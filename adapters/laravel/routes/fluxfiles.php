@@ -20,6 +20,8 @@ Route::delete('delete', [FluxFilesController::class, 'delete']);
 Route::post('move', [FluxFilesController::class, 'move']);
 Route::post('copy', [FluxFilesController::class, 'copy']);
 Route::post('mkdir', [FluxFilesController::class, 'mkdir']);
+Route::post('cross-copy', [FluxFilesController::class, 'crossCopy']);
+Route::post('cross-move', [FluxFilesController::class, 'crossMove']);
 Route::post('presign', [FluxFilesController::class, 'presign']);
 Route::get('meta', [FluxFilesController::class, 'meta']);
 

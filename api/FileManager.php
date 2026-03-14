@@ -246,6 +246,200 @@ class FileManager
         return ['key' => $scopedTo];
     }
 
+    /**
+     * Copy a file from one disk to another using streams.
+     */
+    public function crossCopy(string $srcDisk, string $srcPath, string $dstDisk, string $dstPath): array
+    {
+        $this->assertDisk($srcDisk);
+        $this->assertDisk($dstDisk);
+        $this->assertPerm('read');
+        $this->assertPerm('write');
+
+        if ($srcDisk === $dstDisk) {
+            return $this->copy($srcDisk, $srcPath, $dstPath);
+        }
+
+        $scopedSrc = $this->scopedPath($srcPath);
+        $scopedDst = $this->scopedPath($dstPath);
+
+        $srcFs = $this->disks->disk($srcDisk);
+        $dstFs = $this->disks->disk($dstDisk);
+
+        // Quota check on destination
+        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
+            $fileSize = $srcFs->fileSize($scopedSrc);
+            $this->quotaManager->assertQuota(
+                $dstDisk,
+                $this->claims->pathPrefix,
+                $fileSize,
+                $this->claims->maxStorageMb
+            );
+        }
+
+        // Stream the file across disks
+        $stream = $srcFs->readStream($scopedSrc);
+        try {
+            $dstFs->writeStream($scopedDst, $stream);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        // Copy metadata
+        $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+
+        // Copy image variants if they exist
+        $this->copyVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+
+        return [
+            'key'      => $scopedDst,
+            'url'      => $this->fileUrl($dstDisk, $scopedDst),
+            'src_disk' => $srcDisk,
+            'dst_disk' => $dstDisk,
+        ];
+    }
+
+    /**
+     * Move a file from one disk to another (copy + delete source).
+     */
+    public function crossMove(string $srcDisk, string $srcPath, string $dstDisk, string $dstPath): array
+    {
+        $this->assertDisk($srcDisk);
+        $this->assertDisk($dstDisk);
+        $this->assertPerm('write');
+        $this->assertPerm('delete');
+
+        if ($srcDisk === $dstDisk) {
+            return $this->move($srcDisk, $srcPath, $dstPath);
+        }
+
+        $scopedSrc = $this->scopedPath($srcPath);
+        $scopedDst = $this->scopedPath($dstPath);
+
+        $srcFs = $this->disks->disk($srcDisk);
+        $dstFs = $this->disks->disk($dstDisk);
+
+        // Stream the file across disks
+        $stream = $srcFs->readStream($scopedSrc);
+        try {
+            $dstFs->writeStream($scopedDst, $stream);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        // Move metadata
+        $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+
+        // Move image variants
+        $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+
+        // Delete source file
+        $srcFs->delete($scopedSrc);
+
+        return [
+            'key'      => $scopedDst,
+            'url'      => $this->fileUrl($dstDisk, $scopedDst),
+            'src_disk' => $srcDisk,
+            'dst_disk' => $dstDisk,
+        ];
+    }
+
+    /**
+     * Copy metadata from one disk/key to another.
+     */
+    private function copyMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $existing = $this->meta->get($srcDisk, $srcKey);
+        if ($existing) {
+            $this->meta->save($dstDisk, $dstKey, $existing);
+        }
+    }
+
+    /**
+     * Move metadata from one disk/key to another (copy + delete source).
+     */
+    private function moveMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $this->copyMetadata($srcDisk, $srcKey, $dstDisk, $dstKey);
+        $this->meta->delete($srcDisk, $srcKey);
+    }
+
+    /**
+     * Copy image variants (thumb/medium/large) across disks.
+     */
+    private function copyVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $this->transferVariants($srcDisk, $srcKey, $dstDisk, $dstKey, false);
+    }
+
+    /**
+     * Move image variants (thumb/medium/large) across disks.
+     */
+    private function moveVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $this->transferVariants($srcDisk, $srcKey, $dstDisk, $dstKey, true);
+    }
+
+    /**
+     * Transfer image variants across disks (copy or move).
+     */
+    private function transferVariants(
+        string $srcDisk,
+        string $srcKey,
+        string $dstDisk,
+        string $dstKey,
+        bool $deleteSource
+    ): void {
+        $srcFs = $this->disks->disk($srcDisk);
+        $dstFs = $this->disks->disk($dstDisk);
+        $sizes = ['thumb', 'medium', 'large'];
+
+        foreach ($sizes as $size) {
+            $srcVariant = $this->variantKey($srcKey, $size);
+            $dstVariant = $this->variantKey($dstKey, $size);
+
+            try {
+                if (!$srcFs->fileExists($srcVariant)) {
+                    continue;
+                }
+
+                $stream = $srcFs->readStream($srcVariant);
+                try {
+                    $dstFs->writeStream($dstVariant, $stream);
+                } finally {
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                }
+
+                if ($deleteSource) {
+                    $srcFs->delete($srcVariant);
+                }
+            } catch (\Throwable $e) {
+                // Variant transfer failure should not block the main operation
+                error_log("FluxFiles: Variant transfer failed ({$size}) — " . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Build the variant key for a given file key and size name.
+     * Matches ImageOptimizer naming: dir/_variants/basename_size.webp
+     */
+    private function variantKey(string $key, string $size): string
+    {
+        $dir = dirname($key);
+        $basename = pathinfo($key, PATHINFO_FILENAME);
+
+        $variantsDir = ($dir !== '.' && $dir !== '') ? $dir . '/_variants' : '_variants';
+
+        return $variantsDir . '/' . $basename . '_' . $size . '.webp';
+    }
+
     public function mkdir(string $disk, string $path): array
     {
         $this->assertDisk($disk);

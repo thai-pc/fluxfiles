@@ -131,6 +131,8 @@
         setDisk: function(disk) { this.command('setDisk', { disk: disk }); },
         refresh: function() { this.command('refresh'); },
         search: function(q) { this.command('search', { q: q }); },
+        crossCopy: function(dstDisk, dstPath) { this.command('crossCopy', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
+        crossMove: function(dstDisk, dstPath) { this.command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
 
         on: function(type, cb) {
             if (!listeners[type]) listeners[type] = [];

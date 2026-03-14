@@ -258,6 +258,56 @@ class FluxFilesController
         }
     }
 
+    public function crossCopy(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $srcDisk = $request->input('src_disk');
+            $srcPath = $request->input('src_path');
+            $dstDisk = $request->input('dst_disk');
+            $dstPath = $request->input('dst_path');
+
+            if (!$srcDisk || !$srcPath || !$dstDisk || !$dstPath) {
+                throw new ApiException('Missing required fields: src_disk, src_path, dst_disk, dst_path', 400);
+            }
+
+            $result = $fm->crossCopy($srcDisk, $srcPath, $dstDisk, $dstPath);
+            $this->logAudit($claims, 'cross_copy', $srcDisk, $srcPath);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function crossMove(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $srcDisk = $request->input('src_disk');
+            $srcPath = $request->input('src_path');
+            $dstDisk = $request->input('dst_disk');
+            $dstPath = $request->input('dst_path');
+
+            if (!$srcDisk || !$srcPath || !$dstDisk || !$dstPath) {
+                throw new ApiException('Missing required fields: src_disk, src_path, dst_disk, dst_path', 400);
+            }
+
+            $result = $fm->crossMove($srcDisk, $srcPath, $dstDisk, $dstPath);
+            $this->logAudit($claims, 'cross_move', $srcDisk, $srcPath);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
     public function presign(Request $request): JsonResponse
     {
         try {

@@ -95,6 +95,17 @@
                     </button>
                 </template>
             </div>
+            <div class="ff-sidebar-section" style="margin-top:12px;">
+                <button class="ff-folder-item"
+                        :class="{ active: showTrash }"
+                        @click="showTrash = !showTrash; if(showTrash) loadTrash();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                    Trash
+                </button>
+            </div>
         </div>
 
         <!-- Main content -->
@@ -128,9 +139,28 @@
             </div>
 
             <!-- Bulk actions -->
-            <div class="ff-bulk-bar" x-show="selected.length > 1">
-                <span x-text="selected.length + ' selected'"></span>
-                <button @click="confirmDelete()" class="danger">Delete</button>
+            <div class="ff-bulk-bar" x-show="selected.length > 0 && !bulkBusy">
+                <label class="ff-select-all" title="Select all / Deselect all">
+                    <input type="checkbox" :checked="allSelected" @change="toggleSelectAll()">
+                    <span x-text="selected.length + '/' + filteredFiles.length"></span>
+                </label>
+                <div class="ff-bulk-actions">
+                    <button class="ff-btn ff-btn-sm" @click="openBulkMove()" title="Move to folder">Move</button>
+                    <button class="ff-btn ff-btn-sm" @click="openCrossDisk('copy')" title="Copy to another disk">Copy to disk</button>
+                    <button class="ff-btn ff-btn-sm" @click="openCrossDisk('move')" title="Move to another disk">Move to disk</button>
+                    <button class="ff-btn ff-btn-sm" @click="bulkDownload()" title="Download selected files">Download</button>
+                    <button class="ff-btn ff-btn-sm ff-btn-danger" @click="confirmDelete()">Delete</button>
+                    <button class="ff-btn ff-btn-sm" @click="deselectAll()" title="Clear selection">Clear</button>
+                </div>
+            </div>
+
+            <!-- Bulk progress -->
+            <div class="ff-bulk-bar ff-bulk-progress-bar" x-show="bulkBusy">
+                <span x-text="bulkAction + '... ' + bulkDone + '/' + bulkTotal"></span>
+                <div class="ff-progress-bar" style="flex:1;margin-left:12px;">
+                    <div class="ff-progress-fill" :style="'width:' + bulkProgress + '%'"></div>
+                </div>
+                <span x-text="bulkProgress + '%'" style="margin-left:8px;font-size:12px;"></span>
             </div>
 
             <!-- Loading -->
@@ -160,7 +190,7 @@
                         <template x-for="file in filteredFiles" :key="file.key">
                             <div class="ff-card"
                                  :class="{ selected: isSelected(file) }"
-                                 @click="toggleSelect(file, $event)"
+                                 @click="handleFileClick(file, $event)"
                                  @dblclick="selectFile(file)">
                                 <div x-show="hasMetaBadge(file)" class="ff-meta-badge"></div>
                                 <div class="ff-card-icon">
@@ -188,6 +218,12 @@
             <!-- List view -->
             <template x-if="!loading && view === 'list'">
                 <div class="ff-list">
+                    <div class="ff-list-header">
+                        <input type="checkbox" :checked="allSelected" @change="toggleSelectAll()" title="Select all">
+                        <span class="ff-list-name">Name</span>
+                        <span class="ff-list-size">Size</span>
+                        <span class="ff-list-date">Modified</span>
+                    </div>
                     <template x-for="folder in filteredFolders" :key="folder.key">
                         <div class="ff-list-row" @dblclick="navigate(folder.key)">
                             <svg viewBox="0 0 24 24" fill="#f59e0b" stroke="none">
@@ -201,7 +237,7 @@
                     <template x-for="file in filteredFiles" :key="file.key">
                         <div class="ff-list-row"
                              :class="{ selected: isSelected(file) }"
-                             @click="toggleSelect(file, $event)"
+                             @click="handleFileClick(file, $event)"
                              @dblclick="selectFile(file)">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -215,6 +251,39 @@
                 </div>
             </template>
         </div>
+
+        <!-- Trash view -->
+        <template x-if="showTrash">
+            <div class="ff-main ff-trash-view" style="position:absolute;inset:0;left:var(--ff-sidebar-w);background:var(--ff-bg);z-index:10;overflow-y:auto;">
+                <div style="padding:16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <h3 style="margin:0;">Trash</h3>
+                        <div style="display:flex;gap:6px;">
+                            <button class="ff-btn ff-btn-sm" @click="bulkRestore()" x-show="trashItems.length > 0">Restore All</button>
+                            <button class="ff-btn ff-btn-sm ff-btn-danger" @click="confirmMessage = 'Permanently delete all ' + trashItems.length + ' trashed items?'; confirmAction = () => bulkPurge(); showConfirm = true;" x-show="trashItems.length > 0">Empty Trash</button>
+                            <button class="ff-btn ff-btn-sm" @click="showTrash = false">Close</button>
+                        </div>
+                    </div>
+                    <div x-show="trashItems.length === 0" class="ff-empty" style="padding:40px 0;">
+                        <p>Trash is empty</p>
+                    </div>
+                    <div class="ff-list">
+                        <template x-for="item in trashItems" :key="item.file_key">
+                            <div class="ff-list-row">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                <span class="ff-list-name" x-text="item.file_key.split('/').pop()"></span>
+                                <span class="ff-list-date" x-text="formatDate(item.trashed_at)"></span>
+                                <button class="ff-btn ff-btn-sm" @click="restoreFile(item.file_key); loadTrash();" title="Restore">Restore</button>
+                                <button class="ff-btn ff-btn-sm ff-btn-danger" @click="purgeFile(item.file_key)" title="Delete permanently">Purge</button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </template>
 
         <!-- Detail panel -->
         <div class="ff-detail" x-show="detailFile" x-transition>
@@ -307,6 +376,77 @@
             <div class="ff-confirm-actions">
                 <button class="ff-btn" @click="showConfirm = false">Cancel</button>
                 <button class="ff-btn ff-btn-danger" @click="confirmAction && confirmAction()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk move dialog (same disk) -->
+    <div class="ff-confirm-overlay" x-show="showBulkMove" x-transition>
+        <div class="ff-confirm-box">
+            <h4>Move to Folder</h4>
+            <p x-text="selected.length + ' file(s) on ' + currentDisk.toUpperCase()"></p>
+
+            <div class="ff-meta-field" style="margin:12px 0;">
+                <label>Destination Path</label>
+                <input type="text"
+                       x-model="bulkMoveTarget"
+                       placeholder="e.g. photos/2024 (empty for root)"
+                       style="width:100%;padding:8px;border:1px solid var(--ff-border);border-radius:4px;background:var(--ff-bg);color:var(--ff-text);">
+            </div>
+
+            <!-- Quick pick from visible folders -->
+            <div x-show="folders.length > 0" style="margin-bottom:12px;">
+                <label style="font-size:12px;color:var(--ff-text-secondary);display:block;margin-bottom:4px;">Quick pick:</label>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                    <template x-for="folder in folders" :key="folder.key">
+                        <button class="ff-btn ff-btn-sm"
+                                :class="{ 'ff-btn-primary': bulkMoveTarget === folder.key }"
+                                @click="bulkMoveTarget = folder.key"
+                                x-text="folder.name"></button>
+                    </template>
+                    <button class="ff-btn ff-btn-sm"
+                            :class="{ 'ff-btn-primary': bulkMoveTarget === '' }"
+                            @click="bulkMoveTarget = ''">Root</button>
+                </div>
+            </div>
+
+            <div class="ff-confirm-actions">
+                <button class="ff-btn" @click="showBulkMove = false">Cancel</button>
+                <button class="ff-btn ff-btn-primary" @click="executeBulkMove()">Move</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cross-disk copy/move dialog -->
+    <div class="ff-confirm-overlay" x-show="showCrossDisk" x-transition>
+        <div class="ff-confirm-box">
+            <h4 x-text="crossDiskMode === 'copy' ? 'Copy to Disk' : 'Move to Disk'"></h4>
+            <p x-text="selected.length + ' file(s) from ' + currentDisk.toUpperCase()"></p>
+
+            <div class="ff-meta-field" style="margin:12px 0;">
+                <label>Target Disk</label>
+                <select x-model="crossDiskTarget" style="width:100%;padding:8px;border:1px solid var(--ff-border);border-radius:4px;background:var(--ff-bg);color:var(--ff-text);">
+                    <option value="">-- Select disk --</option>
+                    <template x-for="d in availableDisks" :key="d">
+                        <option :value="d" x-text="d.toUpperCase()"></option>
+                    </template>
+                </select>
+            </div>
+
+            <div class="ff-meta-field" style="margin:12px 0;">
+                <label>Destination Path</label>
+                <input type="text"
+                       x-model="crossDiskPath"
+                       placeholder="e.g. photos/2024"
+                       style="width:100%;padding:8px;border:1px solid var(--ff-border);border-radius:4px;background:var(--ff-bg);color:var(--ff-text);">
+            </div>
+
+            <div class="ff-confirm-actions">
+                <button class="ff-btn" @click="cancelCrossDisk()">Cancel</button>
+                <button class="ff-btn ff-btn-primary"
+                        :disabled="!crossDiskTarget"
+                        @click="executeCrossDisk()"
+                        x-text="crossDiskMode === 'copy' ? 'Copy' : 'Move'"></button>
             </div>
         </div>
     </div>

@@ -100,6 +100,14 @@ try {
             ...jsonBody('disk', 'path')
         ),
 
+        // Cross-disk copy/move
+        $method === 'POST' && $uri === '/api/fm/cross-copy' => $fm->crossCopy(
+            ...jsonBody('src_disk', 'src_path', 'dst_disk', 'dst_path')
+        ),
+        $method === 'POST' && $uri === '/api/fm/cross-move' => $fm->crossMove(
+            ...jsonBody('src_disk', 'src_path', 'dst_disk', 'dst_path')
+        ),
+
         $method === 'POST' && $uri === '/api/fm/presign' => $fm->presign(
             ...jsonBody('disk', 'path', 'method', 'ttl')
         ),
@@ -159,6 +167,8 @@ try {
         $auditAction = match (true) {
             str_contains($uri, '/upload') => 'upload',
             str_contains($uri, '/delete') => 'delete',
+            str_contains($uri, '/cross-move') => 'cross_move',
+            str_contains($uri, '/cross-copy') => 'cross_copy',
             str_contains($uri, '/move') => 'move',
             str_contains($uri, '/copy') => 'copy',
             str_contains($uri, '/mkdir') => 'mkdir',
@@ -170,8 +180,8 @@ try {
         };
         $raw = file_get_contents('php://input');
         $body = json_decode($raw ?: '{}', true) ?: [];
-        $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? '';
-        $auditDisk = $body['disk'] ?? $_POST['disk'] ?? 'local';
+        $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? $body['src_path'] ?? '';
+        $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey);
     }
 

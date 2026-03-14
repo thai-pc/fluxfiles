@@ -20,6 +20,21 @@ function fluxFilesApp() {
         trashItems: [],
         showTrash: false,
 
+        // Cross-disk state
+        showCrossDisk: false,
+        crossDiskMode: 'copy', // 'copy' or 'move'
+        crossDiskTarget: '',
+        crossDiskPath: '',
+
+        // Bulk operation state
+        bulkBusy: false,
+        bulkProgress: 0,
+        bulkTotal: 0,
+        bulkDone: 0,
+        bulkAction: '',
+        showBulkMove: false,
+        bulkMoveTarget: '',
+
         // Upload state
         uploadProgress: 0,
         uploading: false,
@@ -58,7 +73,7 @@ function fluxFilesApp() {
             // Notify parent we're ready
             this.postMessage('FM_READY', {
                 version: '1.0.0',
-                capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata']
+                capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops']
             });
         },
 
@@ -197,7 +212,128 @@ function fluxFilesApp() {
             return this.selected.some(s => s.key === file.key);
         },
 
+        // Select all / deselect all
+        selectAll() {
+            this.selected = [...this.filteredFiles];
+        },
+
+        deselectAll() {
+            this.selected = [];
+            this.detailFile = null;
+        },
+
+        toggleSelectAll() {
+            if (this.selected.length === this.filteredFiles.length) {
+                this.deselectAll();
+            } else {
+                this.selectAll();
+            }
+        },
+
+        get allSelected() {
+            return this.filteredFiles.length > 0 && this.selected.length === this.filteredFiles.length;
+        },
+
+        // Shift+click range select
+        shiftSelect(file, event) {
+            if (event && event.shiftKey && this.selected.length > 0) {
+                const allFiles = this.filteredFiles;
+                const lastSelected = this.selected[this.selected.length - 1];
+                const lastIdx = allFiles.findIndex(f => f.key === lastSelected.key);
+                const currIdx = allFiles.findIndex(f => f.key === file.key);
+
+                if (lastIdx >= 0 && currIdx >= 0) {
+                    const start = Math.min(lastIdx, currIdx);
+                    const end = Math.max(lastIdx, currIdx);
+                    const range = allFiles.slice(start, end + 1);
+
+                    // Merge with existing selection (no duplicates)
+                    const keys = new Set(this.selected.map(s => s.key));
+                    for (const f of range) {
+                        if (!keys.has(f.key)) {
+                            this.selected.push(f);
+                        }
+                    }
+                    return true;
+                }
+            }
+            return false;
+        },
+
+        handleFileClick(file, event) {
+            if (event && event.shiftKey) {
+                if (this.shiftSelect(file, event)) return;
+            }
+            this.toggleSelect(file, event);
+        },
+
+        // Bulk progress helper
+        startBulk(action, total) {
+            this.bulkBusy = true;
+            this.bulkAction = action;
+            this.bulkTotal = total;
+            this.bulkDone = 0;
+            this.bulkProgress = 0;
+        },
+
+        tickBulk() {
+            this.bulkDone++;
+            this.bulkProgress = Math.round((this.bulkDone / this.bulkTotal) * 100);
+        },
+
+        endBulk() {
+            this.bulkBusy = false;
+            this.bulkProgress = 0;
+            this.bulkTotal = 0;
+            this.bulkDone = 0;
+            this.bulkAction = '';
+        },
+
+        // Bulk move (same disk — to a folder)
+        openBulkMove() {
+            if (this.selected.length === 0) return;
+            this.bulkMoveTarget = this.currentPath;
+            this.showBulkMove = true;
+        },
+
+        async executeBulkMove() {
+            if (!this.bulkMoveTarget && this.bulkMoveTarget !== '') return;
+
+            this.showBulkMove = false;
+            this.startBulk('Moving', this.selected.length);
+
+            for (const file of [...this.selected]) {
+                try {
+                    const destPath = (this.bulkMoveTarget ? this.bulkMoveTarget + '/' : '') + file.name;
+                    await this.api('POST', '/api/fm/move', {
+                        disk: this.currentDisk,
+                        from: file.key,
+                        to: destPath
+                    });
+                    this.postMessage('FM_EVENT', { event: 'move:done', key: file.key, to: destPath });
+                } catch (err) {
+                    console.error('FluxFiles: Bulk move failed', file.key, err);
+                }
+                this.tickBulk();
+            }
+
+            this.endBulk();
+            this.selected = [];
+            this.detailFile = null;
+            this.loadFiles();
+        },
+
+        // Bulk download (sequential)
+        async bulkDownload() {
+            for (const file of this.selected) {
+                this.downloadFile(file);
+                // Small delay so browser doesn't block multiple downloads
+                await new Promise(r => setTimeout(r, 300));
+            }
+        },
+
         // Upload
+
         async uploadFiles(fileList) {
             if (!fileList || fileList.length === 0) return;
             this.uploading = true;
@@ -317,7 +453,10 @@ function fluxFilesApp() {
 
         // Delete
         async deleteSelected() {
-            for (const file of this.selected) {
+            this.showConfirm = false;
+            this.startBulk('Deleting', this.selected.length);
+
+            for (const file of [...this.selected]) {
                 try {
                     await this.api('DELETE', '/api/fm/delete', {
                         disk: this.currentDisk,
@@ -327,10 +466,12 @@ function fluxFilesApp() {
                 } catch (err) {
                     console.error('FluxFiles: Delete failed', file.key, err);
                 }
+                this.tickBulk();
             }
+
+            this.endBulk();
             this.selected = [];
             this.detailFile = null;
-            this.showConfirm = false;
             this.loadFiles();
         },
 
@@ -362,6 +503,52 @@ function fluxFilesApp() {
             }
         },
 
+        // Bulk restore from trash
+        async bulkRestore(items) {
+            const list = items || this.trashItems;
+            if (list.length === 0) return;
+            this.startBulk('Restoring', list.length);
+
+            for (const item of [...list]) {
+                try {
+                    await this.api('POST', '/api/fm/restore', {
+                        disk: this.currentDisk,
+                        path: item.file_key
+                    });
+                    this.postMessage('FM_EVENT', { event: 'restore:done', key: item.file_key });
+                } catch (err) {
+                    console.error('FluxFiles: Bulk restore failed', item.file_key, err);
+                }
+                this.tickBulk();
+            }
+
+            this.endBulk();
+            this.loadTrash();
+        },
+
+        // Bulk purge from trash
+        async bulkPurge(items) {
+            const list = items || this.trashItems;
+            if (list.length === 0) return;
+            this.startBulk('Purging', list.length);
+
+            for (const item of [...list]) {
+                try {
+                    await this.api('DELETE', '/api/fm/purge', {
+                        disk: this.currentDisk,
+                        path: item.file_key
+                    });
+                    this.postMessage('FM_EVENT', { event: 'purge:done', key: item.file_key });
+                } catch (err) {
+                    console.error('FluxFiles: Bulk purge failed', item.file_key, err);
+                }
+                this.tickBulk();
+            }
+
+            this.endBulk();
+            this.loadTrash();
+        },
+
         // Load trash items
         async loadTrash() {
             this.loading = true;
@@ -381,6 +568,63 @@ function fluxFilesApp() {
             this.confirmMessage = 'Delete ' + this.selected.length + ' item(s)? This cannot be undone.';
             this.confirmAction = () => this.deleteSelected();
             this.showConfirm = true;
+        },
+
+        // Cross-disk copy/move
+        openCrossDisk(mode) {
+            if (this.selected.length === 0) return;
+            this.crossDiskMode = mode;
+            this.crossDiskTarget = '';
+            this.crossDiskPath = this.currentPath;
+            this.showCrossDisk = true;
+        },
+
+        get availableDisks() {
+            const disks = (this.config && this.config.disks) || [];
+            // If no disk list from config, try common defaults
+            if (disks.length === 0) {
+                return ['local', 's3', 'r2'].filter(d => d !== this.currentDisk);
+            }
+            return disks.filter(d => d !== this.currentDisk);
+        },
+
+        async executeCrossDisk() {
+            if (!this.crossDiskTarget) return;
+
+            const action = this.crossDiskMode === 'move' ? 'cross-move' : 'cross-copy';
+            const label = this.crossDiskMode === 'move' ? 'Moving' : 'Copying';
+            this.showCrossDisk = false;
+            this.startBulk(label, this.selected.length);
+
+            for (const file of [...this.selected]) {
+                try {
+                    const dstPath = (this.crossDiskPath ? this.crossDiskPath + '/' : '') + file.name;
+                    await this.api('POST', '/api/fm/' + action, {
+                        src_disk: this.currentDisk,
+                        src_path: file.key,
+                        dst_disk: this.crossDiskTarget,
+                        dst_path: dstPath
+                    });
+                    this.postMessage('FM_EVENT', {
+                        event: action + ':done',
+                        key: file.key,
+                        src_disk: this.currentDisk,
+                        dst_disk: this.crossDiskTarget
+                    });
+                } catch (err) {
+                    console.error('FluxFiles: Cross-disk ' + this.crossDiskMode + ' failed', file.key, err);
+                }
+                this.tickBulk();
+            }
+
+            this.endBulk();
+            this.selected = [];
+            this.detailFile = null;
+            this.loadFiles();
+        },
+
+        cancelCrossDisk() {
+            this.showCrossDisk = false;
         },
 
         // Create folder
@@ -475,6 +719,22 @@ function fluxFilesApp() {
                     break;
                 case 'search':
                     this.searchQuery = payload.q || '';
+                    break;
+                case 'crossCopy':
+                    this.crossDiskTarget = payload.dst_disk || '';
+                    this.crossDiskPath = payload.dst_path || this.currentPath;
+                    this.crossDiskMode = 'copy';
+                    if (this.selected.length > 0 && this.crossDiskTarget) {
+                        this.executeCrossDisk();
+                    }
+                    break;
+                case 'crossMove':
+                    this.crossDiskTarget = payload.dst_disk || '';
+                    this.crossDiskPath = payload.dst_path || this.currentPath;
+                    this.crossDiskMode = 'move';
+                    if (this.selected.length > 0 && this.crossDiskTarget) {
+                        this.executeCrossDisk();
+                    }
                     break;
                 case 'close':
                     this.closeManager();

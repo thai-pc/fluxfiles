@@ -73,6 +73,12 @@ class FluxFilesApi
         register_rest_route($ns, '/mkdir', array_merge($writeArgs, [
             'callback' => [$api, 'handleMkdir'],
         ]));
+        register_rest_route($ns, '/cross-copy', array_merge($writeArgs, [
+            'callback' => [$api, 'handleCrossCopy'],
+        ]));
+        register_rest_route($ns, '/cross-move', array_merge($writeArgs, [
+            'callback' => [$api, 'handleCrossMove'],
+        ]));
         register_rest_route($ns, '/presign', array_merge($writeArgs, [
             'callback' => [$api, 'handlePresign'],
         ]));
@@ -343,6 +349,58 @@ class FluxFilesApi
 
             $result = $fm->mkdir($disk, $path);
             $this->logAudit($claims, 'mkdir', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleCrossCopy(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body    = $this->body($request);
+            $srcDisk = $body['src_disk'] ?? null;
+            $srcPath = $body['src_path'] ?? null;
+            $dstDisk = $body['dst_disk'] ?? null;
+            $dstPath = $body['dst_path'] ?? null;
+
+            if (!$srcDisk || !$srcPath || !$dstDisk || !$dstPath) {
+                throw new ApiException('Missing required fields: src_disk, src_path, dst_disk, dst_path', 400);
+            }
+
+            $result = $fm->crossCopy($srcDisk, $srcPath, $dstDisk, $dstPath);
+            $this->logAudit($claims, 'cross_copy', $srcDisk, $srcPath);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleCrossMove(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body    = $this->body($request);
+            $srcDisk = $body['src_disk'] ?? null;
+            $srcPath = $body['src_path'] ?? null;
+            $dstDisk = $body['dst_disk'] ?? null;
+            $dstPath = $body['dst_path'] ?? null;
+
+            if (!$srcDisk || !$srcPath || !$dstDisk || !$dstPath) {
+                throw new ApiException('Missing required fields: src_disk, src_path, dst_disk, dst_path', 400);
+            }
+
+            $result = $fm->crossMove($srcDisk, $srcPath, $dstDisk, $dstPath);
+            $this->logAudit($claims, 'cross_move', $srcDisk, $srcPath);
 
             return $this->ok($result);
         } catch (ApiException $e) {

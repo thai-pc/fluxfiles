@@ -250,20 +250,44 @@ body {
     background: var(--ff-bg-secondary);
     border-radius: var(--ff-radius);
     font-size: 13px;
+    flex-wrap: wrap;
 }
 
-.ff-bulk-bar button {
-    padding: 5px 12px;
-    border: 1px solid var(--ff-border);
-    background: var(--ff-bg);
-    border-radius: var(--ff-radius);
+.ff-bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.ff-select-all {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     cursor: pointer;
-    font-size: 12px;
+    user-select: none;
+    font-weight: 500;
+    white-space: nowrap;
 }
 
-.ff-bulk-bar button.danger {
-    color: var(--ff-danger);
-    border-color: var(--ff-danger);
+.ff-select-all input[type="checkbox"] {
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+}
+
+.ff-bulk-progress-bar {
+    background: var(--ff-primary);
+    color: white;
+    font-weight: 500;
+}
+
+.ff-bulk-progress-bar .ff-progress-bar {
+    background: rgba(255,255,255,0.3);
+}
+
+.ff-bulk-progress-bar .ff-progress-fill {
+    background: rgba(255,255,255,0.8);
 }
 
 /* File grid */
@@ -325,6 +349,26 @@ body {
 
 /* File list view */
 .ff-list { width: 100%; }
+
+.ff-list-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 12px;
+    border-bottom: 2px solid var(--ff-border);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--ff-text-secondary);
+    letter-spacing: 0.5px;
+    user-select: none;
+}
+
+.ff-list-header input[type="checkbox"] {
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+}
 
 .ff-list-row {
     display: flex;
@@ -445,6 +489,7 @@ body {
 .ff-btn-primary:hover { background: var(--ff-primary-hover); }
 .ff-btn-danger { color: var(--ff-danger); border-color: var(--ff-danger); }
 .ff-btn-danger:hover { background: var(--ff-danger); color: white; }
+.ff-btn-sm { padding: 4px 10px; font-size: 12px; }
 
 /* Preview */
 .ff-preview {
