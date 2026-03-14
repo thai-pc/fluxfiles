@@ -1,0 +1,5 @@
+vendor/
+.env
+storage/fluxfiles.db
+storage/uploads/
+fluxfiles-spec.docx

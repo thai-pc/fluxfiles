@@ -1,0 +1,21 @@
+{
+    "name": "fluxfiles/fluxfiles",
+    "description": "Standalone PHP file manager with multi-storage support (Local/S3/R2)",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "ext-pdo": "*",
+        "ext-pdo_sqlite": "*",
+        "league/flysystem": "^3.0",
+        "league/flysystem-aws-s3-v3": "^3.0",
+        "firebase/php-jwt": "^6.0",
+        "vlucas/phpdotenv": "^5.0",
+        "intervention/image": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "FluxFiles\\": "api/"
+        }
+    }
+}

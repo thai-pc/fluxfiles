@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FluxFiles</title>
+    <link rel="stylesheet" href="../assets/fm.css">
+    <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@2/dist/htmx.min.js"></script>
+    <script src="../assets/fm.js"></script>
+</head>
+<body>
+<div class="ff-app" x-data="fluxFilesApp()" x-init="init()">
+
+    <!-- Topbar -->
+    <div class="ff-topbar">
+        <!-- Breadcrumb -->
+        <div class="ff-breadcrumb">
+            <template x-for="(crumb, idx) in breadcrumbs" :key="crumb.path">
+                <template x-if="true">
+                    <span style="display:flex;align-items:center;gap:4px;">
+                        <span x-show="idx > 0" style="color:var(--ff-text-secondary);font-size:12px;">/</span>
+                        <button @click="navigate(crumb.path)" x-text="crumb.name"></button>
+                    </span>
+                </template>
+            </template>
+        </div>
+
+        <!-- Disk switcher -->
+        <div class="ff-disk-switcher">
+            <template x-for="disk in (config.disks || ['local'])" :key="disk">
+                <button class="ff-disk-btn"
+                        :class="{ active: currentDisk === disk }"
+                        @click="switchDisk(disk)"
+                        x-text="disk.toUpperCase()">
+                </button>
+            </template>
+        </div>
+
+        <!-- Search -->
+        <div class="ff-search">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input type="text" placeholder="Search files..." x-model="searchQuery">
+        </div>
+
+        <!-- View toggle -->
+        <div class="ff-view-toggle">
+            <button class="ff-view-btn" :class="{ active: view === 'grid' }" @click="view = 'grid'" title="Grid view">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                </svg>
+            </button>
+            <button class="ff-view-btn" :class="{ active: view === 'list' }" @click="view = 'list'" title="List view">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+                    <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- New folder -->
+        <button class="ff-btn" @click="createFolder()" title="New folder">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Body -->
+    <div class="ff-body">
+
+        <!-- Sidebar -->
+        <div class="ff-sidebar">
+            <div class="ff-sidebar-section">
+                <div class="ff-sidebar-title">Folders</div>
+                <button class="ff-folder-item"
+                        :class="{ active: currentPath === '' }"
+                        @click="navigate('')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                    </svg>
+                    Root
+                </button>
+                <template x-for="folder in folders" :key="folder.key">
+                    <button class="ff-folder-item" @click="navigate(folder.key)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                        </svg>
+                        <span x-text="folder.name"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Main content -->
+        <div class="ff-main">
+
+            <!-- Drop zone -->
+            <div class="ff-dropzone"
+                 :class="{ active: dragActive }"
+                 @click="triggerUpload()"
+                 @dragover.prevent="dragActive = true"
+                 @dragleave.prevent="dragActive = false"
+                 @drop="handleDrop($event)">
+                <input type="file" x-ref="fileInput" multiple @change="handleFileInput($event)">
+                <template x-if="!uploading">
+                    <div>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;margin-bottom:4px;">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <p>Drop files here or click to upload</p>
+                    </div>
+                </template>
+                <template x-if="uploading">
+                    <div class="ff-upload-progress" style="width:100%;">
+                        <div class="ff-progress-bar">
+                            <div class="ff-progress-fill" :style="'width:' + uploadProgress + '%'"></div>
+                        </div>
+                        <div class="ff-progress-text">Uploading... <span x-text="uploadProgress"></span>%</div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Bulk actions -->
+            <div class="ff-bulk-bar" x-show="selected.length > 1">
+                <span x-text="selected.length + ' selected'"></span>
+                <button @click="confirmDelete()" class="danger">Delete</button>
+            </div>
+
+            <!-- Loading -->
+            <div class="ff-loading" x-show="loading">
+                <div class="ff-spinner"></div>
+            </div>
+
+            <!-- Grid view -->
+            <template x-if="!loading && view === 'grid'">
+                <div>
+                    <!-- Folders -->
+                    <div class="ff-grid" x-show="filteredFolders.length > 0" style="margin-bottom:16px;">
+                        <template x-for="folder in filteredFolders" :key="folder.key">
+                            <div class="ff-card" @dblclick="navigate(folder.key)">
+                                <div class="ff-card-icon folder">
+                                    <svg viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                                    </svg>
+                                </div>
+                                <div class="ff-card-name" x-text="folder.name"></div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Files -->
+                    <div class="ff-grid" x-show="filteredFiles.length > 0">
+                        <template x-for="file in filteredFiles" :key="file.key">
+                            <div class="ff-card"
+                                 :class="{ selected: isSelected(file) }"
+                                 @click="toggleSelect(file, $event)"
+                                 @dblclick="selectFile(file)">
+                                <div x-show="hasMetaBadge(file)" class="ff-meta-badge"></div>
+                                <div class="ff-card-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                    </svg>
+                                </div>
+                                <div class="ff-card-name" x-text="file.name"></div>
+                                <div class="ff-card-size" x-text="formatSize(file.size)"></div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Empty -->
+                    <div class="ff-empty" x-show="filteredFiles.length === 0 && filteredFolders.length === 0">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                        </svg>
+                        <p>No files in this directory</p>
+                    </div>
+                </div>
+            </template>
+
+            <!-- List view -->
+            <template x-if="!loading && view === 'list'">
+                <div class="ff-list">
+                    <template x-for="folder in filteredFolders" :key="folder.key">
+                        <div class="ff-list-row" @dblclick="navigate(folder.key)">
+                            <svg viewBox="0 0 24 24" fill="#f59e0b" stroke="none">
+                                <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                            </svg>
+                            <span class="ff-list-name" x-text="folder.name"></span>
+                            <span class="ff-list-size">--</span>
+                            <span class="ff-list-date">--</span>
+                        </div>
+                    </template>
+                    <template x-for="file in filteredFiles" :key="file.key">
+                        <div class="ff-list-row"
+                             :class="{ selected: isSelected(file) }"
+                             @click="toggleSelect(file, $event)"
+                             @dblclick="selectFile(file)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            <span class="ff-list-name" x-text="file.name"></span>
+                            <span class="ff-list-size" x-text="formatSize(file.size)"></span>
+                            <span class="ff-list-date" x-text="formatDate(file.modified)"></span>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <!-- Detail panel -->
+        <div class="ff-detail" x-show="detailFile" x-transition>
+            <div class="ff-detail-header">
+                <h3 x-text="detailFile?.name"></h3>
+                <button class="ff-detail-close" @click="detailFile = null">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Preview -->
+            <div class="ff-preview" x-show="detailFile">
+                <template x-if="detailFile && isPreviewable(detailFile, 'image')">
+                    <img :src="detailFile.url" :alt="detailFile.name" style="width:100%;max-height:200px;object-fit:contain;background:#f1f5f9;">
+                </template>
+                <template x-if="detailFile && isPreviewable(detailFile, 'video')">
+                    <video controls style="width:100%;max-height:200px;" :src="detailFile.url"></video>
+                </template>
+                <template x-if="detailFile && isPreviewable(detailFile, 'audio')">
+                    <audio controls style="width:100%;" :src="detailFile.url"></audio>
+                </template>
+                <template x-if="detailFile && isPreviewable(detailFile, 'pdf')">
+                    <embed :src="detailFile.url" type="application/pdf" style="width:100%;height:200px;">
+                </template>
+            </div>
+
+            <!-- Tabs -->
+            <div class="ff-detail-tabs">
+                <button class="ff-tab-btn" :class="{ active: activeTab === 'info' }" @click="activeTab = 'info'">Info</button>
+                <button class="ff-tab-btn" :class="{ active: activeTab === 'seo' }" @click="activeTab = 'seo'">SEO</button>
+            </div>
+
+            <!-- Info tab -->
+            <div class="ff-detail-body" x-show="activeTab === 'info'">
+                <dl>
+                    <div class="ff-detail-row">
+                        <dt>Size</dt>
+                        <dd x-text="formatSize(detailFile?.size)"></dd>
+                    </div>
+                    <div class="ff-detail-row">
+                        <dt>Modified</dt>
+                        <dd x-text="formatDate(detailFile?.modified)"></dd>
+                    </div>
+                    <div class="ff-detail-row">
+                        <dt>Disk</dt>
+                        <dd x-text="currentDisk"></dd>
+                    </div>
+                    <div class="ff-detail-row">
+                        <dt>Path</dt>
+                        <dd style="word-break:break-all;font-size:12px;" x-text="detailFile?.key"></dd>
+                    </div>
+                </dl>
+
+                <div class="ff-detail-actions">
+                    <button class="ff-btn ff-btn-primary" @click="selectFile(detailFile)">Select File</button>
+                    <button class="ff-btn" @click="copyUrl(detailFile)">Copy URL</button>
+                    <button class="ff-btn" @click="downloadFile(detailFile)">Download</button>
+                    <button class="ff-btn ff-btn-danger" @click="selected = [detailFile]; confirmDelete()">Delete</button>
+                </div>
+            </div>
+
+            <!-- SEO tab -->
+            <div class="ff-detail-body" x-show="activeTab === 'seo'">
+                <div class="ff-meta-form">
+                    <div class="ff-meta-field">
+                        <label>Title</label>
+                        <input type="text" x-model="metaForm.title" @input="watchMeta()" placeholder="File title...">
+                    </div>
+                    <div class="ff-meta-field">
+                        <label>Alt Text</label>
+                        <input type="text" x-model="metaForm.alt_text" @input="watchMeta()" placeholder="Image alt text...">
+                    </div>
+                    <div class="ff-meta-field">
+                        <label>Caption</label>
+                        <textarea x-model="metaForm.caption" @input="watchMeta()" placeholder="File caption..." rows="3"></textarea>
+                    </div>
+                    <div class="ff-meta-saving" x-show="metaSaving">Saving...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm dialog -->
+    <div class="ff-confirm-overlay" x-show="showConfirm" x-transition>
+        <div class="ff-confirm-box">
+            <h4>Confirm</h4>
+            <p x-text="confirmMessage"></p>
+            <div class="ff-confirm-actions">
+                <button class="ff-btn" @click="showConfirm = false">Cancel</button>
+                <button class="ff-btn ff-btn-danger" @click="confirmAction && confirmAction()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>
