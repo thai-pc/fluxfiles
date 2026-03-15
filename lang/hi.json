@@ -28,6 +28,7 @@
         "or": "या",
         "clear": "साफ़ करें",
         "select_file": "फ़ाइल चुनें",
+        "select_folder": "फ़ोल्डर चुनें",
         "root": "रूट"
     },
     "toolbar": {

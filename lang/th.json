@@ -28,6 +28,7 @@
         "or": "หรือ",
         "clear": "ล้าง",
         "select_file": "เลือกไฟล์",
+        "select_folder": "เลือกโฟลเดอร์",
         "root": "รูท"
     },
     "toolbar": {

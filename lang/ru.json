@@ -28,6 +28,7 @@
         "or": "или",
         "clear": "Очистить",
         "select_file": "Выбрать файл",
+        "select_folder": "Выбрать папку",
         "root": "Корень"
     },
     "toolbar": {

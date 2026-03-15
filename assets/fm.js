@@ -63,6 +63,16 @@ function fluxFilesApp() {
         _themeMediaQuery: null,
         _themeMediaHandler: null,
 
+        // Mobile: sidebar drawer
+        sidebarOpen: false,
+
+        // Detail panel: resizable width (desktop), persisted
+        detailPanelWidth: 350,
+        _resizeDetail: null, // { startX, startW } when dragging
+
+        // Preview lightbox
+        previewFullscreen: false,
+
         // Upload state
         uploadProgress: 0,
         uploading: false,
@@ -76,6 +86,7 @@ function fluxFilesApp() {
         metaForm: { title: '', alt_text: '', caption: '' },
         metaSaving: false,
         metaSaveTimer: null,
+        seoSectionExpanded: true, // accordion: collapse SEO fields to save space
 
         // Crop state
         cropActive: false,
@@ -128,6 +139,33 @@ function fluxFilesApp() {
 
         // Init
         init() {
+            // Restore detail panel width from localStorage
+            try {
+                const w = parseInt(localStorage.getItem('fluxfiles_detail_width'), 10);
+                if (w >= 280 && w <= 600) this.detailPanelWidth = w;
+            } catch (_) {}
+
+            // Close preview lightbox when detail file is cleared
+            this.$watch('detailFile', (v) => { if (!v) this.previewFullscreen = false; });
+
+            // Detail panel resize (desktop)
+            this._resizeDetailMove = (e) => {
+                if (!this._resizeDetail) return;
+                const delta = this._resizeDetail.startX - e.clientX; // drag left = positive = wider
+                let w = this._resizeDetail.startW + delta;
+                w = Math.max(280, Math.min(600, w));
+                this.detailPanelWidth = w;
+            };
+            this._resizeDetailUp = () => {
+                if (!this._resizeDetail) return;
+                this._resizeDetail = null;
+                document.removeEventListener('mousemove', this._resizeDetailMove);
+                document.removeEventListener('mouseup', this._resizeDetailUp);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                try { localStorage.setItem('fluxfiles_detail_width', String(this.detailPanelWidth)); } catch (_) {}
+            };
+
             window.addEventListener('message', (e) => {
                 const msg = e.data;
                 if (!msg || msg.source !== 'fluxfiles') return;
@@ -284,6 +322,7 @@ function fluxFilesApp() {
         navigate(path) {
             this.currentPath = path;
             this.loadFiles();
+            this.sidebarOpen = false;
         },
 
         navigateUp() {
@@ -309,6 +348,7 @@ function fluxFilesApp() {
             this.currentPath = '';
             this.loadFiles();
             this.loadQuota();
+            this.sidebarOpen = false;
         },
 
         // File selection
@@ -336,7 +376,8 @@ function fluxFilesApp() {
                 name: file.name,
                 size: file.size,
                 disk: this.currentDisk,
-                meta: file.meta || null
+                meta: file.meta || null,
+                type: file.type || 'file'
             });
         },
 
@@ -366,6 +407,15 @@ function fluxFilesApp() {
         deselectAll() {
             this.selected = [];
             this.detailFile = null;
+        },
+
+        startResizeDetail(e) {
+            e.preventDefault();
+            this._resizeDetail = { startX: e.clientX, startW: this.detailPanelWidth };
+            document.addEventListener('mousemove', this._resizeDetailMove);
+            document.addEventListener('mouseup', this._resizeDetailUp);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
         },
 
         toggleSelectAll() {
@@ -1290,7 +1340,7 @@ function fluxFilesApp() {
         },
 
         isPreviewable(file, type) {
-            if (!file || !file.name) return false;
+            if (!file || !file.name || file.type === 'dir') return false;
             const ext = file.name.split('.').pop()?.toLowerCase();
             const map = {
                 image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'],

@@ -28,6 +28,7 @@
         "or": "ou",
         "clear": "Effacer",
         "select_file": "Sélectionner un fichier",
+        "select_folder": "Sélectionner le dossier",
         "root": "Racine"
     },
     "toolbar": {
