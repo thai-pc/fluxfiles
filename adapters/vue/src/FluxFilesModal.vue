@@ -9,6 +9,7 @@ const props = withDefaults(defineProps<{
   token: string;
   disk?: string;
   mode?: 'picker' | 'browser';
+  multiple?: boolean;
   allowedTypes?: string[] | null;
   maxSize?: number | null;
   locale?: string | null;
@@ -17,10 +18,11 @@ const props = withDefaults(defineProps<{
 }>(), {
   disk: 'local',
   mode: 'picker',
+  multiple: false,
 });
 
 const emit = defineEmits<{
-  select: [file: FluxFile];
+  select: [file: FluxFile | FluxFile[]];
   close: [];
   ready: [];
   event: [event: FluxEvent];
@@ -32,6 +34,7 @@ const handle = useFluxFiles({
   token: props.token,
   disk: props.disk,
   mode: props.mode,
+  multiple: props.multiple,
   allowedTypes: props.allowedTypes,
   maxSize: props.maxSize,
   locale: props.locale,

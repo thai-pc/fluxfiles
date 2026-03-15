@@ -129,6 +129,7 @@ All components and the hook expose these methods:
 | `token` | `string` | Yes | JWT token |
 | `disk` | `string` | No | Initial storage disk (`local`) |
 | `mode` | `string` | No | `picker` or `browser` |
+| `multiple` | `boolean` | No | When true, onSelect receives array of files |
 | `locale` | `string` | No | UI language code |
 | `width` | `string` | No | Iframe width |
 | `height` | `string` | No | Iframe height |

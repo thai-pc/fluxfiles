@@ -12,6 +12,7 @@ class FluxFiles extends Component
 {
     public string $disk;
     public string $mode;
+    public bool $multiple;
     public string $width;
     public string $height;
     public array $overrides;
@@ -21,6 +22,7 @@ class FluxFiles extends Component
     public function __construct(
         string $disk = 'local',
         string $mode = 'picker',
+        bool $multiple = false,
         string $width = '100%',
         string $height = '600px',
         array $overrides = [],
@@ -29,6 +31,7 @@ class FluxFiles extends Component
     ) {
         $this->disk = $disk;
         $this->mode = $mode;
+        $this->multiple = $multiple;
         $this->width = $width;
         $this->height = $height;
         $this->overrides = $overrides;

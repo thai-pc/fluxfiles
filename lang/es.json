@@ -29,6 +29,8 @@
         "clear": "Limpiar",
         "select_file": "Seleccionar archivo",
         "select_folder": "Seleccionar carpeta",
+        "select_item": "Seleccionar 1 elemento",
+        "select_items": "Seleccionar {count} elementos",
         "root": "Raíz"
     },
     "toolbar": {

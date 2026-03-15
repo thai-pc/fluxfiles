@@ -40,6 +40,7 @@ Route::delete('metadata', [FluxFilesController::class, 'deleteMetadata']);
 Route::get('trash', [FluxFilesController::class, 'trash']);
 Route::post('restore', [FluxFilesController::class, 'restore']);
 Route::delete('purge', [FluxFilesController::class, 'purge']);
+Route::post('purge-bulk', [FluxFilesController::class, 'purgeBulk']);
 
 // Search
 Route::get('search', [FluxFilesController::class, 'search']);

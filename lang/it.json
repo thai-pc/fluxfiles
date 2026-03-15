@@ -29,6 +29,8 @@
         "clear": "Cancella",
         "select_file": "Seleziona file",
         "select_folder": "Seleziona cartella",
+        "select_item": "Seleziona 1 elemento",
+        "select_items": "Seleziona {count} elementi",
         "root": "Radice"
     },
     "toolbar": {

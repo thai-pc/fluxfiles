@@ -583,6 +583,31 @@ class FluxFilesController
         }
     }
 
+    public function purgeBulk(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk = $request->input('disk', 'local');
+            $paths = $request->input('paths');
+
+            if (!is_array($paths) || empty($paths)) {
+                throw new ApiException('Missing or invalid paths array', 400);
+            }
+
+            $result = $fm->purgeBulk($disk, $paths);
+            foreach ($result['purged'] ?? [] as $path) {
+                $this->logAudit($claims, 'purge', $disk, $path);
+            }
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
     // Search
 
     public function search(Request $request): JsonResponse

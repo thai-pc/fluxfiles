@@ -279,6 +279,30 @@ class FileManager
         return ['purged' => true];
     }
 
+    /**
+     * Purge multiple items from trash in one request (avoids rate limit when purging many).
+     */
+    public function purgeBulk(string $disk, array $paths): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+
+        $purged = [];
+        $errors = [];
+
+        foreach ($paths as $path) {
+            if (!is_string($path) || $path === '') continue;
+            try {
+                $this->purge($disk, $path);
+                $purged[] = $path;
+            } catch (\Throwable $e) {
+                $errors[] = ['path' => $path, 'error' => $e->getMessage()];
+            }
+        }
+
+        return ['purged' => $purged, 'errors' => $errors];
+    }
+
     public function listTrash(string $disk): array
     {
         $this->assertDisk($disk);

@@ -29,6 +29,8 @@
         "clear": "지우기",
         "select_file": "파일 선택",
         "select_folder": "폴더 선택",
+        "select_item": "1개 항목 선택",
+        "select_items": "{count}개 항목 선택",
         "root": "루트"
     },
     "toolbar": {

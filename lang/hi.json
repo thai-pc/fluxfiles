@@ -29,6 +29,8 @@
         "clear": "साफ़ करें",
         "select_file": "फ़ाइल चुनें",
         "select_folder": "फ़ोल्डर चुनें",
+        "select_item": "1 आइटम चुनें",
+        "select_items": "{count} आइटम चुनें",
         "root": "रूट"
     },
     "toolbar": {

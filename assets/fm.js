@@ -175,6 +175,7 @@ function fluxFilesApp() {
                     this.currentDisk = msg.payload.disk || 'local';
                     this.endpoint = msg.payload.endpoint || '';
                     this.config = msg.payload;
+                    if (msg.payload.path !== undefined) this.currentPath = msg.payload.path || '';
                     this.authRequired = false;
                     this._initTheme();
 
@@ -215,7 +216,13 @@ function fluxFilesApp() {
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('token')) this.token = params.get('token');
                 if (params.get('disk')) this.currentDisk = params.get('disk');
-                this.config = { disks: (params.get('disks') || 'local').split(','), theme: params.get('theme') || null };
+                const urlPath = params.get('path');
+                if (urlPath !== null && urlPath !== '') this.currentPath = urlPath;
+                this.config = {
+                    disks: (params.get('disks') || 'local').split(','),
+                    theme: params.get('theme') || null,
+                    multiple: params.get('multiple') === '1' || params.get('multiple') === 'true'
+                };
                 this._initTheme();
 
                 // Locale priority: ?locale= > server Content-Language > browser lang
@@ -258,15 +265,21 @@ function fluxFilesApp() {
             this._toastTimer = setTimeout(() => { this.toastVisible = false; }, duration);
         },
 
-        // PostMessage helper
+        // PostMessage helper — serialize payload to avoid "Proxy object could not be cloned"
         postMessage(type, payload) {
             if (window.parent && window.parent !== window) {
+                let safePayload;
+                try {
+                    safePayload = JSON.parse(JSON.stringify(payload ?? {}));
+                } catch (_) {
+                    safePayload = {};
+                }
                 window.parent.postMessage({
                     source: 'fluxfiles',
                     type: type,
                     v: 1,
                     id: 'ff-' + Math.random().toString(36).substr(2, 9),
-                    payload: payload || {}
+                    payload: safePayload
                 }, '*');
             }
         },
@@ -321,8 +334,20 @@ function fluxFilesApp() {
         // Navigation
         navigate(path) {
             this.currentPath = path;
+            this._updateUrlPath();
             this.loadFiles();
             this.sidebarOpen = false;
+        },
+
+        _updateUrlPath() {
+            if (window.parent !== window) return;
+            const url = new URL(window.location.href);
+            if (this.currentPath) {
+                url.searchParams.set('path', this.currentPath);
+            } else {
+                url.searchParams.delete('path');
+            }
+            window.history.replaceState({}, '', url.toString());
         },
 
         navigateUp() {
@@ -346,12 +371,29 @@ function fluxFilesApp() {
         switchDisk(disk) {
             this.currentDisk = disk;
             this.currentPath = '';
+            this._updateUrlPath();
             this.loadFiles();
             this.loadQuota();
             this.sidebarOpen = false;
         },
 
-        // File selection
+        // Build FM_SELECT payload from file/folder
+        _toSelectPayload(item) {
+            return {
+                url: item.url,
+                key: item.key,
+                name: item.name,
+                path: item.key,      // backward compat
+                basename: item.name, // backward compat
+                size: item.size,
+                disk: this.currentDisk,
+                meta: item.meta || null,
+                type: item.type || 'file',
+                is_dir: item.type === 'dir'
+            };
+        },
+
+        // File selection (single — from detail panel)
         selectFile(file) {
             this.detailFile = file;
             this.activeTab = 'info';
@@ -369,16 +411,15 @@ function fluxFilesApp() {
                 this.aiTags = [];
             }
 
-            // Notify parent
-            this.postMessage('FM_SELECT', {
-                url: file.url,
-                key: file.key,
-                name: file.name,
-                size: file.size,
-                disk: this.currentDisk,
-                meta: file.meta || null,
-                type: file.type || 'file'
-            });
+            // Notify parent (single object)
+            this.postMessage('FM_SELECT', this._toSelectPayload(file));
+        },
+
+        // Multi-select: send selected items as array (when config.multiple)
+        selectMultiple() {
+            if (this.selected.length === 0) return;
+            const payload = this.selected.map(item => this._toSelectPayload(item));
+            this.postMessage('FM_SELECT', payload);
         },
 
         toggleSelect(file, event) {
@@ -391,7 +432,24 @@ function fluxFilesApp() {
                 }
             } else {
                 this.selected = [file];
-                this.selectFile(file);
+                if (this.config.multiple) {
+                    // Multiple mode: just select, show detail — user clicks "Select" to confirm
+                    this.detailFile = file;
+                    this.activeTab = 'info';
+                    if (file.meta) {
+                        this.metaForm = {
+                            title: file.meta.title || '',
+                            alt_text: file.meta.alt_text || '',
+                            caption: file.meta.caption || ''
+                        };
+                        this.aiTags = file.meta.tags ? file.meta.tags.split(', ').filter(Boolean) : [];
+                    } else {
+                        this.metaForm = { title: '', alt_text: '', caption: '' };
+                        this.aiTags = [];
+                    }
+                } else {
+                    this.selectFile(file);
+                }
             }
         },
 
@@ -399,9 +457,9 @@ function fluxFilesApp() {
             return this.selected.some(s => s.key === file.key);
         },
 
-        // Select all / deselect all
+        // Select all / deselect all (folders + files)
         selectAll() {
-            this.selected = [...this.filteredFiles];
+            this.selected = [...this.filteredFolders, ...this.filteredFiles];
         },
 
         deselectAll() {
@@ -419,7 +477,8 @@ function fluxFilesApp() {
         },
 
         toggleSelectAll() {
-            if (this.selected.length === this.filteredFiles.length) {
+            const total = this.filteredFolders.length + this.filteredFiles.length;
+            if (total > 0 && this.selected.length === total) {
                 this.deselectAll();
             } else {
                 this.selectAll();
@@ -427,23 +486,23 @@ function fluxFilesApp() {
         },
 
         get allSelected() {
-            return this.filteredFiles.length > 0 && this.selected.length === this.filteredFiles.length;
+            const total = this.filteredFolders.length + this.filteredFiles.length;
+            return total > 0 && this.selected.length === total;
         },
 
-        // Shift+click range select
+        // Shift+click range select (folders + files in display order)
         shiftSelect(file, event) {
             if (event && event.shiftKey && this.selected.length > 0) {
-                const allFiles = this.filteredFiles;
+                const allItems = [...this.filteredFolders, ...this.filteredFiles];
                 const lastSelected = this.selected[this.selected.length - 1];
-                const lastIdx = allFiles.findIndex(f => f.key === lastSelected.key);
-                const currIdx = allFiles.findIndex(f => f.key === file.key);
+                const lastIdx = allItems.findIndex(f => f.key === lastSelected.key);
+                const currIdx = allItems.findIndex(f => f.key === file.key);
 
                 if (lastIdx >= 0 && currIdx >= 0) {
                     const start = Math.min(lastIdx, currIdx);
                     const end = Math.max(lastIdx, currIdx);
-                    const range = allFiles.slice(start, end + 1);
+                    const range = allItems.slice(start, end + 1);
 
-                    // Merge with existing selection (no duplicates)
                     const keys = new Set(this.selected.map(s => s.key));
                     for (const f of range) {
                         if (!keys.has(f.key)) {
@@ -684,6 +743,7 @@ function fluxFilesApp() {
                     this.postMessage('FM_EVENT', { event: 'delete:done', key: file.key });
                 } catch (err) {
                     console.error('FluxFiles: Delete failed', file.key, err);
+                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
                 }
                 this.tickBulk();
             }
@@ -706,6 +766,7 @@ function fluxFilesApp() {
                 this.loadFiles();
             } catch (err) {
                 console.error('FluxFiles: Restore failed', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             }
         },
 
@@ -720,6 +781,7 @@ function fluxFilesApp() {
                 this.loadTrash();
             } catch (err) {
                 console.error('FluxFiles: Purge failed', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             }
         },
 
@@ -738,6 +800,7 @@ function fluxFilesApp() {
                     this.postMessage('FM_EVENT', { event: 'restore:done', key: item.file_key });
                 } catch (err) {
                     console.error('FluxFiles: Bulk restore failed', item.file_key, err);
+                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
                 }
                 this.tickBulk();
             }
@@ -746,23 +809,31 @@ function fluxFilesApp() {
             this.loadTrash();
         },
 
-        // Bulk purge from trash
+        // Bulk purge from trash (single API call to avoid 429 rate limit)
         async bulkPurge(items) {
             const list = items || this.trashItems;
             if (list.length === 0) return;
             this.startBulk('Purging', list.length);
 
-            for (const item of [...list]) {
-                try {
-                    await this.api('DELETE', '/api/fm/purge', {
-                        disk: this.currentDisk,
-                        path: item.file_key
-                    });
-                    this.postMessage('FM_EVENT', { event: 'purge:done', key: item.file_key });
-                } catch (err) {
-                    console.error('FluxFiles: Bulk purge failed', item.file_key, err);
+            try {
+                const paths = list.map(item => item.file_key);
+                const result = await this.api('POST', '/api/fm/purge-bulk', {
+                    disk: this.currentDisk,
+                    paths
+                });
+                const purged = result?.purged || [];
+                const errors = result?.errors || [];
+                for (const key of purged) {
+                    this.postMessage('FM_EVENT', { event: 'purge:done', key });
                 }
-                this.tickBulk();
+                if (errors.length > 0) {
+                    this.showToast(this.t('delete.purge_partial', { count: errors.length }) || (`${errors.length} item(s) failed to purge`), 'error', 4000);
+                } else if (purged.length > 0) {
+                    this.showToast(this.t('delete.purged'), 'success');
+                }
+            } catch (err) {
+                console.error('FluxFiles: Bulk purge failed', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             }
 
             this.endBulk();
@@ -1011,7 +1082,7 @@ function fluxFilesApp() {
                 });
             } catch (err) {
                 console.error('FluxFiles: AI tag failed', err);
-                alert('AI tagging failed: ' + err.message);
+                this.showToast(this.t('ai.failed', { message: err.message }) || ('AI tagging failed: ' + err.message), 'error', 4000);
             } finally {
                 this.aiTagging = false;
             }
@@ -1192,7 +1263,7 @@ function fluxFilesApp() {
                 this.loadFiles();
             } catch (err) {
                 console.error('FluxFiles: Crop failed', err);
-                alert('Crop failed: ' + err.message);
+                this.showToast(this.t('crop.failed', { message: err.message }) || ('Crop failed: ' + err.message), 'error', 4000);
             } finally {
                 this.cropSaving = false;
             }

@@ -29,6 +29,8 @@
         "clear": "Leeren",
         "select_file": "Datei auswählen",
         "select_folder": "Ordner auswählen",
+        "select_item": "1 Element auswählen",
+        "select_items": "{count} Elemente auswählen",
         "root": "Stammverzeichnis"
     },
     "toolbar": {
@@ -173,7 +175,8 @@
         "free": "Frei",
         "replace": "Original ersetzen",
         "save_copy": "Als Kopie speichern",
-        "saving": "Wird gespeichert..."
+        "saving": "Wird gespeichert...",
+        "failed": "Zuschneiden fehlgeschlagen: {message}"
     },
     "ai": {
         "generate": "KI-Tags erzeugen",

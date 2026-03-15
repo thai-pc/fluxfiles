@@ -29,6 +29,8 @@
         "clear": "Effacer",
         "select_file": "Sélectionner un fichier",
         "select_folder": "Sélectionner le dossier",
+        "select_item": "Sélectionner 1 élément",
+        "select_items": "Sélectionner {count} éléments",
         "root": "Racine"
     },
     "toolbar": {
@@ -173,7 +175,8 @@
         "free": "Libre",
         "replace": "Remplacer l'original",
         "save_copy": "Enregistrer une copie",
-        "saving": "Enregistrement..."
+        "saving": "Enregistrement...",
+        "failed": "Recadrage échoué : {message}"
     },
     "ai": {
         "generate": "Générer des tags IA",

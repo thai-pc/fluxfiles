@@ -3,17 +3,21 @@ interface FluxFilesOpenOptions {
     token: string;
     disk?: string;
     mode?: 'picker' | 'browser';
+    /** Allow multi-select; when true, onSelect receives array of FluxFile */
+    multiple?: boolean;
     locale?: string;
     allowedTypes?: string[];
     maxSize?: number;
     container?: string;
-    onSelect?: (file: FluxFile) => void;
+    onSelect?: (file: FluxFile | FluxFile[]) => void;
     onClose?: () => void;
 }
 
 interface FluxFile {
     path: string;
     basename: string;
+    key?: string;
+    name?: string;
     url?: string;
     size?: number;
     mime?: string;
