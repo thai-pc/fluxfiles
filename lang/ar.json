@@ -28,6 +28,7 @@
         "or": "أو",
         "clear": "مسح",
         "select_file": "اختيار ملف",
+        "select_folder": "اختيار مجلد",
         "root": "الجذر"
     },
     "toolbar": {

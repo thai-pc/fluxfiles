@@ -28,6 +28,7 @@
         "or": "hoặc",
         "clear": "Xóa chọn",
         "select_file": "Chọn file",
+        "select_folder": "Chọn thư mục",
         "root": "Gốc"
     },
     "toolbar": {

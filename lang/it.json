@@ -28,6 +28,7 @@
         "or": "o",
         "clear": "Cancella",
         "select_file": "Seleziona file",
+        "select_folder": "Seleziona cartella",
         "root": "Radice"
     },
     "toolbar": {

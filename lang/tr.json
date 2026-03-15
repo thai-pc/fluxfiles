@@ -28,6 +28,7 @@
         "or": "veya",
         "clear": "Temizle",
         "select_file": "Dosya seç",
+        "select_folder": "Klasör seç",
         "root": "Kök"
     },
     "toolbar": {

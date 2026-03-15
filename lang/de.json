@@ -28,6 +28,7 @@
         "or": "oder",
         "clear": "Leeren",
         "select_file": "Datei auswählen",
+        "select_folder": "Ordner auswählen",
         "root": "Stammverzeichnis"
     },
     "toolbar": {

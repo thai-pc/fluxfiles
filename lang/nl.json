@@ -28,6 +28,7 @@
         "or": "of",
         "clear": "Wissen",
         "select_file": "Bestand selecteren",
+        "select_folder": "Map selecteren",
         "root": "Hoofdmap"
     },
     "toolbar": {

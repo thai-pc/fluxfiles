@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>FluxFiles</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234F46E5'/%3E%3Cpath d='M8 10a2 2 0 012-2h4l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H10a2 2 0 01-2-2V10z' fill='white' fill-opacity='0.9'/%3E%3Cpath d='M12 17l2.5-3 2 2 3.5-4' stroke='%234F46E5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
     <script>
@@ -19,7 +19,7 @@
     <script src="../assets/fm.js"></script>
 </head>
 <body>
-<div class="ff-app" x-data="fluxFilesApp()" x-init="init()">
+<div class="ff-app" :class="{ 'ff-sidebar-open': sidebarOpen }" x-data="fluxFilesApp()" x-init="init()">
 
     <!-- ═══ Auth required screen ═══ -->
     <div class="ff-auth-screen" x-show="authRequired" x-transition.opacity.duration.400ms>
@@ -80,8 +80,12 @@
 
     <!-- ═══ Topbar ═══ -->
     <div class="ff-topbar" x-show="!authRequired">
+        <!-- Mobile: hamburger -->
+        <button class="ff-hamburger" @click="sidebarOpen = !sidebarOpen" aria-label="Toggle menu">
+            <span></span><span></span><span></span>
+        </button>
         <span class="ff-logo">FluxFiles</span>
-        <div class="ff-sep"></div>
+        <div class="ff-sep ff-sep-desktop"></div>
 
         <!-- Breadcrumb -->
         <div class="ff-breadcrumb">
@@ -93,8 +97,8 @@
             </template>
         </div>
 
-        <!-- Disk pills -->
-        <div class="ff-disk-pills">
+        <!-- Disk pills (hidden on mobile, in sidebar) -->
+        <div class="ff-disk-pills ff-disk-pills-desktop">
             <template x-for="disk in (config.disks || ['local'])" :key="disk">
                 <button class="disk-pill"
                         :class="{ active: currentDisk === disk }"
@@ -106,8 +110,22 @@
         </div>
     </div>
 
+    <!-- Mobile sidebar overlay -->
+    <div class="ff-sidebar-overlay" x-show="sidebarOpen" x-transition.opacity @click="sidebarOpen = false" @touchmove.prevent></div>
+
     <!-- ═══ Sidebar ═══ -->
-    <div class="ff-sidebar" x-show="!authRequired">
+    <div class="ff-sidebar" :class="{ 'ff-sidebar-open': sidebarOpen }" x-show="!authRequired">
+        <!-- Mobile: disk pills -->
+        <div class="ff-disk-pills-mobile">
+            <template x-for="disk in (config.disks || ['local'])" :key="disk">
+                <button class="disk-pill"
+                        :class="{ active: currentDisk === disk }"
+                        @click="switchDisk(disk)">
+                    <span class="dot"></span>
+                    <span x-text="disk.toUpperCase()"></span>
+                </button>
+            </template>
+        </div>
         <!-- Folders section -->
         <div class="ff-sidebar-section">
             <div class="ff-sidebar-label" x-text="t('sidebar.folders')"></div>
@@ -135,7 +153,7 @@
             <div class="ff-sidebar-label" x-text="t('sidebar.smart_filters')"></div>
             <button class="tree-item"
                     :class="{ active: showTrash }"
-                    @click="showTrash = !showTrash; if(showTrash) loadTrash();">
+                    @click="showTrash = !showTrash; if(showTrash) loadTrash(); sidebarOpen = false">
                 <span class="ti-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"/>
@@ -236,8 +254,8 @@
                 <template x-if="!uploading">
                     <div>
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="opacity:.5"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 15h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                        <div style="font-size:12px;color:var(--color-text-secondary);" x-text="t('upload.drop_hint')"></div>
-                        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:2px;" x-text="t('upload.max_size', {size: '10MB'})"></div>
+                        <div style="font-size:15px;color:var(--color-text-secondary);" x-text="t('upload.drop_hint')"></div>
+                        <div style="font-size:14px;color:var(--color-text-tertiary);margin-top:4px;" x-text="t('upload.max_size', {size: '10MB'})"></div>
                     </div>
                 </template>
                 <template x-if="uploading">
@@ -255,7 +273,7 @@
                 <div class="progress-bar-wrap" style="flex:1;margin-inline-start:8px;">
                     <div class="progress-bar" :style="'width:' + bulkProgress + '%'"></div>
                 </div>
-                <span x-text="bulkProgress + '%'" style="margin-inline-start:6px;font-size:10px;"></span>
+                <span x-text="bulkProgress + '%'" style="margin-inline-start:8px;font-size:13px;"></span>
             </div>
 
             <!-- Loading -->
@@ -281,7 +299,7 @@
                                          @dblclick="navigate(folder.key)"
                                          @contextmenu.prevent="folderContextMenu(folder, $event)">
                                         <div class="check">✓</div>
-                                        <div class="thumb thumb-folder" style="font-size:22px;">📁</div>
+                                        <div class="thumb thumb-folder" style="font-size:28px;">📁</div>
                                         <div class="fname" x-text="folder.name" :title="folder.name"></div>
                                         <div class="fsize" x-text="t('file.folder')"></div>
                                         <button class="ff-folder-delete"
@@ -347,7 +365,7 @@
             <template x-if="showTrash">
                 <div>
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                        <h3 style="font-size:14px;font-weight:500;" x-text="t('trash.title')"></h3>
+                        <h3 style="font-size:18px;font-weight:500;" x-text="t('trash.title')"></h3>
                         <div style="display:flex;gap:4px;">
                             <button class="ff-btn ff-btn-sm" @click="bulkRestore()" x-show="trashItems.length > 0" x-text="t('trash.restore_all')"></button>
                             <button class="ff-btn ff-btn-sm ff-btn-danger" @click="confirmMessage = t('delete.confirm_bulk', {count: trashItems.length}); confirmAction = () => bulkPurge(); showConfirm = true;" x-show="trashItems.length > 0" x-text="t('trash.empty_trash')"></button>
@@ -358,10 +376,10 @@
                         <p x-text="t('trash.empty')"></p>
                     </div>
                     <template x-for="item in trashItems" :key="item.file_key">
-                        <div class="ff-trash-view" style="position:static;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px;">
+                        <div class="ff-trash-view" style="position:static;display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:15px;">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                             <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="item.file_key.split('/').pop()"></span>
-                            <span style="color:var(--color-text-tertiary);font-size:11px;" x-text="formatDate(item.trashed_at)"></span>
+                            <span style="color:var(--color-text-tertiary);font-size:14px;" x-text="formatDate(item.trashed_at)"></span>
                             <button class="ff-btn ff-btn-sm" @click="restoreFile(item.file_key); loadTrash();" x-text="t('trash.restore')"></button>
                             <button class="ff-btn ff-btn-sm ff-btn-danger" @click="purgeFile(item.file_key)" x-text="t('file.purge')"></button>
                         </div>
@@ -379,7 +397,10 @@
     </div>
 
     <!-- ═══ Detail panel ═══ -->
-    <div class="ff-detail" :class="{ open: detailFile }" x-show="!authRequired">
+    <div class="ff-detail" :class="{ open: detailFile }" :style="detailFile ? { '--ff-detail-w': detailPanelWidth + 'px' } : {}" x-show="!authRequired">
+
+        <!-- Resize handle (desktop only) -->
+        <div class="ff-detail-resize-handle" @mousedown="startResizeDetail($event)" x-show="detailFile" title="Drag to resize"></div>
 
         <div class="ff-detail-header">
             <h3 x-text="detailFile?.name"></h3>
@@ -388,8 +409,10 @@
             </button>
         </div>
 
-        <!-- Preview thumbnail -->
-        <div class="detail-thumb" x-show="detailFile">
+        <!-- Preview thumbnail (click image to view full) -->
+        <div class="detail-thumb" x-show="detailFile"
+             :class="{ 'detail-thumb-clickable': detailFile && isPreviewable(detailFile, 'image') && detailFile.url }"
+             @click="detailFile && isPreviewable(detailFile, 'image') && detailFile.url && (previewFullscreen = true)">
             <template x-if="detailFile && isPreviewable(detailFile, 'image') && detailFile.url">
                 <img :src="detailFile.url" :alt="detailFile.name">
             </template>
@@ -403,7 +426,7 @@
                 <embed :src="detailFile.url" type="application/pdf" style="width:100%;height:100%;">
             </template>
             <template x-if="detailFile && !isPreviewable(detailFile, 'image') && !isPreviewable(detailFile, 'video') && !isPreviewable(detailFile, 'audio') && !isPreviewable(detailFile, 'pdf')">
-                <span x-text="thumbIcon(detailFile)" style="font-size:32px;"></span>
+                <span x-text="thumbIcon(detailFile)" style="font-size:40px;"></span>
             </template>
         </div>
 
@@ -421,7 +444,7 @@
         <!-- Tabs -->
         <div class="ff-detail-tabs" x-show="detailFile">
             <button class="ff-tab-btn" :class="{ active: activeTab === 'info' }" @click="activeTab = 'info'" x-text="t('metadata.tab_info')"></button>
-            <button class="ff-tab-btn" :class="{ active: activeTab === 'seo' }" @click="activeTab = 'seo'" x-text="t('metadata.tab_seo')"></button>
+            <button class="ff-tab-btn" :class="{ active: activeTab === 'seo' }" @click="activeTab = 'seo'" x-show="detailFile && isPreviewable(detailFile, 'image')" x-text="t('metadata.tab_seo')"></button>
             <button class="ff-tab-btn"
                     :class="{ active: activeTab === 'ai' }"
                     @click="activeTab = 'ai'"
@@ -437,7 +460,7 @@
         <!-- Info tab -->
         <div x-show="activeTab === 'info' && detailFile" style="flex:1;display:flex;flex-direction:column;gap:8px;">
             <div class="detail-info">
-                <div class="detail-row"><span class="k" x-text="t('file.size')"></span><span class="v" x-text="formatSize(detailFile?.size)"></span></div>
+                <div class="detail-row"><span class="k" x-text="t('file.size')"></span><span class="v" x-text="detailFile?.type === 'dir' ? '—' : formatSize(detailFile?.size)"></span></div>
                 <div class="detail-row"><span class="k" x-text="t('file.modified')"></span><span class="v" x-text="formatDate(detailFile?.modified)"></span></div>
                 <div class="detail-row"><span class="k" x-text="t('file.disk')"></span><span class="v" x-text="currentDisk"></span></div>
                 <div class="detail-row"><span class="k" x-text="t('file.path')"></span><span class="v" style="word-break:break-all;direction:ltr;" x-text="detailFile?.key"></span></div>
@@ -446,13 +469,13 @@
             <div class="detail-actions">
                 <button class="detail-btn" @click="selectFile(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M4.5 7l2 2 3-3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.1"/></svg>
-                    <span x-text="t('common.select_file')"></span>
+                    <span x-text="detailFile?.type === 'dir' ? t('common.select_folder') : t('common.select_file')"></span>
                 </button>
-                <button class="detail-btn" @click="copyUrl(detailFile)">
+                <button class="detail-btn" x-show="detailFile?.type !== 'dir'" @click="copyUrl(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><path d="M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
                 </button>
-                <button class="detail-btn" @click="downloadFile(detailFile)">
+                <button class="detail-btn" x-show="detailFile?.type !== 'dir'" @click="downloadFile(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('common.download')"></span>
                 </button>
@@ -463,22 +486,29 @@
             </div>
         </div>
 
-        <!-- SEO tab -->
-        <div x-show="activeTab === 'seo' && detailFile" style="flex:1;">
-            <div class="ff-meta-form">
-                <div class="ff-meta-field">
-                    <label x-text="t('metadata.title')"></label>
-                    <input type="text" x-model="metaForm.title" @input="watchMeta()" :placeholder="t('metadata.title_hint')">
+        <!-- SEO tab (collapsible accordion, images only) -->
+        <div x-show="activeTab === 'seo' && detailFile && isPreviewable(detailFile, 'image')" style="flex:1;">
+            <div class="ff-meta-accordion">
+                <button type="button" class="ff-meta-accordion-header" @click="seoSectionExpanded = !seoSectionExpanded">
+                    <span x-text="t('metadata.tab_seo')"></span>
+                    <span class="ff-meta-summary" x-show="!seoSectionExpanded" x-text="(metaForm.title || metaForm.alt_text || metaForm.caption) ? '(…)' : ''"></span>
+                    <svg class="ff-accordion-chevron" :class="{ expanded: seoSectionExpanded }" width="12" height="12" viewBox="0 0 12 12"><path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+                </button>
+                <div class="ff-meta-form" x-show="seoSectionExpanded">
+                    <div class="ff-meta-field">
+                        <label x-text="t('metadata.title')"></label>
+                        <input type="text" x-model="metaForm.title" @input="watchMeta()" :placeholder="t('metadata.title_hint')">
+                    </div>
+                    <div class="ff-meta-field">
+                        <label x-text="t('metadata.alt_text')"></label>
+                        <input type="text" x-model="metaForm.alt_text" @input="watchMeta()" :placeholder="t('metadata.alt_hint')">
+                    </div>
+                    <div class="ff-meta-field">
+                        <label x-text="t('metadata.caption')"></label>
+                        <textarea x-model="metaForm.caption" @input="watchMeta()" :placeholder="t('metadata.caption_hint')" rows="2"></textarea>
+                    </div>
+                    <div class="ff-meta-saving" x-show="metaSaving" x-text="t('metadata.saving')"></div>
                 </div>
-                <div class="ff-meta-field">
-                    <label x-text="t('metadata.alt_text')"></label>
-                    <input type="text" x-model="metaForm.alt_text" @input="watchMeta()" :placeholder="t('metadata.alt_hint')">
-                </div>
-                <div class="ff-meta-field">
-                    <label x-text="t('metadata.caption')"></label>
-                    <textarea x-model="metaForm.caption" @input="watchMeta()" :placeholder="t('metadata.caption_hint')" rows="2"></textarea>
-                </div>
-                <div class="ff-meta-saving" x-show="metaSaving" x-text="t('metadata.saving')"></div>
             </div>
         </div>
 
@@ -493,7 +523,7 @@
                 </button>
             </div>
             <div x-show="aiTags.length > 0" style="margin-bottom:8px;">
-                <label style="font-size:10px;color:var(--color-text-tertiary);display:block;margin-bottom:4px;text-transform:uppercase;" x-text="t('ai.tags')"></label>
+                <label style="font-size:13px;color:var(--color-text-tertiary);display:block;margin-bottom:5px;text-transform:uppercase;" x-text="t('ai.tags')"></label>
                 <div style="display:flex;flex-wrap:wrap;gap:3px;">
                     <template x-for="(tag, idx) in aiTags" :key="idx">
                         <span class="ff-tag"><span x-text="tag"></span><button @click="removeTag(idx)">&times;</button></span>
@@ -505,7 +535,7 @@
             </div>
             <div x-show="aiTagging" style="padding:16px 0;text-align:center;">
                 <div class="ff-spinner"></div>
-                <p style="margin-top:6px;font-size:11px;color:var(--color-text-tertiary);" x-text="t('ai.analyzing_image')"></p>
+                <p style="margin-top:8px;font-size:14px;color:var(--color-text-tertiary);" x-text="t('ai.analyzing_image')"></p>
             </div>
         </div>
 
@@ -549,6 +579,13 @@
                 <button class="ff-btn ff-btn-sm" @click="cancelCrop(); activeTab = 'info'" x-text="t('common.cancel')"></button>
             </div>
         </div>
+    </div>
+
+    <!-- Preview lightbox (full-size image) -->
+    <div class="ff-preview-lightbox" x-show="previewFullscreen && detailFile && isPreviewable(detailFile, 'image')" x-transition.opacity
+         @click="previewFullscreen = false"
+         @keydown.escape.window="previewFullscreen = false">
+        <img :src="detailFile?.url" :alt="detailFile?.name" @click.stop>
     </div>
 
     <!-- ═══ New folder modal ═══ -->
@@ -608,7 +645,7 @@
                 <input type="text" x-model="bulkMoveTarget" placeholder="e.g. photos/2024">
             </div>
             <div x-show="folders.length > 0" style="margin-bottom:10px;">
-                <label style="font-size:10px;color:var(--color-text-tertiary);display:block;margin-bottom:3px;text-transform:uppercase;" x-text="t('bulk.quick_pick')"></label>
+                <label style="font-size:13px;color:var(--color-text-tertiary);display:block;margin-bottom:4px;text-transform:uppercase;" x-text="t('bulk.quick_pick')"></label>
                 <div style="display:flex;flex-wrap:wrap;gap:3px;">
                     <template x-for="folder in folders" :key="folder.key">
                         <button class="ff-btn ff-btn-sm" :class="{ 'ff-btn-primary': bulkMoveTarget === folder.key }" @click="bulkMoveTarget = folder.key" x-text="folder.name"></button>
@@ -630,7 +667,7 @@
             <p x-text="t('file.items_selected', {count: selected.length}) + ' — ' + currentDisk.toUpperCase()"></p>
             <div class="ff-meta-field" style="margin:10px 0;">
                 <label x-text="t('bulk.target_disk')"></label>
-                <select x-model="crossDiskTarget" style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:4px;background:var(--color-background-primary);color:var(--color-text-primary);font-size:11px;">
+                <select x-model="crossDiskTarget" style="width:100%;padding:6px 10px;border:0.5px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);font-size:14px;">
                     <option value="" x-text="t('bulk.select_disk')"></option>
                     <template x-for="d in availableDisks" :key="d">
                         <option :value="d" x-text="d.toUpperCase()"></option>

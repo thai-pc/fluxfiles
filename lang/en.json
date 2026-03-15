@@ -28,6 +28,7 @@
         "or": "or",
         "clear": "Clear",
         "select_file": "Select File",
+        "select_folder": "Select folder",
         "root": "Root"
     },
     "toolbar": {

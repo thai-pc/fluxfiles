@@ -28,6 +28,7 @@
         "or": "o",
         "clear": "Limpiar",
         "select_file": "Seleccionar archivo",
+        "select_folder": "Seleccionar carpeta",
         "root": "Raíz"
     },
     "toolbar": {

@@ -28,6 +28,7 @@
         "or": "または",
         "clear": "クリア",
         "select_file": "ファイルを選択",
+        "select_folder": "フォルダを選択",
         "root": "ルート"
     },
     "toolbar": {
