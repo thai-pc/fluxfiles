@@ -1,0 +1,45 @@
+version: 2
+
+updates:
+  - package-ecosystem: "composer"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "php"
+
+  - package-ecosystem: "composer"
+    directory: "/adapters/laravel"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "php"
+      - "laravel"
+
+  - package-ecosystem: "npm"
+    directory: "/adapters/react"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "react"
+
+  - package-ecosystem: "npm"
+    directory: "/adapters/vue"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "vue"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "ci"
