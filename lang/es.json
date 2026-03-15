@@ -1,0 +1,186 @@
+{
+  "_meta": {
+    "locale":    "es",
+    "name":      "Español",
+    "direction": "ltr",
+    "version":   "1.20.0",
+    "authors":   ["FluxFiles Team"]
+  },
+
+  "common": {
+    "save":        "Guardar",
+    "cancel":      "Cancelar",
+    "delete":      "Eliminar",
+    "rename":      "Renombrar",
+    "move":        "Mover",
+    "copy":        "Copiar",
+    "download":    "Descargar",
+    "upload":      "Subir",
+    "search":      "Buscar",
+    "close":       "Cerrar",
+    "confirm":     "Confirmar",
+    "loading":     "Cargando...",
+    "error":       "Error",
+    "success":     "Listo",
+    "yes":         "Sí",
+    "no":          "No",
+    "or":          "o",
+    "clear":       "Limpiar",
+    "select_file": "Seleccionar archivo",
+    "root":        "Raíz"
+  },
+
+  "toolbar": {
+    "upload":       "Subir",
+    "new_folder":   "Nueva carpeta",
+    "copy_url":     "Copiar URL",
+    "grid_view":    "Vista en cuadrícula",
+    "list_view":    "Vista en lista",
+    "search_hint":  "Buscar archivos..."
+  },
+
+  "sidebar": {
+    "all_files":   "Todos los archivos",
+    "recent":      "Recientes",
+    "starred":     "Favoritos",
+    "trash":       "Papelera",
+    "storage":     "Almacenamiento",
+    "folders":     "Carpetas"
+  },
+
+  "file": {
+    "select":         "Seleccionar",
+    "preview":        "Vista previa",
+    "copy_url":       "Copiar URL",
+    "presign_url":    "URL prefirmada",
+    "delete":         "Eliminar",
+    "restore":        "Restaurar",
+    "purge":          "Eliminar permanentemente",
+    "move_to":        "Mover a...",
+    "items":          "{count} elementos",
+    "items_selected": "{count} seleccionados",
+    "size":           "Tamaño",
+    "type":           "Tipo",
+    "modified":       "Modificado",
+    "disk":           "Almacenamiento",
+    "path":           "Ruta",
+    "name":           "Nombre",
+    "no_files":       "No hay archivos en esta carpeta"
+  },
+
+  "upload": {
+    "drop_hint":      "Arrastra archivos aquí o haz clic para subir",
+    "max_size":       "Máx. {size} por archivo",
+    "all_types":      "Se aceptan todos los tipos",
+    "uploading":      "Subiendo...",
+    "complete":       "Subida completada",
+    "error":          "Error al subir: {message}",
+    "duplicate":      "El archivo ya existe. ¿Usarlo de todos modos?",
+    "quota_exceeded": "Cuota de almacenamiento superada ({used} / {max})"
+  },
+
+  "metadata": {
+    "tab_info":     "Info",
+    "tab_seo":      "SEO",
+    "tab_ai":       "Tags IA",
+    "tab_crop":     "Recortar",
+    "title":        "Título",
+    "title_hint":   "Título personalizado, diferente al nombre del archivo",
+    "alt_text":     "Texto alternativo",
+    "alt_hint":     "Describe la imagen para lectores de pantalla y SEO",
+    "caption":      "Leyenda",
+    "caption_hint": "Descripción breve que se muestra debajo de la imagen",
+    "saving":       "Guardando...",
+    "saved":        "Guardado"
+  },
+
+  "disk": {
+    "local":        "Disco local",
+    "s3":           "Amazon S3",
+    "r2":           "Cloudflare R2"
+  },
+
+  "folder": {
+    "new":          "Nueva carpeta",
+    "name_hint":    "Nombre de la carpeta:",
+    "create":       "Crear carpeta",
+    "created":      "Carpeta creada"
+  },
+
+  "delete": {
+    "confirm_title":  "Confirmación",
+    "confirm_file":   "¿Eliminar \"{name}\"? Se moverá a la papelera.",
+    "confirm_bulk":   "¿Eliminar {count} elemento(s)? Esta acción no se puede deshacer.",
+    "confirm_purge":  "¿Eliminar permanentemente \"{name}\"? Esta acción no se puede deshacer.",
+    "deleted":        "Movido a la papelera",
+    "purged":         "Eliminado permanentemente"
+  },
+
+  "trash": {
+    "title":          "Papelera",
+    "empty":          "La papelera está vacía",
+    "restore":        "Restaurar",
+    "restore_all":    "Restaurar todo",
+    "empty_trash":    "Vaciar papelera",
+    "auto_delete":    "Los archivos se eliminan permanentemente después de {days} días"
+  },
+
+  "search": {
+    "placeholder":    "Buscar por nombre, título, texto alternativo...",
+    "results":        "{count} resultados para \"{query}\"",
+    "no_results":     "Sin resultados para \"{query}\""
+  },
+
+  "error": {
+    "forbidden":        "No tienes permiso para realizar esta acción",
+    "not_found":        "Archivo no encontrado",
+    "quota_exceeded":   "Cuota de almacenamiento superada",
+    "upload_too_large": "El archivo es demasiado grande (máx. {max} MB)",
+    "ext_not_allowed":  "El tipo de archivo .{ext} no está permitido",
+    "generic":          "Algo salió mal. Por favor, inténtalo de nuevo."
+  },
+
+  "presign": {
+    "title":    "URL prefirmada",
+    "expires":  "Expira en",
+    "minutes":  "{n} minutos",
+    "generate": "Generar enlace",
+    "copied":   "¡Enlace copiado!"
+  },
+
+  "audit": {
+    "uploaded":  "{name} subido",
+    "deleted":   "{name} eliminado",
+    "restored":  "{name} restaurado",
+    "moved":     "{from} movido a {to}",
+    "copied":    "{from} copiado a {to}"
+  },
+
+  "bulk": {
+    "move":          "Mover",
+    "copy_to_disk":  "Copiar al disco",
+    "move_to_disk":  "Mover al disco",
+    "download":      "Descargar",
+    "move_to_folder": "Mover a carpeta",
+    "destination":   "Ruta de destino",
+    "quick_pick":    "Acceso rápido:",
+    "target_disk":   "Disco destino",
+    "select_disk":   "-- Seleccionar disco --"
+  },
+
+  "crop": {
+    "free":            "Libre",
+    "replace":         "Reemplazar original",
+    "save_copy":       "Guardar como copia",
+    "saving":          "Guardando..."
+  },
+
+  "ai": {
+    "generate":        "Generar tags con IA",
+    "analyzing":       "Analizando...",
+    "tags":            "Tags",
+    "no_tags":         "Aún no hay tags de IA. Haz clic en \"Generar tags con IA\" para analizar esta imagen.",
+    "analyzing_image": "Analizando imagen con IA...",
+    "failed":          "Error en el etiquetado IA: {message}"
+  }
+}

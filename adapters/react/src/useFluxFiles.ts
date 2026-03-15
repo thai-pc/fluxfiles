@@ -54,6 +54,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
       allowedTypes: opts.allowedTypes || null,
       maxSize: opts.maxSize || null,
       endpoint: opts.endpoint || '',
+      locale: opts.locale || null,
     });
   }, [post]);
 
@@ -94,7 +95,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
     if (ready) {
       sendConfig();
     }
-  }, [options.token, options.disk, options.mode, ready, sendConfig]);
+  }, [options.token, options.disk, options.mode, options.locale, ready, sendConfig]);
 
   // Command helpers
   const command = useCallback(
@@ -110,6 +111,8 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
   const search = useCallback((q: string) => command('search', { q }), [command]);
   const crossCopy = useCallback((dstDisk: string, dstPath?: string) => command('crossCopy', { dst_disk: dstDisk, dst_path: dstPath || '' }), [command]);
   const crossMove = useCallback((dstDisk: string, dstPath?: string) => command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' }), [command]);
+  const crop = useCallback((x: number, y: number, width: number, height: number, savePath?: string) => command('crop', { x, y, width, height, save_path: savePath || '' }), [command]);
+  const aiTag = useCallback(() => command('aiTag'), [command]);
 
   const iframeRef = useCallback((el: HTMLIFrameElement | null) => {
     iframeElRef.current = el;
@@ -129,5 +132,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
     search,
     crossCopy,
     crossMove,
+    crop,
+    aiTag,
   };
 }

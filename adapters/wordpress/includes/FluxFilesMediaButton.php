@@ -73,11 +73,14 @@ class FluxFilesMediaButton
 
         $endpoint = FluxFilesPlugin::apiEndpoint();
 
+        $locale = substr(get_locale(), 0, 2);
+
         $config = wp_json_encode([
             'endpoint' => $endpoint,
             'token'    => $token,
             'disk'     => get_option('fluxfiles_disks', ['local'])[0] ?? 'local',
             'mode'     => 'picker',
+            'locale'   => $locale,
         ]);
 
         ?>

@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+// Language routes (public, no auth needed)
+Route::get('lang', [FluxFilesController::class, 'langList'])->withoutMiddleware(['auth']);
+Route::get('lang/{locale}', [FluxFilesController::class, 'langGet'])->withoutMiddleware(['auth']);
+
 // API routes
 Route::get('list', [FluxFilesController::class, 'list']);
 Route::post('upload', [FluxFilesController::class, 'upload']);
@@ -22,6 +26,8 @@ Route::post('copy', [FluxFilesController::class, 'copy']);
 Route::post('mkdir', [FluxFilesController::class, 'mkdir']);
 Route::post('cross-copy', [FluxFilesController::class, 'crossCopy']);
 Route::post('cross-move', [FluxFilesController::class, 'crossMove']);
+Route::post('crop', [FluxFilesController::class, 'crop']);
+Route::post('ai-tag', [FluxFilesController::class, 'aiTag']);
 Route::post('presign', [FluxFilesController::class, 'presign']);
 Route::get('meta', [FluxFilesController::class, 'meta']);
 

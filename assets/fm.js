@@ -1,5 +1,12 @@
 function fluxFilesApp() {
+    const LOCALE = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };
+
     return {
+        // i18n
+        locale: LOCALE.locale,
+        direction: LOCALE.dir,
+        _messages: LOCALE.messages,
+
         // State
         currentDisk: 'local',
         currentPath: '',
@@ -40,10 +47,63 @@ function fluxFilesApp() {
         uploading: false,
         dragActive: false,
 
+        // AI tag state
+        aiTagging: false,
+        aiTags: [],
+
         // Metadata state
         metaForm: { title: '', alt_text: '', caption: '' },
         metaSaving: false,
         metaSaveTimer: null,
+
+        // Crop state
+        cropActive: false,
+        cropSaving: false,
+        cropData: { x: 0, y: 0, w: 0, h: 0 },
+        cropAspect: null, // null = free, '1:1', '16:9', '4:3'
+        _cropDragging: false,
+        _cropStart: { x: 0, y: 0 },
+        _cropImgRect: null,
+        _cropNatW: 0,
+        _cropNatH: 0,
+
+        // i18n helpers
+        t(key, vars) {
+            const parts = key.split('.');
+            let val = this._messages;
+            for (const p of parts) {
+                val = val?.[p];
+                if (val === undefined) return key;
+            }
+            if (typeof val !== 'string') return key;
+            if (!vars) return val;
+            return val.replace(/\{(\w+)\}/g, (_, k) => vars[k] !== undefined ? vars[k] : '{' + k + '}');
+        },
+
+        tp(singularKey, pluralKey, n, vars) {
+            const key = n === 1 ? singularKey : pluralKey;
+            return this.t(key, { ...vars, count: n });
+        },
+
+        async switchLocale(newLocale) {
+            if (newLocale === this.locale) return;
+            try {
+                const res = await fetch(this.endpoint + '/api/fm/lang/' + encodeURIComponent(newLocale),
+                    { headers: { 'Authorization': 'Bearer ' + this.token } });
+                if (!res.ok) return;
+                const json = await res.json();
+                const data = json.data;
+                if (data && data.messages) {
+                    this._messages = data.messages;
+                    this.locale = data.locale;
+                    this.direction = data.dir;
+                    document.documentElement.dir = data.dir;
+                    document.documentElement.lang = data.locale;
+                }
+            } catch (err) {
+                console.error('FluxFiles: switchLocale failed', err);
+            }
+        },
 
         // Init
         init() {
@@ -59,6 +119,15 @@ function fluxFilesApp() {
                     if (msg.payload.theme) {
                         this.applyTheme(msg.payload.theme);
                     }
+
+                    // Handle locale from host app
+                    const targetLocale = msg.payload.locale && msg.payload.locale !== 'auto'
+                        ? msg.payload.locale
+                        : (navigator.language?.split('-')[0] || 'en');
+                    if (targetLocale !== this.locale) {
+                        this.switchLocale(targetLocale);
+                    }
+
                     this.loadFiles();
                 }
 
@@ -71,9 +140,14 @@ function fluxFilesApp() {
             this.applyTheme('auto');
 
             // Notify parent we're ready
+            // Set document direction
+            document.documentElement.dir = this.direction;
+            document.documentElement.lang = this.locale;
+
             this.postMessage('FM_READY', {
-                version: '1.0.0',
-                capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops']
+                version: '1.20.0',
+                locale: this.locale,
+                capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops', 'ai-tag', 'i18n']
             });
         },
 
@@ -179,8 +253,10 @@ function fluxFilesApp() {
                     alt_text: file.meta.alt_text || '',
                     caption: file.meta.caption || ''
                 };
+                this.aiTags = file.meta.tags ? file.meta.tags.split(', ').filter(Boolean) : [];
             } else {
                 this.metaForm = { title: '', alt_text: '', caption: '' };
+                this.aiTags = [];
             }
 
             // Notify parent
@@ -705,6 +781,225 @@ function fluxFilesApp() {
             return file.meta != null;
         },
 
+        // AI Tag
+        async aiTag() {
+            if (!this.detailFile) return;
+            this.aiTagging = true;
+            try {
+                const result = await this.api('POST', '/api/fm/ai-tag', {
+                    disk: this.currentDisk,
+                    path: this.detailFile.key
+                });
+                if (result && result.tags) {
+                    this.aiTags = result.tags;
+                    if (result.title && !this.metaForm.title) this.metaForm.title = result.title;
+                    if (result.alt_text && !this.metaForm.alt_text) this.metaForm.alt_text = result.alt_text;
+                    if (result.caption && !this.metaForm.caption) this.metaForm.caption = result.caption;
+
+                    this.detailFile.meta = {
+                        ...this.metaForm,
+                        tags: result.tags.join(', ')
+                    };
+
+                    const idx = this.files.findIndex(f => f.key === this.detailFile.key);
+                    if (idx >= 0) {
+                        this.files[idx].meta = { ...this.detailFile.meta };
+                    }
+                }
+                this.postMessage('FM_EVENT', {
+                    event: 'ai_tag:done',
+                    key: this.detailFile.key,
+                    tags: result.tags || []
+                });
+            } catch (err) {
+                console.error('FluxFiles: AI tag failed', err);
+                alert('AI tagging failed: ' + err.message);
+            } finally {
+                this.aiTagging = false;
+            }
+        },
+
+        removeTag(index) {
+            this.aiTags.splice(index, 1);
+            if (this.detailFile) {
+                const tagsStr = this.aiTags.join(', ');
+                this.detailFile.meta = { ...this.metaForm, tags: tagsStr };
+                // Save updated tags
+                this.api('PUT', '/api/fm/metadata', {
+                    disk: this.currentDisk,
+                    key: this.detailFile.key,
+                    ...this.metaForm,
+                    tags: tagsStr
+                }).catch(err => console.error('FluxFiles: Save tags failed', err));
+            }
+        },
+
+        // Crop
+        initCrop() {
+            this.cropActive = true;
+            this.cropData = { x: 0, y: 0, w: 0, h: 0 };
+            this.cropAspect = null;
+
+            this.$nextTick(() => {
+                const img = this.$refs.cropImage;
+                if (!img) return;
+
+                const load = () => {
+                    this._cropNatW = img.naturalWidth;
+                    this._cropNatH = img.naturalHeight;
+                    // Default selection: center 80%
+                    const margin = 0.1;
+                    this.cropData = {
+                        x: Math.round(this._cropNatW * margin),
+                        y: Math.round(this._cropNatH * margin),
+                        w: Math.round(this._cropNatW * (1 - margin * 2)),
+                        h: Math.round(this._cropNatH * (1 - margin * 2))
+                    };
+                };
+
+                if (img.complete) load();
+                else img.onload = load;
+            });
+        },
+
+        cancelCrop() {
+            this.cropActive = false;
+        },
+
+        // Convert crop selection from natural coords to display % for the overlay
+        get cropStyle() {
+            if (!this._cropNatW || !this._cropNatH) return {};
+            const d = this.cropData;
+            return {
+                left: (d.x / this._cropNatW * 100) + '%',
+                top: (d.y / this._cropNatH * 100) + '%',
+                width: (d.w / this._cropNatW * 100) + '%',
+                height: (d.h / this._cropNatH * 100) + '%'
+            };
+        },
+
+        cropMouseDown(e) {
+            const container = this.$refs.cropContainer;
+            if (!container) return;
+            this._cropImgRect = container.getBoundingClientRect();
+
+            const relX = (e.clientX - this._cropImgRect.left) / this._cropImgRect.width;
+            const relY = (e.clientY - this._cropImgRect.top) / this._cropImgRect.height;
+
+            this._cropStart = {
+                x: Math.round(relX * this._cropNatW),
+                y: Math.round(relY * this._cropNatH)
+            };
+            this._cropDragging = true;
+            this.cropData = { x: this._cropStart.x, y: this._cropStart.y, w: 0, h: 0 };
+
+            e.preventDefault();
+        },
+
+        cropMouseMove(e) {
+            if (!this._cropDragging || !this._cropImgRect) return;
+
+            const rect = this._cropImgRect;
+            const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const relY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+
+            let curX = Math.round(relX * this._cropNatW);
+            let curY = Math.round(relY * this._cropNatH);
+
+            let x = Math.min(this._cropStart.x, curX);
+            let y = Math.min(this._cropStart.y, curY);
+            let w = Math.abs(curX - this._cropStart.x);
+            let h = Math.abs(curY - this._cropStart.y);
+
+            // Apply aspect ratio constraint
+            if (this.cropAspect) {
+                const [aw, ah] = this.cropAspect.split(':').map(Number);
+                const ratio = aw / ah;
+                const newH = Math.round(w / ratio);
+                if (newH + y <= this._cropNatH) {
+                    h = newH;
+                } else {
+                    h = this._cropNatH - y;
+                    w = Math.round(h * ratio);
+                }
+            }
+
+            // Clamp
+            w = Math.min(w, this._cropNatW - x);
+            h = Math.min(h, this._cropNatH - y);
+
+            this.cropData = { x, y, w, h };
+            e.preventDefault();
+        },
+
+        cropMouseUp() {
+            this._cropDragging = false;
+        },
+
+        setCropAspect(aspect) {
+            this.cropAspect = aspect;
+            // Re-apply to current selection
+            if (aspect && this.cropData.w > 0) {
+                const [aw, ah] = aspect.split(':').map(Number);
+                const ratio = aw / ah;
+                let w = this.cropData.w;
+                let h = Math.round(w / ratio);
+                if (h + this.cropData.y > this._cropNatH) {
+                    h = this._cropNatH - this.cropData.y;
+                    w = Math.round(h * ratio);
+                }
+                this.cropData.w = Math.min(w, this._cropNatW - this.cropData.x);
+                this.cropData.h = Math.min(h, this._cropNatH - this.cropData.y);
+            }
+        },
+
+        get cropInfo() {
+            const d = this.cropData;
+            if (d.w <= 0 || d.h <= 0) return '';
+            return d.w + ' x ' + d.h + 'px';
+        },
+
+        async saveCrop(mode) {
+            const d = this.cropData;
+            if (d.w <= 0 || d.h <= 0) return;
+
+            this.cropSaving = true;
+            try {
+                const body = {
+                    disk: this.currentDisk,
+                    path: this.detailFile.key,
+                    x: d.x,
+                    y: d.y,
+                    width: d.w,
+                    height: d.h
+                };
+
+                // 'replace' overwrites, 'copy' saves as new file
+                if (mode === 'copy') {
+                    const ext = this.detailFile.name.split('.').pop();
+                    const base = this.detailFile.name.replace(/\.[^.]+$/, '');
+                    body.save_path = (this.currentPath ? this.currentPath + '/' : '') + base + '_cropped.' + ext;
+                }
+
+                const result = await this.api('POST', '/api/fm/crop', body);
+
+                this.postMessage('FM_EVENT', {
+                    event: 'crop:done',
+                    key: result.key,
+                    width: result.width,
+                    height: result.height
+                });
+
+                this.cropActive = false;
+                this.loadFiles();
+            } catch (err) {
+                console.error('FluxFiles: Crop failed', err);
+                alert('Crop failed: ' + err.message);
+            } finally {
+                this.cropSaving = false;
+            }
+        },
+
         // Commands from parent
         handleCommand(payload) {
             switch (payload.action) {
@@ -734,6 +1029,11 @@ function fluxFilesApp() {
                     this.crossDiskMode = 'move';
                     if (this.selected.length > 0 && this.crossDiskTarget) {
                         this.executeCrossDisk();
+                    }
+                    break;
+                case 'aiTag':
+                    if (this.detailFile) {
+                        this.aiTag();
                     }
                     break;
                 case 'close':

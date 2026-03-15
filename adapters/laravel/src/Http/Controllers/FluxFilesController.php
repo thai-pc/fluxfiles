@@ -308,6 +308,78 @@ class FluxFilesController
         }
     }
 
+    public function crop(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk   = $request->input('disk');
+            $path   = $request->input('path');
+            $x      = $request->input('x');
+            $y      = $request->input('y');
+            $width  = $request->input('width');
+            $height = $request->input('height');
+
+            if (!$disk || !$path || $x === null || $y === null || !$width || !$height) {
+                throw new ApiException('Missing required fields', 400);
+            }
+
+            $result = $fm->cropImage(
+                $disk,
+                $path,
+                (int) $x,
+                (int) $y,
+                (int) $width,
+                (int) $height,
+                $request->input('save_path')
+            );
+
+            $this->logAudit($claims, 'crop', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function aiTag(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            // Configure AI tagger if available
+            $aiProvider = config('fluxfiles.ai_provider', env('FLUXFILES_AI_PROVIDER', ''));
+            if (empty($aiProvider)) {
+                throw new ApiException('AI tagging is not configured', 400);
+            }
+
+            $aiTagger = new \FluxFiles\AiTagger(
+                $aiProvider,
+                config('fluxfiles.ai_api_key', env('FLUXFILES_AI_API_KEY', '')),
+                config('fluxfiles.ai_model', env('FLUXFILES_AI_MODEL')) ?: null
+            );
+            $fm->setAiTagger($aiTagger);
+
+            $disk = $request->input('disk');
+            $path = $request->input('path');
+
+            if (!$disk || !$path) {
+                throw new ApiException('Missing required fields: disk, path', 400);
+            }
+
+            $result = $fm->aiTag($disk, $path);
+            $this->logAudit($claims, 'ai_tag', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
     public function presign(Request $request): JsonResponse
     {
         try {
@@ -386,6 +458,7 @@ class FluxFilesController
                 'title'    => $request->input('title'),
                 'alt_text' => $request->input('alt_text'),
                 'caption'  => $request->input('caption'),
+                'tags'     => $request->input('tags'),
             ];
 
             $this->metaRepo->save($disk, $key, $data);
@@ -655,6 +728,49 @@ class FluxFilesController
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }
+    }
+
+    // Language routes (public)
+
+    public function langList(): JsonResponse
+    {
+        $langPath = $this->fluxfilesBasePath() . '/lang';
+        $files = glob($langPath . '/*.json');
+        $result = [];
+
+        foreach ($files as $f) {
+            $data = json_decode(file_get_contents($f), true);
+            if (!is_array($data)) continue;
+            $code = $data['_meta']['locale'] ?? basename($f, '.json');
+            $result[] = [
+                'code' => $code,
+                'name' => $data['_meta']['name'] ?? $code,
+                'dir'  => $data['_meta']['direction'] ?? 'ltr',
+            ];
+        }
+
+        return $this->ok($result);
+    }
+
+    public function langGet(string $locale): JsonResponse
+    {
+        if (!preg_match('/^[a-z]{2,5}$/', $locale)) {
+            return $this->error('Invalid locale', 400);
+        }
+
+        $path = $this->fluxfilesBasePath() . "/lang/{$locale}.json";
+
+        if (!file_exists($path)) {
+            return $this->error('Locale not found', 404);
+        }
+
+        $data = json_decode(file_get_contents($path), true);
+
+        return $this->ok([
+            'locale'   => $data['_meta']['locale'] ?? $locale,
+            'dir'      => $data['_meta']['direction'] ?? 'ltr',
+            'messages' => $data,
+        ]);
     }
 
     // Static asset routes (proxy mode)

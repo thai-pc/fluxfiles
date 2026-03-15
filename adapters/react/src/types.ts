@@ -37,6 +37,8 @@ export interface FluxFilesConfig {
   allowedTypes?: string[] | null;
   /** Max file size filter in bytes. */
   maxSize?: number | null;
+  /** Locale code (e.g. "en", "vi", "ar"). */
+  locale?: string | null;
 }
 
 /** Props for the <FluxFiles /> embedded component. */
@@ -84,7 +86,9 @@ export type FluxCommand =
   | { action: 'refresh' }
   | { action: 'search'; q: string }
   | { action: 'crossCopy'; dst_disk: string; dst_path?: string }
-  | { action: 'crossMove'; dst_disk: string; dst_path?: string };
+  | { action: 'crossMove'; dst_disk: string; dst_path?: string }
+  | { action: 'crop'; x: number; y: number; width: number; height: number; save_path?: string }
+  | { action: 'aiTag' };
 
 /** Return type of useFluxFiles hook. */
 export interface FluxFilesHandle {
@@ -102,6 +106,10 @@ export interface FluxFilesHandle {
   crossCopy: (dstDisk: string, dstPath?: string) => void;
   /** Move selected files to another disk. */
   crossMove: (dstDisk: string, dstPath?: string) => void;
+  /** Crop the currently selected image. */
+  crop: (x: number, y: number, width: number, height: number, savePath?: string) => void;
+  /** Trigger AI tagging on the currently selected image. */
+  aiTag: () => void;
   /** Whether the iframe has reported ready. */
   ready: boolean;
 }

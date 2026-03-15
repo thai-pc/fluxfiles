@@ -12,6 +12,7 @@ class FileManager
 {
     private ImageOptimizer $imageOptimizer;
     private ?QuotaManager $quotaManager = null;
+    private ?AiTagger $aiTagger = null;
 
     public function __construct(
         private DiskManager $disks,
@@ -24,6 +25,11 @@ class FileManager
     public function setQuotaManager(QuotaManager $qm): void
     {
         $this->quotaManager = $qm;
+    }
+
+    public function setAiTagger(AiTagger $ai): void
+    {
+        $this->aiTagger = $ai;
     }
 
     public function list(string $disk, string $path): array
@@ -161,6 +167,30 @@ class FileManager
             } catch (\Throwable $e) {
                 // Image optimization failure should not block upload
                 error_log('FluxFiles: Image optimization failed — ' . $e->getMessage());
+            }
+        }
+
+        // Auto-tag with AI if enabled
+        if ($this->aiTagger !== null
+            && $this->imageOptimizer->isImage($name)
+            && ($_ENV['FLUXFILES_AI_AUTO_TAG'] ?? '') === 'true'
+        ) {
+            try {
+                $imageData = file_get_contents($file['tmp_name']);
+                $mime = mime_content_type($file['tmp_name']) ?: 'image/jpeg';
+                $aiResult = $this->aiTagger->analyze($imageData, $mime);
+
+                if ($aiResult) {
+                    $this->meta->save($disk, $scoped, [
+                        'title'    => $aiResult['title'] ?? null,
+                        'alt_text' => $aiResult['alt_text'] ?? null,
+                        'caption'  => $aiResult['caption'] ?? null,
+                        'tags'     => implode(', ', $aiResult['tags'] ?? []),
+                    ]);
+                    $result['ai_tags'] = $aiResult;
+                }
+            } catch (\Throwable $e) {
+                error_log('FluxFiles: AI auto-tag failed — ' . $e->getMessage());
             }
         }
 
@@ -450,6 +480,124 @@ class FileManager
         $fs->createDirectory($scoped);
 
         return ['created' => true];
+    }
+
+    /**
+     * Crop an image in-place or save as a new file.
+     *
+     * @param string  $disk     Storage disk
+     * @param string  $path     File path
+     * @param int     $x        Crop X offset
+     * @param int     $y        Crop Y offset
+     * @param int     $width    Crop width
+     * @param int     $height   Crop height
+     * @param ?string $savePath If set, save cropped version as a new file; otherwise overwrite
+     * @return array
+     */
+    public function cropImage(
+        string $disk,
+        string $path,
+        int $x,
+        int $y,
+        int $width,
+        int $height,
+        ?string $savePath = null
+    ): array {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+
+        $scopedSrc = $this->scopedPath($path);
+        $fs = $this->disks->disk($disk);
+
+        // Read the original image
+        $imageData = $fs->read($scopedSrc);
+        $ext = strtolower(pathinfo($scopedSrc, PATHINFO_EXTENSION));
+        $format = in_array($ext, ['jpg', 'jpeg']) ? 'jpg' : ($ext === 'webp' ? 'webp' : 'png');
+
+        // Crop
+        $result = $this->imageOptimizer->crop($imageData, $x, $y, $width, $height, $format);
+
+        // Determine destination
+        $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
+
+        // Write cropped image
+        $fs->write($scopedDst, $result['data']);
+
+        // Regenerate image variants for the cropped image
+        $tmpFile = tempnam(sys_get_temp_dir(), 'ffcrop_');
+        file_put_contents($tmpFile, $result['data']);
+
+        $variants = null;
+        try {
+            $variantResult = $this->imageOptimizer->process($fs, $scopedDst, $tmpFile);
+            $variantUrls = [];
+            foreach ($variantResult as $sizeName => $info) {
+                $variantUrls[$sizeName] = [
+                    'url'    => $this->fileUrl($disk, $info['key']),
+                    'key'    => $info['key'],
+                    'width'  => $info['width'],
+                    'height' => $info['height'],
+                ];
+            }
+            $variants = $variantUrls;
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: Variant regeneration after crop failed — ' . $e->getMessage());
+        } finally {
+            @unlink($tmpFile);
+        }
+
+        return [
+            'key'      => $scopedDst,
+            'url'      => $this->fileUrl($disk, $scopedDst),
+            'width'    => $result['width'],
+            'height'   => $result['height'],
+            'variants' => $variants,
+        ];
+    }
+
+    /**
+     * Run AI analysis on an image and save tags/metadata.
+     */
+    public function aiTag(string $disk, string $path): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+
+        if ($this->aiTagger === null) {
+            throw new ApiException('AI tagging is not configured', 400);
+        }
+
+        $scoped = $this->scopedPath($path);
+        $fs = $this->disks->disk($disk);
+
+        $name = basename($scoped);
+        if (!$this->imageOptimizer->isImage($name)) {
+            throw new ApiException('AI tagging is only available for images', 400);
+        }
+
+        $imageData = $fs->read($scoped);
+        $mime = $fs->mimeType($scoped);
+
+        $aiResult = $this->aiTagger->analyze($imageData, $mime);
+
+        // Merge with existing metadata — AI fills empty fields only
+        $existing = $this->meta->get($disk, $scoped);
+
+        $data = [
+            'title'    => (!empty($existing['title'])) ? $existing['title'] : ($aiResult['title'] ?? null),
+            'alt_text' => (!empty($existing['alt_text'])) ? $existing['alt_text'] : ($aiResult['alt_text'] ?? null),
+            'caption'  => (!empty($existing['caption'])) ? $existing['caption'] : ($aiResult['caption'] ?? null),
+            'tags'     => implode(', ', $aiResult['tags'] ?? []),
+        ];
+
+        $this->meta->save($disk, $scoped, $data);
+
+        return [
+            'tags'     => $aiResult['tags'] ?? [],
+            'title'    => $data['title'],
+            'alt_text' => $data['alt_text'],
+            'caption'  => $data['caption'],
+        ];
     }
 
     public function presign(string $disk, string $path, string $method, int $ttl): array

@@ -1,0 +1,169 @@
+{
+  "_meta": {
+    "locale":    "vi",
+    "name":      "Tiếng Việt",
+    "direction": "ltr",
+    "version":   "1.20.0",
+    "authors":   ["FluxFiles Team"]
+  },
+  "common": {
+    "save":        "Lưu",
+    "cancel":      "Hủy",
+    "delete":      "Xóa",
+    "rename":      "Đổi tên",
+    "move":        "Di chuyển",
+    "copy":        "Sao chép",
+    "download":    "Tải xuống",
+    "upload":      "Tải lên",
+    "search":      "Tìm kiếm",
+    "close":       "Đóng",
+    "confirm":     "Xác nhận",
+    "loading":     "Đang tải...",
+    "error":       "Lỗi",
+    "success":     "Thành công",
+    "yes":         "Có",
+    "no":          "Không",
+    "or":          "hoặc",
+    "clear":       "Xóa chọn",
+    "select_file": "Chọn file",
+    "root":        "Gốc"
+  },
+  "toolbar": {
+    "upload":       "Tải lên",
+    "new_folder":   "Tạo thư mục",
+    "copy_url":     "Sao chép URL",
+    "grid_view":    "Dạng lưới",
+    "list_view":    "Dạng danh sách",
+    "search_hint":  "Tìm kiếm file..."
+  },
+  "sidebar": {
+    "all_files":   "Tất cả file",
+    "recent":      "Gần đây",
+    "starred":     "Đã đánh dấu",
+    "trash":       "Thùng rác",
+    "storage":     "Dung lượng",
+    "folders":     "Thư mục"
+  },
+  "file": {
+    "select":         "Chọn",
+    "preview":        "Xem trước",
+    "copy_url":       "Sao chép URL",
+    "presign_url":    "URL có thời hạn",
+    "delete":         "Xóa",
+    "restore":        "Khôi phục",
+    "purge":          "Xóa vĩnh viễn",
+    "move_to":        "Di chuyển đến...",
+    "items":          "{count} mục",
+    "items_selected": "Đã chọn {count} mục",
+    "size":           "Kích thước",
+    "type":           "Loại file",
+    "modified":       "Chỉnh sửa lần cuối",
+    "disk":           "Lưu trữ",
+    "path":           "Đường dẫn",
+    "name":           "Tên",
+    "no_files":       "Thư mục này chưa có file nào"
+  },
+  "upload": {
+    "drop_hint":      "Thả file vào đây hoặc nhấn để tải lên",
+    "max_size":       "Tối đa {size} mỗi file",
+    "all_types":      "Chấp nhận mọi loại file",
+    "uploading":      "Đang tải lên...",
+    "complete":       "Tải lên thành công",
+    "error":          "Tải lên thất bại: {message}",
+    "duplicate":      "File đã tồn tại. Vẫn tiếp tục?",
+    "quota_exceeded": "Đã đạt giới hạn dung lượng ({used} / {max})"
+  },
+  "metadata": {
+    "tab_info":     "Thông tin",
+    "tab_seo":      "SEO",
+    "tab_ai":       "AI Tags",
+    "tab_crop":     "Cắt ảnh",
+    "title":        "Tiêu đề",
+    "title_hint":   "Tiêu đề riêng, khác với tên file",
+    "alt_text":     "Alt text",
+    "alt_hint":     "Mô tả ảnh cho trình đọc màn hình và SEO",
+    "caption":      "Chú thích",
+    "caption_hint": "Mô tả ngắn hiển thị bên dưới ảnh",
+    "saving":       "Đang lưu...",
+    "saved":        "Đã lưu"
+  },
+  "disk": {
+    "local":        "Ổ đĩa cục bộ",
+    "s3":           "Amazon S3",
+    "r2":           "Cloudflare R2"
+  },
+  "folder": {
+    "new":          "Thư mục mới",
+    "name_hint":    "Tên thư mục:",
+    "create":       "Tạo thư mục",
+    "created":      "Đã tạo thư mục"
+  },
+  "delete": {
+    "confirm_title":  "Xác nhận",
+    "confirm_file":   "Xóa \"{name}\"? File sẽ được chuyển vào Thùng rác.",
+    "confirm_bulk":   "Xóa {count} mục? Không thể hoàn tác.",
+    "confirm_purge":  "Xóa vĩnh viễn \"{name}\"? Không thể khôi phục.",
+    "deleted":        "Đã chuyển vào Thùng rác",
+    "purged":         "Đã xóa vĩnh viễn"
+  },
+  "trash": {
+    "title":          "Thùng rác",
+    "empty":          "Thùng rác trống",
+    "restore":        "Khôi phục",
+    "restore_all":    "Khôi phục tất cả",
+    "empty_trash":    "Dọn thùng rác",
+    "auto_delete":    "File sẽ bị xóa vĩnh viễn sau {days} ngày"
+  },
+  "search": {
+    "placeholder":    "Tìm theo tên, tiêu đề, alt text...",
+    "results":        "{count} kết quả cho \"{query}\"",
+    "no_results":     "Không tìm thấy kết quả cho \"{query}\""
+  },
+  "error": {
+    "forbidden":        "Bạn không có quyền thực hiện hành động này",
+    "not_found":        "Không tìm thấy file",
+    "quota_exceeded":   "Đã vượt giới hạn dung lượng",
+    "upload_too_large": "File quá lớn (tối đa {max}MB)",
+    "ext_not_allowed":  "Loại file .{ext} không được phép",
+    "generic":          "Đã xảy ra lỗi. Vui lòng thử lại."
+  },
+  "presign": {
+    "title":    "URL có thời hạn",
+    "expires":  "Hết hạn sau",
+    "minutes":  "{n} phút",
+    "generate": "Tạo liên kết",
+    "copied":   "Đã sao chép liên kết!"
+  },
+  "audit": {
+    "uploaded":  "Đã tải lên {name}",
+    "deleted":   "Đã xóa {name}",
+    "restored":  "Đã khôi phục {name}",
+    "moved":     "Đã di chuyển {from} sang {to}",
+    "copied":    "Đã sao chép {from} sang {to}"
+  },
+  "bulk": {
+    "move":          "Di chuyển",
+    "copy_to_disk":  "Sao chép sang đĩa",
+    "move_to_disk":  "Di chuyển sang đĩa",
+    "download":      "Tải xuống",
+    "move_to_folder": "Di chuyển đến thư mục",
+    "destination":   "Đường dẫn đích",
+    "quick_pick":    "Chọn nhanh:",
+    "target_disk":   "Đĩa đích",
+    "select_disk":   "-- Chọn đĩa --"
+  },
+  "crop": {
+    "free":            "Tự do",
+    "replace":         "Thay thế bản gốc",
+    "save_copy":       "Lưu bản sao",
+    "saving":          "Đang lưu..."
+  },
+  "ai": {
+    "generate":        "Tạo AI Tags",
+    "analyzing":       "Đang phân tích...",
+    "tags":            "Nhãn",
+    "no_tags":         "Chưa có AI tags. Nhấn \"Tạo AI Tags\" để phân tích ảnh này.",
+    "analyzing_image": "Đang phân tích ảnh bằng AI...",
+    "failed":          "Gắn nhãn AI thất bại: {message}"
+  }
+}
