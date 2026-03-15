@@ -79,6 +79,13 @@ body {
     background: var(--color-background-primary);
 }
 
+/* Picker mode: scale down content 5% (except topbar) */
+.ff-picker-mode .ff-sidebar,
+.ff-picker-mode .ff-main,
+.ff-picker-mode .ff-detail {
+    zoom: 0.95;
+}
+
 /* ══════════════════════════ Topbar ══════════════════════════ */
 .ff-topbar {
     grid-column: 1 / -1;
@@ -154,8 +161,8 @@ body {
 .disk-pill {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 18px;
+    gap: 4px;
+    padding: 4px 12px;
     border-radius: 24px;
     border: 0.5px solid var(--color-border-secondary);
     font-size: 15px;
@@ -319,8 +326,8 @@ body {
 .tb-btn {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 18px;
+    gap: 4px;
+    padding: 4px 12px;
     border-radius: var(--border-radius-md);
     border: 0.5px solid var(--color-border-secondary);
     font-size: 16px;
@@ -584,6 +591,7 @@ body {
 }
 
 .file-card:hover .check { display: flex; }
+.ff-multiple-mode .file-card .check { cursor: pointer; }
 
 /* Folder delete button */
 .ff-folder-delete {
@@ -645,6 +653,28 @@ body {
 .thumb-folder { background: #E1F5EE; }
 .thumb-file { background: #F1EFE8; }
 .thumb-audio { background: #FDE8E8; }
+
+.ff-thumb-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ff-thumb-icon .ff-thumb-svg {
+    width: 28px;
+    height: 28px;
+    color: var(--color-text-secondary);
+}
+.ff-detail-thumb-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+.ff-detail-thumb-icon svg {
+    width: 48px;
+    height: 48px;
+    color: var(--color-text-secondary);
+}
 
 .dark .thumb-img { background: #1e3a5f; }
 .dark .thumb-doc { background: #3b3520; }

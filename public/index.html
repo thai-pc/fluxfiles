@@ -19,7 +19,7 @@
     <script src="../assets/fm.js"></script>
 </head>
 <body>
-<div class="ff-app" :class="{ 'ff-sidebar-open': sidebarOpen }" x-data="fluxFilesApp()" x-init="init()">
+<div class="ff-app" :class="{ 'ff-sidebar-open': sidebarOpen, 'ff-picker-mode': config.mode === 'picker', 'ff-multiple-mode': config.multiple }" x-data="fluxFilesApp()" x-init="init()">
 
     <!-- ═══ Auth required screen ═══ -->
     <div class="ff-auth-screen" x-show="authRequired" x-transition.opacity.duration.400ms>
@@ -304,8 +304,10 @@
                                          @click="toggleFolderSelect(folder, $event)"
                                          @dblclick="navigate(folder.key)"
                                          @contextmenu.prevent="folderContextMenu(folder, $event)">
-                                        <div class="check">✓</div>
-                                        <div class="thumb thumb-folder" style="font-size:28px;">📁</div>
+                                        <div class="check" @click.stop="config.multiple && toggleFolderSelect(folder, { ctrlKey: true })">✓</div>
+                                        <div class="thumb thumb-folder ff-thumb-icon">
+                                            <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                                        </div>
                                         <div class="fname" x-text="folder.name" :title="folder.name"></div>
                                         <div class="fsize" x-text="t('file.folder')"></div>
                                         <button class="ff-folder-delete"
@@ -333,7 +335,7 @@
                                          :class="{ selected: isSelected(file) }"
                                          @click="handleFileClick(file, $event)"
                                          @dblclick="selectFile(file)">
-                                        <div class="check">✓</div>
+                                        <div class="check" @click.stop="config.multiple && toggleSelect(file, { ctrlKey: true })">✓</div>
                                         <div x-show="hasMetaBadge(file)" class="ff-meta-badge"></div>
 
                                         <!-- Thumbnail -->
@@ -343,7 +345,26 @@
                                             </div>
                                         </template>
                                         <template x-if="!isPreviewable(file, 'image') || !file.url">
-                                            <div class="thumb" :class="thumbClass(file)" x-text="thumbIcon(file)"></div>
+                                            <div class="thumb ff-thumb-icon" :class="thumbClass(file)">
+                                                <template x-if="fileIcon(file) === 'folder'">
+                                                    <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                                                </template>
+                                                <template x-if="fileIcon(file) === 'video'">
+                                                    <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                                </template>
+                                                <template x-if="fileIcon(file) === 'audio'">
+                                                    <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                                                </template>
+                                                <template x-if="fileIcon(file) === 'document'">
+                                                    <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                                </template>
+                                                <template x-if="fileIcon(file) === 'image'">
+                                                    <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                                </template>
+                                                <template x-if="fileIcon(file) === 'file'">
+                                                    <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                                                </template>
+                                            </div>
                                         </template>
 
                                         <div class="fname" x-text="file.name" :title="file.name"></div>
@@ -432,7 +453,26 @@
                 <embed :src="detailFile.url" type="application/pdf" style="width:100%;height:100%;">
             </template>
             <template x-if="detailFile && !isPreviewable(detailFile, 'image') && !isPreviewable(detailFile, 'video') && !isPreviewable(detailFile, 'audio') && !isPreviewable(detailFile, 'pdf')">
-                <span x-text="thumbIcon(detailFile)" style="font-size:40px;"></span>
+                <div class="ff-detail-thumb-icon">
+                    <template x-if="fileIcon(detailFile) === 'folder'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                    </template>
+                    <template x-if="fileIcon(detailFile) === 'video'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    </template>
+                    <template x-if="fileIcon(detailFile) === 'audio'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    </template>
+                    <template x-if="fileIcon(detailFile) === 'document'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    </template>
+                    <template x-if="fileIcon(detailFile) === 'image'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    </template>
+                    <template x-if="fileIcon(detailFile) === 'file'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                    </template>
+                </div>
             </template>
         </div>
 
@@ -473,7 +513,7 @@
             </div>
 
             <div class="detail-actions">
-                <button class="detail-btn" @click="selectFile(detailFile)">
+                <button class="detail-btn" @click="config.multiple && selected.length > 0 ? selectMultiple() : selectFile(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M4.5 7l2 2 3-3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.1"/></svg>
                     <span x-text="detailFile?.type === 'dir' ? t('common.select_folder') : t('common.select_file')"></span>
                 </button>

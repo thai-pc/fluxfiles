@@ -265,15 +265,21 @@ function fluxFilesApp() {
             this._toastTimer = setTimeout(() => { this.toastVisible = false; }, duration);
         },
 
-        // PostMessage helper
+        // PostMessage helper — serialize payload to avoid "Proxy object could not be cloned"
         postMessage(type, payload) {
             if (window.parent && window.parent !== window) {
+                let safePayload;
+                try {
+                    safePayload = JSON.parse(JSON.stringify(payload ?? {}));
+                } catch (_) {
+                    safePayload = {};
+                }
                 window.parent.postMessage({
                     source: 'fluxfiles',
                     type: type,
                     v: 1,
                     id: 'ff-' + Math.random().toString(36).substr(2, 9),
-                    payload: payload || {}
+                    payload: safePayload
                 }, '*');
             }
         },
@@ -426,7 +432,24 @@ function fluxFilesApp() {
                 }
             } else {
                 this.selected = [file];
-                this.selectFile(file);
+                if (this.config.multiple) {
+                    // Multiple mode: just select, show detail — user clicks "Select" to confirm
+                    this.detailFile = file;
+                    this.activeTab = 'info';
+                    if (file.meta) {
+                        this.metaForm = {
+                            title: file.meta.title || '',
+                            alt_text: file.meta.alt_text || '',
+                            caption: file.meta.caption || ''
+                        };
+                        this.aiTags = file.meta.tags ? file.meta.tags.split(', ').filter(Boolean) : [];
+                    } else {
+                        this.metaForm = { title: '', alt_text: '', caption: '' };
+                        this.aiTags = [];
+                    }
+                } else {
+                    this.selectFile(file);
+                }
             }
         },
 
@@ -434,9 +457,9 @@ function fluxFilesApp() {
             return this.selected.some(s => s.key === file.key);
         },
 
-        // Select all / deselect all
+        // Select all / deselect all (folders + files)
         selectAll() {
-            this.selected = [...this.filteredFiles];
+            this.selected = [...this.filteredFolders, ...this.filteredFiles];
         },
 
         deselectAll() {
@@ -454,7 +477,8 @@ function fluxFilesApp() {
         },
 
         toggleSelectAll() {
-            if (this.selected.length === this.filteredFiles.length) {
+            const total = this.filteredFolders.length + this.filteredFiles.length;
+            if (total > 0 && this.selected.length === total) {
                 this.deselectAll();
             } else {
                 this.selectAll();
@@ -462,23 +486,23 @@ function fluxFilesApp() {
         },
 
         get allSelected() {
-            return this.filteredFiles.length > 0 && this.selected.length === this.filteredFiles.length;
+            const total = this.filteredFolders.length + this.filteredFiles.length;
+            return total > 0 && this.selected.length === total;
         },
 
-        // Shift+click range select
+        // Shift+click range select (folders + files in display order)
         shiftSelect(file, event) {
             if (event && event.shiftKey && this.selected.length > 0) {
-                const allFiles = this.filteredFiles;
+                const allItems = [...this.filteredFolders, ...this.filteredFiles];
                 const lastSelected = this.selected[this.selected.length - 1];
-                const lastIdx = allFiles.findIndex(f => f.key === lastSelected.key);
-                const currIdx = allFiles.findIndex(f => f.key === file.key);
+                const lastIdx = allItems.findIndex(f => f.key === lastSelected.key);
+                const currIdx = allItems.findIndex(f => f.key === file.key);
 
                 if (lastIdx >= 0 && currIdx >= 0) {
                     const start = Math.min(lastIdx, currIdx);
                     const end = Math.max(lastIdx, currIdx);
-                    const range = allFiles.slice(start, end + 1);
+                    const range = allItems.slice(start, end + 1);
 
-                    // Merge with existing selection (no duplicates)
                     const keys = new Set(this.selected.map(s => s.key));
                     for (const f of range) {
                         if (!keys.has(f.key)) {

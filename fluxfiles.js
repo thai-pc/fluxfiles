@@ -50,6 +50,7 @@
                     config.onSelect(msg.payload);
                 }
                 emit('FM_SELECT', msg.payload);
+                FluxFiles.close();
                 break;
 
             case 'FM_EVENT':
@@ -91,16 +92,33 @@
             iframe.setAttribute('allow', 'clipboard-write');
 
             if (!config.container) {
-                // Modal overlay
+                // Modal overlay — UI scaled down 5% (icons, text, spacing)
                 var overlay = document.createElement('div');
                 overlay.id = 'fluxfiles-overlay';
                 overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
 
                 var modal = document.createElement('div');
                 modal.id = 'fluxfiles-modal';
-                modal.style.cssText = 'width:90vw;height:85vh;max-width:1200px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.25);';
+                modal.style.cssText = 'width:90vw;height:85vh;max-width:1200px;background:#f5f5f7;border-radius:10px;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.22);display:flex;flex-direction:column;';
 
-                modal.appendChild(iframe);
+                // Header — macOS-style red close button (left) with × icon
+                var header = document.createElement('div');
+                header.style.cssText = 'flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;padding:10px 12px;border-bottom:1px solid rgba(0,0,0,0.06);background:#f5f5f7;';
+                var closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.setAttribute('aria-label', 'Close');
+                closeBtn.style.cssText = 'width:28px;height:28px;border:none;border-radius:6px;background:transparent;color:#6b7280;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;font-weight:300;transition:color .15s,background .15s;flex-shrink:0;';
+                closeBtn.textContent = '\u00D7';
+                closeBtn.addEventListener('mouseenter', function() { closeBtn.style.background = '#e5e7eb'; closeBtn.style.color = '#374151'; });
+                closeBtn.addEventListener('mouseleave', function() { closeBtn.style.background = 'transparent'; closeBtn.style.color = '#6b7280'; });
+                closeBtn.addEventListener('click', function() { FluxFiles.close(); });
+                header.appendChild(closeBtn);
+                modal.appendChild(header);
+
+                var body = document.createElement('div');
+                body.style.cssText = 'flex:1;min-height:0;display:flex;flex-direction:column;';
+                body.appendChild(iframe);
+                modal.appendChild(body);
                 overlay.appendChild(modal);
                 document.body.appendChild(overlay);
 
