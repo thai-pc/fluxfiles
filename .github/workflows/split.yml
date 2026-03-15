@@ -22,6 +22,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.SPLIT_TOKEN }}
         with:
-          package-directory: ${{ matrix.package.local }}
-          split-repository-organization: thai-pc
-          split-repository-name: ${{ matrix.package.remote }}
+          package_directory: ${{ matrix.package.local }}
+          repository_organization: thai-pc
+          repository_name: ${{ matrix.package.remote }}
