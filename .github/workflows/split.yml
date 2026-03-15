@@ -1,0 +1,27 @@
+name: Split Packages
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - local: 'adapters/laravel'
+            remote: 'fluxfiles-laravel'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: symplify/monorepo-split-github-action@v2
+        with:
+          package_directory: ${{ matrix.package.local }}
+          repository_organization: thai-pc
+          repository_name: ${{ matrix.package.remote }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.SPLIT_TOKEN }}

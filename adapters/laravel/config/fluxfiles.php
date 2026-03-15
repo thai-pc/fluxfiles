@@ -113,15 +113,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Default Permissions
-    |--------------------------------------------------------------------------
-    |
-    | Default JWT claims applied when generating tokens via the facade.
-    | Can be overridden per-call.
-    |
-    */
-    /*
-    |--------------------------------------------------------------------------
     | FluxFiles Base Path
     |--------------------------------------------------------------------------
     |
@@ -165,7 +156,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Default locale for the FluxFiles UI. Supported: en, vi, zh, ja, ko,
-    | fr, de, es, ar, pt. Leave empty to auto-detect from browser.
+    | fr, de, es, ar, pt, it, ru, th, hi, tr, nl. Leave empty to auto-detect.
     |
     */
     'locale' => env('FLUXFILES_LOCALE', ''),
