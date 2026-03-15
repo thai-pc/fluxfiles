@@ -9,9 +9,14 @@ namespace FluxFiles;
  */
 class AiTagger
 {
-    private string $provider;
-    private string $apiKey;
-    private string $model;
+    /** @var string */
+    private $provider;
+
+    /** @var string */
+    private $apiKey;
+
+    /** @var string */
+    private $model;
 
     private const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-4-20250514';
     private const OPENAI_DEFAULT_MODEL = 'gpt-4o';
@@ -28,23 +33,21 @@ class AiTagger
     }
 
     /**
-     * Analyze an image and return tags + metadata.
-     *
-     * @param string $imageData Raw image bytes
-     * @param string $mimeType  MIME type (image/jpeg, image/png, etc.)
      * @return array{tags: string[], title: string, alt_text: string, caption: string}
      */
     public function analyze(string $imageData, string $mimeType): array
     {
-        // Resize image to reduce API cost
         $imageData = $this->resizeForApi($imageData);
         $base64 = base64_encode($imageData);
 
-        return match ($this->provider) {
-            'claude' => $this->analyzeClaude($base64, $mimeType),
-            'openai' => $this->analyzeOpenAI($base64, $mimeType),
-            default  => throw new ApiException("Unsupported AI provider: {$this->provider}", 400),
-        };
+        switch ($this->provider) {
+            case 'claude':
+                return $this->analyzeClaude($base64, $mimeType);
+            case 'openai':
+                return $this->analyzeOpenAI($base64, $mimeType);
+            default:
+                throw new ApiException("Unsupported AI provider: {$this->provider}", 400);
+        }
     }
 
     private function analyzeClaude(string $base64, string $mimeType): array
@@ -87,7 +90,6 @@ class AiTagger
             $body
         );
 
-        // Extract text from response
         $text = '';
         foreach ($response['content'] ?? [] as $block) {
             if (($block['type'] ?? '') === 'text') {
@@ -155,7 +157,6 @@ PROMPT;
 
     private function parseJsonResponse(string $text): array
     {
-        // Strip markdown code fences if present
         $text = preg_replace('/^```(?:json)?\s*/i', '', trim($text));
         $text = preg_replace('/\s*```\s*$/', '', $text);
 
@@ -168,7 +169,7 @@ PROMPT;
         return [
             'tags'     => array_values(array_filter(
                 array_map('trim', $parsed['tags'] ?? []),
-                fn(string $t) => $t !== ''
+                function (string $t): bool { return $t !== ''; }
             )),
             'title'    => substr(trim($parsed['title'] ?? ''), 0, 255),
             'alt_text' => substr(trim($parsed['alt_text'] ?? ''), 0, 500),
@@ -176,9 +177,6 @@ PROMPT;
         ];
     }
 
-    /**
-     * Resize image to max width for API cost reduction.
-     */
     private function resizeForApi(string $imageData): string
     {
         try {
@@ -204,10 +202,8 @@ PROMPT;
                 return $imageData;
             }
 
-            // Preserve transparency
             imagealphablending($resized, false);
             imagesavealpha($resized, true);
-
             imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
 
             ob_start();

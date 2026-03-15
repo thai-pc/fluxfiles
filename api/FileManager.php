@@ -10,15 +10,32 @@ use League\Flysystem\StorageAttributes;
 
 class FileManager
 {
-    private ImageOptimizer $imageOptimizer;
-    private ?QuotaManager $quotaManager = null;
-    private ?AiTagger $aiTagger = null;
+    /** @var DiskManager */
+    private $disks;
+
+    /** @var Claims */
+    private $claims;
+
+    /** @var MetadataRepository */
+    private $meta;
+
+    /** @var ImageOptimizer */
+    private $imageOptimizer;
+
+    /** @var QuotaManager|null */
+    private $quotaManager = null;
+
+    /** @var AiTagger|null */
+    private $aiTagger = null;
 
     public function __construct(
-        private DiskManager $disks,
-        private Claims $claims,
-        private MetadataRepository $meta,
+        DiskManager $disks,
+        Claims $claims,
+        MetadataRepository $meta
     ) {
+        $this->disks = $disks;
+        $this->claims = $claims;
+        $this->meta = $meta;
         $this->imageOptimizer = new ImageOptimizer();
     }
 
@@ -165,7 +182,6 @@ class FileManager
                 }
                 $result['variants'] = $variantUrls;
             } catch (\Throwable $e) {
-                // Image optimization failure should not block upload
                 error_log('FluxFiles: Image optimization failed — ' . $e->getMessage());
             }
         }
@@ -276,9 +292,6 @@ class FileManager
         return ['key' => $scopedTo];
     }
 
-    /**
-     * Copy a file from one disk to another using streams.
-     */
     public function crossCopy(string $srcDisk, string $srcPath, string $dstDisk, string $dstPath): array
     {
         $this->assertDisk($srcDisk);
@@ -317,10 +330,7 @@ class FileManager
             }
         }
 
-        // Copy metadata
         $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
-
-        // Copy image variants if they exist
         $this->copyVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
 
         return [
@@ -331,9 +341,6 @@ class FileManager
         ];
     }
 
-    /**
-     * Move a file from one disk to another (copy + delete source).
-     */
     public function crossMove(string $srcDisk, string $srcPath, string $dstDisk, string $dstPath): array
     {
         $this->assertDisk($srcDisk);
@@ -351,7 +358,6 @@ class FileManager
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
 
-        // Stream the file across disks
         $stream = $srcFs->readStream($scopedSrc);
         try {
             $dstFs->writeStream($scopedDst, $stream);
@@ -361,13 +367,8 @@ class FileManager
             }
         }
 
-        // Move metadata
         $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
-
-        // Move image variants
         $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
-
-        // Delete source file
         $srcFs->delete($scopedSrc);
 
         return [
@@ -378,9 +379,6 @@ class FileManager
         ];
     }
 
-    /**
-     * Copy metadata from one disk/key to another.
-     */
     private function copyMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
     {
         $existing = $this->meta->get($srcDisk, $srcKey);
@@ -389,34 +387,22 @@ class FileManager
         }
     }
 
-    /**
-     * Move metadata from one disk/key to another (copy + delete source).
-     */
     private function moveMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
     {
         $this->copyMetadata($srcDisk, $srcKey, $dstDisk, $dstKey);
         $this->meta->delete($srcDisk, $srcKey);
     }
 
-    /**
-     * Copy image variants (thumb/medium/large) across disks.
-     */
     private function copyVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
     {
         $this->transferVariants($srcDisk, $srcKey, $dstDisk, $dstKey, false);
     }
 
-    /**
-     * Move image variants (thumb/medium/large) across disks.
-     */
     private function moveVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
     {
         $this->transferVariants($srcDisk, $srcKey, $dstDisk, $dstKey, true);
     }
 
-    /**
-     * Transfer image variants across disks (copy or move).
-     */
     private function transferVariants(
         string $srcDisk,
         string $srcKey,
@@ -450,23 +436,16 @@ class FileManager
                     $srcFs->delete($srcVariant);
                 }
             } catch (\Throwable $e) {
-                // Variant transfer failure should not block the main operation
                 error_log("FluxFiles: Variant transfer failed ({$size}) — " . $e->getMessage());
             }
         }
     }
 
-    /**
-     * Build the variant key for a given file key and size name.
-     * Matches ImageOptimizer naming: dir/_variants/basename_size.webp
-     */
     private function variantKey(string $key, string $size): string
     {
         $dir = dirname($key);
         $basename = pathinfo($key, PATHINFO_FILENAME);
-
         $variantsDir = ($dir !== '.' && $dir !== '') ? $dir . '/_variants' : '_variants';
-
         return $variantsDir . '/' . $basename . '_' . $size . '.webp';
     }
 
@@ -483,14 +462,12 @@ class FileManager
     }
 
     /**
-     * Crop an image in-place or save as a new file.
-     *
-     * @param string  $disk     Storage disk
-     * @param string  $path     File path
-     * @param int     $x        Crop X offset
-     * @param int     $y        Crop Y offset
-     * @param int     $width    Crop width
-     * @param int     $height   Crop height
+     * @param string  $disk
+     * @param string  $path
+     * @param int     $x
+     * @param int     $y
+     * @param int     $width
+     * @param int     $height
      * @param ?string $savePath If set, save cropped version as a new file; otherwise overwrite
      * @return array
      */
@@ -509,21 +486,14 @@ class FileManager
         $scopedSrc = $this->scopedPath($path);
         $fs = $this->disks->disk($disk);
 
-        // Read the original image
         $imageData = $fs->read($scopedSrc);
         $ext = strtolower(pathinfo($scopedSrc, PATHINFO_EXTENSION));
         $format = in_array($ext, ['jpg', 'jpeg']) ? 'jpg' : ($ext === 'webp' ? 'webp' : 'png');
 
-        // Crop
         $result = $this->imageOptimizer->crop($imageData, $x, $y, $width, $height, $format);
-
-        // Determine destination
         $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
-
-        // Write cropped image
         $fs->write($scopedDst, $result['data']);
 
-        // Regenerate image variants for the cropped image
         $tmpFile = tempnam(sys_get_temp_dir(), 'ffcrop_');
         file_put_contents($tmpFile, $result['data']);
 
@@ -555,9 +525,6 @@ class FileManager
         ];
     }
 
-    /**
-     * Run AI analysis on an image and save tags/metadata.
-     */
     public function aiTag(string $disk, string $path): array
     {
         $this->assertDisk($disk);
@@ -579,8 +546,6 @@ class FileManager
         $mime = $fs->mimeType($scoped);
 
         $aiResult = $this->aiTagger->analyze($imageData, $mime);
-
-        // Merge with existing metadata — AI fills empty fields only
         $existing = $this->meta->get($disk, $scoped);
 
         $data = [
@@ -649,7 +614,6 @@ class FileManager
 
     private function scopedPath(string $path): string
     {
-        // Strip null bytes and path traversal
         $path = str_replace(["\0", "\x00"], '', $path);
         $parts = explode('/', $path);
         $safe = [];
@@ -678,14 +642,11 @@ class FileManager
 
         if (($config['driver'] ?? '') === 'local') {
             $baseUrl = rtrim($config['url'] ?? '/storage/uploads', '/');
-            // Strip the prefix from the URL path to make it relative
             return $baseUrl . '/' . $path;
         }
 
-        // For S3/R2, construct the URL
         $bucket = $config['bucket'] ?? '';
         if (!empty($config['endpoint'])) {
-            // R2 or custom endpoint
             return rtrim($config['endpoint'], '/') . '/' . $bucket . '/' . $path;
         }
         $region = $config['region'] ?? 'us-east-1';

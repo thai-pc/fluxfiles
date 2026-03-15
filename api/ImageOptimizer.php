@@ -10,7 +10,8 @@ use League\Flysystem\Filesystem;
 
 class ImageOptimizer
 {
-    private ImageManager $manager;
+    /** @var ImageManager */
+    private $manager;
 
     private const VARIANTS = [
         'thumb'  => 150,
@@ -32,15 +33,6 @@ class ImageOptimizer
     }
 
     /**
-     * Crop an image and return the encoded result.
-     *
-     * @param string $imageData  Raw image bytes (from Flysystem read)
-     * @param int    $x          Crop X offset
-     * @param int    $y          Crop Y offset
-     * @param int    $width      Crop width
-     * @param int    $height     Crop height
-     * @param string $format     Output format: original extension or 'webp'/'png'/'jpg'
-     * @param int    $quality    Encode quality (1-100)
      * @return array{data: string, mime: string, width: int, height: int}
      */
     public function crop(
@@ -55,17 +47,21 @@ class ImageOptimizer
         $image = $this->manager->read($imageData);
         $image = $image->crop($width, $height, $x, $y);
 
-        $encoded = match ($format) {
-            'webp'         => $image->toWebp(quality: $quality),
-            'jpg', 'jpeg'  => $image->toJpeg(quality: $quality),
-            default        => $image->toPng(),
-        };
-
-        $mime = match ($format) {
-            'webp'         => 'image/webp',
-            'jpg', 'jpeg'  => 'image/jpeg',
-            default        => 'image/png',
-        };
+        switch ($format) {
+            case 'webp':
+                $encoded = $image->toWebp($quality);
+                $mime = 'image/webp';
+                break;
+            case 'jpg':
+            case 'jpeg':
+                $encoded = $image->toJpeg($quality);
+                $mime = 'image/jpeg';
+                break;
+            default:
+                $encoded = $image->toPng();
+                $mime = 'image/png';
+                break;
+        }
 
         return [
             'data'   => (string) $encoded,
@@ -75,10 +71,6 @@ class ImageOptimizer
         ];
     }
 
-    /**
-     * Process uploaded image: create variants and optionally convert to WebP.
-     * Returns array of variant URLs keyed by size name.
-     */
     public function process(
         Filesystem $fs,
         string $filePath,
@@ -90,23 +82,17 @@ class ImageOptimizer
 
         $image = $this->manager->read($tmpFile);
         $originalWidth = $image->width();
-        $originalHeight = $image->height();
 
         $variants = [];
 
         foreach (self::VARIANTS as $name => $maxWidth) {
-            // Skip variant if original is smaller than target
             if ($originalWidth <= $maxWidth && $name !== 'thumb') {
                 continue;
             }
 
             $resized = $this->manager->read($tmpFile);
-
-            // Resize maintaining aspect ratio
-            $resized = $resized->scaleDown(width: $maxWidth);
-
-            // Encode as WebP
-            $encoded = $resized->toWebp(quality: 80);
+            $resized = $resized->scaleDown($maxWidth);
+            $encoded = $resized->toWebp(80);
             $variantPath = $variantsDir . '/' . $basename . '_' . $name . '.webp';
 
             $fs->write($variantPath, (string) $encoded);

@@ -10,13 +10,14 @@ class ChunkUploader
 {
     private const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
 
-    public function __construct(
-        private DiskManager $diskManager,
-    ) {}
+    /** @var DiskManager */
+    private $diskManager;
 
-    /**
-     * Initiate a multipart upload. Returns uploadId.
-     */
+    public function __construct(DiskManager $diskManager)
+    {
+        $this->diskManager = $diskManager;
+    }
+
     public function initiate(string $disk, string $key): array
     {
         $client = $this->diskManager->s3Client($disk);
@@ -35,9 +36,6 @@ class ChunkUploader
         ];
     }
 
-    /**
-     * Generate a presigned URL for uploading a single part.
-     */
     public function presignPart(string $disk, string $key, string $uploadId, int $partNumber, int $ttl = 3600): array
     {
         $client = $this->diskManager->s3Client($disk);
@@ -60,16 +58,12 @@ class ChunkUploader
         ];
     }
 
-    /**
-     * Complete a multipart upload with the list of parts.
-     */
     public function complete(string $disk, string $key, string $uploadId, array $parts): array
     {
         $client = $this->diskManager->s3Client($disk);
         $config = $this->diskManager->config($disk);
         $bucket = $config['bucket'] ?? '';
 
-        // Parts should be [{PartNumber: int, ETag: string}, ...]
         $multipartUpload = [];
         foreach ($parts as $part) {
             $multipartUpload[] = [
@@ -91,9 +85,6 @@ class ChunkUploader
         ];
     }
 
-    /**
-     * Abort a multipart upload.
-     */
     public function abort(string $disk, string $key, string $uploadId): array
     {
         $client = $this->diskManager->s3Client($disk);

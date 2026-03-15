@@ -90,7 +90,10 @@ class FluxFilesController
     /**
      * Wrap a successful response.
      */
-    private function ok(mixed $data): JsonResponse
+    /**
+     * @param mixed $data
+     */
+    private function ok($data): JsonResponse
     {
         return response()->json(['data' => $data, 'error' => null]);
     }
@@ -806,15 +809,22 @@ class FluxFilesController
         $filePath = realpath($basePath . '/' . $file);
 
         // Prevent directory traversal
-        if (!$filePath || !str_starts_with($filePath, realpath($basePath))) {
+        if (!$filePath || strncmp($filePath, realpath($basePath), strlen(realpath($basePath))) !== 0) {
             abort(404);
         }
 
-        $mime = match (pathinfo($file, PATHINFO_EXTENSION)) {
-            'js'  => 'application/javascript',
-            'css' => 'text/css',
-            default => 'application/octet-stream',
-        };
+        $ext = pathinfo($file, PATHINFO_EXTENSION);
+        switch ($ext) {
+            case 'js':
+                $mime = 'application/javascript';
+                break;
+            case 'css':
+                $mime = 'text/css';
+                break;
+            default:
+                $mime = 'application/octet-stream';
+                break;
+        }
 
         return response(file_get_contents($filePath), 200)
             ->header('Content-Type', $mime . '; charset=utf-8')

@@ -6,10 +6,12 @@ namespace FluxFiles;
 
 class ApiException extends \RuntimeException
 {
-    public function __construct(
-        string $message,
-        private int $httpCode = 400
-    ) {
+    /** @var int */
+    private $httpCode;
+
+    public function __construct(string $message, int $httpCode = 400)
+    {
+        $this->httpCode = $httpCode;
         parent::__construct($message, $httpCode);
     }
 

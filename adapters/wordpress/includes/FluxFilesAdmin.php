@@ -216,7 +216,10 @@ class FluxFilesAdmin
     // Sanitizers
     // -------------------------------------------------------------------------
 
-    public function sanitizePerms(mixed $input): array
+    /**
+     * @param mixed $input
+     */
+    public function sanitizePerms($input): array
     {
         if (!is_array($input)) {
             return ['read'];
@@ -224,7 +227,10 @@ class FluxFilesAdmin
         return array_values(array_intersect($input, ['read', 'write', 'delete']));
     }
 
-    public function sanitizeDisks(mixed $input): array
+    /**
+     * @param mixed $input
+     */
+    public function sanitizeDisks($input): array
     {
         if (!is_array($input)) {
             return ['local'];

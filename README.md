@@ -1,6 +1,6 @@
 # FluxFiles
 
-A standalone, embeddable file manager built with PHP 8.2. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
+A standalone, embeddable file manager built with PHP 7.4+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
 
 Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, and **Vue / Nuxt**.
 
@@ -31,7 +31,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 ## Requirements
 
-- PHP >= 8.2
+- PHP >= 7.4
 - Extensions: `pdo`, `pdo_sqlite`, `gd` (for image processing), `curl` (for AI tagging)
 - Composer
 

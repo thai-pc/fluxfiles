@@ -10,13 +10,14 @@ use League\Flysystem\FileAttributes;
 
 class QuotaManager
 {
-    public function __construct(
-        private DiskManager $diskManager,
-    ) {}
+    /** @var DiskManager */
+    private $diskManager;
 
-    /**
-     * Calculate total storage usage for a given path prefix on a disk (in bytes).
-     */
+    public function __construct(DiskManager $diskManager)
+    {
+        $this->diskManager = $diskManager;
+    }
+
     public function getUsage(string $disk, string $prefix): int
     {
         $fs = $this->diskManager->disk($disk);
@@ -33,15 +34,12 @@ class QuotaManager
     }
 
     /**
-     * Check if uploading a file of given size would exceed quota.
-     * maxStorageMb comes from JWT claims.
-     *
      * @throws ApiException if quota would be exceeded
      */
     public function assertQuota(string $disk, string $prefix, int $fileSizeBytes, int $maxStorageMb): void
     {
         if ($maxStorageMb <= 0) {
-            return; // Unlimited
+            return;
         }
 
         $maxBytes = $maxStorageMb * 1024 * 1024;
@@ -56,9 +54,6 @@ class QuotaManager
         }
     }
 
-    /**
-     * Get quota info for API response.
-     */
     public function getQuotaInfo(string $disk, string $prefix, int $maxStorageMb): array
     {
         $currentUsage = $this->getUsage($disk, $prefix);

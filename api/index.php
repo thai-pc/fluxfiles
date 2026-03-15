@@ -10,6 +10,14 @@ use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
 use FluxFiles\MetadataRepository;
 
+// Polyfill str_contains for PHP < 8.0
+if (!function_exists('str_contains')) {
+    function str_contains(string $haystack, string $needle): bool
+    {
+        return $needle === '' || strpos($haystack, $needle) !== false;
+    }
+}
+
 // Load .env
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->safeLoad();
@@ -121,123 +129,11 @@ try {
     $quotaManager = new QuotaManager($diskManager);
 
     // Routing
-    $data = match (true) {
-        $method === 'GET' && $uri === '/api/fm/list' => $fm->list(
-            $_GET['disk'] ?? 'local',
-            $_GET['path'] ?? ''
-        ),
-
-        $method === 'POST' && $uri === '/api/fm/upload' => $fm->upload(
-            $_POST['disk'] ?? 'local',
-            $_POST['path'] ?? '',
-            $_FILES['file'] ?? throw new ApiException('No file uploaded', 400),
-            (bool) ($_POST['force_upload'] ?? false)
-        ),
-
-        $method === 'DELETE' && $uri === '/api/fm/delete' => $fm->delete(
-            ...jsonBody('disk', 'path')
-        ),
-
-        $method === 'POST' && $uri === '/api/fm/move' => $fm->move(
-            ...jsonBody('disk', 'from', 'to')
-        ),
-
-        $method === 'POST' && $uri === '/api/fm/copy' => $fm->copy(
-            ...jsonBody('disk', 'from', 'to')
-        ),
-
-        $method === 'POST' && $uri === '/api/fm/mkdir' => $fm->mkdir(
-            ...jsonBody('disk', 'path')
-        ),
-
-        // Cross-disk copy/move
-        $method === 'POST' && $uri === '/api/fm/cross-copy' => $fm->crossCopy(
-            ...jsonBody('src_disk', 'src_path', 'dst_disk', 'dst_path')
-        ),
-        $method === 'POST' && $uri === '/api/fm/cross-move' => $fm->crossMove(
-            ...jsonBody('src_disk', 'src_path', 'dst_disk', 'dst_path')
-        ),
-
-        $method === 'POST' && $uri === '/api/fm/presign' => $fm->presign(
-            ...jsonBody('disk', 'path', 'method', 'ttl')
-        ),
-
-        // Image crop
-        $method === 'POST' && $uri === '/api/fm/crop' => handleCrop($fm),
-
-        // AI tag
-        $method === 'POST' && $uri === '/api/fm/ai-tag' => $fm->aiTag(
-            ...jsonBody('disk', 'path')
-        ),
-
-        $method === 'GET' && $uri === '/api/fm/meta' => $fm->fileMeta(
-            $_GET['disk'] ?? 'local',
-            $_GET['path'] ?? throw new ApiException('Missing path parameter', 400)
-        ),
-
-        $method === 'GET' && $uri === '/api/fm/metadata' => handleGetMetadata($metaRepo),
-        $method === 'PUT' && $uri === '/api/fm/metadata' => handleSaveMetadata($metaRepo, $diskManager),
-        $method === 'DELETE' && $uri === '/api/fm/metadata' => handleDeleteMetadata($metaRepo),
-
-        // Trash routes
-        $method === 'GET' && $uri === '/api/fm/trash' => $fm->listTrash(
-            $_GET['disk'] ?? 'local'
-        ),
-        $method === 'POST' && $uri === '/api/fm/restore' => $fm->restore(
-            ...jsonBody('disk', 'path')
-        ),
-        $method === 'DELETE' && $uri === '/api/fm/purge' => $fm->purge(
-            ...jsonBody('disk', 'path')
-        ),
-
-        // Search
-        $method === 'GET' && $uri === '/api/fm/search' => $metaRepo->search(
-            $_GET['disk'] ?? 'local',
-            $_GET['q'] ?? throw new ApiException('Missing search query', 400),
-            (int) ($_GET['limit'] ?? 50)
-        ),
-
-        // Quota
-        $method === 'GET' && $uri === '/api/fm/quota' => $quotaManager->getQuotaInfo(
-            $_GET['disk'] ?? 'local',
-            $claims->pathPrefix,
-            $claims->maxStorageMb
-        ),
-
-        // Audit log
-        $method === 'GET' && $uri === '/api/fm/audit' => $auditLog->list(
-            (int) ($_GET['limit'] ?? 100),
-            (int) ($_GET['offset'] ?? 0),
-            $_GET['user_id'] ?? null
-        ),
-
-        // Chunk upload (multipart) routes
-        $method === 'POST' && $uri === '/api/fm/chunk/init' => handleChunkInit($chunker, $claims),
-        $method === 'POST' && $uri === '/api/fm/chunk/presign' => handleChunkPresign($chunker, $claims),
-        $method === 'POST' && $uri === '/api/fm/chunk/complete' => handleChunkComplete($chunker, $claims),
-        $method === 'POST' && $uri === '/api/fm/chunk/abort' => handleChunkAbort($chunker, $claims),
-
-        default => throw new ApiException('Not found', 404),
-    };
+    $data = routeRequest($method, $uri, $fm, $metaRepo, $diskManager, $claims, $auditLog, $chunker, $quotaManager);
 
     // Log write actions
     if ($isWriteAction && $data !== null) {
-        $auditAction = match (true) {
-            str_contains($uri, '/upload') => 'upload',
-            str_contains($uri, '/delete') => 'delete',
-            str_contains($uri, '/ai-tag') => 'ai_tag',
-            str_contains($uri, '/crop') => 'crop',
-            str_contains($uri, '/cross-move') => 'cross_move',
-            str_contains($uri, '/cross-copy') => 'cross_copy',
-            str_contains($uri, '/move') => 'move',
-            str_contains($uri, '/copy') => 'copy',
-            str_contains($uri, '/mkdir') => 'mkdir',
-            str_contains($uri, '/restore') => 'restore',
-            str_contains($uri, '/purge') => 'purge',
-            str_contains($uri, '/metadata') => 'metadata_update',
-            str_contains($uri, '/chunk') => 'chunk_upload',
-            default => 'unknown',
-        };
+        $auditAction = resolveAuditAction($uri);
         $raw = file_get_contents('php://input');
         $body = json_decode($raw ?: '{}', true) ?: [];
         $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? $body['src_path'] ?? '';
@@ -256,6 +152,175 @@ try {
 }
 
 // --- Helper functions ---
+
+/**
+ * Route the request to the appropriate handler.
+ *
+ * @return mixed
+ */
+function routeRequest(
+    string $method,
+    string $uri,
+    FileManager $fm,
+    MetadataRepository $metaRepo,
+    DiskManager $diskManager,
+    \FluxFiles\Claims $claims,
+    \FluxFiles\AuditLog $auditLog,
+    \FluxFiles\ChunkUploader $chunker,
+    \FluxFiles\QuotaManager $quotaManager
+) {
+    // File operations
+    if ($method === 'GET' && $uri === '/api/fm/list') {
+        return $fm->list($_GET['disk'] ?? 'local', $_GET['path'] ?? '');
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/upload') {
+        if (!isset($_FILES['file'])) {
+            throw new ApiException('No file uploaded', 400);
+        }
+        return $fm->upload(
+            $_POST['disk'] ?? 'local',
+            $_POST['path'] ?? '',
+            $_FILES['file'],
+            (bool) ($_POST['force_upload'] ?? false)
+        );
+    }
+
+    if ($method === 'DELETE' && $uri === '/api/fm/delete') {
+        return $fm->delete(...jsonBody('disk', 'path'));
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/move') {
+        return $fm->move(...jsonBody('disk', 'from', 'to'));
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/copy') {
+        return $fm->copy(...jsonBody('disk', 'from', 'to'));
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/mkdir') {
+        return $fm->mkdir(...jsonBody('disk', 'path'));
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/cross-copy') {
+        return $fm->crossCopy(...jsonBody('src_disk', 'src_path', 'dst_disk', 'dst_path'));
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/cross-move') {
+        return $fm->crossMove(...jsonBody('src_disk', 'src_path', 'dst_disk', 'dst_path'));
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/presign') {
+        return $fm->presign(...jsonBody('disk', 'path', 'method', 'ttl'));
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/crop') {
+        return handleCrop($fm);
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/ai-tag') {
+        return $fm->aiTag(...jsonBody('disk', 'path'));
+    }
+
+    if ($method === 'GET' && $uri === '/api/fm/meta') {
+        $path = $_GET['path'] ?? null;
+        if ($path === null) {
+            throw new ApiException('Missing path parameter', 400);
+        }
+        return $fm->fileMeta($_GET['disk'] ?? 'local', $path);
+    }
+
+    if ($method === 'GET' && $uri === '/api/fm/metadata') {
+        return handleGetMetadata($metaRepo);
+    }
+    if ($method === 'PUT' && $uri === '/api/fm/metadata') {
+        return handleSaveMetadata($metaRepo, $diskManager);
+    }
+    if ($method === 'DELETE' && $uri === '/api/fm/metadata') {
+        return handleDeleteMetadata($metaRepo);
+    }
+
+    // Trash
+    if ($method === 'GET' && $uri === '/api/fm/trash') {
+        return $fm->listTrash($_GET['disk'] ?? 'local');
+    }
+    if ($method === 'POST' && $uri === '/api/fm/restore') {
+        return $fm->restore(...jsonBody('disk', 'path'));
+    }
+    if ($method === 'DELETE' && $uri === '/api/fm/purge') {
+        return $fm->purge(...jsonBody('disk', 'path'));
+    }
+
+    // Search
+    if ($method === 'GET' && $uri === '/api/fm/search') {
+        $q = $_GET['q'] ?? null;
+        if ($q === null) {
+            throw new ApiException('Missing search query', 400);
+        }
+        return $metaRepo->search($_GET['disk'] ?? 'local', $q, (int) ($_GET['limit'] ?? 50));
+    }
+
+    // Quota
+    if ($method === 'GET' && $uri === '/api/fm/quota') {
+        return $quotaManager->getQuotaInfo(
+            $_GET['disk'] ?? 'local',
+            $claims->pathPrefix,
+            $claims->maxStorageMb
+        );
+    }
+
+    // Audit log
+    if ($method === 'GET' && $uri === '/api/fm/audit') {
+        return $auditLog->list(
+            (int) ($_GET['limit'] ?? 100),
+            (int) ($_GET['offset'] ?? 0),
+            $_GET['user_id'] ?? null
+        );
+    }
+
+    // Chunk upload
+    if ($method === 'POST' && $uri === '/api/fm/chunk/init') {
+        return handleChunkInit($chunker, $claims);
+    }
+    if ($method === 'POST' && $uri === '/api/fm/chunk/presign') {
+        return handleChunkPresign($chunker, $claims);
+    }
+    if ($method === 'POST' && $uri === '/api/fm/chunk/complete') {
+        return handleChunkComplete($chunker, $claims);
+    }
+    if ($method === 'POST' && $uri === '/api/fm/chunk/abort') {
+        return handleChunkAbort($chunker, $claims);
+    }
+
+    throw new ApiException('Not found', 404);
+}
+
+function resolveAuditAction(string $uri): string
+{
+    $map = [
+        '/upload'     => 'upload',
+        '/delete'     => 'delete',
+        '/ai-tag'     => 'ai_tag',
+        '/crop'       => 'crop',
+        '/cross-move' => 'cross_move',
+        '/cross-copy' => 'cross_copy',
+        '/move'       => 'move',
+        '/copy'       => 'copy',
+        '/mkdir'      => 'mkdir',
+        '/restore'    => 'restore',
+        '/purge'      => 'purge',
+        '/metadata'   => 'metadata_update',
+        '/chunk'      => 'chunk_upload',
+    ];
+
+    foreach ($map as $needle => $action) {
+        if (strpos($uri, $needle) !== false) {
+            return $action;
+        }
+    }
+
+    return 'unknown';
+}
 
 function jsonBody(string ...$keys): array
 {
@@ -279,8 +344,14 @@ function jsonBody(string ...$keys): array
 
 function handleGetMetadata(MetadataRepository $metaRepo): ?array
 {
-    $disk = $_GET['disk'] ?? throw new ApiException('Missing disk parameter', 400);
-    $key  = $_GET['key'] ?? throw new ApiException('Missing key parameter', 400);
+    $disk = $_GET['disk'] ?? null;
+    $key  = $_GET['key'] ?? null;
+    if ($disk === null) {
+        throw new ApiException('Missing disk parameter', 400);
+    }
+    if ($key === null) {
+        throw new ApiException('Missing key parameter', 400);
+    }
     return $metaRepo->get($disk, $key);
 }
 
@@ -293,8 +364,14 @@ function handleSaveMetadata(MetadataRepository $metaRepo, DiskManager $diskManag
         throw new ApiException('Invalid JSON body', 400);
     }
 
-    $disk = $body['disk'] ?? throw new ApiException('Missing disk', 400);
-    $key  = $body['key'] ?? throw new ApiException('Missing key', 400);
+    $disk = $body['disk'] ?? null;
+    $key  = $body['key'] ?? null;
+    if ($disk === null) {
+        throw new ApiException('Missing disk', 400);
+    }
+    if ($key === null) {
+        throw new ApiException('Missing key', 400);
+    }
 
     $data = [
         'title'    => $body['title'] ?? null,
@@ -316,7 +393,7 @@ function handleDeleteMetadata(MetadataRepository $metaRepo): array
     return ['deleted' => true];
 }
 
-function handleChunkInit(\FluxFiles\ChunkUploader $chunker, Claims $claims): array
+function handleChunkInit(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
 {
     if (!$claims->hasPerm('write')) {
         throw new ApiException('Permission denied: write', 403);
@@ -328,7 +405,7 @@ function handleChunkInit(\FluxFiles\ChunkUploader $chunker, Claims $claims): arr
     return $chunker->initiate($disk, $path);
 }
 
-function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, Claims $claims): array
+function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
 {
     if (!$claims->hasPerm('write')) {
         throw new ApiException('Permission denied: write', 403);
@@ -337,7 +414,7 @@ function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, Claims $claims): 
     return $chunker->presignPart($disk, $key, $uploadId, (int) $partNumber);
 }
 
-function handleChunkComplete(\FluxFiles\ChunkUploader $chunker, Claims $claims): array
+function handleChunkComplete(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
 {
     if (!$claims->hasPerm('write')) {
         throw new ApiException('Permission denied: write', 403);
@@ -346,7 +423,7 @@ function handleChunkComplete(\FluxFiles\ChunkUploader $chunker, Claims $claims):
     return $chunker->complete($disk, $key, $uploadId, $parts);
 }
 
-function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, Claims $claims): array
+function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
 {
     if (!$claims->hasPerm('write')) {
         throw new ApiException('Permission denied: write', 403);

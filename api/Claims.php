@@ -6,26 +6,55 @@ namespace FluxFiles;
 
 class Claims
 {
+    /** @var string */
+    public $userId;
+
+    /** @var array */
+    public $permissions;
+
+    /** @var array */
+    public $allowedDisks;
+
+    /** @var string */
+    public $pathPrefix;
+
+    /** @var int */
+    public $maxUploadMb;
+
+    /** @var array|null */
+    public $allowedExt;
+
+    /** @var int */
+    public $maxStorageMb;
+
     public function __construct(
-        public readonly string $userId,
-        public readonly array $permissions,
-        public readonly array $allowedDisks,
-        public readonly string $pathPrefix,
-        public readonly int $maxUploadMb,
-        public readonly ?array $allowedExt,
-        public readonly int $maxStorageMb,
-    ) {}
+        string $userId,
+        array $permissions,
+        array $allowedDisks,
+        string $pathPrefix,
+        int $maxUploadMb,
+        ?array $allowedExt,
+        int $maxStorageMb
+    ) {
+        $this->userId = $userId;
+        $this->permissions = $permissions;
+        $this->allowedDisks = $allowedDisks;
+        $this->pathPrefix = $pathPrefix;
+        $this->maxUploadMb = $maxUploadMb;
+        $this->allowedExt = $allowedExt;
+        $this->maxStorageMb = $maxStorageMb;
+    }
 
     public static function fromJwtPayload(object $payload): self
     {
         return new self(
-            userId: (string) ($payload->sub ?? '0'),
-            permissions: (array) ($payload->perms ?? ['read']),
-            allowedDisks: (array) ($payload->disks ?? ['local']),
-            pathPrefix: (string) ($payload->prefix ?? ''),
-            maxUploadMb: (int) ($payload->max_upload ?? 10),
-            allowedExt: isset($payload->allowed_ext) ? (array) $payload->allowed_ext : null,
-            maxStorageMb: (int) ($payload->max_storage ?? 0), // 0 = unlimited
+            (string) ($payload->sub ?? '0'),
+            (array) ($payload->perms ?? ['read']),
+            (array) ($payload->disks ?? ['local']),
+            (string) ($payload->prefix ?? ''),
+            (int) ($payload->max_upload ?? 10),
+            isset($payload->allowed_ext) ? (array) $payload->allowed_ext : null,
+            (int) ($payload->max_storage ?? 0)
         );
     }
 
