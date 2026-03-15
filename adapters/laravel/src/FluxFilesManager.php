@@ -11,9 +11,11 @@ class FluxFilesManager
 {
     /**
      * Generate a JWT token for FluxFiles.
+     *
+     * @param string|int|Authenticatable $user
      */
     public function token(
-        string|int|Authenticatable $user,
+        $user,
         array $overrides = []
     ): string {
         $secret = config('fluxfiles.secret');

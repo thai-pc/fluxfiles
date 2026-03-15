@@ -194,7 +194,10 @@ class FluxFilesApi
         $auditLog->log($claims->userId, $action, $disk, $key);
     }
 
-    private function ok(mixed $data): \WP_REST_Response
+    /**
+     * @param mixed $data
+     */
+    private function ok($data): \WP_REST_Response
     {
         return new \WP_REST_Response(['data' => $data, 'error' => null], 200);
     }

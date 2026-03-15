@@ -16,7 +16,10 @@ class FluxFilesShortcode
         add_shortcode('fluxfiles', [$this, 'render']);
     }
 
-    public function render(array|string $atts = []): string
+    /**
+     * @param array|string $atts
+     */
+    public function render($atts = []): string
     {
         if (!is_user_logged_in()) {
             return '<p class="fluxfiles-login-required">Please log in to use the file manager.</p>';
