@@ -21,7 +21,7 @@ class MetadataRepository
     public function get(string $disk, string $key): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT title, alt_text, caption FROM file_meta WHERE disk = ? AND file_key = ?'
+            'SELECT title, alt_text, caption, tags FROM file_meta WHERE disk = ? AND file_key = ?'
         );
         $stmt->execute([$disk, $key]);
         $row = $stmt->fetch();
@@ -33,12 +33,13 @@ class MetadataRepository
     {
         $now = time();
         $stmt = $this->db->prepare(
-            'INSERT INTO file_meta (disk, file_key, title, alt_text, caption, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            'INSERT INTO file_meta (disk, file_key, title, alt_text, caption, tags, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(disk, file_key) DO UPDATE SET
                 title = excluded.title,
                 alt_text = excluded.alt_text,
                 caption = excluded.caption,
+                tags = excluded.tags,
                 updated_at = excluded.updated_at'
         );
         $stmt->execute([
@@ -47,12 +48,13 @@ class MetadataRepository
             $data['title'] ?? null,
             $data['alt_text'] ?? null,
             $data['caption'] ?? null,
+            $data['tags'] ?? null,
             $now,
             $now,
         ]);
 
         // Sync to FTS index
-        $this->syncFts($key, $data['title'] ?? null, $data['alt_text'] ?? null, $data['caption'] ?? null);
+        $this->syncFts($key, $data['title'] ?? null, $data['alt_text'] ?? null, $data['caption'] ?? null, $data['tags'] ?? null);
     }
 
     public function delete(string $disk, string $key): void
@@ -70,7 +72,7 @@ class MetadataRepository
 
         $placeholders = implode(',', array_fill(0, count($keys), '?'));
         $stmt = $this->db->prepare(
-            "SELECT file_key, title, alt_text, caption FROM file_meta WHERE disk = ? AND file_key IN ({$placeholders})"
+            "SELECT file_key, title, alt_text, caption, tags FROM file_meta WHERE disk = ? AND file_key IN ({$placeholders})"
         );
         $stmt->execute(array_merge([$disk], $keys));
 
@@ -124,10 +126,11 @@ class MetadataRepository
     public function search(string $disk, string $query, int $limit = 50): array
     {
         $stmt = $this->db->prepare(
-            'SELECT fm.file_key, fm.title, fm.alt_text, fm.caption,
+            'SELECT fm.file_key, fm.title, fm.alt_text, fm.caption, fm.tags,
                     highlight(file_fts, 1, \'<mark>\', \'</mark>\') as title_hl,
                     highlight(file_fts, 2, \'<mark>\', \'</mark>\') as alt_hl,
-                    highlight(file_fts, 3, \'<mark>\', \'</mark>\') as caption_hl
+                    highlight(file_fts, 3, \'<mark>\', \'</mark>\') as caption_hl,
+                    highlight(file_fts, 4, \'<mark>\', \'</mark>\') as tags_hl
              FROM file_fts
              JOIN file_meta fm ON fm.disk = ? AND fm.file_key = file_fts.file_key
              WHERE file_fts MATCH ?
@@ -139,16 +142,16 @@ class MetadataRepository
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
-    public function syncFts(string $key, ?string $title, ?string $altText, ?string $caption): void
+    public function syncFts(string $key, ?string $title, ?string $altText, ?string $caption, ?string $tags = null): void
     {
         // Delete existing entry
         $this->db->prepare('DELETE FROM file_fts WHERE file_key = ?')->execute([$key]);
 
         // Insert new entry
         $stmt = $this->db->prepare(
-            'INSERT INTO file_fts (file_key, title, alt_text, caption) VALUES (?, ?, ?, ?)'
+            'INSERT INTO file_fts (file_key, title, alt_text, caption, tags) VALUES (?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$key, $title ?? '', $altText ?? '', $caption ?? '']);
+        $stmt->execute([$key, $title ?? '', $altText ?? '', $caption ?? '', $tags ?? '']);
     }
 
     public function deleteFts(string $key): void
@@ -177,7 +180,7 @@ class MetadataRepository
     public function findByHash(string $disk, string $hash): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT file_key, title, alt_text, caption FROM file_meta WHERE disk = ? AND file_hash = ? AND is_trashed = 0 LIMIT 1'
+            'SELECT file_key, title, alt_text, caption, tags FROM file_meta WHERE disk = ? AND file_hash = ? AND is_trashed = 0 LIMIT 1'
         );
         $stmt->execute([$disk, $hash]);
         return $stmt->fetch() ?: null;
@@ -214,7 +217,7 @@ class MetadataRepository
     public function getTrashed(string $disk): array
     {
         $stmt = $this->db->prepare(
-            'SELECT file_key, title, alt_text, caption, trashed_at FROM file_meta WHERE disk = ? AND is_trashed = 1 ORDER BY trashed_at DESC'
+            'SELECT file_key, title, alt_text, caption, tags, trashed_at FROM file_meta WHERE disk = ? AND is_trashed = 1 ORDER BY trashed_at DESC'
         );
         $stmt->execute([$disk]);
         return $stmt->fetchAll();
@@ -247,6 +250,57 @@ class MetadataRepository
     {
         $stmt = $this->db->prepare('DELETE FROM file_meta WHERE disk = ? AND file_key = ? AND is_trashed = 1');
         $stmt->execute([$disk, $key]);
+    }
+
+    private function migrateFts(): void
+    {
+        // Check if file_fts exists
+        $exists = $this->db->query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='file_fts'"
+        )->fetch();
+
+        if (!$exists) {
+            // Fresh install — create with tags column
+            $this->db->exec(
+                'CREATE VIRTUAL TABLE file_fts USING fts5(file_key, title, alt_text, caption, tags)'
+            );
+            return;
+        }
+
+        // Check if tags column exists in FTS table
+        $info = $this->db->query("PRAGMA table_info(file_fts)")->fetchAll();
+        $hasTagsCol = false;
+        foreach ($info as $col) {
+            if (($col['name'] ?? '') === 'tags') {
+                $hasTagsCol = true;
+                break;
+            }
+        }
+
+        if ($hasTagsCol) {
+            return; // Already migrated
+        }
+
+        // Rebuild FTS table with tags column
+        $this->db->exec('DROP TABLE IF EXISTS file_fts');
+        $this->db->exec(
+            'CREATE VIRTUAL TABLE file_fts USING fts5(file_key, title, alt_text, caption, tags)'
+        );
+
+        // Re-index existing metadata rows
+        $stmt = $this->db->query('SELECT file_key, title, alt_text, caption, tags FROM file_meta');
+        $insert = $this->db->prepare(
+            'INSERT INTO file_fts (file_key, title, alt_text, caption, tags) VALUES (?, ?, ?, ?, ?)'
+        );
+        while ($row = $stmt->fetch()) {
+            $insert->execute([
+                $row['file_key'],
+                $row['title'] ?? '',
+                $row['alt_text'] ?? '',
+                $row['caption'] ?? '',
+                $row['tags'] ?? '',
+            ]);
+        }
     }
 
     private function migrate(): void
@@ -287,10 +341,14 @@ class MetadataRepository
         } catch (\PDOException $e) {
             // Column already exists
         }
+        try {
+            $this->db->exec('ALTER TABLE file_meta ADD COLUMN tags TEXT DEFAULT NULL');
+        } catch (\PDOException $e) {
+            // Column already exists
+        }
 
-        // FTS5 virtual table for full-text search
-        $this->db->exec('
-            CREATE VIRTUAL TABLE IF NOT EXISTS file_fts USING fts5(file_key, title, alt_text, caption)
-        ');
+        // FTS5 virtual table for full-text search (with tags)
+        // Check if existing FTS table has the tags column; if not, rebuild it
+        $this->migrateFts();
     }
 }

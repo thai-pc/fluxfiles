@@ -73,6 +73,18 @@ class FluxFilesApi
         register_rest_route($ns, '/mkdir', array_merge($writeArgs, [
             'callback' => [$api, 'handleMkdir'],
         ]));
+        register_rest_route($ns, '/cross-copy', array_merge($writeArgs, [
+            'callback' => [$api, 'handleCrossCopy'],
+        ]));
+        register_rest_route($ns, '/cross-move', array_merge($writeArgs, [
+            'callback' => [$api, 'handleCrossMove'],
+        ]));
+        register_rest_route($ns, '/crop', array_merge($writeArgs, [
+            'callback' => [$api, 'handleCrop'],
+        ]));
+        register_rest_route($ns, '/ai-tag', array_merge($writeArgs, [
+            'callback' => [$api, 'handleAiTag'],
+        ]));
         register_rest_route($ns, '/presign', array_merge($writeArgs, [
             'callback' => [$api, 'handlePresign'],
         ]));
@@ -350,6 +362,130 @@ class FluxFilesApi
         }
     }
 
+    public function handleCrossCopy(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body    = $this->body($request);
+            $srcDisk = $body['src_disk'] ?? null;
+            $srcPath = $body['src_path'] ?? null;
+            $dstDisk = $body['dst_disk'] ?? null;
+            $dstPath = $body['dst_path'] ?? null;
+
+            if (!$srcDisk || !$srcPath || !$dstDisk || !$dstPath) {
+                throw new ApiException('Missing required fields: src_disk, src_path, dst_disk, dst_path', 400);
+            }
+
+            $result = $fm->crossCopy($srcDisk, $srcPath, $dstDisk, $dstPath);
+            $this->logAudit($claims, 'cross_copy', $srcDisk, $srcPath);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleCrossMove(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body    = $this->body($request);
+            $srcDisk = $body['src_disk'] ?? null;
+            $srcPath = $body['src_path'] ?? null;
+            $dstDisk = $body['dst_disk'] ?? null;
+            $dstPath = $body['dst_path'] ?? null;
+
+            if (!$srcDisk || !$srcPath || !$dstDisk || !$dstPath) {
+                throw new ApiException('Missing required fields: src_disk, src_path, dst_disk, dst_path', 400);
+            }
+
+            $result = $fm->crossMove($srcDisk, $srcPath, $dstDisk, $dstPath);
+            $this->logAudit($claims, 'cross_move', $srcDisk, $srcPath);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleCrop(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body   = $this->body($request);
+            $disk   = $body['disk'] ?? null;
+            $path   = $body['path'] ?? null;
+            $x      = $body['x'] ?? null;
+            $y      = $body['y'] ?? null;
+            $width  = $body['width'] ?? null;
+            $height = $body['height'] ?? null;
+
+            if (!$disk || !$path || $x === null || $y === null || !$width || !$height) {
+                throw new ApiException('Missing required fields: disk, path, x, y, width, height', 400);
+            }
+
+            $result = $fm->cropImage(
+                $disk,
+                $path,
+                (int) $x,
+                (int) $y,
+                (int) $width,
+                (int) $height,
+                $body['save_path'] ?? null
+            );
+            $this->logAudit($claims, 'crop', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleAiTag(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $aiProvider = get_option('fluxfiles_ai_provider', '');
+            if (empty($aiProvider)) {
+                throw new ApiException('AI tagging is not configured', 400);
+            }
+
+            $aiTagger = new \FluxFiles\AiTagger(
+                $aiProvider,
+                get_option('fluxfiles_ai_api_key', ''),
+                get_option('fluxfiles_ai_model', '') ?: null
+            );
+            $fm->setAiTagger($aiTagger);
+
+            $body = $this->body($request);
+            $disk = $body['disk'] ?? null;
+            $path = $body['path'] ?? null;
+
+            if (!$disk || !$path) {
+                throw new ApiException('Missing required fields: disk, path', 400);
+            }
+
+            $result = $fm->aiTag($disk, $path);
+            $this->logAudit($claims, 'ai_tag', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
     public function handlePresign(\WP_REST_Request $request): \WP_REST_Response
     {
         try {
@@ -430,6 +566,7 @@ class FluxFilesApi
                 'title'    => $body['title'] ?? null,
                 'alt_text' => $body['alt_text'] ?? null,
                 'caption'  => $body['caption'] ?? null,
+                'tags'     => $body['tags'] ?? null,
             ];
 
             $this->metaRepo->save($disk, $key, $data);

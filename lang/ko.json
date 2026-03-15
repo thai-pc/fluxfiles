@@ -1,0 +1,186 @@
+{
+  "_meta": {
+    "locale":    "ko",
+    "name":      "한국어",
+    "direction": "ltr",
+    "version":   "1.20.0",
+    "authors":   ["FluxFiles Team"]
+  },
+
+  "common": {
+    "save":        "저장",
+    "cancel":      "취소",
+    "delete":      "삭제",
+    "rename":      "이름 변경",
+    "move":        "이동",
+    "copy":        "복사",
+    "download":    "다운로드",
+    "upload":      "업로드",
+    "search":      "검색",
+    "close":       "닫기",
+    "confirm":     "확인",
+    "loading":     "불러오는 중...",
+    "error":       "오류",
+    "success":     "완료",
+    "yes":         "예",
+    "no":          "아니오",
+    "or":          "또는",
+    "clear":       "지우기",
+    "select_file": "파일 선택",
+    "root":        "루트"
+  },
+
+  "toolbar": {
+    "upload":       "업로드",
+    "new_folder":   "새 폴더",
+    "copy_url":     "URL 복사",
+    "grid_view":    "격자 보기",
+    "list_view":    "목록 보기",
+    "search_hint":  "파일 검색..."
+  },
+
+  "sidebar": {
+    "all_files":   "모든 파일",
+    "recent":      "최근 파일",
+    "starred":     "즐겨찾기",
+    "trash":       "휴지통",
+    "storage":     "저장 공간",
+    "folders":     "폴더"
+  },
+
+  "file": {
+    "select":         "선택",
+    "preview":        "미리보기",
+    "copy_url":       "URL 복사",
+    "presign_url":    "서명된 URL",
+    "delete":         "삭제",
+    "restore":        "복원",
+    "purge":          "영구 삭제",
+    "move_to":        "이동...",
+    "items":          "{count}개 항목",
+    "items_selected": "{count}개 선택됨",
+    "size":           "크기",
+    "type":           "유형",
+    "modified":       "수정일",
+    "disk":           "저장소",
+    "path":           "경로",
+    "name":           "이름",
+    "no_files":       "이 폴더에 파일이 없습니다"
+  },
+
+  "upload": {
+    "drop_hint":      "여기에 파일을 끌어다 놓거나 클릭하여 업로드",
+    "max_size":       "파일당 최대 {size}",
+    "all_types":      "모든 파일 형식 허용",
+    "uploading":      "업로드 중...",
+    "complete":       "업로드 완료",
+    "error":          "업로드 실패: {message}",
+    "duplicate":      "이미 존재하는 파일입니다. 그래도 사용하시겠습니까?",
+    "quota_exceeded": "저장 공간을 초과했습니다 ({used} / {max})"
+  },
+
+  "metadata": {
+    "tab_info":     "정보",
+    "tab_seo":      "SEO",
+    "tab_ai":       "AI 태그",
+    "tab_crop":     "자르기",
+    "title":        "제목",
+    "title_hint":   "파일명과 다른 사용자 지정 제목",
+    "alt_text":     "대체 텍스트",
+    "alt_hint":     "스크린 리더와 SEO를 위한 이미지 설명",
+    "caption":      "캡션",
+    "caption_hint": "이미지 아래에 표시되는 짧은 설명",
+    "saving":       "저장 중...",
+    "saved":        "저장 완료"
+  },
+
+  "disk": {
+    "local":        "로컬 디스크",
+    "s3":           "Amazon S3",
+    "r2":           "Cloudflare R2"
+  },
+
+  "folder": {
+    "new":          "새 폴더",
+    "name_hint":    "폴더 이름:",
+    "create":       "폴더 만들기",
+    "created":      "폴더가 생성되었습니다"
+  },
+
+  "delete": {
+    "confirm_title":  "확인",
+    "confirm_file":   "\"{name}\"을(를) 삭제하시겠습니까? 휴지통으로 이동됩니다.",
+    "confirm_bulk":   "{count}개 항목을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+    "confirm_purge":  "\"{name}\"을(를) 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+    "deleted":        "휴지통으로 이동되었습니다",
+    "purged":         "영구적으로 삭제되었습니다"
+  },
+
+  "trash": {
+    "title":          "휴지통",
+    "empty":          "휴지통이 비어 있습니다",
+    "restore":        "복원",
+    "restore_all":    "모두 복원",
+    "empty_trash":    "휴지통 비우기",
+    "auto_delete":    "{days}일 후 파일이 영구적으로 삭제됩니다"
+  },
+
+  "search": {
+    "placeholder":    "이름, 제목, 대체 텍스트로 검색...",
+    "results":        "\"{query}\" 검색 결과: {count}건",
+    "no_results":     "\"{query}\"에 대한 검색 결과가 없습니다"
+  },
+
+  "error": {
+    "forbidden":        "이 작업을 수행할 권한이 없습니다",
+    "not_found":        "파일을 찾을 수 없습니다",
+    "quota_exceeded":   "저장 공간을 초과했습니다",
+    "upload_too_large": "파일이 너무 큽니다 (최대 {max}MB)",
+    "ext_not_allowed":  ".{ext} 파일 형식은 허용되지 않습니다",
+    "generic":          "문제가 발생했습니다. 다시 시도해 주세요."
+  },
+
+  "presign": {
+    "title":    "서명된 URL",
+    "expires":  "만료 기간",
+    "minutes":  "{n}분",
+    "generate": "링크 생성",
+    "copied":   "링크가 복사되었습니다!"
+  },
+
+  "audit": {
+    "uploaded":  "{name}을(를) 업로드했습니다",
+    "deleted":   "{name}을(를) 삭제했습니다",
+    "restored":  "{name}을(를) 복원했습니다",
+    "moved":     "{from}을(를) {to}(으)로 이동했습니다",
+    "copied":    "{from}을(를) {to}(으)로 복사했습니다"
+  },
+
+  "bulk": {
+    "move":          "이동",
+    "copy_to_disk":  "디스크로 복사",
+    "move_to_disk":  "디스크로 이동",
+    "download":      "다운로드",
+    "move_to_folder": "폴더로 이동",
+    "destination":   "대상 경로",
+    "quick_pick":    "빠른 선택:",
+    "target_disk":   "대상 디스크",
+    "select_disk":   "-- 디스크 선택 --"
+  },
+
+  "crop": {
+    "free":            "자유 자르기",
+    "replace":         "원본 교체",
+    "save_copy":       "사본으로 저장",
+    "saving":          "저장 중..."
+  },
+
+  "ai": {
+    "generate":        "AI 태그 생성",
+    "analyzing":       "분석 중...",
+    "tags":            "태그",
+    "no_tags":         "아직 AI 태그가 없습니다. \"AI 태그 생성\"을 클릭하여 이미지를 분석하세요.",
+    "analyzing_image": "AI로 이미지를 분석하는 중...",
+    "failed":          "AI 태그 생성 실패: {message}"
+  }
+}

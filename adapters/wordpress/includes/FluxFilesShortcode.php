@@ -48,12 +48,15 @@ class FluxFilesShortcode
         $width  = esc_attr($atts['width']);
         $height = esc_attr($atts['height']);
 
+        $locale = substr(get_locale(), 0, 2);
+
         $configJson = wp_json_encode([
-            'endpoint' => $endpoint,
-            'token'    => $token,
-            'disk'     => $atts['disk'],
-            'mode'     => $atts['mode'],
+            'endpoint'  => $endpoint,
+            'token'     => $token,
+            'disk'      => $atts['disk'],
+            'mode'      => $atts['mode'],
             'container' => "#{$containerId}",
+            'locale'    => $locale,
         ]);
 
         return <<<HTML

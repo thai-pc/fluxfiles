@@ -12,6 +12,7 @@ class FileManager
 {
     private ImageOptimizer $imageOptimizer;
     private ?QuotaManager $quotaManager = null;
+    private ?AiTagger $aiTagger = null;
 
     public function __construct(
         private DiskManager $disks,
@@ -24,6 +25,11 @@ class FileManager
     public function setQuotaManager(QuotaManager $qm): void
     {
         $this->quotaManager = $qm;
+    }
+
+    public function setAiTagger(AiTagger $ai): void
+    {
+        $this->aiTagger = $ai;
     }
 
     public function list(string $disk, string $path): array
@@ -164,6 +170,30 @@ class FileManager
             }
         }
 
+        // Auto-tag with AI if enabled
+        if ($this->aiTagger !== null
+            && $this->imageOptimizer->isImage($name)
+            && ($_ENV['FLUXFILES_AI_AUTO_TAG'] ?? '') === 'true'
+        ) {
+            try {
+                $imageData = file_get_contents($file['tmp_name']);
+                $mime = mime_content_type($file['tmp_name']) ?: 'image/jpeg';
+                $aiResult = $this->aiTagger->analyze($imageData, $mime);
+
+                if ($aiResult) {
+                    $this->meta->save($disk, $scoped, [
+                        'title'    => $aiResult['title'] ?? null,
+                        'alt_text' => $aiResult['alt_text'] ?? null,
+                        'caption'  => $aiResult['caption'] ?? null,
+                        'tags'     => implode(', ', $aiResult['tags'] ?? []),
+                    ]);
+                    $result['ai_tags'] = $aiResult;
+                }
+            } catch (\Throwable $e) {
+                error_log('FluxFiles: AI auto-tag failed — ' . $e->getMessage());
+            }
+        }
+
         return $result;
     }
 
@@ -246,6 +276,200 @@ class FileManager
         return ['key' => $scopedTo];
     }
 
+    /**
+     * Copy a file from one disk to another using streams.
+     */
+    public function crossCopy(string $srcDisk, string $srcPath, string $dstDisk, string $dstPath): array
+    {
+        $this->assertDisk($srcDisk);
+        $this->assertDisk($dstDisk);
+        $this->assertPerm('read');
+        $this->assertPerm('write');
+
+        if ($srcDisk === $dstDisk) {
+            return $this->copy($srcDisk, $srcPath, $dstPath);
+        }
+
+        $scopedSrc = $this->scopedPath($srcPath);
+        $scopedDst = $this->scopedPath($dstPath);
+
+        $srcFs = $this->disks->disk($srcDisk);
+        $dstFs = $this->disks->disk($dstDisk);
+
+        // Quota check on destination
+        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
+            $fileSize = $srcFs->fileSize($scopedSrc);
+            $this->quotaManager->assertQuota(
+                $dstDisk,
+                $this->claims->pathPrefix,
+                $fileSize,
+                $this->claims->maxStorageMb
+            );
+        }
+
+        // Stream the file across disks
+        $stream = $srcFs->readStream($scopedSrc);
+        try {
+            $dstFs->writeStream($scopedDst, $stream);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        // Copy metadata
+        $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+
+        // Copy image variants if they exist
+        $this->copyVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+
+        return [
+            'key'      => $scopedDst,
+            'url'      => $this->fileUrl($dstDisk, $scopedDst),
+            'src_disk' => $srcDisk,
+            'dst_disk' => $dstDisk,
+        ];
+    }
+
+    /**
+     * Move a file from one disk to another (copy + delete source).
+     */
+    public function crossMove(string $srcDisk, string $srcPath, string $dstDisk, string $dstPath): array
+    {
+        $this->assertDisk($srcDisk);
+        $this->assertDisk($dstDisk);
+        $this->assertPerm('write');
+        $this->assertPerm('delete');
+
+        if ($srcDisk === $dstDisk) {
+            return $this->move($srcDisk, $srcPath, $dstPath);
+        }
+
+        $scopedSrc = $this->scopedPath($srcPath);
+        $scopedDst = $this->scopedPath($dstPath);
+
+        $srcFs = $this->disks->disk($srcDisk);
+        $dstFs = $this->disks->disk($dstDisk);
+
+        // Stream the file across disks
+        $stream = $srcFs->readStream($scopedSrc);
+        try {
+            $dstFs->writeStream($scopedDst, $stream);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        // Move metadata
+        $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+
+        // Move image variants
+        $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+
+        // Delete source file
+        $srcFs->delete($scopedSrc);
+
+        return [
+            'key'      => $scopedDst,
+            'url'      => $this->fileUrl($dstDisk, $scopedDst),
+            'src_disk' => $srcDisk,
+            'dst_disk' => $dstDisk,
+        ];
+    }
+
+    /**
+     * Copy metadata from one disk/key to another.
+     */
+    private function copyMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $existing = $this->meta->get($srcDisk, $srcKey);
+        if ($existing) {
+            $this->meta->save($dstDisk, $dstKey, $existing);
+        }
+    }
+
+    /**
+     * Move metadata from one disk/key to another (copy + delete source).
+     */
+    private function moveMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $this->copyMetadata($srcDisk, $srcKey, $dstDisk, $dstKey);
+        $this->meta->delete($srcDisk, $srcKey);
+    }
+
+    /**
+     * Copy image variants (thumb/medium/large) across disks.
+     */
+    private function copyVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $this->transferVariants($srcDisk, $srcKey, $dstDisk, $dstKey, false);
+    }
+
+    /**
+     * Move image variants (thumb/medium/large) across disks.
+     */
+    private function moveVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $this->transferVariants($srcDisk, $srcKey, $dstDisk, $dstKey, true);
+    }
+
+    /**
+     * Transfer image variants across disks (copy or move).
+     */
+    private function transferVariants(
+        string $srcDisk,
+        string $srcKey,
+        string $dstDisk,
+        string $dstKey,
+        bool $deleteSource
+    ): void {
+        $srcFs = $this->disks->disk($srcDisk);
+        $dstFs = $this->disks->disk($dstDisk);
+        $sizes = ['thumb', 'medium', 'large'];
+
+        foreach ($sizes as $size) {
+            $srcVariant = $this->variantKey($srcKey, $size);
+            $dstVariant = $this->variantKey($dstKey, $size);
+
+            try {
+                if (!$srcFs->fileExists($srcVariant)) {
+                    continue;
+                }
+
+                $stream = $srcFs->readStream($srcVariant);
+                try {
+                    $dstFs->writeStream($dstVariant, $stream);
+                } finally {
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                }
+
+                if ($deleteSource) {
+                    $srcFs->delete($srcVariant);
+                }
+            } catch (\Throwable $e) {
+                // Variant transfer failure should not block the main operation
+                error_log("FluxFiles: Variant transfer failed ({$size}) — " . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Build the variant key for a given file key and size name.
+     * Matches ImageOptimizer naming: dir/_variants/basename_size.webp
+     */
+    private function variantKey(string $key, string $size): string
+    {
+        $dir = dirname($key);
+        $basename = pathinfo($key, PATHINFO_FILENAME);
+
+        $variantsDir = ($dir !== '.' && $dir !== '') ? $dir . '/_variants' : '_variants';
+
+        return $variantsDir . '/' . $basename . '_' . $size . '.webp';
+    }
+
     public function mkdir(string $disk, string $path): array
     {
         $this->assertDisk($disk);
@@ -256,6 +480,124 @@ class FileManager
         $fs->createDirectory($scoped);
 
         return ['created' => true];
+    }
+
+    /**
+     * Crop an image in-place or save as a new file.
+     *
+     * @param string  $disk     Storage disk
+     * @param string  $path     File path
+     * @param int     $x        Crop X offset
+     * @param int     $y        Crop Y offset
+     * @param int     $width    Crop width
+     * @param int     $height   Crop height
+     * @param ?string $savePath If set, save cropped version as a new file; otherwise overwrite
+     * @return array
+     */
+    public function cropImage(
+        string $disk,
+        string $path,
+        int $x,
+        int $y,
+        int $width,
+        int $height,
+        ?string $savePath = null
+    ): array {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+
+        $scopedSrc = $this->scopedPath($path);
+        $fs = $this->disks->disk($disk);
+
+        // Read the original image
+        $imageData = $fs->read($scopedSrc);
+        $ext = strtolower(pathinfo($scopedSrc, PATHINFO_EXTENSION));
+        $format = in_array($ext, ['jpg', 'jpeg']) ? 'jpg' : ($ext === 'webp' ? 'webp' : 'png');
+
+        // Crop
+        $result = $this->imageOptimizer->crop($imageData, $x, $y, $width, $height, $format);
+
+        // Determine destination
+        $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
+
+        // Write cropped image
+        $fs->write($scopedDst, $result['data']);
+
+        // Regenerate image variants for the cropped image
+        $tmpFile = tempnam(sys_get_temp_dir(), 'ffcrop_');
+        file_put_contents($tmpFile, $result['data']);
+
+        $variants = null;
+        try {
+            $variantResult = $this->imageOptimizer->process($fs, $scopedDst, $tmpFile);
+            $variantUrls = [];
+            foreach ($variantResult as $sizeName => $info) {
+                $variantUrls[$sizeName] = [
+                    'url'    => $this->fileUrl($disk, $info['key']),
+                    'key'    => $info['key'],
+                    'width'  => $info['width'],
+                    'height' => $info['height'],
+                ];
+            }
+            $variants = $variantUrls;
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: Variant regeneration after crop failed — ' . $e->getMessage());
+        } finally {
+            @unlink($tmpFile);
+        }
+
+        return [
+            'key'      => $scopedDst,
+            'url'      => $this->fileUrl($disk, $scopedDst),
+            'width'    => $result['width'],
+            'height'   => $result['height'],
+            'variants' => $variants,
+        ];
+    }
+
+    /**
+     * Run AI analysis on an image and save tags/metadata.
+     */
+    public function aiTag(string $disk, string $path): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+
+        if ($this->aiTagger === null) {
+            throw new ApiException('AI tagging is not configured', 400);
+        }
+
+        $scoped = $this->scopedPath($path);
+        $fs = $this->disks->disk($disk);
+
+        $name = basename($scoped);
+        if (!$this->imageOptimizer->isImage($name)) {
+            throw new ApiException('AI tagging is only available for images', 400);
+        }
+
+        $imageData = $fs->read($scoped);
+        $mime = $fs->mimeType($scoped);
+
+        $aiResult = $this->aiTagger->analyze($imageData, $mime);
+
+        // Merge with existing metadata — AI fills empty fields only
+        $existing = $this->meta->get($disk, $scoped);
+
+        $data = [
+            'title'    => (!empty($existing['title'])) ? $existing['title'] : ($aiResult['title'] ?? null),
+            'alt_text' => (!empty($existing['alt_text'])) ? $existing['alt_text'] : ($aiResult['alt_text'] ?? null),
+            'caption'  => (!empty($existing['caption'])) ? $existing['caption'] : ($aiResult['caption'] ?? null),
+            'tags'     => implode(', ', $aiResult['tags'] ?? []),
+        ];
+
+        $this->meta->save($disk, $scoped, $data);
+
+        return [
+            'tags'     => $aiResult['tags'] ?? [],
+            'title'    => $data['title'],
+            'alt_text' => $data['alt_text'],
+            'caption'  => $data['caption'],
+        ];
     }
 
     public function presign(string $disk, string $path, string $method, int $ttl): array

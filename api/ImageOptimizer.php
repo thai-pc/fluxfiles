@@ -32,6 +32,50 @@ class ImageOptimizer
     }
 
     /**
+     * Crop an image and return the encoded result.
+     *
+     * @param string $imageData  Raw image bytes (from Flysystem read)
+     * @param int    $x          Crop X offset
+     * @param int    $y          Crop Y offset
+     * @param int    $width      Crop width
+     * @param int    $height     Crop height
+     * @param string $format     Output format: original extension or 'webp'/'png'/'jpg'
+     * @param int    $quality    Encode quality (1-100)
+     * @return array{data: string, mime: string, width: int, height: int}
+     */
+    public function crop(
+        string $imageData,
+        int $x,
+        int $y,
+        int $width,
+        int $height,
+        string $format = 'png',
+        int $quality = 90
+    ): array {
+        $image = $this->manager->read($imageData);
+        $image = $image->crop($width, $height, $x, $y);
+
+        $encoded = match ($format) {
+            'webp'         => $image->toWebp(quality: $quality),
+            'jpg', 'jpeg'  => $image->toJpeg(quality: $quality),
+            default        => $image->toPng(),
+        };
+
+        $mime = match ($format) {
+            'webp'         => 'image/webp',
+            'jpg', 'jpeg'  => 'image/jpeg',
+            default        => 'image/png',
+        };
+
+        return [
+            'data'   => (string) $encoded,
+            'mime'   => $mime,
+            'width'  => $image->width(),
+            'height' => $image->height(),
+        ];
+    }
+
+    /**
      * Process uploaded image: create variants and optionally convert to WebP.
      * Returns array of variant URLs keyed by size name.
      */

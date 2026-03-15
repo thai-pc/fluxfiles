@@ -35,12 +35,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 header('Content-Type: application/json; charset=utf-8');
 
-try {
-    // Parse URI
-    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    $uri = rtrim($uri, '/');
-    $method = $_SERVER['REQUEST_METHOD'];
+// I18n — initialize before routing
+$i18n = new \FluxFiles\I18n(__DIR__ . '/../lang');
+header('Content-Language: ' . $i18n->locale());
 
+// Parse URI early for lang routes (no auth required)
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = rtrim($uri, '/');
+$method = $_SERVER['REQUEST_METHOD'];
+
+// Language routes — public, no auth needed
+if ($method === 'GET' && $uri === '/api/fm/lang') {
+    $files = glob(__DIR__ . '/../lang/*.json');
+    $result = [];
+    foreach ($files as $f) {
+        $data = json_decode(file_get_contents($f), true);
+        if (!is_array($data)) continue;
+        $code = $data['_meta']['locale'] ?? basename($f, '.json');
+        $result[] = [
+            'code' => $code,
+            'name' => $data['_meta']['name'] ?? $code,
+            'dir'  => $data['_meta']['direction'] ?? 'ltr',
+        ];
+    }
+    echo json_encode(['data' => $result, 'error' => null]);
+    exit;
+}
+
+if ($method === 'GET' && preg_match('#^/api/fm/lang/([a-z]{2,5})$#', $uri, $m)) {
+    $locale = $m[1];
+    $path = __DIR__ . "/../lang/{$locale}.json";
+    if (!file_exists($path)) {
+        http_response_code(404);
+        echo json_encode(['data' => null, 'error' => 'Locale not found']);
+        exit;
+    }
+    $data = json_decode(file_get_contents($path), true);
+    echo json_encode(['data' => [
+        'locale'   => $data['_meta']['locale'] ?? $locale,
+        'dir'      => $data['_meta']['direction'] ?? 'ltr',
+        'messages' => $data,
+    ], 'error' => null]);
+    exit;
+}
+
+try {
     // Auth
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
@@ -57,6 +96,17 @@ try {
     $metaRepo = new MetadataRepository($dbPath);
     $fm = new FileManager($diskManager, $claims, $metaRepo);
     $fm->setQuotaManager(new QuotaManager($diskManager));
+
+    // AI Tagger (optional)
+    $aiProvider = $_ENV['FLUXFILES_AI_PROVIDER'] ?? '';
+    if ($aiProvider !== '') {
+        $aiTagger = new \FluxFiles\AiTagger(
+            $aiProvider,
+            $_ENV['FLUXFILES_AI_API_KEY'] ?? '',
+            $_ENV['FLUXFILES_AI_MODEL'] ?? null
+        );
+        $fm->setAiTagger($aiTagger);
+    }
 
     // Rate limiting
     $rateLimitDb = new \PDO("sqlite:{$dbPath}");
@@ -100,8 +150,24 @@ try {
             ...jsonBody('disk', 'path')
         ),
 
+        // Cross-disk copy/move
+        $method === 'POST' && $uri === '/api/fm/cross-copy' => $fm->crossCopy(
+            ...jsonBody('src_disk', 'src_path', 'dst_disk', 'dst_path')
+        ),
+        $method === 'POST' && $uri === '/api/fm/cross-move' => $fm->crossMove(
+            ...jsonBody('src_disk', 'src_path', 'dst_disk', 'dst_path')
+        ),
+
         $method === 'POST' && $uri === '/api/fm/presign' => $fm->presign(
             ...jsonBody('disk', 'path', 'method', 'ttl')
+        ),
+
+        // Image crop
+        $method === 'POST' && $uri === '/api/fm/crop' => handleCrop($fm),
+
+        // AI tag
+        $method === 'POST' && $uri === '/api/fm/ai-tag' => $fm->aiTag(
+            ...jsonBody('disk', 'path')
         ),
 
         $method === 'GET' && $uri === '/api/fm/meta' => $fm->fileMeta(
@@ -159,6 +225,10 @@ try {
         $auditAction = match (true) {
             str_contains($uri, '/upload') => 'upload',
             str_contains($uri, '/delete') => 'delete',
+            str_contains($uri, '/ai-tag') => 'ai_tag',
+            str_contains($uri, '/crop') => 'crop',
+            str_contains($uri, '/cross-move') => 'cross_move',
+            str_contains($uri, '/cross-copy') => 'cross_copy',
             str_contains($uri, '/move') => 'move',
             str_contains($uri, '/copy') => 'copy',
             str_contains($uri, '/mkdir') => 'mkdir',
@@ -170,8 +240,8 @@ try {
         };
         $raw = file_get_contents('php://input');
         $body = json_decode($raw ?: '{}', true) ?: [];
-        $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? '';
-        $auditDisk = $body['disk'] ?? $_POST['disk'] ?? 'local';
+        $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? $body['src_path'] ?? '';
+        $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey);
     }
 
@@ -230,6 +300,7 @@ function handleSaveMetadata(MetadataRepository $metaRepo, DiskManager $diskManag
         'title'    => $body['title'] ?? null,
         'alt_text' => $body['alt_text'] ?? null,
         'caption'  => $body['caption'] ?? null,
+        'tags'     => $body['tags'] ?? null,
     ];
 
     $metaRepo->save($disk, $key, $data);
@@ -282,4 +353,23 @@ function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, Claims $claims): ar
     }
     [$disk, $key, $uploadId] = jsonBody('disk', 'key', 'upload_id');
     return $chunker->abort($disk, $key, $uploadId);
+}
+
+function handleCrop(FileManager $fm): array
+{
+    [$disk, $path, $x, $y, $width, $height] = jsonBody('disk', 'path', 'x', 'y', 'width', 'height');
+
+    $raw = file_get_contents('php://input');
+    $body = json_decode($raw, true);
+    $savePath = $body['save_path'] ?? null;
+
+    return $fm->cropImage(
+        $disk,
+        $path,
+        (int) $x,
+        (int) $y,
+        (int) $width,
+        (int) $height,
+        $savePath
+    );
 }

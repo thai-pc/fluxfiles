@@ -36,7 +36,8 @@
                     mode: config.mode || 'picker',
                     allowedTypes: config.allowedTypes || null,
                     maxSize: config.maxSize || null,
-                    endpoint: config.endpoint || ''
+                    endpoint: config.endpoint || '',
+                    locale: config.locale || null
                 });
                 emit('FM_READY', msg.payload);
                 break;
@@ -131,6 +132,9 @@
         setDisk: function(disk) { this.command('setDisk', { disk: disk }); },
         refresh: function() { this.command('refresh'); },
         search: function(q) { this.command('search', { q: q }); },
+        crossCopy: function(dstDisk, dstPath) { this.command('crossCopy', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
+        crossMove: function(dstDisk, dstPath) { this.command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
+        aiTag: function() { this.command('aiTag'); },
 
         on: function(type, cb) {
             if (!listeners[type]) listeners[type] = [];

@@ -149,4 +149,29 @@ return [
         'max_storage' => 0,
         'ttl'         => 3600,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI Auto-Tag
+    |--------------------------------------------------------------------------
+    |
+    | Provider: 'claude' or 'openai' (leave empty to disable).
+    | Auto-tag on upload: when true, images are automatically tagged on upload.
+    |
+    */
+    /*
+    |--------------------------------------------------------------------------
+    | Locale
+    |--------------------------------------------------------------------------
+    |
+    | Default locale for the FluxFiles UI. Supported: en, vi, zh, ja, ko,
+    | fr, de, es, ar, pt. Leave empty to auto-detect from browser.
+    |
+    */
+    'locale' => env('FLUXFILES_LOCALE', ''),
+
+    'ai_provider'  => env('FLUXFILES_AI_PROVIDER', ''),
+    'ai_api_key'   => env('FLUXFILES_AI_API_KEY', ''),
+    'ai_model'     => env('FLUXFILES_AI_MODEL', ''),
+    'ai_auto_tag'  => env('FLUXFILES_AI_AUTO_TAG', false),
 ];
