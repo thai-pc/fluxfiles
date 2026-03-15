@@ -42,7 +42,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 ### 1. Install
 
 ```bash
-git clone <repo-url> fluxfiles
+git clone https://github.com/thai-pc/fluxfiles.git fluxfiles
 cd fluxfiles
 composer install
 ```
@@ -624,7 +624,7 @@ FluxFiles was created and maintained by **thai-pc**.
 If you fork or redistribute this project, please retain the original copyright notice and give appropriate credit. A link back to the original repository is appreciated:
 
 ```
-Based on FluxFiles by thai-pc — https://github.com/thai-pc/FluxFiles
+Based on FluxFiles by thai-pc — https://github.com/thai-pc/fluxfiles
 ```
 
 ---

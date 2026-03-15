@@ -3,6 +3,18 @@
     "description": "Standalone PHP file manager with multi-storage support (Local/S3/R2)",
     "type": "library",
     "license": "MIT",
+    "keywords": ["file-manager", "s3", "r2", "flysystem", "upload", "media", "storage", "jwt"],
+    "homepage": "https://github.com/thai-pc/fluxfiles",
+    "authors": [
+        {
+            "name": "thai-pc",
+            "homepage": "https://github.com/thai-pc"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/thai-pc/fluxfiles/issues",
+        "source": "https://github.com/thai-pc/fluxfiles"
+    },
     "require": {
         "php": ">=7.4",
         "ext-pdo": "*",
@@ -17,5 +29,6 @@
         "psr-4": {
             "FluxFiles\\": "api/"
         }
-    }
+    },
+    "minimum-stability": "stable"
 }

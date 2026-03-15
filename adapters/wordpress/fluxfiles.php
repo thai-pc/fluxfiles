@@ -1,10 +1,11 @@
 <?php
 /**
  * Plugin Name: FluxFiles
- * Plugin URI:  https://github.com/fluxfiles/fluxfiles
+ * Plugin URI:  https://github.com/thai-pc/fluxfiles
  * Description: Multi-storage file manager with Local/S3/R2 support, image optimization, and full-text search.
- * Version:     1.0.0
- * Author:      FluxFiles
+ * Version:     1.22.0
+ * Author:      thai-pc
+ * Author URI:  https://github.com/thai-pc
  * License:     MIT
  * Requires PHP: 7.4
  * Requires at least: 6.0
@@ -14,7 +15,7 @@
 
 defined('ABSPATH') || exit;
 
-define('FLUXFILES_VERSION', '1.0.0');
+define('FLUXFILES_VERSION', '1.22.0');
 define('FLUXFILES_PLUGIN_FILE', __FILE__);
 define('FLUXFILES_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FLUXFILES_PLUGIN_URL', plugin_dir_url(__FILE__));

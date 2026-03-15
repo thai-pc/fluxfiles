@@ -36,6 +36,19 @@
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
   },
+  "author": "thai-pc",
+  "homepage": "https://github.com/thai-pc/fluxfiles#vue--nuxt",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thai-pc/fluxfiles.git",
+    "directory": "adapters/vue"
+  },
+  "bugs": {
+    "url": "https://github.com/thai-pc/fluxfiles/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "fluxfiles",
     "file-manager",
