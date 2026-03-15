@@ -28,6 +28,8 @@ export interface FluxFilesConfig {
   token: string;
   disk?: string;
   mode?: 'picker' | 'browser';
+  /** When true, onSelect receives array of FluxFile */
+  multiple?: boolean;
   allowedTypes?: string[] | null;
   maxSize?: number | null;
   locale?: string | null;

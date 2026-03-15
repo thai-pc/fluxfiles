@@ -29,6 +29,8 @@
         "clear": "クリア",
         "select_file": "ファイルを選択",
         "select_folder": "フォルダを選択",
+        "select_item": "1 件を選択",
+        "select_items": "{count} 件を選択",
         "root": "ルート"
     },
     "toolbar": {
@@ -173,7 +175,8 @@
         "free": "自由切り抜き",
         "replace": "元の画像を置き換え",
         "save_copy": "コピーとして保存",
-        "saving": "保存中..."
+        "saving": "保存中...",
+        "failed": "切り抜きに失敗しました：{message}"
     },
     "ai": {
         "generate": "AIタグを生成",

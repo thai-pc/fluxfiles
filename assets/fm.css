@@ -1307,12 +1307,12 @@ body {
     animation: ff-spin 0.6s linear infinite;
 }
 
-/* ══════════════════════════ Toast notification ══════════════════════════ */
+/* ══════════════════════════ Toast notification (top-right) ══════════════════════════ */
 .ff-toast {
     position: fixed;
-    bottom: 28px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: max(20px, env(safe-area-inset-top, 0));
+    right: max(20px, env(safe-area-inset-right, 0));
+    left: auto;
     z-index: 9999;
     display: flex;
     align-items: center;
@@ -1329,11 +1329,11 @@ body {
 }
 
 .ff-toast-enter { transition: all 0.3s ease-out; }
-.ff-toast-enter-start { opacity: 0; transform: translateX(-50%) translateY(12px); }
-.ff-toast-enter-end { opacity: 1; transform: translateX(-50%) translateY(0); }
+.ff-toast-enter-start { opacity: 0; transform: translateX(16px); }
+.ff-toast-enter-end { opacity: 1; transform: translateX(0); }
 .ff-toast-leave { transition: all 0.2s ease-in; }
-.ff-toast-leave-start { opacity: 1; transform: translateX(-50%) translateY(0); }
-.ff-toast-leave-end { opacity: 0; transform: translateX(-50%) translateY(12px); }
+.ff-toast-leave-start { opacity: 1; transform: translateX(0); }
+.ff-toast-leave-end { opacity: 0; transform: translateX(16px); }
 
 .ff-toast-icon {
     display: flex;

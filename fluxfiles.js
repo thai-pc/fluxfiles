@@ -33,7 +33,9 @@
                 postToIframe('FM_CONFIG', {
                     disk: config.disk || 'local',
                     token: config.token || '',
+                    path: config.path || '',
                     mode: config.mode || 'picker',
+                    multiple: !!config.multiple,
                     allowedTypes: config.allowedTypes || null,
                     maxSize: config.maxSize || null,
                     endpoint: config.endpoint || '',

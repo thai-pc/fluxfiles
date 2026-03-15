@@ -9,7 +9,7 @@ function uid(): string {
 }
 
 export interface UseFluxFilesOptions extends FluxFilesConfig {
-  onSelect?: (file: FluxFile) => void;
+  onSelect?: (file: FluxFile | FluxFile[]) => void;
   onClose?: () => void;
   onReady?: () => void;
   onEvent?: (event: FluxEvent) => void;
@@ -39,6 +39,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
       disk: o.disk || 'local',
       token: o.token || '',
       mode: o.mode || 'picker',
+      multiple: !!o.multiple,
       allowedTypes: o.allowedTypes || null,
       maxSize: o.maxSize || null,
       endpoint: o.endpoint || '',
@@ -59,7 +60,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
         o.onReady?.();
         break;
       case 'FM_SELECT':
-        o.onSelect?.(msg.payload as unknown as FluxFile);
+        o.onSelect?.(msg.payload as unknown as FluxFile | FluxFile[]);
         break;
       case 'FM_EVENT':
         o.onEvent?.(msg.payload as unknown as FluxEvent);
@@ -79,7 +80,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
   });
 
   watch(
-    () => [opts.value.token, opts.value.disk, opts.value.mode, opts.value.locale],
+    () => [opts.value.token, opts.value.disk, opts.value.mode, opts.value.multiple, opts.value.locale],
     () => {
       if (ready.value) sendConfig();
     }

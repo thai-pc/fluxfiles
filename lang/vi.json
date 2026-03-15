@@ -29,6 +29,8 @@
         "clear": "Xóa chọn",
         "select_file": "Chọn file",
         "select_folder": "Chọn thư mục",
+        "select_item": "Chọn 1 mục",
+        "select_items": "Chọn {count} mục",
         "root": "Gốc"
     },
     "toolbar": {
@@ -173,7 +175,8 @@
         "free": "Tự do",
         "replace": "Thay thế bản gốc",
         "save_copy": "Lưu bản sao",
-        "saving": "Đang lưu..."
+        "saving": "Đang lưu...",
+        "failed": "Cắt ảnh thất bại: {message}"
     },
     "ai": {
         "generate": "Tạo AI Tags",

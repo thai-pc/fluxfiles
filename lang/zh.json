@@ -29,6 +29,8 @@
         "clear": "清除",
         "select_file": "选择文件",
         "select_folder": "选择文件夹",
+        "select_item": "选择 1 项",
+        "select_items": "选择 {count} 项",
         "root": "根目录"
     },
     "toolbar": {
@@ -173,7 +175,8 @@
         "free": "自由裁剪",
         "replace": "替换原图",
         "save_copy": "另存为副本",
-        "saving": "保存中..."
+        "saving": "保存中...",
+        "failed": "裁剪失败：{message}"
     },
     "ai": {
         "generate": "生成 AI 标签",

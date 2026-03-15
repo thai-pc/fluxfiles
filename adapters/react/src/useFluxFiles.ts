@@ -51,6 +51,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
       disk: opts.disk || 'local',
       token: opts.token || '',
       mode: opts.mode || 'picker',
+      multiple: !!opts.multiple,
       allowedTypes: opts.allowedTypes || null,
       maxSize: opts.maxSize || null,
       endpoint: opts.endpoint || '',
@@ -73,7 +74,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
           opts.onReady?.();
           break;
         case 'FM_SELECT':
-          opts.onSelect?.(msg.payload as unknown as FluxFile);
+          opts.onSelect?.(msg.payload as unknown as FluxFile | FluxFile[]);
           break;
         case 'FM_EVENT':
           opts.onEvent?.(msg.payload as unknown as FluxEvent);
@@ -95,7 +96,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
     if (ready) {
       sendConfig();
     }
-  }, [options.token, options.disk, options.mode, options.locale, ready, sendConfig]);
+  }, [options.token, options.disk, options.mode, options.multiple, options.locale, ready, sendConfig]);
 
   // Command helpers
   const command = useCallback(

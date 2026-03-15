@@ -121,6 +121,7 @@ FluxFiles.open({
     token: 'eyJhbGci...',
     disk: 'local',
     mode: 'picker',         // 'picker' (select file) or 'browser' (free browse)
+    multiple: false,        // when true, onSelect receives array of files
     locale: 'en',           // optional — auto-detects if omitted
     theme: 'auto',          // optional — 'light', 'dark', or 'auto' (system)
     allowedTypes: ['image/*', '.pdf'],  // optional file type filter
@@ -153,7 +154,7 @@ FluxFiles.close();
 
 ```js
 FluxFiles.on('FM_READY', function(payload) { /* iframe loaded */ });
-FluxFiles.on('FM_SELECT', function(file) { /* file selected */ });
+FluxFiles.on('FM_SELECT', function(file) { /* file or array when multiple:true */ });
 FluxFiles.on('FM_EVENT', function(event) {
     // event.action: 'upload', 'delete', 'move', 'copy', 'mkdir',
     //               'restore', 'purge', 'trash', 'crop', 'ai_tag'

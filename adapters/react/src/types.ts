@@ -33,6 +33,8 @@ export interface FluxFilesConfig {
   disk?: string;
   /** Display mode: "picker" selects a file, "browser" is free-browse. */
   mode?: 'picker' | 'browser';
+  /** When true, onSelect receives array of FluxFile. */
+  multiple?: boolean;
   /** Filter displayed file types (e.g. ["image/*", ".pdf"]). */
   allowedTypes?: string[] | null;
   /** Max file size filter in bytes. */
@@ -51,8 +53,8 @@ export interface FluxFilesProps extends FluxFilesConfig {
   className?: string;
   /** Inline styles for the wrapper div. */
   style?: React.CSSProperties;
-  /** Fired when a file is selected (picker mode). */
-  onSelect?: (file: FluxFile) => void;
+  /** Fired when a file is selected (picker mode). Receives array when multiple=true. */
+  onSelect?: (file: FluxFile | FluxFile[]) => void;
   /** Fired when the file manager signals a close. */
   onClose?: () => void;
   /** Fired when the iframe is ready. */
@@ -65,8 +67,8 @@ export interface FluxFilesProps extends FluxFilesConfig {
 export interface FluxFilesModalProps extends FluxFilesConfig {
   /** Whether the modal is open. */
   open: boolean;
-  /** Fired when a file is selected. */
-  onSelect?: (file: FluxFile) => void;
+  /** Fired when a file is selected. Receives array when multiple=true. */
+  onSelect?: (file: FluxFile | FluxFile[]) => void;
   /** Fired when the modal should close (overlay click, escape, or FM_CLOSE). */
   onClose?: () => void;
   /** Fired when the iframe is ready. */
