@@ -122,6 +122,7 @@ FluxFiles.open({
     disk: 'local',
     mode: 'picker',         // 'picker' (select file) or 'browser' (free browse)
     locale: 'en',           // optional — auto-detects if omitted
+    theme: 'auto',          // optional — 'light', 'dark', or 'auto' (system)
     allowedTypes: ['image/*', '.pdf'],  // optional file type filter
     maxSize: 10485760,      // optional max size in bytes
     container: '#my-div',   // optional — omit for modal overlay

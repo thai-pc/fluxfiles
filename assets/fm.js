@@ -42,6 +42,27 @@ function fluxFilesApp() {
         showBulkMove: false,
         bulkMoveTarget: '',
 
+        // New folder modal
+        showNewFolder: false,
+        newFolderName: '',
+        newFolderError: '',
+        newFolderCreating: false,
+
+        // Auth state
+        authRequired: false,
+
+        // Toast state
+        toastMessage: '',
+        toastType: 'success', // 'success' | 'error' | 'info'
+        toastVisible: false,
+        _toastTimer: null,
+
+        // Theme: 'light' | 'dark' | 'auto'
+        theme: 'auto',
+        isDark: false,
+        _themeMediaQuery: null,
+        _themeMediaHandler: null,
+
         // Upload state
         uploadProgress: 0,
         uploading: false,
@@ -86,10 +107,10 @@ function fluxFilesApp() {
         },
 
         async switchLocale(newLocale) {
-            if (newLocale === this.locale) return;
+            if (newLocale === this.locale && Object.keys(this._messages).length > 1) return;
             try {
-                const res = await fetch(this.endpoint + '/api/fm/lang/' + encodeURIComponent(newLocale),
-                    { headers: { 'Authorization': 'Bearer ' + this.token } });
+                const base = this.endpoint || window.location.origin;
+                const res = await fetch(base + '/api/fm/lang/' + encodeURIComponent(newLocale));
                 if (!res.ok) return;
                 const json = await res.json();
                 const data = json.data;
@@ -116,9 +137,8 @@ function fluxFilesApp() {
                     this.currentDisk = msg.payload.disk || 'local';
                     this.endpoint = msg.payload.endpoint || '';
                     this.config = msg.payload;
-                    if (msg.payload.theme) {
-                        this.applyTheme(msg.payload.theme);
-                    }
+                    this.authRequired = false;
+                    this._initTheme();
 
                     // Handle locale from host app
                     const targetLocale = msg.payload.locale && msg.payload.locale !== 'auto'
@@ -129,6 +149,7 @@ function fluxFilesApp() {
                     }
 
                     this.loadFiles();
+                    this.loadQuota();
                 }
 
                 if (msg.type === 'FM_COMMAND') {
@@ -136,8 +157,8 @@ function fluxFilesApp() {
                 }
             });
 
-            // Apply theme
-            this.applyTheme('auto');
+            // Theme: localStorage > config > auto
+            this._initTheme();
 
             // Notify parent we're ready
             // Set document direction
@@ -149,6 +170,54 @@ function fluxFilesApp() {
                 locale: this.locale,
                 capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops', 'ai-tag', 'i18n']
             });
+
+            // Standalone mode: not in iframe, load locale + files directly
+            if (window.parent === window) {
+                this.endpoint = window.location.origin;
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('token')) this.token = params.get('token');
+                if (params.get('disk')) this.currentDisk = params.get('disk');
+                this.config = { disks: (params.get('disks') || 'local').split(','), theme: params.get('theme') || null };
+                this._initTheme();
+
+                // Locale priority: ?locale= > server Content-Language > browser lang
+                const urlLocale = params.get('locale');
+                const initLocale = async () => {
+                    if (urlLocale) {
+                        await this.switchLocale(urlLocale);
+                    } else {
+                        // Fetch /api/fm/lang to detect server-configured locale from Content-Language header
+                        try {
+                            const res = await fetch(this.endpoint + '/api/fm/lang');
+                            const serverLocale = res.headers.get('Content-Language');
+                            if (serverLocale && serverLocale !== 'en') {
+                                await this.switchLocale(serverLocale);
+                            } else {
+                                const browserLocale = navigator.language?.split('-')[0] || 'en';
+                                await this.switchLocale(browserLocale);
+                            }
+                        } catch (_) {
+                            await this.switchLocale(navigator.language?.split('-')[0] || 'en');
+                        }
+                    }
+                    if (this.token) {
+                        this.loadFiles();
+                        this.loadQuota();
+                    } else {
+                        this.authRequired = true;
+                    }
+                };
+                initLocale();
+            }
+        },
+
+        // Toast helper
+        showToast(message, type = 'success', duration = 2500) {
+            if (this._toastTimer) clearTimeout(this._toastTimer);
+            this.toastMessage = message;
+            this.toastType = type;
+            this.toastVisible = true;
+            this._toastTimer = setTimeout(() => { this.toastVisible = false; }, duration);
         },
 
         // PostMessage helper
@@ -225,7 +294,7 @@ function fluxFilesApp() {
 
         get breadcrumbs() {
             const parts = this.currentPath.split('/').filter(Boolean);
-            const crumbs = [{ name: 'Root', path: '' }];
+            const crumbs = [{ name: this.t('common.root') || 'All files', path: '' }];
             let cumulative = '';
             for (const part of parts) {
                 cumulative += (cumulative ? '/' : '') + part;
@@ -239,6 +308,7 @@ function fluxFilesApp() {
             this.currentDisk = disk;
             this.currentPath = '';
             this.loadFiles();
+            this.loadQuota();
         },
 
         // File selection
@@ -341,6 +411,29 @@ function fluxFilesApp() {
                 if (this.shiftSelect(file, event)) return;
             }
             this.toggleSelect(file, event);
+        },
+
+        toggleFolderSelect(folder, event) {
+            if (event && (event.ctrlKey || event.metaKey)) {
+                // Multi-select: toggle folder in selection
+                const idx = this.selected.findIndex(s => s.key === folder.key);
+                if (idx >= 0) {
+                    this.selected.splice(idx, 1);
+                } else {
+                    this.selected.push(folder);
+                }
+            } else {
+                // Single click: select only this folder, show in detail
+                this.selected = [folder];
+                this.detailFile = folder;
+                this.activeTab = 'info';
+            }
+        },
+
+        folderContextMenu(folder, event) {
+            // Select folder and trigger delete confirm
+            this.selected = [folder];
+            this.confirmDelete();
         },
 
         // Bulk progress helper
@@ -546,6 +639,7 @@ function fluxFilesApp() {
             }
 
             this.endBulk();
+            this.showToast(this.t('delete.deleted'), 'success');
             this.selected = [];
             this.detailFile = null;
             this.loadFiles();
@@ -641,7 +735,23 @@ function fluxFilesApp() {
         },
 
         confirmDelete() {
-            this.confirmMessage = 'Delete ' + this.selected.length + ' item(s)? This cannot be undone.';
+            const folders = this.selected.filter(f => f.type === 'dir');
+            const files = this.selected.filter(f => f.type !== 'dir');
+
+            if (folders.length > 0 && this.selected.length === 1) {
+                // Single folder delete
+                this.confirmMessage = this.t('delete.confirm_folder', { name: folders[0].name });
+            } else if (folders.length > 0) {
+                // Mixed or multiple folders
+                this.confirmMessage = this.t('delete.confirm_bulk_folders', {
+                    count: this.selected.length,
+                    folders: folders.length
+                });
+            } else if (files.length === 1) {
+                this.confirmMessage = this.t('delete.confirm_file', { name: files[0].name });
+            } else {
+                this.confirmMessage = this.t('delete.confirm_bulk', { count: this.selected.length });
+            }
             this.confirmAction = () => this.deleteSelected();
             this.showConfirm = true;
         },
@@ -704,10 +814,37 @@ function fluxFilesApp() {
         },
 
         // Create folder
-        async createFolder() {
-            const name = prompt('Folder name:');
-            if (!name) return;
+        createFolder() {
+            this.newFolderName = '';
+            this.newFolderError = '';
+            this.showNewFolder = true;
+            this.$nextTick(() => {
+                const input = this.$refs.newFolderInput;
+                if (input) input.focus();
+            });
+        },
 
+        closeNewFolder() {
+            this.showNewFolder = false;
+            this.newFolderName = '';
+            this.newFolderError = '';
+            this.newFolderCreating = false;
+        },
+
+        async submitNewFolder() {
+            const name = (this.newFolderName || '').trim();
+            this.newFolderError = '';
+
+            if (!name) {
+                this.newFolderError = this.t('folder.name_required') || 'Please enter a folder name';
+                return;
+            }
+            if (/[<>:"/\\|?*]/.test(name)) {
+                this.newFolderError = this.t('folder.invalid_chars') || 'Folder name contains invalid characters';
+                return;
+            }
+
+            this.newFolderCreating = true;
             try {
                 await this.api('POST', '/api/fm/mkdir', {
                     disk: this.currentDisk,
@@ -715,24 +852,35 @@ function fluxFilesApp() {
                 });
                 this.postMessage('FM_EVENT', { event: 'folder:created', name: name });
                 this.loadFiles();
+                this.closeNewFolder();
             } catch (err) {
                 console.error('FluxFiles: Create folder failed', err);
-                alert('Failed to create folder: ' + err.message);
+                this.newFolderError = err.message || 'Failed to create folder';
+            } finally {
+                this.newFolderCreating = false;
             }
         },
 
         // Copy URL
         async copyUrl(file) {
+            // Build full URL: if relative, prepend origin
+            let url = file.url || '';
+            if (url && !url.startsWith('http')) {
+                const base = this.endpoint || window.location.origin;
+                url = base.replace(/\/$/, '') + '/' + url.replace(/^\//, '');
+            }
             try {
-                await navigator.clipboard.writeText(file.url);
+                await navigator.clipboard.writeText(url);
+                this.showToast(this.t('copy.copied'), 'success');
             } catch {
                 // Fallback
                 const ta = document.createElement('textarea');
-                ta.value = file.url;
+                ta.value = url;
                 document.body.appendChild(ta);
                 ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
+                this.showToast(this.t('copy.copied'), 'success');
             }
         },
 
@@ -1044,18 +1192,55 @@ function fluxFilesApp() {
 
         // Theme
         applyTheme(theme) {
+            this.theme = theme || 'auto';
+            this._updateThemeClass();
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem('fluxfiles_theme', this.theme);
+            }
+        },
+
+        toggleTheme() {
             const root = document.documentElement;
-            if (theme === 'dark') {
-                root.classList.add('dark');
-            } else if (theme === 'light') {
-                root.classList.remove('dark');
+            const isDark = root.classList.contains('dark');
+            this.applyTheme(isDark ? 'light' : 'dark');
+        },
+
+        _updateThemeClass() {
+            const root = document.documentElement;
+            let isDark = false;
+            if (this.theme === 'dark') {
+                isDark = true;
+            } else if (this.theme === 'light') {
+                isDark = false;
             } else {
-                // auto — detect system preference
-                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    root.classList.add('dark');
-                } else {
-                    root.classList.remove('dark');
-                }
+                // auto — system preference
+                isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            this.isDark = isDark;
+            if (isDark) {
+                root.classList.add('dark');
+            } else {
+                root.classList.remove('dark');
+            }
+        },
+
+        _initTheme() {
+            const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('fluxfiles_theme') : null;
+            const configTheme = this.config.theme;
+            const theme = stored || configTheme || 'auto';
+            this.theme = theme;
+            this._updateThemeClass();
+
+            // Listen to system preference when theme is 'auto'
+            if (this._themeMediaQuery) {
+                this._themeMediaQuery.removeEventListener('change', this._themeMediaHandler);
+                this._themeMediaQuery = null;
+            }
+            if (this.theme === 'auto' && window.matchMedia) {
+                const mq = window.matchMedia('(prefers-color-scheme: dark)');
+                this._themeMediaHandler = () => { this._updateThemeClass(); };
+                mq.addEventListener('change', this._themeMediaHandler);
+                this._themeMediaQuery = mq;
             }
         },
 
@@ -1120,6 +1305,76 @@ function fluxFilesApp() {
             if (!this.searchQuery) return this.folders;
             const q = this.searchQuery.toLowerCase();
             return this.folders.filter(f => f.name.toLowerCase().includes(q));
+        },
+
+        // Thumbnail CSS class (color-coded by file type)
+        thumbClass(file) {
+            const kind = this.fileIcon(file);
+            const map = {
+                image: 'thumb-img',
+                video: 'thumb-vid',
+                audio: 'thumb-audio',
+                document: 'thumb-doc',
+                folder: 'thumb-folder',
+                file: 'thumb-file'
+            };
+            return map[kind] || 'thumb-file';
+        },
+
+        // Thumbnail emoji icon
+        thumbIcon(file) {
+            if (!file) return '📄';
+            const kind = this.fileIcon(file);
+            const map = {
+                image: '🖼',
+                video: '🎬',
+                audio: '🎵',
+                document: '📄',
+                folder: '📁',
+                file: '📝'
+            };
+            return map[kind] || '📄';
+        },
+
+        // Status bar text
+        get statusText() {
+            const fc = this.filteredFolders.length;
+            const fi = this.filteredFiles.length;
+            const total = fc + fi;
+            const parts = [total + ' items'];
+            if (fc > 0) parts.push(fc + ' folders');
+            if (fi > 0) parts.push(fi + ' files');
+            return parts.join(' · ');
+        },
+
+        // Quota
+        quotaInfo: null,
+        quotaPercent: 0,
+        quotaLabel: '',
+
+        async loadQuota() {
+            try {
+                const data = await this.api('GET',
+                    '/api/fm/quota?disk=' + encodeURIComponent(this.currentDisk));
+                if (data) {
+                    this.quotaInfo = data;
+                    const usedMb = data.used_mb || 0;
+                    const maxMb = data.max_mb || 0;
+                    if (maxMb > 0) {
+                        this.quotaPercent = Math.min(100, Math.round((usedMb / maxMb) * 100));
+                        if (maxMb >= 1024) {
+                            this.quotaLabel = (usedMb / 1024).toFixed(1) + ' / ' + (maxMb / 1024).toFixed(0) + ' GB';
+                        } else {
+                            this.quotaLabel = Math.round(usedMb) + ' / ' + Math.round(maxMb) + ' MB';
+                        }
+                    } else {
+                        this.quotaPercent = 0;
+                        this.quotaLabel = this.formatSize((usedMb || 0) * 1024 * 1024) + ' used';
+                    }
+                }
+            } catch (_) {
+                // Quota not available, that's ok
+            }
         }
     };
 }

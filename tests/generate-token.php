@@ -11,7 +11,7 @@ $fullToken = fluxfiles_token(
     perms:       ['read', 'write', 'delete'],
     disks:       ['local', 's3', 'r2'],
     prefix:      '',
-    maxUploadMb: 50,
+    maxUploadMb: 30,
     allowedExt:  null,
     ttl:         86400
 );

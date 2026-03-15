@@ -1,186 +1,188 @@
 {
-  "_meta": {
-    "locale":    "ar",
-    "name":      "العربية",
-    "direction": "rtl",
-    "version":   "1.20.0",
-    "authors":   ["FluxFiles Team"]
-  },
-
-  "common": {
-    "save":        "حفظ",
-    "cancel":      "إلغاء",
-    "delete":      "حذف",
-    "rename":      "إعادة تسمية",
-    "move":        "نقل",
-    "copy":        "نسخ",
-    "download":    "تنزيل",
-    "upload":      "رفع",
-    "search":      "بحث",
-    "close":       "إغلاق",
-    "confirm":     "تأكيد",
-    "loading":     "جارٍ التحميل...",
-    "error":       "خطأ",
-    "success":     "تم",
-    "yes":         "نعم",
-    "no":          "لا",
-    "or":          "أو",
-    "clear":       "مسح",
-    "select_file": "اختيار ملف",
-    "root":        "الجذر"
-  },
-
-  "toolbar": {
-    "upload":       "رفع",
-    "new_folder":   "مجلد جديد",
-    "copy_url":     "نسخ الرابط",
-    "grid_view":    "عرض شبكي",
-    "list_view":    "عرض قائمة",
-    "search_hint":  "البحث في الملفات..."
-  },
-
-  "sidebar": {
-    "all_files":   "جميع الملفات",
-    "recent":      "الأخيرة",
-    "starred":     "المفضلة",
-    "trash":       "سلة المحذوفات",
-    "storage":     "التخزين",
-    "folders":     "المجلدات"
-  },
-
-  "file": {
-    "select":         "تحديد",
-    "preview":        "معاينة",
-    "copy_url":       "نسخ الرابط",
-    "presign_url":    "رابط موقّع مسبقاً",
-    "delete":         "حذف",
-    "restore":        "استعادة",
-    "purge":          "حذف نهائي",
-    "move_to":        "نقل إلى...",
-    "items":          "{count} عناصر",
-    "items_selected": "{count} محدد",
-    "size":           "الحجم",
-    "type":           "النوع",
-    "modified":       "تاريخ التعديل",
-    "disk":           "التخزين",
-    "path":           "المسار",
-    "name":           "الاسم",
-    "no_files":       "لا توجد ملفات في هذا المجلد"
-  },
-
-  "upload": {
-    "drop_hint":      "اسحب الملفات هنا أو انقر للرفع",
-    "max_size":       "الحد الأقصى {size} لكل ملف",
-    "all_types":      "جميع الأنواع مقبولة",
-    "uploading":      "جارٍ الرفع...",
-    "complete":       "اكتمل الرفع",
-    "error":          "فشل الرفع: {message}",
-    "duplicate":      "الملف موجود بالفعل. هل تريد استخدامه؟",
-    "quota_exceeded": "تم تجاوز حصة التخزين ({used} / {max})"
-  },
-
-  "metadata": {
-    "tab_info":     "معلومات",
-    "tab_seo":      "تحسين محركات البحث",
-    "tab_ai":       "وسوم الذكاء الاصطناعي",
-    "tab_crop":     "اقتصاص",
-    "title":        "العنوان",
-    "title_hint":   "عنوان مخصص، مختلف عن اسم الملف",
-    "alt_text":     "النص البديل",
-    "alt_hint":     "صف الصورة لقارئات الشاشة وتحسين محركات البحث",
-    "caption":      "التسمية التوضيحية",
-    "caption_hint": "وصف قصير يظهر أسفل الصورة",
-    "saving":       "جارٍ الحفظ...",
-    "saved":        "تم الحفظ"
-  },
-
-  "disk": {
-    "local":        "القرص المحلي",
-    "s3":           "Amazon S3",
-    "r2":           "Cloudflare R2"
-  },
-
-  "folder": {
-    "new":          "مجلد جديد",
-    "name_hint":    "اسم المجلد:",
-    "create":       "إنشاء مجلد",
-    "created":      "تم إنشاء المجلد"
-  },
-
-  "delete": {
-    "confirm_title":  "تأكيد",
-    "confirm_file":   "حذف \"{name}\"؟ سيتم نقله إلى سلة المحذوفات.",
-    "confirm_bulk":   "حذف {count} عنصر(عناصر)؟ لا يمكن التراجع عن هذا.",
-    "confirm_purge":  "حذف \"{name}\" نهائياً؟ لا يمكن التراجع عن هذا.",
-    "deleted":        "تم النقل إلى سلة المحذوفات",
-    "purged":         "تم الحذف نهائياً"
-  },
-
-  "trash": {
-    "title":          "سلة المحذوفات",
-    "empty":          "سلة المحذوفات فارغة",
-    "restore":        "استعادة",
-    "restore_all":    "استعادة الكل",
-    "empty_trash":    "إفراغ سلة المحذوفات",
-    "auto_delete":    "يتم حذف الملفات نهائياً بعد {days} يوم"
-  },
-
-  "search": {
-    "placeholder":    "البحث بالاسم أو العنوان أو النص البديل...",
-    "results":        "{count} نتيجة لـ \"{query}\"",
-    "no_results":     "لا توجد نتائج لـ \"{query}\""
-  },
-
-  "error": {
-    "forbidden":        "ليس لديك صلاحية للقيام بذلك",
-    "not_found":        "الملف غير موجود",
-    "quota_exceeded":   "تم تجاوز حصة التخزين",
-    "upload_too_large": "الملف كبير جداً (الحد الأقصى {max}MB)",
-    "ext_not_allowed":  "نوع الملف .{ext} غير مسموح به",
-    "generic":          "حدث خطأ ما. يرجى المحاولة مرة أخرى."
-  },
-
-  "presign": {
-    "title":    "رابط موقّع مسبقاً",
-    "expires":  "ينتهي خلال",
-    "minutes":  "{n} دقائق",
-    "generate": "إنشاء رابط",
-    "copied":   "تم نسخ الرابط!"
-  },
-
-  "audit": {
-    "uploaded":  "تم رفع {name}",
-    "deleted":   "تم حذف {name}",
-    "restored":  "تم استعادة {name}",
-    "moved":     "تم نقل {from} إلى {to}",
-    "copied":    "تم نسخ {from} إلى {to}"
-  },
-
-  "bulk": {
-    "move":          "نقل",
-    "copy_to_disk":  "نسخ إلى قرص",
-    "move_to_disk":  "نقل إلى قرص",
-    "download":      "تنزيل",
-    "move_to_folder": "نقل إلى مجلد",
-    "destination":   "مسار الوجهة",
-    "quick_pick":    "اختيار سريع:",
-    "target_disk":   "القرص الهدف",
-    "select_disk":   "-- اختر القرص --"
-  },
-
-  "crop": {
-    "free":            "حر",
-    "replace":         "استبدال الأصل",
-    "save_copy":       "حفظ كنسخة",
-    "saving":          "جارٍ الحفظ..."
-  },
-
-  "ai": {
-    "generate":        "إنشاء وسوم بالذكاء الاصطناعي",
-    "analyzing":       "جارٍ التحليل...",
-    "tags":            "الوسوم",
-    "no_tags":         "لا توجد وسوم ذكاء اصطناعي بعد. انقر على \"إنشاء وسوم بالذكاء الاصطناعي\" لتحليل هذه الصورة.",
-    "analyzing_image": "جارٍ تحليل الصورة بالذكاء الاصطناعي...",
-    "failed":          "فشل وسم الذكاء الاصطناعي: {message}"
-  }
+    "_meta": {
+        "locale": "ar",
+        "name": "العربية",
+        "direction": "rtl",
+        "version": "1.20.0",
+        "authors": [
+            "FluxFiles Team"
+        ]
+    },
+    "common": {
+        "save": "حفظ",
+        "cancel": "إلغاء",
+        "delete": "حذف",
+        "rename": "إعادة تسمية",
+        "move": "نقل",
+        "copy": "نسخ",
+        "download": "تنزيل",
+        "upload": "رفع",
+        "search": "بحث",
+        "close": "إغلاق",
+        "confirm": "تأكيد",
+        "loading": "جارٍ التحميل...",
+        "error": "خطأ",
+        "success": "تم",
+        "yes": "نعم",
+        "no": "لا",
+        "or": "أو",
+        "clear": "مسح",
+        "select_file": "اختيار ملف",
+        "root": "الجذر"
+    },
+    "toolbar": {
+        "upload": "رفع",
+        "new_folder": "مجلد جديد",
+        "copy_url": "نسخ الرابط",
+        "grid_view": "عرض شبكي",
+        "list_view": "عرض قائمة",
+        "search_hint": "البحث في الملفات...",
+        "theme_toggle": "تبديل الوضع الفاتح\/الداكن"
+    },
+    "sidebar": {
+        "all_files": "جميع الملفات",
+        "recent": "الأخيرة",
+        "starred": "المفضلة",
+        "trash": "سلة المحذوفات",
+        "storage": "التخزين",
+        "folders": "المجلدات",
+        "smart_filters": "مرشحات ذكية"
+    },
+    "quota": {
+        "storage": "التخزين"
+    },
+    "file": {
+        "select": "تحديد",
+        "preview": "معاينة",
+        "copy_url": "نسخ الرابط",
+        "presign_url": "رابط موقّع مسبقاً",
+        "delete": "حذف",
+        "restore": "استعادة",
+        "purge": "حذف نهائي",
+        "move_to": "نقل إلى...",
+        "items": "{count} عناصر",
+        "items_selected": "{count} محدد",
+        "size": "الحجم",
+        "type": "النوع",
+        "modified": "تاريخ التعديل",
+        "disk": "التخزين",
+        "path": "المسار",
+        "name": "الاسم",
+        "no_files": "لا توجد ملفات في هذا المجلد",
+        "files": "ملفات",
+        "folder": "مجلد"
+    },
+    "upload": {
+        "drop_hint": "اسحب الملفات هنا أو انقر للرفع",
+        "max_size": "الحد الأقصى {size} لكل ملف",
+        "all_types": "جميع الأنواع مقبولة",
+        "uploading": "جارٍ الرفع...",
+        "complete": "اكتمل الرفع",
+        "error": "فشل الرفع: {message}",
+        "duplicate": "الملف موجود بالفعل. هل تريد استخدامه؟",
+        "quota_exceeded": "تم تجاوز حصة التخزين ({used} \/ {max})"
+    },
+    "metadata": {
+        "tab_info": "معلومات",
+        "tab_seo": "تحسين محركات البحث",
+        "tab_ai": "وسوم الذكاء الاصطناعي",
+        "tab_crop": "اقتصاص",
+        "title": "العنوان",
+        "title_hint": "عنوان مخصص، مختلف عن اسم الملف",
+        "alt_text": "النص البديل",
+        "alt_hint": "صف الصورة لقارئات الشاشة وتحسين محركات البحث",
+        "caption": "التسمية التوضيحية",
+        "caption_hint": "وصف قصير يظهر أسفل الصورة",
+        "saving": "جارٍ الحفظ...",
+        "saved": "تم الحفظ"
+    },
+    "disk": {
+        "local": "القرص المحلي",
+        "s3": "Amazon S3",
+        "r2": "Cloudflare R2"
+    },
+    "folder": {
+        "new": "مجلد جديد",
+        "name_hint": "اسم المجلد:",
+        "create": "إنشاء مجلد",
+        "created": "تم إنشاء المجلد",
+        "create_title": "إنشاء مجلد جديد",
+        "create_desc": "أدخل اسمًا للمجلد الجديد.",
+        "name_placeholder": "مثال: مجلدي",
+        "name_required": "يرجى إدخال اسم المجلد",
+        "invalid_chars": "لا يمكن أن يحتوي اسم المجلد على: < > : \" \/ \\ | ? *"
+    },
+    "delete": {
+        "confirm_title": "تأكيد",
+        "confirm_file": "حذف \"{name}\"؟ سيتم نقله إلى سلة المحذوفات.",
+        "confirm_bulk": "حذف {count} عنصر(عناصر)؟ لا يمكن التراجع عن هذا.",
+        "confirm_purge": "حذف \"{name}\" نهائياً؟ لا يمكن التراجع عن هذا.",
+        "deleted": "تم النقل إلى سلة المحذوفات",
+        "purged": "تم الحذف نهائياً",
+        "confirm_folder": "حذف المجلد \"{name}\" وجميع الملفات بداخله؟ سيتم نقل كل شيء إلى سلة المهملات.",
+        "confirm_bulk_folders": "حذف {count} عنصر ({folders} مجلد(ات) مع كل المحتويات)؟ سيتم نقل كل شيء إلى سلة المهملات."
+    },
+    "trash": {
+        "title": "سلة المحذوفات",
+        "empty": "سلة المحذوفات فارغة",
+        "restore": "استعادة",
+        "restore_all": "استعادة الكل",
+        "empty_trash": "إفراغ سلة المحذوفات",
+        "auto_delete": "يتم حذف الملفات نهائياً بعد {days} يوم"
+    },
+    "search": {
+        "placeholder": "البحث بالاسم أو العنوان أو النص البديل...",
+        "results": "{count} نتيجة لـ \"{query}\"",
+        "no_results": "لا توجد نتائج لـ \"{query}\""
+    },
+    "error": {
+        "forbidden": "ليس لديك صلاحية للقيام بذلك",
+        "not_found": "الملف غير موجود",
+        "quota_exceeded": "تم تجاوز حصة التخزين",
+        "upload_too_large": "الملف كبير جداً (الحد الأقصى {max}MB)",
+        "ext_not_allowed": "نوع الملف .{ext} غير مسموح به",
+        "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
+    },
+    "presign": {
+        "title": "رابط موقّع مسبقاً",
+        "expires": "ينتهي خلال",
+        "minutes": "{n} دقائق",
+        "generate": "إنشاء رابط",
+        "copied": "تم نسخ الرابط!"
+    },
+    "audit": {
+        "uploaded": "تم رفع {name}",
+        "deleted": "تم حذف {name}",
+        "restored": "تم استعادة {name}",
+        "moved": "تم نقل {from} إلى {to}",
+        "copied": "تم نسخ {from} إلى {to}"
+    },
+    "bulk": {
+        "move": "نقل",
+        "copy_to_disk": "نسخ إلى قرص",
+        "move_to_disk": "نقل إلى قرص",
+        "download": "تنزيل",
+        "move_to_folder": "نقل إلى مجلد",
+        "destination": "مسار الوجهة",
+        "quick_pick": "اختيار سريع:",
+        "target_disk": "القرص الهدف",
+        "select_disk": "-- اختر القرص --"
+    },
+    "crop": {
+        "free": "حر",
+        "replace": "استبدال الأصل",
+        "save_copy": "حفظ كنسخة",
+        "saving": "جارٍ الحفظ..."
+    },
+    "ai": {
+        "generate": "إنشاء وسوم بالذكاء الاصطناعي",
+        "analyzing": "جارٍ التحليل...",
+        "tags": "الوسوم",
+        "no_tags": "لا توجد وسوم ذكاء اصطناعي بعد. انقر على \"إنشاء وسوم بالذكاء الاصطناعي\" لتحليل هذه الصورة.",
+        "analyzing_image": "جارٍ تحليل الصورة بالذكاء الاصطناعي...",
+        "failed": "فشل وسم الذكاء الاصطناعي: {message}"
+    },
+    "copy": {
+        "copied": "تم نسخ الرابط إلى الحافظة"
+    }
 }

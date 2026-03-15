@@ -1,186 +1,188 @@
 {
-  "_meta": {
-    "locale":    "th",
-    "name":      "ไทย",
-    "direction": "ltr",
-    "version":   "1.20.0",
-    "authors":   ["FluxFiles Team"]
-  },
-
-  "common": {
-    "save":        "บันทึก",
-    "cancel":      "ยกเลิก",
-    "delete":      "ลบ",
-    "rename":      "เปลี่ยนชื่อ",
-    "move":        "ย้าย",
-    "copy":        "คัดลอก",
-    "download":    "ดาวน์โหลด",
-    "upload":      "อัปโหลด",
-    "search":      "ค้นหา",
-    "close":       "ปิด",
-    "confirm":     "ยืนยัน",
-    "loading":     "กำลังโหลด...",
-    "error":       "ข้อผิดพลาด",
-    "success":     "สำเร็จ",
-    "yes":         "ใช่",
-    "no":          "ไม่",
-    "or":          "หรือ",
-    "clear":       "ล้าง",
-    "select_file": "เลือกไฟล์",
-    "root":        "รูท"
-  },
-
-  "toolbar": {
-    "upload":       "อัปโหลด",
-    "new_folder":   "โฟลเดอร์ใหม่",
-    "copy_url":     "คัดลอก URL",
-    "grid_view":    "มุมมองตาราง",
-    "list_view":    "มุมมองรายการ",
-    "search_hint":  "ค้นหาไฟล์..."
-  },
-
-  "sidebar": {
-    "all_files":   "ไฟล์ทั้งหมด",
-    "recent":      "ล่าสุด",
-    "starred":     "รายการโปรด",
-    "trash":       "ถังขยะ",
-    "storage":     "พื้นที่จัดเก็บ",
-    "folders":     "โฟลเดอร์"
-  },
-
-  "file": {
-    "select":         "เลือก",
-    "preview":        "ดูตัวอย่าง",
-    "copy_url":       "คัดลอก URL",
-    "presign_url":    "URL ลงนามล่วงหน้า",
-    "delete":         "ลบ",
-    "restore":        "กู้คืน",
-    "purge":          "ลบถาวร",
-    "move_to":        "ย้ายไปที่...",
-    "items":          "{count} รายการ",
-    "items_selected": "เลือก {count} รายการ",
-    "size":           "ขนาด",
-    "type":           "ประเภท",
-    "modified":       "แก้ไขล่าสุด",
-    "disk":           "พื้นที่จัดเก็บ",
-    "path":           "เส้นทาง",
-    "name":           "ชื่อ",
-    "no_files":       "ไม่มีไฟล์ในโฟลเดอร์นี้"
-  },
-
-  "upload": {
-    "drop_hint":      "ลากไฟล์มาวางที่นี่หรือคลิกเพื่ออัปโหลด",
-    "max_size":       "สูงสุด {size} ต่อไฟล์",
-    "all_types":      "รับทุกประเภทไฟล์",
-    "uploading":      "กำลังอัปโหลด...",
-    "complete":       "อัปโหลดเสร็จสิ้น",
-    "error":          "อัปโหลดล้มเหลว: {message}",
-    "duplicate":      "ไฟล์นี้มีอยู่แล้ว ใช้ต่อหรือไม่?",
-    "quota_exceeded": "พื้นที่จัดเก็บเต็ม ({used} / {max})"
-  },
-
-  "metadata": {
-    "tab_info":     "ข้อมูล",
-    "tab_seo":      "SEO",
-    "tab_ai":       "แท็ก AI",
-    "tab_crop":     "ครอป",
-    "title":        "ชื่อเรื่อง",
-    "title_hint":   "ชื่อเรื่องกำหนดเอง ต่างจากชื่อไฟล์",
-    "alt_text":     "ข้อความทดแทน",
-    "alt_hint":     "อธิบายภาพสำหรับโปรแกรมอ่านหน้าจอและ SEO",
-    "caption":      "คำบรรยาย",
-    "caption_hint": "คำอธิบายสั้นๆ แสดงใต้ภาพ",
-    "saving":       "กำลังบันทึก...",
-    "saved":        "บันทึกแล้ว"
-  },
-
-  "disk": {
-    "local":        "ดิสก์ในเครื่อง",
-    "s3":           "Amazon S3",
-    "r2":           "Cloudflare R2"
-  },
-
-  "folder": {
-    "new":          "โฟลเดอร์ใหม่",
-    "name_hint":    "ชื่อโฟลเดอร์:",
-    "create":       "สร้างโฟลเดอร์",
-    "created":      "สร้างโฟลเดอร์แล้ว"
-  },
-
-  "delete": {
-    "confirm_title":  "ยืนยัน",
-    "confirm_file":   "ลบ \"{name}\"? จะถูกย้ายไปถังขยะ",
-    "confirm_bulk":   "ลบ {count} รายการ? ไม่สามารถย้อนกลับได้",
-    "confirm_purge":  "ลบ \"{name}\" ถาวร? ไม่สามารถย้อนกลับได้",
-    "deleted":        "ย้ายไปถังขยะแล้ว",
-    "purged":         "ลบถาวรแล้ว"
-  },
-
-  "trash": {
-    "title":          "ถังขยะ",
-    "empty":          "ถังขยะว่างเปล่า",
-    "restore":        "กู้คืน",
-    "restore_all":    "กู้คืนทั้งหมด",
-    "empty_trash":    "ล้างถังขยะ",
-    "auto_delete":    "ไฟล์จะถูกลบถาวรหลังจาก {days} วัน"
-  },
-
-  "search": {
-    "placeholder":    "ค้นหาตามชื่อ, ชื่อเรื่อง, ข้อความทดแทน...",
-    "results":        "{count} ผลลัพธ์สำหรับ \"{query}\"",
-    "no_results":     "ไม่พบผลลัพธ์สำหรับ \"{query}\""
-  },
-
-  "error": {
-    "forbidden":        "คุณไม่มีสิทธิ์ดำเนินการนี้",
-    "not_found":        "ไม่พบไฟล์",
-    "quota_exceeded":   "พื้นที่จัดเก็บเต็ม",
-    "upload_too_large": "ไฟล์ใหญ่เกินไป (สูงสุด {max}MB)",
-    "ext_not_allowed":  "ไม่อนุญาตไฟล์ประเภท .{ext}",
-    "generic":          "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง"
-  },
-
-  "presign": {
-    "title":    "URL ลงนามล่วงหน้า",
-    "expires":  "หมดอายุใน",
-    "minutes":  "{n} นาที",
-    "generate": "สร้างลิงก์",
-    "copied":   "คัดลอกลิงก์แล้ว!"
-  },
-
-  "audit": {
-    "uploaded":  "อัปโหลด {name}",
-    "deleted":   "ลบ {name}",
-    "restored":  "กู้คืน {name}",
-    "moved":     "ย้าย {from} ไปที่ {to}",
-    "copied":    "คัดลอก {from} ไปที่ {to}"
-  },
-
-  "bulk": {
-    "move":           "ย้าย",
-    "copy_to_disk":   "คัดลอกไปดิสก์",
-    "move_to_disk":   "ย้ายไปดิสก์",
-    "download":       "ดาวน์โหลด",
-    "move_to_folder": "ย้ายไปโฟลเดอร์",
-    "destination":    "เส้นทางปลายทาง",
-    "quick_pick":     "เลือกด่วน:",
-    "target_disk":    "ดิสก์ปลายทาง",
-    "select_disk":    "-- เลือกดิสก์ --"
-  },
-
-  "crop": {
-    "free":            "อิสระ",
-    "replace":         "แทนที่ต้นฉบับ",
-    "save_copy":       "บันทึกเป็นสำเนา",
-    "saving":          "กำลังบันทึก..."
-  },
-
-  "ai": {
-    "generate":        "สร้างแท็ก AI",
-    "analyzing":       "กำลังวิเคราะห์...",
-    "tags":            "แท็ก",
-    "no_tags":         "ยังไม่มีแท็ก AI คลิก \"สร้างแท็ก AI\" เพื่อวิเคราะห์ภาพนี้",
-    "analyzing_image": "กำลังวิเคราะห์ภาพด้วย AI...",
-    "failed":          "สร้างแท็ก AI ล้มเหลว: {message}"
-  }
+    "_meta": {
+        "locale": "th",
+        "name": "ไทย",
+        "direction": "ltr",
+        "version": "1.20.0",
+        "authors": [
+            "FluxFiles Team"
+        ]
+    },
+    "common": {
+        "save": "บันทึก",
+        "cancel": "ยกเลิก",
+        "delete": "ลบ",
+        "rename": "เปลี่ยนชื่อ",
+        "move": "ย้าย",
+        "copy": "คัดลอก",
+        "download": "ดาวน์โหลด",
+        "upload": "อัปโหลด",
+        "search": "ค้นหา",
+        "close": "ปิด",
+        "confirm": "ยืนยัน",
+        "loading": "กำลังโหลด...",
+        "error": "ข้อผิดพลาด",
+        "success": "สำเร็จ",
+        "yes": "ใช่",
+        "no": "ไม่",
+        "or": "หรือ",
+        "clear": "ล้าง",
+        "select_file": "เลือกไฟล์",
+        "root": "รูท"
+    },
+    "toolbar": {
+        "upload": "อัปโหลด",
+        "new_folder": "โฟลเดอร์ใหม่",
+        "copy_url": "คัดลอก URL",
+        "grid_view": "มุมมองตาราง",
+        "list_view": "มุมมองรายการ",
+        "search_hint": "ค้นหาไฟล์...",
+        "theme_toggle": "สลับธีมสว่าง\/มืด"
+    },
+    "sidebar": {
+        "all_files": "ไฟล์ทั้งหมด",
+        "recent": "ล่าสุด",
+        "starred": "รายการโปรด",
+        "trash": "ถังขยะ",
+        "storage": "พื้นที่จัดเก็บ",
+        "folders": "โฟลเดอร์",
+        "smart_filters": "ตัวกรองอัจฉริยะ"
+    },
+    "quota": {
+        "storage": "พื้นที่จัดเก็บ"
+    },
+    "file": {
+        "select": "เลือก",
+        "preview": "ดูตัวอย่าง",
+        "copy_url": "คัดลอก URL",
+        "presign_url": "URL ลงนามล่วงหน้า",
+        "delete": "ลบ",
+        "restore": "กู้คืน",
+        "purge": "ลบถาวร",
+        "move_to": "ย้ายไปที่...",
+        "items": "{count} รายการ",
+        "items_selected": "เลือก {count} รายการ",
+        "size": "ขนาด",
+        "type": "ประเภท",
+        "modified": "แก้ไขล่าสุด",
+        "disk": "พื้นที่จัดเก็บ",
+        "path": "เส้นทาง",
+        "name": "ชื่อ",
+        "no_files": "ไม่มีไฟล์ในโฟลเดอร์นี้",
+        "files": "ไฟล์",
+        "folder": "โฟลเดอร์"
+    },
+    "upload": {
+        "drop_hint": "ลากไฟล์มาวางที่นี่หรือคลิกเพื่ออัปโหลด",
+        "max_size": "สูงสุด {size} ต่อไฟล์",
+        "all_types": "รับทุกประเภทไฟล์",
+        "uploading": "กำลังอัปโหลด...",
+        "complete": "อัปโหลดเสร็จสิ้น",
+        "error": "อัปโหลดล้มเหลว: {message}",
+        "duplicate": "ไฟล์นี้มีอยู่แล้ว ใช้ต่อหรือไม่?",
+        "quota_exceeded": "พื้นที่จัดเก็บเต็ม ({used} \/ {max})"
+    },
+    "metadata": {
+        "tab_info": "ข้อมูล",
+        "tab_seo": "SEO",
+        "tab_ai": "แท็ก AI",
+        "tab_crop": "ครอป",
+        "title": "ชื่อเรื่อง",
+        "title_hint": "ชื่อเรื่องกำหนดเอง ต่างจากชื่อไฟล์",
+        "alt_text": "ข้อความทดแทน",
+        "alt_hint": "อธิบายภาพสำหรับโปรแกรมอ่านหน้าจอและ SEO",
+        "caption": "คำบรรยาย",
+        "caption_hint": "คำอธิบายสั้นๆ แสดงใต้ภาพ",
+        "saving": "กำลังบันทึก...",
+        "saved": "บันทึกแล้ว"
+    },
+    "disk": {
+        "local": "ดิสก์ในเครื่อง",
+        "s3": "Amazon S3",
+        "r2": "Cloudflare R2"
+    },
+    "folder": {
+        "new": "โฟลเดอร์ใหม่",
+        "name_hint": "ชื่อโฟลเดอร์:",
+        "create": "สร้างโฟลเดอร์",
+        "created": "สร้างโฟลเดอร์แล้ว",
+        "create_title": "สร้างโฟลเดอร์ใหม่",
+        "create_desc": "ป้อนชื่อสำหรับโฟลเดอร์ใหม่",
+        "name_placeholder": "เช่น โฟลเดอร์ของฉัน",
+        "name_required": "กรุณาป้อนชื่อโฟลเดอร์",
+        "invalid_chars": "ชื่อโฟลเดอร์ไม่สามารถมีอักขระ: < > : \" \/ \\ | ? *"
+    },
+    "delete": {
+        "confirm_title": "ยืนยัน",
+        "confirm_file": "ลบ \"{name}\"? จะถูกย้ายไปถังขยะ",
+        "confirm_bulk": "ลบ {count} รายการ? ไม่สามารถย้อนกลับได้",
+        "confirm_purge": "ลบ \"{name}\" ถาวร? ไม่สามารถย้อนกลับได้",
+        "deleted": "ย้ายไปถังขยะแล้ว",
+        "purged": "ลบถาวรแล้ว",
+        "confirm_folder": "ลบโฟลเดอร์ \"{name}\" และไฟล์ทั้งหมดภายใน? ทุกอย่างจะถูกย้ายไปถังขยะ",
+        "confirm_bulk_folders": "ลบ {count} รายการ ({folders} โฟลเดอร์พร้อมเนื้อหาทั้งหมด)? ทุกอย่างจะถูกย้ายไปถังขยะ"
+    },
+    "trash": {
+        "title": "ถังขยะ",
+        "empty": "ถังขยะว่างเปล่า",
+        "restore": "กู้คืน",
+        "restore_all": "กู้คืนทั้งหมด",
+        "empty_trash": "ล้างถังขยะ",
+        "auto_delete": "ไฟล์จะถูกลบถาวรหลังจาก {days} วัน"
+    },
+    "search": {
+        "placeholder": "ค้นหาตามชื่อ, ชื่อเรื่อง, ข้อความทดแทน...",
+        "results": "{count} ผลลัพธ์สำหรับ \"{query}\"",
+        "no_results": "ไม่พบผลลัพธ์สำหรับ \"{query}\""
+    },
+    "error": {
+        "forbidden": "คุณไม่มีสิทธิ์ดำเนินการนี้",
+        "not_found": "ไม่พบไฟล์",
+        "quota_exceeded": "พื้นที่จัดเก็บเต็ม",
+        "upload_too_large": "ไฟล์ใหญ่เกินไป (สูงสุด {max}MB)",
+        "ext_not_allowed": "ไม่อนุญาตไฟล์ประเภท .{ext}",
+        "generic": "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง"
+    },
+    "presign": {
+        "title": "URL ลงนามล่วงหน้า",
+        "expires": "หมดอายุใน",
+        "minutes": "{n} นาที",
+        "generate": "สร้างลิงก์",
+        "copied": "คัดลอกลิงก์แล้ว!"
+    },
+    "audit": {
+        "uploaded": "อัปโหลด {name}",
+        "deleted": "ลบ {name}",
+        "restored": "กู้คืน {name}",
+        "moved": "ย้าย {from} ไปที่ {to}",
+        "copied": "คัดลอก {from} ไปที่ {to}"
+    },
+    "bulk": {
+        "move": "ย้าย",
+        "copy_to_disk": "คัดลอกไปดิสก์",
+        "move_to_disk": "ย้ายไปดิสก์",
+        "download": "ดาวน์โหลด",
+        "move_to_folder": "ย้ายไปโฟลเดอร์",
+        "destination": "เส้นทางปลายทาง",
+        "quick_pick": "เลือกด่วน:",
+        "target_disk": "ดิสก์ปลายทาง",
+        "select_disk": "-- เลือกดิสก์ --"
+    },
+    "crop": {
+        "free": "อิสระ",
+        "replace": "แทนที่ต้นฉบับ",
+        "save_copy": "บันทึกเป็นสำเนา",
+        "saving": "กำลังบันทึก..."
+    },
+    "ai": {
+        "generate": "สร้างแท็ก AI",
+        "analyzing": "กำลังวิเคราะห์...",
+        "tags": "แท็ก",
+        "no_tags": "ยังไม่มีแท็ก AI คลิก \"สร้างแท็ก AI\" เพื่อวิเคราะห์ภาพนี้",
+        "analyzing_image": "กำลังวิเคราะห์ภาพด้วย AI...",
+        "failed": "สร้างแท็ก AI ล้มเหลว: {message}"
+    },
+    "copy": {
+        "copied": "คัดลอก URL ไปยังคลิปบอร์ดแล้ว"
+    }
 }
