@@ -3,8 +3,20 @@
     "description": "Laravel adapter for FluxFiles file manager",
     "type": "library",
     "license": "MIT",
+    "keywords": ["fluxfiles", "laravel", "file-manager", "s3", "r2", "upload"],
+    "homepage": "https://github.com/thai-pc/fluxfiles",
+    "authors": [
+        {
+            "name": "thai-pc",
+            "homepage": "https://github.com/thai-pc"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/thai-pc/fluxfiles/issues",
+        "source": "https://github.com/thai-pc/fluxfiles"
+    },
     "require": {
-        "php": "^8.2",
+        "php": ">=7.4",
         "fluxfiles/fluxfiles": "^1.0",
         "illuminate/support": "^10.0|^11.0|^12.0",
         "illuminate/routing": "^10.0|^11.0|^12.0",
