@@ -1,5 +1,37 @@
+# Dependencies
 vendor/
+node_modules/
+
+# Environment
 .env
+
+# Database & uploads
 storage/fluxfiles.db
 storage/uploads/
+
+# Build output
+adapters/react/dist/
+adapters/vue/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+.phpunit.result.cache
+.phpunit.cache/
+
+# Logs
+*.log
+
+# Project docs (private)
 fluxfiles-spec.docx
+PUBLISHING.md
