@@ -1,0 +1,186 @@
+{
+  "_meta": {
+    "locale":    "tr",
+    "name":      "Türkçe",
+    "direction": "ltr",
+    "version":   "1.20.0",
+    "authors":   ["FluxFiles Team"]
+  },
+
+  "common": {
+    "save":        "Kaydet",
+    "cancel":      "İptal",
+    "delete":      "Sil",
+    "rename":      "Yeniden adlandır",
+    "move":        "Taşı",
+    "copy":        "Kopyala",
+    "download":    "İndir",
+    "upload":      "Yükle",
+    "search":      "Ara",
+    "close":       "Kapat",
+    "confirm":     "Onayla",
+    "loading":     "Yükleniyor...",
+    "error":       "Hata",
+    "success":     "Tamam",
+    "yes":         "Evet",
+    "no":          "Hayır",
+    "or":          "veya",
+    "clear":       "Temizle",
+    "select_file": "Dosya seç",
+    "root":        "Kök"
+  },
+
+  "toolbar": {
+    "upload":       "Yükle",
+    "new_folder":   "Yeni klasör",
+    "copy_url":     "URL kopyala",
+    "grid_view":    "Izgara görünümü",
+    "list_view":    "Liste görünümü",
+    "search_hint":  "Dosya ara..."
+  },
+
+  "sidebar": {
+    "all_files":   "Tüm dosyalar",
+    "recent":      "Son kullanılan",
+    "starred":     "Yıldızlı",
+    "trash":       "Çöp kutusu",
+    "storage":     "Depolama",
+    "folders":     "Klasörler"
+  },
+
+  "file": {
+    "select":         "Seç",
+    "preview":        "Önizle",
+    "copy_url":       "URL kopyala",
+    "presign_url":    "Ön imzalı URL",
+    "delete":         "Sil",
+    "restore":        "Geri yükle",
+    "purge":          "Kalıcı olarak sil",
+    "move_to":        "Taşı...",
+    "items":          "{count} öğe",
+    "items_selected": "{count} seçildi",
+    "size":           "Boyut",
+    "type":           "Tür",
+    "modified":       "Değiştirilme",
+    "disk":           "Depolama",
+    "path":           "Yol",
+    "name":           "Ad",
+    "no_files":       "Bu klasörde dosya yok"
+  },
+
+  "upload": {
+    "drop_hint":      "Dosyaları buraya sürükleyin veya yüklemek için tıklayın",
+    "max_size":       "Dosya başına en fazla {size}",
+    "all_types":      "Tüm türler kabul edilir",
+    "uploading":      "Yükleniyor...",
+    "complete":       "Yükleme tamamlandı",
+    "error":          "Yükleme başarısız: {message}",
+    "duplicate":      "Dosya zaten mevcut. Yine de kullanılsın mı?",
+    "quota_exceeded": "Depolama kotası aşıldı ({used} / {max})"
+  },
+
+  "metadata": {
+    "tab_info":     "Bilgi",
+    "tab_seo":      "SEO",
+    "tab_ai":       "AI Etiketler",
+    "tab_crop":     "Kırp",
+    "title":        "Başlık",
+    "title_hint":   "Dosya adından farklı özel başlık",
+    "alt_text":     "Alternatif metin",
+    "alt_hint":     "Ekran okuyucular ve SEO için görüntüyü tanımlayın",
+    "caption":      "Altyazı",
+    "caption_hint": "Görüntünün altında gösterilen kısa açıklama",
+    "saving":       "Kaydediliyor...",
+    "saved":        "Kaydedildi"
+  },
+
+  "disk": {
+    "local":        "Yerel disk",
+    "s3":           "Amazon S3",
+    "r2":           "Cloudflare R2"
+  },
+
+  "folder": {
+    "new":          "Yeni klasör",
+    "name_hint":    "Klasör adı:",
+    "create":       "Klasör oluştur",
+    "created":      "Klasör oluşturuldu"
+  },
+
+  "delete": {
+    "confirm_title":  "Onay",
+    "confirm_file":   "\"{name}\" silinsin mi? Çöp kutusuna taşınacak.",
+    "confirm_bulk":   "{count} öğe silinsin mi? Bu işlem geri alınamaz.",
+    "confirm_purge":  "\"{name}\" kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
+    "deleted":        "Çöp kutusuna taşındı",
+    "purged":         "Kalıcı olarak silindi"
+  },
+
+  "trash": {
+    "title":          "Çöp Kutusu",
+    "empty":          "Çöp kutusu boş",
+    "restore":        "Geri yükle",
+    "restore_all":    "Tümünü geri yükle",
+    "empty_trash":    "Çöp kutusunu boşalt",
+    "auto_delete":    "Dosyalar {days} gün sonra kalıcı olarak silinir"
+  },
+
+  "search": {
+    "placeholder":    "Ad, başlık, alternatif metin ile ara...",
+    "results":        "\"{query}\" için {count} sonuç",
+    "no_results":     "\"{query}\" için sonuç bulunamadı"
+  },
+
+  "error": {
+    "forbidden":        "Bu işlem için yetkiniz yok",
+    "not_found":        "Dosya bulunamadı",
+    "quota_exceeded":   "Depolama kotası aşıldı",
+    "upload_too_large": "Dosya çok büyük (en fazla {max}MB)",
+    "ext_not_allowed":  ".{ext} dosya türüne izin verilmiyor",
+    "generic":          "Bir hata oluştu. Lütfen tekrar deneyin."
+  },
+
+  "presign": {
+    "title":    "Ön imzalı URL",
+    "expires":  "Süre",
+    "minutes":  "{n} dakika",
+    "generate": "Bağlantı oluştur",
+    "copied":   "Bağlantı kopyalandı!"
+  },
+
+  "audit": {
+    "uploaded":  "{name} yüklendi",
+    "deleted":   "{name} silindi",
+    "restored":  "{name} geri yüklendi",
+    "moved":     "{from}, {to} konumuna taşındı",
+    "copied":    "{from}, {to} konumuna kopyalandı"
+  },
+
+  "bulk": {
+    "move":           "Taşı",
+    "copy_to_disk":   "Diske kopyala",
+    "move_to_disk":   "Diske taşı",
+    "download":       "İndir",
+    "move_to_folder": "Klasöre taşı",
+    "destination":    "Hedef yol",
+    "quick_pick":     "Hızlı seçim:",
+    "target_disk":    "Hedef disk",
+    "select_disk":    "-- Disk seçin --"
+  },
+
+  "crop": {
+    "free":            "Serbest",
+    "replace":         "Orijinali değiştir",
+    "save_copy":       "Kopya olarak kaydet",
+    "saving":          "Kaydediliyor..."
+  },
+
+  "ai": {
+    "generate":        "AI etiketleri oluştur",
+    "analyzing":       "Analiz ediliyor...",
+    "tags":            "Etiketler",
+    "no_tags":         "Henüz AI etiketi yok. Bu görüntüyü analiz etmek için \"AI etiketleri oluştur\"a tıklayın.",
+    "analyzing_image": "Görüntü AI ile analiz ediliyor...",
+    "failed":          "AI etiketleme başarısız: {message}"
+  }
+}
