@@ -273,6 +273,15 @@ function routeRequest(
     if ($method === 'DELETE' && $uri === '/api/fm/purge') {
         return $fm->purge(...jsonBody('disk', 'path'));
     }
+    if ($method === 'POST' && $uri === '/api/fm/purge-bulk') {
+        $raw = file_get_contents('php://input');
+        $body = json_decode($raw ?: '{}', true);
+        if (!is_array($body) || !isset($body['paths']) || !is_array($body['paths'])) {
+            throw new ApiException('Missing or invalid paths array', 400);
+        }
+        $disk = $body['disk'] ?? 'local';
+        return $fm->purgeBulk($disk, $body['paths']);
+    }
 
     // Search
     if ($method === 'GET' && $uri === '/api/fm/search') {
@@ -339,6 +348,7 @@ function resolveAuditAction(string $uri): string
         '/mkdir'      => 'mkdir',
         '/restore'    => 'restore',
         '/purge'      => 'purge',
+        '/purge-bulk' => 'purge',
         '/metadata'   => 'metadata_update',
         '/chunk'      => 'chunk_upload',
     ];

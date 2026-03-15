@@ -125,6 +125,9 @@ class FluxFilesApi
             'permission_callback' => [self::class, 'checkAuth'],
             'callback'            => [$api, 'handlePurge'],
         ]);
+        register_rest_route($ns, '/purge-bulk', array_merge($writeArgs, [
+            'callback' => [$api, 'handlePurgeBulk'],
+        ]));
 
         // Search, quota, audit
         register_rest_route($ns, '/search', array_merge($readArgs, [
@@ -687,6 +690,32 @@ class FluxFilesApi
 
             $result = $fm->purge($disk, $path);
             $this->logAudit($claims, 'purge', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handlePurgeBulk(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $disk = $body['disk'] ?? 'local';
+            $paths = $body['paths'] ?? null;
+
+            if (!is_array($paths) || empty($paths)) {
+                throw new ApiException('Missing or invalid paths array', 400);
+            }
+
+            $result = $fm->purgeBulk($disk, $paths);
+            foreach ($result['purged'] ?? [] as $path) {
+                $this->logAudit($claims, 'purge', $disk, $path);
+            }
 
             return $this->ok($result);
         } catch (ApiException $e) {

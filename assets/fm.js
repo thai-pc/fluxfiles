@@ -719,6 +719,7 @@ function fluxFilesApp() {
                     this.postMessage('FM_EVENT', { event: 'delete:done', key: file.key });
                 } catch (err) {
                     console.error('FluxFiles: Delete failed', file.key, err);
+                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
                 }
                 this.tickBulk();
             }
@@ -741,6 +742,7 @@ function fluxFilesApp() {
                 this.loadFiles();
             } catch (err) {
                 console.error('FluxFiles: Restore failed', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             }
         },
 
@@ -755,6 +757,7 @@ function fluxFilesApp() {
                 this.loadTrash();
             } catch (err) {
                 console.error('FluxFiles: Purge failed', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             }
         },
 
@@ -773,6 +776,7 @@ function fluxFilesApp() {
                     this.postMessage('FM_EVENT', { event: 'restore:done', key: item.file_key });
                 } catch (err) {
                     console.error('FluxFiles: Bulk restore failed', item.file_key, err);
+                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
                 }
                 this.tickBulk();
             }
@@ -781,23 +785,31 @@ function fluxFilesApp() {
             this.loadTrash();
         },
 
-        // Bulk purge from trash
+        // Bulk purge from trash (single API call to avoid 429 rate limit)
         async bulkPurge(items) {
             const list = items || this.trashItems;
             if (list.length === 0) return;
             this.startBulk('Purging', list.length);
 
-            for (const item of [...list]) {
-                try {
-                    await this.api('DELETE', '/api/fm/purge', {
-                        disk: this.currentDisk,
-                        path: item.file_key
-                    });
-                    this.postMessage('FM_EVENT', { event: 'purge:done', key: item.file_key });
-                } catch (err) {
-                    console.error('FluxFiles: Bulk purge failed', item.file_key, err);
+            try {
+                const paths = list.map(item => item.file_key);
+                const result = await this.api('POST', '/api/fm/purge-bulk', {
+                    disk: this.currentDisk,
+                    paths
+                });
+                const purged = result?.purged || [];
+                const errors = result?.errors || [];
+                for (const key of purged) {
+                    this.postMessage('FM_EVENT', { event: 'purge:done', key });
                 }
-                this.tickBulk();
+                if (errors.length > 0) {
+                    this.showToast(this.t('delete.purge_partial', { count: errors.length }) || (`${errors.length} item(s) failed to purge`), 'error', 4000);
+                } else if (purged.length > 0) {
+                    this.showToast(this.t('delete.purged'), 'success');
+                }
+            } catch (err) {
+                console.error('FluxFiles: Bulk purge failed', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             }
 
             this.endBulk();
