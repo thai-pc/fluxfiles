@@ -109,7 +109,11 @@ class FluxFilesMediaButton
                 if (!opened) {
                     config.container = '#fluxfiles-modal-body';
                     config.onSelect = function(file) {
-                        insertFile(file);
+                        if (Array.isArray(file)) {
+                            file.forEach(function(f) { insertFile(f); });
+                        } else {
+                            insertFile(file);
+                        }
                         closeModal();
                     };
                     FluxFiles.open(config);
@@ -123,7 +127,7 @@ class FluxFilesMediaButton
 
             function insertFile(file) {
                 var url = file.url || '';
-                var name = file.basename || file.path || '';
+                var name = file.basename || file.name || file.path || file.key || '';
                 var html = '';
 
                 if (/\.(jpe?g|png|gif|webp|svg)$/i.test(name)) {

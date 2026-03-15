@@ -16,6 +16,8 @@ interface FluxFilesOpenOptions {
 interface FluxFile {
     path: string;
     basename: string;
+    key?: string;
+    name?: string;
     url?: string;
     size?: number;
     mime?: string;

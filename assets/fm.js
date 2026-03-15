@@ -377,10 +377,13 @@ function fluxFilesApp() {
                 url: item.url,
                 key: item.key,
                 name: item.name,
+                path: item.key,      // backward compat
+                basename: item.name, // backward compat
                 size: item.size,
                 disk: this.currentDisk,
                 meta: item.meta || null,
-                type: item.type || 'file'
+                type: item.type || 'file',
+                is_dir: item.type === 'dir'
             };
         },
 

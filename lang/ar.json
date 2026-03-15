@@ -29,6 +29,8 @@
         "clear": "مسح",
         "select_file": "اختيار ملف",
         "select_folder": "اختيار مجلد",
+        "select_item": "اختيار عنصر واحد",
+        "select_items": "اختيار {count} عناصر",
         "root": "الجذر"
     },
     "toolbar": {

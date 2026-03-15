@@ -29,6 +29,8 @@
         "clear": "ล้าง",
         "select_file": "เลือกไฟล์",
         "select_folder": "เลือกโฟลเดอร์",
+        "select_item": "เลือก 1 รายการ",
+        "select_items": "เลือก {count} รายการ",
         "root": "รูท"
     },
     "toolbar": {

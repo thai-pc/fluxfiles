@@ -15,6 +15,7 @@
         token: @json($token),
         disk: @json($disk),
         mode: @json($mode),
+        multiple: @json($multiple),
         container: "#{{ $containerId }}",
         @if($onSelect)
         onSelect: {!! $onSelect !!},

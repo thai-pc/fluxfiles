@@ -48,6 +48,7 @@
         <h3>Open File Manager</h3>
         <div class="btn-group">
             <button class="primary" onclick="openPicker()">Open Picker (Modal)</button>
+            <button class="primary" onclick="openPickerMultiple()">Open Picker (Multiple)</button>
             <button class="primary" onclick="openBrowser()">Open Browser (Embedded)</button>
         </div>
 
@@ -118,7 +119,8 @@
             addLog('FM_READY', JSON.stringify(p));
         });
         FluxFiles.on('FM_SELECT', function(f) {
-            addLog('FM_SELECT', f.basename + ' — ' + (f.url || f.path));
+            var s = Array.isArray(f) ? f.map(function(x) { return (x.basename || x.name) + ' — ' + (x.url || x.path || x.key); }).join('; ') : ((f.basename || f.name) + ' — ' + (f.url || f.path || f.key));
+            addLog('FM_SELECT', s);
         });
         FluxFiles.on('FM_EVENT', function(e) {
             addLog('FM_EVENT', e.action + ' — ' + JSON.stringify(e));
@@ -136,7 +138,23 @@
                 disk: 'local',
                 mode: 'picker',
                 onSelect: function(file) {
-                    addLog('FM_SELECT', '[onSelect callback] ' + file.basename);
+                    var s = Array.isArray(file) ? file.map(function(x) { return x.basename || x.name; }).join(', ') : (file.basename || file.name);
+                    addLog('FM_SELECT', '[onSelect callback] ' + s);
+                }
+            });
+        }
+
+        function openPickerMultiple() {
+            if (!getToken()) { alert('Nhap token truoc!'); return; }
+            FluxFiles.open({
+                endpoint: location.origin,
+                token: getToken(),
+                disk: 'local',
+                mode: 'picker',
+                multiple: true,
+                onSelect: function(file) {
+                    var s = Array.isArray(file) ? file.map(function(x) { return x.basename || x.name; }).join(', ') : (file.basename || file.name);
+                    addLog('FM_SELECT', '[onSelect multiple] ' + s);
                 }
             });
         }

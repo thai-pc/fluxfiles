@@ -9,7 +9,7 @@ function uid(): string {
 }
 
 interface UseFluxFilesOptions extends FluxFilesConfig {
-  onSelect?: (file: FluxFile) => void;
+  onSelect?: (file: FluxFile | FluxFile[]) => void;
   onClose?: () => void;
   onReady?: () => void;
   onEvent?: (event: FluxEvent) => void;

@@ -29,6 +29,8 @@
         "clear": "Очистить",
         "select_file": "Выбрать файл",
         "select_folder": "Выбрать папку",
+        "select_item": "Выбрать 1 элемент",
+        "select_items": "Выбрать {count} элементов",
         "root": "Корень"
     },
     "toolbar": {

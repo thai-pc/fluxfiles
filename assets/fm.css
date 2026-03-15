@@ -933,10 +933,10 @@ body {
 
 /* Detail actions */
 .detail-actions {
+    margin-top: 10px;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-top: auto;
 }
 
 .detail-btn {
