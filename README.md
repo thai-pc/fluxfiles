@@ -502,6 +502,42 @@ FluxFiles/
 
 ---
 
+## Fork / Customize
+
+If you fork FluxFiles, the table below lists the key files you'll need to review and modify:
+
+### Files to Change
+
+| Category | File(s) | What to Change |
+|----------|---------|----------------|
+| **Secrets & CORS** | `.env` | `FLUXFILES_SECRET`, `FLUXFILES_ALLOWED_ORIGINS` — generate your own secret and set your domains |
+| **Storage drivers** | `config/disks.php` | Add, remove, or reconfigure disk definitions (local / S3 / R2) |
+| **Cloud credentials** | `.env` | `AWS_*` and `R2_*` variables for your own buckets |
+| **AI tagging** | `.env` | `FLUXFILES_AI_PROVIDER`, `FLUXFILES_AI_API_KEY`, `FLUXFILES_AI_MODEL` |
+| **Branding — colors** | `assets/fm.css` | CSS custom properties (`--ff-primary`, `--ff-bg`, `--ff-text`, etc.) |
+| **Branding — title** | `public/index.html` | `<title>` tag and any visible product name |
+| **Frontend logic** | `assets/fm.js` | Alpine.js component — add features or change UI behavior |
+| **SDK** | `fluxfiles.js` | Event names, default options, iframe communication protocol |
+| **Token helper** | `embed.php` | Default TTL, claims, or signing algorithm |
+| **Laravel adapter** | `adapters/laravel/config/fluxfiles.php` | Endpoint, default disks, mode, AI settings |
+| **WordPress adapter** | `adapters/wordpress/fluxfiles.php` | Plugin header (name, author, URI) |
+| **React adapter** | `adapters/react/package.json` | Package name, author, repository URL |
+| **Translations** | `lang/*.json` | Edit existing strings or add a new locale (see `lang/CONTRIBUTING.md`) |
+| **Rate limits** | `api/RateLimiter.php` | Bucket size and refill rate constants |
+| **Image variants** | `api/ImageOptimizer.php` | Thumbnail / medium / large dimensions and quality |
+
+### Attribution
+
+FluxFiles was created and maintained by **thai-pc**.
+
+If you fork or redistribute this project, please retain the original copyright notice and give appropriate credit. A link back to the original repository is appreciated:
+
+```
+Based on FluxFiles by thai-pc — https://github.com/thai-pc/FluxFiles
+```
+
+---
+
 ## License
 
 MIT
