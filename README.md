@@ -24,7 +24,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - **Audit log** — All write actions logged with user, IP, and user agent
 - **Storage quota** — Per-user storage limits enforced server-side
 - **Dark mode** — Automatic theme detection with manual toggle
-- **i18n** — 10 languages (EN, VI, ZH, JA, KO, FR, DE, ES, AR, PT) with RTL support
+- **i18n** — 16 languages (EN, VI, ZH, JA, KO, FR, DE, ES, AR, PT, IT, RU, TH, HI, TR, NL) with RTL support
 - **Bulk operations** — Multi-select with bulk move, copy, delete, download
 
 ---
@@ -175,7 +175,7 @@ echo fluxfiles_embed(
 |----------|----------|---------|-------------|
 | `FLUXFILES_SECRET` | Yes | — | JWT signing secret (32+ chars) |
 | `FLUXFILES_ALLOWED_ORIGINS` | Yes | — | Comma-separated CORS origins |
-| `FLUXFILES_LOCALE` | No | auto-detect | UI language (`en`, `vi`, `zh`, `ja`, `ko`, `fr`, `de`, `es`, `ar`, `pt`) |
+| `FLUXFILES_LOCALE` | No | auto-detect | UI language (`en`, `vi`, `zh`, `ja`, `ko`, `fr`, `de`, `es`, `ar`, `pt`, `it`, `ru`, `th`, `hi`, `tr`, `nl`) |
 | `AWS_ACCESS_KEY_ID` | No | — | AWS S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | No | — | AWS S3 secret key |
 | `AWS_DEFAULT_REGION` | No | `ap-southeast-1` | AWS region |
@@ -416,7 +416,7 @@ const { iframeRef, iframeSrc, navigate, setDisk, refresh, search, aiTag } =
 
 ## Internationalization
 
-10 languages included. Translation files are in `lang/`.
+16 languages included. Translation files are in `lang/`.
 
 | Code | Language | Direction |
 |------|----------|-----------|
@@ -430,6 +430,12 @@ const { iframeRef, iframeSrc, navigate, setDisk, refresh, search, aiTag } =
 | `es` | Espanol | LTR |
 | `pt` | Portugues | LTR |
 | `ar` | Arabic | RTL |
+| `it` | Italiano | LTR |
+| `ru` | Русский | LTR |
+| `th` | ไทย | LTR |
+| `hi` | हिन्दी | LTR |
+| `tr` | Türkçe | LTR |
+| `nl` | Nederlands | LTR |
 
 **Set locale via SDK:**
 ```js

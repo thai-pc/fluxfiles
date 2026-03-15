@@ -16,6 +16,7 @@ class I18n
 
     private const SUPPORTED = [
         'en', 'vi', 'zh', 'ja', 'ko', 'fr', 'de', 'es', 'ar', 'pt',
+        'it', 'ru', 'th', 'hi', 'tr', 'nl',
     ];
 
     public function __construct(string $langDir, ?string $forceLocale = null)
