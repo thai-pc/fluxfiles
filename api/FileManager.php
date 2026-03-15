@@ -80,24 +80,21 @@ class FileManager
             $items[] = $entry;
         }
 
-        // Merge metadata for files and filter out trashed
-        if (!empty($fileKeys)) {
-            $metaMap = $this->meta->getBulk($disk, $fileKeys);
-            $filtered = [];
-            foreach ($items as $item) {
-                if ($item['type'] === 'file') {
-                    $item['meta'] = $metaMap[$item['key']] ?? null;
-                    // Skip trashed files
-                    if ($this->meta->isTrashed($disk, $item['key'])) {
-                        continue;
-                    }
-                }
-                $filtered[] = $item;
+        // Merge metadata for files and filter out trashed items
+        $metaMap = !empty($fileKeys) ? $this->meta->getBulk($disk, $fileKeys) : [];
+        $filtered = [];
+        foreach ($items as $item) {
+            // Skip trashed items (both files and directories)
+            if ($this->meta->isTrashed($disk, $item['key'])) {
+                continue;
             }
-            $items = $filtered;
+            if ($item['type'] === 'file') {
+                $item['meta'] = $metaMap[$item['key']] ?? null;
+            }
+            $filtered[] = $item;
         }
 
-        return $items;
+        return $filtered;
     }
 
     public function upload(string $disk, string $path, array $file, bool $forceUpload = false): array
@@ -108,6 +105,7 @@ class FileManager
         $name = $file['name'] ?? '';
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
         $this->assertExt($ext);
+        $this->assertSafeFilename($name);
 
         $sizeMb = ($file['size'] ?? 0) / (1024 * 1024);
         $this->assertUploadSize($sizeMb);
@@ -219,11 +217,27 @@ class FileManager
         $this->assertPerm('delete');
 
         $scoped = $this->scopedPath($path);
+        $fs = $this->disks->disk($disk);
 
-        // Soft delete: move to trash instead of permanent delete
+        // Check if it's a directory — also trash all children
+        $childrenTrashed = 0;
+        try {
+            if ($fs->directoryExists($scoped)) {
+                $childrenTrashed = $this->meta->trashChildren($disk, $scoped);
+                // Also trash metadata entries for files in storage that may not have meta yet
+                foreach ($fs->listContents($scoped, true) as $item) {
+                    if ($item->isFile()) {
+                        $this->meta->trash($disk, $item->path());
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Directory check may fail, continue with single-key trash
+        }
+
         $this->meta->trash($disk, $scoped);
 
-        return ['trashed' => true];
+        return ['trashed' => true, 'children_trashed' => $childrenTrashed];
     }
 
     public function restore(string $disk, string $path): array
@@ -233,6 +247,8 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->meta->restore($disk, $scoped);
+        // Also restore children if it was a directory
+        $this->meta->restoreChildren($disk, $scoped);
 
         return ['restored' => true];
     }
@@ -245,14 +261,19 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $fs = $this->disks->disk($disk);
 
-        // Permanently delete file from storage
+        // Check if directory — delete all contents recursively
         try {
-            $fs->delete($scoped);
+            if ($fs->directoryExists($scoped)) {
+                $fs->deleteDirectory($scoped);
+            } else {
+                $fs->delete($scoped);
+            }
         } catch (\Throwable $e) {
-            // File may already be gone from storage
+            // File/dir may already be gone from storage
         }
 
-        // Remove metadata
+        // Remove metadata for this key and all children
+        $this->meta->purgeChildren($disk, $scoped);
         $this->meta->purge($disk, $scoped);
 
         return ['purged' => true];
@@ -667,6 +688,14 @@ class FileManager
         }
     }
 
+    /** Extensions that are always blocked regardless of allowedExt. */
+    private const DANGEROUS_EXTENSIONS = [
+        'php', 'phtml', 'phar', 'php3', 'php4', 'php5', 'php7', 'phps',
+        'cgi', 'pl', 'py', 'rb', 'sh', 'bash', 'bat', 'cmd', 'com',
+        'exe', 'dll', 'msi', 'scr', 'vbs', 'wsf', 'jsp', 'jspx',
+        'asp', 'aspx', 'htaccess', 'htpasswd',
+    ];
+
     private function assertExt(string $ext): void
     {
         if ($this->claims->allowedExt === null) {
@@ -674,6 +703,21 @@ class FileManager
         }
         if (!in_array($ext, $this->claims->allowedExt, true)) {
             throw new ApiException("File extension not allowed: {$ext}", 403);
+        }
+    }
+
+    /**
+     * Check ALL extensions in a filename to block double-extension attacks
+     * like "shell.php.jpg" which some servers may execute as PHP.
+     */
+    private function assertSafeFilename(string $name): void
+    {
+        $parts = explode('.', strtolower($name));
+        array_shift($parts); // remove the base name
+        foreach ($parts as $part) {
+            if (in_array($part, self::DANGEROUS_EXTENSIONS, true)) {
+                throw new ApiException("Dangerous extension detected in filename: {$part}", 403);
+            }
         }
     }
 

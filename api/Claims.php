@@ -67,4 +67,41 @@ class Claims
     {
         return in_array($disk, $this->allowedDisks, true);
     }
+
+    /**
+     * Check if a path is within the user's allowed scope (pathPrefix).
+     */
+    public function isPathInScope(string $path): bool
+    {
+        $prefix = trim($this->pathPrefix, '/');
+        if ($prefix === '') {
+            return true;
+        }
+        $path = trim(str_replace(["\0", "\x00"], '', $path), '/');
+        return $path === $prefix || strpos($path, $prefix . '/') === 0;
+    }
+
+    /**
+     * Apply path prefix and normalize (remove .. and .).
+     */
+    public function scopePath(string $path): string
+    {
+        $path = str_replace(["\0", "\x00"], '', $path);
+        $parts = explode('/', $path);
+        $safe = [];
+        foreach ($parts as $part) {
+            if ($part === '..' || $part === '.') {
+                continue;
+            }
+            if ($part !== '') {
+                $safe[] = $part;
+            }
+        }
+        $relative = implode('/', $safe);
+        $prefix = trim($this->pathPrefix, '/');
+        if ($prefix !== '') {
+            return $prefix . '/' . $relative;
+        }
+        return $relative;
+    }
 }

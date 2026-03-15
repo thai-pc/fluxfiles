@@ -1,186 +1,188 @@
 {
-  "_meta": {
-    "locale":    "de",
-    "name":      "Deutsch",
-    "direction": "ltr",
-    "version":   "1.20.0",
-    "authors":   ["FluxFiles Team"]
-  },
-
-  "common": {
-    "save":        "Speichern",
-    "cancel":      "Abbrechen",
-    "delete":      "Löschen",
-    "rename":      "Umbenennen",
-    "move":        "Verschieben",
-    "copy":        "Kopieren",
-    "download":    "Herunterladen",
-    "upload":      "Hochladen",
-    "search":      "Suchen",
-    "close":       "Schließen",
-    "confirm":     "Bestätigen",
-    "loading":     "Wird geladen...",
-    "error":       "Fehler",
-    "success":     "Fertig",
-    "yes":         "Ja",
-    "no":          "Nein",
-    "or":          "oder",
-    "clear":       "Leeren",
-    "select_file": "Datei auswählen",
-    "root":        "Stammverzeichnis"
-  },
-
-  "toolbar": {
-    "upload":       "Hochladen",
-    "new_folder":   "Neuer Ordner",
-    "copy_url":     "URL kopieren",
-    "grid_view":    "Rasteransicht",
-    "list_view":    "Listenansicht",
-    "search_hint":  "Dateien suchen..."
-  },
-
-  "sidebar": {
-    "all_files":   "Alle Dateien",
-    "recent":      "Zuletzt verwendet",
-    "starred":     "Favoriten",
-    "trash":       "Papierkorb",
-    "storage":     "Speicher",
-    "folders":     "Ordner"
-  },
-
-  "file": {
-    "select":         "Auswählen",
-    "preview":        "Vorschau",
-    "copy_url":       "URL kopieren",
-    "presign_url":    "Vorsignierte URL",
-    "delete":         "Löschen",
-    "restore":        "Wiederherstellen",
-    "purge":          "Endgültig löschen",
-    "move_to":        "Verschieben nach...",
-    "items":          "{count} Elemente",
-    "items_selected": "{count} ausgewählt",
-    "size":           "Größe",
-    "type":           "Typ",
-    "modified":       "Geändert",
-    "disk":           "Speicher",
-    "path":           "Pfad",
-    "name":           "Name",
-    "no_files":       "Keine Dateien in diesem Ordner"
-  },
-
-  "upload": {
-    "drop_hint":      "Dateien hier ablegen oder klicken zum Hochladen",
-    "max_size":       "Max. {size} pro Datei",
-    "all_types":      "Alle Dateitypen erlaubt",
-    "uploading":      "Wird hochgeladen...",
-    "complete":       "Upload abgeschlossen",
-    "error":          "Upload fehlgeschlagen: {message}",
-    "duplicate":      "Datei existiert bereits. Trotzdem verwenden?",
-    "quota_exceeded": "Speicherkontingent überschritten ({used} / {max})"
-  },
-
-  "metadata": {
-    "tab_info":     "Info",
-    "tab_seo":      "SEO",
-    "tab_ai":       "KI-Tags",
-    "tab_crop":     "Zuschneiden",
-    "title":        "Titel",
-    "title_hint":   "Eigener Titel, abweichend vom Dateinamen",
-    "alt_text":     "Alt-Text",
-    "alt_hint":     "Beschreiben Sie das Bild für Screenreader und SEO",
-    "caption":      "Bildunterschrift",
-    "caption_hint": "Kurzbeschreibung unterhalb des Bildes",
-    "saving":       "Wird gespeichert...",
-    "saved":        "Gespeichert"
-  },
-
-  "disk": {
-    "local":        "Lokaler Speicher",
-    "s3":           "Amazon S3",
-    "r2":           "Cloudflare R2"
-  },
-
-  "folder": {
-    "new":          "Neuer Ordner",
-    "name_hint":    "Ordnername:",
-    "create":       "Ordner erstellen",
-    "created":      "Ordner erstellt"
-  },
-
-  "delete": {
-    "confirm_title":  "Bestätigung",
-    "confirm_file":   "\"{name}\" löschen? Die Datei wird in den Papierkorb verschoben.",
-    "confirm_bulk":   "{count} Element(e) löschen? Dies kann nicht rückgängig gemacht werden.",
-    "confirm_purge":  "\"{name}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
-    "deleted":        "In den Papierkorb verschoben",
-    "purged":         "Endgültig gelöscht"
-  },
-
-  "trash": {
-    "title":          "Papierkorb",
-    "empty":          "Der Papierkorb ist leer",
-    "restore":        "Wiederherstellen",
-    "restore_all":    "Alle wiederherstellen",
-    "empty_trash":    "Papierkorb leeren",
-    "auto_delete":    "Dateien werden nach {days} Tagen endgültig gelöscht"
-  },
-
-  "search": {
-    "placeholder":    "Nach Name, Titel, Alt-Text suchen...",
-    "results":        "{count} Ergebnisse für \"{query}\"",
-    "no_results":     "Keine Ergebnisse für \"{query}\""
-  },
-
-  "error": {
-    "forbidden":        "Sie haben keine Berechtigung für diese Aktion",
-    "not_found":        "Datei nicht gefunden",
-    "quota_exceeded":   "Speicherkontingent überschritten",
-    "upload_too_large": "Datei ist zu groß (max. {max} MB)",
-    "ext_not_allowed":  "Der Dateityp .{ext} ist nicht erlaubt",
-    "generic":          "Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut."
-  },
-
-  "presign": {
-    "title":    "Vorsignierte URL",
-    "expires":  "Gültig für",
-    "minutes":  "{n} Minuten",
-    "generate": "Link erzeugen",
-    "copied":   "Link kopiert!"
-  },
-
-  "audit": {
-    "uploaded":  "{name} hochgeladen",
-    "deleted":   "{name} gelöscht",
-    "restored":  "{name} wiederhergestellt",
-    "moved":     "{from} nach {to} verschoben",
-    "copied":    "{from} nach {to} kopiert"
-  },
-
-  "bulk": {
-    "move":          "Verschieben",
-    "copy_to_disk":  "Auf Speicher kopieren",
-    "move_to_disk":  "Auf Speicher verschieben",
-    "download":      "Herunterladen",
-    "move_to_folder": "In Ordner verschieben",
-    "destination":   "Zielpfad",
-    "quick_pick":    "Schnellauswahl:",
-    "target_disk":   "Zielspeicher",
-    "select_disk":   "-- Speicher wählen --"
-  },
-
-  "crop": {
-    "free":            "Frei",
-    "replace":         "Original ersetzen",
-    "save_copy":       "Als Kopie speichern",
-    "saving":          "Wird gespeichert..."
-  },
-
-  "ai": {
-    "generate":        "KI-Tags erzeugen",
-    "analyzing":       "Wird analysiert...",
-    "tags":            "Tags",
-    "no_tags":         "Noch keine KI-Tags vorhanden. Klicken Sie auf \"KI-Tags erzeugen\", um dieses Bild zu analysieren.",
-    "analyzing_image": "Bild wird mit KI analysiert...",
-    "failed":          "KI-Tagging fehlgeschlagen: {message}"
-  }
+    "_meta": {
+        "locale": "de",
+        "name": "Deutsch",
+        "direction": "ltr",
+        "version": "1.20.0",
+        "authors": [
+            "FluxFiles Team"
+        ]
+    },
+    "common": {
+        "save": "Speichern",
+        "cancel": "Abbrechen",
+        "delete": "Löschen",
+        "rename": "Umbenennen",
+        "move": "Verschieben",
+        "copy": "Kopieren",
+        "download": "Herunterladen",
+        "upload": "Hochladen",
+        "search": "Suchen",
+        "close": "Schließen",
+        "confirm": "Bestätigen",
+        "loading": "Wird geladen...",
+        "error": "Fehler",
+        "success": "Fertig",
+        "yes": "Ja",
+        "no": "Nein",
+        "or": "oder",
+        "clear": "Leeren",
+        "select_file": "Datei auswählen",
+        "root": "Stammverzeichnis"
+    },
+    "toolbar": {
+        "upload": "Hochladen",
+        "new_folder": "Neuer Ordner",
+        "copy_url": "URL kopieren",
+        "grid_view": "Rasteransicht",
+        "list_view": "Listenansicht",
+        "search_hint": "Dateien suchen...",
+        "theme_toggle": "Hell\/Dunkel umschalten"
+    },
+    "sidebar": {
+        "all_files": "Alle Dateien",
+        "recent": "Zuletzt verwendet",
+        "starred": "Favoriten",
+        "trash": "Papierkorb",
+        "storage": "Speicher",
+        "folders": "Ordner",
+        "smart_filters": "Intelligente Filter"
+    },
+    "quota": {
+        "storage": "Speicher"
+    },
+    "file": {
+        "select": "Auswählen",
+        "preview": "Vorschau",
+        "copy_url": "URL kopieren",
+        "presign_url": "Vorsignierte URL",
+        "delete": "Löschen",
+        "restore": "Wiederherstellen",
+        "purge": "Endgültig löschen",
+        "move_to": "Verschieben nach...",
+        "items": "{count} Elemente",
+        "items_selected": "{count} ausgewählt",
+        "size": "Größe",
+        "type": "Typ",
+        "modified": "Geändert",
+        "disk": "Speicher",
+        "path": "Pfad",
+        "name": "Name",
+        "no_files": "Keine Dateien in diesem Ordner",
+        "files": "Dateien",
+        "folder": "Ordner"
+    },
+    "upload": {
+        "drop_hint": "Dateien hier ablegen oder klicken zum Hochladen",
+        "max_size": "Max. {size} pro Datei",
+        "all_types": "Alle Dateitypen erlaubt",
+        "uploading": "Wird hochgeladen...",
+        "complete": "Upload abgeschlossen",
+        "error": "Upload fehlgeschlagen: {message}",
+        "duplicate": "Datei existiert bereits. Trotzdem verwenden?",
+        "quota_exceeded": "Speicherkontingent überschritten ({used} \/ {max})"
+    },
+    "metadata": {
+        "tab_info": "Info",
+        "tab_seo": "SEO",
+        "tab_ai": "KI-Tags",
+        "tab_crop": "Zuschneiden",
+        "title": "Titel",
+        "title_hint": "Eigener Titel, abweichend vom Dateinamen",
+        "alt_text": "Alt-Text",
+        "alt_hint": "Beschreiben Sie das Bild für Screenreader und SEO",
+        "caption": "Bildunterschrift",
+        "caption_hint": "Kurzbeschreibung unterhalb des Bildes",
+        "saving": "Wird gespeichert...",
+        "saved": "Gespeichert"
+    },
+    "disk": {
+        "local": "Lokaler Speicher",
+        "s3": "Amazon S3",
+        "r2": "Cloudflare R2"
+    },
+    "folder": {
+        "new": "Neuer Ordner",
+        "name_hint": "Ordnername:",
+        "create": "Ordner erstellen",
+        "created": "Ordner erstellt",
+        "create_title": "Neuen Ordner erstellen",
+        "create_desc": "Geben Sie einen Namen für den neuen Ordner ein.",
+        "name_placeholder": "z.B. Mein Ordner",
+        "name_required": "Bitte geben Sie einen Ordnernamen ein",
+        "invalid_chars": "Ordnername darf nicht enthalten: < > : \" \/ \\ | ? *"
+    },
+    "delete": {
+        "confirm_title": "Bestätigung",
+        "confirm_file": "\"{name}\" löschen? Die Datei wird in den Papierkorb verschoben.",
+        "confirm_bulk": "{count} Element(e) löschen? Dies kann nicht rückgängig gemacht werden.",
+        "confirm_purge": "\"{name}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+        "deleted": "In den Papierkorb verschoben",
+        "purged": "Endgültig gelöscht",
+        "confirm_folder": "Ordner \"{name}\" und alle Dateien löschen? Alles wird in den Papierkorb verschoben.",
+        "confirm_bulk_folders": "{count} Elemente ({folders} Ordner mit gesamtem Inhalt) löschen? Alles wird in den Papierkorb verschoben."
+    },
+    "trash": {
+        "title": "Papierkorb",
+        "empty": "Der Papierkorb ist leer",
+        "restore": "Wiederherstellen",
+        "restore_all": "Alle wiederherstellen",
+        "empty_trash": "Papierkorb leeren",
+        "auto_delete": "Dateien werden nach {days} Tagen endgültig gelöscht"
+    },
+    "search": {
+        "placeholder": "Nach Name, Titel, Alt-Text suchen...",
+        "results": "{count} Ergebnisse für \"{query}\"",
+        "no_results": "Keine Ergebnisse für \"{query}\""
+    },
+    "error": {
+        "forbidden": "Sie haben keine Berechtigung für diese Aktion",
+        "not_found": "Datei nicht gefunden",
+        "quota_exceeded": "Speicherkontingent überschritten",
+        "upload_too_large": "Datei ist zu groß (max. {max} MB)",
+        "ext_not_allowed": "Der Dateityp .{ext} ist nicht erlaubt",
+        "generic": "Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut."
+    },
+    "presign": {
+        "title": "Vorsignierte URL",
+        "expires": "Gültig für",
+        "minutes": "{n} Minuten",
+        "generate": "Link erzeugen",
+        "copied": "Link kopiert!"
+    },
+    "audit": {
+        "uploaded": "{name} hochgeladen",
+        "deleted": "{name} gelöscht",
+        "restored": "{name} wiederhergestellt",
+        "moved": "{from} nach {to} verschoben",
+        "copied": "{from} nach {to} kopiert"
+    },
+    "bulk": {
+        "move": "Verschieben",
+        "copy_to_disk": "Auf Speicher kopieren",
+        "move_to_disk": "Auf Speicher verschieben",
+        "download": "Herunterladen",
+        "move_to_folder": "In Ordner verschieben",
+        "destination": "Zielpfad",
+        "quick_pick": "Schnellauswahl:",
+        "target_disk": "Zielspeicher",
+        "select_disk": "-- Speicher wählen --"
+    },
+    "crop": {
+        "free": "Frei",
+        "replace": "Original ersetzen",
+        "save_copy": "Als Kopie speichern",
+        "saving": "Wird gespeichert..."
+    },
+    "ai": {
+        "generate": "KI-Tags erzeugen",
+        "analyzing": "Wird analysiert...",
+        "tags": "Tags",
+        "no_tags": "Noch keine KI-Tags vorhanden. Klicken Sie auf \"KI-Tags erzeugen\", um dieses Bild zu analysieren.",
+        "analyzing_image": "Bild wird mit KI analysiert...",
+        "failed": "KI-Tagging fehlgeschlagen: {message}"
+    },
+    "copy": {
+        "copied": "URL in die Zwischenablage kopiert"
+    }
 }

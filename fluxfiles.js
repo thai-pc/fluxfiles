@@ -37,7 +37,8 @@
                     allowedTypes: config.allowedTypes || null,
                     maxSize: config.maxSize || null,
                     endpoint: config.endpoint || '',
-                    locale: config.locale || null
+                    locale: config.locale || null,
+                    theme: config.theme || null
                 });
                 emit('FM_READY', msg.payload);
                 break;

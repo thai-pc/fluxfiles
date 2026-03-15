@@ -123,10 +123,10 @@ class MetadataRepository
 
     // --- Full-text Search ---
 
-    public function search(string $disk, string $query, int $limit = 50): array
+    public function search(string $disk, string $query, int $limit = 50, string $pathPrefix = ''): array
     {
-        $stmt = $this->db->prepare(
-            'SELECT fm.file_key, fm.title, fm.alt_text, fm.caption, fm.tags,
+        $prefix = trim($pathPrefix, '/');
+        $sql = 'SELECT fm.file_key, fm.title, fm.alt_text, fm.caption, fm.tags,
                     highlight(file_fts, 1, \'<mark>\', \'</mark>\') as title_hl,
                     highlight(file_fts, 2, \'<mark>\', \'</mark>\') as alt_hl,
                     highlight(file_fts, 3, \'<mark>\', \'</mark>\') as caption_hl,
@@ -134,11 +134,20 @@ class MetadataRepository
              FROM file_fts
              JOIN file_meta fm ON fm.disk = ? AND fm.file_key = file_fts.file_key
              WHERE file_fts MATCH ?
-             AND fm.is_trashed = 0
-             ORDER BY rank
-             LIMIT ?'
-        );
-        $stmt->execute([$disk, $query, $limit]);
+             AND fm.is_trashed = 0';
+        $params = [$disk, $query];
+
+        if ($prefix !== '') {
+            $sql .= ' AND (fm.file_key = ? OR fm.file_key LIKE ?)';
+            $params[] = $prefix;
+            $params[] = $prefix . '/%';
+        }
+
+        $sql .= ' ORDER BY rank LIMIT ?';
+        $params[] = $limit;
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
@@ -206,12 +215,39 @@ class MetadataRepository
         }
     }
 
+    /**
+     * Trash all children whose file_key starts with "$prefix/".
+     */
+    public function trashChildren(string $disk, string $prefix): int
+    {
+        $now = time();
+        $like = str_replace(['%', '_'], ['\\%', '\\_'], $prefix) . '/%';
+        $stmt = $this->db->prepare(
+            "UPDATE file_meta SET is_trashed = 1, trashed_at = ? WHERE disk = ? AND file_key LIKE ? ESCAPE '\\' AND is_trashed = 0"
+        );
+        $stmt->execute([$now, $disk, $like]);
+        return $stmt->rowCount();
+    }
+
     public function restore(string $disk, string $key): void
     {
         $stmt = $this->db->prepare(
             'UPDATE file_meta SET is_trashed = 0, trashed_at = NULL WHERE disk = ? AND file_key = ?'
         );
         $stmt->execute([$disk, $key]);
+    }
+
+    /**
+     * Restore all children whose file_key starts with "$prefix/".
+     */
+    public function restoreChildren(string $disk, string $prefix): int
+    {
+        $like = str_replace(['%', '_'], ['\\%', '\\_'], $prefix) . '/%';
+        $stmt = $this->db->prepare(
+            "UPDATE file_meta SET is_trashed = 0, trashed_at = NULL WHERE disk = ? AND file_key LIKE ? ESCAPE '\\' AND is_trashed = 1"
+        );
+        $stmt->execute([$disk, $like]);
+        return $stmt->rowCount();
     }
 
     public function getTrashed(string $disk): array
@@ -250,6 +286,42 @@ class MetadataRepository
     {
         $stmt = $this->db->prepare('DELETE FROM file_meta WHERE disk = ? AND file_key = ? AND is_trashed = 1');
         $stmt->execute([$disk, $key]);
+    }
+
+    /**
+     * Permanently delete all children whose file_key starts with "$prefix/".
+     */
+    public function purgeChildren(string $disk, string $prefix): int
+    {
+        $like = str_replace(['%', '_'], ['\\%', '\\_'], $prefix) . '/%';
+        // Also delete FTS entries for children
+        $stmt = $this->db->prepare(
+            "SELECT file_key FROM file_meta WHERE disk = ? AND file_key LIKE ? ESCAPE '\\' AND is_trashed = 1"
+        );
+        $stmt->execute([$disk, $like]);
+        $keys = array_column($stmt->fetchAll(), 'file_key');
+        foreach ($keys as $k) {
+            $this->deleteFts($k);
+        }
+
+        $stmt = $this->db->prepare(
+            "DELETE FROM file_meta WHERE disk = ? AND file_key LIKE ? ESCAPE '\\' AND is_trashed = 1"
+        );
+        $stmt->execute([$disk, $like]);
+        return $stmt->rowCount();
+    }
+
+    /**
+     * Count children whose file_key starts with "$prefix/".
+     */
+    public function countChildren(string $disk, string $prefix): int
+    {
+        $like = str_replace(['%', '_'], ['\\%', '\\_'], $prefix) . '/%';
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) FROM file_meta WHERE disk = ? AND file_key LIKE ? ESCAPE '\\' AND is_trashed = 0"
+        );
+        $stmt->execute([$disk, $like]);
+        return (int) $stmt->fetchColumn();
     }
 
     private function migrateFts(): void

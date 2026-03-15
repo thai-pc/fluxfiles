@@ -1,186 +1,188 @@
 {
-  "_meta": {
-    "locale":    "en",
-    "name":      "English",
-    "direction": "ltr",
-    "version":   "1.20.0",
-    "authors":   ["FluxFiles Team"]
-  },
-
-  "common": {
-    "save":        "Save",
-    "cancel":      "Cancel",
-    "delete":      "Delete",
-    "rename":      "Rename",
-    "move":        "Move",
-    "copy":        "Copy",
-    "download":    "Download",
-    "upload":      "Upload",
-    "search":      "Search",
-    "close":       "Close",
-    "confirm":     "Confirm",
-    "loading":     "Loading...",
-    "error":       "Error",
-    "success":     "Done",
-    "yes":         "Yes",
-    "no":          "No",
-    "or":          "or",
-    "clear":       "Clear",
-    "select_file": "Select File",
-    "root":        "Root"
-  },
-
-  "toolbar": {
-    "upload":       "Upload",
-    "new_folder":   "New folder",
-    "copy_url":     "Copy URL",
-    "grid_view":    "Grid view",
-    "list_view":    "List view",
-    "search_hint":  "Search files..."
-  },
-
-  "sidebar": {
-    "all_files":   "All files",
-    "recent":      "Recent",
-    "starred":     "Starred",
-    "trash":       "Trash",
-    "storage":     "Storage",
-    "folders":     "Folders"
-  },
-
-  "file": {
-    "select":         "Select",
-    "preview":        "Preview",
-    "copy_url":       "Copy URL",
-    "presign_url":    "Presigned URL",
-    "delete":         "Delete",
-    "restore":        "Restore",
-    "purge":          "Permanently delete",
-    "move_to":        "Move to...",
-    "items":          "{count} items",
-    "items_selected": "{count} selected",
-    "size":           "Size",
-    "type":           "Type",
-    "modified":       "Modified",
-    "disk":           "Storage",
-    "path":           "Path",
-    "name":           "Name",
-    "no_files":       "No files in this folder"
-  },
-
-  "upload": {
-    "drop_hint":      "Drop files here or click to upload",
-    "max_size":       "Max {size} per file",
-    "all_types":      "All types accepted",
-    "uploading":      "Uploading...",
-    "complete":       "Upload complete",
-    "error":          "Upload failed: {message}",
-    "duplicate":      "File already exists. Use anyway?",
-    "quota_exceeded": "Storage quota exceeded ({used} / {max})"
-  },
-
-  "metadata": {
-    "tab_info":     "Info",
-    "tab_seo":      "SEO",
-    "tab_ai":       "AI Tags",
-    "tab_crop":     "Crop",
-    "title":        "Title",
-    "title_hint":   "Custom title, different from filename",
-    "alt_text":     "Alt text",
-    "alt_hint":     "Describe the image for screen readers and SEO",
-    "caption":      "Caption",
-    "caption_hint": "Short description shown below the image",
-    "saving":       "Saving...",
-    "saved":        "Saved"
-  },
-
-  "disk": {
-    "local":        "Local disk",
-    "s3":           "Amazon S3",
-    "r2":           "Cloudflare R2"
-  },
-
-  "folder": {
-    "new":          "New folder",
-    "name_hint":    "Folder name:",
-    "create":       "Create folder",
-    "created":      "Folder created"
-  },
-
-  "delete": {
-    "confirm_title":  "Confirm",
-    "confirm_file":   "Delete \"{name}\"? This will move it to Trash.",
-    "confirm_bulk":   "Delete {count} item(s)? This cannot be undone.",
-    "confirm_purge":  "Permanently delete \"{name}\"? This cannot be undone.",
-    "deleted":        "Moved to Trash",
-    "purged":         "Permanently deleted"
-  },
-
-  "trash": {
-    "title":          "Trash",
-    "empty":          "Trash is empty",
-    "restore":        "Restore",
-    "restore_all":    "Restore all",
-    "empty_trash":    "Empty Trash",
-    "auto_delete":    "Files are permanently deleted after {days} days"
-  },
-
-  "search": {
-    "placeholder":    "Search by name, title, alt text...",
-    "results":        "{count} results for \"{query}\"",
-    "no_results":     "No results for \"{query}\""
-  },
-
-  "error": {
-    "forbidden":        "You do not have permission to do this",
-    "not_found":        "File not found",
-    "quota_exceeded":   "Storage quota exceeded",
-    "upload_too_large": "File is too large (max {max}MB)",
-    "ext_not_allowed":  "File type .{ext} is not allowed",
-    "generic":          "Something went wrong. Please try again."
-  },
-
-  "presign": {
-    "title":    "Presigned URL",
-    "expires":  "Expires in",
-    "minutes":  "{n} minutes",
-    "generate": "Generate link",
-    "copied":   "Link copied!"
-  },
-
-  "audit": {
-    "uploaded":  "Uploaded {name}",
-    "deleted":   "Deleted {name}",
-    "restored":  "Restored {name}",
-    "moved":     "Moved {from} to {to}",
-    "copied":    "Copied {from} to {to}"
-  },
-
-  "bulk": {
-    "move":          "Move",
-    "copy_to_disk":  "Copy to disk",
-    "move_to_disk":  "Move to disk",
-    "download":      "Download",
-    "move_to_folder": "Move to Folder",
-    "destination":   "Destination Path",
-    "quick_pick":    "Quick pick:",
-    "target_disk":   "Target Disk",
-    "select_disk":   "-- Select disk --"
-  },
-
-  "crop": {
-    "free":            "Free",
-    "replace":         "Replace Original",
-    "save_copy":       "Save as Copy",
-    "saving":          "Saving..."
-  },
-
-  "ai": {
-    "generate":        "Generate AI Tags",
-    "analyzing":       "Analyzing...",
-    "tags":            "Tags",
-    "no_tags":         "No AI tags yet. Click \"Generate AI Tags\" to analyze this image.",
-    "analyzing_image": "Analyzing image with AI...",
-    "failed":          "AI tagging failed: {message}"
-  }
+    "_meta": {
+        "locale": "en",
+        "name": "English",
+        "direction": "ltr",
+        "version": "1.20.0",
+        "authors": [
+            "FluxFiles Team"
+        ]
+    },
+    "common": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "rename": "Rename",
+        "move": "Move",
+        "copy": "Copy",
+        "download": "Download",
+        "upload": "Upload",
+        "search": "Search",
+        "close": "Close",
+        "confirm": "Confirm",
+        "loading": "Loading...",
+        "error": "Error",
+        "success": "Done",
+        "yes": "Yes",
+        "no": "No",
+        "or": "or",
+        "clear": "Clear",
+        "select_file": "Select File",
+        "root": "Root"
+    },
+    "toolbar": {
+        "upload": "Upload",
+        "new_folder": "New folder",
+        "copy_url": "Copy URL",
+        "grid_view": "Grid view",
+        "list_view": "List view",
+        "search_hint": "Search files...",
+        "theme_toggle": "Toggle light\/dark"
+    },
+    "sidebar": {
+        "all_files": "All files",
+        "recent": "Recent",
+        "starred": "Starred",
+        "trash": "Trash",
+        "storage": "Storage",
+        "folders": "Folders",
+        "smart_filters": "Smart filters"
+    },
+    "quota": {
+        "storage": "Storage"
+    },
+    "file": {
+        "select": "Select",
+        "preview": "Preview",
+        "copy_url": "Copy URL",
+        "presign_url": "Presigned URL",
+        "delete": "Delete",
+        "restore": "Restore",
+        "purge": "Permanently delete",
+        "move_to": "Move to...",
+        "items": "{count} items",
+        "items_selected": "{count} selected",
+        "size": "Size",
+        "type": "Type",
+        "modified": "Modified",
+        "disk": "Storage",
+        "path": "Path",
+        "name": "Name",
+        "no_files": "No files in this folder",
+        "files": "Files",
+        "folder": "Folder"
+    },
+    "upload": {
+        "drop_hint": "Drop files here or click to upload",
+        "max_size": "Max {size} per file",
+        "all_types": "All types accepted",
+        "uploading": "Uploading...",
+        "complete": "Upload complete",
+        "error": "Upload failed: {message}",
+        "duplicate": "File already exists. Use anyway?",
+        "quota_exceeded": "Storage quota exceeded ({used} \/ {max})"
+    },
+    "metadata": {
+        "tab_info": "Info",
+        "tab_seo": "SEO",
+        "tab_ai": "AI Tags",
+        "tab_crop": "Crop",
+        "title": "Title",
+        "title_hint": "Custom title, different from filename",
+        "alt_text": "Alt text",
+        "alt_hint": "Describe the image for screen readers and SEO",
+        "caption": "Caption",
+        "caption_hint": "Short description shown below the image",
+        "saving": "Saving...",
+        "saved": "Saved"
+    },
+    "disk": {
+        "local": "Local disk",
+        "s3": "Amazon S3",
+        "r2": "Cloudflare R2"
+    },
+    "folder": {
+        "new": "New folder",
+        "name_hint": "Folder name:",
+        "create": "Create",
+        "create_title": "Create new folder",
+        "create_desc": "Enter a name for the new folder.",
+        "name_placeholder": "e.g. My folder",
+        "name_required": "Please enter a folder name",
+        "invalid_chars": "Folder name cannot contain: < > : \" \/ \\ | ? *",
+        "created": "Folder created"
+    },
+    "delete": {
+        "confirm_title": "Confirm",
+        "confirm_file": "Delete \"{name}\"? This will move it to Trash.",
+        "confirm_bulk": "Delete {count} item(s)? This cannot be undone.",
+        "confirm_purge": "Permanently delete \"{name}\"? This cannot be undone.",
+        "deleted": "Moved to Trash",
+        "purged": "Permanently deleted",
+        "confirm_folder": "Delete folder \"{name}\" and all files inside? This will move everything to Trash.",
+        "confirm_bulk_folders": "Delete {count} items ({folders} folder(s) with all contents)? This will move everything to Trash."
+    },
+    "trash": {
+        "title": "Trash",
+        "empty": "Trash is empty",
+        "restore": "Restore",
+        "restore_all": "Restore all",
+        "empty_trash": "Empty Trash",
+        "auto_delete": "Files are permanently deleted after {days} days"
+    },
+    "search": {
+        "placeholder": "Search by name, title, alt text...",
+        "results": "{count} results for \"{query}\"",
+        "no_results": "No results for \"{query}\""
+    },
+    "error": {
+        "forbidden": "You do not have permission to do this",
+        "not_found": "File not found",
+        "quota_exceeded": "Storage quota exceeded",
+        "upload_too_large": "File is too large (max {max}MB)",
+        "ext_not_allowed": "File type .{ext} is not allowed",
+        "generic": "Something went wrong. Please try again."
+    },
+    "presign": {
+        "title": "Presigned URL",
+        "expires": "Expires in",
+        "minutes": "{n} minutes",
+        "generate": "Generate link",
+        "copied": "Link copied!"
+    },
+    "audit": {
+        "uploaded": "Uploaded {name}",
+        "deleted": "Deleted {name}",
+        "restored": "Restored {name}",
+        "moved": "Moved {from} to {to}",
+        "copied": "Copied {from} to {to}"
+    },
+    "bulk": {
+        "move": "Move",
+        "copy_to_disk": "Copy to disk",
+        "move_to_disk": "Move to disk",
+        "download": "Download",
+        "move_to_folder": "Move to Folder",
+        "destination": "Destination Path",
+        "quick_pick": "Quick pick:",
+        "target_disk": "Target Disk",
+        "select_disk": "-- Select disk --"
+    },
+    "crop": {
+        "free": "Free",
+        "replace": "Replace Original",
+        "save_copy": "Save as Copy",
+        "saving": "Saving..."
+    },
+    "ai": {
+        "generate": "Generate AI Tags",
+        "analyzing": "Analyzing...",
+        "tags": "Tags",
+        "no_tags": "No AI tags yet. Click \"Generate AI Tags\" to analyze this image.",
+        "analyzing_image": "Analyzing image with AI...",
+        "failed": "AI tagging failed: {message}"
+    },
+    "copy": {
+        "copied": "URL copied to clipboard"
+    }
 }

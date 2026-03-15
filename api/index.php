@@ -48,13 +48,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 header('Content-Type: application/json; charset=utf-8');
 
 // I18n — initialize before routing
-$i18n = new \FluxFiles\I18n(__DIR__ . '/../lang');
+$envLocale = $_ENV['FLUXFILES_LOCALE'] ?? '';
+$i18n = new \FluxFiles\I18n(__DIR__ . '/../lang', $envLocale !== '' ? $envLocale : null);
 header('Content-Language: ' . $i18n->locale());
 
 // Parse URI early for lang routes (no auth required)
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = rtrim($uri, '/');
 $method = $_SERVER['REQUEST_METHOD'];
+
+// Serve UI with pre-injected locale (no flash)
+if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' || $uri === '/public/')) {
+    header('Content-Type: text/html; charset=utf-8');
+    $localeJson = $i18n->toJson();
+    $locale = $i18n->locale();
+    $dir = $i18n->direction();
+    $html = file_get_contents(__DIR__ . '/../public/index.html');
+    $injection = "window.__FM_LOCALE__ = { locale: " . json_encode($locale) . ", dir: " . json_encode($dir) . ", messages: {$localeJson} };";
+    $html = str_replace(
+        "window.__FM_LOCALE__ = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };",
+        $injection,
+        $html
+    );
+    $html = str_replace('<html lang="en">', '<html lang="' . htmlspecialchars($locale) . '" dir="' . htmlspecialchars($dir) . '">', $html);
+    echo $html;
+    exit;
+}
 
 // Language routes — public, no auth needed
 if ($method === 'GET' && $uri === '/api/fm/lang') {
@@ -235,13 +254,13 @@ function routeRequest(
     }
 
     if ($method === 'GET' && $uri === '/api/fm/metadata') {
-        return handleGetMetadata($metaRepo);
+        return handleGetMetadata($metaRepo, $claims);
     }
     if ($method === 'PUT' && $uri === '/api/fm/metadata') {
-        return handleSaveMetadata($metaRepo, $diskManager);
+        return handleSaveMetadata($metaRepo, $diskManager, $claims);
     }
     if ($method === 'DELETE' && $uri === '/api/fm/metadata') {
-        return handleDeleteMetadata($metaRepo);
+        return handleDeleteMetadata($metaRepo, $claims);
     }
 
     // Trash
@@ -261,7 +280,14 @@ function routeRequest(
         if ($q === null) {
             throw new ApiException('Missing search query', 400);
         }
-        return $metaRepo->search($_GET['disk'] ?? 'local', $q, (int) ($_GET['limit'] ?? 50));
+        $disk = $_GET['disk'] ?? 'local';
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException("Access denied to disk: {$disk}", 403);
+        }
+        if (!$claims->hasPerm('read')) {
+            throw new ApiException('Permission denied: read', 403);
+        }
+        return $metaRepo->search($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
     }
 
     // Quota
@@ -273,12 +299,12 @@ function routeRequest(
         );
     }
 
-    // Audit log
+    // Audit log — users can only view their own logs
     if ($method === 'GET' && $uri === '/api/fm/audit') {
         return $auditLog->list(
             (int) ($_GET['limit'] ?? 100),
             (int) ($_GET['offset'] ?? 0),
-            $_GET['user_id'] ?? null
+            $claims->userId
         );
     }
 
@@ -346,7 +372,7 @@ function jsonBody(string ...$keys): array
     return $result;
 }
 
-function handleGetMetadata(MetadataRepository $metaRepo): ?array
+function handleGetMetadata(MetadataRepository $metaRepo, \FluxFiles\Claims $claims): ?array
 {
     $disk = $_GET['disk'] ?? null;
     $key  = $_GET['key'] ?? null;
@@ -356,10 +382,19 @@ function handleGetMetadata(MetadataRepository $metaRepo): ?array
     if ($key === null) {
         throw new ApiException('Missing key parameter', 400);
     }
+    if (!$claims->hasDisk($disk)) {
+        throw new ApiException("Access denied to disk: {$disk}", 403);
+    }
+    if (!$claims->hasPerm('read')) {
+        throw new ApiException('Permission denied: read', 403);
+    }
+    if (!$claims->isPathInScope($key)) {
+        throw new ApiException('Access denied to path', 403);
+    }
     return $metaRepo->get($disk, $key);
 }
 
-function handleSaveMetadata(MetadataRepository $metaRepo, DiskManager $diskManager): array
+function handleSaveMetadata(MetadataRepository $metaRepo, DiskManager $diskManager, \FluxFiles\Claims $claims): array
 {
     $raw = file_get_contents('php://input');
     $body = json_decode($raw, true);
@@ -376,6 +411,15 @@ function handleSaveMetadata(MetadataRepository $metaRepo, DiskManager $diskManag
     if ($key === null) {
         throw new ApiException('Missing key', 400);
     }
+    if (!$claims->hasDisk($disk)) {
+        throw new ApiException("Access denied to disk: {$disk}", 403);
+    }
+    if (!$claims->hasPerm('write')) {
+        throw new ApiException('Permission denied: write', 403);
+    }
+    if (!$claims->isPathInScope($key)) {
+        throw new ApiException('Access denied to path', 403);
+    }
 
     $data = [
         'title'    => $body['title'] ?? null,
@@ -390,9 +434,18 @@ function handleSaveMetadata(MetadataRepository $metaRepo, DiskManager $diskManag
     return ['saved' => true];
 }
 
-function handleDeleteMetadata(MetadataRepository $metaRepo): array
+function handleDeleteMetadata(MetadataRepository $metaRepo, \FluxFiles\Claims $claims): array
 {
     [$disk, $key] = jsonBody('disk', 'key');
+    if (!$claims->hasDisk($disk)) {
+        throw new ApiException("Access denied to disk: {$disk}", 403);
+    }
+    if (!$claims->hasPerm('write')) {
+        throw new ApiException('Permission denied: write', 403);
+    }
+    if (!$claims->isPathInScope($key)) {
+        throw new ApiException('Access denied to path', 403);
+    }
     $metaRepo->delete($disk, $key);
     return ['deleted' => true];
 }
@@ -406,7 +459,8 @@ function handleChunkInit(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $c
     if (!$claims->hasDisk($disk)) {
         throw new ApiException("Access denied to disk: {$disk}", 403);
     }
-    return $chunker->initiate($disk, $path);
+    $scopedPath = $claims->scopePath($path);
+    return $chunker->initiate($disk, $scopedPath);
 }
 
 function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
@@ -415,6 +469,12 @@ function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims
         throw new ApiException('Permission denied: write', 403);
     }
     [$disk, $key, $uploadId, $partNumber] = jsonBody('disk', 'key', 'upload_id', 'part_number');
+    if (!$claims->hasDisk($disk)) {
+        throw new ApiException("Access denied to disk: {$disk}", 403);
+    }
+    if (!$claims->isPathInScope($key)) {
+        throw new ApiException('Access denied to path', 403);
+    }
     return $chunker->presignPart($disk, $key, $uploadId, (int) $partNumber);
 }
 
@@ -424,6 +484,12 @@ function handleChunkComplete(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claim
         throw new ApiException('Permission denied: write', 403);
     }
     [$disk, $key, $uploadId, $parts] = jsonBody('disk', 'key', 'upload_id', 'parts');
+    if (!$claims->hasDisk($disk)) {
+        throw new ApiException("Access denied to disk: {$disk}", 403);
+    }
+    if (!$claims->isPathInScope($key)) {
+        throw new ApiException('Access denied to path', 403);
+    }
     return $chunker->complete($disk, $key, $uploadId, $parts);
 }
 
@@ -433,6 +499,12 @@ function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $
         throw new ApiException('Permission denied: write', 403);
     }
     [$disk, $key, $uploadId] = jsonBody('disk', 'key', 'upload_id');
+    if (!$claims->hasDisk($disk)) {
+        throw new ApiException("Access denied to disk: {$disk}", 403);
+    }
+    if (!$claims->isPathInScope($key)) {
+        throw new ApiException('Access denied to path', 403);
+    }
     return $chunker->abort($disk, $key, $uploadId);
 }
 

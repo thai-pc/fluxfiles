@@ -437,6 +437,15 @@ class FluxFilesController
             if (!$disk || !$key) {
                 throw new ApiException('Missing disk or key parameter', 400);
             }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied: read', 403);
+            }
+            if (!$claims->isPathInScope($key)) {
+                throw new ApiException('Access denied to path', 403);
+            }
 
             return $this->ok($this->metaRepo->get($disk, $key));
         } catch (ApiException $e) {
@@ -455,6 +464,15 @@ class FluxFilesController
 
             if (!$disk || !$key) {
                 throw new ApiException('Missing disk or key', 400);
+            }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->hasPerm('write')) {
+                throw new ApiException('Permission denied: write', 403);
+            }
+            if (!$claims->isPathInScope($key)) {
+                throw new ApiException('Access denied to path', 403);
             }
 
             $data = [
@@ -485,6 +503,15 @@ class FluxFilesController
 
             if (!$disk || !$key) {
                 throw new ApiException('Missing disk or key', 400);
+            }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->hasPerm('write')) {
+                throw new ApiException('Permission denied: write', 403);
+            }
+            if (!$claims->isPathInScope($key)) {
+                throw new ApiException('Access denied to path', 403);
             }
 
             $this->metaRepo->delete($disk, $key);
@@ -570,11 +597,18 @@ class FluxFilesController
             if (!$query) {
                 throw new ApiException('Missing search query', 400);
             }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied: read', 403);
+            }
 
             return $this->ok($this->metaRepo->search(
                 $disk,
                 $query,
-                (int) $request->query('limit', 50)
+                (int) $request->query('limit', 50),
+                $claims->pathPrefix
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
@@ -614,7 +648,7 @@ class FluxFilesController
             return $this->ok($auditLog->list(
                 (int) $request->query('limit', 100),
                 (int) $request->query('offset', 0),
-                $request->query('user_id')
+                $claims->userId
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
@@ -643,9 +677,10 @@ class FluxFilesController
                 throw new ApiException("Access denied to disk: {$disk}", 403);
             }
 
+            $scopedPath = $claims->scopePath($path);
             $chunker = new ChunkUploader($this->diskManager);
-            $result = $chunker->initiate($disk, $path);
-            $this->logAudit($claims, 'chunk_upload', $disk, $path);
+            $result = $chunker->initiate($disk, $scopedPath);
+            $this->logAudit($claims, 'chunk_upload', $disk, $scopedPath);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -670,6 +705,12 @@ class FluxFilesController
 
             if (!$disk || !$key || !$uploadId || !$partNumber) {
                 throw new ApiException('Missing required fields', 400);
+            }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->isPathInScope($key)) {
+                throw new ApiException('Access denied to path', 403);
             }
 
             $chunker = new ChunkUploader($this->diskManager);
@@ -698,6 +739,12 @@ class FluxFilesController
             if (!$disk || !$key || !$uploadId || !$parts) {
                 throw new ApiException('Missing required fields', 400);
             }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->isPathInScope($key)) {
+                throw new ApiException('Access denied to path', 403);
+            }
 
             $chunker = new ChunkUploader($this->diskManager);
 
@@ -723,6 +770,12 @@ class FluxFilesController
 
             if (!$disk || !$key || !$uploadId) {
                 throw new ApiException('Missing required fields', 400);
+            }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->isPathInScope($key)) {
+                throw new ApiException('Access denied to path', 403);
             }
 
             $chunker = new ChunkUploader($this->diskManager);
