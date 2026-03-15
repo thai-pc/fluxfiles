@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>FluxFiles SDK Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #f5f7fa; }
+        h1 { font-size: 22px; margin-bottom: 16px; }
+        h3 { font-size: 14px; margin: 16px 0 8px; color: #475569; }
+        .section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        button {
+            padding: 8px 16px; border: 1px solid #d1d5db; background: #fff; border-radius: 6px;
+            cursor: pointer; font-size: 13px; transition: all 0.15s;
+        }
+        button:hover { background: #f1f5f9; border-color: #94a3b8; }
+        button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+        button.primary:hover { background: #1d4ed8; }
+        button.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
+        button.danger:hover { background: #dc2626; }
+        input { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; width: 100%; }
+        label { font-size: 12px; color: #64748b; display: block; margin-bottom: 4px; }
+        .token-input { margin-bottom: 12px; }
+        #embedded { width: 100%; height: 500px; border: 1px solid #d1d5db; border-radius: 8px; display: none; overflow: hidden; }
+        #log {
+            background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px;
+            max-height: 300px; overflow: auto; font-family: monospace; font-size: 12px; line-height: 1.6;
+        }
+        .log-ready { color: #4ade80; }
+        .log-select { color: #60a5fa; }
+        .log-event { color: #fbbf24; }
+        .log-close { color: #f87171; }
+        .log-time { color: #64748b; }
+    </style>
+</head>
+<body>
+    <h1>FluxFiles SDK Test</h1>
+
+    <div class="section">
+        <div class="token-input">
+            <label>JWT Token (chay: php tests/generate-token.php)</label>
+            <input type="text" id="tokenInput" placeholder="Paste token here...">
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Open File Manager</h3>
+        <div class="btn-group">
+            <button class="primary" onclick="openPicker()">Open Picker (Modal)</button>
+            <button class="primary" onclick="openBrowser()">Open Browser (Embedded)</button>
+        </div>
+
+        <h3>Test Locale</h3>
+        <div class="btn-group">
+            <button onclick="testLocale('en')">English</button>
+            <button onclick="testLocale('vi')">Tieng Viet</button>
+            <button onclick="testLocale('zh')">Chinese</button>
+            <button onclick="testLocale('ja')">Japanese</button>
+            <button onclick="testLocale('ko')">Korean</button>
+            <button onclick="testLocale('fr')">Francais</button>
+            <button onclick="testLocale('de')">Deutsch</button>
+            <button onclick="testLocale('es')">Espanol</button>
+            <button onclick="testLocale('ar')">Arabic (RTL)</button>
+            <button onclick="testLocale('pt')">Portugues</button>
+            <button onclick="testLocale('it')">Italiano</button>
+            <button onclick="testLocale('ru')">Russian</button>
+            <button onclick="testLocale('th')">Thai</button>
+            <button onclick="testLocale('hi')">Hindi</button>
+            <button onclick="testLocale('tr')">Turkce</button>
+            <button onclick="testLocale('nl')">Nederlands</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Commands</h3>
+        <div class="btn-group">
+            <button onclick="FluxFiles.navigate('/')">Navigate to /</button>
+            <button onclick="FluxFiles.navigate('/test-folder')">Navigate to /test-folder</button>
+            <button onclick="FluxFiles.setDisk('local')">Disk: Local</button>
+            <button onclick="FluxFiles.setDisk('s3')">Disk: S3</button>
+            <button onclick="FluxFiles.refresh()">Refresh</button>
+            <button onclick="FluxFiles.search('photo')">Search "photo"</button>
+            <button onclick="FluxFiles.search('')">Clear Search</button>
+            <button onclick="FluxFiles.aiTag()">AI Tag</button>
+            <button class="danger" onclick="FluxFiles.close()">Close</button>
+        </div>
+    </div>
+
+    <div id="embedded"></div>
+
+    <div class="section">
+        <h3>Event Log</h3>
+        <button onclick="document.getElementById('log').textContent=''" style="margin-bottom:8px;">Clear Log</button>
+        <pre id="log"></pre>
+    </div>
+
+    <script src="/fluxfiles.js"></script>
+    <script>
+        var log = document.getElementById('log');
+
+        function getToken() {
+            return document.getElementById('tokenInput').value.trim();
+        }
+
+        function addLog(type, msg) {
+            var cls = {
+                'FM_READY': 'log-ready',
+                'FM_SELECT': 'log-select',
+                'FM_EVENT': 'log-event',
+                'FM_CLOSE': 'log-close'
+            }[type] || '';
+            var time = new Date().toLocaleTimeString();
+            log.innerHTML = '<span class="log-time">' + time + '</span> <span class="' + cls + '">[' + type + ']</span> ' + msg + '\n' + log.innerHTML;
+        }
+
+        FluxFiles.on('FM_READY', function(p) {
+            addLog('FM_READY', JSON.stringify(p));
+        });
+        FluxFiles.on('FM_SELECT', function(f) {
+            addLog('FM_SELECT', f.basename + ' — ' + (f.url || f.path));
+        });
+        FluxFiles.on('FM_EVENT', function(e) {
+            addLog('FM_EVENT', e.action + ' — ' + JSON.stringify(e));
+        });
+        FluxFiles.on('FM_CLOSE', function() {
+            addLog('FM_CLOSE', 'File manager closed');
+            document.getElementById('embedded').style.display = 'none';
+        });
+
+        function openPicker() {
+            if (!getToken()) { alert('Nhap token truoc!'); return; }
+            FluxFiles.open({
+                endpoint: location.origin,
+                token: getToken(),
+                disk: 'local',
+                mode: 'picker',
+                onSelect: function(file) {
+                    addLog('FM_SELECT', '[onSelect callback] ' + file.basename);
+                }
+            });
+        }
+
+        function openBrowser() {
+            if (!getToken()) { alert('Nhap token truoc!'); return; }
+            document.getElementById('embedded').style.display = 'block';
+            FluxFiles.open({
+                endpoint: location.origin,
+                token: getToken(),
+                disk: 'local',
+                mode: 'browser',
+                container: '#embedded'
+            });
+        }
+
+        function testLocale(locale) {
+            if (!getToken()) { alert('Nhap token truoc!'); return; }
+            FluxFiles.open({
+                endpoint: location.origin,
+                token: getToken(),
+                disk: 'local',
+                mode: 'browser',
+                locale: locale
+            });
+            addLog('INFO', 'Opened with locale: ' + locale);
+        }
+    </script>
+</body>
+</html>

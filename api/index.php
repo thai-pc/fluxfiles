@@ -5,10 +5,14 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use FluxFiles\ApiException;
+use FluxFiles\AuditLog;
+use FluxFiles\Claims;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
 use FluxFiles\MetadataRepository;
+use FluxFiles\QuotaManager;
+use FluxFiles\RateLimiter;
 
 // Polyfill str_contains for PHP < 8.0
 if (!function_exists('str_contains')) {
