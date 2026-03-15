@@ -42,7 +42,7 @@
   "homepage": "https://github.com/thai-pc/fluxfiles#vue--nuxt",
   "repository": {
     "type": "git",
-    "url": "https://github.com/thai-pc/fluxfiles.git",
+    "url": "git+https://github.com/thai-pc/fluxfiles.git",
     "directory": "adapters/vue"
   },
   "bugs": {
