@@ -38,7 +38,7 @@
   "homepage": "https://github.com/thai-pc/fluxfiles#react",
   "repository": {
     "type": "git",
-    "url": "https://github.com/thai-pc/fluxfiles.git",
+    "url": "git+https://github.com/thai-pc/fluxfiles.git",
     "directory": "adapters/react"
   },
   "bugs": {
