@@ -18,10 +18,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: symplify/monorepo-split-github-action@v2
-        with:
-          package_directory: ${{ matrix.package.local }}
-          repository_organization: thai-pc
-          repository_name: ${{ matrix.package.remote }}
+      - uses: danharrin/monorepo-split-github-action@main
         env:
           GITHUB_TOKEN: ${{ secrets.SPLIT_TOKEN }}
+        with:
+          package-directory: ${{ matrix.package.local }}
+          split-repository-organization: thai-pc
+          split-repository-name: ${{ matrix.package.remote }}
