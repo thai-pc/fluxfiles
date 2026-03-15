@@ -1,6 +1,6 @@
 {
   "name": "@fluxfiles/react",
-  "version": "1.0.0",
+  "version": "1.22.0",
   "description": "React components and hooks for FluxFiles file manager",
   "license": "MIT",
   "main": "dist/index.js",

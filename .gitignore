@@ -12,6 +12,7 @@ storage/uploads/
 # Build output
 adapters/react/dist/
 adapters/vue/dist/
+build/
 
 # OS files
 .DS_Store
