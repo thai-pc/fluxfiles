@@ -570,8 +570,12 @@ FluxFiles/
 │   ├── react/                  # React component library
 │   └── vue/                    # Vue 3 / Nuxt 3 component library
 ├── fluxfiles.js                # Host app SDK (UMD)
+├── fluxfiles.d.ts              # TypeScript declarations for SDK
 ├── embed.php                   # PHP helper (token + embed)
 ├── composer.json
+├── package.json                # npm package for SDK (CDN access)
+├── scripts/
+│   └── build-wordpress.sh      # Bundle WordPress plugin to ZIP
 └── .env.example
 ```
 
