@@ -2,7 +2,7 @@
 
 A standalone, embeddable file manager built with PHP 8.2. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
 
-Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, and **React**.
+Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, and **Vue / Nuxt**.
 
 ---
 
@@ -412,6 +412,89 @@ const { iframeRef, iframeSrc, navigate, setDisk, refresh, search, aiTag } =
     });
 ```
 
+### Vue / Nuxt
+
+```bash
+npm install @fluxfiles/vue
+```
+
+**Modal component:**
+```vue
+<script setup>
+import { ref } from 'vue';
+import { FluxFilesModal } from '@fluxfiles/vue';
+
+const open = ref(false);
+
+function onSelect(file) {
+    console.log(file);
+    open.value = false;
+}
+</script>
+
+<template>
+    <button @click="open = true">Pick file</button>
+
+    <FluxFilesModal
+        v-model:open="open"
+        endpoint="https://your-fluxfiles-host"
+        :token="token"
+        disk="local"
+        locale="en"
+        @select="onSelect"
+        @close="open = false"
+    />
+</template>
+```
+
+**Embedded component:**
+```vue
+<script setup>
+import { ref } from 'vue';
+import { FluxFiles } from '@fluxfiles/vue';
+
+const fm = ref();
+
+// Programmatic control:
+// fm.value?.navigate('/uploads');
+// fm.value?.setDisk('s3');
+// fm.value?.refresh();
+</script>
+
+<template>
+    <FluxFiles
+        ref="fm"
+        endpoint="https://your-fluxfiles-host"
+        :token="token"
+        disk="local"
+        width="100%"
+        height="600px"
+        @select="(file) => console.log(file)"
+    />
+</template>
+```
+
+**Composable for full control:**
+```ts
+import { useFluxFiles } from '@fluxfiles/vue';
+
+const { iframeRef, iframeSrc, navigate, setDisk, refresh, search, aiTag } =
+    useFluxFiles({
+        endpoint: 'https://your-fluxfiles-host',
+        token,
+        onSelect: (file) => console.log(file),
+    });
+```
+
+**Nuxt 3 auto-import:** Add the plugin to your `nuxt.config.ts`:
+```ts
+export default defineNuxtConfig({
+    plugins: ['@fluxfiles/vue/nuxt'],
+});
+```
+
+Components `<FluxFiles>` and `<FluxFilesModal>` are then globally available without explicit imports.
+
 ---
 
 ## Internationalization
@@ -484,7 +567,8 @@ FluxFiles/
 ├── adapters/
 │   ├── laravel/                # Laravel package
 │   ├── wordpress/              # WordPress plugin
-│   └── react/                  # React component library
+│   ├── react/                  # React component library
+│   └── vue/                    # Vue 3 / Nuxt 3 component library
 ├── fluxfiles.js                # Host app SDK (UMD)
 ├── embed.php                   # PHP helper (token + embed)
 ├── composer.json
@@ -528,6 +612,7 @@ If you fork FluxFiles, the table below lists the key files you'll need to review
 | **Laravel adapter** | `adapters/laravel/config/fluxfiles.php` | Endpoint, default disks, mode, AI settings |
 | **WordPress adapter** | `adapters/wordpress/fluxfiles.php` | Plugin header (name, author, URI) |
 | **React adapter** | `adapters/react/package.json` | Package name, author, repository URL |
+| **Vue adapter** | `adapters/vue/package.json` | Package name, author, repository URL |
 | **Translations** | `lang/*.json` | Edit existing strings or add a new locale (see `lang/CONTRIBUTING.md`) |
 | **Rate limits** | `api/RateLimiter.php` | Bucket size and refill rate constants |
 | **Image variants** | `api/ImageOptimizer.php` | Thumbnail / medium / large dimensions and quality |
