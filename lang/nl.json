@@ -39,8 +39,9 @@
         "copy_url": "URL kopiëren",
         "grid_view": "Rasterweergave",
         "list_view": "Lijstweergave",
-        "search_hint": "Bestanden zoeken...",
-        "theme_toggle": "Licht\/donker wisselen"
+        "search_hint": "Bestanden en mappen zoeken...",
+        "theme_toggle": "Licht\/donker wisselen",
+        "language": "Taal"
     },
     "sidebar": {
         "all_files": "Alle bestanden",
@@ -122,6 +123,7 @@
         "confirm_purge": "\"{name}\" definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",
         "deleted": "Naar prullenbak verplaatst",
         "purged": "Definitief verwijderd",
+        "purge_partial": "{count} item(s) konden niet definitief worden verwijderd",
         "confirm_folder": "Map \"{name}\" en alle bestanden verwijderen? Alles wordt naar de Prullenbak verplaatst.",
         "confirm_bulk_folders": "{count} items ({folders} map(pen) met alle inhoud) verwijderen? Alles wordt naar de Prullenbak verplaatst."
     },
@@ -175,7 +177,8 @@
         "free": "Vrij",
         "replace": "Origineel vervangen",
         "save_copy": "Opslaan als kopie",
-        "saving": "Opslaan..."
+        "saving": "Opslaan...",
+        "failed": "Bijsnijden mislukt: {message}"
     },
     "ai": {
         "generate": "AI-tags genereren",

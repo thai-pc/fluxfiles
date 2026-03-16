@@ -7,6 +7,10 @@
 
 set -e
 
+# Ensure we run from project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
 BASE="http://localhost:8080/api/fm"
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -14,16 +18,16 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Generate token
+# Generate token (run from project root)
 TOKEN=$(php -r "
-require __DIR__ . '/embed.php';
+require_once __DIR__ . '/embed.php';
 \$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 \$dotenv->safeLoad();
 echo fluxfiles_token('test-api', ['read','write','delete'], ['local','s3','r2'], '', 50, null, 86400);
 ")
 
 READ_TOKEN=$(php -r "
-require __DIR__ . '/embed.php';
+require_once __DIR__ . '/embed.php';
 \$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 \$dotenv->safeLoad();
 echo fluxfiles_token('reader', ['read'], ['local'], '', 10, null, 3600);
@@ -208,6 +212,16 @@ RESP=$(curl -s -w "\n%{http_code}" -X POST -H "Authorization: Bearer $TOKEN" \
 CODE=$(echo "$RESP" | tail -1)
 check "Move file → 200" "200" "$CODE"
 
+# ═══ Cross-copy (local to local = copy) ═══
+echo -e "\n${YELLOW}[Cross-copy]${NC}"
+
+RESP=$(curl -s -w "\n%{http_code}" -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"src_disk":"local","src_path":"_api_test_dir/ff-api-test.txt","dst_disk":"local","dst_path":"_api_test_dir/cross-copied.txt"}' \
+  "$BASE/cross-copy")
+CODE=$(echo "$RESP" | tail -1)
+check "Cross-copy (local→local) → 200" "200" "$CODE"
+
 # ═══ Trash ═══
 echo -e "\n${YELLOW}[Trash — Delete / Restore / Purge]${NC}"
 
@@ -239,6 +253,18 @@ RESP=$(curl -s -w "\n%{http_code}" -X DELETE -H "Authorization: Bearer $TOKEN" \
   -d '{"disk":"local","path":"_api_test_dir/moved.txt"}' "$BASE/purge")
 CODE=$(echo "$RESP" | tail -1)
 check "Purge file → 200" "200" "$CODE"
+
+# Purge-bulk: delete cross-copied file, then purge-bulk
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"disk":"local","path":"_api_test_dir/cross-copied.txt"}' "$BASE/delete" > /dev/null 2>&1
+RESP=$(curl -s -w "\n%{http_code}" -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"disk":"local","paths":["_api_test_dir/cross-copied.txt"]}' "$BASE/purge-bulk")
+CODE=$(echo "$RESP" | tail -1)
+check "Purge-bulk → 200" "200" "$CODE"
+
+# Chunk upload requires S3/R2 — skip when only local disk configured
 
 # ═══ Quota ═══
 echo -e "\n${YELLOW}[Quota]${NC}"

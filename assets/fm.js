@@ -180,12 +180,15 @@ function fluxFilesApp() {
                     this._initTheme();
 
                     // Handle locale from host app
-                    const targetLocale = msg.payload.locale && msg.payload.locale !== 'auto'
-                        ? msg.payload.locale
-                        : (navigator.language?.split('-')[0] || 'en');
-                    if (targetLocale !== this.locale) {
-                        this.switchLocale(targetLocale);
+                    // Priority: explicit SDK locale > server-injected locale > browser lang
+                    if (msg.payload.locale && msg.payload.locale !== 'auto') {
+                        // Host app explicitly requested a locale
+                        this.switchLocale(msg.payload.locale);
+                    } else if (Object.keys(this._messages).length <= 1) {
+                        // No server-injected locale (static file) — fall back to browser lang
+                        this.switchLocale(navigator.language?.split('-')[0] || 'en');
                     }
+                    // else: server already injected locale via FLUXFILES_LOCALE — keep it
 
                     this.loadFiles();
                     this.loadQuota();
@@ -1300,6 +1303,11 @@ function fluxFilesApp() {
                         this.executeCrossDisk();
                     }
                     break;
+                case 'setLocale':
+                    if (payload.locale) {
+                        this.switchLocale(payload.locale);
+                    }
+                    break;
                 case 'aiTag':
                     if (this.detailFile) {
                         this.aiTag();
@@ -1407,7 +1415,15 @@ function fluxFilesApp() {
         get filteredFiles() {
             if (!this.searchQuery) return this.files;
             const q = this.searchQuery.toLowerCase();
-            return this.files.filter(f => f.name.toLowerCase().includes(q));
+            return this.files.filter(f => {
+                if (f.name.toLowerCase().includes(q)) return true;
+                if (f.key && f.key.toLowerCase().includes(q)) return true;
+                if (f.meta) {
+                    if (f.meta.title && f.meta.title.toLowerCase().includes(q)) return true;
+                    if (f.meta.tags && f.meta.tags.toLowerCase().includes(q)) return true;
+                }
+                return false;
+            });
         },
 
         isPreviewable(file, type) {
@@ -1425,7 +1441,11 @@ function fluxFilesApp() {
         get filteredFolders() {
             if (!this.searchQuery) return this.folders;
             const q = this.searchQuery.toLowerCase();
-            return this.folders.filter(f => f.name.toLowerCase().includes(q));
+            return this.folders.filter(f => {
+                if (f.name.toLowerCase().includes(q)) return true;
+                if (f.key && f.key.toLowerCase().includes(q)) return true;
+                return false;
+            });
         },
 
         // Thumbnail CSS class (color-coded by file type)

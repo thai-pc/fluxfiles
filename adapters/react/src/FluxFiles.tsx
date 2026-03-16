@@ -69,6 +69,7 @@ export const FluxFiles = forwardRef<FluxFilesHandle, FluxFilesProps>(
       crossMove: handle.crossMove,
       crop: handle.crop,
       aiTag: handle.aiTag,
+      setLocale: handle.setLocale,
       ready: handle.ready,
     }), [handle]);
 

@@ -39,8 +39,9 @@
         "copy_url": "URL kopyala",
         "grid_view": "Izgara görünümü",
         "list_view": "Liste görünümü",
-        "search_hint": "Dosya ara...",
-        "theme_toggle": "Açık\/koyu tema değiştir"
+        "search_hint": "Dosya ve klasör ara...",
+        "theme_toggle": "Açık\/koyu tema değiştir",
+        "language": "Dil"
     },
     "sidebar": {
         "all_files": "Tüm dosyalar",
@@ -122,6 +123,7 @@
         "confirm_purge": "\"{name}\" kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
         "deleted": "Çöp kutusuna taşındı",
         "purged": "Kalıcı olarak silindi",
+        "purge_partial": "{count} öğe kalıcı olarak silinemedi",
         "confirm_folder": "\"{name}\" klasörü ve içindeki tüm dosyalar silinsin mi? Her şey Çöp Kutusuna taşınacak.",
         "confirm_bulk_folders": "{count} öğe ({folders} klasör ve tüm içerikleri) silinsin mi? Her şey Çöp Kutusuna taşınacak."
     },
@@ -175,7 +177,8 @@
         "free": "Serbest",
         "replace": "Orijinali değiştir",
         "save_copy": "Kopya olarak kaydet",
-        "saving": "Kaydediliyor..."
+        "saving": "Kaydediliyor...",
+        "failed": "Kırpma başarısız: {message}"
     },
     "ai": {
         "generate": "AI etiketleri oluştur",

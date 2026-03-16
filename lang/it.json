@@ -39,8 +39,9 @@
         "copy_url": "Copia URL",
         "grid_view": "Vista griglia",
         "list_view": "Vista elenco",
-        "search_hint": "Cerca file...",
-        "theme_toggle": "Alterna chiaro\/scuro"
+        "search_hint": "Cerca file e cartelle...",
+        "theme_toggle": "Alterna chiaro\/scuro",
+        "language": "Lingua"
     },
     "sidebar": {
         "all_files": "Tutti i file",
@@ -122,6 +123,7 @@
         "confirm_purge": "Eliminare definitivamente \"{name}\"? Questa azione non può essere annullata.",
         "deleted": "Spostato nel cestino",
         "purged": "Eliminato definitivamente",
+        "purge_partial": "{count} elemento/i non è stato possibile eliminare definitivamente",
         "confirm_folder": "Eliminare la cartella \"{name}\" e tutti i file? Tutto sarà spostato nel Cestino.",
         "confirm_bulk_folders": "Eliminare {count} elementi ({folders} cartella\/e con tutto il contenuto)? Tutto sarà spostato nel Cestino."
     },
@@ -175,7 +177,8 @@
         "free": "Libero",
         "replace": "Sostituisci originale",
         "save_copy": "Salva come copia",
-        "saving": "Salvataggio..."
+        "saving": "Salvataggio...",
+        "failed": "Ritaglio fallito: {message}"
     },
     "ai": {
         "generate": "Genera tag AI",

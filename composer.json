@@ -17,8 +17,6 @@
     },
     "require": {
         "php": ">=7.4",
-        "ext-pdo": "*",
-        "ext-pdo_sqlite": "*",
         "league/flysystem": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.0",
         "firebase/php-jwt": "^6.0",

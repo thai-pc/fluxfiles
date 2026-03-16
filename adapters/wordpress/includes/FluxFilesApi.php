@@ -3,14 +3,14 @@
 defined('ABSPATH') || exit;
 
 use FluxFiles\ApiException;
-use FluxFiles\AuditLog;
+use FluxFiles\AuditLogStorage;
 use FluxFiles\ChunkUploader;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
-use FluxFiles\MetadataRepository;
 use FluxFiles\QuotaManager;
-use FluxFiles\RateLimiter;
+use FluxFiles\RateLimiterFileStorage;
+use FluxFiles\StorageMetadataHandler;
 
 /**
  * REST API controller — registers all FluxFiles endpoints under /wp-json/fluxfiles/v1/.
@@ -18,8 +18,7 @@ use FluxFiles\RateLimiter;
 class FluxFilesApi
 {
     private DiskManager $diskManager;
-    private MetadataRepository $metaRepo;
-    private \PDO $db;
+    private StorageMetadataHandler $metaRepo;
 
     public function __construct()
     {
@@ -30,12 +29,7 @@ class FluxFilesApi
         }
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
-
-        $dbPath = $storagePath . '/fluxfiles.db';
-        $this->metaRepo = new MetadataRepository($dbPath);
-
-        $this->db = new \PDO("sqlite:{$dbPath}");
-        $this->db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $this->metaRepo = new StorageMetadataHandler($this->diskManager);
     }
 
     // -------------------------------------------------------------------------
@@ -180,6 +174,9 @@ class FluxFilesApi
 
     private function fileManager(\FluxFiles\Claims $claims): FileManager
     {
+        foreach ($claims->byobDisks as $byobName => $byobConfig) {
+            $this->diskManager->registerByobDisk($byobName, $byobConfig);
+        }
         $fm = new FileManager($this->diskManager, $claims, $this->metaRepo);
         $fm->setQuotaManager(new QuotaManager($this->diskManager));
         return $fm;
@@ -187,14 +184,15 @@ class FluxFilesApi
 
     private function rateLimit(\FluxFiles\Claims $claims, bool $isWrite): void
     {
-        $rateLimiter = new RateLimiter($this->db);
+        $storagePath = FluxFilesPlugin::storagePath();
+        $rateLimiter = new RateLimiterFileStorage($storagePath . '/rate_limit.json');
         $rateLimiter->check($claims->userId, $isWrite ? 'write' : 'read');
     }
 
     private function logAudit(\FluxFiles\Claims $claims, string $action, string $disk, string $key): void
     {
-        $auditLog = new AuditLog($this->db);
-        $auditLog->log($claims->userId, $action, $disk, $key);
+        $audit = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
+        $audit->log($claims->userId, $action, $disk, $key);
     }
 
     /**
@@ -783,9 +781,9 @@ class FluxFilesApi
             $claims = $this->claims();
             $this->rateLimit($claims, false);
 
-            $auditLog = new AuditLog($this->db);
+            $audit = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
 
-            return $this->ok($auditLog->list(
+            return $this->ok($audit->list(
                 (int) ($request->get_param('limit') ?? 100),
                 (int) ($request->get_param('offset') ?? 0),
                 $claims->userId

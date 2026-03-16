@@ -40,7 +40,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 ## Requirements
 
 - PHP >= 7.4
-- Extensions: `pdo`, `pdo_sqlite`, `gd` (for image processing), `curl` (for AI tagging)
+- Extensions: `gd` (for image processing), `curl` (for AI tagging)
 - Composer
 
 ---
@@ -553,15 +553,15 @@ FluxFiles/
 ├── api/                        # PHP backend
 │   ├── index.php               # Main router (CORS, auth, routing)
 │   ├── FileManager.php         # Core file operations
-│   ├── MetadataRepository.php  # SQLite CRUD + FTS5 search
+│   ├── StorageMetadataHandler.php  # Metadata/trash/audit trong storage user
 │   ├── DiskManager.php         # Flysystem factory (local/s3/r2)
 │   ├── Claims.php              # JWT claims value object
 │   ├── JwtMiddleware.php       # JWT extraction + verification
 │   ├── ImageOptimizer.php      # Resize + WebP variant generation
 │   ├── AiTagger.php            # Claude/OpenAI vision integration
 │   ├── ChunkUploader.php       # S3 multipart upload
-│   ├── RateLimiter.php         # Token bucket rate limiting
-│   ├── AuditLog.php            # Write action logging
+│   ├── RateLimiterFileStorage.php  # Rate limit (JSON file)
+│   ├── AuditLogStorage.php     # Audit log trong storage user
 │   ├── QuotaManager.php        # Storage quota enforcement
 │   ├── I18n.php                # Internationalization
 │   └── ApiException.php        # HTTP error exceptions
@@ -573,7 +573,7 @@ FluxFiles/
 ├── lang/                       # Translation JSON files
 ├── public/
 │   └── index.html              # Iframe entry point
-├── storage/                    # SQLite DB + local uploads
+├── storage/                    # Local uploads + rate_limit.json
 ├── adapters/
 │   ├── laravel/                # Laravel package
 │   ├── wordpress/              # WordPress plugin
@@ -628,7 +628,7 @@ If you fork FluxFiles, the table below lists the key files you'll need to review
 | **React adapter** | `adapters/react/package.json` | Package name, author, repository URL |
 | **Vue adapter** | `adapters/vue/package.json` | Package name, author, repository URL |
 | **Translations** | `lang/*.json` | Edit existing strings or add a new locale (see `lang/CONTRIBUTING.md`) |
-| **Rate limits** | `api/RateLimiter.php` | Bucket size and refill rate constants |
+| **Rate limits** | `api/RateLimiterFileStorage.php` | Bucket size and refill rate constants |
 | **Image variants** | `api/ImageOptimizer.php` | Thumbnail / medium / large dimensions and quality |
 
 ### Attribution

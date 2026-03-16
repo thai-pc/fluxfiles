@@ -55,4 +55,42 @@ $quotaToken = fluxfiles_token(
     maxUploadMb: 2,
     ttl:         3600
 );
-echo "QUOTA TOKEN (max_upload=2MB):\n{$quotaToken}\n";
+echo "QUOTA TOKEN (max_upload=2MB):\n{$quotaToken}\n\n";
+
+// ── BYOB (Bring Your Own Bucket) ──
+
+// Token BYOB: user dung S3 bucket rieng cua ho
+$byobToken = fluxfiles_byob_token(
+    userId:    'byob-user-001',
+    byobDisks: [
+        'my-s3' => [
+            'driver' => 's3',
+            'region' => 'us-west-2',
+            'bucket' => 'user-personal-bucket',
+            'key'    => 'AKIAIOSFODNN7EXAMPLE',
+            'secret' => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        ],
+    ],
+    perms: ['read', 'write', 'delete'],
+    ttl:   1800
+);
+echo "BYOB TOKEN (my-s3 = user's own bucket):\n{$byobToken}\n\n";
+
+// Token Mixed: local (server) + my-r2 (user's Cloudflare R2)
+$mixedToken = fluxfiles_mixed_token(
+    userId:      'mixed-user-001',
+    serverDisks: ['local'],
+    byobDisks:   [
+        'my-r2' => [
+            'driver'   => 's3',
+            'endpoint' => 'https://abc123.r2.cloudflarestorage.com',
+            'region'   => 'auto',
+            'bucket'   => 'user-r2-bucket',
+            'key'      => 'R2_KEY_EXAMPLE',
+            'secret'   => 'R2_SECRET_EXAMPLE',
+        ],
+    ],
+    perms: ['read', 'write'],
+    ttl:   1800
+);
+echo "MIXED TOKEN (local + my-r2):\n{$mixedToken}\n";

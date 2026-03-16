@@ -90,7 +90,8 @@ export type FluxCommand =
   | { action: 'crossCopy'; dst_disk: string; dst_path?: string }
   | { action: 'crossMove'; dst_disk: string; dst_path?: string }
   | { action: 'crop'; x: number; y: number; width: number; height: number; save_path?: string }
-  | { action: 'aiTag' };
+  | { action: 'aiTag' }
+  | { action: 'setLocale'; locale: string };
 
 /** Return type of useFluxFiles hook. */
 export interface FluxFilesHandle {
@@ -112,6 +113,8 @@ export interface FluxFilesHandle {
   crop: (x: number, y: number, width: number, height: number, savePath?: string) => void;
   /** Trigger AI tagging on the currently selected image. */
   aiTag: () => void;
+  /** Switch locale/language at runtime. */
+  setLocale: (locale: string) => void;
   /** Whether the iframe has reported ready. */
   ready: boolean;
 }

@@ -39,8 +39,9 @@
         "copy_url": "复制链接",
         "grid_view": "网格视图",
         "list_view": "列表视图",
-        "search_hint": "搜索文件...",
-        "theme_toggle": "切换明暗"
+        "search_hint": "搜索文件和文件夹...",
+        "theme_toggle": "切换明暗",
+        "language": "语言"
     },
     "sidebar": {
         "all_files": "全部文件",
@@ -122,6 +123,7 @@
         "confirm_purge": "彻底删除\"{name}\"？此操作无法撤销。",
         "deleted": "已移至回收站",
         "purged": "已彻底删除",
+        "purge_partial": "无法永久删除 {count} 个项目",
         "confirm_folder": "删除文件夹\"{name}\"及其所有文件？所有内容将移至回收站。",
         "confirm_bulk_folders": "删除{count}个项目（{folders}个文件夹及所有内容）？所有内容将移至回收站。"
     },

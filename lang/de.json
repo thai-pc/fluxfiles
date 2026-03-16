@@ -39,8 +39,9 @@
         "copy_url": "URL kopieren",
         "grid_view": "Rasteransicht",
         "list_view": "Listenansicht",
-        "search_hint": "Dateien suchen...",
-        "theme_toggle": "Hell\/Dunkel umschalten"
+        "search_hint": "Dateien und Ordner suchen...",
+        "theme_toggle": "Hell\/Dunkel umschalten",
+        "language": "Sprache"
     },
     "sidebar": {
         "all_files": "Alle Dateien",
@@ -122,6 +123,7 @@
         "confirm_purge": "\"{name}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
         "deleted": "In den Papierkorb verschoben",
         "purged": "Endgültig gelöscht",
+        "purge_partial": "{count} Element(e) konnten nicht endgültig gelöscht werden",
         "confirm_folder": "Ordner \"{name}\" und alle Dateien löschen? Alles wird in den Papierkorb verschoben.",
         "confirm_bulk_folders": "{count} Elemente ({folders} Ordner mit gesamtem Inhalt) löschen? Alles wird in den Papierkorb verschoben."
     },

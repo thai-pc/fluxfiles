@@ -46,6 +46,22 @@ class DiskManager
         return $this->s3Clients[$name];
     }
 
+    /**
+     * Register a BYOB (Bring Your Own Bucket) disk at runtime.
+     * Only S3-compatible drivers are allowed — local driver is rejected for security.
+     */
+    public function registerByobDisk(string $name, array $config): void
+    {
+        if (($config['driver'] ?? '') === 'local') {
+            throw new ApiException("BYOB disk '{$name}' cannot use local driver", 403);
+        }
+
+        $this->configs[$name] = $config;
+
+        // Clear cached instances so next call rebuilds with new config
+        unset($this->disks[$name], $this->s3Clients[$name]);
+    }
+
     public function config(string $name): array
     {
         return $this->configs[$name] ?? [];

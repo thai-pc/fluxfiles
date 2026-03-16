@@ -39,8 +39,9 @@
         "copy_url": "URL 복사",
         "grid_view": "격자 보기",
         "list_view": "목록 보기",
-        "search_hint": "파일 검색...",
-        "theme_toggle": "라이트\/다크 전환"
+        "search_hint": "파일 및 폴더 검색...",
+        "theme_toggle": "라이트\/다크 전환",
+        "language": "언어"
     },
     "sidebar": {
         "all_files": "모든 파일",
@@ -122,6 +123,7 @@
         "confirm_purge": "\"{name}\"을(를) 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
         "deleted": "휴지통으로 이동되었습니다",
         "purged": "영구적으로 삭제되었습니다",
+        "purge_partial": "{count}개 항목을 영구 삭제하지 못했습니다",
         "confirm_folder": "\"{name}\" 폴더와 내부 모든 파일을 삭제하시겠습니까? 휴지통으로 이동됩니다.",
         "confirm_bulk_folders": "{count}개 항목({folders}개 폴더 및 모든 콘텐츠)을 삭제하시겠습니까? 휴지통으로 이동됩니다."
     },
@@ -175,7 +177,8 @@
         "free": "자유 자르기",
         "replace": "원본 교체",
         "save_copy": "사본으로 저장",
-        "saving": "저장 중..."
+        "saving": "저장 중...",
+        "failed": "자르기 실패: {message}"
     },
     "ai": {
         "generate": "AI 태그 생성",

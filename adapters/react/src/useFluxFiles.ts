@@ -114,6 +114,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
   const crossMove = useCallback((dstDisk: string, dstPath?: string) => command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' }), [command]);
   const crop = useCallback((x: number, y: number, width: number, height: number, savePath?: string) => command('crop', { x, y, width, height, save_path: savePath || '' }), [command]);
   const aiTag = useCallback(() => command('aiTag'), [command]);
+  const setLocale = useCallback((locale: string) => command('setLocale', { locale }), [command]);
 
   const iframeRef = useCallback((el: HTMLIFrameElement | null) => {
     iframeElRef.current = el;
@@ -135,5 +136,6 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
     crossMove,
     crop,
     aiTag,
+    setLocale,
   };
 }
