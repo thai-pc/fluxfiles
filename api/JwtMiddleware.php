@@ -17,7 +17,7 @@ class JwtMiddleware
             throw new ApiException('Invalid or expired token: ' . $e->getMessage(), 401);
         }
 
-        return Claims::fromJwtPayload($payload);
+        return Claims::fromJwtPayload($payload, $secret);
     }
 
     public static function extractToken(): string

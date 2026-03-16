@@ -158,6 +158,13 @@ body {
     flex-shrink: 0;
 }
 
+/* Theme + Language above disk pills (desktop & mobile) */
+.ff-pills-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .disk-pill {
     display: flex;
     align-items: center;
@@ -165,7 +172,7 @@ body {
     padding: 4px 12px;
     border-radius: 24px;
     border: 0.5px solid var(--color-border-secondary);
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
@@ -195,6 +202,100 @@ body {
     background: currentColor;
     opacity: .7;
 }
+
+/* Pills separator */
+.ff-pills-sep {
+    width: 1px;
+    height: 18px;
+    background: var(--color-border-secondary);
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+/* Locale selector (dropdown) */
+.ff-locale-select { position: relative; }
+
+.ff-locale-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+}
+.ff-locale-btn:hover {
+    background: var(--ff-bg-hover);
+    color: var(--color-text-primary);
+    border-color: var(--color-text-secondary);
+}
+.ff-locale-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.ff-locale-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    inset-inline-end: 0;
+    background: var(--ff-bg);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 6px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    z-index: 100;
+    min-width: 180px;
+}
+.dark .ff-locale-dropdown { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+.ff-locale-item {
+    padding: 5px 8px;
+    border: none;
+    border-radius: 5px;
+    background: none;
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.1s;
+    text-align: center;
+}
+.ff-locale-item:hover {
+    background: var(--ff-bg-hover);
+    color: var(--color-text-primary);
+}
+.ff-locale-item.active {
+    background: var(--ff-primary);
+    color: #fff;
+}
+
+/* Small theme toggle (in disk pills bar) */
+.ff-theme-toggle-sm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+.ff-theme-toggle-sm:hover {
+    background: var(--ff-bg-hover);
+    color: var(--color-text-primary);
+    border-color: var(--color-text-secondary);
+}
+.ff-theme-toggle-sm span { display: flex; align-items: center; justify-content: center; }
+.ff-theme-toggle-sm svg { width: 14px; height: 14px; }
 
 /* ══════════════════════════ Sidebar ══════════════════════════ */
 .ff-sidebar {

@@ -39,8 +39,9 @@
         "copy_url": "Copiar URL",
         "grid_view": "Visualização em grade",
         "list_view": "Visualização em lista",
-        "search_hint": "Pesquisar arquivos...",
-        "theme_toggle": "Alternar claro\/escuro"
+        "search_hint": "Pesquisar arquivos e pastas...",
+        "theme_toggle": "Alternar claro\/escuro",
+        "language": "Idioma"
     },
     "sidebar": {
         "all_files": "Todos os arquivos",
@@ -122,6 +123,7 @@
         "confirm_purge": "Excluir permanentemente \"{name}\"? Esta ação não pode ser desfeita.",
         "deleted": "Movido para a lixeira",
         "purged": "Excluído permanentemente",
+        "purge_partial": "{count} item(ns) não foi possível excluir permanentemente",
         "confirm_folder": "Excluir a pasta \"{name}\" e todos os arquivos? Tudo será movido para a Lixeira.",
         "confirm_bulk_folders": "Excluir {count} itens ({folders} pasta(s) com todo o conteúdo)? Tudo será movido para a Lixeira."
     },
@@ -175,7 +177,8 @@
         "free": "Livre",
         "replace": "Substituir original",
         "save_copy": "Salvar como cópia",
-        "saving": "Salvando..."
+        "saving": "Salvando...",
+        "failed": "Recorte falhou: {message}"
     },
     "ai": {
         "generate": "Gerar tags com IA",

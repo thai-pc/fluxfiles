@@ -5,14 +5,14 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use FluxFiles\ApiException;
-use FluxFiles\AuditLog;
+use FluxFiles\AuditLogStorage;
 use FluxFiles\Claims;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
-use FluxFiles\MetadataRepository;
 use FluxFiles\QuotaManager;
-use FluxFiles\RateLimiter;
+use FluxFiles\RateLimiterFileStorage;
+use FluxFiles\StorageMetadataHandler;
 
 // Polyfill str_contains for PHP < 8.0
 if (!function_exists('str_contains')) {
@@ -123,8 +123,13 @@ try {
     // Dependencies
     $diskConfigs = require __DIR__ . '/../config/disks.php';
     $diskManager = new DiskManager($diskConfigs);
-    $dbPath = __DIR__ . '/../storage/fluxfiles.db';
-    $metaRepo = new MetadataRepository($dbPath);
+
+    // Register BYOB (Bring Your Own Bucket) disks from JWT
+    foreach ($claims->byobDisks as $byobName => $byobConfig) {
+        $diskManager->registerByobDisk($byobName, $byobConfig);
+    }
+    $storagePath = __DIR__ . '/../storage';
+    $metaRepo = new StorageMetadataHandler($diskManager);
     $fm = new FileManager($diskManager, $claims, $metaRepo);
     $fm->setQuotaManager(new QuotaManager($diskManager));
 
@@ -139,15 +144,18 @@ try {
         $fm->setAiTagger($aiTagger);
     }
 
-    // Rate limiting
-    $rateLimitDb = new \PDO("sqlite:{$dbPath}");
-    $rateLimitDb->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-    $rateLimiter = new RateLimiter($rateLimitDb);
+    // Rate limiting (JSON file)
+    $rateLimiter = new RateLimiterFileStorage(
+        $storagePath . '/rate_limit.json',
+        (int) ($_ENV['FLUXFILES_RATE_LIMIT_READ'] ?? 60),
+        (int) ($_ENV['FLUXFILES_RATE_LIMIT_WRITE'] ?? 10),
+        60
+    );
     $isWriteAction = in_array($method, ['POST', 'PUT', 'DELETE'], true);
     $rateLimiter->check($claims->userId, $isWriteAction ? 'write' : 'read');
 
-    // Audit log
-    $auditLog = new AuditLog($rateLimitDb);
+    // Audit log (lưu trong user storage)
+    $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
     $quotaManager = new QuotaManager($diskManager);
 
@@ -185,10 +193,10 @@ function routeRequest(
     string $method,
     string $uri,
     FileManager $fm,
-    MetadataRepository $metaRepo,
+    StorageMetadataHandler $metaRepo,
     DiskManager $diskManager,
     \FluxFiles\Claims $claims,
-    \FluxFiles\AuditLog $auditLog,
+    AuditLogStorage $auditLog,
     \FluxFiles\ChunkUploader $chunker,
     \FluxFiles\QuotaManager $quotaManager
 ) {
@@ -382,7 +390,7 @@ function jsonBody(string ...$keys): array
     return $result;
 }
 
-function handleGetMetadata(MetadataRepository $metaRepo, \FluxFiles\Claims $claims): ?array
+function handleGetMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $claims): ?array
 {
     $disk = $_GET['disk'] ?? null;
     $key  = $_GET['key'] ?? null;
@@ -404,7 +412,7 @@ function handleGetMetadata(MetadataRepository $metaRepo, \FluxFiles\Claims $clai
     return $metaRepo->get($disk, $key);
 }
 
-function handleSaveMetadata(MetadataRepository $metaRepo, DiskManager $diskManager, \FluxFiles\Claims $claims): array
+function handleSaveMetadata(StorageMetadataHandler $metaRepo, DiskManager $diskManager, \FluxFiles\Claims $claims): array
 {
     $raw = file_get_contents('php://input');
     $body = json_decode($raw, true);
@@ -444,7 +452,7 @@ function handleSaveMetadata(MetadataRepository $metaRepo, DiskManager $diskManag
     return ['saved' => true];
 }
 
-function handleDeleteMetadata(MetadataRepository $metaRepo, \FluxFiles\Claims $claims): array
+function handleDeleteMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $claims): array
 {
     [$disk, $key] = jsonBody('disk', 'key');
     if (!$claims->hasDisk($disk)) {

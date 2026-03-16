@@ -1,137 +1,685 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" translate="no">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FluxFiles SDK Test</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #f5f7fa; }
-        h1 { font-size: 22px; margin-bottom: 16px; }
-        h3 { font-size: 14px; margin: 16px 0 8px; color: #475569; }
-        .section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
-        button {
-            padding: 8px 16px; border: 1px solid #d1d5db; background: #fff; border-radius: 6px;
-            cursor: pointer; font-size: 13px; transition: all 0.15s;
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --text-tertiary: #94a3b8;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --success: #059669;
+            --success-light: #ecfdf5;
+            --danger: #dc2626;
+            --danger-light: #fef2f2;
+            --warning: #d97706;
+            --warning-light: #fffbeb;
+            --info: #2563eb;
+            --info-light: #eff6ff;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
         }
-        button:hover { background: #f1f5f9; border-color: #94a3b8; }
-        button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
-        button.primary:hover { background: #1d4ed8; }
-        button.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
-        button.danger:hover { background: #dc2626; }
-        input { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; width: 100%; }
-        label { font-size: 12px; color: #64748b; display: block; margin-bottom: 4px; }
-        .token-input { margin-bottom: 12px; }
-        #embedded { width: 100%; height: 500px; border: 1px solid #d1d5db; border-radius: 8px; display: none; overflow: hidden; }
-        #log {
-            background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px;
-            max-height: 300px; overflow: auto; font-family: monospace; font-size: 12px; line-height: 1.6;
+        .dark {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-tertiary: #64748b;
+            --primary: #818cf8;
+            --primary-hover: #6366f1;
+            --primary-light: #1e1b4b;
+            --success: #34d399;
+            --success-light: #064e3b;
+            --danger: #f87171;
+            --danger-light: #450a0a;
+            --warning: #fbbf24;
+            --warning-light: #451a03;
+            --info: #60a5fa;
+            --info-light: #172554;
+            --shadow: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-lg: 0 10px 25px rgba(0,0,0,0.4);
         }
-        .log-ready { color: #4ade80; }
-        .log-select { color: #60a5fa; }
-        .log-event { color: #fbbf24; }
-        .log-close { color: #f87171; }
-        .log-time { color: #64748b; }
+
+        body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
+
+        /* Header */
+        .header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .logo {
+            width: 36px; height: 36px;
+            background: var(--primary);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 700; font-size: 16px;
+        }
+        .header-title { font-size: 18px; font-weight: 700; }
+        .header-subtitle { font-size: 12px; color: var(--text-secondary); }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+
+        /* Theme toggle */
+        .theme-toggle {
+            width: 36px; height: 36px; border: 1px solid var(--border);
+            background: var(--card); border-radius: var(--radius-sm);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 16px; transition: all 0.2s;
+        }
+        .theme-toggle:hover { background: var(--primary-light); border-color: var(--primary); }
+
+        /* Main layout */
+        .main { max-width: 1400px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+        @media (max-width: 960px) { .main { grid-template-columns: 1fr; } }
+
+        /* Sidebar */
+        .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+        /* Card */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: background 0.3s, border-color 0.3s;
+        }
+        .card-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .card-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
+        .card-badge {
+            font-size: 10px; font-weight: 600;
+            padding: 2px 8px; border-radius: 10px;
+            background: var(--primary-light); color: var(--primary);
+        }
+        .card-body { padding: 16px; }
+
+        /* Token input */
+        .token-group { display: flex; flex-direction: column; gap: 8px; }
+        .token-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+        .token-input {
+            width: 100%; padding: 10px 12px;
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            background: var(--bg); color: var(--text);
+            font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+        }
+        .token-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,0.15); }
+        .token-input::placeholder { color: var(--text-tertiary); font-family: var(--font); }
+        .token-help { font-size: 11px; color: var(--text-tertiary); line-height: 1.4; }
+        .token-help code {
+            background: var(--bg); padding: 1px 5px; border-radius: 4px;
+            font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        /* Status indicator */
+        .status-bar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 16px; font-size: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .status-dot.connected { background: var(--success); box-shadow: 0 0 6px rgba(5,150,105,0.4); }
+        .status-dot.disconnected { background: var(--text-tertiary); }
+
+        /* Buttons */
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .btn-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+        .btn-list { display: flex; flex-direction: column; gap: 6px; }
+        .btn {
+            padding: 9px 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--card);
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+            font-family: var(--font);
+        }
+        .btn:hover { background: var(--bg); border-color: var(--text-tertiary); }
+        .btn:active { transform: scale(0.97); }
+        .btn-icon { font-size: 14px; flex-shrink: 0; }
+
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+        .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
+        .btn-danger:hover { opacity: 0.9; }
+        .btn-success { background: var(--success); color: white; border-color: var(--success); }
+        .btn-success:hover { opacity: 0.9; }
+        .btn-sm { padding: 6px 10px; font-size: 11px; }
+        .btn-full { grid-column: 1 / -1; }
+
+        /* Search input in commands */
+        .search-row { display: flex; gap: 6px; }
+        .search-input {
+            flex: 1; padding: 8px 12px;
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            background: var(--bg); color: var(--text);
+            font-size: 12px; outline: none;
+            font-family: var(--font);
+            transition: border-color 0.2s;
+        }
+        .search-input:focus { border-color: var(--primary); }
+
+        /* Content area */
+        .content { display: flex; flex-direction: column; gap: 16px; }
+
+        /* Embedded container */
+        .embed-container {
+            border-radius: var(--radius);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--card);
+            box-shadow: var(--shadow-lg);
+            min-height: 550px;
+            display: none;
+            position: relative;
+        }
+        .embed-container.active { display: block; }
+        .embed-placeholder {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 550px;
+            color: var(--text-tertiary);
+            gap: 12px;
+        }
+        .embed-placeholder-icon { font-size: 48px; opacity: 0.3; }
+        .embed-placeholder-text { font-size: 14px; }
+
+        /* Event log */
+        .log-container {
+            background: #0d1117;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        .log-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+        }
+        .log-header-title { font-size: 12px; font-weight: 600; color: #c9d1d9; }
+        .log-count {
+            font-size: 10px; font-weight: 600;
+            padding: 2px 8px; border-radius: 10px;
+            background: #21262d; color: #8b949e;
+        }
+        .log-body {
+            max-height: 350px; overflow-y: auto;
+            padding: 8px 0;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 12px; line-height: 1.8;
+        }
+        .log-entry {
+            padding: 2px 14px;
+            display: flex; align-items: flex-start; gap: 8px;
+            transition: background 0.1s;
+        }
+        .log-entry:hover { background: #161b22; }
+        .log-time { color: #484f58; flex-shrink: 0; font-size: 11px; }
+        .log-tag {
+            flex-shrink: 0; font-size: 10px; font-weight: 600;
+            padding: 1px 6px; border-radius: 4px;
+            text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .log-tag-ready { background: #0d2818; color: #3fb950; }
+        .log-tag-select { background: #0c2d6b; color: #58a6ff; }
+        .log-tag-event { background: #341a04; color: #d29922; }
+        .log-tag-close { background: #3d0c0c; color: #f85149; }
+        .log-tag-info { background: #1c1c3a; color: #a78bfa; }
+        .log-tag-error { background: #3d0c0c; color: #f85149; }
+        .log-msg { color: #c9d1d9; word-break: break-all; }
+        .log-empty {
+            padding: 24px 14px;
+            text-align: center;
+            color: #484f58;
+            font-size: 12px;
+        }
+
+        .log-actions { display: flex; gap: 6px; }
+        .log-btn {
+            padding: 4px 10px; border: 1px solid #30363d;
+            border-radius: 6px; background: #21262d;
+            color: #c9d1d9; font-size: 11px; cursor: pointer;
+            font-family: var(--font);
+            transition: all 0.15s;
+        }
+        .log-btn:hover { background: #30363d; border-color: #484f58; }
+
+        /* Locale grid */
+        .locale-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        @media (max-width: 960px) { .locale-grid { grid-template-columns: repeat(3, 1fr); } }
+        .locale-btn {
+            padding: 7px 6px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--card);
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            font-family: var(--font);
+        }
+        .locale-btn:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+        .locale-btn .flag { font-size: 16px; }
+        .locale-btn .code { font-size: 10px; color: var(--text-tertiary); font-weight: 400; }
+        .locale-btn:hover .code { color: var(--primary); }
+        .locale-btn.rtl-badge::after {
+            content: 'RTL';
+            font-size: 8px;
+            background: var(--warning);
+            color: white;
+            padding: 0 4px;
+            border-radius: 3px;
+            font-weight: 700;
+        }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 2px; padding: 4px; background: var(--bg); border-radius: var(--radius-sm); }
+        .tab {
+            flex: 1; padding: 7px 12px;
+            border: none; border-radius: 6px;
+            background: transparent; color: var(--text-secondary);
+            font-size: 12px; font-weight: 500; cursor: pointer;
+            transition: all 0.15s; font-family: var(--font);
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+
+        /* Separator */
+        .sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+        /* Scrollbar */
+        .log-body::-webkit-scrollbar { width: 6px; }
+        .log-body::-webkit-scrollbar-track { background: transparent; }
+        .log-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+        /* Fade in */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        .card { animation: fadeIn 0.3s ease; }
+        .card:nth-child(2) { animation-delay: 0.05s; }
+        .card:nth-child(3) { animation-delay: 0.1s; }
+        .card:nth-child(4) { animation-delay: 0.15s; }
     </style>
 </head>
 <body>
-    <h1>FluxFiles SDK Test</h1>
-
-    <div class="section">
-        <div class="token-input">
-            <label>JWT Token (chay: php tests/generate-token.php)</label>
-            <input type="text" id="tokenInput" placeholder="Paste token here...">
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">
+                <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                    <path d="M8 10a2 2 0 012-2h4l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H10a2 2 0 01-2-2V10z" fill="white" fill-opacity="0.9"/>
+                    <path d="M12 17l2.5-3 2 2 3.5-4" stroke="rgba(79,70,229,0.8)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                </svg>
+            </div>
+            <div>
+                <div class="header-title">FluxFiles SDK</div>
+                <div class="header-subtitle">Interactive Test Console</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn" title="Toggle dark mode">
+                <span id="themeIcon">&#9789;</span>
+            </button>
         </div>
     </div>
 
-    <div class="section">
-        <h3>Open File Manager</h3>
-        <div class="btn-group">
-            <button class="primary" onclick="openPicker()">Open Picker (Modal)</button>
-            <button class="primary" onclick="openPickerMultiple()">Open Picker (Multiple)</button>
-            <button class="primary" onclick="openBrowser()">Open Browser (Embedded)</button>
+    <div class="main">
+        <!-- ═══ Sidebar ═══ -->
+        <div class="sidebar">
+
+            <!-- Token -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Authentication</span>
+                    <span class="card-badge">JWT</span>
+                </div>
+                <div class="card-body">
+                    <div class="token-group">
+                        <label class="token-label">JWT Token</label>
+                        <input type="text" class="token-input" id="tokenInput" placeholder="eyJhbGciOiJIUzI1NiIs...">
+                        <div class="token-help">
+                            Generate: <code>php tests/generate-token.php</code>
+                        </div>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText" style="color:var(--text-secondary)">Not connected</span>
+                </div>
+            </div>
+
+            <!-- Open modes -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Open File Manager</span>
+                </div>
+                <div class="card-body">
+                    <div class="btn-list">
+                        <button class="btn btn-primary" onclick="openPicker()">
+                            <span class="btn-icon">&#128193;</span> Open Picker (Single)
+                        </button>
+                        <button class="btn btn-primary" onclick="openPickerMultiple()">
+                            <span class="btn-icon">&#128194;</span> Open Picker (Multiple)
+                        </button>
+                        <button class="btn btn-success" onclick="openBrowser()">
+                            <span class="btn-icon">&#128421;</span> Open Browser (Embedded)
+                        </button>
+                        <div class="sep"></div>
+                        <button class="btn btn-danger btn-sm" onclick="FluxFiles.close()">
+                            <span class="btn-icon">&#10005;</span> Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Commands -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Commands</span>
+                    <span class="card-badge">SDK</span>
+                </div>
+                <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+                    <!-- Tabs -->
+                    <div class="tabs" id="cmdTabs">
+                        <button class="tab active" onclick="switchTab('nav')">Navigate</button>
+                        <button class="tab" onclick="switchTab('disk')">Disk</button>
+                        <button class="tab" onclick="switchTab('search')">Search</button>
+                        <button class="tab" onclick="switchTab('actions')">Actions</button>
+                    </div>
+
+                    <!-- Navigate tab -->
+                    <div id="tab-nav">
+                        <div class="btn-list">
+                            <button class="btn" onclick="FluxFiles.navigate('/')">
+                                <span class="btn-icon">&#127968;</span> Root /
+                            </button>
+                            <div class="search-row">
+                                <input type="text" class="search-input" id="navPathInput" placeholder="Enter path, e.g. /images">
+                                <button class="btn btn-sm" onclick="navigateToPath()">Go</button>
+                            </div>
+                            <button class="btn btn-sm" onclick="FluxFiles.refresh()">
+                                <span class="btn-icon">&#8635;</span> Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Disk tab -->
+                    <div id="tab-disk" style="display:none">
+                        <div class="btn-list">
+                            <button class="btn" onclick="FluxFiles.setDisk('local')">
+                                <span class="btn-icon">&#128190;</span> Local
+                            </button>
+                            <button class="btn" onclick="FluxFiles.setDisk('s3')">
+                                <span class="btn-icon">&#9729;</span> S3
+                            </button>
+                            <button class="btn" onclick="FluxFiles.setDisk('r2')">
+                                <span class="btn-icon">&#9729;</span> R2
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Search tab -->
+                    <div id="tab-search" style="display:none">
+                        <div class="btn-list">
+                            <div class="search-row">
+                                <input type="text" class="search-input" id="searchInput" placeholder="Search files & folders...">
+                                <button class="btn btn-primary btn-sm" onclick="doSearch()">Search</button>
+                            </div>
+                            <button class="btn btn-sm" onclick="FluxFiles.search('');document.getElementById('searchInput').value=''">
+                                <span class="btn-icon">&#10005;</span> Clear Search
+                            </button>
+                            <div class="sep"></div>
+                            <div class="token-help">Search by file name, folder name, or metadata.</div>
+                        </div>
+                    </div>
+
+                    <!-- Actions tab -->
+                    <div id="tab-actions" style="display:none">
+                        <div class="btn-list">
+                            <button class="btn" onclick="FluxFiles.aiTag()">
+                                <span class="btn-icon">&#129302;</span> AI Tag Selected
+                            </button>
+                            <div class="sep"></div>
+                            <div class="token-help">Select a file first, then run actions.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Locale -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Locale / i18n</span>
+                    <span class="card-badge">16 langs</span>
+                </div>
+                <div class="card-body">
+                    <div class="locale-grid">
+                        <button class="locale-btn" onclick="testLocale('en')"><span class="flag">&#127468;&#127463;</span>EN<span class="code">English</span></button>
+                        <button class="locale-btn" onclick="testLocale('vi')"><span class="flag">&#127483;&#127475;</span>VI<span class="code">Tieng Viet</span></button>
+                        <button class="locale-btn" onclick="testLocale('zh')"><span class="flag">&#127464;&#127475;</span>ZH<span class="code">Chinese</span></button>
+                        <button class="locale-btn" onclick="testLocale('ja')"><span class="flag">&#127471;&#127477;</span>JA<span class="code">Japanese</span></button>
+                        <button class="locale-btn" onclick="testLocale('ko')"><span class="flag">&#127472;&#127479;</span>KO<span class="code">Korean</span></button>
+                        <button class="locale-btn" onclick="testLocale('fr')"><span class="flag">&#127467;&#127479;</span>FR<span class="code">Francais</span></button>
+                        <button class="locale-btn" onclick="testLocale('de')"><span class="flag">&#127465;&#127466;</span>DE<span class="code">Deutsch</span></button>
+                        <button class="locale-btn" onclick="testLocale('es')"><span class="flag">&#127466;&#127480;</span>ES<span class="code">Espanol</span></button>
+                        <button class="locale-btn rtl-badge" onclick="testLocale('ar')"><span class="flag">&#127480;&#127462;</span>AR<span class="code">Arabic</span></button>
+                        <button class="locale-btn" onclick="testLocale('pt')"><span class="flag">&#127463;&#127479;</span>PT<span class="code">Portugues</span></button>
+                        <button class="locale-btn" onclick="testLocale('it')"><span class="flag">&#127470;&#127481;</span>IT<span class="code">Italiano</span></button>
+                        <button class="locale-btn" onclick="testLocale('ru')"><span class="flag">&#127479;&#127482;</span>RU<span class="code">Russian</span></button>
+                        <button class="locale-btn" onclick="testLocale('th')"><span class="flag">&#127481;&#127469;</span>TH<span class="code">Thai</span></button>
+                        <button class="locale-btn" onclick="testLocale('hi')"><span class="flag">&#127470;&#127475;</span>HI<span class="code">Hindi</span></button>
+                        <button class="locale-btn" onclick="testLocale('tr')"><span class="flag">&#127481;&#127479;</span>TR<span class="code">Turkce</span></button>
+                        <button class="locale-btn" onclick="testLocale('nl')"><span class="flag">&#127475;&#127473;</span>NL<span class="code">Dutch</span></button>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <h3>Test Locale</h3>
-        <div class="btn-group">
-            <button onclick="testLocale('en')">English</button>
-            <button onclick="testLocale('vi')">Tieng Viet</button>
-            <button onclick="testLocale('zh')">Chinese</button>
-            <button onclick="testLocale('ja')">Japanese</button>
-            <button onclick="testLocale('ko')">Korean</button>
-            <button onclick="testLocale('fr')">Francais</button>
-            <button onclick="testLocale('de')">Deutsch</button>
-            <button onclick="testLocale('es')">Espanol</button>
-            <button onclick="testLocale('ar')">Arabic (RTL)</button>
-            <button onclick="testLocale('pt')">Portugues</button>
-            <button onclick="testLocale('it')">Italiano</button>
-            <button onclick="testLocale('ru')">Russian</button>
-            <button onclick="testLocale('th')">Thai</button>
-            <button onclick="testLocale('hi')">Hindi</button>
-            <button onclick="testLocale('tr')">Turkce</button>
-            <button onclick="testLocale('nl')">Nederlands</button>
+        <!-- ═══ Content ═══ -->
+        <div class="content">
+            <!-- Embedded FM -->
+            <div class="embed-container" id="embedded">
+                <div class="embed-placeholder" id="embedPlaceholder">
+                    <div class="embed-placeholder-icon">&#128193;</div>
+                    <div class="embed-placeholder-text">Click "Open Browser" to embed FluxFiles here</div>
+                </div>
+            </div>
+
+            <!-- Event log -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Event Log</span>
+                    <span class="log-count" id="logCount">0</span>
+                </div>
+                <div class="card-body" style="padding:0;">
+                    <div class="log-container">
+                        <div class="log-header">
+                            <span class="log-header-title">Console Output</span>
+                            <div class="log-actions">
+                                <button class="log-btn" onclick="toggleAutoScroll()" id="autoScrollBtn">Auto-scroll: ON</button>
+                                <button class="log-btn" onclick="clearLog()">Clear</button>
+                            </div>
+                        </div>
+                        <div class="log-body" id="log">
+                            <div class="log-empty" id="logEmpty">No events yet. Open the file manager to see events.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-
-    <div class="section">
-        <h3>Commands</h3>
-        <div class="btn-group">
-            <button onclick="FluxFiles.navigate('/')">Navigate to /</button>
-            <button onclick="FluxFiles.navigate('/test-folder')">Navigate to /test-folder</button>
-            <button onclick="FluxFiles.setDisk('local')">Disk: Local</button>
-            <button onclick="FluxFiles.setDisk('s3')">Disk: S3</button>
-            <button onclick="FluxFiles.refresh()">Refresh</button>
-            <button onclick="FluxFiles.search('photo')">Search "photo"</button>
-            <button onclick="FluxFiles.search('')">Clear Search</button>
-            <button onclick="FluxFiles.aiTag()">AI Tag</button>
-            <button class="danger" onclick="FluxFiles.close()">Close</button>
-        </div>
-    </div>
-
-    <div id="embedded"></div>
-
-    <div class="section">
-        <h3>Event Log</h3>
-        <button onclick="document.getElementById('log').textContent=''" style="margin-bottom:8px;">Clear Log</button>
-        <pre id="log"></pre>
     </div>
 
     <script src="/fluxfiles.js"></script>
     <script>
-        var log = document.getElementById('log');
+        // ═══ State ═══
+        var logEl = document.getElementById('log');
+        var logCountEl = document.getElementById('logCount');
+        var logEmptyEl = document.getElementById('logEmpty');
+        var statusDot = document.getElementById('statusDot');
+        var statusText = document.getElementById('statusText');
+        var logEntryCount = 0;
+        var autoScroll = true;
+        var isConnected = false;
 
+        // ═══ Theme ═══
+        function applyTheme(dark) {
+            document.body.classList.toggle('dark', dark);
+            document.getElementById('themeIcon').innerHTML = dark ? '&#9788;' : '&#9789;';
+            localStorage.setItem('fftest_theme', dark ? 'dark' : 'light');
+        }
+        function toggleTheme() {
+            applyTheme(!document.body.classList.contains('dark'));
+        }
+        (function() {
+            var t = localStorage.getItem('fftest_theme');
+            var dark = t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            applyTheme(dark);
+        })();
+
+        // ═══ Helpers ═══
         function getToken() {
-            return document.getElementById('tokenInput').value.trim();
+            var el = document.getElementById('tokenInput');
+            return el ? el.value.trim() : '';
         }
 
+        function setStatus(connected, text) {
+            isConnected = connected;
+            statusDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
+            statusText.textContent = text || (connected ? 'Connected' : 'Not connected');
+        }
+
+        // ═══ Logging ═══
         function addLog(type, msg) {
-            var cls = {
-                'FM_READY': 'log-ready',
-                'FM_SELECT': 'log-select',
-                'FM_EVENT': 'log-event',
-                'FM_CLOSE': 'log-close'
-            }[type] || '';
-            var time = new Date().toLocaleTimeString();
-            log.innerHTML = '<span class="log-time">' + time + '</span> <span class="' + cls + '">[' + type + ']</span> ' + msg + '\n' + log.innerHTML;
+            if (logEmptyEl) { logEmptyEl.remove(); logEmptyEl = null; }
+            logEntryCount++;
+            logCountEl.textContent = logEntryCount;
+
+            var tagClass = {
+                'FM_READY': 'log-tag-ready',
+                'FM_SELECT': 'log-tag-select',
+                'FM_EVENT': 'log-tag-event',
+                'FM_CLOSE': 'log-tag-close',
+                'INFO': 'log-tag-info',
+                'ERROR': 'log-tag-error'
+            }[type] || 'log-tag-info';
+
+            var time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            var entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = '<span class="log-time">' + time + '</span>'
+                + '<span class="log-tag ' + tagClass + '">' + type + '</span>'
+                + '<span class="log-msg">' + escapeHtml(msg) + '</span>';
+
+            logEl.insertBefore(entry, logEl.firstChild);
         }
 
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function clearLog() {
+            logEl.innerHTML = '<div class="log-empty">Log cleared.</div>';
+            logEntryCount = 0;
+            logCountEl.textContent = '0';
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            document.getElementById('autoScrollBtn').textContent = 'Auto-scroll: ' + (autoScroll ? 'ON' : 'OFF');
+        }
+
+        // ═══ Tab switching ═══
+        function switchTab(name) {
+            var tabs = ['nav', 'disk', 'search', 'actions'];
+            tabs.forEach(function(t) {
+                var panel = document.getElementById('tab-' + t);
+                if (panel) panel.style.display = (t === name) ? 'block' : 'none';
+            });
+            var btns = document.querySelectorAll('#cmdTabs .tab');
+            btns.forEach(function(b, i) { b.classList.toggle('active', tabs[i] === name); });
+        }
+
+        // ═══ SDK Events ═══
         FluxFiles.on('FM_READY', function(p) {
+            setStatus(true, 'Connected — ready');
             addLog('FM_READY', JSON.stringify(p));
         });
+
         FluxFiles.on('FM_SELECT', function(f) {
-            var s = Array.isArray(f) ? f.map(function(x) { return (x.basename || x.name) + ' — ' + (x.url || x.path || x.key); }).join('; ') : ((f.basename || f.name) + ' — ' + (f.url || f.path || f.key));
+            var s = Array.isArray(f)
+                ? f.map(function(x) { return (x.basename || x.name) + ' (' + (x.url || x.path || x.key) + ')'; }).join('; ')
+                : ((f.basename || f.name) + ' (' + (f.url || f.path || f.key) + ')');
             addLog('FM_SELECT', s);
         });
+
         FluxFiles.on('FM_EVENT', function(e) {
-            addLog('FM_EVENT', e.action + ' — ' + JSON.stringify(e));
-        });
-        FluxFiles.on('FM_CLOSE', function() {
-            addLog('FM_CLOSE', 'File manager closed');
-            document.getElementById('embedded').style.display = 'none';
+            addLog('FM_EVENT', e.action + ': ' + JSON.stringify(e));
         });
 
+        FluxFiles.on('FM_CLOSE', function() {
+            setStatus(false, 'Disconnected');
+            addLog('FM_CLOSE', 'File manager closed');
+            var el = document.getElementById('embedded');
+            if (el) {
+                el.classList.remove('active');
+                // Re-add placeholder
+                var ph = document.createElement('div');
+                ph.className = 'embed-placeholder';
+                ph.id = 'embedPlaceholder';
+                ph.innerHTML = '<div class="embed-placeholder-icon">&#128193;</div><div class="embed-placeholder-text">Click "Open Browser" to embed FluxFiles here</div>';
+                // Only add if no placeholder exists
+                if (!el.querySelector('.embed-placeholder')) {
+                    el.appendChild(ph);
+                }
+            }
+        });
+
+        // ═══ Open Modes ═══
         function openPicker() {
-            if (!getToken()) { alert('Nhap token truoc!'); return; }
+            if (!getToken()) { addLog('ERROR', 'Token required! Generate with: php tests/generate-token.php'); return; }
+            setStatus(false, 'Connecting...');
             FluxFiles.open({
                 endpoint: location.origin,
                 token: getToken(),
@@ -139,13 +687,15 @@
                 mode: 'picker',
                 onSelect: function(file) {
                     var s = Array.isArray(file) ? file.map(function(x) { return x.basename || x.name; }).join(', ') : (file.basename || file.name);
-                    addLog('FM_SELECT', '[onSelect callback] ' + s);
+                    addLog('FM_SELECT', '[onSelect] ' + s);
                 }
             });
+            addLog('INFO', 'Opened picker (single select)');
         }
 
         function openPickerMultiple() {
-            if (!getToken()) { alert('Nhap token truoc!'); return; }
+            if (!getToken()) { addLog('ERROR', 'Token required!'); return; }
+            setStatus(false, 'Connecting...');
             FluxFiles.open({
                 endpoint: location.origin,
                 token: getToken(),
@@ -157,11 +707,19 @@
                     addLog('FM_SELECT', '[onSelect multiple] ' + s);
                 }
             });
+            addLog('INFO', 'Opened picker (multiple select)');
         }
 
         function openBrowser() {
-            if (!getToken()) { alert('Nhap token truoc!'); return; }
-            document.getElementById('embedded').style.display = 'block';
+            if (!getToken()) { addLog('ERROR', 'Token required!'); return; }
+            var el = document.getElementById('embedded');
+            if (el) {
+                el.classList.add('active');
+                // Remove placeholder
+                var ph = el.querySelector('.embed-placeholder');
+                if (ph) ph.remove();
+            }
+            setStatus(false, 'Connecting...');
             FluxFiles.open({
                 endpoint: location.origin,
                 token: getToken(),
@@ -169,19 +727,66 @@
                 mode: 'browser',
                 container: '#embedded'
             });
+            addLog('INFO', 'Opened browser (embedded)');
         }
 
-        function testLocale(locale) {
-            if (!getToken()) { alert('Nhap token truoc!'); return; }
-            FluxFiles.open({
-                endpoint: location.origin,
-                token: getToken(),
-                disk: 'local',
-                mode: 'browser',
-                locale: locale
-            });
-            addLog('INFO', 'Opened with locale: ' + locale);
+        // ═══ Navigation ═══
+        function navigateToPath() {
+            var path = document.getElementById('navPathInput').value.trim();
+            if (!path) return;
+            FluxFiles.navigate(path);
+            addLog('INFO', 'Navigate to: ' + path);
         }
+        document.getElementById('navPathInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') navigateToPath();
+        });
+
+        // ═══ Search ═══
+        function doSearch() {
+            var q = document.getElementById('searchInput').value.trim();
+            FluxFiles.search(q);
+            addLog('INFO', 'Search: "' + q + '"');
+        }
+        document.getElementById('searchInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') doSearch();
+        });
+
+        // ═══ Locale ═══
+        function testLocale(locale) {
+            if (!getToken()) { addLog('ERROR', 'Token required!'); return; }
+            if (isConnected) {
+                // Switch locale on already-open FM instance
+                FluxFiles.setLocale(locale);
+                addLog('INFO', 'Switched locale to: ' + locale);
+            } else {
+                // Open new embedded browser with locale
+                var el = document.getElementById('embedded');
+                if (el) {
+                    el.classList.add('active');
+                    var ph = el.querySelector('.embed-placeholder');
+                    if (ph) ph.remove();
+                }
+                setStatus(false, 'Connecting...');
+                FluxFiles.open({
+                    endpoint: location.origin,
+                    token: getToken(),
+                    disk: 'local',
+                    mode: 'browser',
+                    locale: locale,
+                    container: '#embedded'
+                });
+                addLog('INFO', 'Opened browser with locale: ' + locale);
+            }
+        }
+
+        // ═══ Token persistence ═══
+        (function() {
+            var saved = localStorage.getItem('fftest_token');
+            if (saved) document.getElementById('tokenInput').value = saved;
+            document.getElementById('tokenInput').addEventListener('input', function() {
+                localStorage.setItem('fftest_token', this.value);
+            });
+        })();
     </script>
 </body>
 </html>

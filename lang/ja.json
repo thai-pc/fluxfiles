@@ -39,8 +39,9 @@
         "copy_url": "URLをコピー",
         "grid_view": "グリッド表示",
         "list_view": "リスト表示",
-        "search_hint": "ファイルを検索...",
-        "theme_toggle": "ライト\/ダーク切り替え"
+        "search_hint": "ファイルとフォルダを検索...",
+        "theme_toggle": "ライト\/ダーク切り替え",
+        "language": "言語"
     },
     "sidebar": {
         "all_files": "すべてのファイル",
@@ -122,6 +123,7 @@
         "confirm_purge": "「{name}」を完全に削除しますか？この操作は取り消せません。",
         "deleted": "ゴミ箱に移動しました",
         "purged": "完全に削除しました",
+        "purge_partial": "{count} 件の削除に失敗しました",
         "confirm_folder": "フォルダ「{name}」と中のファイルをすべて削除しますか？ゴミ箱に移動されます。",
         "confirm_bulk_folders": "{count}件（{folders}フォルダとすべての内容）を削除しますか？ゴミ箱に移動されます。"
     },

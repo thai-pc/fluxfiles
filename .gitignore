@@ -5,9 +5,9 @@ node_modules/
 # Environment
 .env
 
-# Database & uploads
-storage/fluxfiles.db
+# Storage
 storage/uploads/
+storage/rate_limit.json
 
 # Build output
 adapters/react/dist/

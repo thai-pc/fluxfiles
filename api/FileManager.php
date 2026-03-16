@@ -16,7 +16,7 @@ class FileManager
     /** @var Claims */
     private $claims;
 
-    /** @var MetadataRepository */
+    /** @var MetadataRepositoryInterface */
     private $meta;
 
     /** @var ImageOptimizer */
@@ -31,7 +31,7 @@ class FileManager
     public function __construct(
         DiskManager $disks,
         Claims $claims,
-        MetadataRepository $meta
+        MetadataRepositoryInterface $meta
     ) {
         $this->disks = $disks;
         $this->claims = $claims;

@@ -39,8 +39,9 @@
         "copy_url": "Copy URL",
         "grid_view": "Grid view",
         "list_view": "List view",
-        "search_hint": "Search files...",
-        "theme_toggle": "Toggle light\/dark"
+        "search_hint": "Search files and folders...",
+        "theme_toggle": "Toggle light\/dark",
+        "language": "Language"
     },
     "sidebar": {
         "all_files": "All files",

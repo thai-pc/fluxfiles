@@ -62,6 +62,59 @@ class FluxFilesManager
     }
 
     /**
+     * Generate a BYOB (Bring Your Own Bucket) token.
+     *
+     * @param string|int|Authenticatable $user
+     * @param array $byobDisks Map of disk name => S3 config array
+     * @param array $overrides Optional overrides (perms, prefix, ttl, etc.)
+     */
+    public function tokenWithByob(
+        $user,
+        array $byobDisks,
+        array $overrides = []
+    ): string {
+        $secret = config('fluxfiles.secret');
+
+        if (empty($secret)) {
+            throw new \RuntimeException('FLUXFILES_SECRET is not configured.');
+        }
+
+        $userId = $user instanceof Authenticatable
+            ? (string) $user->getAuthIdentifier()
+            : (string) $user;
+
+        $defaults = config('fluxfiles.defaults');
+        $now = time();
+
+        // Encrypt BYOB disk configs
+        $encryptedDisks = [];
+        foreach ($byobDisks as $name => $config) {
+            \FluxFiles\CredentialEncryptor::validate($name, $config);
+            $encryptedDisks[$name] = \FluxFiles\CredentialEncryptor::encrypt($config, $secret);
+        }
+
+        // Merge server disks + BYOB disk names
+        $serverDisks = $overrides['disks'] ?? $defaults['disks'];
+        $allDisks = array_merge($serverDisks, array_keys($byobDisks));
+
+        $payload = [
+            'sub'         => $userId,
+            'iat'         => $now,
+            'exp'         => $now + ($overrides['ttl'] ?? 1800), // shorter TTL for BYOB
+            'jti'         => bin2hex(random_bytes(12)),
+            'perms'       => $overrides['perms'] ?? $defaults['perms'],
+            'disks'       => $allDisks,
+            'prefix'      => $overrides['prefix'] ?? $defaults['prefix'],
+            'max_upload'  => $overrides['max_upload'] ?? $defaults['max_upload'],
+            'allowed_ext' => $overrides['allowed_ext'] ?? $defaults['allowed_ext'],
+            'max_storage' => $overrides['max_storage'] ?? $defaults['max_storage'],
+            'byob_disks'  => $encryptedDisks,
+        ];
+
+        return JWT::encode($payload, $secret, 'HS256');
+    }
+
+    /**
      * Get the FluxFiles endpoint URL.
      */
     public function endpoint(): string

@@ -39,8 +39,9 @@
         "copy_url": "Copier l'URL",
         "grid_view": "Vue en grille",
         "list_view": "Vue en liste",
-        "search_hint": "Rechercher des fichiers...",
-        "theme_toggle": "Basculer clair\/sombre"
+        "search_hint": "Rechercher fichiers et dossiers...",
+        "theme_toggle": "Basculer clair\/sombre",
+        "language": "Langue"
     },
     "sidebar": {
         "all_files": "Tous les fichiers",
@@ -122,6 +123,7 @@
         "confirm_purge": "Supprimer définitivement « {name} » ? Cette action est irréversible.",
         "deleted": "Déplacé dans la corbeille",
         "purged": "Supprimé définitivement",
+        "purge_partial": "{count} élément(s) n'ont pas pu être supprimés définitivement",
         "confirm_folder": "Supprimer le dossier \"{name}\" et tous les fichiers ? Tout sera déplacé dans la Corbeille.",
         "confirm_bulk_folders": "Supprimer {count} éléments ({folders} dossier(s) avec tout leur contenu) ? Tout sera déplacé dans la Corbeille."
     },

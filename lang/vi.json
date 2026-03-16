@@ -39,8 +39,9 @@
         "copy_url": "Sao chép URL",
         "grid_view": "Dạng lưới",
         "list_view": "Dạng danh sách",
-        "search_hint": "Tìm kiếm file...",
-        "theme_toggle": "Chuyển sáng\/tối"
+        "search_hint": "Tìm kiếm file và thư mục...",
+        "theme_toggle": "Chuyển sáng\/tối",
+        "language": "Ngôn ngữ"
     },
     "sidebar": {
         "all_files": "Tất cả file",

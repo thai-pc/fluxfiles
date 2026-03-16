@@ -27,6 +27,9 @@ class Claims
     /** @var int */
     public $maxStorageMb;
 
+    /** @var array<string, array> BYOB disk configs (decrypted) — diskName => config */
+    public $byobDisks = [];
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -34,7 +37,8 @@ class Claims
         string $pathPrefix,
         int $maxUploadMb,
         ?array $allowedExt,
-        int $maxStorageMb
+        int $maxStorageMb,
+        array $byobDisks = []
     ) {
         $this->userId = $userId;
         $this->permissions = $permissions;
@@ -43,10 +47,25 @@ class Claims
         $this->maxUploadMb = $maxUploadMb;
         $this->allowedExt = $allowedExt;
         $this->maxStorageMb = $maxStorageMb;
+        $this->byobDisks = $byobDisks;
     }
 
-    public static function fromJwtPayload(object $payload): self
+    /**
+     * @param object $payload JWT payload
+     * @param string $secret  FLUXFILES_SECRET (needed to decrypt BYOB credentials)
+     */
+    public static function fromJwtPayload(object $payload, string $secret = ''): self
     {
+        // Decrypt BYOB disk credentials if present
+        $byobDisks = [];
+        if (isset($payload->byob_disks) && is_object($payload->byob_disks) && $secret !== '') {
+            foreach ($payload->byob_disks as $diskName => $encryptedBlob) {
+                $config = CredentialEncryptor::decrypt((string) $encryptedBlob, $secret);
+                CredentialEncryptor::validate((string) $diskName, $config);
+                $byobDisks[(string) $diskName] = $config;
+            }
+        }
+
         return new self(
             (string) ($payload->sub ?? '0'),
             (array) ($payload->perms ?? ['read']),
@@ -54,8 +73,25 @@ class Claims
             (string) ($payload->prefix ?? ''),
             (int) ($payload->max_upload ?? 10),
             isset($payload->allowed_ext) ? (array) $payload->allowed_ext : null,
-            (int) ($payload->max_storage ?? 0)
+            (int) ($payload->max_storage ?? 0),
+            $byobDisks
         );
+    }
+
+    /**
+     * Check if a disk is a BYOB (user-provided) disk.
+     */
+    public function isByobDisk(string $disk): bool
+    {
+        return isset($this->byobDisks[$disk]);
+    }
+
+    /**
+     * Get the decrypted config for a BYOB disk.
+     */
+    public function getByobConfig(string $disk): ?array
+    {
+        return $this->byobDisks[$disk] ?? null;
     }
 
     public function hasPerm(string $perm): bool

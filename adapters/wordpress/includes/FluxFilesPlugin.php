@@ -182,6 +182,59 @@ class FluxFilesPlugin
     }
 
     /**
+     * Generate a BYOB (Bring Your Own Bucket) JWT token.
+     *
+     * @param int   $userId    WordPress user ID
+     * @param array $byobDisks Map of disk name => S3 config array
+     * @param array $overrides Optional overrides
+     */
+    public static function generateByobToken(
+        int $userId,
+        array $byobDisks,
+        array $overrides = []
+    ): string {
+        $secret = get_option('fluxfiles_secret', '');
+
+        if (empty($secret)) {
+            throw new \RuntimeException('FluxFiles secret is not configured.');
+        }
+
+        $defaultPerms = get_option('fluxfiles_default_perms', ['read', 'write', 'delete']);
+        $defaultDisks = get_option('fluxfiles_disks', ['local']);
+        $maxUpload    = (int) get_option('fluxfiles_max_upload', 10);
+        $maxStorage   = (int) get_option('fluxfiles_max_storage', 0);
+        $ttl          = (int) get_option('fluxfiles_ttl', 3600);
+
+        $now = time();
+
+        // Encrypt BYOB disk configs
+        $encryptedDisks = [];
+        foreach ($byobDisks as $name => $config) {
+            \FluxFiles\CredentialEncryptor::validate($name, $config);
+            $encryptedDisks[$name] = \FluxFiles\CredentialEncryptor::encrypt($config, $secret);
+        }
+
+        $serverDisks = $overrides['disks'] ?? $defaultDisks;
+        $allDisks = array_merge($serverDisks, array_keys($byobDisks));
+
+        $payload = [
+            'sub'         => (string) $userId,
+            'iat'         => $now,
+            'exp'         => $now + min($overrides['ttl'] ?? $ttl, 1800), // cap at 1800s for BYOB
+            'jti'         => bin2hex(random_bytes(12)),
+            'perms'       => $overrides['perms'] ?? $defaultPerms,
+            'disks'       => $allDisks,
+            'prefix'      => $overrides['prefix'] ?? '',
+            'max_upload'  => $overrides['max_upload'] ?? $maxUpload,
+            'allowed_ext' => $overrides['allowed_ext'] ?? null,
+            'max_storage' => $overrides['max_storage'] ?? $maxStorage,
+            'byob_disks'  => $encryptedDisks,
+        ];
+
+        return \Firebase\JWT\JWT::encode($payload, $secret, 'HS256');
+    }
+
+    /**
      * Generate a token for the current logged-in user.
      */
     public static function tokenForCurrentUser(array $overrides = []): string

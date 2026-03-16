@@ -32,6 +32,7 @@
                 ready = true;
                 postToIframe('FM_CONFIG', {
                     disk: config.disk || 'local',
+                    disks: config.disks || ['local'],
                     token: config.token || '',
                     path: config.path || '',
                     mode: config.mode || 'picker',
@@ -156,6 +157,7 @@
         crossCopy: function(dstDisk, dstPath) { this.command('crossCopy', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
         crossMove: function(dstDisk, dstPath) { this.command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
         aiTag: function() { this.command('aiTag'); },
+        setLocale: function(locale) { this.command('setLocale', { locale: locale }); },
 
         on: function(type, cb) {
             if (!listeners[type]) listeners[type] = [];
