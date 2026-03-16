@@ -99,6 +99,11 @@
 
         <!-- Disk pills + controls (hidden on mobile, in sidebar) — Theme & Language above disk pills -->
         <div class="ff-disk-pills ff-disk-pills-desktop">
+            <!-- Search -->
+            <div class="ff-search-box">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                <input :placeholder="t('toolbar.search_hint')" x-model="searchQuery">
+            </div>
             <!-- Row 1: Theme + Language (above disk pills) -->
             <div class="ff-pills-actions">
                 <div class="ff-locale-select" x-data="{ open: false }" @click.away="open = false">
@@ -260,12 +265,6 @@
             </button>
 
             <div style="margin-inline-start:auto;display:flex;align-items:center;gap:6px;">
-                <!-- Search -->
-                <div class="ff-search-box">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
-                    <input :placeholder="t('toolbar.search_hint')" x-model="searchQuery">
-                </div>
-
                 <!-- View toggle -->
                 <div class="view-toggle">
                     <button :class="{ active: view === 'grid' }" @click="view = 'grid'" :title="t('toolbar.grid_view')">
