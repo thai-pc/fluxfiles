@@ -707,7 +707,7 @@
             <p x-text="confirmMessage"></p>
             <div class="ff-confirm-actions">
                 <button class="ff-btn" @click="showConfirm = false" x-text="t('common.cancel')"></button>
-                <button class="ff-btn ff-btn-danger" @click="confirmAction && confirmAction()" x-text="t('common.delete')"></button>
+                <button class="ff-btn ff-btn-danger" @click="showConfirm = false; confirmAction && confirmAction()" x-text="t('common.delete')"></button>
             </div>
         </div>
     </div>
