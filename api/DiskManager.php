@@ -96,6 +96,11 @@ class DiskManager
             $this->s3Clients[$name] = $client;
 
             $adapter = new AwsS3V3Adapter($client, $cfg['bucket'] ?? '');
+
+            // R2/MinIO don't support ACLs — disable retain_visibility to avoid GetObjectAcl calls
+            if (!empty($cfg['endpoint'])) {
+                return new Filesystem($adapter, ['retain_visibility' => false]);
+            }
         } else {
             throw new ApiException("Unknown disk driver: {$driver}", 400);
         }

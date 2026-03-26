@@ -8,7 +8,7 @@
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
 
-A standalone, embeddable file manager built with PHP 7.4+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
+Standalone, embeddable file manager built with PHP 7.4+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
 
 Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, and **Vue / Nuxt**.
 
@@ -16,31 +16,23 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 ## Features
 
-- **Multi-storage** — Local disk, AWS S3, Cloudflare R2 via Flysystem v3
-- **JWT authentication** — HS256 tokens with granular claims (permissions, disk access, path scoping, upload limits, file type whitelist, storage quota)
-- **File operations** — Upload, download, move, copy, rename, delete, create folders
-- **Cross-disk operations** — Copy/move files between different storage backends
-- **Image optimization** — Auto-generates WebP variants (thumb 150px, medium 768px, large 1920px) on upload
-- **Image crop** — Inline crop tool with aspect ratio presets
-- **AI auto-tag** — Claude or OpenAI vision API integration for automatic image tagging, alt text, and captions
-- **Chunk upload** — S3 multipart upload for large files (>10 MB)
-- **Trash / soft delete** — Recoverable deletes with configurable auto-purge
-- **Full-text search** — SQLite FTS5 across file names, titles, alt text, captions, and tags
-- **SEO metadata** — Title, alt text, caption per file (synced to S3 object tags)
-- **Duplicate detection** — MD5 hash check on upload
-- **Rate limiting** — Token bucket per user (60 reads, 10 writes per minute)
-- **Audit log** — All write actions logged with user, IP, and user agent
-- **Storage quota** — Per-user storage limits enforced server-side
-- **Dark mode** — Automatic theme detection with manual toggle
-- **i18n** — 16 languages (EN, VI, ZH, JA, KO, FR, DE, ES, AR, PT, IT, RU, TH, HI, TR, NL) with RTL support
-- **Bulk operations** — Multi-select with bulk move, copy, delete, download
+| Category | Details |
+|----------|---------|
+| **Storage** | Local disk, AWS S3, Cloudflare R2 via Flysystem v3. Cross-disk copy/move. |
+| **Auth** | JWT HS256 with granular claims — permissions, disk access, path scoping, upload limits, file type whitelist, storage quota. BYOB (Bring Your Own Bucket) support. |
+| **File ops** | Upload, download (presigned URL), move, copy, rename, delete, create folders. Chunk upload (S3 multipart) for large files. |
+| **Images** | Auto WebP variants on upload (thumb 150px / medium 768px / large 1920px). Inline crop tool with aspect ratio presets. |
+| **AI** | Claude or OpenAI vision API — auto-tag, alt text, captions on upload or manual trigger. |
+| **Metadata** | Title, alt text, caption, tags per file. Stored as S3 object metadata (cloud) or sidecar JSON (local). Full-text search via FTS5. |
+| **Safety** | Soft delete (trash) with restore. Duplicate detection (MD5). Rate limiting per user. Audit log. Per-user storage quota. |
+| **UI** | Dark mode (auto/manual). 16 languages with RTL support. Bulk operations (multi-select, shift-select). |
 
 ---
 
 ## Requirements
 
 - PHP >= 7.4
-- Extensions: `gd` (for image processing), `curl` (for AI tagging)
+- Extensions: `gd` (image processing), `curl` (AI tagging)
 - Composer
 
 ---
@@ -50,7 +42,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 ### 1. Install
 
 ```bash
-git clone https://github.com/thai-pc/fluxfiles.git fluxfiles
+git clone https://github.com/thai-pc/fluxfiles.git
 cd fluxfiles
 composer install
 ```
@@ -64,40 +56,48 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-# REQUIRED — generate a random 32+ character string
-FLUXFILES_SECRET=your-random-secret-key-here
-
-# Allowed origins for CORS (comma-separated)
+# Required
+FLUXFILES_SECRET=your-random-secret-key-min-32-chars
 FLUXFILES_ALLOWED_ORIGINS=http://localhost:3000,https://yourapp.com
+
+# AWS S3 (optional)
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=ap-southeast-1
+AWS_BUCKET=
+
+# Cloudflare R2 (optional)
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_ACCOUNT_ID=
+R2_BUCKET=
+
+# AI auto-tag (optional — 'claude' or 'openai')
+FLUXFILES_AI_PROVIDER=
+FLUXFILES_AI_API_KEY=
 ```
 
 ### 3. Run
 
 ```bash
-# Development server
-php -S localhost:8080 -t .
-
-# The file manager UI is at:
-# http://localhost:8080/public/index.html
-
-# The API endpoint is:
-# http://localhost:8080/api/
+php -S localhost:8080 router.php
 ```
 
-For production, point your web server (Nginx/Apache) to the project root.
+- UI: `http://localhost:8080/public/index.html`
+- API: `http://localhost:8080/api/fm/`
 
-### 4. Generate a token
+For production, point your web server (Nginx/Apache) to the project root with URL rewriting equivalent to `router.php`.
 
-In your host application, generate a JWT token to authenticate users:
+### 4. Generate a Token
 
 ```php
 require_once 'path/to/fluxfiles/embed.php';
 
 $token = fluxfiles_token(
-    userId:     'user-123',
-    perms:      ['read', 'write', 'delete'],
-    disks:      ['local', 's3'],
-    prefix:     'user-123/',    // scope to user directory
+    userId:      'user-123',
+    perms:       ['read', 'write', 'delete'],
+    disks:       ['local', 's3', 'r2'],
+    prefix:      'user-123/',   // scope to user directory
     maxUploadMb: 10,
     allowedExt:  null,          // null = allow all
     ttl:         3600           // 1 hour
@@ -110,8 +110,6 @@ $token = fluxfiles_token(
 
 ### JavaScript SDK
 
-Include `fluxfiles.js` in your page:
-
 ```html
 <script src="https://your-fluxfiles-host/fluxfiles.js"></script>
 
@@ -120,24 +118,24 @@ FluxFiles.open({
     endpoint: 'https://your-fluxfiles-host',
     token: 'eyJhbGci...',
     disk: 'local',
-    mode: 'picker',         // 'picker' (select file) or 'browser' (free browse)
-    multiple: false,        // when true, onSelect receives array of files
-    locale: 'en',           // optional — auto-detects if omitted
-    theme: 'auto',          // optional — 'light', 'dark', or 'auto' (system)
-    allowedTypes: ['image/*', '.pdf'],  // optional file type filter
-    maxSize: 10485760,      // optional max size in bytes
-    container: '#my-div',   // optional — omit for modal overlay
-    onSelect: function(file) {
+    mode: 'picker',         // 'picker' or 'browser'
+    multiple: false,
+    locale: 'en',           // auto-detects if omitted
+    theme: 'auto',          // 'light', 'dark', or 'auto'
+    allowedTypes: ['image/*', '.pdf'],
+    maxSize: 10485760,      // bytes
+    container: '#my-div',   // omit for modal overlay
+    onSelect(file) {
         console.log('Selected:', file.url, file.path);
     },
-    onClose: function() {
+    onClose() {
         console.log('Closed');
     }
 });
 </script>
 ```
 
-### SDK Commands
+### Commands
 
 ```js
 FluxFiles.navigate('/photos/2024');
@@ -150,16 +148,16 @@ FluxFiles.aiTag();
 FluxFiles.close();
 ```
 
-### SDK Events
+### Events
 
 ```js
-FluxFiles.on('FM_READY', function(payload) { /* iframe loaded */ });
-FluxFiles.on('FM_SELECT', function(file) { /* file or array when multiple:true */ });
-FluxFiles.on('FM_EVENT', function(event) {
-    // event.action: 'upload', 'delete', 'move', 'copy', 'mkdir',
-    //               'restore', 'purge', 'trash', 'crop', 'ai_tag'
+FluxFiles.on('FM_READY',  (payload) => { /* iframe loaded */ });
+FluxFiles.on('FM_SELECT', (file)    => { /* file or array */ });
+FluxFiles.on('FM_CLOSE',  ()        => { /* closed */ });
+FluxFiles.on('FM_EVENT',  (event)   => {
+    // event.action: upload, delete, move, copy, mkdir,
+    //               restore, purge, trash, crop, ai_tag
 });
-FluxFiles.on('FM_CLOSE', function() { /* closed */ });
 ```
 
 ### PHP Embed Helper
@@ -179,65 +177,63 @@ echo fluxfiles_embed(
 
 ---
 
-## Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `FLUXFILES_SECRET` | Yes | — | JWT signing secret (32+ chars) |
-| `FLUXFILES_ALLOWED_ORIGINS` | Yes | — | Comma-separated CORS origins |
-| `FLUXFILES_LOCALE` | No | auto-detect | UI language (`en`, `vi`, `zh`, `ja`, `ko`, `fr`, `de`, `es`, `ar`, `pt`, `it`, `ru`, `th`, `hi`, `tr`, `nl`) |
-| `AWS_ACCESS_KEY_ID` | No | — | AWS S3 access key |
-| `AWS_SECRET_ACCESS_KEY` | No | — | AWS S3 secret key |
-| `AWS_DEFAULT_REGION` | No | `ap-southeast-1` | AWS region |
-| `AWS_BUCKET` | No | — | S3 bucket name |
-| `R2_ACCESS_KEY_ID` | No | — | Cloudflare R2 access key |
-| `R2_SECRET_ACCESS_KEY` | No | — | Cloudflare R2 secret key |
-| `R2_ACCOUNT_ID` | No | — | Cloudflare account ID |
-| `R2_BUCKET` | No | — | R2 bucket name |
-| `FLUXFILES_AI_PROVIDER` | No | — | `claude` or `openai` (empty = disabled) |
-| `FLUXFILES_AI_API_KEY` | No | — | API key for AI provider |
-| `FLUXFILES_AI_MODEL` | No | auto | Override AI model (e.g. `gpt-4o`, `claude-sonnet-4-20250514`) |
-| `FLUXFILES_AI_AUTO_TAG` | No | `false` | Auto-tag images on upload |
-
----
-
 ## Storage Disks
 
-Configured in `config/disks.php`. Three drivers are provided out of the box:
+Configured in `config/disks.php`:
 
 ```php
 // Local filesystem
 'local' => [
     'driver' => 'local',
     'root'   => __DIR__ . '/../storage/uploads',
-    'url'    => '/storage/uploads',
 ],
 
 // AWS S3
 's3' => [
     'driver' => 's3',
-    'region' => env('AWS_DEFAULT_REGION'),
-    'bucket' => env('AWS_BUCKET'),
-    'key'    => env('AWS_ACCESS_KEY_ID'),
-    'secret' => env('AWS_SECRET_ACCESS_KEY'),
+    'region' => $_ENV['AWS_DEFAULT_REGION'],
+    'bucket' => $_ENV['AWS_BUCKET'],
+    'key'    => $_ENV['AWS_ACCESS_KEY_ID'],
+    'secret' => $_ENV['AWS_SECRET_ACCESS_KEY'],
 ],
 
 // Cloudflare R2
 'r2' => [
     'driver'   => 's3',
-    'endpoint' => 'https://' . env('R2_ACCOUNT_ID') . '.r2.cloudflarestorage.com',
+    'endpoint' => 'https://' . $_ENV['R2_ACCOUNT_ID'] . '.r2.cloudflarestorage.com',
     'region'   => 'auto',
-    'bucket'   => env('R2_BUCKET'),
-    'key'      => env('R2_ACCESS_KEY_ID'),
-    'secret'   => env('R2_SECRET_ACCESS_KEY'),
+    'bucket'   => $_ENV['R2_BUCKET'],
+    'key'      => $_ENV['R2_ACCESS_KEY_ID'],
+    'secret'   => $_ENV['R2_SECRET_ACCESS_KEY'],
 ],
+```
+
+> R2 uses the S3-compatible API. ACL operations are not supported — FluxFiles automatically disables `retain_visibility` for endpoint-based disks.
+
+### BYOB (Bring Your Own Bucket)
+
+Users can connect their own S3/R2 buckets. Credentials are AES-256-GCM encrypted inside the JWT:
+
+```php
+$token = fluxfiles_byob_token(
+    userId:    'user-123',
+    byobDisks: [
+        'my-s3' => [
+            'driver' => 's3',
+            'region' => 'us-west-2',
+            'bucket' => 'user-personal-bucket',
+            'key'    => 'AKIAIOSFODNN7EXAMPLE',
+            'secret' => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        ],
+    ],
+    perms: ['read', 'write', 'delete'],
+    ttl:   1800
+);
 ```
 
 ---
 
 ## JWT Token Structure
-
-Tokens are signed with HS256. Claims control what each user can do:
 
 ```json
 {
@@ -246,7 +242,7 @@ Tokens are signed with HS256. Claims control what each user can do:
     "exp":          1710503600,
     "jti":          "a1b2c3d4e5f6",
     "perms":        ["read", "write", "delete"],
-    "disks":        ["local", "s3"],
+    "disks":        ["local", "s3", "r2"],
     "prefix":       "user-123/",
     "max_upload":   10,
     "allowed_ext":  ["jpg", "png", "pdf"],
@@ -257,12 +253,13 @@ Tokens are signed with HS256. Claims control what each user can do:
 | Claim | Type | Description |
 |-------|------|-------------|
 | `sub` | string | User identifier |
-| `perms` | string[] | Permissions: `read`, `write`, `delete` |
+| `perms` | string[] | `read`, `write`, `delete` |
 | `disks` | string[] | Allowed storage disks |
-| `prefix` | string | Path prefix scope (e.g. `user-123/` restricts to that directory) |
-| `max_upload` | int | Maximum upload size in MB |
-| `allowed_ext` | string[]&#124;null | Allowed file extensions (`null` = any) |
+| `prefix` | string | Path scope (e.g. `user-123/`) |
+| `max_upload` | int | Max upload size in MB (default 10) |
+| `allowed_ext` | string[]&#124;null | File extension whitelist (`null` = any) |
 | `max_storage` | int | Storage quota in MB (`0` = unlimited) |
+| `byob_disks` | object | Encrypted BYOB credentials (optional) |
 
 ---
 
@@ -275,15 +272,15 @@ Base path: `/api/fm/`
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/lang` | List available locales |
-| `GET` | `/lang/{code}` | Get translation messages for a locale |
+| `GET` | `/lang/{code}` | Get translation messages |
 
 ### File Operations (JWT required)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/list?disk=&path=` | List directory contents |
-| `POST` | `/upload` | Upload file (multipart form) |
-| `DELETE` | `/delete` | Soft delete (move to trash) |
+| `GET` | `/list?disk=&path=` | List directory |
+| `POST` | `/upload` | Upload file (multipart) |
+| `DELETE` | `/delete` | Soft delete (trash) |
 | `POST` | `/move` | Move file/folder |
 | `POST` | `/copy` | Copy file/folder |
 | `POST` | `/mkdir` | Create directory |
@@ -291,13 +288,13 @@ Base path: `/api/fm/`
 | `POST` | `/cross-move` | Move between disks |
 | `POST` | `/presign` | Generate presigned URL |
 | `POST` | `/crop` | Crop image |
-| `POST` | `/ai-tag` | AI-tag an image |
+| `POST` | `/ai-tag` | AI-tag image |
 
 ### Metadata
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/meta?disk=&path=` | File info (size, mime, modified, variants) |
+| `GET` | `/meta?disk=&path=` | File info (size, mime, variants) |
 | `GET` | `/metadata?disk=&key=` | Get SEO metadata |
 | `PUT` | `/metadata` | Save title, alt_text, caption, tags |
 | `DELETE` | `/metadata` | Delete metadata |
@@ -308,7 +305,8 @@ Base path: `/api/fm/`
 |--------|------|-------------|
 | `GET` | `/trash?disk=` | List trashed files |
 | `POST` | `/restore` | Restore from trash |
-| `DELETE` | `/purge` | Permanently delete |
+| `DELETE` | `/purge` | Permanent delete (single) |
+| `POST` | `/purge-bulk` | Permanent delete (bulk) |
 
 ### Search, Quota, Audit
 
@@ -323,14 +321,11 @@ Base path: `/api/fm/`
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/chunk/init` | Initiate multipart upload |
-| `POST` | `/chunk/presign` | Get presigned URL for a part |
-| `POST` | `/chunk/complete` | Complete multipart upload |
-| `POST` | `/chunk/abort` | Abort multipart upload |
+| `POST` | `/chunk/presign` | Presign URL for a part |
+| `POST` | `/chunk/complete` | Complete upload |
+| `POST` | `/chunk/abort` | Abort upload |
 
-All responses follow the format:
-```json
-{ "data": { ... }, "error": null }
-```
+All responses: `{ "data": { ... }, "error": null }`
 
 ---
 
@@ -339,25 +334,14 @@ All responses follow the format:
 ### Laravel
 
 ```bash
-# In your Laravel project
 composer require fluxfiles/laravel
-
-# Publish config
 php artisan vendor:publish --tag=fluxfiles-config
 ```
 
-**Blade component:**
 ```blade
-<x-fluxfiles
-    disk="local"
-    mode="picker"
-    width="100%"
-    height="600px"
-    @select="handleFileSelect"
-/>
+<x-fluxfiles disk="local" mode="picker" height="600px" @select="handleFileSelect" />
 ```
 
-**Generate token:**
 ```php
 use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
 
@@ -368,20 +352,17 @@ $token = FluxFiles::token(
 );
 ```
 
-Config: `config/fluxfiles.php`
-
 ### WordPress
 
 1. Copy `adapters/wordpress/` to `wp-content/plugins/fluxfiles/`
-2. Activate the plugin in WP Admin
+2. Activate in WP Admin
 3. Configure at **Settings > FluxFiles**
 
-**Shortcode:**
 ```
 [fluxfiles disk="local" mode="browser" height="600px"]
 ```
 
-**Media button:** A "FluxFiles" button is automatically added to the classic editor toolbar.
+A "FluxFiles" media button is added to the classic editor toolbar.
 
 ### React
 
@@ -389,37 +370,24 @@ Config: `config/fluxfiles.php`
 npm install @fluxfiles/react
 ```
 
-**Picker component:**
 ```tsx
 import { FluxFilesModal } from '@fluxfiles/react';
 
-function App() {
-    const [open, setOpen] = useState(false);
-
-    return (
-        <FluxFilesModal
-            open={open}
-            endpoint="https://your-fluxfiles-host"
-            token={token}
-            disk="local"
-            locale="en"
-            onSelect={(file) => console.log(file)}
-            onClose={() => setOpen(false)}
-        />
-    );
-}
+<FluxFilesModal
+    open={open}
+    endpoint="https://your-fluxfiles-host"
+    token={token}
+    disk="local"
+    onSelect={(file) => console.log(file)}
+    onClose={() => setOpen(false)}
+/>
 ```
 
-**Hook for full control:**
 ```tsx
 import { useFluxFiles } from '@fluxfiles/react';
 
 const { iframeRef, iframeSrc, navigate, setDisk, refresh, search, aiTag } =
-    useFluxFiles({
-        endpoint: 'https://your-fluxfiles-host',
-        token,
-        onSelect: (file) => console.log(file),
-    });
+    useFluxFiles({ endpoint, token, onSelect: (file) => console.log(file) });
 ```
 
 ### Vue / Nuxt
@@ -428,121 +396,104 @@ const { iframeRef, iframeSrc, navigate, setDisk, refresh, search, aiTag } =
 npm install @fluxfiles/vue
 ```
 
-**Modal component:**
 ```vue
 <script setup>
 import { ref } from 'vue';
 import { FluxFilesModal } from '@fluxfiles/vue';
 
 const open = ref(false);
-
-function onSelect(file) {
-    console.log(file);
-    open.value = false;
-}
 </script>
 
 <template>
-    <button @click="open = true">Pick file</button>
-
     <FluxFilesModal
         v-model:open="open"
         endpoint="https://your-fluxfiles-host"
         :token="token"
         disk="local"
-        locale="en"
-        @select="onSelect"
+        @select="(file) => console.log(file)"
         @close="open = false"
     />
 </template>
 ```
 
-**Embedded component:**
-```vue
-<script setup>
-import { ref } from 'vue';
-import { FluxFiles } from '@fluxfiles/vue';
-
-const fm = ref();
-
-// Programmatic control:
-// fm.value?.navigate('/uploads');
-// fm.value?.setDisk('s3');
-// fm.value?.refresh();
-</script>
-
-<template>
-    <FluxFiles
-        ref="fm"
-        endpoint="https://your-fluxfiles-host"
-        :token="token"
-        disk="local"
-        width="100%"
-        height="600px"
-        @select="(file) => console.log(file)"
-    />
-</template>
-```
-
-**Composable for full control:**
+Nuxt 3 auto-import:
 ```ts
-import { useFluxFiles } from '@fluxfiles/vue';
-
-const { iframeRef, iframeSrc, navigate, setDisk, refresh, search, aiTag } =
-    useFluxFiles({
-        endpoint: 'https://your-fluxfiles-host',
-        token,
-        onSelect: (file) => console.log(file),
-    });
-```
-
-**Nuxt 3 auto-import:** Add the plugin to your `nuxt.config.ts`:
-```ts
+// nuxt.config.ts
 export default defineNuxtConfig({
     plugins: ['@fluxfiles/vue/nuxt'],
 });
 ```
 
-Components `<FluxFiles>` and `<FluxFilesModal>` are then globally available without explicit imports.
-
 ---
 
 ## Internationalization
 
-16 languages included. Translation files are in `lang/`.
+16 languages. Translation files in `lang/`.
 
-| Code | Language | Direction |
-|------|----------|-----------|
-| `en` | English | LTR |
-| `vi` | Tieng Viet | LTR |
-| `zh` | Chinese | LTR |
-| `ja` | Japanese | LTR |
-| `ko` | Korean | LTR |
-| `fr` | Francais | LTR |
-| `de` | Deutsch | LTR |
-| `es` | Espanol | LTR |
-| `pt` | Portugues | LTR |
-| `ar` | Arabic | RTL |
-| `it` | Italiano | LTR |
-| `ru` | Русский | LTR |
-| `th` | ไทย | LTR |
-| `hi` | हिन्दी | LTR |
-| `tr` | Türkçe | LTR |
-| `nl` | Nederlands | LTR |
+| Code | Language | Dir | | Code | Language | Dir |
+|------|----------|-----|-|------|----------|-----|
+| `en` | English | LTR | | `pt` | Portugues | LTR |
+| `vi` | Tieng Viet | LTR | | `it` | Italiano | LTR |
+| `zh` | Chinese | LTR | | `ru` | Русский | LTR |
+| `ja` | Japanese | LTR | | `th` | ไทย | LTR |
+| `ko` | Korean | LTR | | `hi` | हिन्दी | LTR |
+| `fr` | Francais | LTR | | `tr` | Turkce | LTR |
+| `de` | Deutsch | LTR | | `nl` | Nederlands | LTR |
+| `es` | Espanol | LTR | | `ar` | Arabic | RTL |
 
-**Set locale via SDK:**
-```js
-FluxFiles.open({ locale: 'ar', ... });
+**Priority:** FM_CONFIG locale > `?lang=` query param > `Accept-Language` header > `en`
+
+See [`lang/CONTRIBUTING.md`](lang/CONTRIBUTING.md) to add a new language.
+
+---
+
+## Testing
+
+```bash
+# Start dev server
+php -S localhost:8080 router.php
+
+# Run all tests
+bash tests/test-api.sh          # API integration tests (local disk)
+bash tests/test-r2.sh           # R2/S3 cloud storage tests
+php tests/test-claims.php       # Claims unit tests
+php tests/test-diskmanager.php  # DiskManager unit tests
+php tests/test-ratelimiter.php  # Rate limiter tests
+php tests/test-metadata.php     # Metadata handler tests
+php tests/test-byob.php         # BYOB encryption + token tests
+php tests/test-i18n.php         # i18n validation (all languages)
+php tests/test-i18n.php --api   # i18n API endpoint tests
+
+# Generate tokens for manual testing
+php tests/generate-token.php
+
+# SDK test page (open in browser)
+open tests/test-sdk.html
 ```
 
-**Set locale via env:**
-```env
-FLUXFILES_LOCALE=vi
-```
+---
 
-**Auto-detection order:** FM_CONFIG locale > `?lang=` query param > `Accept-Language` header > `en`
+## Environment Variables
 
-**Adding a new language:** See [`lang/CONTRIBUTING.md`](lang/CONTRIBUTING.md).
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `FLUXFILES_SECRET` | Yes | — | JWT signing secret (32+ chars) |
+| `FLUXFILES_ALLOWED_ORIGINS` | Yes | — | Comma-separated CORS origins |
+| `FLUXFILES_LOCALE` | No | auto | UI language code |
+| `AWS_ACCESS_KEY_ID` | No | — | AWS S3 access key |
+| `AWS_SECRET_ACCESS_KEY` | No | — | AWS S3 secret key |
+| `AWS_DEFAULT_REGION` | No | `ap-southeast-1` | AWS region |
+| `AWS_BUCKET` | No | — | S3 bucket name |
+| `R2_ACCESS_KEY_ID` | No | — | Cloudflare R2 access key |
+| `R2_SECRET_ACCESS_KEY` | No | — | Cloudflare R2 secret key |
+| `R2_ACCOUNT_ID` | No | — | Cloudflare account ID |
+| `R2_BUCKET` | No | — | R2 bucket name |
+| `FLUXFILES_AI_PROVIDER` | No | — | `claude` or `openai` |
+| `FLUXFILES_AI_API_KEY` | No | — | AI provider API key |
+| `FLUXFILES_AI_MODEL` | No | auto | Override AI model |
+| `FLUXFILES_AI_AUTO_TAG` | No | `false` | Auto-tag on upload |
+| `FLUXFILES_RATE_LIMIT_READ` | No | `60` | Read requests per minute |
+| `FLUXFILES_RATE_LIMIT_WRITE` | No | `10` | Write requests per minute |
 
 ---
 
@@ -550,43 +501,43 @@ FLUXFILES_LOCALE=vi
 
 ```
 FluxFiles/
-├── api/                        # PHP backend
-│   ├── index.php               # Main router (CORS, auth, routing)
-│   ├── FileManager.php         # Core file operations
-│   ├── StorageMetadataHandler.php  # Metadata/trash/audit trong storage user
-│   ├── DiskManager.php         # Flysystem factory (local/s3/r2)
-│   ├── Claims.php              # JWT claims value object
-│   ├── JwtMiddleware.php       # JWT extraction + verification
-│   ├── ImageOptimizer.php      # Resize + WebP variant generation
-│   ├── AiTagger.php            # Claude/OpenAI vision integration
-│   ├── ChunkUploader.php       # S3 multipart upload
-│   ├── RateLimiterFileStorage.php  # Rate limit (JSON file)
-│   ├── AuditLogStorage.php     # Audit log trong storage user
-│   ├── QuotaManager.php        # Storage quota enforcement
-│   ├── I18n.php                # Internationalization
-│   └── ApiException.php        # HTTP error exceptions
+├── api/                          # PHP backend
+│   ├── index.php                 # Router, CORS, JWT auth
+│   ├── FileManager.php           # Core file operations
+│   ├── StorageMetadataHandler.php # Metadata/trash/audit in user storage
+│   ├── DiskManager.php           # Flysystem factory (local/s3/r2)
+│   ├── Claims.php                # JWT claims value object
+│   ├── JwtMiddleware.php         # JWT extraction + verification
+│   ├── ImageOptimizer.php        # Resize + WebP variants
+│   ├── AiTagger.php              # Claude/OpenAI vision
+│   ├── ChunkUploader.php         # S3 multipart upload
+│   ├── CredentialEncryptor.php   # AES-256-GCM for BYOB credentials
+│   ├── RateLimiterFileStorage.php # Token bucket rate limit
+│   ├── AuditLogStorage.php       # Audit log in user storage
+│   ├── QuotaManager.php          # Storage quota enforcement
+│   ├── I18n.php                  # Internationalization
+│   └── ApiException.php          # HTTP error exceptions
 ├── assets/
-│   ├── fm.js                   # Alpine.js UI component
-│   └── fm.css                  # Styles (dark mode, RTL)
+│   ├── fm.js                     # Alpine.js UI component
+│   └── fm.css                    # Styles (dark mode, RTL)
 ├── config/
-│   └── disks.php               # Storage disk definitions
-├── lang/                       # Translation JSON files
+│   └── disks.php                 # Storage disk definitions
+├── lang/                         # 16 translation JSON files
 ├── public/
-│   └── index.html              # Iframe entry point
-├── storage/                    # Local uploads + rate_limit.json
+│   └── index.html                # Iframe entry point
+├── storage/                      # Local uploads + rate limit data
+├── tests/                        # Test suite
 ├── adapters/
-│   ├── laravel/                # Laravel package
-│   ├── wordpress/              # WordPress plugin
-│   ├── react/                  # React component library
-│   └── vue/                    # Vue 3 / Nuxt 3 component library
-├── fluxfiles.js                # Host app SDK (UMD)
-├── fluxfiles.d.ts              # TypeScript declarations for SDK
-├── embed.php                   # PHP helper (token + embed)
+│   ├── laravel/                  # Laravel package
+│   ├── wordpress/                # WordPress plugin
+│   ├── react/                    # React component library
+│   └── vue/                      # Vue 3 / Nuxt 3 library
+├── fluxfiles.js                  # Host app SDK (UMD)
+├── fluxfiles.d.ts                # TypeScript declarations
+├── embed.php                     # PHP helper (token + embed)
+├── router.php                    # PHP built-in server router
 ├── composer.json
-├── package.json                # npm package for SDK (CDN access)
-├── scripts/
-│   └── build-wordpress.sh      # Bundle WordPress plugin to ZIP
-└── .env.example
+└── package.json
 ```
 
 ---
@@ -595,47 +546,39 @@ FluxFiles/
 
 - **JWT HS256** — All API requests require a signed token
 - **CORS whitelist** — Only specified origins can access the API
-- **Path scoping** — Users can be restricted to a directory prefix via `prefix` claim
-- **Permission model** — Granular `read`, `write`, `delete` permissions per token
+- **Path scoping** — Users restricted to directory prefix via `prefix` claim
+- **Permission model** — Granular `read`, `write`, `delete` per token
 - **Disk whitelist** — Per-token disk access control
 - **File type restrictions** — Optional extension whitelist per token
+- **BYOB encryption** — User bucket credentials encrypted with AES-256-GCM
 - **Rate limiting** — Token bucket algorithm prevents abuse
 - **Quota enforcement** — Per-user storage limits
 - **Soft delete** — Files go to trash before permanent deletion
-- **Audit trail** — All write actions are logged
+- **Audit trail** — All write actions logged with user, IP, user agent
+- **No ACL dependency** — Works with modern IAM/Bucket Policy (S3) and R2
 
 ---
 
 ## Fork / Customize
 
-If you fork FluxFiles, the table below lists the key files you'll need to review and modify:
-
-### Files to Change
-
 | Category | File(s) | What to Change |
 |----------|---------|----------------|
-| **Secrets & CORS** | `.env` | `FLUXFILES_SECRET`, `FLUXFILES_ALLOWED_ORIGINS` — generate your own secret and set your domains |
-| **Storage drivers** | `config/disks.php` | Add, remove, or reconfigure disk definitions (local / S3 / R2) |
-| **Cloud credentials** | `.env` | `AWS_*` and `R2_*` variables for your own buckets |
-| **AI tagging** | `.env` | `FLUXFILES_AI_PROVIDER`, `FLUXFILES_AI_API_KEY`, `FLUXFILES_AI_MODEL` |
-| **Branding — colors** | `assets/fm.css` | CSS custom properties (`--ff-primary`, `--ff-bg`, `--ff-text`, etc.) |
-| **Branding — title** | `public/index.html` | `<title>` tag and any visible product name |
-| **Frontend logic** | `assets/fm.js` | Alpine.js component — add features or change UI behavior |
-| **SDK** | `fluxfiles.js` | Event names, default options, iframe communication protocol |
-| **Token helper** | `embed.php` | Default TTL, claims, or signing algorithm |
-| **Laravel adapter** | `adapters/laravel/config/fluxfiles.php` | Endpoint, default disks, mode, AI settings |
-| **WordPress adapter** | `adapters/wordpress/fluxfiles.php` | Plugin header (name, author, URI) |
-| **React adapter** | `adapters/react/package.json` | Package name, author, repository URL |
-| **Vue adapter** | `adapters/vue/package.json` | Package name, author, repository URL |
-| **Translations** | `lang/*.json` | Edit existing strings or add a new locale (see `lang/CONTRIBUTING.md`) |
-| **Rate limits** | `api/RateLimiterFileStorage.php` | Bucket size and refill rate constants |
-| **Image variants** | `api/ImageOptimizer.php` | Thumbnail / medium / large dimensions and quality |
+| **Secrets & CORS** | `.env` | `FLUXFILES_SECRET`, `FLUXFILES_ALLOWED_ORIGINS` |
+| **Storage** | `config/disks.php` | Add/remove disk definitions |
+| **Cloud credentials** | `.env` | `AWS_*` and `R2_*` variables |
+| **AI tagging** | `.env` | `FLUXFILES_AI_PROVIDER`, `FLUXFILES_AI_API_KEY` |
+| **Branding** | `assets/fm.css` | CSS custom properties (`--ff-primary`, etc.) |
+| **Frontend** | `assets/fm.js` | Alpine.js component |
+| **SDK** | `fluxfiles.js` | Event names, defaults, iframe protocol |
+| **Token** | `embed.php` | Default TTL, claims, signing |
+| **Adapters** | `adapters/*/` | Package name, config, routes |
+| **Translations** | `lang/*.json` | Edit strings or add locale |
+| **Rate limits** | `.env` | `FLUXFILES_RATE_LIMIT_READ`, `FLUXFILES_RATE_LIMIT_WRITE` |
+| **Image variants** | `api/ImageOptimizer.php` | Dimensions and quality |
 
 ### Attribution
 
-FluxFiles was created and maintained by **thai-pc**.
-
-If you fork or redistribute this project, please retain the original copyright notice and give appropriate credit. A link back to the original repository is appreciated:
+Created and maintained by **thai-pc**. If you fork or redistribute, please retain the copyright notice:
 
 ```
 Based on FluxFiles by thai-pc — https://github.com/thai-pc/fluxfiles
