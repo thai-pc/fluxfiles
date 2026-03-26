@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FluxFiles — CKEditor 4 Integration Test</title>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --success: #059669;
+            --success-light: #ecfdf5;
+            --danger: #dc2626;
+            --danger-light: #fef2f2;
+            --info: #2563eb;
+            --info-light: #eff6ff;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+        }
+        .dark {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --primary: #818cf8;
+            --primary-hover: #6366f1;
+            --primary-light: #1e1b4b;
+            --success: #34d399;
+            --success-light: #064e3b;
+            --danger: #f87171;
+            --danger-light: #450a0a;
+            --info: #60a5fa;
+            --info-light: #172554;
+            --shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
+
+        .header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .logo {
+            width: 36px; height: 36px;
+            background: var(--primary);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 700; font-size: 16px;
+        }
+        .header-title { font-size: 18px; font-weight: 700; }
+        .header-subtitle { font-size: 12px; color: var(--text-secondary); }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+
+        .theme-toggle {
+            width: 36px; height: 36px; border: 1px solid var(--border);
+            background: var(--card); border-radius: var(--radius-sm);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 16px; transition: all 0.2s;
+        }
+        .theme-toggle:hover { background: var(--primary-light); border-color: var(--primary); }
+
+        .main { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+        }
+        .card-title {
+            font-size: 14px; font-weight: 600;
+            margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+        }
+
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+            border-radius: var(--radius-sm); background: var(--bg); color: var(--text);
+            font-size: 13px; font-family: var(--font); transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border: none; border-radius: var(--radius-sm);
+            font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            font-family: var(--font);
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.ok { background: var(--success); }
+        .status-dot.err { background: var(--danger); }
+        .status-text { font-size: 12px; color: var(--text-secondary); }
+
+        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 600px) { .config-grid { grid-template-columns: 1fr; } }
+
+        .helper-text { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+        .log-area {
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+            padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px;
+            max-height: 200px; overflow-y: auto; white-space: pre-wrap; color: var(--text-secondary);
+        }
+        .log-entry { padding: 4px 0; border-bottom: 1px solid var(--border); }
+        .log-entry:last-child { border-bottom: none; }
+        .log-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; margin-right: 6px; }
+        .log-tag.select { background: var(--success-light); color: var(--success); }
+        .log-tag.event { background: var(--info-light); color: var(--info); }
+        .log-tag.info { background: var(--primary-light); color: var(--primary); }
+        .log-tag.error { background: var(--danger-light); color: var(--danger); }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">Ff</div>
+            <div>
+                <div class="header-title">CKEditor 4 Integration Test</div>
+                <div class="header-subtitle">FluxFiles + CKEditor 4</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode" id="themeBtn">&#9790;</button>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- Config -->
+        <div class="card">
+            <div class="card-title">Configuration</div>
+            <div class="config-grid">
+                <div class="form-group">
+                    <label>JWT Token</label>
+                    <input type="text" id="tokenInput" placeholder="Paste JWT token here...">
+                    <div class="helper-text">Generate: <code>php tests/generate-token.php</code></div>
+                </div>
+                <div class="form-group">
+                    <label>Endpoint</label>
+                    <input type="text" id="endpointInput" value="http://localhost:8080">
+                </div>
+                <div class="form-group">
+                    <label>Disk</label>
+                    <select id="diskSelect">
+                        <option value="local">local</option>
+                        <option value="s3">s3</option>
+                        <option value="r2">r2</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Locale</label>
+                    <select id="localeSelect">
+                        <option value="">auto</option>
+                        <option value="en">en</option>
+                        <option value="vi">vi</option>
+                        <option value="zh">zh</option>
+                        <option value="ja">ja</option>
+                        <option value="ko">ko</option>
+                        <option value="fr">fr</option>
+                        <option value="de">de</option>
+                        <option value="es">es</option>
+                        <option value="ar">ar</option>
+                        <option value="pt">pt</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="initEditor()">Initialize CKEditor</button>
+            <button class="btn btn-primary" onclick="reinitEditor()" style="margin-left:8px;">Reinitialize</button>
+        </div>
+
+        <!-- CKEditor -->
+        <div class="card">
+            <div class="card-title">CKEditor 4 with FluxFiles Plugin</div>
+            <div class="status-row">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Not initialized</span>
+            </div>
+            <textarea id="ckeditor-area" rows="10">&lt;p&gt;Click the FluxFiles toolbar button (folder icon) to browse and insert files.&lt;/p&gt;</textarea>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card">
+            <div class="card-title">
+                Event Log
+                <button class="btn btn-sm" onclick="clearLog()" style="margin-left:auto; background:var(--bg); color:var(--text-secondary); border:1px solid var(--border);">Clear</button>
+            </div>
+            <div class="log-area" id="logArea"><div class="log-entry"><span class="log-tag info">INFO</span>Waiting for editor initialization...</div></div>
+        </div>
+    </div>
+
+    <!-- Load FluxFiles SDK -->
+    <script src="../fluxfiles.js"></script>
+
+    <!-- CKEditor 4 from CDN (4.22.1 — last stable) -->
+    <script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>
+
+    <script>
+        var editorInstance = null;
+        var unsubscribers = [];
+
+        function cleanupListeners() {
+            unsubscribers.forEach(function (fn) { fn(); });
+            unsubscribers = [];
+        }
+
+        function getConfig() {
+            return {
+                endpoint: document.getElementById('endpointInput').value.replace(/\/+$/, ''),
+                token: document.getElementById('tokenInput').value.trim(),
+                disk: document.getElementById('diskSelect').value,
+                locale: document.getElementById('localeSelect').value || null
+            };
+        }
+
+        function initEditor() {
+            if (editorInstance) {
+                log('info', 'Editor already initialized. Use Reinitialize to recreate.');
+                return;
+            }
+
+            var cfg = getConfig();
+            if (!cfg.token) {
+                log('error', 'JWT token is required.');
+                return;
+            }
+
+            // Register plugin path (only once)
+            if (!CKEDITOR.plugins.externals.fluxfiles) {
+                CKEDITOR.plugins.addExternal('fluxfiles', '../adapters/ckeditor4/', 'plugin.js');
+            }
+
+            try {
+                editorInstance = CKEDITOR.replace('ckeditor-area', {
+                    extraPlugins: 'fluxfiles',
+                    toolbar: [
+                        { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline', 'Strike'] },
+                        { name: 'paragraph', items: ['NumberedList', 'BulletedList', '-', 'Blockquote'] },
+                        { name: 'links', items: ['Link', 'Unlink'] },
+                        { name: 'insert', items: ['Image', 'Table', 'HorizontalRule', 'FluxFiles'] },
+                        { name: 'styles', items: ['Format'] },
+                        { name: 'tools', items: ['Maximize', 'Source'] }
+                    ],
+                    fluxfiles: {
+                        endpoint: cfg.endpoint,
+                        token: cfg.token,
+                        disk: cfg.disk,
+                        locale: cfg.locale,
+                        multiple: false
+                    },
+                    height: 350,
+                    removePlugins: 'elementspath',
+                    resize_enabled: false
+                });
+
+                editorInstance.on('instanceReady', function () {
+                    setStatus(true, 'CKEditor 4 ready — FluxFiles plugin loaded');
+                    log('info', 'CKEditor 4 initialized with FluxFiles plugin');
+                });
+
+                // Listen to FluxFiles events (store unsubscribers for cleanup)
+                unsubscribers.push(FluxFiles.on('FM_SELECT', function (data) {
+                    log('select', 'File selected: ' + JSON.stringify(data, null, 2));
+                }));
+
+                unsubscribers.push(FluxFiles.on('FM_EVENT', function (data) {
+                    log('event', 'Event: ' + JSON.stringify(data));
+                }));
+
+            } catch (e) {
+                setStatus(false, 'Error: ' + e.message);
+                log('error', 'Init failed: ' + e.message);
+            }
+        }
+
+        function reinitEditor() {
+            cleanupListeners();
+            if (editorInstance) {
+                editorInstance.destroy();
+                editorInstance = null;
+            }
+            setStatus(false, 'Reinitializing...');
+            setTimeout(initEditor, 300);
+        }
+
+        function setStatus(ok, text) {
+            document.getElementById('statusDot').className = 'status-dot ' + (ok ? 'ok' : 'err');
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function log(type, msg) {
+            var area = document.getElementById('logArea');
+            var entry = document.createElement('div');
+            entry.className = 'log-entry';
+            var time = new Date().toLocaleTimeString();
+            entry.innerHTML = '<span class="log-tag ' + type + '">' + type.toUpperCase() + '</span>'
+                + '<span style="color:var(--text-tertiary);margin-right:6px;">' + time + '</span>'
+                + escHtml(msg);
+            area.appendChild(entry);
+            area.scrollTop = area.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logArea').innerHTML = '';
+        }
+
+        function escHtml(s) {
+            var d = document.createElement('div');
+            d.appendChild(document.createTextNode(s));
+            return d.innerHTML;
+        }
+
+        // Theme
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            var dark = document.documentElement.classList.contains('dark');
+            document.getElementById('themeBtn').textContent = dark ? '\u2600' : '\u263E';
+            localStorage.setItem('ff-theme', dark ? 'dark' : 'light');
+        }
+        if (localStorage.getItem('ff-theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.getElementById('themeBtn').textContent = '\u2600';
+        }
+
+        // Restore token
+        var savedToken = localStorage.getItem('ff-token');
+        if (savedToken) document.getElementById('tokenInput').value = savedToken;
+        document.getElementById('tokenInput').addEventListener('change', function () {
+            localStorage.setItem('ff-token', this.value);
+        });
+    </script>
+</body>
+</html>

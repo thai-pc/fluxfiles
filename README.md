@@ -10,7 +10,7 @@
 
 Standalone, embeddable file manager built with PHP 7.4+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
 
-Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, and **Vue / Nuxt**.
+Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, and **TinyMCE**.
 
 ---
 
@@ -424,6 +424,46 @@ export default defineNuxtConfig({
 });
 ```
 
+### CKEditor 4
+
+1. Copy `adapters/ckeditor4/` to your CKEditor plugins directory
+2. Load `fluxfiles.js` SDK on the page
+
+```js
+CKEDITOR.replace('editor', {
+    extraPlugins: 'fluxfiles',
+    fluxfiles: {
+        endpoint: 'https://your-fluxfiles-host',
+        token: 'JWT_TOKEN',
+        disk: 'local',
+        locale: 'en',
+        multiple: false
+    }
+});
+```
+
+Click the **FluxFiles** toolbar button — images insert as `<img>`, other files as `<a>`.
+
+### TinyMCE (4.x / 5.x)
+
+1. Copy `adapters/tinymce/` to your TinyMCE plugins directory
+2. Load `fluxfiles.js` SDK on the page
+
+```js
+tinymce.init({
+    selector: '#editor',
+    plugins: 'fluxfiles',
+    toolbar: 'undo redo | bold italic | fluxfiles',
+    fluxfiles_endpoint: 'https://your-fluxfiles-host',
+    fluxfiles_token: 'JWT_TOKEN',
+    fluxfiles_disk: 'local',
+    fluxfiles_locale: 'en',
+    fluxfiles_multiple: false
+});
+```
+
+Auto-detects TinyMCE 4 vs 5 API. Click the **FluxFiles** toolbar button — images insert as `<img>`, other files as `<a>`.
+
 ---
 
 ## Internationalization
@@ -469,6 +509,10 @@ php tests/generate-token.php
 
 # SDK test page (open in browser)
 open tests/test-sdk.html
+
+# Editor integration tests (open in browser)
+open tests/test-ckeditor4.html   # CKEditor 4 + FluxFiles
+open tests/test-tinymce.html     # TinyMCE 4/5 + FluxFiles
 ```
 
 ---
@@ -531,7 +575,9 @@ FluxFiles/
 │   ├── laravel/                  # Laravel package
 │   ├── wordpress/                # WordPress plugin
 │   ├── react/                    # React component library
-│   └── vue/                      # Vue 3 / Nuxt 3 library
+│   ├── vue/                      # Vue 3 / Nuxt 3 library
+│   ├── ckeditor4/                # CKEditor 4 plugin
+│   └── tinymce/                  # TinyMCE 4/5 plugin
 ├── fluxfiles.js                  # Host app SDK (UMD)
 ├── fluxfiles.d.ts                # TypeScript declarations
 ├── embed.php                     # PHP helper (token + embed)
