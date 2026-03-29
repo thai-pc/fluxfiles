@@ -540,14 +540,15 @@ FluxFiles/
 │   ├── index.php                 # Router, CORS, JWT auth
 │   ├── FileManager.php           # Core file operations
 │   ├── StorageMetadataHandler.php # Metadata/audit in user storage
-│   ├── DiskManager.php           # Flysystem factory (local/s3/r2)
+│   ├── MetadataRepositoryInterface.php # Metadata interface
+│   ├── DiskManager.php           # Flysystem factory (local/s3/r2/byob)
 │   ├── Claims.php                # JWT claims value object
 │   ├── JwtMiddleware.php         # JWT extraction + verification
 │   ├── ImageOptimizer.php        # Resize + WebP variants
 │   ├── AiTagger.php              # Claude/OpenAI vision
 │   ├── ChunkUploader.php         # S3 multipart upload
 │   ├── CredentialEncryptor.php   # AES-256-GCM for BYOB credentials
-│   ├── RateLimiterFileStorage.php # Token bucket rate limit
+│   ├── RateLimiterFileStorage.php # Token bucket rate limit (file-based)
 │   ├── AuditLogStorage.php       # Audit log in user storage
 │   ├── QuotaManager.php          # Storage quota enforcement
 │   ├── I18n.php                  # Internationalization
