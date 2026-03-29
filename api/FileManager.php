@@ -217,17 +217,19 @@ class FileManager
         // Check if directory — delete all contents recursively
         try {
             if ($fs->directoryExists($scoped)) {
-                $this->meta->deleteChildren($disk, $scoped);
+                // Delete variant directory for the folder
+                $this->deleteVariantsDir($disk, $scoped);
                 $fs->deleteDirectory($scoped);
+                $this->meta->deleteChildren($disk, $scoped);
             } else {
+                // Delete image variants for the file
+                $this->deleteVariants($disk, $scoped);
                 $fs->delete($scoped);
+                $this->meta->delete($disk, $scoped);
             }
         } catch (\Throwable $e) {
             // File/dir may already be gone from storage
         }
-
-        // Remove metadata
-        $this->meta->delete($disk, $scoped);
 
         return ['deleted' => true];
     }
@@ -277,11 +279,27 @@ class FileManager
 
         if ($isDir) {
             // For directories: move all contents to new path
+            $scopedPrefix = rtrim($scoped, '/') . '/';
             foreach ($fs->listContents($scoped, true) as $item) {
                 if ($item->isFile()) {
-                    $relative = substr($item->path(), strlen($scoped));
-                    $fs->move($item->path(), $newPath . $relative);
+                    $relative = substr($item->path(), strlen($scopedPrefix));
+                    $fs->move($item->path(), $newPath . '/' . $relative);
                 }
+            }
+            // Move _variants/ directory
+            $oldVariantsDir = $scopedPrefix . '_variants';
+            $newVariantsDir = rtrim($newPath, '/') . '/_variants';
+            try {
+                if ($fs->directoryExists($oldVariantsDir)) {
+                    foreach ($fs->listContents($oldVariantsDir, true) as $vItem) {
+                        if ($vItem->isFile()) {
+                            $vRelative = substr($vItem->path(), strlen(rtrim($oldVariantsDir, '/') . '/'));
+                            $fs->move($vItem->path(), $newVariantsDir . '/' . $vRelative);
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                error_log('FluxFiles: Variant directory rename failed — ' . $e->getMessage());
             }
             // Move metadata for children
             $this->meta->renameChildren($disk, $scoped, $newPath);
@@ -477,6 +495,35 @@ class FileManager
             } catch (\Throwable $e) {
                 error_log("FluxFiles: Variant transfer failed ({$size}) — " . $e->getMessage());
             }
+        }
+    }
+
+    private function deleteVariants(string $disk, string $key): void
+    {
+        $fs = $this->disks->disk($disk);
+        $sizes = ['thumb', 'medium', 'large'];
+        foreach ($sizes as $size) {
+            $variant = $this->variantKey($key, $size);
+            try {
+                if ($fs->fileExists($variant)) {
+                    $fs->delete($variant);
+                }
+            } catch (\Throwable $e) {
+                // Best effort cleanup
+            }
+        }
+    }
+
+    private function deleteVariantsDir(string $disk, string $dirPath): void
+    {
+        $fs = $this->disks->disk($disk);
+        $variantsDir = ($dirPath !== '.' && $dirPath !== '') ? $dirPath . '/_variants' : '_variants';
+        try {
+            if ($fs->directoryExists($variantsDir)) {
+                $fs->deleteDirectory($variantsDir);
+            }
+        } catch (\Throwable $e) {
+            // Best effort cleanup
         }
     }
 

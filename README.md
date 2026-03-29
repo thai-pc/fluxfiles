@@ -24,7 +24,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 | **Images** | Auto WebP variants on upload (thumb 150px / medium 768px / large 1920px). Inline crop tool with aspect ratio presets. |
 | **AI** | Claude or OpenAI vision API — auto-tag, alt text, captions on upload or manual trigger. |
 | **Metadata** | Title, alt text, caption, tags per file. Stored as S3 object metadata (cloud) or sidecar JSON (local). Full-text search via FTS5. |
-| **Safety** | Soft delete (trash) with restore. Duplicate detection (MD5). Rate limiting per user. Audit log. Per-user storage quota. |
+| **Safety** | Duplicate detection (MD5). Rate limiting per user. Audit log. Per-user storage quota. |
 | **UI** | Dark mode (auto/manual). 16 languages with RTL support. Bulk operations (multi-select, shift-select). |
 
 ---
@@ -155,8 +155,7 @@ FluxFiles.on('FM_READY',  (payload) => { /* iframe loaded */ });
 FluxFiles.on('FM_SELECT', (file)    => { /* file or array */ });
 FluxFiles.on('FM_CLOSE',  ()        => { /* closed */ });
 FluxFiles.on('FM_EVENT',  (event)   => {
-    // event.action: upload, delete, move, copy, mkdir,
-    //               restore, purge, trash, crop, ai_tag
+    // event.action: upload, delete, rename, move, copy, mkdir, crop, ai_tag
 });
 ```
 
@@ -280,7 +279,8 @@ Base path: `/api/fm/`
 |--------|------|-------------|
 | `GET` | `/list?disk=&path=` | List directory |
 | `POST` | `/upload` | Upload file (multipart) |
-| `DELETE` | `/delete` | Soft delete (trash) |
+| `DELETE` | `/delete` | Permanently delete file/folder |
+| `POST` | `/rename` | Rename file/folder |
 | `POST` | `/move` | Move file/folder |
 | `POST` | `/copy` | Copy file/folder |
 | `POST` | `/mkdir` | Create directory |
@@ -298,15 +298,6 @@ Base path: `/api/fm/`
 | `GET` | `/metadata?disk=&key=` | Get SEO metadata |
 | `PUT` | `/metadata` | Save title, alt_text, caption, tags |
 | `DELETE` | `/metadata` | Delete metadata |
-
-### Trash
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/trash?disk=` | List trashed files |
-| `POST` | `/restore` | Restore from trash |
-| `DELETE` | `/purge` | Permanent delete (single) |
-| `POST` | `/purge-bulk` | Permanent delete (bulk) |
 
 ### Search, Quota, Audit
 
@@ -548,15 +539,16 @@ FluxFiles/
 ├── api/                          # PHP backend
 │   ├── index.php                 # Router, CORS, JWT auth
 │   ├── FileManager.php           # Core file operations
-│   ├── StorageMetadataHandler.php # Metadata/trash/audit in user storage
-│   ├── DiskManager.php           # Flysystem factory (local/s3/r2)
+│   ├── StorageMetadataHandler.php # Metadata/audit in user storage
+│   ├── MetadataRepositoryInterface.php # Metadata interface
+│   ├── DiskManager.php           # Flysystem factory (local/s3/r2/byob)
 │   ├── Claims.php                # JWT claims value object
 │   ├── JwtMiddleware.php         # JWT extraction + verification
 │   ├── ImageOptimizer.php        # Resize + WebP variants
 │   ├── AiTagger.php              # Claude/OpenAI vision
 │   ├── ChunkUploader.php         # S3 multipart upload
 │   ├── CredentialEncryptor.php   # AES-256-GCM for BYOB credentials
-│   ├── RateLimiterFileStorage.php # Token bucket rate limit
+│   ├── RateLimiterFileStorage.php # Token bucket rate limit (file-based)
 │   ├── AuditLogStorage.php       # Audit log in user storage
 │   ├── QuotaManager.php          # Storage quota enforcement
 │   ├── I18n.php                  # Internationalization
@@ -599,7 +591,6 @@ FluxFiles/
 - **BYOB encryption** — User bucket credentials encrypted with AES-256-GCM
 - **Rate limiting** — Token bucket algorithm prevents abuse
 - **Quota enforcement** — Per-user storage limits
-- **Soft delete** — Files go to trash before permanent deletion
 - **Audit trail** — All write actions logged with user, IP, user agent
 - **No ACL dependency** — Works with modern IAM/Bucket Policy (S3) and R2
 

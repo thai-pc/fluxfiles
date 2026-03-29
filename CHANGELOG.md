@@ -4,6 +4,20 @@ All notable changes to FluxFiles are documented here.
 
 ---
 
+## [1.23.0] — 2026-03-30
+
+- **CKEditor 4 adapter** (`adapters/ckeditor4/`) — toolbar button, image `<img>` / file `<a>` insert
+- **TinyMCE 4/5 adapter** (`adapters/tinymce/`) — toolbar button, auto-detects TinyMCE 4 vs 5 API
+- **BYOB (Bring Your Own Bucket)** — users connect their own S3/R2 buckets via AES-256-GCM encrypted JWT credentials
+- **Metadata storage redesign** — replaced SQLite with storage-based metadata (S3 object metadata / local sidecar JSON), metadata travels with files
+- `CredentialEncryptor` — AES-256-GCM encryption for BYOB credentials
+- `StorageMetadataHandler` — metadata, search index, audit log stored in user's own bucket
+- `fluxfiles_byob_token()` and `fluxfiles_mixed_token()` helper functions in `embed.php`
+- Rate limiter switched to file-based storage (`RateLimiterFileStorage`)
+- Audit log switched to storage-based (`AuditLogStorage`)
+- Added test suites: BYOB, metadata handler, CKEditor 4, TinyMCE
+- Bug fixes: multi-select, purge API, rename, UI improvements
+
 ## [1.22.0] — 2026-03-15
 
 - Downgrade PHP requirement from 8.2 to **7.4+** (compatible with PHP 7.4 — 8.3)
