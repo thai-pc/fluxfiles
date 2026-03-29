@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FluxFiles — TinyMCE Integration Test</title>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --success: #059669;
+            --success-light: #ecfdf5;
+            --danger: #dc2626;
+            --danger-light: #fef2f2;
+            --info: #2563eb;
+            --info-light: #eff6ff;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+        }
+        .dark {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --primary: #818cf8;
+            --primary-hover: #6366f1;
+            --primary-light: #1e1b4b;
+            --success: #34d399;
+            --success-light: #064e3b;
+            --danger: #f87171;
+            --danger-light: #450a0a;
+            --info: #60a5fa;
+            --info-light: #172554;
+            --shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
+
+        .header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .logo {
+            width: 36px; height: 36px;
+            background: var(--primary);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 700; font-size: 16px;
+        }
+        .header-title { font-size: 18px; font-weight: 700; }
+        .header-subtitle { font-size: 12px; color: var(--text-secondary); }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+
+        .theme-toggle {
+            width: 36px; height: 36px; border: 1px solid var(--border);
+            background: var(--card); border-radius: var(--radius-sm);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 16px; transition: all 0.2s;
+        }
+        .theme-toggle:hover { background: var(--primary-light); border-color: var(--primary); }
+
+        .main { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+        }
+        .card-title {
+            font-size: 14px; font-weight: 600;
+            margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+        }
+
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+            border-radius: var(--radius-sm); background: var(--bg); color: var(--text);
+            font-size: 13px; font-family: var(--font); transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border: none; border-radius: var(--radius-sm);
+            font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            font-family: var(--font);
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.ok { background: var(--success); }
+        .status-dot.err { background: var(--danger); }
+        .status-text { font-size: 12px; color: var(--text-secondary); }
+
+        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 600px) { .config-grid { grid-template-columns: 1fr; } }
+
+        .helper-text { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+        .version-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .version-tab {
+            padding: 6px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+            background: var(--bg); color: var(--text-secondary); cursor: pointer;
+            font-size: 13px; font-weight: 600; transition: all 0.2s;
+        }
+        .version-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .version-tab:hover:not(.active) { border-color: var(--primary); color: var(--primary); }
+
+        .log-area {
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+            padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px;
+            max-height: 200px; overflow-y: auto; white-space: pre-wrap; color: var(--text-secondary);
+        }
+        .log-entry { padding: 4px 0; border-bottom: 1px solid var(--border); }
+        .log-entry:last-child { border-bottom: none; }
+        .log-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; margin-right: 6px; }
+        .log-tag.select { background: var(--success-light); color: var(--success); }
+        .log-tag.event { background: var(--info-light); color: var(--info); }
+        .log-tag.info { background: var(--primary-light); color: var(--primary); }
+        .log-tag.error { background: var(--danger-light); color: var(--danger); }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">Ff</div>
+            <div>
+                <div class="header-title">TinyMCE Integration Test</div>
+                <div class="header-subtitle">FluxFiles + TinyMCE 4 / 5</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode" id="themeBtn">&#9790;</button>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- Config -->
+        <div class="card">
+            <div class="card-title">Configuration</div>
+            <div class="config-grid">
+                <div class="form-group">
+                    <label>JWT Token</label>
+                    <input type="text" id="tokenInput" placeholder="Paste JWT token here...">
+                    <div class="helper-text">Generate: <code>php tests/generate-token.php</code></div>
+                </div>
+                <div class="form-group">
+                    <label>Endpoint</label>
+                    <input type="text" id="endpointInput" value="http://localhost:8080">
+                </div>
+                <div class="form-group">
+                    <label>Disk</label>
+                    <select id="diskSelect">
+                        <option value="local">local</option>
+                        <option value="s3">s3</option>
+                        <option value="r2">r2</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Locale</label>
+                    <select id="localeSelect">
+                        <option value="">auto</option>
+                        <option value="en">en</option>
+                        <option value="vi">vi</option>
+                        <option value="zh">zh</option>
+                        <option value="ja">ja</option>
+                        <option value="ko">ko</option>
+                        <option value="fr">fr</option>
+                        <option value="de">de</option>
+                        <option value="es">es</option>
+                        <option value="ar">ar</option>
+                        <option value="pt">pt</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Version selector -->
+            <div style="margin-bottom: 12px;">
+                <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em;">TinyMCE Version</label>
+                <div class="version-tabs">
+                    <div class="version-tab active" data-version="4" onclick="selectVersion(this)">TinyMCE 4</div>
+                    <div class="version-tab" data-version="5" onclick="selectVersion(this)">TinyMCE 5</div>
+                </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="initEditor()">Initialize TinyMCE</button>
+            <button class="btn btn-primary" onclick="reinitEditor()" style="margin-left:8px;">Reinitialize</button>
+        </div>
+
+        <!-- TinyMCE Editor -->
+        <div class="card">
+            <div class="card-title">TinyMCE with FluxFiles Plugin</div>
+            <div class="status-row">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Not initialized</span>
+            </div>
+            <textarea id="tinymce-area" rows="10">&lt;p&gt;Click the FluxFiles toolbar button (browse icon) to browse and insert files.&lt;/p&gt;</textarea>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card">
+            <div class="card-title">
+                Event Log
+                <button class="btn btn-sm" onclick="clearLog()" style="margin-left:auto; background:var(--bg); color:var(--text-secondary); border:1px solid var(--border);">Clear</button>
+            </div>
+            <div class="log-area" id="logArea"><div class="log-entry"><span class="log-tag info">INFO</span>Waiting for editor initialization...</div></div>
+        </div>
+    </div>
+
+    <!-- Load FluxFiles SDK -->
+    <script src="../fluxfiles.js"></script>
+
+    <script>
+        var editorInstance = null;
+        var selectedVersion = '4';
+        var tinymceLoaded = false;
+        var unsubscribers = [];
+
+        function cleanupListeners() {
+            unsubscribers.forEach(function (fn) { fn(); });
+            unsubscribers = [];
+        }
+
+        function selectVersion(el) {
+            document.querySelectorAll('.version-tab').forEach(function (t) { t.classList.remove('active'); });
+            el.classList.add('active');
+            selectedVersion = el.getAttribute('data-version');
+            // Reset state if version changed
+            if (editorInstance) {
+                log('info', 'Version changed to TinyMCE ' + selectedVersion + '. Click Reinitialize.');
+            }
+        }
+
+        function getConfig() {
+            return {
+                endpoint: document.getElementById('endpointInput').value.replace(/\/+$/, ''),
+                token: document.getElementById('tokenInput').value.trim(),
+                disk: document.getElementById('diskSelect').value,
+                locale: document.getElementById('localeSelect').value || null
+            };
+        }
+
+        function loadScript(src, cb) {
+            var s = document.createElement('script');
+            s.src = src;
+            s.onload = cb;
+            s.onerror = function () { log('error', 'Failed to load: ' + src); };
+            document.head.appendChild(s);
+        }
+
+        function loadTinyMCE(version, cb) {
+            // Remove old tinymce if version changed
+            if (window.tinymce) {
+                try { tinymce.remove(); } catch (e) {}
+                // Remove old scripts
+                var scripts = document.querySelectorAll('script[data-tinymce]');
+                scripts.forEach(function (s) { s.remove(); });
+                delete window.tinymce;
+                delete window.tinyMCE;
+                tinymceLoaded = false;
+            }
+
+            var cdnUrl;
+            if (version === '5') {
+                cdnUrl = 'https://cdn.jsdelivr.net/npm/tinymce@5.10.9/tinymce.min.js';
+            } else {
+                cdnUrl = 'https://cdn.jsdelivr.net/npm/tinymce@4.9.11/tinymce.min.js';
+            }
+
+            log('info', 'Loading TinyMCE ' + version + ' from CDN...');
+
+            var s = document.createElement('script');
+            s.src = cdnUrl;
+            s.setAttribute('data-tinymce', version);
+            s.onload = function () {
+                tinymceLoaded = true;
+                log('info', 'TinyMCE ' + version + ' loaded (v' + tinymce.majorVersion + '.' + tinymce.minorVersion + ')');
+                cb();
+            };
+            s.onerror = function () { log('error', 'Failed to load TinyMCE ' + version); };
+            document.head.appendChild(s);
+        }
+
+        function doInit() {
+            var cfg = getConfig();
+
+            var initConfig = {
+                selector: '#tinymce-area',
+                plugins: 'link image lists',
+                toolbar: 'undo redo | formatselect | bold italic underline | bullist numlist | link image | fluxfiles | removeformat',
+                height: 350,
+                menubar: false,
+                branding: false,
+                statusbar: false,
+                fluxfiles_endpoint: cfg.endpoint,
+                fluxfiles_token: cfg.token,
+                fluxfiles_disk: cfg.disk,
+                fluxfiles_locale: cfg.locale,
+                fluxfiles_multiple: false,
+
+                // Register external plugin (TinyMCE requires absolute URL)
+                external_plugins: {
+                    'fluxfiles': new URL('../adapters/tinymce/plugin.js', location.href).href
+                },
+
+                setup: function (editor) {
+                    editor.on('init', function () {
+                        editorInstance = editor;
+                        setStatus(true, 'TinyMCE ' + selectedVersion + ' ready — FluxFiles plugin loaded');
+                        log('info', 'TinyMCE ' + selectedVersion + ' initialized with FluxFiles plugin');
+                    });
+                }
+            };
+
+            // TinyMCE 4 uses "theme: 'modern'"
+            if (selectedVersion === '4') {
+                initConfig.theme = 'modern';
+            }
+
+            try {
+                tinymce.init(initConfig);
+
+                // Listen to FluxFiles SDK events
+                unsubscribers.push(FluxFiles.on('FM_SELECT', function (data) {
+                    log('select', 'File selected: ' + JSON.stringify(data, null, 2));
+                }));
+
+                unsubscribers.push(FluxFiles.on('FM_EVENT', function (data) {
+                    log('event', 'Event: ' + JSON.stringify(data));
+                }));
+
+            } catch (e) {
+                setStatus(false, 'Error: ' + e.message);
+                log('error', 'Init failed: ' + e.message);
+            }
+        }
+
+        function initEditor() {
+            if (editorInstance) {
+                log('info', 'Editor already initialized. Use Reinitialize to recreate.');
+                return;
+            }
+
+            var cfg = getConfig();
+            if (!cfg.token) {
+                log('error', 'JWT token is required.');
+                return;
+            }
+
+            if (!tinymceLoaded) {
+                loadTinyMCE(selectedVersion, doInit);
+            } else {
+                doInit();
+            }
+        }
+
+        function reinitEditor() {
+            cleanupListeners();
+
+            // If version changed, need full page reload (TinyMCE can't be swapped in-page)
+            if (tinymceLoaded && window.tinymce && tinymce.majorVersion !== selectedVersion) {
+                log('info', 'Switching TinyMCE versions requires page reload...');
+                sessionStorage.setItem('ff-tinymce-version', selectedVersion);
+                location.reload();
+                return;
+            }
+
+            if (editorInstance) {
+                try { tinymce.remove('#tinymce-area'); } catch (e) {}
+                editorInstance = null;
+            }
+            setStatus(false, 'Reinitializing...');
+
+            if (!tinymceLoaded) {
+                loadTinyMCE(selectedVersion, function () {
+                    setTimeout(doInit, 200);
+                });
+                return;
+            }
+
+            setTimeout(doInit, 200);
+        }
+
+        function setStatus(ok, text) {
+            document.getElementById('statusDot').className = 'status-dot ' + (ok ? 'ok' : 'err');
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function log(type, msg) {
+            var area = document.getElementById('logArea');
+            var entry = document.createElement('div');
+            entry.className = 'log-entry';
+            var time = new Date().toLocaleTimeString();
+            entry.innerHTML = '<span class="log-tag ' + type + '">' + type.toUpperCase() + '</span>'
+                + '<span style="color:var(--text-tertiary);margin-right:6px;">' + time + '</span>'
+                + escHtml(msg);
+            area.appendChild(entry);
+            area.scrollTop = area.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logArea').innerHTML = '';
+        }
+
+        function escHtml(s) {
+            var d = document.createElement('div');
+            d.appendChild(document.createTextNode(s));
+            return d.innerHTML;
+        }
+
+        // Theme
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            var dark = document.documentElement.classList.contains('dark');
+            document.getElementById('themeBtn').textContent = dark ? '\u2600' : '\u263E';
+            localStorage.setItem('ff-theme', dark ? 'dark' : 'light');
+        }
+        if (localStorage.getItem('ff-theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.getElementById('themeBtn').textContent = '\u2600';
+        }
+
+        // Restore token
+        var savedToken = localStorage.getItem('ff-token');
+        if (savedToken) document.getElementById('tokenInput').value = savedToken;
+        document.getElementById('tokenInput').addEventListener('change', function () {
+            localStorage.setItem('ff-token', this.value);
+        });
+
+        // Restore version after page reload (for version switching)
+        var savedVersion = sessionStorage.getItem('ff-tinymce-version');
+        if (savedVersion) {
+            sessionStorage.removeItem('ff-tinymce-version');
+            selectedVersion = savedVersion;
+            document.querySelectorAll('.version-tab').forEach(function (t) {
+                t.classList.toggle('active', t.getAttribute('data-version') === savedVersion);
+            });
+        }
+    </script>
+</body>
+</html>

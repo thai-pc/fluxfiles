@@ -40,14 +40,13 @@
         "grid_view": "Rasterweergave",
         "list_view": "Lijstweergave",
         "search_hint": "Bestanden en mappen zoeken...",
-        "theme_toggle": "Licht\/donker wisselen",
+        "theme_toggle": "Licht/donker wisselen",
         "language": "Taal"
     },
     "sidebar": {
         "all_files": "Alle bestanden",
         "recent": "Recent",
         "starred": "Met ster",
-        "trash": "Prullenbak",
         "storage": "Opslag",
         "folders": "Mappen",
         "smart_filters": "Slimme filters"
@@ -61,8 +60,6 @@
         "copy_url": "URL kopiëren",
         "presign_url": "Voorondertekende URL",
         "delete": "Verwijderen",
-        "restore": "Herstellen",
-        "purge": "Definitief verwijderen",
         "move_to": "Verplaatsen naar...",
         "items": "{count} items",
         "items_selected": "{count} geselecteerd",
@@ -84,7 +81,7 @@
         "complete": "Upload voltooid",
         "error": "Upload mislukt: {message}",
         "duplicate": "Bestand bestaat al. Toch gebruiken?",
-        "quota_exceeded": "Opslaglimiet bereikt ({used} \/ {max})"
+        "quota_exceeded": "Opslaglimiet bereikt ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Info",
@@ -114,26 +111,15 @@
         "create_desc": "Voer een naam in voor de nieuwe map.",
         "name_placeholder": "bijv. Mijn map",
         "name_required": "Voer een mapnaam in",
-        "invalid_chars": "Mapnaam mag niet bevatten: < > : \" \/ \\ | ? *"
+        "invalid_chars": "Mapnaam mag niet bevatten: < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "Bevestigen",
-        "confirm_file": "\"{name}\" verwijderen? Het wordt naar de prullenbak verplaatst.",
+        "confirm_file": "\"{name}\" permanent verwijderen? Dit kan niet ongedaan worden gemaakt.",
         "confirm_bulk": "{count} item(s) verwijderen? Dit kan niet ongedaan worden gemaakt.",
-        "confirm_purge": "\"{name}\" definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",
-        "deleted": "Naar prullenbak verplaatst",
-        "purged": "Definitief verwijderd",
-        "purge_partial": "{count} item(s) konden niet definitief worden verwijderd",
-        "confirm_folder": "Map \"{name}\" en alle bestanden verwijderen? Alles wordt naar de Prullenbak verplaatst.",
-        "confirm_bulk_folders": "{count} items ({folders} map(pen) met alle inhoud) verwijderen? Alles wordt naar de Prullenbak verplaatst."
-    },
-    "trash": {
-        "title": "Prullenbak",
-        "empty": "Prullenbak is leeg",
-        "restore": "Herstellen",
-        "restore_all": "Alles herstellen",
-        "empty_trash": "Prullenbak legen",
-        "auto_delete": "Bestanden worden na {days} dagen definitief verwijderd"
+        "deleted": "Verwijderd",
+        "confirm_folder": "Map \"{name}\" en alle bestanden erin permanent verwijderen? Dit kan niet ongedaan worden gemaakt.",
+        "confirm_bulk_folders": "{count} item(s) ({folders} map(pen) met alle inhoud) permanent verwijderen? Dit kan niet ongedaan worden gemaakt."
     },
     "search": {
         "placeholder": "Zoek op naam, titel, alt-tekst...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "{name} geüpload",
         "deleted": "{name} verwijderd",
-        "restored": "{name} hersteld",
         "moved": "{from} verplaatst naar {to}",
         "copied": "{from} gekopieerd naar {to}"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL gekopieerd naar klembord"
+    },
+    "rename": {
+        "title": "Hernoemen",
+        "description": "Voer een nieuwe naam in.",
+        "placeholder": "Nieuwe naam",
+        "success": "Hernoemd",
+        "error_empty": "Voer een naam in",
+        "error_chars": "Naam mag niet bevatten: < > : \" / \\ | ? *"
     }
 }

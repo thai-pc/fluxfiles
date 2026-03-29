@@ -111,6 +111,45 @@ bash tests/test-api.sh
 kill $SERVER_PID 2>/dev/null || true
 ```
 
+### 5. Test CKEditor 4 Integration
+
+**Yeu cau:** Server chay, mo trinh duyet:
+
+```bash
+php -S localhost:8080 -t .
+# Mo: http://localhost:8080/tests/test-ckeditor4.html
+```
+
+1. Chay `php tests/generate-token.php` de lay token
+2. Dan token vao o JWT Token
+3. Click "Initialize CKEditor"
+4. Trong toolbar CKEditor, click nut **FluxFiles** (icon folder, nhom Insert)
+5. Chon file — kiem tra:
+   - Anh duoc chen dang `<img src="..." alt="..." />`
+   - File khac duoc chen dang `<a href="...">filename</a>`
+6. Kiem tra Event Log ghi nhan `FM_SELECT`
+7. Thu "Reinitialize" de tao lai editor voi config moi
+
+### 6. Test TinyMCE Integration
+
+**Yeu cau:** Server chay, mo trinh duyet:
+
+```bash
+php -S localhost:8080 -t .
+# Mo: http://localhost:8080/tests/test-tinymce.html
+```
+
+1. Chay `php tests/generate-token.php` de lay token
+2. Dan token vao o JWT Token
+3. Chon phien ban TinyMCE (4 hoac 5) bang tab
+4. Click "Initialize TinyMCE"
+5. Trong toolbar TinyMCE, click nut **FluxFiles** (icon browse)
+6. Chon file — kiem tra:
+   - Anh duoc chen dang `<img src="..." alt="..." />`
+   - File khac duoc chen dang `<a href="...">filename</a>`
+7. Kiem tra Event Log ghi nhan `FM_SELECT`
+8. Thu chuyen doi giua TinyMCE 4 va 5, click "Reinitialize"
+
 ---
 
 ## Checklist nhanh
@@ -122,6 +161,8 @@ kill $SERVER_PID 2>/dev/null || true
 | BYOB | `php tests/test-byob.php` | All passed |
 | API | `bash tests/test-api.sh` | All tests passed |
 | SDK | Mở `tests/test-sdk.html` | Events, commands hoạt động |
+| CKEditor 4 | Mở `tests/test-ckeditor4.html` | FluxFiles button, insert file |
+| TinyMCE | Mở `tests/test-tinymce.html` | FluxFiles button, insert file |
 
 ---
 
@@ -129,9 +170,11 @@ kill $SERVER_PID 2>/dev/null || true
 
 ```
 tests/
-├── generate-token.php   # Tạo JWT test
-├── test-api.sh          # Test API HTTP (curl)
-├── test-byob.php        # Test BYOB encryption/Claims
-├── test-i18n.php       # Test ngôn ngữ
-└── test-sdk.html       # Test SDK (trình duyệt)
+├── generate-token.php      # Tạo JWT test
+├── test-api.sh             # Test API HTTP (curl)
+├── test-byob.php           # Test BYOB encryption/Claims
+├── test-i18n.php           # Test ngôn ngữ
+├── test-sdk.html           # Test SDK (trình duyệt)
+├── test-ckeditor4.html     # Test CKEditor 4 + FluxFiles
+└── test-tinymce.html       # Test TinyMCE 4/5 + FluxFiles
 ```

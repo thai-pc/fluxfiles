@@ -40,14 +40,13 @@
         "grid_view": "격자 보기",
         "list_view": "목록 보기",
         "search_hint": "파일 및 폴더 검색...",
-        "theme_toggle": "라이트\/다크 전환",
+        "theme_toggle": "라이트/다크 전환",
         "language": "언어"
     },
     "sidebar": {
         "all_files": "모든 파일",
         "recent": "최근 파일",
         "starred": "즐겨찾기",
-        "trash": "휴지통",
         "storage": "저장 공간",
         "folders": "폴더",
         "smart_filters": "스마트 필터"
@@ -61,8 +60,6 @@
         "copy_url": "URL 복사",
         "presign_url": "서명된 URL",
         "delete": "삭제",
-        "restore": "복원",
-        "purge": "영구 삭제",
         "move_to": "이동...",
         "items": "{count}개 항목",
         "items_selected": "{count}개 선택됨",
@@ -84,7 +81,7 @@
         "complete": "업로드 완료",
         "error": "업로드 실패: {message}",
         "duplicate": "이미 존재하는 파일입니다. 그래도 사용하시겠습니까?",
-        "quota_exceeded": "저장 공간을 초과했습니다 ({used} \/ {max})"
+        "quota_exceeded": "저장 공간을 초과했습니다 ({used} / {max})"
     },
     "metadata": {
         "tab_info": "정보",
@@ -114,26 +111,15 @@
         "create_desc": "새 폴더의 이름을 입력하세요.",
         "name_placeholder": "예: 내 폴더",
         "name_required": "폴더 이름을 입력해 주세요",
-        "invalid_chars": "폴더 이름에 다음 문자를 사용할 수 없습니다: < > : \" \/ \\ | ? *"
+        "invalid_chars": "폴더 이름에 다음 문자를 사용할 수 없습니다: < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "확인",
-        "confirm_file": "\"{name}\"을(를) 삭제하시겠습니까? 휴지통으로 이동됩니다.",
+        "confirm_file": "\"{name}\"을(를) 영구 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
         "confirm_bulk": "{count}개 항목을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-        "confirm_purge": "\"{name}\"을(를) 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-        "deleted": "휴지통으로 이동되었습니다",
-        "purged": "영구적으로 삭제되었습니다",
-        "purge_partial": "{count}개 항목을 영구 삭제하지 못했습니다",
-        "confirm_folder": "\"{name}\" 폴더와 내부 모든 파일을 삭제하시겠습니까? 휴지통으로 이동됩니다.",
-        "confirm_bulk_folders": "{count}개 항목({folders}개 폴더 및 모든 콘텐츠)을 삭제하시겠습니까? 휴지통으로 이동됩니다."
-    },
-    "trash": {
-        "title": "휴지통",
-        "empty": "휴지통이 비어 있습니다",
-        "restore": "복원",
-        "restore_all": "모두 복원",
-        "empty_trash": "휴지통 비우기",
-        "auto_delete": "{days}일 후 파일이 영구적으로 삭제됩니다"
+        "deleted": "삭제됨",
+        "confirm_folder": "폴더 \"{name}\"과(와) 내부 모든 파일을 영구 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
+        "confirm_bulk_folders": "{count}개 항목({folders}개 폴더 및 모든 내용)을 영구 삭제하시겠습니까? 이 작업은 취소할 수 없습니다."
     },
     "search": {
         "placeholder": "이름, 제목, 대체 텍스트로 검색...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "{name}을(를) 업로드했습니다",
         "deleted": "{name}을(를) 삭제했습니다",
-        "restored": "{name}을(를) 복원했습니다",
         "moved": "{from}을(를) {to}(으)로 이동했습니다",
         "copied": "{from}을(를) {to}(으)로 복사했습니다"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL이 클립보드에 복사되었습니다"
+    },
+    "rename": {
+        "title": "이름 변경",
+        "description": "새 이름을 입력하세요.",
+        "placeholder": "새 이름",
+        "success": "이름이 변경됨",
+        "error_empty": "이름을 입력하세요",
+        "error_chars": "이름에 사용할 수 없는 문자: < > : \" / \\ | ? *"
     }
 }

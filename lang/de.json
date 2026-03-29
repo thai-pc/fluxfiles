@@ -40,14 +40,13 @@
         "grid_view": "Rasteransicht",
         "list_view": "Listenansicht",
         "search_hint": "Dateien und Ordner suchen...",
-        "theme_toggle": "Hell\/Dunkel umschalten",
+        "theme_toggle": "Hell/Dunkel umschalten",
         "language": "Sprache"
     },
     "sidebar": {
         "all_files": "Alle Dateien",
         "recent": "Zuletzt verwendet",
         "starred": "Favoriten",
-        "trash": "Papierkorb",
         "storage": "Speicher",
         "folders": "Ordner",
         "smart_filters": "Intelligente Filter"
@@ -61,8 +60,6 @@
         "copy_url": "URL kopieren",
         "presign_url": "Vorsignierte URL",
         "delete": "Löschen",
-        "restore": "Wiederherstellen",
-        "purge": "Endgültig löschen",
         "move_to": "Verschieben nach...",
         "items": "{count} Elemente",
         "items_selected": "{count} ausgewählt",
@@ -84,7 +81,7 @@
         "complete": "Upload abgeschlossen",
         "error": "Upload fehlgeschlagen: {message}",
         "duplicate": "Datei existiert bereits. Trotzdem verwenden?",
-        "quota_exceeded": "Speicherkontingent überschritten ({used} \/ {max})"
+        "quota_exceeded": "Speicherkontingent überschritten ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Info",
@@ -114,26 +111,15 @@
         "create_desc": "Geben Sie einen Namen für den neuen Ordner ein.",
         "name_placeholder": "z.B. Mein Ordner",
         "name_required": "Bitte geben Sie einen Ordnernamen ein",
-        "invalid_chars": "Ordnername darf nicht enthalten: < > : \" \/ \\ | ? *"
+        "invalid_chars": "Ordnername darf nicht enthalten: < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "Bestätigung",
-        "confirm_file": "\"{name}\" löschen? Die Datei wird in den Papierkorb verschoben.",
+        "confirm_file": "\"{name}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
         "confirm_bulk": "{count} Element(e) löschen? Dies kann nicht rückgängig gemacht werden.",
-        "confirm_purge": "\"{name}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
-        "deleted": "In den Papierkorb verschoben",
-        "purged": "Endgültig gelöscht",
-        "purge_partial": "{count} Element(e) konnten nicht endgültig gelöscht werden",
-        "confirm_folder": "Ordner \"{name}\" und alle Dateien löschen? Alles wird in den Papierkorb verschoben.",
-        "confirm_bulk_folders": "{count} Elemente ({folders} Ordner mit gesamtem Inhalt) löschen? Alles wird in den Papierkorb verschoben."
-    },
-    "trash": {
-        "title": "Papierkorb",
-        "empty": "Der Papierkorb ist leer",
-        "restore": "Wiederherstellen",
-        "restore_all": "Alle wiederherstellen",
-        "empty_trash": "Papierkorb leeren",
-        "auto_delete": "Dateien werden nach {days} Tagen endgültig gelöscht"
+        "deleted": "Gelöscht",
+        "confirm_folder": "Ordner \"{name}\" und alle Dateien darin endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+        "confirm_bulk_folders": "{count} Element(e) ({folders} Ordner mit gesamtem Inhalt) endgültig löschen? Dies kann nicht rückgängig gemacht werden."
     },
     "search": {
         "placeholder": "Nach Name, Titel, Alt-Text suchen...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "{name} hochgeladen",
         "deleted": "{name} gelöscht",
-        "restored": "{name} wiederhergestellt",
         "moved": "{from} nach {to} verschoben",
         "copied": "{from} nach {to} kopiert"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL in die Zwischenablage kopiert"
+    },
+    "rename": {
+        "title": "Umbenennen",
+        "description": "Neuen Namen eingeben.",
+        "placeholder": "Neuer Name",
+        "success": "Umbenannt",
+        "error_empty": "Bitte geben Sie einen Namen ein",
+        "error_chars": "Name darf nicht enthalten: < > : \" / \\ | ? *"
     }
 }

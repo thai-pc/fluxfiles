@@ -58,6 +58,9 @@ class FluxFilesApi
             'permission_callback' => [self::class, 'checkAuth'],
             'callback'            => [$api, 'handleDelete'],
         ]);
+        register_rest_route($ns, '/rename', array_merge($writeArgs, [
+            'callback' => [$api, 'handleRename'],
+        ]));
         register_rest_route($ns, '/move', array_merge($writeArgs, [
             'callback' => [$api, 'handleMove'],
         ]));
@@ -106,22 +109,6 @@ class FluxFilesApi
                 'callback'            => [$api, 'handleDeleteMetadata'],
             ],
         ]);
-
-        // Trash
-        register_rest_route($ns, '/trash', array_merge($readArgs, [
-            'callback' => [$api, 'handleTrash'],
-        ]));
-        register_rest_route($ns, '/restore', array_merge($writeArgs, [
-            'callback' => [$api, 'handleRestore'],
-        ]));
-        register_rest_route($ns, '/purge', [
-            'methods'             => 'DELETE',
-            'permission_callback' => [self::class, 'checkAuth'],
-            'callback'            => [$api, 'handlePurge'],
-        ]);
-        register_rest_route($ns, '/purge-bulk', array_merge($writeArgs, [
-            'callback' => [$api, 'handlePurgeBulk'],
-        ]));
 
         // Search, quota, audit
         register_rest_route($ns, '/search', array_merge($readArgs, [
@@ -285,6 +272,31 @@ class FluxFilesApi
 
             $result = $fm->delete($disk, $path);
             $this->logAudit($claims, 'delete', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleRename(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $disk = $body['disk'] ?? null;
+            $path = $body['path'] ?? null;
+            $name = $body['name'] ?? null;
+
+            if (!$disk || !$path || !$name) {
+                throw new ApiException('Missing required field: disk, path or name', 400);
+            }
+
+            $result = $fm->rename($disk, $path, $name);
+            $this->logAudit($claims, 'rename', $disk, $path);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -627,95 +639,6 @@ class FluxFilesApi
             $this->metaRepo->delete($disk, $key);
 
             return $this->ok(['deleted' => true]);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
-        }
-    }
-
-    // Trash
-
-    public function handleTrash(\WP_REST_Request $request): \WP_REST_Response
-    {
-        try {
-            $claims = $this->claims();
-            $this->rateLimit($claims, false);
-            $fm = $this->fileManager($claims);
-
-            return $this->ok($fm->listTrash($request->get_param('disk') ?? 'local'));
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
-        }
-    }
-
-    public function handleRestore(\WP_REST_Request $request): \WP_REST_Response
-    {
-        try {
-            $claims = $this->claims();
-            $this->rateLimit($claims, true);
-            $fm = $this->fileManager($claims);
-
-            $body = $this->body($request);
-            $disk = $body['disk'] ?? null;
-            $path = $body['path'] ?? null;
-
-            if (!$disk || !$path) {
-                throw new ApiException('Missing required field: disk or path', 400);
-            }
-
-            $result = $fm->restore($disk, $path);
-            $this->logAudit($claims, 'restore', $disk, $path);
-
-            return $this->ok($result);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
-        }
-    }
-
-    public function handlePurge(\WP_REST_Request $request): \WP_REST_Response
-    {
-        try {
-            $claims = $this->claims();
-            $this->rateLimit($claims, true);
-            $fm = $this->fileManager($claims);
-
-            $body = $this->body($request);
-            $disk = $body['disk'] ?? null;
-            $path = $body['path'] ?? null;
-
-            if (!$disk || !$path) {
-                throw new ApiException('Missing required field: disk or path', 400);
-            }
-
-            $result = $fm->purge($disk, $path);
-            $this->logAudit($claims, 'purge', $disk, $path);
-
-            return $this->ok($result);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
-        }
-    }
-
-    public function handlePurgeBulk(\WP_REST_Request $request): \WP_REST_Response
-    {
-        try {
-            $claims = $this->claims();
-            $this->rateLimit($claims, true);
-            $fm = $this->fileManager($claims);
-
-            $body = $this->body($request);
-            $disk = $body['disk'] ?? 'local';
-            $paths = $body['paths'] ?? null;
-
-            if (!is_array($paths) || empty($paths)) {
-                throw new ApiException('Missing or invalid paths array', 400);
-            }
-
-            $result = $fm->purgeBulk($disk, $paths);
-            foreach ($result['purged'] ?? [] as $path) {
-                $this->logAudit($claims, 'purge', $disk, $path);
-            }
-
-            return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }

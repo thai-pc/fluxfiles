@@ -40,14 +40,13 @@
         "grid_view": "Izgara görünümü",
         "list_view": "Liste görünümü",
         "search_hint": "Dosya ve klasör ara...",
-        "theme_toggle": "Açık\/koyu tema değiştir",
+        "theme_toggle": "Açık/koyu tema değiştir",
         "language": "Dil"
     },
     "sidebar": {
         "all_files": "Tüm dosyalar",
         "recent": "Son kullanılan",
         "starred": "Yıldızlı",
-        "trash": "Çöp kutusu",
         "storage": "Depolama",
         "folders": "Klasörler",
         "smart_filters": "Akıllı filtreler"
@@ -61,8 +60,6 @@
         "copy_url": "URL kopyala",
         "presign_url": "Ön imzalı URL",
         "delete": "Sil",
-        "restore": "Geri yükle",
-        "purge": "Kalıcı olarak sil",
         "move_to": "Taşı...",
         "items": "{count} öğe",
         "items_selected": "{count} seçildi",
@@ -84,7 +81,7 @@
         "complete": "Yükleme tamamlandı",
         "error": "Yükleme başarısız: {message}",
         "duplicate": "Dosya zaten mevcut. Yine de kullanılsın mı?",
-        "quota_exceeded": "Depolama kotası aşıldı ({used} \/ {max})"
+        "quota_exceeded": "Depolama kotası aşıldı ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Bilgi",
@@ -114,26 +111,15 @@
         "create_desc": "Yeni klasör için bir ad girin.",
         "name_placeholder": "ör. Klasörüm",
         "name_required": "Lütfen bir klasör adı girin",
-        "invalid_chars": "Klasör adı şu karakterleri içeremez: < > : \" \/ \\ | ? *"
+        "invalid_chars": "Klasör adı şu karakterleri içeremez: < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "Onay",
-        "confirm_file": "\"{name}\" silinsin mi? Çöp kutusuna taşınacak.",
+        "confirm_file": "\"{name}\" kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
         "confirm_bulk": "{count} öğe silinsin mi? Bu işlem geri alınamaz.",
-        "confirm_purge": "\"{name}\" kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
-        "deleted": "Çöp kutusuna taşındı",
-        "purged": "Kalıcı olarak silindi",
-        "purge_partial": "{count} öğe kalıcı olarak silinemedi",
-        "confirm_folder": "\"{name}\" klasörü ve içindeki tüm dosyalar silinsin mi? Her şey Çöp Kutusuna taşınacak.",
-        "confirm_bulk_folders": "{count} öğe ({folders} klasör ve tüm içerikleri) silinsin mi? Her şey Çöp Kutusuna taşınacak."
-    },
-    "trash": {
-        "title": "Çöp Kutusu",
-        "empty": "Çöp kutusu boş",
-        "restore": "Geri yükle",
-        "restore_all": "Tümünü geri yükle",
-        "empty_trash": "Çöp kutusunu boşalt",
-        "auto_delete": "Dosyalar {days} gün sonra kalıcı olarak silinir"
+        "deleted": "Silindi",
+        "confirm_folder": "\"{name}\" klasörü ve içindeki tüm dosyalar kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
+        "confirm_bulk_folders": "{count} öğe ({folders} klasör ve tüm içerikleri) kalıcı olarak silinsin mi? Bu işlem geri alınamaz."
     },
     "search": {
         "placeholder": "Ad, başlık, alternatif metin ile ara...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "{name} yüklendi",
         "deleted": "{name} silindi",
-        "restored": "{name} geri yüklendi",
         "moved": "{from}, {to} konumuna taşındı",
         "copied": "{from}, {to} konumuna kopyalandı"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL panoya kopyalandı"
+    },
+    "rename": {
+        "title": "Yeniden Adlandır",
+        "description": "Yeni bir ad girin.",
+        "placeholder": "Yeni ad",
+        "success": "Yeniden adlandırıldı",
+        "error_empty": "Lütfen bir ad girin",
+        "error_chars": "Ad şu karakterleri içeremez: < > : \" / \\ | ? *"
     }
 }

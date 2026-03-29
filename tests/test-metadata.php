@@ -169,74 +169,6 @@ test('getBulk() returns metadata for multiple keys', function () use ($handler, 
 });
 
 // ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► trash() / isTrashed(){$reset}\n";
-// ═══════════════════════════════════════════════════════════════
-
-test('trash() marks file as trashed', function () use ($handler, $diskName) {
-    $handler->trash($diskName, 'photo.jpg');
-    assertEqual(true, $handler->isTrashed($diskName, 'photo.jpg'));
-});
-
-test('isTrashed() returns false for non-trashed file', function () use ($handler, $diskName) {
-    assertEqual(false, $handler->isTrashed($diskName, 'never-trashed.jpg'));
-});
-
-// ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► restore(){$reset}\n";
-// ═══════════════════════════════════════════════════════════════
-
-test('restore() untrashes file', function () use ($handler, $diskName) {
-    $handler->trash($diskName, 'restore-me.jpg');
-    assertEqual(true, $handler->isTrashed($diskName, 'restore-me.jpg'));
-
-    $handler->restore($diskName, 'restore-me.jpg');
-    assertEqual(false, $handler->isTrashed($diskName, 'restore-me.jpg'));
-});
-
-// ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► getTrashed(){$reset}\n";
-// ═══════════════════════════════════════════════════════════════
-
-test('getTrashed() returns list of trashed items', function () use ($handler, $diskName) {
-    // Clean slate: restore photo.jpg from earlier trash test
-    $handler->restore($diskName, 'photo.jpg');
-
-    $handler->trash($diskName, 'trashed-1.jpg');
-    $handler->trash($diskName, 'trashed-2.jpg');
-
-    $trashed = $handler->getTrashed($diskName);
-    $trashedKeys = array_column($trashed, 'file_key');
-
-    assertEqual(true, in_array('trashed-1.jpg', $trashedKeys, true), 'trashed-1.jpg should be in trash');
-    assertEqual(true, in_array('trashed-2.jpg', $trashedKeys, true), 'trashed-2.jpg should be in trash');
-
-    // Clean up
-    $handler->restore($diskName, 'trashed-1.jpg');
-    $handler->restore($diskName, 'trashed-2.jpg');
-});
-
-// ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► purge(){$reset}\n";
-// ═══════════════════════════════════════════════════════════════
-
-test('purge() removes from trash index', function () use ($handler, $diskName) {
-    $handler->save($diskName, 'purge-me.jpg', [
-        'title' => 'Purge', 'alt_text' => '', 'caption' => '', 'tags' => '',
-    ]);
-    $handler->trash($diskName, 'purge-me.jpg');
-    assertEqual(true, $handler->isTrashed($diskName, 'purge-me.jpg'));
-
-    $handler->purge($diskName, 'purge-me.jpg');
-    assertEqual(false, $handler->isTrashed($diskName, 'purge-me.jpg'));
-
-    // Purge removes from trash + index; sidecar .meta.json still exists
-    // (FileManager handles actual file+sidecar deletion)
-    $trashed = $handler->getTrashed($diskName);
-    $trashedKeys = array_column($trashed, 'file_key');
-    assertEqual(false, in_array('purge-me.jpg', $trashedKeys, true));
-});
-
-// ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► saveHash() + findByHash(){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
@@ -279,29 +211,10 @@ test('updateIndex() - verify index.json is written', function () use ($handler, 
 });
 
 // ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► Trash/restore flow with children{$reset}\n";
+echo "\n{$yellow}► deleteChildren(){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
-test('trashChildren() trashes all files under prefix', function () use ($handler, $diskName) {
-    $count = $handler->trashChildren($diskName, 'docs');
-    assertEqual(true, $count >= 3, "Expected at least 3 children trashed, got {$count}");
-
-    assertEqual(true, $handler->isTrashed($diskName, 'docs/readme.txt'));
-    assertEqual(true, $handler->isTrashed($diskName, 'docs/notes.txt'));
-    assertEqual(true, $handler->isTrashed($diskName, 'docs/sub/deep.txt'));
-});
-
-test('restoreChildren() restores all files under prefix', function () use ($handler, $diskName) {
-    // Files were trashed in previous test
-    $count = $handler->restoreChildren($diskName, 'docs');
-    assertEqual(true, $count >= 3, "Expected at least 3 children restored, got {$count}");
-
-    assertEqual(false, $handler->isTrashed($diskName, 'docs/readme.txt'));
-    assertEqual(false, $handler->isTrashed($diskName, 'docs/notes.txt'));
-    assertEqual(false, $handler->isTrashed($diskName, 'docs/sub/deep.txt'));
-});
-
-test('purgeChildren() removes children from trash and index', function () use ($handler, $diskName) {
+test('deleteChildren() removes children from index', function () use ($handler, $diskName) {
     // Save metadata for docs children so they appear in index
     $handler->save($diskName, 'docs/readme.txt', [
         'title' => 'Readme', 'alt_text' => '', 'caption' => '', 'tags' => '',
@@ -313,24 +226,13 @@ test('purgeChildren() removes children from trash and index', function () use ($
         'title' => 'Deep', 'alt_text' => '', 'caption' => '', 'tags' => '',
     ]);
 
-    // Trash them first
-    $handler->trashChildren($diskName, 'docs');
+    $count = $handler->deleteChildren($diskName, 'docs');
+    assertEqual(true, $count >= 3, "Expected at least 3 children deleted, got {$count}");
 
-    // Purge
-    $count = $handler->purgeChildren($diskName, 'docs');
-    assertEqual(true, $count >= 3, "Expected at least 3 children purged, got {$count}");
-
-    // Should no longer be in trash
-    assertEqual(false, $handler->isTrashed($diskName, 'docs/readme.txt'));
-    assertEqual(false, $handler->isTrashed($diskName, 'docs/notes.txt'));
-    assertEqual(false, $handler->isTrashed($diskName, 'docs/sub/deep.txt'));
-
-    // Should be removed from index (sidecar files still exist — FileManager handles cleanup)
-    $trashed = $handler->getTrashed($diskName);
-    $trashedKeys = array_column($trashed, 'file_key');
-    assertEqual(false, in_array('docs/readme.txt', $trashedKeys, true));
-    assertEqual(false, in_array('docs/notes.txt', $trashedKeys, true));
-    assertEqual(false, in_array('docs/sub/deep.txt', $trashedKeys, true));
+    // Should be removed from index
+    assertEqual(null, $handler->get($diskName, 'docs/readme.txt'));
+    assertEqual(null, $handler->get($diskName, 'docs/notes.txt'));
+    assertEqual(null, $handler->get($diskName, 'docs/sub/deep.txt'));
 });
 
 // ═══════════════════════════════════════════════════════════════

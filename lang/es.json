@@ -40,14 +40,13 @@
         "grid_view": "Vista en cuadrícula",
         "list_view": "Vista en lista",
         "search_hint": "Buscar archivos y carpetas...",
-        "theme_toggle": "Alternar claro\/oscuro",
+        "theme_toggle": "Alternar claro/oscuro",
         "language": "Idioma"
     },
     "sidebar": {
         "all_files": "Todos los archivos",
         "recent": "Recientes",
         "starred": "Favoritos",
-        "trash": "Papelera",
         "storage": "Almacenamiento",
         "folders": "Carpetas",
         "smart_filters": "Filtros inteligentes"
@@ -61,8 +60,6 @@
         "copy_url": "Copiar URL",
         "presign_url": "URL prefirmada",
         "delete": "Eliminar",
-        "restore": "Restaurar",
-        "purge": "Eliminar permanentemente",
         "move_to": "Mover a...",
         "items": "{count} elementos",
         "items_selected": "{count} seleccionados",
@@ -84,7 +81,7 @@
         "complete": "Subida completada",
         "error": "Error al subir: {message}",
         "duplicate": "El archivo ya existe. ¿Usarlo de todos modos?",
-        "quota_exceeded": "Cuota de almacenamiento superada ({used} \/ {max})"
+        "quota_exceeded": "Cuota de almacenamiento superada ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Info",
@@ -114,26 +111,15 @@
         "create_desc": "Ingrese un nombre para la nueva carpeta.",
         "name_placeholder": "ej. Mi carpeta",
         "name_required": "Por favor ingrese un nombre de carpeta",
-        "invalid_chars": "El nombre de la carpeta no puede contener: < > : \" \/ \\ | ? *"
+        "invalid_chars": "El nombre de la carpeta no puede contener: < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "Confirmación",
-        "confirm_file": "¿Eliminar \"{name}\"? Se moverá a la papelera.",
+        "confirm_file": "¿Eliminar permanentemente \"{name}\"? Esta acción no se puede deshacer.",
         "confirm_bulk": "¿Eliminar {count} elemento(s)? Esta acción no se puede deshacer.",
-        "confirm_purge": "¿Eliminar permanentemente \"{name}\"? Esta acción no se puede deshacer.",
-        "deleted": "Movido a la papelera",
-        "purged": "Eliminado permanentemente",
-        "purge_partial": "No se pudieron eliminar permanentemente {count} elemento(s)",
-        "confirm_folder": "¿Eliminar la carpeta \"{name}\" y todos los archivos? Todo se moverá a la Papelera.",
-        "confirm_bulk_folders": "¿Eliminar {count} elementos ({folders} carpeta(s) con todo el contenido)? Todo se moverá a la Papelera."
-    },
-    "trash": {
-        "title": "Papelera",
-        "empty": "La papelera está vacía",
-        "restore": "Restaurar",
-        "restore_all": "Restaurar todo",
-        "empty_trash": "Vaciar papelera",
-        "auto_delete": "Los archivos se eliminan permanentemente después de {days} días"
+        "deleted": "Eliminado",
+        "confirm_folder": "¿Eliminar permanentemente la carpeta \"{name}\" y todo su contenido? Esta acción no se puede deshacer.",
+        "confirm_bulk_folders": "¿Eliminar permanentemente {count} elemento(s) ({folders} carpeta(s) con todo su contenido)? Esta acción no se puede deshacer."
     },
     "search": {
         "placeholder": "Buscar por nombre, título, texto alternativo...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "{name} subido",
         "deleted": "{name} eliminado",
-        "restored": "{name} restaurado",
         "moved": "{from} movido a {to}",
         "copied": "{from} copiado a {to}"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL copiada al portapapeles"
+    },
+    "rename": {
+        "title": "Renombrar",
+        "description": "Ingrese un nuevo nombre.",
+        "placeholder": "Nuevo nombre",
+        "success": "Renombrado",
+        "error_empty": "Por favor ingrese un nombre",
+        "error_chars": "El nombre no puede contener: < > : \" / \\ | ? *"
     }
 }

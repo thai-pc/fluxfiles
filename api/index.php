@@ -221,6 +221,10 @@ function routeRequest(
         return $fm->delete(...jsonBody('disk', 'path'));
     }
 
+    if ($method === 'POST' && $uri === '/api/fm/rename') {
+        return $fm->rename(...jsonBody('disk', 'path', 'name'));
+    }
+
     if ($method === 'POST' && $uri === '/api/fm/move') {
         return $fm->move(...jsonBody('disk', 'from', 'to'));
     }
@@ -269,26 +273,6 @@ function routeRequest(
     }
     if ($method === 'DELETE' && $uri === '/api/fm/metadata') {
         return handleDeleteMetadata($metaRepo, $claims);
-    }
-
-    // Trash
-    if ($method === 'GET' && $uri === '/api/fm/trash') {
-        return $fm->listTrash($_GET['disk'] ?? 'local');
-    }
-    if ($method === 'POST' && $uri === '/api/fm/restore') {
-        return $fm->restore(...jsonBody('disk', 'path'));
-    }
-    if ($method === 'DELETE' && $uri === '/api/fm/purge') {
-        return $fm->purge(...jsonBody('disk', 'path'));
-    }
-    if ($method === 'POST' && $uri === '/api/fm/purge-bulk') {
-        $raw = file_get_contents('php://input');
-        $body = json_decode($raw ?: '{}', true);
-        if (!is_array($body) || !isset($body['paths']) || !is_array($body['paths'])) {
-            throw new ApiException('Missing or invalid paths array', 400);
-        }
-        $disk = $body['disk'] ?? 'local';
-        return $fm->purgeBulk($disk, $body['paths']);
     }
 
     // Search
@@ -346,6 +330,7 @@ function resolveAuditAction(string $uri): string
 {
     $map = [
         '/upload'     => 'upload',
+        '/rename'     => 'rename',
         '/delete'     => 'delete',
         '/ai-tag'     => 'ai_tag',
         '/crop'       => 'crop',
@@ -354,9 +339,6 @@ function resolveAuditAction(string $uri): string
         '/move'       => 'move',
         '/copy'       => 'copy',
         '/mkdir'      => 'mkdir',
-        '/restore'    => 'restore',
-        '/purge'      => 'purge',
-        '/purge-bulk' => 'purge',
         '/metadata'   => 'metadata_update',
         '/chunk'      => 'chunk_upload',
     ];

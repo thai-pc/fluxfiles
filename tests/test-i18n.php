@@ -100,7 +100,7 @@ $testKeys = [
     'error.upload_too_large' => ['max' => 10],
     'search.results'      => ['count' => 7, 'query' => 'photo'],
     'delete.confirm_file' => ['name' => 'test.jpg'],
-    'trash.auto_delete'   => ['days' => 30],
+    'delete.confirm_bulk' => ['count' => 5],
 ];
 
 foreach ($locales as $locale) {

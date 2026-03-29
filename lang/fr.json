@@ -40,14 +40,13 @@
         "grid_view": "Vue en grille",
         "list_view": "Vue en liste",
         "search_hint": "Rechercher fichiers et dossiers...",
-        "theme_toggle": "Basculer clair\/sombre",
+        "theme_toggle": "Basculer clair/sombre",
         "language": "Langue"
     },
     "sidebar": {
         "all_files": "Tous les fichiers",
         "recent": "Récents",
         "starred": "Favoris",
-        "trash": "Corbeille",
         "storage": "Stockage",
         "folders": "Dossiers",
         "smart_filters": "Filtres intelligents"
@@ -61,8 +60,6 @@
         "copy_url": "Copier l'URL",
         "presign_url": "URL présignée",
         "delete": "Supprimer",
-        "restore": "Restaurer",
-        "purge": "Supprimer définitivement",
         "move_to": "Déplacer vers...",
         "items": "{count} éléments",
         "items_selected": "{count} sélectionnés",
@@ -84,7 +81,7 @@
         "complete": "Import terminé",
         "error": "Échec de l'import : {message}",
         "duplicate": "Ce fichier existe déjà. L'utiliser quand même ?",
-        "quota_exceeded": "Quota de stockage dépassé ({used} \/ {max})"
+        "quota_exceeded": "Quota de stockage dépassé ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Infos",
@@ -114,26 +111,15 @@
         "create_desc": "Entrez un nom pour le nouveau dossier.",
         "name_placeholder": "ex. Mon dossier",
         "name_required": "Veuillez entrer un nom de dossier",
-        "invalid_chars": "Le nom du dossier ne peut pas contenir : < > : \" \/ \\ | ? *"
+        "invalid_chars": "Le nom du dossier ne peut pas contenir : < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "Confirmation",
-        "confirm_file": "Supprimer « {name} » ? Le fichier sera déplacé dans la corbeille.",
+        "confirm_file": "Supprimer définitivement \"{name}\" ? Cette action est irréversible.",
         "confirm_bulk": "Supprimer {count} élément(s) ? Cette action est irréversible.",
-        "confirm_purge": "Supprimer définitivement « {name} » ? Cette action est irréversible.",
-        "deleted": "Déplacé dans la corbeille",
-        "purged": "Supprimé définitivement",
-        "purge_partial": "{count} élément(s) n'ont pas pu être supprimés définitivement",
-        "confirm_folder": "Supprimer le dossier \"{name}\" et tous les fichiers ? Tout sera déplacé dans la Corbeille.",
-        "confirm_bulk_folders": "Supprimer {count} éléments ({folders} dossier(s) avec tout leur contenu) ? Tout sera déplacé dans la Corbeille."
-    },
-    "trash": {
-        "title": "Corbeille",
-        "empty": "La corbeille est vide",
-        "restore": "Restaurer",
-        "restore_all": "Tout restaurer",
-        "empty_trash": "Vider la corbeille",
-        "auto_delete": "Les fichiers sont définitivement supprimés après {days} jours"
+        "deleted": "Supprimé",
+        "confirm_folder": "Supprimer définitivement le dossier \"{name}\" et tout son contenu ? Cette action est irréversible.",
+        "confirm_bulk_folders": "Supprimer définitivement {count} élément(s) ({folders} dossier(s) avec tout leur contenu) ? Cette action est irréversible."
     },
     "search": {
         "placeholder": "Rechercher par nom, titre, texte alternatif...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "{name} importé",
         "deleted": "{name} supprimé",
-        "restored": "{name} restauré",
         "moved": "{from} déplacé vers {to}",
         "copied": "{from} copié vers {to}"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL copiée dans le presse-papiers"
+    },
+    "rename": {
+        "title": "Renommer",
+        "description": "Entrez un nouveau nom.",
+        "placeholder": "Nouveau nom",
+        "success": "Renommé",
+        "error_empty": "Veuillez entrer un nom",
+        "error_chars": "Le nom ne peut pas contenir : < > : \" / \\ | ? *"
     }
 }
