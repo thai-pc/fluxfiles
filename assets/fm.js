@@ -24,8 +24,6 @@ function fluxFilesApp() {
         showConfirm: false,
         confirmAction: null,
         confirmMessage: '',
-        trashItems: [],
-        showTrash: false,
 
         // Cross-disk state
         showCrossDisk: false,
@@ -47,6 +45,13 @@ function fluxFilesApp() {
         newFolderName: '',
         newFolderError: '',
         newFolderCreating: false,
+
+        // Rename modal
+        showRename: false,
+        renameTarget: null,
+        renameValue: '',
+        renameError: '',
+        renameSubmitting: false,
 
         // Auth state
         authRequired: false,
@@ -758,106 +763,6 @@ function fluxFilesApp() {
             this.loadFiles();
         },
 
-        // Restore from trash
-        async restoreFile(fileKey) {
-            try {
-                await this.api('POST', '/api/fm/restore', {
-                    disk: this.currentDisk,
-                    path: fileKey
-                });
-                this.postMessage('FM_EVENT', { event: 'restore:done', key: fileKey });
-                this.loadFiles();
-            } catch (err) {
-                console.error('FluxFiles: Restore failed', err);
-                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
-            }
-        },
-
-        // Purge (permanent delete)
-        async purgeFile(fileKey) {
-            try {
-                await this.api('DELETE', '/api/fm/purge', {
-                    disk: this.currentDisk,
-                    path: fileKey
-                });
-                this.postMessage('FM_EVENT', { event: 'purge:done', key: fileKey });
-                this.loadTrash();
-            } catch (err) {
-                console.error('FluxFiles: Purge failed', err);
-                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
-            }
-        },
-
-        // Bulk restore from trash
-        async bulkRestore(items) {
-            const list = items || this.trashItems;
-            if (list.length === 0) return;
-            this.startBulk('Restoring', list.length);
-
-            for (const item of [...list]) {
-                try {
-                    await this.api('POST', '/api/fm/restore', {
-                        disk: this.currentDisk,
-                        path: item.file_key
-                    });
-                    this.postMessage('FM_EVENT', { event: 'restore:done', key: item.file_key });
-                } catch (err) {
-                    console.error('FluxFiles: Bulk restore failed', item.file_key, err);
-                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
-                }
-                this.tickBulk();
-            }
-
-            this.endBulk();
-            this.loadTrash();
-        },
-
-        // Bulk purge from trash (single API call to avoid 429 rate limit)
-        async bulkPurge(items) {
-            const list = items || this.trashItems;
-            if (list.length === 0) return;
-            this.startBulk('Purging', list.length);
-
-            try {
-                const paths = list.map(item => item.file_key);
-                const result = await this.api('POST', '/api/fm/purge-bulk', {
-                    disk: this.currentDisk,
-                    paths
-                });
-                const purged = result?.purged || [];
-                const errors = result?.errors || [];
-                for (const key of purged) {
-                    this.postMessage('FM_EVENT', { event: 'purge:done', key });
-                }
-                if (errors.length > 0) {
-                    this.showToast(this.t('delete.purge_partial', { count: errors.length }) || (`${errors.length} item(s) failed to purge`), 'error', 4000);
-                } else if (purged.length > 0) {
-                    this.showToast(this.t('delete.purged'), 'success');
-                }
-            } catch (err) {
-                console.error('FluxFiles: Bulk purge failed', err);
-                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
-            }
-
-            this.endBulk();
-            this.loadTrash();
-        },
-
-        // Load trash items
-        async loadTrash() {
-            this.loading = true;
-            try {
-                const items = await this.api('GET',
-                    '/api/fm/trash?disk=' + encodeURIComponent(this.currentDisk)
-                );
-                this.trashItems = items || [];
-            } catch (err) {
-                console.error('FluxFiles: Failed to load trash', err);
-            } finally {
-                this.loading = false;
-            }
-        },
-
         confirmDelete() {
             const folders = this.selected.filter(f => f.type === 'dir');
             const files = this.selected.filter(f => f.type !== 'dir');
@@ -982,6 +887,80 @@ function fluxFilesApp() {
                 this.newFolderError = err.message || 'Failed to create folder';
             } finally {
                 this.newFolderCreating = false;
+            }
+        },
+
+        // Rename
+        openRename(item) {
+            if (!item) return;
+            this.renameTarget = item;
+            this.renameValue = item.name;
+            this.renameError = '';
+            this.showRename = true;
+            this.$nextTick(() => {
+                const input = this.$refs.renameInput;
+                if (input) {
+                    input.focus();
+                    // Select name without extension for files
+                    if (item.type !== 'dir') {
+                        const dotIdx = item.name.lastIndexOf('.');
+                        if (dotIdx > 0) {
+                            input.setSelectionRange(0, dotIdx);
+                        } else {
+                            input.select();
+                        }
+                    } else {
+                        input.select();
+                    }
+                }
+            });
+        },
+
+        closeRename() {
+            this.showRename = false;
+            this.renameTarget = null;
+            this.renameValue = '';
+            this.renameError = '';
+            this.renameSubmitting = false;
+        },
+
+        async submitRename() {
+            const name = (this.renameValue || '').trim();
+            this.renameError = '';
+
+            if (!name) {
+                this.renameError = this.t('rename.error_empty');
+                return;
+            }
+            if (/[<>:"/\\|?*]/.test(name)) {
+                this.renameError = this.t('rename.error_chars');
+                return;
+            }
+            if (name === this.renameTarget.name) {
+                this.closeRename();
+                return;
+            }
+
+            this.renameSubmitting = true;
+            try {
+                const result = await this.api('POST', '/api/fm/rename', {
+                    disk: this.currentDisk,
+                    path: this.renameTarget.key,
+                    name: name
+                });
+                this.postMessage('FM_EVENT', { event: 'rename:done', key: result.key, oldKey: this.renameTarget.key, name: name });
+                this.showToast(this.t('rename.success'), 'success');
+                if (this.detailFile && this.detailFile.key === this.renameTarget.key) {
+                    this.detailFile = null;
+                }
+                this.selected = [];
+                this.loadFiles();
+                this.closeRename();
+            } catch (err) {
+                console.error('FluxFiles: Rename failed', err);
+                this.renameError = err.message || this.t('error.generic');
+            } finally {
+                this.renameSubmitting = false;
             }
         },
 

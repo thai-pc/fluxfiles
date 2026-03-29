@@ -40,14 +40,13 @@
         "grid_view": "Grid view",
         "list_view": "List view",
         "search_hint": "Search files and folders...",
-        "theme_toggle": "Toggle light\/dark",
+        "theme_toggle": "Toggle light/dark",
         "language": "Language"
     },
     "sidebar": {
         "all_files": "All files",
         "recent": "Recent",
         "starred": "Starred",
-        "trash": "Trash",
         "storage": "Storage",
         "folders": "Folders",
         "smart_filters": "Smart filters"
@@ -61,8 +60,6 @@
         "copy_url": "Copy URL",
         "presign_url": "Presigned URL",
         "delete": "Delete",
-        "restore": "Restore",
-        "purge": "Permanently delete",
         "move_to": "Move to...",
         "items": "{count} items",
         "items_selected": "{count} selected",
@@ -84,7 +81,7 @@
         "complete": "Upload complete",
         "error": "Upload failed: {message}",
         "duplicate": "File already exists. Use anyway?",
-        "quota_exceeded": "Storage quota exceeded ({used} \/ {max})"
+        "quota_exceeded": "Storage quota exceeded ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Info",
@@ -113,27 +110,16 @@
         "create_desc": "Enter a name for the new folder.",
         "name_placeholder": "e.g. My folder",
         "name_required": "Please enter a folder name",
-        "invalid_chars": "Folder name cannot contain: < > : \" \/ \\ | ? *",
+        "invalid_chars": "Folder name cannot contain: < > : \" / \\ | ? *",
         "created": "Folder created"
     },
     "delete": {
         "confirm_title": "Confirm",
-        "confirm_file": "Delete \"{name}\"? This will move it to Trash.",
+        "confirm_file": "Permanently delete \"{name}\"? This cannot be undone.",
         "confirm_bulk": "Delete {count} item(s)? This cannot be undone.",
-        "confirm_purge": "Permanently delete \"{name}\"? This cannot be undone.",
-        "deleted": "Moved to Trash",
-        "purged": "Permanently deleted",
-        "purge_partial": "{count} item(s) failed to purge",
-        "confirm_folder": "Delete folder \"{name}\" and all files inside? This will move everything to Trash.",
-        "confirm_bulk_folders": "Delete {count} items ({folders} folder(s) with all contents)? This will move everything to Trash."
-    },
-    "trash": {
-        "title": "Trash",
-        "empty": "Trash is empty",
-        "restore": "Restore",
-        "restore_all": "Restore all",
-        "empty_trash": "Empty Trash",
-        "auto_delete": "Files are permanently deleted after {days} days"
+        "deleted": "Deleted",
+        "confirm_folder": "Permanently delete folder \"{name}\" and all files inside? This cannot be undone.",
+        "confirm_bulk_folders": "Permanently delete {count} items ({folders} folder(s) with all contents)? This cannot be undone."
     },
     "search": {
         "placeholder": "Search by name, title, alt text...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "Uploaded {name}",
         "deleted": "Deleted {name}",
-        "restored": "Restored {name}",
         "moved": "Moved {from} to {to}",
         "copied": "Copied {from} to {to}"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL copied to clipboard"
+    },
+    "rename": {
+        "title": "Rename",
+        "description": "Enter a new name.",
+        "placeholder": "New name",
+        "success": "Renamed",
+        "error_empty": "Please enter a name",
+        "error_chars": "Name cannot contain: < > : \" / \\ | ? *"
     }
 }

@@ -80,21 +80,16 @@ class FileManager
             $items[] = $entry;
         }
 
-        // Merge metadata for files and filter out trashed items
+        // Merge metadata for files
         $metaMap = !empty($fileKeys) ? $this->meta->getBulk($disk, $fileKeys) : [];
-        $filtered = [];
-        foreach ($items as $item) {
-            // Skip trashed items (both files and directories)
-            if ($this->meta->isTrashed($disk, $item['key'])) {
-                continue;
-            }
+        foreach ($items as &$item) {
             if ($item['type'] === 'file') {
                 $item['meta'] = $metaMap[$item['key']] ?? null;
             }
-            $filtered[] = $item;
         }
+        unset($item);
 
-        return $filtered;
+        return $items;
     }
 
     public function upload(string $disk, string $path, array $file, bool $forceUpload = false): array
@@ -219,51 +214,10 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $fs = $this->disks->disk($disk);
 
-        // Check if it's a directory — also trash all children
-        $childrenTrashed = 0;
-        try {
-            if ($fs->directoryExists($scoped)) {
-                $childrenTrashed = $this->meta->trashChildren($disk, $scoped);
-                // Also trash metadata entries for files in storage that may not have meta yet
-                foreach ($fs->listContents($scoped, true) as $item) {
-                    if ($item->isFile()) {
-                        $this->meta->trash($disk, $item->path());
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            // Directory check may fail, continue with single-key trash
-        }
-
-        $this->meta->trash($disk, $scoped);
-
-        return ['trashed' => true, 'children_trashed' => $childrenTrashed];
-    }
-
-    public function restore(string $disk, string $path): array
-    {
-        $this->assertDisk($disk);
-        $this->assertPerm('write');
-
-        $scoped = $this->scopedPath($path);
-        $this->meta->restore($disk, $scoped);
-        // Also restore children if it was a directory
-        $this->meta->restoreChildren($disk, $scoped);
-
-        return ['restored' => true];
-    }
-
-    public function purge(string $disk, string $path): array
-    {
-        $this->assertDisk($disk);
-        $this->assertPerm('delete');
-
-        $scoped = $this->scopedPath($path);
-        $fs = $this->disks->disk($disk);
-
         // Check if directory — delete all contents recursively
         try {
             if ($fs->directoryExists($scoped)) {
+                $this->meta->deleteChildren($disk, $scoped);
                 $fs->deleteDirectory($scoped);
             } else {
                 $fs->delete($scoped);
@@ -272,43 +226,83 @@ class FileManager
             // File/dir may already be gone from storage
         }
 
-        // Remove metadata for this key and all children
-        $this->meta->purgeChildren($disk, $scoped);
-        $this->meta->purge($disk, $scoped);
+        // Remove metadata
+        $this->meta->delete($disk, $scoped);
 
-        return ['purged' => true];
+        return ['deleted' => true];
     }
 
-    /**
-     * Purge multiple items from trash in one request (avoids rate limit when purging many).
-     */
-    public function purgeBulk(string $disk, array $paths): array
+    public function rename(string $disk, string $path, string $newName): array
     {
         $this->assertDisk($disk);
-        $this->assertPerm('delete');
+        $this->assertPerm('write');
 
-        $purged = [];
-        $errors = [];
-
-        foreach ($paths as $path) {
-            if (!is_string($path) || $path === '') continue;
-            try {
-                $this->purge($disk, $path);
-                $purged[] = $path;
-            } catch (\Throwable $e) {
-                $errors[] = ['path' => $path, 'error' => $e->getMessage()];
-            }
+        $newName = trim($newName);
+        if ($newName === '') {
+            throw new ApiException('New name cannot be empty', 400);
+        }
+        if (preg_match('/[<>:"\/\\\\|?*\x00-\x1f]/', $newName)) {
+            throw new ApiException('Name contains invalid characters', 400);
         }
 
-        return ['purged' => $purged, 'errors' => $errors];
-    }
+        $this->assertSafeFilename($newName);
 
-    public function listTrash(string $disk): array
-    {
-        $this->assertDisk($disk);
-        $this->assertPerm('read');
+        $scoped = $this->scopedPath($path);
+        $fs = $this->disks->disk($disk);
 
-        return $this->meta->getTrashed($disk);
+        $dir = dirname($scoped);
+        $newPath = ($dir !== '.' && $dir !== '') ? $dir . '/' . $newName : $newName;
+
+        if ($scoped === $newPath) {
+            throw new ApiException('New name is the same as current name', 400);
+        }
+
+        // Check target doesn't already exist
+        try {
+            if ($fs->fileExists($newPath) || $fs->directoryExists($newPath)) {
+                throw new ApiException('A file or folder with that name already exists', 409);
+            }
+        } catch (ApiException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            // Some adapters may throw on directoryExists check
+        }
+
+        $isDir = false;
+        try {
+            $isDir = $fs->directoryExists($scoped);
+        } catch (\Throwable $e) {
+            // Not a directory
+        }
+
+        if ($isDir) {
+            // For directories: move all contents to new path
+            foreach ($fs->listContents($scoped, true) as $item) {
+                if ($item->isFile()) {
+                    $relative = substr($item->path(), strlen($scoped));
+                    $fs->move($item->path(), $newPath . $relative);
+                }
+            }
+            // Move metadata for children
+            $this->meta->renameChildren($disk, $scoped, $newPath);
+            try {
+                $fs->deleteDirectory($scoped);
+            } catch (\Throwable $e) {
+                // May already be empty/gone
+            }
+        } else {
+            $fs->move($scoped, $newPath);
+            // Move metadata
+            $this->moveMetadata($disk, $scoped, $disk, $newPath);
+            // Move image variants
+            $this->moveVariants($disk, $scoped, $disk, $newPath);
+        }
+
+        return [
+            'key'  => $newPath,
+            'name' => $newName,
+            'url'  => $isDir ? null : $this->fileUrl($disk, $newPath),
+        ];
     }
 
     public function move(string $disk, string $from, string $to): array

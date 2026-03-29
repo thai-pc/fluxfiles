@@ -21,6 +21,7 @@ Route::get('lang/{locale}', [FluxFilesController::class, 'langGet'])->withoutMid
 Route::get('list', [FluxFilesController::class, 'list']);
 Route::post('upload', [FluxFilesController::class, 'upload']);
 Route::delete('delete', [FluxFilesController::class, 'delete']);
+Route::post('rename', [FluxFilesController::class, 'rename']);
 Route::post('move', [FluxFilesController::class, 'move']);
 Route::post('copy', [FluxFilesController::class, 'copy']);
 Route::post('mkdir', [FluxFilesController::class, 'mkdir']);
@@ -35,12 +36,6 @@ Route::get('meta', [FluxFilesController::class, 'meta']);
 Route::get('metadata', [FluxFilesController::class, 'getMetadata']);
 Route::put('metadata', [FluxFilesController::class, 'saveMetadata']);
 Route::delete('metadata', [FluxFilesController::class, 'deleteMetadata']);
-
-// Trash
-Route::get('trash', [FluxFilesController::class, 'trash']);
-Route::post('restore', [FluxFilesController::class, 'restore']);
-Route::delete('purge', [FluxFilesController::class, 'purge']);
-Route::post('purge-bulk', [FluxFilesController::class, 'purgeBulk']);
 
 // Search
 Route::get('search', [FluxFilesController::class, 'search']);

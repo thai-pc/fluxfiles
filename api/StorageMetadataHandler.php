@@ -9,13 +9,11 @@ namespace FluxFiles;
  *
  * - S3/R2: Object Metadata (x-amz-meta-*) + index file _fluxfiles/index.json
  * - Local: Sidecar .meta.json + index file _fluxfiles/index.json
- * - Trash: _fluxfiles/trash.json
  * - Audit: _fluxfiles/audit.jsonl
  */
 class StorageMetadataHandler implements MetadataRepositoryInterface
 {
     private const INDEX_KEY = '_fluxfiles/index.json';
-    private const TRASH_KEY = '_fluxfiles/trash.json';
     private const AUDIT_KEY = '_fluxfiles/audit.jsonl';
 
     private DiskManager $diskManager;
@@ -57,6 +55,52 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $this->removeFromIndex($disk, $key);
     }
 
+    public function deleteChildren(string $disk, string $prefix): int
+    {
+        $index = $this->loadIndex($disk);
+        $count = 0;
+        foreach (array_keys($index) as $k) {
+            if ($k === $prefix || strpos($k, $prefix . '/') === 0) {
+                $this->delete($disk, $k);
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    public function renameChildren(string $disk, string $oldPrefix, string $newPrefix): int
+    {
+        $index = $this->loadIndex($disk);
+        $count = 0;
+        $updated = [];
+        foreach ($index as $k => $meta) {
+            if ($k === $oldPrefix || strpos($k, $oldPrefix . '/') === 0) {
+                $newKey = $newPrefix . substr($k, strlen($oldPrefix));
+                $updated[$newKey] = $meta;
+                unset($index[$k]);
+                // Move sidecar file for local disks
+                if (!$this->isS3Compatible($disk)) {
+                    $fs = $this->diskManager->disk($disk);
+                    $oldSidecar = $this->sidecarPath($k);
+                    $newSidecar = $this->sidecarPath($newKey);
+                    try {
+                        if ($fs->fileExists($oldSidecar)) {
+                            $fs->move($oldSidecar, $newSidecar);
+                        }
+                    } catch (\Throwable $e) {
+                        // Silent
+                    }
+                }
+                $count++;
+            }
+        }
+        if ($count > 0) {
+            $index = array_merge($index, $updated);
+            $this->saveIndex($disk, $index);
+        }
+        return $count;
+    }
+
     public function getBulk(string $disk, array $keys): array
     {
         $result = [];
@@ -83,9 +127,6 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $results = [];
 
         foreach ($index as $fileKey => $meta) {
-            if ($this->isTrashed($disk, $fileKey)) {
-                continue;
-            }
             if ($prefix !== '' && $fileKey !== $prefix && strpos($fileKey, $prefix . '/') !== 0) {
                 continue;
             }
@@ -121,160 +162,16 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         return preg_replace('/(' . $q . ')/iu', '<mark>$1</mark>', $text) ?: null;
     }
 
-    // --- Trash (manifest _fluxfiles/trash.json: { "key": timestamp }) ---
-
-    public function getTrashed(string $disk): array
-    {
-        return $this->getTrashList($disk);
-    }
-
-    public function getTrashList(string $disk): array
-    {
-        $trash = $this->loadTrash($disk);
-        $index = $this->loadIndex($disk);
-        $items = [];
-        foreach ($trash as $fileKey => $ts) {
-            $meta = $index[$fileKey] ?? [];
-            $items[] = [
-                'file_key' => $fileKey,
-                'title' => $meta['title'] ?? null,
-                'alt_text' => $meta['alt_text'] ?? null,
-                'caption' => $meta['caption'] ?? null,
-                'tags' => $meta['tags'] ?? null,
-                'trashed_at' => $ts,
-            ];
-        }
-        usort($items, fn($a, $b) => ($b['trashed_at'] ?? 0) <=> ($a['trashed_at'] ?? 0));
-        return $items;
-    }
-
-    public function isTrashed(string $disk, string $key): bool
-    {
-        $trash = $this->loadTrash($disk);
-        return isset($trash[$key]);
-    }
-
-    public function trash(string $disk, string $key): void
-    {
-        $trash = $this->loadTrash($disk);
-        $trash[$key] = time();
-        $this->saveTrash($disk, $trash);
-    }
-
-    public function trashChildren(string $disk, string $prefix): int
-    {
-        $fs = $this->diskManager->disk($disk);
-        $trash = $this->loadTrash($disk);
-        $count = 0;
-        foreach ($fs->listContents($prefix, true) as $item) {
-            if ($item->isFile() && !str_ends_with($item->path(), '.meta.json')) {
-                $trash[$item->path()] = time();
-                $count++;
-            }
-        }
-        if ($count > 0) {
-            $this->saveTrash($disk, $trash);
-        }
-        return $count;
-    }
-
-    public function restore(string $disk, string $key): void
-    {
-        $trash = $this->loadTrash($disk);
-        unset($trash[$key]);
-        $this->saveTrash($disk, $trash);
-    }
-
-    public function restoreChildren(string $disk, string $prefix): int
-    {
-        $trash = $this->loadTrash($disk);
-        $count = 0;
-        foreach (array_keys($trash) as $k) {
-            if ($k === $prefix || strpos($k, $prefix . '/') === 0) {
-                unset($trash[$k]);
-                $count++;
-            }
-        }
-        if ($count > 0) {
-            $this->saveTrash($disk, $trash);
-        }
-        return $count;
-    }
-
-    /**
-     * Remove from trash manifest + index. File deletion is done by FileManager.
-     */
-    public function purge(string $disk, string $key): void
-    {
-        $trash = $this->loadTrash($disk);
-        unset($trash[$key]);
-        $this->saveTrash($disk, $trash);
-        $this->removeFromIndex($disk, $key);
-    }
-
-    /**
-     * Remove children from trash manifest + index. File deletion is done by FileManager.
-     */
-    public function purgeChildren(string $disk, string $prefix): int
-    {
-        $trash = $this->loadTrash($disk);
-        $count = 0;
-        foreach (array_keys($trash) as $k) {
-            if ($k === $prefix || strpos($k, $prefix . '/') === 0) {
-                unset($trash[$k]);
-                $this->removeFromIndex($disk, $k);
-                $count++;
-            }
-        }
-        if ($count > 0) {
-            $this->saveTrash($disk, $trash);
-        }
-        return $count;
-    }
-
-    private function loadTrash(string $disk): array
-    {
-        $fs = $this->diskManager->disk($disk);
-        if (!$fs->fileExists(self::TRASH_KEY)) {
-            return [];
-        }
-        try {
-            $json = $fs->read(self::TRASH_KEY);
-            $data = json_decode($json, true);
-            return is_array($data) ? $data : [];
-        } catch (\Throwable $e) {
-            return [];
-        }
-    }
-
-    private function saveTrash(string $disk, array $trash): void
-    {
-        $fs = $this->diskManager->disk($disk);
-        $dir = dirname(self::TRASH_KEY);
-        if ($dir !== '.' && !$fs->directoryExists($dir)) {
-            $fs->createDirectory($dir);
-        }
-        $fs->write(self::TRASH_KEY, json_encode($trash, JSON_UNESCAPED_UNICODE));
-    }
-
     public function countChildren(string $disk, string $prefix): int
     {
         $fs = $this->diskManager->disk($disk);
-        $trash = $this->loadTrash($disk);
         $count = 0;
         foreach ($fs->listContents($prefix, true) as $item) {
-            if ($item->isFile() && !str_ends_with($item->path(), '.meta.json') && !isset($trash[$item->path()])) {
+            if ($item->isFile() && !str_ends_with($item->path(), '.meta.json')) {
                 $count++;
             }
         }
         return $count;
-    }
-
-    public function getExpiredTrash(string $disk, int $days = 30): array
-    {
-        $trash = $this->loadTrash($disk);
-        $cutoff = time() - ($days * 86400);
-        return array_keys(array_filter($trash, fn($ts) => $ts < $cutoff));
     }
 
     public function saveHash(string $disk, string $key, string $hash): void
@@ -290,7 +187,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     {
         $index = $this->loadIndex($disk);
         foreach ($index as $fileKey => $meta) {
-            if (($meta['file_hash'] ?? '') === $hash && !$this->isTrashed($disk, $fileKey)) {
+            if (($meta['file_hash'] ?? '') === $hash) {
                 $row = ['file_key' => $fileKey];
                 foreach (['title', 'alt_text', 'caption', 'tags'] as $k) {
                     if (isset($meta[$k])) {

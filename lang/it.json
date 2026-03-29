@@ -40,14 +40,13 @@
         "grid_view": "Vista griglia",
         "list_view": "Vista elenco",
         "search_hint": "Cerca file e cartelle...",
-        "theme_toggle": "Alterna chiaro\/scuro",
+        "theme_toggle": "Alterna chiaro/scuro",
         "language": "Lingua"
     },
     "sidebar": {
         "all_files": "Tutti i file",
         "recent": "Recenti",
         "starred": "Preferiti",
-        "trash": "Cestino",
         "storage": "Archiviazione",
         "folders": "Cartelle",
         "smart_filters": "Filtri intelligenti"
@@ -61,8 +60,6 @@
         "copy_url": "Copia URL",
         "presign_url": "URL prefirmato",
         "delete": "Elimina",
-        "restore": "Ripristina",
-        "purge": "Elimina definitivamente",
         "move_to": "Sposta in...",
         "items": "{count} elementi",
         "items_selected": "{count} selezionati",
@@ -84,7 +81,7 @@
         "complete": "Caricamento completato",
         "error": "Caricamento fallito: {message}",
         "duplicate": "Il file esiste già. Usare comunque?",
-        "quota_exceeded": "Quota di archiviazione superata ({used} \/ {max})"
+        "quota_exceeded": "Quota di archiviazione superata ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Info",
@@ -114,26 +111,15 @@
         "create_desc": "Inserisci un nome per la nuova cartella.",
         "name_placeholder": "es. La mia cartella",
         "name_required": "Inserisci un nome per la cartella",
-        "invalid_chars": "Il nome della cartella non può contenere: < > : \" \/ \\ | ? *"
+        "invalid_chars": "Il nome della cartella non può contenere: < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "Conferma",
-        "confirm_file": "Eliminare \"{name}\"? Verrà spostato nel cestino.",
+        "confirm_file": "Eliminare definitivamente \"{name}\"? Questa azione non può essere annullata.",
         "confirm_bulk": "Eliminare {count} elementi? Questa azione non può essere annullata.",
-        "confirm_purge": "Eliminare definitivamente \"{name}\"? Questa azione non può essere annullata.",
-        "deleted": "Spostato nel cestino",
-        "purged": "Eliminato definitivamente",
-        "purge_partial": "{count} elemento/i non è stato possibile eliminare definitivamente",
-        "confirm_folder": "Eliminare la cartella \"{name}\" e tutti i file? Tutto sarà spostato nel Cestino.",
-        "confirm_bulk_folders": "Eliminare {count} elementi ({folders} cartella\/e con tutto il contenuto)? Tutto sarà spostato nel Cestino."
-    },
-    "trash": {
-        "title": "Cestino",
-        "empty": "Il cestino è vuoto",
-        "restore": "Ripristina",
-        "restore_all": "Ripristina tutto",
-        "empty_trash": "Svuota cestino",
-        "auto_delete": "I file vengono eliminati definitivamente dopo {days} giorni"
+        "deleted": "Eliminato",
+        "confirm_folder": "Eliminare definitivamente la cartella \"{name}\" e tutti i file al suo interno? Questa azione non può essere annullata.",
+        "confirm_bulk_folders": "Eliminare definitivamente {count} elemento(i) ({folders} cartella(e) con tutto il contenuto)? Questa azione non può essere annullata."
     },
     "search": {
         "placeholder": "Cerca per nome, titolo, testo alternativo...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "Caricato {name}",
         "deleted": "Eliminato {name}",
-        "restored": "Ripristinato {name}",
         "moved": "Spostato {from} in {to}",
         "copied": "Copiato {from} in {to}"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL copiato negli appunti"
+    },
+    "rename": {
+        "title": "Rinomina",
+        "description": "Inserisci un nuovo nome.",
+        "placeholder": "Nuovo nome",
+        "success": "Rinominato",
+        "error_empty": "Inserisci un nome",
+        "error_chars": "Il nome non può contenere: < > : \" / \\ | ? *"
     }
 }

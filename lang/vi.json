@@ -40,14 +40,13 @@
         "grid_view": "Dạng lưới",
         "list_view": "Dạng danh sách",
         "search_hint": "Tìm kiếm file và thư mục...",
-        "theme_toggle": "Chuyển sáng\/tối",
+        "theme_toggle": "Chuyển sáng/tối",
         "language": "Ngôn ngữ"
     },
     "sidebar": {
         "all_files": "Tất cả file",
         "recent": "Gần đây",
         "starred": "Đã đánh dấu",
-        "trash": "Thùng rác",
         "storage": "Dung lượng",
         "folders": "Thư mục",
         "smart_filters": "Bộ lọc thông minh"
@@ -61,8 +60,6 @@
         "copy_url": "Sao chép URL",
         "presign_url": "URL có thời hạn",
         "delete": "Xóa",
-        "restore": "Khôi phục",
-        "purge": "Xóa vĩnh viễn",
         "move_to": "Di chuyển đến...",
         "items": "{count} mục",
         "items_selected": "Đã chọn {count} mục",
@@ -84,7 +81,7 @@
         "complete": "Tải lên thành công",
         "error": "Tải lên thất bại: {message}",
         "duplicate": "File đã tồn tại. Vẫn tiếp tục?",
-        "quota_exceeded": "Đã đạt giới hạn dung lượng ({used} \/ {max})"
+        "quota_exceeded": "Đã đạt giới hạn dung lượng ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Thông tin",
@@ -113,27 +110,16 @@
         "create_desc": "Nhập tên cho thư mục mới.",
         "name_placeholder": "vd. Thư mục của tôi",
         "name_required": "Vui lòng nhập tên thư mục",
-        "invalid_chars": "Tên thư mục không được chứa: < > : \" \/ \\ | ? *",
+        "invalid_chars": "Tên thư mục không được chứa: < > : \" / \\ | ? *",
         "created": "Đã tạo thư mục"
     },
     "delete": {
         "confirm_title": "Xác nhận",
-        "confirm_file": "Xóa \"{name}\"? File sẽ được chuyển vào Thùng rác.",
+        "confirm_file": "Xóa vĩnh viễn \"{name}\"? Hành động này không thể hoàn tác.",
         "confirm_bulk": "Xóa {count} mục? Không thể hoàn tác.",
-        "confirm_purge": "Xóa vĩnh viễn \"{name}\"? Không thể khôi phục.",
-        "deleted": "Đã chuyển vào Thùng rác",
-        "purged": "Đã xóa vĩnh viễn",
-        "purge_partial": "{count} mục không xóa được",
-        "confirm_folder": "Xóa thư mục \"{name}\" và tất cả file bên trong? Mọi thứ sẽ được chuyển vào Thùng rác.",
-        "confirm_bulk_folders": "Xóa {count} mục ({folders} thư mục cùng tất cả nội dung)? Mọi thứ sẽ được chuyển vào Thùng rác."
-    },
-    "trash": {
-        "title": "Thùng rác",
-        "empty": "Thùng rác trống",
-        "restore": "Khôi phục",
-        "restore_all": "Khôi phục tất cả",
-        "empty_trash": "Dọn thùng rác",
-        "auto_delete": "File sẽ bị xóa vĩnh viễn sau {days} ngày"
+        "deleted": "Đã xóa",
+        "confirm_folder": "Xóa vĩnh viễn thư mục \"{name}\" và tất cả file bên trong? Hành động này không thể hoàn tác.",
+        "confirm_bulk_folders": "Xóa vĩnh viễn {count} mục ({folders} thư mục cùng toàn bộ nội dung)? Hành động này không thể hoàn tác."
     },
     "search": {
         "placeholder": "Tìm theo tên, tiêu đề, alt text...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "Đã tải lên {name}",
         "deleted": "Đã xóa {name}",
-        "restored": "Đã khôi phục {name}",
         "moved": "Đã di chuyển {from} sang {to}",
         "copied": "Đã sao chép {from} sang {to}"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "Đã sao chép URL"
+    },
+    "rename": {
+        "title": "Đổi tên",
+        "description": "Nhập tên mới.",
+        "placeholder": "Tên mới",
+        "success": "Đã đổi tên",
+        "error_empty": "Vui lòng nhập tên",
+        "error_chars": "Tên không được chứa: < > : \" / \\ | ? *"
     }
 }

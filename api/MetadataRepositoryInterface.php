@@ -12,27 +12,13 @@ interface MetadataRepositoryInterface
 
     public function delete(string $disk, string $key): void;
 
+    public function deleteChildren(string $disk, string $prefix): int;
+
+    public function renameChildren(string $disk, string $oldPrefix, string $newPrefix): int;
+
     public function getBulk(string $disk, array $keys): array;
 
     public function search(string $disk, string $query, int $limit = 50, string $pathPrefix = ''): array;
-
-    public function trash(string $disk, string $key): void;
-
-    public function trashChildren(string $disk, string $prefix): int;
-
-    public function restore(string $disk, string $key): void;
-
-    public function restoreChildren(string $disk, string $prefix): int;
-
-    public function getTrashed(string $disk): array;
-
-    public function isTrashed(string $disk, string $key): bool;
-
-    public function getExpiredTrash(string $disk, int $days = 30): array;
-
-    public function purge(string $disk, string $key): void;
-
-    public function purgeChildren(string $disk, string $prefix): int;
 
     public function saveHash(string $disk, string $key, string $hash): void;
 

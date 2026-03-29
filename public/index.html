@@ -177,8 +177,8 @@
         <div class="ff-sidebar-section">
             <div class="ff-sidebar-label" x-text="t('sidebar.folders')"></div>
             <button class="tree-item"
-                    :class="{ active: currentPath === '' && !showTrash }"
-                    @click="showTrash = false; navigate('')">
+                    :class="{ active: currentPath === '' }"
+                    @click="navigate('')">
                 <span class="ti-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                 </span>
@@ -193,22 +193,6 @@
                     <span x-text="folder.name"></span>
                 </button>
             </template>
-        </div>
-
-        <!-- Smart filters -->
-        <div class="ff-sidebar-section">
-            <div class="ff-sidebar-label" x-text="t('sidebar.smart_filters')"></div>
-            <button class="tree-item"
-                    :class="{ active: showTrash }"
-                    @click="showTrash = !showTrash; if(showTrash) loadTrash(); sidebarOpen = false">
-                <span class="ti-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                    </svg>
-                </span>
-                <span x-text="t('sidebar.trash')"></span>
-            </button>
         </div>
 
         <!-- Storage meter -->
@@ -240,6 +224,10 @@
             <div class="ff-sep"></div>
 
             <!-- Contextual bulk buttons -->
+            <button class="tb-btn" x-show="selected.length === 1" @click="openRename(selected[0])">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span x-text="t('common.rename')"></span>
+            </button>
             <button class="tb-btn danger" x-show="selected.length > 0" @click="confirmDelete()">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span x-text="t('common.delete')"></span>
@@ -319,7 +307,7 @@
             </div>
 
             <!-- File content -->
-            <template x-if="!loading && !showTrash">
+            <template x-if="!loading">
                 <div>
                     <!-- Folders -->
                     <template x-if="filteredFolders.length > 0">
@@ -419,31 +407,6 @@
                 </div>
             </template>
 
-            <!-- Trash view -->
-            <template x-if="showTrash">
-                <div>
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                        <h3 style="font-size:18px;font-weight:500;" x-text="t('trash.title')"></h3>
-                        <div style="display:flex;gap:4px;">
-                            <button class="ff-btn ff-btn-sm" @click="bulkRestore()" x-show="trashItems.length > 0" x-text="t('trash.restore_all')"></button>
-                            <button class="ff-btn ff-btn-sm ff-btn-danger" @click="confirmMessage = t('delete.confirm_bulk', {count: trashItems.length}); confirmAction = () => bulkPurge(); showConfirm = true;" x-show="trashItems.length > 0" x-text="t('trash.empty_trash')"></button>
-                            <button class="ff-btn ff-btn-sm" @click="showTrash = false" x-text="t('common.close')"></button>
-                        </div>
-                    </div>
-                    <div x-show="trashItems.length === 0" class="ff-empty">
-                        <p x-text="t('trash.empty')"></p>
-                    </div>
-                    <template x-for="item in trashItems" :key="item.file_key">
-                        <div class="ff-trash-view" style="position:static;display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:15px;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="item.file_key.split('/').pop()"></span>
-                            <span style="color:var(--color-text-tertiary);font-size:14px;" x-text="formatDate(item.trashed_at)"></span>
-                            <button class="ff-btn ff-btn-sm" @click="restoreFile(item.file_key); loadTrash();" x-text="t('trash.restore')"></button>
-                            <button class="ff-btn ff-btn-sm ff-btn-danger" @click="purgeFile(item.file_key)" x-text="t('file.purge')"></button>
-                        </div>
-                    </template>
-                </div>
-            </template>
         </div>
 
         <!-- Status bar -->
@@ -551,6 +514,10 @@
                 <button class="detail-btn" x-show="detailFile?.type !== 'dir'" @click="copyUrl(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><path d="M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
+                </button>
+                <button class="detail-btn" @click="openRename(detailFile)">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('common.rename')"></span>
                 </button>
                 <button class="detail-btn" x-show="detailFile?.type !== 'dir'" @click="downloadFile(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
@@ -758,6 +725,41 @@
             <div class="ff-confirm-actions">
                 <button class="ff-btn" @click="cancelCrossDisk()" x-text="t('common.cancel')"></button>
                 <button class="ff-btn ff-btn-primary" :disabled="!crossDiskTarget" @click="executeCrossDisk()" x-text="crossDiskMode === 'copy' ? t('common.copy') : t('common.move')"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Rename modal ═══ -->
+    <div class="ff-modal-overlay ff-new-folder-overlay" x-show="showRename" x-transition @click.self="closeRename()">
+        <div class="ff-new-folder-modal" @keydown.escape.window="showRename && closeRename()">
+            <div class="ff-new-folder-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+            </div>
+            <h3 class="ff-new-folder-title" x-text="t('rename.title')"></h3>
+            <p class="ff-new-folder-desc" x-text="t('rename.description')"></p>
+            <div class="ff-new-folder-field">
+                <input type="text"
+                       x-ref="renameInput"
+                       x-model="renameValue"
+                       :placeholder="t('rename.placeholder')"
+                       @keydown.enter.prevent="submitRename()"
+                       class="ff-new-folder-input"
+                       :disabled="renameSubmitting">
+                <p class="ff-new-folder-error" x-show="renameError" x-text="renameError"></p>
+            </div>
+            <div class="ff-new-folder-actions">
+                <button class="ff-btn ff-btn-ghost" @click="closeRename()" :disabled="renameSubmitting" x-text="t('common.cancel')"></button>
+                <button class="ff-btn ff-btn-primary ff-new-folder-submit"
+                        @click="submitRename()"
+                        :disabled="renameSubmitting || !renameValue.trim()">
+                    <span x-show="!renameSubmitting" x-text="t('common.rename')"></span>
+                    <span x-show="renameSubmitting" style="display:inline-flex;align-items:center;gap:6px;">
+                        <span class="ff-new-folder-spinner"></span>
+                        <span x-text="t('common.loading')"></span>
+                    </span>
+                </button>
             </div>
         </div>
     </div>

@@ -188,6 +188,30 @@ class FluxFilesController
         }
     }
 
+    public function rename(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk = $request->input('disk');
+            $path = $request->input('path');
+            $name = $request->input('name');
+
+            if (!$disk || !$path || !$name) {
+                throw new ApiException('Missing required field: disk, path or name', 400);
+            }
+
+            $result = $fm->rename($disk, $path, $name);
+            $this->logAudit($claims, 'rename', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
     public function move(Request $request): JsonResponse
     {
         try {
@@ -515,92 +539,6 @@ class FluxFilesController
             $this->metaRepo->delete($disk, $key);
 
             return $this->ok(['deleted' => true]);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
-        }
-    }
-
-    // Trash routes
-
-    public function trash(Request $request): JsonResponse
-    {
-        try {
-            $claims = $this->claims($request);
-            $this->rateLimit($claims, false);
-            $fm = $this->fileManager($claims);
-
-            return $this->ok($fm->listTrash($request->query('disk', 'local')));
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
-        }
-    }
-
-    public function restore(Request $request): JsonResponse
-    {
-        try {
-            $claims = $this->claims($request);
-            $this->rateLimit($claims, true);
-            $fm = $this->fileManager($claims);
-
-            $disk = $request->input('disk');
-            $path = $request->input('path');
-
-            if (!$disk || !$path) {
-                throw new ApiException('Missing required field: disk or path', 400);
-            }
-
-            $result = $fm->restore($disk, $path);
-            $this->logAudit($claims, 'restore', $disk, $path);
-
-            return $this->ok($result);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
-        }
-    }
-
-    public function purge(Request $request): JsonResponse
-    {
-        try {
-            $claims = $this->claims($request);
-            $this->rateLimit($claims, true);
-            $fm = $this->fileManager($claims);
-
-            $disk = $request->input('disk');
-            $path = $request->input('path');
-
-            if (!$disk || !$path) {
-                throw new ApiException('Missing required field: disk or path', 400);
-            }
-
-            $result = $fm->purge($disk, $path);
-            $this->logAudit($claims, 'purge', $disk, $path);
-
-            return $this->ok($result);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
-        }
-    }
-
-    public function purgeBulk(Request $request): JsonResponse
-    {
-        try {
-            $claims = $this->claims($request);
-            $this->rateLimit($claims, true);
-            $fm = $this->fileManager($claims);
-
-            $disk = $request->input('disk', 'local');
-            $paths = $request->input('paths');
-
-            if (!is_array($paths) || empty($paths)) {
-                throw new ApiException('Missing or invalid paths array', 400);
-            }
-
-            $result = $fm->purgeBulk($disk, $paths);
-            foreach ($result['purged'] ?? [] as $path) {
-                $this->logAudit($claims, 'purge', $disk, $path);
-            }
-
-            return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }

@@ -40,14 +40,13 @@
         "grid_view": "Visualização em grade",
         "list_view": "Visualização em lista",
         "search_hint": "Pesquisar arquivos e pastas...",
-        "theme_toggle": "Alternar claro\/escuro",
+        "theme_toggle": "Alternar claro/escuro",
         "language": "Idioma"
     },
     "sidebar": {
         "all_files": "Todos os arquivos",
         "recent": "Recentes",
         "starred": "Favoritos",
-        "trash": "Lixeira",
         "storage": "Armazenamento",
         "folders": "Pastas",
         "smart_filters": "Filtros inteligentes"
@@ -61,8 +60,6 @@
         "copy_url": "Copiar URL",
         "presign_url": "URL pré-assinada",
         "delete": "Excluir",
-        "restore": "Restaurar",
-        "purge": "Excluir permanentemente",
         "move_to": "Mover para...",
         "items": "{count} itens",
         "items_selected": "{count} selecionados",
@@ -84,7 +81,7 @@
         "complete": "Envio concluído",
         "error": "Falha no envio: {message}",
         "duplicate": "O arquivo já existe. Usar mesmo assim?",
-        "quota_exceeded": "Cota de armazenamento excedida ({used} \/ {max})"
+        "quota_exceeded": "Cota de armazenamento excedida ({used} / {max})"
     },
     "metadata": {
         "tab_info": "Info",
@@ -114,26 +111,15 @@
         "create_desc": "Digite um nome para a nova pasta.",
         "name_placeholder": "ex. Minha pasta",
         "name_required": "Por favor, digite um nome para a pasta",
-        "invalid_chars": "O nome da pasta não pode conter: < > : \" \/ \\ | ? *"
+        "invalid_chars": "O nome da pasta não pode conter: < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "Confirmação",
-        "confirm_file": "Excluir \"{name}\"? O arquivo será movido para a lixeira.",
+        "confirm_file": "Excluir permanentemente \"{name}\"? Esta ação não pode ser desfeita.",
         "confirm_bulk": "Excluir {count} item(ns)? Esta ação não pode ser desfeita.",
-        "confirm_purge": "Excluir permanentemente \"{name}\"? Esta ação não pode ser desfeita.",
-        "deleted": "Movido para a lixeira",
-        "purged": "Excluído permanentemente",
-        "purge_partial": "{count} item(ns) não foi possível excluir permanentemente",
-        "confirm_folder": "Excluir a pasta \"{name}\" e todos os arquivos? Tudo será movido para a Lixeira.",
-        "confirm_bulk_folders": "Excluir {count} itens ({folders} pasta(s) com todo o conteúdo)? Tudo será movido para a Lixeira."
-    },
-    "trash": {
-        "title": "Lixeira",
-        "empty": "A lixeira está vazia",
-        "restore": "Restaurar",
-        "restore_all": "Restaurar tudo",
-        "empty_trash": "Esvaziar lixeira",
-        "auto_delete": "Os arquivos são excluídos permanentemente após {days} dias"
+        "deleted": "Excluído",
+        "confirm_folder": "Excluir permanentemente a pasta \"{name}\" e todos os arquivos dentro? Esta ação não pode ser desfeita.",
+        "confirm_bulk_folders": "Excluir permanentemente {count} item(ns) ({folders} pasta(s) com todo o conteúdo)? Esta ação não pode ser desfeita."
     },
     "search": {
         "placeholder": "Pesquisar por nome, título, texto alternativo...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "{name} enviado",
         "deleted": "{name} excluído",
-        "restored": "{name} restaurado",
         "moved": "{from} movido para {to}",
         "copied": "{from} copiado para {to}"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "URL copiada para a área de transferência"
+    },
+    "rename": {
+        "title": "Renomear",
+        "description": "Digite um novo nome.",
+        "placeholder": "Novo nome",
+        "success": "Renomeado",
+        "error_empty": "Por favor, insira um nome",
+        "error_chars": "O nome não pode conter: < > : \" / \\ | ? *"
     }
 }

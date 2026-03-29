@@ -47,7 +47,6 @@
         "all_files": "全部文件",
         "recent": "最近使用",
         "starred": "已收藏",
-        "trash": "回收站",
         "storage": "存储空间",
         "folders": "文件夹",
         "smart_filters": "智能筛选"
@@ -61,8 +60,6 @@
         "copy_url": "复制链接",
         "presign_url": "预签名链接",
         "delete": "删除",
-        "restore": "恢复",
-        "purge": "彻底删除",
         "move_to": "移动到...",
         "items": "{count} 个项目",
         "items_selected": "已选择 {count} 个",
@@ -84,7 +81,7 @@
         "complete": "上传完成",
         "error": "上传失败：{message}",
         "duplicate": "文件已存在，是否继续使用？",
-        "quota_exceeded": "存储空间已满（已用 {used} \/ 共 {max}）"
+        "quota_exceeded": "存储空间已满（已用 {used} / 共 {max}）"
     },
     "metadata": {
         "tab_info": "信息",
@@ -114,26 +111,15 @@
         "create_desc": "请输入新文件夹的名称。",
         "name_placeholder": "例如：我的文件夹",
         "name_required": "请输入文件夹名称",
-        "invalid_chars": "文件夹名称不能包含: < > : \" \/ \\ | ? *"
+        "invalid_chars": "文件夹名称不能包含: < > : \" / \\ | ? *"
     },
     "delete": {
         "confirm_title": "确认",
-        "confirm_file": "删除\"{name}\"？该文件将被移至回收站。",
+        "confirm_file": "永久删除 \"{name}\"？此操作无法撤销。",
         "confirm_bulk": "删除 {count} 个项目？此操作无法撤销。",
-        "confirm_purge": "彻底删除\"{name}\"？此操作无法撤销。",
-        "deleted": "已移至回收站",
-        "purged": "已彻底删除",
-        "purge_partial": "无法永久删除 {count} 个项目",
-        "confirm_folder": "删除文件夹\"{name}\"及其所有文件？所有内容将移至回收站。",
-        "confirm_bulk_folders": "删除{count}个项目（{folders}个文件夹及所有内容）？所有内容将移至回收站。"
-    },
-    "trash": {
-        "title": "回收站",
-        "empty": "回收站为空",
-        "restore": "恢复",
-        "restore_all": "全部恢复",
-        "empty_trash": "清空回收站",
-        "auto_delete": "文件将在 {days} 天后被永久删除"
+        "deleted": "已删除",
+        "confirm_folder": "永久删除文件夹 \"{name}\" 及其所有文件？此操作无法撤销。",
+        "confirm_bulk_folders": "永久删除 {count} 个项目（{folders} 个文件夹及其所有内容）？此操作无法撤销。"
     },
     "search": {
         "placeholder": "按名称、标题、替代文本搜索...",
@@ -158,7 +144,6 @@
     "audit": {
         "uploaded": "已上传 {name}",
         "deleted": "已删除 {name}",
-        "restored": "已恢复 {name}",
         "moved": "已将 {from} 移动到 {to}",
         "copied": "已将 {from} 复制到 {to}"
     },
@@ -190,5 +175,13 @@
     },
     "copy": {
         "copied": "已复制URL到剪贴板"
+    },
+    "rename": {
+        "title": "重命名",
+        "description": "输入新名称。",
+        "placeholder": "新名称",
+        "success": "已重命名",
+        "error_empty": "请输入名称",
+        "error_chars": "名称不能包含：< > : \" / \\ | ? *"
     }
 }
