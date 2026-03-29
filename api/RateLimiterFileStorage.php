@@ -32,37 +32,51 @@ class RateLimiterFileStorage
         $now = time();
         $windowStart = $now - $this->windowSeconds;
 
-        $data = $this->load();
-        $key = $userId . ':' . $actionType;
-        $entries = $data[$key] ?? [];
-        $entries = array_filter($entries, fn($ts) => $ts > $windowStart);
-
-        if (count($entries) >= $limit) {
-            header('Retry-After: ' . $this->windowSeconds);
-            throw new ApiException('Too many requests. Please try again later.', 429);
-        }
-
-        $entries[] = $now;
-        $data[$key] = array_slice($entries, -$limit);
-        $this->save($data);
-    }
-
-    private function load(): array
-    {
-        if (!file_exists($this->filePath)) {
-            return [];
-        }
-        $json = file_get_contents($this->filePath);
-        $data = json_decode($json, true);
-        return is_array($data) ? $data : [];
-    }
-
-    private function save(array $data): void
-    {
         $dir = dirname($this->filePath);
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
-        file_put_contents($this->filePath, json_encode($data, JSON_UNESCAPED_UNICODE), LOCK_EX);
+
+        // Use exclusive lock for atomic read-check-write
+        $fp = fopen($this->filePath, 'c+');
+        if ($fp === false) {
+            throw new ApiException('Rate limiter unavailable', 500);
+        }
+
+        try {
+            if (!flock($fp, LOCK_EX)) {
+                throw new ApiException('Rate limiter unavailable', 500);
+            }
+
+            $json = stream_get_contents($fp);
+            $data = ($json !== '' && $json !== false) ? json_decode($json, true) : [];
+            if (!is_array($data)) {
+                $data = [];
+            }
+
+            $key = $userId . ':' . $actionType;
+            $entries = $data[$key] ?? [];
+            $entries = array_values(array_filter($entries, fn($ts) => $ts > $windowStart));
+
+            if (count($entries) >= $limit) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                header('Retry-After: ' . $this->windowSeconds);
+                throw new ApiException('Too many requests. Please try again later.', 429);
+            }
+
+            $entries[] = $now;
+            $data[$key] = array_slice($entries, -$limit);
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data, JSON_UNESCAPED_UNICODE));
+            fflush($fp);
+            flock($fp, LOCK_UN);
+        } finally {
+            if (is_resource($fp)) {
+                fclose($fp);
+            }
+        }
     }
 }

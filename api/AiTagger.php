@@ -238,13 +238,15 @@ PROMPT;
         curl_close($ch);
 
         if ($response === false) {
-            throw new ApiException("AI API request failed: {$error}", 502);
+            error_log("FluxFiles AI API request failed: {$error}");
+            throw new ApiException('AI service temporarily unavailable', 502);
         }
 
         if ($httpCode >= 400) {
             $decoded = json_decode($response, true);
             $errMsg = $decoded['error']['message'] ?? $decoded['error']['type'] ?? "HTTP {$httpCode}";
-            throw new ApiException("AI API error: {$errMsg}", 502);
+            error_log("FluxFiles AI API error ({$httpCode}): {$errMsg}");
+            throw new ApiException('AI service returned an error', 502);
         }
 
         $decoded = json_decode($response, true);
