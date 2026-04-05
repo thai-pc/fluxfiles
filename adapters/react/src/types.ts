@@ -43,6 +43,13 @@ export interface FluxFilesConfig {
   locale?: string | null;
 }
 
+/**
+ * Callback for automatic token refresh.
+ * Called when the iframe receives a 401 and needs a new JWT.
+ * Return the new token string, or null/throw to signal failure.
+ */
+export type TokenRefreshHandler = (context: { reason: string; disk?: string; path?: string }) => Promise<string | null>;
+
 /** Props for the <FluxFiles /> embedded component. */
 export interface FluxFilesProps extends FluxFilesConfig {
   /** Container width. */
@@ -61,6 +68,8 @@ export interface FluxFilesProps extends FluxFilesConfig {
   onReady?: () => void;
   /** Fired on file operations (upload, delete, move, etc.). */
   onEvent?: (event: FluxEvent) => void;
+  /** Called when the iframe needs a fresh JWT (401 received). Return new token or null. */
+  onTokenRefresh?: TokenRefreshHandler;
 }
 
 /** Props for the <FluxFilesModal /> component. */
@@ -75,6 +84,8 @@ export interface FluxFilesModalProps extends FluxFilesConfig {
   onReady?: () => void;
   /** Fired on file operations. */
   onEvent?: (event: FluxEvent) => void;
+  /** Called when the iframe needs a fresh JWT (401 received). Return new token or null. */
+  onTokenRefresh?: TokenRefreshHandler;
   /** CSS class for the overlay. */
   overlayClassName?: string;
   /** CSS class for the modal content. */
@@ -115,6 +126,8 @@ export interface FluxFilesHandle {
   aiTag: () => void;
   /** Switch locale/language at runtime. */
   setLocale: (locale: string) => void;
+  /** Push a new token to the iframe (e.g. after background refresh). */
+  updateToken: (token: string) => void;
   /** Whether the iframe has reported ready. */
   ready: boolean;
 }
@@ -122,7 +135,7 @@ export interface FluxFilesHandle {
 /** Internal postMessage protocol types. */
 export interface FluxMessage {
   source: 'fluxfiles';
-  type: 'FM_READY' | 'FM_SELECT' | 'FM_EVENT' | 'FM_CLOSE' | 'FM_CONFIG' | 'FM_COMMAND';
+  type: 'FM_READY' | 'FM_SELECT' | 'FM_EVENT' | 'FM_CLOSE' | 'FM_CONFIG' | 'FM_COMMAND' | 'FM_TOKEN_REFRESH';
   v: number;
   id: string;
   payload: Record<string, unknown>;

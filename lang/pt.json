@@ -183,5 +183,11 @@
         "success": "Renomeado",
         "error_empty": "Por favor, insira um nome",
         "error_chars": "O nome não pode conter: < > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "Atualizando sessão...",
+        "expired": "Sua sessão expirou. Por favor, recarregue ou autentique-se novamente.",
+        "retry": "Tentar novamente",
+        "close": "Fechar"
     }
 }

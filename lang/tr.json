@@ -183,5 +183,11 @@
         "success": "Yeniden adlandırıldı",
         "error_empty": "Lütfen bir ad girin",
         "error_chars": "Ad şu karakterleri içeremez: < > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "Oturum yenileniyor...",
+        "expired": "Oturumunuz sona erdi. Lütfen yeniden yükleyin veya tekrar kimlik doğrulaması yapın.",
+        "retry": "Tekrar dene",
+        "close": "Kapat"
     }
 }

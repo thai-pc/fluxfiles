@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FluxFile, FluxEvent, FluxFilesConfig, FluxFilesHandle, FluxMessage } from './types';
+import type { FluxFile, FluxEvent, FluxFilesConfig, FluxFilesHandle, FluxMessage, TokenRefreshHandler } from './types';
 
 const SOURCE = 'fluxfiles';
 const VERSION = 1;
@@ -13,6 +13,7 @@ interface UseFluxFilesOptions extends FluxFilesConfig {
   onClose?: () => void;
   onReady?: () => void;
   onEvent?: (event: FluxEvent) => void;
+  onTokenRefresh?: TokenRefreshHandler;
 }
 
 /**
@@ -79,6 +80,24 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
         case 'FM_EVENT':
           opts.onEvent?.(msg.payload as unknown as FluxEvent);
           break;
+        case 'FM_TOKEN_REFRESH':
+          if (opts.onTokenRefresh) {
+            const payload = msg.payload as { reason: string; disk?: string; path?: string };
+            Promise.resolve(opts.onTokenRefresh(payload))
+              .then((newToken) => {
+                if (newToken) {
+                  post('FM_TOKEN_UPDATED', { token: newToken });
+                } else {
+                  post('FM_TOKEN_FAILED', { reason: 'refresh_returned_null' });
+                }
+              })
+              .catch((err) => {
+                post('FM_TOKEN_FAILED', { reason: (err as Error).message || 'refresh_error' });
+              });
+          } else {
+            post('FM_TOKEN_FAILED', { reason: 'no_handler' });
+          }
+          break;
         case 'FM_CLOSE':
           opts.onClose?.();
           break;
@@ -115,6 +134,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
   const crop = useCallback((x: number, y: number, width: number, height: number, savePath?: string) => command('crop', { x, y, width, height, save_path: savePath || '' }), [command]);
   const aiTag = useCallback(() => command('aiTag'), [command]);
   const setLocale = useCallback((locale: string) => command('setLocale', { locale }), [command]);
+  const updateToken = useCallback((token: string) => post('FM_TOKEN_UPDATED', { token }), [post]);
 
   const iframeRef = useCallback((el: HTMLIFrameElement | null) => {
     iframeElRef.current = el;
@@ -137,5 +157,6 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
     crop,
     aiTag,
     setLocale,
+    updateToken,
   };
 }

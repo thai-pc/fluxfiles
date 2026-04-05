@@ -55,6 +55,9 @@ function fluxFilesApp() {
 
         // Auth state
         authRequired: false,
+        authState: 'ok', // 'ok' | 'missing' | 'expired' | 'refreshing'
+        _refreshPromise: null, // coalesces concurrent refresh requests
+        _refreshAttempts: 0, // prevents infinite refresh loops
 
         // Toast state
         toastMessage: '',
@@ -206,6 +209,14 @@ function fluxFilesApp() {
                     this.loadQuota();
                 }
 
+                // Host proactively pushed a new token (e.g. background refresh)
+                if (msg.type === 'FM_TOKEN_UPDATED' && msg.payload?.token) {
+                    this.token = msg.payload.token;
+                    this.authRequired = false;
+                    this.authState = 'ok';
+                    this._refreshAttempts = 0;
+                }
+
                 if (msg.type === 'FM_COMMAND') {
                     this.handleCommand(msg.payload);
                 }
@@ -220,7 +231,7 @@ function fluxFilesApp() {
             document.documentElement.lang = this.locale;
 
             this.postMessage('FM_READY', {
-                version: '1.20.0',
+                version: '1.25.0',
                 locale: this.locale,
                 capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops', 'ai-tag', 'i18n']
             });
@@ -264,6 +275,7 @@ function fluxFilesApp() {
                         this.loadFiles();
                         this.loadQuota();
                     } else {
+                        this.authState = 'missing';
                         this.authRequired = true;
                     }
                 };
@@ -299,8 +311,8 @@ function fluxFilesApp() {
             }
         },
 
-        // API helper
-        async api(method, path, body) {
+        // API helper — with 401 detection, token refresh queue, and retry
+        async api(method, path, body, _isRetry = false) {
             const url = this.endpoint + path;
             const opts = {
                 method: method,
@@ -317,13 +329,106 @@ function fluxFilesApp() {
             }
 
             const res = await fetch(url, opts);
+
+            // 401 — token expired or invalid
+            if (res.status === 401 && !_isRetry) {
+                const refreshed = await this._handleTokenExpired();
+                if (refreshed) {
+                    // Retry the original request with new token
+                    return this.api(method, path, body, true);
+                }
+                // Refresh failed — throw so caller's catch handles it
+                throw new Error('Session expired');
+            }
+
             const json = await res.json();
 
             if (json.error) {
                 throw new Error(json.error);
             }
 
+            // Reset refresh attempts on any successful request
+            this._refreshAttempts = 0;
             return json.data;
+        },
+
+        /**
+         * Handle token expiration:
+         * 1. Notify host app via FM_TOKEN_REFRESH
+         * 2. Wait for FM_TOKEN_UPDATED with new token (or timeout)
+         * 3. If host doesn't respond, show auth expired screen
+         *
+         * Multiple concurrent 401s coalesce into ONE refresh request.
+         * Returns true if token was refreshed, false if not.
+         */
+        async _handleTokenExpired() {
+            // Prevent infinite refresh loops
+            this._refreshAttempts++;
+            if (this._refreshAttempts > 2) {
+                this._showAuthExpired();
+                return false;
+            }
+
+            // Coalesce: if a refresh is already in progress, wait for it
+            if (this._refreshPromise) {
+                return this._refreshPromise;
+            }
+
+            this.authState = 'refreshing';
+
+            this._refreshPromise = new Promise((resolve) => {
+                // Ask host app for a new token
+                this.postMessage('FM_TOKEN_REFRESH', {
+                    reason: 'expired',
+                    disk: this.currentDisk,
+                    path: this.currentPath
+                });
+
+                // Listen for response (with timeout)
+                const timeout = setTimeout(() => {
+                    cleanup();
+                    this._showAuthExpired();
+                    resolve(false);
+                }, 10000); // 10s timeout
+
+                const handler = (e) => {
+                    if (this._parentOrigin && e.origin !== this._parentOrigin) return;
+                    const msg = e.data;
+                    if (!msg || msg.source !== 'fluxfiles') return;
+
+                    if (msg.type === 'FM_TOKEN_UPDATED' && msg.payload?.token) {
+                        cleanup();
+                        this.token = msg.payload.token;
+                        this.authRequired = false;
+                        this.authState = 'ok';
+                        this.postMessage('FM_EVENT', { event: 'auth:refreshed' });
+                        resolve(true);
+                    }
+
+                    if (msg.type === 'FM_TOKEN_FAILED') {
+                        cleanup();
+                        this._showAuthExpired();
+                        resolve(false);
+                    }
+                };
+
+                const cleanup = () => {
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', handler);
+                    this._refreshPromise = null;
+                };
+
+                window.addEventListener('message', handler);
+            });
+
+            return this._refreshPromise;
+        },
+
+        _showAuthExpired() {
+            this.authState = 'expired';
+            this.authRequired = true;
+            this._refreshPromise = null;
+            this.postMessage('FM_EVENT', { event: 'auth:expired' });
         },
 
         // Load files

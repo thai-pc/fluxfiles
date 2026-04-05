@@ -183,5 +183,11 @@
         "success": "Đã đổi tên",
         "error_empty": "Vui lòng nhập tên",
         "error_chars": "Tên không được chứa: < > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "Đang làm mới phiên...",
+        "expired": "Phiên làm việc đã hết hạn. Vui lòng tải lại hoặc xác thực lại.",
+        "retry": "Thử lại",
+        "close": "Đóng"
     }
 }

@@ -4,6 +4,21 @@ All notable changes to FluxFiles are documented here.
 
 ---
 
+## [1.25.0] — 2026-04-05
+
+### Token Refresh System
+
+- **Automatic token renewal** — when the API returns 401, the iframe requests a fresh JWT from the host app via `FM_TOKEN_REFRESH` / `FM_TOKEN_UPDATED` / `FM_TOKEN_FAILED` postMessage protocol
+- **Request coalescing** — multiple concurrent 401s trigger only one refresh request; all waiting requests retry after the new token arrives
+- **Retry with circuit breaker** — failed requests auto-retry once with the new token; after 2 consecutive refresh failures, shows the expired screen instead of looping
+- **10s timeout** — if the host app doesn't respond within 10 seconds, the iframe falls back to the expired auth screen
+- **SDK `onTokenRefresh` callback** — `FluxFiles.open({ onTokenRefresh: async () => fetchNewToken() })` enables automatic renewal in the vanilla JS SDK
+- **SDK `updateToken()` method** — `FluxFiles.updateToken(newJwt)` lets the host push a new token proactively (e.g. background refresh timer)
+- **Auth screen states** — three visual states: "missing" (no token), "refreshing" (spinner), "expired" (retry button + close)
+- **React adapter** — `onTokenRefresh` prop + `updateToken()` on the handle; `TokenRefreshHandler` type exported
+- **Vue adapter** — `onTokenRefresh` option + `updateToken()` composable method; `TokenRefreshHandler` type exported
+- **Event system** — `auth:refreshed` and `auth:expired` events emitted via `FM_EVENT` for host app observability
+
 ## [1.24.0] — 2026-04-05
 
 ### Security Fixes

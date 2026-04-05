@@ -183,5 +183,11 @@
         "success": "已重命名",
         "error_empty": "请输入名称",
         "error_chars": "名称不能包含：< > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "正在刷新会话...",
+        "expired": "您的会话已过期。请重新加载或重新验证。",
+        "retry": "重试",
+        "close": "关闭"
     }
 }

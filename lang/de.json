@@ -183,5 +183,11 @@
         "success": "Umbenannt",
         "error_empty": "Bitte geben Sie einen Namen ein",
         "error_chars": "Name darf nicht enthalten: < > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "Sitzung wird erneuert...",
+        "expired": "Ihre Sitzung ist abgelaufen. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.",
+        "retry": "Wiederholen",
+        "close": "Schließen"
     }
 }

@@ -8,6 +8,7 @@
     var config = {};
     var ready = false;
     var iframeOrigin = '';
+    var _tokenRefreshing = false;
 
     function uuid() {
         return 'ff-' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -54,6 +55,37 @@
                 }
                 emit('FM_SELECT', msg.payload);
                 FluxFiles.close();
+                break;
+
+            case 'FM_TOKEN_REFRESH':
+                // Iframe is requesting a new token (401 received)
+                if (_tokenRefreshing) break; // prevent concurrent refreshes
+                _tokenRefreshing = true;
+                emit('FM_TOKEN_REFRESH', msg.payload);
+
+                if (typeof config.onTokenRefresh === 'function') {
+                    // onTokenRefresh must return a Promise<string> (new JWT) or Promise<null> (failed)
+                    Promise.resolve()
+                        .then(function() { return config.onTokenRefresh(msg.payload); })
+                        .then(function(newToken) {
+                            _tokenRefreshing = false;
+                            if (newToken) {
+                                config.token = newToken;
+                                postToIframe('FM_TOKEN_UPDATED', { token: newToken });
+                            } else {
+                                postToIframe('FM_TOKEN_FAILED', { reason: 'refresh_returned_null' });
+                            }
+                        })
+                        .catch(function(err) {
+                            _tokenRefreshing = false;
+                            console.error('FluxFiles: onTokenRefresh failed', err);
+                            postToIframe('FM_TOKEN_FAILED', { reason: err.message || 'refresh_error' });
+                        });
+                } else {
+                    // No handler — notify iframe that refresh is not supported
+                    _tokenRefreshing = false;
+                    postToIframe('FM_TOKEN_FAILED', { reason: 'no_handler' });
+                }
                 break;
 
             case 'FM_EVENT':
@@ -168,6 +200,13 @@
         crossMove: function(dstDisk, dstPath) { this.command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
         aiTag: function() { this.command('aiTag'); },
         setLocale: function(locale) { this.command('setLocale', { locale: locale }); },
+
+        updateToken: function(newToken) {
+            config.token = newToken;
+            if (ready && iframe) {
+                postToIframe('FM_TOKEN_UPDATED', { token: newToken });
+            }
+        },
 
         on: function(type, cb) {
             if (!listeners[type]) listeners[type] = [];

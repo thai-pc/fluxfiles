@@ -239,6 +239,13 @@ function openFilePicker() {
         },
         onClose() {
             console.log('File picker closed');
+        },
+
+        // Token refresh — called automatically on 401
+        async onTokenRefresh({ reason, disk, path }) {
+            const res = await fetch('/api/auth/refresh-fluxfiles-token');
+            const { token } = await res.json();
+            return token; // return new JWT string, or null to fail
         }
     });
 }
@@ -259,6 +266,7 @@ FluxFiles.crossMove('r2', 'archive/');    // Move selected file to another disk
 FluxFiles.aiTag();                        // AI-tag selected image
 FluxFiles.setLocale('vi');                // Change language
 FluxFiles.close();                        // Close file manager
+FluxFiles.updateToken('eyJ...');          // Push new token (e.g. background refresh)
 ```
 
 ### SDK Events
@@ -285,10 +293,33 @@ FluxFiles.on('FM_CLOSE', () => {
     console.log('Closed');
 });
 
+// Token refresh events
+FluxFiles.on('FM_TOKEN_REFRESH', (ctx) => {
+    console.log('Token refresh requested:', ctx.reason);
+});
+
 // Unsubscribe
 const unsub = FluxFiles.on('FM_SELECT', handler);
 unsub(); // remove listener
 ```
+
+### Token Refresh
+
+FluxFiles automatically handles JWT expiration. When the API returns 401:
+
+1. The iframe sends `FM_TOKEN_REFRESH` to the host app
+2. The SDK calls your `onTokenRefresh` callback
+3. You fetch a new JWT from your backend and return it
+4. The SDK sends `FM_TOKEN_UPDATED` back to the iframe
+5. The failed request is automatically retried with the new token
+
+**Behavior details:**
+- Multiple concurrent 401s are coalesced into a single refresh request
+- After 2 consecutive refresh failures, the auth expired screen is shown
+- 10-second timeout — if no response, falls back to expired screen
+- `auth:refreshed` and `auth:expired` events are emitted via `FM_EVENT`
+
+**Proactive refresh:** Call `FluxFiles.updateToken(newJwt)` to push a new token before it expires (e.g. on a timer).
 
 ### PHP Embed Helper
 
