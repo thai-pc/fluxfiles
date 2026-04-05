@@ -7,6 +7,7 @@
     var listeners = {};
     var config = {};
     var ready = false;
+    var iframeOrigin = '';
 
     function uuid() {
         return 'ff-' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -20,10 +21,11 @@
             v: VERSION,
             id: uuid(),
             payload: payload || {}
-        }, '*');
+        }, iframeOrigin || '*');
     }
 
     function handleMessage(e) {
+        if (iframeOrigin && e.origin !== iframeOrigin) return;
         var msg = e.data;
         if (!msg || msg.source !== SOURCE) return;
 
@@ -81,6 +83,14 @@
             var container = config.container
                 ? document.querySelector(config.container)
                 : document.body;
+
+            // Derive origin from endpoint for postMessage validation
+            try {
+                var u = new URL(endpoint + '/public/index.html');
+                iframeOrigin = u.origin;
+            } catch (_) {
+                iframeOrigin = window.location.origin;
+            }
 
             // Clean up existing
             this.close();

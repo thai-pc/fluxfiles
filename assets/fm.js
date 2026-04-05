@@ -142,6 +142,9 @@ function fluxFilesApp() {
             }
         },
 
+        // Trusted parent origin (set on first FM_CONFIG message)
+        _parentOrigin: null,
+
         // Init
         init() {
             // Restore detail panel width from localStorage
@@ -172,10 +175,14 @@ function fluxFilesApp() {
             };
 
             window.addEventListener('message', (e) => {
+                // Validate origin: trust first FM_CONFIG sender, then lock to that origin
+                if (this._parentOrigin && e.origin !== this._parentOrigin) return;
+
                 const msg = e.data;
                 if (!msg || msg.source !== 'fluxfiles') return;
 
                 if (msg.type === 'FM_CONFIG') {
+                    if (!this._parentOrigin) this._parentOrigin = e.origin;
                     this.token = msg.payload.token || '';
                     this.currentDisk = msg.payload.disk || 'local';
                     this.endpoint = msg.payload.endpoint || '';
@@ -288,7 +295,7 @@ function fluxFilesApp() {
                     v: 1,
                     id: 'ff-' + Math.random().toString(36).substr(2, 9),
                     payload: safePayload
-                }, '*');
+                }, this._parentOrigin || '*');
             }
         },
 

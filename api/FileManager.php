@@ -115,8 +115,8 @@ class FileManager
             );
         }
 
-        // Duplicate detection
-        $hash = md5_file($file['tmp_name']);
+        // Duplicate detection (SHA-256)
+        $hash = hash_file('sha256', $file['tmp_name']);
         if ($hash !== false && !$forceUpload) {
             $existing = $this->meta->findByHash($disk, $hash);
             if ($existing) {
@@ -651,10 +651,23 @@ class FileManager
         ];
     }
 
+    private const MAX_PRESIGN_TTL = 86400; // 24 hours
+
     public function presign(string $disk, string $path, string $method, int $ttl): array
     {
         $this->assertDisk($disk);
         $this->assertPerm('write');
+
+        if (!in_array($method, ['GET', 'PUT'], true)) {
+            throw new ApiException('Invalid presign method: must be GET or PUT', 400);
+        }
+
+        if ($ttl < 1) {
+            $ttl = 3600;
+        }
+        if ($ttl > self::MAX_PRESIGN_TTL) {
+            $ttl = self::MAX_PRESIGN_TTL;
+        }
 
         $scoped = $this->scopedPath($path);
         $config = $this->disks->config($disk);

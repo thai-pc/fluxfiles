@@ -15,8 +15,13 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 {
     private const INDEX_KEY = '_fluxfiles/index.json';
     private const AUDIT_KEY = '_fluxfiles/audit.jsonl';
+    private const MAX_AUDIT_BYTES = 5 * 1024 * 1024; // 5MB rotation threshold
+    private const AUDIT_KEEP_LINES = 5000; // Keep last N entries after rotation
 
     private DiskManager $diskManager;
+
+    /** @var array<string, resource> Active file locks keyed by disk name */
+    private array $indexLocks = [];
 
     public function __construct(DiskManager $diskManager)
     {
@@ -70,35 +75,40 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     public function renameChildren(string $disk, string $oldPrefix, string $newPrefix): int
     {
-        $index = $this->loadIndex($disk);
-        $count = 0;
-        $updated = [];
-        foreach ($index as $k => $meta) {
-            if ($k === $oldPrefix || strpos($k, $oldPrefix . '/') === 0) {
-                $newKey = $newPrefix . substr($k, strlen($oldPrefix));
-                $updated[$newKey] = $meta;
-                unset($index[$k]);
-                // Move sidecar file for local disks
-                if (!$this->isS3Compatible($disk)) {
-                    $fs = $this->diskManager->disk($disk);
-                    $oldSidecar = $this->sidecarPath($k);
-                    $newSidecar = $this->sidecarPath($newKey);
-                    try {
-                        if ($fs->fileExists($oldSidecar)) {
-                            $fs->move($oldSidecar, $newSidecar);
+        $this->acquireIndexLock($disk);
+        try {
+            $index = $this->loadIndex($disk);
+            $count = 0;
+            $updated = [];
+            foreach ($index as $k => $meta) {
+                if ($k === $oldPrefix || strpos($k, $oldPrefix . '/') === 0) {
+                    $newKey = $newPrefix . substr($k, strlen($oldPrefix));
+                    $updated[$newKey] = $meta;
+                    unset($index[$k]);
+                    // Move sidecar file for local disks
+                    if (!$this->isS3Compatible($disk)) {
+                        $fs = $this->diskManager->disk($disk);
+                        $oldSidecar = $this->sidecarPath($k);
+                        $newSidecar = $this->sidecarPath($newKey);
+                        try {
+                            if ($fs->fileExists($oldSidecar)) {
+                                $fs->move($oldSidecar, $newSidecar);
+                            }
+                        } catch (\Throwable $e) {
+                            // Silent
                         }
-                    } catch (\Throwable $e) {
-                        // Silent
                     }
+                    $count++;
                 }
-                $count++;
             }
+            if ($count > 0) {
+                $index = array_merge($index, $updated);
+                $this->saveIndex($disk, $index);
+            }
+            return $count;
+        } finally {
+            $this->releaseIndexLock($disk);
         }
-        if ($count > 0) {
-            $index = array_merge($index, $updated);
-            $this->saveIndex($disk, $index);
-        }
-        return $count;
     }
 
     public function getBulk(string $disk, array $keys): array
@@ -158,8 +168,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         if ($text === '' || $query === '') {
             return null;
         }
-        $q = preg_quote($query, '/');
-        return preg_replace('/(' . $q . ')/iu', '<mark>$1</mark>', $text) ?: null;
+        // Escape HTML first to prevent XSS, then apply highlight marks
+        $escaped = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $q = preg_quote(htmlspecialchars($query, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), '/');
+        return preg_replace('/(' . $q . ')/iu', '<mark>$1</mark>', $escaped) ?: null;
     }
 
     public function countChildren(string $disk, string $prefix): int
@@ -176,11 +188,16 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     public function saveHash(string $disk, string $key, string $hash): void
     {
-        $index = $this->loadIndex($disk);
-        $existing = $index[$key] ?? [];
-        $existing['file_hash'] = $hash;
-        $index[$key] = $existing;
-        $this->saveIndex($disk, $index);
+        $this->acquireIndexLock($disk);
+        try {
+            $index = $this->loadIndex($disk);
+            $existing = $index[$key] ?? [];
+            $existing['file_hash'] = $hash;
+            $index[$key] = $existing;
+            $this->saveIndex($disk, $index);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
     }
 
     public function findByHash(string $disk, string $hash): ?array
@@ -250,11 +267,18 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         ]) . "\n";
         $fs = $this->diskManager->disk($disk);
         try {
+            $content = '';
             if ($fs->fileExists(self::AUDIT_KEY)) {
-                $content = $fs->read(self::AUDIT_KEY) . $entry;
-            } else {
-                $content = $entry;
+                $content = $fs->read(self::AUDIT_KEY);
+
+                // Rotate if audit log exceeds size threshold
+                if (strlen($content) > self::MAX_AUDIT_BYTES) {
+                    $lines = array_filter(explode("\n", $content));
+                    $lines = array_slice($lines, -self::AUDIT_KEEP_LINES);
+                    $content = implode("\n", $lines) . "\n";
+                }
             }
+            $content .= $entry;
             $fs->write(self::AUDIT_KEY, $content);
         } catch (\Throwable $e) {
             // Silent fail
@@ -353,6 +377,37 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         return $key . '.meta.json';
     }
 
+    /**
+     * Acquire an exclusive lock for local disk index operations.
+     * Returns the lock file handle, or null for S3 disks (no local locking possible).
+     */
+    private function acquireIndexLock(string $disk): void
+    {
+        if ($this->isS3Compatible($disk) || isset($this->indexLocks[$disk])) {
+            return;
+        }
+        $config = $this->diskManager->config($disk);
+        $root = $config['root'] ?? __DIR__ . '/../storage/uploads';
+        $lockDir = $root . '/_fluxfiles';
+        if (!is_dir($lockDir)) {
+            mkdir($lockDir, 0755, true);
+        }
+        $lockFile = $lockDir . '/index.lock';
+        $fp = fopen($lockFile, 'c+');
+        if ($fp !== false && flock($fp, LOCK_EX)) {
+            $this->indexLocks[$disk] = $fp;
+        }
+    }
+
+    private function releaseIndexLock(string $disk): void
+    {
+        if (isset($this->indexLocks[$disk])) {
+            flock($this->indexLocks[$disk], LOCK_UN);
+            fclose($this->indexLocks[$disk]);
+            unset($this->indexLocks[$disk]);
+        }
+    }
+
     private function loadIndex(string $disk): array
     {
         $fs = $this->diskManager->disk($disk);
@@ -380,22 +435,32 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function updateIndex(string $disk, string $key, array $data): void
     {
-        $index = $this->loadIndex($disk);
-        $existing = $index[$key] ?? [];
-        $index[$key] = array_merge($existing, [
-            'title' => $data['title'] ?? $existing['title'] ?? null,
-            'alt_text' => $data['alt_text'] ?? $existing['alt_text'] ?? null,
-            'caption' => $data['caption'] ?? $existing['caption'] ?? null,
-            'tags' => $data['tags'] ?? $existing['tags'] ?? null,
-        ]);
-        $this->saveIndex($disk, $index);
+        $this->acquireIndexLock($disk);
+        try {
+            $index = $this->loadIndex($disk);
+            $existing = $index[$key] ?? [];
+            $index[$key] = array_merge($existing, [
+                'title' => $data['title'] ?? $existing['title'] ?? null,
+                'alt_text' => $data['alt_text'] ?? $existing['alt_text'] ?? null,
+                'caption' => $data['caption'] ?? $existing['caption'] ?? null,
+                'tags' => $data['tags'] ?? $existing['tags'] ?? null,
+            ]);
+            $this->saveIndex($disk, $index);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
     }
 
     private function removeFromIndex(string $disk, string $key): void
     {
-        $index = $this->loadIndex($disk);
-        unset($index[$key]);
-        $this->saveIndex($disk, $index);
+        $this->acquireIndexLock($disk);
+        try {
+            $index = $this->loadIndex($disk);
+            unset($index[$key]);
+            $this->saveIndex($disk, $index);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
     }
 
 }

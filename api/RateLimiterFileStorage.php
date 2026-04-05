@@ -38,9 +38,13 @@ class RateLimiterFileStorage
         }
 
         // Use exclusive lock for atomic read-check-write
+        $isNew = !file_exists($this->filePath);
         $fp = fopen($this->filePath, 'c+');
         if ($fp === false) {
             throw new ApiException('Rate limiter unavailable', 500);
+        }
+        if ($isNew) {
+            chmod($this->filePath, 0600);
         }
 
         try {
