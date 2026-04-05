@@ -183,5 +183,11 @@
         "success": "Renamed",
         "error_empty": "Please enter a name",
         "error_chars": "Name cannot contain: < > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "Refreshing session...",
+        "expired": "Your session has expired. Please reload or re-authenticate.",
+        "retry": "Retry",
+        "close": "Close"
     }
 }

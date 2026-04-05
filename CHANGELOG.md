@@ -4,6 +4,39 @@ All notable changes to FluxFiles are documented here.
 
 ---
 
+## [1.25.0] — 2026-04-05
+
+### Token Refresh System
+
+- **Automatic token renewal** — when the API returns 401, the iframe requests a fresh JWT from the host app via `FM_TOKEN_REFRESH` / `FM_TOKEN_UPDATED` / `FM_TOKEN_FAILED` postMessage protocol
+- **Request coalescing** — multiple concurrent 401s trigger only one refresh request; all waiting requests retry after the new token arrives
+- **Retry with circuit breaker** — failed requests auto-retry once with the new token; after 2 consecutive refresh failures, shows the expired screen instead of looping
+- **10s timeout** — if the host app doesn't respond within 10 seconds, the iframe falls back to the expired auth screen
+- **SDK `onTokenRefresh` callback** — `FluxFiles.open({ onTokenRefresh: async () => fetchNewToken() })` enables automatic renewal in the vanilla JS SDK
+- **SDK `updateToken()` method** — `FluxFiles.updateToken(newJwt)` lets the host push a new token proactively (e.g. background refresh timer)
+- **Auth screen states** — three visual states: "missing" (no token), "refreshing" (spinner), "expired" (retry button + close)
+- **React adapter** — `onTokenRefresh` prop + `updateToken()` on the handle; `TokenRefreshHandler` type exported
+- **Vue adapter** — `onTokenRefresh` option + `updateToken()` composable method; `TokenRefreshHandler` type exported
+- **Event system** — `auth:refreshed` and `auth:expired` events emitted via `FM_EVENT` for host app observability
+
+## [1.24.0] — 2026-04-05
+
+### Security Fixes
+
+- **[CRITICAL] postMessage origin validation** — SDK (`fluxfiles.js`) and iframe (`fm.js`) now validate `e.origin` on all `message` events. SDK locks to the iframe's origin; iframe locks to the first `FM_CONFIG` sender. Outbound `postMessage` calls target the trusted origin instead of `'*'`.
+- **[HIGH] CSRF / Origin header check** — All POST/PUT/DELETE requests now verify the `Origin` header against `FLUXFILES_ALLOWED_ORIGINS`. Requests from unlisted origins are rejected with 403.
+- **[MEDIUM] XSS in search highlights** — `StorageMetadataHandler::highlight()` now escapes HTML entities before applying `<mark>` tags, preventing stored XSS via metadata fields.
+- **[MEDIUM] SHA-256 replaces MD5** — Duplicate detection now uses `hash_file('sha256')` instead of `md5_file()`.
+- **[MEDIUM] Presign parameter validation** — `presign()` now rejects methods other than `GET`/`PUT` and caps TTL at 86400 seconds (24 hours).
+- **[MEDIUM] Metadata index file locking** — All read-modify-write operations on `_fluxfiles/index.json` now use `flock(LOCK_EX)` to prevent race conditions under concurrent requests (local disk).
+- **[LOW] Rate limit file permissions** — New rate limit files are created with `0600` permissions.
+- **[LOW] Audit log rotation** — Audit log (`_fluxfiles/audit.jsonl`) is automatically trimmed to the last 5000 entries when exceeding 5MB.
+
+### Other Changes
+
+- Removed unnecessary `str_contains` polyfill (PHP 8.2+ is the runtime target)
+- Updated README.md with comprehensive deployment guide, API reference, and security documentation
+
 ## [1.23.0] — 2026-03-30
 
 - **CKEditor 4 adapter** (`adapters/ckeditor4/`) — toolbar button, image `<img>` / file `<a>` insert
@@ -105,7 +138,7 @@ All notable changes to FluxFiles are documented here.
 
 ## [1.7.0] — 2026-02-12
 
-- **Duplicate detection** — MD5 hash check on upload
+- **Duplicate detection** — Hash check on upload (upgraded to SHA-256 in v1.24.0)
 - Returns existing file URL + warning instead of re-uploading
 - `force_upload` option to override
 

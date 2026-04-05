@@ -66,12 +66,15 @@ export interface FluxFilesHandle {
   crossMove: (dstDisk: string, dstPath?: string) => void;
   crop: (x: number, y: number, width: number, height: number, savePath?: string) => void;
   aiTag: () => void;
+  updateToken: (token: string) => void;
   ready: boolean;
 }
 
+export type TokenRefreshHandler = (context: { reason: string; disk?: string; path?: string }) => Promise<string | null>;
+
 export interface FluxMessage {
   source: 'fluxfiles';
-  type: 'FM_READY' | 'FM_SELECT' | 'FM_EVENT' | 'FM_CLOSE' | 'FM_CONFIG' | 'FM_COMMAND';
+  type: 'FM_READY' | 'FM_SELECT' | 'FM_EVENT' | 'FM_CLOSE' | 'FM_CONFIG' | 'FM_COMMAND' | 'FM_TOKEN_REFRESH';
   v: number;
   id: string;
   payload: Record<string, unknown>;

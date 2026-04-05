@@ -12,4 +12,5 @@ export type {
   FluxFilesModalProps,
   FluxFilesHandle,
   FluxCommand,
+  TokenRefreshHandler,
 } from './types';

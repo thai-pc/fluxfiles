@@ -1,5 +1,5 @@
 import { ref, watch, onMounted, onUnmounted, computed, type Ref } from 'vue';
-import type { FluxFile, FluxEvent, FluxFilesConfig, FluxMessage } from './types';
+import type { FluxFile, FluxEvent, FluxFilesConfig, FluxMessage, TokenRefreshHandler } from './types';
 
 const SOURCE = 'fluxfiles';
 const VERSION = 1;
@@ -13,6 +13,7 @@ export interface UseFluxFilesOptions extends FluxFilesConfig {
   onClose?: () => void;
   onReady?: () => void;
   onEvent?: (event: FluxEvent) => void;
+  onTokenRefresh?: TokenRefreshHandler;
 }
 
 export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOptions>) {
@@ -65,6 +66,24 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
       case 'FM_EVENT':
         o.onEvent?.(msg.payload as unknown as FluxEvent);
         break;
+      case 'FM_TOKEN_REFRESH':
+        if (o.onTokenRefresh) {
+          const payload = msg.payload as { reason: string; disk?: string; path?: string };
+          Promise.resolve(o.onTokenRefresh(payload))
+            .then((newToken) => {
+              if (newToken) {
+                post('FM_TOKEN_UPDATED', { token: newToken });
+              } else {
+                post('FM_TOKEN_FAILED', { reason: 'refresh_returned_null' });
+              }
+            })
+            .catch((err) => {
+              post('FM_TOKEN_FAILED', { reason: (err as Error).message || 'refresh_error' });
+            });
+        } else {
+          post('FM_TOKEN_FAILED', { reason: 'no_handler' });
+        }
+        break;
       case 'FM_CLOSE':
         o.onClose?.();
         break;
@@ -98,6 +117,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
   const crossMove  = (dstDisk: string, dstPath?: string) => command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' });
   const crop       = (x: number, y: number, width: number, height: number, savePath?: string) => command('crop', { x, y, width, height, save_path: savePath || '' });
   const aiTag      = () => command('aiTag');
+  const updateToken = (token: string) => post('FM_TOKEN_UPDATED', { token });
 
   return {
     iframeRef,
@@ -112,5 +132,6 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
     crossMove,
     crop,
     aiTag,
+    updateToken,
   };
 }

@@ -14,14 +14,6 @@ use FluxFiles\QuotaManager;
 use FluxFiles\RateLimiterFileStorage;
 use FluxFiles\StorageMetadataHandler;
 
-// Polyfill str_contains for PHP < 8.0
-if (!function_exists('str_contains')) {
-    function str_contains(string $haystack, string $needle): bool
-    {
-        return $needle === '' || strpos($haystack, $needle) !== false;
-    }
-}
-
 // Load .env
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->safeLoad();
@@ -43,6 +35,17 @@ if (in_array($origin, $allowedOrigins, true)) {
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
+}
+
+// CSRF protection: verify Origin header on mutating requests
+if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'DELETE'], true)) {
+    $reqOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($reqOrigin !== '' && !empty($allowedOrigins) && !in_array($reqOrigin, $allowedOrigins, true)) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['data' => null, 'error' => 'Origin not allowed']);
+        exit;
+    }
 }
 
 header('Content-Type: application/json; charset=utf-8');

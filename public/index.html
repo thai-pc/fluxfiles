@@ -35,43 +35,68 @@
             </div>
 
             <h2 class="ff-auth-title">FluxFiles</h2>
-            <p class="ff-auth-subtitle">Authentication required to access the file manager.</p>
 
-            <div class="ff-auth-divider"></div>
+            <!-- State: refreshing — spinner while waiting for new token -->
+            <template x-if="authState === 'refreshing'">
+                <div style="text-align:center;">
+                    <div class="ff-auth-spinner"></div>
+                    <p class="ff-auth-subtitle" x-text="t('auth.refreshing') || 'Refreshing session...'"></p>
+                </div>
+            </template>
 
-            <!-- Method cards -->
-            <div class="ff-auth-methods">
-                <div class="ff-auth-method">
-                    <div class="ff-auth-method-icon">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M15 7H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V9a2 2 0 00-2-2z"/>
-                            <path d="M7 7V5a3 3 0 016 0v2"/>
-                            <circle cx="10" cy="12" r="1"/>
-                        </svg>
-                    </div>
-                    <div class="ff-auth-method-body">
-                        <span class="ff-auth-method-label">URL Token</span>
-                        <code class="ff-auth-code">?token=&lt;JWT&gt;</code>
+            <!-- State: expired — session could not be renewed -->
+            <template x-if="authState === 'expired'">
+                <div style="text-align:center;">
+                    <p class="ff-auth-subtitle" x-text="t('auth.expired') || 'Your session has expired. Please reload or re-authenticate.'"></p>
+                    <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">
+                        <button class="ff-btn ff-btn-primary" @click="window.parent !== window ? postMessage('FM_TOKEN_REFRESH', { reason: 'manual_retry' }) : location.reload()" x-text="t('auth.retry') || 'Retry'"></button>
+                        <button class="ff-btn" @click="if(window.parent !== window) postMessage('FM_CLOSE', {})" x-show="window.parent !== window" x-text="t('auth.close') || 'Close'"></button>
                     </div>
                 </div>
-                <div class="ff-auth-method">
-                    <div class="ff-auth-method-icon">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="2" y="4" width="16" height="12" rx="2"/>
-                            <path d="M6 8h8M6 11h5"/>
-                        </svg>
-                    </div>
-                    <div class="ff-auth-method-body">
-                        <span class="ff-auth-method-label">Iframe Embed</span>
-                        <code class="ff-auth-code">postMessage FM_CONFIG</code>
-                    </div>
-                </div>
-            </div>
+            </template>
 
-            <a class="ff-auth-docs" href="https://github.com/thai-pc/fluxfiles" target="_blank" rel="noopener">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-                View documentation
-            </a>
+            <!-- State: missing — no token provided (initial / standalone) -->
+            <template x-if="authState === 'missing' || authState === 'ok'">
+                <div>
+                    <p class="ff-auth-subtitle">Authentication required to access the file manager.</p>
+
+                    <div class="ff-auth-divider"></div>
+
+                    <!-- Method cards -->
+                    <div class="ff-auth-methods">
+                        <div class="ff-auth-method">
+                            <div class="ff-auth-method-icon">
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M15 7H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+                                    <path d="M7 7V5a3 3 0 016 0v2"/>
+                                    <circle cx="10" cy="12" r="1"/>
+                                </svg>
+                            </div>
+                            <div class="ff-auth-method-body">
+                                <span class="ff-auth-method-label">URL Token</span>
+                                <code class="ff-auth-code">?token=&lt;JWT&gt;</code>
+                            </div>
+                        </div>
+                        <div class="ff-auth-method">
+                            <div class="ff-auth-method-icon">
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="4" width="16" height="12" rx="2"/>
+                                    <path d="M6 8h8M6 11h5"/>
+                                </svg>
+                            </div>
+                            <div class="ff-auth-method-body">
+                                <span class="ff-auth-method-label">Iframe Embed</span>
+                                <code class="ff-auth-code">postMessage FM_CONFIG</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <a class="ff-auth-docs" href="https://github.com/thai-pc/fluxfiles" target="_blank" rel="noopener">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                        View documentation
+                    </a>
+                </div>
+            </template>
         </div>
 
         <!-- Subtle background pattern -->
@@ -279,8 +304,8 @@
                 <template x-if="!uploading">
                     <div>
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="opacity:.5"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 15h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                        <div style="font-size:15px;color:var(--color-text-secondary);" x-text="t('upload.drop_hint')"></div>
-                        <div style="font-size:14px;color:var(--color-text-tertiary);margin-top:4px;" x-text="t('upload.max_size', {size: '10MB'})"></div>
+                        <div style="font-size:13px;color:var(--color-text-secondary);" x-text="t('upload.drop_hint')"></div>
+                        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px;" x-text="t('upload.max_size', {size: '10MB'})"></div>
                     </div>
                 </template>
                 <template x-if="uploading">
@@ -399,10 +424,14 @@
 
                     <!-- Empty -->
                     <div class="ff-empty" x-show="filteredFiles.length === 0 && filteredFolders.length === 0">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
                         </svg>
                         <p x-text="t('file.no_files')"></p>
+                        <button class="ff-empty-cta" @click="triggerUpload()">
+                            <svg viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 4l3-3 3 3M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            <span x-text="t('toolbar.upload')"></span>
+                        </button>
                     </div>
                 </div>
             </template>

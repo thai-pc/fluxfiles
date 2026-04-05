@@ -183,5 +183,11 @@
         "success": "Rinominato",
         "error_empty": "Inserisci un nome",
         "error_chars": "Il nome non può contenere: < > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "Aggiornamento sessione...",
+        "expired": "La sessione è scaduta. Ricaricare o autenticarsi di nuovo.",
+        "retry": "Riprova",
+        "close": "Chiudi"
     }
 }

@@ -183,5 +183,11 @@
         "success": "Renombrado",
         "error_empty": "Por favor ingrese un nombre",
         "error_chars": "El nombre no puede contener: < > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "Renovando sesión...",
+        "expired": "Su sesión ha expirado. Por favor, recargue o vuelva a autenticarse.",
+        "retry": "Reintentar",
+        "close": "Cerrar"
     }
 }

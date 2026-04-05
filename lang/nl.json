@@ -183,5 +183,11 @@
         "success": "Hernoemd",
         "error_empty": "Voer een naam in",
         "error_chars": "Naam mag niet bevatten: < > : \" / \\ | ? *"
+    },
+    "auth": {
+        "refreshing": "Sessie vernieuwen...",
+        "expired": "Uw sessie is verlopen. Herlaad de pagina of authenticeer opnieuw.",
+        "retry": "Opnieuw proberen",
+        "close": "Sluiten"
     }
 }
