@@ -31,7 +31,8 @@
         "select_folder": "เลือกโฟลเดอร์",
         "select_item": "เลือก 1 รายการ",
         "select_items": "เลือก {count} รายการ",
-        "root": "รูท"
+        "root": "รูท",
+        "selected": "ที่เลือก"
     },
     "toolbar": {
         "upload": "อัปโหลด",

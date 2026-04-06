@@ -31,7 +31,8 @@
         "select_folder": "Seleccionar carpeta",
         "select_item": "Seleccionar 1 elemento",
         "select_items": "Seleccionar {count} elementos",
-        "root": "Raíz"
+        "root": "Raíz",
+        "selected": "seleccionado(s)"
     },
     "toolbar": {
         "upload": "Subir",

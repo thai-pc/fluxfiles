@@ -71,8 +71,11 @@ function fluxFilesApp() {
         _themeMediaQuery: null,
         _themeMediaHandler: null,
 
-        // Mobile: sidebar drawer
+        // Mobile: sidebar drawer + mobile UI state
         sidebarOpen: false,
+        mobileSearchOpen: false,
+        mobileMoreOpen: false,
+        mobileActionSheet: null, // null or file/folder object for action sheet
 
         // Detail panel: resizable width (desktop), persisted
         detailPanelWidth: 350,
@@ -660,9 +663,22 @@ function fluxFilesApp() {
         },
 
         folderContextMenu(folder, event) {
-            // Select folder and trigger delete confirm
+            // Mobile: show action sheet instead of context menu
+            if (window.innerWidth <= 768) {
+                this.mobileActionSheet = folder;
+                return;
+            }
+            // Desktop: select folder and trigger delete confirm
             this.selected = [folder];
             this.confirmDelete();
+        },
+
+        openActionSheet(item) {
+            this.mobileActionSheet = item;
+        },
+
+        closeActionSheet() {
+            this.mobileActionSheet = null;
         },
 
         // Bulk progress helper

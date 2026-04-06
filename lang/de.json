@@ -31,7 +31,8 @@
         "select_folder": "Ordner auswählen",
         "select_item": "1 Element auswählen",
         "select_items": "{count} Elemente auswählen",
-        "root": "Stammverzeichnis"
+        "root": "Stammverzeichnis",
+        "selected": "ausgewählt"
     },
     "toolbar": {
         "upload": "Hochladen",
