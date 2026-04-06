@@ -32,7 +32,8 @@
         "select_item": "1 öğe seç",
         "select_items": "{count} öğe seç",
         "root": "Kök",
-        "selected": "seçili"
+        "selected": "seçili",
+        "refresh": "Yenile"
     },
     "toolbar": {
         "upload": "Yükle",

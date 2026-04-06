@@ -32,7 +32,8 @@
         "select_item": "Seleziona 1 elemento",
         "select_items": "Seleziona {count} elementi",
         "root": "Radice",
-        "selected": "selezionato/i"
+        "selected": "selezionato/i",
+        "refresh": "Aggiorna"
     },
     "toolbar": {
         "upload": "Carica",

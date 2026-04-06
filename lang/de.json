@@ -32,7 +32,8 @@
         "select_item": "1 Element auswählen",
         "select_items": "{count} Elemente auswählen",
         "root": "Stammverzeichnis",
-        "selected": "ausgewählt"
+        "selected": "ausgewählt",
+        "refresh": "Aktualisieren"
     },
     "toolbar": {
         "upload": "Hochladen",

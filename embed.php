@@ -16,7 +16,8 @@ function fluxfiles_token(
     string $prefix = '',
     int $maxUploadMb = 10,
     ?array $allowedExt = null,
-    int $ttl = 3600
+    int $ttl = 3600,
+    bool $ownerOnly = false
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -32,6 +33,10 @@ function fluxfiles_token(
         'max_upload'  => $maxUploadMb,
         'allowed_ext' => $allowedExt,
     ];
+
+    if ($ownerOnly) {
+        $payload['owner_only'] = true;
+    }
 
     return JWT::encode($payload, $secret, 'HS256');
 }
@@ -60,7 +65,8 @@ function fluxfiles_byob_token(
     string $prefix = '',
     int $maxUploadMb = 10,
     ?array $allowedExt = null,
-    int $ttl = 1800
+    int $ttl = 1800,
+    bool $ownerOnly = false
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -88,6 +94,10 @@ function fluxfiles_byob_token(
         'byob_disks'  => $encryptedDisks,
     ];
 
+    if ($ownerOnly) {
+        $payload['owner_only'] = true;
+    }
+
     return JWT::encode($payload, $secret, 'HS256');
 }
 
@@ -112,7 +122,8 @@ function fluxfiles_mixed_token(
     string $prefix = '',
     int $maxUploadMb = 10,
     ?array $allowedExt = null,
-    int $ttl = 1800
+    int $ttl = 1800,
+    bool $ownerOnly = false
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -139,6 +150,10 @@ function fluxfiles_mixed_token(
         'allowed_ext' => $allowedExt,
         'byob_disks'  => !empty($encryptedDisks) ? $encryptedDisks : null,
     ];
+
+    if ($ownerOnly) {
+        $payload['owner_only'] = true;
+    }
 
     return JWT::encode($payload, $secret, 'HS256');
 }

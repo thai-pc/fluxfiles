@@ -32,7 +32,8 @@
         "select_item": "เลือก 1 รายการ",
         "select_items": "เลือก {count} รายการ",
         "root": "รูท",
-        "selected": "ที่เลือก"
+        "selected": "ที่เลือก",
+        "refresh": "รีเฟรช"
     },
     "toolbar": {
         "upload": "อัปโหลด",

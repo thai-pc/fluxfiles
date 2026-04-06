@@ -480,6 +480,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `max_upload` | int | `10` | Max file upload size in MB |
 | `allowed_ext` | string[]&#124;null | `null` | File extension whitelist (`null` = allow all safe types) |
 | `max_storage` | int | `0` | Storage quota in MB (`0` = unlimited) |
+| `owner_only` | bool | `false` | When `true`, users can only delete/rename/move files they uploaded |
 | `byob_disks` | object | — | Encrypted BYOB credentials (optional) |
 
 ### Permissions explained
@@ -500,6 +501,42 @@ prefix: "users/42/"
 → Path traversal (../) is stripped before prefix is applied
 → Null bytes are removed
 ```
+
+### User isolation
+
+FluxFiles provides two layers of user isolation that can be used independently or combined:
+
+**Layer 1: Path prefix (recommended)** — Each user gets a unique `prefix` so they physically cannot see or touch other users' files:
+
+```php
+$token = fluxfiles_token(
+    userId:   $user->id,
+    perms:    ['read', 'write', 'delete'],
+    prefix:   'users/' . $user->id . '/',  // user 42 → users/42/*
+);
+```
+
+**Layer 2: Owner-only mode** — When multiple users share the same prefix (e.g., a shared team folder), `owner_only` restricts destructive operations (delete, rename, move, crop) to the user who uploaded the file:
+
+```php
+$token = fluxfiles_token(
+    userId:    $user->id,
+    perms:     ['read', 'write', 'delete'],
+    prefix:    'team/shared/',
+    ownerOnly: true,  // can only delete/rename own files
+);
+```
+
+| Scenario | Use |
+|----------|-----|
+| Each user has their own space | `prefix: 'users/{id}/'` |
+| Shared folder, users can only manage own files | `prefix: 'shared/'` + `owner_only: true` |
+| Admin with full access | `prefix: ''` (no prefix, no owner_only) |
+| Shared folder, everyone can manage all files | `prefix: 'shared/'` (no owner_only) |
+
+> **Warning:** `owner_only` is a safety layer, NOT a replacement for `prefix` isolation. Always use `prefix` to scope users to their own directory. `owner_only` only protects against delete/rename/move — it does NOT prevent users from reading or downloading each other's files.
+
+> **Note:** Files uploaded before `owner_only` was enabled lack ownership metadata and will be accessible to all users. Ownership is recorded from the moment the feature is enabled.
 
 ---
 
@@ -908,6 +945,7 @@ FluxFiles.setLocale('ja');
 | **Path traversal** | `..` and `.` segments stripped, null bytes removed, paths normalized before use |
 | **Extension blocking** | Dangerous extensions (php, exe, sh, bat, etc.) blocked even in double-extension filenames (e.g. `shell.php.jpg`) |
 | **Path scoping** | Users confined to their `prefix` directory — cannot access files outside scope |
+| **Owner-only mode** | `owner_only` JWT claim restricts delete/rename/move to files the user uploaded |
 | **Disk whitelist** | Per-token disk access — users can only access disks listed in JWT |
 | **Permission model** | Granular `read`, `write`, `delete` checked on every operation |
 | **BYOB encryption** | AES-256-GCM with HKDF-derived key (separate from signing key) |

@@ -32,7 +32,8 @@
         "select_item": "选择 1 项",
         "select_items": "选择 {count} 项",
         "root": "根目录",
-        "selected": "已选择"
+        "selected": "已选择",
+        "refresh": "刷新"
     },
     "toolbar": {
         "upload": "上传",

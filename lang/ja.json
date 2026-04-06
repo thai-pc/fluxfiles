@@ -32,7 +32,8 @@
         "select_item": "1 件を選択",
         "select_items": "{count} 件を選択",
         "root": "ルート",
-        "selected": "選択済み"
+        "selected": "選択済み",
+        "refresh": "更新"
     },
     "toolbar": {
         "upload": "アップロード",

@@ -152,6 +152,11 @@ class FileManager
             $this->meta->saveHash($disk, $scoped, $hash);
         }
 
+        // Store ownership metadata
+        $this->meta->save($disk, $scoped, [
+            'uploaded_by' => $this->claims->userId,
+        ]);
+
         $result = [
             'key'      => $scoped,
             'url'      => $this->fileUrl($disk, $scoped),
@@ -212,6 +217,7 @@ class FileManager
         $this->assertPerm('delete');
 
         $scoped = $this->scopedPath($path);
+        $this->assertOwner($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
         // Check if directory — delete all contents recursively
@@ -239,6 +245,9 @@ class FileManager
         $this->assertDisk($disk);
         $this->assertPerm('write');
 
+        $scoped = $this->scopedPath($path);
+        $this->assertOwner($disk, $scoped);
+
         $newName = trim($newName);
         if ($newName === '') {
             throw new ApiException('New name cannot be empty', 400);
@@ -249,7 +258,6 @@ class FileManager
 
         $this->assertSafeFilename($newName);
 
-        $scoped = $this->scopedPath($path);
         $fs = $this->disks->disk($disk);
 
         $dir = dirname($scoped);
@@ -329,6 +337,7 @@ class FileManager
         $this->assertPerm('write');
 
         $scopedFrom = $this->scopedPath($from);
+        $this->assertOwner($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
         $fs = $this->disks->disk($disk);
         $fs->move($scopedFrom, $scopedTo);
@@ -410,6 +419,7 @@ class FileManager
         }
 
         $scopedSrc = $this->scopedPath($srcPath);
+        $this->assertOwner($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
 
         $srcFs = $this->disks->disk($srcDisk);
@@ -570,6 +580,7 @@ class FileManager
         $this->assertPerm('write');
 
         $scopedSrc = $this->scopedPath($path);
+        $this->assertOwner($disk, $scopedSrc);
         $fs = $this->disks->disk($disk);
 
         $imageData = $fs->read($scopedSrc);
@@ -750,6 +761,34 @@ class FileManager
         }
         $region = $config['region'] ?? 'us-east-1';
         return "https://{$bucket}.s3.{$region}.amazonaws.com/{$path}";
+    }
+
+    /**
+     * When owner_only is enabled, verify the current user owns the file.
+     * Skips check for directories (no ownership metadata) and for files
+     * without uploaded_by (legacy files uploaded before owner tracking).
+     */
+    private function assertOwner(string $disk, string $scopedPath): void
+    {
+        if (!$this->claims->ownerOnly) {
+            return;
+        }
+
+        $meta = $this->meta->get($disk, $scopedPath);
+        if ($meta === null) {
+            // No metadata — likely a directory or legacy file; allow
+            return;
+        }
+
+        $owner = $meta['uploaded_by'] ?? null;
+        if ($owner === null) {
+            // Legacy file without ownership info; allow
+            return;
+        }
+
+        if ($owner !== $this->claims->userId) {
+            throw new ApiException('You can only modify files you uploaded', 403);
+        }
     }
 
     private function assertDisk(string $disk): void

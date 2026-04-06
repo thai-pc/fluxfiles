@@ -32,7 +32,8 @@
         "select_item": "1 आइटम चुनें",
         "select_items": "{count} आइटम चुनें",
         "root": "रूट",
-        "selected": "चयनित"
+        "selected": "चयनित",
+        "refresh": "रीफ़्रेश"
     },
     "toolbar": {
         "upload": "अपलोड",

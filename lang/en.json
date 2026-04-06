@@ -32,7 +32,8 @@
         "select_item": "Select 1 item",
         "select_items": "Select {count} items",
         "root": "Root",
-        "selected": "selected"
+        "selected": "selected",
+        "refresh": "Refresh"
     },
     "toolbar": {
         "upload": "Upload",
