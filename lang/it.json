@@ -31,7 +31,8 @@
         "select_folder": "Seleziona cartella",
         "select_item": "Seleziona 1 elemento",
         "select_items": "Seleziona {count} elementi",
-        "root": "Radice"
+        "root": "Radice",
+        "selected": "selezionato/i"
     },
     "toolbar": {
         "upload": "Carica",

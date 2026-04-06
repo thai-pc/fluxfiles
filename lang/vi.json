@@ -31,7 +31,8 @@
         "select_folder": "Chọn thư mục",
         "select_item": "Chọn 1 mục",
         "select_items": "Chọn {count} mục",
-        "root": "Gốc"
+        "root": "Gốc",
+        "selected": "da chon"
     },
     "toolbar": {
         "upload": "Tải lên",

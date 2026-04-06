@@ -31,7 +31,8 @@
         "select_folder": "Map selecteren",
         "select_item": "1 item selecteren",
         "select_items": "{count} items selecteren",
-        "root": "Hoofdmap"
+        "root": "Hoofdmap",
+        "selected": "geselecteerd"
     },
     "toolbar": {
         "upload": "Uploaden",

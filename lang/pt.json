@@ -31,7 +31,8 @@
         "select_folder": "Selecionar pasta",
         "select_item": "Selecionar 1 item",
         "select_items": "Selecionar {count} itens",
-        "root": "Raiz"
+        "root": "Raiz",
+        "selected": "selecionado(s)"
     },
     "toolbar": {
         "upload": "Enviar",

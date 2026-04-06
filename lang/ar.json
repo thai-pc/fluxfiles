@@ -31,7 +31,8 @@
         "select_folder": "اختيار مجلد",
         "select_item": "اختيار عنصر واحد",
         "select_items": "اختيار {count} عناصر",
-        "root": "الجذر"
+        "root": "الجذر",
+        "selected": "محدد"
     },
     "toolbar": {
         "upload": "رفع",

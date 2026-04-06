@@ -31,7 +31,8 @@
         "select_folder": "फ़ोल्डर चुनें",
         "select_item": "1 आइटम चुनें",
         "select_items": "{count} आइटम चुनें",
-        "root": "रूट"
+        "root": "रूट",
+        "selected": "चयनित"
     },
     "toolbar": {
         "upload": "अपलोड",

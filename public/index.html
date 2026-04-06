@@ -122,6 +122,11 @@
             </template>
         </div>
 
+        <!-- Mobile: search icon (opens fullscreen search) -->
+        <button class="ff-mobile-search-btn" @click="mobileSearchOpen = true" :title="t('toolbar.search_hint')">
+            <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+        </button>
+
         <!-- Disk pills + controls (hidden on mobile, in sidebar) — Theme & Language above disk pills -->
         <div class="ff-disk-pills ff-disk-pills-desktop">
             <!-- Search -->
@@ -162,6 +167,19 @@
                 </button>
             </template>
         </div>
+    </div>
+
+    <!-- ═══ Mobile fullscreen search ═══ -->
+    <div class="ff-mobile-search-overlay" x-show="mobileSearchOpen" x-transition.opacity.duration.200ms @keydown.escape.window="mobileSearchOpen = false"
+         x-effect="if (mobileSearchOpen) $nextTick(() => $refs.mobileSearchInput?.focus())">
+        <div class="ff-mobile-search-header">
+            <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            <input type="text" x-ref="mobileSearchInput" x-model="searchQuery" :placeholder="t('toolbar.search_hint')" @input="searchQuery.length >= 2 && loadFiles()" autofocus>
+            <button @click="mobileSearchOpen = false; searchQuery = ''; loadFiles()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="ff-mobile-search-hint" x-show="!searchQuery" x-text="t('toolbar.search_hint')"></div>
     </div>
 
     <!-- Mobile sidebar overlay -->
@@ -246,36 +264,68 @@
                 <span x-text="t('toolbar.new_folder')"></span>
             </button>
 
-            <div class="ff-sep"></div>
+            <div class="ff-sep ff-sep-desktop"></div>
 
-            <!-- Contextual bulk buttons -->
-            <button class="tb-btn" x-show="selected.length === 1" @click="openRename(selected[0])">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span x-text="t('common.rename')"></span>
-            </button>
-            <button class="tb-btn danger" x-show="selected.length > 0" @click="confirmDelete()">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span x-text="t('common.delete')"></span>
-                <span x-show="selected.length > 1" x-text="'(' + selected.length + ')'"></span>
-            </button>
-            <button class="tb-btn" x-show="selected.length === 1 && detailFile" @click="copyUrl(detailFile)">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
-                <span x-text="t('toolbar.copy_url')"></span>
-            </button>
+            <!-- Contextual bulk buttons (desktop only) -->
+            <div class="ff-toolbar-context">
+                <button class="tb-btn" x-show="selected.length === 1" @click="openRename(selected[0])">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('common.rename')"></span>
+                </button>
+                <button class="tb-btn danger" x-show="selected.length > 0" @click="confirmDelete()">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('common.delete')"></span>
+                    <span x-show="selected.length > 1" x-text="'(' + selected.length + ')'"></span>
+                </button>
+                <button class="tb-btn" x-show="selected.length === 1 && detailFile" @click="copyUrl(detailFile)">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('toolbar.copy_url')"></span>
+                </button>
 
-            <!-- Select multiple (picker mode, multiple: true) -->
-            <button class="tb-btn primary" x-show="config.multiple && selected.length > 0" @click="selectMultiple()">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 7l2 2 3-3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.1"/></svg>
-                <span x-text="tp('common.select_item', 'common.select_items', selected.length)"></span>
-            </button>
+                <!-- Select multiple (picker mode, multiple: true) -->
+                <button class="tb-btn primary" x-show="config.multiple && selected.length > 0" @click="selectMultiple()">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 7l2 2 3-3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.1"/></svg>
+                    <span x-text="tp('common.select_item', 'common.select_items', selected.length)"></span>
+                </button>
 
-            <!-- Bulk operations -->
-            <button class="tb-btn" x-show="selected.length > 0" @click="openBulkMove()">
-                <span x-text="t('bulk.move')"></span>
-            </button>
-            <button class="tb-btn" x-show="selected.length > 0" @click="openCrossDisk('copy')">
-                <span x-text="t('bulk.copy_to_disk')"></span>
-            </button>
+                <!-- Bulk operations -->
+                <button class="tb-btn" x-show="selected.length > 0" @click="openBulkMove()">
+                    <span x-text="t('bulk.move')"></span>
+                </button>
+                <button class="tb-btn" x-show="selected.length > 0" @click="openCrossDisk('copy')">
+                    <span x-text="t('bulk.copy_to_disk')"></span>
+                </button>
+            </div>
+
+            <!-- Mobile: "More" menu (3 dots) -->
+            <div class="ff-mobile-more" x-data="{ open: false }" @click.away="open = false">
+                <button class="tb-btn ff-more-btn" @click="open = !open">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                </button>
+                <div class="ff-more-menu" x-show="open" x-transition.scale.origin.top.right>
+                    <button @click="open = false; selected.length === 1 && openRename(selected[0])" x-show="selected.length === 1">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span x-text="t('common.rename')"></span>
+                    </button>
+                    <button @click="open = false; selected.length === 1 && detailFile && copyUrl(detailFile)" x-show="selected.length === 1 && detailFile">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                        <span x-text="t('toolbar.copy_url')"></span>
+                    </button>
+                    <button @click="open = false; openBulkMove()" x-show="selected.length > 0">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M1 3.5A1.5 1.5 0 012.5 2h2l1 1.5h4A1.5 1.5 0 0111 5v4A1.5 1.5 0 019.5 10.5h-7A1.5 1.5 0 011 9V3.5z" stroke="currentColor" stroke-width="1.1"/></svg>
+                        <span x-text="t('bulk.move')"></span>
+                    </button>
+                    <button @click="open = false; openCrossDisk('copy')" x-show="selected.length > 0">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><rect x="2" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M5 4V3a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H8" stroke="currentColor" stroke-width="1.1"/></svg>
+                        <span x-text="t('bulk.copy_to_disk')"></span>
+                    </button>
+                    <div class="ff-more-divider" x-show="selected.length > 0"></div>
+                    <button @click="open = false; confirmDelete()" x-show="selected.length > 0" class="ff-more-danger">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span x-text="t('common.delete')"></span>
+                    </button>
+                </div>
+            </div>
 
             <div style="margin-inline-start:auto;display:flex;align-items:center;gap:6px;">
                 <!-- View toggle -->
@@ -378,7 +428,8 @@
                                     <div class="file-card"
                                          :class="{ selected: isSelected(file) }"
                                          @click="handleFileClick(file, $event)"
-                                         @dblclick="selectFile(file)">
+                                         @dblclick="selectFile(file)"
+                                         @contextmenu.prevent="openActionSheet(file)">
                                         <div class="check" @click.stop="config.multiple && toggleSelect(file, { ctrlKey: true })">✓</div>
                                         <div x-show="hasMetaBadge(file)" class="ff-meta-badge"></div>
 
@@ -790,6 +841,67 @@
                     </span>
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- ═══ Mobile bottom action bar (shown when items selected) ═══ -->
+    <div class="ff-bottom-bar" x-show="selected.length > 0" x-transition.opacity.duration.200ms>
+        <span class="ff-bottom-bar-count" x-text="selected.length + ' ' + t('common.selected')"></span>
+        <div class="ff-bottom-bar-actions">
+            <button @click="confirmDelete()">
+                <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span x-text="t('common.delete')"></span>
+            </button>
+            <button @click="openBulkMove()">
+                <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><path d="M1 3.5A1.5 1.5 0 012.5 2h2l1 1.5h4A1.5 1.5 0 0111 5v4A1.5 1.5 0 019.5 10.5h-7A1.5 1.5 0 011 9V3.5z" stroke="currentColor" stroke-width="1.1"/></svg>
+                <span x-text="t('common.move')"></span>
+            </button>
+            <button @click="openCrossDisk('copy')">
+                <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><rect x="2" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M5 4V3a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H8" stroke="currentColor" stroke-width="1.1"/></svg>
+                <span x-text="t('common.copy')"></span>
+            </button>
+            <button @click="selected = []">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <span x-text="t('common.cancel')"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══ Mobile action sheet (context menu replacement) ═══ -->
+    <div class="ff-action-sheet-overlay" x-show="mobileActionSheet" x-transition.opacity.duration.200ms @click="closeActionSheet()">
+        <div class="ff-action-sheet" @click.stop x-show="mobileActionSheet"
+             x-transition:enter="ff-sheet-enter" x-transition:enter-start="ff-sheet-enter-start" x-transition:enter-end="ff-sheet-enter-end"
+             x-transition:leave="ff-sheet-leave" x-transition:leave-start="ff-sheet-leave-start" x-transition:leave-end="ff-sheet-leave-end">
+            <div class="ff-sheet-handle"></div>
+            <div class="ff-sheet-title" x-text="mobileActionSheet?.name"></div>
+            <div class="ff-sheet-actions">
+                <button @click="closeActionSheet(); selected = [mobileActionSheet]; detailFile = mobileActionSheet; activeTab = 'info'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    <span x-text="t('metadata.tab_info')"></span>
+                </button>
+                <button @click="closeActionSheet(); openRename(mobileActionSheet)">
+                    <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('common.rename')"></span>
+                </button>
+                <button x-show="mobileActionSheet?.type !== 'dir'" @click="closeActionSheet(); copyUrl(mobileActionSheet)">
+                    <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('toolbar.copy_url')"></span>
+                </button>
+                <button x-show="mobileActionSheet?.type !== 'dir'" @click="closeActionSheet(); downloadFile(mobileActionSheet)">
+                    <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('common.download')"></span>
+                </button>
+                <button @click="closeActionSheet(); selected = [mobileActionSheet]; openBulkMove()">
+                    <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M1 3.5A1.5 1.5 0 012.5 2h2l1 1.5h4A1.5 1.5 0 0111 5v4A1.5 1.5 0 019.5 10.5h-7A1.5 1.5 0 011 9V3.5z" stroke="currentColor" stroke-width="1.1"/></svg>
+                    <span x-text="t('common.move')"></span>
+                </button>
+                <div class="ff-sheet-divider"></div>
+                <button class="ff-sheet-danger" @click="closeActionSheet(); selected = [mobileActionSheet]; confirmDelete()">
+                    <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('common.delete')"></span>
+                </button>
+            </div>
+            <button class="ff-sheet-cancel" @click="closeActionSheet()" x-text="t('common.cancel')"></button>
         </div>
     </div>
 

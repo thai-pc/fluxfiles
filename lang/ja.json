@@ -31,7 +31,8 @@
         "select_folder": "フォルダを選択",
         "select_item": "1 件を選択",
         "select_items": "{count} 件を選択",
-        "root": "ルート"
+        "root": "ルート",
+        "selected": "選択済み"
     },
     "toolbar": {
         "upload": "アップロード",
