@@ -1889,7 +1889,7 @@ body {
     justify-content: center;
 }
 
-.ff-empty svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.3; }
+.ff-empty svg { width: 48px; height: 48px; opacity: 0.3; }
 .ff-empty p { font-size: 14px; margin-bottom: 16px; }
 
 .ff-empty-cta {
@@ -2160,6 +2160,12 @@ body {
 .ff-bottom-bar,
 .ff-action-sheet-overlay { display: none; }
 
+.ff-toolbar-context{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 /* ══════════════════════════ Responsive Mobile ══════════════════════════ */
 @media (max-width: 768px) {
     :root {
@@ -2363,8 +2369,9 @@ body {
         flex-wrap: nowrap;
         gap: 6px;
         padding: 8px 12px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        overflow-x: visible;
+        position: relative;
+        z-index: 10;
     }
 
     .tb-btn {
@@ -2378,10 +2385,10 @@ body {
     .ff-toolbar .ff-sep,
     .ff-toolbar .ff-sep-desktop { display: none; }
 
-    /* Hide contextual buttons — they're in "More" menu and bottom bar */
+    /* Hide contextual buttons + view toggle — they're in "More" menu and bottom bar */
     .ff-toolbar-context { display: none; }
-
     .ff-search-box { display: none; }
+    .ff-toolbar .view-toggle { display: none; }
 
     /* "More" menu */
     .ff-mobile-more {
@@ -2408,7 +2415,7 @@ body {
         border-radius: 12px;
         padding: 6px;
         box-shadow: 0 8px 30px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-        z-index: 50;
+        z-index: 100;
     }
 
     .ff-more-menu button {
@@ -2462,10 +2469,14 @@ body {
     .file-card .fname {
         font-size: 12px;
         max-width: none;
+        white-space: normal;
+        word-break: break-all;
         -webkit-line-clamp: 2;
+        line-clamp: 2;
         display: -webkit-box;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .file-card .fsize { font-size: 10px; }

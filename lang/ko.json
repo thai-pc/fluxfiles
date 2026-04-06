@@ -32,7 +32,8 @@
         "select_item": "1개 항목 선택",
         "select_items": "{count}개 항목 선택",
         "root": "루트",
-        "selected": "선택됨"
+        "selected": "선택됨",
+        "refresh": "새로고침"
     },
     "toolbar": {
         "upload": "업로드",

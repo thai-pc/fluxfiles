@@ -32,7 +32,8 @@
         "select_item": "اختيار عنصر واحد",
         "select_items": "اختيار {count} عناصر",
         "root": "الجذر",
-        "selected": "محدد"
+        "selected": "محدد",
+        "refresh": "تحديث"
     },
     "toolbar": {
         "upload": "رفع",

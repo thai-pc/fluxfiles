@@ -4,6 +4,28 @@ All notable changes to FluxFiles are documented here.
 
 ---
 
+## [1.26.0] — 2026-04-06
+
+### Owner-Only File Protection
+
+- **`owner_only` JWT claim** — when `true`, delete/rename/move/crop operations are restricted to files uploaded by the token holder
+- **`uploaded_by` metadata** — every uploaded file now records the uploader's `userId` in metadata for ownership tracking
+- **`assertOwner()` enforcement** — ownership checked on `delete()`, `rename()`, `move()`, `crossMove()`, `cropImage()`; returns 403 if user is not the file owner
+- **Graceful legacy fallback** — files uploaded before `owner_only` was enabled (no `uploaded_by` metadata) remain accessible to all users
+- **`embed.php` support** — all token functions (`fluxfiles_token`, `fluxfiles_byob_token`, `fluxfiles_mixed_token`) accept `ownerOnly` parameter
+
+### Mobile UX Overhaul
+
+- **Mobile search** — search icon in topbar opens fullscreen search overlay with auto-focus input
+- **Sidebar drawer** — upgraded to 300px max, spring animation (`cubic-bezier(0.32, 0.72, 0, 1)`), blur overlay, 44px tap targets
+- **File grid** — larger thumbnails (56x48px), 2-line filenames with `word-break`, 10px gap
+- **Toolbar "More" menu** — 3-dot button with view toggle, refresh, and contextual actions; replaces inline toolbar buttons on mobile
+- **Bottom action bar** — fixed bottom bar when items selected with Delete/Move/Copy/Cancel buttons, safe-area padding
+- **Detail panel slide-up** — 90vh fullscreen modal with slide-up animation, drag handle, sticky header, rounded top corners
+- **Action sheet** — bottom sheet replaces context menu on mobile; triggered via long-press on file/folder cards
+- **Spacing & touch** — increased padding, `-webkit-tap-highlight-color: transparent`, `touch-action: manipulation`
+- **Dark mode mobile** — component-specific dark overrides for all new mobile elements
+
 ## [1.25.0] — 2026-04-05
 
 ### Token Refresh System

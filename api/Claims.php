@@ -27,6 +27,9 @@ class Claims
     /** @var int */
     public $maxStorageMb;
 
+    /** @var bool When true, write/delete operations are restricted to files uploaded by this user */
+    public $ownerOnly;
+
     /** @var array<string, array> BYOB disk configs (decrypted) — diskName => config */
     public $byobDisks = [];
 
@@ -38,6 +41,7 @@ class Claims
         int $maxUploadMb,
         ?array $allowedExt,
         int $maxStorageMb,
+        bool $ownerOnly = false,
         array $byobDisks = []
     ) {
         $this->userId = $userId;
@@ -47,6 +51,7 @@ class Claims
         $this->maxUploadMb = $maxUploadMb;
         $this->allowedExt = $allowedExt;
         $this->maxStorageMb = $maxStorageMb;
+        $this->ownerOnly = $ownerOnly;
         $this->byobDisks = $byobDisks;
     }
 
@@ -74,6 +79,7 @@ class Claims
             (int) ($payload->max_upload ?? 10),
             isset($payload->allowed_ext) ? (array) $payload->allowed_ext : null,
             (int) ($payload->max_storage ?? 0),
+            (bool) ($payload->owner_only ?? false),
             $byobDisks
         );
     }

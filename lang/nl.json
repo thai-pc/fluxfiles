@@ -32,7 +32,8 @@
         "select_item": "1 item selecteren",
         "select_items": "{count} items selecteren",
         "root": "Hoofdmap",
-        "selected": "geselecteerd"
+        "selected": "geselecteerd",
+        "refresh": "Vernieuwen"
     },
     "toolbar": {
         "upload": "Uploaden",

@@ -95,13 +95,13 @@ echo "{$yellow}► hasPerm{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('hasPerm returns true for granted permission', function () {
-    $claims = new FluxFiles\Claims('u1', ['read', 'write'], ['local'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read', 'write'], ['local'], '', 10, null, 0, false);
     assertEqual(true, $claims->hasPerm('read'));
     assertEqual(true, $claims->hasPerm('write'));
 });
 
 test('hasPerm returns false for missing permission', function () {
-    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
     assertEqual(false, $claims->hasPerm('write'));
     assertEqual(false, $claims->hasPerm('delete'));
 });
@@ -111,13 +111,13 @@ echo "{$yellow}► hasDisk{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('hasDisk returns true for allowed disk', function () {
-    $claims = new FluxFiles\Claims('u1', ['read'], ['local', 's3'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local', 's3'], '', 10, null, 0, false);
     assertEqual(true, $claims->hasDisk('local'));
     assertEqual(true, $claims->hasDisk('s3'));
 });
 
 test('hasDisk returns false for disallowed disk', function () {
-    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
     assertEqual(false, $claims->hasDisk('s3'));
     assertEqual(false, $claims->hasDisk('r2'));
 });
@@ -127,7 +127,7 @@ echo "{$yellow}► isPathInScope{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('isPathInScope: empty prefix always returns true', function () {
-    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
     assertEqual(true, $claims->isPathInScope('anything/goes/here'));
     assertEqual(true, $claims->isPathInScope(''));
     assertEqual(true, $claims->isPathInScope('/'));
@@ -162,7 +162,7 @@ echo "{$yellow}► scopePath{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('scopePath: simple path without prefix', function () {
-    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
     assertEqual('photos/pic.jpg', $claims->scopePath('photos/pic.jpg'));
 });
 
@@ -172,18 +172,18 @@ test('scopePath: simple path with prefix', function () {
 });
 
 test('scopePath: strips .. segments (does not resolve, just removes)', function () {
-    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
     // ".." segments are dropped entirely, not resolved — so "foo" stays
     assertEqual('foo/etc/passwd', $claims->scopePath('foo/../../etc/passwd'));
 });
 
 test('scopePath: strips . segments', function () {
-    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
     assertEqual('foo/bar', $claims->scopePath('./foo/./bar'));
 });
 
 test('scopePath: empty path without prefix', function () {
-    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0);
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
     assertEqual('', $claims->scopePath(''));
 });
 
@@ -218,6 +218,47 @@ test('allowedExt is array when set in payload', function () {
     $payload = (object) ['allowed_ext' => ['jpg', 'png']];
     $claims = FluxFiles\Claims::fromJwtPayload($payload);
     assertEqual(['jpg', 'png'], $claims->allowedExt);
+});
+
+// ═══════════════════════════════════════════════════════════════
+echo "{$yellow}► ownerOnly{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('ownerOnly defaults to false', function () {
+    $payload = (object) [];
+    $claims = FluxFiles\Claims::fromJwtPayload($payload);
+    assertEqual(false, $claims->ownerOnly);
+});
+
+test('ownerOnly parsed from JWT payload', function () {
+    $payload = (object) ['owner_only' => true];
+    $claims = FluxFiles\Claims::fromJwtPayload($payload);
+    assertEqual(true, $claims->ownerOnly);
+});
+
+test('ownerOnly false when JWT has owner_only=false', function () {
+    $payload = (object) ['owner_only' => false];
+    $claims = FluxFiles\Claims::fromJwtPayload($payload);
+    assertEqual(false, $claims->ownerOnly);
+});
+
+test('ownerOnly set via constructor', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, true);
+    assertEqual(true, $claims->ownerOnly);
+});
+
+test('embed.php fluxfiles_token with ownerOnly includes owner_only claim', function () {
+    $token = fluxfiles_token('user-99', ['read', 'write', 'delete'], ['local'], '', 10, null, 3600, true);
+    $parts = explode('.', $token);
+    $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
+    assertEqual(true, $payload['owner_only'] ?? null, 'owner_only should be true');
+});
+
+test('embed.php fluxfiles_token without ownerOnly omits owner_only claim', function () {
+    $token = fluxfiles_token('user-99', ['read'], ['local'], '', 10, null, 3600, false);
+    $parts = explode('.', $token);
+    $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
+    assertEqual(false, isset($payload['owner_only']), 'owner_only should not be set');
 });
 
 // ═══════════════════════════════════════════════════════════════

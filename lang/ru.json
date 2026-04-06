@@ -32,7 +32,8 @@
         "select_item": "Выбрать 1 элемент",
         "select_items": "Выбрать {count} элементов",
         "root": "Корень",
-        "selected": "выбрано"
+        "selected": "выбрано",
+        "refresh": "Обновить"
     },
     "toolbar": {
         "upload": "Загрузить",

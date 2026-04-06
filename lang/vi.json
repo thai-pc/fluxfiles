@@ -32,7 +32,8 @@
         "select_item": "Chọn 1 mục",
         "select_items": "Chọn {count} mục",
         "root": "Gốc",
-        "selected": "da chon"
+        "selected": "da chon",
+        "refresh": "Làm mới"
     },
     "toolbar": {
         "upload": "Tải lên",

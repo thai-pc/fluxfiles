@@ -32,7 +32,8 @@
         "select_item": "Seleccionar 1 elemento",
         "select_items": "Seleccionar {count} elementos",
         "root": "Raíz",
-        "selected": "seleccionado(s)"
+        "selected": "seleccionado(s)",
+        "refresh": "Actualizar"
     },
     "toolbar": {
         "upload": "Subir",

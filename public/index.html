@@ -303,11 +303,27 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
                 </button>
                 <div class="ff-more-menu" x-show="open" x-transition.scale.origin.top.right>
-                    <button @click="open = false; selected.length === 1 && openRename(selected[0])" x-show="selected.length === 1">
+                    <!-- Always-visible actions -->
+                    <button @click="open = false; view = view === 'grid' ? 'list' : 'grid'">
+                        <template x-if="view === 'grid'">
+                            <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M1 3h10M1 6h10M1 9h10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                        </template>
+                        <template x-if="view === 'list'">
+                            <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1"/><rect x="7" y="1" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1"/><rect x="1" y="7" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1"/><rect x="7" y="7" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1"/></svg>
+                        </template>
+                        <span x-text="view === 'grid' ? t('toolbar.list_view') : t('toolbar.grid_view')"></span>
+                    </button>
+                    <button @click="open = false; loadFiles()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                        <span x-text="t('common.refresh') || 'Refresh'"></span>
+                    </button>
+                    <!-- Selection-dependent actions -->
+                    <div class="ff-more-divider" x-show="selected.length > 0"></div>
+                    <button @click="open = false; openRename(selected[0])" x-show="selected.length === 1">
                         <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span x-text="t('common.rename')"></span>
                     </button>
-                    <button @click="open = false; selected.length === 1 && detailFile && copyUrl(detailFile)" x-show="selected.length === 1 && detailFile">
+                    <button @click="open = false; copyUrl(detailFile)" x-show="selected.length === 1 && detailFile">
                         <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                         <span x-text="t('toolbar.copy_url')"></span>
                     </button>
