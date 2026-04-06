@@ -92,6 +92,25 @@ Open in browser:
 - **UI:** http://localhost:8080/public/index.html
 - **API:** http://localhost:8080/api/fm/list?disk=local&path=
 
+### URL Parameters (Standalone Mode)
+
+When opening FluxFiles directly via `/public/index.html`, configure it with URL parameters:
+
+```
+/public/index.html?token=JWT&disk=local&path=photos/&locale=vi&theme=dark
+```
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `token` | **Yes** | — | JWT authentication token |
+| `disk` | No | `local` | Active disk |
+| `disks` | No | `local` | Comma-separated available disks (e.g. `local,s3,r2`) |
+| `path` | No | `` (root) | Initial directory path |
+| `locale` | No | `en` | UI language (`en`, `vi`, `zh`, `ja`, `ko`, `fr`, `de`, `es`, `ar`, `pt`, `it`, `ru`, `th`, `hi`, `tr`, `nl`) |
+| `lang` | No | `en` | Alias for `locale` |
+| `theme` | No | auto | `light`, `dark`, or auto-detect |
+| `multiple` | No | `false` | `1` or `true` to enable multi-select |
+
 ### 4. Generate a Token
 
 ```php
@@ -226,7 +245,7 @@ function openFilePicker() {
         disks: ['local', 'r2'],       // available disks in sidebar
         mode: 'picker',               // 'picker' = select & close, 'browser' = stay open
         multiple: false,              // true = multi-select returns array
-        locale: 'en',                 // auto-detects if omitted
+        locale: 'en',                 // default 'en' if omitted
         theme: 'auto',                // 'light', 'dark', or 'auto'
         allowedTypes: ['image/*', '.pdf'],
         maxSize: 10485760,            // 10MB in bytes
@@ -918,7 +937,16 @@ Auto-detects TinyMCE 4 vs 5 API.
 | `de` | Deutsch | LTR | | `nl` | Nederlands | LTR |
 | `es` | Espanol | LTR | | `ar` | Arabic | RTL |
 
-**Locale priority:** SDK `locale` option > `FLUXFILES_LOCALE` env > `Accept-Language` header > `en`
+**Locale priority:** SDK `locale` option > URL param (`?locale=` or `?lang=`) > `FLUXFILES_LOCALE` env > `en`
+
+**Default is English.** No auto-detection from browser. To use a different language, set it explicitly.
+
+**Set locale via URL (standalone mode):**
+
+```
+/public/index.html?token=...&locale=vi
+/public/index.html?token=...&lang=ja
+```
 
 **Set locale via SDK:**
 
@@ -926,6 +954,12 @@ Auto-detects TinyMCE 4 vs 5 API.
 FluxFiles.open({ locale: 'vi', ... });
 // or change at runtime:
 FluxFiles.setLocale('ja');
+```
+
+**Set locale server-wide (env):**
+
+```env
+FLUXFILES_LOCALE=vi
 ```
 
 **Add a new language:** See [`lang/CONTRIBUTING.md`](lang/CONTRIBUTING.md) — copy `lang/en.json`, translate, submit PR.
@@ -946,6 +980,7 @@ FluxFiles.setLocale('ja');
 | **Extension blocking** | Dangerous extensions (php, exe, sh, bat, etc.) blocked even in double-extension filenames (e.g. `shell.php.jpg`) |
 | **Path scoping** | Users confined to their `prefix` directory — cannot access files outside scope |
 | **Owner-only mode** | `owner_only` JWT claim restricts delete/rename/move to files the user uploaded |
+| **System path protection** | `_fluxfiles/` and `_variants/` directories blocked from list/delete/rename/move — hidden in file listing |
 | **Disk whitelist** | Per-token disk access — users can only access disks listed in JWT |
 | **Permission model** | Granular `read`, `write`, `delete` checked on every operation |
 | **BYOB encryption** | AES-256-GCM with HKDF-derived key (separate from signing key) |
@@ -1006,7 +1041,7 @@ open tests/test-tinymce.html    # TinyMCE
 |----------|----------|---------|-------------|
 | `FLUXFILES_SECRET` | **Yes** | — | JWT signing secret (min 32 chars) |
 | `FLUXFILES_ALLOWED_ORIGINS` | **Yes** | — | Comma-separated CORS origins |
-| `FLUXFILES_LOCALE` | No | auto-detect | UI language (`en`, `vi`, `zh`, `ja`, etc.) |
+| `FLUXFILES_LOCALE` | No | `en` | UI language (`en`, `vi`, `zh`, `ja`, etc.) |
 | `FLUXFILES_RATE_LIMIT_READ` | No | `60` | Max read requests per minute per user |
 | `FLUXFILES_RATE_LIMIT_WRITE` | No | `10` | Max write requests per minute per user |
 | `AWS_ACCESS_KEY_ID` | No | — | AWS S3 access key |
