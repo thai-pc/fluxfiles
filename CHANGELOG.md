@@ -14,6 +14,31 @@ All notable changes to FluxFiles are documented here.
 - **Graceful legacy fallback** — files uploaded before `owner_only` was enabled (no `uploaded_by` metadata) remain accessible to all users
 - **`embed.php` support** — all token functions (`fluxfiles_token`, `fluxfiles_byob_token`, `fluxfiles_mixed_token`) accept `ownerOnly` parameter
 
+### System Path Protection
+
+- **`_fluxfiles/` and `_variants/` blocked** — API returns 403 for any list/delete/rename/move on internal directories
+- **Hidden from file listing** — system directories and `.meta.json` files filtered out of `list()` results
+- **Error transparency** — generic "This file cannot be modified" message, no internal path details leaked
+
+### Error Localization (i18n)
+
+- **`error_code` + `error_params`** — API returns structured error data (`{ error, error_code, error_params }`) for frontend i18n mapping
+- **28 error keys** — all API errors now have translatable codes: `upload_too_large`, `quota_exceeded`, `ext_not_allowed`, `owner_only`, `system_path`, `permission_denied`, `rate_limited`, etc.
+- **Dynamic error messages** — `{max}`, `{used}`, `{ext}` placeholders in translations (e.g. "File is too large (max {max})")
+- **Frontend error toasts** — `uploadFiles()`, `loadFiles()`, `saveMeta()`, bulk operations now show error toasts instead of silently failing
+- **Backwards compatible** — raw `error` string still present for clients not using i18n
+
+### Locale Default Changed to English
+
+- **Default locale is now `en`** — removed auto-detection from browser `Accept-Language` header
+- **Explicit locale required** — use `?locale=` / `?lang=` URL param, SDK `locale` option, or `FLUXFILES_LOCALE` env to set language
+- **Locale priority:** SDK `locale` > URL param (`?locale=` / `?lang=`) > `FLUXFILES_LOCALE` env > `en`
+
+### URL Parameters (Standalone Mode)
+
+- **Documented URL params** — `token`, `disk`, `disks`, `path`, `locale`/`lang`, `theme`, `multiple` now documented in README
+- **`?lang=` alias** — frontend standalone mode now accepts `?lang=` as alias for `?locale=`
+
 ### Mobile UX Overhaul
 
 - **Mobile search** — search icon in topbar opens fullscreen search overlay with auto-focus input
@@ -88,7 +113,7 @@ All notable changes to FluxFiles are documented here.
 
 - **i18n** — 16 languages (en, vi, zh, ja, ko, fr, de, es, ar, pt, it, ru, th, hi, tr, nl)
 - RTL support for Arabic
-- Auto-detect locale: FM_CONFIG → URL param → Accept-Language → `en`
+- Locale priority: SDK `locale` → `?locale=`/`?lang=` URL param → `FLUXFILES_LOCALE` env → `en`
 - `I18n.php` backend + Alpine.js `t()` helper
 
 ## [1.19.0] — 2026-03-12

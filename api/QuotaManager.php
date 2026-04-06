@@ -49,7 +49,9 @@ class QuotaManager
             $usedMb = round($currentUsage / (1024 * 1024), 2);
             throw new ApiException(
                 "Storage quota exceeded: {$usedMb}MB used of {$maxStorageMb}MB limit",
-                413
+                413,
+                'quota_exceeded',
+                ['used' => $usedMb . 'MB', 'max' => $maxStorageMb . 'MB']
             );
         }
     }

@@ -66,7 +66,7 @@ class RateLimiterFileStorage
                 flock($fp, LOCK_UN);
                 fclose($fp);
                 header('Retry-After: ' . $this->windowSeconds);
-                throw new ApiException('Too many requests. Please try again later.', 429);
+                throw new ApiException('Too many requests. Please try again later.', 429, 'rate_limited');
             }
 
             $entries[] = $now;

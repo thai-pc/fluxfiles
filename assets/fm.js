@@ -198,15 +198,12 @@ function fluxFilesApp() {
                     this._initTheme();
 
                     // Handle locale from host app
-                    // Priority: explicit SDK locale > server-injected locale > browser lang
+                    // Priority: explicit SDK locale > server-injected locale > default 'en'
                     if (msg.payload.locale && msg.payload.locale !== 'auto') {
                         // Host app explicitly requested a locale
                         this.switchLocale(msg.payload.locale);
-                    } else if (Object.keys(this._messages).length <= 1) {
-                        // No server-injected locale (static file) — fall back to browser lang
-                        this.switchLocale(navigator.language?.split('-')[0] || 'en');
                     }
-                    // else: server already injected locale via FLUXFILES_LOCALE — keep it
+                    // else: keep server-injected locale (FLUXFILES_LOCALE) or default 'en'
 
                     this.loadFiles();
                     this.loadQuota();
@@ -254,24 +251,22 @@ function fluxFilesApp() {
                 };
                 this._initTheme();
 
-                // Locale priority: ?locale= > server Content-Language > browser lang
-                const urlLocale = params.get('locale');
+                // Locale priority: ?locale= > FLUXFILES_LOCALE on server > default 'en'
+                const urlLocale = params.get('locale') || params.get('lang');
                 const initLocale = async () => {
                     if (urlLocale) {
                         await this.switchLocale(urlLocale);
                     } else {
-                        // Fetch /api/fm/lang to detect server-configured locale from Content-Language header
+                        // Check if server configured a specific locale via FLUXFILES_LOCALE
                         try {
                             const res = await fetch(this.endpoint + '/api/fm/lang');
                             const serverLocale = res.headers.get('Content-Language');
                             if (serverLocale && serverLocale !== 'en') {
                                 await this.switchLocale(serverLocale);
-                            } else {
-                                const browserLocale = navigator.language?.split('-')[0] || 'en';
-                                await this.switchLocale(browserLocale);
                             }
+                            // else: keep default 'en'
                         } catch (_) {
-                            await this.switchLocale(navigator.language?.split('-')[0] || 'en');
+                            // keep default 'en'
                         }
                     }
                     if (this.token) {
@@ -347,7 +342,15 @@ function fluxFilesApp() {
             const json = await res.json();
 
             if (json.error) {
-                throw new Error(json.error);
+                // Try i18n error code first, fall back to raw message
+                var msg = null;
+                if (json.error_code) {
+                    msg = this.t('error.' + json.error_code, json.error_params || {});
+                    if (msg === 'error.' + json.error_code) {
+                        msg = null; // key not found, fall back
+                    }
+                }
+                throw new Error(msg || json.error);
             }
 
             // Reset refresh attempts on any successful request
@@ -449,6 +452,7 @@ function fluxFilesApp() {
                 this.detailFile = null;
             } catch (err) {
                 console.error('FluxFiles: Failed to load files', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             } finally {
                 this.loading = false;
             }
@@ -716,6 +720,7 @@ function fluxFilesApp() {
             this.showBulkMove = false;
             this.startBulk('Moving', this.selected.length);
 
+            var errors = 0;
             for (const file of [...this.selected]) {
                 try {
                     const destPath = (this.bulkMoveTarget ? this.bulkMoveTarget + '/' : '') + file.name;
@@ -726,12 +731,17 @@ function fluxFilesApp() {
                     });
                     this.postMessage('FM_EVENT', { event: 'move:done', key: file.key, to: destPath });
                 } catch (err) {
+                    errors++;
                     console.error('FluxFiles: Bulk move failed', file.key, err);
+                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
                 }
                 this.tickBulk();
             }
 
             this.endBulk();
+            if (errors === 0) {
+                this.showToast(this.t('common.success'), 'success');
+            }
             this.selected = [];
             this.detailFile = null;
             this.loadFiles();
@@ -775,6 +785,7 @@ function fluxFilesApp() {
                     this.postMessage('FM_EVENT', { event: 'upload:done', name: file.name });
                 } catch (err) {
                     console.error('FluxFiles: Upload failed', file.name, err);
+                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
                 }
             }
 
@@ -870,6 +881,7 @@ function fluxFilesApp() {
             this.showConfirm = false;
             this.startBulk('Deleting', this.selected.length);
 
+            var errors = 0;
             for (const file of [...this.selected]) {
                 try {
                     await this.api('DELETE', '/api/fm/delete', {
@@ -878,6 +890,7 @@ function fluxFilesApp() {
                     });
                     this.postMessage('FM_EVENT', { event: 'delete:done', key: file.key });
                 } catch (err) {
+                    errors++;
                     console.error('FluxFiles: Delete failed', file.key, err);
                     this.showToast(err.message || this.t('error.generic'), 'error', 4000);
                 }
@@ -885,7 +898,9 @@ function fluxFilesApp() {
             }
 
             this.endBulk();
-            this.showToast(this.t('delete.deleted'), 'success');
+            if (errors === 0) {
+                this.showToast(this.t('delete.deleted'), 'success');
+            }
             this.selected = [];
             this.detailFile = null;
             this.loadFiles();
@@ -939,6 +954,7 @@ function fluxFilesApp() {
             this.showCrossDisk = false;
             this.startBulk(label, this.selected.length);
 
+            var errors = 0;
             for (const file of [...this.selected]) {
                 try {
                     const dstPath = (this.crossDiskPath ? this.crossDiskPath + '/' : '') + file.name;
@@ -955,12 +971,17 @@ function fluxFilesApp() {
                         dst_disk: this.crossDiskTarget
                     });
                 } catch (err) {
+                    errors++;
                     console.error('FluxFiles: Cross-disk ' + this.crossDiskMode + ' failed', file.key, err);
+                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
                 }
                 this.tickBulk();
             }
 
             this.endBulk();
+            if (errors === 0) {
+                this.showToast(this.t('common.success'), 'success');
+            }
             this.selected = [];
             this.detailFile = null;
             this.loadFiles();
@@ -1151,6 +1172,7 @@ function fluxFilesApp() {
                 }
             } catch (err) {
                 console.error('FluxFiles: Save metadata failed', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             } finally {
                 this.metaSaving = false;
             }

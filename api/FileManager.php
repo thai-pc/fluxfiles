@@ -55,6 +55,7 @@ class FileManager
         $this->assertPerm('read');
 
         $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
 
         $items = [];
@@ -63,6 +64,12 @@ class FileManager
         /** @var StorageAttributes $item */
         foreach ($fs->listContents($scoped, false) as $item) {
             $name = basename($item->path());
+
+            // Hide internal system directories and sidecar metadata files
+            if ($name === '_fluxfiles' || $name === '_variants' || substr($name, -10) === '.meta.json') {
+                continue;
+            }
+
             $entry = [
                 'key'  => $item->path(),
                 'name' => $name,
@@ -136,7 +143,7 @@ class FileManager
 
         $stream = fopen($file['tmp_name'], 'r');
         if ($stream === false) {
-            throw new ApiException('Failed to read uploaded file', 500);
+            throw new ApiException('Failed to read uploaded file', 500, 'upload_failed');
         }
 
         try {
@@ -217,6 +224,7 @@ class FileManager
         $this->assertPerm('delete');
 
         $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
         $this->assertOwner($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
@@ -234,7 +242,16 @@ class FileManager
                 $this->meta->delete($disk, $scoped);
             }
         } catch (\Throwable $e) {
-            // File/dir may already be gone from storage
+            // Only swallow if file is actually gone; otherwise re-throw
+            try {
+                if ($fs->fileExists($scoped) || $fs->directoryExists($scoped)) {
+                    throw new ApiException('Delete failed: ' . $e->getMessage(), 500, 'delete_failed');
+                }
+            } catch (ApiException $ae) {
+                throw $ae;
+            } catch (\Throwable $ignore) {
+                // Existence check itself failed — assume gone
+            }
         }
 
         return ['deleted' => true];
@@ -246,14 +263,15 @@ class FileManager
         $this->assertPerm('write');
 
         $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
         $this->assertOwner($disk, $scoped);
 
         $newName = trim($newName);
         if ($newName === '') {
-            throw new ApiException('New name cannot be empty', 400);
+            throw new ApiException('New name cannot be empty', 400, 'name_empty');
         }
         if (preg_match('/[<>:"\/\\\\|?*\x00-\x1f]/', $newName)) {
-            throw new ApiException('Name contains invalid characters', 400);
+            throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
         }
 
         $this->assertSafeFilename($newName);
@@ -264,13 +282,13 @@ class FileManager
         $newPath = ($dir !== '.' && $dir !== '') ? $dir . '/' . $newName : $newName;
 
         if ($scoped === $newPath) {
-            throw new ApiException('New name is the same as current name', 400);
+            throw new ApiException('New name is the same as current name', 400, 'name_same');
         }
 
         // Check target doesn't already exist
         try {
             if ($fs->fileExists($newPath) || $fs->directoryExists($newPath)) {
-                throw new ApiException('A file or folder with that name already exists', 409);
+                throw new ApiException('A file or folder with that name already exists', 409, 'name_exists');
             }
         } catch (ApiException $e) {
             throw $e;
@@ -337,8 +355,10 @@ class FileManager
         $this->assertPerm('write');
 
         $scopedFrom = $this->scopedPath($from);
+        $this->assertNotSystem($scopedFrom);
         $this->assertOwner($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
+        $this->assertNotSystem($scopedTo);
         $fs = $this->disks->disk($disk);
         $fs->move($scopedFrom, $scopedTo);
 
@@ -419,8 +439,10 @@ class FileManager
         }
 
         $scopedSrc = $this->scopedPath($srcPath);
+        $this->assertNotSystem($scopedSrc);
         $this->assertOwner($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
+        $this->assertNotSystem($scopedDst);
 
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
@@ -628,7 +650,7 @@ class FileManager
         $this->assertPerm('write');
 
         if ($this->aiTagger === null) {
-            throw new ApiException('AI tagging is not configured', 400);
+            throw new ApiException('AI tagging is not configured', 400, 'ai_not_configured');
         }
 
         $scoped = $this->scopedPath($path);
@@ -636,7 +658,7 @@ class FileManager
 
         $name = basename($scoped);
         if (!$this->imageOptimizer->isImage($name)) {
-            throw new ApiException('AI tagging is only available for images', 400);
+            throw new ApiException('AI tagging is only available for images', 400, 'ai_images_only');
         }
 
         $imageData = $fs->read($scoped);
@@ -787,23 +809,44 @@ class FileManager
         }
 
         if ($owner !== $this->claims->userId) {
-            throw new ApiException('You can only modify files you uploaded', 403);
+            throw new ApiException('You can only modify files you uploaded', 403, 'owner_only');
+        }
+    }
+
+    /**
+     * Block access to internal system paths (_fluxfiles/, _variants/).
+     */
+    private function assertNotSystem(string $scopedPath): void
+    {
+        $normalized = trim($scopedPath, '/') . '/';
+        foreach (self::SYSTEM_PREFIXES as $prefix) {
+            if (strpos($normalized, $prefix) === 0 || strpos($normalized, '/' . $prefix) !== false) {
+                throw new ApiException('Access denied: system path', 403, 'system_path');
+            }
+        }
+        // Also block exact match (e.g. "_fluxfiles" without trailing slash)
+        $base = basename($scopedPath);
+        if ($base === '_fluxfiles' || $base === '_variants') {
+            throw new ApiException('Access denied: system path', 403, 'system_path');
         }
     }
 
     private function assertDisk(string $disk): void
     {
         if (!$this->claims->hasDisk($disk)) {
-            throw new ApiException("Access denied to disk: {$disk}", 403);
+            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
         }
     }
 
     private function assertPerm(string $perm): void
     {
         if (!$this->claims->hasPerm($perm)) {
-            throw new ApiException("Permission denied: {$perm}", 403);
+            throw new ApiException("Permission denied: {$perm}", 403, 'permission_denied');
         }
     }
+
+    /** Internal directories that must never be exposed or modified by users. */
+    private const SYSTEM_PREFIXES = ['_fluxfiles/', '_variants/'];
 
     /** Extensions that are always blocked regardless of allowedExt. */
     private const DANGEROUS_EXTENSIONS = [
@@ -819,7 +862,7 @@ class FileManager
             return;
         }
         if (!in_array($ext, $this->claims->allowedExt, true)) {
-            throw new ApiException("File extension not allowed: {$ext}", 403);
+            throw new ApiException("File extension not allowed: {$ext}", 403, 'ext_not_allowed', ['ext' => $ext]);
         }
     }
 
@@ -833,7 +876,7 @@ class FileManager
         array_shift($parts); // remove the base name
         foreach ($parts as $part) {
             if (in_array($part, self::DANGEROUS_EXTENSIONS, true)) {
-                throw new ApiException("Dangerous extension detected in filename: {$part}", 403);
+                throw new ApiException("Dangerous extension detected in filename: {$part}", 403, 'ext_dangerous');
             }
         }
     }
@@ -843,7 +886,9 @@ class FileManager
         if ($sizeMb > $this->claims->maxUploadMb) {
             throw new ApiException(
                 "File too large: {$sizeMb}MB exceeds limit of {$this->claims->maxUploadMb}MB",
-                413
+                413,
+                'upload_too_large',
+                ['max' => $this->claims->maxUploadMb . 'MB']
             );
         }
     }

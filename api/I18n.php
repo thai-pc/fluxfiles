@@ -87,15 +87,7 @@ class I18n
             return $this->normalize($lang);
         }
 
-        // 3. Accept-Language header
-        $accept = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
-        foreach ($this->parseAcceptLanguage($accept) as $code) {
-            if ($this->isSupported($code)) {
-                return $code;
-            }
-        }
-
-        // 4. Default
+        // 3. Default — explicit locale required, no auto-detect from browser
         return 'en';
     }
 
@@ -174,17 +166,5 @@ class I18n
         $code = $this->normalize($locale);
         return in_array($code, self::SUPPORTED, true)
             || file_exists("{$this->langDir}/{$code}.json");
-    }
-
-    private function parseAcceptLanguage(string $header): array
-    {
-        $result = [];
-        foreach (explode(',', $header) as $part) {
-            $code = trim(explode(';', $part)[0]);
-            if ($code !== '') {
-                $result[] = $this->normalize($code);
-            }
-        }
-        return array_unique($result);
     }
 }
