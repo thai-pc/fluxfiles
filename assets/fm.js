@@ -586,23 +586,20 @@ function fluxFilesApp() {
                 }
             } else {
                 this.selected = [file];
-                if (this.config.multiple) {
-                    // Multiple mode: just select, show detail — user clicks "Select" to confirm
-                    this.detailFile = file;
-                    this.activeTab = 'info';
-                    if (file.meta) {
-                        this.metaForm = {
-                            title: file.meta.title || '',
-                            alt_text: file.meta.alt_text || '',
-                            caption: file.meta.caption || ''
-                        };
-                        this.aiTags = file.meta.tags ? file.meta.tags.split(', ').filter(Boolean) : [];
-                    } else {
-                        this.metaForm = { title: '', alt_text: '', caption: '' };
-                        this.aiTags = [];
-                    }
+                // Show detail panel — user clicks "Select" or picks a variant to confirm
+                this.detailFile = file;
+                this.selectedVariant = 'original';
+                this.activeTab = 'info';
+                if (file.meta) {
+                    this.metaForm = {
+                        title: file.meta.title || '',
+                        alt_text: file.meta.alt_text || '',
+                        caption: file.meta.caption || ''
+                    };
+                    this.aiTags = file.meta.tags ? file.meta.tags.split(', ').filter(Boolean) : [];
                 } else {
-                    this.selectFile(file);
+                    this.metaForm = { title: '', alt_text: '', caption: '' };
+                    this.aiTags = [];
                 }
             }
         },
