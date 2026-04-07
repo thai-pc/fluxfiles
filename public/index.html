@@ -117,7 +117,10 @@
             <template x-for="(crumb, idx) in breadcrumbs" :key="crumb.path">
                 <span style="display:inline-flex;align-items:center;gap:4px;">
                     <span x-show="idx > 0" class="bc-sep">›</span>
-                    <button @click="navigate(crumb.path)" x-text="crumb.name"></button>
+                    <button @click="navigate(crumb.path)" :class="{ 'bc-active': idx === breadcrumbs.length - 1 }">
+                        <svg x-show="idx === 0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                        <span x-text="crumb.name"></span>
+                    </button>
                 </span>
             </template>
         </div>
@@ -600,6 +603,26 @@
                 <div class="detail-row"><span class="k" x-text="t('file.modified')"></span><span class="v" x-text="formatDate(detailFile?.modified)"></span></div>
                 <div class="detail-row"><span class="k" x-text="t('file.disk')"></span><span class="v" x-text="currentDisk"></span></div>
                 <div class="detail-row"><span class="k" x-text="t('file.path')"></span><span class="v" style="word-break:break-all;direction:ltr;" x-text="detailFile?.key"></span></div>
+            </div>
+
+            <!-- Variants / Image Sizes -->
+            <div class="ff-variants" x-show="detailFile?.variants && Object.keys(detailFile.variants).length > 0">
+                <div class="ff-variants-label" x-text="t('variants.title')"></div>
+                <div class="ff-variants-list">
+                    <button class="ff-variant-item" :class="{ 'ff-variant-active': selectedVariant === 'original' }" @click="selectVariant(detailFile, 'original')">
+                        <span class="ff-variant-name" x-text="t('variants.original')"></span>
+                        <span class="ff-variant-meta" x-text="formatSize(detailFile?.size)"></span>
+                    </button>
+                    <template x-for="size in ['thumb', 'medium', 'large']" :key="size">
+                        <button class="ff-variant-item" :class="{ 'ff-variant-active': selectedVariant === size }" x-show="detailFile?.variants?.[size]" @click="selectVariant(detailFile, size)">
+                            <span class="ff-variant-name" x-text="t('variants.' + size)"></span>
+                            <span class="ff-variant-meta" x-text="size === 'thumb' ? '150px' : size === 'medium' ? '768px' : '1920px'"></span>
+                        </button>
+                    </template>
+                </div>
+                <div class="ff-variant-url" x-show="selectedVariant !== 'original'">
+                    <span class="ff-variant-url-text" x-text="getActiveUrl(detailFile)"></span>
+                </div>
             </div>
 
             <div class="detail-actions">

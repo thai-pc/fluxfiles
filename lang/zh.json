@@ -128,6 +128,14 @@
         "results": "\"{query}\"的搜索结果：{count} 条",
         "no_results": "未找到\"{query}\"的相关结果"
     },
+    "variants": {
+        "title": "图片尺寸",
+        "original": "原图",
+        "thumb": "缩略图",
+        "medium": "中等",
+        "large": "大图",
+        "selected": "已选择 {size}"
+    },
     "error": {
         "forbidden": "您没有执行此操作的权限",
         "not_found": "未找到",

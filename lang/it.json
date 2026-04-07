@@ -128,6 +128,14 @@
         "results": "{count} risultati per \"{query}\"",
         "no_results": "Nessun risultato per \"{query}\""
     },
+    "variants": {
+        "title": "Dimensioni immagine",
+        "original": "Originale",
+        "thumb": "Miniatura",
+        "medium": "Media",
+        "large": "Grande",
+        "selected": "{size} selezionato"
+    },
     "error": {
         "forbidden": "Non hai i permessi per questa azione",
         "not_found": "Non trovato",

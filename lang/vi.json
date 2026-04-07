@@ -128,6 +128,14 @@
         "results": "{count} kết quả cho \"{query}\"",
         "no_results": "Không tìm thấy kết quả cho \"{query}\""
     },
+    "variants": {
+        "title": "Kích thước ảnh",
+        "original": "Gốc",
+        "thumb": "Thu nhỏ",
+        "medium": "Trung bình",
+        "large": "Lớn",
+        "selected": "Đã chọn {size}"
+    },
     "error": {
         "forbidden": "Bạn không có quyền thực hiện hành động này",
         "not_found": "Không tìm thấy",

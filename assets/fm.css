@@ -135,6 +135,9 @@ body {
 }
 
 .ff-breadcrumb button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     background: none;
     border: none;
     cursor: pointer;
@@ -147,7 +150,7 @@ body {
 }
 
 .ff-breadcrumb button:hover { color: var(--color-text-primary); background: var(--ff-bg-hover); }
-.ff-breadcrumb button:last-child { color: var(--color-text-primary); font-weight: 500; }
+.ff-breadcrumb button.bc-active { color: var(--color-text-primary); font-weight: 500; background: var(--ff-bg-hover); }
 
 .ff-breadcrumb .bc-sep {
     color: var(--color-text-tertiary);
@@ -1120,6 +1123,65 @@ body {
 .ff-tab-btn.active {
     color: var(--ff-primary);
     border-bottom-color: var(--ff-primary);
+}
+
+/* Variants / Image Sizes */
+.ff-variants {
+    margin-top: 4px;
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.ff-variants-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-tertiary);
+    padding: 8px 10px 4px;
+}
+.ff-variants-list {
+    display: flex;
+    flex-direction: column;
+}
+.ff-variant-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    transition: all var(--ff-transition);
+    text-align: start;
+    width: 100%;
+}
+.ff-variant-item:hover {
+    background: var(--ff-bg-hover);
+    color: var(--color-text-primary);
+}
+.ff-variant-active {
+    color: var(--ff-primary);
+    font-weight: 500;
+}
+.ff-variant-name { flex: 1; }
+.ff-variant-meta {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-inline-start: 8px;
+}
+.ff-variant-url {
+    padding: 6px 10px;
+    border-top: 1px solid var(--color-border-secondary);
+    background: var(--color-background-secondary);
+}
+.ff-variant-url-text {
+    font-size: 11px;
+    color: var(--ff-primary);
+    word-break: break-all;
+    direction: ltr;
 }
 
 /* Detail actions */

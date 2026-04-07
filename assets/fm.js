@@ -20,6 +20,7 @@ function fluxFilesApp() {
         config: {},
         searchQuery: '',
         detailFile: null,
+        selectedVariant: 'original',
         activeTab: 'info',
         showConfirm: false,
         confirmAction: null,
@@ -515,6 +516,7 @@ function fluxFilesApp() {
                 size: item.size,
                 disk: this.currentDisk,
                 meta: item.meta || null,
+                variants: item.variants || null,
                 type: item.type || 'file',
                 is_dir: item.type === 'dir'
             };
@@ -523,6 +525,7 @@ function fluxFilesApp() {
         // File selection (single — from detail panel)
         selectFile(file) {
             this.detailFile = file;
+            this.selectedVariant = 'original';
             this.activeTab = 'info';
 
             // Load metadata into form
@@ -540,6 +543,30 @@ function fluxFilesApp() {
 
             // Notify parent (single object)
             this.postMessage('FM_SELECT', this._toSelectPayload(file));
+        },
+
+        // Get URL for currently selected variant (or original)
+        getActiveUrl(file) {
+            if (!file) return '';
+            if (this.selectedVariant !== 'original' && file.variants && file.variants[this.selectedVariant]) {
+                return file.variants[this.selectedVariant].url;
+            }
+            return file.url;
+        },
+
+        // Select a specific variant (thumb/medium/large) or 'original'
+        selectVariant(file, size) {
+            this.selectedVariant = size;
+            var payload = this._toSelectPayload(file);
+            if (size !== 'original' && file.variants && file.variants[size]) {
+                payload.url = file.variants[size].url;
+                payload.key = file.variants[size].key;
+                payload.variant = size;
+            } else {
+                payload.variant = 'original';
+            }
+            this.postMessage('FM_SELECT', payload);
+            this.showToast(this.t('variants.selected', { size: size === 'original' ? this.t('variants.original') : this.t('variants.' + size) }), 'success');
         },
 
         // Multi-select: send selected items as array (when config.multiple)
@@ -1115,8 +1142,8 @@ function fluxFilesApp() {
 
         // Copy URL
         async copyUrl(file) {
-            // Build full URL: if relative, prepend origin
-            let url = file.url || '';
+            // Build full URL: use active variant if selected
+            let url = this.getActiveUrl(file) || '';
             if (url && !url.startsWith('http')) {
                 const base = this.endpoint || window.location.origin;
                 url = base.replace(/\/$/, '') + '/' + url.replace(/^\//, '');
