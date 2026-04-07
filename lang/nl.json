@@ -128,6 +128,14 @@
         "results": "{count} resultaten voor \"{query}\"",
         "no_results": "Geen resultaten voor \"{query}\""
     },
+    "variants": {
+        "title": "Afbeeldingsformaten",
+        "original": "Origineel",
+        "thumb": "Thumbnail",
+        "medium": "Gemiddeld",
+        "large": "Groot",
+        "selected": "{size} geselecteerd"
+    },
     "error": {
         "forbidden": "U heeft geen toestemming voor deze actie",
         "not_found": "Niet gevonden",

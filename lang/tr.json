@@ -128,6 +128,14 @@
         "results": "\"{query}\" için {count} sonuç",
         "no_results": "\"{query}\" için sonuç bulunamadı"
     },
+    "variants": {
+        "title": "Görsel boyutları",
+        "original": "Orijinal",
+        "thumb": "Küçük resim",
+        "medium": "Orta",
+        "large": "Büyük",
+        "selected": "{size} seçildi"
+    },
     "error": {
         "forbidden": "Bu işlem için yetkiniz yok",
         "not_found": "Bulunamadı",

@@ -128,6 +128,14 @@
         "results": "\"{query}\" के लिए {count} परिणाम",
         "no_results": "\"{query}\" के लिए कोई परिणाम नहीं"
     },
+    "variants": {
+        "title": "छवि आकार",
+        "original": "मूल",
+        "thumb": "थंबनेल",
+        "medium": "मध्यम",
+        "large": "बड़ा",
+        "selected": "{size} चुना गया"
+    },
     "error": {
         "forbidden": "आपको यह करने की अनुमति नहीं है",
         "not_found": "नहीं मिला",

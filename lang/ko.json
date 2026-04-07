@@ -128,6 +128,14 @@
         "results": "\"{query}\" 검색 결과: {count}건",
         "no_results": "\"{query}\"에 대한 검색 결과가 없습니다"
     },
+    "variants": {
+        "title": "이미지 크기",
+        "original": "원본",
+        "thumb": "썸네일",
+        "medium": "중간",
+        "large": "큰 이미지",
+        "selected": "{size} 선택됨"
+    },
     "error": {
         "forbidden": "이 작업을 수행할 권한이 없습니다",
         "not_found": "찾을 수 없습니다",

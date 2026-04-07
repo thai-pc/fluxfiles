@@ -87,11 +87,12 @@ class FileManager
             $items[] = $entry;
         }
 
-        // Merge metadata for files
+        // Merge metadata + variants for files
         $metaMap = !empty($fileKeys) ? $this->meta->getBulk($disk, $fileKeys) : [];
         foreach ($items as &$item) {
             if ($item['type'] === 'file') {
                 $item['meta'] = $metaMap[$item['key']] ?? null;
+                $item['variants'] = $this->getFileVariants($disk, $item['key']);
             }
         }
         unset($item);
@@ -133,7 +134,7 @@ class FileManager
                     'name'      => basename($existing['file_key']),
                     'duplicate' => true,
                     'message'   => 'File already exists. Use force_upload to override.',
-                    'variants'  => null,
+                    'variants'  => $this->getFileVariants($disk, $existing['file_key']),
                 ];
             }
         }
@@ -766,6 +767,31 @@ class FileManager
         }
 
         return $relative;
+    }
+
+    /**
+     * Look up existing variant files (thumb/medium/large WebP) for an image.
+     */
+    private function getFileVariants(string $disk, string $key): ?array
+    {
+        if (!$this->imageOptimizer->isImage($key)) {
+            return null;
+        }
+
+        $fs = $this->disks->disk($disk);
+        $variants = [];
+
+        foreach (['thumb', 'medium', 'large'] as $size) {
+            $vk = $this->variantKey($key, $size);
+            if ($fs->fileExists($vk)) {
+                $variants[$size] = [
+                    'url' => $this->fileUrl($disk, $vk),
+                    'key' => $vk,
+                ];
+            }
+        }
+
+        return !empty($variants) ? $variants : null;
     }
 
     private function fileUrl(string $disk, string $path): string
