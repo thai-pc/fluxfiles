@@ -211,7 +211,7 @@
     <!-- Load FluxFiles SDK -->
     <script src="../fluxfiles.js"></script>
 
-    <!-- CKEditor 4 from CDN (4.22.1 — last stable) -->
+    <!-- CKEditor 4 from CDN (4.25.1-lts) -->
     <script src="https://cdn.ckeditor.com/4.25.1-lts/standard/ckeditor.js"></script>
 
     <script>
@@ -244,9 +244,12 @@
                 return;
             }
 
-            // Register plugin path (only once)
+            // Register plugin path (only once) — must use absolute URL
+            // because CKEditor resolves relative paths against its own basePath (CDN),
+            // not the page URL.
             if (!CKEDITOR.plugins.externals.fluxfiles) {
-                CKEDITOR.plugins.addExternal('fluxfiles', '../adapters/ckeditor4/', 'plugin.js');
+                var pluginDir = new URL('../adapters/ckeditor4/', location.href).href;
+                CKEDITOR.plugins.addExternal('fluxfiles', pluginDir, 'plugin.js');
             }
 
             try {

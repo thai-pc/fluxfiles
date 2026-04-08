@@ -156,7 +156,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Default locale for the FluxFiles UI. Supported: en, vi, zh, ja, ko,
-    | fr, de, es, ar, pt, it, ru, th, hi, tr, nl. Leave empty to auto-detect.
+    | fr, de, es, ar, pt, it, ru, th, hi, tr, nl. Default: en.
     |
     */
     'locale' => env('FLUXFILES_LOCALE', ''),

@@ -44,6 +44,10 @@ class FluxFilesManager
             'max_storage' => $overrides['max_storage'] ?? $defaults['max_storage'],
         ];
 
+        if (!empty($overrides['owner_only'])) {
+            $payload['owner_only'] = true;
+        }
+
         return JWT::encode($payload, $secret, 'HS256');
     }
 
@@ -110,6 +114,10 @@ class FluxFilesManager
             'max_storage' => $overrides['max_storage'] ?? $defaults['max_storage'],
             'byob_disks'  => $encryptedDisks,
         ];
+
+        if (!empty($overrides['owner_only'])) {
+            $payload['owner_only'] = true;
+        }
 
         return JWT::encode($payload, $secret, 'HS256');
     }

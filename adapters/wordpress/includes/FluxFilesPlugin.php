@@ -178,6 +178,10 @@ class FluxFilesPlugin
             'max_storage' => $overrides['max_storage'] ?? $maxStorage,
         ];
 
+        if (!empty($overrides['owner_only'])) {
+            $payload['owner_only'] = true;
+        }
+
         return \Firebase\JWT\JWT::encode($payload, $secret, 'HS256');
     }
 
@@ -230,6 +234,10 @@ class FluxFilesPlugin
             'max_storage' => $overrides['max_storage'] ?? $maxStorage,
             'byob_disks'  => $encryptedDisks,
         ];
+
+        if (!empty($overrides['owner_only'])) {
+            $payload['owner_only'] = true;
+        }
 
         return \Firebase\JWT\JWT::encode($payload, $secret, 'HS256');
     }
