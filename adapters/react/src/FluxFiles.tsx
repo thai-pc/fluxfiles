@@ -43,6 +43,7 @@ export const FluxFiles = forwardRef<FluxFilesHandle, FluxFilesProps>(
       onClose,
       onReady,
       onEvent,
+      onTokenRefresh,
     } = props;
 
     const handle = useFluxFiles({
@@ -57,6 +58,7 @@ export const FluxFiles = forwardRef<FluxFilesHandle, FluxFilesProps>(
       onClose,
       onReady,
       onEvent,
+      onTokenRefresh,
     });
 
     useImperativeHandle(ref, () => ({
@@ -70,6 +72,7 @@ export const FluxFiles = forwardRef<FluxFilesHandle, FluxFilesProps>(
       crop: handle.crop,
       aiTag: handle.aiTag,
       setLocale: handle.setLocale,
+      updateToken: handle.updateToken,
       ready: handle.ready,
     }), [handle]);
 

@@ -1,6 +1,6 @@
 {
   "name": "@fluxfiles/vue",
-  "version": "1.22.2",
+  "version": "1.26.1",
   "description": "Vue 3 components and composables for FluxFiles file manager, with Nuxt 3 auto-import support",
   "license": "MIT",
   "main": "dist/index.js",
@@ -8,14 +8,14 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./nuxt": {
+      "types": "./dist/nuxt.d.ts",
       "import": "./dist/nuxt.mjs",
-      "require": "./dist/nuxt.js",
-      "types": "./dist/nuxt.d.ts"
+      "require": "./dist/nuxt.js"
     }
   },
   "files": [

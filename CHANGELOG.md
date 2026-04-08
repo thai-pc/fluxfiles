@@ -10,6 +10,8 @@ All notable changes to FluxFiles are documented here.
 
 - **CKEditor 4 plugin path** — test page used relative path in `addExternal()` which resolved against CKEditor's CDN base URL instead of the page URL, causing plugin.js to 404. Fixed by using absolute URL via `new URL()`.
 - **TinyMCE 5 missing icon** — `icon: 'browse'` only exists in TinyMCE 4's skin CSS, not in TinyMCE 5's SVG icon set. Button rendered invisible in TinyMCE 5. Fixed by registering a custom folder SVG icon via `editor.ui.registry.addIcon()` for v5+.
+- **React adapter missing `updateToken` / `onTokenRefresh`** — `<FluxFiles>` component didn't pass `onTokenRefresh` to the hook and omitted `updateToken` from the imperative handle, causing TS build error. `<FluxFilesModal>` had the same missing `onTokenRefresh` passthrough.
+- **React/Vue exports order** — `types` condition in `package.json` exports placed after `import`/`require`, making it unreachable. Moved `types` first per Node.js resolution order.
 
 ## [1.26.0] — 2026-04-06
 
