@@ -58,6 +58,7 @@ export function FluxFilesModal({
   onClose,
   onReady,
   onEvent,
+  onTokenRefresh,
   overlayClassName,
   modalClassName,
 }: FluxFilesModalProps) {
@@ -73,6 +74,7 @@ export function FluxFilesModal({
     onClose,
     onReady,
     onEvent,
+    onTokenRefresh,
   });
 
   // Close on escape
