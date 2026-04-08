@@ -72,9 +72,16 @@
         var majorVersion = parseInt(tinymce.majorVersion, 10);
 
         if (majorVersion >= 5) {
-            // TinyMCE 5+ API
+            // TinyMCE 5+ API — register custom icon (browse doesn't exist in v5)
+            editor.ui.registry.addIcon('fluxfiles',
+                '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">'
+                + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
+                + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+                + '</svg>'
+            );
+
             editor.ui.registry.addButton('fluxfiles', {
-                icon: 'browse',
+                icon: 'fluxfiles',
                 tooltip: 'FluxFiles',
                 onAction: function () {
                     openPicker(editor);
@@ -82,7 +89,7 @@
             });
 
             editor.ui.registry.addMenuItem('fluxfiles', {
-                icon: 'browse',
+                icon: 'fluxfiles',
                 text: 'FluxFiles',
                 onAction: function () {
                     openPicker(editor);

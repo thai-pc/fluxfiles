@@ -117,6 +117,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
   const crossMove  = (dstDisk: string, dstPath?: string) => command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' });
   const crop       = (x: number, y: number, width: number, height: number, savePath?: string) => command('crop', { x, y, width, height, save_path: savePath || '' });
   const aiTag      = () => command('aiTag');
+  const setLocale  = (locale: string) => command('setLocale', { locale });
   const updateToken = (token: string) => post('FM_TOKEN_UPDATED', { token });
 
   return {
@@ -132,6 +133,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
     crossMove,
     crop,
     aiTag,
+    setLocale,
     updateToken,
   };
 }

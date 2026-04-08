@@ -12,7 +12,8 @@ export interface FluxFile {
   alt_text?: string;
   caption?: string;
   hash?: string;
-  variants?: Record<string, string>;
+  variants?: Record<string, { url: string; key: string }> | null;
+  variant?: 'original' | 'thumb' | 'medium' | 'large';
 }
 
 export interface FluxEvent {
@@ -54,7 +55,8 @@ export type FluxCommand =
   | { action: 'crossCopy'; dst_disk: string; dst_path?: string }
   | { action: 'crossMove'; dst_disk: string; dst_path?: string }
   | { action: 'crop'; x: number; y: number; width: number; height: number; save_path?: string }
-  | { action: 'aiTag' };
+  | { action: 'aiTag' }
+  | { action: 'setLocale'; locale: string };
 
 export interface FluxFilesHandle {
   command: (action: string, data?: Record<string, unknown>) => void;
@@ -66,6 +68,7 @@ export interface FluxFilesHandle {
   crossMove: (dstDisk: string, dstPath?: string) => void;
   crop: (x: number, y: number, width: number, height: number, savePath?: string) => void;
   aiTag: () => void;
+  setLocale: (locale: string) => void;
   updateToken: (token: string) => void;
   ready: boolean;
 }

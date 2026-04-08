@@ -11,7 +11,9 @@ export interface FluxFile {
   alt_text?: string;
   caption?: string;
   hash?: string;
-  variants?: Record<string, string>;
+  variants?: Record<string, { url: string; key: string }> | null;
+  /** Set when a specific variant was selected via the variant picker. */
+  variant?: 'original' | 'thumb' | 'medium' | 'large';
 }
 
 /** Event payload dispatched by the file manager iframe. */
