@@ -8,7 +8,7 @@
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
 
-Standalone, embeddable file manager built with PHP 7.4+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
+Standalone, embeddable file manager built with PHP 8.1+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
 
 Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, and **TinyMCE**.
 
@@ -53,7 +53,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 ## Requirements
 
-- **PHP** >= 7.4 (tested with 7.4 — 8.3)
+- **PHP** >= 8.1 (Flysystem 3 + Intervention Image v3; tested with 8.1 — 8.3)
 - **Extensions:** `gd`, `curl`, `json`, `openssl`, `mbstring`, `fileinfo`
 - **Composer** >= 2.0
 
@@ -115,6 +115,8 @@ When opening FluxFiles directly via `/public/index.html`, configure it with URL 
 ### 4. Generate a Token
 
 ```php
+// Composer: vendor/fluxfiles/fluxfiles/embed.php
+// Monorepo clone: packages/core/embed.php
 require_once 'path/to/fluxfiles/embed.php';
 
 $token = fluxfiles_token(
@@ -346,6 +348,8 @@ FluxFiles automatically handles JWT expiration. When the API returns 401:
 For server-rendered pages, use the PHP helper to generate the iframe HTML:
 
 ```php
+// Composer: vendor/fluxfiles/fluxfiles/embed.php
+// Monorepo clone: packages/core/embed.php
 require_once 'path/to/fluxfiles/embed.php';
 
 // Generate token
@@ -717,18 +721,13 @@ return [
 
 ### WordPress
 
-**Install:**
+**Install (recommended):** use a **release ZIP** that already includes `vendor/` (GitHub Releases or WordPress.org). Upload via **Plugins → Add New → Upload Plugin**, or extract into `wp-content/plugins/fluxfiles/`. No Composer or SSH on the server.
 
-```bash
-# Option 1: Copy plugin folder
-cp -r packages/wordpress/ /path/to/wp-content/plugins/fluxfiles/
+**Requirements:** PHP **8.1+** on the host (Flysystem 3 needs 8.0.2+; Intervention Image v3 needs 8.1+). PHP 7.4 is not supported with the current `fluxfiles/fluxfiles` release line.
 
-# Option 2: If using Composer in your WP project
-composer require fluxfiles/fluxfiles
-cp -r vendor/fluxfiles/fluxfiles/packages/wordpress wp-content/plugins/fluxfiles
-```
+The Packagist package `fluxfiles/fluxfiles` is **core PHP only**; it does **not** include this WordPress plugin. Source for the plugin folder: [main repository](https://github.com/thai-pc/fluxfiles) (`packages/wordpress`).
 
-**Requires:** Composer dependencies installed in the FluxFiles root (`composer install`).
+**Maintainers / monorepo:** to (re)build `vendor/` before zipping or committing to SVN, run `composer install --no-dev --optimize-autoloader` inside `packages/wordpress`. When developing from the monorepo with `packages/wordpress` next to `packages/core`, you can instead use `composer install -d packages/core` and the plugin will load that `vendor/autoload.php`.
 
 **Activate & Configure:**
 

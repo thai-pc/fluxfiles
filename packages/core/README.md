@@ -11,7 +11,7 @@ This package provides:
 
 ## Requirements
 
-- PHP >= 7.4
+- PHP >= 8.1 (Flysystem 3 + Intervention Image v3)
 - Composer >= 2
 
 ## Install (Composer)
@@ -34,7 +34,7 @@ Open:
 
 ## Configuration
 
-Copy `.env.example` from the main repo and set at least:
+Copy `.env.example` from the monorepo root (`../../.env.example` when working inside this package) and set at least:
 
 ```env
 FLUXFILES_SECRET=your-random-secret-key-min-32-chars

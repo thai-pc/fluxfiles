@@ -1,0 +1,16 @@
+{
+    "name": "fluxfiles/wordpress",
+    "description": "WordPress plugin for FluxFiles — release ZIPs bundle vendor/; Composer is for maintainers only",
+    "type": "wordpress-plugin",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "fluxfiles/fluxfiles": "^1.22"
+    },
+    "config": {
+        "sort-packages": true,
+        "platform": {
+            "php": "8.1.0"
+        }
+    }
+}
