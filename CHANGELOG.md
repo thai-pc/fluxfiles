@@ -19,6 +19,8 @@ All notable changes to FluxFiles are documented here.
 - **Export safety net** — added `.gitattributes` with `export-ignore` rules to avoid shipping dev-only files when archives are built from the monorepo.
 - **Docs moved** — `ROADMAP.md` moved to `docs/ROADMAP.md` (root file kept as a pointer).
 - **Dev server docs updated** — documentation now runs the PHP dev server from `packages/core` (`php -S ... router.php`).
+- **WordPress plugin distribution** — documented **ZIP-first** install (upload / extract a build that already includes `vendor/`); `composer.json` / `composer.lock` target **PHP 8.1+** and are for maintainers building releases. Plugin autoload order: plugin `vendor/`, then monorepo `packages/core/vendor`.
+- **PHP minimum raised to 8.1** for `packages/core` and `packages/laravel` Composer metadata — aligns with League Flysystem 3 and Intervention Image v3 (PHP 7.4 / 8.0 were not actually satisfiable by the published dependency graph).
 
 ## [1.26.1] — 2026-04-08
 

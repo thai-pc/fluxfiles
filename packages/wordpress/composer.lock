@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0a791c2c0fbad3bc17fa90d44b18999b",
+    "content-hash": "4f5f81db6b7e15216b877fbbe35c1d9f",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -219,6 +219,62 @@
                 "source": "https://github.com/firebase/php-jwt/tree/v6.11.1"
             },
             "time": "2025-04-09T20:32:01+00:00"
+        },
+        {
+            "name": "fluxfiles/fluxfiles",
+            "version": "v1.26.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/thai-pc/fluxfiles-core.git",
+                "reference": "ed4aff66b72d2cc02564a2c84a86d29bc1ebec09"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/ed4aff66b72d2cc02564a2c84a86d29bc1ebec09",
+                "reference": "ed4aff66b72d2cc02564a2c84a86d29bc1ebec09",
+                "shasum": ""
+            },
+            "require": {
+                "firebase/php-jwt": "^6.0",
+                "intervention/image": "^3.0",
+                "league/flysystem": "^3.0",
+                "league/flysystem-aws-s3-v3": "^3.0",
+                "php": ">=7.4",
+                "vlucas/phpdotenv": "^5.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "FluxFiles\\": "api/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "thai-pc",
+                    "homepage": "https://github.com/thai-pc"
+                }
+            ],
+            "description": "Standalone PHP file manager with multi-storage support (Local/S3/R2)",
+            "homepage": "https://github.com/thai-pc/fluxfiles",
+            "keywords": [
+                "Flysystem",
+                "file-manager",
+                "jwt",
+                "media",
+                "r2",
+                "s3",
+                "storage",
+                "upload"
+            ],
+            "support": {
+                "issues": "https://github.com/thai-pc/fluxfiles/issues",
+                "source": "https://github.com/thai-pc/fluxfiles"
+            },
+            "time": "2026-04-09T03:35:36+00:00"
         },
         {
             "name": "graham-campbell/result-type",
@@ -1409,25 +1465,25 @@
         },
         {
             "name": "symfony/filesystem",
-            "version": "v7.4.8",
+            "version": "v6.4.34",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/filesystem.git",
-                "reference": "58b9790d12f9670b7f53a1c1738febd3108970a5"
+                "reference": "01ffe0411b842f93c571e5c391f289c3fdd498c3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/filesystem/zipball/58b9790d12f9670b7f53a1c1738febd3108970a5",
-                "reference": "58b9790d12f9670b7f53a1c1738febd3108970a5",
+                "url": "https://api.github.com/repos/symfony/filesystem/zipball/01ffe0411b842f93c571e5c391f289c3fdd498c3",
+                "reference": "01ffe0411b842f93c571e5c391f289c3fdd498c3",
                 "shasum": ""
             },
             "require": {
-                "php": ">=8.2",
+                "php": ">=8.1",
                 "symfony/polyfill-ctype": "~1.8",
                 "symfony/polyfill-mbstring": "~1.8"
             },
             "require-dev": {
-                "symfony/process": "^6.4|^7.0|^8.0"
+                "symfony/process": "^5.4|^6.4|^7.0"
             },
             "type": "library",
             "autoload": {
@@ -1455,7 +1511,7 @@
             "description": "Provides basic utilities for the filesystem",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/filesystem/tree/v7.4.8"
+                "source": "https://github.com/symfony/filesystem/tree/v6.4.34"
             },
             "funding": [
                 {
@@ -1475,7 +1531,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-03-24T13:12:05+00:00"
+            "time": "2026-02-24T17:51:06+00:00"
         },
         {
             "name": "symfony/polyfill-ctype",
@@ -1824,5 +1880,8 @@
         "php": "^8.1"
     },
     "platform-dev": {},
+    "platform-overrides": {
+        "php": "8.1.0"
+    },
     "plugin-api-version": "2.6.0"
 }

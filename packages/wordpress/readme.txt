@@ -3,7 +3,7 @@ Contributors: thaipc
 Tags: file-manager, media, s3, r2, upload, cloud-storage
 Requires at least: 6.0
 Tested up to: 6.7
-Requires PHP: 7.4
+Requires PHP: 8.1
 Stable tag: 1.22.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
@@ -29,10 +29,12 @@ image optimization with WebP variants, AI auto-tagging, and full-text search.
 
 == Installation ==
 
-1. Upload the `fluxfiles` folder to `/wp-content/plugins/`
-2. Activate the plugin through the 'Plugins' menu in WordPress
+1. Download a release ZIP that includes the `vendor/` folder (WordPress.org or GitHub Releases)
+2. In WordPress go to **Plugins → Add New → Upload Plugin**, choose the ZIP, install, and activate — or unzip into `wp-content/plugins/fluxfiles/` and activate from **Plugins**
 3. Go to **Settings > FluxFiles** to configure your JWT secret and storage options
 4. Use the shortcode `[fluxfiles]` in any page or post
+
+*(Developers building from Git: run `composer install --no-dev --optimize-autoloader` in the plugin directory before zipping, or use a monorepo checkout with `composer install -d packages/core` next to `packages/wordpress`.)*
 
 == Frequently Asked Questions ==
 
@@ -46,7 +48,7 @@ No. The plugin bundles the full FluxFiles backend. Everything runs within your W
 
 = What PHP version is required? =
 
-PHP 7.4 or higher. Compatible with PHP 7.4, 8.0, 8.1, 8.2, and 8.3.
+PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfiles`). PHP 7.4 / 8.0 are not supported with the current release line.
 
 == Screenshots ==
 
@@ -58,7 +60,7 @@ PHP 7.4 or higher. Compatible with PHP 7.4, 8.0, 8.1, 8.2, and 8.3.
 == Changelog ==
 
 = 1.22.0 =
-* PHP 7.4+ compatibility (supports PHP 7.4 — 8.3)
+* Requires PHP 8.1+ (core dependencies). Prefer installing from a ZIP that includes `vendor/`.
 * Vue / Nuxt adapter added
 * 16 languages with RTL support
 

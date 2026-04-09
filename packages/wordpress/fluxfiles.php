@@ -7,7 +7,7 @@
  * Author:      thai-pc
  * Author URI:  https://github.com/thai-pc
  * License:     MIT
- * Requires PHP: 7.4
+ * Requires PHP: 8.1
  * Requires at least: 6.0
  *
  * @package FluxFiles
@@ -20,13 +20,26 @@ define('FLUXFILES_PLUGIN_FILE', __FILE__);
 define('FLUXFILES_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FLUXFILES_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-// Require the FluxFiles core autoloader
-$autoloader = dirname(__DIR__, 2) . '/vendor/autoload.php';
-if (!file_exists($autoloader)) {
+// Require the FluxFiles core autoloader (plugin-local vendor, monorepo packages/core, or legacy repo root)
+$fluxfilesAutoloadCandidates = [
+    __DIR__ . '/vendor/autoload.php',
+    dirname(__DIR__, 1) . '/core/vendor/autoload.php',
+    dirname(__DIR__, 2) . '/packages/core/vendor/autoload.php',
+    dirname(__DIR__, 2) . '/vendor/autoload.php',
+];
+$autoloader = null;
+foreach ($fluxfilesAutoloadCandidates as $candidate) {
+    if (is_file($candidate)) {
+        $autoloader = $candidate;
+        break;
+    }
+}
+if ($autoloader === null) {
     add_action('admin_notices', function () {
         echo '<div class="notice notice-error"><p>';
-        echo '<strong>FluxFiles:</strong> Composer dependencies not installed. ';
-        echo 'Run <code>composer install</code> in the FluxFiles root directory.';
+        echo '<strong>FluxFiles:</strong> Missing <code>vendor/</code>. Install a release ZIP that includes dependencies, ';
+        echo 'or run <code>composer install --no-dev</code> in this plugin folder (maintainers), ';
+        echo 'or use a monorepo checkout with <code>composer install -d packages/core</code> next to <code>packages/wordpress</code>.';
         echo '</p></div>';
     });
     return;
