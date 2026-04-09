@@ -14,6 +14,7 @@ namespace FluxFiles;
 class StorageMetadataHandler implements MetadataRepositoryInterface
 {
     private const INDEX_KEY = '_fluxfiles/index.json';
+    private const DIRS_KEY  = '_fluxfiles/dirs.json';
     private const AUDIT_KEY = '_fluxfiles/audit.jsonl';
     private const MAX_AUDIT_BYTES = 5 * 1024 * 1024; // 5MB rotation threshold
     private const AUDIT_KEEP_LINES = 5000; // Keep last N entries after rotation
@@ -160,6 +161,144 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 }
             }
         }
+        return $results;
+    }
+
+    // ---------------------------------------------------------------------
+    // Directory index (folder search)
+    // ---------------------------------------------------------------------
+
+    public function trackDir(string $disk, string $dirKey): void
+    {
+        $dirKey = trim($dirKey, '/');
+        if ($dirKey === '' || $dirKey === '.' || $dirKey === '_fluxfiles' || str_contains($dirKey, '/_fluxfiles')) {
+            return;
+        }
+
+        $this->acquireIndexLock($disk);
+        try {
+            $dirs = $this->loadDirsIndex($disk);
+            $dirs[$dirKey] = true;
+            $this->saveDirsIndex($disk, $dirs);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    public function trackParents(string $disk, string $key): void
+    {
+        $key = trim($key, '/');
+        if ($key === '' || $key === '.' || $key === '_fluxfiles' || str_contains($key, '/_fluxfiles')) {
+            return;
+        }
+
+        $dir = dirname($key);
+        if ($dir === '.' || $dir === '') {
+            return;
+        }
+        $dir = trim($dir, '/');
+        if ($dir === '') {
+            return;
+        }
+
+        $parts = explode('/', $dir);
+        $acc = [];
+
+        $this->acquireIndexLock($disk);
+        try {
+            $dirs = $this->loadDirsIndex($disk);
+            foreach ($parts as $p) {
+                if ($p === '' || $p === '.' || $p === '..') continue;
+                $acc[] = $p;
+                $d = implode('/', $acc);
+                if ($d === '_fluxfiles' || str_contains($d, '/_fluxfiles')) continue;
+                $dirs[$d] = true;
+            }
+            $this->saveDirsIndex($disk, $dirs);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    public function renameDirPrefix(string $disk, string $oldPrefix, string $newPrefix): int
+    {
+        $oldPrefix = trim($oldPrefix, '/');
+        $newPrefix = trim($newPrefix, '/');
+        if ($oldPrefix === '' || $oldPrefix === '_fluxfiles') return 0;
+
+        $this->acquireIndexLock($disk);
+        try {
+            $dirs = $this->loadDirsIndex($disk);
+            $count = 0;
+            $updated = [];
+            foreach ($dirs as $k => $_true) {
+                if ($k === $oldPrefix || str_starts_with($k, $oldPrefix . '/')) {
+                    $newKey = $newPrefix . substr($k, strlen($oldPrefix));
+                    $updated[$newKey] = true;
+                    unset($dirs[$k]);
+                    $count++;
+                }
+            }
+            if ($count > 0) {
+                $dirs = $dirs + $updated;
+                $this->saveDirsIndex($disk, $dirs);
+            }
+            return $count;
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    public function deleteDirPrefix(string $disk, string $prefix): int
+    {
+        $prefix = trim($prefix, '/');
+        if ($prefix === '' || $prefix === '_fluxfiles') return 0;
+
+        $this->acquireIndexLock($disk);
+        try {
+            $dirs = $this->loadDirsIndex($disk);
+            $count = 0;
+            foreach (array_keys($dirs) as $k) {
+                if ($k === $prefix || str_starts_with($k, $prefix . '/')) {
+                    unset($dirs[$k]);
+                    $count++;
+                }
+            }
+            if ($count > 0) {
+                $this->saveDirsIndex($disk, $dirs);
+            }
+            return $count;
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    /**
+     * Search folders across disk using directory index.
+     * Returns rows: { dir_key, name }
+     */
+    public function searchFolders(string $disk, string $query, int $limit = 50, string $pathPrefix = ''): array
+    {
+        $dirs = $this->loadDirsIndex($disk);
+        $prefix = trim($pathPrefix, '/');
+        $q = mb_strtolower($query);
+        $results = [];
+
+        foreach ($dirs as $dirKey => $_true) {
+            if ($prefix !== '' && $dirKey !== $prefix && strpos($dirKey, $prefix . '/') !== 0) {
+                continue;
+            }
+            $name = basename($dirKey);
+            $searchable = $dirKey . ' ' . $name;
+            if (strpos(mb_strtolower($searchable), $q) !== false) {
+                $results[] = [
+                    'dir_key' => $dirKey,
+                    'name'    => $name,
+                ];
+                if (count($results) >= $limit) break;
+            }
+        }
+
         return $results;
     }
 
@@ -460,6 +599,55 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $this->saveIndex($disk, $index);
         } finally {
             $this->releaseIndexLock($disk);
+        }
+    }
+
+    /**
+     * @return array<string, true> Set of directory keys.
+     */
+    private function loadDirsIndex(string $disk): array
+    {
+        $fs = $this->diskManager->disk($disk);
+        if (!$fs->fileExists(self::DIRS_KEY)) {
+            return [];
+        }
+        try {
+            $json = $fs->read(self::DIRS_KEY);
+            $data = json_decode($json, true);
+            if (!is_array($data)) {
+                return [];
+            }
+            $set = [];
+            foreach ($data as $k) {
+                if (!is_string($k)) continue;
+                $k = trim($k, '/');
+                if ($k === '' || $k === '_fluxfiles' || str_contains($k, '/_fluxfiles')) continue;
+                $set[$k] = true;
+            }
+            return $set;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<string, true> $dirs
+     */
+    private function saveDirsIndex(string $disk, array $dirs): void
+    {
+        $fs = $this->diskManager->disk($disk);
+        $dir = dirname(self::DIRS_KEY);
+        if ($dir !== '.' && !$fs->directoryExists($dir)) {
+            $fs->createDirectory($dir);
+        }
+
+        $keys = array_keys($dirs);
+        sort($keys, SORT_STRING);
+
+        try {
+            $fs->write(self::DIRS_KEY, json_encode($keys, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        } catch (\Throwable $e) {
+            // Silent fail
         }
     }
 

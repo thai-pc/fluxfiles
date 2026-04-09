@@ -27,6 +27,15 @@ All notable changes to FluxFiles are documented here.
 
 - **Search (toolbar)** — mobile fullscreen search stopped calling `loadFiles()` on each input (that cleared selection and did not improve filtering). Client-side file filtering now matches `alt_text` and `caption` like title/tags, with safe handling when metadata fields are not strings.
 
+## [1.26.2] — 2026-04-09
+
+| Area | Change |
+|------|--------|
+| Core UI | Global search now queries `/api/fm/search` (metadata index) instead of only filtering the current folder. |
+| Core UI | Folder search added via `/api/fm/search-folders` backed by `_fluxfiles/dirs.json` directory index; results include folders and files. |
+| Core API | Directory index is updated best-effort on `upload`, `mkdir`, `move`, `rename`, `delete`, `copy`, `cross-copy`, `cross-move` so folder names like `test2` can be found. |
+| Mobile UX | Mobile fullscreen search no longer reloads the current folder on every keystroke (prevents losing selection/detail). |
+
 ## [1.26.1] — 2026-04-08
 
 ### Bug Fixes

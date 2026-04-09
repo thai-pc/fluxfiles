@@ -142,6 +142,11 @@ class FileManager
         $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
         $fs = $this->disks->disk($disk);
 
+        // Track parent directories for global folder search (best-effort)
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->trackParents($disk, $scoped);
+        }
+
         $stream = fopen($file['tmp_name'], 'r');
         if ($stream === false) {
             throw new ApiException('Failed to read uploaded file', 500, 'upload_failed');
@@ -236,6 +241,9 @@ class FileManager
                 $this->deleteVariantsDir($disk, $scoped);
                 $fs->deleteDirectory($scoped);
                 $this->meta->deleteChildren($disk, $scoped);
+                if ($this->meta instanceof StorageMetadataHandler) {
+                    $this->meta->deleteDirPrefix($disk, $scoped);
+                }
             } else {
                 // Delete image variants for the file
                 $this->deleteVariants($disk, $scoped);
@@ -330,6 +338,9 @@ class FileManager
             }
             // Move metadata for children
             $this->meta->renameChildren($disk, $scoped, $newPath);
+            if ($this->meta instanceof StorageMetadataHandler) {
+                $this->meta->renameDirPrefix($disk, $scoped, $newPath);
+            }
             try {
                 $fs->deleteDirectory($scoped);
             } catch (\Throwable $e) {
@@ -341,6 +352,10 @@ class FileManager
             $this->moveMetadata($disk, $scoped, $disk, $newPath);
             // Move image variants
             $this->moveVariants($disk, $scoped, $disk, $newPath);
+
+            if ($this->meta instanceof StorageMetadataHandler) {
+                $this->meta->trackParents($disk, $newPath);
+            }
         }
 
         return [
@@ -361,7 +376,28 @@ class FileManager
         $scopedTo   = $this->scopedPath($to);
         $this->assertNotSystem($scopedTo);
         $fs = $this->disks->disk($disk);
+        $isDir = false;
+        try {
+            $isDir = $fs->directoryExists($scopedFrom);
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
         $fs->move($scopedFrom, $scopedTo);
+
+        // Keep metadata + folder index best-effort in sync
+        if ($isDir) {
+            $this->meta->renameChildren($disk, $scopedFrom, $scopedTo);
+            if ($this->meta instanceof StorageMetadataHandler) {
+                $this->meta->renameDirPrefix($disk, $scopedFrom, $scopedTo);
+            }
+        } else {
+            $this->moveMetadata($disk, $scopedFrom, $disk, $scopedTo);
+            $this->moveVariants($disk, $scopedFrom, $disk, $scopedTo);
+            if ($this->meta instanceof StorageMetadataHandler) {
+                $this->meta->trackParents($disk, $scopedTo);
+            }
+        }
 
         return ['key' => $scopedTo];
     }
@@ -375,6 +411,10 @@ class FileManager
         $scopedTo   = $this->scopedPath($to);
         $fs = $this->disks->disk($disk);
         $fs->copy($scopedFrom, $scopedTo);
+
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->trackParents($disk, $scopedTo);
+        }
 
         return ['key' => $scopedTo];
     }
@@ -419,6 +459,9 @@ class FileManager
 
         $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $this->copyVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->trackParents($dstDisk, $scopedDst);
+        }
 
         return [
             'key'      => $scopedDst,
@@ -460,6 +503,10 @@ class FileManager
         $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $srcFs->delete($scopedSrc);
+
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->trackParents($dstDisk, $scopedDst);
+        }
 
         return [
             'key'      => $scopedDst,
@@ -576,6 +623,11 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $fs = $this->disks->disk($disk);
         $fs->createDirectory($scoped);
+
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->trackDir($disk, $scoped);
+            $this->meta->trackParents($disk, $scoped);
+        }
 
         return ['created' => true];
     }

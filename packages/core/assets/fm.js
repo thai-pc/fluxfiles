@@ -19,7 +19,8 @@ function fluxFilesApp() {
         endpoint: '',
         config: {},
         searchQuery: '',
-        searchResults: null, // null | array
+        searchResults: null, // null | array (files)
+        searchFolderResults: null, // null | array (folders)
         searching: false,
         searchError: '',
         _searchTimer: null,
@@ -483,6 +484,7 @@ function fluxFilesApp() {
             // Clear search state when query is empty or too short
             if (q.length < 2) {
                 this.searchResults = null;
+                this.searchFolderResults = null;
                 this.searchError = '';
                 this.searching = false;
                 this._searchLastQ = q;
@@ -512,15 +514,26 @@ function fluxFilesApp() {
             this.searchError = '';
 
             try {
-                const url =
+                const filesUrl =
                     '/api/fm/search?disk=' + encodeURIComponent(this.currentDisk) +
                     '&q=' + encodeURIComponent(query) +
                     '&limit=' + encodeURIComponent(200);
-                const rows = await this.api('GET', url);
-                this.searchResults = Array.isArray(rows) ? rows : [];
+                const foldersUrl =
+                    '/api/fm/search-folders?disk=' + encodeURIComponent(this.currentDisk) +
+                    '&q=' + encodeURIComponent(query) +
+                    '&limit=' + encodeURIComponent(200);
+
+                const [fileRows, folderRows] = await Promise.all([
+                    this.api('GET', filesUrl),
+                    this.api('GET', foldersUrl),
+                ]);
+
+                this.searchResults = Array.isArray(fileRows) ? fileRows : [];
+                this.searchFolderResults = Array.isArray(folderRows) ? folderRows : [];
             } catch (err) {
                 console.error('FluxFiles: Search failed', err);
                 this.searchResults = [];
+                this.searchFolderResults = [];
                 this.searchError = err?.message || 'Search failed';
             } finally {
                 this.searching = false;
@@ -537,9 +550,21 @@ function fluxFilesApp() {
             // Exit search view and navigate to folder containing the file
             this.searchQuery = '';
             this.searchResults = null;
+            this.searchFolderResults = null;
             this.searchError = '';
             this._pendingSelectKey = s;
             this.navigate(dir);
+        },
+
+        openSearchFolder(row) {
+            const key = row?.dir_key || row?.key;
+            if (!key) return;
+            const s = String(key);
+            this.searchQuery = '';
+            this.searchResults = null;
+            this.searchFolderResults = null;
+            this.searchError = '';
+            this.navigate(s);
         },
 
         // Navigation

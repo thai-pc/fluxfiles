@@ -313,6 +313,22 @@ function routeRequest(
         return $metaRepo->search($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
     }
 
+    // Search folders (directory index)
+    if ($method === 'GET' && $uri === '/api/fm/search-folders') {
+        $q = $_GET['q'] ?? null;
+        if ($q === null) {
+            throw new ApiException('Missing search query', 400, 'missing_param');
+        }
+        $disk = $_GET['disk'] ?? 'local';
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+        }
+        if (!$claims->hasPerm('read')) {
+            throw new ApiException('Permission denied: read', 403, 'permission_denied');
+        }
+        return $metaRepo->searchFolders($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
+    }
+
     // Quota
     if ($method === 'GET' && $uri === '/api/fm/quota') {
         return $quotaManager->getQuotaInfo(
