@@ -135,7 +135,7 @@
             <!-- Search -->
             <div class="ff-search-box">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
-                <input :placeholder="t('toolbar.search_hint')" x-model="searchQuery">
+                <input :placeholder="t('toolbar.search_hint')" x-model="searchQuery" @input="_scheduleSearch()">
             </div>
             <!-- Row 1: Theme + Language (above disk pills) -->
             <div class="ff-pills-actions">
@@ -177,7 +177,7 @@
          x-effect="if (mobileSearchOpen) $nextTick(() => $refs.mobileSearchInput?.focus())">
         <div class="ff-mobile-search-header">
             <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
-            <input type="text" x-ref="mobileSearchInput" x-model="searchQuery" :placeholder="t('toolbar.search_hint')" @input="searchQuery.length >= 2 && loadFiles()" autofocus>
+            <input type="text" x-ref="mobileSearchInput" x-model="searchQuery" :placeholder="t('toolbar.search_hint')" @input="_scheduleSearch()" autofocus>
             <button @click="mobileSearchOpen = false; searchQuery = ''; loadFiles()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -403,8 +403,39 @@
             <!-- File content -->
             <template x-if="!loading">
                 <div>
+                    <!-- Global search results (across disk) -->
+                    <template x-if="searchQuery && searchQuery.trim().length >= 2 && searchResults !== null">
+                        <div>
+                            <div class="section-label">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                                <span x-text="t('search.results', { query: searchQuery, count: (searchResults || []).length }) || ('Search results')"></span>
+                                <span style="font-weight:400;color:var(--color-text-tertiary);" x-show="searching" x-text="t('common.loading') || 'Loading…'"></span>
+                            </div>
+
+                            <div class="ff-empty" x-show="!searching && searchError">
+                                <p x-text="searchError"></p>
+                            </div>
+
+                            <div class="ff-empty" x-show="!searching && !searchError && (searchResults || []).length === 0">
+                                <p x-text="t('search.no_results', { query: searchQuery }) || 'No results'"></p>
+                            </div>
+
+                            <div class="file-grid list-view" x-show="(searchResults || []).length > 0">
+                                <template x-for="row in searchResults" :key="row.file_key || row.key">
+                                    <div class="file-card" @click="openSearchResult(row)">
+                                        <div class="thumb ff-thumb-icon thumb-file">
+                                            <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                                        </div>
+                                        <div class="fname" x-text="(row.file_key || row.key || '').split('/').pop()" :title="row.file_key || row.key"></div>
+                                        <div class="fsize" x-text="row.file_key || row.key"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
                     <!-- Folders -->
-                    <template x-if="filteredFolders.length > 0">
+                    <template x-if="(searchResults === null) && filteredFolders.length > 0">
                         <div>
                             <div class="section-label">
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 2.5A1.5 1.5 0 012.5 1h2l1 1.5h4A1.5 1.5 0 0111 4v5A1.5 1.5 0 019.5 10.5h-7A1.5 1.5 0 011 9V2.5z" stroke="currentColor" stroke-width="1"/></svg>
@@ -435,7 +466,7 @@
                     </template>
 
                     <!-- Files -->
-                    <template x-if="filteredFiles.length > 0">
+                    <template x-if="(searchResults === null) && filteredFiles.length > 0">
                         <div>
                             <div class="section-label" style="margin-top:8px;">
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1"/><path d="M1 8l3-3 2 2 2-2 3 3" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8.5" cy="4" r="1" fill="currentColor"/></svg>
@@ -493,7 +524,7 @@
                     </template>
 
                     <!-- Empty -->
-                    <div class="ff-empty" x-show="filteredFiles.length === 0 && filteredFolders.length === 0">
+                    <div class="ff-empty" x-show="(searchResults === null) && filteredFiles.length === 0 && filteredFolders.length === 0">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
                         </svg>
