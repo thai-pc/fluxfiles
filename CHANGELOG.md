@@ -20,7 +20,8 @@ All notable changes to FluxFiles are documented here.
 - **Docs moved** — `ROADMAP.md` moved to `docs/ROADMAP.md` (root file kept as a pointer).
 - **Dev server docs updated** — documentation now runs the PHP dev server from `packages/core` (`php -S ... router.php`).
 - **WordPress plugin distribution** — documented **ZIP-first** install (upload / extract a build that already includes `vendor/`); `composer.json` / `composer.lock` target **PHP 8.1+** and are for maintainers building releases. Plugin autoload order: plugin `vendor/`, then monorepo `packages/core/vendor`.
-- **PHP minimum raised to 8.1** for `packages/core` and `packages/laravel` Composer metadata — aligns with League Flysystem 3 and Intervention Image v3 (PHP 7.4 / 8.0 were not actually satisfiable by the published dependency graph).
+- **PHP minimum raised to 8.1** for `packages/core` and `packages/laravel` Composer metadata — aligns with League Flysystem 3 and Intervention Image v3 (earlier lower minimums did not match what Composer could actually resolve).
+- **Documentation** — dropped leftover PHP 7.4 phrasing in `README.md`, `packages/wordpress/readme.txt`, and `CHANGELOG.md` (`[1.22.0]` history + upgrade notice now align with PHP 8.1+).
 
 ## [1.26.1] — 2026-04-08
 
@@ -127,8 +128,8 @@ All notable changes to FluxFiles are documented here.
 
 ## [1.22.0] — 2026-03-15
 
-- Downgrade PHP requirement from 8.2 to **7.4+** (compatible with PHP 7.4 — 8.3)
-- Rewrite all PHP 8.x syntax: match, readonly, constructor promotion, named args, throw expressions, union types
+- Broadened **source-level** PHP compatibility (removed PHP 8-only syntax: match, readonly, constructor promotion, named args, throw expressions, union types) so the tree could target older runtimes at the time
+- **Current note:** dependency upgrades (Flysystem 3, Intervention Image 3) mean **PHP 8.1+** is now required for installs via Composer / bundled `vendor/`; see package `composer.json` files
 
 ## [1.21.0] — 2026-03-15
 
