@@ -48,7 +48,7 @@ No. The plugin bundles the full FluxFiles backend. Everything runs within your W
 
 = What PHP version is required? =
 
-PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfiles`). PHP 7.4 / 8.0 are not supported with the current release line.
+PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfiles`). Anything below 8.1 is not supported on the current release line.
 
 == Screenshots ==
 
@@ -87,4 +87,4 @@ PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfile
 == Upgrade Notice ==
 
 = 1.22.0 =
-Now supports PHP 7.4+. No breaking changes — safe to upgrade.
+Requires **PHP 8.1+** and a build that includes `vendor/` (release ZIP or run `composer install --no-dev` before deploying). Review settings after upgrade.
