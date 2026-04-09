@@ -19,6 +19,12 @@ function fluxFilesApp() {
         endpoint: '',
         config: {},
         searchQuery: '',
+        searchResults: null, // null | array
+        searching: false,
+        searchError: '',
+        _searchTimer: null,
+        _searchLastQ: '',
+        _pendingSelectKey: null,
         detailFile: null,
         selectedVariant: 'original',
         activeTab: 'info',
@@ -451,12 +457,89 @@ function fluxFilesApp() {
                 this.files = (items || []).filter(i => i.type === 'file');
                 this.selected = [];
                 this.detailFile = null;
+
+                // If we navigated from a global search result, try to auto-select the file.
+                if (this._pendingSelectKey) {
+                    const key = this._pendingSelectKey;
+                    this._pendingSelectKey = null;
+                    const found = this.files.find(f => f && f.key === key);
+                    if (found) {
+                        this.selected = [found];
+                        this.detailFile = found;
+                    }
+                }
             } catch (err) {
                 console.error('FluxFiles: Failed to load files', err);
                 this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             } finally {
                 this.loading = false;
             }
+        },
+
+        // Global search (across disk via metadata index)
+        _scheduleSearch() {
+            const q = (this.searchQuery || '').trim();
+
+            // Clear search state when query is empty or too short
+            if (q.length < 2) {
+                this.searchResults = null;
+                this.searchError = '';
+                this.searching = false;
+                this._searchLastQ = q;
+                if (this._searchTimer) {
+                    clearTimeout(this._searchTimer);
+                    this._searchTimer = null;
+                }
+                return;
+            }
+
+            // Debounce
+            if (this._searchTimer) clearTimeout(this._searchTimer);
+            this._searchTimer = setTimeout(() => {
+                this._searchTimer = null;
+                this.runSearch(q);
+            }, 250);
+        },
+
+        async runSearch(q) {
+            const query = (q || '').trim();
+            if (query.length < 2) return;
+
+            // Avoid duplicate calls for same query
+            if (this.searching && this._searchLastQ === query) return;
+            this._searchLastQ = query;
+            this.searching = true;
+            this.searchError = '';
+
+            try {
+                const url =
+                    '/api/fm/search?disk=' + encodeURIComponent(this.currentDisk) +
+                    '&q=' + encodeURIComponent(query) +
+                    '&limit=' + encodeURIComponent(200);
+                const rows = await this.api('GET', url);
+                this.searchResults = Array.isArray(rows) ? rows : [];
+            } catch (err) {
+                console.error('FluxFiles: Search failed', err);
+                this.searchResults = [];
+                this.searchError = err?.message || 'Search failed';
+            } finally {
+                this.searching = false;
+            }
+        },
+
+        openSearchResult(row) {
+            const key = row?.file_key || row?.key;
+            if (!key) return;
+            const s = String(key);
+            const idx = s.lastIndexOf('/');
+            const dir = idx >= 0 ? s.slice(0, idx) : '';
+
+            // Exit search view and navigate to folder containing the file
+            this.searchQuery = '';
+            this.searchResults = null;
+            this.searchError = '';
+            this._pendingSelectKey = s;
+            this.navigate(dir);
         },
 
         // Navigation
@@ -1531,6 +1614,12 @@ function fluxFilesApp() {
             this.postMessage('FM_CLOSE', {});
         },
 
+        // Watch search query changes
+        _initSearchWatcher() {
+            // Alpine doesn't provide deep watchers here; poll via microtask on input binding changes.
+            // We keep it simple: run schedule on next tick in places that mutate searchQuery.
+        },
+
         // Utility
         formatSize(bytes) {
             if (!bytes) return '0 B';
@@ -1565,15 +1654,30 @@ function fluxFilesApp() {
             return 'file';
         },
 
+        /** @param {unknown} v */
+        _searchableMetaField(v) {
+            if (v == null || v === '') return '';
+            return typeof v === 'string' ? v : String(v);
+        },
+
         get filteredFiles() {
             if (!this.searchQuery) return this.files;
             const q = this.searchQuery.toLowerCase();
             return this.files.filter(f => {
-                if (f.name.toLowerCase().includes(q)) return true;
-                if (f.key && f.key.toLowerCase().includes(q)) return true;
+                const name = (f.name != null && f.name !== '') ? String(f.name) : '';
+                if (name.toLowerCase().includes(q)) return true;
+                if (f.key && String(f.key).toLowerCase().includes(q)) return true;
                 if (f.meta) {
-                    if (f.meta.title && f.meta.title.toLowerCase().includes(q)) return true;
-                    if (f.meta.tags && f.meta.tags.toLowerCase().includes(q)) return true;
+                    const m = f.meta;
+                    const fields = [
+                        this._searchableMetaField(m.title),
+                        this._searchableMetaField(m.alt_text),
+                        this._searchableMetaField(m.caption),
+                        this._searchableMetaField(m.tags),
+                    ];
+                    for (const s of fields) {
+                        if (s && s.toLowerCase().includes(q)) return true;
+                    }
                 }
                 return false;
             });
@@ -1595,8 +1699,9 @@ function fluxFilesApp() {
             if (!this.searchQuery) return this.folders;
             const q = this.searchQuery.toLowerCase();
             return this.folders.filter(f => {
-                if (f.name.toLowerCase().includes(q)) return true;
-                if (f.key && f.key.toLowerCase().includes(q)) return true;
+                const name = (f.name != null && f.name !== '') ? String(f.name) : '';
+                if (name.toLowerCase().includes(q)) return true;
+                if (f.key && String(f.key).toLowerCase().includes(q)) return true;
                 return false;
             });
         },

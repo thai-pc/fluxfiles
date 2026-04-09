@@ -23,6 +23,10 @@ All notable changes to FluxFiles are documented here.
 - **PHP minimum raised to 8.1** for `packages/core` and `packages/laravel` Composer metadata — aligns with League Flysystem 3 and Intervention Image v3 (earlier lower minimums did not match what Composer could actually resolve).
 - **Documentation** — dropped leftover PHP 7.4 phrasing in `README.md`, `packages/wordpress/readme.txt`, and `CHANGELOG.md` (`[1.22.0]` history + upgrade notice now align with PHP 8.1+).
 
+### Bug Fixes
+
+- **Search (toolbar)** — mobile fullscreen search stopped calling `loadFiles()` on each input (that cleared selection and did not improve filtering). Client-side file filtering now matches `alt_text` and `caption` like title/tags, with safe handling when metadata fields are not strings.
+
 ## [1.26.1] — 2026-04-08
 
 ### Bug Fixes

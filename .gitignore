@@ -9,6 +9,10 @@ node_modules/
 storage/uploads/
 storage/rate_limit.json
 
+# Core package storage (runtime/test artifacts)
+packages/core/storage/uploads/
+packages/core/storage/rate_limit.json
+
 # Build output
 adapters/react/dist/
 adapters/vue/dist/
