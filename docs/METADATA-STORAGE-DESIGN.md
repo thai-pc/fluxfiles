@@ -17,7 +17,7 @@
 | ---------------- | ------------------------------------ | ----------------------------------------------------- |
 | **Metadata**     | S3 Object Metadata (x-amz-meta-*)    | title, alt_text, caption, tags — max 2KB/object       |
 | **Search index** | `_fluxfiles/index.json` trong bucket | Cập nhật khi save metadata, dùng cho full-text search |
-| **Trash**        | Prefix `_trash/`                     | Di chuyển file vào `_trash/path/to/file.jpg`          |
+| **Trash**        | —                                    | (Chưa có API trash/restore/purge trong core hiện tại)  |
 | **Audit**        | `_fluxfiles/audit.jsonl`             | Append mỗi sự kiện                                    |
 | **File hash**    | x-amz-meta-file-hash                 | Phát hiện duplicate                                   |
 
@@ -33,7 +33,7 @@
 | ---------------- | ------------------------ | ------------------------------------------------------ |
 | **Metadata**     | `{path}.meta.json`       | Ví dụ: `photos/2024.jpg` → `photos/2024.jpg.meta.json` |
 | **Search index** | `_fluxfiles/index.json`  | Cache để search nhanh                                  |
-| **Trash**        | Thư mục `_trash/`        | Di chuyển file + sidecar vào `_trash/`                 |
+| **Trash**        | —                        | (Chưa có API trash/restore/purge trong core hiện tại)  |
 | **Audit**        | `_fluxfiles/audit.jsonl` | Append mỗi sự kiện                                     |
 
 
@@ -62,9 +62,7 @@
 
 ### Trash
 
-1. **Soft delete:** Move file (và metadata) vào prefix `_trash/`
-2. **Restore:** Move từ `_trash/` về vị trí gốc
-3. **Purge:** Xóa vĩnh viễn từ `_trash/`
+Core hiện có `DELETE /api/fm/delete` (xóa trực tiếp). Chưa có các endpoint trash/restore/purge.
 
 ---
 

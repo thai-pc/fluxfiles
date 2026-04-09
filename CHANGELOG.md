@@ -4,6 +4,22 @@ All notable changes to FluxFiles are documented here.
 
 ---
 
+## [Unreleased]
+
+### Monorepo Structure
+
+- **Standardized package layout** — moved code into `packages/*` without rewriting runtime logic:
+  - `packages/core` (Composer: `fluxfiles/fluxfiles`)
+  - `packages/laravel` (Composer: `fluxfiles/laravel`)
+  - `packages/sdk` (npm: `fluxfiles`)
+  - `packages/react` / `packages/vue` (npm adapters)
+  - `packages/wordpress`, `packages/tinymce`, `packages/ckeditor4`
+- **CI paths updated** — npm publish workflow and subtree split workflow updated to point at `packages/*`.
+- **Laravel adapter base path** — default lookup now targets `vendor/fluxfiles/fluxfiles` to locate core assets cleanly after the move.
+- **Export safety net** — added `.gitattributes` with `export-ignore` rules to avoid shipping dev-only files when archives are built from the monorepo.
+- **Docs moved** — `ROADMAP.md` moved to `docs/ROADMAP.md` (root file kept as a pointer).
+- **Dev server docs updated** — documentation now runs the PHP dev server from `packages/core` (`php -S ... router.php`).
+
 ## [1.26.1] — 2026-04-08
 
 ### Bug Fixes
@@ -95,8 +111,8 @@ All notable changes to FluxFiles are documented here.
 
 ## [1.23.0] — 2026-03-30
 
-- **CKEditor 4 adapter** (`adapters/ckeditor4/`) — toolbar button, image `<img>` / file `<a>` insert
-- **TinyMCE 4/5 adapter** (`adapters/tinymce/`) — toolbar button, auto-detects TinyMCE 4 vs 5 API
+- **CKEditor 4 adapter** (`packages/ckeditor4/`) — toolbar button, image `<img>` / file `<a>` insert
+- **TinyMCE 4/5 adapter** (`packages/tinymce/`) — toolbar button, auto-detects TinyMCE 4 vs 5 API
 - **BYOB (Bring Your Own Bucket)** — users connect their own S3/R2 buckets via AES-256-GCM encrypted JWT credentials
 - **Metadata storage redesign** — replaced SQLite with storage-based metadata (S3 object metadata / local sidecar JSON), metadata travels with files
 - `CredentialEncryptor` — AES-256-GCM encryption for BYOB credentials
@@ -211,7 +227,7 @@ All notable changes to FluxFiles are documented here.
 ## [1.4.0] — 2026-02-05
 
 - **Trash / soft delete** — recoverable deletes with `is_trashed` flag
-- `POST /api/fm/restore`, `DELETE /api/fm/purge`
+- (legacy note) `POST /api/fm/restore`, `DELETE /api/fm/purge`
 - Auto-purge after 30 days
 
 ## [1.3.0] — 2026-02-02
