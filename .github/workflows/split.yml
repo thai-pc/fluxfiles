@@ -10,7 +10,9 @@ jobs:
     strategy:
       matrix:
         package:
-          - local: 'adapters/laravel'
+          - local: 'packages/core'
+            remote: 'fluxfiles-core'
+          - local: 'packages/laravel'
             remote: 'fluxfiles-laravel'
 
     steps:

@@ -66,7 +66,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 ```bash
 git clone https://github.com/thai-pc/fluxfiles.git
 cd fluxfiles
-composer install
+composer install -d packages/core
 ```
 
 ### 2. Configure
@@ -85,6 +85,7 @@ FLUXFILES_ALLOWED_ORIGINS=http://localhost:3000,https://yourapp.com
 ### 3. Run
 
 ```bash
+cd packages/core
 php -S localhost:8080 router.php
 ```
 
@@ -130,7 +131,7 @@ $token = fluxfiles_token(
 Or generate via CLI for testing:
 
 ```bash
-php tests/generate-token.php
+php packages/core/tests/generate-token.php
 ```
 
 ---
@@ -143,7 +144,7 @@ php tests/generate-token.php
 server {
     listen 443 ssl http2;
     server_name fm.yourdomain.com;
-    root /var/www/fluxfiles;
+    root /var/www/fluxfiles/packages/core;
 
     # SSL
     ssl_certificate     /etc/ssl/certs/fm.yourdomain.com.pem;
@@ -173,7 +174,7 @@ server {
 
     # Uploaded files (local disk only)
     location /storage/uploads/ {
-        alias /var/www/fluxfiles/storage/uploads/;
+        alias /var/www/fluxfiles/packages/core/storage/uploads/;
         expires 7d;
         add_header Cache-Control "public";
     }
@@ -720,11 +721,11 @@ return [
 
 ```bash
 # Option 1: Copy plugin folder
-cp -r adapters/wordpress/ /path/to/wp-content/plugins/fluxfiles/
+cp -r packages/wordpress/ /path/to/wp-content/plugins/fluxfiles/
 
 # Option 2: If using Composer in your WP project
 composer require fluxfiles/fluxfiles
-cp -r vendor/fluxfiles/fluxfiles/adapters/wordpress wp-content/plugins/fluxfiles
+cp -r vendor/fluxfiles/fluxfiles/packages/wordpress wp-content/plugins/fluxfiles
 ```
 
 **Requires:** Composer dependencies installed in the FluxFiles root (`composer install`).
@@ -828,7 +829,7 @@ function AdvancedUsage() {
 **Build from source:**
 
 ```bash
-cd adapters/react
+cd packages/react
 npm install
 npm run build       # → dist/index.js, dist/index.mjs, dist/index.d.ts
 npm run typecheck   # TypeScript validation
@@ -882,7 +883,7 @@ export default defineNuxtConfig({
 
 ### CKEditor 4
 
-1. Copy `adapters/ckeditor4/` to your CKEditor plugins directory
+1. Copy `packages/ckeditor4/` to your CKEditor plugins directory
 2. Load `fluxfiles.js` SDK on the page
 
 ```js
@@ -902,7 +903,7 @@ Click the **FluxFiles** toolbar button — images insert as `<img>`, other files
 
 ### TinyMCE (4.x / 5.x)
 
-1. Copy `adapters/tinymce/` to your TinyMCE plugins directory
+1. Copy `packages/tinymce/` to your TinyMCE plugins directory
 2. Load `fluxfiles.js` SDK on the page
 
 ```js
@@ -962,7 +963,7 @@ FluxFiles.setLocale('ja');
 FLUXFILES_LOCALE=vi
 ```
 
-**Add a new language:** See [`lang/CONTRIBUTING.md`](lang/CONTRIBUTING.md) — copy `lang/en.json`, translate, submit PR.
+**Add a new language:** See [`packages/core/lang/CONTRIBUTING.md`](packages/core/lang/CONTRIBUTING.md) — copy `packages/core/lang/en.json`, translate, submit PR.
 
 ---
 
@@ -1009,28 +1010,29 @@ FLUXFILES_LOCALE=vi
 
 ```bash
 # Start dev server
+cd packages/core
 php -S localhost:8080 router.php
 
 # API integration tests
-bash tests/test-api.sh          # Local disk — list, upload, rename, move, copy, delete, metadata, search
-bash tests/test-r2.sh           # R2/S3 cloud storage tests
+bash packages/core/tests/test-api.sh          # Local disk — list, upload, rename, move, copy, delete, metadata, search
+bash packages/core/tests/test-r2.sh           # R2/S3 cloud storage tests
 
 # Unit tests
-php tests/test-claims.php       # JWT claims parsing + path scoping
-php tests/test-diskmanager.php  # DiskManager factory
-php tests/test-ratelimiter.php  # Rate limiter
-php tests/test-metadata.php     # Metadata handler
-php tests/test-byob.php         # BYOB encryption + token validation
-php tests/test-i18n.php         # i18n — validates all 16 language files
-php tests/test-i18n.php --api   # i18n API endpoint tests
+php packages/core/tests/test-claims.php       # JWT claims parsing + path scoping
+php packages/core/tests/test-diskmanager.php  # DiskManager factory
+php packages/core/tests/test-ratelimiter.php  # Rate limiter
+php packages/core/tests/test-metadata.php     # Metadata handler
+php packages/core/tests/test-byob.php         # BYOB encryption + token validation
+php packages/core/tests/test-i18n.php         # i18n — validates all 16 language files
+php packages/core/tests/test-i18n.php --api   # i18n API endpoint tests
 
 # Generate tokens for manual testing
-php tests/generate-token.php
+php packages/core/tests/generate-token.php
 
 # Browser-based tests
-open tests/test-sdk.html        # SDK integration
-open tests/test-ckeditor4.html  # CKEditor 4
-open tests/test-tinymce.html    # TinyMCE
+open packages/core/tests/test-sdk.html        # SDK integration
+open packages/core/tests/test-ckeditor4.html  # CKEditor 4
+open packages/core/tests/test-tinymce.html    # TinyMCE
 ```
 
 ---
@@ -1063,64 +1065,22 @@ open tests/test-tinymce.html    # TinyMCE
 
 ```
 FluxFiles/
-├── api/                              # PHP backend
-│   ├── index.php                     # Router, CORS, Origin validation, JWT auth
-│   ├── FileManager.php               # Core file operations (list/upload/delete/move/copy/rename/mkdir/crop/presign)
-│   ├── StorageMetadataHandler.php     # Metadata + search index + audit in user storage (S3 or sidecar JSON)
-│   ├── MetadataRepositoryInterface.php
-│   ├── DiskManager.php               # Flysystem factory (local/s3/r2/byob)
-│   ├── Claims.php                    # JWT claims value object (perms, disks, prefix, limits)
-│   ├── JwtMiddleware.php             # JWT extraction + HS256 verification
-│   ├── ImageOptimizer.php            # Resize + WebP variants (thumb/medium/large)
-│   ├── AiTagger.php                  # Claude / OpenAI vision API integration
-│   ├── ChunkUploader.php             # S3 multipart upload (files > 10MB)
-│   ├── CredentialEncryptor.php        # AES-256-GCM encryption for BYOB credentials
-│   ├── RateLimiterFileStorage.php     # Token bucket rate limiter (file-based with flock)
-│   ├── AuditLogStorage.php           # Audit log stored in user's disk (_fluxfiles/audit.jsonl)
-│   ├── QuotaManager.php              # Storage quota calculation + enforcement
-│   ├── I18n.php                      # Locale detection, JSON translation loading, t() / tp()
-│   └── ApiException.php              # HTTP error exception class
-├── assets/
-│   ├── fm.js                         # Alpine.js UI component (file browser, detail panel, crop, bulk ops)
-│   └── fm.css                        # Styles — light/dark mode, RTL support, CSS custom properties
-├── config/
-│   └── disks.php                     # Storage disk definitions (local/s3/r2)
-├── lang/                             # 16 translation files (en.json, vi.json, etc.)
-│   ├── en.json
-│   ├── vi.json
-│   ├── ...
-│   └── CONTRIBUTING.md               # How to add a new language
-├── public/
-│   └── index.html                    # Iframe entry point (Alpine.js + htmx)
-├── storage/
-│   ├── uploads/                      # Local disk root (gitignored)
-│   └── rate_limit.json               # Rate limiter data (gitignored)
-├── tests/                            # Test suite (bash scripts + PHP unit tests)
-├── adapters/
+├── packages/
+│   ├── core/                         # Composer package: fluxfiles/fluxfiles
+│   │   ├── api/                       # PHP backend (API router + core classes)
+│   │   ├── assets/                    # UI JS/CSS served by core
+│   │   ├── config/                    # disk definitions
+│   │   ├── lang/                      # 16 translations
+│   │   ├── public/                    # iframe entrypoint
+│   │   ├── storage/                   # local uploads + runtime files (gitignored)
+│   │   └── tests/                     # test suite
 │   ├── laravel/                      # Composer package: fluxfiles/laravel
-│   │   ├── src/                      # ServiceProvider, Facade, Controller, Middleware, Blade component
-│   │   ├── config/fluxfiles.php      # Publishable config
-│   │   ├── routes/fluxfiles.php      # Route definitions
-│   │   └── composer.json
 │   ├── wordpress/                    # WP plugin
-│   │   ├── fluxfiles.php             # Plugin header + boot
-│   │   ├── includes/                 # Plugin, Admin, Api, Shortcode, MediaButton classes
-│   │   ├── templates/settings.php    # Admin settings page
-│   │   └── assets/admin.css
 │   ├── react/                        # npm: @fluxfiles/react (TypeScript)
-│   │   ├── src/                      # FluxFiles.tsx, FluxFilesModal.tsx, useFluxFiles.ts, types.ts
-│   │   └── package.json
 │   ├── vue/                          # npm: @fluxfiles/vue (TypeScript)
-│   │   ├── src/                      # FluxFiles.vue, FluxFilesModal.vue, useFluxFiles.ts
-│   │   └── package.json
 │   ├── ckeditor4/                    # CKEditor 4 plugin
-│   └── tinymce/                      # TinyMCE 4/5 plugin
-├── fluxfiles.js                      # Host app SDK (IIFE + UMD, zero dependencies)
-├── fluxfiles.d.ts                    # TypeScript declarations for SDK
-├── embed.php                         # PHP helpers: fluxfiles_token(), fluxfiles_embed(), fluxfiles_byob_token()
-├── router.php                        # PHP built-in server router (dev mode)
-├── composer.json                     # PHP dependencies
-├── package.json                      # npm metadata (for SDK publishing)
+│   ├── tinymce/                      # TinyMCE 4/5 plugin
+│   └── sdk/                          # npm: fluxfiles (SDK)
 ├── .env.example                      # Environment template
 ├── CHANGELOG.md
 └── LICENSE                           # MIT
@@ -1133,18 +1093,18 @@ FluxFiles/
 | What | Where | Notes |
 |------|-------|-------|
 | **Secrets & CORS** | `.env` | `FLUXFILES_SECRET`, `FLUXFILES_ALLOWED_ORIGINS` |
-| **Storage disks** | `config/disks.php` | Add/remove disk definitions |
+| **Storage disks** | `packages/core/config/disks.php` | Add/remove disk definitions |
 | **Cloud credentials** | `.env` | `AWS_*`, `R2_*` variables |
 | **AI tagging** | `.env` | Provider, API key, model, auto-tag on upload |
-| **Branding / colors** | `assets/fm.css` | CSS custom properties (`--ff-primary`, `--ff-bg`, etc.) |
-| **UI behavior** | `assets/fm.js` | Alpine.js component — modify any behavior |
-| **SDK protocol** | `fluxfiles.js` | Event names, iframe communication |
-| **Token defaults** | `embed.php` | Default TTL, claims, signing |
-| **Image variants** | `api/ImageOptimizer.php` | Change sizes (thumb/medium/large) and quality |
+| **Branding / colors** | `packages/core/assets/fm.css` | CSS custom properties (`--ff-primary`, `--ff-bg`, etc.) |
+| **UI behavior** | `packages/core/assets/fm.js` | Alpine.js component — modify any behavior |
+| **SDK protocol** | `packages/sdk/fluxfiles.js` | Event names, iframe communication |
+| **Token defaults** | `packages/core/embed.php` | Default TTL, claims, signing |
+| **Image variants** | `packages/core/api/ImageOptimizer.php` | Change sizes (thumb/medium/large) and quality |
 | **Rate limits** | `.env` | `FLUXFILES_RATE_LIMIT_READ`, `FLUXFILES_RATE_LIMIT_WRITE` |
-| **Translations** | `lang/*.json` | Edit existing or add new locale |
-| **Dangerous extensions** | `api/FileManager.php` | `DANGEROUS_EXTENSIONS` constant |
-| **Adapters** | `adapters/*/` | Package name, config, routes, views |
+| **Translations** | `packages/core/lang/*.json` | Edit existing or add new locale |
+| **Dangerous extensions** | `packages/core/api/FileManager.php` | `DANGEROUS_EXTENSIONS` constant |
+| **Packages** | `packages/*/` | Core, adapters, SDK |
 
 ---
 

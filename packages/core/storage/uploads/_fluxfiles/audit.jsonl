@@ -1,0 +1,44 @@
+{"ts":1775455511,"action":"delete","context":{"user_id":"test-user-001","file_key":"_fluxfiles\/audit.jsonl","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775480133,"action":"upload","context":{"user_id":"test-user-001","file_key":"","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775480139,"action":"delete","context":{"user_id":"test-user-001","file_key":"BAO_CAO_SO_LIEU_TPBANK.xlsx","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486096,"action":"mkdir","context":{"user_id":"test-user-001","file_key":"test1","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486286,"action":"upload","context":{"user_id":"test-user-001","file_key":"","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486403,"action":"upload","context":{"user_id":"test-user-001","file_key":"","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486502,"action":"rename","context":{"user_id":"test-user-001","file_key":"test1\/sepay-mo-hinh.png","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486516,"action":"delete","context":{"user_id":"test-user-001","file_key":"test1\/sepay-mo-hinh-1.png","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486543,"action":"upload","context":{"user_id":"test-user-001","file_key":"","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486637,"action":"move","context":{"user_id":"test-user-001","file_key":"test1\/sepay-mo-hinh.png","ip":"::1","user_agent":"Mozilla\/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit\/605.1.15 (KHTML, like Gecko) Version\/26.0 Mobile\/15E148 Safari\/604.1"}}
+{"ts":1775486655,"action":"move","context":{"user_id":"test-user-001","file_key":"test1\/sepay-mo-hinh.png","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486666,"action":"mkdir","context":{"user_id":"test-user-001","file_key":"test1\/test2","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486679,"action":"move","context":{"user_id":"test-user-001","file_key":"test1\/sepay-mo-hinh.png","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486707,"action":"delete","context":{"user_id":"test-user-001","file_key":"test1\/test2","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486713,"action":"upload","context":{"user_id":"test-user-001","file_key":"","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775486718,"action":"delete","context":{"user_id":"test-user-001","file_key":"test1\/\u0110a\u0306ng ky\u0301 loa Sepay.xlsm","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775557799,"action":"mkdir","context":{"user_id":"test-user-001","file_key":"test1","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775557815,"action":"upload","context":{"user_id":"test-user-001","file_key":"","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775702365,"action":"mkdir","context":{"user_id":"test-api","file_key":"_api_test_dir","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702365,"action":"upload","context":{"user_id":"test-api","file_key":"","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702365,"action":"upload","context":{"user_id":"test-api","file_key":"","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702365,"action":"upload","context":{"user_id":"test-api","file_key":"","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702365,"action":"metadata_update","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702365,"action":"copy","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702365,"action":"move","context":{"user_id":"test-api","file_key":"_api_test_dir\/copied.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702365,"action":"cross_copy","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702365,"action":"delete","context":{"user_id":"test-api","file_key":"_api_test_dir\/moved.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702366,"action":"delete","context":{"user_id":"test-api","file_key":"_api_test_dir\/moved.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702366,"action":"delete","context":{"user_id":"test-api","file_key":"_api_test_dir\/cross-copied.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702368,"action":"delete","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702368,"action":"metadata_update","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702468,"action":"mkdir","context":{"user_id":"test-api","file_key":"_api_test_dir","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702468,"action":"upload","context":{"user_id":"test-api","file_key":"","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702468,"action":"upload","context":{"user_id":"test-api","file_key":"","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702468,"action":"upload","context":{"user_id":"test-api","file_key":"","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702469,"action":"metadata_update","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702469,"action":"copy","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702469,"action":"move","context":{"user_id":"test-api","file_key":"_api_test_dir\/copied.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702469,"action":"cross_copy","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702469,"action":"delete","context":{"user_id":"test-api","file_key":"_api_test_dir\/moved.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702471,"action":"delete","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775702471,"action":"metadata_update","context":{"user_id":"test-api","file_key":"_api_test_dir\/ff-api-test.txt","ip":"::1","user_agent":"curl\/8.7.1"}}
+{"ts":1775704968,"action":"delete","context":{"user_id":"test-user-001","file_key":"_api_test_dir\/cross-copied.txt","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}
+{"ts":1775704976,"action":"delete","context":{"user_id":"test-user-001","file_key":"_api_test_dir","ip":"::1","user_agent":"Mozilla\/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko\/20100101 Firefox\/149.0"}}

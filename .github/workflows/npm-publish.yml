@@ -17,6 +17,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Publish (skip if version exists)
+        working-directory: packages/sdk
         run: npm publish || echo "Version already published, skipping."
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -37,15 +38,15 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
-        working-directory: adapters/${{ matrix.adapter }}
+        working-directory: packages/${{ matrix.adapter }}
         run: npm install
 
       - name: Build
-        working-directory: adapters/${{ matrix.adapter }}
+        working-directory: packages/${{ matrix.adapter }}
         run: npm run build
 
       - name: Publish (skip if version exists)
-        working-directory: adapters/${{ matrix.adapter }}
+        working-directory: packages/${{ matrix.adapter }}
         run: npm publish --access public || echo "Version already published, skipping."
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

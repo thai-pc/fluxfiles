@@ -1,0 +1,15 @@
+* text=auto eol=lf
+
+# Keep monorepo exports lean (safety net).
+# Composer/npm registries may build dist archives from the repository.
+/.github export-ignore
+/docs export-ignore
+/scripts export-ignore
+/storage export-ignore
+/vendor export-ignore
+/.env export-ignore
+/.env.* export-ignore
+/.claude export-ignore
+/.cursor export-ignore
+/.DS_Store export-ignore
+
