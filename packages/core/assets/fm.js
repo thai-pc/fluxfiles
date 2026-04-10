@@ -25,6 +25,8 @@ function fluxFilesApp() {
         searchError: '',
         _searchTimer: null,
         _searchLastQ: '',
+        _searchSeq: 0,
+        _activeSearchId: 0,
         _pendingSelectKey: null,
         detailFile: null,
         selectedVariant: 'original',
@@ -488,6 +490,7 @@ function fluxFilesApp() {
                 this.searchError = '';
                 this.searching = false;
                 this._searchLastQ = q;
+                this._activeSearchId = 0;
                 if (this._searchTimer) {
                     clearTimeout(this._searchTimer);
                     this._searchTimer = null;
@@ -510,6 +513,8 @@ function fluxFilesApp() {
             // Avoid duplicate calls for same query
             if (this.searching && this._searchLastQ === query) return;
             this._searchLastQ = query;
+            const reqId = ++this._searchSeq;
+            this._activeSearchId = reqId;
             this.searching = true;
             this.searchError = '';
 
@@ -528,15 +533,23 @@ function fluxFilesApp() {
                     this.api('GET', foldersUrl),
                 ]);
 
+                // Ignore stale responses when user typed a newer query
+                if (this._activeSearchId !== reqId) return;
+
                 this.searchResults = Array.isArray(fileRows) ? fileRows : [];
                 this.searchFolderResults = Array.isArray(folderRows) ? folderRows : [];
             } catch (err) {
                 console.error('FluxFiles: Search failed', err);
+
+                if (this._activeSearchId !== reqId) return;
+
                 this.searchResults = [];
                 this.searchFolderResults = [];
                 this.searchError = err?.message || 'Search failed';
             } finally {
-                this.searching = false;
+                if (this._activeSearchId === reqId) {
+                    this.searching = false;
+                }
             }
         },
 
