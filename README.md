@@ -1087,6 +1087,31 @@ FluxFiles/
 
 ---
 
+## Storage Internals (`_fluxfiles/`, `rate_limit.json`)
+
+FluxFiles creates a few internal runtime files under your storage root (for local disk: `packages/core/storage/uploads/`).
+These files are **not user content** and are **not meant to be edited by hand**.
+
+### `_fluxfiles/` directory
+
+Hidden internal folder used for indexes and logs. The API/UI blocks system paths (`_fluxfiles/`, `_variants/`) from normal list/rename/move/delete operations.
+
+- **`_fluxfiles/index.json`**: Metadata index for files (title/alt/caption/tags) stored alongside objects. Used by `GET /api/fm/search` to perform fast search across the disk.
+- **`_fluxfiles/dirs.json`**: Directory index (list of folder paths). Used by `GET /api/fm/search-folders` so searches like `test2` can match folder names without scanning the whole storage.
+- **`_fluxfiles/audit.jsonl`**: Append-only audit log (JSON Lines) for user actions. Rotated automatically when it grows too large.
+- **`_fluxfiles/index.lock`** (local disks only): Lock file for safely updating indexes on local filesystem. Not used for S3/R2.
+
+If you delete `_fluxfiles/`, FluxFiles will generally recreate it as needed, but you may temporarily lose search results / audit history until indexes are rebuilt by new operations.
+
+### `storage/rate_limit.json`
+
+Local file-backed counter used by the rate limiter (per-user read/write quotas controlled by `.env`: `FLUXFILES_RATE_LIMIT_READ`, `FLUXFILES_RATE_LIMIT_WRITE`).
+
+- Safe to delete during development (it will be recreated), but it may reset rate-limit counters.
+- In production, **do not expose this file publicly** (deny access at your web server).
+
+---
+
 ## Customization
 
 | What | Where | Notes |
