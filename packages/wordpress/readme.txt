@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1
-Stable tag: 1.22.0
+Stable tag: 1.27.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -80,6 +80,12 @@ PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfile
 4. Dark mode — automatic theme detection
 
 == Changelog ==
+
+= 1.27.0 =
+* Version aligned with monorepo (core + all adapters now on the same `1.27.0` tag).
+* New `wp fluxfiles seed` WP-CLI command — index pre-existing files/folders under `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so they appear in FTS5 and folder search.
+* Missing `/search-folders` REST route registered — global folder search now works through the WordPress REST proxy.
+* `/wp-json/fluxfiles/v1/list` forwards `limit` + `cursor` query params for cursor-based pagination on folders with >1000 files.
 
 = 1.22.0 =
 * Requires PHP 8.1+ (core dependencies). Prefer installing from a ZIP that includes `vendor/`.

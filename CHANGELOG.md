@@ -4,7 +4,13 @@ All notable changes to FluxFiles are documented here.
 
 ---
 
-## [Unreleased]
+## [1.27.0] — 2026-04-13
+
+### Version Alignment
+
+- **Unified all package versions to `1.27.0`** — previously the npm adapters drifted (`sdk` 1.26.2, `react` 1.26.3, `vue` 1.26.4) and the WordPress plugin trailed far behind at 1.22.0. Every publishable package in the monorepo now carries the same version.
+- **Composer cross-package constraints tightened** — `packages/laravel/composer.json` required `fluxfiles/fluxfiles: ^1.26.3`, `packages/wordpress/composer.json` still pointed at `^1.22`. Both are now `^1.27.0` so adapter installs pull a core compatible with the features they depend on.
+- **PHP baseline unchanged** — `^8.1` across `core`, `laravel`, `wordpress` (verified; the `php8.2-fpm.sock` line in the root README nginx example is illustrative, not a version requirement).
 
 ### Pagination (Core + Adapters)
 

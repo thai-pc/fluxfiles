@@ -1,6 +1,6 @@
 {
   "name": "@fluxfiles/vue",
-  "version": "1.26.4",
+  "version": "1.27.0",
   "description": "Vue 3 components and composables for FluxFiles file manager, with Nuxt 3 auto-import support",
   "license": "MIT",
   "main": "dist/index.js",
