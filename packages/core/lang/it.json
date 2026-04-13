@@ -128,6 +128,29 @@
         "results": "{count} risultati per \"{query}\"",
         "no_results": "Nessun risultato per \"{query}\""
     },
+    "sort": {
+        "label": "Ordina",
+        "name": "Nome",
+        "date": "Data",
+        "size": "Dimensione",
+        "type": "Tipo",
+        "ascending": "Crescente",
+        "descending": "Decrescente"
+    },
+    "filter": {
+        "label": "Filtra",
+        "all": "Tutti",
+        "image": "Immagini",
+        "video": "Video",
+        "audio": "Audio",
+        "document": "Documenti",
+        "other": "Altri"
+    },
+    "pagination": {
+        "load_more": "Carica altri ({count} rimanenti)",
+        "loading_more": "Caricamento…",
+        "showing": "Mostrati {shown} di {total}"
+    },
     "variants": {
         "title": "Dimensioni immagine",
         "original": "Originale",

@@ -128,6 +128,29 @@
         "results": "\"{query}\" için {count} sonuç",
         "no_results": "\"{query}\" için sonuç bulunamadı"
     },
+    "sort": {
+        "label": "Sırala",
+        "name": "Ad",
+        "date": "Tarih",
+        "size": "Boyut",
+        "type": "Tür",
+        "ascending": "Artan",
+        "descending": "Azalan"
+    },
+    "filter": {
+        "label": "Filtrele",
+        "all": "Tümü",
+        "image": "Resimler",
+        "video": "Videolar",
+        "audio": "Ses",
+        "document": "Belgeler",
+        "other": "Diğer"
+    },
+    "pagination": {
+        "load_more": "Daha fazla yükle ({count} kaldı)",
+        "loading_more": "Yükleniyor…",
+        "showing": "{total} öğeden {shown} gösteriliyor"
+    },
     "variants": {
         "title": "Görsel boyutları",
         "original": "Orijinal",

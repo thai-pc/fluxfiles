@@ -320,6 +320,17 @@
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                         <span x-text="t('common.refresh') || 'Refresh'"></span>
                     </button>
+                    <div class="ff-more-divider"></div>
+                    <!-- Sort cycle: name → date → size → type → name -->
+                    <button @click="open = false; setSort(sortBy === 'name' ? 'date' : sortBy === 'date' ? 'size' : sortBy === 'size' ? 'type' : 'name')">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M3 2v8M1.5 4L3 2l1.5 2M9 10V2M7.5 8L9 10l1.5-2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span x-text="(t('sort.label') || 'Sort') + ': ' + sortLabel + ' ' + (sortDir === 'asc' ? '↑' : '↓')"></span>
+                    </button>
+                    <!-- Filter cycle: all → image → video → audio → document → other → all -->
+                    <button @click="open = false; setTypeFilter(typeFilter === 'all' ? 'image' : typeFilter === 'image' ? 'video' : typeFilter === 'video' ? 'audio' : typeFilter === 'audio' ? 'document' : typeFilter === 'document' ? 'other' : 'all')">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M1 2h10L7 7v3L5 11V7z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span x-text="(t('filter.label') || 'Filter') + ': ' + typeFilterLabel"></span>
+                    </button>
                     <!-- Selection-dependent actions -->
                     <div class="ff-more-divider" x-show="selected.length > 0"></div>
                     <button @click="open = false; openRename(selected[0])" x-show="selected.length === 1">
@@ -347,6 +358,83 @@
             </div>
 
             <div style="margin-inline-start:auto;display:flex;align-items:center;gap:6px;">
+                <!-- Type filter -->
+                <div class="ff-dropdown ff-filter-dd" @click.away="filterMenuOpen = false">
+                    <button class="tb-btn ff-dd-btn"
+                            :class="{ active: typeFilter !== 'all' }"
+                            @click="filterMenuOpen = !filterMenuOpen; sortMenuOpen = false"
+                            :title="t('filter.label') || 'Filter'">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 2h10L7 7v3L5 11V7z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span x-text="typeFilterLabel"></span>
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style="opacity:.6"><path d="M1.5 3l2.5 2.5L6.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <div class="ff-dd-menu" x-show="filterMenuOpen" x-transition.scale.origin.top.right>
+                        <button @click="setTypeFilter('all')" :class="{ active: typeFilter === 'all' }">
+                            <span x-text="t('filter.all') || 'All'"></span>
+                        </button>
+                        <button @click="setTypeFilter('image')" :class="{ active: typeFilter === 'image' }">
+                            <span aria-hidden="true">🖼</span>
+                            <span x-text="t('filter.image') || 'Images'"></span>
+                        </button>
+                        <button @click="setTypeFilter('video')" :class="{ active: typeFilter === 'video' }">
+                            <span aria-hidden="true">🎬</span>
+                            <span x-text="t('filter.video') || 'Videos'"></span>
+                        </button>
+                        <button @click="setTypeFilter('audio')" :class="{ active: typeFilter === 'audio' }">
+                            <span aria-hidden="true">🎵</span>
+                            <span x-text="t('filter.audio') || 'Audio'"></span>
+                        </button>
+                        <button @click="setTypeFilter('document')" :class="{ active: typeFilter === 'document' }">
+                            <span aria-hidden="true">📄</span>
+                            <span x-text="t('filter.document') || 'Documents'"></span>
+                        </button>
+                        <button @click="setTypeFilter('other')" :class="{ active: typeFilter === 'other' }">
+                            <span aria-hidden="true">📝</span>
+                            <span x-text="t('filter.other') || 'Other'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sort -->
+                <div class="ff-dropdown ff-sort-dd" @click.away="sortMenuOpen = false">
+                    <button class="tb-btn ff-dd-btn"
+                            @click="sortMenuOpen = !sortMenuOpen; filterMenuOpen = false"
+                            :title="t('sort.label') || 'Sort'">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 2v8M1.5 4L3 2l1.5 2M9 10V2M7.5 8L9 10l1.5-2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span x-text="sortLabel"></span>
+                        <span class="ff-sort-dir" :title="sortDir === 'asc' ? (t('sort.ascending') || 'Ascending') : (t('sort.descending') || 'Descending')">
+                            <template x-if="sortDir === 'asc'">
+                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M4 1.5v5M2 3.5L4 1.5l2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </template>
+                            <template x-if="sortDir === 'desc'">
+                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M4 6.5v-5M2 4.5L4 6.5l2-2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </template>
+                        </span>
+                    </button>
+                    <div class="ff-dd-menu" x-show="sortMenuOpen" x-transition.scale.origin.top.right>
+                        <button @click="setSort('name')" :class="{ active: sortBy === 'name' }">
+                            <span x-text="t('sort.name') || 'Name'"></span>
+                            <span class="ff-dd-mark" x-show="sortBy === 'name'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+                        </button>
+                        <button @click="setSort('date')" :class="{ active: sortBy === 'date' }">
+                            <span x-text="t('sort.date') || 'Date'"></span>
+                            <span class="ff-dd-mark" x-show="sortBy === 'date'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+                        </button>
+                        <button @click="setSort('size')" :class="{ active: sortBy === 'size' }">
+                            <span x-text="t('sort.size') || 'Size'"></span>
+                            <span class="ff-dd-mark" x-show="sortBy === 'size'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+                        </button>
+                        <button @click="setSort('type')" :class="{ active: sortBy === 'type' }">
+                            <span x-text="t('sort.type') || 'Type'"></span>
+                            <span class="ff-dd-mark" x-show="sortBy === 'type'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+                        </button>
+                        <div class="ff-dd-divider"></div>
+                        <button @click="sortDir = (sortDir === 'asc' ? 'desc' : 'asc'); sortMenuOpen = false">
+                            <span x-text="sortDir === 'asc' ? (t('sort.descending') || 'Descending') : (t('sort.ascending') || 'Ascending')"></span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- View toggle -->
                 <div class="view-toggle">
                     <button :class="{ active: view === 'grid' }" @click="view = 'grid'" :title="t('toolbar.grid_view')">
@@ -554,6 +642,15 @@
                             </div>
                         </div>
                     </template>
+
+                    <!-- Load more (pagination) -->
+                    <div class="ff-load-more" x-show="(searchResults === null) && listCursor">
+                        <button type="button" @click="loadMoreFiles()" :disabled="loadingMore">
+                            <span x-show="!loadingMore" x-text="t('pagination.load_more', { count: Math.max(0, listTotal - (folders.length + files.length)) })"></span>
+                            <span x-show="loadingMore" x-text="t('pagination.loading_more') || 'Loading…'"></span>
+                        </button>
+                        <div class="ff-load-more-meta" x-text="t('pagination.showing', { shown: (folders.length + files.length), total: listTotal })"></div>
+                    </div>
 
                     <!-- Empty -->
                     <div class="ff-empty" x-show="(searchResults === null) && filteredFiles.length === 0 && filteredFolders.length === 0">

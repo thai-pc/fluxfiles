@@ -117,7 +117,9 @@ class FluxFilesController
 
             return $this->ok($fm->list(
                 $request->query('disk', 'local'),
-                $request->query('path', '')
+                $request->query('path', ''),
+                max(0, (int) $request->query('limit', 0)),
+                (string) $request->query('cursor', '')
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
@@ -566,6 +568,36 @@ class FluxFilesController
             }
 
             return $this->ok($this->metaRepo->search(
+                $disk,
+                $query,
+                (int) $request->query('limit', 50),
+                $claims->pathPrefix
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function searchFolders(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+
+            $disk  = $request->query('disk', 'local');
+            $query = $request->query('q');
+
+            if (!$query) {
+                throw new ApiException('Missing search query', 400);
+            }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied: read', 403);
+            }
+
+            return $this->ok($this->metaRepo->searchFolders(
                 $disk,
                 $query,
                 (int) $request->query('limit', 50),

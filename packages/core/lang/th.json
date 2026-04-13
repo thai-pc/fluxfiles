@@ -128,6 +128,29 @@
         "results": "{count} ผลลัพธ์สำหรับ \"{query}\"",
         "no_results": "ไม่พบผลลัพธ์สำหรับ \"{query}\""
     },
+    "sort": {
+        "label": "เรียงลำดับ",
+        "name": "ชื่อ",
+        "date": "วันที่",
+        "size": "ขนาด",
+        "type": "ประเภท",
+        "ascending": "น้อยไปมาก",
+        "descending": "มากไปน้อย"
+    },
+    "filter": {
+        "label": "กรอง",
+        "all": "ทั้งหมด",
+        "image": "รูปภาพ",
+        "video": "วิดีโอ",
+        "audio": "เสียง",
+        "document": "เอกสาร",
+        "other": "อื่น ๆ"
+    },
+    "pagination": {
+        "load_more": "โหลดเพิ่ม (เหลือ {count})",
+        "loading_more": "กำลังโหลด…",
+        "showing": "แสดง {shown} จาก {total}"
+    },
     "variants": {
         "title": "ขนาดรูปภาพ",
         "original": "ต้นฉบับ",

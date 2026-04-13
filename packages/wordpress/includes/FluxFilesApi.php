@@ -114,6 +114,9 @@ class FluxFilesApi
         register_rest_route($ns, '/search', array_merge($readArgs, [
             'callback' => [$api, 'handleSearch'],
         ]));
+        register_rest_route($ns, '/search-folders', array_merge($readArgs, [
+            'callback' => [$api, 'handleSearchFolders'],
+        ]));
         register_rest_route($ns, '/quota', array_merge($readArgs, [
             'callback' => [$api, 'handleQuota'],
         ]));
@@ -216,7 +219,9 @@ class FluxFilesApi
 
             return $this->ok($fm->list(
                 $request->get_param('disk') ?? 'local',
-                $request->get_param('path') ?? ''
+                $request->get_param('path') ?? '',
+                max(0, (int) ($request->get_param('limit') ?? 0)),
+                (string) ($request->get_param('cursor') ?? '')
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
@@ -666,6 +671,36 @@ class FluxFilesApi
             }
 
             return $this->ok($this->metaRepo->search(
+                $disk,
+                $query,
+                (int) ($request->get_param('limit') ?? 50),
+                $claims->pathPrefix
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleSearchFolders(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+
+            $disk  = $request->get_param('disk') ?? 'local';
+            $query = $request->get_param('q');
+
+            if (!$query) {
+                throw new ApiException('Missing search query', 400);
+            }
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403);
+            }
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied: read', 403);
+            }
+
+            return $this->ok($this->metaRepo->searchFolders(
                 $disk,
                 $query,
                 (int) ($request->get_param('limit') ?? 50),

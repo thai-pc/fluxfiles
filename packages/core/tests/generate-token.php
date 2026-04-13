@@ -2,8 +2,18 @@
 
 require_once __DIR__ . '/../embed.php';
 
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
-$dotenv->safeLoad();
+// Load .env from packages/core/ if present, otherwise fall back to repo root.
+foreach ([__DIR__ . '/..', __DIR__ . '/../../..'] as $envDir) {
+    if (is_file($envDir . '/.env')) {
+        Dotenv\Dotenv::createImmutable($envDir)->safeLoad();
+        break;
+    }
+}
+
+if (($_ENV['FLUXFILES_SECRET'] ?? '') === '') {
+    fwrite(STDERR, "ERROR: FLUXFILES_SECRET is not set. Define it in .env before generating tokens.\n");
+    exit(1);
+}
 
 // Token day du quyen
 $fullToken = fluxfiles_token(

@@ -39,6 +39,7 @@ Route::delete('metadata', [FluxFilesController::class, 'deleteMetadata']);
 
 // Search
 Route::get('search', [FluxFilesController::class, 'search']);
+Route::get('search-folders', [FluxFilesController::class, 'searchFolders']);
 
 // Quota
 Route::get('quota', [FluxFilesController::class, 'quota']);

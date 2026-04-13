@@ -19,6 +19,12 @@ function fluxFilesApp() {
         endpoint: '',
         config: {},
         searchQuery: '',
+        // Sort + filter state (persisted per-session)
+        sortBy: 'name',     // 'name' | 'date' | 'size' | 'type'
+        sortDir: 'asc',     // 'asc' | 'desc'
+        typeFilter: 'all',  // 'all' | 'image' | 'video' | 'audio' | 'document' | 'other'
+        sortMenuOpen: false,
+        filterMenuOpen: false,
         searchResults: null, // null | array (files)
         searchFolderResults: null, // null | array (folders)
         searching: false,
@@ -28,6 +34,11 @@ function fluxFilesApp() {
         _searchSeq: 0,
         _activeSearchId: 0,
         _pendingSelectKey: null,
+        // Pagination state for /api/fm/list
+        listLimit: 1000,
+        listCursor: null,    // null = no more pages or not paginated
+        listTotal: 0,
+        loadingMore: false,
         detailFile: null,
         selectedVariant: 'original',
         activeTab: 'info',
@@ -168,6 +179,21 @@ function fluxFilesApp() {
                 const w = parseInt(localStorage.getItem('fluxfiles_detail_width'), 10);
                 if (w >= 280 && w <= 600) this.detailPanelWidth = w;
             } catch (_) {}
+
+            // Restore sort + filter preferences
+            try {
+                const sb = localStorage.getItem('fluxfiles_sort_by');
+                if (sb && ['name','date','size','type'].includes(sb)) this.sortBy = sb;
+                const sd = localStorage.getItem('fluxfiles_sort_dir');
+                if (sd === 'asc' || sd === 'desc') this.sortDir = sd;
+                const tf = localStorage.getItem('fluxfiles_type_filter');
+                if (tf && ['all','image','video','audio','document','other'].includes(tf)) this.typeFilter = tf;
+            } catch (_) {}
+
+            // Persist whenever they change
+            this.$watch('sortBy', (v) => { try { localStorage.setItem('fluxfiles_sort_by', v); } catch (_) {} });
+            this.$watch('sortDir', (v) => { try { localStorage.setItem('fluxfiles_sort_dir', v); } catch (_) {} });
+            this.$watch('typeFilter', (v) => { try { localStorage.setItem('fluxfiles_type_filter', v); } catch (_) {} });
 
             // Close preview lightbox when detail file is cleared
             this.$watch('detailFile', (v) => { if (!v) this.previewFullscreen = false; });
@@ -447,35 +473,83 @@ function fluxFilesApp() {
             this.postMessage('FM_EVENT', { event: 'auth:expired' });
         },
 
-        // Load files
+        // Load files (first page)
         async loadFiles() {
             this.loading = true;
+            this.listCursor = null;
+            this.listTotal = 0;
             try {
-                const items = await this.api('GET',
+                const res = await this.api('GET',
                     '/api/fm/list?disk=' + encodeURIComponent(this.currentDisk) +
-                    '&path=' + encodeURIComponent(this.currentPath)
+                    '&path=' + encodeURIComponent(this.currentPath) +
+                    '&limit=' + encodeURIComponent(this.listLimit)
                 );
 
-                this.folders = (items || []).filter(i => i.type === 'dir');
-                this.files = (items || []).filter(i => i.type === 'file');
+                // Paginated mode returns {items, next_cursor, total}; legacy mode returns a flat array.
+                const items = Array.isArray(res) ? res : (res?.items || []);
+                this.listCursor = Array.isArray(res) ? null : (res?.next_cursor ?? null);
+                this.listTotal = Array.isArray(res) ? items.length : (res?.total ?? items.length);
+
+                this.folders = items.filter(i => i.type === 'dir');
+                this.files = items.filter(i => i.type === 'file');
                 this.selected = [];
                 this.detailFile = null;
 
-                // If we navigated from a global search result, try to auto-select the file.
+                // If the target file from a global search isn't on the first page, keep loading until we find it or pages run out.
                 if (this._pendingSelectKey) {
-                    const key = this._pendingSelectKey;
-                    this._pendingSelectKey = null;
-                    const found = this.files.find(f => f && f.key === key);
-                    if (found) {
-                        this.selected = [found];
-                        this.detailFile = found;
-                    }
+                    await this._resolvePendingSelection();
                 }
             } catch (err) {
                 console.error('FluxFiles: Failed to load files', err);
                 this.showToast(err.message || this.t('error.generic'), 'error', 4000);
             } finally {
                 this.loading = false;
+            }
+        },
+
+        // Load the next page and append to existing folders/files.
+        async loadMoreFiles() {
+            if (!this.listCursor || this.loadingMore) return;
+            this.loadingMore = true;
+            try {
+                const res = await this.api('GET',
+                    '/api/fm/list?disk=' + encodeURIComponent(this.currentDisk) +
+                    '&path=' + encodeURIComponent(this.currentPath) +
+                    '&limit=' + encodeURIComponent(this.listLimit) +
+                    '&cursor=' + encodeURIComponent(this.listCursor)
+                );
+
+                const items = Array.isArray(res) ? res : (res?.items || []);
+                this.listCursor = Array.isArray(res) ? null : (res?.next_cursor ?? null);
+
+                // Dedupe by key in case of overlap.
+                const existing = new Set([...this.folders, ...this.files].map(i => i.key));
+                for (const it of items) {
+                    if (existing.has(it.key)) continue;
+                    if (it.type === 'dir') this.folders.push(it);
+                    else this.files.push(it);
+                }
+            } catch (err) {
+                console.error('FluxFiles: Failed to load more files', err);
+                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
+            } finally {
+                this.loadingMore = false;
+            }
+        },
+
+        async _resolvePendingSelection() {
+            const key = this._pendingSelectKey;
+            if (!key) return;
+            let found = this.files.find(f => f && f.key === key);
+            // Keep paging until we find it or there are no more pages.
+            while (!found && this.listCursor) {
+                await this.loadMoreFiles();
+                found = this.files.find(f => f && f.key === key);
+            }
+            this._pendingSelectKey = null;
+            if (found) {
+                this.selected = [found];
+                this.detailFile = found;
             }
         },
 
@@ -1560,6 +1634,7 @@ function fluxFilesApp() {
                     break;
                 case 'search':
                     this.searchQuery = payload.q || '';
+                    this._scheduleSearch();
                     break;
                 case 'crossCopy':
                     this.crossDiskTarget = payload.dst_disk || '';
@@ -1698,10 +1773,50 @@ function fluxFilesApp() {
             return typeof v === 'string' ? v : String(v);
         },
 
+        // Does a file match the current type filter?
+        _matchTypeFilter(file) {
+            if (!this.typeFilter || this.typeFilter === 'all') return true;
+            const kind = this.fileIcon(file); // 'image' | 'video' | 'audio' | 'document' | 'file'
+            if (this.typeFilter === 'other') return kind === 'file';
+            return kind === this.typeFilter;
+        },
+
+        // Comparator based on sortBy / sortDir
+        _compareItems(a, b) {
+            const dir = this.sortDir === 'desc' ? -1 : 1;
+            let av, bv;
+            switch (this.sortBy) {
+                case 'date':
+                    av = Number(a.modified || 0);
+                    bv = Number(b.modified || 0);
+                    break;
+                case 'size':
+                    av = Number(a.size || 0);
+                    bv = Number(b.size || 0);
+                    break;
+                case 'type':
+                    av = this.fileIcon(a) || '';
+                    bv = this.fileIcon(b) || '';
+                    break;
+                case 'name':
+                default:
+                    av = String(a.name || '').toLowerCase();
+                    bv = String(b.name || '').toLowerCase();
+                    return av.localeCompare(bv, undefined, { numeric: true }) * dir;
+            }
+            if (av < bv) return -1 * dir;
+            if (av > bv) return 1 * dir;
+            // Stable tie-break by name
+            const an = String(a.name || '').toLowerCase();
+            const bn = String(b.name || '').toLowerCase();
+            return an.localeCompare(bn, undefined, { numeric: true });
+        },
+
         get filteredFiles() {
-            if (!this.searchQuery) return this.files;
-            const q = this.searchQuery.toLowerCase();
-            return this.files.filter(f => {
+            const q = (this.searchQuery || '').toLowerCase();
+            const arr = this.files.filter(f => {
+                if (!this._matchTypeFilter(f)) return false;
+                if (!q) return true;
                 const name = (f.name != null && f.name !== '') ? String(f.name) : '';
                 if (name.toLowerCase().includes(q)) return true;
                 if (f.key && String(f.key).toLowerCase().includes(q)) return true;
@@ -1719,6 +1834,7 @@ function fluxFilesApp() {
                 }
                 return false;
             });
+            return arr.slice().sort((a, b) => this._compareItems(a, b));
         },
 
         isPreviewable(file, type) {
@@ -1734,14 +1850,71 @@ function fluxFilesApp() {
         },
 
         get filteredFolders() {
-            if (!this.searchQuery) return this.folders;
-            const q = this.searchQuery.toLowerCase();
-            return this.folders.filter(f => {
+            // Folders are always listed regardless of type filter; we only apply search filter + sort.
+            const q = (this.searchQuery || '').toLowerCase();
+            const arr = q ? this.folders.filter(f => {
                 const name = (f.name != null && f.name !== '') ? String(f.name) : '';
                 if (name.toLowerCase().includes(q)) return true;
                 if (f.key && String(f.key).toLowerCase().includes(q)) return true;
                 return false;
+            }) : this.folders.slice();
+            // For folders, 'size'/'type' sort falls back to name (folders have no size/type).
+            const effectiveBy = (this.sortBy === 'size' || this.sortBy === 'type') ? 'name' : this.sortBy;
+            const dir = this.sortDir === 'desc' ? -1 : 1;
+            return arr.sort((a, b) => {
+                if (effectiveBy === 'date') {
+                    const av = Number(a.modified || 0);
+                    const bv = Number(b.modified || 0);
+                    if (av !== bv) return (av < bv ? -1 : 1) * dir;
+                }
+                const an = String(a.name || '').toLowerCase();
+                const bn = String(b.name || '').toLowerCase();
+                return an.localeCompare(bn, undefined, { numeric: true }) * dir;
             });
+        },
+
+        // Toggle sort: if choosing same key, flip direction; otherwise set new key with asc.
+        setSort(by) {
+            const allowed = ['name','date','size','type'];
+            if (!allowed.includes(by)) return;
+            if (this.sortBy === by) {
+                this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortBy = by;
+                // Default to desc for date (newest first), asc for others
+                this.sortDir = (by === 'date' || by === 'size') ? 'desc' : 'asc';
+            }
+            this.sortMenuOpen = false;
+        },
+
+        setTypeFilter(v) {
+            const allowed = ['all','image','video','audio','document','other'];
+            if (!allowed.includes(v)) return;
+            this.typeFilter = v;
+            this.filterMenuOpen = false;
+        },
+
+        // Human-readable label for the currently active sort (for the button)
+        get sortLabel() {
+            const map = {
+                name: this.t('sort.name') || 'Name',
+                date: this.t('sort.date') || 'Date',
+                size: this.t('sort.size') || 'Size',
+                type: this.t('sort.type') || 'Type'
+            };
+            return map[this.sortBy] || map.name;
+        },
+
+        get typeFilterLabel() {
+            const map = {
+                all: this.t('filter.all') || 'All',
+                image: this.t('filter.image') || 'Images',
+                video: this.t('filter.video') || 'Videos',
+                audio: this.t('filter.audio') || 'Audio',
+                document: this.t('filter.document') || 'Documents',
+                other: this.t('filter.other') || 'Other'
+            };
+            return map[this.typeFilter] || map.all;
         },
 
         // Thumbnail CSS class (color-coded by file type)

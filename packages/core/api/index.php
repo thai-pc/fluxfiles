@@ -224,7 +224,12 @@ function routeRequest(
 ) {
     // File operations
     if ($method === 'GET' && $uri === '/api/fm/list') {
-        return $fm->list($_GET['disk'] ?? 'local', $_GET['path'] ?? '');
+        return $fm->list(
+            $_GET['disk'] ?? 'local',
+            $_GET['path'] ?? '',
+            max(0, (int) ($_GET['limit'] ?? 0)),
+            (string) ($_GET['cursor'] ?? '')
+        );
     }
 
     if ($method === 'POST' && $uri === '/api/fm/upload') {

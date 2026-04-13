@@ -65,7 +65,9 @@ class RateLimiterFileStorage
             if (count($entries) >= $limit) {
                 flock($fp, LOCK_UN);
                 fclose($fp);
-                header('Retry-After: ' . $this->windowSeconds);
+                if (!headers_sent()) {
+                    header('Retry-After: ' . $this->windowSeconds);
+                }
                 throw new ApiException('Too many requests. Please try again later.', 429, 'rate_limited');
             }
 
