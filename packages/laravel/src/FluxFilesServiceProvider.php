@@ -22,6 +22,13 @@ class FluxFilesServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Artisan commands
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                Console\SeedMetadataCommand::class,
+            ]);
+        }
+
         // Publish config
         $this->publishes([
             __DIR__ . '/../config/fluxfiles.php' => config_path('fluxfiles.php'),

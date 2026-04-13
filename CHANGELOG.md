@@ -16,6 +16,11 @@ All notable changes to FluxFiles are documented here.
 - **Adapter parity** — `packages/laravel` and `packages/wordpress` controllers now forward `limit` + `cursor` query params.
 - **i18n** — added `pagination.load_more`, `pagination.loading_more`, `pagination.showing` keys across all 16 locales.
 
+### Laravel Adapter — Existing Directory Support
+
+- **`php artisan fluxfiles:seed`** — new Artisan command that indexes pre-existing files and folders on a configured disk so they become searchable. Walks the disk recursively, creates a metadata record per file (with `title` derived from filename) and tracks each directory in `_fluxfiles/dirs.json`. Supports `--disk=`, `--path=`, `--overwrite`, `--dry-run`.
+- **README — "Using an existing upload directory"** — end-to-end guide for teams who already have a populated upload tree (e.g. `public/uploads/user_1/`): point the `local` disk at the existing path, scope each user with the `prefix` JWT claim derived from `auth()->id()`, set filesystem perms, and run the seed command.
+
 ### Cross-adapter Fixes
 
 - **Laravel adapter** — added missing `GET search-folders` route + `searchFolders()` controller method so global folder search works through the Laravel proxy.

@@ -135,6 +135,82 @@ return [
 ];
 ```
 
+## Using an existing upload directory
+
+If your app already has a directory tree like `public/uploads/user_1/`, `public/uploads/user_2/` (populated before FluxFiles was installed), you can point FluxFiles at it — existing files show up immediately, and a one-shot Artisan command makes them searchable.
+
+### 1. Point the `local` disk at your existing path
+
+In `config/fluxfiles.php`:
+
+```php
+'disks' => [
+    'local' => [
+        'driver' => 'local',
+        'root'   => public_path('uploads'),     // where your files already live
+        'url'    => '/uploads',                 // URL prefix for preview links
+    ],
+],
+```
+
+### 2. Scope each user to their own sub-folder via the `prefix` claim
+
+Always derive the prefix server-side from the authenticated user — never trust client input:
+
+```php
+use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
+
+$token = FluxFiles::tokenForUser([
+    'prefix' => 'user_' . auth()->id() . '/',
+    'disks'  => ['local'],
+    'perms'  => ['read', 'write', 'delete'],
+]);
+```
+
+With `prefix = 'user_1/'`, all API paths are transparently scoped to `public/uploads/user_1/`. User 1 cannot see or touch `user_2/`.
+
+### 3. Filesystem permissions
+
+Make `public/uploads` writable by the PHP process (upload / mkdir / delete):
+
+```bash
+chown -R www-data:www-data public/uploads
+chmod -R u+rwX public/uploads
+```
+
+### 4. Seed metadata + folder index for pre-existing content
+
+Listing and previewing existing files works out of the box. **Search** however relies on the FluxFiles metadata index (FTS5) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API. To make pre-existing files and folders searchable, run the included Artisan command once:
+
+```bash
+# Dry run first — report what would be indexed, no writes
+php artisan fluxfiles:seed --disk=local --dry-run
+
+# Apply
+php artisan fluxfiles:seed --disk=local
+
+# Only a sub-tree
+php artisan fluxfiles:seed --disk=local --path=user_1
+
+# Force re-index (overwrite any existing metadata)
+php artisan fluxfiles:seed --disk=local --overwrite
+```
+
+What it does:
+
+- Walks the disk recursively (skipping `_fluxfiles/`, `_variants/`, and `*.meta.json`).
+- For each **file**: creates a metadata record with `title` derived from the filename (so FTS5 search can find it). Skips files that already have metadata unless `--overwrite` is passed.
+- For each **folder**: tracks it in `_fluxfiles/dirs.json` so folder search (`/api/fm/search-folders`) can return it.
+
+After seeding, both file and folder search work for the existing tree.
+
+### 5. Notes & gotchas
+
+- FluxFiles auto-creates `public/uploads/_fluxfiles/` (metadata, audit log, FTS5 DB) and `public/uploads/_variants/` (image thumbnails). These are hidden from the UI — do not delete them. If you use FTP/rsync/backup tools, add them to your ignore list.
+- `url = '/uploads'` must match how your web server serves `public/`. Preview links are built as `{url}/{key}` — e.g. file key `user_1/avatar.jpg` → `/uploads/user_1/avatar.jpg`.
+- Files uploaded **before** seeding won't have an `uploaded_by` metadata field. If you later enable `owner_only`, legacy files fall through gracefully (all users can act on them) until the next time someone edits them through the UI.
+- For S3/R2 disks with an existing bucket, the same seed command works — pass `--disk=s3` (or `--disk=r2`). Listing is slower because it pages the bucket remotely.
+
 ## Features
 
 - **Blade component** `<x-fluxfiles>` with auto token generation
