@@ -4,7 +4,13 @@ All notable changes to FluxFiles are documented here.
 
 ---
 
-## [Unreleased]
+## [1.27.0] — 2026-04-13
+
+### Version Alignment
+
+- **Unified all package versions to `1.27.0`** — previously the npm adapters drifted (`sdk` 1.26.2, `react` 1.26.3, `vue` 1.26.4) and the WordPress plugin trailed far behind at 1.22.0. Every publishable package in the monorepo now carries the same version.
+- **Composer cross-package constraints tightened** — `packages/laravel/composer.json` required `fluxfiles/fluxfiles: ^1.26.3`, `packages/wordpress/composer.json` still pointed at `^1.22`. Both are now `^1.27.0` so adapter installs pull a core compatible with the features they depend on.
+- **PHP baseline unchanged** — `^8.1` across `core`, `laravel`, `wordpress` (verified; the `php8.2-fpm.sock` line in the root README nginx example is illustrative, not a version requirement).
 
 ### Pagination (Core + Adapters)
 
@@ -20,6 +26,11 @@ All notable changes to FluxFiles are documented here.
 
 - **`php artisan fluxfiles:seed`** — new Artisan command that indexes pre-existing files and folders on a configured disk so they become searchable. Walks the disk recursively, creates a metadata record per file (with `title` derived from filename) and tracks each directory in `_fluxfiles/dirs.json`. Supports `--disk=`, `--path=`, `--overwrite`, `--dry-run`.
 - **README — "Using an existing upload directory"** — end-to-end guide for teams who already have a populated upload tree (e.g. `public/uploads/user_1/`): point the `local` disk at the existing path, scope each user with the `prefix` JWT claim derived from `auth()->id()`, set filesystem perms, and run the seed command.
+
+### WordPress Adapter — Existing Directory Support
+
+- **`wp fluxfiles seed`** — WP-CLI command equivalent to the Laravel Artisan seed. Registered only when WP-CLI is loaded (no overhead in normal requests). Same options (`--disk=`, `--path=`, `--overwrite`, `--dry-run`) and same semantics — indexes pre-existing files in `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so FTS5 and folder search return them.
+- **`readme.txt` — "Using an existing upload directory"** — documents the WP-CLI flow for sites installed on top of a populated uploads tree, with a fallback note (re-upload through the UI) for hosts without WP-CLI.
 
 ### Cross-adapter Fixes
 

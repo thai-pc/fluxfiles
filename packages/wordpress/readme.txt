@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1
-Stable tag: 1.22.0
+Stable tag: 1.27.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -36,6 +36,28 @@ image optimization with WebP variants, AI auto-tagging, and full-text search.
 
 *(Developers building from Git: run `composer install --no-dev --optimize-autoloader` in the plugin directory before zipping, or use a monorepo checkout with `composer install -d packages/core` next to `packages/wordpress`.)*
 
+== Using an existing upload directory ==
+
+If you already have files under `wp-content/fluxfiles/uploads/` (or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (FTS5) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
+
+To make pre-existing files and folders searchable, use the bundled WP-CLI command:
+
+`# Dry run first — report what would be indexed, no writes
+wp fluxfiles seed --disk=local --dry-run
+
+# Apply
+wp fluxfiles seed --disk=local
+
+# Only a sub-tree
+wp fluxfiles seed --disk=local --path=user_1
+
+# Force re-index (overwrite any existing metadata)
+wp fluxfiles seed --disk=local --overwrite`
+
+The command walks the disk recursively (skipping `_fluxfiles/`, `_variants/`, and `*.meta.json`). For each file it creates a metadata record with `title` derived from the filename. For each folder it updates `_fluxfiles/dirs.json` so folder search works. For S3/R2 disks with an existing bucket, pass `--disk=s3` or `--disk=r2`.
+
+If you cannot use WP-CLI, trigger the same indexing by re-uploading files through the FluxFiles UI — new uploads register metadata automatically.
+
 == Frequently Asked Questions ==
 
 = What storage backends are supported? =
@@ -58,6 +80,12 @@ PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfile
 4. Dark mode — automatic theme detection
 
 == Changelog ==
+
+= 1.27.0 =
+* Version aligned with monorepo (core + all adapters now on the same `1.27.0` tag).
+* New `wp fluxfiles seed` WP-CLI command — index pre-existing files/folders under `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so they appear in FTS5 and folder search.
+* Missing `/search-folders` REST route registered — global folder search now works through the WordPress REST proxy.
+* `/wp-json/fluxfiles/v1/list` forwards `limit` + `cursor` query params for cursor-based pagination on folders with >1000 files.
 
 = 1.22.0 =
 * Requires PHP 8.1+ (core dependencies). Prefer installing from a ZIP that includes `vendor/`.
