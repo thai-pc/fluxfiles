@@ -128,6 +128,29 @@
         "results": "{count} نتيجة لـ \"{query}\"",
         "no_results": "لا توجد نتائج لـ \"{query}\""
     },
+    "sort": {
+        "label": "ترتيب",
+        "name": "الاسم",
+        "date": "التاريخ",
+        "size": "الحجم",
+        "type": "النوع",
+        "ascending": "تصاعدي",
+        "descending": "تنازلي"
+    },
+    "filter": {
+        "label": "تصفية",
+        "all": "الكل",
+        "image": "الصور",
+        "video": "الفيديو",
+        "audio": "الصوت",
+        "document": "المستندات",
+        "other": "أخرى"
+    },
+    "pagination": {
+        "load_more": "تحميل المزيد (المتبقي {count})",
+        "loading_more": "جارٍ التحميل…",
+        "showing": "عرض {shown} من {total}"
+    },
     "variants": {
         "title": "أحجام الصورة",
         "original": "الأصلي",

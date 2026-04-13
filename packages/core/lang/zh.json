@@ -128,6 +128,29 @@
         "results": "\"{query}\"的搜索结果：{count} 条",
         "no_results": "未找到\"{query}\"的相关结果"
     },
+    "sort": {
+        "label": "排序",
+        "name": "名称",
+        "date": "日期",
+        "size": "大小",
+        "type": "类型",
+        "ascending": "升序",
+        "descending": "降序"
+    },
+    "filter": {
+        "label": "筛选",
+        "all": "全部",
+        "image": "图片",
+        "video": "视频",
+        "audio": "音频",
+        "document": "文档",
+        "other": "其他"
+    },
+    "pagination": {
+        "load_more": "加载更多（剩余 {count}）",
+        "loading_more": "加载中…",
+        "showing": "显示 {shown} / {total}"
+    },
     "variants": {
         "title": "图片尺寸",
         "original": "原图",

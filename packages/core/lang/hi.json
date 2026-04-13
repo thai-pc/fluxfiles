@@ -128,6 +128,29 @@
         "results": "\"{query}\" के लिए {count} परिणाम",
         "no_results": "\"{query}\" के लिए कोई परिणाम नहीं"
     },
+    "sort": {
+        "label": "क्रमबद्ध करें",
+        "name": "नाम",
+        "date": "दिनांक",
+        "size": "आकार",
+        "type": "प्रकार",
+        "ascending": "आरोही",
+        "descending": "अवरोही"
+    },
+    "filter": {
+        "label": "फ़िल्टर",
+        "all": "सभी",
+        "image": "चित्र",
+        "video": "वीडियो",
+        "audio": "ऑडियो",
+        "document": "दस्तावेज़",
+        "other": "अन्य"
+    },
+    "pagination": {
+        "load_more": "और लोड करें ({count} शेष)",
+        "loading_more": "लोड हो रहा है…",
+        "showing": "{total} में से {shown} दिखा रहे हैं"
+    },
     "variants": {
         "title": "छवि आकार",
         "original": "मूल",

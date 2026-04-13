@@ -556,6 +556,104 @@ body {
 
 .view-toggle button svg { width: 14px; height: 14px; }
 
+/* Sort + filter dropdowns */
+.ff-dropdown {
+    position: relative;
+    display: inline-flex;
+}
+
+.ff-dd-btn {
+    gap: 6px;
+}
+
+.ff-dd-btn.active {
+    color: var(--color-text-primary);
+    background: var(--ff-bg-hover);
+    border-color: var(--color-border-primary);
+}
+
+.ff-dd-btn .ff-sort-dir {
+    display: inline-flex;
+    align-items: center;
+    opacity: .7;
+}
+
+.ff-dd-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    inset-inline-end: 0;
+    min-width: 160px;
+    background: var(--color-background-primary);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+    padding: 4px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.ff-dd-menu button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: 13px;
+    text-align: start;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background var(--ff-transition);
+}
+
+.ff-dd-menu button:hover {
+    background: var(--ff-bg-hover);
+}
+
+.ff-dd-menu button.active {
+    background: var(--ff-bg-hover);
+    color: var(--color-text-primary);
+    font-weight: 500;
+}
+
+.ff-dd-menu button .ff-dd-mark {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    min-width: 10px;
+    text-align: end;
+}
+
+.ff-dd-divider {
+    height: 1px;
+    background: var(--color-border-secondary);
+    margin: 4px 2px;
+}
+
+.dark .ff-dd-menu {
+    background: var(--color-background-secondary);
+    border-color: var(--color-border-primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Hide dropdown button labels on narrow widths to save space */
+@media (max-width: 820px) {
+    .ff-dd-btn > span:not(.ff-sort-dir):not(.ff-dd-mark) {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .ff-filter-dd,
+    .ff-sort-dd {
+        display: none;
+    }
+}
+
 /* Theme toggle */
 .ff-theme-toggle {
     padding: 6px 10px;
@@ -1939,6 +2037,30 @@ body {
 }
 
 @keyframes ff-spin { to { transform: rotate(360deg); } }
+
+/* Load more (pagination) */
+.ff-load-more {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 20px 16px 12px;
+}
+.ff-load-more button {
+    padding: 8px 20px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    cursor: pointer;
+    font-size: 13px;
+}
+.ff-load-more button:hover:not(:disabled) { background: var(--color-surface-hover); }
+.ff-load-more button:disabled { opacity: 0.6; cursor: default; }
+.ff-load-more-meta {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
 
 /* Empty state */
 .ff-empty {

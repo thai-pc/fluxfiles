@@ -49,7 +49,7 @@ class FileManager
         $this->aiTagger = $ai;
     }
 
-    public function list(string $disk, string $path): array
+    public function list(string $disk, string $path, int $limit = 0, string $cursor = ''): array
     {
         $this->assertDisk($disk);
         $this->assertPerm('read');
@@ -58,8 +58,7 @@ class FileManager
         $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
 
-        $items = [];
-        $fileKeys = [];
+        $all = [];
 
         /** @var StorageAttributes $item */
         foreach ($fs->listContents($scoped, false) as $item) {
@@ -81,23 +80,74 @@ class FileManager
                 $entry['size']     = $item->fileSize();
                 $entry['modified'] = $item->lastModified();
                 $entry['url']      = $this->fileUrl($disk, $item->path());
-                $fileKeys[] = $item->path();
             }
 
-            $items[] = $entry;
+            $all[] = $entry;
         }
 
-        // Merge metadata + variants for files
+        // Stable ordering for deterministic cursor pagination: dirs first, then files, both by key ASC.
+        usort($all, static function (array $a, array $b): int {
+            if ($a['type'] !== $b['type']) {
+                return $a['type'] === 'dir' ? -1 : 1;
+            }
+            return strcmp($a['key'], $b['key']);
+        });
+
+        $total = count($all);
+
+        if ($limit > 0) {
+            // Skip past cursor (exclusive)
+            if ($cursor !== '') {
+                $start = 0;
+                foreach ($all as $i => $it) {
+                    if ($it['key'] === $cursor) {
+                        $start = $i + 1;
+                        break;
+                    }
+                }
+                $all = array_slice($all, $start);
+            }
+
+            $page = array_slice($all, 0, $limit);
+            $nextCursor = (count($page) === $limit && $limit < count($all))
+                ? $page[count($page) - 1]['key']
+                : null;
+
+            $this->attachMetadata($disk, $page);
+
+            return [
+                'items'       => $page,
+                'next_cursor' => $nextCursor,
+                'total'       => $total,
+            ];
+        }
+
+        // Legacy mode: return flat array with all items + metadata.
+        $this->attachMetadata($disk, $all);
+        return $all;
+    }
+
+    /**
+     * Merge metadata + variants into file entries in place.
+     *
+     * @param array<int,array<string,mixed>> $items
+     */
+    private function attachMetadata(string $disk, array &$items): void
+    {
+        $fileKeys = [];
+        foreach ($items as $it) {
+            if (($it['type'] ?? '') === 'file') {
+                $fileKeys[] = $it['key'];
+            }
+        }
         $metaMap = !empty($fileKeys) ? $this->meta->getBulk($disk, $fileKeys) : [];
         foreach ($items as &$item) {
-            if ($item['type'] === 'file') {
+            if (($item['type'] ?? '') === 'file') {
                 $item['meta'] = $metaMap[$item['key']] ?? null;
                 $item['variants'] = $this->getFileVariants($disk, $item['key']);
             }
         }
         unset($item);
-
-        return $items;
     }
 
     public function upload(string $disk, string $path, array $file, bool $forceUpload = false): array

@@ -128,6 +128,29 @@
         "results": "\"{query}\" 검색 결과: {count}건",
         "no_results": "\"{query}\"에 대한 검색 결과가 없습니다"
     },
+    "sort": {
+        "label": "정렬",
+        "name": "이름",
+        "date": "날짜",
+        "size": "크기",
+        "type": "유형",
+        "ascending": "오름차순",
+        "descending": "내림차순"
+    },
+    "filter": {
+        "label": "필터",
+        "all": "전체",
+        "image": "이미지",
+        "video": "동영상",
+        "audio": "오디오",
+        "document": "문서",
+        "other": "기타"
+    },
+    "pagination": {
+        "load_more": "더 보기 ({count}개 남음)",
+        "loading_more": "불러오는 중…",
+        "showing": "{total}개 중 {shown}개 표시"
+    },
     "variants": {
         "title": "이미지 크기",
         "original": "원본",

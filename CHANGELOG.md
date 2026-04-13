@@ -6,6 +6,29 @@ All notable changes to FluxFiles are documented here.
 
 ## [Unreleased]
 
+### Pagination (Core + Adapters)
+
+- `**/api/fm/list` pagination** — endpoint now accepts optional `?limit=&cursor=` query params. When `limit > 0`, response shape becomes `{ items, next_cursor, total }`; without `limit` the endpoint still returns a flat array (backward compatible for older third-party integrations).
+- **Cursor-based** — listings are sorted deterministically (dirs first, then files, both by key ASC) so a cursor equal to the last item's key yields a stable next page.
+- **Metadata merge scoped to page** — metadata/variants are now merged only for the entries actually returned in each page, reducing per-request work for large folders.
+- **Frontend auto-pages** — `fm.js` now requests `limit=1000` by default and renders a "Load more" button (plus a `Showing X of Y` meta line) when `next_cursor` is present. Small folders see no UI difference.
+- **Pending-selection across pages** — when navigating into a folder from a global search result, the UI keeps paging until the target file is found (or pages run out).
+- **Adapter parity** — `packages/laravel` and `packages/wordpress` controllers now forward `limit` + `cursor` query params.
+- **i18n** — added `pagination.load_more`, `pagination.loading_more`, `pagination.showing` keys across all 16 locales.
+
+### Cross-adapter Fixes
+
+- **Laravel adapter** — added missing `GET search-folders` route + `searchFolders()` controller method so global folder search works through the Laravel proxy.
+- **WordPress adapter** — registered missing `/search-folders` REST route + `handleSearchFolders()` handler.
+- **SDK `search` command** — calling `FluxFiles.search(q)` from a host app now triggers the debounced global search (previously it only updated the query string, so FTS5 results never loaded unless the user typed manually).
+- **Rate limiter in CLI** — `RateLimiterFileStorage::consume()` guards the `Retry-After` header with `headers_sent()`, eliminating PHP warnings when the limiter fires from PHPUnit / CLI tests.
+- **Test bootstrap `.env` loading** — `tests/generate-token.php` and `tests/test-byob.php` now try `packages/core/.env` first and fall back to the repo root, so `FLUXFILES_SECRET` is picked up regardless of where the env file lives. Both fail fast with a clear error when the secret is missing.
+
+### i18n
+
+- **14 locales backfilled** — `ar`, `de`, `es`, `fr`, `hi`, `it`, `ja`, `ko`, `nl`, `pt`, `ru`, `th`, `tr`, `zh` received the `sort.*` and `filter.*` blocks that previously only existed in `en` / `vi`. Every locale now has the same 194 keys.
+- **Contributing guide rewritten** — `packages/core/lang/CONTRIBUTING.md` walks contributors end-to-end: fork → clone → `i18n/add-{code}` branch → translate → `php tests/test-i18n.php` → push → PR (both `gh pr create` and GitHub UI).
+
 ### Monorepo Structure
 
 - **Standardized package layout** — moved code into `packages/*` without rewriting runtime logic:
@@ -23,18 +46,40 @@ All notable changes to FluxFiles are documented here.
 - **PHP minimum raised to 8.1** for `packages/core` and `packages/laravel` Composer metadata — aligns with League Flysystem 3 and Intervention Image v3 (earlier lower minimums did not match what Composer could actually resolve).
 - **Documentation** — dropped leftover PHP 7.4 phrasing in `README.md`, `packages/wordpress/readme.txt`, and `CHANGELOG.md` (`[1.22.0]` history + upgrade notice now align with PHP 8.1+).
 
-### Bug Fixes
+## [1.26.4] — 2026-04-13
+
+### Sort & Type Filter (Core UI)
+
+- **Sort dropdown (toolbar)** — sort files and folders by `name`, `date`, `size`, or `type`; ascending/descending toggle with a clear directional arrow indicator on the trigger button.
+- **Type filter dropdown (toolbar)** — quickly narrow the current folder to `Images`, `Videos`, `Audio`, `Documents`, or `Other`. Defaults to `All`; folders are always shown regardless of filter so navigation isn't blocked.
+- **Smart defaults** — choosing `Date` or `Size` starts in **descending** order (newest / largest first); `Name` and `Type` start in **ascending** (A→Z). Clicking the active sort key flips direction.
+- **Stable tie-break** — numeric/date/type comparisons fall back to locale-aware name comparison (`localeCompare` with `{ numeric: true }`), so `file2.png` sorts before `file10.png`.
+- **Folder-safe sorting** — folders ignore `size`/`type` sorts (no meaningful value) and silently fall back to name; date sort still works for folders using their `modified` timestamp.
+- **Persisted per browser** — `sortBy`, `sortDir`, `typeFilter` are saved to `localStorage` (`fluxfiles_sort_by`, `fluxfiles_sort_dir`, `fluxfiles_type_filter`) and restored across sessions.
+- **Mobile parity** — on narrow widths the toolbar dropdowns collapse; equivalent **Sort** and **Filter** entries appear inside the existing mobile "More" menu, cycling through options on tap (no nested popovers needed).
+- **i18n** — new `sort.*` and `filter.*` message groups added to `en.json` and `vi.json` (other locales fall back gracefully via inline defaults in the UI).
+- **Search-compatible** — sort and type filter run on top of the existing local search filter; global (cross-disk) search results are unaffected.
+
+### UX Notes
+
+- The sort button shows both the active key (e.g. `Date`) and a small ↑/↓ arrow; on the dropdown itself, the active row is highlighted and marked with the current direction.
+- The type-filter button highlights (active state) whenever the filter is not `All`, so users don't forget they've scoped the view.
+- Dropdowns close on outside-click (`@click.away`) and when a choice is made.
+
+## [1.26.3] — 2026-04-10
 
 - **Search (toolbar)** — mobile fullscreen search stopped calling `loadFiles()` on each input (that cleared selection and did not improve filtering). Client-side file filtering now matches `alt_text` and `caption` like title/tags, with safe handling when metadata fields are not strings.
 
 ## [1.26.2] — 2026-04-09
 
-| Area | Change |
-|------|--------|
-| Core UI | Global search now queries `/api/fm/search` (metadata index) instead of only filtering the current folder. |
-| Core UI | Folder search added via `/api/fm/search-folders` backed by `_fluxfiles/dirs.json` directory index; results include folders and files. |
-| Core API | Directory index is updated best-effort on `upload`, `mkdir`, `move`, `rename`, `delete`, `copy`, `cross-copy`, `cross-move` so folder names like `test2` can be found. |
-| Mobile UX | Mobile fullscreen search no longer reloads the current folder on every keystroke (prevents losing selection/detail). |
+
+| Area      | Change                                                                                                                                                                 |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core UI   | Global search now queries `/api/fm/search` (metadata index) instead of only filtering the current folder.                                                              |
+| Core UI   | Folder search added via `/api/fm/search-folders` backed by `_fluxfiles/dirs.json` directory index; results include folders and files.                                  |
+| Core API  | Directory index is updated best-effort on `upload`, `mkdir`, `move`, `rename`, `delete`, `copy`, `cross-copy`, `cross-move` so folder names like `test2` can be found. |
+| Mobile UX | Mobile fullscreen search no longer reloads the current folder on every keystroke (prevents losing selection/detail).                                                   |
+
 
 ## [1.26.1] — 2026-04-08
 
@@ -49,21 +94,21 @@ All notable changes to FluxFiles are documented here.
 
 ### Owner-Only File Protection
 
-- **`owner_only` JWT claim** — when `true`, delete/rename/move/crop operations are restricted to files uploaded by the token holder
-- **`uploaded_by` metadata** — every uploaded file now records the uploader's `userId` in metadata for ownership tracking
-- **`assertOwner()` enforcement** — ownership checked on `delete()`, `rename()`, `move()`, `crossMove()`, `cropImage()`; returns 403 if user is not the file owner
+- `**owner_only` JWT claim** — when `true`, delete/rename/move/crop operations are restricted to files uploaded by the token holder
+- `**uploaded_by` metadata** — every uploaded file now records the uploader's `userId` in metadata for ownership tracking
+- `**assertOwner()` enforcement** — ownership checked on `delete()`, `rename()`, `move()`, `crossMove()`, `cropImage()`; returns 403 if user is not the file owner
 - **Graceful legacy fallback** — files uploaded before `owner_only` was enabled (no `uploaded_by` metadata) remain accessible to all users
-- **`embed.php` support** — all token functions (`fluxfiles_token`, `fluxfiles_byob_token`, `fluxfiles_mixed_token`) accept `ownerOnly` parameter
+- `**embed.php` support** — all token functions (`fluxfiles_token`, `fluxfiles_byob_token`, `fluxfiles_mixed_token`) accept `ownerOnly` parameter
 
 ### System Path Protection
 
-- **`_fluxfiles/` and `_variants/` blocked** — API returns 403 for any list/delete/rename/move on internal directories
+- `**_fluxfiles/` and `_variants/` blocked** — API returns 403 for any list/delete/rename/move on internal directories
 - **Hidden from file listing** — system directories and `.meta.json` files filtered out of `list()` results
 - **Error transparency** — generic "This file cannot be modified" message, no internal path details leaked
 
 ### Error Localization (i18n)
 
-- **`error_code` + `error_params`** — API returns structured error data (`{ error, error_code, error_params }`) for frontend i18n mapping
+- `**error_code` + `error_params`** — API returns structured error data (`{ error, error_code, error_params }`) for frontend i18n mapping
 - **28 error keys** — all API errors now have translatable codes: `upload_too_large`, `quota_exceeded`, `ext_not_allowed`, `owner_only`, `system_path`, `permission_denied`, `rate_limited`, etc.
 - **Dynamic error messages** — `{max}`, `{used}`, `{ext}` placeholders in translations (e.g. "File is too large (max {max})")
 - **Frontend error toasts** — `uploadFiles()`, `loadFiles()`, `saveMeta()`, bulk operations now show error toasts instead of silently failing
@@ -78,7 +123,7 @@ All notable changes to FluxFiles are documented here.
 ### URL Parameters (Standalone Mode)
 
 - **Documented URL params** — `token`, `disk`, `disks`, `path`, `locale`/`lang`, `theme`, `multiple` now documented in README
-- **`?lang=` alias** — frontend standalone mode now accepts `?lang=` as alias for `?locale=`
+- `**?lang=` alias** — frontend standalone mode now accepts `?lang=` as alias for `?locale=`
 
 ### Mobile UX Overhaul
 
@@ -271,3 +316,4 @@ All notable changes to FluxFiles are documented here.
 - SEO metadata: title, alt text, caption per file
 - Alpine.js + htmx frontend, iframe embed via postMessage SDK
 - PHP embed helper (`embed.php`)
+

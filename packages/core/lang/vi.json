@@ -128,6 +128,29 @@
         "results": "{count} kết quả cho \"{query}\"",
         "no_results": "Không tìm thấy kết quả cho \"{query}\""
     },
+    "sort": {
+        "label": "Sắp xếp",
+        "name": "Tên",
+        "date": "Ngày",
+        "size": "Kích thước",
+        "type": "Loại",
+        "ascending": "Tăng dần",
+        "descending": "Giảm dần"
+    },
+    "filter": {
+        "label": "Lọc",
+        "all": "Tất cả",
+        "image": "Hình ảnh",
+        "video": "Video",
+        "audio": "Âm thanh",
+        "document": "Tài liệu",
+        "other": "Khác"
+    },
+    "pagination": {
+        "load_more": "Tải thêm (còn {count})",
+        "loading_more": "Đang tải…",
+        "showing": "Hiện {shown} trong {total}"
+    },
     "variants": {
         "title": "Kích thước ảnh",
         "original": "Gốc",

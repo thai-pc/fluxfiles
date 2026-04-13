@@ -128,6 +128,29 @@
         "results": "{count} results for \"{query}\"",
         "no_results": "No results for \"{query}\""
     },
+    "sort": {
+        "label": "Sort",
+        "name": "Name",
+        "date": "Date",
+        "size": "Size",
+        "type": "Type",
+        "ascending": "Ascending",
+        "descending": "Descending"
+    },
+    "filter": {
+        "label": "Filter",
+        "all": "All",
+        "image": "Images",
+        "video": "Videos",
+        "audio": "Audio",
+        "document": "Documents",
+        "other": "Other"
+    },
+    "pagination": {
+        "load_more": "Load more ({count} remaining)",
+        "loading_more": "Loading…",
+        "showing": "Showing {shown} of {total}"
+    },
     "variants": {
         "title": "Image Sizes",
         "original": "Original",

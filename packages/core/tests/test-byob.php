@@ -11,8 +11,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
-$dotenv->safeLoad();
+// Load .env from packages/core/ if present, otherwise fall back to repo root.
+foreach ([__DIR__ . '/..', __DIR__ . '/../../..'] as $envDir) {
+    if (is_file($envDir . '/.env')) {
+        Dotenv\Dotenv::createImmutable($envDir)->safeLoad();
+        break;
+    }
+}
 
 require_once __DIR__ . '/../embed.php';
 

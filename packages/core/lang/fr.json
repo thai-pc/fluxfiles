@@ -128,6 +128,29 @@
         "results": "{count} résultats pour « {query} »",
         "no_results": "Aucun résultat pour « {query} »"
     },
+    "sort": {
+        "label": "Trier",
+        "name": "Nom",
+        "date": "Date",
+        "size": "Taille",
+        "type": "Type",
+        "ascending": "Croissant",
+        "descending": "Décroissant"
+    },
+    "filter": {
+        "label": "Filtrer",
+        "all": "Tous",
+        "image": "Images",
+        "video": "Vidéos",
+        "audio": "Audio",
+        "document": "Documents",
+        "other": "Autres"
+    },
+    "pagination": {
+        "load_more": "Charger plus ({count} restants)",
+        "loading_more": "Chargement…",
+        "showing": "Affichage de {shown} sur {total}"
+    },
     "variants": {
         "title": "Tailles d'image",
         "original": "Original",
