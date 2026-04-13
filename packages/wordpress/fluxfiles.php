@@ -53,5 +53,11 @@ require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesApi.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesShortcode.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesMediaButton.php';
 
+// Register WP-CLI commands (only when running under wp-cli)
+if (defined('WP_CLI') && WP_CLI) {
+    require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesCli.php';
+    WP_CLI::add_command('fluxfiles', 'FluxFilesCli');
+}
+
 // Boot
 FluxFilesPlugin::instance();

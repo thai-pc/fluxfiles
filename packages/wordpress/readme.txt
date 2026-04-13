@@ -36,6 +36,28 @@ image optimization with WebP variants, AI auto-tagging, and full-text search.
 
 *(Developers building from Git: run `composer install --no-dev --optimize-autoloader` in the plugin directory before zipping, or use a monorepo checkout with `composer install -d packages/core` next to `packages/wordpress`.)*
 
+== Using an existing upload directory ==
+
+If you already have files under `wp-content/fluxfiles/uploads/` (or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (FTS5) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
+
+To make pre-existing files and folders searchable, use the bundled WP-CLI command:
+
+`# Dry run first — report what would be indexed, no writes
+wp fluxfiles seed --disk=local --dry-run
+
+# Apply
+wp fluxfiles seed --disk=local
+
+# Only a sub-tree
+wp fluxfiles seed --disk=local --path=user_1
+
+# Force re-index (overwrite any existing metadata)
+wp fluxfiles seed --disk=local --overwrite`
+
+The command walks the disk recursively (skipping `_fluxfiles/`, `_variants/`, and `*.meta.json`). For each file it creates a metadata record with `title` derived from the filename. For each folder it updates `_fluxfiles/dirs.json` so folder search works. For S3/R2 disks with an existing bucket, pass `--disk=s3` or `--disk=r2`.
+
+If you cannot use WP-CLI, trigger the same indexing by re-uploading files through the FluxFiles UI — new uploads register metadata automatically.
+
 == Frequently Asked Questions ==
 
 = What storage backends are supported? =

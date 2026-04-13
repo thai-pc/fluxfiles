@@ -21,6 +21,11 @@ All notable changes to FluxFiles are documented here.
 - **`php artisan fluxfiles:seed`** — new Artisan command that indexes pre-existing files and folders on a configured disk so they become searchable. Walks the disk recursively, creates a metadata record per file (with `title` derived from filename) and tracks each directory in `_fluxfiles/dirs.json`. Supports `--disk=`, `--path=`, `--overwrite`, `--dry-run`.
 - **README — "Using an existing upload directory"** — end-to-end guide for teams who already have a populated upload tree (e.g. `public/uploads/user_1/`): point the `local` disk at the existing path, scope each user with the `prefix` JWT claim derived from `auth()->id()`, set filesystem perms, and run the seed command.
 
+### WordPress Adapter — Existing Directory Support
+
+- **`wp fluxfiles seed`** — WP-CLI command equivalent to the Laravel Artisan seed. Registered only when WP-CLI is loaded (no overhead in normal requests). Same options (`--disk=`, `--path=`, `--overwrite`, `--dry-run`) and same semantics — indexes pre-existing files in `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so FTS5 and folder search return them.
+- **`readme.txt` — "Using an existing upload directory"** — documents the WP-CLI flow for sites installed on top of a populated uploads tree, with a fallback note (re-upload through the UI) for hosts without WP-CLI.
+
 ### Cross-adapter Fixes
 
 - **Laravel adapter** — added missing `GET search-folders` route + `searchFolders()` controller method so global folder search works through the Laravel proxy.
