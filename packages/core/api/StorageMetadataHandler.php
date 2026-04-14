@@ -39,12 +39,17 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     public function save(string $disk, string $key, array $data): void
     {
+        // Merge with existing so partial updates (e.g. {uploaded_by} right after upload,
+        // or {title, alt_text} from the metadata edit form) don't wipe unrelated fields.
+        $existing = $this->get($disk, $key) ?? [];
+        $merged = array_merge($existing, $data);
+
         if ($this->isS3Compatible($disk)) {
-            $this->saveToS3($disk, $key, $data);
+            $this->saveToS3($disk, $key, $merged);
         } else {
-            $this->saveToLocal($disk, $key, $data);
+            $this->saveToLocal($disk, $key, $merged);
         }
-        $this->updateIndex($disk, $key, $data);
+        $this->updateIndex($disk, $key, $merged);
     }
 
     public function delete(string $disk, string $key): void
@@ -343,15 +348,25 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     {
         $index = $this->loadIndex($disk);
         foreach ($index as $fileKey => $meta) {
-            if (($meta['file_hash'] ?? '') === $hash) {
-                $row = ['file_key' => $fileKey];
-                foreach (['title', 'alt_text', 'caption', 'tags'] as $k) {
-                    if (isset($meta[$k])) {
-                        $row[$k] = $meta[$k];
-                    }
-                }
-                return $row;
+            if (($meta['file_hash'] ?? '') !== $hash) {
+                continue;
             }
+            // Never surface internal paths as duplicates — they're hidden from
+            // listing, so the user would see a "file already exists" message
+            // pointing at a file they can't see.
+            if (str_starts_with($fileKey, '_fluxfiles/')
+                || str_starts_with($fileKey, '_variants/')
+                || str_contains($fileKey, '/_fluxfiles/')
+                || str_contains($fileKey, '/_variants/')) {
+                continue;
+            }
+            $row = ['file_key' => $fileKey];
+            foreach (['title', 'alt_text', 'caption', 'tags'] as $k) {
+                if (isset($meta[$k])) {
+                    $row[$k] = $meta[$k];
+                }
+            }
+            return $row;
         }
         return null;
     }
@@ -457,6 +472,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             'fm-alt' => substr($data['alt_text'] ?? '', 0, 1024),
             'fm-caption' => substr($data['caption'] ?? '', 0, 1024),
             'fm-tags' => substr($data['tags'] ?? '', 0, 1024),
+            'fm-uploaded-by' => substr((string) ($data['uploaded_by'] ?? ''), 0, 1024),
         ];
 
         $copySource = $bucket . '/' . $key;
@@ -471,11 +487,13 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function metaFromS3Headers(array $meta): array
     {
+        $uploadedBy = $meta['fm-uploaded-by'] ?? null;
         return [
             'title' => $meta['fm-title'] ?? null,
             'alt_text' => $meta['fm-alt'] ?? null,
             'caption' => $meta['fm-caption'] ?? null,
             'tags' => $meta['fm-tags'] ?? null,
+            'uploaded_by' => ($uploadedBy === null || $uploadedBy === '') ? null : $uploadedBy,
         ];
     }
 
@@ -508,6 +526,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             'alt_text' => $data['alt_text'] ?? '',
             'caption' => $data['caption'] ?? '',
             'tags' => $data['tags'] ?? '',
+            'uploaded_by' => $data['uploaded_by'] ?? null,
         ], JSON_UNESCAPED_UNICODE));
     }
 
@@ -583,6 +602,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 'alt_text' => $data['alt_text'] ?? $existing['alt_text'] ?? null,
                 'caption' => $data['caption'] ?? $existing['caption'] ?? null,
                 'tags' => $data['tags'] ?? $existing['tags'] ?? null,
+                'uploaded_by' => $data['uploaded_by'] ?? $existing['uploaded_by'] ?? null,
             ]);
             $this->saveIndex($disk, $index);
         } finally {

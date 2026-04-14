@@ -127,6 +127,34 @@ test('save() overwrites existing metadata', function () use ($handler, $diskName
     assertEqual('updated', $result['tags']);
 });
 
+test('save({uploaded_by}) persists owner and get() returns it', function () use ($handler, $diskName, $fs) {
+    $fs->write('owned.jpg', 'x');
+    $handler->save($diskName, 'owned.jpg', ['uploaded_by' => 'user-42']);
+
+    $result = $handler->get($diskName, 'owned.jpg');
+    assertEqual('user-42', $result['uploaded_by'] ?? null);
+});
+
+test('partial save does not wipe existing SEO fields', function () use ($handler, $diskName, $fs) {
+    $fs->write('partial.jpg', 'x');
+    $handler->save($diskName, 'partial.jpg', [
+        'title'    => 'My Photo',
+        'alt_text' => 'A photo',
+        'caption'  => 'Caption',
+        'tags'     => 'a,b',
+    ]);
+
+    // Simulate FileManager::upload() calling save() with only uploaded_by.
+    $handler->save($diskName, 'partial.jpg', ['uploaded_by' => 'user-9']);
+
+    $result = $handler->get($diskName, 'partial.jpg');
+    assertEqual('My Photo', $result['title'] ?? null);
+    assertEqual('A photo', $result['alt_text'] ?? null);
+    assertEqual('Caption', $result['caption'] ?? null);
+    assertEqual('a,b', $result['tags'] ?? null);
+    assertEqual('user-9', $result['uploaded_by'] ?? null);
+});
+
 // ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► delete() removes metadata{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
@@ -186,6 +214,15 @@ test('saveHash() + findByHash() for duplicate detection', function () use ($hand
     // Non-existent hash returns null
     $notFound = $handler->findByHash($diskName, md5('no-match'));
     assertEqual(null, $notFound);
+});
+
+test('findByHash() skips entries inside _fluxfiles/ (system paths)', function () use ($handler, $diskName) {
+    $hash = md5('content-that-landed-inside-internal-dir');
+    // Simulate a pre-fix wayward upload that indexed a file under _fluxfiles/.
+    $handler->saveHash($diskName, '_fluxfiles/legacy-ghost.jpg', $hash);
+
+    $found = $handler->findByHash($diskName, $hash);
+    assertEqual(null, $found, 'hash match inside _fluxfiles/ must not be returned');
 });
 
 // ═══════════════════════════════════════════════════════════════

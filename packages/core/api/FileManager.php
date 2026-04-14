@@ -173,24 +173,36 @@ class FileManager
             );
         }
 
-        // Duplicate detection (SHA-256)
+        $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
+        $this->assertNotSystem($scoped);
+        $fs = $this->disks->disk($disk);
+
+        // Duplicate detection (SHA-256). Only report a duplicate if the candidate
+        // actually exists on disk and isn't inside an internal directory — stale
+        // index entries shouldn't surface as phantom duplicates to the user.
         $hash = hash_file('sha256', $file['tmp_name']);
         if ($hash !== false && !$forceUpload) {
             $existing = $this->meta->findByHash($disk, $hash);
             if ($existing) {
-                return [
-                    'key'       => $existing['file_key'],
-                    'url'       => $this->fileUrl($disk, $existing['file_key']),
-                    'name'      => basename($existing['file_key']),
-                    'duplicate' => true,
-                    'message'   => 'File already exists. Use force_upload to override.',
-                    'variants'  => $this->getFileVariants($disk, $existing['file_key']),
-                ];
+                $existingKey = $existing['file_key'];
+                $isSystem = str_starts_with($existingKey, '_fluxfiles/')
+                    || str_starts_with($existingKey, '_variants/')
+                    || str_contains($existingKey, '/_fluxfiles/')
+                    || str_contains($existingKey, '/_variants/');
+                if (!$isSystem && $fs->fileExists($existingKey)) {
+                    return [
+                        'key'       => $existingKey,
+                        'url'       => $this->fileUrl($disk, $existingKey),
+                        'name'      => basename($existingKey),
+                        'duplicate' => true,
+                        'message'   => 'File already exists. Use force_upload to override.',
+                        'variants'  => $this->getFileVariants($disk, $existingKey),
+                    ];
+                }
+                // Stale / invalid hash entry — purge so it doesn't keep blocking uploads.
+                $this->meta->delete($disk, $existingKey);
             }
         }
-
-        $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
-        $fs = $this->disks->disk($disk);
 
         // Track parent directories for global folder search (best-effort)
         if ($this->meta instanceof StorageMetadataHandler) {

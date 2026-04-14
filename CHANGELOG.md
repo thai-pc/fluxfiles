@@ -2,9 +2,23 @@
 
 All notable changes to FluxFiles are documented here.
 
----
+## [1.27.1] — 2026-04-14
+
+### Upload — Metadata Persistence Fixes
+
+- `uploaded_by` **is now actually persisted.** `StorageMetadataHandler::saveToLocal()` / `saveToS3()` previously only wrote `{title, alt_text, caption, tags}` — the `uploaded_by` field passed by `FileManager::upload()` was silently dropped. `owner_only` enforcement fell back to the "legacy file, allow everyone" branch for every freshly uploaded file, so any user could delete/rename files uploaded by others. Fixed by writing `uploaded_by` into the sidecar JSON (local), the `fm-uploaded-by` S3 object metadata key (S3/R2), and the `_fluxfiles/index.json` index.
+- **Partial** `save()` **no longer wipes unrelated fields.** `FileManager::upload()` calls `$meta->save($disk, $scoped, ['uploaded_by' => …])` right after the write, and the metadata PUT form posts only `{title, alt_text, caption, tags}`. Before the fix, each call overwrote the sidecar (local) or ran a `MetadataDirective: REPLACE` `CopyObject` (S3) with the non-supplied fields as empty strings — so uploading cleared prior SEO metadata on S3, and editing title+alt wiped owner/AI tags on local. `save()` now loads the existing record and merges before delegating, preserving every field the caller didn't supply.
+- **Tests** — `tests/test-metadata.php` gains two new cases: `save({uploaded_by})` round-trips through `get()`, and a partial `save()` preserves existing `{title, alt_text, caption, tags}`.
 
 ## [1.27.0] — 2026-04-13
+
+### Upload — Duplicate Detection & System-Path Hardening
+
+- **Uploads are now blocked from writing into `_fluxfiles/` / `_variants/`.** `FileManager::upload()` previously enforced `assertNotSystem()` on `list`/`delete`/`rename`/`move`/`copy` but skipped it on upload, so a client sending `path=_fluxfiles` wrote user files directly into FluxFiles' internal metadata directory. Those files then became invisible (hidden by the listing filter) yet kept their hash in `_fluxfiles/index.json`, turning the next upload of the same content into a "File already exists" pointing at a file the user couldn't see.
+- `**findByHash()` ignores system paths.** Even if the index still contains ghost entries from past wayward uploads (or manual file placement), `findByHash()` now skips any key under `_fluxfiles/` or `_variants/` so duplicate detection only surfaces candidates the user can actually reach.
+- **Stale-hash self-healing.** If `findByHash()` returns a match but the file no longer exists on disk (or lives under a system prefix), `FileManager::upload()` now purges that index entry via `meta->delete()` instead of returning a phantom duplicate. The real upload proceeds, and subsequent calls stop hitting the stale record.
+- `**scoped` path is computed and checked earlier.** Path resolution + `assertNotSystem()` moved above duplicate detection so permission errors fire before any hashing work.
+- **Tests** — `tests/test-metadata.php` gains `findByHash() skips entries inside _fluxfiles/ (system paths)`
 
 ### Version Alignment
 
@@ -24,13 +38,13 @@ All notable changes to FluxFiles are documented here.
 
 ### Laravel Adapter — Existing Directory Support
 
-- **`php artisan fluxfiles:seed`** — new Artisan command that indexes pre-existing files and folders on a configured disk so they become searchable. Walks the disk recursively, creates a metadata record per file (with `title` derived from filename) and tracks each directory in `_fluxfiles/dirs.json`. Supports `--disk=`, `--path=`, `--overwrite`, `--dry-run`.
+- `**php artisan fluxfiles:seed`** — new Artisan command that indexes pre-existing files and folders on a configured disk so they become searchable. Walks the disk recursively, creates a metadata record per file (with `title` derived from filename) and tracks each directory in `_fluxfiles/dirs.json`. Supports `--disk=`, `--path=`, `--overwrite`, `--dry-run`.
 - **README — "Using an existing upload directory"** — end-to-end guide for teams who already have a populated upload tree (e.g. `public/uploads/user_1/`): point the `local` disk at the existing path, scope each user with the `prefix` JWT claim derived from `auth()->id()`, set filesystem perms, and run the seed command.
 
 ### WordPress Adapter — Existing Directory Support
 
-- **`wp fluxfiles seed`** — WP-CLI command equivalent to the Laravel Artisan seed. Registered only when WP-CLI is loaded (no overhead in normal requests). Same options (`--disk=`, `--path=`, `--overwrite`, `--dry-run`) and same semantics — indexes pre-existing files in `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so FTS5 and folder search return them.
-- **`readme.txt` — "Using an existing upload directory"** — documents the WP-CLI flow for sites installed on top of a populated uploads tree, with a fallback note (re-upload through the UI) for hosts without WP-CLI.
+- `**wp fluxfiles seed`** — WP-CLI command equivalent to the Laravel Artisan seed. Registered only when WP-CLI is loaded (no overhead in normal requests). Same options (`--disk=`, `--path=`, `--overwrite`, `--dry-run`) and same semantics — indexes pre-existing files in `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so FTS5 and folder search return them.
+- `**readme.txt` — "Using an existing upload directory"** — documents the WP-CLI flow for sites installed on top of a populated uploads tree, with a fallback note (re-upload through the UI) for hosts without WP-CLI.
 
 ### Cross-adapter Fixes
 
