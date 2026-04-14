@@ -154,7 +154,7 @@ class FluxFilesController
                 (bool) $request->input('force_upload', false)
             );
 
-            $this->audit(
+            $this->logAudit(
                 $claims,
                 'upload',
                 $request->input('disk', 'local'),
