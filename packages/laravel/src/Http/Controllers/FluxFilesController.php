@@ -423,7 +423,13 @@ class FluxFilesController
                 throw new ApiException('Missing required fields', 400);
             }
 
-            return $this->ok($fm->presign($disk, $path, $method, $ttl));
+            return $this->ok($fm->presign(
+                $disk,
+                $path,
+                strtoupper((string) $method),
+                (int) $ttl,
+                (int) ($request->input('size') ?? $request->input('size_bytes') ?? 0)
+            ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }
@@ -454,6 +460,7 @@ class FluxFilesController
         try {
             $claims = $this->claims($request);
             $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
 
             $disk = $request->query('disk');
             $key  = $request->query('key');
@@ -470,6 +477,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
+            $fm->validateScopedPath($key);
 
             return $this->ok($this->metaRepo->get($disk, $key));
         } catch (ApiException $e) {
@@ -482,6 +490,7 @@ class FluxFilesController
         try {
             $claims = $this->claims($request);
             $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
 
             $disk = $request->input('disk');
             $key  = $request->input('key');
@@ -498,6 +507,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
+            $fm->assertCanModifyScopedPath($disk, $key);
 
             $data = [
                 'title'    => $request->input('title'),
@@ -521,6 +531,7 @@ class FluxFilesController
         try {
             $claims = $this->claims($request);
             $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
 
             $disk = $request->input('disk');
             $key  = $request->input('key');
@@ -537,6 +548,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
+            $fm->assertCanModifyScopedPath($disk, $key);
 
             $this->metaRepo->delete($disk, $key);
 
@@ -655,6 +667,7 @@ class FluxFilesController
         try {
             $claims = $this->claims($request);
             $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
 
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
@@ -670,7 +683,21 @@ class FluxFilesController
                 throw new ApiException("Access denied to disk: {$disk}", 403);
             }
 
-            $scopedPath = $claims->scopePath($path);
+            $sizeBytes = (int) ($request->input('size') ?? $request->input('size_bytes') ?? 0);
+            if ($sizeBytes <= 0) {
+                throw new ApiException('Missing required field: size', 400);
+            }
+            $scopedPath = $fm->validateUserPath($path);
+            $fm->validateUploadName(basename($scopedPath), $sizeBytes);
+            if ($claims->maxStorageMb > 0 && $sizeBytes > 0) {
+                (new QuotaManager($this->diskManager))->assertQuota(
+                    $disk,
+                    $claims->pathPrefix,
+                    $sizeBytes,
+                    $claims->maxStorageMb
+                );
+            }
+
             $chunker = new ChunkUploader($this->diskManager);
             $result = $chunker->initiate($disk, $scopedPath);
             $this->logAudit($claims, 'chunk_upload', $disk, $scopedPath);
@@ -686,6 +713,7 @@ class FluxFilesController
         try {
             $claims = $this->claims($request);
             $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
 
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
@@ -705,6 +733,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
+            $fm->validateScopedPath($key);
 
             $chunker = new ChunkUploader($this->diskManager);
 
@@ -719,6 +748,7 @@ class FluxFilesController
         try {
             $claims = $this->claims($request);
             $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
 
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
@@ -738,10 +768,16 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
+            $fm->validateScopedPath($key);
 
             $chunker = new ChunkUploader($this->diskManager);
 
-            return $this->ok($chunker->complete($disk, $key, $uploadId, $parts));
+            $result = $chunker->complete($disk, $key, $uploadId, $parts);
+            $this->metaRepo->save($disk, $key, [
+                'uploaded_by' => $claims->userId,
+            ]);
+
+            return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }
@@ -752,6 +788,7 @@ class FluxFilesController
         try {
             $claims = $this->claims($request);
             $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
 
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
@@ -770,6 +807,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
+            $fm->validateScopedPath($key);
 
             $chunker = new ChunkUploader($this->diskManager);
 

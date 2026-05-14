@@ -1,0 +1,81 @@
+# Architecture Notes
+
+## Runtime Flow
+
+1. Browser opens `packages/core/public/index.html` either directly or inside an iframe.
+2. The host page or wrapper SDK sends configuration by `postMessage`: endpoint, JWT token, active disk, mode, path, locale, theme, and picker options.
+3. UI calls `/api/fm/*` routes with `Authorization: Bearer <JWT>`.
+4. `packages/core/api/index.php` handles CORS, public locale/UI routes, JWT auth, disk setup, metadata repo setup, rate limiting, audit logging, and route dispatch.
+5. `FileManager` performs file operations through `DiskManager` and stores metadata through `StorageMetadataHandler`.
+
+## Core Backend Modules
+
+- `api/index.php`
+  - Public routes: `/public/index.html`, `/api/fm/lang`, `/api/fm/lang/{locale}`.
+  - Authenticated routes: all other `/api/fm/*` routes.
+  - Loads `.env` from package root or monorepo root.
+  - Applies CORS and origin checks for mutating requests.
+  - Builds `Claims`, `DiskManager`, `StorageMetadataHandler`, `FileManager`, `QuotaManager`, `RateLimiterFileStorage`, `AuditLogStorage`, `ChunkUploader`, and optional `AiTagger`.
+
+- `api/Claims.php`
+  - Decodes the product-specific JWT payload into typed-ish public properties.
+  - Important fields: `sub`, `perms`, `disks`, `prefix`, `max_upload`, `allowed_ext`, `max_storage`, `owner_only`, `byob_disks`.
+  - `scopePath()` sanitizes `.` and `..`, strips null bytes, and prepends the user's prefix.
+  - `isPathInScope()` checks already-scoped keys.
+
+- `api/FileManager.php`
+  - Main service for list, upload, delete, rename, move, copy, cross-disk operations, mkdir, crop, AI tag, presign, and file metadata.
+  - Enforces permissions and disk access through claims.
+  - Uses scoped paths before touching storage.
+  - Hides internal `_fluxfiles`, `_variants`, and local `.meta.json` files from listings.
+  - Handles duplicate detection through SHA-256 metadata index.
+  - Tracks parent directories for folder search.
+
+- `api/DiskManager.php`
+  - Builds Flysystem local disks and S3-compatible disks.
+  - R2/MinIO-style endpoints are treated as S3 with path-style endpoint and `retain_visibility` disabled.
+  - BYOB disks can be registered at runtime, but local BYOB disks are rejected.
+
+- `api/StorageMetadataHandler.php`
+  - Metadata is storage-backed, not database-backed.
+  - S3/R2: object metadata plus `_fluxfiles/index.json`.
+  - Local: `{file}.meta.json` sidecar plus `_fluxfiles/index.json`.
+  - Folder search uses `_fluxfiles/dirs.json`.
+  - Audit uses `_fluxfiles/audit.jsonl`.
+  - File hash is stored for duplicate detection but removed from public metadata responses.
+
+- `api/ChunkUploader.php`
+  - Supports multipart uploads for S3-compatible disks through init, presign part, complete, and abort endpoints.
+
+- `api/ImageOptimizer.php`
+  - Generates image variants under internal variant paths. Keep list/delete/copy/move behavior aware of variants.
+
+- `api/AiTagger.php`
+  - Optional AI metadata generation. Controlled by `FLUXFILES_AI_PROVIDER`, `FLUXFILES_AI_API_KEY`, and `FLUXFILES_AI_MODEL`.
+
+## Frontend And Embedding
+
+- `packages/core/public/index.html` and `packages/core/assets/fm.js` implement the standalone UI.
+- `packages/sdk/fluxfiles.js` is the plain browser SDK. It creates/removes the iframe modal, sends `FM_CONFIG`, listens for `FM_SELECT`, token refresh requests, events, and close messages.
+- `packages/react/src/useFluxFiles.ts` and `packages/vue/src/useFluxFiles.ts` mirror the SDK postMessage protocol for framework users.
+- `packages/react/src/FluxFiles.tsx` and `packages/vue/src/FluxFiles.vue` are thin iframe components with imperative control APIs.
+
+## Framework Adapters
+
+- Laravel:
+  - `FluxFilesServiceProvider` registers config, views, Blade component, routes in proxy mode, and directives.
+  - `FluxFilesManager` generates JWT tokens and BYOB tokens.
+  - `FluxFilesController` proxies/serves core assets in Laravel mode.
+
+- WordPress:
+  - `fluxfiles.php` boots the plugin.
+  - `includes/FluxFilesPlugin.php` wires activation, admin, REST API, media button, and shortcode.
+  - `FluxFilesPlugin::diskConfigs()` maps WordPress options to core disk configs.
+  - Token generation mirrors Laravel/core helpers.
+
+## Storage Invariants
+
+- Internal storage paths use `_fluxfiles/` and `_variants/`; these should not appear as normal user files.
+- Metadata updates should update both the object/sidecar and the relevant index.
+- Copy/move/delete behavior should keep metadata, variants, folder index, and audit behavior coherent.
+- Path prefix scoping is a security boundary. Do not bypass `Claims::scopePath()` or `Claims::isPathInScope()`.

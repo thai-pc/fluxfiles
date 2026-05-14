@@ -43,12 +43,20 @@ function useFluxFiles(options) {
   optionsRef.current = options;
   const endpoint = (options.endpoint || "").replace(/\/+$/, "");
   const iframeSrc = endpoint + "/public/index.html";
+  const expectedOrigin = (0, import_react.useRef)("");
+  (0, import_react.useEffect)(() => {
+    try {
+      expectedOrigin.current = new URL(iframeSrc, window.location.href).origin;
+    } catch {
+      expectedOrigin.current = window.location.origin;
+    }
+  }, [iframeSrc]);
   const post = (0, import_react.useCallback)((type, payload = {}) => {
     const el = iframeElRef.current;
     if (!el?.contentWindow) return;
     el.contentWindow.postMessage(
       { source: SOURCE, type, v: VERSION, id: uid(), payload },
-      "*"
+      expectedOrigin.current || window.location.origin
     );
   }, []);
   const sendConfig = (0, import_react.useCallback)(() => {
@@ -66,6 +74,7 @@ function useFluxFiles(options) {
   }, [post]);
   (0, import_react.useEffect)(() => {
     function onMessage(e) {
+      if (expectedOrigin.current && e.origin !== expectedOrigin.current) return;
       const msg = e.data;
       if (!msg || msg.source !== SOURCE) return;
       const opts = optionsRef.current;

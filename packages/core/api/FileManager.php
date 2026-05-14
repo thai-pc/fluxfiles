@@ -467,13 +467,19 @@ class FileManager
     public function copy(string $disk, string $from, string $to): array
     {
         $this->assertDisk($disk);
+        $this->assertPerm('read');
         $this->assertPerm('write');
 
         $scopedFrom = $this->scopedPath($from);
+        $this->assertNotSystem($scopedFrom);
+        $this->assertOwner($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
+        $this->assertNotSystem($scopedTo);
         $fs = $this->disks->disk($disk);
         $fs->copy($scopedFrom, $scopedTo);
 
+        $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo);
+        $this->copyVariants($disk, $scopedFrom, $disk, $scopedTo);
         if ($this->meta instanceof StorageMetadataHandler) {
             $this->meta->trackParents($disk, $scopedTo);
         }
@@ -493,7 +499,10 @@ class FileManager
         }
 
         $scopedSrc = $this->scopedPath($srcPath);
+        $this->assertNotSystem($scopedSrc);
+        $this->assertOwner($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
+        $this->assertNotSystem($scopedDst);
 
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
@@ -683,6 +692,7 @@ class FileManager
         $this->assertPerm('write');
 
         $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
         $fs->createDirectory($scoped);
 
@@ -717,6 +727,7 @@ class FileManager
         $this->assertPerm('write');
 
         $scopedSrc = $this->scopedPath($path);
+        $this->assertNotSystem($scopedSrc);
         $this->assertOwner($disk, $scopedSrc);
         $fs = $this->disks->disk($disk);
 
@@ -726,6 +737,10 @@ class FileManager
 
         $result = $this->imageOptimizer->crop($imageData, $x, $y, $width, $height, $format);
         $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
+        $this->assertNotSystem($scopedDst);
+        if ($savePath !== null) {
+            $this->validateUploadName(basename($scopedDst), 0);
+        }
         $fs->write($scopedDst, $result['data']);
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'ffcrop_');
@@ -769,6 +784,7 @@ class FileManager
         }
 
         $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
 
         $name = basename($scoped);
@@ -801,14 +817,15 @@ class FileManager
 
     private const MAX_PRESIGN_TTL = 86400; // 24 hours
 
-    public function presign(string $disk, string $path, string $method, int $ttl): array
+    public function presign(string $disk, string $path, string $method, int $ttl, int $sizeBytes = 0): array
     {
         $this->assertDisk($disk);
-        $this->assertPerm('write');
 
         if (!in_array($method, ['GET', 'PUT'], true)) {
             throw new ApiException('Invalid presign method: must be GET or PUT', 400);
         }
+
+        $this->assertPerm($method === 'GET' ? 'read' : 'write');
 
         if ($ttl < 1) {
             $ttl = 3600;
@@ -818,10 +835,37 @@ class FileManager
         }
 
         $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
         $config = $this->disks->config($disk);
 
         if (($config['driver'] ?? '') !== 's3') {
             throw new ApiException('Presigned URLs are only available for S3/R2 disks', 400);
+        }
+
+        if ($method === 'PUT') {
+            if ($sizeBytes <= 0) {
+                throw new ApiException('Missing required field: size', 400, 'missing_param');
+            }
+            $this->validateUploadName(basename($scoped), $sizeBytes);
+            if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0 && $sizeBytes > 0) {
+                $this->quotaManager->assertQuota(
+                    $disk,
+                    $this->claims->pathPrefix,
+                    $sizeBytes,
+                    $this->claims->maxStorageMb
+                );
+            }
+
+            $fs = $this->disks->disk($disk);
+            try {
+                if ($fs->fileExists($scoped)) {
+                    $this->assertOwner($disk, $scoped);
+                }
+            } catch (ApiException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                // Some adapters can throw on existence checks; presign should still work for new objects.
+            }
         }
 
         $client = $this->disks->s3Client($disk);
@@ -850,6 +894,7 @@ class FileManager
         $this->assertPerm('read');
 
         $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
 
         return [
@@ -1031,5 +1076,34 @@ class FileManager
                 ['max' => $this->claims->maxUploadMb . 'MB']
             );
         }
+    }
+
+    public function validateUploadName(string $name, int $sizeBytes = 0): void
+    {
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        $this->assertExt($ext);
+        $this->assertSafeFilename($name);
+        if ($sizeBytes > 0) {
+            $this->assertUploadSize($sizeBytes / (1024 * 1024));
+        }
+    }
+
+    public function validateUserPath(string $path): string
+    {
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+        return $scoped;
+    }
+
+    public function validateScopedPath(string $scopedPath): string
+    {
+        $this->assertNotSystem($scopedPath);
+        return $scopedPath;
+    }
+
+    public function assertCanModifyScopedPath(string $disk, string $scopedPath): void
+    {
+        $this->assertNotSystem($scopedPath);
+        $this->assertOwner($disk, $scopedPath);
     }
 }

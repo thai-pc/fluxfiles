@@ -273,7 +273,7 @@ function routeRequest(
     }
 
     if ($method === 'POST' && $uri === '/api/fm/presign') {
-        return $fm->presign(...jsonBody('disk', 'path', 'method', 'ttl'));
+        return handlePresign($fm);
     }
 
     if ($method === 'POST' && $uri === '/api/fm/crop') {
@@ -293,13 +293,13 @@ function routeRequest(
     }
 
     if ($method === 'GET' && $uri === '/api/fm/metadata') {
-        return handleGetMetadata($metaRepo, $claims);
+        return handleGetMetadata($metaRepo, $claims, $fm);
     }
     if ($method === 'PUT' && $uri === '/api/fm/metadata') {
-        return handleSaveMetadata($metaRepo, $diskManager, $claims);
+        return handleSaveMetadata($metaRepo, $diskManager, $claims, $fm);
     }
     if ($method === 'DELETE' && $uri === '/api/fm/metadata') {
-        return handleDeleteMetadata($metaRepo, $claims);
+        return handleDeleteMetadata($metaRepo, $claims, $fm);
     }
 
     // Search
@@ -354,16 +354,16 @@ function routeRequest(
 
     // Chunk upload
     if ($method === 'POST' && $uri === '/api/fm/chunk/init') {
-        return handleChunkInit($chunker, $claims);
+        return handleChunkInit($chunker, $claims, $fm, $quotaManager);
     }
     if ($method === 'POST' && $uri === '/api/fm/chunk/presign') {
-        return handleChunkPresign($chunker, $claims);
+        return handleChunkPresign($chunker, $claims, $fm);
     }
     if ($method === 'POST' && $uri === '/api/fm/chunk/complete') {
-        return handleChunkComplete($chunker, $claims);
+        return handleChunkComplete($chunker, $claims, $fm, $metaRepo);
     }
     if ($method === 'POST' && $uri === '/api/fm/chunk/abort') {
-        return handleChunkAbort($chunker, $claims);
+        return handleChunkAbort($chunker, $claims, $fm);
     }
 
     throw new ApiException('Not found', 404, 'not_found');
@@ -415,7 +415,7 @@ function jsonBody(string ...$keys): array
     return $result;
 }
 
-function handleGetMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $claims): ?array
+function handleGetMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $claims, FileManager $fm): ?array
 {
     $disk = $_GET['disk'] ?? null;
     $key  = $_GET['key'] ?? null;
@@ -434,10 +434,11 @@ function handleGetMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
+    $fm->validateScopedPath($key);
     return $metaRepo->get($disk, $key);
 }
 
-function handleSaveMetadata(StorageMetadataHandler $metaRepo, DiskManager $diskManager, \FluxFiles\Claims $claims): array
+function handleSaveMetadata(StorageMetadataHandler $metaRepo, DiskManager $diskManager, \FluxFiles\Claims $claims, FileManager $fm): array
 {
     $raw = file_get_contents('php://input');
     $body = json_decode($raw, true);
@@ -463,6 +464,7 @@ function handleSaveMetadata(StorageMetadataHandler $metaRepo, DiskManager $diskM
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
+    $fm->assertCanModifyScopedPath($disk, $key);
 
     $data = [
         'title'    => $body['title'] ?? null,
@@ -477,7 +479,7 @@ function handleSaveMetadata(StorageMetadataHandler $metaRepo, DiskManager $diskM
     return ['saved' => true];
 }
 
-function handleDeleteMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $claims): array
+function handleDeleteMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $claims, FileManager $fm): array
 {
     [$disk, $key] = jsonBody('disk', 'key');
     if (!$claims->hasDisk($disk)) {
@@ -489,24 +491,77 @@ function handleDeleteMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claim
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
+    $fm->assertCanModifyScopedPath($disk, $key);
     $metaRepo->delete($disk, $key);
     return ['deleted' => true];
 }
 
-function handleChunkInit(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
+function handlePresign(FileManager $fm): array
+{
+    $raw = file_get_contents('php://input');
+    $body = json_decode($raw, true);
+
+    if (!is_array($body)) {
+        throw new ApiException('Invalid JSON body', 400, 'invalid_json');
+    }
+
+    foreach (['disk', 'path', 'method', 'ttl'] as $key) {
+        if (!isset($body[$key])) {
+            throw new ApiException("Missing required field: {$key}", 400);
+        }
+    }
+
+    return $fm->presign(
+        (string) $body['disk'],
+        (string) $body['path'],
+        strtoupper((string) $body['method']),
+        (int) $body['ttl'],
+        (int) ($body['size'] ?? $body['size_bytes'] ?? 0)
+    );
+}
+
+function handleChunkInit(
+    \FluxFiles\ChunkUploader $chunker,
+    \FluxFiles\Claims $claims,
+    FileManager $fm,
+    \FluxFiles\QuotaManager $quotaManager
+): array
 {
     if (!$claims->hasPerm('write')) {
         throw new ApiException('Permission denied: write', 403, 'permission_denied');
     }
-    [$disk, $path] = jsonBody('disk', 'path');
+
+    $raw = file_get_contents('php://input');
+    $body = json_decode($raw, true);
+    if (!is_array($body)) {
+        throw new ApiException('Invalid JSON body', 400, 'invalid_json');
+    }
+
+    $disk = $body['disk'] ?? null;
+    $path = $body['path'] ?? null;
+    if ($disk === null || $path === null) {
+        throw new ApiException('Missing required field: disk or path', 400);
+    }
+
     if (!$claims->hasDisk($disk)) {
         throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
     }
-    $scopedPath = $claims->scopePath($path);
+
+    $sizeBytes = (int) ($body['size'] ?? $body['size_bytes'] ?? 0);
+    if ($sizeBytes <= 0) {
+        throw new ApiException('Missing required field: size', 400, 'missing_param');
+    }
+    $scopedPath = $fm->validateUserPath((string) $path);
+    $fm->validateUploadName(basename($scopedPath), $sizeBytes);
+
+    if ($claims->maxStorageMb > 0 && $sizeBytes > 0) {
+        $quotaManager->assertQuota($disk, $claims->pathPrefix, $sizeBytes, $claims->maxStorageMb);
+    }
+
     return $chunker->initiate($disk, $scopedPath);
 }
 
-function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
+function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims, FileManager $fm): array
 {
     if (!$claims->hasPerm('write')) {
         throw new ApiException('Permission denied: write', 403, 'permission_denied');
@@ -518,10 +573,16 @@ function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
+    $fm->validateScopedPath($key);
     return $chunker->presignPart($disk, $key, $uploadId, (int) $partNumber);
 }
 
-function handleChunkComplete(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
+function handleChunkComplete(
+    \FluxFiles\ChunkUploader $chunker,
+    \FluxFiles\Claims $claims,
+    FileManager $fm,
+    StorageMetadataHandler $metaRepo
+): array
 {
     if (!$claims->hasPerm('write')) {
         throw new ApiException('Permission denied: write', 403, 'permission_denied');
@@ -533,10 +594,15 @@ function handleChunkComplete(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claim
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
-    return $chunker->complete($disk, $key, $uploadId, $parts);
+    $fm->validateScopedPath($key);
+    $result = $chunker->complete($disk, $key, $uploadId, $parts);
+    $metaRepo->save($disk, $key, [
+        'uploaded_by' => $claims->userId,
+    ]);
+    return $result;
 }
 
-function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims): array
+function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims, FileManager $fm): array
 {
     if (!$claims->hasPerm('write')) {
         throw new ApiException('Permission denied: write', 403, 'permission_denied');
@@ -548,6 +614,7 @@ function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
+    $fm->validateScopedPath($key);
     return $chunker->abort($disk, $key, $uploadId);
 }
 
