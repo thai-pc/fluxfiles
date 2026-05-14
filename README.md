@@ -591,7 +591,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/mkdir` | `{disk, path}` | Create directory |
 | `POST` | `/cross-copy` | `{src_disk, src_path, dst_disk, dst_path}` | Copy between disks |
 | `POST` | `/cross-move` | `{src_disk, src_path, dst_disk, dst_path}` | Move between disks |
-| `POST` | `/presign` | `{disk, path, method, ttl}` | Generate presigned URL (GET or PUT, max 86400s) |
+| `POST` | `/presign` | `{disk, path, method, ttl, size?}` | Generate presigned URL (GET or PUT, max 86400s). `size` is required for PUT. |
 | `POST` | `/crop` | `{disk, path, x, y, width, height, save_path?}` | Crop image |
 | `POST` | `/ai-tag` | `{disk, path}` | AI-analyze image (requires AI config) |
 
@@ -616,7 +616,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
-| `POST` | `/chunk/init` | `{disk, path}` | Initiate → `{upload_id, key, chunk_size}` |
+| `POST` | `/chunk/init` | `{disk, path, size}` | Initiate → `{upload_id, key, chunk_size}` |
 | `POST` | `/chunk/presign` | `{disk, key, upload_id, part_number}` | Presign URL for part |
 | `POST` | `/chunk/complete` | `{disk, key, upload_id, parts}` | Complete upload |
 | `POST` | `/chunk/abort` | `{disk, key, upload_id}` | Abort upload |

@@ -1033,11 +1033,12 @@ function fluxFilesApp() {
         async chunkUpload(file, disk, path) {
             const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
             const MAX_CONCURRENT = 3;
-            const key = (path ? path + '/' : '') + file.name;
+            let key = (path ? path + '/' : '') + file.name;
 
             // Initiate multipart upload
-            const initData = await this.api('POST', '/api/fm/chunk/init', { disk, path: key });
+            const initData = await this.api('POST', '/api/fm/chunk/init', { disk, path: key, size: file.size });
             const uploadId = initData.upload_id;
+            key = initData.key || key;
             const totalParts = Math.ceil(file.size / CHUNK_SIZE);
 
             const parts = [];

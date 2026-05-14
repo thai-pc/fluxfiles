@@ -34,6 +34,15 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
 
   const endpoint = (options.endpoint || '').replace(/\/+$/, '');
   const iframeSrc = endpoint + '/public/index.html';
+  const expectedOrigin = useRef<string>('');
+
+  useEffect(() => {
+    try {
+      expectedOrigin.current = new URL(iframeSrc, window.location.href).origin;
+    } catch {
+      expectedOrigin.current = window.location.origin;
+    }
+  }, [iframeSrc]);
 
   // Post a message to the iframe
   const post = useCallback((type: string, payload: Record<string, unknown> = {}) => {
@@ -41,7 +50,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
     if (!el?.contentWindow) return;
     el.contentWindow.postMessage(
       { source: SOURCE, type, v: VERSION, id: uid(), payload },
-      '*'
+      expectedOrigin.current || window.location.origin
     );
   }, []);
 
@@ -63,6 +72,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
   // Listen for messages from iframe
   useEffect(() => {
     function onMessage(e: MessageEvent) {
+      if (expectedOrigin.current && e.origin !== expectedOrigin.current) return;
       const msg = e.data as FluxMessage;
       if (!msg || msg.source !== SOURCE) return;
 

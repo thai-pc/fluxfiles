@@ -170,6 +170,22 @@ test('non-owner CANNOT modify another user file', function () {
     assertEqual(true, $threw, 'Should have thrown ApiException');
 });
 
+test('non-owner CANNOT copy another user file', function () {
+    $claims = new Claims('user-A', ['read', 'write', 'delete'], ['local'], '', 10, null, 0, true);
+    $meta = new MockMetadataRepository();
+    $meta->setMeta('local', 'photos/pic.jpg', ['uploaded_by' => 'user-B']);
+    $fm = makeFM($claims, $meta);
+
+    $threw = false;
+    try {
+        $fm->copy('local', 'photos/pic.jpg', 'photos/copy.jpg');
+    } catch (ApiException $e) {
+        $threw = true;
+        assertEqual(403, $e->getHttpCode(), 'Should be 403');
+    }
+    assertEqual(true, $threw, 'Should have thrown ApiException');
+});
+
 test('file with no metadata (directory/unknown) is allowed', function () {
     $claims = new Claims('user-A', ['read', 'write', 'delete'], ['local'], '', 10, null, 0, true);
     $meta = new MockMetadataRepository();

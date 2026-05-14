@@ -24,13 +24,20 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
 
   const endpoint = computed(() => (opts.value.endpoint || '').replace(/\/+$/, ''));
   const iframeSrc = computed(() => endpoint.value + '/public/index.html');
+  const expectedOrigin = computed(() => {
+    try {
+      return new URL(iframeSrc.value, window.location.href).origin;
+    } catch {
+      return window.location.origin;
+    }
+  });
 
   function post(type: string, payload: Record<string, unknown> = {}) {
     const el = iframeRef.value;
     if (!el?.contentWindow) return;
     el.contentWindow.postMessage(
       { source: SOURCE, type, v: VERSION, id: uid(), payload },
-      '*'
+      expectedOrigin.value
     );
   }
 
@@ -49,6 +56,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
   }
 
   function onMessage(e: MessageEvent) {
+    if (expectedOrigin.value && e.origin !== expectedOrigin.value) return;
     const msg = e.data as FluxMessage;
     if (!msg || msg.source !== SOURCE) return;
 
