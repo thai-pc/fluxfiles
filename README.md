@@ -560,7 +560,35 @@ $token = fluxfiles_token(
 
 > **Warning:** `owner_only` is a safety layer, NOT a replacement for `prefix` isolation. Always use `prefix` to scope users to their own directory. `owner_only` only protects against delete/rename/move — it does NOT prevent users from reading or downloading each other's files.
 
-> **Note:** Files uploaded before `owner_only` was enabled lack ownership metadata and will be accessible to all users. Ownership is recorded from the moment the feature is enabled.
+> **Note:** Files uploaded before `owner_only` was enabled lack ownership metadata and will be accessible to all users unless you import them with owner assignment or readonly mode.
+
+### Import Existing Files
+
+If a disk or bucket already contains files before FluxFiles is installed, run the indexer so existing content becomes searchable and folder search works. The default mode is **index-only**: it writes FluxFiles index files under `_fluxfiles/` but does not modify source files/objects.
+
+```bash
+cd packages/core
+bin/fluxfiles index --disk=local --path=users/42 --dry-run
+bin/fluxfiles index --disk=local --path=users/42
+```
+
+Useful options:
+
+| Option | Effect |
+|--------|--------|
+| `--owner=user-123` | Persist ownership metadata so `owner_only` can protect imported files |
+| `--readonly` | Persist an internal owner that no normal user matches |
+| `--hash` | Compute SHA-256 hashes for duplicate detection |
+| `--variants` | Generate WebP image variants during indexing |
+| `--overwrite` | Re-index files that already have index entries |
+| `--persist-metadata` | Write local sidecars / S3 object metadata instead of index-only |
+
+Laravel proxy mode also exposes the same workflow:
+
+```bash
+php artisan fluxfiles:seed --disk=local --path=users/42 --dry-run
+php artisan fluxfiles:seed --disk=local --path=users/42 --owner=user-123
+```
 
 ---
 
