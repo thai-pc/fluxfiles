@@ -52,6 +52,39 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $this->updateIndex($disk, $key, $merged);
     }
 
+    /**
+     * Add or update only the searchable FluxFiles index without changing the
+     * source object or creating local sidecar metadata.
+     */
+    public function indexFile(string $disk, string $key, array $data, bool $overwrite = false): bool
+    {
+        $this->acquireIndexLock($disk);
+        try {
+            $index = $this->loadIndex($disk);
+            if (!$overwrite && isset($index[$key])) {
+                return false;
+            }
+
+            $existing = $index[$key] ?? [];
+            $index[$key] = array_merge($existing, [
+                'title' => $data['title'] ?? $existing['title'] ?? null,
+                'alt_text' => $data['alt_text'] ?? $existing['alt_text'] ?? null,
+                'caption' => $data['caption'] ?? $existing['caption'] ?? null,
+                'tags' => $data['tags'] ?? $existing['tags'] ?? null,
+                'uploaded_by' => $data['uploaded_by'] ?? $existing['uploaded_by'] ?? null,
+            ]);
+
+            if (isset($data['file_hash'])) {
+                $index[$key]['file_hash'] = $data['file_hash'];
+            }
+
+            $this->saveIndex($disk, $index);
+            return true;
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
     public function delete(string $disk, string $key): void
     {
         if ($this->isS3Compatible($disk)) {

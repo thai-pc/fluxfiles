@@ -1,0 +1,74 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use FluxFiles\DiskManager;
+use FluxFiles\ExistingFileIndexer;
+use FluxFiles\StorageMetadataHandler;
+
+$command = $argv[1] ?? '';
+if (!in_array($command, ['index', 'seed'], true)) {
+    fwrite(STDERR, "Usage: fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
+    exit(1);
+}
+
+$opts = getopt('', [
+    'disk::',
+    'path::',
+    'owner::',
+    'readonly',
+    'overwrite',
+    'dry-run',
+    'hash',
+    'variants',
+    'persist-metadata',
+]);
+
+$envDirs = [
+    realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'),
+    realpath(__DIR__ . '/../../..') ?: (__DIR__ . '/../../..'),
+];
+
+foreach ($envDirs as $dir) {
+    if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
+        Dotenv\Dotenv::createImmutable($dir)->safeLoad();
+        break;
+    }
+}
+
+$diskConfigs = require __DIR__ . '/../config/disks.php';
+$disk = (string) ($opts['disk'] ?? 'local');
+if (!isset($diskConfigs[$disk])) {
+    fwrite(STDERR, "Disk '{$disk}' is not configured.\n");
+    exit(1);
+}
+
+$dm = new DiskManager($diskConfigs);
+$indexer = new ExistingFileIndexer($dm, new StorageMetadataHandler($dm));
+
+$stats = $indexer->index([
+    'disk' => $disk,
+    'path' => (string) ($opts['path'] ?? ''),
+    'owner' => $opts['owner'] ?? null,
+    'readonly' => isset($opts['readonly']),
+    'overwrite' => isset($opts['overwrite']),
+    'dry_run' => isset($opts['dry-run']),
+    'hash' => isset($opts['hash']),
+    'variants' => isset($opts['variants']),
+    'persist_metadata' => isset($opts['persist-metadata']),
+    'on_item' => static function (string $type, string $key, array $stats, ?Throwable $error): void {
+        if ($type === 'error') {
+            fwrite(STDERR, "[error] {$key}: {$error->getMessage()}\n");
+            return;
+        }
+        if (($stats['files_indexed'] + $stats['folders_indexed'] + $stats['skipped']) % 250 === 0) {
+            fwrite(STDOUT, '.');
+        }
+    },
+]);
+
+fwrite(STDOUT, "\nDone. Files indexed: {$stats['files_indexed']}, folders indexed: {$stats['folders_indexed']}, skipped: {$stats['skipped']}, hashed: {$stats['hashed']}, variants: {$stats['variants']}, errors: {$stats['errors']}.\n");
+exit($stats['errors'] > 0 ? 2 : 0);

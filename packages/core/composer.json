@@ -28,5 +28,8 @@
             "FluxFiles\\": "api/"
         }
     },
+    "bin": [
+        "bin/fluxfiles"
+    ],
     "minimum-stability": "stable"
 }
