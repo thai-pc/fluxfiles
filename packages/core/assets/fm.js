@@ -152,8 +152,7 @@ function fluxFilesApp() {
         async switchLocale(newLocale) {
             if (newLocale === this.locale && Object.keys(this._messages).length > 1) return;
             try {
-                const base = this.endpoint || window.location.origin;
-                const res = await fetch(base + '/api/fm/lang/' + encodeURIComponent(newLocale));
+                const res = await fetch(this.joinUrl('/api/fm/lang/' + encodeURIComponent(newLocale)));
                 if (!res.ok) return;
                 const json = await res.json();
                 const data = json.data;
@@ -295,7 +294,7 @@ function fluxFilesApp() {
                     } else {
                         // Check if server configured a specific locale via FLUXFILES_LOCALE
                         try {
-                            const res = await fetch(this.endpoint + '/api/fm/lang');
+                            const res = await fetch(this.joinUrl('/api/fm/lang'));
                             const serverLocale = res.headers.get('Content-Language');
                             if (serverLocale && serverLocale !== 'en') {
                                 await this.switchLocale(serverLocale);
@@ -345,9 +344,26 @@ function fluxFilesApp() {
             }
         },
 
+        // Join the configured endpoint with a path that may already carry a `?`-
+        // prefixed query string. Plain endpoints like `https://files.example.com`
+        // concatenate cleanly, but proxy endpoints such as WordPress's
+        // `…/index.php?rest_route=/fluxfiles/v1` already contain a `?`, so we
+        // promote any subsequent `?` in `path` to `&` to avoid double-`?` URLs
+        // that PHP would parse as one giant rest_route value.
+        joinUrl(path) {
+            const base = this.endpoint || '';
+            if (base.indexOf('?') !== -1) {
+                const qIdx = path.indexOf('?');
+                if (qIdx !== -1) {
+                    return base + path.slice(0, qIdx) + '&' + path.slice(qIdx + 1);
+                }
+            }
+            return base + path;
+        },
+
         // API helper — with 401 detection, token refresh queue, and retry
         async api(method, path, body, _isRetry = false) {
-            const url = this.endpoint + path;
+            const url = this.joinUrl(path);
             const opts = {
                 method: method,
                 headers: {

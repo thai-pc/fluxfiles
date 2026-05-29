@@ -22,7 +22,7 @@ interface MetadataRepositoryInterface
 
     public function saveHash(string $disk, string $key, string $hash): void;
 
-    public function findByHash(string $disk, string $hash): ?array;
+    public function findByHash(string $disk, string $hash, string $pathPrefix = '', ?string $ownerUserId = null): ?array;
 
     public function syncToS3Tags(string $disk, string $key, array $data, DiskManager $diskManager): void;
 

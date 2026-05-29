@@ -377,9 +377,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         }
     }
 
-    public function findByHash(string $disk, string $hash): ?array
+    public function findByHash(string $disk, string $hash, string $pathPrefix = '', ?string $ownerUserId = null): ?array
     {
         $index = $this->loadIndex($disk);
+        $prefix = trim($pathPrefix, '/');
         foreach ($index as $fileKey => $meta) {
             if (($meta['file_hash'] ?? '') !== $hash) {
                 continue;
@@ -392,6 +393,20 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 || str_contains($fileKey, '/_fluxfiles/')
                 || str_contains($fileKey, '/_variants/')) {
                 continue;
+            }
+            // Never leak a file outside the caller's path scope — otherwise the
+            // duplicate response reveals existence and metadata of files the
+            // user cannot list or access.
+            if ($prefix !== '' && $fileKey !== $prefix && strpos($fileKey, $prefix . '/') !== 0) {
+                continue;
+            }
+            // When owner_only is in effect, only the original uploader can be
+            // shown the duplicate; everyone else uploads a fresh copy.
+            if ($ownerUserId !== null) {
+                $owner = $meta['uploaded_by'] ?? null;
+                if ($owner !== null && $owner !== $ownerUserId) {
+                    continue;
+                }
             }
             $row = ['file_key' => $fileKey];
             foreach (['title', 'alt_text', 'caption', 'tags'] as $k) {

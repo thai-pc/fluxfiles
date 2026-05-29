@@ -1,0 +1,19 @@
+{
+  "name": "ff-wrapper-hosts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "react": "vite --config react.vite.config.mjs --port 5173",
+    "vue":   "vite --config vue.vite.config.mjs --port 5174"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vite": "^5.4.11"
+  }
+}

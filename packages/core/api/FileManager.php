@@ -182,7 +182,8 @@ class FileManager
         // index entries shouldn't surface as phantom duplicates to the user.
         $hash = hash_file('sha256', $file['tmp_name']);
         if ($hash !== false && !$forceUpload) {
-            $existing = $this->meta->findByHash($disk, $hash);
+            $ownerFilter = $this->claims->ownerOnly ? $this->claims->userId : null;
+            $existing = $this->meta->findByHash($disk, $hash, $this->claims->pathPrefix, $ownerFilter);
             if ($existing) {
                 $existingKey = $existing['file_key'];
                 $isSystem = str_starts_with($existingKey, '_fluxfiles/')
@@ -296,10 +297,23 @@ class FileManager
         $this->assertOwner($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
-        // Check if directory — delete all contents recursively
+        $isDir = false;
+        $isFile = false;
         try {
-            if ($fs->directoryExists($scoped)) {
-                // Delete variant directory for the folder
+            $isDir = $fs->directoryExists($scoped);
+            if (!$isDir) {
+                $isFile = $fs->fileExists($scoped);
+            }
+        } catch (\Throwable $e) {
+            // Existence check failure is treated as not-found below.
+        }
+
+        if (!$isDir && !$isFile) {
+            throw new ApiException('File or directory not found', 404, 'not_found');
+        }
+
+        try {
+            if ($isDir) {
                 $this->deleteVariantsDir($disk, $scoped);
                 $fs->deleteDirectory($scoped);
                 $this->meta->deleteChildren($disk, $scoped);
@@ -307,22 +321,12 @@ class FileManager
                     $this->meta->deleteDirPrefix($disk, $scoped);
                 }
             } else {
-                // Delete image variants for the file
                 $this->deleteVariants($disk, $scoped);
                 $fs->delete($scoped);
                 $this->meta->delete($disk, $scoped);
             }
         } catch (\Throwable $e) {
-            // Only swallow if file is actually gone; otherwise re-throw
-            try {
-                if ($fs->fileExists($scoped) || $fs->directoryExists($scoped)) {
-                    throw new ApiException('Delete failed: ' . $e->getMessage(), 500, 'delete_failed');
-                }
-            } catch (ApiException $ae) {
-                throw $ae;
-            } catch (\Throwable $ignore) {
-                // Existence check itself failed — assume gone
-            }
+            throw new ApiException('Delete failed: ' . $e->getMessage(), 500, 'delete_failed');
         }
 
         return ['deleted' => true];

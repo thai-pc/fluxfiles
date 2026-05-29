@@ -41,7 +41,7 @@ class FluxFilesShortcode
         $endpoint    = FluxFilesPlugin::apiEndpoint();
         $containerId = 'fluxfiles-' . wp_unique_id();
         $basePath    = FluxFilesPlugin::basePath();
-        $sdkUrl      = plugins_url('../../fluxfiles.js', FLUXFILES_PLUGIN_FILE);
+        $sdkUrl      = plugins_url('assets/fluxfiles.js', FLUXFILES_PLUGIN_FILE);
 
         // Enqueue the SDK
         wp_enqueue_script('fluxfiles-sdk', $sdkUrl, [], FLUXFILES_VERSION, true);

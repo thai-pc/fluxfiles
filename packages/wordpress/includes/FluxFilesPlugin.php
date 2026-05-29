@@ -101,6 +101,24 @@ class FluxFilesPlugin
     }
 
     /**
+     * Locate a core asset path. Release ZIPs bundle core under <plugin>/{public,assets,lang};
+     * monorepo dev checkouts have them at packages/core/{public,assets,lang}.
+     */
+    public static function corePath(string $subdir): ?string
+    {
+        $candidates = [
+            FLUXFILES_PLUGIN_DIR . $subdir,
+            dirname(FLUXFILES_PLUGIN_DIR) . '/core/' . $subdir,
+        ];
+        foreach ($candidates as $path) {
+            if (is_dir($path)) {
+                return rtrim($path, '/');
+            }
+        }
+        return null;
+    }
+
+    /**
      * Get disk configurations.
      */
     public static function diskConfigs(): array

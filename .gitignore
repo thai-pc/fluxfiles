@@ -14,9 +14,16 @@ packages/core/storage/uploads/
 packages/core/storage/rate_limit.json
 
 # Build output
-adapters/react/dist/
-adapters/vue/dist/
+packages/react/dist/
+packages/vue/dist/
 build/
+
+# Test playground scaffolds (source committed, deps not)
+packages/core/tests/apps/**/node_modules/
+packages/core/tests/apps/node_modules/
+
+# Playwright runtime artifacts
+.playwright-mcp/
 
 # OS files
 .DS_Store

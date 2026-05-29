@@ -44,7 +44,7 @@ class FluxFilesMediaButton
             return;
         }
 
-        $sdkUrl = plugins_url('../../fluxfiles.js', FLUXFILES_PLUGIN_FILE);
+        $sdkUrl = plugins_url('assets/fluxfiles.js', FLUXFILES_PLUGIN_FILE);
         wp_enqueue_script('fluxfiles-sdk', $sdkUrl, [], FLUXFILES_VERSION, true);
 
         wp_enqueue_style(

@@ -89,7 +89,7 @@ class MockMetadataRepository implements MetadataRepositoryInterface
     public function getBulk(string $disk, array $keys): array { return []; }
     public function search(string $disk, string $query, int $limit = 50, string $pathPrefix = ''): array { return []; }
     public function saveHash(string $disk, string $key, string $hash): void {}
-    public function findByHash(string $disk, string $hash): ?array { return null; }
+    public function findByHash(string $disk, string $hash, string $pathPrefix = '', ?string $ownerUserId = null): ?array { return null; }
     public function syncToS3Tags(string $disk, string $key, array $data, DiskManager $diskManager): void {}
     public function countChildren(string $disk, string $prefix): int { return 0; }
 }

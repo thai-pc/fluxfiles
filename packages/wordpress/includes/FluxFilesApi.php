@@ -36,63 +36,93 @@ class FluxFilesApi
     // Route registration
     // -------------------------------------------------------------------------
 
+    /**
+     * When a request to our namespace carries a valid Bearer JWT, suppress
+     * WP REST's default cookie/nonce auth check so the request reaches our
+     * permission_callback instead of being rejected with rest_cookie_invalid_nonce.
+     */
+    public static function bypassCookieAuthForBearer($result)
+    {
+        // Only intervene on our routes.
+        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        $query = $_SERVER['QUERY_STRING'] ?? '';
+        if (strpos($uri, '/fluxfiles/v1/') === false && strpos($query, 'fluxfiles/v1') === false) {
+            return $result;
+        }
+        $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if (!preg_match('/^Bearer\s+/i', $auth)) {
+            return $result;
+        }
+        // A Bearer is present — let permission_callback decide.
+        return null;
+    }
+
     public static function registerRoutes(): void
     {
         $api = new self();
         $ns  = 'fluxfiles/v1';
 
+        // Stop WP's cookie/nonce auth from short-circuiting when we already have
+        // a Bearer JWT. Hooked at priority 999 so it runs AFTER WP's default
+        // `rest_cookie_check_errors` (priority 100) and can clear its WP_Error.
+        add_filter('rest_authentication_errors', [self::class, 'bypassCookieAuthForBearer'], 999);
+
+        // The browser SDK builds URLs as `${endpoint}/api/fm/<route>` — keep that
+        // prefix here so the same fm.js works against either the standalone PHP
+        // server or this WP REST proxy without conditionals.
+        $p = '/api/fm';
         $readArgs  = ['methods' => 'GET', 'permission_callback' => [self::class, 'checkAuth']];
         $writeArgs = ['methods' => 'POST', 'permission_callback' => [self::class, 'checkAuth']];
 
         // Core file operations
-        register_rest_route($ns, '/list', array_merge($readArgs, [
+        register_rest_route($ns, $p . '/list', array_merge($readArgs, [
             'callback' => [$api, 'handleList'],
         ]));
-        register_rest_route($ns, '/upload', [
+        register_rest_route($ns, $p . '/upload', [
             'methods'             => 'POST',
             'permission_callback' => [self::class, 'checkAuth'],
             'callback'            => [$api, 'handleUpload'],
         ]);
-        register_rest_route($ns, '/delete', [
+        register_rest_route($ns, $p . '/delete', [
             'methods'             => 'DELETE',
             'permission_callback' => [self::class, 'checkAuth'],
             'callback'            => [$api, 'handleDelete'],
         ]);
-        register_rest_route($ns, '/rename', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/rename', array_merge($writeArgs, [
             'callback' => [$api, 'handleRename'],
         ]));
-        register_rest_route($ns, '/move', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/move', array_merge($writeArgs, [
             'callback' => [$api, 'handleMove'],
         ]));
-        register_rest_route($ns, '/copy', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/copy', array_merge($writeArgs, [
             'callback' => [$api, 'handleCopy'],
         ]));
-        register_rest_route($ns, '/mkdir', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/mkdir', array_merge($writeArgs, [
             'callback' => [$api, 'handleMkdir'],
         ]));
-        register_rest_route($ns, '/cross-copy', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/cross-copy', array_merge($writeArgs, [
             'callback' => [$api, 'handleCrossCopy'],
         ]));
-        register_rest_route($ns, '/cross-move', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/cross-move', array_merge($writeArgs, [
             'callback' => [$api, 'handleCrossMove'],
         ]));
-        register_rest_route($ns, '/crop', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/crop', array_merge($writeArgs, [
             'callback' => [$api, 'handleCrop'],
         ]));
-        register_rest_route($ns, '/ai-tag', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/ai-tag', array_merge($writeArgs, [
             'callback' => [$api, 'handleAiTag'],
         ]));
-        register_rest_route($ns, '/presign', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/presign', array_merge($writeArgs, [
             'callback' => [$api, 'handlePresign'],
         ]));
 
         // File meta
-        register_rest_route($ns, '/meta', array_merge($readArgs, [
+        register_rest_route($ns, $p . '/meta', array_merge($readArgs, [
             'callback' => [$api, 'handleMeta'],
         ]));
 
         // Metadata CRUD
-        register_rest_route($ns, '/metadata', [
+        register_rest_route($ns, $p . '/metadata', [
             [
                 'methods'             => 'GET',
                 'permission_callback' => [self::class, 'checkAuth'],
@@ -111,39 +141,83 @@ class FluxFilesApi
         ]);
 
         // Search, quota, audit
-        register_rest_route($ns, '/search', array_merge($readArgs, [
+        register_rest_route($ns, $p . '/search', array_merge($readArgs, [
             'callback' => [$api, 'handleSearch'],
         ]));
-        register_rest_route($ns, '/search-folders', array_merge($readArgs, [
+        register_rest_route($ns, $p . '/search-folders', array_merge($readArgs, [
             'callback' => [$api, 'handleSearchFolders'],
         ]));
-        register_rest_route($ns, '/quota', array_merge($readArgs, [
+        register_rest_route($ns, $p . '/quota', array_merge($readArgs, [
             'callback' => [$api, 'handleQuota'],
         ]));
-        register_rest_route($ns, '/audit', array_merge($readArgs, [
+        register_rest_route($ns, $p . '/audit', array_merge($readArgs, [
             'callback' => [$api, 'handleAudit'],
         ]));
 
         // Chunk upload
-        register_rest_route($ns, '/chunk/init', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/chunk/init', array_merge($writeArgs, [
             'callback' => [$api, 'handleChunkInit'],
         ]));
-        register_rest_route($ns, '/chunk/presign', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/chunk/presign', array_merge($writeArgs, [
             'callback' => [$api, 'handleChunkPresign'],
         ]));
-        register_rest_route($ns, '/chunk/complete', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/chunk/complete', array_merge($writeArgs, [
             'callback' => [$api, 'handleChunkComplete'],
         ]));
-        register_rest_route($ns, '/chunk/abort', array_merge($writeArgs, [
+        register_rest_route($ns, $p . '/chunk/abort', array_merge($writeArgs, [
             'callback' => [$api, 'handleChunkAbort'],
+        ]));
+
+        // ---------------------------------------------------------------------
+        // UI / asset / locale proxy — public routes so the iframe can load HTML
+        // and assets without going through the WP login flow. Auth still applies
+        // to every /api/fm/ data route above.
+        // ---------------------------------------------------------------------
+        $publicArgs = ['methods' => 'GET', 'permission_callback' => '__return_true'];
+
+        register_rest_route($ns, '/public/index.html', array_merge($publicArgs, [
+            'callback' => [$api, 'serveUiHtml'],
+        ]));
+        register_rest_route($ns, '/assets/(?P<file>fm\.(?:js|css))', array_merge($publicArgs, [
+            'callback' => [$api, 'serveUiAsset'],
+        ]));
+        register_rest_route($ns, $p . '/lang', array_merge($publicArgs, [
+            'callback' => [$api, 'serveLangList'],
+        ]));
+        register_rest_route($ns, $p . '/lang/(?P<locale>[a-z]{2,5})', array_merge($publicArgs, [
+            'callback' => [$api, 'serveLangMessages'],
         ]));
     }
 
     /**
-     * Permission callback — user must be logged in.
+     * Permission callback — accept either:
+     *   1. A valid Bearer JWT (signed with FLUXFILES_SECRET), used by fm.js
+     *      from inside the iframe.
+     *   2. A logged-in WP user with a valid REST nonce (X-WP-Nonce header),
+     *      used when the wrapping page calls our routes through wp.apiFetch.
      */
     public static function checkAuth(\WP_REST_Request $request): bool
     {
+        // get_header() lowercases names, but some servers strip the
+        // Authorization header before PHP sees it (Apache + suexec). Fall back
+        // to common server vars that mod_rewrite preserves.
+        $auth = $request->get_header('authorization')
+            ?: ($_SERVER['HTTP_AUTHORIZATION'] ?? '')
+            ?: ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
+            $secret = get_option('fluxfiles_secret', '');
+            if ($secret === '') {
+                error_log('FluxFiles: rejecting Bearer token — fluxfiles_secret option is empty');
+                return false;
+            }
+            try {
+                JwtMiddleware::handle($m[1], $secret);
+                return true;
+            } catch (\Throwable $e) {
+                error_log('FluxFiles: Bearer rejected — ' . $e->getMessage());
+                return false;
+            }
+        }
         return is_user_logged_in();
     }
 
@@ -152,14 +226,20 @@ class FluxFilesApi
     // -------------------------------------------------------------------------
 
     /**
-     * Resolve JWT claims — auto-generates a token from the current WP user.
+     * Resolve JWT claims for the current request. Prefer the Bearer token sent
+     * by the iframe (so request scope / permissions match what was minted at
+     * shortcode render time) and fall back to a freshly-minted token tied to
+     * the logged-in WP user when no Bearer is present (REST consumers using
+     * cookie+nonce).
      */
     private function claims(): \FluxFiles\Claims
     {
-        $token  = FluxFilesPlugin::tokenForCurrentUser();
         $secret = get_option('fluxfiles_secret', '');
-
-        return JwtMiddleware::handle($token, $secret);
+        $auth   = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
+            return JwtMiddleware::handle($m[1], $secret);
+        }
+        return JwtMiddleware::handle(FluxFilesPlugin::tokenForCurrentUser(), $secret);
     }
 
     private function fileManager(\FluxFiles\Claims $claims): FileManager
@@ -884,5 +964,138 @@ class FluxFilesApi
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // UI / asset / locale serving (public — needed by the iframe)
+    // -------------------------------------------------------------------------
+
+    public function serveUiHtml(\WP_REST_Request $request)
+    {
+        $publicDir = FluxFilesPlugin::corePath('public');
+        $langDir   = FluxFilesPlugin::corePath('lang');
+        if ($publicDir === null || $langDir === null) {
+            return $this->error('UI assets not bundled with this plugin install', 500);
+        }
+        $html = @file_get_contents($publicDir . '/index.html');
+        if ($html === false) {
+            return $this->error('public/index.html not found', 500);
+        }
+
+        $i18n = new \FluxFiles\I18n($langDir, $request->get_param('lang') ?: null);
+        $locale = $i18n->locale();
+        $dir = $i18n->direction();
+        $injection = 'window.__FM_LOCALE__ = { locale: ' . json_encode($locale)
+            . ', dir: ' . json_encode($dir)
+            . ', messages: ' . $i18n->toJson() . ' };';
+        $html = str_replace(
+            "window.__FM_LOCALE__ = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };",
+            $injection,
+            $html
+        );
+        $html = str_replace(
+            '<html lang="en">',
+            '<html lang="' . esc_attr($locale) . '" dir="' . esc_attr($dir) . '">',
+            $html
+        );
+
+        // The HTML uses `../assets/fm.css` and `../assets/fm.js`, which work when
+        // served from /public/index.html on a real path but break under WP's
+        // ?rest_route=… query form (browser strips the query, ../ goes to /assets/
+        // at site root). Rewrite to absolute URLs against our /assets/ route and
+        // append a content-hash version so browsers pick up new builds.
+        $assetsBase = rest_url('fluxfiles/v1/assets');
+        $assetsDir  = FluxFilesPlugin::corePath('assets') ?: '';
+        $jsHash  = $assetsDir && is_file("$assetsDir/fm.js")  ? substr(md5_file("$assetsDir/fm.js"),  0, 8) : 'x';
+        $cssHash = $assetsDir && is_file("$assetsDir/fm.css") ? substr(md5_file("$assetsDir/fm.css"), 0, 8) : 'x';
+        $jsSep  = strpos($assetsBase, '?') !== false ? '&' : '?';
+        $html = str_replace('"../assets/fm.css"', '"' . esc_url($assetsBase . '/fm.css') . $jsSep . 'v=' . $cssHash . '"', $html);
+        $html = str_replace('"../assets/fm.js"',  '"' . esc_url($assetsBase . '/fm.js')  . $jsSep . 'v=' . $jsHash  . '"', $html);
+
+        // Bypass REST JSON serialization — the browser iframe must receive raw HTML
+        // with the right content type, not a JSON-wrapped string.
+        $this->sendRaw($html, 'text/html; charset=utf-8', ['Content-Language: ' . $locale]);
+    }
+
+    public function serveUiAsset(\WP_REST_Request $request)
+    {
+        $file = (string) $request->get_param('file');
+        // Regex on the route already restricts to fm.js / fm.css.
+        $assetsDir = FluxFilesPlugin::corePath('assets');
+        if ($assetsDir === null) {
+            return $this->error('Assets not bundled', 500);
+        }
+        $path = $assetsDir . '/' . $file;
+        $real = realpath($path);
+        if ($real === false || strpos($real, realpath($assetsDir)) !== 0 || !is_file($real)) {
+            return $this->error('Asset not found', 404);
+        }
+        $mime = substr($file, -3) === '.js' ? 'application/javascript' : 'text/css';
+        // Cache busts on every file mtime so iframe never serves stale UI/JS after upgrades.
+        $etag = '"' . substr(md5_file($real), 0, 16) . '"';
+        $this->sendRaw(file_get_contents($real), $mime . '; charset=utf-8', [
+            'Cache-Control: public, max-age=300, must-revalidate',
+            'ETag: ' . $etag,
+        ]);
+    }
+
+    /**
+     * Send a non-JSON response from inside a REST handler. WP REST normally
+     * json_encodes the response body; we need raw HTML / JS / CSS for the
+     * iframe and its assets.
+     */
+    private function sendRaw(string $body, string $contentType, array $extraHeaders = []): void
+    {
+        status_header(200);
+        header('Content-Type: ' . $contentType);
+        foreach ($extraHeaders as $h) {
+            header($h);
+        }
+        echo $body;
+        exit;
+    }
+
+    public function serveLangList(\WP_REST_Request $request)
+    {
+        $langDir = FluxFilesPlugin::corePath('lang');
+        if ($langDir === null) {
+            return $this->ok([]);
+        }
+        $files = glob($langDir . '/*.json') ?: [];
+        $result = [];
+        foreach ($files as $f) {
+            $data = json_decode((string) file_get_contents($f), true);
+            if (!is_array($data)) continue;
+            $code = $data['_meta']['locale'] ?? basename($f, '.json');
+            $result[] = [
+                'code' => $code,
+                'name' => $data['_meta']['name'] ?? $code,
+                'dir'  => $data['_meta']['direction'] ?? 'ltr',
+            ];
+        }
+        return $this->ok($result);
+    }
+
+    public function serveLangMessages(\WP_REST_Request $request)
+    {
+        $locale = (string) $request->get_param('locale');
+        $langDir = FluxFilesPlugin::corePath('lang');
+        if ($langDir === null) {
+            return $this->error('Locales not bundled', 500);
+        }
+        $path = $langDir . '/' . $locale . '.json';
+        $real = realpath($path);
+        if ($real === false || strpos($real, realpath($langDir)) !== 0 || !is_file($real)) {
+            return $this->error('Locale not found', 404);
+        }
+        $data = json_decode((string) file_get_contents($real), true);
+        if (!is_array($data)) {
+            return $this->error('Invalid locale file', 500);
+        }
+        return $this->ok([
+            'locale'   => $data['_meta']['locale'] ?? $locale,
+            'dir'      => $data['_meta']['direction'] ?? 'ltr',
+            'messages' => $data,
+        ]);
     }
 }

@@ -240,7 +240,7 @@ function routeRequest(
             $_POST['disk'] ?? 'local',
             $_POST['path'] ?? '',
             $_FILES['file'],
-            (bool) ($_POST['force_upload'] ?? false)
+            filter_var($_POST['force_upload'] ?? false, FILTER_VALIDATE_BOOLEAN)
         );
     }
 
