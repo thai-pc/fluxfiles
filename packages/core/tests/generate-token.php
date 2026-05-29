@@ -15,64 +15,76 @@ if (($_ENV['FLUXFILES_SECRET'] ?? '') === '') {
     exit(1);
 }
 
+// NOTE: arguments are positional (not named) so this script also runs on PHP 7.4.
+// fluxfiles_token(userId, perms, disks, prefix, maxUploadMb, allowedExt, ttl, ownerOnly)
+
 // Token day du quyen
 $fullToken = fluxfiles_token(
-    userId:      'test-user-001',
-    perms:       ['read', 'write', 'delete'],
-    disks:       ['local', 's3', 'r2'],
-    prefix:      '',
-    maxUploadMb: 30,
-    allowedExt:  null,
-    ttl:         86400
+    'test-user-001',                  // userId
+    ['read', 'write', 'delete'],      // perms
+    ['local', 's3', 'r2'],            // disks
+    '',                               // prefix
+    30,                               // maxUploadMb
+    null,                             // allowedExt
+    86400                             // ttl
 );
 echo "FULL TOKEN:\n{$fullToken}\n\n";
 
 // Token chi doc
 $readToken = fluxfiles_token(
-    userId: 'reader-001',
-    perms:  ['read'],
-    disks:  ['local'],
-    ttl:    3600
+    'reader-001',                     // userId
+    ['read'],                         // perms
+    ['local'],                        // disks
+    '',                               // prefix
+    10,                               // maxUploadMb
+    null,                             // allowedExt
+    3600                              // ttl
 );
 echo "READ-ONLY TOKEN:\n{$readToken}\n\n";
 
 // Token gioi han extension
 $imageToken = fluxfiles_token(
-    userId:      'uploader-001',
-    perms:       ['read', 'write'],
-    disks:       ['local'],
-    allowedExt:  ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-    maxUploadMb: 5,
-    ttl:         3600
+    'uploader-001',                   // userId
+    ['read', 'write'],                // perms
+    ['local'],                        // disks
+    '',                               // prefix
+    5,                                // maxUploadMb
+    ['jpg', 'jpeg', 'png', 'webp', 'gif'], // allowedExt
+    3600                              // ttl
 );
 echo "IMAGE-ONLY TOKEN:\n{$imageToken}\n\n";
 
 // Token co path prefix (scoped)
 $scopedToken = fluxfiles_token(
-    userId: 'scoped-user',
-    perms:  ['read', 'write', 'delete'],
-    disks:  ['local'],
-    prefix: 'users/scoped-user/',
-    ttl:    3600
+    'scoped-user',                    // userId
+    ['read', 'write', 'delete'],      // perms
+    ['local'],                        // disks
+    'users/scoped-user/',             // prefix
+    10,                               // maxUploadMb
+    null,                             // allowedExt
+    3600                              // ttl
 );
 echo "SCOPED TOKEN (prefix=users/scoped-user/):\n{$scopedToken}\n\n";
 
 // Token co quota nho
 $quotaToken = fluxfiles_token(
-    userId:      'quota-user',
-    perms:       ['read', 'write'],
-    disks:       ['local'],
-    maxUploadMb: 2,
-    ttl:         3600
+    'quota-user',                     // userId
+    ['read', 'write'],                // perms
+    ['local'],                        // disks
+    '',                               // prefix
+    2,                                // maxUploadMb
+    null,                             // allowedExt
+    3600                              // ttl
 );
 echo "QUOTA TOKEN (max_upload=2MB):\n{$quotaToken}\n\n";
 
 // ── BYOB (Bring Your Own Bucket) ──
+// fluxfiles_byob_token(userId, byobDisks, perms, prefix, maxUploadMb, allowedExt, ttl, ownerOnly)
 
 // Token BYOB: user dung S3 bucket rieng cua ho
 $byobToken = fluxfiles_byob_token(
-    userId:    'byob-user-001',
-    byobDisks: [
+    'byob-user-001',                  // userId
+    [                                 // byobDisks
         'my-s3' => [
             'driver' => 's3',
             'region' => 'us-west-2',
@@ -81,16 +93,20 @@ $byobToken = fluxfiles_byob_token(
             'secret' => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
         ],
     ],
-    perms: ['read', 'write', 'delete'],
-    ttl:   1800
+    ['read', 'write', 'delete'],      // perms
+    '',                               // prefix
+    10,                               // maxUploadMb
+    null,                             // allowedExt
+    1800                              // ttl
 );
 echo "BYOB TOKEN (my-s3 = user's own bucket):\n{$byobToken}\n\n";
 
 // Token Mixed: local (server) + my-r2 (user's Cloudflare R2)
+// fluxfiles_mixed_token(userId, serverDisks, byobDisks, perms, prefix, maxUploadMb, allowedExt, ttl, ownerOnly)
 $mixedToken = fluxfiles_mixed_token(
-    userId:      'mixed-user-001',
-    serverDisks: ['local'],
-    byobDisks:   [
+    'mixed-user-001',                 // userId
+    ['local'],                        // serverDisks
+    [                                 // byobDisks
         'my-r2' => [
             'driver'   => 's3',
             'endpoint' => 'https://abc123.r2.cloudflarestorage.com',
@@ -100,7 +116,10 @@ $mixedToken = fluxfiles_mixed_token(
             'secret'   => 'R2_SECRET_EXAMPLE',
         ],
     ],
-    perms: ['read', 'write'],
-    ttl:   1800
+    ['read', 'write'],                // perms
+    '',                               // prefix
+    10,                               // maxUploadMb
+    null,                             // allowedExt
+    1800                              // ttl
 );
 echo "MIXED TOKEN (local + my-r2):\n{$mixedToken}\n";

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+use Aws\CommandInterface;
+use Aws\Middleware;
 use Aws\S3\S3Client;
 use League\Flysystem\AwsS3V3\AwsS3V3Adapter;
 use League\Flysystem\Filesystem;
@@ -93,13 +95,37 @@ class DiskManager
             }
 
             $client = new S3Client($s3Params);
+
+            // Only native AWS S3 marked public should send an object ACL (public-read).
+            // Everyone else — private AWS disks, and all R2/MinIO endpoint disks — must
+            // NOT send an ACL: modern S3 buckets default to "Bucket owner enforced"
+            // (ACLs disabled) and reject any ACL header, and R2 has no ACL support.
+            // Strip the ACL param from every command so writes/copies/multipart succeed.
+            $wantsAcl = empty($cfg['endpoint']) && ($cfg['visibility'] ?? 'private') === 'public';
+            if (!$wantsAcl) {
+                $client->getHandlerList()->appendInit(
+                    Middleware::mapCommand(static function (CommandInterface $command) {
+                        unset($command['ACL']);
+                        return $command;
+                    }),
+                    'fluxfiles.strip_acl'
+                );
+            }
+
             $this->s3Clients[$name] = $client;
 
             $adapter = new AwsS3V3Adapter($client, $cfg['bucket'] ?? '');
 
-            // R2/MinIO don't support ACLs — disable retain_visibility to avoid GetObjectAcl calls
+            // R2/MinIO: disable retain_visibility to avoid GetObjectAcl reads. Public
+            // access is handled at the URL layer (public_url / public bucket).
             if (!empty($cfg['endpoint'])) {
                 return new Filesystem($adapter, ['retain_visibility' => false]);
+            }
+
+            // Native AWS S3 public disk → default writes to public-read ACL so the
+            // direct object URL is readable (requires a bucket that allows ACLs).
+            if ($wantsAcl) {
+                return new Filesystem($adapter, ['visibility' => 'public']);
             }
         } else {
             throw new ApiException("Unknown disk driver: {$driver}", 400);

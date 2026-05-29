@@ -901,10 +901,26 @@ class FileManager
         $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
 
+        // Each lookup is best-effort: some S3-compatible backends (notably Cloudflare R2)
+        // don't return a ContentType on HeadObject, which makes Flysystem's mimeType()
+        // throw. Fall back to an extension-based guess instead of failing the whole call.
+        $size = null;
+        try { $size = $fs->fileSize($scoped); } catch (\Throwable $e) {}
+
+        $mime = null;
+        try { $mime = $fs->mimeType($scoped); } catch (\Throwable $e) {}
+        if ($mime === null || $mime === '') {
+            $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
+                ->detectMimeTypeFromPath($scoped) ?? 'application/octet-stream';
+        }
+
+        $modified = null;
+        try { $modified = $fs->lastModified($scoped); } catch (\Throwable $e) {}
+
         return [
-            'size'     => $fs->fileSize($scoped),
-            'mime'     => $fs->mimeType($scoped),
-            'modified' => $fs->lastModified($scoped),
+            'size'     => $size,
+            'mime'     => $mime,
+            'modified' => $modified,
         ];
     }
 
@@ -966,12 +982,59 @@ class FileManager
             return $baseUrl . '/' . $path;
         }
 
+        // S3/R2. Private disks (the default) are served through short-lived presigned
+        // GET URLs so objects work even on private buckets. Public disks return a direct
+        // URL — using public_url (CDN / R2 custom domain) when set, otherwise the
+        // bucket/endpoint URL.
+        $visibility = $config['visibility'] ?? 'private';
+        if ($visibility !== 'public') {
+            $signed = $this->presignGetUrl($disk, $path, $config);
+            if ($signed !== null) {
+                return $signed;
+            }
+            // Fall through to a direct URL if presigning is unavailable.
+        }
+
+        $publicUrl = rtrim($config['public_url'] ?? '', '/');
+        if ($publicUrl !== '') {
+            return $publicUrl . '/' . $path;
+        }
+
         $bucket = $config['bucket'] ?? '';
         if (!empty($config['endpoint'])) {
             return rtrim($config['endpoint'], '/') . '/' . $bucket . '/' . $path;
         }
         $region = $config['region'] ?? 'us-east-1';
         return "https://{$bucket}.s3.{$region}.amazonaws.com/{$path}";
+    }
+
+    /**
+     * Build a presigned GET URL for an S3/R2 object so private buckets can serve it.
+     * TTL is taken from the disk's `url_ttl` (default 1 hour), clamped to MAX_PRESIGN_TTL.
+     * Returns null if signing is not possible so the caller can fall back.
+     */
+    private function presignGetUrl(string $disk, string $path, array $config): ?string
+    {
+        $ttl = (int) ($config['url_ttl'] ?? 3600);
+        if ($ttl < 1) {
+            $ttl = 3600;
+        }
+        if ($ttl > self::MAX_PRESIGN_TTL) {
+            $ttl = self::MAX_PRESIGN_TTL;
+        }
+
+        try {
+            $client = $this->disks->s3Client($disk);
+            $cmd = $client->getCommand('GetObject', [
+                'Bucket' => $config['bucket'] ?? '',
+                'Key'    => $path,
+            ]);
+            $request = $client->createPresignedRequest($cmd, "+{$ttl} seconds");
+            return (string) $request->getUri();
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: presign GET URL failed — ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**

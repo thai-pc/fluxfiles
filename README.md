@@ -53,7 +53,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 ## Requirements
 
-- **PHP** >= 8.1 (Flysystem 3 + Intervention Image v3; tested with 8.1 — 8.3)
+- **PHP** >= 8.1 (Flysystem 3 + Intervention Image v3 + firebase/php-jwt v7; tested with 8.1 — 8.4)
 - **Extensions:** `gd`, `curl`, `json`, `openssl`, `mbstring`, `fileinfo`
 - **Composer** >= 2.0
 
@@ -751,7 +751,7 @@ return [
 
 **Install (recommended):** use a **release ZIP** that already includes `vendor/` (GitHub Releases or WordPress.org). Upload via **Plugins → Add New → Upload Plugin**, or extract into `wp-content/plugins/fluxfiles/`. No Composer or SSH on the server.
 
-**Requirements:** PHP **8.1+** on the host (Flysystem 3 needs 8.0.2+; Intervention Image v3 needs 8.1+). Older PHP releases are not supported for the current `fluxfiles/fluxfiles` line.
+**Requirements:** PHP **8.1+** on the host (Flysystem 3 needs 8.0.2+; Intervention Image v3 and firebase/php-jwt v7 need 8.1+). Older PHP releases are not supported for the current `fluxfiles/fluxfiles` line.
 
 The Packagist package `fluxfiles/fluxfiles` is **core PHP only**; it does **not** include this WordPress plugin. Source for the plugin folder: [main repository](https://github.com/thai-pc/fluxfiles) (`packages/wordpress`).
 

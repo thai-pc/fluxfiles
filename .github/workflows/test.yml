@@ -1,0 +1,99 @@
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  core-php:
+    name: Core (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    # HS256 secret >= 32 bytes (firebase/php-jwt v7 enforces minimum key length).
+    env:
+      FLUXFILES_SECRET: ci-fluxfiles-test-secret-key-0123456789
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4']
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - name: Show resolved dependency versions
+        working-directory: packages/core
+        run: composer show firebase/php-jwt league/flysystem intervention/image aws/aws-sdk-php 2>/dev/null | grep -E "name|versions" || true
+
+      - name: Lint all PHP sources
+        run: |
+          find packages/core/api packages/core/embed.php packages/core/router.php \
+               packages/laravel/src packages/wordpress/includes packages/wordpress/fluxfiles.php \
+               -name '*.php' -print0 2>/dev/null | xargs -0 -n1 php -l
+
+      - name: Run unit/integration test suite
+        working-directory: packages/core
+        run: |
+          set -e
+          for t in test-claims test-metadata test-i18n test-ratelimiter \
+                   test-diskmanager test-owner-only test-byob test-existing-indexer \
+                   test-visibility test-images; do
+            if [ -f "tests/$t.php" ]; then
+              echo "::group::$t"
+              php "tests/$t.php"
+              echo "::endgroup::"
+            fi
+          done
+
+  api-e2e:
+    name: API e2e (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.4']
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - name: Write .env with test secret
+        run: echo "FLUXFILES_SECRET=ci-test-secret-$(openssl rand -hex 16)" > .env
+
+      - name: Start standalone server
+        working-directory: packages/core
+        run: |
+          php -S 127.0.0.1:8080 router.php > /tmp/fluxfiles-server.log 2>&1 &
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8080/public/ >/dev/null && break
+            sleep 0.5
+          done
+
+      - name: Run API test suite
+        run: bash packages/core/tests/test-api.sh
+
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/fluxfiles-server.log || true

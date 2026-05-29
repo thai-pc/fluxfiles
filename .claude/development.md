@@ -44,6 +44,8 @@ php packages/core/tests/test-i18n.php
 php packages/core/tests/test-claims.php
 php packages/core/tests/test-owner-only.php
 php packages/core/tests/test-byob.php
+php packages/core/tests/test-visibility.php
+php packages/core/tests/test-images.php
 ```
 
 React:

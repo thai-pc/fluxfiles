@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use Firebase\JWT\JWT;
+use FluxFiles\JwtCompat;
 
 /**
  * Generate a JWT token for FluxFiles.
@@ -38,7 +38,7 @@ function fluxfiles_token(
         $payload['owner_only'] = true;
     }
 
-    return JWT::encode($payload, $secret, 'HS256');
+    return JwtCompat::encode($payload, $secret);
 }
 
 /**
@@ -98,7 +98,7 @@ function fluxfiles_byob_token(
         $payload['owner_only'] = true;
     }
 
-    return JWT::encode($payload, $secret, 'HS256');
+    return JwtCompat::encode($payload, $secret);
 }
 
 /**
@@ -155,7 +155,7 @@ function fluxfiles_mixed_token(
         $payload['owner_only'] = true;
     }
 
-    return JWT::encode($payload, $secret, 'HS256');
+    return JwtCompat::encode($payload, $secret);
 }
 
 /**

@@ -17,9 +17,15 @@
     },
     "require": {
         "php": "^8.1",
+        "ext-gd": "*",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-openssl": "*",
+        "ext-mbstring": "*",
+        "ext-fileinfo": "*",
         "league/flysystem": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.0",
-        "firebase/php-jwt": "^6.0",
+        "firebase/php-jwt": "^7.0",
         "vlucas/phpdotenv": "^5.0",
         "intervention/image": "^3.0"
     },
