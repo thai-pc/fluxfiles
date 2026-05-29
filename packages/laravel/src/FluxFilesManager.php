@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FluxFiles\Laravel;
 
-use Firebase\JWT\JWT;
+use FluxFiles\JwtCompat;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 class FluxFilesManager
@@ -48,7 +48,7 @@ class FluxFilesManager
             $payload['owner_only'] = true;
         }
 
-        return JWT::encode($payload, $secret, 'HS256');
+        return JwtCompat::encode($payload, $secret);
     }
 
     /**
@@ -119,7 +119,7 @@ class FluxFilesManager
             $payload['owner_only'] = true;
         }
 
-        return JWT::encode($payload, $secret, 'HS256');
+        return JwtCompat::encode($payload, $secret);
     }
 
     /**

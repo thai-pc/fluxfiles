@@ -296,7 +296,7 @@ test('fluxfiles_byob_token creates valid JWT with encrypted credentials', functi
         perms: ['read', 'write', 'delete']
     );
 
-    $payload = Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($secret, 'HS256'));
+    $payload = \FluxFiles\JwtCompat::decode($token, $secret);
     assertContains('my-s3', (array) $payload->disks);
     assertEqual(true, isset($payload->byob_disks->{'my-s3'}));
 
@@ -316,7 +316,7 @@ test('fluxfiles_mixed_token includes both server and BYOB disks', function () us
         ]
     );
 
-    $payload = Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($secret, 'HS256'));
+    $payload = \FluxFiles\JwtCompat::decode($token, $secret);
     $disks = (array) $payload->disks;
     assertContains('local', $disks);
     assertContains('user-r2', $disks);
@@ -335,7 +335,7 @@ test('fluxfiles_byob_token has shorter TTL (1800s default)', function () use ($s
         ]
     );
 
-    $payload = Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($secret, 'HS256'));
+    $payload = \FluxFiles\JwtCompat::decode($token, $secret);
     $ttl = $payload->exp - $payload->iat;
     assertEqual(1800, $ttl, "Expected TTL 1800 but got {$ttl}");
 });
@@ -374,7 +374,7 @@ test('end-to-end BYOB flow', function () use ($secret) {
     );
 
     // 2. Server decodes JWT (simulating JwtMiddleware)
-    $payload = Firebase\JWT\JWT::decode($token, new Firebase\JWT\Key($secret, 'HS256'));
+    $payload = \FluxFiles\JwtCompat::decode($token, $secret);
     $claims = FluxFiles\Claims::fromJwtPayload($payload, $secret);
 
     // 3. Server creates DiskManager and registers BYOB disks

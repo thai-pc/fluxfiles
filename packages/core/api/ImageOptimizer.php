@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
-use Intervention\Image\ImageManager;
-use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use League\Flysystem\Filesystem;
 
 class ImageOptimizer
 {
-    /** @var ImageManager */
+    /** @var ImageCompat */
     private $manager;
 
     private const VARIANTS = [
@@ -23,7 +21,7 @@ class ImageOptimizer
 
     public function __construct()
     {
-        $this->manager = new ImageManager(new GdDriver());
+        $this->manager = new ImageCompat();
     }
 
     public function isImage(string $filename): bool
@@ -49,16 +47,16 @@ class ImageOptimizer
 
         switch ($format) {
             case 'webp':
-                $encoded = $image->toWebp($quality);
+                $encoded = $this->manager->encodeWebp($image, $quality);
                 $mime = 'image/webp';
                 break;
             case 'jpg':
             case 'jpeg':
-                $encoded = $image->toJpeg($quality);
+                $encoded = $this->manager->encodeJpeg($image, $quality);
                 $mime = 'image/jpeg';
                 break;
             default:
-                $encoded = $image->toPng();
+                $encoded = $this->manager->encodePng($image);
                 $mime = 'image/png';
                 break;
         }
@@ -91,8 +89,8 @@ class ImageOptimizer
             }
 
             $resized = $this->manager->read($tmpFile);
-            $resized = $resized->scaleDown($maxWidth);
-            $encoded = $resized->toWebp(80);
+            $resized = $this->manager->scaleDown($resized, $maxWidth);
+            $encoded = $this->manager->encodeWebp($resized, 80);
             $variantPath = $variantsDir . '/' . $basename . '_' . $name . '.webp';
 
             $fs->write($variantPath, (string) $encoded);

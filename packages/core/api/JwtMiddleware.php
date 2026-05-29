@@ -4,15 +4,12 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
-
 class JwtMiddleware
 {
     public static function handle(string $token, string $secret): Claims
     {
         try {
-            $payload = JWT::decode($token, new Key($secret, 'HS256'));
+            $payload = JwtCompat::decode($token, $secret);
         } catch (\Exception $e) {
             error_log('FluxFiles JWT error: ' . $e->getMessage());
             throw new ApiException('Invalid or expired token', 401, 'token_invalid');

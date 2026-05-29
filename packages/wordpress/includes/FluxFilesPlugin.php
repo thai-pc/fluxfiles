@@ -200,7 +200,7 @@ class FluxFilesPlugin
             $payload['owner_only'] = true;
         }
 
-        return \Firebase\JWT\JWT::encode($payload, $secret, 'HS256');
+        return \FluxFiles\JwtCompat::encode($payload, $secret);
     }
 
     /**
@@ -257,7 +257,7 @@ class FluxFilesPlugin
             $payload['owner_only'] = true;
         }
 
-        return \Firebase\JWT\JWT::encode($payload, $secret, 'HS256');
+        return \FluxFiles\JwtCompat::encode($payload, $secret);
     }
 
     /**
