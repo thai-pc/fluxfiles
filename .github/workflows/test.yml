@@ -111,18 +111,6 @@ jobs:
   s3-minio:
     name: Live S3 (MinIO)
     runs-on: ubuntu-latest
-    services:
-      minio:
-        image: bitnami/minio:latest
-        ports: ['9000:9000']
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin123
-          MINIO_DEFAULT_BUCKETS: fluxfiles-test
-        options: >-
-          --health-cmd "mc ready local || curl -sf http://localhost:9000/minio/health/live"
-          --health-interval 5s --health-timeout 5s --health-retries 20
-
     steps:
       - uses: actions/checkout@v6
         with:
@@ -138,6 +126,20 @@ jobs:
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
+      # Run MinIO via `docker run` (not a service container) so we can pass the
+      # required `server /data` command — GitHub service containers can't override it,
+      # and bitnami/minio's free Docker Hub tags were removed in 2025.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin123 \
+            minio/minio server /data
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null && break
+            sleep 1
+          done
+
       - name: Run live S3 test against MinIO
         working-directory: packages/core
         env:
@@ -150,3 +152,7 @@ jobs:
           FXTEST_S3_VISIBILITY: private
           FXTEST_S3_CREATE_BUCKET: '1'
         run: php tests/test-s3-live.php
+
+      - name: MinIO log on failure
+        if: failure()
+        run: docker logs minio || true
