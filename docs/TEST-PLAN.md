@@ -102,17 +102,23 @@ perms (read/write/delete → 403 đúng); disks (ngoài claim → 403); prefix s
 | r2 `private` | presigned GET | ✅ |
 | r2 `public` + `public_url` | custom domain | ✅ |
 | r2 `public` không `public_url` | fallback endpoint/bucket | ✅ |
+| **Live private bucket** presigned GET → HTTP 200; raw URL → 403 | `test-s3-live.php` | ✅ MinIO + AWS + R2 |
 | **TTL presign** (`url_ttl`, default 3600, clamp 86400) | URL hết hạn đúng | ⬜ |
-| **Live bucket private** (MinIO) | `<img src=presigned>` load 200; raw URL 403 | ⬜ cần MinIO |
-| **Live bucket public** | raw URL load 200 | ⬜ |
+| **Live public bucket** raw URL → 200 | cần set bucket policy public | ⬜ |
 | **Variant URL theo visibility** | variant private → presigned, public → thẳng | ⬜ |
-| R2 `public` set ACL? | KHÔNG gọi ACL (R2 không hỗ trợ) | ✅ (build) |
+| R2 `public` set ACL? | KHÔNG gọi ACL (R2 không hỗ trợ) | ✅ |
+
+### Bug thật tìm được qua live test (đã fix)
+1. **AWS bucket "Bucket owner enforced" (ACL disabled — mặc định AWS từ 4/2023)** → mọi write fail `AccessControlListNotSupported`. Fix: middleware strip param `ACL` cho mọi disk trừ AWS-public (`DiskManager`).
+2. **R2 không trả ContentType qua HeadObject** → `fileMeta()` (`/api/fm/meta`) throw 500. Fix: `fileMeta()` chịu lỗi + fallback đoán mime theo extension.
+3. **move/copy trước đây KHÔNG guard collision → ghi đè im lặng** (rename thì có). Đã FIX: thêm `assertTargetAvailable()` dùng chung cho rename/move/copy → tất cả trả 409 `name_exists` khi đích tồn tại. Test trong `test-images.php`.
 
 ---
 
 ## 6. Storage backends
 - **Local**: full matrix (sidecar `.meta.json`, `_fluxfiles/index.json`, `dirs.json`, `audit.jsonl`). ✅ phần lớn
-- **S3/R2 (MinIO/localstack)** ⬜: presign GET/PUT, chunk multipart (init/presign/complete/abort) cho file >10MB, metadata copy-to-self, `retain_visibility=false`, directory placeholder.
+- **S3/R2 live** ✅ qua `test-s3-live.php` (env-gated, chạy với MinIO/AWS/R2): upload+variants, list, fileMeta, presigned GET 200, raw private 403, presign PUT→GET readback, delete. CI có job `s3-minio`.
+- **Chunk multipart** (init/presign/complete/abort) cho file >10MB ⬜.
 
 ---
 

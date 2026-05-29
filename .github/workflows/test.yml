@@ -9,9 +9,6 @@ jobs:
   core-php:
     name: Core (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
-    # HS256 secret >= 32 bytes (firebase/php-jwt v7 enforces minimum key length).
-    env:
-      FLUXFILES_SECRET: ci-fluxfiles-test-secret-key-0123456789
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +25,12 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
           coverage: none
+
+      # Write a real .env so dotenv loads the secret into $_ENV regardless of the
+      # runner's variables_order. The tests read $_ENV['FLUXFILES_SECRET'] and
+      # firebase/php-jwt v7 rejects HS256 keys shorter than 32 bytes.
+      - name: Write .env with test secret
+        run: echo "FLUXFILES_SECRET=ci-test-secret-$(openssl rand -hex 16)" > .env
 
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
@@ -79,8 +82,15 @@ jobs:
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
+      # High rate limits so the 42-request test-api.sh suite doesn't trip the
+      # default 60 read / 10 write per-minute limiter (which returns 429).
       - name: Write .env with test secret
-        run: echo "FLUXFILES_SECRET=ci-test-secret-$(openssl rand -hex 16)" > .env
+        run: |
+          {
+            echo "FLUXFILES_SECRET=ci-test-secret-$(openssl rand -hex 16)"
+            echo "FLUXFILES_RATE_LIMIT_READ=10000"
+            echo "FLUXFILES_RATE_LIMIT_WRITE=10000"
+          } > .env
 
       - name: Start standalone server
         working-directory: packages/core
@@ -97,3 +107,46 @@ jobs:
       - name: Server log on failure
         if: failure()
         run: cat /tmp/fluxfiles-server.log || true
+
+  s3-minio:
+    name: Live S3 (MinIO)
+    runs-on: ubuntu-latest
+    services:
+      minio:
+        image: bitnami/minio:latest
+        ports: ['9000:9000']
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin123
+          MINIO_DEFAULT_BUCKETS: fluxfiles-test
+        options: >-
+          --health-cmd "mc ready local || curl -sf http://localhost:9000/minio/health/live"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - name: Run live S3 test against MinIO
+        working-directory: packages/core
+        env:
+          FXTEST_S3_LABEL: MinIO
+          FXTEST_S3_ENDPOINT: http://127.0.0.1:9000
+          FXTEST_S3_REGION: us-east-1
+          FXTEST_S3_BUCKET: fluxfiles-test
+          FXTEST_S3_KEY: minioadmin
+          FXTEST_S3_SECRET: minioadmin123
+          FXTEST_S3_VISIBILITY: private
+          FXTEST_S3_CREATE_BUCKET: '1'
+        run: php tests/test-s3-live.php
