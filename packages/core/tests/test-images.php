@@ -253,7 +253,7 @@ test('same name, different content → overwrite + variants regenerated', functi
 });
 
 // ── 3. Collision on rename / move / copy ────────────────────────────
-echo "\n{$yellow}► Collision behaviour (rename guards; move/copy overwrite){$reset}\n";
+echo "\n{$yellow}► Collision behaviour (rename/move/copy all guard → 409){$reset}\n";
 
 test('rename onto existing file → 409 name_exists', function () {
     [$fm] = makeFM();
@@ -276,21 +276,43 @@ test('rename onto free name → 200, variants follow', function () {
     assertTrue(!$fs->fileExists('src.png'), 'src gone');
 });
 
-test('move onto existing file → OVERWRITES (no collision guard) [documents behaviour]', function () {
+test('move onto existing file → 409 name_exists (source untouched)', function () {
     [$fm, $fs] = makeFM();
     $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'm-from.png'));
     $fm->upload('local', '', fileArray(makeImage(70, 70, 'png'), 'm-to.png'), true);
-    $fm->move('local', 'm-from.png', 'm-to.png');
-    assertTrue($fs->fileExists('m-to.png'), 'target exists after move');
-    assertTrue(!$fs->fileExists('m-from.png'), 'source gone after move');
+    try {
+        $fm->move('local', 'm-from.png', 'm-to.png');
+        throw new \RuntimeException('should have thrown');
+    } catch (ApiException $e) {
+        assertEqual('name_exists', $e->getErrorCode(), 'expected name_exists');
+    }
+    assertTrue($fs->fileExists('m-from.png'), 'source preserved after blocked move');
 });
 
-test('copy onto existing file → OVERWRITES (no collision guard) [documents behaviour]', function () {
+test('move onto free name → 200', function () {
     [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'm-from.png'));
+    $fm->move('local', 'm-from.png', 'm-dest.png');
+    assertTrue($fs->fileExists('m-dest.png') && !$fs->fileExists('m-from.png'), 'moved');
+});
+
+test('copy onto existing file → 409 name_exists', function () {
+    [$fm] = makeFM();
     $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'c-from.png'));
     $fm->upload('local', '', fileArray(makeImage(70, 70, 'png'), 'c-to.png'), true);
-    $fm->copy('local', 'c-from.png', 'c-to.png');
-    assertTrue($fs->fileExists('c-to.png') && $fs->fileExists('c-from.png'), 'both exist after copy');
+    try {
+        $fm->copy('local', 'c-from.png', 'c-to.png');
+        throw new \RuntimeException('should have thrown');
+    } catch (ApiException $e) {
+        assertEqual('name_exists', $e->getErrorCode(), 'expected name_exists');
+    }
+});
+
+test('copy onto free name → 200', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'c-from.png'));
+    $fm->copy('local', 'c-from.png', 'c-dest.png');
+    assertTrue($fs->fileExists('c-dest.png') && $fs->fileExists('c-from.png'), 'copied, source kept');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

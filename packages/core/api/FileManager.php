@@ -361,15 +361,7 @@ class FileManager
         }
 
         // Check target doesn't already exist
-        try {
-            if ($fs->fileExists($newPath) || $fs->directoryExists($newPath)) {
-                throw new ApiException('A file or folder with that name already exists', 409, 'name_exists');
-            }
-        } catch (ApiException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            // Some adapters may throw on directoryExists check
-        }
+        $this->assertTargetAvailable($fs, $newPath);
 
         $isDir = false;
         try {
@@ -442,6 +434,7 @@ class FileManager
         $scopedTo   = $this->scopedPath($to);
         $this->assertNotSystem($scopedTo);
         $fs = $this->disks->disk($disk);
+        $this->assertTargetAvailable($fs, $scopedTo);
         $isDir = false;
         try {
             $isDir = $fs->directoryExists($scopedFrom);
@@ -480,6 +473,7 @@ class FileManager
         $scopedTo   = $this->scopedPath($to);
         $this->assertNotSystem($scopedTo);
         $fs = $this->disks->disk($disk);
+        $this->assertTargetAvailable($fs, $scopedTo);
         $fs->copy($scopedFrom, $scopedTo);
 
         $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo);
@@ -1130,6 +1124,24 @@ class FileManager
             if (in_array($part, self::DANGEROUS_EXTENSIONS, true)) {
                 throw new ApiException("Dangerous extension detected in filename: {$part}", 403, 'ext_dangerous');
             }
+        }
+    }
+
+    /**
+     * Reject if a file or directory already exists at the destination, so
+     * rename/move/copy never silently overwrite. Some adapters throw on the
+     * directoryExists() probe — that is treated as "not a directory", not a hard error.
+     */
+    private function assertTargetAvailable($fs, string $target): void
+    {
+        try {
+            if ($fs->fileExists($target) || $fs->directoryExists($target)) {
+                throw new ApiException('A file or folder with that name already exists', 409, 'name_exists');
+            }
+        } catch (ApiException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            // Some adapters may throw on the existence probe; allow the operation.
         }
     }
 

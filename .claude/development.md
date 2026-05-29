@@ -48,6 +48,16 @@ php packages/core/tests/test-visibility.php
 php packages/core/tests/test-images.php
 ```
 
+Live S3/R2 test (env-gated; skips if no bucket). Works against MinIO, AWS S3, or R2:
+
+```bash
+FXTEST_S3_LABEL=MinIO FXTEST_S3_ENDPOINT=http://127.0.0.1:9000 \
+FXTEST_S3_REGION=us-east-1 FXTEST_S3_BUCKET=fluxfiles-test \
+FXTEST_S3_KEY=minioadmin FXTEST_S3_SECRET=minioadmin123 \
+FXTEST_S3_VISIBILITY=private FXTEST_S3_CREATE_BUCKET=1 \
+php packages/core/tests/test-s3-live.php
+```
+
 React:
 
 ```bash
