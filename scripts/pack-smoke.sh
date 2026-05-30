@@ -23,6 +23,7 @@ smoke_react() {
   local tb; tb="$ROOT/packages/react/$(cat /tmp/.tb)"
   local C="$TMP/react"; mkdir -p "$C"; cd "$C"; npm init -y >/dev/null 2>&1
   npm install --silent --no-audit --no-fund "$tb" react react-dom typescript @types/react @types/react-dom >/dev/null 2>&1
+  rm -f "$tb"
   printf "import { FluxFiles } from '@fluxfiles/react';\nexport const el = <FluxFiles endpoint=\"x\" token=\"t\" onSelect={() => {}} />;\n" > consume.tsx
   base_tsconfig
   npx --no-install tsc
@@ -35,6 +36,7 @@ smoke_vue() {
   local tb; tb="$ROOT/packages/vue/$(cat /tmp/.tb)"
   local C="$TMP/vue"; mkdir -p "$C"; cd "$C"; npm init -y >/dev/null 2>&1
   npm install --silent --no-audit --no-fund "$tb" vue typescript >/dev/null 2>&1
+  rm -f "$tb"
   printf "import { FluxFiles } from '@fluxfiles/vue';\nconst c: unknown = FluxFiles;\nexport default c;\n" > consume.ts
   base_tsconfig
   npx --no-install tsc
@@ -47,6 +49,7 @@ smoke_sdk() {
   local tb; tb="$ROOT/packages/sdk/$(cat /tmp/.tb)"
   local C="$TMP/sdk"; mkdir -p "$C"; cd "$C"; npm init -y >/dev/null 2>&1
   npm install --silent --no-audit --no-fund "$tb" typescript >/dev/null 2>&1
+  rm -f "$tb"
   printf "import FluxFiles from 'fluxfiles';\nFluxFiles.open({ endpoint: 'x', token: 't' });\n" > consume.ts
   base_tsconfig
   npx --no-install tsc
