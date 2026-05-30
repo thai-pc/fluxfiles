@@ -77,7 +77,7 @@ Upload ảnh đã có variant → `process()` ghi đè variant. Crop ảnh đã 
 ## 2bis. FILE/ẢNH TỒN TẠI SẴN TỪ TRƯỚC (đặt thẳng lên storage, KHÔNG qua FluxFiles) ✅ **local đã phủ**
 
 > Tình huống: ảnh/file đã nằm sẵn trên disk/bucket (copy tay, `aws s3 cp`, migrate từ hệ thống cũ) — **chưa có** sidecar `.meta.json`, **chưa có** entry trong `_fluxfiles/index.json`, **chưa có** hash, **chưa có** `_variants`. `ExistingFileIndexer` **không tự chạy** (không gắn route) → mặc định file ở **Trạng thái A (chưa index)**.
-> ✅ **Đã phủ bằng `integration/test-existing-files.php` (17 case)** — toàn bộ Trạng thái A + B + idempotency trên disk local. Còn ⬜: pre-existing trên **S3/R2**, **cây lớn + pagination**, audit.
+> ✅ **Đã phủ**: `integration/test-existing-files.php` (17 case, local: State A+B+idempotency) + `e2e/test-s3-live.php` nhánh pre-existing (7 case PUT-thẳng: list/meta/metadata-null/presign/dedup-miss/index+variants — verified MinIO+AWS+R2). Còn ⬜: cây lớn + pagination, audit.
 
 ### A. Trạng thái CHƯA INDEX — mọi thao tác phải hoạt động "graceful"
 | Thao tác | Mong đợi với file pre-existing chưa index |

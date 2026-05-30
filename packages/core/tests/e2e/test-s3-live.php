@@ -58,6 +58,7 @@ function test(string $name, callable $fn): void {
     catch (\Throwable $e) { echo "  {$red}FAIL{$reset} {$name}: {$e->getMessage()}\n"; $failed++; }
 }
 function assertTrue($c, string $m): void { if (!$c) throw new \RuntimeException($m); }
+function assertEqual($e, $a, string $m = ''): void { if ($e !== $a) throw new \RuntimeException($m ?: "Expected " . json_encode($e) . " got " . json_encode($a)); }
 
 /** Plain HTTP status of a URL (follows nothing; HEAD-ish via GET). */
 function httpStatus(string $url): int {
@@ -87,7 +88,9 @@ if ($createBucket) {
 
 $dm = new DiskManager(['s3test' => $diskCfg]);
 $claims = new Claims('liveuser', ['read', 'write', 'delete'], ['s3test'], '', 50, null, 0, false);
-$fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
+$meta = new StorageMetadataHandler($dm);
+$fm = new FileManager($dm, $claims, $meta);
+$indexer = new FluxFiles\ExistingFileIndexer($dm, $meta);
 
 $prefix = 'fluxfiles-livetest';
 $uploadedKey = null;
@@ -163,13 +166,71 @@ test('presign PUT, upload bytes, then presign GET reads them', function () use (
     assertTrue($read === $body, 'read-back mismatch');
 });
 
+// ── Pre-existing object: PUT directly via the S3 client (no FluxFiles upload, so
+//    no sidecar / index / hash / variants) — mirrors TEST-PLAN section 2bis on S3/R2.
+echo "\n{$yellow}► Pre-existing object (PUT outside FluxFiles){$reset}\n";
+$preKey = $prefix . '/pre-existing/orig.png';
+$preImg = imagecreatetruecolor(900, 600);
+imagefilledrectangle($preImg, 0, 0, 900, 600, imagecolorallocate($preImg, 200, 90, 40));
+ob_start(); imagepng($preImg); $preBytes = ob_get_clean(); imagedestroy($preImg);
+
+test('PUT object directly, then it appears in FileManager list', function () use ($dm, $fm, $bucket, $prefix, $preKey, $preBytes) {
+    $dm->s3Client('s3test')->putObject(['Bucket' => $bucket, 'Key' => $preKey, 'Body' => $preBytes, 'ContentType' => 'image/png']);
+    $items = $fm->list('s3test', $prefix . '/pre-existing');
+    $names = array_map(fn($i) => $i['name'] ?? '', is_array($items['items'] ?? null) ? $items['items'] : $items);
+    assertTrue(in_array('orig.png', $names, true), 'pre-existing object listed');
+});
+
+test('fileMeta on pre-existing object works (size present)', function () use ($fm, $preKey) {
+    $m = $fm->fileMeta('s3test', $preKey);
+    assertTrue(($m['size'] ?? 0) > 0, 'size present');
+});
+
+test('metadata GET on pre-existing → no FluxFiles metadata (graceful)', function () use ($meta, $preKey) {
+    // On S3/R2 a raw HeadObject may return an empty metadata array (not null);
+    // either way there should be no FluxFiles title before indexing.
+    $got = $meta->get('s3test', $preKey);
+    assertTrue($got === null || empty($got['title'] ?? ''), 'no title metadata before indexing');
+});
+
+test('presign GET on pre-existing object → HTTP 200', function () use ($fm, $preKey) {
+    $g = $fm->presign('s3test', $preKey, 'GET', 600);
+    assertEqual(200, httpStatus($g['url']), 'pre-existing object readable via presign');
+});
+
+test('dedup does NOT fire for un-indexed pre-existing content', function () use ($fm, $prefix, $preBytes) {
+    $tmp = sys_get_temp_dir() . '/fxpre-' . uniqid() . '.png';
+    file_put_contents($tmp, $preBytes);          // identical bytes to the pre-existing object
+    $r = $fm->upload('s3test', $prefix . '/dedup', ['name' => 'copy.png', 'size' => strlen($preBytes), 'tmp_name' => $tmp]);
+    @unlink($tmp);
+    assertTrue(empty($r['duplicate']), 'pre-existing (no hash) must not be seen as duplicate');
+    // remember the uploaded copy for cleanup
+    $GLOBALS['_dedupCopyKey'] = $r['key'] ?? null;
+});
+
+test('index pre-existing subtree (hash+variants) → variant object + metadata created', function () use ($indexer, $meta, $dm, $prefix, $preKey) {
+    // overwrite=true: on S3 a raw-PUT object already returns a (empty) HeadObject
+    // metadata array, which the default indexer would treat as "already indexed".
+    $stats = $indexer->index([
+        'disk' => 's3test', 'path' => $prefix . '/pre-existing',
+        'hash' => true, 'variants' => true, 'persist_metadata' => true, 'overwrite' => true,
+    ]);
+    assertTrue($stats['files_indexed'] >= 1, 'indexed the pre-existing object');
+    assertTrue($stats['variants'] >= 1, 'variants generated');
+    $got = $meta->get('s3test', $preKey);
+    assertTrue(is_array($got) && ($got['title'] ?? '') === 'orig', 'metadata persisted (title=orig)');
+    assertTrue($dm->disk('s3test')->fileExists($prefix . '/pre-existing/_variants/orig_thumb.webp'), 'variant object on bucket');
+});
+
 echo "\n{$yellow}► Cleanup{$reset}\n";
 test('delete uploaded file + variants', function () use ($fm, &$uploadedKey) {
     assertTrue(is_string($uploadedKey), 'no uploaded key (upload failed above)');
     $fm->delete('s3test', $uploadedKey);
 });
-// best-effort delete the put.txt
-try { $fm->delete('s3test', $prefix . '/put.txt'); } catch (\Throwable $e) {}
+// best-effort cleanup of all test artifacts
+foreach ([$prefix . '/put.txt', $preKey, $GLOBALS['_dedupCopyKey'] ?? null] as $k) {
+    if ($k) { try { $fm->delete('s3test', $k); } catch (\Throwable $e) {} }
+}
 @unlink($tmp);
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
