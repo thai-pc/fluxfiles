@@ -265,7 +265,7 @@ function openFilePicker() {
         container: '#my-div',         // CSS selector — omit for modal overlay
 
         onSelect(file) {
-            // file = { url, key, name, size, mime, meta }
+            // file = { url, key, name, path, size, disk, meta, variants }
             console.log('Selected:', file.url);
             document.getElementById('image').src = file.url;
         },
@@ -310,7 +310,7 @@ FluxFiles.on('FM_READY', (payload) => {
 });
 
 FluxFiles.on('FM_SELECT', (file) => {
-    // Single file: { url, key, name, size, mime, meta, variants }
+    // Single file: { url, key, name, path, size, disk, meta, variants }
     // Multiple:    [{ url, key, ... }, ...]
 });
 
@@ -647,6 +647,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | Method | Path | Params | Description |
 |--------|------|--------|-------------|
 | `GET` | `/search?disk=&q=&limit=` | `limit` default 50 | Full-text search across file names + metadata |
+| `GET` | `/search-folders?disk=&q=&limit=` | `limit` default 50 | Search folder names via the directory index |
 | `GET` | `/quota?disk=` | — | Storage usage: used_mb, max_mb, percentage |
 | `GET` | `/audit?limit=&offset=` | `limit` default 100 | Audit log (filtered to current user) |
 
@@ -1045,27 +1046,85 @@ FLUXFILES_LOCALE=vi
 
 ## Testing
 
+### Core PHP — unit & integration
+
 ```bash
-# Start dev server
-cd packages/core
-php -S localhost:8080 router.php
+# Run the whole unit + integration suite
+for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done
 
-# API integration tests
-bash packages/core/tests/e2e/test-api.sh          # Local disk — list, upload, rename, move, copy, delete, metadata, search
+# Or individually
+php packages/core/tests/unit/test-claims.php           # JWT claims parsing + path scoping
+php packages/core/tests/unit/test-diskmanager.php      # DiskManager factory
+php packages/core/tests/unit/test-ratelimiter.php      # Rate limiter
+php packages/core/tests/unit/test-byob.php             # BYOB encryption + token validation
+php packages/core/tests/unit/test-i18n.php             # i18n — validates all 16 language files
+php packages/core/tests/unit/test-i18n.php --api       # i18n API endpoint tests
+php packages/core/tests/integration/test-metadata.php  # Metadata handler
 
-# Unit tests
-php packages/core/tests/unit/test-claims.php       # JWT claims parsing + path scoping
-php packages/core/tests/unit/test-diskmanager.php  # DiskManager factory
-php packages/core/tests/unit/test-ratelimiter.php  # Rate limiter
-php packages/core/tests/integration/test-metadata.php     # Metadata handler
-php packages/core/tests/unit/test-byob.php         # BYOB encryption + token validation
-php packages/core/tests/unit/test-i18n.php         # i18n — validates all 16 language files
-php packages/core/tests/unit/test-i18n.php --api   # i18n API endpoint tests
-
-# Generate tokens for manual testing
+# Generate a token for manual testing
 php packages/core/tests/generate-token.php
+```
 
-# Browser-based tests
+### API & live storage (e2e)
+
+```bash
+# Boot the dev server first
+cd packages/core && php -S 127.0.0.1:8080 router.php &
+
+# HTTP API suite — list, upload, rename, move, copy, delete, metadata, search (42 checks)
+bash packages/core/tests/e2e/test-api.sh
+
+# Live S3/R2 test — env-gated, skips if no bucket. Works against MinIO, AWS S3, or R2.
+FXTEST_S3_LABEL=MinIO FXTEST_S3_ENDPOINT=http://127.0.0.1:9000 \
+FXTEST_S3_REGION=us-east-1 FXTEST_S3_BUCKET=fluxfiles-test \
+FXTEST_S3_KEY=minioadmin FXTEST_S3_SECRET=minioadmin123 \
+FXTEST_S3_VISIBILITY=private FXTEST_S3_CREATE_BUCKET=1 \
+php packages/core/tests/e2e/test-s3-live.php
+```
+
+### Browser e2e (Playwright)
+
+Boots the real PHP server and drives the standalone UI in chromium — render/auth smoke plus full UI interaction flows (upload, folder create + breadcrumb nav, search, dark-mode toggle, delete, inline crop, picker-mode `FM_SELECT`).
+
+```bash
+cd packages/core/tests/browser
+npm install && npx playwright install chromium && npm test
+```
+
+### Framework wrappers
+
+Each wrapper owns its tests — vitest + jsdom for the JS adapters, stubbed-PHP smokes for the PHP adapters.
+
+```bash
+# JS wrappers — postMessage protocol
+cd packages/sdk       && npm install && npm test
+cd packages/react     && npm install && npm test
+cd packages/vue       && npm install && npm test
+cd packages/ckeditor4 && npm install && npm test
+cd packages/tinymce   && npm install && npm test
+
+# PHP adapters (need `composer install -d packages/core` first)
+php packages/wordpress/tests/test-wp-smoke.php
+php packages/laravel/tests/test-laravel-smoke.php
+
+# Published-artifact smoke — pack each wrapper, install its tarball into a
+# throwaway consumer, and typecheck (verifies dist/types, not just src/)
+bash scripts/pack-smoke.sh all
+```
+
+### Docker
+
+```bash
+make test PHP=8.4     # run the core suite in a clean container on a given PHP version
+make test-all         # PHP 8.1 – 8.4 matrix
+make up               # dev stack: standalone app (:8080) + MinIO (:9000, console :9001)
+```
+
+CI (`.github/workflows/test.yml`) runs all of the above across 7 jobs (core PHP 8.1–8.4, API e2e, live S3 on MinIO, wrappers, browser e2e, pack-smoke, production Docker image).
+
+### Manual browser pages
+
+```bash
 open packages/core/tests/manual/test-sdk.html        # SDK integration
 open packages/core/tests/manual/test-ckeditor4.html  # CKEditor 4
 open packages/core/tests/manual/test-tinymce.html    # TinyMCE
