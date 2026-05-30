@@ -47,6 +47,7 @@ php packages/core/tests/unit/test-byob.php
 php packages/core/tests/unit/test-visibility.php
 php packages/core/tests/integration/test-images.php
 php packages/core/tests/integration/test-existing-files.php
+php packages/core/tests/integration/test-audit.php
 ```
 
 Live S3/R2 test (env-gated; skips if no bucket). Works against MinIO, AWS S3, or R2:

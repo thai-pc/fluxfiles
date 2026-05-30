@@ -77,7 +77,7 @@ Upload ảnh đã có variant → `process()` ghi đè variant. Crop ảnh đã 
 ## 2bis. FILE/ẢNH TỒN TẠI SẴN TỪ TRƯỚC (đặt thẳng lên storage, KHÔNG qua FluxFiles) ✅ **local đã phủ**
 
 > Tình huống: ảnh/file đã nằm sẵn trên disk/bucket (copy tay, `aws s3 cp`, migrate từ hệ thống cũ) — **chưa có** sidecar `.meta.json`, **chưa có** entry trong `_fluxfiles/index.json`, **chưa có** hash, **chưa có** `_variants`. `ExistingFileIndexer` **không tự chạy** (không gắn route) → mặc định file ở **Trạng thái A (chưa index)**.
-> ✅ **Đã phủ**: `integration/test-existing-files.php` (17 case, local: State A+B+idempotency) + `e2e/test-s3-live.php` nhánh pre-existing (7 case PUT-thẳng: list/meta/metadata-null/presign/dedup-miss/index+variants — verified MinIO+AWS+R2). Còn ⬜: cây lớn + pagination, audit.
+> ✅ **Đã phủ**: `integration/test-existing-files.php` (17 case, local: State A+B+idempotency) + `e2e/test-s3-live.php` nhánh pre-existing (7 case PUT-thẳng: list/meta/metadata-null/presign/dedup-miss/index+variants — verified MinIO+AWS+R2) + pagination cây-lớn (State C) + audit (`test-audit.php`). ✅ mục 2bis hoàn tất trên local & S3/R2.
 
 ### A. Trạng thái CHƯA INDEX — mọi thao tác phải hoạt động "graceful"
 | Thao tác | Mong đợi với file pre-existing chưa index |
@@ -192,8 +192,8 @@ Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → ch
 ## 10. Tính năng CHƯA có trong plan (review 2026-05-30 phát hiện) ⬜
 - **AI auto-tag** (`/api/fm/ai-tag` thủ công + `FLUXFILES_AI_AUTO_TAG` khi upload) — chưa có test (cần mock provider Claude/OpenAI).
 - **Chunk upload** chi tiết: `chunk/init` → `chunk/presign` (part) → `chunk/complete` → `chunk/abort`; thứ tự part, abort dọn dở dang, file >10MB.
-- **Audit log**: hành động nào được ghi, filter theo user, rotation.
-- **Pagination**: `list?limit>0` trả `{items,next_cursor,total}`; cursor ổn định khi có thay đổi.
+- ✅ **Audit log**: round-trip log/list, filter theo user, limit/offset, rotation (`test-audit.php`).
+- ✅ **Pagination**: `list?limit>0` trả `{items,next_cursor,total}`; cursor đi hết cây không trùng/sót (`test-existing-files.php` State C).
 - **Delete folder đệ quy**: xoá children + `_variants` + metadata + folder index.
 - **Quota tái tính** sau delete; quota có/không tính file pre-existing.
 - **Token refresh/expiry giữa phiên** (SDK `FM_TOKEN_REFRESH`/`FAILED`/`UPDATED`).

@@ -260,6 +260,48 @@ test('after indexing, search finds the file', function () {
     assertTrue(count($hits) >= 1, 'searchable after index');
 });
 
+// ════════════════════════════════════════════════════════════════════
+echo "\n{$yellow}► State C — large pre-existing tree + pagination{$reset}\n";
+// ════════════════════════════════════════════════════════════════════
+
+test('list limit>0 returns items + next_cursor + total', function () {
+    [$fm, , , , $root] = makeEnv();
+    for ($i = 0; $i < 25; $i++) {
+        place($root, 'big/f' . sprintf('%02d', $i) . '.txt', "x{$i}");
+    }
+    $page = $fm->list('local', 'big', 10);
+    assertTrue(isset($page['items'], $page['next_cursor'], $page['total']), 'paged shape');
+    assertEqual(25, $page['total'], 'total counts all');
+    assertEqual(10, count($page['items']), 'first page has limit items');
+    assertTrue($page['next_cursor'] !== null, 'has next_cursor');
+});
+
+test('cursor pagination walks the whole tree with no gaps or dupes', function () {
+    [$fm, , , , $root] = makeEnv();
+    $expected = [];
+    for ($i = 0; $i < 25; $i++) {
+        $name = 'f' . sprintf('%02d', $i) . '.txt';
+        place($root, 'big/' . $name, "x{$i}");
+        $expected[] = 'big/' . $name;
+    }
+    $seen = [];
+    $cursor = '';
+    $pages = 0;
+    do {
+        $page = $fm->list('local', 'big', 10, $cursor);
+        foreach ($page['items'] as $it) {
+            assertTrue(!in_array($it['key'], $seen, true), 'no duplicate key across pages: ' . $it['key']);
+            $seen[] = $it['key'];
+        }
+        $cursor = $page['next_cursor'] ?? null;
+        $pages++;
+        assertTrue($pages <= 10, 'pagination terminates');
+    } while ($cursor !== null);
+    sort($seen); sort($expected);
+    assertEqual($expected, $seen, 'every file seen exactly once');
+    assertEqual(3, $pages, '25 items / 10 per page = 3 pages');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
