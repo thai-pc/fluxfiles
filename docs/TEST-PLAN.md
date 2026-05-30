@@ -194,7 +194,7 @@ Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → ch
 - **Chunk upload** chi tiết: `chunk/init` → `chunk/presign` (part) → `chunk/complete` → `chunk/abort`; thứ tự part, abort dọn dở dang, file >10MB.
 - ✅ **Audit log**: round-trip log/list, filter theo user, limit/offset, rotation (`test-audit.php`).
 - ✅ **Pagination**: `list?limit>0` trả `{items,next_cursor,total}`; cursor đi hết cây không trùng/sót (`test-existing-files.php` State C).
-- **Delete folder đệ quy**: xoá children + `_variants` + metadata + folder index.
+- ✅ **Delete folder đệ quy**: children + `_variants` (mọi cấp) + metadata + folder index, + edge (empty/nested/mixed/404/403/system/owner_only) — `test-delete-folder.php` (12 case).
 - **Quota tái tính** sau delete; quota có/không tính file pre-existing.
 - **Token refresh/expiry giữa phiên** (SDK `FM_TOKEN_REFRESH`/`FAILED`/`UPDATED`).
 - **Crop edge**: toạ độ ngoài biên, `save_path` trùng (giờ → 409), đổi format.
