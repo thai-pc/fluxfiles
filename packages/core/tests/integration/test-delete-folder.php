@@ -172,14 +172,47 @@ test('cannot delete a system folder (_fluxfiles)', function () {
     catch (ApiException $e) { assertTrue($e->getErrorCode() !== null, 'blocked: ' . $e->getErrorCode()); }
 });
 
-test('owner_only does NOT block folder delete (dirs carry no owner)', function () {
-    // NOTE: documents current behaviour — a directory delete is not owner-gated
-    // (assertOwner skips dirs), so under owner_only a user can delete a folder
-    // even though child files may belong to others. Flagged as a hardening item.
-    [$fm, $fs] = makeFM(true, 'intruder');
-    $fm->mkdir('local', 'shared');
-    $fm->delete('local', 'shared');
-    assertTrue(!$fs->directoryExists('shared'), 'folder deletable under owner_only');
+// ── owner_only over a whole folder (assertOwnsTree) ──
+/** Two FileManagers (different users) over one shared disk/root. */
+function sharedDisk(): array
+{
+    $root = sys_get_temp_dir() . '/fluxfiles-df-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage']]);
+    $meta = new StorageMetadataHandler($dm);
+    $mk = fn(string $user, bool $ownerOnly) => new FileManager(
+        $dm, new Claims($user, ['read', 'write', 'delete'], ['local'], '', 50, null, 0, $ownerOnly), $meta
+    );
+    return [$dm->disk('local'), $mk];
+}
+
+test('owner_only BLOCKS deleting a folder containing another user\'s files', function () {
+    [$fs, $mk] = sharedDisk();
+    up($mk('alice', false), 'shared', 'a.txt', tmpTxt('x'));   // alice owns it
+    $bob = $mk('bob', true);                                    // bob is owner_only
+    try { $bob->delete('local', 'shared'); throw new \RuntimeException('should throw'); }
+    catch (ApiException $e) { assertEqual('owner_only', $e->getErrorCode(), 'blocked'); }
+    assertTrue($fs->fileExists('shared/a.txt'), "alice's file preserved");
+});
+
+test('owner_only ALLOWS deleting a folder of only own + legacy files', function () {
+    [$fs, $mk] = sharedDisk();
+    $owner = $mk('owner', true);
+    up($owner, 'mine', 'a.png', imgFile(300, 200));            // owner uploads → uploaded_by=owner
+    // a legacy file with no owner is fine too
+    up($mk('owner', false), 'mine', 'b.txt', tmpTxt('y'));
+    $owner->delete('local', 'mine');
+    assertTrue(!$fs->directoryExists('mine'), 'own folder deletable');
+});
+
+test('owner_only BLOCKS rename/move of a folder with others\' files', function () {
+    [, $mk] = sharedDisk();
+    up($mk('alice', false), 'x', 'a.txt', tmpTxt('x'));
+    $bob = $mk('bob', true);
+    try { $bob->rename('local', 'x', 'y'); throw new \RuntimeException('rename should throw'); }
+    catch (ApiException $e) { assertEqual('owner_only', $e->getErrorCode(), 'rename blocked'); }
+    try { $bob->move('local', 'x', 'z'); throw new \RuntimeException('move should throw'); }
+    catch (ApiException $e) { assertEqual('owner_only', $e->getErrorCode(), 'move blocked'); }
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

@@ -312,6 +312,10 @@ class FileManager
             throw new ApiException('File or directory not found', 404, 'not_found');
         }
 
+        if ($isDir) {
+            $this->assertOwnsTree($disk, $scoped);
+        }
+
         try {
             if ($isDir) {
                 $this->deleteVariantsDir($disk, $scoped);
@@ -371,6 +375,7 @@ class FileManager
         }
 
         if ($isDir) {
+            $this->assertOwnsTree($disk, $scoped);
             // For directories: move all contents to new path
             $scopedPrefix = rtrim($scoped, '/') . '/';
             foreach ($fs->listContents($scoped, true) as $item) {
@@ -440,6 +445,10 @@ class FileManager
             $isDir = $fs->directoryExists($scopedFrom);
         } catch (\Throwable $e) {
             // ignore
+        }
+
+        if ($isDir) {
+            $this->assertOwnsTree($disk, $scopedFrom);
         }
 
         $fs->move($scopedFrom, $scopedTo);
@@ -1056,6 +1065,46 @@ class FileManager
 
         if ($owner !== $this->claims->userId) {
             throw new ApiException('You can only modify files you uploaded', 403, 'owner_only');
+        }
+    }
+
+    /**
+     * When owner_only is enabled, verify the current user owns every file inside a
+     * directory before a folder-level delete/rename/move. Without this, the dir-path
+     * assertOwner() (which skips directories) would let a user wipe/relocate a folder
+     * full of other people's files. Files with no owner (legacy / pre-existing) are
+     * allowed; enumeration failures fall through (best-effort, like elsewhere).
+     */
+    private function assertOwnsTree(string $disk, string $scopedDir): void
+    {
+        if (!$this->claims->ownerOnly) {
+            return;
+        }
+
+        $fs = $this->disks->disk($disk);
+        try {
+            foreach ($fs->listContents($scopedDir, true) as $item) {
+                if (!$item->isFile()) {
+                    continue;
+                }
+                $key = $item->path();
+                if (str_starts_with($key, '_fluxfiles/') || str_starts_with($key, '_variants/')
+                    || str_contains($key, '/_fluxfiles/') || str_contains($key, '/_variants/')
+                    || substr($key, -10) === '.meta.json'
+                ) {
+                    continue;
+                }
+                $meta = $this->meta->get($disk, $key);
+                $owner = $meta['uploaded_by'] ?? null;
+                if ($owner !== null && $owner !== $this->claims->userId) {
+                    throw new ApiException('This folder contains files you do not own', 403, 'owner_only');
+                }
+            }
+        } catch (ApiException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            // Could not enumerate the tree — fall through; the operation itself will
+            // surface any real storage error.
         }
     }
 

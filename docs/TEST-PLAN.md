@@ -132,7 +132,7 @@ Xoá ảnh phải xoá variant + dọn `_variants` rỗng.
 ---
 
 ## 4. Bảo mật / Claims (cơ bản ✅, mở rộng ⬜)
-perms (read/write/delete → 403 đúng); disks (ngoài claim → 403); prefix scope (`../`, null byte, `..%2f` sanitize); path traversal + `_fluxfiles/`/`_variants/` (`assertNotSystem`); owner_only (user khác → 403, legacy no-owner → qua); BYOB (local BYOB bị từ chối; mixed local+r2); JWT (thiếu/sai/hết hạn → 401; **secret <32 byte → lỗi jwt v7**); CORS/Origin; rate limit (60 read/10 write → 429).
+perms (read/write/delete → 403 đúng); disks (ngoài claim → 403); prefix scope (`../`, null byte, `..%2f` sanitize); path traversal + `_fluxfiles/`/`_variants/` (`assertNotSystem`); owner_only (user khác → 403, legacy no-owner → qua; **folder-level**: xoá/rename/move folder chứa file người khác → 403 qua assertOwnsTree); BYOB (local BYOB bị từ chối; mixed local+r2); JWT (thiếu/sai/hết hạn → 401; **secret <32 byte → lỗi jwt v7**); CORS/Origin; rate limit (60 read/10 write → 429).
 
 ---
 
