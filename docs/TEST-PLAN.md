@@ -177,7 +177,7 @@ Each framework package owns its own test suite (vitest+jsdom for JS, stubbed PHP
 - ✅ **CKEditor4** `packages/ckeditor4/tests/plugin.test.mjs` (3) / **TinyMCE** `packages/tinymce/tests/plugin.test.mjs` (3): registers plugin+button, action opens FluxFiles, onSelect inserts `<img>`.
 - ✅ **Laravel** `packages/laravel/tests/test-laravel-smoke.php` (5): token/byob-token/endpoint via stubbed `config()`. ⬜ controller proxy, Blade component.
 - ✅ **WordPress** `packages/wordpress/tests/test-wp-smoke.php` (6): token/byob-token/disk-config via stubbed WP. ⬜ REST `/wp-json/fluxfiles/v1/`, shortcode, media-button modal.
-- ✅ **Browser e2e (Playwright)** `packages/core/tests/browser/` (2): boots the real PHP server, drives the standalone UI in chromium — valid token → file manager renders; no token → auth screen. ⬜ upload/select/crop flows.
+- ✅ **Browser e2e (Playwright)** `packages/core/tests/browser/` (9): boots the real PHP server, drives the standalone UI in chromium. `ui.spec.ts` (2): valid token → file manager renders; no token → auth screen. `interactions.spec.ts` (7): upload via file input → card appears; create folder + breadcrumb navigation; search narrows the grid; dark-mode toggle adds/removes `.dark`; select+confirm delete removes the card; inline crop tab → "Save as Copy" produces `{base}_cropped.{ext}`; picker mode (iframe host page) FM_READY→FM_CONFIG handshake → double-click emits `FM_SELECT`.
 
 ---
 
@@ -210,5 +210,5 @@ unicode/emoji/spaces/>255-char names/`#?&`; huge files → chunk; mid-stream abo
 **Remaining ⬜:**
 1. Dedup edge cases (stale index, system-path, owner_only/prefix scoping).
 2. Wrapper depth: WP REST/shortcode/media-button, Laravel controller proxy + Blade; CKEditor4/TinyMCE link-insert + multi-select paths.
-3. Browser e2e flows (upload/select/crop); presign-TTL + live-public-bucket + variant-URL-by-visibility.
+3. Presign-TTL + live-public-bucket + variant-URL-by-visibility (browser flows now cover upload/folder/search/theme/delete/crop/picker).
 4. Edge/worst-case (section 9).
