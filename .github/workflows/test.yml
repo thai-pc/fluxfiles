@@ -55,6 +55,9 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: WordPress plugin smoke (stubbed WP, uses core autoload)
+        run: php packages/wordpress/tests/test-wp-smoke.php
+
   api-e2e:
     name: API e2e (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest

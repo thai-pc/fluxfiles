@@ -747,6 +747,11 @@ class FileManager
         $this->assertNotSystem($scopedDst);
         if ($savePath !== null) {
             $this->validateUploadName(basename($scopedDst), 0);
+            // "Save as" to a different path must not silently clobber an existing file
+            // (in-place crop, where dst == src, is still allowed to overwrite).
+            if ($scopedDst !== $scopedSrc) {
+                $this->assertTargetAvailable($fs, $scopedDst);
+            }
         }
         $fs->write($scopedDst, $result['data']);
 

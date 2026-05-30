@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useFluxFiles } from './useFluxFiles';
-import type { FluxFile, FluxEvent } from './types';
+import type { FluxFile, FluxEvent, TokenRefreshHandler } from './types';
 
 const props = withDefaults(defineProps<{
   endpoint: string;
@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
   allowedTypes?: string[] | null;
   maxSize?: number | null;
   locale?: string | null;
+  onTokenRefresh?: TokenRefreshHandler;
   width?: string | number;
   height?: string | number;
 }>(), {
@@ -38,6 +39,7 @@ const handle = useFluxFiles({
   allowedTypes: props.allowedTypes,
   maxSize: props.maxSize,
   locale: props.locale,
+  onTokenRefresh: props.onTokenRefresh,
   onSelect: (file) => emit('select', file),
   onClose: () => emit('close'),
   onReady: () => emit('ready'),
