@@ -10,11 +10,13 @@
 | Core API e2e | bash + server | `php -S localhost:8080 router.php` + `bash tests/e2e/test-api.sh` |
 | Visibility/URL | PHP CLI | `php tests/unit/test-visibility.php` ✅ |
 | Image processing | PHP CLI | `php tests/integration/test-images.php` ✅ |
-| PHP version matrix | Docker | images `fluxfiles-php81/82/83/84` |
-| React/Vue wrappers | vitest + jsdom | `cd tests/apps && npm test` ✅ |
-| Laravel | PHPUnit/Orchestra | `tests/apps/laravel-host/run-test.php` ⬜ |
+| PHP version matrix | Docker | `make test-all` (8.1–8.4 via `docker/Dockerfile`) ✅ |
+| Wrapper packages | vitest+jsdom / stubbed PHP | tests inside each `packages/*/tests` (CI matrix `wrappers`) ✅ |
+| Laravel | stubbed config | `php packages/laravel/tests/test-laravel-smoke.php` ✅ |
 | WordPress | stubbed WP | `php packages/wordpress/tests/test-wp-smoke.php` ✅ |
-| Browser e2e (iframe/SDK) | Playwright MCP | postMessage flow ⬜ |
+| Browser e2e (real UI) | Playwright + chromium | `cd packages/core/tests/browser && npm test` ✅ |
+| Published artifacts | pack & typecheck | `bash scripts/pack-smoke.sh all` ✅ |
+| Docker | Dockerfile + compose | `make test` / `make up` ✅ |
 
 ---
 
@@ -203,10 +205,10 @@ unicode/emoji/spaces/>255-char names/`#?&`; huge files → chunk; mid-stream abo
 
 ## Status & remaining priorities (2026-05-30)
 
-**Done:** full upload/variant matrix, pre-existing files (local + S3/R2), rename/move/copy collision, recursive folder delete, quota, crop, visibility, S3/R2 live (MinIO+AWS+R2), chunk upload, AI auto-tag, audit, pagination, token refresh, security (XSS/SSRF/CSRF + owner_only folder gate), JS wrappers (SDK/React/Vue), WordPress smoke, PHP 8.1–8.4 + MinIO CI.
+**Done:** full upload/variant matrix, pre-existing files (local + S3/R2), rename/move/copy collision, recursive folder delete, quota, crop, visibility, S3/R2 live (MinIO+AWS+R2), chunk upload, AI auto-tag, audit, pagination, token refresh, security (XSS/SSRF/CSRF + owner_only folder gate + sidecar namespace), per-framework wrapper tests (SDK/React/Vue/CKEditor4/TinyMCE + WordPress/Laravel smokes), Playwright browser e2e, pack-&-install smoke, Docker dev/test + production image, CI (7 jobs, PHP 8.1–8.4 + MinIO).
 
 **Remaining ⬜:**
 1. Dedup edge cases (stale index, system-path, owner_only/prefix scoping).
-2. CKEditor4/TinyMCE + Laravel wrapper tests; WP REST/shortcode/media-button.
-3. Browser e2e via Playwright; presign-TTL + live-public-bucket + variant-URL-by-visibility.
+2. Wrapper depth: WP REST/shortcode/media-button, Laravel controller proxy + Blade; CKEditor4/TinyMCE link-insert + multi-select paths.
+3. Browser e2e flows (upload/select/crop); presign-TTL + live-public-bucket + variant-URL-by-visibility.
 4. Edge/worst-case (section 9).
