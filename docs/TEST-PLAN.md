@@ -74,6 +74,53 @@ Upload ảnh đã có variant → `process()` ghi đè variant. Crop ảnh đã 
 
 ---
 
+## 2bis. FILE/ẢNH TỒN TẠI SẴN TỪ TRƯỚC (đặt thẳng lên storage, KHÔNG qua FluxFiles) ⬜ **GAP LỚN**
+
+> Tình huống: ảnh/file đã nằm sẵn trên disk/bucket (copy tay, `aws s3 cp`, migrate từ hệ thống cũ) — **chưa có** sidecar `.meta.json`, **chưa có** entry trong `_fluxfiles/index.json`, **chưa có** hash, **chưa có** `_variants`. `ExistingFileIndexer` **không tự chạy** (không gắn route) → mặc định file ở **Trạng thái A (chưa index)**.
+> Hiện chỉ có **2 test** (`integration/test-existing-indexer.php`: index-only + owner). Toàn bộ ma trận dưới là ⬜.
+
+### A. Trạng thái CHƯA INDEX — mọi thao tác phải hoạt động "graceful"
+| Thao tác | Mong đợi với file pre-existing chưa index |
+|---|---|
+| `list` | ảnh hiện ra (file thật trên disk); `_fluxfiles`/`_variants`/`.meta.json` đặt tay → **vẫn bị ẩn** |
+| `meta` (`/api/fm/meta`) | size/mime/modified đúng; `variants:null` (chưa có); không cần sidecar |
+| `metadata` GET | trả null/rỗng (không có index entry) — **không lỗi** |
+| `metadata` PUT | tạo mới sidecar/index cho file pre-existing |
+| `search` | **KHÔNG** tìm thấy (chưa vào FTS/index) cho tới khi index |
+| **dedup** khi upload nội dung TRÙNG file pre-existing | **KHÔNG phát hiện** (chưa có hash) → upload thành file mới ⚠️ (hành vi cần khẳng định + document) |
+| `rename`/`move` | OK; không có variant/metadata để kéo theo; folder index cập nhật |
+| `copy` | OK; không copy variant/metadata (không có) |
+| `delete` | OK; không lỗi khi thiếu sidecar/variant |
+| `crop` ảnh pre-existing | đọc file → crop ra output OK (không phụ thuộc index) |
+| `ai-tag` ảnh pre-existing | đọc file → tag OK |
+| `owner_only` | file không có `uploaded_by` → legacy **cho qua** ✅ (đã test) |
+| `presign` (S3) object pre-existing | presign GET OK (không cần index) |
+| quota | dung lượng file pre-existing có/không tính vào quota? — cần khẳng định |
+
+### B. SAU KHI chạy `ExistingFileIndexer.index()` — ma trận options
+| Option | Mong đợi |
+|---|---|
+| mặc định | tạo index + metadata (`title`=tên file), đếm `files_indexed`/`folders_indexed` |
+| `hash:true` | tính + lưu `file_hash` → **dedup hoạt động** cho các file này sau đó |
+| `variants:true` | sinh `_variants` cho ảnh pre-existing → `list`/`meta` từ đó có variants |
+| `owner:'u'` | set `uploaded_by` → `owner_only` bắt đầu enforce |
+| `readonly:true` | đánh dấu owner `__fluxfiles_readonly__` |
+| `overwrite:false` (mặc định) | **idempotent**: re-run → `skipped` = đã index, không nhân đôi |
+| `overwrite:true` | index lại, ghi đè metadata |
+| `dry_run:true` | đếm nhưng **không ghi** gì xuống disk |
+| `path:'sub/'` | chỉ index subtree đó |
+| skip rule | bỏ qua `_fluxfiles`/`_variants`/`*.meta.json` |
+| sau index | `search` tìm thấy, `dedup` chạy, variants có mặt |
+
+### C. Cross-cutting cho pre-existing
+- **S3/R2**: object PUT thẳng (aws cli) → list/index/meta/presign/variants-gen.
+- **Cây lớn pre-existing** → performance + pagination (`list?limit>0&cursor`).
+- File pre-existing trùng tên thư mục hệ thống.
+- Audit log khi thao tác trên file pre-existing.
+- Re-index sau khi đã có 1 phần được FluxFiles tạo (mix indexed + unindexed).
+
+---
+
 ## 3. RENAME / MOVE / COPY — collision (KHÁC upload: CÓ guard) ⬜
 | Op | Đích chưa có | Đích đã có (file/folder) |
 |---|---|---|
@@ -142,7 +189,23 @@ Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → ch
 
 ---
 
-## Ưu tiên triển khai
-1. **`test-images.php`** — mục 1a/1b/1c/2b/2d (ảnh thật bằng GD đa kích thước/định dạng) + bổ sung collision vào `test-api.sh` (mục 3). Giá trị cao, chạy ngay trên host + Docker matrix.
-2. **MinIO trong Docker** — mục 5/6 (S3/R2 thật + chunk + visibility live).
-3. **vitest** cho React/Vue (mục 7).
+## 10. Tính năng CHƯA có trong plan (review 2026-05-30 phát hiện) ⬜
+- **AI auto-tag** (`/api/fm/ai-tag` thủ công + `FLUXFILES_AI_AUTO_TAG` khi upload) — chưa có test (cần mock provider Claude/OpenAI).
+- **Chunk upload** chi tiết: `chunk/init` → `chunk/presign` (part) → `chunk/complete` → `chunk/abort`; thứ tự part, abort dọn dở dang, file >10MB.
+- **Audit log**: hành động nào được ghi, filter theo user, rotation.
+- **Pagination**: `list?limit>0` trả `{items,next_cursor,total}`; cursor ổn định khi có thay đổi.
+- **Delete folder đệ quy**: xoá children + `_variants` + metadata + folder index.
+- **Quota tái tính** sau delete; quota có/không tính file pre-existing.
+- **Token refresh/expiry giữa phiên** (SDK `FM_TOKEN_REFRESH`/`FAILED`/`UPDATED`).
+- **Crop edge**: toạ độ ngoài biên, `save_path` trùng (giờ → 409), đổi format.
+
+---
+
+## Trạng thái & ưu tiên triển khai (cập nhật 2026-05-30)
+
+**Đã xong:** `test-images.php` (1a/1b/1c/2b/2d + collision 409), `test-visibility.php`, `test-s3-live.php` (MinIO+AWS+R2 live), security (XSS/SSRF/CSRF + tests), matrix 8.1–8.4 + MinIO CI.
+
+**Ưu tiên còn lại:**
+1. **Pre-existing files (mục 2bis)** — GAP LỚN nhất bạn chỉ ra: viết `test-existing-files.php` phủ Trạng thái A (chưa index, mọi thao tác graceful) + B (ma trận options của indexer) + idempotency. Hiện chỉ 2/~25 case.
+2. **AI tag + chunk upload + pagination + delete-folder** (mục 10) — feature lõi chưa có test.
+3. **vitest** cho React/Vue (mục 7) + WP smoke (mục 7).
