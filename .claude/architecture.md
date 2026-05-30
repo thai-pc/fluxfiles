@@ -27,7 +27,7 @@
   - Main service for list, upload, delete, rename, move, copy, cross-disk operations, mkdir, crop, AI tag, presign, and file metadata.
   - Enforces permissions and disk access through claims.
   - Uses scoped paths before touching storage.
-  - Hides internal `_fluxfiles`, `_variants`, and local `.meta.json` files from listings.
+  - Hides internal `_fluxfiles` and `_variants` from listings; legacy `{file}.meta.json` sidecars are hidden only when their base file still exists (genuine user `*.meta.json` uploads are shown).
   - Handles duplicate detection through SHA-256 metadata index.
   - Tracks parent directories for folder search.
 
@@ -39,7 +39,7 @@
 - `api/StorageMetadataHandler.php`
   - Metadata is storage-backed, not database-backed.
   - S3/R2: object metadata plus `_fluxfiles/index.json`.
-  - Local: `{file}.meta.json` sidecar plus `_fluxfiles/index.json`.
+  - Local: sidecar at `_fluxfiles/meta/{key}.json` (inside the protected namespace; legacy `{file}.meta.json` is migrated on read) plus `_fluxfiles/index.json`.
   - Folder search uses `_fluxfiles/dirs.json`.
   - Audit uses `_fluxfiles/audit.jsonl`.
   - File hash is stored for duplicate detection but removed from public metadata responses.

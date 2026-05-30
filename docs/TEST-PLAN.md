@@ -162,7 +162,7 @@ perms (read/write/delete → correct 403); disks (outside claim → 403); prefix
 ---
 
 ## 6. Storage backends
-- **Local**: full matrix (sidecar `.meta.json`, `_fluxfiles/index.json`, `dirs.json`, `audit.jsonl`). ✅ mostly
+- **Local**: full matrix (sidecar `_fluxfiles/meta/{key}.json`, `_fluxfiles/index.json`, `dirs.json`, `audit.jsonl`). ✅ mostly
 - **S3/R2 live** ✅ via `test-s3-live.php` (env-gated, runs against MinIO/AWS/R2): upload+variants, list, fileMeta, presigned GET 200, raw-private 403, presign PUT→GET readback, delete, pre-existing branch. CI job `s3-minio`.
 - **Chunk multipart** (init/presign/complete/abort) ✅ `test-s3-live.php` (verified MinIO+AWS+R2).
 
