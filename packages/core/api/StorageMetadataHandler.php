@@ -8,7 +8,7 @@ namespace FluxFiles;
  * Metadata lưu trực tiếp trong storage của user (S3/R2/Local) — không dùng SQLite.
  *
  * - S3/R2: Object Metadata (x-amz-meta-*) + index file _fluxfiles/index.json
- * - Local: Sidecar .meta.json + index file _fluxfiles/index.json
+ * - Local: Sidecar at _fluxfiles/meta/{key}.json + index file _fluxfiles/index.json
  * - Audit: _fluxfiles/audit.jsonl
  */
 class StorageMetadataHandler implements MetadataRepositoryInterface
@@ -88,12 +88,17 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     public function delete(string $disk, string $key): void
     {
         if ($this->isS3Compatible($disk)) {
-            // Metadata sẽ mất khi file bị xóa; xóa khỏi index
+            // Object metadata disappears with the object; just drop the index entry.
         } else {
-            $metaPath = $this->sidecarPath($key);
             $fs = $this->diskManager->disk($disk);
-            if ($fs->fileExists($metaPath)) {
-                $fs->delete($metaPath);
+            foreach ([$this->sidecarPath($key), $this->legacySidecarPath($key)] as $p) {
+                try {
+                    if ($fs->fileExists($p)) {
+                        $fs->delete($p);
+                    }
+                } catch (\Throwable $e) {
+                    // best-effort
+                }
             }
         }
         $this->removeFromIndex($disk, $key);
@@ -124,17 +129,25 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                     $newKey = $newPrefix . substr($k, strlen($oldPrefix));
                     $updated[$newKey] = $meta;
                     unset($index[$k]);
-                    // Move sidecar file for local disks
+                    // Move the sidecar (new location, and legacy if present) for local disks.
                     if (!$this->isS3Compatible($disk)) {
                         $fs = $this->diskManager->disk($disk);
-                        $oldSidecar = $this->sidecarPath($k);
-                        $newSidecar = $this->sidecarPath($newKey);
-                        try {
-                            if ($fs->fileExists($oldSidecar)) {
-                                $fs->move($oldSidecar, $newSidecar);
+                        $moves = [
+                            [$this->sidecarPath($k), $this->sidecarPath($newKey)],
+                            [$this->legacySidecarPath($k), $this->sidecarPath($newKey)],
+                        ];
+                        foreach ($moves as [$from, $to]) {
+                            try {
+                                if ($fs->fileExists($from) && !$fs->fileExists($to)) {
+                                    $dir = dirname($to);
+                                    if ($dir !== '.' && !$fs->directoryExists($dir)) {
+                                        $fs->createDirectory($dir);
+                                    }
+                                    $fs->move($from, $to);
+                                }
+                            } catch (\Throwable $e) {
+                                // Silent
                             }
-                        } catch (\Throwable $e) {
-                            // Silent
                         }
                     }
                     $count++;
@@ -547,40 +560,83 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function getFromLocal(string $disk, string $key): ?array
     {
-        $metaPath = $this->sidecarPath($key);
         $fs = $this->diskManager->disk($disk);
-        if (!$fs->fileExists($metaPath)) {
-            return null;
+        $metaPath = $this->sidecarPath($key);
+        if ($fs->fileExists($metaPath)) {
+            return $this->decodeSidecar($fs, $metaPath);
         }
+
+        // Backward compatibility: a legacy sidecar in the user namespace
+        // ({key}.meta.json). Migrate it to the new protected location on first read.
+        $legacy = $this->legacySidecarPath($key);
+        if ($fs->fileExists($legacy)) {
+            $data = $this->decodeSidecar($fs, $legacy);
+            try {
+                $this->writeSidecar($fs, $metaPath, $data ?? []);
+                $fs->delete($legacy);
+            } catch (\Throwable $e) {
+                // best-effort migration; reading still succeeds
+            }
+            return $data;
+        }
+        return null;
+    }
+
+    private function saveToLocal(string $disk, string $key, array $data): void
+    {
+        $fs = $this->diskManager->disk($disk);
+        $this->writeSidecar($fs, $this->sidecarPath($key), $data);
+        // Remove any legacy sidecar left in the user namespace.
+        $legacy = $this->legacySidecarPath($key);
         try {
-            $json = $fs->read($metaPath);
-            $data = json_decode($json, true);
+            if ($fs->fileExists($legacy)) {
+                $fs->delete($legacy);
+            }
+        } catch (\Throwable $e) {
+            // best-effort cleanup
+        }
+    }
+
+    /**
+     * Where a local file's metadata sidecar lives. Sidecars are stored inside the
+     * protected `_fluxfiles/` namespace (never in the user's file namespace) so a
+     * user-uploaded `*.meta.json` can't be confused with — or overwrite — a sidecar.
+     */
+    private function sidecarPath(string $key): string
+    {
+        return '_fluxfiles/meta/' . $key . '.json';
+    }
+
+    /** Legacy sidecar location ({key}.meta.json next to the file) — read-only fallback. */
+    private function legacySidecarPath(string $key): string
+    {
+        return $key . '.meta.json';
+    }
+
+    /** @return array<string,mixed>|null */
+    private function decodeSidecar($fs, string $path): ?array
+    {
+        try {
+            $data = json_decode($fs->read($path), true);
             return is_array($data) ? $data : null;
         } catch (\Throwable $e) {
             return null;
         }
     }
 
-    private function saveToLocal(string $disk, string $key, array $data): void
+    private function writeSidecar($fs, string $path, array $data): void
     {
-        $metaPath = $this->sidecarPath($key);
-        $fs = $this->diskManager->disk($disk);
-        $dir = dirname($metaPath);
+        $dir = dirname($path);
         if ($dir !== '.' && !$fs->directoryExists($dir)) {
             $fs->createDirectory($dir);
         }
-        $fs->write($metaPath, json_encode([
+        $fs->write($path, json_encode([
             'title' => $data['title'] ?? '',
             'alt_text' => $data['alt_text'] ?? '',
             'caption' => $data['caption'] ?? '',
             'tags' => $data['tags'] ?? '',
             'uploaded_by' => $data['uploaded_by'] ?? null,
         ], JSON_UNESCAPED_UNICODE));
-    }
-
-    private function sidecarPath(string $key): string
-    {
-        return $key . '.meta.json';
     }
 
     /**

@@ -1,0 +1,38 @@
+# Local dev/test stack: the FluxFiles standalone app + a MinIO S3 backend.
+#   docker compose up        → app at http://localhost:8080, MinIO at :9000 (console :9001)
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.3}
+    # Runs the code baked into the image (composer deps already installed at build).
+    command: sh -c "cd /app/packages/core && php -S 0.0.0.0:8080 router.php"
+    ports:
+      - "8080:8080"
+    # For live-reload dev, mount the repo over the baked code (needs the repo path to
+    # be in Docker Desktop's file-sharing list on macOS/Windows):
+    #   volumes:
+    #     - .:/app
+    environment:
+      FLUXFILES_SECRET: docker-dev-secret-key-0123456789abcdef
+      FLUXFILES_RATE_LIMIT_READ: "100000"
+      FLUXFILES_RATE_LIMIT_WRITE: "100000"
+    depends_on:
+      - minio
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio-data:/data
+
+volumes:
+  minio-data:

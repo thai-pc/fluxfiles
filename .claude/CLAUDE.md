@@ -89,5 +89,14 @@ npm run build
 ## Current Notes
 
 - The core route file currently has direct delete, not trash/restore/purge routes.
-- `docs/ROADMAP.md` contains roadmap ideas and may be older than the implemented route surface. Verify implementation before following roadmap endpoints.
-- `docs/METADATA-STORAGE-DESIGN.md` captures the important principle that metadata travels with user storage.
+- `docs/FLUXFILES-ROADMAP.md` (gitignored, local) contains roadmap ideas and may be older than the implemented route surface. Verify implementation before following roadmap endpoints.
+- `docs/METADATA-STORAGE-DESIGN.md` captures the important principle that metadata travels with user storage. `docs/TEST-PLAN.md` is the living test plan.
+- Auth uses `firebase/php-jwt` **v7** (constraint `^7.0`): HS256 keys must be **≥ 32 bytes** or token encode/decode throws. `JwtCompat`/`ImageCompat` shims abstract jwt v5–v7 / intervention v2–v3.
+- Local metadata sidecars live at `_fluxfiles/meta/{key}.json` (not `{file}.meta.json`), so a user-uploaded `*.meta.json` cannot collide with or overwrite them. S3/R2 use object metadata.
+- `owner_only` is also enforced at folder level (delete/rename/move a folder containing other users' files → 403 via `assertOwnsTree`). BYOB endpoints are SSRF-checked.
+
+## Tests & Tooling
+
+- Core PHP tests: `packages/core/tests/{unit,integration}/*.php`, e2e `tests/e2e/test-api.sh` + env-gated `tests/e2e/test-s3-live.php`, browser `tests/e2e/browser` (Playwright). Run: `for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done`.
+- Each wrapper owns its tests: `packages/{sdk,react,vue,ckeditor4,tinymce}/tests` (vitest), `packages/{wordpress,laravel}/tests/test-*-smoke.php` (stubbed PHP). `scripts/pack-smoke.sh` verifies published dist/types.
+- Docker: `docker/Dockerfile` (`ARG PHP_VERSION`, runs the suite), `docker/Dockerfile.prod` (nginx+php-fpm), `docker-compose.yml` (app + MinIO), `Makefile` (`make test`/`test-all`/`up`). CI is `.github/workflows/test.yml` (7 jobs).

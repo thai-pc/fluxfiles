@@ -73,20 +73,50 @@ npm run typecheck
 npm run build
 ```
 
-JS wrappers (SDK/React/Vue postMessage protocol):
-
-```bash
-cd packages/core/tests/apps
-npm install
-npm test
-```
-
 Vue:
 
 ```bash
 cd packages/vue
 npm run typecheck
 npm run build
+```
+
+Wrapper tests live inside each package (vitest+jsdom for JS, stubbed PHP for PHP):
+
+```bash
+# JS wrappers — postMessage protocol
+cd packages/sdk       && npm install && npm test
+cd packages/react     && npm install && npm test
+cd packages/vue       && npm install && npm test
+cd packages/ckeditor4 && npm install && npm test
+cd packages/tinymce   && npm install && npm test
+
+# PHP adapters (need `composer install -d packages/core` first)
+php packages/wordpress/tests/test-wp-smoke.php
+php packages/laravel/tests/test-laravel-smoke.php
+
+# Browser e2e — boots the PHP server + drives the iframe UI in chromium
+cd packages/core/tests/browser
+npm install && npx playwright install chromium && npm test
+
+# Published-artifact smoke — pack each wrapper + install its tarball into a
+# throwaway consumer and typecheck (verifies dist/types, not just src/)
+bash scripts/pack-smoke.sh all
+```
+
+Docker (dev/test + production):
+
+```bash
+# Run the core suite in a clean container on a given PHP version
+make test PHP=8.4         # or: make test-all  (8.1–8.4)
+
+# Dev stack: standalone app (:8080) + MinIO (:9000, console :9001)
+make up                   # docker compose up --build
+make down
+
+# Build + run the production image (nginx + php-fpm)
+docker build -f docker/Dockerfile.prod -t fluxfiles/fluxfiles:latest .
+docker run -p 8080:80 -e FLUXFILES_SECRET=<32+ bytes> fluxfiles/fluxfiles:latest
 ```
 
 WordPress package:

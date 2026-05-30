@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import FluxFiles from '../../../../sdk/fluxfiles.js';
+import FluxFiles from '../fluxfiles.js';
 
 const ORIGIN = 'http://localhost';
 

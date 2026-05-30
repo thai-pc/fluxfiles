@@ -58,6 +58,9 @@ jobs:
       - name: WordPress plugin smoke (stubbed WP, uses core autoload)
         run: php packages/wordpress/tests/test-wp-smoke.php
 
+      - name: Laravel adapter smoke (stubbed Laravel, uses core autoload)
+        run: php packages/laravel/tests/test-laravel-smoke.php
+
   api-e2e:
     name: API e2e (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
@@ -156,9 +159,13 @@ jobs:
         if: failure()
         run: docker logs minio || true
 
-  js-wrappers:
-    name: JS wrappers (SDK/React/Vue)
+  wrappers:
+    name: Wrapper (${{ matrix.pkg }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [sdk, react, vue, ckeditor4, tinymce]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -168,10 +175,73 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install test deps
-        working-directory: packages/core/tests/apps
-        run: npm install --no-audit --no-fund
+      - name: Install + test ${{ matrix.pkg }}
+        working-directory: packages/${{ matrix.pkg }}
+        run: |
+          npm install --no-audit --no-fund
+          npm test
 
-      - name: Run vitest (SDK + React + Vue postMessage protocol)
-        working-directory: packages/core/tests/apps
-        run: npm test
+  browser-e2e:
+    name: Browser e2e (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright + chromium
+        working-directory: packages/core/tests/browser
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright e2e (boots the PHP server, drives the iframe UI)
+        working-directory: packages/core/tests/browser
+        run: npx playwright test
+
+  pack-smoke:
+    name: Pack & install (published artifacts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build, pack, install each wrapper into a throwaway consumer
+        run: |
+          for p in sdk react vue; do npm install --prefix packages/$p --no-audit --no-fund; done
+          bash scripts/pack-smoke.sh all
+
+  docker-build:
+    name: Docker production image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Build production image
+        run: docker build -f docker/Dockerfile.prod -t fluxfiles/fluxfiles:ci .
+      - name: Smoke the image (public routes respond)
+        run: |
+          docker run -d --name ff -p 8081:80 -e FLUXFILES_SECRET=ci-docker-secret-0123456789abcdef fluxfiles/fluxfiles:ci
+          for i in $(seq 1 20); do curl -sf http://localhost:8081/public/ >/dev/null && break; sleep 1; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/public/index.html)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/api/fm/lang)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8081/api/fm/list?disk=local')" = "401"
+          docker rm -f ff

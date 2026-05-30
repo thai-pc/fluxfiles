@@ -1,0 +1,29 @@
+# Production image: nginx + php-fpm serving the FluxFiles standalone app.
+#   docker build -f docker/Dockerfile.prod -t fluxfiles/fluxfiles:latest .
+#   docker run -p 8080:80 -e FLUXFILES_SECRET=<32+ bytes> fluxfiles/fluxfiles:latest
+
+# --- composer deps (no-dev) ---
+FROM composer:2 AS vendor
+WORKDIR /src
+COPY packages/core/composer.json ./packages/core/
+RUN composer update -d packages/core --no-dev --prefer-dist --no-interaction --no-progress --ignore-platform-reqs
+
+# --- runtime ---
+FROM php:8.3-fpm-alpine
+RUN apk add --no-cache nginx libpng libjpeg-turbo freetype libwebp libzip \
+    && apk add --no-cache --virtual .build $PHPIZE_DEPS libpng-dev libjpeg-turbo-dev freetype-dev libwebp-dev libzip-dev \
+    && docker-php-ext-configure gd --with-jpeg --with-freetype --with-webp \
+    && docker-php-ext-install -j"$(nproc)" gd zip \
+    && apk del .build
+
+WORKDIR /app
+COPY packages/core /app/packages/core
+COPY --from=vendor /src/packages/core/vendor /app/packages/core/vendor
+COPY docker/nginx.conf /etc/nginx/http.d/default.conf
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh \
+    && mkdir -p /app/packages/core/storage/uploads \
+    && chown -R www-data:www-data /app/packages/core/storage
+
+EXPOSE 80
+ENTRYPOINT ["/entrypoint.sh"]

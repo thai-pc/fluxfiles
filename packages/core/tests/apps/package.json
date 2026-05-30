@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "react": "vite --config react.vite.config.mjs --port 5173",
-    "vue":   "vite --config vue.vite.config.mjs --port 5174",
-    "test": "vitest run"
+    "vue":   "vite --config vue.vite.config.mjs --port 5174"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -13,12 +12,8 @@
     "vue": "^3.5.13"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.1.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitejs/plugin-vue": "^5.2.1",
-    "@vue/test-utils": "^2.4.6",
-    "jsdom": "^25.0.1",
-    "vite": "^5.4.11",
-    "vitest": "^2.1.8"
+    "vite": "^5.4.11"
   }
 }
