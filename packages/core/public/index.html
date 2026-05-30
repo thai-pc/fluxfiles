@@ -127,7 +127,7 @@
         </div>
 
         <!-- Mobile: search icon (opens fullscreen search) -->
-        <button class="ff-mobile-search-btn" @click="mobileSearchOpen = true" :title="t('toolbar.search_hint')">
+        <button class="ff-mobile-search-btn" @click="mobileSearchOpen = true" :title="t('toolbar.search_hint')" :aria-label="t('toolbar.search_hint')">
             <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
         </button>
 
@@ -141,7 +141,7 @@
             <!-- Row 1: Theme + Language (above disk pills) -->
             <div class="ff-pills-actions">
                 <div class="ff-locale-select" x-data="{ open: false }" @click.away="open = false">
-                    <button class="ff-locale-btn" @click="open = !open" :title="t('toolbar.language') || 'Language'">
+                    <button class="ff-locale-btn" @click="open = !open" :title="t('toolbar.language') || 'Language'" :aria-label="t('toolbar.language') || 'Language'" aria-haspopup="listbox" :aria-expanded="open">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
                         <span x-text="locale.toUpperCase()" style="font-size:11px;font-weight:600;min-width:18px;text-align:center;"></span>
                     </button>
@@ -151,7 +151,7 @@
                         </template>
                     </div>
                 </div>
-                <button class="ff-theme-toggle-sm" @click="toggleTheme()" :title="t('toolbar.theme_toggle')">
+                <button class="ff-theme-toggle-sm" @click="toggleTheme()" :title="t('toolbar.theme_toggle')" :aria-label="t('toolbar.theme_toggle')" :aria-pressed="isDark">
                     <span x-show="isDark">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
                     </span>
@@ -438,10 +438,10 @@
 
                 <!-- View toggle -->
                 <div class="view-toggle">
-                    <button :class="{ active: view === 'grid' }" @click="view = 'grid'" :title="t('toolbar.grid_view')">
+                    <button :class="{ active: view === 'grid' }" @click="view = 'grid'" :title="t('toolbar.grid_view')" :aria-label="t('toolbar.grid_view')" :aria-pressed="view === 'grid'">
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1"/><rect x="7" y="1" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1"/><rect x="1" y="7" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1"/><rect x="7" y="7" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1"/></svg>
                     </button>
-                    <button :class="{ active: view === 'list' }" @click="view = 'list'" :title="t('toolbar.list_view')">
+                    <button :class="{ active: view === 'list' }" @click="view = 'list'" :title="t('toolbar.list_view')" :aria-label="t('toolbar.list_view')" :aria-pressed="view === 'list'">
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 3h10M1 6h10M1 9h10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     </button>
                 </div>
@@ -914,7 +914,7 @@
 
     <!-- ═══ New folder modal ═══ -->
     <div class="ff-modal-overlay ff-new-folder-overlay" x-show="showNewFolder" x-transition @click.self="closeNewFolder()">
-        <div class="ff-new-folder-modal" @keydown.escape.window="closeNewFolder()">
+        <div class="ff-new-folder-modal" role="dialog" aria-modal="true" :aria-label="t('folder.create_title')" @keydown.escape.window="closeNewFolder()">
             <div class="ff-new-folder-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
@@ -948,8 +948,8 @@
     </div>
 
     <!-- ═══ Confirm dialog ═══ -->
-    <div class="ff-confirm-overlay" x-show="showConfirm" x-transition>
-        <div class="ff-confirm-box">
+    <div class="ff-confirm-overlay" x-show="showConfirm" x-transition @keydown.escape.window="showConfirm = false">
+        <div class="ff-confirm-box" role="dialog" aria-modal="true">
             <h4 x-text="t('delete.confirm_title')"></h4>
             <p x-text="confirmMessage"></p>
             <div class="ff-confirm-actions">
@@ -960,8 +960,8 @@
     </div>
 
     <!-- ═══ Bulk move dialog ═══ -->
-    <div class="ff-confirm-overlay" x-show="showBulkMove" x-transition>
-        <div class="ff-confirm-box">
+    <div class="ff-confirm-overlay" x-show="showBulkMove" x-transition @keydown.escape.window="showBulkMove = false">
+        <div class="ff-confirm-box" role="dialog" aria-modal="true">
             <h4 x-text="t('bulk.move_to_folder')"></h4>
             <p x-text="t('file.items_selected', {count: selected.length}) + ' — ' + currentDisk.toUpperCase()"></p>
             <div class="ff-meta-field" style="margin:10px 0;">
@@ -985,8 +985,8 @@
     </div>
 
     <!-- ═══ Cross-disk dialog ═══ -->
-    <div class="ff-confirm-overlay" x-show="showCrossDisk" x-transition>
-        <div class="ff-confirm-box">
+    <div class="ff-confirm-overlay" x-show="showCrossDisk" x-transition @keydown.escape.window="showCrossDisk = false">
+        <div class="ff-confirm-box" role="dialog" aria-modal="true">
             <h4 x-text="crossDiskMode === 'copy' ? t('bulk.copy_to_disk') : t('bulk.move_to_disk')"></h4>
             <p x-text="t('file.items_selected', {count: selected.length}) + ' — ' + currentDisk.toUpperCase()"></p>
             <div class="ff-meta-field" style="margin:10px 0;">
@@ -1011,7 +1011,7 @@
 
     <!-- ═══ Rename modal ═══ -->
     <div class="ff-modal-overlay ff-new-folder-overlay" x-show="showRename" x-transition @click.self="closeRename()">
-        <div class="ff-new-folder-modal" @keydown.escape.window="showRename && closeRename()">
+        <div class="ff-new-folder-modal" role="dialog" aria-modal="true" :aria-label="t('rename.title') || t('common.rename')" @keydown.escape.window="showRename && closeRename()">
             <div class="ff-new-folder-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>

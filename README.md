@@ -174,11 +174,21 @@ server {
         add_header Cache-Control "public";
     }
 
-    # Uploaded files (local disk only)
+    # Uploaded files (local disk only).
+    # Security: stop MIME-sniffing and neutralize active content (e.g. <script>
+    # inside an uploaded SVG/HTML) so user files can't run as same-origin XSS.
     location /storage/uploads/ {
         alias /var/www/fluxfiles/packages/core/storage/uploads/;
         expires 7d;
         add_header Cache-Control "public";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Content-Security-Policy "sandbox" always;
+        # HTML/SVG are never safe to render inline — force download.
+        location ~* \.(html?|xhtml|shtml|xml|svg)$ {
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Content-Security-Policy "sandbox" always;
+            add_header Content-Disposition "attachment" always;
+        }
     }
 
     # PHP-FPM
@@ -1041,25 +1051,24 @@ cd packages/core
 php -S localhost:8080 router.php
 
 # API integration tests
-bash packages/core/tests/test-api.sh          # Local disk — list, upload, rename, move, copy, delete, metadata, search
-bash packages/core/tests/test-r2.sh           # R2/S3 cloud storage tests
+bash packages/core/tests/e2e/test-api.sh          # Local disk — list, upload, rename, move, copy, delete, metadata, search
 
 # Unit tests
-php packages/core/tests/test-claims.php       # JWT claims parsing + path scoping
-php packages/core/tests/test-diskmanager.php  # DiskManager factory
-php packages/core/tests/test-ratelimiter.php  # Rate limiter
-php packages/core/tests/test-metadata.php     # Metadata handler
-php packages/core/tests/test-byob.php         # BYOB encryption + token validation
-php packages/core/tests/test-i18n.php         # i18n — validates all 16 language files
-php packages/core/tests/test-i18n.php --api   # i18n API endpoint tests
+php packages/core/tests/unit/test-claims.php       # JWT claims parsing + path scoping
+php packages/core/tests/unit/test-diskmanager.php  # DiskManager factory
+php packages/core/tests/unit/test-ratelimiter.php  # Rate limiter
+php packages/core/tests/integration/test-metadata.php     # Metadata handler
+php packages/core/tests/unit/test-byob.php         # BYOB encryption + token validation
+php packages/core/tests/unit/test-i18n.php         # i18n — validates all 16 language files
+php packages/core/tests/unit/test-i18n.php --api   # i18n API endpoint tests
 
 # Generate tokens for manual testing
 php packages/core/tests/generate-token.php
 
 # Browser-based tests
-open packages/core/tests/test-sdk.html        # SDK integration
-open packages/core/tests/test-ckeditor4.html  # CKEditor 4
-open packages/core/tests/test-tinymce.html    # TinyMCE
+open packages/core/tests/manual/test-sdk.html        # SDK integration
+open packages/core/tests/manual/test-ckeditor4.html  # CKEditor 4
+open packages/core/tests/manual/test-tinymce.html    # TinyMCE
 ```
 
 ---

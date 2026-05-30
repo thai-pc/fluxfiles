@@ -129,6 +129,60 @@ class CredentialEncryptor
         if (empty($config['secret'])) {
             throw new ApiException("BYOB disk '{$diskName}' is missing 'secret'", 400);
         }
+
+        // Custom endpoints (MinIO/R2/etc.) must not point at internal infrastructure —
+        // otherwise a BYOB config could turn the server into an SSRF proxy (e.g. cloud
+        // metadata at 169.254.169.254, or internal hosts behind the firewall).
+        if (!empty($config['endpoint'])) {
+            self::assertSafeEndpoint($diskName, (string) $config['endpoint']);
+        }
+    }
+
+    /**
+     * Reject endpoints whose host resolves to a loopback, link-local, private or
+     * otherwise-reserved address — the classic SSRF targets. Validation happens at
+     * token-mint time so a malicious BYOB config never reaches the S3 client.
+     */
+    private static function assertSafeEndpoint(string $diskName, string $endpoint): void
+    {
+        $parts = parse_url($endpoint);
+        if ($parts === false || empty($parts['host']) || empty($parts['scheme'])) {
+            throw new ApiException("BYOB disk '{$diskName}' has a malformed endpoint", 400);
+        }
+        if (!in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+            throw new ApiException("BYOB disk '{$diskName}' endpoint must use http(s)", 400);
+        }
+
+        $host = strtolower(trim($parts['host'], '[]')); // strip IPv6 brackets
+
+        // Obvious internal names.
+        if ($host === 'localhost' || substr($host, -10) === '.localhost' || substr($host, -6) === '.local') {
+            throw new ApiException("BYOB disk '{$diskName}' endpoint host is not allowed", 403, 'endpoint_blocked');
+        }
+
+        // Collect candidate IPs: the literal host if it is one, otherwise its A record.
+        $ips = [];
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            $ips[] = $host;
+        } else {
+            $resolved = @gethostbyname($host);
+            if ($resolved !== $host && filter_var($resolved, FILTER_VALIDATE_IP)) {
+                $ips[] = $resolved;
+            }
+        }
+
+        foreach ($ips as $ip) {
+            // Cloud metadata endpoints + any private/reserved range.
+            if ($ip === '169.254.169.254' || $ip === '::1'
+                || !filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)
+            ) {
+                throw new ApiException(
+                    "BYOB disk '{$diskName}' endpoint resolves to a blocked (internal) address",
+                    403,
+                    'endpoint_blocked'
+                );
+            }
+        }
     }
 
     /**

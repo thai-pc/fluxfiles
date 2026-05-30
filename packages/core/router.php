@@ -52,8 +52,14 @@ if (strncmp($uri, '/api/', 5) === 0) {
 
 // Serve uploaded files from /storage/uploads/
 if (strncmp($uri, '/storage/uploads/', 17) === 0) {
-    $file = __DIR__ . $uri;
-    if (is_file($file)) {
+    $uploadsBase = realpath(__DIR__ . '/storage/uploads');
+    $file = realpath(__DIR__ . $uri);
+
+    // Path-traversal guard: the resolved file must live inside the uploads dir.
+    if ($uploadsBase !== false && $file !== false
+        && strncmp($file, $uploadsBase . DIRECTORY_SEPARATOR, strlen($uploadsBase) + 1) === 0
+        && is_file($file)
+    ) {
         $mimeTypes = [
             'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
             'gif' => 'image/gif', 'webp' => 'image/webp', 'svg' => 'image/svg+xml',
@@ -66,6 +72,17 @@ if (strncmp($uri, '/storage/uploads/', 17) === 0) {
         header('Content-Type: ' . $mime);
         header('Content-Length: ' . filesize($file));
         header('Cache-Control: public, max-age=86400');
+
+        // Stop browsers MIME-sniffing user uploads, and neutralize active content
+        // (e.g. <script> inside an SVG/HTML) so user files can't run as same-origin
+        // XSS. `CSP: sandbox` lets images still render but disables scripts/plugins.
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Security-Policy: sandbox');
+        // HTML-family files are never safe to render inline — force download.
+        if (in_array($ext, ['html', 'htm', 'xhtml', 'shtml', 'xml', 'svg'], true)) {
+            header('Content-Disposition: attachment; filename="' . basename($file) . '"');
+        }
+
         readfile($file);
         return true;
     }

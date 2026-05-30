@@ -9,7 +9,7 @@ set -e
 
 # Ensure we run from monorepo root
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR/../../.."
+cd "$SCRIPT_DIR/../../../.."
 
 BASE="http://localhost:8080/api/fm"
 GREEN='\033[0;32m'

@@ -150,10 +150,15 @@
                 var closeBtn = document.createElement('button');
                 closeBtn.type = 'button';
                 closeBtn.setAttribute('aria-label', 'Close');
-                closeBtn.style.cssText = 'width:28px;height:28px;border:none;border-radius:6px;background:transparent;color:#6b7280;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;font-weight:300;transition:color .15s,background .15s;flex-shrink:0;';
+                // macOS traffic-light: a red dot that reveals a faint \u00D7 on hover.
+                closeBtn.style.cssText = 'width:13px;height:13px;padding:0;border:none;border-radius:50%;background:#ff5f57;box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.14);color:rgba(0,0,0,0);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;font-weight:700;transition:filter .15s,color .15s;flex-shrink:0;';
                 closeBtn.textContent = '\u00D7';
-                closeBtn.addEventListener('mouseenter', function() { closeBtn.style.background = '#e5e7eb'; closeBtn.style.color = '#374151'; });
-                closeBtn.addEventListener('mouseleave', function() { closeBtn.style.background = 'transparent'; closeBtn.style.color = '#6b7280'; });
+                var closeReveal = function() { closeBtn.style.color = 'rgba(0,0,0,0.55)'; closeBtn.style.filter = 'brightness(0.93)'; };
+                var closeHide = function() { closeBtn.style.color = 'rgba(0,0,0,0)'; closeBtn.style.filter = 'none'; };
+                closeBtn.addEventListener('mouseenter', closeReveal);
+                closeBtn.addEventListener('mouseleave', closeHide);
+                closeBtn.addEventListener('focus', closeReveal);
+                closeBtn.addEventListener('blur', closeHide);
                 closeBtn.addEventListener('click', function() { FluxFiles.close(); });
                 header.appendChild(closeBtn);
                 modal.appendChild(header);

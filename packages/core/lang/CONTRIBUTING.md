@@ -21,7 +21,7 @@ cp en.json th.json
 
 # 6. Verify
 cd ../..   # back to packages/core
-php tests/test-i18n.php
+php tests/unit/test-i18n.php
 
 # 7. Commit and push to your fork
 git add lang/th.json
@@ -99,7 +99,7 @@ Run the i18n test suite — it validates JSON, key completeness, placeholder pre
 
 ```bash
 cd packages/core
-php tests/test-i18n.php
+php tests/unit/test-i18n.php
 ```
 
 Or check a single key manually:
@@ -132,7 +132,7 @@ gh pr create \
   --repo thai-pc/fluxfiles \
   --base master \
   --title "i18n: add {Language Name} ({code})" \
-  --body "Adds {language} translation for v1.20+.\n\nTested: \`php tests/test-i18n.php\` passes."
+  --body "Adds {language} translation for v1.20+.\n\nTested: \`php tests/unit/test-i18n.php\` passes."
 ```
 
 **Using the GitHub web UI:**
@@ -158,7 +158,7 @@ Same flow — fork, branch (`i18n/update-{code}`), edit, test, PR. Use a title l
 - All keys present in `en.json` must exist in your file.
 - Keep `{placeholder}` names exactly as in English; only reorder if grammar requires.
 - If unsure, leave the English value as a fallback rather than omitting the key.
-- Run `php tests/test-i18n.php` before pushing.
+- Run `php tests/unit/test-i18n.php` before pushing.
 
 ## Need help?
 

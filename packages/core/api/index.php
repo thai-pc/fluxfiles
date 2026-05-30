@@ -49,14 +49,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// CSRF protection: verify Origin header on mutating requests
+// CSRF protection: verify the Origin header on mutating requests. Browsers always
+// send Origin on cross-site mutating requests, so a forged one can be rejected.
+// When no allowlist is configured we fall back to same-origin only — never "allow
+// all" (the previous behaviour silently skipped the check on an empty allowlist).
+// Requests with no Origin (non-browser API clients) are unaffected: they carry the
+// JWT bearer token and are not a CSRF vector.
 if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'DELETE'], true)) {
     $reqOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
-    if ($reqOrigin !== '' && !empty($allowedOrigins) && !in_array($reqOrigin, $allowedOrigins, true)) {
-        http_response_code(403);
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['data' => null, 'error' => 'Origin not allowed', 'error_code' => 'origin_denied']);
-        exit;
+    if ($reqOrigin !== '') {
+        $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+            || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        $selfOrigin = ($isHttps ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '');
+        $allowed = in_array($reqOrigin, $allowedOrigins, true) || $reqOrigin === $selfOrigin;
+        if (!$allowed) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['data' => null, 'error' => 'Origin not allowed', 'error_code' => 'origin_denied']);
+            exit;
+        }
     }
 }
 

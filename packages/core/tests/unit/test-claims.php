@@ -9,16 +9,16 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 
-foreach ([__DIR__ . "/..", __DIR__ . "/../../.."] as $envDir) {
+foreach ([__DIR__ . "/../..", __DIR__ . "/../../../.."] as $envDir) {
     if (is_file($envDir . "/.env")) {
         Dotenv\Dotenv::createImmutable($envDir)->safeLoad();
         break;
     }
 }
 
-require_once __DIR__ . '/../embed.php';
+require_once __DIR__ . '/../../embed.php';
 
 $green  = "\033[32m";
 $red    = "\033[31m";

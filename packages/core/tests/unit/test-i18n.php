@@ -11,11 +11,11 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 use FluxFiles\I18n;
 
-$langDir  = __DIR__ . '/../lang';
+$langDir  = __DIR__ . '/../../lang';
 $specific = $argv[1] ?? null;
 $testApi  = in_array('--api', $argv, true);
 

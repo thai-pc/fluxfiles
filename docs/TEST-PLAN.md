@@ -6,9 +6,9 @@
 
 | Lớp | Công cụ | Lệnh |
 |---|---|---|
-| Core unit/integration | PHP CLI | `php packages/core/tests/test-*.php` |
-| Core API e2e | bash + server | `php -S localhost:8080 router.php` + `bash tests/test-api.sh` |
-| Visibility/URL | PHP CLI | `php tests/test-visibility.php` ✅ |
+| Core unit/integration | PHP CLI | `php packages/core/tests/unit/*.php` + `tests/integration/*.php` |
+| Core API e2e | bash + server | `php -S localhost:8080 router.php` + `bash tests/e2e/test-api.sh` |
+| Visibility/URL | PHP CLI | `php tests/unit/test-visibility.php` ✅ |
 | Image processing | PHP CLI | ⬜ `test-images.php` (cần thêm) |
 | PHP version matrix | Docker | image `fluxfiles-php81/82/83/84` |
 | Wrappers React/Vue | vitest + jsdom | `tests/apps/` (scaffold có, ⬜ test thật) |
