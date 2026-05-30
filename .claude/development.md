@@ -46,6 +46,10 @@ php packages/core/tests/unit/test-owner-only.php
 php packages/core/tests/unit/test-byob.php
 php packages/core/tests/unit/test-visibility.php
 php packages/core/tests/integration/test-images.php
+php packages/core/tests/integration/test-existing-files.php
+php packages/core/tests/integration/test-audit.php
+php packages/core/tests/integration/test-delete-folder.php
+php packages/core/tests/integration/test-aitagger.php
 ```
 
 Live S3/R2 test (env-gated; skips if no bucket). Works against MinIO, AWS S3, or R2:
@@ -64,6 +68,14 @@ React:
 cd packages/react
 npm run typecheck
 npm run build
+```
+
+JS wrappers (SDK/React/Vue postMessage protocol):
+
+```bash
+cd packages/core/tests/apps
+npm install
+npm test
 ```
 
 Vue:
