@@ -1,0 +1,9 @@
+{
+  "name": "@fluxfiles/ckeditor4",
+  "version": "1.27.1",
+  "description": "CKEditor 4 plugin for FluxFiles",
+  "license": "MIT",
+  "private": true,
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "jsdom": "^25.0.1", "vitest": "^2.1.8" }
+}

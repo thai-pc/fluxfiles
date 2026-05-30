@@ -9,6 +9,13 @@
         "fluxfiles.js",
         "fluxfiles.d.ts"
     ],
+    "scripts": {
+        "test": "vitest run"
+    },
+    "devDependencies": {
+        "jsdom": "^25.0.1",
+        "vitest": "^2.1.8"
+    },
     "author": "thai-pc",
     "homepage": "https://github.com/thai-pc/fluxfiles",
     "repository": {

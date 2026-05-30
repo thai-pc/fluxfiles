@@ -168,13 +168,14 @@ perms (read/write/delete → correct 403); disks (outside claim → 403); prefix
 
 ---
 
-## 7. Wrapper packages (postMessage)
-- ✅ **SDK**: FM_READY→FM_CONFIG, FM_SELECT→onSelect+close, token refresh (UPDATED/FAILED/no-handler/concurrent-dedup), foreign-origin ignored (`apps/__tests__/sdk.test.mjs`).
-- ✅ **React/Vue**: `<FluxFiles>` iframe render, FM_CONFIG, FM_SELECT→onSelect/emit, FM_TOKEN_REFRESH, origin guard (`react.test.tsx`, `vue.test.ts`).
-- ⬜ **CKEditor4/TinyMCE**: insert the chosen image URL into the editor.
-- ⬜ **Laravel**: token + BYOB/mixed token, controller proxy assets, Blade component, auth→JWT.
-- ✅ **WordPress**: token/byob-token/disk-config via stubbed WP (`wordpress/tests/test-wp-smoke.php`); ⬜ REST `/wp-json/fluxfiles/v1/`, shortcode, media-button modal.
-- ⬜ **Browser e2e (Playwright)**: pick existing image → `FM_SELECT` URL+variants; upload → thumbnail; inline crop; multi-select bulk; dark mode.
+## 7. Wrapper packages — tests live IN each package ✅
+Each framework package owns its own test suite (vitest+jsdom for JS, stubbed PHP for PHP). CI job `wrappers` is a matrix over the JS packages; `core-php` runs the PHP smokes.
+- ✅ **SDK** `packages/sdk/tests/sdk.test.mjs` (7): FM_READY→FM_CONFIG, FM_SELECT→onSelect+close, token refresh (UPDATED/FAILED/no-handler/concurrent-dedup), foreign-origin ignored.
+- ✅ **React** `packages/react/tests/FluxFiles.test.tsx` (5) / **Vue** `packages/vue/tests/FluxFiles.test.ts` (5): iframe render, FM_CONFIG, FM_SELECT→onSelect/emit, FM_TOKEN_REFRESH, origin guard.
+- ✅ **CKEditor4** `packages/ckeditor4/tests/plugin.test.mjs` (3) / **TinyMCE** `packages/tinymce/tests/plugin.test.mjs` (3): registers plugin+button, action opens FluxFiles, onSelect inserts `<img>`.
+- ✅ **Laravel** `packages/laravel/tests/test-laravel-smoke.php` (5): token/byob-token/endpoint via stubbed `config()`. ⬜ controller proxy, Blade component.
+- ✅ **WordPress** `packages/wordpress/tests/test-wp-smoke.php` (6): token/byob-token/disk-config via stubbed WP. ⬜ REST `/wp-json/fluxfiles/v1/`, shortcode, media-button modal.
+- ✅ **Browser e2e (Playwright)** `packages/core/tests/browser/` (2): boots the real PHP server, drives the standalone UI in chromium — valid token → file manager renders; no token → auth screen. ⬜ upload/select/crop flows.
 
 ---
 

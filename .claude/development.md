@@ -73,20 +73,31 @@ npm run typecheck
 npm run build
 ```
 
-JS wrappers (SDK/React/Vue postMessage protocol):
-
-```bash
-cd packages/core/tests/apps
-npm install
-npm test
-```
-
 Vue:
 
 ```bash
 cd packages/vue
 npm run typecheck
 npm run build
+```
+
+Wrapper tests live inside each package (vitest+jsdom for JS, stubbed PHP for PHP):
+
+```bash
+# JS wrappers — postMessage protocol
+cd packages/sdk       && npm install && npm test
+cd packages/react     && npm install && npm test
+cd packages/vue       && npm install && npm test
+cd packages/ckeditor4 && npm install && npm test
+cd packages/tinymce   && npm install && npm test
+
+# PHP adapters (need `composer install -d packages/core` first)
+php packages/wordpress/tests/test-wp-smoke.php
+php packages/laravel/tests/test-laravel-smoke.php
+
+# Browser e2e — boots the PHP server + drives the iframe UI in chromium
+cd packages/core/tests/browser
+npm install && npx playwright install chromium && npm test
 ```
 
 WordPress package:

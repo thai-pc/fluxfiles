@@ -58,6 +58,9 @@ jobs:
       - name: WordPress plugin smoke (stubbed WP, uses core autoload)
         run: php packages/wordpress/tests/test-wp-smoke.php
 
+      - name: Laravel adapter smoke (stubbed Laravel, uses core autoload)
+        run: php packages/laravel/tests/test-laravel-smoke.php
+
   api-e2e:
     name: API e2e (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
@@ -156,9 +159,13 @@ jobs:
         if: failure()
         run: docker logs minio || true
 
-  js-wrappers:
-    name: JS wrappers (SDK/React/Vue)
+  wrappers:
+    name: Wrapper (${{ matrix.pkg }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [sdk, react, vue, ckeditor4, tinymce]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -168,10 +175,40 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install test deps
-        working-directory: packages/core/tests/apps
-        run: npm install --no-audit --no-fund
+      - name: Install + test ${{ matrix.pkg }}
+        working-directory: packages/${{ matrix.pkg }}
+        run: |
+          npm install --no-audit --no-fund
+          npm test
 
-      - name: Run vitest (SDK + React + Vue postMessage protocol)
-        working-directory: packages/core/tests/apps
-        run: npm test
+  browser-e2e:
+    name: Browser e2e (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright + chromium
+        working-directory: packages/core/tests/browser
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright e2e (boots the PHP server, drives the iframe UI)
+        working-directory: packages/core/tests/browser
+        run: npx playwright test
