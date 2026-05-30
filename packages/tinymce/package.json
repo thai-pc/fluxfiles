@@ -1,6 +1,6 @@
 {
   "name": "@fluxfiles/tinymce",
-  "version": "1.27.1",
+  "version": "0.1.0",
   "description": "TinyMCE plugin for FluxFiles",
   "license": "MIT",
   "private": true,

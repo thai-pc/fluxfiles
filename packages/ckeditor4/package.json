@@ -1,6 +1,6 @@
 {
   "name": "@fluxfiles/ckeditor4",
-  "version": "1.27.1",
+  "version": "0.1.0",
   "description": "CKEditor 4 plugin for FluxFiles",
   "license": "MIT",
   "private": true,
