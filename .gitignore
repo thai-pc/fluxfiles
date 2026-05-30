@@ -45,5 +45,5 @@ coverage/
 *.log
 
 # Project docs (private)
-fluxfiles-spec.docx
 PUBLISHING.md
+docs/FLUXFILES-ROADMAP.md
