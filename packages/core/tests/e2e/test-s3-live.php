@@ -222,6 +222,48 @@ test('index pre-existing subtree (hash+variants) → variant object + metadata c
     assertTrue($dm->disk('s3test')->fileExists($prefix . '/pre-existing/_variants/orig_thumb.webp'), 'variant object on bucket');
 });
 
+// ── Chunk / multipart upload (init → presign part → PUT → complete / abort) ──
+echo "\n{$yellow}► Chunk upload (S3 multipart){$reset}\n";
+
+test('multipart: initiate → presign part → PUT → complete → readable', function () use ($dm, $fm, $prefix) {
+    $chunker = new FluxFiles\ChunkUploader($dm);
+    $key = $prefix . '/chunk/big.bin';
+    $body = str_repeat('FLUXCHUNK', 1200);   // single part — no 5MB minimum applies
+    $init = $chunker->initiate('s3test', $key);
+    assertTrue(!empty($init['upload_id']), 'got upload_id');
+
+    $ps = $chunker->presignPart('s3test', $key, $init['upload_id'], 1, 600);
+    $ch = curl_init($ps['url']);
+    curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $body, CURLOPT_HEADER => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
+    $resp = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+    assertEqual(200, $code, "part PUT failed: {$code}");
+
+    preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
+    $etag = trim($m[1] ?? '', '"');
+    assertTrue($etag !== '', 'got ETag from part PUT');
+
+    $chunker->complete('s3test', $key, $init['upload_id'], [['PartNumber' => 1, 'ETag' => $etag]]);
+
+    $get = $fm->presign('s3test', $key, 'GET', 600);
+    assertEqual($body, file_get_contents($get['url']), 'completed object content matches');
+    try { $fm->delete('s3test', $key); } catch (\Throwable $e) {}
+});
+
+test('multipart: initiate → abort (then complete fails)', function () use ($dm, $prefix) {
+    $chunker = new FluxFiles\ChunkUploader($dm);
+    $key = $prefix . '/chunk/aborted.bin';
+    $init = $chunker->initiate('s3test', $key);
+    $r = $chunker->abort('s3test', $key, $init['upload_id']);
+    assertEqual(true, $r['aborted'] ?? false, 'aborted');
+    $threw = false;
+    try { $chunker->complete('s3test', $key, $init['upload_id'], [['PartNumber' => 1, 'ETag' => 'x']]); }
+    catch (\Throwable $e) { $threw = true; }
+    assertTrue($threw, 'cannot complete an aborted upload');
+});
+
 echo "\n{$yellow}► Cleanup{$reset}\n";
 test('delete uploaded file + variants', function () use ($fm, &$uploadedKey) {
     assertTrue(is_string($uploadedKey), 'no uploaded key (upload failed above)');

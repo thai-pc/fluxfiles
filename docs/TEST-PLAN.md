@@ -189,14 +189,14 @@ Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → ch
 
 ---
 
-## 10. Tính năng CHƯA có trong plan (review 2026-05-30 phát hiện) ⬜
-- **AI auto-tag** (`/api/fm/ai-tag` thủ công + `FLUXFILES_AI_AUTO_TAG` khi upload) — chưa có test (cần mock provider Claude/OpenAI).
-- **Chunk upload** chi tiết: `chunk/init` → `chunk/presign` (part) → `chunk/complete` → `chunk/abort`; thứ tự part, abort dọn dở dang, file >10MB.
+## 10. Feature lõi — phần lớn ĐÃ phủ (review 2026-05-30)
+- ✅ **AI auto-tag**: parse (fence/truncate/filter/invalid→502) + manual `aiTag` + auto-tag-on-upload (stub) — `test-aitagger.php` (12).
+- ✅ **Chunk upload**: init→presign part→PUT→complete→readable + init→abort→complete-fails — `test-s3-live.php` (verified MinIO+AWS+R2).
 - ✅ **Audit log**: round-trip log/list, filter theo user, limit/offset, rotation (`test-audit.php`).
 - ✅ **Pagination**: `list?limit>0` trả `{items,next_cursor,total}`; cursor đi hết cây không trùng/sót (`test-existing-files.php` State C).
 - ✅ **Delete folder đệ quy**: children + `_variants` (mọi cấp) + metadata + folder index, + edge (empty/nested/mixed/404/403/system/owner_only) — `test-delete-folder.php` (12 case).
 - **Quota tái tính** sau delete; quota có/không tính file pre-existing.
-- **Token refresh/expiry giữa phiên** (SDK `FM_TOKEN_REFRESH`/`FAILED`/`UPDATED`).
+- ✅ **Token refresh** (SDK + React): REFRESH→onTokenRefresh→UPDATED/FAILED/no-handler + concurrent de-dup + origin guard — vitest `apps/__tests__/sdk.test.mjs` + `react.test.tsx`.
 - **Crop edge**: toạ độ ngoài biên, `save_path` trùng (giờ → 409), đổi format.
 
 ---
@@ -208,4 +208,4 @@ Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → ch
 **Ưu tiên còn lại:**
 1. ✅ **Pre-existing files (mục 2bis)** — XONG: `integration/test-existing-files.php` (17 case, State A+B+idempotency, local). Còn ⬜ pre-existing trên S3/R2 + cây lớn/pagination.
 2. **AI tag + chunk upload + pagination + delete-folder** (mục 10) — feature lõi chưa có test.
-3. **vitest** cho React/Vue (mục 7) + WP smoke (mục 7).
+3. ✅ **vitest** SDK/React/Vue (`apps/__tests__/`, 17 test, CI job `js-wrappers`). Còn ⬜: WP smoke, quota-recalc, crop-edge.
