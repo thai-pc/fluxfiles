@@ -74,10 +74,10 @@ Upload ảnh đã có variant → `process()` ghi đè variant. Crop ảnh đã 
 
 ---
 
-## 2bis. FILE/ẢNH TỒN TẠI SẴN TỪ TRƯỚC (đặt thẳng lên storage, KHÔNG qua FluxFiles) ⬜ **GAP LỚN**
+## 2bis. FILE/ẢNH TỒN TẠI SẴN TỪ TRƯỚC (đặt thẳng lên storage, KHÔNG qua FluxFiles) ✅ **local đã phủ**
 
 > Tình huống: ảnh/file đã nằm sẵn trên disk/bucket (copy tay, `aws s3 cp`, migrate từ hệ thống cũ) — **chưa có** sidecar `.meta.json`, **chưa có** entry trong `_fluxfiles/index.json`, **chưa có** hash, **chưa có** `_variants`. `ExistingFileIndexer` **không tự chạy** (không gắn route) → mặc định file ở **Trạng thái A (chưa index)**.
-> Hiện chỉ có **2 test** (`integration/test-existing-indexer.php`: index-only + owner). Toàn bộ ma trận dưới là ⬜.
+> ✅ **Đã phủ bằng `integration/test-existing-files.php` (17 case)** — toàn bộ Trạng thái A + B + idempotency trên disk local. Còn ⬜: pre-existing trên **S3/R2**, **cây lớn + pagination**, audit.
 
 ### A. Trạng thái CHƯA INDEX — mọi thao tác phải hoạt động "graceful"
 | Thao tác | Mong đợi với file pre-existing chưa index |
@@ -206,6 +206,6 @@ Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → ch
 **Đã xong:** `test-images.php` (1a/1b/1c/2b/2d + collision 409), `test-visibility.php`, `test-s3-live.php` (MinIO+AWS+R2 live), security (XSS/SSRF/CSRF + tests), matrix 8.1–8.4 + MinIO CI.
 
 **Ưu tiên còn lại:**
-1. **Pre-existing files (mục 2bis)** — GAP LỚN nhất bạn chỉ ra: viết `test-existing-files.php` phủ Trạng thái A (chưa index, mọi thao tác graceful) + B (ma trận options của indexer) + idempotency. Hiện chỉ 2/~25 case.
+1. ✅ **Pre-existing files (mục 2bis)** — XONG: `integration/test-existing-files.php` (17 case, State A+B+idempotency, local). Còn ⬜ pre-existing trên S3/R2 + cây lớn/pagination.
 2. **AI tag + chunk upload + pagination + delete-folder** (mục 10) — feature lõi chưa có test.
 3. **vitest** cho React/Vue (mục 7) + WP smoke (mục 7).
