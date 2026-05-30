@@ -1,211 +1,211 @@
 # FluxFiles — Test Plan (full case)
 
-> Cập nhật: 2026-05-30. Bám sát code thật trong `packages/core/api/`. Đánh dấu: ✅ đã cover, ⬜ cần thêm.
+> Updated: 2026-05-30. Tracks the real code in `packages/core/api/`. Markers: ✅ covered, ⬜ to add.
 
-## 0. Các lớp test & cách chạy
+## 0. Test layers & how to run
 
-| Lớp | Công cụ | Lệnh |
+| Layer | Tooling | Command |
 |---|---|---|
 | Core unit/integration | PHP CLI | `php packages/core/tests/unit/*.php` + `tests/integration/*.php` |
 | Core API e2e | bash + server | `php -S localhost:8080 router.php` + `bash tests/e2e/test-api.sh` |
 | Visibility/URL | PHP CLI | `php tests/unit/test-visibility.php` ✅ |
-| Image processing | PHP CLI | ⬜ `test-images.php` (cần thêm) |
-| PHP version matrix | Docker | image `fluxfiles-php81/82/83/84` |
-| Wrappers React/Vue | vitest + jsdom | `tests/apps/` (scaffold có, ⬜ test thật) |
-| Laravel | PHPUnit/Orchestra | `tests/apps/laravel-host/run-test.php` |
-| WordPress | wp-now/wp-env | ⬜ chưa có |
-| Browser e2e (iframe/SDK) | Playwright MCP | postMessage flow |
+| Image processing | PHP CLI | `php tests/integration/test-images.php` ✅ |
+| PHP version matrix | Docker | images `fluxfiles-php81/82/83/84` |
+| React/Vue wrappers | vitest + jsdom | `cd tests/apps && npm test` ✅ |
+| Laravel | PHPUnit/Orchestra | `tests/apps/laravel-host/run-test.php` ⬜ |
+| WordPress | stubbed WP | `php packages/wordpress/tests/test-wp-smoke.php` ✅ |
+| Browser e2e (iframe/SDK) | Playwright MCP | postMessage flow ⬜ |
 
 ---
 
-## 1. Ma trận UPLOAD theo dạng file
+## 1. UPLOAD matrix by file type
 
-Ngưỡng variant (`ImageOptimizer`): `thumb=150, medium=768, large=1920` WebP. Luật: `width ≤ maxWidth && name≠thumb → skip`.
+Variant thresholds (`ImageOptimizer`): `thumb=150, medium=768, large=1920` WebP. Rule: `width ≤ maxWidth && name≠thumb → skip`.
 
-### 1a. Ảnh → sinh variant (ext: jpg, jpeg, png, gif, webp, bmp) ⬜
-| Case | Input | Mong đợi |
+### 1a. Images → generate variants (ext: jpg, jpeg, png, gif, webp, bmp) ✅ `test-images.php`
+| Case | Input | Expected |
 |---|---|---|
-| Ảnh ≤150px | png 100×80 | chỉ `thumb` (không upsize) |
-| 150<w≤768 | jpg 500×300 | `thumb` + `medium` |
-| 768<w≤1920 | png 1000×600 | `thumb` + `medium` (large skip) |
-| >1920 | jpg 3000×2000 | đủ `thumb`+`medium`+`large` |
-| Mỗi ext | gif/webp/bmp/jpeg | sinh variant WebP, đọc lại được |
-| Ảnh corrupt/0 byte | rác.jpg | upload **vẫn 200**, variant fail được catch + log, `variants:null` |
+| Image ≤150px | png 100×80 | `thumb` only (no upsize) |
+| 768<w≤1920 | png 1000×600 | `thumb` + `medium` (large skipped) |
+| >1920 | jpg 2400×1400 | `thumb`+`medium`+`large` |
+| Each ext | gif/webp/bmp/jpeg | WebP variant generated, readable back |
+| Corrupt/0-byte | bad.jpg | upload **still 200**, optimizer error caught + logged, `variants:null` |
 
-### 1b. File không phải ảnh → không variant ⬜
-pdf, txt, mp4, mp3, webm, docx, xlsx, csv, json, **svg** (không nằm trong IMAGE_EXTENSIONS), zip, tar.gz → `variants:null`, 200.
+### 1b. Non-image files → no variants ✅
+pdf, txt, mp4, mp3, webm, docx, xlsx, csv, json, **svg** (not in IMAGE_EXTENSIONS), zip, tar.gz → `variants:null`, 200.
 
-### 1c. Extension chặn / nguy hiểm (một phần ✅)
-| Case | Mong đợi |
+### 1c. Blocked / dangerous extensions ✅
+| Case | Expected |
 |---|---|
-| Dangerous ext (`php/phtml/exe/sh/bat/jsp/htaccess`...) | 403 `ext_dangerous` (bất kể allowedExt) |
-| Double-extension (`shell.php.jpg`, `evil.phtml.png`) | 403 `ext_dangerous` (quét mọi phần) ⬜ |
-| Ext ngoài allowedExt | 403 `ext_not_allowed` |
-| allowedExt=null | mọi ext không nguy hiểm qua |
-| No-ext (`README`) | qua nếu allowedExt=null |
-| Hoa/thường (`IMG.JPG`) | normalize lowercase |
+| Dangerous ext (`php/phtml/exe/sh/bat/jsp/htaccess`...) | 403 `ext_dangerous` (regardless of allowedExt) |
+| Double-extension (`shell.php.jpg`, `evil.phtml.png`) | 403 `ext_dangerous` (scans every part) |
+| Ext outside allowedExt | 403 `ext_not_allowed` |
+| allowedExt=null | every non-dangerous ext passes |
+| No ext (`README`) | passes when allowedExt=null |
+| Upper/lower (`IMG.JPG`) | normalized to lowercase |
 
-### 1d. Kích thước / quota (một phần ✅)
-size>max_upload → 413 `upload_too_large`; size=max → qua; tổng vượt max_storage → quota 4xx (khi `max_storage>0`); max_storage=0 → bỏ qua.
+### 1d. Size / quota ✅ `test-quota.php`
+size>max_upload → 413 `upload_too_large`; size=max → passes; total over max_storage → 413 `quota_exceeded` (when `max_storage>0`); max_storage=0 → unlimited.
 
 ---
 
-## 2. Kịch bản "ĐÃ CÓ SẴN vs CHƯA CÓ" ⬜ (gap chính)
+## 2. "ALREADY EXISTS vs NOT" scenarios
 
-### 2a. Dedup SHA-256 (cơ bản ✅, mở rộng ⬜)
-| Case | Mong đợi |
+### 2a. SHA-256 dedup ✅ basics, ⬜ extended
+| Case | Expected |
 |---|---|
-| File mới | 200, lưu hash |
-| Trùng hash, `force_upload=false` | 200 `duplicate:true`, trả key cũ + variants cũ, không ghi đè ✅ |
-| Trùng hash, `force_upload=true` | 200, ghi bình thường ✅ |
-| Trùng hash nhưng file đã bị xoá (stale index) | KHÔNG báo dup, purge entry, upload tiếp ⬜ |
-| Trùng hash trong `_fluxfiles/`/`_variants/` | bỏ qua ⬜ |
-| Dedup + owner_only | chỉ match file của chính user ⬜ |
-| Dedup + pathPrefix | chỉ match trong prefix ⬜ |
+| New file | 200, hash saved |
+| Same hash, `force_upload=false` | 200 `duplicate:true`, returns existing key + variants, no overwrite ✅ |
+| Same hash, `force_upload=true` | 200, writes normally ✅ |
+| Same hash but file deleted (stale index) | NOT reported as dup, purge entry, upload proceeds ⬜ |
+| Same hash inside `_fluxfiles/`/`_variants/` | skipped ⬜ |
+| Dedup + owner_only | only matches the user's own file ⬜ |
+| Dedup + pathPrefix | only matches within the prefix ⬜ |
 
-### 2b. Trùng TÊN khác nội dung ⬜
-Upload `a.jpg` (khác nội dung) lên `a.jpg` đã có → **upload GHI ĐÈ** (upload không có guard collision) → variant regenerate đè; metadata/hash cập nhật theo file mới.
+### 2b. Same NAME, different content ✅
+Uploading `a.jpg` (different content) over an existing `a.jpg` → **overwrite** (upload has no collision guard) → variants regenerated; metadata/hash updated to the new file.
 
-### 2c. Folder đã có / chưa ⬜
-mkdir chưa có → 200; mkdir đã có → idempotent; upload vào path chưa có folder → auto-tạo cha.
+### 2c. Folder exists / not ✅ (mkdir/upload tested)
+mkdir new → 200; mkdir existing → idempotent; upload into a non-existent folder → parent auto-created.
 
-### 2d. Variant đã tồn tại ⬜
-Upload ảnh đã có variant → `process()` ghi đè variant. Crop ảnh đã có variant → tạo theo `save_path`/đè.
+### 2d. Variant already exists ✅
+Uploading an image that already has variants → `process()` overwrites them. Crop over an image with variants → regenerates.
 
 ---
 
-## 2bis. FILE/ẢNH TỒN TẠI SẴN TỪ TRƯỚC (đặt thẳng lên storage, KHÔNG qua FluxFiles) ✅ **local đã phủ**
+## 2bis. PRE-EXISTING FILES/IMAGES (placed directly on storage, NOT via FluxFiles) ✅ **covered (local + S3/R2)**
 
-> Tình huống: ảnh/file đã nằm sẵn trên disk/bucket (copy tay, `aws s3 cp`, migrate từ hệ thống cũ) — **chưa có** sidecar `.meta.json`, **chưa có** entry trong `_fluxfiles/index.json`, **chưa có** hash, **chưa có** `_variants`. `ExistingFileIndexer` **không tự chạy** (không gắn route) → mặc định file ở **Trạng thái A (chưa index)**.
-> ✅ **Đã phủ**: `integration/test-existing-files.php` (17 case, local: State A+B+idempotency) + `e2e/test-s3-live.php` nhánh pre-existing (7 case PUT-thẳng: list/meta/metadata-null/presign/dedup-miss/index+variants — verified MinIO+AWS+R2) + pagination cây-lớn (State C) + audit (`test-audit.php`). ✅ mục 2bis hoàn tất trên local & S3/R2.
+> Scenario: files/images already on disk/bucket (manual copy, `aws s3 cp`, migration) — **no** `.meta.json` sidecar, **no** `_fluxfiles/index.json` entry, **no** hash, **no** `_variants`. `ExistingFileIndexer` is **not auto-wired** to any route, so files default to **State A (un-indexed)**.
+> ✅ **Covered**: `integration/test-existing-files.php` (19 cases — State A + B + idempotency + State C pagination) + `e2e/test-s3-live.php` pre-existing branch (raw PUT: list/meta/metadata-null/presign/dedup-miss/index+variants — verified MinIO+AWS+R2) + audit (`test-audit.php`).
 
-### A. Trạng thái CHƯA INDEX — mọi thao tác phải hoạt động "graceful"
-| Thao tác | Mong đợi với file pre-existing chưa index |
+### A. State A (un-indexed) — every operation must work gracefully
+| Operation | Expected for an un-indexed pre-existing file |
 |---|---|
-| `list` | ảnh hiện ra (file thật trên disk); `_fluxfiles`/`_variants`/`.meta.json` đặt tay → **vẫn bị ẩn** |
-| `meta` (`/api/fm/meta`) | size/mime/modified đúng; `variants:null` (chưa có); không cần sidecar |
-| `metadata` GET | trả null/rỗng (không có index entry) — **không lỗi** |
-| `metadata` PUT | tạo mới sidecar/index cho file pre-existing |
-| `search` | **KHÔNG** tìm thấy (chưa vào FTS/index) cho tới khi index |
-| **dedup** khi upload nội dung TRÙNG file pre-existing | **KHÔNG phát hiện** (chưa có hash) → upload thành file mới ⚠️ (hành vi cần khẳng định + document) |
-| `rename`/`move` | OK; không có variant/metadata để kéo theo; folder index cập nhật |
-| `copy` | OK; không copy variant/metadata (không có) |
-| `delete` | OK; không lỗi khi thiếu sidecar/variant |
-| `crop` ảnh pre-existing | đọc file → crop ra output OK (không phụ thuộc index) |
-| `ai-tag` ảnh pre-existing | đọc file → tag OK |
-| `owner_only` | file không có `uploaded_by` → legacy **cho qua** ✅ (đã test) |
-| `presign` (S3) object pre-existing | presign GET OK (không cần index) |
-| quota | dung lượng file pre-existing có/không tính vào quota? — cần khẳng định |
+| `list` | file shows up (real on disk); manually placed `_fluxfiles`/`_variants`/`.meta.json` → **still hidden** |
+| `meta` (`/api/fm/meta`) | size/mime/modified correct; `variants:null`; no sidecar needed |
+| `metadata` GET | returns null/empty (no index entry) — **no error** |
+| `metadata` PUT | creates a sidecar/index for the pre-existing file |
+| `search` | **NOT** found (not in FTS/index) until indexed |
+| **dedup** when uploading content matching a pre-existing file | **NOT detected** (no hash) → uploads as a new file ⚠️ (documented behaviour) |
+| `rename`/`move` | OK; no variant/metadata to carry; folder index updated |
+| `copy` | OK; no variant/metadata copy (none exist) |
+| `delete` | OK; no error on missing sidecar/variant |
+| `crop` on a pre-existing image | reads file → produces output OK (no index needed) |
+| `ai-tag` on a pre-existing image | reads file → tags OK |
+| `owner_only` | file with no `uploaded_by` → legacy **allowed** ✅ |
+| `presign` (S3) on a pre-existing object | presign GET OK (no index needed) ✅ |
 
-### B. SAU KHI chạy `ExistingFileIndexer.index()` — ma trận options
-| Option | Mong đợi |
+### B. After `ExistingFileIndexer.index()` — option matrix ✅
+| Option | Expected |
 |---|---|
-| mặc định | tạo index + metadata (`title`=tên file), đếm `files_indexed`/`folders_indexed` |
-| `hash:true` | tính + lưu `file_hash` → **dedup hoạt động** cho các file này sau đó |
-| `variants:true` | sinh `_variants` cho ảnh pre-existing → `list`/`meta` từ đó có variants |
-| `owner:'u'` | set `uploaded_by` → `owner_only` bắt đầu enforce |
-| `readonly:true` | đánh dấu owner `__fluxfiles_readonly__` |
-| `overwrite:false` (mặc định) | **idempotent**: re-run → `skipped` = đã index, không nhân đôi |
-| `overwrite:true` | index lại, ghi đè metadata |
-| `dry_run:true` | đếm nhưng **không ghi** gì xuống disk |
-| `path:'sub/'` | chỉ index subtree đó |
-| skip rule | bỏ qua `_fluxfiles`/`_variants`/`*.meta.json` |
-| sau index | `search` tìm thấy, `dedup` chạy, variants có mặt |
+| default | creates index + metadata (`title`=filename), counts `files_indexed`/`folders_indexed` |
+| `hash:true` | computes + stores `file_hash` → **dedup works** for those files afterwards |
+| `variants:true` | generates `_variants` for pre-existing images → `list`/`meta` then show variants |
+| `owner:'u'` | sets `uploaded_by` → `owner_only` starts enforcing |
+| `readonly:true` | marks owner `__fluxfiles_readonly__` |
+| `overwrite:false` (default) | **idempotent**: re-run → `skipped` = already indexed, no duplicates |
+| `dry_run:true` | counts but **writes nothing** |
+| `path:'sub/'` | indexes only that subtree |
+| skip rule | skips `_fluxfiles`/`_variants`/`*.meta.json` |
+| after index | `search` finds it, `dedup` works, variants present |
 
-### C. Cross-cutting cho pre-existing
-- **S3/R2**: object PUT thẳng (aws cli) → list/index/meta/presign/variants-gen.
-- **Cây lớn pre-existing** → performance + pagination (`list?limit>0&cursor`).
-- File pre-existing trùng tên thư mục hệ thống.
-- Audit log khi thao tác trên file pre-existing.
-- Re-index sau khi đã có 1 phần được FluxFiles tạo (mix indexed + unindexed).
+> Note: on S3/R2 a raw-PUT object returns a non-null (empty) HeadObject metadata array, so the default indexer skips it as "already indexed" — use `overwrite:true` to (re)index such objects.
+
+### C. Cross-cutting ⬜
+- ✅ **S3/R2**: raw-PUT objects → list/index/meta/presign/variant-gen.
+- ✅ **Large tree** → pagination (`list?limit>0&cursor`, `test-existing-files.php` State C).
+- ⬜ Pre-existing name clashing with a system folder.
+- ✅ Audit log on operations (`test-audit.php`).
+- ⬜ Re-index after some files are already FluxFiles-created (mixed indexed + un-indexed).
 
 ---
 
-## 3. RENAME / MOVE / COPY — collision (KHÁC upload: CÓ guard) ⬜
-| Op | Đích chưa có | Đích đã có (file/folder) |
+## 3. RENAME / MOVE / COPY — collision (unlike upload: guarded) ✅
+| Op | Free destination | Existing destination (file/folder) |
 |---|---|---|
-| rename/move/copy | 200 + kéo theo `_variants/*` + metadata | 4xx collision (`fileExists\|\|directoryExists`) |
-| cross-copy/move (local→local, →s3) | 200 stream + transfer variant+metadata | verify hành vi đè |
+| rename/move/copy | 200 + carries `_variants/*` + metadata | 409 `name_exists` (`assertTargetAvailable`) ✅ |
+| cross-copy/move (local→local, →s3) | 200 stream + variant+metadata transfer | ⬜ verify overwrite behaviour |
 
-Xoá ảnh phải xoá variant + dọn `_variants` rỗng.
+Deleting an image removes its variants and prunes an empty `_variants` dir. ✅ `test-delete-folder.php`
 
 ---
 
-## 4. Bảo mật / Claims (cơ bản ✅, mở rộng ⬜)
-perms (read/write/delete → 403 đúng); disks (ngoài claim → 403); prefix scope (`../`, null byte, `..%2f` sanitize); path traversal + `_fluxfiles/`/`_variants/` (`assertNotSystem`); owner_only (user khác → 403, legacy no-owner → qua; **folder-level**: xoá/rename/move folder chứa file người khác → 403 qua assertOwnsTree); BYOB (local BYOB bị từ chối; mixed local+r2); JWT (thiếu/sai/hết hạn → 401; **secret <32 byte → lỗi jwt v7**); CORS/Origin; rate limit (60 read/10 write → 429).
+## 4. Security / Claims ✅ basics, ⬜ extended
+perms (read/write/delete → correct 403); disks (outside claim → 403); prefix scope (`../`, null byte, `..%2f` sanitized); path traversal + `_fluxfiles/`/`_variants/` (`assertNotSystem`); owner_only (other user → 403, legacy no-owner → pass; **folder-level**: delete/rename/move a folder containing others' files → 403 via `assertOwnsTree`); BYOB (local BYOB rejected; SSRF endpoints blocked; mixed local+r2); JWT (missing/invalid/expired → 401; **secret <32 bytes → jwt v7 error**); CORS/Origin (forged cross-origin → 403, same-origin fallback); rate limit (60 read/10 write → 429).
 
 ---
 
 ## 5. Visibility S3/R2 — public vs private (URL logic ✅ `test-visibility.php`)
 
-> Đã fix: cấu hình `visibility` + `public_url` mỗi disk (`config/disks.php`, env `AWS_VISIBILITY/AWS_PUBLIC_URL/R2_VISIBILITY/R2_PUBLIC_URL`).
+> Fixed: per-disk `visibility` + `public_url` config (`config/disks.php`, env `AWS_VISIBILITY/AWS_PUBLIC_URL/R2_VISIBILITY/R2_PUBLIC_URL`).
 
-| Case | Mong đợi | Trạng thái |
+| Case | Expected | Status |
 |---|---|---|
 | local | base URL `config['url']` | ✅ |
-| s3 `private` (mặc định) | presigned GET (`X-Amz-Signature`) | ✅ |
-| s3 `public` | URL bucket thẳng, không signature; write dùng ACL public-read | ✅ (URL) |
-| s3 `public` + `public_url` | base CDN | ✅ |
+| s3 `private` (default) | presigned GET (`X-Amz-Signature`) | ✅ |
+| s3 `public` | direct bucket URL, no signature; writes use public-read ACL | ✅ |
+| s3 `public` + `public_url` | CDN base | ✅ |
 | r2 `private` | presigned GET | ✅ |
 | r2 `public` + `public_url` | custom domain | ✅ |
-| r2 `public` không `public_url` | fallback endpoint/bucket | ✅ |
-| **Live private bucket** presigned GET → HTTP 200; raw URL → 403 | `test-s3-live.php` | ✅ MinIO + AWS + R2 |
-| **TTL presign** (`url_ttl`, default 3600, clamp 86400) | URL hết hạn đúng | ⬜ |
-| **Live public bucket** raw URL → 200 | cần set bucket policy public | ⬜ |
-| **Variant URL theo visibility** | variant private → presigned, public → thẳng | ⬜ |
-| R2 `public` set ACL? | KHÔNG gọi ACL (R2 không hỗ trợ) | ✅ |
+| r2 `public` without `public_url` | fallback to endpoint/bucket | ✅ |
+| **Live private bucket** presigned GET → 200; raw URL → 403 | `test-s3-live.php` | ✅ MinIO + AWS + R2 |
+| **Presign TTL** (`url_ttl`, default 3600, clamp 86400) | URL expires correctly | ⬜ |
+| **Live public bucket** raw URL → 200 | needs public bucket policy | ⬜ |
+| **Variant URL by visibility** | private → presigned, public → direct | ⬜ |
+| R2 `public` sends ACL? | NO ACL call (R2 has none) | ✅ |
 
-### Bug thật tìm được qua live test (đã fix)
-1. **AWS bucket "Bucket owner enforced" (ACL disabled — mặc định AWS từ 4/2023)** → mọi write fail `AccessControlListNotSupported`. Fix: middleware strip param `ACL` cho mọi disk trừ AWS-public (`DiskManager`).
-2. **R2 không trả ContentType qua HeadObject** → `fileMeta()` (`/api/fm/meta`) throw 500. Fix: `fileMeta()` chịu lỗi + fallback đoán mime theo extension.
-3. **move/copy trước đây KHÔNG guard collision → ghi đè im lặng** (rename thì có). Đã FIX: thêm `assertTargetAvailable()` dùng chung cho rename/move/copy → tất cả trả 409 `name_exists` khi đích tồn tại. Test trong `test-images.php`.
+### Real bugs found via live testing (fixed)
+1. **AWS "Bucket owner enforced" (ACLs disabled — AWS default since 2023-04)** → every write failed `AccessControlListNotSupported`. Fix: middleware strips the `ACL` param on every disk except native-AWS-public (`DiskManager`).
+2. **R2 returns no ContentType on HeadObject** → `fileMeta()` (`/api/fm/meta`) threw 500. Fix: `fileMeta()` is tolerant + falls back to an extension-based mime guess.
+3. **move/copy previously had NO collision guard → silent overwrite** (rename did). Fixed: shared `assertTargetAvailable()` for rename/move/copy → all return 409 `name_exists` when the destination exists. Tested in `test-images.php`.
 
 ---
 
 ## 6. Storage backends
-- **Local**: full matrix (sidecar `.meta.json`, `_fluxfiles/index.json`, `dirs.json`, `audit.jsonl`). ✅ phần lớn
-- **S3/R2 live** ✅ qua `test-s3-live.php` (env-gated, chạy với MinIO/AWS/R2): upload+variants, list, fileMeta, presigned GET 200, raw private 403, presign PUT→GET readback, delete. CI có job `s3-minio`.
-- **Chunk multipart** (init/presign/complete/abort) cho file >10MB ⬜.
+- **Local**: full matrix (sidecar `.meta.json`, `_fluxfiles/index.json`, `dirs.json`, `audit.jsonl`). ✅ mostly
+- **S3/R2 live** ✅ via `test-s3-live.php` (env-gated, runs against MinIO/AWS/R2): upload+variants, list, fileMeta, presigned GET 200, raw-private 403, presign PUT→GET readback, delete, pre-existing branch. CI job `s3-minio`.
+- **Chunk multipart** (init/presign/complete/abort) ✅ `test-s3-live.php` (verified MinIO+AWS+R2).
 
 ---
 
-## 7. Wrapper packages (postMessage) ⬜
-- **SDK**: mở/đóng iframe, `FM_CONFIG`, `FM_SELECT`, token refresh, close, locale/theme.
-- **React/Vue**: mount/unmount, `useFluxFiles` commands (navigate/setDisk/refresh/search), Modal, ref imperatives, event subtypes.
-- **CKEditor4/TinyMCE**: chèn URL ảnh đã chọn vào editor.
-- **Laravel**: token + BYOB/mixed token, controller proxy asset, Blade component, auth→JWT.
-- **WordPress**: REST `/wp-json/fluxfiles/v1/`, shortcode, media button modal, settings→disk config, self-host REST.
-- **Browser e2e (Playwright)**: chọn ảnh có sẵn → `FM_SELECT` URL+variants; upload mới → thumbnail; crop inline; multi-select bulk; dark mode.
+## 7. Wrapper packages (postMessage)
+- ✅ **SDK**: FM_READY→FM_CONFIG, FM_SELECT→onSelect+close, token refresh (UPDATED/FAILED/no-handler/concurrent-dedup), foreign-origin ignored (`apps/__tests__/sdk.test.mjs`).
+- ✅ **React/Vue**: `<FluxFiles>` iframe render, FM_CONFIG, FM_SELECT→onSelect/emit, FM_TOKEN_REFRESH, origin guard (`react.test.tsx`, `vue.test.ts`).
+- ⬜ **CKEditor4/TinyMCE**: insert the chosen image URL into the editor.
+- ⬜ **Laravel**: token + BYOB/mixed token, controller proxy assets, Blade component, auth→JWT.
+- ✅ **WordPress**: token/byob-token/disk-config via stubbed WP (`wordpress/tests/test-wp-smoke.php`); ⬜ REST `/wp-json/fluxfiles/v1/`, shortcode, media-button modal.
+- ⬜ **Browser e2e (Playwright)**: pick existing image → `FM_SELECT` URL+variants; upload → thumbnail; inline crop; multi-select bulk; dark mode.
 
 ---
 
 ## 8. PHP version matrix (Docker)
-Chạy `test-*.php` + `test-api.sh` trên **8.1, 8.2, 8.3, 8.4**. Xác nhận jwt v7 + flysystem v3 + intervention v3 resolve sạch, variant đúng, `composer audit` clean. (8.1/8.2 ✅; 8.3/8.4 ⬜.)
+Run unit/integration + `test-api.sh` on **8.1, 8.2, 8.3, 8.4** (CI `core-php` + `api-e2e`). Confirms jwt v7 + flysystem v3 + intervention v3 resolve cleanly, variants correct, `composer audit` clean.
 
 ---
 
 ## 9. Edge / worst-case ⬜
-Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → chunk; ngắt giữa chừng → abort; upload đồng thời cùng tên (race, last-wins); quota chạm biên; FTS5 search dấu tiếng Việt/ký tự đặc biệt; ảnh CMYK/exif-rotated/animated gif; i18n 16 ngôn ngữ + RTL (ar) + key thiếu fallback.
+unicode/emoji/spaces/>255-char names/`#?&`; huge files → chunk; mid-stream abort; concurrent same-name uploads (race, last-wins); quota boundary; FTS5 search with diacritics/special chars; CMYK/exif-rotated/animated-gif images; i18n 16 languages + RTL (ar) + missing-key fallback.
 
 ---
 
-## 10. Feature lõi — phần lớn ĐÃ phủ (review 2026-05-30)
-- ✅ **AI auto-tag**: parse (fence/truncate/filter/invalid→502) + manual `aiTag` + auto-tag-on-upload (stub) — `test-aitagger.php` (12).
-- ✅ **Chunk upload**: init→presign part→PUT→complete→readable + init→abort→complete-fails — `test-s3-live.php` (verified MinIO+AWS+R2).
-- ✅ **Audit log**: round-trip log/list, filter theo user, limit/offset, rotation (`test-audit.php`).
-- ✅ **Pagination**: `list?limit>0` trả `{items,next_cursor,total}`; cursor đi hết cây không trùng/sót (`test-existing-files.php` State C).
-- ✅ **Delete folder đệ quy**: children + `_variants` (mọi cấp) + metadata + folder index, + edge (empty/nested/mixed/404/403/system/owner_only) — `test-delete-folder.php` (12 case).
-- ✅ **Quota tái tính**: getUsage/getQuotaInfo + assertQuota 413 + upload-block-then-allow-after-delete — `test-quota.php` (5).
-- ✅ **Token refresh** (SDK + React): REFRESH→onTokenRefresh→UPDATED/FAILED/no-handler + concurrent de-dup + origin guard — vitest `apps/__tests__/sdk.test.mjs` + `react.test.tsx`.
-- ✅ **Crop edge**: save-as 409 collision (đã thêm guard), in-place overwrite, format theo source, toạ độ ngoài biên, perm — `test-crop.php` (6).
+## 10. Core features — mostly covered (review 2026-05-30)
+- ✅ **AI auto-tag**: response parsing (fence/truncate/filter/invalid→502) + manual `aiTag` + auto-tag-on-upload (stub tagger) — `test-aitagger.php` (12).
+- ✅ **Chunk upload**: init→presign part→PUT→complete→readable + init→abort→complete-fails — `test-s3-live.php` (MinIO+AWS+R2).
+- ✅ **Audit log**: log/list round-trip, per-user filter, limit/offset, rotation (`test-audit.php`).
+- ✅ **Pagination**: `list?limit>0` returns `{items,next_cursor,total}`; cursor walks the whole tree with no gaps/dupes (`test-existing-files.php` State C).
+- ✅ **Recursive folder delete**: children + `_variants` (all depths) + metadata + folder index, + edges (empty/nested/mixed/404/403/system/owner_only) — `test-delete-folder.php` (14).
+- ✅ **Quota recalc**: getUsage/getQuotaInfo + assertQuota 413 + upload-blocked-then-allowed-after-delete — `test-quota.php` (5).
+- ✅ **Token refresh** (SDK + React + Vue): REFRESH→onTokenRefresh→UPDATED/FAILED/no-handler + concurrent de-dup + origin guard — vitest.
+- ✅ **Crop edge**: save-as 409 collision (guard added), in-place overwrite, format from source, out-of-bounds, write-perm — `test-crop.php` (6).
 
 ---
 
-## Trạng thái & ưu tiên triển khai (cập nhật 2026-05-30)
+## Status & remaining priorities (2026-05-30)
 
-**Đã xong:** `test-images.php` (1a/1b/1c/2b/2d + collision 409), `test-visibility.php`, `test-s3-live.php` (MinIO+AWS+R2 live), security (XSS/SSRF/CSRF + tests), matrix 8.1–8.4 + MinIO CI.
+**Done:** full upload/variant matrix, pre-existing files (local + S3/R2), rename/move/copy collision, recursive folder delete, quota, crop, visibility, S3/R2 live (MinIO+AWS+R2), chunk upload, AI auto-tag, audit, pagination, token refresh, security (XSS/SSRF/CSRF + owner_only folder gate), JS wrappers (SDK/React/Vue), WordPress smoke, PHP 8.1–8.4 + MinIO CI.
 
-**Ưu tiên còn lại:**
-1. ✅ **Pre-existing files (mục 2bis)** — XONG: `integration/test-existing-files.php` (17 case, State A+B+idempotency, local). Còn ⬜ pre-existing trên S3/R2 + cây lớn/pagination.
-2. **AI tag + chunk upload + pagination + delete-folder** (mục 10) — feature lõi chưa có test.
-3. ✅ **vitest** SDK/React/Vue (`apps/__tests__/`, 17 test, CI job `js-wrappers`). ✅ WP smoke (`wordpress/tests/test-wp-smoke.php`), quota, crop đều xong.
+**Remaining ⬜:**
+1. Dedup edge cases (stale index, system-path, owner_only/prefix scoping).
+2. CKEditor4/TinyMCE + Laravel wrapper tests; WP REST/shortcode/media-button.
+3. Browser e2e via Playwright; presign-TTL + live-public-bucket + variant-URL-by-visibility.
+4. Edge/worst-case (section 9).
