@@ -84,8 +84,9 @@ CKEditor 4, and TinyMCE.
   live S3/R2 test (MinIO/AWS/R2).
 - **Browser e2e (Playwright + chromium)** — render/auth smoke and full UI
   interaction coverage: upload, folder create + breadcrumb navigation, search,
-  dark-mode toggle, delete, inline crop (save-as-copy), and picker-mode
-  `FM_SELECT` via an iframe host page.
+  dark-mode toggle, delete, inline crop (save-as-copy), single-pick `FM_SELECT`,
+  and multi-select (`multiple:true`) returning an `FM_SELECT` array — all via an
+  iframe host page.
 - **Wrapper tests** — vitest for the JS adapters, stubbed-PHP smokes for
   WordPress/Laravel, and a pack-&-install smoke that typechecks published
   tarballs.

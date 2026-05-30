@@ -1084,7 +1084,7 @@ php packages/core/tests/e2e/test-s3-live.php
 
 ### Browser e2e (Playwright)
 
-Boots the real PHP server and drives the standalone UI in chromium — render/auth smoke plus full UI interaction flows (upload, folder create + breadcrumb nav, search, dark-mode toggle, delete, inline crop, picker-mode `FM_SELECT`).
+Boots the real PHP server and drives the standalone UI in chromium — render/auth smoke plus full UI interaction flows (upload, folder create + breadcrumb nav, search, dark-mode toggle, delete, inline crop, single-pick `FM_SELECT`, and multi-select `multiple:true` returning an `FM_SELECT` array).
 
 ```bash
 cd packages/core/tests/browser
