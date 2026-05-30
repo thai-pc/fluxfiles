@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1
-Stable tag: 1.27.1
+Stable tag: 0.1.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -81,38 +81,15 @@ PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfile
 
 == Changelog ==
 
-= 1.27.1 =
-* Version aligned with monorepo (core + all adapters now on the same `1.27.1` tag).
-* New `wp fluxfiles seed` WP-CLI command — index pre-existing files/folders under `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so they appear in FTS5 and folder search.
-* Missing `/search-folders` REST route registered — global folder search now works through the WordPress REST proxy.
-* `/wp-json/fluxfiles/v1/list` forwards `limit` + `cursor` query params for cursor-based pagination on folders with >1000 files.
-
-= 1.22.0 =
-* Requires PHP 8.1+ (core dependencies). Prefer installing from a ZIP that includes `vendor/`.
-* Vue / Nuxt adapter added
-* 16 languages with RTL support
-
-= 1.21.0 =
-* Vue 3 / Nuxt 3 adapter
-
-= 1.20.0 =
-* 16 languages (en, vi, zh, ja, ko, fr, de, es, ar, pt, it, ru, th, hi, tr, nl)
-* RTL support for Arabic
-
-= 1.19.0 =
-* AI auto-tag — Claude / OpenAI vision integration
-
-= 1.18.0 =
-* Image crop inline with aspect ratio presets
-
-= 1.17.0 =
-* Bulk operations — multi-select with bulk move, copy, delete, download
-
-= 1.13.0 =
-* Initial WordPress plugin release
-* Settings page, shortcode, media button integration
+= 0.1.0 =
+First public release. WordPress adapter for the FluxFiles file manager:
+* Settings page, `[fluxfiles]` shortcode, and editor media button with iframe picker.
+* REST proxy at `/wp-json/fluxfiles/v1/` with JWT bridged from the WordPress user.
+* `wp fluxfiles seed` WP-CLI command — index pre-existing files/folders under `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so they appear in search.
+* Local, AWS S3, and Cloudflare R2 storage; cursor-based pagination; 16 languages with RTL.
+* Requires PHP 8.1+. Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
 
-= 1.22.0 =
-Requires **PHP 8.1+** and a build that includes `vendor/` (release ZIP or run `composer install --no-dev` before deploying). Review settings after upgrade.
+= 0.1.0 =
+Requires **PHP 8.1+** and a build that includes `vendor/` (release ZIP or run `composer install --no-dev` before deploying). Review settings after activation.
