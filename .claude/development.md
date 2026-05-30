@@ -50,6 +50,9 @@ php packages/core/tests/integration/test-existing-files.php
 php packages/core/tests/integration/test-audit.php
 php packages/core/tests/integration/test-delete-folder.php
 php packages/core/tests/integration/test-aitagger.php
+php packages/core/tests/integration/test-quota.php
+php packages/core/tests/integration/test-crop.php
+php packages/wordpress/tests/test-wp-smoke.php
 ```
 
 Live S3/R2 test (env-gated; skips if no bucket). Works against MinIO, AWS S3, or R2:

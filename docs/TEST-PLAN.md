@@ -195,9 +195,9 @@ Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → ch
 - ✅ **Audit log**: round-trip log/list, filter theo user, limit/offset, rotation (`test-audit.php`).
 - ✅ **Pagination**: `list?limit>0` trả `{items,next_cursor,total}`; cursor đi hết cây không trùng/sót (`test-existing-files.php` State C).
 - ✅ **Delete folder đệ quy**: children + `_variants` (mọi cấp) + metadata + folder index, + edge (empty/nested/mixed/404/403/system/owner_only) — `test-delete-folder.php` (12 case).
-- **Quota tái tính** sau delete; quota có/không tính file pre-existing.
+- ✅ **Quota tái tính**: getUsage/getQuotaInfo + assertQuota 413 + upload-block-then-allow-after-delete — `test-quota.php` (5).
 - ✅ **Token refresh** (SDK + React): REFRESH→onTokenRefresh→UPDATED/FAILED/no-handler + concurrent de-dup + origin guard — vitest `apps/__tests__/sdk.test.mjs` + `react.test.tsx`.
-- **Crop edge**: toạ độ ngoài biên, `save_path` trùng (giờ → 409), đổi format.
+- ✅ **Crop edge**: save-as 409 collision (đã thêm guard), in-place overwrite, format theo source, toạ độ ngoài biên, perm — `test-crop.php` (6).
 
 ---
 
@@ -208,4 +208,4 @@ Tên unicode/emoji/khoảng trắng/>255 ký tự/`#?&`; file cực lớn → ch
 **Ưu tiên còn lại:**
 1. ✅ **Pre-existing files (mục 2bis)** — XONG: `integration/test-existing-files.php` (17 case, State A+B+idempotency, local). Còn ⬜ pre-existing trên S3/R2 + cây lớn/pagination.
 2. **AI tag + chunk upload + pagination + delete-folder** (mục 10) — feature lõi chưa có test.
-3. ✅ **vitest** SDK/React/Vue (`apps/__tests__/`, 17 test, CI job `js-wrappers`). Còn ⬜: WP smoke, quota-recalc, crop-edge.
+3. ✅ **vitest** SDK/React/Vue (`apps/__tests__/`, 17 test, CI job `js-wrappers`). ✅ WP smoke (`wordpress/tests/test-wp-smoke.php`), quota, crop đều xong.
