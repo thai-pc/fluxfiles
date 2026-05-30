@@ -64,8 +64,16 @@ class FileManager
         foreach ($fs->listContents($scoped, false) as $item) {
             $name = basename($item->path());
 
-            // Hide internal system directories and sidecar metadata files
-            if ($name === '_fluxfiles' || $name === '_variants' || substr($name, -10) === '.meta.json') {
+            // Hide internal system directories.
+            if ($name === '_fluxfiles' || $name === '_variants') {
+                continue;
+            }
+            // Hide a LEGACY sidecar ({file}.meta.json next to its file) but show genuine
+            // user-uploaded *.meta.json files (no matching base file). New sidecars live
+            // under _fluxfiles/meta/ and are already hidden by the check above.
+            if (substr($name, -10) === '.meta.json' && $item->isFile()
+                && $fs->fileExists(substr($item->path(), 0, -10))
+            ) {
                 continue;
             }
 

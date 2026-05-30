@@ -28,7 +28,7 @@
 
 | Component | Location | Notes |
 | ---------------- | ------------------------ | ------------------------------------------------------ |
-| **Metadata**     | `{path}.meta.json`       | e.g. `photos/2024.jpg` → `photos/2024.jpg.meta.json`   |
+| **Metadata**     | `_fluxfiles/meta/{path}.json` | e.g. `photos/2024.jpg` → `_fluxfiles/meta/photos/2024.jpg.json` (kept inside the protected `_fluxfiles/` namespace so a user-uploaded `*.meta.json` can't collide with or overwrite it). Legacy `{path}.meta.json` sidecars are migrated on read. |
 | **Search index** | `_fluxfiles/index.json`  | Cache for fast search                                  |
 | **Trash**        | —                        | (No trash/restore/purge API in core today)             |
 | **Audit**        | `_fluxfiles/audit.jsonl` | Appended on every event                                |
@@ -47,7 +47,7 @@
 
 1. `ListObjects` from storage
 2. For S3: `HeadObject` per file to read Metadata (or use the index)
-3. For Local: read the `.meta.json` sidecar if present
+3. For Local: read the `_fluxfiles/meta/{key}.json` sidecar if present (with a legacy `{key}.meta.json` fallback)
 4. Filter trash (S3: drop the `_trash/` prefix, Local: drop `_trash/`)
 
 ### Search
