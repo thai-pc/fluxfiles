@@ -9,17 +9,17 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 // Load .env from packages/core/ if present, otherwise fall back to repo root.
-foreach ([__DIR__ . '/..', __DIR__ . '/../../..'] as $envDir) {
+foreach ([__DIR__ . '/../..', __DIR__ . '/../../../..'] as $envDir) {
     if (is_file($envDir . '/.env')) {
         Dotenv\Dotenv::createImmutable($envDir)->safeLoad();
         break;
     }
 }
 
-require_once __DIR__ . '/../embed.php';
+require_once __DIR__ . '/../../embed.php';
 
 $green  = "\033[32m";
 $red    = "\033[31m";
@@ -210,6 +210,32 @@ test('valid S3 config passes validation', function () {
     ]);
     // No exception = pass
 });
+
+// ── SSRF guard on custom endpoints ──
+$byobBase = ['driver' => 's3', 'bucket' => 'b', 'key' => 'k', 'secret' => 's'];
+
+test('endpoint to a public host passes', function () use ($byobBase) {
+    FluxFiles\CredentialEncryptor::validate('r2', $byobBase + ['endpoint' => 'https://acc.r2.cloudflarestorage.com']);
+});
+
+$blockedEndpoints = [
+    'localhost'        => 'http://localhost:9000',
+    'loopback IP'      => 'http://127.0.0.1:9000',
+    'cloud metadata'   => 'http://169.254.169.254/latest/meta-data/',
+    'private 10.x'     => 'http://10.1.2.3:9000',
+    'private 192.168'  => 'https://192.168.1.5',
+    'non-http scheme'  => 'ftp://example.com',
+];
+foreach ($blockedEndpoints as $label => $ep) {
+    test("SSRF: {$label} endpoint rejected", function () use ($byobBase, $ep) {
+        try {
+            FluxFiles\CredentialEncryptor::validate('evil', $byobBase + ['endpoint' => $ep]);
+            throw new \RuntimeException('should have thrown');
+        } catch (FluxFiles\ApiException $e) {
+            assertEqual(true, in_array($e->getHttpCode(), [400, 403], true), 'expected 400/403');
+        }
+    });
+}
 
 // ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► Claims with BYOB{$reset}\n";
