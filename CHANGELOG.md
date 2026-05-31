@@ -3,6 +3,42 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] — 2026-05-31
+
+### Security
+
+- **`?lang=` path traversal blocked.** `I18n::isSupported()` gated a locale only
+  via `in_array()`/`file_exists()`, so with `FLUXFILES_LOCALE` unset a crafted
+  `?lang=../composer` could traverse the lang dir and load an arbitrary `.json`
+  into the injected page. A strict `^[a-z]{2,5}$` guard now runs before the
+  `file_exists()` check. (The `/api/fm/lang/{code}` REST route was already
+  regex-constrained.)
+- **Inline-script JSON hardened.** The locale data embedded in the standalone
+  page's inline `<script>` now uses `JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT`
+  (in `I18n::toJson()` and the `locale`/`dir` encodes), so `<`/`>` become
+  `\uXXXX` and can never break out with `</script>`.
+
+### Changed
+
+- **Bulk download is now reachable from the UI.** `bulkDownload()` existed but
+  had no button wired to it. Added a "Download" action to the desktop toolbar,
+  the mobile "more" menu, and the mobile bottom bar; `bulkDownload()` now skips
+  folders (which have no direct URL).
+
+### Documentation
+
+- README: new "Uploading multiple files" guide (drag-drop / multi-select dialog,
+  sequential upload, vs the picker's `multiple` option); corrected the
+  `FM_SELECT` payload fields (no `mime`); added the `GET /api/fm/search-folders`
+  route; expanded the Testing section (Playwright browser e2e, wrapper vitest,
+  pack-smoke, Docker).
+
+### Tests
+
+- Playwright browser e2e expanded to 13 cases incl. multi-select (`FM_SELECT`
+  array) and bulk delete/move/download; new `I18n` traversal-rejection +
+  inline-script-safety cases.
+
 ## [0.1.0] — 2026-05-30
 
 First public release. FluxFiles is a standalone, embeddable PHP file manager: a

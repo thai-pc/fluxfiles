@@ -284,6 +284,26 @@ function openFilePicker() {
 </script>
 ```
 
+### Uploading multiple files
+
+Multi-file upload is always available in the file manager UI — no special option
+needed:
+
+- **Drag & drop** several files onto the dropzone at once, or
+- Click **Upload** and select multiple files in the OS dialog (the file input is
+  `multiple`).
+
+Files upload **sequentially** (one `POST /api/fm/upload` per file) with a
+combined progress bar; large files on S3/R2 automatically use multipart chunk
+upload. Each file is independently checked for size, extension, quota, and
+duplicates, so one rejected file doesn't abort the rest. After the batch the
+listing refreshes and an `upload:done` `FM_EVENT` fires.
+
+> Don't confuse this with the SDK's `multiple: true` option — that controls
+> **picker selection** (returning an array of already-stored files via
+> `FM_SELECT`), not uploading. The two are independent. Selecting several files
+> and using the bulk bar also enables **bulk move / delete / download**.
+
 ### SDK Commands
 
 Control the file manager programmatically after opening:
