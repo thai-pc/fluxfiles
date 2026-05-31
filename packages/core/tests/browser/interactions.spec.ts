@@ -174,3 +174,157 @@ test('picker mode: double-clicking a file emits FM_SELECT to the host page', asy
   expect(sel.disk).toBe('local');
   expect(String(sel.key)).toContain(fname);
 });
+
+test('picker multiple: selecting several files emits an FM_SELECT array', async ({ page }) => {
+  const token = mintToken();
+
+  // Same host handshake, but config.multiple = true so the UI returns an array.
+  const host = `<!doctype html><html><body>
+    <iframe id="fm" src="/public/index.html" style="width:1000px;height:680px;border:0"></iframe>
+    <script>
+      window.__sel = null;
+      window.addEventListener('message', function (e) {
+        var m = e.data;
+        if (!m || m.source !== 'fluxfiles') return;
+        if (m.type === 'FM_READY') {
+          document.getElementById('fm').contentWindow.postMessage({
+            source: 'fluxfiles', type: 'FM_CONFIG', v: 1, id: 'host-multi',
+            payload: { token: ${JSON.stringify(token)}, disk: 'local', endpoint: location.origin, multiple: true }
+          }, '*');
+        }
+        if (m.type === 'FM_SELECT') { window.__sel = m.payload; }
+      });
+    </script>
+  </body></html>`;
+
+  await page.route('**/__pw_host_multi', (route) =>
+    route.fulfill({ contentType: 'text/html', body: host })
+  );
+  await page.goto('/__pw_host_multi');
+
+  const frame = page.frameLocator('#fm');
+  await expect(frame.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-multi-${Date.now()}`;
+  await createFolder(frame, page, folder);
+  await enterFolder(frame, folder);
+
+  const stamp = Date.now();
+  const a = `multi-a-${stamp}.png`;
+  const b = `multi-b-${stamp}.png`;
+  await uploadFile(frame, pngFile(a));
+  await expect(cardByName(frame, a)).toBeVisible({ timeout: 15_000 });
+  await uploadFile(frame, pngFile(b));
+  await expect(cardByName(frame, b)).toBeVisible({ timeout: 15_000 });
+
+  // Ctrl/Cmd-click accumulates the selection (toggleSelect with ctrlKey/metaKey).
+  await cardByName(frame, a).click({ modifiers: ['ControlOrMeta'] });
+  await cardByName(frame, b).click({ modifiers: ['ControlOrMeta'] });
+
+  // The "Select N items" toolbar button (only shown when multiple && selected > 0)
+  // fires selectMultiple(), which posts the whole selection as an array.
+  await frame.getByRole('button', { name: /Select \d+ items?/ }).click();
+
+  await expect.poll(() => page.evaluate(() => (window as any).__sel), { timeout: 10_000 }).toBeTruthy();
+  const sel = await page.evaluate(() => (window as any).__sel);
+  expect(Array.isArray(sel)).toBe(true);
+  expect(sel.length).toBe(2);
+  expect(sel.map((s: any) => s.name).sort()).toEqual([a, b].sort());
+});
+
+test('bulk delete: select multiple files and delete them all at once', async ({ page }) => {
+  const token = mintToken();
+  // multiple=1 enables multi-select; Ctrl/Cmd-click accumulates the selection.
+  await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-bulkdel-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  const stamp = Date.now();
+  const a = `del-a-${stamp}.png`;
+  const b = `del-b-${stamp}.png`;
+  await uploadFile(page, pngFile(a));
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await uploadFile(page, pngFile(b));
+  await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });
+
+  await cardByName(page, a).click({ modifiers: ['ControlOrMeta'] });
+  await cardByName(page, b).click({ modifiers: ['ControlOrMeta'] });
+
+  // Contextual bulk delete button (shows count) → confirm dialog → deleteSelected().
+  await page.locator('.ff-toolbar-context .tb-btn.danger').click();
+  await page.locator('.ff-confirm-box .ff-btn-danger').click();
+
+  await expect(cardByName(page, a)).toHaveCount(0, { timeout: 15_000 });
+  await expect(cardByName(page, b)).toHaveCount(0);
+  await expect(page.locator('.ff-empty:has(.ff-empty-cta)')).toBeVisible();
+});
+
+test('bulk move: move multiple files into a subfolder at once', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const base = `pw-bulkmv-${Date.now()}`;
+  await createFolder(page, page, base);
+  await enterFolder(page, base);
+  await createFolder(page, page, 'dest'); // destination subfolder
+
+  const stamp = Date.now();
+  const a = `mv-a-${stamp}.png`;
+  const b = `mv-b-${stamp}.png`;
+  await uploadFile(page, pngFile(a));
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await uploadFile(page, pngFile(b));
+  await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });
+
+  await cardByName(page, a).click({ modifiers: ['ControlOrMeta'] });
+  await cardByName(page, b).click({ modifiers: ['ControlOrMeta'] });
+
+  // Toolbar "Move" opens the bulk-move modal; pick the `dest` quick-pick + confirm.
+  await page.getByRole('button', { name: 'Move', exact: true }).click();
+  const modal = page.locator('.ff-confirm-overlay:has(input[x-model="bulkMoveTarget"])');
+  await modal.getByRole('button', { name: 'dest', exact: true }).click();
+  await modal.getByRole('button', { name: 'Move', exact: true }).click();
+
+  // Files leave the source view…
+  await expect(cardByName(page, a)).toHaveCount(0, { timeout: 15_000 });
+  await expect(cardByName(page, b)).toHaveCount(0);
+  // …and land inside `dest`.
+  await cardByName(page, 'dest').dblclick();
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await expect(cardByName(page, b)).toBeVisible();
+});
+
+test('bulk download: triggers a download for each selected file', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-bulkdl-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  const stamp = Date.now();
+  const a = `dl-a-${stamp}.png`;
+  const b = `dl-b-${stamp}.png`;
+  await uploadFile(page, pngFile(a));
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await uploadFile(page, pngFile(b));
+  await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });
+
+  await cardByName(page, a).click({ modifiers: ['ControlOrMeta'] });
+  await cardByName(page, b).click({ modifiers: ['ControlOrMeta'] });
+
+  // Collect the per-file downloads bulkDownload() fires (one <a download> per file).
+  const downloads: string[] = [];
+  page.on('download', (d) => downloads.push(d.suggestedFilename()));
+
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+
+  await expect.poll(() => downloads.length, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
+  expect(downloads).toContain(a);
+  expect(downloads).toContain(b);
+});
