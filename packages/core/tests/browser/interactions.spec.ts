@@ -231,3 +231,69 @@ test('picker multiple: selecting several files emits an FM_SELECT array', async 
   expect(sel.length).toBe(2);
   expect(sel.map((s: any) => s.name).sort()).toEqual([a, b].sort());
 });
+
+test('bulk delete: select multiple files and delete them all at once', async ({ page }) => {
+  const token = mintToken();
+  // multiple=1 enables multi-select; Ctrl/Cmd-click accumulates the selection.
+  await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-bulkdel-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  const stamp = Date.now();
+  const a = `del-a-${stamp}.png`;
+  const b = `del-b-${stamp}.png`;
+  await uploadFile(page, pngFile(a));
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await uploadFile(page, pngFile(b));
+  await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });
+
+  await cardByName(page, a).click({ modifiers: ['ControlOrMeta'] });
+  await cardByName(page, b).click({ modifiers: ['ControlOrMeta'] });
+
+  // Contextual bulk delete button (shows count) → confirm dialog → deleteSelected().
+  await page.locator('.ff-toolbar-context .tb-btn.danger').click();
+  await page.locator('.ff-confirm-box .ff-btn-danger').click();
+
+  await expect(cardByName(page, a)).toHaveCount(0, { timeout: 15_000 });
+  await expect(cardByName(page, b)).toHaveCount(0);
+  await expect(page.locator('.ff-empty:has(.ff-empty-cta)')).toBeVisible();
+});
+
+test('bulk move: move multiple files into a subfolder at once', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const base = `pw-bulkmv-${Date.now()}`;
+  await createFolder(page, page, base);
+  await enterFolder(page, base);
+  await createFolder(page, page, 'dest'); // destination subfolder
+
+  const stamp = Date.now();
+  const a = `mv-a-${stamp}.png`;
+  const b = `mv-b-${stamp}.png`;
+  await uploadFile(page, pngFile(a));
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await uploadFile(page, pngFile(b));
+  await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });
+
+  await cardByName(page, a).click({ modifiers: ['ControlOrMeta'] });
+  await cardByName(page, b).click({ modifiers: ['ControlOrMeta'] });
+
+  // Toolbar "Move" opens the bulk-move modal; pick the `dest` quick-pick + confirm.
+  await page.getByRole('button', { name: 'Move', exact: true }).click();
+  const modal = page.locator('.ff-confirm-overlay:has(input[x-model="bulkMoveTarget"])');
+  await modal.getByRole('button', { name: 'dest', exact: true }).click();
+  await modal.getByRole('button', { name: 'Move', exact: true }).click();
+
+  // Files leave the source view…
+  await expect(cardByName(page, a)).toHaveCount(0, { timeout: 15_000 });
+  await expect(cardByName(page, b)).toHaveCount(0);
+  // …and land inside `dest`.
+  await cardByName(page, 'dest').dblclick();
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await expect(cardByName(page, b)).toBeVisible();
+});
