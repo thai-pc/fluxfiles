@@ -1066,6 +1066,12 @@ FLUXFILES_LOCALE=vi
 
 ## Testing
 
+> Install core dependencies first — the PHP tests load `packages/core/vendor/autoload.php`:
+>
+> ```bash
+> composer install -d packages/core
+> ```
+
 ### Core PHP — unit & integration
 
 ```bash
