@@ -44,6 +44,29 @@ if ($uri === '/fluxfiles.js') {
     }
 }
 
+// Dev convenience: serve the editor adapter packages (CKEditor 4 / TinyMCE) from
+// their sibling dirs so the manual test pages under /tests/manual/ can load each
+// plugin + its assets at a stable absolute path. Monorepo checkout only.
+foreach (['ckeditor4', 'tinymce'] as $pkg) {
+    if (strncmp($uri, "/{$pkg}/", strlen($pkg) + 2) === 0) {
+        $base = realpath(__DIR__ . "/../{$pkg}");
+        $file = realpath(__DIR__ . '/..' . $uri);
+        if ($base !== false && $file !== false
+            && strncmp($file, $base . DIRECTORY_SEPARATOR, strlen($base) + 1) === 0
+            && is_file($file)
+        ) {
+            $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            $types = ['js' => 'application/javascript', 'css' => 'text/css',
+                      'png' => 'image/png', 'svg' => 'image/svg+xml', 'gif' => 'image/gif'];
+            $ct = $types[$ext] ?? 'application/octet-stream';
+            header('Content-Type: ' . $ct . (in_array($ext, ['js', 'css', 'svg'], true) ? '; charset=utf-8' : ''));
+            header('Cache-Control: public, max-age=300');
+            readfile($file);
+            return true;
+        }
+    }
+}
+
 // Route /api/* through the API
 if (strncmp($uri, '/api/', 5) === 0) {
     require __DIR__ . '/api/index.php';

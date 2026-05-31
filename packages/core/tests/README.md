@@ -7,7 +7,7 @@ Layout by test type:
 | `unit/` | Pure logic — claims, owner-only, visibility URLs, i18n, rate limiter, BYOB crypto/SSRF, disk manager | PHP only |
 | `integration/` | Local-filesystem behaviour — metadata sidecars, image variants, existing-file indexer | PHP + temp FS |
 | `e2e/` | `test-api.sh` (running server) and `test-s3-live.php` (live S3/R2, env-gated) | server / S3 backend |
-| `manual/` | Browser fixtures for SDK + editor integrations (open in a browser) | manual |
+| `manual/` | Browser fixtures for SDK + editor integrations (serve via `router.php`, open `http://localhost:8080/tests/manual/*.html` — not `file://`) | manual |
 | `apps/` | React/Vue/Laravel host scaffolds for wrapper testing | node / composer |
 | `generate-token.php` | Helper to mint test JWTs | PHP |
 

@@ -5,6 +5,15 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Manual editor test pages now load.** `tests/manual/test-ckeditor4.html` and
+  `test-tinymce.html` referenced the SDK at `../fluxfiles.js` and their plugin at
+  `../../{pkg}/` — both 404'd after the monorepo restructure. They now use the
+  absolute `/fluxfiles.js` + `/{ckeditor4,tinymce}/plugin.js` paths, and the dev
+  `router.php` serves those sibling adapter packages. README/test docs updated to
+  open the pages through the dev server (not `file://`).
+
 ### Changed
 
 - **Real upload progress.** The upload bar now shows true byte-level progress via
