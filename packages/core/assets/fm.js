@@ -982,9 +982,11 @@ function fluxFilesApp() {
             this.loadFiles();
         },
 
-        // Bulk download (sequential)
+        // Bulk download (sequential) — files only; folders have no direct URL.
         async bulkDownload() {
-            for (const file of this.selected) {
+            const files = this.selected.filter(f => f.type !== 'dir' && f.url);
+            if (files.length === 0) return;
+            for (const file of files) {
                 this.downloadFile(file);
                 // Small delay so browser doesn't block multiple downloads
                 await new Promise(r => setTimeout(r, 300));

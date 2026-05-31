@@ -297,3 +297,34 @@ test('bulk move: move multiple files into a subfolder at once', async ({ page })
   await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
   await expect(cardByName(page, b)).toBeVisible();
 });
+
+test('bulk download: triggers a download for each selected file', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-bulkdl-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  const stamp = Date.now();
+  const a = `dl-a-${stamp}.png`;
+  const b = `dl-b-${stamp}.png`;
+  await uploadFile(page, pngFile(a));
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await uploadFile(page, pngFile(b));
+  await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });
+
+  await cardByName(page, a).click({ modifiers: ['ControlOrMeta'] });
+  await cardByName(page, b).click({ modifiers: ['ControlOrMeta'] });
+
+  // Collect the per-file downloads bulkDownload() fires (one <a download> per file).
+  const downloads: string[] = [];
+  page.on('download', (d) => downloads.push(d.suggestedFilename()));
+
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+
+  await expect.poll(() => downloads.length, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
+  expect(downloads).toContain(a);
+  expect(downloads).toContain(b);
+});

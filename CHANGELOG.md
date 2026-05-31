@@ -86,7 +86,7 @@ CKEditor 4, and TinyMCE.
   interaction coverage: upload, folder create + breadcrumb navigation, search,
   dark-mode toggle, delete, inline crop (save-as-copy), single-pick `FM_SELECT`,
   multi-select (`multiple:true`) returning an `FM_SELECT` array, and bulk
-  operations (multi-select delete + move).
+  operations (multi-select delete + move + download).
 - **Wrapper tests** — vitest for the JS adapters, stubbed-PHP smokes for
   WordPress/Laravel, and a pack-&-install smoke that typechecks published
   tarballs.
