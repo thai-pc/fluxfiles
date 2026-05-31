@@ -4,7 +4,13 @@ Adds a **FluxFiles** toolbar button to TinyMCE 4.x / 5.x for browsing and insert
 
 ## Installation
 
-1. Copy this folder to your TinyMCE plugins directory:
+```bash
+npm install @fluxfiles/tinymce
+```
+
+TinyMCE loads the plugin from a URL (`external_plugins`), so make `plugin.js`
+reachable — reference it from `node_modules/@fluxfiles/tinymce/plugin.js`, or copy
+the plugin folder into your TinyMCE `plugins/` directory:
 
 ```
 tinymce/plugins/fluxfiles/

@@ -3,7 +3,32 @@
   "version": "0.1.1",
   "description": "CKEditor 4 plugin for FluxFiles",
   "license": "MIT",
-  "private": true,
+  "main": "plugin.js",
+  "files": [
+    "plugin.js",
+    "icons",
+    "README.md"
+  ],
   "scripts": { "test": "vitest run" },
-  "devDependencies": { "jsdom": "^25.0.1", "vitest": "^2.1.8" }
+  "devDependencies": { "jsdom": "^25.0.1", "vitest": "^2.1.8" },
+  "publishConfig": { "access": "public" },
+  "author": "thai-pc",
+  "homepage": "https://github.com/thai-pc/fluxfiles#ckeditor-4",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thai-pc/fluxfiles.git",
+    "directory": "packages/ckeditor4"
+  },
+  "bugs": { "url": "https://github.com/thai-pc/fluxfiles/issues" },
+  "keywords": [
+    "fluxfiles",
+    "file-manager",
+    "ckeditor",
+    "ckeditor4",
+    "plugin",
+    "s3",
+    "r2",
+    "upload",
+    "media"
+  ]
 }

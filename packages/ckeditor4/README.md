@@ -4,7 +4,13 @@ Adds a **FluxFiles** toolbar button to CKEditor 4 for browsing and inserting fil
 
 ## Installation
 
-1. Copy this folder to your CKEditor plugins directory:
+```bash
+npm install @fluxfiles/ckeditor4
+```
+
+CKEditor 4 loads plugins from a path, so make the files reachable by your editor —
+either point `CKEDITOR.plugins.addExternal` at `node_modules/@fluxfiles/ckeditor4/`,
+or copy the plugin folder into your CKEditor `plugins/` directory:
 
 ```
 ckeditor/plugins/fluxfiles/
