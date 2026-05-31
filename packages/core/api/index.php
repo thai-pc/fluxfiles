@@ -90,7 +90,9 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     $locale = $i18n->locale();
     $dir = $i18n->direction();
     $html = file_get_contents(__DIR__ . '/../public/index.html');
-    $injection = "window.__FM_LOCALE__ = { locale: " . json_encode($locale) . ", dir: " . json_encode($dir) . ", messages: {$localeJson} };";
+    // HEX flags keep these safe to embed inside the inline <script> (no </script> breakout).
+    $jsFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+    $injection = "window.__FM_LOCALE__ = { locale: " . json_encode($locale, $jsFlags) . ", dir: " . json_encode($dir, $jsFlags) . ", messages: {$localeJson} };";
     $html = str_replace(
         "window.__FM_LOCALE__ = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };",
         $injection,
