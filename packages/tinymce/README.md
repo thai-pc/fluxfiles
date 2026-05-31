@@ -51,3 +51,9 @@ tinymce.init({
 - **TinyMCE 4.x** — Uses `addButton` / `addMenuItem` API
 - **TinyMCE 5.x** — Uses `ui.registry.addButton` / `ui.registry.addMenuItem` API
 - Auto-detects version at load time.
+
+## Links
+
+- Main repository: `https://github.com/thai-pc/fluxfiles`
+- Documentation: `https://github.com/thai-pc/fluxfiles#tinymce-4x--5x`
+- Issues: `https://github.com/thai-pc/fluxfiles/issues`

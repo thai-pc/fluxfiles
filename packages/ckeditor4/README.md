@@ -47,3 +47,9 @@ CKEDITOR.replace('editor', {
 | `disk` | string | `'local'` | Storage disk |
 | `locale` | string | `null` | UI language code |
 | `multiple` | boolean | `false` | Allow multi-file selection |
+
+## Links
+
+- Main repository: `https://github.com/thai-pc/fluxfiles`
+- Documentation: `https://github.com/thai-pc/fluxfiles#ckeditor-4`
+- Issues: `https://github.com/thai-pc/fluxfiles/issues`

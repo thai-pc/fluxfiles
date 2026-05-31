@@ -26,6 +26,6 @@ FluxFiles.open({
 ## Links
 
 - Main repository: `https://github.com/thai-pc/fluxfiles`
-- Documentation: `https://github.com/thai-pc/fluxfiles#sdk`
+- Documentation: `https://github.com/thai-pc/fluxfiles#javascript-sdk-vanilla`
 - Issues: `https://github.com/thai-pc/fluxfiles/issues`
 

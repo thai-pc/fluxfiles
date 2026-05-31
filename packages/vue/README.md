@@ -175,5 +175,5 @@ MIT — see [LICENSE](LICENSE) for details.
 ## Links
 
 - [FluxFiles](https://github.com/thai-pc/fluxfiles) — Main repository
-- [Documentation](https://github.com/thai-pc/fluxfiles#vue--nuxt) — Full docs
+- [Documentation](https://github.com/thai-pc/fluxfiles#vue-3--nuxt-3) — Full docs
 - [Issues](https://github.com/thai-pc/fluxfiles/issues) — Bug reports
