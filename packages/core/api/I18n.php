@@ -67,7 +67,12 @@ class I18n
      */
     public function toJson(): string
     {
-        return json_encode($this->translations, JSON_UNESCAPED_UNICODE);
+        // HEX flags escape <, >, &, ', " as \uXXXX so the JSON is safe to embed
+        // directly inside an inline <script> (can't break out with </script>).
+        return json_encode(
+            $this->translations,
+            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -164,6 +169,12 @@ class I18n
     private function isSupported(string $locale): bool
     {
         $code = $this->normalize($locale);
+        // Locale codes are 2–5 lowercase letters. Reject anything else BEFORE the
+        // file_exists() check so a crafted ?lang= (e.g. "../composer") cannot
+        // traverse the lang dir and load an arbitrary .json into the page.
+        if (!preg_match('/^[a-z]{2,5}$/', $code)) {
+            return false;
+        }
         return in_array($code, self::SUPPORTED, true)
             || file_exists("{$this->langDir}/{$code}.json");
     }

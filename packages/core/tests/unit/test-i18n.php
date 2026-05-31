@@ -171,6 +171,46 @@ if ($testApi) {
     }
 }
 
+// --- 4. Security: locale resolution must reject path traversal ---
+echo "\n{$yellow}[sec] Locale resolution rejects path traversal{$reset}\n";
+$malicious = ['../composer', '../../etc/passwd', 'en/../../secret', '<script>', '..%2ffoo'];
+foreach ($malicious as $bad) {
+    // (a) forceLocale path
+    $i = new I18n($langDir, $bad);
+    if ($i->locale() === 'en') {
+        echo "  {$green}✓{$reset} forceLocale '{$bad}' → rejected (en)\n";
+    } else {
+        echo "  {$red}✗ forceLocale '{$bad}' resolved to '{$i->locale()}'{$reset}\n";
+        $errors++;
+    }
+    // (b) ?lang= path (consulted only when forceLocale is null)
+    $_GET['lang'] = $bad;
+    $i2 = new I18n($langDir, null);
+    if ($i2->locale() === 'en') {
+        echo "  {$green}✓{$reset} ?lang='{$bad}' → rejected (en)\n";
+    } else {
+        echo "  {$red}✗ ?lang='{$bad}' resolved to '{$i2->locale()}'{$reset}\n";
+        $errors++;
+    }
+    unset($_GET['lang']);
+}
+// Sanity: a real locale still resolves
+$okI18n = new I18n($langDir, 'vi');
+if ($okI18n->locale() === 'vi') {
+    echo "  {$green}✓{$reset} valid locale 'vi' still resolves\n";
+} else {
+    echo "  {$red}✗ valid 'vi' broke → '{$okI18n->locale()}'{$reset}\n";
+    $errors++;
+}
+// toJson() must be safe to embed in an inline <script> (HEX-escaped angle brackets)
+$jsonOut = $okI18n->toJson();
+if (strpos($jsonOut, '<') === false && strpos($jsonOut, '>') === false) {
+    echo "  {$green}✓{$reset} toJson() has no literal < or > (no </script> breakout)\n";
+} else {
+    echo "  {$red}✗ toJson() contains a literal angle bracket{$reset}\n";
+    $errors++;
+}
+
 // --- Summary ---
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
 if ($errors === 0) {
