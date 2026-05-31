@@ -298,6 +298,38 @@ test('bulk move: move multiple files into a subfolder at once', async ({ page })
   await expect(cardByName(page, b)).toBeVisible();
 });
 
+test('upload progress UI shows spinner, current filename, and N/total', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-prog-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  // Hold each upload request ~900ms so the progress bar stays observable.
+  await page.route('**/api/fm/upload', async (route) => {
+    await new Promise((r) => setTimeout(r, 900));
+    await route.continue();
+  });
+
+  const stamp = Date.now();
+  const a = `prog-a-${stamp}.png`;
+  const b = `prog-b-${stamp}.png`;
+  await page.locator('input[type=file]').first().setInputFiles([pngFile(a), pngFile(b)]);
+
+  // While in flight: animated spinner, the current file name, and the (n/2) count.
+  await expect(page.locator('.ff-upload-spinner')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('.ff-upload-name')).toBeVisible();
+  await expect(page.locator('.ff-upload-name')).not.toHaveText('');
+  await expect(page.locator('.ff-upload-count')).toHaveText(/\([12]\/2\)/);
+
+  await page.unroute('**/api/fm/upload');
+  // Both files finish and land in the grid.
+  await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
+  await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });
+});
+
 test('bulk download: triggers a download for each selected file', async ({ page }) => {
   const token = mintToken();
   await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);

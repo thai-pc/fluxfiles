@@ -1144,11 +1144,19 @@ CI (`.github/workflows/test.yml`) runs all of the above across 7 jobs (core PHP 
 
 ### Manual browser pages
 
+These pages load the SDK/editor plugins from absolute paths (`/fluxfiles.js`,
+`/ckeditor4/`, `/tinymce/`) that the dev router serves, so **open them through
+the running server**, not via `file://`:
+
 ```bash
-open packages/core/tests/manual/test-sdk.html        # SDK integration
-open packages/core/tests/manual/test-ckeditor4.html  # CKEditor 4
-open packages/core/tests/manual/test-tinymce.html    # TinyMCE
+cd packages/core && php -S localhost:8080 router.php   # then open in a browser:
+#   http://localhost:8080/tests/manual/test-sdk.html        — SDK integration
+#   http://localhost:8080/tests/manual/test-ckeditor4.html  — CKEditor 4
+#   http://localhost:8080/tests/manual/test-tinymce.html    — TinyMCE
 ```
+
+Paste a token from `php packages/core/tests/generate-token.php` into the page's
+token field.
 
 ---
 

@@ -475,10 +475,17 @@
                     </div>
                 </template>
                 <template x-if="uploading">
-                    <div class="ff-upload-bar" style="background:transparent;color:inherit;">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.2"/></svg>
-                        <span x-text="t('upload.uploading') + ' ' + uploadProgress + '%'"></span>
-                        <div class="progress-bar-wrap"><div class="progress-bar" :style="'width:' + uploadProgress + '%'"></div></div>
+                    <div class="ff-upload-bar ff-upload-progress" style="background:transparent;color:inherit;">
+                        <span class="ff-upload-spinner"></span>
+                        <div class="ff-upload-info">
+                            <div class="ff-upload-line">
+                                <span class="ff-upload-label" x-text="uploadPhase === 'processing' ? t('common.loading') : t('upload.uploading')"></span>
+                                <span class="ff-upload-name" x-show="uploadCurrentName" x-text="uploadCurrentName" :title="uploadCurrentName"></span>
+                                <span class="ff-upload-count" x-show="uploadTotal > 1" x-text="'(' + uploadCurrentIndex + '/' + uploadTotal + ')'"></span>
+                                <span class="ff-upload-pct" x-text="uploadProgress + '%'"></span>
+                            </div>
+                            <div class="progress-bar-wrap"><div class="progress-bar" :style="'width:' + uploadProgress + '%'"></div></div>
+                        </div>
                     </div>
                 </template>
             </div>

@@ -108,6 +108,10 @@ function fluxFilesApp() {
         // Upload state
         uploadProgress: 0,
         uploading: false,
+        uploadCurrentName: '',   // file currently being sent
+        uploadCurrentIndex: 0,   // 1-based index within the batch
+        uploadTotal: 0,          // total files in the batch
+        uploadPhase: 'uploading', // 'uploading' (bytes in flight) | 'processing' (server working)
         dragActive: false,
 
         // AI tag state
@@ -997,38 +1001,114 @@ function fluxFilesApp() {
 
         async uploadFiles(fileList) {
             if (!fileList || fileList.length === 0) return;
+            const files = Array.from(fileList);
+            const total = files.length;
+
             this.uploading = true;
             this.uploadProgress = 0;
+            this.uploadTotal = total;
 
-            const total = fileList.length;
-            let done = 0;
+            // Overall % = (fully-done files + current file's byte fraction) / total.
+            const setOverall = (index, frac) => {
+                this.uploadProgress = Math.min(100, Math.round(((index + frac) / total) * 100));
+            };
 
-            for (const file of fileList) {
+            let succeeded = 0;
+            for (let i = 0; i < total; i++) {
+                const file = files[i];
+                this.uploadCurrentIndex = i + 1;
+                this.uploadCurrentName = file.name;
+                this.uploadPhase = 'uploading';
+                setOverall(i, 0);
+
                 try {
-                    // Use chunk upload for files > 10MB on S3/R2 disks
+                    const onFrac = (frac) => {
+                        // Bytes done but awaiting the response → server is processing
+                        // (e.g. generating WebP variants for images).
+                        this.uploadPhase = frac >= 1 ? 'processing' : 'uploading';
+                        setOverall(i, Math.max(0, Math.min(1, frac)));
+                    };
+
                     if (file.size > 10 * 1024 * 1024 && this.currentDisk !== 'local') {
-                        await this.chunkUpload(file, this.currentDisk, this.currentPath);
+                        await this.chunkUpload(file, this.currentDisk, this.currentPath, onFrac);
                     } else {
-                        const formData = new FormData();
-                        formData.append('disk', this.currentDisk);
-                        formData.append('path', this.currentPath);
-                        formData.append('file', file);
-
-                        await this.api('POST', '/api/fm/upload', formData);
+                        await this.uploadOne(file, onFrac);
                     }
-                    done++;
-                    this.uploadProgress = Math.round((done / total) * 100);
 
+                    succeeded++;
+                    setOverall(i + 1, 0); // snap to the file boundary
                     this.postMessage('FM_EVENT', { event: 'upload:done', name: file.name });
                 } catch (err) {
                     console.error('FluxFiles: Upload failed', file.name, err);
-                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
+                    this.showToast((err && err.message) || this.t('error.generic'), 'error', 4000);
+                    // Still advance the bar so it reflects items processed, not just succeeded.
+                    setOverall(i + 1, 0);
                 }
             }
 
             this.uploading = false;
             this.uploadProgress = 0;
+            this.uploadCurrentName = '';
+            this.uploadCurrentIndex = 0;
+            this.uploadTotal = 0;
+            this.uploadPhase = 'uploading';
             this.loadFiles();
+        },
+
+        // Single-file upload over XHR so we get real byte-level upload progress
+        // (fetch() can't report upload progress). Mirrors api()'s 401 token-refresh
+        // retry and i18n error-code mapping.
+        uploadOne(file, onProgress, _isRetry = false) {
+            return new Promise((resolve, reject) => {
+                const form = new FormData();
+                form.append('disk', this.currentDisk);
+                form.append('path', this.currentPath);
+                form.append('file', file);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', this.joinUrl('/api/fm/upload'));
+                xhr.setRequestHeader('Authorization', 'Bearer ' + this.token);
+
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+                };
+                // Whole body sent → hand off to the server (variant generation, etc.).
+                xhr.upload.onload = () => { if (onProgress) onProgress(1); };
+
+                xhr.onerror = () => reject(new Error(this.t('error.generic') || 'Upload failed'));
+                xhr.onload = async () => {
+                    // 401 → coalesced token refresh + single retry, like api().
+                    if (xhr.status === 401 && !_isRetry) {
+                        const refreshed = await this._handleTokenExpired();
+                        if (refreshed) {
+                            try { resolve(await this.uploadOne(file, onProgress, true)); }
+                            catch (e) { reject(e); }
+                        } else {
+                            reject(new Error('Session expired'));
+                        }
+                        return;
+                    }
+
+                    let json = null;
+                    try { json = JSON.parse(xhr.responseText); } catch (_) {}
+
+                    if (xhr.status >= 200 && xhr.status < 300 && json && !json.error) {
+                        this._refreshAttempts = 0;
+                        resolve(json.data);
+                        return;
+                    }
+
+                    // Prefer i18n error code, fall back to raw message.
+                    let msg = null;
+                    if (json && json.error_code) {
+                        msg = this.t('error.' + json.error_code, json.error_params || {});
+                        if (msg === 'error.' + json.error_code) msg = null;
+                    }
+                    reject(new Error(msg || (json && json.error) || ('HTTP ' + xhr.status)));
+                };
+
+                xhr.send(form);
+            });
         },
 
         handleDrop(event) {
@@ -1048,7 +1128,7 @@ function fluxFilesApp() {
         },
 
         // Chunk upload for large files (>10MB) on S3/R2
-        async chunkUpload(file, disk, path) {
+        async chunkUpload(file, disk, path, onProgress) {
             const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
             const MAX_CONCURRENT = 3;
             let key = (path ? path + '/' : '') + file.name;
@@ -1080,7 +1160,7 @@ function fluxFilesApp() {
                 });
 
                 completedParts++;
-                this.uploadProgress = Math.round((completedParts / totalParts) * 100);
+                if (onProgress) onProgress(completedParts / totalParts);
 
                 return {
                     PartNumber: partNumber,

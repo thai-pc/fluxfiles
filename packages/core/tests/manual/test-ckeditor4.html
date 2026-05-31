@@ -208,8 +208,8 @@
         </div>
     </div>
 
-    <!-- Load FluxFiles SDK -->
-    <script src="../fluxfiles.js"></script>
+    <!-- Load FluxFiles SDK (served by the dev router at the root) -->
+    <script src="/fluxfiles.js"></script>
 
     <!-- CKEditor 4 from CDN. Pinned to 4.22.1 (last LTS-free build); 4.23+
          requires a paid Extended Support contract and refuses to boot without
@@ -250,7 +250,7 @@
             // because CKEditor resolves relative paths against its own basePath (CDN),
             // not the page URL.
             if (!CKEDITOR.plugins.externals.fluxfiles) {
-                var pluginDir = new URL('../../ckeditor4/', location.href).href;
+                var pluginDir = new URL('/ckeditor4/', location.href).href;
                 CKEDITOR.plugins.addExternal('fluxfiles', pluginDir, 'plugin.js');
             }
 

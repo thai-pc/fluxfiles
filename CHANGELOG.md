@@ -3,6 +3,29 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Manual editor test pages now load.** `tests/manual/test-ckeditor4.html` and
+  `test-tinymce.html` referenced the SDK at `../fluxfiles.js` and their plugin at
+  `../../{pkg}/` — both 404'd after the monorepo restructure. They now use the
+  absolute `/fluxfiles.js` + `/{ckeditor4,tinymce}/plugin.js` paths, and the dev
+  `router.php` serves those sibling adapter packages. README/test docs updated to
+  open the pages through the dev server (not `file://`).
+
+### Changed
+
+- **Real upload progress.** The upload bar now shows true byte-level progress via
+  `XMLHttpRequest` (`xhr.upload.onprogress`) instead of a coarse file-count
+  percentage — so a single large file no longer sits at 0% then jumps to 100%.
+  Overall % is `(completed files + current file's byte fraction) / total`, and
+  the bar shows the current file name, an `(n/total)` counter, an animated
+  spinner, and a "processing" state once bytes are sent but the server is still
+  working (e.g. generating image variants). The new XHR path preserves the api()
+  401 token-refresh retry and i18n error-code mapping; chunked S3/R2 uploads
+  report part-level progress through the same callback.
+
 ## [0.1.1] — 2026-05-31
 
 ### Security

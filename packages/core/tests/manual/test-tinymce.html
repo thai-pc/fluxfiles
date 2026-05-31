@@ -227,8 +227,8 @@
         </div>
     </div>
 
-    <!-- Load FluxFiles SDK -->
-    <script src="../fluxfiles.js"></script>
+    <!-- Load FluxFiles SDK (served by the dev router at the root) -->
+    <script src="/fluxfiles.js"></script>
 
     <script>
         var editorInstance = null;
@@ -320,7 +320,7 @@
 
                 // Register external plugin (TinyMCE requires absolute URL)
                 external_plugins: {
-                    'fluxfiles': new URL('../../tinymce/plugin.js', location.href).href
+                    'fluxfiles': new URL('/tinymce/plugin.js', location.href).href
                 },
 
                 setup: function (editor) {

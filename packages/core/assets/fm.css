@@ -737,6 +737,37 @@ body {
 
 .ff-upload-bar svg { width: 16px; height: 16px; flex-shrink: 0; }
 
+/* Upload progress: spinning indicator + one-line status (name + N/total + %) + bar */
+.ff-upload-progress { align-items: center; }
+.ff-upload-spinner {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    border: 2px solid var(--color-border-tertiary);
+    border-top-color: var(--ff-success);
+    border-radius: 50%;
+    animation: ff-spin 0.7s linear infinite;
+}
+.ff-upload-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ff-upload-line {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 13px;
+    line-height: 1.2;
+}
+.ff-upload-label { flex-shrink: 0; font-weight: 500; }
+.ff-upload-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+}
+.ff-upload-count { flex-shrink: 0; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
+.ff-upload-pct { flex-shrink: 0; margin-inline-start: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+
 .progress-bar-wrap {
     flex: 1;
     height: 4px;
