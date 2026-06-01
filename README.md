@@ -1148,6 +1148,25 @@ make up               # dev stack: standalone app (:8080) + MinIO (:9000, consol
 
 CI (`.github/workflows/test.yml`) runs all of the above across 7 jobs (core PHP 8.1–8.4, API e2e, live S3 on MinIO, wrappers, browser e2e, pack-smoke, production Docker image).
 
+### Package publishing
+
+Packages are versioned independently. Do not use a plain `v*` monorepo tag for new releases. Use a package-prefixed tag so CI only publishes the package that changed:
+
+```bash
+# Composer split packages. The split repo receives the semver tag without the prefix.
+git tag core-v0.1.3
+git tag laravel-v0.1.3
+
+# npm packages. The tag version must match package.json.
+git tag sdk-v0.1.3
+git tag react-v0.1.3
+git tag vue-v0.1.3
+git tag ckeditor4-v0.1.3
+git tag tinymce-v0.1.3
+```
+
+`core-v*` and `laravel-v*` trigger `.github/workflows/split.yml`. The npm package tags trigger `.github/workflows/npm-publish.yml` for only the matching package.
+
 ### Manual browser pages
 
 These pages load the SDK/editor plugins from absolute paths (`/fluxfiles.js`,

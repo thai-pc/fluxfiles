@@ -2,58 +2,74 @@ name: Publish npm packages
 
 on:
   push:
-    tags: ['v*']
+    tags:
+      - "sdk-v*"
+      - "react-v*"
+      - "vue-v*"
+      - "ckeditor4-v*"
+      - "tinymce-v*"
 
 jobs:
-  # No-build packages: ship source files directly (sdk = fluxfiles.js, editor
-  # plugins = plugin.js). `--access public` is required for the scoped ones.
-  publish-nobuild:
+  publish:
     name: Publish ${{ matrix.pkg }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        pkg: [sdk, ckeditor4, tinymce]
+        include:
+          - pkg: sdk
+            tag_prefix: "sdk-"
+            build: "false"
+          - pkg: ckeditor4
+            tag_prefix: "ckeditor4-"
+            build: "false"
+          - pkg: tinymce
+            tag_prefix: "tinymce-"
+            build: "false"
+          - pkg: react
+            tag_prefix: "react-"
+            build: "true"
+          - pkg: vue
+            tag_prefix: "vue-"
+            build: "true"
+
     steps:
       - uses: actions/checkout@v6
+        if: startsWith(github.ref_name, matrix.tag_prefix)
 
       - uses: actions/setup-node@v6
+        if: startsWith(github.ref_name, matrix.tag_prefix)
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - name: Publish (skip if version exists)
+      - name: Check tag matches package.json version
+        if: startsWith(github.ref_name, matrix.tag_prefix)
         working-directory: packages/${{ matrix.pkg }}
-        run: npm publish --access public || echo "Version already published, skipping."
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  # Bundled packages: build dist first, then publish.
-  publish-build:
-    name: Publish ${{ matrix.adapter }} adapter
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        adapter: [react, vue]
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
+          TAG_PREFIX: ${{ matrix.tag_prefix }}
+          MONOREPO_TAG: ${{ github.ref_name }}
+        run: |
+          PACKAGE_TAG="${MONOREPO_TAG#${TAG_PREFIX}}"
+          PACKAGE_VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$PACKAGE_TAG" != "$PACKAGE_VERSION" ]; then
+            echo "::error::Tag ${MONOREPO_TAG} does not match packages/${{ matrix.pkg }}/package.json version ${PACKAGE_VERSION}"
+            exit 1
+          fi
 
       - name: Install dependencies
-        working-directory: packages/${{ matrix.adapter }}
+        if: startsWith(github.ref_name, matrix.tag_prefix) && matrix.build == 'true'
+        working-directory: packages/${{ matrix.pkg }}
         run: npm install
 
       - name: Build
-        working-directory: packages/${{ matrix.adapter }}
+        if: startsWith(github.ref_name, matrix.tag_prefix) && matrix.build == 'true'
+        working-directory: packages/${{ matrix.pkg }}
         run: npm run build
 
       - name: Publish (skip if version exists)
-        working-directory: packages/${{ matrix.adapter }}
+        if: startsWith(github.ref_name, matrix.tag_prefix)
+        working-directory: packages/${{ matrix.pkg }}
         run: npm publish --access public || echo "Version already published, skipping."
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

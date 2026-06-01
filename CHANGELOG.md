@@ -16,6 +16,8 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Changed
 
+- **Package publishing now uses independent tags.** CI no longer treats every `v*` monorepo tag as a release for every package. Composer split packages use `core-v*` / `laravel-v*` tags, and npm packages use `sdk-v*`, `react-v*`, `vue-v*`, `ckeditor4-v*`, or `tinymce-v*` so only the changed package publishes.
+
 - **Real upload progress.** The upload bar now shows true byte-level progress via
   `XMLHttpRequest` (`xhr.upload.onprogress`) instead of a coarse file-count
   percentage — so a single large file no longer sits at 0% then jumps to 100%.
