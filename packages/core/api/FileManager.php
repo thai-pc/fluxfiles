@@ -181,6 +181,16 @@ class FileManager
             );
         }
 
+        // File-count limit (total files under the prefix)
+        if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
+            $this->quotaManager->assertFileCount(
+                $disk,
+                $this->claims->pathPrefix,
+                1,
+                $this->claims->maxFiles
+            );
+        }
+
         $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
         $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);

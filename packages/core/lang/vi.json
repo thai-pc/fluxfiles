@@ -164,6 +164,7 @@
         "not_found": "Không tìm thấy",
         "quota_exceeded": "Đã vượt quá dung lượng ({used} / {max})",
         "upload_too_large": "File quá lớn (tối đa {max})",
+        "too_many_files": "Đã đạt giới hạn số tệp (tối đa {max})",
         "ext_not_allowed": "Loại file .{ext} không được phép",
         "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
         "system_path": "Không thể thao tác trên file này",

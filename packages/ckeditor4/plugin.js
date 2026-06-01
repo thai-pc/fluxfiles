@@ -39,6 +39,8 @@
                         disk: cfg.disk || 'local',
                         mode: 'picker',
                         multiple: !!cfg.multiple,
+                        maxUploadMb: cfg.maxUploadMb || null,
+                        maxFiles: cfg.maxFiles || null,
                         locale: cfg.locale || null,
                         onSelect: function (payload) {
                             var files = Array.isArray(payload) ? payload : (payload && payload.files ? payload.files : [payload]);

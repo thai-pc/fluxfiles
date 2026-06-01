@@ -27,6 +27,48 @@ test('upload a file through the UI → it appears in the grid', async ({ page })
   await expect(cardByName(page, fname)).toBeVisible({ timeout: 15_000 });
 });
 
+test('maxUploadMb blocks an oversized file client-side (toast, no upload)', async ({ page }) => {
+  const token = mintToken();
+  // Standalone URL param sets config.maxUploadMb = 1 (MB).
+  await page.goto(`/public/index.html?token=${token}&disk=local&maxUploadMb=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-maxmb-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  // A ~2 MB "file" — exceeds the 1 MB client limit.
+  const big = { name: `big-${Date.now()}.png`, mimeType: 'image/png', buffer: Buffer.alloc(2 * 1024 * 1024, 7) };
+
+  let uploadCalled = false;
+  await page.route('**/api/fm/upload', (r) => { uploadCalled = true; return r.continue(); });
+
+  await page.locator('input[type=file]').first().setInputFiles(big);
+
+  await expect(page.locator('.ff-toast')).toBeVisible({ timeout: 5_000 });
+  await page.waitForTimeout(800);
+  expect(uploadCalled).toBe(false);               // never hit the API
+  await expect(cardByName(page, big.name)).toHaveCount(0);
+});
+
+test('maxFiles caps an oversized drop batch client-side', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local&maxFiles=2`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-maxf-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  const stamp = Date.now();
+  const fs = [`x1-${stamp}.png`, `x2-${stamp}.png`, `x3-${stamp}.png`].map((n) => pngFile(n));
+  await page.locator('input[type=file]').first().setInputFiles(fs);
+
+  await expect(page.locator('.ff-toast')).toBeVisible({ timeout: 5_000 });
+  // Batch sliced to maxFiles=2 → exactly 2 cards, never 3.
+  await expect(page.locator('.file-card')).toHaveCount(2, { timeout: 15_000 });
+});
+
 test('dropping a file OUTSIDE the dropzone uploads it (no browser navigation)', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);

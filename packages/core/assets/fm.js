@@ -284,7 +284,7 @@ function fluxFilesApp() {
             document.documentElement.lang = this.locale;
 
             this.postMessage('FM_READY', {
-                version: '0.1.3',
+                version: '0.2.0',
                 locale: this.locale,
                 capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops', 'ai-tag', 'i18n']
             });
@@ -300,7 +300,9 @@ function fluxFilesApp() {
                 this.config = {
                     disks: (params.get('disks') || 'local').split(','),
                     theme: params.get('theme') || null,
-                    multiple: params.get('multiple') === '1' || params.get('multiple') === 'true'
+                    multiple: params.get('multiple') === '1' || params.get('multiple') === 'true',
+                    maxUploadMb: params.get('maxUploadMb') ? parseInt(params.get('maxUploadMb'), 10) : null,
+                    maxFiles: params.get('maxFiles') ? parseInt(params.get('maxFiles'), 10) : null
                 };
                 this._initTheme();
 
@@ -1028,7 +1030,31 @@ function fluxFilesApp() {
 
         async uploadFiles(fileList) {
             if (!fileList || fileList.length === 0) return;
-            const files = Array.from(fileList);
+            let files = Array.from(fileList);
+
+            // Client-side size guard (MB). The server also enforces max_upload, but
+            // checking here avoids uploading bytes that will be rejected with 413.
+            const maxMb = (this.config && typeof this.config.maxUploadMb === 'number')
+                ? this.config.maxUploadMb : 0;
+            if (maxMb > 0) {
+                const tooBig = files.filter(f => f.size > maxMb * 1024 * 1024);
+                if (tooBig.length) {
+                    this.showToast(this.t('error.upload_too_large', { max: maxMb + 'MB' }), 'error', 4000);
+                    files = files.filter(f => f.size <= maxMb * 1024 * 1024);
+                }
+                if (files.length === 0) return;
+            }
+
+            // Client-side file-count guard. The server enforces the true total under
+            // the prefix; this catches an oversized batch early. Cap the batch to
+            // maxFiles so a single drop of too many files is rejected up front.
+            const maxFiles = (this.config && typeof this.config.maxFiles === 'number')
+                ? this.config.maxFiles : 0;
+            if (maxFiles > 0 && files.length > maxFiles) {
+                this.showToast(this.t('error.too_many_files', { max: maxFiles }), 'error', 4000);
+                files = files.slice(0, maxFiles);
+            }
+
             const total = files.length;
 
             this.uploading = true;

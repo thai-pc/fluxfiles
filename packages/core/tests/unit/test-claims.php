@@ -70,6 +70,7 @@ test('fromJwtPayload with minimal payload uses defaults', function () {
     assertEqual(10, $claims->maxUploadMb);
     assertEqual(null, $claims->allowedExt);
     assertEqual(0, $claims->maxStorageMb);
+    assertEqual(0, $claims->maxFiles);
     assertEqual([], $claims->byobDisks);
 });
 
@@ -82,6 +83,7 @@ test('fromJwtPayload with full payload', function () {
         'max_upload'  => 50,
         'allowed_ext' => ['jpg', 'png', 'pdf'],
         'max_storage' => 500,
+        'max_files'   => 25,
     ];
     $claims = FluxFiles\Claims::fromJwtPayload($payload);
 
@@ -92,6 +94,7 @@ test('fromJwtPayload with full payload', function () {
     assertEqual(50, $claims->maxUploadMb);
     assertEqual(['jpg', 'png', 'pdf'], $claims->allowedExt);
     assertEqual(500, $claims->maxStorageMb);
+    assertEqual(25, $claims->maxFiles);
 });
 
 // ═══════════════════════════════════════════════════════════════

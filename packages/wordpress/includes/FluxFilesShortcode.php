@@ -26,10 +26,11 @@ class FluxFilesShortcode
         }
 
         $atts = shortcode_atts([
-            'disk'   => 'local',
-            'mode'   => 'picker',
-            'width'  => '100%',
-            'height' => '600px',
+            'disk'     => 'local',
+            'mode'     => 'picker',
+            'width'    => '100%',
+            'height'   => '600px',
+            'multiple' => '0',
         ], $atts, 'fluxfiles');
 
         try {
@@ -58,6 +59,7 @@ class FluxFilesShortcode
             'token'     => $token,
             'disk'      => $atts['disk'],
             'mode'      => $atts['mode'],
+            'multiple'  => filter_var($atts['multiple'], FILTER_VALIDATE_BOOLEAN),
             'container' => "#{$containerId}",
             'locale'    => $locale,
         ]);

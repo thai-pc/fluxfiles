@@ -39,8 +39,12 @@ export interface FluxFilesConfig {
   multiple?: boolean;
   /** Filter displayed file types (e.g. ["image/*", ".pdf"]). */
   allowedTypes?: string[] | null;
-  /** Max file size filter in bytes. */
+  /** Max size per uploaded file, in **megabytes (MB)**. Preferred over `maxSize`. */
+  maxUploadMb?: number | null;
+  /** @deprecated Use `maxUploadMb` (MB). Bytes; converted when `maxUploadMb` is unset. */
   maxSize?: number | null;
+  /** Max number of files per upload batch (0/undefined = unlimited). Server enforces the prefix total via the `max_files` claim. */
+  maxFiles?: number | null;
   /** Locale code (e.g. "en", "vi", "ar"). */
   locale?: string | null;
 }

@@ -135,11 +135,24 @@ return [
         'perms'       => ['read', 'write', 'delete'],
         'disks'       => ['local'],
         'prefix'      => '',
-        'max_upload'  => 10,
-        'allowed_ext' => null,
-        'max_storage' => 0,
-        'ttl'         => 3600,
+        'max_upload'  => 10,    // MB — max size per uploaded file
+        'allowed_ext' => null,  // lowercase, no dot; null = all safe types
+        'max_storage' => 0,     // MB — total quota per prefix (0 = unlimited)
+        'max_files'   => 0,     // max number of files per prefix (0 = unlimited)
+        'ttl'         => 3600,  // seconds — token lifetime
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | UI Defaults
+    |--------------------------------------------------------------------------
+    |
+    | Default picker/UI options for the <x-fluxfiles> Blade component. These are
+    | NOT JWT claims — they configure the embedded picker. `multiple` enables
+    | multi-select (onSelect then receives an array).
+    |
+    */
+    'multiple' => false,
 
     /*
     |--------------------------------------------------------------------------

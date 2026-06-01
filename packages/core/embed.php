@@ -21,6 +21,8 @@ use FluxFiles\JwtCompat;
  * @param bool       $ownerOnly    Restrict delete/rename/move to the uploader.
  * @param int        $maxStorageMb Total storage quota for the prefix, in MEGABYTES
  *                                 (MB). 0 = unlimited.
+ * @param int        $maxFiles     Max number of files allowed under the prefix.
+ *                                 0 = unlimited.
  */
 function fluxfiles_token(
     string $userId,
@@ -31,7 +33,8 @@ function fluxfiles_token(
     ?array $allowedExt = null,
     int $ttl = 3600,
     bool $ownerOnly = false,
-    int $maxStorageMb = 0
+    int $maxStorageMb = 0,
+    int $maxFiles = 0
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -47,6 +50,7 @@ function fluxfiles_token(
         'max_upload'  => $maxUploadMb,
         'allowed_ext' => $allowedExt,
         'max_storage' => $maxStorageMb,
+        'max_files'   => $maxFiles,
     ];
 
     if ($ownerOnly) {

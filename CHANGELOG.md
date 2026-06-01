@@ -3,7 +3,38 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] — 2026-06-02
+
+### Added
+
+- **`max_files` — limit the number of files.** New JWT claim `max_files` (token
+  param `maxFiles`, `0` = unlimited) caps the **total** user-visible files under
+  a prefix; exceeding it returns **413 `too_many_files`** on both the normal and
+  chunked upload paths (`QuotaManager::getFileCount()` skips internal
+  `_fluxfiles/`/`_variants/`). The SDK/React/Vue/editor `maxFiles` option also caps
+  a single drop/selection batch client-side. Wired through every package
+  (core/SDK/React/Vue/CKEditor4/TinyMCE/Laravel/WordPress) + the standalone URL
+  param `?maxFiles=`. Added `error.too_many_files` to all 16 locales.
+
+### Changed
+
+- **Upload-size option standardized on megabytes.** The JS packages now take
+  **`maxUploadMb`** (MB) — matching the server's `max_upload` claim — instead of
+  the bytes-based `maxSize`. `maxSize` is kept as a **deprecated alias** (auto
+  converted to MB) so existing integrations keep working. The standalone UI now
+  **actually enforces** the per-file size client-side (it was a dead option
+  before): an oversized file is rejected with a toast before any bytes are sent.
+  Standalone URL param `?maxUploadMb=` added.
+
+- **`multiple` option filled in where it was missing.** Laravel `config/fluxfiles.php`
+  gains a `multiple` UI default (the `<x-fluxfiles>` component falls back to it),
+  and the WordPress `[fluxfiles]` shortcode (`multiple="1"`) + media button
+  (`fluxfiles_picker_multiple` option) now support multi-select. SDK/React/Vue/
+  CKEditor4/TinyMCE already had it.
+
+- **`fluxfiles_token()` can now set the storage quota.** Added a `maxStorageMb`
+  parameter (megabytes; `0` = unlimited) that writes the `max_storage` claim — the
+  claim was enforced but the core helper had no way to set it.
 
 ### Fixed
 
@@ -16,13 +47,6 @@ All notable changes to FluxFiles are documented here. This project adheres to
   published lib), so CI resolves platform-correct optional deps from a fresh
   install. (`react`'s committed lock already lists all platforms; `vue`'s pulls no
   native rollup — both unaffected.)
-
-### Added
-
-- **`fluxfiles_token()` can now set the storage quota.** Added a `maxStorageMb`
-  parameter (megabytes; `0` = unlimited) that writes the `max_storage` claim. The
-  claim was already enforced by the quota manager but the core helper had no way
-  to set it.
 
 ### Documentation
 

@@ -164,6 +164,7 @@
         "not_found": "見つかりません",
         "quota_exceeded": "ストレージ容量を超えました（{used} / {max}）",
         "upload_too_large": "ファイルが大きすぎます（最大 {max}）",
+        "too_many_files": "ファイル数の上限に達しました（最大 {max}）",
         "ext_not_allowed": ".{ext} ファイル形式は許可されていません",
         "generic": "問題が発生しました。もう一度お試しください。",
         "system_path": "このファイルは操作できません",

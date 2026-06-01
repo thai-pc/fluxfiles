@@ -164,6 +164,7 @@
         "not_found": "Not found",
         "quota_exceeded": "Storage quota exceeded ({used} / {max})",
         "upload_too_large": "File is too large (max {max})",
+        "too_many_files": "File limit reached (max {max})",
         "ext_not_allowed": "File type .{ext} is not allowed",
         "generic": "Something went wrong. Please try again.",
         "system_path": "This file cannot be modified",

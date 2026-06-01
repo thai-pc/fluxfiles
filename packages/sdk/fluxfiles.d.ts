@@ -12,7 +12,12 @@ interface FluxFilesOpenOptions {
     /** Theme: "light", "dark", or "auto". */
     theme?: string;
     allowedTypes?: string[];
+    /** Max size per uploaded file, in **megabytes (MB)**. Preferred over `maxSize`. */
+    maxUploadMb?: number;
+    /** @deprecated Use `maxUploadMb` (MB). Bytes; converted to MB when `maxUploadMb` is unset. */
     maxSize?: number;
+    /** Max number of files per upload batch (0/undefined = unlimited). The server enforces the total per prefix via the `max_files` claim. */
+    maxFiles?: number;
     container?: string;
     onSelect?: (file: FluxFile | FluxFile[]) => void;
     onClose?: () => void;

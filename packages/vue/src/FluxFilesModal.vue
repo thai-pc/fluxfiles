@@ -11,7 +11,9 @@ const props = withDefaults(defineProps<{
   mode?: 'picker' | 'browser';
   multiple?: boolean;
   allowedTypes?: string[] | null;
+  maxUploadMb?: number | null;
   maxSize?: number | null;
+  maxFiles?: number | null;
   locale?: string | null;
   overlayClass?: string;
   modalClass?: string;
@@ -36,7 +38,9 @@ const handle = useFluxFiles({
   mode: props.mode,
   multiple: props.multiple,
   allowedTypes: props.allowedTypes,
+  maxUploadMb: props.maxUploadMb,
   maxSize: props.maxSize,
+  maxFiles: props.maxFiles,
   locale: props.locale,
   onSelect: (file) => emit('select', file),
   onClose: () => {

@@ -42,6 +42,7 @@ class FluxFilesManager
             'max_upload'  => $overrides['max_upload'] ?? $defaults['max_upload'],
             'allowed_ext' => $overrides['allowed_ext'] ?? $defaults['allowed_ext'],
             'max_storage' => $overrides['max_storage'] ?? $defaults['max_storage'],
+            'max_files'   => $overrides['max_files'] ?? $defaults['max_files'] ?? 0,
         ];
 
         if (!empty($overrides['owner_only'])) {
@@ -112,6 +113,7 @@ class FluxFilesManager
             'max_upload'  => $overrides['max_upload'] ?? $defaults['max_upload'],
             'allowed_ext' => $overrides['allowed_ext'] ?? $defaults['allowed_ext'],
             'max_storage' => $overrides['max_storage'] ?? $defaults['max_storage'],
+            'max_files'   => $overrides['max_files'] ?? $defaults['max_files'] ?? 0,
             'byob_disks'  => $encryptedDisks,
         ];
 

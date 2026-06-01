@@ -164,6 +164,7 @@
         "not_found": "No encontrado",
         "quota_exceeded": "Cuota de almacenamiento excedida ({used} / {max})",
         "upload_too_large": "El archivo es demasiado grande (máx. {max})",
+        "too_many_files": "Límite de archivos alcanzado (máx. {max})",
         "ext_not_allowed": "El tipo de archivo .{ext} no está permitido",
         "generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
         "system_path": "Este archivo no se puede modificar",
