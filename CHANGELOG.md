@@ -5,6 +5,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.2.1] — 2026-06-02
 
+### Changed
+
+- **CKEditor 4 toolbar icon is now an inline SVG**, matching the TinyMCE plugin —
+  the same folder glyph as a data-URI SVG instead of a bundled `icons/fluxfiles.png`.
+  Drops the PNG file, the sprite-based `icons`/`hidpi` plugin props, and the
+  `icons` entry in `package.json`. Both editor plugins are now visually in sync
+  and ship no separate image asset.
+
 ### Fixed
 
 - **Duplicated network requests when opening the manager (iframe/modal).** The
