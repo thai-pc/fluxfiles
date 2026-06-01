@@ -5,14 +5,19 @@
     "license": "MIT",
     "main": "fluxfiles.js",
     "types": "fluxfiles.d.ts",
+    "unpkg": "fluxfiles.min.js",
+    "jsdelivr": "fluxfiles.min.js",
     "files": [
         "fluxfiles.js",
+        "fluxfiles.min.js",
         "fluxfiles.d.ts"
     ],
     "scripts": {
+        "build": "esbuild fluxfiles.js --minify --legal-comments=none --outfile=fluxfiles.min.js",
         "test": "vitest run"
     },
     "devDependencies": {
+        "esbuild": "^0.28.0",
         "jsdom": "^25.0.1",
         "vitest": "^2.1.8"
     },

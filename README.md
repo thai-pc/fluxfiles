@@ -242,10 +242,12 @@ chmod 600 storage/rate_limit.json   # if exists
 
 ### JavaScript SDK (Vanilla)
 
-Include `fluxfiles.js` on your page — zero dependencies, works with any framework:
+Include `fluxfiles.js` on your page — zero dependencies, works with any framework
+(use the minified `fluxfiles.min.js`, ~5 KB, in production):
 
 ```html
 <script src="https://fm.yourdomain.com/fluxfiles.js"></script>
+<!-- production: <script src="https://fm.yourdomain.com/fluxfiles.min.js"></script> -->
 
 <button onclick="openFilePicker()">Choose File</button>
 

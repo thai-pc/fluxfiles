@@ -5,6 +5,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Minified SDK build.** The `fluxfiles` package now ships `fluxfiles.min.js`
+  (~5 KB, ~half of `fluxfiles.js`) alongside the readable source, served by the
+  dev router at `/fluxfiles.min.js` and resolved by jsDelivr/unpkg `npm/fluxfiles`.
+  `npm run build` (esbuild) regenerates it.
+
 ### Fixed
 
 - **Dropping a file outside the dropzone no longer breaks the app.** Only the
