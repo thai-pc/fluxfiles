@@ -6,7 +6,6 @@
   "main": "plugin.js",
   "files": [
     "plugin.js",
-    "icons",
     "README.md"
   ],
   "scripts": { "test": "vitest run" },
