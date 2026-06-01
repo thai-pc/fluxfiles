@@ -120,15 +120,21 @@ When opening FluxFiles directly via `/public/index.html`, configure it with URL 
 require_once 'path/to/fluxfiles/embed.php';
 
 $token = fluxfiles_token(
-    userId:      'user-123',
-    perms:       ['read', 'write', 'delete'],
-    disks:       ['local', 's3', 'r2'],
-    prefix:      'user-123/',   // scope user to their own directory
-    maxUploadMb: 10,
-    allowedExt:  null,          // null = allow all safe extensions
-    ttl:         3600           // 1 hour
+    userId:       'user-123',
+    perms:        ['read', 'write', 'delete'],
+    disks:        ['local', 's3', 'r2'],
+    prefix:       'user-123/',   // scope user to their own directory
+    maxUploadMb:  10,            // MB — max size PER uploaded file
+    allowedExt:   ['jpg','png','pdf'], // extensions (lowercase, no dot); null = all safe types
+    ttl:          3600,          // SECONDS — token lifetime (3600 = 1 hour)
+    ownerOnly:    false,         // true = users only manage files they uploaded
+    maxStorageMb: 1000           // MB — total quota for the prefix; 0 = unlimited
 );
 ```
+
+> **Units at a glance:** `maxUploadMb` and `maxStorageMb` are **megabytes (MB)**,
+> `ttl` is **seconds**, `allowedExt` is a list of **extensions** (lowercase, no
+> leading dot). See the [parameter reference](#token-parameters--units) below.
 
 Or generate via CLI for testing:
 
@@ -485,7 +491,7 @@ $token = fluxfiles_byob_token(
         ],
     ],
     perms: ['read', 'write', 'delete'],
-    ttl:   1800  // shorter TTL for BYOB tokens
+    ttl:   1800  // SECONDS — shorter lifetime recommended for BYOB tokens (1800 = 30 min)
 );
 ```
 
@@ -515,29 +521,54 @@ Metadata and image variants are transferred together. Quota is checked on the de
 {
     "sub":          "user-123",
     "iat":          1710500000,
-    "exp":          1710503600,
+    "exp":          1710503600,     // Unix seconds
     "jti":          "a1b2c3d4e5f6",
     "perms":        ["read", "write", "delete"],
     "disks":        ["local", "s3", "r2"],
     "prefix":       "user-123/",
-    "max_upload":   10,
+    "max_upload":   10,             // MB per file
     "allowed_ext":  ["jpg", "png", "pdf"],
-    "max_storage":  1000,
+    "max_storage":  1000,           // MB total (0 = unlimited)
     "byob_disks":   {}
 }
 ```
 
-| Claim | Type | Default | Description |
-|-------|------|---------|-------------|
-| `sub` | string | `"0"` | User identifier |
-| `perms` | string[] | `["read"]` | Permissions: `read`, `write`, `delete` |
-| `disks` | string[] | `["local"]` | Allowed storage disks |
-| `prefix` | string | `""` | Path scope — user can only access files under this prefix |
-| `max_upload` | int | `10` | Max file upload size in MB |
-| `allowed_ext` | string[]&#124;null | `null` | File extension whitelist (`null` = allow all safe types) |
-| `max_storage` | int | `0` | Storage quota in MB (`0` = unlimited) |
-| `owner_only` | bool | `false` | When `true`, users can only delete/rename/move files they uploaded |
-| `byob_disks` | object | — | Encrypted BYOB credentials (optional) |
+| Claim | Type | Unit | Default | Description |
+|-------|------|------|---------|-------------|
+| `sub` | string | — | `"0"` | User identifier |
+| `iat` | int | **Unix seconds** | now | Issued-at timestamp |
+| `exp` | int | **Unix seconds** | now + ttl | Expiry timestamp (token invalid after this) |
+| `perms` | string[] | — | `["read"]` | Permissions: `read`, `write`, `delete` |
+| `disks` | string[] | — | `["local"]` | Allowed storage disks |
+| `prefix` | string | path | `""` | Path scope — user can only access files under this prefix |
+| `max_upload` | int | **MB** | `10` | Max size **per uploaded file**, in megabytes |
+| `allowed_ext` | string[]&#124;null | extensions | `null` | Allowed extensions, lowercase & **no dot** (e.g. `["jpg","png"]`). `null` = allow all non-dangerous types |
+| `max_storage` | int | **MB** | `0` | **Total** storage quota for the prefix, in megabytes. `0` = unlimited |
+| `owner_only` | bool | — | `false` | When `true`, users can only delete/rename/move files they uploaded |
+| `byob_disks` | object | — | — | Encrypted BYOB credentials (optional) |
+
+> `ttl` is **not** a claim — it's the `fluxfiles_token()` parameter (in **seconds**)
+> used to compute `exp` = `iat + ttl`.
+
+### Token parameters & units
+
+`fluxfiles_token()` parameters, with exact units:
+
+| Parameter | Maps to claim | Unit | Default | Notes |
+|-----------|---------------|------|---------|-------|
+| `userId` | `sub` | — | required | Your app's user id (string). |
+| `perms` | `perms` | — | `['read']` | `read` (list/download/search), `write` (upload/rename/move/copy/mkdir/crop/ai-tag), `delete`. |
+| `disks` | `disks` | — | `['local']` | Disk names the token may use. |
+| `prefix` | `prefix` | path | `''` | Every path is sandboxed under this. `''` = full disk. |
+| `maxUploadMb` | `max_upload` | **MB** | `10` | Max size **per file**. A 25 MB file with `maxUploadMb: 10` → 413. |
+| `allowedExt` | `allowed_ext` | extensions | `null` | Lowercase, no dot, e.g. `['jpg','png','pdf']`. `null` = all non-dangerous types. Dangerous types (`php`, `exe`, …) are **always** blocked regardless. A disallowed type → **403 `ext_not_allowed`**. |
+| `ttl` | `exp` (`= iat + ttl`) | **seconds** | `3600` | Token lifetime. `3600` = 1 hour, `86400` = 1 day. After `exp` the API returns 401 and the SDK triggers token refresh. |
+| `ownerOnly` | `owner_only` | — | `false` | Restrict destructive ops to the uploader (use with a shared `prefix`). |
+| `maxStorageMb` | `max_storage` | **MB** | `0` | **Total** quota across the prefix (existing files + variants + metadata count). `0` = unlimited. Exceeding it → **413 `quota_exceeded`**. |
+
+> **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is
+> **seconds** (`ttl`), and `allowedExt` entries are **bare lowercase extensions**
+> with no leading dot.
 
 ### Permissions explained
 
@@ -774,9 +805,9 @@ return [
     'disk'        => 'local',
     'disks'       => ['local', 'r2'],
     'prefix'      => 'users/{user_id}',
-    'max_upload'  => 50,
-    'max_storage' => 500,
-    'allowed_ext' => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'],
+    'max_upload'  => 50,    // MB — per uploaded file
+    'max_storage' => 500,   // MB — total quota per prefix (0 = unlimited)
+    'allowed_ext' => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'], // lowercase, no dot; null = all safe
 ];
 ```
 

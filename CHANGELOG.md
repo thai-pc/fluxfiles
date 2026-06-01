@@ -3,6 +3,23 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`fluxfiles_token()` can now set the storage quota.** Added a `maxStorageMb`
+  parameter (megabytes; `0` = unlimited) that writes the `max_storage` claim. The
+  claim was already enforced by the quota manager but the core helper had no way
+  to set it.
+
+### Documentation
+
+- README documents the exact **units** for every token parameter — `maxUploadMb`
+  and `maxStorageMb` are **MB**, `ttl` is **seconds** (`exp = iat + ttl`), and
+  `allowedExt` entries are bare lowercase extensions (no dot). Added a "Token
+  parameters & units" reference table and unit annotations across the token,
+  JWT-structure, BYOB, and Laravel examples.
+
 ## [0.1.3] — 2026-06-01
 
 ### Added
