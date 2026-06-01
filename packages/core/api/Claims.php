@@ -142,7 +142,13 @@ class Claims
         $relative = implode('/', $safe);
         $prefix = trim($this->pathPrefix, '/');
         if ($prefix !== '') {
-            return $prefix . '/' . $relative;
+            // Idempotent prefixing — see FileManager::scopedPath(). A path already
+            // inside the prefix is returned unchanged (`..`/`.` stripped above), and
+            // the "/" boundary keeps prefix confusion (user_1 vs user_10) out.
+            if ($relative === $prefix || strpos($relative, $prefix . '/') === 0) {
+                return $relative;
+            }
+            return $relative === '' ? $prefix : $prefix . '/' . $relative;
         }
         return $relative;
     }

@@ -958,7 +958,16 @@ class FileManager
         $prefix = trim($this->claims->pathPrefix, '/');
 
         if ($prefix !== '') {
-            return $prefix . '/' . $relative;
+            // Idempotent prefixing. list() returns full prefixed keys (e.g.
+            // "user_1/posts") and the UI navigates with those keys, so a path
+            // already inside the prefix must NOT be prefixed again (which produced
+            // "user_1/user_1/posts" → empty folder). `..`/`.` were stripped above
+            // and the trailing-"/" boundary blocks prefix confusion (user_1 vs
+            // user_10), so anything not under the prefix is still sandboxed into it.
+            if ($relative === $prefix || strpos($relative, $prefix . '/') === 0) {
+                return $relative;
+            }
+            return $relative === '' ? $prefix : $prefix . '/' . $relative;
         }
 
         return $relative;

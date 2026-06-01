@@ -3,9 +3,21 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.2] — 2026-06-01
 
 ### Fixed
+
+- **Subfolders were unreachable when the token had a path `prefix`.** `list()`
+  returns full prefixed keys (e.g. `user_1/posts`) and the UI navigates with
+  them, but `scopedPath()`/`Claims::scopePath()` prefixed again
+  (`user_1/user_1/posts`) so every subfolder came back empty — only the root
+  showed, and no images loaded inside folders. Prefixing is now **idempotent**: a
+  path already inside the prefix is left as-is. The security boundary is intact —
+  `..`/`.` are still stripped first and the `/` boundary blocks prefix confusion
+  (`user_1` vs `user_10`), so a foreign path is still sandboxed back into the
+  user's prefix (verified: `user_1` cannot list `user_2`). New
+  `tests/integration/test-prefix-navigate.php` + `Claims::scopePath` cases lock
+  this in.
 
 - **Manual editor test pages now load.** `tests/manual/test-ckeditor4.html` and
   `test-tinymce.html` referenced the SDK at `../fluxfiles.js` and their plugin at
