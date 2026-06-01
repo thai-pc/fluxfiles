@@ -75,7 +75,7 @@ return [
     | Storage Path
     |--------------------------------------------------------------------------
     |
-    | Path to the FluxFiles SQLite database and local uploads.
+    | Path to FluxFiles runtime files such as rate-limit state.
     |
     */
     'storage_path' => env('FLUXFILES_STORAGE_PATH', storage_path('fluxfiles')),
@@ -91,7 +91,7 @@ return [
     'disks' => [
         'local' => [
             'driver' => 'local',
-            'root'   => env('FLUXFILES_LOCAL_ROOT', storage_path('fluxfiles/uploads')),
+            'root'   => env('FLUXFILES_LOCAL_ROOT', storage_path('app/public/fluxfiles/uploads')),
             'url'    => '/storage/fluxfiles/uploads',
         ],
         's3' => [

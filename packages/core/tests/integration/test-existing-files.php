@@ -208,6 +208,19 @@ test('index variants → generates _variants for pre-existing image', function (
     assertTrue($fs->fileExists('gallery/_variants/big_thumb.webp'), 'thumb variant on disk');
 });
 
+
+test("variants can be generated after metadata already exists", function () {
+    [, $fs, , $indexer, $root] = makeEnv();
+    placeImage($root, "gallery/already.png", 1000, 700);
+    $first = $indexer->index(["disk" => "local", "persist_metadata" => true]);
+    assertEqual(1, $first["files_indexed"], "first run indexes metadata");
+    $second = $indexer->index(["disk" => "local", "variants" => true]);
+    assertEqual(0, $second["files_indexed"], "metadata was skipped");
+    assertEqual(1, $second["skipped"], "existing metadata counted as skipped");
+    assertTrue($second["variants"] > 0, "variants generated for skipped file");
+    assertTrue($fs->fileExists("gallery/_variants/already_thumb.webp"), "thumb variant on disk");
+});
+
 test('index owner → owner_only then enforced for other users', function () {
     [, , $meta, $indexer, $root] = makeEnv();
     placeImage($root, 'owned.png', 80, 80);

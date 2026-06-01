@@ -769,6 +769,19 @@ function fluxFilesApp() {
             return file.url;
         },
 
+        previewUrl(file, preferred = 'thumb') {
+            if (!file) return '';
+            if (file.variants) {
+                if (preferred && file.variants[preferred] && file.variants[preferred].url) {
+                    return file.variants[preferred].url;
+                }
+                if (file.variants.thumb && file.variants.thumb.url) {
+                    return file.variants.thumb.url;
+                }
+            }
+            return file.url || '';
+        },
+
         // Select a specific variant (thumb/medium/large) or 'original'
         selectVariant(file, size) {
             this.selectedVariant = size;

@@ -40,6 +40,12 @@ if (!function_exists('config')) {
         return $cfg[$key] ?? $default;
     }
 }
+if (!function_exists('env')) {
+    function env($key, $default = null) { return $default; }
+}
+if (!function_exists('storage_path')) {
+    function storage_path($path = '') { return '/app/storage' . ($path !== '' ? '/' . $path : ''); }
+}
 
 require_once __DIR__ . '/../../core/vendor/autoload.php';   // FluxFiles\JwtCompat, CredentialEncryptor
 require_once __DIR__ . '/../src/FluxFilesManager.php';
@@ -106,6 +112,13 @@ test('endpoint() resolves by mode (standalone → fluxfiles.endpoint, else app.u
     } finally {
         $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
     }
+});
+
+
+test("default local disk root matches public storage URL", function () {
+    $cfg = require __DIR__ . "/../config/fluxfiles.php";
+    assertEqual("/app/storage/app/public/fluxfiles/uploads", $cfg["disks"]["local"]["root"], "local root");
+    assertEqual("/storage/fluxfiles/uploads", $cfg["disks"]["local"]["url"], "local url");
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

@@ -71,11 +71,7 @@ class ExistingFileIndexer
             try {
                 if ($item instanceof FileAttributes) {
                     $existing = $this->metadata->getBulk($disk, [$key])[$key] ?? null;
-                    if (!$overwrite && $existing !== null) {
-                        $stats['skipped']++;
-                        $this->emit($onItem, 'skip', $key, $stats);
-                        continue;
-                    }
+                    $alreadyIndexed = !$overwrite && $existing !== null;
 
                     $data = [
                         'title' => pathinfo($name, PATHINFO_FILENAME),
@@ -94,13 +90,17 @@ class ExistingFileIndexer
                     }
 
                     if (!$dryRun) {
-                        if ($persistMetadata || $owner !== null || $readonly) {
-                            $this->metadata->save($disk, $key, $data);
-                            if (isset($data['file_hash'])) {
-                                $this->metadata->saveHash($disk, $key, $data['file_hash']);
+                        if (!$alreadyIndexed) {
+                            if ($persistMetadata || $owner !== null || $readonly) {
+                                $this->metadata->save($disk, $key, $data);
+                                if (isset($data['file_hash'])) {
+                                    $this->metadata->saveHash($disk, $key, $data['file_hash']);
+                                }
+                            } else {
+                                $this->metadata->indexFile($disk, $key, $data, $overwrite);
                             }
-                        } else {
-                            $this->metadata->indexFile($disk, $key, $data, $overwrite);
+                        } elseif (isset($data['file_hash'])) {
+                            $this->metadata->saveHash($disk, $key, $data['file_hash']);
                         }
 
                         $this->metadata->trackParents($disk, $key);
@@ -110,8 +110,13 @@ class ExistingFileIndexer
                         }
                     }
 
-                    $stats['files_indexed']++;
-                    $this->emit($onItem, 'file', $key, $stats);
+                    if ($alreadyIndexed) {
+                        $stats['skipped']++;
+                        $this->emit($onItem, 'skip', $key, $stats);
+                    } else {
+                        $stats['files_indexed']++;
+                        $this->emit($onItem, 'file', $key, $stats);
+                    }
                     continue;
                 }
 

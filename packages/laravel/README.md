@@ -25,6 +25,14 @@ Add to your `.env`:
 FLUXFILES_SECRET=your-random-32-char-secret
 ```
 
+For the default local disk, expose Laravel public storage once:
+
+```bash
+php artisan storage:link
+```
+
+The default `local` disk writes to `storage/app/public/fluxfiles/uploads` and returns URLs under `/storage/fluxfiles/uploads`.
+
 ## Modes
 
 | Mode | Description |
@@ -180,7 +188,7 @@ chmod -R u+rwX public/uploads
 
 ### 4. Seed metadata + folder index for pre-existing content
 
-Listing and previewing existing files works out of the box. **Search** however relies on the FluxFiles metadata index (FTS5) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API. To make pre-existing files and folders searchable, run the included Artisan command once:
+Listing existing files works out of the box. Preview links load only when the disk `url` matches a path your web server actually serves. **Search** relies on the FluxFiles metadata index (`_fluxfiles/index.json`) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API. To make pre-existing files and folders searchable, run the included Artisan command once:
 
 ```bash
 # Dry run first — report what would be indexed, no writes
@@ -188,6 +196,12 @@ php artisan fluxfiles:seed --disk=local --dry-run
 
 # Apply
 php artisan fluxfiles:seed --disk=local
+
+# Generate thumbnails for existing images
+php artisan fluxfiles:seed --disk=local --variants
+
+# Add hashes for duplicate detection too
+php artisan fluxfiles:seed --disk=local --hash --variants
 
 # Only a sub-tree
 php artisan fluxfiles:seed --disk=local --path=user_1
@@ -199,14 +213,14 @@ php artisan fluxfiles:seed --disk=local --overwrite
 What it does:
 
 - Walks the disk recursively (skipping `_fluxfiles/`, `_variants/`, and `*.meta.json`).
-- For each **file**: creates a metadata record with `title` derived from the filename (so FTS5 search can find it). Skips files that already have metadata unless `--overwrite` is passed.
+- For each **file**: creates a metadata record with `title` derived from the filename so search can find it. Metadata writes are skipped for files that already have metadata unless `--overwrite` is passed, but `--hash` and `--variants` can still fill in missing hashes/thumbnails.
 - For each **folder**: tracks it in `_fluxfiles/dirs.json` so folder search (`/api/fm/search-folders`) can return it.
 
 After seeding, both file and folder search work for the existing tree.
 
 ### 5. Notes & gotchas
 
-- FluxFiles auto-creates `public/uploads/_fluxfiles/` (metadata, audit log, FTS5 DB) and `public/uploads/_variants/` (image thumbnails). These are hidden from the UI — do not delete them. If you use FTP/rsync/backup tools, add them to your ignore list.
+- FluxFiles auto-creates `public/uploads/_fluxfiles/` (metadata index and audit log) and `public/uploads/_variants/` (image thumbnails). These are hidden from the UI — do not delete them. If you use FTP/rsync/backup tools, add them to your ignore list.
 - `url = '/uploads'` must match how your web server serves `public/`. Preview links are built as `{url}/{key}` — e.g. file key `user_1/avatar.jpg` → `/uploads/user_1/avatar.jpg`.
 - Files uploaded **before** seeding won't have an `uploaded_by` metadata field. If you later enable `owner_only`, legacy files fall through gracefully (all users can act on them) until the next time someone edits them through the UI.
 - For S3/R2 disks with an existing bucket, the same seed command works — pass `--disk=s3` (or `--disk=r2`). Listing is slower because it pages the bucket remotely.
