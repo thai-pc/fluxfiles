@@ -22,7 +22,7 @@ class FluxFiles extends Component
     public function __construct(
         string $disk = 'local',
         string $mode = 'picker',
-        bool $multiple = false,
+        ?bool $multiple = null,
         string $width = '100%',
         string $height = '600px',
         array $overrides = [],
@@ -31,7 +31,8 @@ class FluxFiles extends Component
     ) {
         $this->disk = $disk;
         $this->mode = $mode;
-        $this->multiple = $multiple;
+        // Fall back to the config UI default when not set on the tag.
+        $this->multiple = $multiple ?? (bool) config('fluxfiles.multiple', false);
         $this->width = $width;
         $this->height = $height;
         $this->overrides = $overrides;

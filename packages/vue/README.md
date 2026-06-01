@@ -148,6 +148,8 @@ All components and the composable expose these methods:
 | `disk` | `string` | No | Initial storage disk (`local`) |
 | `mode` | `string` | No | `picker` or `browser` |
 | `multiple` | `boolean` | No | When true, onSelect receives array of files |
+| `maxUploadMb` | `number` | No | Max size per uploaded file, in **MB** (deprecated alias: `maxSize` in bytes) |
+| `maxFiles` | `number` | No | Max files per upload batch (0/omit = unlimited; server enforces the prefix total via `max_files`) |
 | `locale` | `string` | No | UI language code |
 | `width` | `string` | No | Iframe width |
 | `height` | `string` | No | Iframe height |

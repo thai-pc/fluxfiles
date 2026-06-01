@@ -164,6 +164,7 @@
         "not_found": "Bulunamadı",
         "quota_exceeded": "Depolama kotası aşıldı ({used} / {max})",
         "upload_too_large": "Dosya çok büyük (maks. {max})",
+        "too_many_files": "Dosya sınırına ulaşıldı (en fazla {max})",
         "ext_not_allowed": ".{ext} dosya türüne izin verilmiyor",
         "generic": "Bir hata oluştu. Lütfen tekrar deneyin.",
         "system_path": "Bu dosya üzerinde işlem yapılamaz",

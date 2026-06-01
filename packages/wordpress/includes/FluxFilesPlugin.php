@@ -179,6 +179,7 @@ class FluxFilesPlugin
         $defaultDisks  = get_option('fluxfiles_disks', ['local']);
         $maxUpload     = (int) get_option('fluxfiles_max_upload', 10);
         $maxStorage    = (int) get_option('fluxfiles_max_storage', 0);
+        $maxFiles      = (int) get_option('fluxfiles_max_files', 0);
         $ttl           = (int) get_option('fluxfiles_ttl', 3600);
 
         $now = time();
@@ -194,6 +195,7 @@ class FluxFilesPlugin
             'max_upload'  => $overrides['max_upload'] ?? $maxUpload,
             'allowed_ext' => $overrides['allowed_ext'] ?? null,
             'max_storage' => $overrides['max_storage'] ?? $maxStorage,
+            'max_files'   => $overrides['max_files'] ?? $maxFiles,
         ];
 
         if (!empty($overrides['owner_only'])) {

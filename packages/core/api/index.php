@@ -571,6 +571,10 @@ function handleChunkInit(
         $quotaManager->assertQuota($disk, $claims->pathPrefix, $sizeBytes, $claims->maxStorageMb);
     }
 
+    if ($claims->maxFiles > 0) {
+        $quotaManager->assertFileCount($disk, $claims->pathPrefix, 1, $claims->maxFiles);
+    }
+
     return $chunker->initiate($disk, $scopedPath);
 }
 

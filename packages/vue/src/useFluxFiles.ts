@@ -49,7 +49,10 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
       mode: o.mode || 'picker',
       multiple: !!o.multiple,
       allowedTypes: o.allowedTypes || null,
-      maxSize: o.maxSize || null,
+      maxUploadMb: (typeof o.maxUploadMb === 'number')
+        ? o.maxUploadMb
+        : (typeof o.maxSize === 'number' ? Math.round(o.maxSize / (1024 * 1024)) : null),
+      maxFiles: (typeof o.maxFiles === 'number') ? o.maxFiles : null,
       endpoint: o.endpoint || '',
       locale: o.locale || null,
     });

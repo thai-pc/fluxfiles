@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1
-Stable tag: 0.1.2
+Stable tag: 0.2.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -81,7 +81,7 @@ PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfile
 
 == Changelog ==
 
-= 0.1.2 =
+= 0.2.0 =
 First public release. WordPress adapter for the FluxFiles file manager:
 * Settings page, `[fluxfiles]` shortcode, and editor media button with iframe picker.
 * REST proxy at `/wp-json/fluxfiles/v1/` with JWT bridged from the WordPress user.
@@ -91,5 +91,5 @@ First public release. WordPress adapter for the FluxFiles file manager:
 
 == Upgrade Notice ==
 
-= 0.1.2 =
+= 0.2.0 =
 Requires **PHP 8.1+** and a build that includes `vendor/` (release ZIP or run `composer install --no-dev` before deploying). Review settings after activation.

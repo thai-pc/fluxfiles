@@ -80,6 +80,9 @@ class FluxFilesMediaButton
             'token'    => $token,
             'disk'     => get_option('fluxfiles_disks', ['local'])[0] ?? 'local',
             'mode'     => 'picker',
+            // onSelect already inserts each file in an array, so multi-select just
+            // works when enabled. Off by default to keep single-insert behaviour.
+            'multiple' => (bool) get_option('fluxfiles_picker_multiple', false),
             'locale'   => $locale,
         ]);
 

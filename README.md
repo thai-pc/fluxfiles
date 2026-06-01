@@ -128,7 +128,8 @@ $token = fluxfiles_token(
     allowedExt:   ['jpg','png','pdf'], // extensions (lowercase, no dot); null = all safe types
     ttl:          3600,          // SECONDS — token lifetime (3600 = 1 hour)
     ownerOnly:    false,         // true = users only manage files they uploaded
-    maxStorageMb: 1000           // MB — total quota for the prefix; 0 = unlimited
+    maxStorageMb: 1000,          // MB — total quota for the prefix; 0 = unlimited
+    maxFiles:     0              // max number of files under the prefix; 0 = unlimited
 );
 ```
 
@@ -157,6 +158,11 @@ server {
     # SSL
     ssl_certificate     /etc/ssl/certs/fm.yourdomain.com.pem;
     ssl_certificate_key /etc/ssl/private/fm.yourdomain.com.key;
+
+    # Max request body — must be >= the largest `max_upload` (MB) you issue in a
+    # JWT, or nginx rejects big uploads with 413 BEFORE the request reaches PHP.
+    # Set this a bit above your biggest per-file limit (here: 100 MB).
+    client_max_body_size 100M;
 
     # API — rewrite to PHP router
     location /api/ {
@@ -242,6 +248,30 @@ chmod 600 .env
 chmod 600 storage/rate_limit.json   # if exists
 ```
 
+### Upload size limits (three layers)
+
+A large upload must pass **three** independent limits — the smallest one wins.
+The JWT `max_upload` is the only one FluxFiles controls; the other two are your
+server/PHP config and must be **≥** your largest `max_upload`, or files are
+rejected *before* reaching the app (often as a confusing `413` or
+`400 No file uploaded` instead of FluxFiles' own `413 upload_too_large`).
+
+| Layer | Setting | Where | Note |
+|-------|---------|-------|------|
+| Web server | `client_max_body_size` (nginx) / `LimitRequestBody` (Apache) | nginx `server`/`http` block | Rejects the request body if too big. |
+| PHP | `upload_max_filesize` **and** `post_max_size` | `php.ini` (or php-fpm pool) | `post_max_size` must be ≥ `upload_max_filesize`; both ≥ your `max_upload`. |
+| FluxFiles | `max_upload` (JWT claim, **MB, per file**) | issued in your token | Returns `413 upload_too_large` when exceeded. |
+
+```ini
+; php.ini — example for a 100 MB per-file limit
+upload_max_filesize = 100M
+post_max_size       = 110M     ; a little above upload_max_filesize
+```
+
+> Files **larger than 10 MB on S3/R2 disks** use chunked (multipart) upload, which
+> sends 5 MB parts directly to the bucket — so those bypass `post_max_size`. Local
+> disk always uses a single request, so the PHP/nginx limits above apply in full.
+
 ---
 
 ## Embedding in Your App
@@ -269,7 +299,8 @@ function openFilePicker() {
         locale: 'en',                 // default 'en' if omitted
         theme: 'auto',                // 'light', 'dark', or 'auto'
         allowedTypes: ['image/*', '.pdf'],
-        maxSize: 10485760,            // 10MB in bytes
+        maxUploadMb: 10,              // MB — max size per file (deprecated alias: `maxSize` in bytes)
+        maxFiles: 20,                 // max files per upload batch (0/omit = unlimited)
         container: '#my-div',         // CSS selector — omit for modal overlay
 
         onSelect(file) {
@@ -306,6 +337,15 @@ combined progress bar; large files on S3/R2 automatically use multipart chunk
 upload. Each file is independently checked for size, extension, quota, and
 duplicates, so one rejected file doesn't abort the rest. After the batch the
 listing refreshes and an `upload:done` `FM_EVENT` fires.
+
+**Limiting how many files** — there's no built-in cap on the *number* of files
+by default. Use:
+- the **`max_files`** JWT claim (`maxFiles` token param) to cap the **total**
+  files under the user's prefix — enforced server-side (`413 too_many_files`);
+- the SDK/component **`maxFiles`** option to cap a single drop/selection batch
+  client-side (a friendlier early rejection).
+
+And **`max_upload`** (`maxUploadMb`, MB) caps the size of each individual file.
 
 > Don't confuse this with the SDK's `multiple: true` option — that controls
 > **picker selection** (returning an array of already-stored files via
@@ -544,6 +584,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `max_upload` | int | **MB** | `10` | Max size **per uploaded file**, in megabytes |
 | `allowed_ext` | string[]&#124;null | extensions | `null` | Allowed extensions, lowercase & **no dot** (e.g. `["jpg","png"]`). `null` = allow all non-dangerous types |
 | `max_storage` | int | **MB** | `0` | **Total** storage quota for the prefix, in megabytes. `0` = unlimited |
+| `max_files` | int | count | `0` | **Total** number of files allowed under the prefix. `0` = unlimited |
 | `owner_only` | bool | — | `false` | When `true`, users can only delete/rename/move files they uploaded |
 | `byob_disks` | object | — | — | Encrypted BYOB credentials (optional) |
 
@@ -565,6 +606,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `ttl` | `exp` (`= iat + ttl`) | **seconds** | `3600` | Token lifetime. `3600` = 1 hour, `86400` = 1 day. After `exp` the API returns 401 and the SDK triggers token refresh. |
 | `ownerOnly` | `owner_only` | — | `false` | Restrict destructive ops to the uploader (use with a shared `prefix`). |
 | `maxStorageMb` | `max_storage` | **MB** | `0` | **Total** quota across the prefix (existing files + variants + metadata count). `0` = unlimited. Exceeding it → **413 `quota_exceeded`**. |
+| `maxFiles` | `max_files` | count | `0` | **Total** number of files allowed under the prefix (counts user files; skips internal `_fluxfiles/`/`_variants/`). `0` = unlimited. Exceeding it → **413 `too_many_files`**. |
 
 > **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is
 > **seconds** (`ttl`), and `allowedExt` entries are **bare lowercase extensions**

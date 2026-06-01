@@ -1,6 +1,6 @@
 {
     "name": "fluxfiles",
-    "version": "0.1.2",
+    "version": "0.2.0",
     "description": "FluxFiles JavaScript SDK — embed the file manager in any web app",
     "license": "MIT",
     "main": "fluxfiles.js",

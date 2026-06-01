@@ -63,7 +63,10 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
       mode: opts.mode || 'picker',
       multiple: !!opts.multiple,
       allowedTypes: opts.allowedTypes || null,
-      maxSize: opts.maxSize || null,
+      maxUploadMb: (typeof opts.maxUploadMb === 'number')
+        ? opts.maxUploadMb
+        : (typeof opts.maxSize === 'number' ? Math.round(opts.maxSize / (1024 * 1024)) : null),
+      maxFiles: (typeof opts.maxFiles === 'number') ? opts.maxFiles : null,
       endpoint: opts.endpoint || '',
       locale: opts.locale || null,
     });

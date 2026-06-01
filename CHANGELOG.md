@@ -3,14 +3,74 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.1] — 2026-06-02
+
+### Changed
+
+- **CKEditor 4 toolbar icon is now an inline SVG**, matching the TinyMCE plugin —
+  the same folder glyph as a data-URI SVG instead of a bundled `icons/fluxfiles.png`.
+  Drops the PNG file, the sprite-based `icons`/`hidpi` plugin props, and the
+  `icons` entry in `package.json`. Both editor plugins are now visually in sync
+  and ship no separate image asset.
+
+### Fixed
+
+- **Duplicated network requests when opening the manager (iframe/modal).** The
+  standalone page had both Alpine's automatic `init()` call **and** an explicit
+  `x-init="init()"` on the same element, so `init()` ran twice → two `message`
+  listeners → every `FM_CONFIG` was handled twice, firing `list` + `quota` +
+  `lang` twice. Combined with chatty wrappers (React/Vue re-renders sending the
+  config 2–3×) this multiplied into the ~4–6× duplicate requests seen in the
+  network panel. Removed the redundant `x-init`, and added an **idempotency
+  guard** to the `FM_CONFIG` handler so a repeated/identical config no longer
+  re-fetches — a real change (token/disk/path/locale/endpoint) still reloads.
+  Regression test asserts exactly one `list`/`quota`/`lang` per config even when
+  the host sends FM_CONFIG three times.
+
+## [0.2.0] — 2026-06-02
 
 ### Added
 
+- **`max_files` — limit the number of files.** New JWT claim `max_files` (token
+  param `maxFiles`, `0` = unlimited) caps the **total** user-visible files under
+  a prefix; exceeding it returns **413 `too_many_files`** on both the normal and
+  chunked upload paths (`QuotaManager::getFileCount()` skips internal
+  `_fluxfiles/`/`_variants/`). The SDK/React/Vue/editor `maxFiles` option also caps
+  a single drop/selection batch client-side. Wired through every package
+  (core/SDK/React/Vue/CKEditor4/TinyMCE/Laravel/WordPress) + the standalone URL
+  param `?maxFiles=`. Added `error.too_many_files` to all 16 locales.
+
+### Changed
+
+- **Upload-size option standardized on megabytes.** The JS packages now take
+  **`maxUploadMb`** (MB) — matching the server's `max_upload` claim — instead of
+  the bytes-based `maxSize`. `maxSize` is kept as a **deprecated alias** (auto
+  converted to MB) so existing integrations keep working. The standalone UI now
+  **actually enforces** the per-file size client-side (it was a dead option
+  before): an oversized file is rejected with a toast before any bytes are sent.
+  Standalone URL param `?maxUploadMb=` added.
+
+- **`multiple` option filled in where it was missing.** Laravel `config/fluxfiles.php`
+  gains a `multiple` UI default (the `<x-fluxfiles>` component falls back to it),
+  and the WordPress `[fluxfiles]` shortcode (`multiple="1"`) + media button
+  (`fluxfiles_picker_multiple` option) now support multi-select. SDK/React/Vue/
+  CKEditor4/TinyMCE already had it.
+
 - **`fluxfiles_token()` can now set the storage quota.** Added a `maxStorageMb`
-  parameter (megabytes; `0` = unlimited) that writes the `max_storage` claim. The
-  claim was already enforced by the quota manager but the core helper had no way
-  to set it.
+  parameter (megabytes; `0` = unlimited) that writes the `max_storage` claim — the
+  claim was enforced but the core helper had no way to set it.
+
+### Fixed
+
+- **CI: the SDK wrapper test failed on Linux** with
+  `Cannot find module @rollup/rollup-linux-x64-gnu`. A `packages/sdk/package-lock.json`
+  generated on macOS had been committed; it pinned only the darwin rollup native
+  binary, so `npm install` on the Linux runner skipped the linux one
+  ([npm/cli#4828](https://github.com/npm/cli/issues/4828)) and vitest crashed at
+  startup. The lockfile is now untracked + gitignored (it isn't needed for a
+  published lib), so CI resolves platform-correct optional deps from a fresh
+  install. (`react`'s committed lock already lists all platforms; `vue`'s pulls no
+  native rollup — both unaffected.)
 
 ### Documentation
 
@@ -19,6 +79,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
   `allowedExt` entries are bare lowercase extensions (no dot). Added a "Token
   parameters & units" reference table and unit annotations across the token,
   JWT-structure, BYOB, and Laravel examples.
+- README production-deployment section now documents the **three upload-size
+  layers** (nginx `client_max_body_size`, PHP `upload_max_filesize`/`post_max_size`,
+  and the JWT `max_upload`), with the nginx example setting `client_max_body_size`
+  and a note that S3/R2 chunked uploads bypass `post_max_size`.
 
 ## [0.1.3] — 2026-06-01
 

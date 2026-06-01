@@ -56,6 +56,51 @@ class QuotaManager
         }
     }
 
+    /**
+     * Count user-visible files under a prefix. Internal FluxFiles paths
+     * (`_fluxfiles/`, `_variants/`) are excluded so the count matches what the
+     * user actually sees and uploads.
+     */
+    public function getFileCount(string $disk, string $prefix): int
+    {
+        $fs = $this->diskManager->disk($disk);
+        $count = 0;
+
+        /** @var StorageAttributes $item */
+        foreach ($fs->listContents($prefix, true) as $item) {
+            if (!($item instanceof FileAttributes)) {
+                continue;
+            }
+            $path = $item->path();
+            if (strpos($path, '_fluxfiles/') !== false || strpos($path, '_variants/') !== false) {
+                continue;
+            }
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * @throws ApiException if adding $addCount files would exceed the file-count limit
+     */
+    public function assertFileCount(string $disk, string $prefix, int $addCount, int $maxFiles): void
+    {
+        if ($maxFiles <= 0) {
+            return;
+        }
+
+        $current = $this->getFileCount($disk, $prefix);
+        if (($current + $addCount) > $maxFiles) {
+            throw new ApiException(
+                "File limit reached: {$current} of {$maxFiles} files used",
+                413,
+                'too_many_files',
+                ['used' => $current, 'max' => $maxFiles]
+            );
+        }
+    }
+
     public function getQuotaInfo(string $disk, string $prefix, int $maxStorageMb): array
     {
         $currentUsage = $this->getUsage($disk, $prefix);

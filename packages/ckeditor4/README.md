@@ -15,10 +15,11 @@ or copy the plugin folder into your CKEditor `plugins/` directory:
 ```
 ckeditor/plugins/fluxfiles/
 ├── plugin.js
-├── icons/
-│   └── fluxfiles.png
 └── README.md
 ```
+
+The toolbar icon is an inline SVG (no separate image file) — the same folder
+glyph the TinyMCE plugin uses.
 
 2. Load the FluxFiles SDK (`fluxfiles.js`) on the page.
 

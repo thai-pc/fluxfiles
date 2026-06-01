@@ -41,7 +41,12 @@
                     mode: config.mode || 'picker',
                     multiple: !!config.multiple,
                     allowedTypes: config.allowedTypes || null,
-                    maxSize: config.maxSize || null,
+                    // Canonical upload-size limit is megabytes. `maxSize` (bytes)
+                    // is the deprecated alias — used only when maxUploadMb is absent.
+                    maxUploadMb: (typeof config.maxUploadMb === 'number')
+                        ? config.maxUploadMb
+                        : (typeof config.maxSize === 'number' ? Math.round(config.maxSize / (1024 * 1024)) : null),
+                    maxFiles: (typeof config.maxFiles === 'number') ? config.maxFiles : null,
                     endpoint: config.endpoint || '',
                     locale: config.locale || null,
                     theme: config.theme || null

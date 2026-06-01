@@ -19,10 +19,15 @@
 (function () {
     'use strict';
 
-    CKEDITOR.plugins.add('fluxfiles', {
-        icons: 'fluxfiles',
-        hidpi: true,
+    // Shared toolbar glyph — the same folder icon TinyMCE registers, kept inline
+    // (no separate image file) so both editor plugins stay visually in sync.
+    // currentColor doesn't resolve inside an <img>, so use an explicit gray.
+    var ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">'
+        + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
+        + 'stroke="#575757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    var ICON_URI = 'data:image/svg+xml,' + encodeURIComponent(ICON_SVG);
 
+    CKEDITOR.plugins.add('fluxfiles', {
         init: function (editor) {
             var cfg = editor.config.fluxfiles || {};
 
@@ -39,6 +44,8 @@
                         disk: cfg.disk || 'local',
                         mode: 'picker',
                         multiple: !!cfg.multiple,
+                        maxUploadMb: cfg.maxUploadMb || null,
+                        maxFiles: cfg.maxFiles || null,
                         locale: cfg.locale || null,
                         onSelect: function (payload) {
                             var files = Array.isArray(payload) ? payload : (payload && payload.files ? payload.files : [payload]);
@@ -65,7 +72,7 @@
                 label: 'FluxFiles',
                 command: 'openFluxFiles',
                 toolbar: 'insert',
-                icon: this.path + 'icons/fluxfiles.png'
+                icon: ICON_URI
             });
         }
     });

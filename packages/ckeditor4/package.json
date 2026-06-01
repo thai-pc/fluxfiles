@@ -1,12 +1,11 @@
 {
   "name": "@fluxfiles/ckeditor4",
-  "version": "0.1.2",
+  "version": "0.2.1",
   "description": "CKEditor 4 plugin for FluxFiles",
   "license": "MIT",
   "main": "plugin.js",
   "files": [
     "plugin.js",
-    "icons",
     "README.md"
   ],
   "scripts": { "test": "vitest run" },

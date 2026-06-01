@@ -38,6 +38,23 @@ describe('FluxFiles SDK postMessage protocol', () => {
     expect(cfg.payload.disk).toBe('s3');
   });
 
+  it('FM_CONFIG carries maxUploadMb (MB) and maxFiles', () => {
+    FluxFiles.open({ endpoint: ORIGIN, token: 't', maxUploadMb: 25, maxFiles: 3 });
+    const sent = captureOutgoing();
+    fromIframe('FM_READY');
+    const cfg = sent.find((m) => m.type === 'FM_CONFIG');
+    expect(cfg.payload.maxUploadMb).toBe(25);
+    expect(cfg.payload.maxFiles).toBe(3);
+  });
+
+  it('deprecated maxSize (bytes) is converted to maxUploadMb (MB)', () => {
+    FluxFiles.open({ endpoint: ORIGIN, token: 't', maxSize: 10 * 1024 * 1024 });
+    const sent = captureOutgoing();
+    fromIframe('FM_READY');
+    const cfg = sent.find((m) => m.type === 'FM_CONFIG');
+    expect(cfg.payload.maxUploadMb).toBe(10); // 10 MB
+  });
+
   it('FM_SELECT → calls onSelect and closes the modal', () => {
     const onSelect = vi.fn();
     FluxFiles.open({ endpoint: ORIGIN, token: 't', onSelect });

@@ -38,6 +38,14 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     expect(buttons.FluxFiles).toBeTruthy();
   });
 
+  it('toolbar icon is an inline SVG data URI (no external PNG file)', () => {
+    const { buttons } = loadPlugin();
+    const icon = buttons.FluxFiles.icon;
+    expect(icon.startsWith('data:image/svg+xml,')).toBe(true);
+    expect(decodeURIComponent(icon)).toContain('<svg');
+    expect(icon).not.toContain('.png'); // the old icons/fluxfiles.png is gone
+  });
+
   it('running the command opens FluxFiles with the editor config', () => {
     const { editor, open } = loadPlugin();
     editor.execCommand('openFluxFiles');

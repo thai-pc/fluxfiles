@@ -33,6 +33,9 @@ class Claims
     /** @var array<string, array> BYOB disk configs (decrypted) — diskName => config */
     public $byobDisks = [];
 
+    /** @var int Max number of files allowed under the prefix (0 = unlimited) */
+    public $maxFiles;
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -42,7 +45,8 @@ class Claims
         ?array $allowedExt,
         int $maxStorageMb,
         bool $ownerOnly = false,
-        array $byobDisks = []
+        array $byobDisks = [],
+        int $maxFiles = 0
     ) {
         $this->userId = $userId;
         $this->permissions = $permissions;
@@ -53,6 +57,7 @@ class Claims
         $this->maxStorageMb = $maxStorageMb;
         $this->ownerOnly = $ownerOnly;
         $this->byobDisks = $byobDisks;
+        $this->maxFiles = $maxFiles;
     }
 
     /**
@@ -80,7 +85,8 @@ class Claims
             isset($payload->allowed_ext) ? (array) $payload->allowed_ext : null,
             (int) ($payload->max_storage ?? 0),
             (bool) ($payload->owner_only ?? false),
-            $byobDisks
+            $byobDisks,
+            (int) ($payload->max_files ?? 0)
         );
     }
 

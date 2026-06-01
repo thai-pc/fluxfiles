@@ -164,6 +164,7 @@
         "not_found": "Niet gevonden",
         "quota_exceeded": "Opslagquotum overschreden ({used} / {max})",
         "upload_too_large": "Bestand is te groot (max. {max})",
+        "too_many_files": "Bestandslimiet bereikt (max {max})",
         "ext_not_allowed": "Bestandstype .{ext} is niet toegestaan",
         "generic": "Er is iets misgegaan. Probeer het opnieuw.",
         "system_path": "Dit bestand kan niet worden gewijzigd",

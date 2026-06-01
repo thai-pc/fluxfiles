@@ -78,6 +78,7 @@ $token = FluxFiles::token(auth()->id(), [
     'prefix'     => 'user-123/',
     'max_upload'  => 20,    // MB — per uploaded file
     'max_storage' => 1000,  // MB — total quota per prefix (0 = unlimited)
+    'max_files'   => 0,     // max files per prefix (0 = unlimited)
     'allowed_ext' => ['jpg', 'png', 'pdf'], // lowercase, no dot; null = all safe
     'ttl'         => 7200,  // seconds — token lifetime (7200 = 2 hours)
 ]);

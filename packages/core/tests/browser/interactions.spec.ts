@@ -13,6 +13,50 @@ import {
 // Each test works inside its own freshly-created folder so it is isolated from
 // any files left behind by previous runs (uploads persist in storage/uploads).
 
+test('iframe init fires list/quota/lang exactly once per config (no duplicate requests)', async ({ page }) => {
+  const token = mintToken();
+
+  // Host that completes the handshake and sends the SAME FM_CONFIG three times —
+  // mimicking a chatty wrapper (React/Vue re-renders / double-send). The UI must
+  // not re-fire list+quota+lang for duplicate configs (regression: Alpine was
+  // double-initialising AND there was no idempotency guard → doubled requests).
+  const counts: Record<string, number> = { list: 0, quota: 0, lang: 0 };
+  await page.route('**/api/fm/**', (route) => {
+    const m = route.request().url().match(/\/api\/fm\/(list|quota|lang)/);
+    if (m) counts[m[1]]++;
+    return route.continue();
+  });
+
+  const host = `<!doctype html><html><body>
+    <iframe id="fm" src="/public/index.html" style="width:900px;height:600px;border:0"></iframe>
+    <script>
+      var done = false;
+      window.addEventListener('message', function (e) {
+        var m = e.data; if (!m || m.source !== 'fluxfiles') return;
+        if (m.type === 'FM_READY' && !done) {
+          done = true;
+          var w = document.getElementById('fm').contentWindow;
+          var cfg = { source: 'fluxfiles', type: 'FM_CONFIG', v: 1, id: 'h',
+            payload: { token: ${JSON.stringify(token)}, disk: 'local', endpoint: location.origin, locale: 'vi' } };
+          w.postMessage(cfg, '*');
+          w.postMessage(cfg, '*');
+          setTimeout(function () { w.postMessage(cfg, '*'); }, 200);
+        }
+      });
+    </script>
+  </body></html>`;
+  await page.route('**/__cfg_host', (r) => r.fulfill({ contentType: 'text/html', body: host }));
+  await page.goto('/__cfg_host');
+
+  const frame = page.frameLocator('#fm');
+  await expect(frame.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(1500); // let any stray duplicate requests land
+
+  expect(counts.list).toBe(1);
+  expect(counts.quota).toBe(1);
+  expect(counts.lang).toBe(1);
+});
+
 test('upload a file through the UI → it appears in the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);
@@ -25,6 +69,48 @@ test('upload a file through the UI → it appears in the grid', async ({ page })
   await uploadFile(page, pngFile(fname));
 
   await expect(cardByName(page, fname)).toBeVisible({ timeout: 15_000 });
+});
+
+test('maxUploadMb blocks an oversized file client-side (toast, no upload)', async ({ page }) => {
+  const token = mintToken();
+  // Standalone URL param sets config.maxUploadMb = 1 (MB).
+  await page.goto(`/public/index.html?token=${token}&disk=local&maxUploadMb=1`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-maxmb-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  // A ~2 MB "file" — exceeds the 1 MB client limit.
+  const big = { name: `big-${Date.now()}.png`, mimeType: 'image/png', buffer: Buffer.alloc(2 * 1024 * 1024, 7) };
+
+  let uploadCalled = false;
+  await page.route('**/api/fm/upload', (r) => { uploadCalled = true; return r.continue(); });
+
+  await page.locator('input[type=file]').first().setInputFiles(big);
+
+  await expect(page.locator('.ff-toast')).toBeVisible({ timeout: 5_000 });
+  await page.waitForTimeout(800);
+  expect(uploadCalled).toBe(false);               // never hit the API
+  await expect(cardByName(page, big.name)).toHaveCount(0);
+});
+
+test('maxFiles caps an oversized drop batch client-side', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local&maxFiles=2`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-maxf-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  const stamp = Date.now();
+  const fs = [`x1-${stamp}.png`, `x2-${stamp}.png`, `x3-${stamp}.png`].map((n) => pngFile(n));
+  await page.locator('input[type=file]').first().setInputFiles(fs);
+
+  await expect(page.locator('.ff-toast')).toBeVisible({ timeout: 5_000 });
+  // Batch sliced to maxFiles=2 → exactly 2 cards, never 3.
+  await expect(page.locator('.file-card')).toHaveCount(2, { timeout: 15_000 });
 });
 
 test('dropping a file OUTSIDE the dropzone uploads it (no browser navigation)', async ({ page }) => {

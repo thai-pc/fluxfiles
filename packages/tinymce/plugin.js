@@ -39,6 +39,8 @@
         var disk = editor.getParam('fluxfiles_disk', 'local');
         var locale = editor.getParam('fluxfiles_locale', null);
         var multiple = editor.getParam('fluxfiles_multiple', false);
+        var maxUploadMb = editor.getParam('fluxfiles_max_upload_mb', null);
+        var maxFiles = editor.getParam('fluxfiles_max_files', null);
 
         FluxFiles.open({
             endpoint: endpoint,
@@ -46,6 +48,8 @@
             disk: disk,
             mode: 'picker',
             multiple: !!multiple,
+            maxUploadMb: maxUploadMb,
+            maxFiles: maxFiles,
             locale: locale,
             onSelect: function (payload) {
                 var files = Array.isArray(payload) ? payload : (payload && payload.files ? payload.files : [payload]);
