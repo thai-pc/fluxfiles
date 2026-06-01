@@ -3,7 +3,7 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.3] — 2026-06-01
 
 ### Added
 
