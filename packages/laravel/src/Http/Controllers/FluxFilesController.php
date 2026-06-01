@@ -147,23 +147,28 @@ class FluxFilesController
                 'size'     => $file->getSize(),
             ];
 
+            // Cast to string: input() returns null when the field is present but
+            // empty/null, and FileManager::upload() type-hints `string $path` — an
+            // unguarded null there throws a TypeError (HTTP 500) before the
+            // extension check even runs. '' is a valid path (upload to root).
+            $disk = (string) ($request->input('disk') ?? 'local');
+            $path = (string) ($request->input('path') ?? '');
+
             $result = $fm->upload(
-                $request->input('disk', 'local'),
-                $request->input('path', ''),
+                $disk !== '' ? $disk : 'local',
+                $path,
                 $fileData,
                 (bool) $request->input('force_upload', false)
             );
 
-            $this->logAudit(
-                $claims,
-                'upload',
-                $request->input('disk', 'local'),
-                $request->input('path', '')
-            );
+            $this->logAudit($claims, 'upload', $disk !== '' ? $disk : 'local', $path);
 
             return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
+        } catch (\Throwable $e) {
+            // Never leak a TypeError/HTML error page from the API surface.
+            return $this->error('Upload failed: ' . $e->getMessage(), 500);
         }
     }
 

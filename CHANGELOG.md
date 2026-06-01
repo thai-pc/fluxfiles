@@ -14,6 +14,15 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Fixed
 
+- **Laravel adapter: upload no longer 500s on a missing/null `path`.**
+  `FluxFilesController::upload()` passed `$request->input('path', '')` straight
+  into `FileManager::upload(string $path)`; Laravel's `input()` default only
+  applies when the key is absent, so a present-but-null `path` yielded `null` →
+  an uncaught `TypeError` (HTML 500) *before* the extension check. Now disk/path
+  are coerced with `(string) (… ?? '')`, and a catch-all `\Throwable` returns a
+  JSON error instead of an HTML page. A disallowed type (e.g. a `.zip` not in
+  `allowed_ext`) now correctly returns **403 `ext_not_allowed`** instead of 500.
+
 - **Dropping a file outside the dropzone no longer breaks the app.** Only the
   small `.ff-dropzone` prevented the browser default, so a file (e.g. a `.zip`)
   dropped on the grid or anywhere else made the browser open/navigate to the raw
