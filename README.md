@@ -5,6 +5,8 @@
 [![npm](https://img.shields.io/npm/v/fluxfiles?label=sdk&color=cb3837)](https://www.npmjs.com/package/fluxfiles)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/react?label=react&color=61dafb)](https://www.npmjs.com/package/@fluxfiles/react)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/vue?label=vue&color=42b883)](https://www.npmjs.com/package/@fluxfiles/vue)
+[![npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor4?label=ckeditor4&color=1eb5ff)](https://www.npmjs.com/package/@fluxfiles/ckeditor4)
+[![npm](https://img.shields.io/npm/v/@fluxfiles/tinymce?label=tinymce&color=2dc26b)](https://www.npmjs.com/package/@fluxfiles/tinymce)
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
 
@@ -875,8 +877,11 @@ The Packagist package `fluxfiles/fluxfiles` is **core PHP only**; it does **not*
 **Shortcode:**
 
 ```
-[fluxfiles disk="r2" path="uploads" mode="picker" height="500px"]
+[fluxfiles disk="r2" path="uploads" mode="picker" height="500px" multiple="1"]
 ```
+
+Attributes: `disk`, `mode` (`picker`/`browser`), `width`, `height`, `multiple`
+(`1`/`0` — multi-select).
 
 **Media Button:** A "FluxFiles" button appears in the Classic Editor toolbar — opens a modal file picker.
 
@@ -1016,8 +1021,13 @@ export default defineNuxtConfig({
 
 ### CKEditor 4
 
-1. Copy `packages/ckeditor4/` to your CKEditor plugins directory
-2. Load `fluxfiles.js` SDK on the page
+```bash
+npm install @fluxfiles/ckeditor4
+```
+
+CKEditor 4 loads plugins from a path, so point `addExternal` at the installed
+package (`node_modules/@fluxfiles/ckeditor4/`) or copy the folder into your
+CKEditor `plugins/` directory. Then load `fluxfiles.js` SDK on the page and:
 
 ```js
 CKEDITOR.replace('editor', {
@@ -1027,17 +1037,25 @@ CKEDITOR.replace('editor', {
         token: 'JWT_TOKEN',
         disk: 'local',
         locale: 'en',
-        multiple: false
+        multiple: false,
+        maxUploadMb: 10,   // MB per file (optional)
+        maxFiles: 0        // max files per batch (0 = unlimited)
     }
 });
 ```
 
-Click the **FluxFiles** toolbar button — images insert as `<img>`, other files as `<a>`.
+Click the **FluxFiles** toolbar button (inline-SVG folder icon) — images insert
+as `<img>`, other files as `<a>`.
 
 ### TinyMCE (4.x / 5.x)
 
-1. Copy `packages/tinymce/` to your TinyMCE plugins directory
-2. Load `fluxfiles.js` SDK on the page
+```bash
+npm install @fluxfiles/tinymce
+```
+
+TinyMCE loads the plugin from a URL (`external_plugins`), so reference
+`node_modules/@fluxfiles/tinymce/plugin.js` or copy the folder into your TinyMCE
+`plugins/` directory. Then load `fluxfiles.js` SDK and:
 
 ```js
 tinymce.init({
@@ -1048,7 +1066,9 @@ tinymce.init({
     fluxfiles_token: 'JWT_TOKEN',
     fluxfiles_disk: 'local',
     fluxfiles_locale: 'en',
-    fluxfiles_multiple: false
+    fluxfiles_multiple: false,
+    fluxfiles_max_upload_mb: 10,  // MB per file (optional)
+    fluxfiles_max_files: 0        // max files per batch (0 = unlimited)
 });
 ```
 
@@ -1229,18 +1249,18 @@ Packages are versioned independently. Do not use a plain `v*` monorepo tag for n
 
 ```bash
 # Composer split packages. The split repo receives the semver tag without the prefix.
-git tag core-v0.1.3
-git tag laravel-v0.1.3
+git tag core-v0.2.1
+git tag laravel-v0.2.0
 
-# npm packages. The tag version must match package.json.
-git tag sdk-v0.1.3
-git tag react-v0.1.3
-git tag vue-v0.1.3
-git tag ckeditor4-v0.1.3
-git tag tinymce-v0.1.3
+# npm packages. The tag version must match each package.json.
+git tag sdk-v0.2.0
+git tag react-v0.2.0
+git tag vue-v0.2.0
+git tag ckeditor4-v0.2.1
+git tag tinymce-v0.2.0
 ```
 
-`core-v*` and `laravel-v*` trigger `.github/workflows/split.yml`. The npm package tags trigger `.github/workflows/npm-publish.yml` for only the matching package.
+`core-v*` and `laravel-v*` trigger `.github/workflows/split.yml`. The npm package tags trigger `.github/workflows/npm-publish.yml` for only the matching package. **Push tags one at a time** — pushing more than three tags in a single `git push` skips the tag-triggered workflows.
 
 ### Manual browser pages
 
