@@ -191,9 +191,40 @@ test('scopePath: empty path without prefix', function () {
     assertEqual('', $claims->scopePath(''));
 });
 
-test('scopePath: empty path with prefix', function () {
+test('scopePath: empty path with prefix → prefix (no trailing slash)', function () {
     $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
-    assertEqual('uploads/user1/', $claims->scopePath(''));
+    assertEqual('uploads/user1', $claims->scopePath(''));
+});
+
+// Idempotency: list() returns full prefixed keys and the UI navigates with them,
+// so an already-prefixed path must not be prefixed twice.
+test('scopePath: already-prefixed path is NOT doubled (the navigate bug)', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
+    assertEqual('uploads/user1/posts', $claims->scopePath('uploads/user1/posts'));
+    assertEqual('uploads/user1', $claims->scopePath('uploads/user1'));
+});
+
+test('scopePath: relative path is still prefixed', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
+    assertEqual('uploads/user1/posts', $claims->scopePath('posts'));
+});
+
+// Security: idempotency must NOT let one user reach another's prefix.
+test('scopePath: foreign top-level path is sandboxed back into the prefix', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'user_1', 10, null, 0);
+    // "user_2/secret" does not start with "user_1/" → prepended, stays in user_1
+    assertEqual('user_1/user_2/secret', $claims->scopePath('user_2/secret'));
+});
+
+test('scopePath: .. inside an already-prefixed path cannot escape the prefix', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'user_1', 10, null, 0);
+    // ".." stripped → "user_1/user_2/secret" (a folder inside user_1, not user_2's root)
+    assertEqual('user_1/user_2/secret', $claims->scopePath('user_1/../user_2/secret'));
+});
+
+test('scopePath: prefix confusion (user_1 vs user_10) is blocked by the / boundary', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'user_1', 10, null, 0);
+    assertEqual('user_1/user_10/x', $claims->scopePath('user_10/x'));
 });
 
 // ═══════════════════════════════════════════════════════════════
