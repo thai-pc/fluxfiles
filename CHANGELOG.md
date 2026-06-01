@@ -5,6 +5,18 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI: the SDK wrapper test failed on Linux** with
+  `Cannot find module @rollup/rollup-linux-x64-gnu`. A `packages/sdk/package-lock.json`
+  generated on macOS had been committed; it pinned only the darwin rollup native
+  binary, so `npm install` on the Linux runner skipped the linux one
+  ([npm/cli#4828](https://github.com/npm/cli/issues/4828)) and vitest crashed at
+  startup. The lockfile is now untracked + gitignored (it isn't needed for a
+  published lib), so CI resolves platform-correct optional deps from a fresh
+  install. (`react`'s committed lock already lists all platforms; `vue`'s pulls no
+  native rollup — both unaffected.)
+
 ### Added
 
 - **`fluxfiles_token()` can now set the storage quota.** Added a `maxStorageMb`
@@ -19,6 +31,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
   `allowedExt` entries are bare lowercase extensions (no dot). Added a "Token
   parameters & units" reference table and unit annotations across the token,
   JWT-structure, BYOB, and Laravel examples.
+- README production-deployment section now documents the **three upload-size
+  layers** (nginx `client_max_body_size`, PHP `upload_max_filesize`/`post_max_size`,
+  and the JWT `max_upload`), with the nginx example setting `client_max_body_size`
+  and a note that S3/R2 chunked uploads bypass `post_max_size`.
 
 ## [0.1.3] — 2026-06-01
 

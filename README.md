@@ -158,6 +158,11 @@ server {
     ssl_certificate     /etc/ssl/certs/fm.yourdomain.com.pem;
     ssl_certificate_key /etc/ssl/private/fm.yourdomain.com.key;
 
+    # Max request body — must be >= the largest `max_upload` (MB) you issue in a
+    # JWT, or nginx rejects big uploads with 413 BEFORE the request reaches PHP.
+    # Set this a bit above your biggest per-file limit (here: 100 MB).
+    client_max_body_size 100M;
+
     # API — rewrite to PHP router
     location /api/ {
         try_files $uri /api/index.php?$query_string;
@@ -241,6 +246,30 @@ chmod -R 755 storage/
 chmod 600 .env
 chmod 600 storage/rate_limit.json   # if exists
 ```
+
+### Upload size limits (three layers)
+
+A large upload must pass **three** independent limits — the smallest one wins.
+The JWT `max_upload` is the only one FluxFiles controls; the other two are your
+server/PHP config and must be **≥** your largest `max_upload`, or files are
+rejected *before* reaching the app (often as a confusing `413` or
+`400 No file uploaded` instead of FluxFiles' own `413 upload_too_large`).
+
+| Layer | Setting | Where | Note |
+|-------|---------|-------|------|
+| Web server | `client_max_body_size` (nginx) / `LimitRequestBody` (Apache) | nginx `server`/`http` block | Rejects the request body if too big. |
+| PHP | `upload_max_filesize` **and** `post_max_size` | `php.ini` (or php-fpm pool) | `post_max_size` must be ≥ `upload_max_filesize`; both ≥ your `max_upload`. |
+| FluxFiles | `max_upload` (JWT claim, **MB, per file**) | issued in your token | Returns `413 upload_too_large` when exceeded. |
+
+```ini
+; php.ini — example for a 100 MB per-file limit
+upload_max_filesize = 100M
+post_max_size       = 110M     ; a little above upload_max_filesize
+```
+
+> Files **larger than 10 MB on S3/R2 disks** use chunked (multipart) upload, which
+> sends 5 MB parts directly to the bucket — so those bypass `post_max_size`. Local
+> disk always uses a single request, so the PHP/nginx limits above apply in full.
 
 ---
 
