@@ -3,6 +3,19 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Dropping a file outside the dropzone no longer breaks the app.** Only the
+  small `.ff-dropzone` prevented the browser default, so a file (e.g. a `.zip`)
+  dropped on the grid or anywhere else made the browser open/navigate to the raw
+  file, replacing the whole manager. A global `dragover`/`drop` guard now blocks
+  that everywhere and treats a drop anywhere in the manager as an upload; drops on
+  the dropzone still upload as before. (Server-side extension rejection was already
+  correct — disallowed types return a clean 403 on both the normal and chunked
+  upload paths.)
+
 ## [0.1.2] — 2026-06-01
 
 ### Fixed

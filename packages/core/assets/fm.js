@@ -219,6 +219,20 @@ function fluxFilesApp() {
                 try { localStorage.setItem('fluxfiles_detail_width', String(this.detailPanelWidth)); } catch (_) {}
             };
 
+            // Global drag-and-drop guard. The dropzone is a small target; without
+            // this, a file dropped anywhere else (e.g. a .zip onto the file grid)
+            // triggers the browser's default "open the file" behaviour, which
+            // navigates away and replaces the whole app with the raw file. Block
+            // that everywhere, and treat a drop anywhere in the manager as an
+            // upload (the dropzone keeps handling its own drops).
+            window.addEventListener('dragover', (e) => { e.preventDefault(); });
+            window.addEventListener('drop', (e) => {
+                if (e.target && e.target.closest && e.target.closest('.ff-dropzone')) return;
+                e.preventDefault();
+                const dropped = e.dataTransfer && e.dataTransfer.files;
+                if (dropped && dropped.length && this.token) this.uploadFiles(dropped);
+            });
+
             window.addEventListener('message', (e) => {
                 // Validate origin: trust first FM_CONFIG sender, then lock to that origin
                 if (this._parentOrigin && e.origin !== this._parentOrigin) return;
