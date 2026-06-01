@@ -20,7 +20,10 @@
     <script src="../assets/fm.js"></script>
 </head>
 <body>
-<div class="ff-app" :class="{ 'ff-sidebar-open': sidebarOpen, 'ff-picker-mode': config.mode === 'picker', 'ff-multiple-mode': config.multiple }" x-data="fluxFilesApp()" x-init="init()">
+<!-- Alpine 3 auto-calls the component's init() method — do NOT add x-init="init()"
+     here too, or init() runs twice (two message listeners → duplicate FM_CONFIG
+     handling → doubled list/quota/lang requests). -->
+<div class="ff-app" :class="{ 'ff-sidebar-open': sidebarOpen, 'ff-picker-mode': config.mode === 'picker', 'ff-multiple-mode': config.multiple }" x-data="fluxFilesApp()">
 
     <!-- ═══ Auth required screen ═══ -->
     <div class="ff-auth-screen" x-show="authRequired" x-transition.opacity.duration.400ms>

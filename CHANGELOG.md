@@ -3,6 +3,22 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] — 2026-06-02
+
+### Fixed
+
+- **Duplicated network requests when opening the manager (iframe/modal).** The
+  standalone page had both Alpine's automatic `init()` call **and** an explicit
+  `x-init="init()"` on the same element, so `init()` ran twice → two `message`
+  listeners → every `FM_CONFIG` was handled twice, firing `list` + `quota` +
+  `lang` twice. Combined with chatty wrappers (React/Vue re-renders sending the
+  config 2–3×) this multiplied into the ~4–6× duplicate requests seen in the
+  network panel. Removed the redundant `x-init`, and added an **idempotency
+  guard** to the `FM_CONFIG` handler so a repeated/identical config no longer
+  re-fetches — a real change (token/disk/path/locale/endpoint) still reloads.
+  Regression test asserts exactly one `list`/`quota`/`lang` per config even when
+  the host sends FM_CONFIG three times.
+
 ## [0.2.0] — 2026-06-02
 
 ### Added

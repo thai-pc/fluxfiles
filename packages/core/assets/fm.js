@@ -242,19 +242,31 @@ function fluxFilesApp() {
 
                 if (msg.type === 'FM_CONFIG') {
                     if (!this._parentOrigin) this._parentOrigin = e.origin;
-                    this.token = msg.payload.token || '';
-                    this.currentDisk = msg.payload.disk || 'local';
-                    this.endpoint = msg.payload.endpoint || '';
-                    this.config = msg.payload;
-                    if (msg.payload.path !== undefined) this.currentPath = msg.payload.path || '';
+                    const p = msg.payload;
+
+                    // Idempotency guard: chatty hosts (React/Vue re-renders, double
+                    // sends) can post the same FM_CONFIG repeatedly. Only (re)load when
+                    // something that affects the listing actually changed — otherwise a
+                    // duplicate config would re-fire list + quota + lang every time.
+                    const sig = [p.token || '', p.disk || 'local', p.path || '', p.locale || '', p.endpoint || ''].join('|');
+                    const changed = sig !== this._lastConfigSig;
+                    this._lastConfigSig = sig;
+
+                    this.token = p.token || '';
+                    this.currentDisk = p.disk || 'local';
+                    this.endpoint = p.endpoint || '';
+                    this.config = p;
+                    if (p.path !== undefined) this.currentPath = p.path || '';
                     this.authRequired = false;
                     this._initTheme();
 
+                    if (!changed) return; // same config already applied — no reload
+
                     // Handle locale from host app
                     // Priority: explicit SDK locale > server-injected locale > default 'en'
-                    if (msg.payload.locale && msg.payload.locale !== 'auto') {
+                    if (p.locale && p.locale !== 'auto') {
                         // Host app explicitly requested a locale
-                        this.switchLocale(msg.payload.locale);
+                        this.switchLocale(p.locale);
                     }
                     // else: keep server-injected locale (FLUXFILES_LOCALE) or default 'en'
 
@@ -284,7 +296,7 @@ function fluxFilesApp() {
             document.documentElement.lang = this.locale;
 
             this.postMessage('FM_READY', {
-                version: '0.2.0',
+                version: '0.2.1',
                 locale: this.locale,
                 capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops', 'ai-tag', 'i18n']
             });
