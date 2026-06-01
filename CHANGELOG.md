@@ -3,6 +3,35 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] — 2026-06-01
+
+### Added
+
+- **Minified SDK build.** The `fluxfiles` package now ships `fluxfiles.min.js`
+  (~5 KB, ~half of `fluxfiles.js`) alongside the readable source, served by the
+  dev router at `/fluxfiles.min.js` and resolved by jsDelivr/unpkg `npm/fluxfiles`.
+  `npm run build` (esbuild) regenerates it.
+
+### Fixed
+
+- **Laravel adapter: upload no longer 500s on a missing/null `path`.**
+  `FluxFilesController::upload()` passed `$request->input('path', '')` straight
+  into `FileManager::upload(string $path)`; Laravel's `input()` default only
+  applies when the key is absent, so a present-but-null `path` yielded `null` →
+  an uncaught `TypeError` (HTML 500) *before* the extension check. Now disk/path
+  are coerced with `(string) (… ?? '')`, and a catch-all `\Throwable` returns a
+  JSON error instead of an HTML page. A disallowed type (e.g. a `.zip` not in
+  `allowed_ext`) now correctly returns **403 `ext_not_allowed`** instead of 500.
+
+- **Dropping a file outside the dropzone no longer breaks the app.** Only the
+  small `.ff-dropzone` prevented the browser default, so a file (e.g. a `.zip`)
+  dropped on the grid or anywhere else made the browser open/navigate to the raw
+  file, replacing the whole manager. A global `dragover`/`drop` guard now blocks
+  that everywhere and treats a drop anywhere in the manager as an upload; drops on
+  the dropzone still upload as before. (Server-side extension rejection was already
+  correct — disallowed types return a clean 403 on both the normal and chunked
+  upload paths.)
+
 ## [0.1.2] — 2026-06-01
 
 ### Fixed

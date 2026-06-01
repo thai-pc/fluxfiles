@@ -27,6 +27,34 @@ test('upload a file through the UI → it appears in the grid', async ({ page })
   await expect(cardByName(page, fname)).toBeVisible({ timeout: 15_000 });
 });
 
+test('dropping a file OUTSIDE the dropzone uploads it (no browser navigation)', async ({ page }) => {
+  const token = mintToken();
+  await openManager(page, token);
+
+  const folder = `pw-drop-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  const urlBefore = page.url();
+  const fname = `dropped-${Date.now()}.png`;
+
+  // Simulate a real drag-drop of a file onto <body> (well outside .ff-dropzone).
+  // Without the global drop guard the browser would navigate to the raw file.
+  await page.evaluate((name) => {
+    const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length + 16);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    for (let i = 0; i < 16; i++) arr[bin.length + i] = Math.floor(Math.random() * 256); // unique hash
+    const dt = new DataTransfer();
+    dt.items.add(new File([arr], name, { type: 'image/png' }));
+    document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, fname);
+
+  await expect(cardByName(page, fname)).toBeVisible({ timeout: 15_000 });
+  expect(page.url()).toBe(urlBefore); // app did not navigate away
+});
+
 test('create a folder and navigate in and back out via the breadcrumb', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);

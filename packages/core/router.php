@@ -27,12 +27,14 @@ if ($uri === '/public/index.html' || $uri === '/public/' || $uri === '/public') 
 }
 
 // Serve the browser SDK from packages/sdk/ at the conventional /fluxfiles.js
-// path so test fixtures, README snippets, and production setups can use the
-// same URL regardless of monorepo vs. published-package layout.
-if ($uri === '/fluxfiles.js') {
+// (and minified /fluxfiles.min.js) path so test fixtures, README snippets, and
+// production setups can use the same URL regardless of monorepo vs. published
+// layout.
+if ($uri === '/fluxfiles.js' || $uri === '/fluxfiles.min.js') {
+    $name = basename($uri);
     $candidates = [
-        __DIR__ . '/fluxfiles.js',          // release ZIP (build-wordpress.sh copies it here)
-        __DIR__ . '/../sdk/fluxfiles.js',   // monorepo checkout
+        __DIR__ . '/' . $name,          // release ZIP (build-wordpress.sh copies it here)
+        __DIR__ . '/../sdk/' . $name,   // monorepo checkout
     ];
     foreach ($candidates as $path) {
         if (is_file($path)) {
