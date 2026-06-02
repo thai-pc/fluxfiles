@@ -977,6 +977,19 @@ class FileManager
             if ($relative === $prefix || strpos($relative, $prefix . '/') === 0) {
                 return $relative;
             }
+
+            // Fail closed on a cross-tenant path. When the prefix has a parent
+            // (e.g. "users/42" → parent "users"), a path that targets a sibling
+            // under that same parent ("users/99/…") is unambiguously another
+            // tenant's tree — reject it instead of silently sandboxing it into an
+            // empty phantom folder. A flat single-segment prefix ("user_1") has no
+            // parent, so "user_2/…" is indistinguishable from a real subfolder and
+            // stays sandboxed (still safe — it can never reach user_2's files).
+            $parent = (strpos($prefix, '/') !== false) ? substr($prefix, 0, strrpos($prefix, '/')) : '';
+            if ($parent !== '' && strpos($relative, $parent . '/') === 0) {
+                throw new ApiException('Access denied to path', 403, 'path_denied');
+            }
+
             return $relative === '' ? $prefix : $prefix . '/' . $relative;
         }
 

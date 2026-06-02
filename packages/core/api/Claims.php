@@ -154,6 +154,12 @@ class Claims
             if ($relative === $prefix || strpos($relative, $prefix . '/') === 0) {
                 return $relative;
             }
+            // Fail closed on a cross-tenant path that targets a sibling under the
+            // prefix's parent (e.g. prefix "users/42" + path "users/99/…").
+            $parent = (strpos($prefix, '/') !== false) ? substr($prefix, 0, strrpos($prefix, '/')) : '';
+            if ($parent !== '' && strpos($relative, $parent . '/') === 0) {
+                throw new ApiException('Access denied to path', 403, 'path_denied');
+            }
             return $relative === '' ? $prefix : $prefix . '/' . $relative;
         }
         return $relative;

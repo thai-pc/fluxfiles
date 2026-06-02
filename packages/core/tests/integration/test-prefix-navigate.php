@@ -87,10 +87,17 @@ test('file URL resolves under the user prefix', function () use ($fm) {
 
 echo "{$yellow}► prefix isolation (security){$reset}\n";
 
-test("user_1 cannot list user_2's folder (sandboxed → empty)", function () use ($fm) {
-    // "uploads/user_2" is prefixed into "uploads/user_1/uploads/user_2" → does not exist.
-    $f = files($fm->list('local', 'uploads/user_2'));
-    assertEqual(0, count($f), 'user_1 must not see user_2 files, got ' . count($f));
+test("user_1 listing user_2's folder is rejected (403 path_denied)", function () use ($fm) {
+    // prefix "uploads/user_1" has parent "uploads"; "uploads/user_2" targets a
+    // sibling tenant under that parent → fail closed instead of an empty phantom.
+    $threw = false; $code = null;
+    try {
+        $fm->list('local', 'uploads/user_2');
+    } catch (\FluxFiles\ApiException $e) {
+        $threw = true; $code = $e->getErrorCode();
+    }
+    assertEqual(true, $threw, 'cross-tenant list must throw');
+    assertEqual('path_denied', $code);
 });
 
 test('.. inside a prefixed path cannot escape to user_2', function () use ($fm) {

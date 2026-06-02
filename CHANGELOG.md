@@ -19,6 +19,20 @@ All notable changes to FluxFiles are documented here. This project adheres to
   ellipsis (`…`) and shows the full name via `title` on hover; the row height
   stays fixed.
 
+### Security
+
+- **Cross-tenant paths now fail closed (403) instead of silently sandboxing.**
+  When a token's `prefix` has a parent (e.g. `users/42` → parent `users`), a
+  request targeting a sibling tenant under that parent (`users/99/…`) is rejected
+  with `403 path_denied` in `scopePath()`/`scopedPath()` — applied to list,
+  navigate, and every mutating op — rather than mapping to an empty phantom
+  folder. (It was never a leak — `user_1` could never reach `user_2`'s files —
+  but the explicit error is clearer and consistent with the metadata endpoints.)
+  Relative paths and in-scope absolute keys are unaffected. A flat single-segment
+  prefix (`user_1`) has no parent, so `user_2/…` remains indistinguishable from a
+  real subfolder and stays sandboxed — use a parented prefix (`users/{id}`) for
+  explicit cross-tenant rejection.
+
 ### Changed
 
 - **Core runtime-state directory is env-configurable.** `FLUXFILES_STORAGE_PATH`
