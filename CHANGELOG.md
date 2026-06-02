@@ -3,6 +3,29 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Minified builds for the editor plugins.** `@fluxfiles/ckeditor4` and
+  `@fluxfiles/tinymce` now ship `plugin.min.js` (~1.3 KB / ~1.8 KB) alongside the
+  readable `plugin.js`, served by the dev router and resolved by jsDelivr/unpkg.
+  `npm run build` (esbuild) regenerates them. Mirrors the SDK's `fluxfiles.min.js`.
+
+### Fixed
+
+- **Long folder names in the sidebar tree no longer wrap to two lines.** The
+  `tree-item`/`tree-item-child` label now truncates to a single line with an
+  ellipsis (`…`) and shows the full name via `title` on hover; the row height
+  stays fixed.
+
+### Changed
+
+- **Core runtime-state directory is env-configurable.** `FLUXFILES_STORAGE_PATH`
+  (optional; defaults to `packages/core/storage`) lets read-only/immutable
+  deployments point the rate-limit state file at a writable volume. Matches the
+  Laravel adapter, which already had it.
+
 ## [0.2.1] — 2026-06-02
 
 ### Changed

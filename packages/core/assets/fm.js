@@ -296,7 +296,7 @@ function fluxFilesApp() {
             document.documentElement.lang = this.locale;
 
             this.postMessage('FM_READY', {
-                version: '0.2.1',
+                version: '0.2.2',
                 locale: this.locale,
                 capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops', 'ai-tag', 'i18n']
             });

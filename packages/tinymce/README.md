@@ -14,9 +14,13 @@ the plugin folder into your TinyMCE `plugins/` directory:
 
 ```
 tinymce/plugins/fluxfiles/
-├── plugin.js
+├── plugin.js        # readable source
+├── plugin.min.js    # minified (~1.8 KB) — use in production
 └── README.md
 ```
+
+A minified `plugin.min.js` ships alongside the source (CDN `unpkg`/`jsdelivr`
+resolve to it); regenerate with `npm run build` (esbuild).
 
 2. Load the FluxFiles SDK (`fluxfiles.js`) on the page.
 
