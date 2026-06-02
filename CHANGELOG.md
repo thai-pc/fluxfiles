@@ -3,7 +3,10 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.2] — 2026-06-02
+
+> Released: core `core-v0.2.2` (Packagist), `@fluxfiles/ckeditor4` 0.2.2,
+> `@fluxfiles/tinymce` 0.2.1 (npm).
 
 ### Added
 
