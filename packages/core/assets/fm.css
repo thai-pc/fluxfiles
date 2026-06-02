@@ -383,6 +383,15 @@ body {
     height: 18px;
 }
 
+/* Folder/label text: single line, ellipsis when too long (no 2-line wrap). */
+.tree-item .ti-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .tree-item .count {
     margin-inline-start: auto;
     font-size: 11px;

@@ -1,15 +1,21 @@
 {
   "name": "@fluxfiles/ckeditor4",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "CKEditor 4 plugin for FluxFiles",
   "license": "MIT",
   "main": "plugin.js",
+  "unpkg": "plugin.min.js",
+  "jsdelivr": "plugin.min.js",
   "files": [
     "plugin.js",
+    "plugin.min.js",
     "README.md"
   ],
-  "scripts": { "test": "vitest run" },
-  "devDependencies": { "jsdom": "^25.0.1", "vitest": "^2.1.8" },
+  "scripts": {
+    "build": "esbuild plugin.js --minify --legal-comments=none --outfile=plugin.min.js",
+    "test": "vitest run"
+  },
+  "devDependencies": { "esbuild": "^0.28.0", "jsdom": "^25.0.1", "vitest": "^2.1.8" },
   "publishConfig": { "access": "public" },
   "author": "thai-pc",
   "homepage": "https://github.com/thai-pc/fluxfiles#ckeditor-4",

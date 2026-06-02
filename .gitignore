@@ -50,3 +50,5 @@ docs/FLUXFILES-ROADMAP.md
 # Wrapper lockfiles aren't needed for published libs and break cross-platform
 # npm optional-dep resolution (npm/cli#4828). CI does a fresh install.
 packages/sdk/package-lock.json
+packages/ckeditor4/package-lock.json
+packages/tinymce/package-lock.json

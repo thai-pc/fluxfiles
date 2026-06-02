@@ -219,6 +219,27 @@ test('scopePath: foreign top-level path is sandboxed back into the prefix', func
     assertEqual('user_1/user_2/secret', $claims->scopePath('user_2/secret'));
 });
 
+// Cross-tenant rejection: a prefix WITH a parent ("users/42") fails closed when a
+// path targets a sibling tenant under the same parent ("users/99/…").
+test('scopePath: cross-tenant sibling path is rejected (403 path_denied)', function () {
+    $claims = new FluxFiles\Claims('u42', ['read'], ['local'], 'users/42', 10, null, 0);
+    $threw = false; $code = null;
+    try {
+        $claims->scopePath('users/99/secret.jpg');
+    } catch (\FluxFiles\ApiException $e) {
+        $threw = true; $code = $e->getErrorCode();
+    }
+    assertEqual(true, $threw, 'sibling tenant path must throw');
+    assertEqual('path_denied', $code);
+});
+
+test('scopePath: in-scope + relative paths still work with a parented prefix', function () {
+    $claims = new FluxFiles\Claims('u42', ['read'], ['local'], 'users/42', 10, null, 0);
+    assertEqual('users/42', $claims->scopePath(''));                       // root
+    assertEqual('users/42/photos', $claims->scopePath('photos'));          // relative
+    assertEqual('users/42/photos/a.jpg', $claims->scopePath('users/42/photos/a.jpg')); // absolute in-scope
+});
+
 test('scopePath: .. inside an already-prefixed path cannot escape the prefix', function () {
     $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'user_1', 10, null, 0);
     // ".." stripped → "user_1/user_2/secret" (a folder inside user_1, not user_2's root)

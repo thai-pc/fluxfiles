@@ -3,6 +3,46 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] — 2026-06-02
+
+> Released: core `core-v0.2.2` (Packagist), `@fluxfiles/ckeditor4` 0.2.2,
+> `@fluxfiles/tinymce` 0.2.1 (npm).
+
+### Added
+
+- **Minified builds for the editor plugins.** `@fluxfiles/ckeditor4` and
+  `@fluxfiles/tinymce` now ship `plugin.min.js` (~1.3 KB / ~1.8 KB) alongside the
+  readable `plugin.js`, served by the dev router and resolved by jsDelivr/unpkg.
+  `npm run build` (esbuild) regenerates them. Mirrors the SDK's `fluxfiles.min.js`.
+
+### Fixed
+
+- **Long folder names in the sidebar tree no longer wrap to two lines.** The
+  `tree-item`/`tree-item-child` label now truncates to a single line with an
+  ellipsis (`…`) and shows the full name via `title` on hover; the row height
+  stays fixed.
+
+### Security
+
+- **Cross-tenant paths now fail closed (403) instead of silently sandboxing.**
+  When a token's `prefix` has a parent (e.g. `users/42` → parent `users`), a
+  request targeting a sibling tenant under that parent (`users/99/…`) is rejected
+  with `403 path_denied` in `scopePath()`/`scopedPath()` — applied to list,
+  navigate, and every mutating op — rather than mapping to an empty phantom
+  folder. (It was never a leak — `user_1` could never reach `user_2`'s files —
+  but the explicit error is clearer and consistent with the metadata endpoints.)
+  Relative paths and in-scope absolute keys are unaffected. A flat single-segment
+  prefix (`user_1`) has no parent, so `user_2/…` remains indistinguishable from a
+  real subfolder and stays sandboxed — use a parented prefix (`users/{id}`) for
+  explicit cross-tenant rejection.
+
+### Changed
+
+- **Core runtime-state directory is env-configurable.** `FLUXFILES_STORAGE_PATH`
+  (optional; defaults to `packages/core/storage`) lets read-only/immutable
+  deployments point the rate-limit state file at a writable volume. Matches the
+  Laravel adapter, which already had it.
+
 ## [0.2.1] — 2026-06-02
 
 ### Changed

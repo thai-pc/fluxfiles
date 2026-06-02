@@ -114,6 +114,10 @@ When opening FluxFiles directly via `/public/index.html`, configure it with URL 
 | `theme` | No | auto | `light`, `dark`, or auto-detect |
 | `multiple` | No | `false` | `1` or `true` to enable multi-select |
 
+> **Security:** a token in the URL can leak via history/logs/`Referer`. For
+> production, embed via the SDK (token sent over `postMessage`, never in the URL)
+> and keep `ttl` short — see [Token handling](#token-handling).
+
 ### 4. Generate a Token
 
 ```php
@@ -1139,6 +1143,7 @@ FLUXFILES_LOCALE=vi
 | **Permission model** | Granular `read`, `write`, `delete` checked on every operation |
 | **BYOB encryption** | AES-256-GCM with HKDF-derived key (separate from signing key) |
 | **BYOB local blocked** | BYOB tokens cannot use `local` driver — only S3-compatible storage |
+| **BYOB SSRF guard** | BYOB endpoints must be http(s) and are rejected if they resolve to loopback, link-local, private/reserved ranges, or the cloud metadata IP (`169.254.169.254`) |
 | **Rate limiting** | Token bucket per user, file-locked, configurable (default: 60 read, 10 write/min) |
 | **Quota enforcement** | Per-user storage limits checked before upload and cross-disk copy |
 | **Duplicate detection** | SHA-256 hash prevents redundant uploads |
@@ -1147,11 +1152,34 @@ FLUXFILES_LOCALE=vi
 | **Error handling** | Generic errors to client, detailed errors to server log only |
 | **Search XSS** | HTML entities escaped before highlight `<mark>` tags applied |
 
+### Token handling
+
+The JWT is a **bearer credential** — anyone holding it has the access it grants.
+How you deliver it to the file manager matters:
+
+- **Embedding (recommended):** the SDK and framework wrappers pass the token over
+  `postMessage` (`FM_CONFIG`), so it never appears in a URL. Use this for production.
+- **Standalone mode** opens `/public/index.html?token=<JWT>`. A token in the URL
+  can leak through **browser history, server access logs, and the `Referer`
+  header** of any outbound request the page makes. Treat standalone URLs as
+  sensitive and prefer it for local dev / short-lived links only.
+
+Mitigations regardless of delivery:
+
+- **Keep TTLs short** — `ttl` is in seconds; issue the smallest lifetime that
+  fits the session (e.g. `900`–`3600`). Expired tokens return `401` and the SDK
+  triggers your `onTokenRefresh` to mint a fresh one.
+- **Scope tightly** — set `prefix`, the minimum `perms`, and `disks` so a leaked
+  token grants as little as possible.
+- **Serve over HTTPS** so tokens aren't exposed on the wire.
+- Don't log full request URLs (which may contain `?token=`) at your proxy.
+
 ### Production Checklist
 
 - [ ] Set `FLUXFILES_SECRET` to a cryptographically random string (min 32 chars)
 - [ ] Set `FLUXFILES_ALLOWED_ORIGINS` to your production domain(s)
 - [ ] Use HTTPS everywhere
+- [ ] Deliver tokens via the SDK/`postMessage` (not `?token=` URLs) in production; keep `ttl` short
 - [ ] Block public access to `.env`, `vendor/`, `storage/rate_limit.json`
 - [ ] Set `storage/` directory permissions to 755, `.env` to 600
 - [ ] Never commit `.env` with real credentials to git
@@ -1289,6 +1317,7 @@ token field.
 | `FLUXFILES_LOCALE` | No | `en` | UI language (`en`, `vi`, `zh`, `ja`, etc.) |
 | `FLUXFILES_RATE_LIMIT_READ` | No | `60` | Max read requests per minute per user |
 | `FLUXFILES_RATE_LIMIT_WRITE` | No | `10` | Max write requests per minute per user |
+| `FLUXFILES_STORAGE_PATH` | No | `packages/core/storage` | Dir for runtime state (rate-limit counter). Point at a writable volume for read-only deployments |
 | `AWS_ACCESS_KEY_ID` | No | — | AWS S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | No | — | AWS S3 secret key |
 | `AWS_DEFAULT_REGION` | No | `ap-southeast-1` | AWS region |
