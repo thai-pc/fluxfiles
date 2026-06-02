@@ -146,6 +146,51 @@ return [
 ];
 ```
 
+## Deployment & permissions (`rate_limit.json`)
+
+In **proxy mode** the rate limiter keeps its counter in a JSON file at
+`config('fluxfiles.storage_path')` — by default `storage/fluxfiles/rate_limit.json`
+(override with `FLUXFILES_STORAGE_PATH`). PHP creates the directory `0755` and the
+file **`0600`** automatically on the first request.
+
+What you need on the server:
+
+- The directory must be **writable by the user PHP-FPM runs as** (usually
+  `www-data`). Laravel's `storage/` already requires this, so the standard deploy
+  perms cover it:
+
+  ```bash
+  sudo chown -R www-data:www-data storage bootstrap/cache
+  sudo chmod -R 775 storage bootstrap/cache
+  ```
+
+- **Let PHP create `rate_limit.json` itself.** It's chmod-ed to `0600` (owner
+  only), so it must be **owned by the PHP-FPM user**. If a deploy script or `root`
+  pre-creates it as another user, PHP-FPM can't read it and every request fails
+  with `500 "Rate limiter unavailable"`. Fix:
+
+  ```bash
+  sudo chown www-data:www-data storage/fluxfiles/rate_limit.json   # or just delete it; PHP recreates it
+  ```
+
+- **No web-server rule needed.** Unlike the standalone core, this file lives under
+  Laravel's `storage/` (outside the `public/` web root), so it is never served.
+  Keep the `0600` mode — don't loosen it.
+
+- **Read-only / immutable deploys** (e.g. containers): point the path at a writable
+  volume —
+
+  ```env
+  FLUXFILES_STORAGE_PATH=/var/lib/fluxfiles
+  ```
+  ```bash
+  sudo install -d -o www-data -g www-data -m 775 /var/lib/fluxfiles
+  ```
+
+> Standalone mode (running the core server directly) puts the file at
+> `packages/core/storage/rate_limit.json` instead — there it **is** under the web
+> root, so block it at the web server (`location /storage/rate_limit.json { deny all; }`).
+
 ## Using an existing upload directory
 
 If your app already has a directory tree like `public/uploads/user_1/`, `public/uploads/user_2/` (populated before FluxFiles was installed), you can point FluxFiles at it — existing files show up immediately, and a one-shot Artisan command makes them searchable.
