@@ -1317,6 +1317,7 @@ token field.
 | `FLUXFILES_LOCALE` | No | `en` | UI language (`en`, `vi`, `zh`, `ja`, etc.) |
 | `FLUXFILES_RATE_LIMIT_READ` | No | `60` | Max read requests per minute per user |
 | `FLUXFILES_RATE_LIMIT_WRITE` | No | `10` | Max write requests per minute per user |
+| `FLUXFILES_STORAGE_PATH` | No | `packages/core/storage` | Dir for runtime state (rate-limit counter). Point at a writable volume for read-only deployments |
 | `AWS_ACCESS_KEY_ID` | No | — | AWS S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | No | — | AWS S3 secret key |
 | `AWS_DEFAULT_REGION` | No | `ap-southeast-1` | AWS region |

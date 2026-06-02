@@ -156,7 +156,9 @@ try {
     foreach ($claims->byobDisks as $byobName => $byobConfig) {
         $diskManager->registerByobDisk($byobName, $byobConfig);
     }
-    $storagePath = __DIR__ . '/../storage';
+    // Runtime-state dir (rate-limit counter). Overridable so read-only/immutable
+    // deployments can point it at a writable volume; defaults to packages/core/storage.
+    $storagePath = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
     $metaRepo = new StorageMetadataHandler($diskManager);
     $fm = new FileManager($diskManager, $claims, $metaRepo);
     $fm->setQuotaManager(new QuotaManager($diskManager));
