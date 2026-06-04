@@ -17,6 +17,31 @@ npm install @fluxfiles/react
 yarn add @fluxfiles/react
 ```
 
+## Next.js
+
+Works in Next.js the same way as any React app — the components are SSR-safe
+(they only touch `window`/`document` inside effects) and ship the `"use client"`
+directive, so you can render them in the **App Router** without writing your own
+client wrapper:
+
+```tsx
+// app/files/page.tsx — a Server Component can render <FluxFiles> directly
+import { FluxFiles } from '@fluxfiles/react';
+import { mintToken } from '@/lib/fluxfiles'; // your server-side token mint
+
+export default async function Page() {
+  const token = await mintToken();
+  return (
+    <FluxFiles endpoint="https://your-fluxfiles-host" token={token} disk="local" />
+  );
+}
+```
+
+The **Pages Router** works identically. Always mint the JWT **on the server**
+(never expose your `FLUXFILES_SECRET` to the browser) — e.g. in a Route Handler /
+API route, or by asking your FluxFiles core backend for one — and pass it in as
+`token`.
+
 ## Components
 
 ### FluxFilesModal
