@@ -1712,6 +1712,25 @@ body {
     cursor: not-allowed;
 }
 
+/* Rename: editable base name + locked extension suffix shown beside it. */
+.ff-rename-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.ff-rename-row .ff-rename-base {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.ff-rename-ext {
+    flex: 0 0 auto;
+    color: var(--color-text-tertiary);
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    user-select: none;
+}
+
 .ff-new-folder-error {
     font-size: 13px;
     color: var(--color-text-danger);

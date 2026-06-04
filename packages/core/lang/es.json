@@ -188,7 +188,8 @@
         "path_denied": "Acceso denegado a esta ruta",
         "missing_param": "Falta información requerida",
         "invalid_json": "Datos de solicitud no válidos",
-        "origin_denied": "Acceso denegado desde este origen"
+        "origin_denied": "Acceso denegado desde este origen",
+        "ext_changed": "No se puede cambiar la extensión del archivo"
     },
     "presign": {
         "title": "URL prefirmada",
@@ -238,7 +239,8 @@
         "placeholder": "Nuevo nombre",
         "success": "Renombrado",
         "error_empty": "Por favor ingrese un nombre",
-        "error_chars": "El nombre no puede contener: < > : \" / \\ | ? *"
+        "error_chars": "El nombre no puede contener: < > : \" / \\ | ? *",
+        "ext_locked": "La extensión está bloqueada y no se puede cambiar"
     },
     "auth": {
         "refreshing": "Renovando sesión...",

@@ -188,7 +188,8 @@
         "path_denied": "Zugriff auf diesen Pfad verweigert",
         "missing_param": "Erforderliche Information fehlt",
         "invalid_json": "Ungültige Anfragedaten",
-        "origin_denied": "Zugriff von diesem Ursprung verweigert"
+        "origin_denied": "Zugriff von diesem Ursprung verweigert",
+        "ext_changed": "Die Dateiendung kann nicht geändert werden"
     },
     "presign": {
         "title": "Vorsignierte URL",
@@ -238,7 +239,8 @@
         "placeholder": "Neuer Name",
         "success": "Umbenannt",
         "error_empty": "Bitte geben Sie einen Namen ein",
-        "error_chars": "Name darf nicht enthalten: < > : \" / \\ | ? *"
+        "error_chars": "Name darf nicht enthalten: < > : \" / \\ | ? *",
+        "ext_locked": "Die Dateiendung ist gesperrt und kann nicht geändert werden"
     },
     "auth": {
         "refreshing": "Sitzung wird erneuert...",

@@ -188,7 +188,8 @@
         "path_denied": "Không có quyền truy cập đường dẫn này",
         "missing_param": "Thiếu thông tin bắt buộc",
         "invalid_json": "Dữ liệu yêu cầu không hợp lệ",
-        "origin_denied": "Truy cập bị từ chối từ nguồn này"
+        "origin_denied": "Truy cập bị từ chối từ nguồn này",
+        "ext_changed": "Không thể thay đổi phần mở rộng của tệp"
     },
     "presign": {
         "title": "URL có thời hạn",
@@ -238,7 +239,8 @@
         "placeholder": "Tên mới",
         "success": "Đã đổi tên",
         "error_empty": "Vui lòng nhập tên",
-        "error_chars": "Tên không được chứa: < > : \" / \\ | ? *"
+        "error_chars": "Tên không được chứa: < > : \" / \\ | ? *",
+        "ext_locked": "Phần mở rộng bị khóa, không thể thay đổi"
     },
     "auth": {
         "refreshing": "Đang làm mới phiên...",

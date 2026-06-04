@@ -188,7 +188,8 @@
         "path_denied": "이 경로에 대한 접근이 거부되었습니다",
         "missing_param": "필수 정보가 누락되었습니다",
         "invalid_json": "잘못된 요청 데이터",
-        "origin_denied": "이 출처에서의 접근이 거부되었습니다"
+        "origin_denied": "이 출처에서의 접근이 거부되었습니다",
+        "ext_changed": "파일 확장자는 변경할 수 없습니다"
     },
     "presign": {
         "title": "서명된 URL",
@@ -238,7 +239,8 @@
         "placeholder": "새 이름",
         "success": "이름이 변경됨",
         "error_empty": "이름을 입력하세요",
-        "error_chars": "이름에 사용할 수 없는 문자: < > : \" / \\ | ? *"
+        "error_chars": "이름에 사용할 수 없는 문자: < > : \" / \\ | ? *",
+        "ext_locked": "확장자는 잠겨 있어 변경할 수 없습니다"
     },
     "auth": {
         "refreshing": "세션 갱신 중...",

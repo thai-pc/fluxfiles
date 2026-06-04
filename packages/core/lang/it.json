@@ -188,7 +188,8 @@
         "path_denied": "Accesso negato a questo percorso",
         "missing_param": "Informazione richiesta mancante",
         "invalid_json": "Dati richiesta non validi",
-        "origin_denied": "Accesso negato da questa origine"
+        "origin_denied": "Accesso negato da questa origine",
+        "ext_changed": "L’estensione del file non può essere modificata"
     },
     "presign": {
         "title": "URL prefirmato",
@@ -238,7 +239,8 @@
         "placeholder": "Nuovo nome",
         "success": "Rinominato",
         "error_empty": "Inserisci un nome",
-        "error_chars": "Il nome non può contenere: < > : \" / \\ | ? *"
+        "error_chars": "Il nome non può contenere: < > : \" / \\ | ? *",
+        "ext_locked": "L’estensione è bloccata e non può essere modificata"
     },
     "auth": {
         "refreshing": "Aggiornamento sessione...",

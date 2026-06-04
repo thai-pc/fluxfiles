@@ -175,10 +175,12 @@ server {
         try_files $uri /api/index.php?$query_string;
     }
 
-    # Public HTML — served via PHP for locale injection
-    location /public/ {
-        try_files $uri /api/index.php?$query_string;
-    }
+    # Public HTML — MUST go through PHP so the resolved locale (messages + dir)
+    # is injected before the UI boots. A plain `try_files $uri ...` would serve
+    # the static index.html first and skip PHP, causing a flash of raw i18n keys.
+    location = /public           { rewrite ^ /api/index.php last; }
+    location = /public/          { rewrite ^ /api/index.php last; }
+    location = /public/index.html { rewrite ^ /api/index.php last; }
 
     # Static assets (JS, CSS)
     location /assets/ {
@@ -724,12 +726,12 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/list?disk=&path=` | — | List directory contents |
 | `POST` | `/upload` | `multipart: disk, path, file, force_upload?` | Upload file |
 | `DELETE` | `/delete` | `{disk, path}` | Delete file or directory (recursive) |
-| `POST` | `/rename` | `{disk, path, name}` | Rename file or directory |
-| `POST` | `/move` | `{disk, from, to}` | Move within same disk |
-| `POST` | `/copy` | `{disk, from, to}` | Copy within same disk |
+| `POST` | `/rename` | `{disk, path, name}` | Rename file or directory (a file's extension is fixed — base name only) |
+| `POST` | `/move` | `{disk, from, to}` | Move within same disk (file extension must not change; `allowedExt` enforced) |
+| `POST` | `/copy` | `{disk, from, to}` | Copy within same disk (file extension must not change; `allowedExt` enforced) |
 | `POST` | `/mkdir` | `{disk, path}` | Create directory |
-| `POST` | `/cross-copy` | `{src_disk, src_path, dst_disk, dst_path}` | Copy between disks |
-| `POST` | `/cross-move` | `{src_disk, src_path, dst_disk, dst_path}` | Move between disks |
+| `POST` | `/cross-copy` | `{src_disk, src_path, dst_disk, dst_path}` | Copy between disks (file extension must not change; `allowedExt` enforced) |
+| `POST` | `/cross-move` | `{src_disk, src_path, dst_disk, dst_path}` | Move between disks (file extension must not change; `allowedExt` enforced) |
 | `POST` | `/presign` | `{disk, path, method, ttl, size?}` | Generate presigned URL (GET or PUT, max 86400s). `size` is required for PUT. |
 | `POST` | `/crop` | `{disk, path, x, y, width, height, save_path?}` | Crop image |
 | `POST` | `/ai-tag` | `{disk, path}` | AI-analyze image (requires AI config) |
@@ -1136,9 +1138,10 @@ FLUXFILES_LOCALE=vi
 | **postMessage origin** | SDK and iframe validate `e.origin` to prevent cross-origin message injection |
 | **Path traversal** | `..` and `.` segments stripped, null bytes removed, paths normalized before use |
 | **Extension blocking** | Dangerous extensions (php, exe, sh, bat, etc.) blocked even in double-extension filenames (e.g. `shell.php.jpg`) |
+| **Extension immutability** | A file's extension is fixed at upload. Rename/move/copy/cross-disk **cannot change it** (→ `400 ext_changed`), and move/copy re-check the `allowedExt` policy (→ `403 ext_not_allowed`) — so a scoped token can't relocate a file out of its allowed types. Folders are unaffected. |
 | **Path scoping** | Users confined to their `prefix` directory — cannot access files outside scope |
 | **Owner-only mode** | `owner_only` JWT claim restricts delete/rename/move to files the user uploaded |
-| **System path protection** | `_fluxfiles/` and `_variants/` directories blocked from list/delete/rename/move — hidden in file listing |
+| **System path protection** | `_fluxfiles/` and `_variants/` directories blocked from list/delete/rename/move, hidden in file listing, **and excluded from file/folder search results** |
 | **Disk whitelist** | Per-token disk access — users can only access disks listed in JWT |
 | **Permission model** | Granular `read`, `write`, `delete` checked on every operation |
 | **BYOB encryption** | AES-256-GCM with HKDF-derived key (separate from signing key) |

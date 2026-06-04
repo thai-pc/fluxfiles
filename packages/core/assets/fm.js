@@ -71,7 +71,8 @@ function fluxFilesApp() {
         // Rename modal
         showRename: false,
         renameTarget: null,
-        renameValue: '',
+        renameValue: '',     // editable base name (extension stripped for files)
+        renameExt: '',       // locked extension suffix incl. dot (e.g. ".png"); '' for folders/extensionless
         renameError: '',
         renameSubmitting: false,
 
@@ -1445,24 +1446,23 @@ function fluxFilesApp() {
         openRename(item) {
             if (!item) return;
             this.renameTarget = item;
-            this.renameValue = item.name;
+            // Files: split off the extension and lock it (only the base is editable).
+            // Folders / extensionless files: the whole name is editable.
+            const dotIdx = item.type !== 'dir' ? item.name.lastIndexOf('.') : -1;
+            if (dotIdx > 0) {
+                this.renameValue = item.name.slice(0, dotIdx);
+                this.renameExt = item.name.slice(dotIdx); // includes the dot
+            } else {
+                this.renameValue = item.name;
+                this.renameExt = '';
+            }
             this.renameError = '';
             this.showRename = true;
             this.$nextTick(() => {
                 const input = this.$refs.renameInput;
                 if (input) {
                     input.focus();
-                    // Select name without extension for files
-                    if (item.type !== 'dir') {
-                        const dotIdx = item.name.lastIndexOf('.');
-                        if (dotIdx > 0) {
-                            input.setSelectionRange(0, dotIdx);
-                        } else {
-                            input.select();
-                        }
-                    } else {
-                        input.select();
-                    }
+                    input.select(); // base name only — extension is shown locked beside it
                 }
             });
         },
@@ -1471,19 +1471,22 @@ function fluxFilesApp() {
             this.showRename = false;
             this.renameTarget = null;
             this.renameValue = '';
+            this.renameExt = '';
             this.renameError = '';
             this.renameSubmitting = false;
         },
 
         async submitRename() {
-            const name = (this.renameValue || '').trim();
+            const base = (this.renameValue || '').trim();
             this.renameError = '';
 
-            if (!name) {
+            if (!base) {
                 this.renameError = this.t('rename.error_empty');
                 return;
             }
-            if (/[<>:"/\\|?*]/.test(name)) {
+            // Re-attach the locked extension; the user only edits the base name.
+            const name = base + this.renameExt;
+            if (/[<>:"/\\|?*]/.test(base)) {
                 this.renameError = this.t('rename.error_chars');
                 return;
             }

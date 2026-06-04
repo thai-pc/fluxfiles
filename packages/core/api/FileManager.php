@@ -392,6 +392,23 @@ class FileManager
             // Not a directory
         }
 
+        // For files, the extension is fixed at upload time (it ties the stored
+        // MIME, variants and the JWT allowedExt policy to the file). Renaming
+        // may only change the base name — never the extension — so a token that
+        // can only upload e.g. images cannot rename a.png → a.svg to bypass it.
+        if (!$isDir) {
+            $oldExt = strtolower(pathinfo($scoped, PATHINFO_EXTENSION));
+            $newExt = strtolower(pathinfo($newName, PATHINFO_EXTENSION));
+            if ($oldExt !== $newExt) {
+                throw new ApiException(
+                    'Changing the file extension is not allowed',
+                    400,
+                    'ext_changed',
+                    ['from' => $oldExt, 'to' => $newExt]
+                );
+            }
+        }
+
         if ($isDir) {
             $this->assertOwnsTree($disk, $scoped);
             // For directories: move all contents to new path
@@ -467,6 +484,8 @@ class FileManager
 
         if ($isDir) {
             $this->assertOwnsTree($disk, $scopedFrom);
+        } else {
+            $this->assertRelocationExt($scopedFrom, $scopedTo);
         }
 
         $fs->move($scopedFrom, $scopedTo);
@@ -501,6 +520,7 @@ class FileManager
         $this->assertNotSystem($scopedTo);
         $fs = $this->disks->disk($disk);
         $this->assertTargetAvailable($fs, $scopedTo);
+        $this->assertRelocationExt($scopedFrom, $scopedTo);
         $fs->copy($scopedFrom, $scopedTo);
 
         $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo);
@@ -528,6 +548,7 @@ class FileManager
         $this->assertOwner($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
         $this->assertNotSystem($scopedDst);
+        $this->assertRelocationExt($scopedSrc, $scopedDst);
 
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
@@ -583,6 +604,7 @@ class FileManager
         $this->assertOwner($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
         $this->assertNotSystem($scopedDst);
+        $this->assertRelocationExt($scopedSrc, $scopedDst);
 
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
@@ -1204,6 +1226,27 @@ class FileManager
         if (!in_array($ext, $this->claims->allowedExt, true)) {
             throw new ApiException("File extension not allowed: {$ext}", 403, 'ext_not_allowed', ['ext' => $ext]);
         }
+    }
+
+    /**
+     * A relocation (move/copy, same- or cross-disk) may rename a file but must
+     * not change its type: the destination extension has to match the source
+     * AND stay within the JWT allowedExt policy. This closes the move/copy
+     * vectors for bypassing the upload extension rules (mirrors rename).
+     */
+    private function assertRelocationExt(string $scopedFrom, string $scopedTo): void
+    {
+        $srcExt = strtolower(pathinfo($scopedFrom, PATHINFO_EXTENSION));
+        $dstExt = strtolower(pathinfo($scopedTo, PATHINFO_EXTENSION));
+        if ($srcExt !== $dstExt) {
+            throw new ApiException(
+                'Changing the file extension is not allowed',
+                400,
+                'ext_changed',
+                ['from' => $srcExt, 'to' => $dstExt]
+            );
+        }
+        $this->assertExt($dstExt);
     }
 
     /**

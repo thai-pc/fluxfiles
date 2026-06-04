@@ -188,7 +188,8 @@
         "path_denied": "Accès refusé à ce chemin",
         "missing_param": "Information requise manquante",
         "invalid_json": "Données de requête invalides",
-        "origin_denied": "Accès refusé depuis cette origine"
+        "origin_denied": "Accès refusé depuis cette origine",
+        "ext_changed": "L’extension du fichier ne peut pas être modifiée"
     },
     "presign": {
         "title": "URL présignée",
@@ -238,7 +239,8 @@
         "placeholder": "Nouveau nom",
         "success": "Renommé",
         "error_empty": "Veuillez entrer un nom",
-        "error_chars": "Le nom ne peut pas contenir : < > : \" / \\ | ? *"
+        "error_chars": "Le nom ne peut pas contenir : < > : \" / \\ | ? *",
+        "ext_locked": "L’extension est verrouillée et ne peut pas être modifiée"
     },
     "auth": {
         "refreshing": "Actualisation de la session...",

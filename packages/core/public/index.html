@@ -1046,13 +1046,16 @@
             <h3 class="ff-new-folder-title" x-text="t('rename.title')"></h3>
             <p class="ff-new-folder-desc" x-text="t('rename.description')"></p>
             <div class="ff-new-folder-field">
-                <input type="text"
-                       x-ref="renameInput"
-                       x-model="renameValue"
-                       :placeholder="t('rename.placeholder')"
-                       @keydown.enter.prevent="submitRename()"
-                       class="ff-new-folder-input"
-                       :disabled="renameSubmitting">
+                <div class="ff-rename-row">
+                    <input type="text"
+                           x-ref="renameInput"
+                           x-model="renameValue"
+                           :placeholder="t('rename.placeholder')"
+                           @keydown.enter.prevent="submitRename()"
+                           class="ff-new-folder-input ff-rename-base"
+                           :disabled="renameSubmitting">
+                    <span class="ff-rename-ext" x-show="renameExt" x-text="renameExt" :title="t('rename.ext_locked')"></span>
+                </div>
                 <p class="ff-new-folder-error" x-show="renameError" x-text="renameError"></p>
             </div>
             <div class="ff-new-folder-actions">

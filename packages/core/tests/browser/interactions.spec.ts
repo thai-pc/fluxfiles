@@ -273,6 +273,38 @@ test('delete a file through the UI removes it from the grid', async ({ page }) =
   await expect(page.locator('.ff-empty:has(.ff-empty-cta)')).toBeVisible();
 });
 
+test('rename locks the file extension: only the base name is editable', async ({ page }) => {
+  const token = mintToken();
+  await openManager(page, token);
+
+  const folder = `pw-rename-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+
+  const stamp = Date.now();
+  const fname = `lock-${stamp}.png`;
+  await uploadFile(page, pngFile(fname));
+  const card = cardByName(page, fname);
+  await expect(card).toBeVisible({ timeout: 15_000 });
+
+  // Select → open rename via the contextual toolbar button.
+  await card.click();
+  await page.locator('.ff-toolbar-context .tb-btn', { hasText: 'Rename' }).click();
+
+  // The input holds only the base name; the extension is shown locked beside it.
+  const input = page.locator('.ff-rename-base');
+  await expect(input).toBeVisible();
+  await expect(input).toHaveValue(`lock-${stamp}`);
+  await expect(page.locator('.ff-rename-ext')).toHaveText('.png');
+
+  // Editing the base re-attaches the .png automatically.
+  await input.fill(`renamed-${stamp}`);
+  await input.press('Enter');
+
+  await expect(cardByName(page, `renamed-${stamp}.png`)).toBeVisible({ timeout: 15_000 });
+  await expect(cardByName(page, fname)).toHaveCount(0);
+});
+
 test('inline crop → "Save as Copy" produces a cropped file in the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);

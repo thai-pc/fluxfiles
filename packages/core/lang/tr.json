@@ -188,7 +188,8 @@
         "path_denied": "Bu yola erişim reddedildi",
         "missing_param": "Gerekli bilgi eksik",
         "invalid_json": "Geçersiz istek verisi",
-        "origin_denied": "Bu kaynaktan erişim reddedildi"
+        "origin_denied": "Bu kaynaktan erişim reddedildi",
+        "ext_changed": "Dosya uzantısı değiştirilemez"
     },
     "presign": {
         "title": "Ön imzalı URL",
@@ -238,7 +239,8 @@
         "placeholder": "Yeni ad",
         "success": "Yeniden adlandırıldı",
         "error_empty": "Lütfen bir ad girin",
-        "error_chars": "Ad şu karakterleri içeremez: < > : \" / \\ | ? *"
+        "error_chars": "Ad şu karakterleri içeremez: < > : \" / \\ | ? *",
+        "ext_locked": "Uzantı kilitli ve değiştirilemez"
     },
     "auth": {
         "refreshing": "Oturum yenileniyor...",

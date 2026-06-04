@@ -276,6 +276,76 @@ test('rename onto free name → 200, variants follow', function () {
     assertTrue(!$fs->fileExists('src.png'), 'src gone');
 });
 
+test('rename changing the file extension → 400 ext_changed (file untouched)', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'keep.png'));
+    try {
+        $fm->rename('local', 'keep.png', 'keep.svg');
+        throw new \RuntimeException('should have thrown');
+    } catch (ApiException $e) {
+        assertEqual('ext_changed', $e->getErrorCode(), 'expected ext_changed');
+    }
+    assertTrue($fs->fileExists('keep.png') && !$fs->fileExists('keep.svg'), 'original untouched');
+});
+
+test('rename changing only the base name (same extension) → 200', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'before.png'));
+    $r = $fm->rename('local', 'before.png', 'after.png');
+    assertEqual('after.png', $r['key'], 'renamed within same extension');
+    assertTrue($fs->fileExists('after.png') && !$fs->fileExists('before.png'), 'moved');
+});
+
+test('extension comparison is case-insensitive (no false ext_changed)', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'mixed.png'));
+    // .png → .PNG is the same extension, must be allowed.
+    $r = $fm->rename('local', 'mixed.png', 'mixed2.PNG');
+    assertEqual('mixed2.PNG', $r['key'], 'case-only extension change allowed');
+});
+
+test('move changing the file extension → 400 ext_changed (source untouched)', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'mv.png'));
+    try {
+        $fm->move('local', 'mv.png', 'mv.svg');
+        throw new \RuntimeException('should have thrown');
+    } catch (ApiException $e) {
+        assertEqual('ext_changed', $e->getErrorCode(), 'expected ext_changed');
+    }
+    assertTrue($fs->fileExists('mv.png') && !$fs->fileExists('mv.svg'), 'source preserved');
+});
+
+test('move with a restricted token cannot relocate a file outside allowedExt', function () {
+    [$fm, $fs, $root] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'photo.png'));
+
+    // A token that only permits jpg may not move the existing png anywhere.
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage']]);
+    $meta = new StorageMetadataHandler($dm);
+    $claims = new Claims('tester', ['read', 'write', 'delete'], ['local'], '', 50, ['jpg'], 0, false);
+    $restricted = new FileManager($dm, $claims, $meta);
+    try {
+        $restricted->move('local', 'photo.png', 'archive/photo.png');
+        throw new \RuntimeException('should have thrown');
+    } catch (ApiException $e) {
+        assertEqual('ext_not_allowed', $e->getErrorCode(), 'expected ext_not_allowed');
+    }
+    assertTrue($fs->fileExists('photo.png'), 'source preserved');
+});
+
+test('copy changing the file extension → 400 ext_changed (no copy made)', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'cp.png'));
+    try {
+        $fm->copy('local', 'cp.png', 'cp.gif');
+        throw new \RuntimeException('should have thrown');
+    } catch (ApiException $e) {
+        assertEqual('ext_changed', $e->getErrorCode(), 'expected ext_changed');
+    }
+    assertTrue($fs->fileExists('cp.png') && !$fs->fileExists('cp.gif'), 'no copy made');
+});
+
 test('move onto existing file → 409 name_exists (source untouched)', function () {
     [$fm, $fs] = makeFM();
     $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'm-from.png'));
