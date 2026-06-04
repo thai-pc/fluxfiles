@@ -5,7 +5,15 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.2.3] — 2026-06-04
 
-> Released: core `core-v0.2.3` (Packagist). Adapters/editor plugins unchanged.
+> Released: core `core-v0.2.3` (Packagist), `@fluxfiles/react` 0.2.1 (npm).
+
+### Added
+
+- **`@fluxfiles/react` now works in the Next.js App Router out of the box.** The
+  package ships the `"use client"` directive (added via a tsup banner), so
+  `<FluxFiles>` / `<FluxFilesModal>` can be imported directly into a Server
+  Component. Components were already SSR-safe (they only touch `window`/`document`
+  inside effects). A **Next.js** section was added to the React README.
 
 ### Security
 
