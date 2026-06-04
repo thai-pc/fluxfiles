@@ -5,10 +5,18 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.2.3] — 2026-06-04
 
-> Released: core `core-v0.2.3` (Packagist), `@fluxfiles/react` 0.2.1 (npm).
+> Released: core `core-v0.2.3` (Packagist), `@fluxfiles/react` 0.2.1,
+> `@fluxfiles/node` 0.1.0 (npm).
 
 ### Added
 
+- **New `@fluxfiles/node` — server-side token SDK.** Zero-dependency Node/TS
+  package that mints FluxFiles JWTs (plain + BYOB) from any JS backend
+  (Express, Next.js, Nuxt, NestJS), byte-compatible with the PHP core so non-PHP
+  apps can issue tokens. `createToken` / `createByobToken` mirror the PHP helpers
+  exactly; BYOB credentials use the same HKDF-SHA256 + AES-256-GCM scheme as
+  `CredentialEncryptor`. Cross-language tests assert tokens decode in the PHP core
+  and BYOB blobs round-trip both ways.
 - **`@fluxfiles/react` now works in the Next.js App Router out of the box.** The
   package ships the `"use client"` directive (added via a tsup banner), so
   `<FluxFiles>` / `<FluxFilesModal>` can be imported directly into a Server

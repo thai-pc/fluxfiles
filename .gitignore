@@ -16,6 +16,7 @@ packages/core/storage/rate_limit.json
 # Build output
 packages/react/dist/
 packages/vue/dist/
+packages/node/dist/
 build/
 
 # Test playground scaffolds (source committed, deps not)

@@ -1,0 +1,58 @@
+{
+  "name": "@fluxfiles/node",
+  "version": "0.1.0",
+  "description": "Server-side Node/TypeScript SDK for minting FluxFiles JWTs (plain + BYOB), byte-compatible with the PHP core",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.1.8"
+  },
+  "author": "thai-pc",
+  "homepage": "https://github.com/thai-pc/fluxfiles#node-server-side-token-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thai-pc/fluxfiles.git",
+    "directory": "packages/node"
+  },
+  "bugs": {
+    "url": "https://github.com/thai-pc/fluxfiles/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "fluxfiles",
+    "jwt",
+    "token",
+    "file-manager",
+    "s3",
+    "r2",
+    "byob",
+    "server"
+  ]
+}
