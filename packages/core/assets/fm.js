@@ -1868,9 +1868,14 @@ function fluxFilesApp() {
 
         _initTheme() {
             const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('fluxfiles_theme') : null;
+            // An explicit 'dark'/'light' from the host (URL ?theme= or FM_CONFIG) is a
+            // deliberate override and wins so the embed matches the host app. A null or
+            // 'auto' config means "no opinion" — fall back to the user's saved choice,
+            // then to system preference. (Override is not persisted to localStorage;
+            // only toggleTheme/user action writes it, so the host can stop forcing later.)
             const configTheme = this.config.theme;
-            const theme = stored || configTheme || 'auto';
-            this.theme = theme;
+            const override = (configTheme === 'dark' || configTheme === 'light') ? configTheme : null;
+            this.theme = override || stored || 'auto';
             this._updateThemeClass();
 
             // Listen to system preference when theme is 'auto'

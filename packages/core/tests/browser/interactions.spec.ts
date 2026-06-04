@@ -191,6 +191,34 @@ test('dark-mode toggle adds and removes the `dark` class on <html>', async ({ pa
   await expect(html).not.toHaveClass(/\bdark\b/);
 });
 
+test('explicit ?theme=dark overrides a saved light preference (host override wins)', async ({ page }) => {
+  const token = mintToken();
+
+  // User had previously chosen light and it was persisted.
+  await page.goto('/public/index.html');
+  await page.evaluate(() => localStorage.setItem('fluxfiles_theme', 'light'));
+
+  // Host embeds with an explicit dark theme — the override must win over storage.
+  await page.goto(`/public/index.html?token=${token}&disk=local&theme=dark`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+
+  // The override is not persisted, so the user's saved 'light' choice survives.
+  const stored = await page.evaluate(() => localStorage.getItem('fluxfiles_theme'));
+  expect(stored).toBe('light');
+});
+
+test('saved preference applies when host gives no explicit theme', async ({ page }) => {
+  const token = mintToken();
+
+  await page.goto('/public/index.html');
+  await page.evaluate(() => localStorage.setItem('fluxfiles_theme', 'dark'));
+
+  await page.goto(`/public/index.html?token=${token}&disk=local`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+});
+
 test('delete a file through the UI removes it from the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);
