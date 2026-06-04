@@ -181,6 +181,39 @@ jobs:
           npm install --no-audit --no-fund
           npm test
 
+  node-sdk:
+    name: Node token SDK (PHP↔Node parity)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # PHP + core vendor so the cross-language parity test actually runs
+      # (Node-minted tokens decode in the PHP core; BYOB blobs round-trip both
+      # ways) instead of skipping.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install + typecheck + build + test @fluxfiles/node
+        working-directory: packages/node
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          npm test
+
   browser-e2e:
     name: Browser e2e (Playwright)
     runs-on: ubuntu-latest
