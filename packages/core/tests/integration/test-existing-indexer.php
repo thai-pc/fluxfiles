@@ -101,6 +101,32 @@ test('index-only indexes existing files and folders without sidecars', function 
     }
 });
 
+test('_variants directories never enter folder search', function () {
+    $root = sys_get_temp_dir() . '/fluxfiles-variants-' . uniqid();
+    mkdir($root, 0777, true);
+
+    try {
+        [, $meta] = makeIndexer($root);
+
+        // Mirror what variant creation does: track the variant dir and the parents
+        // of a variant file. A real sibling folder is tracked alongside it.
+        $meta->trackDir('local', 'photos/_variants');
+        $meta->trackParents('local', 'photos/_variants/sunset/thumb.webp');
+        $meta->trackDir('local', 'photos/album');
+
+        // Reserved namespace must not surface for any query…
+        assertEqual(0, count($meta->searchFolders('local', 'variants')), 'no _variants in folder search');
+        foreach ($meta->searchFolders('local', 'photos') as $f) {
+            assertEqual(false, strpos($f['dir_key'], '_variants') !== false, 'photos search excludes _variants subtree');
+        }
+        // …while the genuine folder is still searchable.
+        $album = $meta->searchFolders('local', 'album');
+        assertEqual('photos/album', $album[0]['dir_key'] ?? null, 'real folder still searchable');
+    } finally {
+        rrmdir($root);
+    }
+});
+
 test('owner assignment persists metadata for owner_only checks', function () {
     $root = sys_get_temp_dir() . '/fluxfiles-indexer-owner-' . uniqid();
     mkdir($root, 0777, true);

@@ -189,6 +189,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $results = [];
 
         foreach ($index as $fileKey => $meta) {
+            // Never surface metadata sidecars or image variants as search hits.
+            if ($this->isReservedPath($fileKey)) {
+                continue;
+            }
             if ($prefix !== '' && $fileKey !== $prefix && strpos($fileKey, $prefix . '/') !== 0) {
                 continue;
             }
@@ -219,10 +223,25 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     // Directory index (folder search)
     // ---------------------------------------------------------------------
 
+    /**
+     * True when any path segment is a reserved namespace (metadata sidecars in
+     * _fluxfiles/ or image variants in _variants/). These must never enter the
+     * folder index or surface in folder search at any depth.
+     */
+    private function isReservedPath(string $key): bool
+    {
+        foreach (explode('/', trim($key, '/')) as $seg) {
+            if ($seg === '_fluxfiles' || $seg === '_variants') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public function trackDir(string $disk, string $dirKey): void
     {
         $dirKey = trim($dirKey, '/');
-        if ($dirKey === '' || $dirKey === '.' || $dirKey === '_fluxfiles' || str_contains($dirKey, '/_fluxfiles')) {
+        if ($dirKey === '' || $dirKey === '.' || $this->isReservedPath($dirKey)) {
             return;
         }
 
@@ -239,7 +258,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     public function trackParents(string $disk, string $key): void
     {
         $key = trim($key, '/');
-        if ($key === '' || $key === '.' || $key === '_fluxfiles' || str_contains($key, '/_fluxfiles')) {
+        if ($key === '' || $key === '.' || $this->isReservedPath($key)) {
             return;
         }
 
@@ -262,7 +281,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 if ($p === '' || $p === '.' || $p === '..') continue;
                 $acc[] = $p;
                 $d = implode('/', $acc);
-                if ($d === '_fluxfiles' || str_contains($d, '/_fluxfiles')) continue;
+                if ($this->isReservedPath($d)) continue;
                 $dirs[$d] = true;
             }
             $this->saveDirsIndex($disk, $dirs);
@@ -336,6 +355,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $results = [];
 
         foreach ($dirs as $dirKey => $_true) {
+            // Defend against indexes polluted before reserved dirs were filtered.
+            if ($this->isReservedPath($dirKey)) {
+                continue;
+            }
             if ($prefix !== '' && $dirKey !== $prefix && strpos($dirKey, $prefix . '/') !== 0) {
                 continue;
             }
