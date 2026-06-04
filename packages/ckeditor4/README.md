@@ -62,6 +62,10 @@ CKEDITOR.replace('editor', {
 | `locale` | string | `null` | UI language code |
 | `multiple` | boolean | `false` | Allow multi-file selection |
 
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
+
 ## Links
 
 - Main repository: `https://github.com/thai-pc/fluxfiles`

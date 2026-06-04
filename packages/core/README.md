@@ -41,6 +41,10 @@ FLUXFILES_SECRET=your-random-secret-key-min-32-chars
 FLUXFILES_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
 ```
 
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
+
 ## Links
 
 - Main repository: `https://github.com/thai-pc/fluxfiles`

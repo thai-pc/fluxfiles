@@ -40,6 +40,10 @@ production. Same global API:
 
 It's regenerated from `fluxfiles.js` with `npm run build` (esbuild).
 
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
+
 ## Links
 
 - Main repository: `https://github.com/thai-pc/fluxfiles`
