@@ -3,6 +3,46 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] — 2026-06-04
+
+> Released: core `core-v0.2.3` (Packagist). Adapters/editor plugins unchanged.
+
+### Security
+
+- **A file's extension is now immutable across relocation.** `rename`, `move`,
+  `copy` and the cross-disk variants take a caller-controlled destination
+  filename, so they could change a file's extension (e.g. `a.png → a.svg`) and
+  bypass the upload `allowedExt` policy, while drifting the stored MIME/variants
+  from the real type. Renaming a file now edits the base name only (the
+  extension is fixed → `400 ext_changed` on change), and move/copy additionally
+  re-check `allowedExt` (`403 ext_not_allowed`) — a scoped token can no longer
+  relocate a file out of its allowed types. Directories and extensionless files
+  keep whole-name edits.
+
+### Fixed
+
+- **No more flash of raw translation keys on load.** In production the public UI
+  could render i18n keys (e.g. `toolbar.upload`) before `/api/fm/lang` resolved,
+  because nginx served `public/index.html` statically (`try_files $uri …`) and
+  skipped the server-side `window.__FM_LOCALE__` injection. The UI is now routed
+  through PHP via exact-match `rewrite` (matching the already-correct Apache
+  rule), and the frontend gained defense-in-depth: an `x-cloak` boot overlay
+  hides the app until messages are ready, so statically-served pages degrade to a
+  brief spinner instead of showing keys.
+- **Rename dialog locks the file extension.** The modal shows the extension as a
+  locked suffix beside the input; only the base name is editable.
+- **Internal directories no longer appear in search.** `_fluxfiles/` and
+  `_variants/` (at any depth) are excluded from both file and folder search
+  results — previously image-variant folders leaked into folder search.
+- **Explicit theme from the host/URL wins over a saved preference.** `?theme=` /
+  `FM_CONFIG` `theme` now overrides a stored `localStorage` choice (without
+  persisting), so an embed matches the host app; the saved choice resurfaces when
+  the host stops forcing a theme.
+
+### Changed
+
+- Added `rename.ext_locked` and `error.ext_changed` strings to all 16 locales.
+
 ## [0.2.2] — 2026-06-02
 
 > Released: core `core-v0.2.2` (Packagist), `@fluxfiles/ckeditor4` 0.2.2,
