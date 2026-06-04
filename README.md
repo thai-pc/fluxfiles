@@ -839,6 +839,29 @@ Send `force_upload=true` (in form data) to upload anyway.
 
 ## Framework Adapters
 
+### Node (server-side token SDK)
+
+Mint FluxFiles tokens from any Node backend (Express, Next.js, Nuxt, NestJS) —
+byte-compatible with the PHP core, including encrypted BYOB credentials. Zero
+runtime dependencies.
+
+```bash
+npm install @fluxfiles/node
+```
+
+```ts
+import { createToken } from '@fluxfiles/node';
+
+const token = createToken({
+  userId: 'user-42',
+  perms: ['read', 'write'],
+  prefix: 'users/42',
+});
+```
+
+See [`packages/node`](packages/node) for BYOB, `verify`/`decode`, and Next.js /
+Express examples.
+
 ### Laravel
 
 ```bash
