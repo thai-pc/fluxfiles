@@ -7,7 +7,8 @@ React components and hooks for [FluxFiles](https://github.com/thai-pc/fluxfiles)
 ## Requirements
 
 - React 18 or 19
-- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This package is a thin client over it — `endpoint` must point at that server.
+- A running **FluxFiles core service** — the backend that serves the file-manager UI and performs the storage operations (the PHP app in `packages/core`, e.g. via the Docker image). This package is a thin client; `endpoint` points at it.
+- A user **token**, minted server-side. Your own backend can be anything: use [`@fluxfiles/node`](https://www.npmjs.com/package/@fluxfiles/node) to issue tokens from Node/Next.js (**no PHP needed**), or the Laravel / WordPress adapters.
 
 ## Installation
 

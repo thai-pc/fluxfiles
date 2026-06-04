@@ -3,6 +3,18 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] — 2026-06-05
+
+> Released: `@fluxfiles/node` 0.1.1 (npm).
+
+### Changed
+
+- **`@fluxfiles/node` docs (republish).** Clarified that the package only
+  *issues tokens* — a running FluxFiles **core service** (the PHP file backend)
+  is still required for the tokens to authenticate against. The React / Vue / SDK
+  Requirements now separate "core service" from "token minting" (which works from
+  any backend). Added an npm badge, a `LICENSE` file, and `sideEffects: false`.
+
 ## [0.2.3] — 2026-06-04
 
 > Released: core `core-v0.2.3` (Packagist), `@fluxfiles/react` 0.2.1,

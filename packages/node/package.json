@@ -1,8 +1,9 @@
 {
   "name": "@fluxfiles/node",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Server-side Node/TypeScript SDK for minting FluxFiles JWTs (plain + BYOB), byte-compatible with the PHP core",
   "license": "MIT",
+  "sideEffects": false,
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

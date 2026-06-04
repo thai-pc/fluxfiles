@@ -7,9 +7,17 @@ including encrypted BYOB (Bring Your Own Bucket) credentials — without running
 
 Zero runtime dependencies (built on `node:crypto`).
 
+> **This package only issues tokens — it is not a backend.** You still run a
+> FluxFiles **core service** (the file-manager backend that talks to storage; a
+> PHP app, e.g. the Docker image) for the token to authenticate against.
+> `@fluxfiles/node` simply removes the need for *your app* to be PHP in order to
+> mint those tokens.
+
 ## Requirements
 
 - Node.js 16+
+- A running FluxFiles **core service** the issued tokens authenticate against
+  (the SDK/iframe `endpoint` points at it).
 - The same **`FLUXFILES_SECRET`** your FluxFiles core server uses to verify tokens
   (HS256, **must be ≥ 32 bytes**). Keep it server-side only.
 
