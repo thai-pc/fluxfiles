@@ -6,6 +6,7 @@ function fluxFilesApp() {
         locale: LOCALE.locale,
         direction: LOCALE.dir,
         _messages: LOCALE.messages,
+        _i18nForceReady: false, // safety net: reveal UI even if messages never load
 
         // State
         currentDisk: 'local',
@@ -153,6 +154,14 @@ function fluxFilesApp() {
             return this.t(key, { ...vars, count: n });
         },
 
+        // True once translation messages are available, so the UI can stay
+        // behind a boot spinner until then instead of painting raw i18n keys
+        // (happens when index.html is served without the server-side
+        // __FM_LOCALE__ injection). Server-injected pages are ready on frame 1.
+        get i18nReady() {
+            return this._i18nForceReady || Object.keys(this._messages || {}).length > 0;
+        },
+
         async switchLocale(newLocale) {
             if (newLocale === this.locale && Object.keys(this._messages).length > 1) return;
             try {
@@ -177,6 +186,13 @@ function fluxFilesApp() {
 
         // Init
         init() {
+            // Safety net: never trap the UI behind the boot spinner. If messages
+            // can't be fetched (offline, route error), reveal anyway after 3s —
+            // raw keys are a last resort, an infinite spinner is worse.
+            if (!this.i18nReady) {
+                setTimeout(() => { this._i18nForceReady = true; }, 3000);
+            }
+
             // Restore detail panel width from localStorage
             try {
                 const w = parseInt(localStorage.getItem('fluxfiles_detail_width'), 10);
@@ -327,11 +343,14 @@ function fluxFilesApp() {
                         // Check if server configured a specific locale via FLUXFILES_LOCALE
                         try {
                             const res = await fetch(this.joinUrl('/api/fm/lang'));
-                            const serverLocale = res.headers.get('Content-Language');
-                            if (serverLocale && serverLocale !== 'en') {
+                            const serverLocale = res.headers.get('Content-Language') || 'en';
+                            // Load messages when the server resolved a non-default
+                            // locale, OR when this page was served without the
+                            // __FM_LOCALE__ injection (messages still empty) —
+                            // otherwise English would render raw keys forever.
+                            if (serverLocale !== 'en' || !this.i18nReady) {
                                 await this.switchLocale(serverLocale);
                             }
-                            // else: keep default 'en'
                         } catch (_) {
                             // keep default 'en'
                         }
@@ -1868,9 +1887,14 @@ function fluxFilesApp() {
 
         _initTheme() {
             const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('fluxfiles_theme') : null;
+            // An explicit 'dark'/'light' from the host (URL ?theme= or FM_CONFIG) is a
+            // deliberate override and wins so the embed matches the host app. A null or
+            // 'auto' config means "no opinion" — fall back to the user's saved choice,
+            // then to system preference. (Override is not persisted to localStorage;
+            // only toggleTheme/user action writes it, so the host can stop forcing later.)
             const configTheme = this.config.theme;
-            const theme = stored || configTheme || 'auto';
-            this.theme = theme;
+            const override = (configTheme === 'dark' || configTheme === 'light') ? configTheme : null;
+            this.theme = override || stored || 'auto';
             this._updateThemeClass();
 
             // Listen to system preference when theme is 'auto'

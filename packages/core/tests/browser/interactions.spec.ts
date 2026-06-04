@@ -191,6 +191,66 @@ test('dark-mode toggle adds and removes the `dark` class on <html>', async ({ pa
   await expect(html).not.toHaveClass(/\bdark\b/);
 });
 
+test('explicit ?theme=dark overrides a saved light preference (host override wins)', async ({ page }) => {
+  const token = mintToken();
+
+  // User had previously chosen light and it was persisted.
+  await page.goto('/public/index.html');
+  await page.evaluate(() => localStorage.setItem('fluxfiles_theme', 'light'));
+
+  // Host embeds with an explicit dark theme — the override must win over storage.
+  await page.goto(`/public/index.html?token=${token}&disk=local&theme=dark`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+
+  // The override is not persisted, so the user's saved 'light' choice survives.
+  const stored = await page.evaluate(() => localStorage.getItem('fluxfiles_theme'));
+  expect(stored).toBe('light');
+});
+
+test('saved preference applies when host gives no explicit theme', async ({ page }) => {
+  const token = mintToken();
+
+  await page.goto('/public/index.html');
+  await page.evaluate(() => localStorage.setItem('fluxfiles_theme', 'dark'));
+
+  await page.goto(`/public/index.html?token=${token}&disk=local`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+});
+
+test('statically-served page (no locale injection) shows the boot spinner then reveals translated UI — never raw keys', async ({ page }) => {
+  const token = mintToken();
+
+  // Simulate a page served WITHOUT the server-side __FM_LOCALE__ injection
+  // (e.g. nginx/CDN serving index.html as a static file): swallow the injected
+  // assignment so the app boots with empty messages.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, '__FM_LOCALE__', {
+      configurable: true,
+      get() { return { locale: 'en', dir: 'ltr', messages: {} }; },
+      set() { /* swallow server injection */ },
+    });
+  });
+
+  // Slow the lang fetch so the boot state is observable.
+  await page.route('**/api/fm/lang*', async (route) => {
+    await new Promise((r) => setTimeout(r, 600));
+    await route.continue();
+  });
+
+  await page.goto(`/public/index.html?token=${token}&disk=local`);
+
+  // While messages load the opaque boot overlay covers the UI (raw keys behind it
+  // are never visible to the user).
+  await expect(page.locator('.ff-i18n-boot')).toBeVisible();
+
+  // Once messages arrive the overlay disappears and no raw i18n key is rendered.
+  await expect(page.locator('.ff-i18n-boot')).toBeHidden({ timeout: 5_000 });
+  await expect(page.locator('.ff-app')).toBeVisible();
+  await expect(page.getByText('toolbar.upload', { exact: true })).toHaveCount(0);
+});
+
 test('delete a file through the UI removes it from the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);

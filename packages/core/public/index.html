@@ -23,7 +23,15 @@
 <!-- Alpine 3 auto-calls the component's init() method — do NOT add x-init="init()"
      here too, or init() runs twice (two message listeners → duplicate FM_CONFIG
      handling → doubled list/quota/lang requests). -->
-<div class="ff-app" :class="{ 'ff-sidebar-open': sidebarOpen, 'ff-picker-mode': config.mode === 'picker', 'ff-multiple-mode': config.multiple }" x-data="fluxFilesApp()">
+<div class="ff-app" x-cloak :class="{ 'ff-sidebar-open': sidebarOpen, 'ff-picker-mode': config.mode === 'picker', 'ff-multiple-mode': config.multiple }" x-data="fluxFilesApp()">
+
+    <!-- ═══ i18n boot overlay ═══
+         Covers the UI until translation messages are ready so raw i18n keys are
+         never shown. Server-injected pages have messages on frame 1 (overlay is
+         already hidden); only statically-served pages briefly show the spinner. -->
+    <div class="ff-i18n-boot" x-show="!i18nReady" x-cloak>
+        <div class="ff-i18n-boot-spinner"></div>
+    </div>
 
     <!-- ═══ Auth required screen ═══ -->
     <div class="ff-auth-screen" x-show="authRequired" x-transition.opacity.duration.400ms>
