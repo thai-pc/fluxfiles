@@ -24,6 +24,8 @@ packages/core/tests/apps/node_modules/
 
 # Playwright runtime artifacts
 .playwright-mcp/
+test-results/
+playwright-report/
 
 # OS files
 .DS_Store
