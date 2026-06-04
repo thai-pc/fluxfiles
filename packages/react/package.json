@@ -1,6 +1,6 @@
 {
   "name": "@fluxfiles/react",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "React components and hooks for FluxFiles file manager",
   "license": "MIT",
   "main": "dist/index.js",
@@ -18,8 +18,8 @@
     "src"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

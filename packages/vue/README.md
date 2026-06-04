@@ -7,7 +7,7 @@ Vue 3 components and composables for [FluxFiles](https://github.com/thai-pc/flux
 ## Requirements
 
 - Vue 3.3+
-- A running FluxFiles backend
+- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This package is a thin client over it — `endpoint` must point at that server.
 
 ## Installation
 

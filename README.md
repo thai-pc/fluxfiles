@@ -522,6 +522,36 @@ Add a new entry to `config/disks.php`:
 
 Then include `'minio'` in the JWT `disks` claim.
 
+### S3-compatible providers (no extra code)
+
+Any S3-compatible object store works **today** through the `s3` driver — just set
+`endpoint` (and `region`). No new dependency or driver is needed; the same
+chunked-upload / presign / visibility logic applies.
+
+| Provider | `endpoint` example | Notes |
+|----------|--------------------|-------|
+| **DigitalOcean Spaces** | `https://nyc3.digitaloceanspaces.com` | `region` = the Space's region (e.g. `nyc3`) |
+| **Backblaze B2** | `https://s3.us-west-004.backblazeb2.com` | Use the S3-compatible endpoint from the bucket page |
+| **Wasabi** | `https://s3.us-east-1.wasabisys.com` | Region-specific endpoint |
+| **MinIO (self-hosted)** | `http://minio.local:9000` | `region` can be any value (e.g. `us-east-1`) |
+| **Cloudflare R2** | `https://<account>.r2.cloudflarestorage.com` | First-class — see above |
+
+```php
+'spaces' => [
+    'driver'   => 's3',
+    'endpoint' => 'https://nyc3.digitaloceanspaces.com',
+    'region'   => 'nyc3',
+    'bucket'   => $_ENV['DO_SPACES_BUCKET'],
+    'key'      => $_ENV['DO_SPACES_KEY'],
+    'secret'   => $_ENV['DO_SPACES_SECRET'],
+],
+```
+
+> Like R2, endpoint-based disks have ACL operations disabled automatically
+> (`retain_visibility` off). For native **Google Cloud Storage** or **Azure Blob**
+> (non-S3 APIs), a dedicated Flysystem adapter + `DiskManager` driver would be
+> needed — not currently bundled.
+
 ### BYOB (Bring Your Own Bucket)
 
 Users can connect their own S3/R2 buckets. Credentials are AES-256-GCM encrypted inside the JWT (derived key via HKDF, separate from signing key):

@@ -2,6 +2,11 @@
 
 Adds a **FluxFiles** toolbar button to CKEditor 4 for browsing and inserting files.
 
+## Requirements
+
+- CKEditor 4
+- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This plugin is only the editor button — it loads the FluxFiles SDK (`fluxfiles.js`) from that server and `endpoint` must point at it.
+
 ## Installation
 
 ```bash
@@ -56,6 +61,10 @@ CKEDITOR.replace('editor', {
 | `disk` | string | `'local'` | Storage disk |
 | `locale` | string | `null` | UI language code |
 | `multiple` | boolean | `false` | Allow multi-file selection |
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
 
 ## Links
 
