@@ -188,7 +188,8 @@
         "path_denied": "Toegang tot dit pad geweigerd",
         "missing_param": "Vereiste informatie ontbreekt",
         "invalid_json": "Ongeldige aanvraaggegevens",
-        "origin_denied": "Toegang geweigerd vanaf deze bron"
+        "origin_denied": "Toegang geweigerd vanaf deze bron",
+        "ext_changed": "De bestandsextensie kan niet worden gewijzigd"
     },
     "presign": {
         "title": "Voorondertekende URL",
@@ -238,7 +239,8 @@
         "placeholder": "Nieuwe naam",
         "success": "Hernoemd",
         "error_empty": "Voer een naam in",
-        "error_chars": "Naam mag niet bevatten: < > : \" / \\ | ? *"
+        "error_chars": "Naam mag niet bevatten: < > : \" / \\ | ? *",
+        "ext_locked": "De extensie is vergrendeld en kan niet worden gewijzigd"
     },
     "auth": {
         "refreshing": "Sessie vernieuwen...",

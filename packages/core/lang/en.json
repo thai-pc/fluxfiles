@@ -188,7 +188,8 @@
         "path_denied": "Access denied to this path",
         "missing_param": "Missing required information",
         "invalid_json": "Invalid request data",
-        "origin_denied": "Access denied from this origin"
+        "origin_denied": "Access denied from this origin",
+        "ext_changed": "The file extension cannot be changed"
     },
     "presign": {
         "title": "Presigned URL",
@@ -238,7 +239,8 @@
         "placeholder": "New name",
         "success": "Renamed",
         "error_empty": "Please enter a name",
-        "error_chars": "Name cannot contain: < > : \" / \\ | ? *"
+        "error_chars": "Name cannot contain: < > : \" / \\ | ? *",
+        "ext_locked": "Extension is locked and cannot be changed"
     },
     "auth": {
         "refreshing": "Refreshing session...",

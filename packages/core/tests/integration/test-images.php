@@ -276,6 +276,34 @@ test('rename onto free name → 200, variants follow', function () {
     assertTrue(!$fs->fileExists('src.png'), 'src gone');
 });
 
+test('rename changing the file extension → 400 ext_changed (file untouched)', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'keep.png'));
+    try {
+        $fm->rename('local', 'keep.png', 'keep.svg');
+        throw new \RuntimeException('should have thrown');
+    } catch (ApiException $e) {
+        assertEqual('ext_changed', $e->getErrorCode(), 'expected ext_changed');
+    }
+    assertTrue($fs->fileExists('keep.png') && !$fs->fileExists('keep.svg'), 'original untouched');
+});
+
+test('rename changing only the base name (same extension) → 200', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'before.png'));
+    $r = $fm->rename('local', 'before.png', 'after.png');
+    assertEqual('after.png', $r['key'], 'renamed within same extension');
+    assertTrue($fs->fileExists('after.png') && !$fs->fileExists('before.png'), 'moved');
+});
+
+test('extension comparison is case-insensitive (no false ext_changed)', function () {
+    [$fm, $fs] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'mixed.png'));
+    // .png → .PNG is the same extension, must be allowed.
+    $r = $fm->rename('local', 'mixed.png', 'mixed2.PNG');
+    assertEqual('mixed2.PNG', $r['key'], 'case-only extension change allowed');
+});
+
 test('move onto existing file → 409 name_exists (source untouched)', function () {
     [$fm, $fs] = makeFM();
     $fm->upload('local', '', fileArray(makeImage(60, 60, 'png'), 'm-from.png'));

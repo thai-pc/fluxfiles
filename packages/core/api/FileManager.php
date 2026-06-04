@@ -392,6 +392,23 @@ class FileManager
             // Not a directory
         }
 
+        // For files, the extension is fixed at upload time (it ties the stored
+        // MIME, variants and the JWT allowedExt policy to the file). Renaming
+        // may only change the base name — never the extension — so a token that
+        // can only upload e.g. images cannot rename a.png → a.svg to bypass it.
+        if (!$isDir) {
+            $oldExt = strtolower(pathinfo($scoped, PATHINFO_EXTENSION));
+            $newExt = strtolower(pathinfo($newName, PATHINFO_EXTENSION));
+            if ($oldExt !== $newExt) {
+                throw new ApiException(
+                    'Changing the file extension is not allowed',
+                    400,
+                    'ext_changed',
+                    ['from' => $oldExt, 'to' => $newExt]
+                );
+            }
+        }
+
         if ($isDir) {
             $this->assertOwnsTree($disk, $scoped);
             // For directories: move all contents to new path

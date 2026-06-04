@@ -188,7 +188,8 @@
         "path_denied": "このパスへのアクセスが拒否されました",
         "missing_param": "必要な情報が不足しています",
         "invalid_json": "無効なリクエストデータ",
-        "origin_denied": "このオリジンからのアクセスが拒否されました"
+        "origin_denied": "このオリジンからのアクセスが拒否されました",
+        "ext_changed": "ファイルの拡張子は変更できません"
     },
     "presign": {
         "title": "署名付きURL",
@@ -238,7 +239,8 @@
         "placeholder": "新しい名前",
         "success": "名前を変更しました",
         "error_empty": "名前を入力してください",
-        "error_chars": "名前に使えない文字: < > : \" / \\ | ? *"
+        "error_chars": "名前に使えない文字: < > : \" / \\ | ? *",
+        "ext_locked": "拡張子はロックされており変更できません"
     },
     "auth": {
         "refreshing": "セッションを更新中...",

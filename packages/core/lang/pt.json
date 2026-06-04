@@ -188,7 +188,8 @@
         "path_denied": "Acesso negado a este caminho",
         "missing_param": "Informação obrigatória ausente",
         "invalid_json": "Dados de requisição inválidos",
-        "origin_denied": "Acesso negado desta origem"
+        "origin_denied": "Acesso negado desta origem",
+        "ext_changed": "Não é possível alterar a extensão do arquivo"
     },
     "presign": {
         "title": "URL pré-assinada",
@@ -238,7 +239,8 @@
         "placeholder": "Novo nome",
         "success": "Renomeado",
         "error_empty": "Por favor, insira um nome",
-        "error_chars": "O nome não pode conter: < > : \" / \\ | ? *"
+        "error_chars": "O nome não pode conter: < > : \" / \\ | ? *",
+        "ext_locked": "A extensão está bloqueada e não pode ser alterada"
     },
     "auth": {
         "refreshing": "Atualizando sessão...",

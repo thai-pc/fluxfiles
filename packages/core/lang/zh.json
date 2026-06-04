@@ -188,7 +188,8 @@
         "path_denied": "无权访问此路径",
         "missing_param": "缺少必要信息",
         "invalid_json": "无效的请求数据",
-        "origin_denied": "此来源的访问被拒绝"
+        "origin_denied": "此来源的访问被拒绝",
+        "ext_changed": "无法更改文件扩展名"
     },
     "presign": {
         "title": "预签名链接",
@@ -238,7 +239,8 @@
         "placeholder": "新名称",
         "success": "已重命名",
         "error_empty": "请输入名称",
-        "error_chars": "名称不能包含：< > : \" / \\ | ? *"
+        "error_chars": "名称不能包含：< > : \" / \\ | ? *",
+        "ext_locked": "扩展名已锁定，无法更改"
     },
     "auth": {
         "refreshing": "正在刷新会话...",
