@@ -219,6 +219,38 @@ test('saved preference applies when host gives no explicit theme', async ({ page
   await expect(page.locator('html')).toHaveClass(/\bdark\b/);
 });
 
+test('statically-served page (no locale injection) shows the boot spinner then reveals translated UI — never raw keys', async ({ page }) => {
+  const token = mintToken();
+
+  // Simulate a page served WITHOUT the server-side __FM_LOCALE__ injection
+  // (e.g. nginx/CDN serving index.html as a static file): swallow the injected
+  // assignment so the app boots with empty messages.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, '__FM_LOCALE__', {
+      configurable: true,
+      get() { return { locale: 'en', dir: 'ltr', messages: {} }; },
+      set() { /* swallow server injection */ },
+    });
+  });
+
+  // Slow the lang fetch so the boot state is observable.
+  await page.route('**/api/fm/lang*', async (route) => {
+    await new Promise((r) => setTimeout(r, 600));
+    await route.continue();
+  });
+
+  await page.goto(`/public/index.html?token=${token}&disk=local`);
+
+  // While messages load the opaque boot overlay covers the UI (raw keys behind it
+  // are never visible to the user).
+  await expect(page.locator('.ff-i18n-boot')).toBeVisible();
+
+  // Once messages arrive the overlay disappears and no raw i18n key is rendered.
+  await expect(page.locator('.ff-i18n-boot')).toBeHidden({ timeout: 5_000 });
+  await expect(page.locator('.ff-app')).toBeVisible();
+  await expect(page.getByText('toolbar.upload', { exact: true })).toHaveCount(0);
+});
+
 test('delete a file through the UI removes it from the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);

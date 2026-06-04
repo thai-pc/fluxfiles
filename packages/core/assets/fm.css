@@ -82,6 +82,31 @@ body {
     background: var(--color-background-primary);
 }
 
+/* Hide x-bound elements until Alpine initializes (and removes x-cloak). */
+[x-cloak] { display: none !important; }
+
+/* i18n boot overlay — shown only while translation messages are still loading
+   (statically-served pages without server-side __FM_LOCALE__ injection). An
+   opaque, theme-aware cover means the underlying raw i18n keys are never seen.
+   position:fixed so it works regardless of .ff-app's grid layout. */
+.ff-i18n-boot {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ff-bg);
+}
+.ff-i18n-boot-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--ff-border);
+    border-top-color: var(--ff-primary);
+    border-radius: 50%;
+    animation: ff-spin 0.7s linear infinite;
+}
+
 /* Picker mode: scale down content 5% (except topbar) */
 .ff-picker-mode .ff-sidebar,
 .ff-picker-mode .ff-main,
