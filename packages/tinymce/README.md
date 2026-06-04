@@ -2,6 +2,11 @@
 
 Adds a **FluxFiles** toolbar button to TinyMCE 4.x / 5.x for browsing and inserting files.
 
+## Requirements
+
+- TinyMCE 4.x or 5.x
+- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This plugin is only the editor button — it loads the FluxFiles SDK (`fluxfiles.js`) from that server and `fluxfiles_endpoint` must point at it.
+
 ## Installation
 
 ```bash

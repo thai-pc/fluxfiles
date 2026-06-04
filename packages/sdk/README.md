@@ -2,6 +2,10 @@
 
 Vanilla JavaScript SDK for embedding FluxFiles in any web app (no framework required).
 
+## Requirements
+
+- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This SDK is a thin client: it loads `fluxfiles.js` from that server and talks to its API at `endpoint`.
+
 ## Install (npm)
 
 ```bash

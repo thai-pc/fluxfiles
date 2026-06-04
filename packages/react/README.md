@@ -7,7 +7,7 @@ React components and hooks for [FluxFiles](https://github.com/thai-pc/fluxfiles)
 ## Requirements
 
 - React 18 or 19
-- A running FluxFiles backend
+- A running **FluxFiles core** server (the PHP backend / standalone app in `packages/core`). This package is a thin client over it — `endpoint` must point at that server.
 
 ## Installation
 
