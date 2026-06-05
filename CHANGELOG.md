@@ -5,7 +5,35 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.2.4] — 2026-06-05
 
-> Released: `@fluxfiles/node` 0.1.1 (npm).
+> Released: core `core-v0.2.4` (Packagist), `@fluxfiles/node` 0.1.1 (npm).
+
+### Security
+
+- **The activity log is now scoped to the token's path prefix.** `GET
+  /api/fm/audit` previously filtered entries only by user id; it now also scopes
+  them to the caller's prefix via `Claims::isPathInScope()` (default-deny for
+  out-of-scope or keyless entries) and is gated behind a new **`audit`
+  permission** (off by default). Defense-in-depth so a tenant can never read
+  another tenant's activity from a shared disk's log.
+
+### Added
+
+- **Activity log panel + filters.** The audit endpoint gained `action` / `from`
+  / `to` / `path` / `actor` filters, and the embedded UI has an Activity panel
+  (shown when the token holds the `audit` perm) with a "stored in your own
+  storage" note for the BYOB trust story.
+- **Bucket Doctor.** New `GET /api/fm/disk/doctor` diagnoses an S3/R2 disk
+  (reachability, read/write/delete, presigned GET, multipart, CORS, versioning)
+  with the disk's own credentials and returns a report plus IAM/CORS remediation
+  snippets; checks needing extra permissions degrade to warnings, so it never
+  demands more access than FluxFiles itself. An in-app "Bucket health" panel
+  surfaces it (write-gated). Built for BYOB onboarding — a host can run it on an
+  ephemeral token to validate credentials before issuing a long-lived one.
+
+### Fixed
+
+- **Multipart uploads now record their file key in the audit log** (it was blank
+  because multipart requests carry no JSON body to read the path from).
 
 ### Changed
 
