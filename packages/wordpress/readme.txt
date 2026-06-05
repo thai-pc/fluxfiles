@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -21,7 +21,7 @@ image optimization with WebP variants, AI auto-tagging, and full-text search.
 * Multi-storage — Local disk, AWS S3, Cloudflare R2
 * Image optimization — Auto WebP variants (thumb, medium, large)
 * AI tagging — Claude / OpenAI vision API
-* Full-text search (SQLite FTS5)
+* Full-text search across file names + metadata
 * 16 languages with RTL support
 * Shortcode: `[fluxfiles]`
 * Classic editor media button integration
@@ -81,6 +81,12 @@ PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfile
 
 == Changelog ==
 
+= 0.2.1 =
+Bundles FluxFiles core **0.2.4**:
+* **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart) with IAM/CORS remediation; an in-app "Bucket health" panel for tokens that can write.
+* **Activity log** with prefix-scoped audit and filters (requires the `audit` permission).
+* A file's extension is now immutable across rename/move/copy (security), no flash of untranslated keys on load, and internal folders are excluded from search.
+
 = 0.2.0 =
 First public release. WordPress adapter for the FluxFiles file manager:
 * Settings page, `[fluxfiles]` shortcode, and editor media button with iframe picker.
@@ -90,6 +96,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+. Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 0.2.1 =
+Bundles FluxFiles core 0.2.4 (Bucket Doctor, activity log, extension immutability). Install from the release ZIP that includes `vendor/`, or rebuild with `composer install --no-dev`.
 
 = 0.2.0 =
 Requires **PHP 8.1+** and a build that includes `vendor/` (release ZIP or run `composer install --no-dev` before deploying). Review settings after activation.

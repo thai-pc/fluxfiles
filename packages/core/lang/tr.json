@@ -202,7 +202,19 @@
         "uploaded": "{name} yüklendi",
         "deleted": "{name} silindi",
         "moved": "{from}, {to} konumuna taşındı",
-        "copied": "{from}, {to} konumuna kopyalandı"
+        "copied": "{from}, {to} konumuna kopyalandı",
+        "title": "Etkinlik",
+        "note": "Bu günlük kendi depolama alanınızda saklanır (_fluxfiles/audit.jsonl).",
+        "filter_action": "Eylem",
+        "filter_path": "Yol",
+        "filter_from": "Başlangıç",
+        "filter_to": "Bitiş",
+        "apply": "Uygula",
+        "empty": "Henüz etkinlik yok",
+        "col_time": "Zaman",
+        "col_action": "Eylem",
+        "col_file": "Dosya",
+        "col_actor": "Kullanıcı"
     },
     "bulk": {
         "move": "Taşı",
@@ -247,5 +259,16 @@
         "expired": "Oturumunuz sona erdi. Lütfen yeniden yükleyin veya tekrar kimlik doğrulaması yapın.",
         "retry": "Tekrar dene",
         "close": "Kapat"
+    },
+    "doctor": {
+        "title": "Bucket durumu",
+        "rerun": "Yeniden çalıştır",
+        "running": "Denetleniyor…",
+        "summary_ok": "Sağlıklı",
+        "summary_warn": "Uyarılar",
+        "summary_fail": "Sorunlar",
+        "cors_snippet": "CORS yapılandırması",
+        "iam_snippet": "IAM politikası",
+        "copy": "Kopyala"
     }
 }

@@ -202,7 +202,19 @@
         "uploaded": "{name} subido",
         "deleted": "{name} eliminado",
         "moved": "{from} movido a {to}",
-        "copied": "{from} copiado a {to}"
+        "copied": "{from} copiado a {to}",
+        "title": "Actividad",
+        "note": "Este registro se almacena en tu propio almacenamiento (_fluxfiles/audit.jsonl).",
+        "filter_action": "Acción",
+        "filter_path": "Ruta",
+        "filter_from": "Desde",
+        "filter_to": "Hasta",
+        "apply": "Aplicar",
+        "empty": "Aún no hay actividad",
+        "col_time": "Hora",
+        "col_action": "Acción",
+        "col_file": "Archivo",
+        "col_actor": "Usuario"
     },
     "bulk": {
         "move": "Mover",
@@ -247,5 +259,16 @@
         "expired": "Su sesión ha expirado. Por favor, recargue o vuelva a autenticarse.",
         "retry": "Reintentar",
         "close": "Cerrar"
+    },
+    "doctor": {
+        "title": "Estado del bucket",
+        "rerun": "Reejecutar",
+        "running": "Comprobando…",
+        "summary_ok": "Correcto",
+        "summary_warn": "Advertencias",
+        "summary_fail": "Problemas",
+        "cors_snippet": "Configuración CORS",
+        "iam_snippet": "Política IAM",
+        "copy": "Copiar"
     }
 }

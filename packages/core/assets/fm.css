@@ -1731,6 +1731,132 @@ body {
     user-select: none;
 }
 
+/* Activity (audit) + Bucket Doctor panels share the modal box. */
+.ff-activity-modal,
+.ff-doctor-modal {
+    background: var(--ff-bg);
+    border-radius: 12px;
+    width: min(900px, 94vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+.ff-activity-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--ff-border);
+}
+.ff-activity-head h3 { margin: 0; font-size: 16px; }
+.ff-activity-close {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 24px;
+    line-height: 1;
+    color: var(--color-text-tertiary);
+}
+.ff-activity-note {
+    margin: 0;
+    padding: 8px 20px;
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    background: var(--ff-bg-secondary);
+}
+.ff-activity-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--ff-border);
+}
+.ff-activity-filters input {
+    padding: 6px 10px;
+    border: 1px solid var(--ff-border);
+    border-radius: 6px;
+    background: var(--ff-bg);
+    color: var(--color-text-primary);
+    font-size: 13px;
+}
+.ff-activity-filters input[type="text"] { flex: 1 1 140px; min-width: 0; }
+.ff-activity-body { overflow: auto; padding: 8px 20px 20px; }
+.ff-activity-state { padding: 32px; text-align: center; color: var(--color-text-tertiary); }
+.ff-activity-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ff-activity-table th {
+    text-align: start;
+    padding: 8px 10px;
+    position: sticky;
+    top: 0;
+    background: var(--ff-bg);
+    border-bottom: 1px solid var(--ff-border);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+}
+.ff-activity-table td { padding: 8px 10px; border-bottom: 1px solid var(--ff-border); }
+.ff-activity-action {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: color-mix(in srgb, var(--ff-primary) 12%, transparent);
+    color: var(--ff-primary);
+}
+.ff-activity-file {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Bucket Doctor panel */
+.ff-doctor-summary { padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.ff-doctor-summary.is-ok { background: color-mix(in srgb, #16a34a 16%, transparent); color: #16a34a; }
+.ff-doctor-summary.is-warn { background: color-mix(in srgb, #d97706 18%, transparent); color: #b45309; }
+.ff-doctor-summary.is-fail { background: color-mix(in srgb, var(--color-text-danger) 16%, transparent); color: var(--color-text-danger); }
+.ff-doctor-checks { list-style: none; margin: 0; padding: 0; }
+.ff-doctor-check { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--ff-border); }
+.ff-doctor-dot {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+}
+.ff-doctor-check.is-ok .ff-doctor-dot { background: #16a34a; }
+.ff-doctor-check.is-warn .ff-doctor-dot { background: #d97706; }
+.ff-doctor-check.is-fail .ff-doctor-dot { background: var(--color-text-danger); }
+.ff-doctor-check.is-info .ff-doctor-dot { background: var(--color-text-tertiary); }
+.ff-doctor-msg { font-size: 13px; }
+.ff-doctor-fix { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+.ff-doctor-remed { margin-top: 16px; }
+.ff-doctor-remed-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin: 12px 0 4px;
+}
+.ff-doctor-remed pre {
+    margin: 0;
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--ff-bg-secondary);
+    border: 1px solid var(--ff-border);
+    font-size: 11px;
+    overflow: auto;
+    max-height: 160px;
+}
+
 .ff-new-folder-error {
     font-size: 13px;
     color: var(--color-text-danger);

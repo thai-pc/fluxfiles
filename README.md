@@ -783,7 +783,8 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/search?disk=&q=&limit=` | `limit` default 50 | Full-text search across file names + metadata |
 | `GET` | `/search-folders?disk=&q=&limit=` | `limit` default 50 | Search folder names via the directory index |
 | `GET` | `/quota?disk=` | — | Storage usage: used_mb, max_mb, percentage |
-| `GET` | `/audit?limit=&offset=` | `limit` default 100 | Audit log (filtered to current user) |
+| `GET` | `/audit?limit=&offset=&action=&from=&to=&path=&actor=` | `limit` default 100 | Activity log, **scoped to the token's prefix**. Requires the `audit` permission (403 otherwise). |
+| `GET` | `/disk/doctor?disk=&origin=` | — | **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write`. |
 
 ### Chunk Upload (S3 multipart, files > 10MB)
 

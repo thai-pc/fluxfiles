@@ -202,7 +202,19 @@
         "uploaded": "{name} hochgeladen",
         "deleted": "{name} gelöscht",
         "moved": "{from} nach {to} verschoben",
-        "copied": "{from} nach {to} kopiert"
+        "copied": "{from} nach {to} kopiert",
+        "title": "Aktivität",
+        "note": "Dieses Protokoll wird in Ihrem eigenen Speicher abgelegt (_fluxfiles/audit.jsonl).",
+        "filter_action": "Aktion",
+        "filter_path": "Pfad",
+        "filter_from": "Von",
+        "filter_to": "Bis",
+        "apply": "Anwenden",
+        "empty": "Noch keine Aktivität",
+        "col_time": "Zeit",
+        "col_action": "Aktion",
+        "col_file": "Datei",
+        "col_actor": "Benutzer"
     },
     "bulk": {
         "move": "Verschieben",
@@ -247,5 +259,16 @@
         "expired": "Ihre Sitzung ist abgelaufen. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.",
         "retry": "Wiederholen",
         "close": "Schließen"
+    },
+    "doctor": {
+        "title": "Bucket-Status",
+        "rerun": "Erneut prüfen",
+        "running": "Prüfung läuft…",
+        "summary_ok": "In Ordnung",
+        "summary_warn": "Warnungen",
+        "summary_fail": "Probleme",
+        "cors_snippet": "CORS-Konfiguration",
+        "iam_snippet": "IAM-Richtlinie",
+        "copy": "Kopieren"
     }
 }

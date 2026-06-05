@@ -76,6 +76,19 @@ function fluxFilesApp() {
         renameError: '',
         renameSubmitting: false,
 
+        // Activity log (audit) panel
+        showActivity: false,
+        activityEntries: [],
+        activityLoading: false,
+        activityError: '',
+        activityFilter: { action: '', path: '', from: '', to: '' },
+
+        // Bucket Doctor panel
+        showDoctor: false,
+        doctorReport: null,
+        doctorLoading: false,
+        doctorError: '',
+
         // Auth state
         authRequired: false,
         authState: 'ok', // 'ok' | 'missing' | 'expired' | 'refreshing'
@@ -1925,6 +1938,100 @@ function fluxFilesApp() {
         },
 
         // Utility
+        // Activity log (audit) — decode the JWT payload client-side (cosmetic only;
+        // the server enforces the 'audit' permission) to know whether to show it.
+        _tokenPayload() {
+            try {
+                const seg = (this.token || '').split('.')[1] || '';
+                const b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
+                const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+                return JSON.parse(atob(b64 + pad)) || {};
+            } catch (_) {
+                return {};
+            }
+        },
+
+        get canAudit() {
+            const perms = this._tokenPayload().perms;
+            return Array.isArray(perms) && perms.includes('audit');
+        },
+
+        async openActivity() {
+            this.showActivity = true;
+            this.activityError = '';
+            await this.loadActivity();
+        },
+
+        async loadActivity() {
+            this.activityLoading = true;
+            this.activityError = '';
+            try {
+                const q = new URLSearchParams({ limit: '200' });
+                const f = this.activityFilter;
+                if (f.action) q.set('action', f.action);
+                if (f.path) q.set('path', f.path);
+                if (f.from) { const t = Date.parse(f.from); if (!isNaN(t)) q.set('from', String(Math.floor(t / 1000))); }
+                if (f.to) { const t = Date.parse(f.to); if (!isNaN(t)) q.set('to', String(Math.floor(t / 1000))); }
+                const data = await this.api('GET', '/api/fm/audit?' + q.toString());
+                this.activityEntries = Array.isArray(data) ? data : [];
+            } catch (e) {
+                this.activityError = e.message || this.t('error.generic');
+                this.activityEntries = [];
+            } finally {
+                this.activityLoading = false;
+            }
+        },
+
+        closeActivity() {
+            this.showActivity = false;
+        },
+
+        // Bucket Doctor — diagnose the current disk's backend (write perm gated
+        // server-side; the button is shown when the token can write).
+        get canDiagnose() {
+            const perms = this._tokenPayload().perms;
+            return Array.isArray(perms) && perms.includes('write');
+        },
+
+        async openDoctor() {
+            this.showDoctor = true;
+            this.doctorReport = null;
+            this.doctorError = '';
+            await this.loadDoctor();
+        },
+
+        async loadDoctor() {
+            this.doctorLoading = true;
+            this.doctorError = '';
+            try {
+                const data = await this.api('GET', '/api/fm/disk/doctor?disk=' + encodeURIComponent(this.currentDisk));
+                this.doctorReport = data || null;
+            } catch (e) {
+                this.doctorError = e.message || this.t('error.generic');
+                this.doctorReport = null;
+            } finally {
+                this.doctorLoading = false;
+            }
+        },
+
+        closeDoctor() {
+            this.showDoctor = false;
+        },
+
+        async _copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch (_) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            this.showToast(this.t('copy.copied'), 'success');
+        },
+
         formatSize(bytes) {
             if (!bytes) return '0 B';
             const units = ['B', 'KB', 'MB', 'GB'];

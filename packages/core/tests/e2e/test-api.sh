@@ -23,7 +23,7 @@ TOKEN=$(php -r "
 require_once getcwd() . '/packages/core/embed.php';
 \$dotenv = Dotenv\Dotenv::createImmutable(getcwd());
 \$dotenv->safeLoad();
-echo fluxfiles_token('test-api', ['read','write','delete'], ['local','s3','r2'], '', 50, null, 86400);
+echo fluxfiles_token('test-api', ['read','write','delete','audit'], ['local','s3','r2'], '', 50, null, 86400);
 ")
 
 READ_TOKEN=$(php -r "
@@ -249,7 +249,7 @@ BODY=$(echo "$RESP" | sed '$d')
 ACOUNT=$(echo "$BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "?")
 check "Audit log → 200 ($ACOUNT entries)" "200" "$CODE"
 
-RESP=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/audit?limit=5&user_id=test-api")
+RESP=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE/audit?limit=5&actor=test-api")
 CODE=$(echo "$RESP" | tail -1)
 check "Audit filter by user → 200" "200" "$CODE"
 

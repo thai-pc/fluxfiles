@@ -202,7 +202,19 @@
         "uploaded": "Đã tải lên {name}",
         "deleted": "Đã xóa {name}",
         "moved": "Đã di chuyển {from} sang {to}",
-        "copied": "Đã sao chép {from} sang {to}"
+        "copied": "Đã sao chép {from} sang {to}",
+        "title": "Hoạt động",
+        "note": "Nhật ký này được lưu trong storage của bạn (_fluxfiles/audit.jsonl).",
+        "filter_action": "Hành động",
+        "filter_path": "Đường dẫn",
+        "filter_from": "Từ",
+        "filter_to": "Đến",
+        "apply": "Áp dụng",
+        "empty": "Chưa có hoạt động",
+        "col_time": "Thời gian",
+        "col_action": "Hành động",
+        "col_file": "Tệp",
+        "col_actor": "Người dùng"
     },
     "bulk": {
         "move": "Di chuyển",
@@ -247,5 +259,16 @@
         "expired": "Phiên làm việc đã hết hạn. Vui lòng tải lại hoặc xác thực lại.",
         "retry": "Thử lại",
         "close": "Đóng"
+    },
+    "doctor": {
+        "title": "Tình trạng bucket",
+        "rerun": "Chạy lại",
+        "running": "Đang kiểm tra…",
+        "summary_ok": "Tốt",
+        "summary_warn": "Cảnh báo",
+        "summary_fail": "Có vấn đề",
+        "cors_snippet": "Cấu hình CORS",
+        "iam_snippet": "Chính sách IAM",
+        "copy": "Sao chép"
     }
 }

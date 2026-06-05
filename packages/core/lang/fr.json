@@ -202,7 +202,19 @@
         "uploaded": "{name} importé",
         "deleted": "{name} supprimé",
         "moved": "{from} déplacé vers {to}",
-        "copied": "{from} copié vers {to}"
+        "copied": "{from} copié vers {to}",
+        "title": "Activité",
+        "note": "Ce journal est stocké dans votre propre stockage (_fluxfiles/audit.jsonl).",
+        "filter_action": "Action",
+        "filter_path": "Chemin",
+        "filter_from": "Du",
+        "filter_to": "Au",
+        "apply": "Appliquer",
+        "empty": "Aucune activité pour le moment",
+        "col_time": "Heure",
+        "col_action": "Action",
+        "col_file": "Fichier",
+        "col_actor": "Utilisateur"
     },
     "bulk": {
         "move": "Déplacer",
@@ -247,5 +259,16 @@
         "expired": "Votre session a expiré. Veuillez recharger ou vous reconnecter.",
         "retry": "Réessayer",
         "close": "Fermer"
+    },
+    "doctor": {
+        "title": "État du bucket",
+        "rerun": "Relancer",
+        "running": "Vérification…",
+        "summary_ok": "Sain",
+        "summary_warn": "Avertissements",
+        "summary_fail": "Problèmes",
+        "cors_snippet": "Configuration CORS",
+        "iam_snippet": "Politique IAM",
+        "copy": "Copier"
     }
 }

@@ -202,7 +202,19 @@
         "uploaded": "Caricato {name}",
         "deleted": "Eliminato {name}",
         "moved": "Spostato {from} in {to}",
-        "copied": "Copiato {from} in {to}"
+        "copied": "Copiato {from} in {to}",
+        "title": "Attività",
+        "note": "Questo registro è archiviato nel tuo storage (_fluxfiles/audit.jsonl).",
+        "filter_action": "Azione",
+        "filter_path": "Percorso",
+        "filter_from": "Da",
+        "filter_to": "A",
+        "apply": "Applica",
+        "empty": "Nessuna attività",
+        "col_time": "Ora",
+        "col_action": "Azione",
+        "col_file": "File",
+        "col_actor": "Utente"
     },
     "bulk": {
         "move": "Sposta",
@@ -247,5 +259,16 @@
         "expired": "La sessione è scaduta. Ricaricare o autenticarsi di nuovo.",
         "retry": "Riprova",
         "close": "Chiudi"
+    },
+    "doctor": {
+        "title": "Stato del bucket",
+        "rerun": "Riesegui",
+        "running": "Controllo in corso…",
+        "summary_ok": "Integro",
+        "summary_warn": "Avvisi",
+        "summary_fail": "Problemi",
+        "cors_snippet": "Configurazione CORS",
+        "iam_snippet": "Criterio IAM",
+        "copy": "Copia"
     }
 }

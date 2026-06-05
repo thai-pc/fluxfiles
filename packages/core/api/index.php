@@ -6,6 +6,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use FluxFiles\ApiException;
 use FluxFiles\AuditLogStorage;
+use FluxFiles\BucketDoctor;
 use FluxFiles\Claims;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
@@ -198,6 +199,12 @@ try {
         $raw = file_get_contents('php://input');
         $body = json_decode($raw ?: '{}', true) ?: [];
         $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? $body['src_path'] ?? '';
+        // Multipart uploads carry no JSON body, so the key isn't in $body — fall
+        // back to the operation result (the uploaded file's key) so the entry
+        // isn't blank. Only fills when empty, so other actions are unchanged.
+        if ($auditKey === '' && is_array($data) && isset($data['key'])) {
+            $auditKey = (string) $data['key'];
+        }
         $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey);
     }
@@ -360,11 +367,39 @@ function routeRequest(
 
     // Audit log — users can only view their own logs
     if ($method === 'GET' && $uri === '/api/fm/audit') {
+        // Reading the activity log is gated behind an explicit 'audit' permission
+        // (off by default) so an ordinary read token cannot see who did what.
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
         return $auditLog->list(
             (int) ($_GET['limit'] ?? 100),
             (int) ($_GET['offset'] ?? 0),
-            $claims->userId
+            ($_GET['actor'] ?? null) ?: null,
+            $claims,
+            [
+                'action' => $_GET['action'] ?? null,
+                'from'   => $_GET['from'] ?? null,
+                'to'     => $_GET['to'] ?? null,
+                'path'   => $_GET['path'] ?? null,
+            ]
         );
+    }
+
+    // Bucket Doctor — diagnose a disk's storage backend (creds, permissions,
+    // CORS, presign). Requires write (it writes/deletes a probe object) on a
+    // disk the token may access; the host can run it on an ephemeral BYOB token
+    // to validate credentials before issuing a long-lived one.
+    if ($method === 'GET' && $uri === '/api/fm/disk/doctor') {
+        $disk = $_GET['disk'] ?? 'local';
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        if (!$claims->hasPerm('write')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? ($_GET['origin'] ?? null);
+        return (new BucketDoctor($diskManager))->diagnose($disk, $origin ?: null);
     }
 
     // Chunk upload

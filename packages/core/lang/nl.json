@@ -202,7 +202,19 @@
         "uploaded": "{name} geüpload",
         "deleted": "{name} verwijderd",
         "moved": "{from} verplaatst naar {to}",
-        "copied": "{from} gekopieerd naar {to}"
+        "copied": "{from} gekopieerd naar {to}",
+        "title": "Activiteit",
+        "note": "Dit logboek wordt opgeslagen in je eigen opslag (_fluxfiles/audit.jsonl).",
+        "filter_action": "Actie",
+        "filter_path": "Pad",
+        "filter_from": "Van",
+        "filter_to": "Tot",
+        "apply": "Toepassen",
+        "empty": "Nog geen activiteit",
+        "col_time": "Tijd",
+        "col_action": "Actie",
+        "col_file": "Bestand",
+        "col_actor": "Gebruiker"
     },
     "bulk": {
         "move": "Verplaatsen",
@@ -247,5 +259,16 @@
         "expired": "Uw sessie is verlopen. Herlaad de pagina of authenticeer opnieuw.",
         "retry": "Opnieuw proberen",
         "close": "Sluiten"
+    },
+    "doctor": {
+        "title": "Bucketstatus",
+        "rerun": "Opnieuw uitvoeren",
+        "running": "Controleren…",
+        "summary_ok": "Gezond",
+        "summary_warn": "Waarschuwingen",
+        "summary_fail": "Problemen",
+        "cors_snippet": "CORS-configuratie",
+        "iam_snippet": "IAM-beleid",
+        "copy": "Kopiëren"
     }
 }

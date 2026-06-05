@@ -305,6 +305,40 @@ test('rename locks the file extension: only the base name is editable', async ({
   await expect(cardByName(page, fname)).toHaveCount(0);
 });
 
+test('activity log: only an audit-perm token shows the panel, and it lists entries', async ({ page }) => {
+  // Without the audit perm the Activity button is hidden.
+  await openManager(page, mintToken(['read', 'write', 'delete']));
+  await expect(page.getByRole('button', { name: 'Activity' })).toHaveCount(0);
+
+  // With it, the panel opens and lists the activity we just generated.
+  await openManager(page, mintToken(['read', 'write', 'delete', 'audit']));
+  const folder = `pw-audit-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+  const fname = `act-${Date.now()}.png`;
+  await uploadFile(page, pngFile(fname));
+
+  await page.getByRole('button', { name: 'Activity' }).click();
+  const modal = page.locator('.ff-activity-modal');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.ff-activity-table tbody tr').first()).toBeVisible({ timeout: 10_000 });
+  // The upload entry now carries the file key (not blank), so its name shows.
+  await expect(modal.locator('.ff-activity-file', { hasText: fname })).toBeVisible();
+});
+
+test('bucket doctor: write token opens the panel and reports on the disk', async ({ page }) => {
+  // A read-only token has no Diagnose button (needs write).
+  await openManager(page, mintToken(['read']));
+  await expect(page.getByRole('button', { name: 'Bucket health' })).toHaveCount(0);
+
+  // With write, the panel opens and the local disk reports healthy.
+  await openManager(page, mintToken(['read', 'write', 'delete']));
+  await page.getByRole('button', { name: 'Bucket health' }).click();
+  await expect(page.locator('.ff-doctor-checks')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.ff-doctor-check').first()).toBeVisible();
+  await expect(page.locator('.ff-doctor-summary')).toHaveText(/Healthy/);
+});
+
 test('inline crop → "Save as Copy" produces a cropped file in the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);

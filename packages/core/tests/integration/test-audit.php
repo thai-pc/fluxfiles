@@ -80,6 +80,28 @@ test('filter by user_id returns only that user', function () {
     foreach ($alice as $e) { assertEqual('alice', $e['user_id'], 'all alice'); }
 });
 
+test('audit is scoped to the caller\'s path prefix (no cross-tenant leak)', function () {
+    [$audit] = makeAudit();
+    $audit->log('tenant-42', 'upload', 'local', 'users/42/a.png');
+    $audit->log('tenant-99', 'delete', 'local', 'users/99/secret.png');
+    $audit->log('tenant-42', 'mkdir',  'local', ''); // keyless entry
+
+    // Scoped tenant: even with userId=null (would otherwise see all), the prefix
+    // must hide users/99 AND the keyless entry (default-deny).
+    $scoped = new \FluxFiles\Claims('tenant-42', ['read'], ['local'], 'users/42', 10, null, 0, false);
+    $rows = $audit->list(100, 0, null, $scoped);
+    assertEqual(1, count($rows), 'only the in-scope entry is visible');
+    assertEqual('users/42/a.png', $rows[0]['file_key'], 'and it is the tenant\'s own file');
+
+    // Sibling-prefix confusion (users/42 vs users/420) must not leak.
+    $audit->log('tenant-420', 'upload', 'local', 'users/420/x.png');
+    assertEqual(1, count($audit->list(100, 0, null, $scoped)), 'users/420 not in users/42 scope');
+
+    // Empty prefix (admin) = no scoping → sees everything.
+    $admin = new \FluxFiles\Claims('admin', ['read'], ['local'], '', 10, null, 0, false);
+    assertEqual(4, count($audit->list(100, 0, null, $admin)), 'empty prefix = no scoping');
+});
+
 test('limit + offset paginate the audit log', function () {
     [$audit] = makeAudit();
     for ($i = 0; $i < 5; $i++) { $audit->log('u', 'act' . $i, 'local', "f{$i}.txt"); }
