@@ -198,6 +198,12 @@ try {
         $raw = file_get_contents('php://input');
         $body = json_decode($raw ?: '{}', true) ?: [];
         $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? $body['src_path'] ?? '';
+        // Multipart uploads carry no JSON body, so the key isn't in $body — fall
+        // back to the operation result (the uploaded file's key) so the entry
+        // isn't blank. Only fills when empty, so other actions are unchanged.
+        if ($auditKey === '' && is_array($data) && isset($data['key'])) {
+            $auditKey = (string) $data['key'];
+        }
         $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey);
     }

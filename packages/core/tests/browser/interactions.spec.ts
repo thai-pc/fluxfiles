@@ -315,12 +315,15 @@ test('activity log: only an audit-perm token shows the panel, and it lists entri
   const folder = `pw-audit-${Date.now()}`;
   await createFolder(page, page, folder);
   await enterFolder(page, folder);
-  await uploadFile(page, pngFile(`act-${Date.now()}.png`));
+  const fname = `act-${Date.now()}.png`;
+  await uploadFile(page, pngFile(fname));
 
   await page.getByRole('button', { name: 'Activity' }).click();
   const modal = page.locator('.ff-activity-modal');
   await expect(modal).toBeVisible();
   await expect(modal.locator('.ff-activity-table tbody tr').first()).toBeVisible({ timeout: 10_000 });
+  // The upload entry now carries the file key (not blank), so its name shows.
+  await expect(modal.locator('.ff-activity-file', { hasText: fname })).toBeVisible();
 });
 
 test('inline crop → "Save as Copy" produces a cropped file in the grid', async ({ page }) => {
