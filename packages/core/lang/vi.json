@@ -259,5 +259,16 @@
         "expired": "Phiên làm việc đã hết hạn. Vui lòng tải lại hoặc xác thực lại.",
         "retry": "Thử lại",
         "close": "Đóng"
+    },
+    "doctor": {
+        "title": "Tình trạng bucket",
+        "rerun": "Chạy lại",
+        "running": "Đang kiểm tra…",
+        "summary_ok": "Tốt",
+        "summary_warn": "Cảnh báo",
+        "summary_fail": "Có vấn đề",
+        "cors_snippet": "Cấu hình CORS",
+        "iam_snippet": "Chính sách IAM",
+        "copy": "Sao chép"
     }
 }

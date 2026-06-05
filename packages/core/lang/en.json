@@ -259,5 +259,16 @@
         "expired": "Your session has expired. Please reload or re-authenticate.",
         "retry": "Retry",
         "close": "Close"
+    },
+    "doctor": {
+        "title": "Bucket health",
+        "rerun": "Re-run",
+        "running": "Running checks…",
+        "summary_ok": "Healthy",
+        "summary_warn": "Warnings",
+        "summary_fail": "Problems",
+        "cors_snippet": "CORS configuration",
+        "iam_snippet": "IAM policy",
+        "copy": "Copy"
     }
 }

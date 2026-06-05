@@ -259,5 +259,16 @@
         "expired": "La sessione è scaduta. Ricaricare o autenticarsi di nuovo.",
         "retry": "Riprova",
         "close": "Chiudi"
+    },
+    "doctor": {
+        "title": "Stato del bucket",
+        "rerun": "Riesegui",
+        "running": "Controllo in corso…",
+        "summary_ok": "Integro",
+        "summary_warn": "Avvisi",
+        "summary_fail": "Problemi",
+        "cors_snippet": "Configurazione CORS",
+        "iam_snippet": "Criterio IAM",
+        "copy": "Copia"
     }
 }

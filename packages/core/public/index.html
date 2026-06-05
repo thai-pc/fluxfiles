@@ -173,6 +173,9 @@
                 <button class="ff-theme-toggle-sm" x-show="canAudit" @click="openActivity()" :title="t('audit.title')" :aria-label="t('audit.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                 </button>
+                <button class="ff-theme-toggle-sm" x-show="canDiagnose" @click="openDoctor()" :title="t('doctor.title')" :aria-label="t('doctor.title')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h4"/></svg>
+                </button>
             </div>
             <span class="ff-pills-sep"></span>
             <!-- Row 2: Disk pills -->
@@ -1115,6 +1118,53 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Bucket Doctor panel ═══ -->
+    <div class="ff-modal-overlay" x-show="showDoctor" x-transition @click.self="closeDoctor()" style="z-index:60;" x-cloak>
+        <div class="ff-doctor-modal" role="dialog" aria-modal="true" :aria-label="t('doctor.title')" @keydown.escape.window="showDoctor && closeDoctor()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('doctor.title') + (currentDisk ? ' · ' + currentDisk : '')"></h3>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span x-show="doctorReport" class="ff-doctor-summary" :class="'is-' + (doctorReport ? doctorReport.summary : '')" x-text="doctorReport ? t('doctor.summary_' + doctorReport.summary) : ''"></span>
+                    <button class="ff-btn ff-btn-ghost" @click="loadDoctor()" :disabled="doctorLoading" x-text="t('doctor.rerun')"></button>
+                    <button class="ff-activity-close" @click="closeDoctor()" :aria-label="t('common.close')">&times;</button>
+                </div>
+            </div>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="doctorError" x-text="doctorError"></p>
+                <div x-show="doctorLoading" class="ff-activity-state" x-text="t('doctor.running')"></div>
+                <template x-if="!doctorLoading && doctorReport">
+                    <div>
+                        <ul class="ff-doctor-checks">
+                            <template x-for="(c, i) in doctorReport.checks" :key="i">
+                                <li class="ff-doctor-check" :class="'is-' + c.status">
+                                    <span class="ff-doctor-dot" x-text="({ ok: '✓', warn: '!', fail: '✕', info: 'i' })[c.status] || '·'"></span>
+                                    <div>
+                                        <div class="ff-doctor-msg"><b x-text="c.id"></b> — <span x-text="c.message"></span></div>
+                                        <div class="ff-doctor-fix" x-show="c.fix" x-text="c.fix"></div>
+                                    </div>
+                                </li>
+                            </template>
+                        </ul>
+                        <template x-if="doctorReport.remediation && doctorReport.remediation.cors">
+                            <div class="ff-doctor-remed">
+                                <div class="ff-doctor-remed-head">
+                                    <span x-text="t('doctor.cors_snippet')"></span>
+                                    <button class="ff-btn ff-btn-ghost" @click="_copyText(doctorReport.remediation.cors)" x-text="t('doctor.copy')"></button>
+                                </div>
+                                <pre x-text="doctorReport.remediation.cors"></pre>
+                                <div class="ff-doctor-remed-head">
+                                    <span x-text="t('doctor.iam_snippet')"></span>
+                                    <button class="ff-btn ff-btn-ghost" @click="_copyText(doctorReport.remediation.iam_policy)" x-text="t('doctor.copy')"></button>
+                                </div>
+                                <pre x-text="doctorReport.remediation.iam_policy"></pre>
+                            </div>
+                        </template>
+                    </div>
+                </template>
             </div>
         </div>
     </div>

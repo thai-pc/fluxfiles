@@ -259,5 +259,16 @@
         "expired": "您的会话已过期。请重新加载或重新验证。",
         "retry": "重试",
         "close": "关闭"
+    },
+    "doctor": {
+        "title": "存储桶状态",
+        "rerun": "重新运行",
+        "running": "正在检查…",
+        "summary_ok": "正常",
+        "summary_warn": "警告",
+        "summary_fail": "有问题",
+        "cors_snippet": "CORS 配置",
+        "iam_snippet": "IAM 策略",
+        "copy": "复制"
     }
 }

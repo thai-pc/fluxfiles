@@ -259,5 +259,16 @@
         "expired": "Uw sessie is verlopen. Herlaad de pagina of authenticeer opnieuw.",
         "retry": "Opnieuw proberen",
         "close": "Sluiten"
+    },
+    "doctor": {
+        "title": "Bucketstatus",
+        "rerun": "Opnieuw uitvoeren",
+        "running": "Controleren…",
+        "summary_ok": "Gezond",
+        "summary_warn": "Waarschuwingen",
+        "summary_fail": "Problemen",
+        "cors_snippet": "CORS-configuratie",
+        "iam_snippet": "IAM-beleid",
+        "copy": "Kopiëren"
     }
 }

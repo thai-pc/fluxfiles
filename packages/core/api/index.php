@@ -6,6 +6,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use FluxFiles\ApiException;
 use FluxFiles\AuditLogStorage;
+use FluxFiles\BucketDoctor;
 use FluxFiles\Claims;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;

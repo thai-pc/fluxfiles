@@ -259,5 +259,16 @@
         "expired": "セッションの有効期限が切れました。再読み込みまたは再認証してください。",
         "retry": "再試行",
         "close": "閉じる"
+    },
+    "doctor": {
+        "title": "バケットの状態",
+        "rerun": "再実行",
+        "running": "チェック中…",
+        "summary_ok": "正常",
+        "summary_warn": "警告",
+        "summary_fail": "問題あり",
+        "cors_snippet": "CORS 設定",
+        "iam_snippet": "IAM ポリシー",
+        "copy": "コピー"
     }
 }

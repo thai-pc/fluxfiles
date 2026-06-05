@@ -259,5 +259,16 @@
         "expired": "Su sesión ha expirado. Por favor, recargue o vuelva a autenticarse.",
         "retry": "Reintentar",
         "close": "Cerrar"
+    },
+    "doctor": {
+        "title": "Estado del bucket",
+        "rerun": "Reejecutar",
+        "running": "Comprobando…",
+        "summary_ok": "Correcto",
+        "summary_warn": "Advertencias",
+        "summary_fail": "Problemas",
+        "cors_snippet": "Configuración CORS",
+        "iam_snippet": "Política IAM",
+        "copy": "Copiar"
     }
 }

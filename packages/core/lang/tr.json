@@ -259,5 +259,16 @@
         "expired": "Oturumunuz sona erdi. Lütfen yeniden yükleyin veya tekrar kimlik doğrulaması yapın.",
         "retry": "Tekrar dene",
         "close": "Kapat"
+    },
+    "doctor": {
+        "title": "Bucket durumu",
+        "rerun": "Yeniden çalıştır",
+        "running": "Denetleniyor…",
+        "summary_ok": "Sağlıklı",
+        "summary_warn": "Uyarılar",
+        "summary_fail": "Sorunlar",
+        "cors_snippet": "CORS yapılandırması",
+        "iam_snippet": "IAM politikası",
+        "copy": "Kopyala"
     }
 }

@@ -259,5 +259,16 @@
         "expired": "세션이 만료되었습니다. 다시 로드하거나 재인증해 주세요.",
         "retry": "재시도",
         "close": "닫기"
+    },
+    "doctor": {
+        "title": "버킷 상태",
+        "rerun": "다시 실행",
+        "running": "검사 중…",
+        "summary_ok": "정상",
+        "summary_warn": "경고",
+        "summary_fail": "문제 있음",
+        "cors_snippet": "CORS 구성",
+        "iam_snippet": "IAM 정책",
+        "copy": "복사"
     }
 }

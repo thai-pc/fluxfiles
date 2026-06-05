@@ -259,5 +259,16 @@
         "expired": "Ihre Sitzung ist abgelaufen. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.",
         "retry": "Wiederholen",
         "close": "Schließen"
+    },
+    "doctor": {
+        "title": "Bucket-Status",
+        "rerun": "Erneut prüfen",
+        "running": "Prüfung läuft…",
+        "summary_ok": "In Ordnung",
+        "summary_warn": "Warnungen",
+        "summary_fail": "Probleme",
+        "cors_snippet": "CORS-Konfiguration",
+        "iam_snippet": "IAM-Richtlinie",
+        "copy": "Kopieren"
     }
 }

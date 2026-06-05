@@ -83,6 +83,12 @@ function fluxFilesApp() {
         activityError: '',
         activityFilter: { action: '', path: '', from: '', to: '' },
 
+        // Bucket Doctor panel
+        showDoctor: false,
+        doctorReport: null,
+        doctorLoading: false,
+        doctorError: '',
+
         // Auth state
         authRequired: false,
         authState: 'ok', // 'ok' | 'missing' | 'expired' | 'refreshing'
@@ -1978,6 +1984,52 @@ function fluxFilesApp() {
 
         closeActivity() {
             this.showActivity = false;
+        },
+
+        // Bucket Doctor — diagnose the current disk's backend (write perm gated
+        // server-side; the button is shown when the token can write).
+        get canDiagnose() {
+            const perms = this._tokenPayload().perms;
+            return Array.isArray(perms) && perms.includes('write');
+        },
+
+        async openDoctor() {
+            this.showDoctor = true;
+            this.doctorReport = null;
+            this.doctorError = '';
+            await this.loadDoctor();
+        },
+
+        async loadDoctor() {
+            this.doctorLoading = true;
+            this.doctorError = '';
+            try {
+                const data = await this.api('GET', '/api/fm/disk/doctor?disk=' + encodeURIComponent(this.currentDisk));
+                this.doctorReport = data || null;
+            } catch (e) {
+                this.doctorError = e.message || this.t('error.generic');
+                this.doctorReport = null;
+            } finally {
+                this.doctorLoading = false;
+            }
+        },
+
+        closeDoctor() {
+            this.showDoctor = false;
+        },
+
+        async _copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch (_) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            this.showToast(this.t('copy.copied'), 'success');
         },
 
         formatSize(bytes) {

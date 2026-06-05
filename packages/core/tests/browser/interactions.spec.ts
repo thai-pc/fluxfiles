@@ -326,6 +326,19 @@ test('activity log: only an audit-perm token shows the panel, and it lists entri
   await expect(modal.locator('.ff-activity-file', { hasText: fname })).toBeVisible();
 });
 
+test('bucket doctor: write token opens the panel and reports on the disk', async ({ page }) => {
+  // A read-only token has no Diagnose button (needs write).
+  await openManager(page, mintToken(['read']));
+  await expect(page.getByRole('button', { name: 'Bucket health' })).toHaveCount(0);
+
+  // With write, the panel opens and the local disk reports healthy.
+  await openManager(page, mintToken(['read', 'write', 'delete']));
+  await page.getByRole('button', { name: 'Bucket health' }).click();
+  await expect(page.locator('.ff-doctor-checks')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.ff-doctor-check').first()).toBeVisible();
+  await expect(page.locator('.ff-doctor-summary')).toHaveText(/Healthy/);
+});
+
 test('inline crop → "Save as Copy" produces a cropped file in the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);
