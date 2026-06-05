@@ -363,7 +363,8 @@ function routeRequest(
         return $auditLog->list(
             (int) ($_GET['limit'] ?? 100),
             (int) ($_GET['offset'] ?? 0),
-            $claims->userId
+            $claims->userId,
+            $claims
         );
     }
 
