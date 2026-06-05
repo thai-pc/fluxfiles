@@ -1,6 +1,6 @@
 # FluxFiles AI Context
 
-This directory is for AI agents working on the FluxFiles codebase. Read this file first, then use the linked notes for deeper context.
+This directory is for AI agents working on the FluxFiles codebase. Read this file first, then use the linked notes for deeper context. The repo root [`AGENTS.md`](../AGENTS.md) is the tool-agnostic summary of the same guidance — keep the two roughly in sync.
 
 ## Product Summary
 
