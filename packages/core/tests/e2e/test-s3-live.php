@@ -264,6 +264,18 @@ test('multipart: initiate → abort (then complete fails)', function () use ($dm
     assertTrue($threw, 'cannot complete an aborted upload');
 });
 
+echo "\n{$yellow}► Bucket Doctor{$reset}\n";
+test('doctor diagnoses the live bucket (write/read/presign/delete/multipart ok)', function () use ($dm) {
+    $report = (new \FluxFiles\BucketDoctor($dm))->diagnose('s3test', 'https://app.example');
+    assertTrue($report['summary'] !== 'fail', "summary should not be fail (got {$report['summary']})");
+    $byId = [];
+    foreach ($report['checks'] as $c) { $byId[$c['id']] = $c['status']; }
+    foreach (['reachability', 'write', 'read', 'presign', 'delete', 'multipart'] as $id) {
+        assertTrue(($byId[$id] ?? '') === 'ok', "doctor check '{$id}' should be ok (got " . ($byId[$id] ?? 'missing') . ")");
+    }
+    assertTrue(isset($report['remediation']['cors']) && isset($report['remediation']['iam_policy']), 'remediation snippets present');
+});
+
 echo "\n{$yellow}► Cleanup{$reset}\n";
 test('delete uploaded file + variants', function () use ($fm, &$uploadedKey) {
     assertTrue(is_string($uploadedKey), 'no uploaded key (upload failed above)');

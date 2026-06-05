@@ -385,6 +385,22 @@ function routeRequest(
         );
     }
 
+    // Bucket Doctor — diagnose a disk's storage backend (creds, permissions,
+    // CORS, presign). Requires write (it writes/deletes a probe object) on a
+    // disk the token may access; the host can run it on an ephemeral BYOB token
+    // to validate credentials before issuing a long-lived one.
+    if ($method === 'GET' && $uri === '/api/fm/disk/doctor') {
+        $disk = $_GET['disk'] ?? 'local';
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        if (!$claims->hasPerm('write')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? ($_GET['origin'] ?? null);
+        return (new BucketDoctor($diskManager))->diagnose($disk, $origin ?: null);
+    }
+
     // Chunk upload
     if ($method === 'POST' && $uri === '/api/fm/chunk/init') {
         return handleChunkInit($chunker, $claims, $fm, $quotaManager);
