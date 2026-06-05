@@ -1,5 +1,5 @@
-/** A FluxFiles permission. */
-export type FluxPermission = 'read' | 'write' | 'delete';
+/** A FluxFiles permission. `audit` gates reading the activity log. */
+export type FluxPermission = 'read' | 'write' | 'delete' | 'audit';
 
 /**
  * A BYOB (Bring Your Own Bucket) disk config. Encrypted into the JWT and

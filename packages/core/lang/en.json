@@ -202,7 +202,19 @@
         "uploaded": "Uploaded {name}",
         "deleted": "Deleted {name}",
         "moved": "Moved {from} to {to}",
-        "copied": "Copied {from} to {to}"
+        "copied": "Copied {from} to {to}",
+        "title": "Activity",
+        "note": "This log is stored in your own storage (_fluxfiles/audit.jsonl).",
+        "filter_action": "Action",
+        "filter_path": "Path",
+        "filter_from": "From",
+        "filter_to": "To",
+        "apply": "Apply",
+        "empty": "No activity yet",
+        "col_time": "Time",
+        "col_action": "Action",
+        "col_file": "File",
+        "col_actor": "User"
     },
     "bulk": {
         "move": "Move",

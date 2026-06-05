@@ -8,11 +8,12 @@ import { TEST_SECRET } from './secret';
 const coreDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** Mint a JWT with read/write/delete on the local disk, signed with TEST_SECRET. */
-export function mintToken(): string {
+export function mintToken(perms: string[] = ['read', 'write', 'delete']): string {
+  const permsPhp = perms.map((p) => `'${p}'`).join(',');
   const php =
     `require '${coreDir}/embed.php';` +
     `$_ENV['FLUXFILES_SECRET']='${TEST_SECRET}';` +
-    `echo fluxfiles_token('e2e-user', ['read','write','delete'], ['local'], '', 50, null, 86400);`;
+    `echo fluxfiles_token('e2e-user', [${permsPhp}], ['local'], '', 50, null, 86400);`;
   // execFileSync → no shell, so $_ENV is not interpolated away by zsh.
   return execFileSync('php', ['-r', php]).toString().trim();
 }

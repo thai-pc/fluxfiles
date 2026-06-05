@@ -202,7 +202,19 @@
         "uploaded": "{name} enviado",
         "deleted": "{name} excluído",
         "moved": "{from} movido para {to}",
-        "copied": "{from} copiado para {to}"
+        "copied": "{from} copiado para {to}",
+        "title": "Atividade",
+        "note": "Este registro é armazenado no seu próprio armazenamento (_fluxfiles/audit.jsonl).",
+        "filter_action": "Ação",
+        "filter_path": "Caminho",
+        "filter_from": "De",
+        "filter_to": "Até",
+        "apply": "Aplicar",
+        "empty": "Nenhuma atividade ainda",
+        "col_time": "Hora",
+        "col_action": "Ação",
+        "col_file": "Arquivo",
+        "col_actor": "Usuário"
     },
     "bulk": {
         "move": "Mover",

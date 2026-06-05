@@ -202,7 +202,19 @@
         "uploaded": "Đã tải lên {name}",
         "deleted": "Đã xóa {name}",
         "moved": "Đã di chuyển {from} sang {to}",
-        "copied": "Đã sao chép {from} sang {to}"
+        "copied": "Đã sao chép {from} sang {to}",
+        "title": "Hoạt động",
+        "note": "Nhật ký này được lưu trong storage của bạn (_fluxfiles/audit.jsonl).",
+        "filter_action": "Hành động",
+        "filter_path": "Đường dẫn",
+        "filter_from": "Từ",
+        "filter_to": "Đến",
+        "apply": "Áp dụng",
+        "empty": "Chưa có hoạt động",
+        "col_time": "Thời gian",
+        "col_action": "Hành động",
+        "col_file": "Tệp",
+        "col_actor": "Người dùng"
     },
     "bulk": {
         "move": "Di chuyển",

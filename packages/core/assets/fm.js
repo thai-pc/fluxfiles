@@ -76,6 +76,13 @@ function fluxFilesApp() {
         renameError: '',
         renameSubmitting: false,
 
+        // Activity log (audit) panel
+        showActivity: false,
+        activityEntries: [],
+        activityLoading: false,
+        activityError: '',
+        activityFilter: { action: '', path: '', from: '', to: '' },
+
         // Auth state
         authRequired: false,
         authState: 'ok', // 'ok' | 'missing' | 'expired' | 'refreshing'
@@ -1925,6 +1932,54 @@ function fluxFilesApp() {
         },
 
         // Utility
+        // Activity log (audit) — decode the JWT payload client-side (cosmetic only;
+        // the server enforces the 'audit' permission) to know whether to show it.
+        _tokenPayload() {
+            try {
+                const seg = (this.token || '').split('.')[1] || '';
+                const b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
+                const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+                return JSON.parse(atob(b64 + pad)) || {};
+            } catch (_) {
+                return {};
+            }
+        },
+
+        get canAudit() {
+            const perms = this._tokenPayload().perms;
+            return Array.isArray(perms) && perms.includes('audit');
+        },
+
+        async openActivity() {
+            this.showActivity = true;
+            this.activityError = '';
+            await this.loadActivity();
+        },
+
+        async loadActivity() {
+            this.activityLoading = true;
+            this.activityError = '';
+            try {
+                const q = new URLSearchParams({ limit: '200' });
+                const f = this.activityFilter;
+                if (f.action) q.set('action', f.action);
+                if (f.path) q.set('path', f.path);
+                if (f.from) { const t = Date.parse(f.from); if (!isNaN(t)) q.set('from', String(Math.floor(t / 1000))); }
+                if (f.to) { const t = Date.parse(f.to); if (!isNaN(t)) q.set('to', String(Math.floor(t / 1000))); }
+                const data = await this.api('GET', '/api/fm/audit?' + q.toString());
+                this.activityEntries = Array.isArray(data) ? data : [];
+            } catch (e) {
+                this.activityError = e.message || this.t('error.generic');
+                this.activityEntries = [];
+            } finally {
+                this.activityLoading = false;
+            }
+        },
+
+        closeActivity() {
+            this.showActivity = false;
+        },
+
         formatSize(bytes) {
             if (!bytes) return '0 B';
             const units = ['B', 'KB', 'MB', 'GB'];

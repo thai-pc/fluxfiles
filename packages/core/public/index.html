@@ -170,6 +170,9 @@
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
                     </span>
                 </button>
+                <button class="ff-theme-toggle-sm" x-show="canAudit" @click="openActivity()" :title="t('audit.title')" :aria-label="t('audit.title')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </button>
             </div>
             <span class="ff-pills-sep"></span>
             <!-- Row 2: Disk pills -->
@@ -1069,6 +1072,49 @@
                         <span x-text="t('common.loading')"></span>
                     </span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Activity log (audit) panel ═══ -->
+    <div class="ff-modal-overlay" x-show="showActivity" x-transition @click.self="closeActivity()" style="z-index:60;" x-cloak>
+        <div class="ff-activity-modal" role="dialog" aria-modal="true" :aria-label="t('audit.title')" @keydown.escape.window="showActivity && closeActivity()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('audit.title')"></h3>
+                <button class="ff-activity-close" @click="closeActivity()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <p class="ff-activity-note" x-text="t('audit.note')"></p>
+            <div class="ff-activity-filters">
+                <input type="text" x-model="activityFilter.action" :placeholder="t('audit.filter_action')" @keydown.enter="loadActivity()">
+                <input type="text" x-model="activityFilter.path" :placeholder="t('audit.filter_path')" @keydown.enter="loadActivity()">
+                <input type="date" x-model="activityFilter.from" :title="t('audit.filter_from')">
+                <input type="date" x-model="activityFilter.to" :title="t('audit.filter_to')">
+                <button class="ff-btn ff-btn-primary" @click="loadActivity()" x-text="t('audit.apply')"></button>
+            </div>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="activityError" x-text="activityError"></p>
+                <div x-show="activityLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
+                <div x-show="!activityLoading && !activityError && activityEntries.length === 0" class="ff-activity-state" x-text="t('audit.empty')"></div>
+                <table class="ff-activity-table" x-show="!activityLoading && activityEntries.length > 0">
+                    <thead>
+                        <tr>
+                            <th x-text="t('audit.col_time')"></th>
+                            <th x-text="t('audit.col_action')"></th>
+                            <th x-text="t('audit.col_file')"></th>
+                            <th x-text="t('audit.col_actor')"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(e, i) in activityEntries" :key="i">
+                            <tr>
+                                <td x-text="formatDate(e.created_at)"></td>
+                                <td><span class="ff-activity-action" x-text="e.action"></span></td>
+                                <td class="ff-activity-file" :title="e.file_key" x-text="e.file_key || '—'"></td>
+                                <td x-text="e.user_id || '—'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

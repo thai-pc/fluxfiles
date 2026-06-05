@@ -202,7 +202,19 @@
         "uploaded": "تم رفع {name}",
         "deleted": "تم حذف {name}",
         "moved": "تم نقل {from} إلى {to}",
-        "copied": "تم نسخ {from} إلى {to}"
+        "copied": "تم نسخ {from} إلى {to}",
+        "title": "النشاط",
+        "note": "يُحفظ هذا السجل في مساحة التخزين الخاصة بك (_fluxfiles/audit.jsonl).",
+        "filter_action": "الإجراء",
+        "filter_path": "المسار",
+        "filter_from": "من",
+        "filter_to": "إلى",
+        "apply": "تطبيق",
+        "empty": "لا يوجد نشاط بعد",
+        "col_time": "الوقت",
+        "col_action": "الإجراء",
+        "col_file": "الملف",
+        "col_actor": "المستخدم"
     },
     "bulk": {
         "move": "نقل",

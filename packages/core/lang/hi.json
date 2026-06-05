@@ -202,7 +202,19 @@
         "uploaded": "{name} अपलोड किया",
         "deleted": "{name} हटाया",
         "moved": "{from} को {to} में स्थानांतरित किया",
-        "copied": "{from} को {to} में कॉपी किया"
+        "copied": "{from} को {to} में कॉपी किया",
+        "title": "गतिविधि",
+        "note": "यह लॉग आपके अपने स्टोरेज में सहेजा जाता है (_fluxfiles/audit.jsonl)।",
+        "filter_action": "क्रिया",
+        "filter_path": "पथ",
+        "filter_from": "से",
+        "filter_to": "तक",
+        "apply": "लागू करें",
+        "empty": "अभी तक कोई गतिविधि नहीं",
+        "col_time": "समय",
+        "col_action": "क्रिया",
+        "col_file": "फ़ाइल",
+        "col_actor": "उपयोगकर्ता"
     },
     "bulk": {
         "move": "स्थानांतरित करें",

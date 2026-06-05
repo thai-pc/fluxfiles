@@ -202,7 +202,19 @@
         "uploaded": "已上传 {name}",
         "deleted": "已删除 {name}",
         "moved": "已将 {from} 移动到 {to}",
-        "copied": "已将 {from} 复制到 {to}"
+        "copied": "已将 {from} 复制到 {to}",
+        "title": "活动",
+        "note": "此日志存储在您自己的存储中 (_fluxfiles/audit.jsonl)。",
+        "filter_action": "操作",
+        "filter_path": "路径",
+        "filter_from": "从",
+        "filter_to": "到",
+        "apply": "应用",
+        "empty": "暂无活动",
+        "col_time": "时间",
+        "col_action": "操作",
+        "col_file": "文件",
+        "col_actor": "用户"
     },
     "bulk": {
         "move": "移动",

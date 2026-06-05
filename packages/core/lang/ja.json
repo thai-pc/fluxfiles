@@ -202,7 +202,19 @@
         "uploaded": "{name} をアップロードしました",
         "deleted": "{name} を削除しました",
         "moved": "{from} を {to} に移動しました",
-        "copied": "{from} を {to} にコピーしました"
+        "copied": "{from} を {to} にコピーしました",
+        "title": "アクティビティ",
+        "note": "このログはご自身のストレージに保存されます (_fluxfiles/audit.jsonl)。",
+        "filter_action": "操作",
+        "filter_path": "パス",
+        "filter_from": "開始",
+        "filter_to": "終了",
+        "apply": "適用",
+        "empty": "アクティビティはまだありません",
+        "col_time": "日時",
+        "col_action": "操作",
+        "col_file": "ファイル",
+        "col_actor": "ユーザー"
     },
     "bulk": {
         "move": "移動",

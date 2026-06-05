@@ -202,7 +202,19 @@
         "uploaded": "Загружен {name}",
         "deleted": "Удалён {name}",
         "moved": "Перемещён {from} в {to}",
-        "copied": "Скопирован {from} в {to}"
+        "copied": "Скопирован {from} в {to}",
+        "title": "Активность",
+        "note": "Этот журнал хранится в вашем хранилище (_fluxfiles/audit.jsonl).",
+        "filter_action": "Действие",
+        "filter_path": "Путь",
+        "filter_from": "С",
+        "filter_to": "По",
+        "apply": "Применить",
+        "empty": "Пока нет активности",
+        "col_time": "Время",
+        "col_action": "Действие",
+        "col_file": "Файл",
+        "col_actor": "Пользователь"
     },
     "bulk": {
         "move": "Переместить",

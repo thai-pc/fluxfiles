@@ -202,7 +202,19 @@
         "uploaded": "อัปโหลด {name}",
         "deleted": "ลบ {name}",
         "moved": "ย้าย {from} ไปที่ {to}",
-        "copied": "คัดลอก {from} ไปที่ {to}"
+        "copied": "คัดลอก {from} ไปที่ {to}",
+        "title": "กิจกรรม",
+        "note": "บันทึกนี้จัดเก็บในพื้นที่จัดเก็บของคุณเอง (_fluxfiles/audit.jsonl)",
+        "filter_action": "การกระทำ",
+        "filter_path": "เส้นทาง",
+        "filter_from": "จาก",
+        "filter_to": "ถึง",
+        "apply": "ใช้",
+        "empty": "ยังไม่มีกิจกรรม",
+        "col_time": "เวลา",
+        "col_action": "การกระทำ",
+        "col_file": "ไฟล์",
+        "col_actor": "ผู้ใช้"
     },
     "bulk": {
         "move": "ย้าย",

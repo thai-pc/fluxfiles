@@ -305,6 +305,24 @@ test('rename locks the file extension: only the base name is editable', async ({
   await expect(cardByName(page, fname)).toHaveCount(0);
 });
 
+test('activity log: only an audit-perm token shows the panel, and it lists entries', async ({ page }) => {
+  // Without the audit perm the Activity button is hidden.
+  await openManager(page, mintToken(['read', 'write', 'delete']));
+  await expect(page.getByRole('button', { name: 'Activity' })).toHaveCount(0);
+
+  // With it, the panel opens and lists the activity we just generated.
+  await openManager(page, mintToken(['read', 'write', 'delete', 'audit']));
+  const folder = `pw-audit-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+  await uploadFile(page, pngFile(`act-${Date.now()}.png`));
+
+  await page.getByRole('button', { name: 'Activity' }).click();
+  const modal = page.locator('.ff-activity-modal');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.ff-activity-table tbody tr').first()).toBeVisible({ timeout: 10_000 });
+});
+
 test('inline crop → "Save as Copy" produces a cropped file in the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);

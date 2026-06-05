@@ -202,7 +202,19 @@
         "uploaded": "{name}을(를) 업로드했습니다",
         "deleted": "{name}을(를) 삭제했습니다",
         "moved": "{from}을(를) {to}(으)로 이동했습니다",
-        "copied": "{from}을(를) {to}(으)로 복사했습니다"
+        "copied": "{from}을(를) {to}(으)로 복사했습니다",
+        "title": "활동",
+        "note": "이 로그는 사용자 저장소에 저장됩니다 (_fluxfiles/audit.jsonl).",
+        "filter_action": "작업",
+        "filter_path": "경로",
+        "filter_from": "시작",
+        "filter_to": "종료",
+        "apply": "적용",
+        "empty": "아직 활동이 없습니다",
+        "col_time": "시간",
+        "col_action": "작업",
+        "col_file": "파일",
+        "col_actor": "사용자"
     },
     "bulk": {
         "move": "이동",

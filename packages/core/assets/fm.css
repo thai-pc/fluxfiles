@@ -1731,6 +1731,85 @@ body {
     user-select: none;
 }
 
+/* Activity (audit) panel */
+.ff-activity-modal {
+    background: var(--ff-bg);
+    border-radius: 12px;
+    width: min(900px, 94vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+.ff-activity-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--ff-border);
+}
+.ff-activity-head h3 { margin: 0; font-size: 16px; }
+.ff-activity-close {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 24px;
+    line-height: 1;
+    color: var(--color-text-tertiary);
+}
+.ff-activity-note {
+    margin: 0;
+    padding: 8px 20px;
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    background: var(--ff-bg-secondary);
+}
+.ff-activity-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--ff-border);
+}
+.ff-activity-filters input {
+    padding: 6px 10px;
+    border: 1px solid var(--ff-border);
+    border-radius: 6px;
+    background: var(--ff-bg);
+    color: var(--color-text-primary);
+    font-size: 13px;
+}
+.ff-activity-filters input[type="text"] { flex: 1 1 140px; min-width: 0; }
+.ff-activity-body { overflow: auto; padding: 8px 20px 20px; }
+.ff-activity-state { padding: 32px; text-align: center; color: var(--color-text-tertiary); }
+.ff-activity-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ff-activity-table th {
+    text-align: start;
+    padding: 8px 10px;
+    position: sticky;
+    top: 0;
+    background: var(--ff-bg);
+    border-bottom: 1px solid var(--ff-border);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+}
+.ff-activity-table td { padding: 8px 10px; border-bottom: 1px solid var(--ff-border); }
+.ff-activity-action {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: color-mix(in srgb, var(--ff-primary) 12%, transparent);
+    color: var(--ff-primary);
+}
+.ff-activity-file {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .ff-new-folder-error {
     font-size: 13px;
     color: var(--color-text-danger);
