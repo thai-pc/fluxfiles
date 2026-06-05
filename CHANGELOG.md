@@ -5,7 +5,8 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.2.4] — 2026-06-05
 
-> Released: core `core-v0.2.4` (Packagist), `@fluxfiles/node` 0.1.1 (npm).
+> Released: core `core-v0.2.4` (Packagist), `@fluxfiles/node` 0.1.1 (npm),
+> WordPress plugin `wordpress-v0.2.1` (bundles core 0.2.4).
 
 ### Security
 
