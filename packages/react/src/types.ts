@@ -2,15 +2,25 @@
 export interface FluxFile {
   path: string;
   basename: string;
+  /** Same as `path` / `basename` — the storage key and file name. */
+  key?: string;
+  name?: string;
   type: 'file' | 'dir';
+  is_dir?: boolean;
+  disk?: string;
   size?: number;
   mime?: string;
+  /** Image dimensions (present for images uploaded through FluxFiles). */
+  width?: number;
+  height?: number;
   modified?: number;
   url?: string;
   title?: string;
   alt_text?: string;
   caption?: string;
   hash?: string;
+  /** Stored metadata: title, alt_text, caption, tags, uploaded_by, mime, width, height. */
+  meta?: Record<string, unknown> | null;
   variants?: Record<string, { url: string; key: string }> | null;
   /** Set when a specific variant was selected via the variant picker. */
   variant?: 'original' | 'thumb' | 'medium' | 'large';

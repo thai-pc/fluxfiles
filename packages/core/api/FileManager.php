@@ -152,6 +152,13 @@ class FileManager
         foreach ($items as &$item) {
             if (($item['type'] ?? '') === 'file') {
                 $item['meta'] = $metaMap[$item['key']] ?? null;
+                if (is_array($item['meta'])) {
+                    foreach (['mime', 'width', 'height'] as $attr) {
+                        if (isset($item['meta'][$attr]) && $item['meta'][$attr] !== null) {
+                            $item[$attr] = $item['meta'][$attr];
+                        }
+                    }
+                }
                 $item['variants'] = $this->getFileVariants($disk, $item['key']);
             }
         }
@@ -246,10 +253,24 @@ class FileManager
             $this->meta->saveHash($disk, $scoped, $hash);
         }
 
-        // Store ownership metadata
-        $this->meta->save($disk, $scoped, [
-            'uploaded_by' => $this->claims->userId,
-        ]);
+        // Store ownership + MIME, and image dimensions (so listings and the
+        // select payload can carry them without re-opening the object).
+        $attrs = ['uploaded_by' => $this->claims->userId];
+        $mime = @mime_content_type($file['tmp_name']);
+        if ($mime === false || $mime === null || $mime === '') {
+            $mime = $file['type'] ?? null;
+        }
+        if ($mime) {
+            $attrs['mime'] = $mime;
+        }
+        if ($this->imageOptimizer->isImage($name)) {
+            $dims = @getimagesize($file['tmp_name']);
+            if (is_array($dims) && isset($dims[0], $dims[1])) {
+                $attrs['width']  = (int) $dims[0];
+                $attrs['height'] = (int) $dims[1];
+            }
+        }
+        $this->meta->save($disk, $scoped, $attrs);
 
         $result = [
             'key'      => $scoped,

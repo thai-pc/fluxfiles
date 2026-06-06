@@ -3,15 +3,23 @@ import type { CSSProperties } from 'vue';
 export interface FluxFile {
   path: string;
   basename: string;
+  key?: string;
+  name?: string;
   type: 'file' | 'dir';
+  is_dir?: boolean;
+  disk?: string;
   size?: number;
   mime?: string;
+  /** Image dimensions (present for images uploaded through FluxFiles). */
+  width?: number;
+  height?: number;
   modified?: number;
   url?: string;
   title?: string;
   alt_text?: string;
   caption?: string;
   hash?: string;
+  meta?: Record<string, unknown> | null;
   variants?: Record<string, { url: string; key: string }> | null;
   variant?: 'original' | 'thumb' | 'medium' | 'large';
 }

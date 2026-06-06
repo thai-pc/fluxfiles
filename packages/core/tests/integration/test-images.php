@@ -252,6 +252,18 @@ test('same name, different content → overwrite + variants regenerated', functi
     assertTrue($fs->fileExists('p.jpg'), 'file present');
 });
 
+test('upload stores width/height/mime → exposed on list items', function () {
+    [$fm] = makeFM();
+    $fm->upload('local', '', fileArray(makeImage(120, 80, 'png'), 'dim.png'));
+    $items = $fm->list('local', '');
+    $row = null;
+    foreach ($items as $it) { if (($it['name'] ?? '') === 'dim.png') { $row = $it; break; } }
+    assertTrue($row !== null, 'dim.png listed');
+    assertEqual(120, $row['width'] ?? null, 'width');
+    assertEqual(80, $row['height'] ?? null, 'height');
+    assertTrue(strpos((string) ($row['mime'] ?? ''), 'image/') === 0, 'mime is image/*');
+});
+
 // ── 3. Collision on rename / move / copy ────────────────────────────
 echo "\n{$yellow}► Collision behaviour (rename/move/copy all guard → 409){$reset}\n";
 

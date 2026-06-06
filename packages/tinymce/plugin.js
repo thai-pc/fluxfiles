@@ -52,19 +52,33 @@
             maxFiles: maxFiles,
             locale: locale,
             onSelect: function (payload) {
-                var files = Array.isArray(payload) ? payload : (payload && payload.files ? payload.files : [payload]);
+                var files = Array.isArray(payload) ? payload : [payload];
 
                 for (var i = 0; i < files.length; i++) {
                     var file = files[i];
-                    if (!file) continue;
+                    if (!file || file.is_dir) continue;
 
                     var url = file.url || '';
-                    var name = file.basename || file.name || file.path || '';
+                    var name = file.name || file.basename || file.path || '';
+                    var meta = file.meta || {};
 
-                    if (/\.(jpe?g|png|gif|webp|svg|bmp|ico)$/i.test(name)) {
-                        editor.insertContent('<img src="' + escHtml(url) + '" alt="' + escHtml(name) + '" />');
+                    // A private-disk URL is presigned and expires — embedding it in
+                    // saved content yields broken links/images later. Use a public
+                    // disk or public_url for editor embedding.
+                    if (/[?&](X-Amz-|Signature=)/.test(url)) {
+                        console.warn('[FluxFiles] Inserting a presigned (expiring) URL — it will break when the URL expires. Use a public disk or public_url for embeds.');
+                    }
+
+                    var isImage = (file.mime && file.mime.indexOf('image/') === 0)
+                        || /\.(jpe?g|png|gif|webp|svg|bmp|ico|avif)$/i.test(name);
+
+                    if (isImage) {
+                        var dim = '';
+                        if (file.width) { dim += ' width="' + parseInt(file.width, 10) + '"'; }
+                        if (file.height) { dim += ' height="' + parseInt(file.height, 10) + '"'; }
+                        editor.insertContent('<img src="' + escHtml(url) + '" alt="' + escHtml(meta.alt_text || name) + '"' + dim + ' />');
                     } else {
-                        editor.insertContent('<a href="' + escHtml(url) + '">' + escHtml(name) + '</a>');
+                        editor.insertContent('<a href="' + escHtml(url) + '">' + escHtml(meta.title || name) + '</a>');
                     }
                 }
             }

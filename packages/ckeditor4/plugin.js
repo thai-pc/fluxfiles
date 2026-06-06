@@ -48,19 +48,34 @@
                         maxFiles: cfg.maxFiles || null,
                         locale: cfg.locale || null,
                         onSelect: function (payload) {
-                            var files = Array.isArray(payload) ? payload : (payload && payload.files ? payload.files : [payload]);
+                            var files = Array.isArray(payload) ? payload : [payload];
+                            var enc = CKEDITOR.tools.htmlEncode;
 
                             for (var i = 0; i < files.length; i++) {
                                 var file = files[i];
-                                if (!file) continue;
+                                if (!file || file.is_dir) continue;
 
                                 var url = file.url || '';
-                                var name = file.basename || file.name || file.path || '';
+                                var name = file.name || file.basename || file.path || '';
+                                var meta = file.meta || {};
 
-                                if (/\.(jpe?g|png|gif|webp|svg|bmp|ico)$/i.test(name)) {
-                                    editor.insertHtml('<img src="' + CKEDITOR.tools.htmlEncode(url) + '" alt="' + CKEDITOR.tools.htmlEncode(name) + '" />');
+                                // A private-disk URL is presigned and expires — embedding it in
+                                // saved content yields broken links/images later. Use a public
+                                // disk or public_url for editor embedding.
+                                if (/[?&](X-Amz-|Signature=)/.test(url)) {
+                                    console.warn('[FluxFiles] Inserting a presigned (expiring) URL — it will break when the URL expires. Use a public disk or public_url for embeds.');
+                                }
+
+                                var isImage = (file.mime && file.mime.indexOf('image/') === 0)
+                                    || /\.(jpe?g|png|gif|webp|svg|bmp|ico|avif)$/i.test(name);
+
+                                if (isImage) {
+                                    var dim = '';
+                                    if (file.width) { dim += ' width="' + parseInt(file.width, 10) + '"'; }
+                                    if (file.height) { dim += ' height="' + parseInt(file.height, 10) + '"'; }
+                                    editor.insertHtml('<img src="' + enc(url) + '" alt="' + enc(meta.alt_text || name) + '"' + dim + ' />');
                                 } else {
-                                    editor.insertHtml('<a href="' + CKEDITOR.tools.htmlEncode(url) + '">' + CKEDITOR.tools.htmlEncode(name) + '</a>');
+                                    editor.insertHtml('<a href="' + enc(url) + '">' + enc(meta.title || name) + '</a>');
                                 }
                             }
                         }

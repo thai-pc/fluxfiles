@@ -64,4 +64,41 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     expect(editor.insertHtml).toHaveBeenCalled();
     expect(editor.insertHtml.mock.calls[0][0]).toContain('<img src="https://cdn/a.png"');
   });
+
+  it('uses meta.alt_text for alt and adds width/height from the payload', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'https://cdn/a.png', name: 'a.png', mime: 'image/png', width: 800, height: 600, meta: { alt_text: 'A sunset' } });
+    const html = editor.insertHtml.mock.calls[0][0];
+    expect(html).toContain('alt="A sunset"');
+    expect(html).toContain('width="800"');
+    expect(html).toContain('height="600"');
+  });
+
+  it('detects images by MIME even without an image extension', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'https://cdn/photo', name: 'photo', mime: 'image/jpeg' });
+    expect(editor.insertHtml.mock.calls[0][0]).toMatch(/^<img /);
+  });
+
+  it('warns when inserting a presigned (expiring) URL', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'https://s3/a.png?X-Amz-Signature=abc', name: 'a.png', mime: 'image/png' });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('skips folders (is_dir)', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ name: 'folder', is_dir: true });
+    expect(editor.insertHtml).not.toHaveBeenCalled();
+  });
 });
