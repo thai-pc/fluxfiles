@@ -5,7 +5,8 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.2.5] — 2026-06-06
 
-> Released: core `core-v0.2.5` (Packagist).
+> Released: core `core-v0.2.5` (Packagist), WordPress plugin
+> `wordpress-v0.2.2` (bundles core 0.2.5).
 
 ### Added
 
