@@ -3,7 +3,9 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.2.5] — unreleased
+## [0.2.5] — 2026-06-06
+
+> Released: core `core-v0.2.5` (Packagist).
 
 ### Added
 
