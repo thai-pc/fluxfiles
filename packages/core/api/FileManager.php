@@ -507,6 +507,7 @@ class FileManager
     {
         $this->assertDisk($disk);
         $this->assertPerm('delete');
+        $this->assertSafeTrashId($id);
         if (!($this->meta instanceof StorageMetadataHandler)) {
             throw new ApiException('Trash is not available for this storage', 400, 'trash_unavailable');
         }
@@ -531,8 +532,10 @@ class FileManager
             return $this->restoreDirectory($disk, $id, $entry, $target, $trashDir, $fs);
         }
 
+        // basename() defends against a tampered manifest (BYOB) carrying a path.
+        $payloadName = basename((string) ($entry['basename'] ?? ''));
         try {
-            $fs->move($trashDir . '/' . $entry['basename'], $target);
+            $fs->move($trashDir . '/' . $payloadName, $target);
         } catch (\Throwable $e) {
             throw new ApiException('Restore failed: ' . $e->getMessage(), 500, 'restore_failed');
         }
@@ -566,7 +569,7 @@ class FileManager
         } catch (\Throwable $e) { /* best effort */ }
 
         foreach (($entry['files'] ?? []) as $f) {
-            $rel = (string) ($f['rel'] ?? '');
+            $rel = $this->safeRel((string) ($f['rel'] ?? '')); // strip any traversal
             if ($rel === '') {
                 continue;
             }
@@ -625,6 +628,7 @@ class FileManager
     {
         $this->assertDisk($disk);
         $this->assertPerm('delete');
+        $this->assertSafeTrashId($id);
         if (!($this->meta instanceof StorageMetadataHandler)) {
             throw new ApiException('Trash is not available for this storage', 400, 'trash_unavailable');
         }
@@ -660,6 +664,32 @@ class FileManager
             $n++;
         }
         return ['purged' => $n];
+    }
+
+    /**
+     * Reject a trash id that could escape the `_fluxfiles/trash/` namespace when
+     * used in a path. Ids are hex tokens; a tampered index (BYOB) can't turn an
+     * id into a traversal payload.
+     */
+    private function assertSafeTrashId(string $id): void
+    {
+        if ($id === '' || !preg_match('/^[A-Za-z0-9_-]+$/', $id)) {
+            throw new ApiException('Invalid trash id', 400, 'invalid_trash_id');
+        }
+    }
+
+    /** Strip any path-traversal from a relative path read back from a manifest. */
+    private function safeRel(string $rel): string
+    {
+        $rel = str_replace('\\', '/', $rel);
+        $parts = [];
+        foreach (explode('/', $rel) as $p) {
+            if ($p === '' || $p === '.' || $p === '..') {
+                continue;
+            }
+            $parts[] = $p;
+        }
+        return implode('/', $parts);
     }
 
     /** A trash entry is visible when its origin is in scope and (owner-only) ours. */
