@@ -121,15 +121,34 @@ test('trash is scoped: a tenant cannot see another tenant\'s trash', function ()
     assertEqual(0, count($b->listTrash('local')), 'other tenant sees nothing');
 });
 
-test('trashing a folder is rejected (files-only in P0)', function () {
-    [$fm] = makeFM();
-    $fm->mkdir('local', 'folder1');
-    try {
-        $fm->trash('local', 'folder1');
-        throw new \RuntimeException('should have thrown');
-    } catch (ApiException $e) {
-        assertEqual('trash_dir_unsupported', $e->getErrorCode(), 'expected trash_dir_unsupported');
-    }
+test('trash a folder → whole subtree moves to trash and restore brings it back', function () {
+    [$fm, $fs] = makeFM();
+    $fm->mkdir('local', 'docs');
+    upload($fm, 'docs', 'one.txt', 'c1');
+    upload($fm, 'docs', 'two.txt', 'c2');
+
+    $r = $fm->trash('local', 'docs');
+    assertTrue($r['trashed'] === true, 'trashed');
+    assertTrue(!$fs->fileExists('docs/one.txt') && !$fs->fileExists('docs/two.txt'), 'subtree files gone');
+    $list = $fm->listTrash('local');
+    assertEqual(1, count($list), 'one trash entry (the folder)');
+    assertTrue($list[0]['is_dir'] === true, 'entry marked is_dir');
+    assertEqual('docs', $list[0]['name'], 'folder name');
+
+    $fm->restore('local', $r['trash_id']);
+    assertTrue($fs->fileExists('docs/one.txt') && $fs->fileExists('docs/two.txt'), 'subtree restored');
+    assertEqual('c1', $fs->read('docs/one.txt'), 'content intact');
+    assertEqual(0, count($fm->listTrash('local')), 'trash empty after restore');
+});
+
+test('trashed folder is searchable-clean: restore re-tracks the dir index', function () {
+    [$fm, $fs, $root, $meta] = makeFM();
+    $fm->mkdir('local', 'album');
+    upload($fm, 'album', 'p.txt');
+    $id = $fm->trash('local', 'album')['trash_id'];
+    assertEqual(0, count($meta->searchFolders('local', 'album')), 'folder gone from dir index while trashed');
+    $fm->restore('local', $id);
+    assertTrue(count($meta->searchFolders('local', 'album')) >= 1, 'folder back in dir index after restore');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

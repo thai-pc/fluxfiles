@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Confirmação",
-        "confirm_file": "Excluir permanentemente \"{name}\"? Esta ação não pode ser desfeita.",
-        "confirm_bulk": "Excluir {count} item(ns)? Esta ação não pode ser desfeita.",
+        "confirm_file": "Mover \"{name}\" para a lixeira?",
+        "confirm_bulk": "Mover {count} item(ns) para a lixeira?",
         "deleted": "Excluído",
-        "confirm_folder": "Excluir permanentemente a pasta \"{name}\" e todos os arquivos dentro? Esta ação não pode ser desfeita.",
-        "confirm_bulk_folders": "Excluir permanentemente {count} item(ns) ({folders} pasta(s) com todo o conteúdo)? Esta ação não pode ser desfeita."
+        "confirm_folder": "Mover a pasta \"{name}\" e todo o seu conteúdo para a lixeira?",
+        "confirm_bulk_folders": "Mover {count} itens ({folders} pasta(s) com conteúdo) para a lixeira?"
     },
     "search": {
         "placeholder": "Pesquisar por nome, título, texto alternativo...",

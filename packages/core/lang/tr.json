@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Onay",
-        "confirm_file": "\"{name}\" kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
-        "confirm_bulk": "{count} öğe silinsin mi? Bu işlem geri alınamaz.",
+        "confirm_file": "\"{name}\" çöp kutusuna taşınsın mı?",
+        "confirm_bulk": "{count} öğe çöp kutusuna taşınsın mı?",
         "deleted": "Silindi",
-        "confirm_folder": "\"{name}\" klasörü ve içindeki tüm dosyalar kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
-        "confirm_bulk_folders": "{count} öğe ({folders} klasör ve tüm içerikleri) kalıcı olarak silinsin mi? Bu işlem geri alınamaz."
+        "confirm_folder": "\"{name}\" klasörünü ve tüm içeriğini çöp kutusuna taşı?",
+        "confirm_bulk_folders": "{count} öğeyi ({folders} klasör ve içeriği) çöp kutusuna taşı?"
     },
     "search": {
         "placeholder": "Ad, başlık, alternatif metin ile ara...",

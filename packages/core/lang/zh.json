@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "确认",
-        "confirm_file": "永久删除 \"{name}\"？此操作无法撤销。",
-        "confirm_bulk": "删除 {count} 个项目？此操作无法撤销。",
+        "confirm_file": "将\"{name}\"移至回收站？",
+        "confirm_bulk": "将 {count} 个项目移至回收站？",
         "deleted": "已删除",
-        "confirm_folder": "永久删除文件夹 \"{name}\" 及其所有文件？此操作无法撤销。",
-        "confirm_bulk_folders": "永久删除 {count} 个项目（{folders} 个文件夹及其所有内容）？此操作无法撤销。"
+        "confirm_folder": "将文件夹\"{name}\"及其全部内容移至回收站？",
+        "confirm_bulk_folders": "将 {count} 个项目（{folders} 个文件夹及其内容）移至回收站？"
     },
     "search": {
         "placeholder": "按名称、标题、替代文本搜索...",

@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "確認",
-        "confirm_file": "\"{name}\" を完全に削除しますか？この操作は元に戻せません。",
-        "confirm_bulk": "{count} 件を削除しますか？この操作は取り消せません。",
+        "confirm_file": "「{name}」をゴミ箱に移動しますか？",
+        "confirm_bulk": "{count} 件をゴミ箱に移動しますか？",
         "deleted": "削除しました",
-        "confirm_folder": "フォルダ \"{name}\" とすべてのファイルを完全に削除しますか？この操作は元に戻せません。",
-        "confirm_bulk_folders": "{count} 個のアイテム（{folders} 個のフォルダとその中身すべて）を完全に削除しますか？この操作は元に戻せません。"
+        "confirm_folder": "フォルダー「{name}」とその中身をすべてゴミ箱に移動しますか？",
+        "confirm_bulk_folders": "{count} 件（{folders} 個のフォルダーとその中身）をゴミ箱に移動しますか？"
     },
     "search": {
         "placeholder": "名前、タイトル、代替テキストで検索...",

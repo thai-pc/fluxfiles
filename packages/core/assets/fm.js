@@ -1304,19 +1304,11 @@ function fluxFilesApp() {
             this.startBulk('Deleting', this.selected.length);
 
             var errors = 0;
-            var trashed = 0;
             for (const file of [...this.selected]) {
                 try {
-                    if (file.type === 'dir') {
-                        // Folders are deleted permanently (trash is files-only in P0).
-                        await this.api('DELETE', '/api/fm/delete', { disk: this.currentDisk, path: file.key });
-                        this.postMessage('FM_EVENT', { event: 'delete:done', key: file.key });
-                    } else {
-                        // Files are soft-deleted to trash.
-                        await this.api('POST', '/api/fm/trash', { disk: this.currentDisk, path: file.key });
-                        trashed++;
-                        this.postMessage('FM_EVENT', { event: 'trash:done', key: file.key });
-                    }
+                    // Soft-delete files and folders to trash (restorable).
+                    await this.api('POST', '/api/fm/trash', { disk: this.currentDisk, path: file.key });
+                    this.postMessage('FM_EVENT', { event: 'trash:done', key: file.key });
                 } catch (err) {
                     errors++;
                     console.error('FluxFiles: Delete failed', file.key, err);
@@ -1327,7 +1319,7 @@ function fluxFilesApp() {
 
             this.endBulk();
             if (errors === 0) {
-                this.showToast(this.t(trashed > 0 ? 'trash.moved' : 'delete.deleted'), 'success');
+                this.showToast(this.t('trash.moved'), 'success');
             }
             this.selected = [];
             this.detailFile = null;

@@ -355,9 +355,9 @@ class FileManager
     }
 
     /**
-     * Soft-delete a FILE: move it (and its variants) into the reserved trash
-     * namespace, snapshot its metadata, and record a restorable entry. Folders
-     * are not supported in P0 — use delete() for permanent removal.
+     * Soft-delete a file or directory: move it (and image variants) into the
+     * reserved trash namespace, snapshot metadata, and record a restorable
+     * entry. Directories move the whole subtree (variants included).
      */
     public function trash(string $disk, string $path): array
     {
@@ -375,16 +375,18 @@ class FileManager
         $fs = $this->disks->disk($disk);
         $isDir = false;
         try { $isDir = $fs->directoryExists($scoped); } catch (\Throwable $e) { /* not a dir */ }
+
+        $id       = bin2hex(random_bytes(8));
+        $trashDir = '_fluxfiles/trash/' . $id;
+
         if ($isDir) {
-            throw new ApiException('Folders cannot be moved to trash — delete them permanently instead', 400, 'trash_dir_unsupported');
+            return $this->trashDirectory($disk, $scoped, $id, $trashDir, $fs);
         }
         if (!$fs->fileExists($scoped)) {
             throw new ApiException('File not found', 404, 'not_found');
         }
 
-        $id       = bin2hex(random_bytes(8));
         $basename = basename($scoped);
-        $trashDir = '_fluxfiles/trash/' . $id;
         $size     = 0;
         try { $size = (int) $fs->fileSize($scoped); } catch (\Throwable $e) { /* best effort */ }
 
@@ -424,7 +426,58 @@ class FileManager
         return ['trashed' => true, 'trash_id' => $id];
     }
 
-    /** Restore a trashed file to its original key (or $newPath). */
+    /** Soft-delete a whole directory subtree (variants included) into trash. */
+    private function trashDirectory(string $disk, string $scoped, string $id, string $trashDir, $fs): array
+    {
+        $this->assertOwnsTree($disk, $scoped);
+
+        // Collect paths first so moving files doesn't disturb the recursive listing.
+        $paths = [];
+        try {
+            foreach ($fs->listContents($scoped, true) as $item) {
+                if ($item->isFile()) {
+                    $paths[] = $item->path();
+                }
+            }
+        } catch (\Throwable $e) {
+            throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
+        }
+
+        $prefix = rtrim($scoped, '/') . '/';
+        $files  = [];
+        $total  = 0;
+        foreach ($paths as $p) {
+            $rel = substr($p, strlen($prefix));
+            // Snapshot metadata for real files (variant files have none).
+            $meta = (strpos($rel, '_variants/') === false) ? ($this->meta->get($disk, $p) ?: []) : [];
+            try { $total += (int) $fs->fileSize($p); } catch (\Throwable $e) { /* best effort */ }
+            try {
+                $fs->move($p, $trashDir . '/payload/' . $rel);
+            } catch (\Throwable $e) {
+                throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
+            }
+            $files[] = ['rel' => $rel, 'meta' => $meta];
+        }
+
+        try { $fs->deleteDirectory($scoped); } catch (\Throwable $e) { /* best effort */ }
+        $this->meta->deleteChildren($disk, $scoped);
+        $this->meta->deleteDirPrefix($disk, $scoped);
+
+        $this->meta->addTrash($disk, $id, [
+            'original_key' => $scoped,
+            'disk'         => $disk,
+            'basename'     => basename($scoped),
+            'is_dir'       => true,
+            'size'         => $total,
+            'deleted_at'   => time(),
+            'deleted_by'   => $this->claims->userId,
+            'files'        => $files,
+        ]);
+
+        return ['trashed' => true, 'trash_id' => $id];
+    }
+
+    /** Restore a trashed file or directory to its original key (or $newPath). */
     public function restore(string $disk, string $id, ?string $newPath = null): array
     {
         $this->assertDisk($disk);
@@ -448,6 +501,11 @@ class FileManager
         $this->assertTargetAvailable($fs, $target);
 
         $trashDir = '_fluxfiles/trash/' . $id;
+
+        if (!empty($entry['is_dir'])) {
+            return $this->restoreDirectory($disk, $id, $entry, $target, $trashDir, $fs);
+        }
+
         try {
             $fs->move($trashDir . '/' . $entry['basename'], $target);
         } catch (\Throwable $e) {
@@ -474,6 +532,42 @@ class FileManager
         return ['restored' => true, 'key' => $target];
     }
 
+    /** Restore a trashed directory subtree to $target. */
+    private function restoreDirectory(string $disk, string $id, array $entry, string $target, string $trashDir, $fs): array
+    {
+        $target = rtrim($target, '/');
+        try {
+            $fs->createDirectory($target); // handles empty folders too
+        } catch (\Throwable $e) { /* best effort */ }
+
+        foreach (($entry['files'] ?? []) as $f) {
+            $rel = (string) ($f['rel'] ?? '');
+            if ($rel === '') {
+                continue;
+            }
+            $src = $trashDir . '/payload/' . $rel;
+            $dst = $target . '/' . $rel;
+            try {
+                if ($fs->fileExists($src)) {
+                    $fs->move($src, $dst);
+                }
+            } catch (\Throwable $e) { /* best effort */ }
+            if (!empty($f['meta'])) {
+                $this->meta->save($disk, $dst, $f['meta']);
+            }
+            // Rebuild the folder tree in the dirs index for real files.
+            if (strpos($rel, '_variants/') === false) {
+                $this->meta->trackParents($disk, $dst);
+            }
+        }
+        $this->meta->trackDir($disk, $target);
+
+        try { $fs->deleteDirectory($trashDir); } catch (\Throwable $e) { /* best effort */ }
+        $this->meta->removeTrash($disk, $id);
+
+        return ['restored' => true, 'key' => $target];
+    }
+
     /** List trash entries the caller may see (scoped to prefix + owner). */
     public function listTrash(string $disk): array
     {
@@ -491,6 +585,7 @@ class FileManager
                 'trash_id'     => $id,
                 'name'         => $e['basename'] ?? basename((string) ($e['original_key'] ?? '')),
                 'original_key' => $e['original_key'] ?? '',
+                'is_dir'       => !empty($e['is_dir']),
                 'size'         => $e['size'] ?? 0,
                 'deleted_at'   => $e['deleted_at'] ?? 0,
                 'deleted_by'   => $e['deleted_by'] ?? '',

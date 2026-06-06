@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Confirmation",
-        "confirm_file": "Supprimer définitivement \"{name}\" ? Cette action est irréversible.",
-        "confirm_bulk": "Supprimer {count} élément(s) ? Cette action est irréversible.",
+        "confirm_file": "Déplacer « {name} » vers la corbeille ?",
+        "confirm_bulk": "Déplacer {count} élément(s) vers la corbeille ?",
         "deleted": "Supprimé",
-        "confirm_folder": "Supprimer définitivement le dossier \"{name}\" et tout son contenu ? Cette action est irréversible.",
-        "confirm_bulk_folders": "Supprimer définitivement {count} élément(s) ({folders} dossier(s) avec tout leur contenu) ? Cette action est irréversible."
+        "confirm_folder": "Déplacer le dossier « {name} » et tout son contenu vers la corbeille ?",
+        "confirm_bulk_folders": "Déplacer {count} éléments ({folders} dossier(s) avec contenu) vers la corbeille ?"
     },
     "search": {
         "placeholder": "Rechercher par nom, titre, texte alternatif...",

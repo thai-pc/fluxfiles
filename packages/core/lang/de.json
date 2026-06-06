@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Bestätigung",
-        "confirm_file": "\"{name}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
-        "confirm_bulk": "{count} Element(e) löschen? Dies kann nicht rückgängig gemacht werden.",
+        "confirm_file": "„{name}“ in den Papierkorb verschieben?",
+        "confirm_bulk": "{count} Element(e) in den Papierkorb verschieben?",
         "deleted": "Gelöscht",
-        "confirm_folder": "Ordner \"{name}\" und alle Dateien darin endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
-        "confirm_bulk_folders": "{count} Element(e) ({folders} Ordner mit gesamtem Inhalt) endgültig löschen? Dies kann nicht rückgängig gemacht werden."
+        "confirm_folder": "Ordner „{name}“ und seinen gesamten Inhalt in den Papierkorb verschieben?",
+        "confirm_bulk_folders": "{count} Elemente ({folders} Ordner mit Inhalt) in den Papierkorb verschieben?"
     },
     "search": {
         "placeholder": "Nach Name, Titel, Alt-Text suchen...",

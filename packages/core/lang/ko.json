@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "확인",
-        "confirm_file": "\"{name}\"을(를) 영구 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
-        "confirm_bulk": "{count}개 항목을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+        "confirm_file": "\"{name}\"을(를) 휴지통으로 이동할까요?",
+        "confirm_bulk": "{count}개 항목을 휴지통으로 이동할까요?",
         "deleted": "삭제됨",
-        "confirm_folder": "폴더 \"{name}\"과(와) 내부 모든 파일을 영구 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
-        "confirm_bulk_folders": "{count}개 항목({folders}개 폴더 및 모든 내용)을 영구 삭제하시겠습니까? 이 작업은 취소할 수 없습니다."
+        "confirm_folder": "폴더 \"{name}\"와(과) 모든 내용을 휴지통으로 이동할까요?",
+        "confirm_bulk_folders": "{count}개 항목({folders}개 폴더 및 내용)을 휴지통으로 이동할까요?"
     },
     "search": {
         "placeholder": "이름, 제목, 대체 텍스트로 검색...",

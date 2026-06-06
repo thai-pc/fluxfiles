@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Conferma",
-        "confirm_file": "Eliminare definitivamente \"{name}\"? Questa azione non può essere annullata.",
-        "confirm_bulk": "Eliminare {count} elementi? Questa azione non può essere annullata.",
+        "confirm_file": "Spostare \"{name}\" nel cestino?",
+        "confirm_bulk": "Spostare {count} elemento/i nel cestino?",
         "deleted": "Eliminato",
-        "confirm_folder": "Eliminare definitivamente la cartella \"{name}\" e tutti i file al suo interno? Questa azione non può essere annullata.",
-        "confirm_bulk_folders": "Eliminare definitivamente {count} elemento(i) ({folders} cartella(e) con tutto il contenuto)? Questa azione non può essere annullata."
+        "confirm_folder": "Spostare la cartella \"{name}\" e tutto il suo contenuto nel cestino?",
+        "confirm_bulk_folders": "Spostare {count} elementi ({folders} cartella/e con contenuto) nel cestino?"
     },
     "search": {
         "placeholder": "Cerca per nome, titolo, testo alternativo...",

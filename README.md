@@ -757,8 +757,8 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/list?disk=&path=` | — | List directory contents |
 | `POST` | `/upload` | `multipart: disk, path, file, force_upload?` | Upload file |
 | `DELETE` | `/delete` | `{disk, path}` | **Permanently** delete a file or directory (recursive) |
-| `POST` | `/trash` | `{disk, path}` | Soft-delete a **file** to trash (move-based, restorable). Folders not supported — use `/delete`. |
-| `POST` | `/trash/restore` | `{disk, trash_id, path?}` | Restore a trashed file (→ 409 if the target key is occupied) |
+| `POST` | `/trash` | `{disk, path}` | Soft-delete a **file or folder** to trash (move-based, restorable; folders move the whole subtree) |
+| `POST` | `/trash/restore` | `{disk, trash_id, path?}` | Restore a trashed file/folder (→ 409 if the target is occupied) |
 | `GET` | `/trash/list?disk=` | — | List trash entries (scoped to the token's prefix/owner) |
 | `POST` | `/trash/purge` | `{disk, trash_id}` | Permanently delete one trash item |
 | `POST` | `/trash/empty` | `{disk}` | Permanently delete all visible trash items |

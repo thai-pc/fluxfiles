@@ -16,7 +16,7 @@ SDK and a Node server-side token SDK.
 Capabilities: Local / AWS S3 / Cloudflare R2 (and any S3-compatible store) via
 Flysystem v3; JWT auth with rich claims (perms, disk, path prefix, quota,
 owner-only, allowed extensions, BYOB); file ops + cross-disk copy/move; file
-soft-delete (trash/restore, storage-resident); metadata that travels with
+soft-delete of files & folders (trash/restore, storage-resident); metadata that travels with
 storage; image WebP variants + crop; optional AI tagging;
 i18n (16 locales, RTL); chunked S3 uploads; rate limiting; audit log; Bucket
 Doctor diagnostics.
