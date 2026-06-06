@@ -151,5 +151,15 @@ test('trashed folder is searchable-clean: restore re-tracks the dir index', func
     assertTrue(count($meta->searchFolders('local', 'album')) >= 1, 'folder back in dir index after restore');
 });
 
+test('restore/purge reject a path-traversal trash id', function () {
+    [$fm] = makeFM();
+    foreach (['../../etc', 'a/b', '..', ''] as $bad) {
+        try { $fm->restore('local', $bad); throw new \RuntimeException('restore should reject'); }
+        catch (ApiException $e) { assertTrue(in_array($e->getErrorCode(), ['invalid_trash_id', 'not_found'], true), 'restore guard'); }
+        try { $fm->purgeTrash('local', $bad); throw new \RuntimeException('purge should reject'); }
+        catch (ApiException $e) { assertTrue(in_array($e->getErrorCode(), ['invalid_trash_id', 'not_found'], true), 'purge guard'); }
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
