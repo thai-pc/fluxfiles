@@ -313,9 +313,16 @@ function openFilePicker() {
         container: '#my-div',         // CSS selector — omit for modal overlay
 
         onSelect(file) {
-            // file = { url, key, name, path, size, disk, meta, variants }
-            console.log('Selected:', file.url);
-            document.getElementById('image').src = file.url;
+            // file = { url, permanent_url, key, name, path, size, disk,
+            //          mime, width, height, meta, variants }
+            // For embedding in SAVED content, prefer permanent_url — `url` is a
+            // short-lived presigned URL on private disks and will expire.
+            const src = file.permanent_url || file.url;
+            const img = document.getElementById('image');
+            img.src = src;
+            img.alt = (file.meta && file.meta.alt_text) || file.name;
+            if (file.width)  img.width  = file.width;
+            if (file.height) img.height = file.height;
         },
         onClose() {
             console.log('File picker closed');
@@ -331,6 +338,28 @@ function openFilePicker() {
 }
 </script>
 ```
+
+#### Embedding selected files (`permanent_url` vs `url`)
+
+The select payload carries two URLs:
+
+- **`url`** — ready to display immediately. On a **private** disk it's a
+  short-lived **presigned** URL (expires, ≤ 24h). Fine for previewing right after
+  selection; **do not save it** into content.
+- **`permanent_url`** — a stable, non-expiring URL for **embedding in saved
+  content** (CMS pages, editor HTML, DB records). Present for local disks, public
+  disks, and any disk with a `public_url` (CDN / custom domain). It is **`null`**
+  for a private bucket with no public domain — such a disk has no permanent URL.
+
+```js
+// Embedding into content you persist:
+const embedSrc = file.permanent_url || file.url; // prefer the stable one
+```
+
+> To make `permanent_url` available for a private S3/R2 bucket, serve it behind a
+> CDN / custom domain and set `public_url` on the disk config. The CKEditor 4 and
+> TinyMCE plugins already prefer `permanent_url` automatically and warn when they
+> have to fall back to a presigned URL.
 
 ### Uploading multiple files
 

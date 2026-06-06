@@ -67,7 +67,10 @@ function App() {
                 disk="local"
                 locale="en"
                 onSelect={(file) => {
-                    console.log(file.url, file.path);
+                    // For saved content, prefer permanent_url (url is presigned/
+                    // expiring on private disks). file also has mime/width/height.
+                    const src = file.permanent_url || file.url;
+                    console.log(src, file.path);
                     setOpen(false);
                 }}
                 onClose={() => setOpen(false)}
