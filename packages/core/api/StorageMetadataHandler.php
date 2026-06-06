@@ -73,6 +73,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 'caption' => $data['caption'] ?? $existing['caption'] ?? null,
                 'tags' => $data['tags'] ?? $existing['tags'] ?? null,
                 'uploaded_by' => $data['uploaded_by'] ?? $existing['uploaded_by'] ?? null,
+                'mime' => $data['mime'] ?? $existing['mime'] ?? null,
+                'width' => $data['width'] ?? $existing['width'] ?? null,
+                'height' => $data['height'] ?? $existing['height'] ?? null,
             ]);
 
             if (isset($data['file_hash'])) {
@@ -790,6 +793,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 'caption' => $data['caption'] ?? $existing['caption'] ?? null,
                 'tags' => $data['tags'] ?? $existing['tags'] ?? null,
                 'uploaded_by' => $data['uploaded_by'] ?? $existing['uploaded_by'] ?? null,
+                'mime' => $data['mime'] ?? $existing['mime'] ?? null,
+                'width' => $data['width'] ?? $existing['width'] ?? null,
+                'height' => $data['height'] ?? $existing['height'] ?? null,
             ]);
             $this->saveIndex($disk, $index);
         } finally {

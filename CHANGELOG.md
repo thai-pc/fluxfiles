@@ -3,6 +3,33 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.6] — 2026-06-06
+
+> Released: core `core-v0.2.6` (Packagist); npm `fluxfiles` (SDK) `sdk-v0.2.1`,
+> `@fluxfiles/react` `react-v0.2.2`, `@fluxfiles/vue` `vue-v0.2.1`,
+> `@fluxfiles/ckeditor4` `ckeditor4-v0.2.3`, `@fluxfiles/tinymce` `tinymce-v0.2.2`.
+
+### Added
+
+- **`width` / `height` / `mime` on file listings and the select payload.** Image
+  dimensions and MIME type are captured at upload and stored in metadata, so
+  listings and the `FM_SELECT` payload expose them directly (no extra `/meta`
+  call). Reflected in the React / Vue / SDK `FluxFile` types.
+- **`permanent_url` on file listings and the select payload.** A stable,
+  non-expiring URL for embedding (local disks, public disks, or any disk with a
+  `public_url`); `null` for a private bucket with no public domain. The editor
+  plugins prefer it over the presigned `url`, so saved content doesn't embed an
+  expiring link.
+
+### Fixed
+
+- **CKEditor 4 & TinyMCE plugins now use the rich callback data.** Inserted
+  images use `meta.alt_text` for `alt` (was the filename), detect images by MIME
+  (not just extension), and set `width`/`height` to avoid layout shift. Folders
+  are skipped. **They also warn when inserting a presigned (expiring) URL** — a
+  private-disk URL embedded in saved editor content breaks once it expires; use a
+  public disk or `public_url` for editor embedding.
+
 ## [0.2.5] — 2026-06-06
 
 > Released: core `core-v0.2.5` (Packagist), WordPress plugin

@@ -56,4 +56,54 @@ describe('TinyMCE FluxFiles plugin', () => {
     expect(editor.insertContent).toHaveBeenCalled();
     expect(editor.insertContent.mock.calls[0][0]).toContain('<img src="https://cdn/a.png"');
   });
+
+  it('uses meta.alt_text for alt and adds width/height from the payload', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'https://cdn/a.png', name: 'a.png', mime: 'image/png', width: 800, height: 600, meta: { alt_text: 'A sunset' } });
+    const html = editor.insertContent.mock.calls[0][0];
+    expect(html).toContain('alt="A sunset"');
+    expect(html).toContain('width="800"');
+    expect(html).toContain('height="600"');
+  });
+
+  it('detects images by MIME even without an image extension', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'https://cdn/photo', name: 'photo', mime: 'image/jpeg' });
+    expect(editor.insertContent.mock.calls[0][0]).toMatch(/^<img /);
+  });
+
+  it('warns when inserting a presigned (expiring) URL', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'https://s3/a.png?X-Amz-Signature=abc', name: 'a.png', mime: 'image/png' });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('skips folders (is_dir)', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ name: 'folder', is_dir: true });
+    expect(editor.insertContent).not.toHaveBeenCalled();
+  });
+
+  it('prefers permanent_url over a presigned url (and does not warn)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'https://s3/a.png?X-Amz-Signature=x', permanent_url: 'https://cdn/a.png', name: 'a.png', mime: 'image/png' });
+    const html = editor.insertContent.mock.calls[0][0];
+    expect(html).toContain('https://cdn/a.png');
+    expect(html).not.toContain('X-Amz-');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });

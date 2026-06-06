@@ -31,8 +31,13 @@ interface FluxFile {
     key?: string;
     name?: string;
     url?: string;
+    /** Stable, non-expiring URL for embedding (public disk / public_url). */
+    permanent_url?: string;
     size?: number;
     mime?: string;
+    /** Image dimensions (present for images uploaded through FluxFiles). */
+    width?: number;
+    height?: number;
     disk?: string;
     is_dir?: boolean;
     modified?: string;
@@ -41,6 +46,10 @@ interface FluxFile {
         alt_text?: string | null;
         caption?: string | null;
         tags?: string | null;
+        mime?: string | null;
+        width?: number | null;
+        height?: number | null;
+        uploaded_by?: string | null;
     } | null;
     /** Image variant URLs (thumb/medium/large WebP). */
     variants?: Record<string, { url: string; key: string }> | null;

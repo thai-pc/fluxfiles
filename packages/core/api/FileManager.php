@@ -152,6 +152,17 @@ class FileManager
         foreach ($items as &$item) {
             if (($item['type'] ?? '') === 'file') {
                 $item['meta'] = $metaMap[$item['key']] ?? null;
+                $perm = $this->permanentUrl($disk, $item['key']);
+                if ($perm !== null) {
+                    $item['permanent_url'] = $perm;
+                }
+                if (is_array($item['meta'])) {
+                    foreach (['mime', 'width', 'height'] as $attr) {
+                        if (isset($item['meta'][$attr]) && $item['meta'][$attr] !== null) {
+                            $item[$attr] = $item['meta'][$attr];
+                        }
+                    }
+                }
                 $item['variants'] = $this->getFileVariants($disk, $item['key']);
             }
         }
@@ -246,10 +257,24 @@ class FileManager
             $this->meta->saveHash($disk, $scoped, $hash);
         }
 
-        // Store ownership metadata
-        $this->meta->save($disk, $scoped, [
-            'uploaded_by' => $this->claims->userId,
-        ]);
+        // Store ownership + MIME, and image dimensions (so listings and the
+        // select payload can carry them without re-opening the object).
+        $attrs = ['uploaded_by' => $this->claims->userId];
+        $mime = @mime_content_type($file['tmp_name']);
+        if ($mime === false || $mime === null || $mime === '') {
+            $mime = $file['type'] ?? null;
+        }
+        if ($mime) {
+            $attrs['mime'] = $mime;
+        }
+        if ($this->imageOptimizer->isImage($name)) {
+            $dims = @getimagesize($file['tmp_name']);
+            if (is_array($dims) && isset($dims[0], $dims[1])) {
+                $attrs['width']  = (int) $dims[0];
+                $attrs['height'] = (int) $dims[1];
+            }
+        }
+        $this->meta->save($disk, $scoped, $attrs);
 
         $result = [
             'key'      => $scoped,
@@ -1343,6 +1368,37 @@ class FileManager
         }
 
         return !empty($variants) ? $variants : null;
+    }
+
+    /**
+     * A stable, non-expiring URL for embedding (editors, saved content), or null
+     * when none exists. Local disks and public disks / disks with a `public_url`
+     * (CDN / custom domain) have one; a private bucket without a public domain
+     * does not (its only URL is a short-lived presigned one).
+     */
+    private function permanentUrl(string $disk, string $path): ?string
+    {
+        $config = $this->disks->config($disk);
+
+        if (($config['driver'] ?? '') === 'local') {
+            return rtrim($config['url'] ?? '/storage/uploads', '/') . '/' . $path;
+        }
+
+        $publicUrl = rtrim($config['public_url'] ?? '', '/');
+        if ($publicUrl !== '') {
+            return $publicUrl . '/' . $path;
+        }
+
+        if (($config['visibility'] ?? 'private') === 'public') {
+            $bucket = $config['bucket'] ?? '';
+            if (!empty($config['endpoint'])) {
+                return rtrim($config['endpoint'], '/') . '/' . $bucket . '/' . $path;
+            }
+            $region = $config['region'] ?? 'us-east-1';
+            return "https://{$bucket}.s3.{$region}.amazonaws.com/{$path}";
+        }
+
+        return null;
     }
 
     private function fileUrl(string $disk, string $path): string

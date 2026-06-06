@@ -49,8 +49,14 @@ CKEDITOR.replace('editor', {
 
 - Click the **FluxFiles** toolbar button (folder icon) in the **Insert** toolbar group.
 - The FluxFiles picker opens as a modal overlay.
-- Select a file — images are inserted as `<img>`, other files as `<a>` links.
+- Select a file — images are inserted as `<img>` (with `alt` from the file's
+  metadata and `width`/`height` when known), other files as `<a>` links.
 - The modal closes automatically after selection.
+
+> **Embedding & expiring URLs.** On a **private** disk the file URL is a
+> *presigned* URL that expires (≤ 24h) — embedding it in saved content will break
+> once it expires (the plugin logs a `console.warn`). For editor embeds use a
+> **public** disk or a `public_url` so the inserted URL is permanent.
 
 ## Configuration
 
