@@ -270,5 +270,19 @@
         "cors_snippet": "CORS yapılandırması",
         "iam_snippet": "IAM politikası",
         "copy": "Kopyala"
+    },
+    "trash": {
+        "title": "Çöp kutusu",
+        "note": "Silinen dosyalar burada saklanır ve geri yüklenebilir. Kendi depolama alanınızda saklanır.",
+        "empty": "Çöp kutusunu boşalt",
+        "empty_state": "Çöp kutusu boş",
+        "col_name": "Ad",
+        "col_deleted": "Silindi",
+        "restore": "Geri yükle",
+        "delete_forever": "Kalıcı olarak sil",
+        "moved": "Çöp kutusuna taşındı",
+        "restored": "Geri yüklendi",
+        "purged": "Kalıcı olarak silindi",
+        "emptied": "Çöp kutusu boşaltıldı"
     }
 }

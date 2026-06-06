@@ -270,5 +270,19 @@
         "cors_snippet": "Configuration CORS",
         "iam_snippet": "Politique IAM",
         "copy": "Copier"
+    },
+    "trash": {
+        "title": "Corbeille",
+        "note": "Les fichiers supprimés sont conservés ici et peuvent être restaurés. Stockés dans votre propre stockage.",
+        "empty": "Vider la corbeille",
+        "empty_state": "La corbeille est vide",
+        "col_name": "Nom",
+        "col_deleted": "Supprimé",
+        "restore": "Restaurer",
+        "delete_forever": "Supprimer définitivement",
+        "moved": "Déplacé vers la corbeille",
+        "restored": "Restauré",
+        "purged": "Supprimé définitivement",
+        "emptied": "Corbeille vidée"
     }
 }

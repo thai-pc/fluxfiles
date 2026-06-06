@@ -270,5 +270,19 @@
         "cors_snippet": "CORS-Konfiguration",
         "iam_snippet": "IAM-Richtlinie",
         "copy": "Kopieren"
+    },
+    "trash": {
+        "title": "Papierkorb",
+        "note": "Gelöschte Dateien werden hier aufbewahrt und können wiederhergestellt werden. In Ihrem eigenen Speicher abgelegt.",
+        "empty": "Papierkorb leeren",
+        "empty_state": "Papierkorb ist leer",
+        "col_name": "Name",
+        "col_deleted": "Gelöscht",
+        "restore": "Wiederherstellen",
+        "delete_forever": "Endgültig löschen",
+        "moved": "In den Papierkorb verschoben",
+        "restored": "Wiederhergestellt",
+        "purged": "Endgültig gelöscht",
+        "emptied": "Papierkorb geleert"
     }
 }

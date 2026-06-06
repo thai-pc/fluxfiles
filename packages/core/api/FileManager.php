@@ -354,6 +354,213 @@ class FileManager
         return ['deleted' => true];
     }
 
+    /**
+     * Soft-delete a FILE: move it (and its variants) into the reserved trash
+     * namespace, snapshot its metadata, and record a restorable entry. Folders
+     * are not supported in P0 — use delete() for permanent removal.
+     */
+    public function trash(string $disk, string $path): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+        $this->assertOwner($disk, $scoped);
+
+        if (!($this->meta instanceof StorageMetadataHandler)) {
+            throw new ApiException('Trash is not available for this storage', 400, 'trash_unavailable');
+        }
+
+        $fs = $this->disks->disk($disk);
+        $isDir = false;
+        try { $isDir = $fs->directoryExists($scoped); } catch (\Throwable $e) { /* not a dir */ }
+        if ($isDir) {
+            throw new ApiException('Folders cannot be moved to trash — delete them permanently instead', 400, 'trash_dir_unsupported');
+        }
+        if (!$fs->fileExists($scoped)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+
+        $id       = bin2hex(random_bytes(8));
+        $basename = basename($scoped);
+        $trashDir = '_fluxfiles/trash/' . $id;
+        $size     = 0;
+        try { $size = (int) $fs->fileSize($scoped); } catch (\Throwable $e) { /* best effort */ }
+
+        // Snapshot metadata before it is removed from the active index.
+        $metaSnapshot = $this->meta->get($disk, $scoped) ?: [];
+
+        try {
+            $fs->move($scoped, $trashDir . '/' . $basename);
+        } catch (\Throwable $e) {
+            throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
+        }
+
+        $movedVariants = [];
+        foreach (['thumb', 'medium', 'large'] as $vsize) {
+            $vk = $this->variantKey($scoped, $vsize);
+            try {
+                if ($fs->fileExists($vk)) {
+                    $fs->move($vk, $trashDir . '/v/' . $vsize . '.webp');
+                    $movedVariants[] = $vsize;
+                }
+            } catch (\Throwable $e) { /* best effort */ }
+        }
+
+        // Drop the active metadata; the trash entry (written last) is the commit point.
+        $this->meta->delete($disk, $scoped);
+        $this->meta->addTrash($disk, $id, [
+            'original_key' => $scoped,
+            'disk'         => $disk,
+            'basename'     => $basename,
+            'size'         => $size,
+            'deleted_at'   => time(),
+            'deleted_by'   => $this->claims->userId,
+            'variants'     => $movedVariants,
+            'meta'         => $metaSnapshot,
+        ]);
+
+        return ['trashed' => true, 'trash_id' => $id];
+    }
+
+    /** Restore a trashed file to its original key (or $newPath). */
+    public function restore(string $disk, string $id, ?string $newPath = null): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+        if (!($this->meta instanceof StorageMetadataHandler)) {
+            throw new ApiException('Trash is not available for this storage', 400, 'trash_unavailable');
+        }
+
+        $entry = $this->meta->getTrash($disk, $id);
+        if ($entry === null) {
+            throw new ApiException('Trash item not found', 404, 'not_found');
+        }
+        $this->assertTrashScope($entry);
+
+        $target = ($newPath !== null && $newPath !== '')
+            ? $this->scopedPath($newPath)
+            : (string) ($entry['original_key'] ?? '');
+        $this->assertNotSystem($target);
+
+        $fs = $this->disks->disk($disk);
+        $this->assertTargetAvailable($fs, $target);
+
+        $trashDir = '_fluxfiles/trash/' . $id;
+        try {
+            $fs->move($trashDir . '/' . $entry['basename'], $target);
+        } catch (\Throwable $e) {
+            throw new ApiException('Restore failed: ' . $e->getMessage(), 500, 'restore_failed');
+        }
+
+        foreach (($entry['variants'] ?? []) as $vsize) {
+            $src = $trashDir . '/v/' . $vsize . '.webp';
+            try {
+                if ($fs->fileExists($src)) {
+                    $fs->move($src, $this->variantKey($target, (string) $vsize));
+                }
+            } catch (\Throwable $e) { /* best effort */ }
+        }
+
+        if (!empty($entry['meta'])) {
+            $this->meta->save($disk, $target, $entry['meta']);
+        }
+        $this->meta->trackParents($disk, $target);
+
+        try { $fs->deleteDirectory($trashDir); } catch (\Throwable $e) { /* best effort */ }
+        $this->meta->removeTrash($disk, $id);
+
+        return ['restored' => true, 'key' => $target];
+    }
+
+    /** List trash entries the caller may see (scoped to prefix + owner). */
+    public function listTrash(string $disk): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+        if (!($this->meta instanceof StorageMetadataHandler)) {
+            return [];
+        }
+        $out = [];
+        foreach ($this->meta->allTrash($disk) as $id => $e) {
+            if (!$this->trashVisible($e)) {
+                continue;
+            }
+            $out[] = [
+                'trash_id'     => $id,
+                'name'         => $e['basename'] ?? basename((string) ($e['original_key'] ?? '')),
+                'original_key' => $e['original_key'] ?? '',
+                'size'         => $e['size'] ?? 0,
+                'deleted_at'   => $e['deleted_at'] ?? 0,
+                'deleted_by'   => $e['deleted_by'] ?? '',
+            ];
+        }
+        usort($out, fn($a, $b) => ($b['deleted_at'] ?? 0) <=> ($a['deleted_at'] ?? 0));
+        return $out;
+    }
+
+    /** Permanently delete one trash item. */
+    public function purgeTrash(string $disk, string $id): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+        if (!($this->meta instanceof StorageMetadataHandler)) {
+            throw new ApiException('Trash is not available for this storage', 400, 'trash_unavailable');
+        }
+        $entry = $this->meta->getTrash($disk, $id);
+        if ($entry === null) {
+            throw new ApiException('Trash item not found', 404, 'not_found');
+        }
+        $this->assertTrashScope($entry);
+
+        $fs = $this->disks->disk($disk);
+        try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $e) { /* best effort */ }
+        $this->meta->removeTrash($disk, $id);
+
+        return ['purged' => true];
+    }
+
+    /** Permanently delete every trash item the caller may see. */
+    public function emptyTrash(string $disk): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+        if (!($this->meta instanceof StorageMetadataHandler)) {
+            return ['purged' => 0];
+        }
+        $fs = $this->disks->disk($disk);
+        $n = 0;
+        foreach ($this->meta->allTrash($disk) as $id => $e) {
+            if (!$this->trashVisible($e)) {
+                continue;
+            }
+            try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $ex) { /* best effort */ }
+            $this->meta->removeTrash($disk, $id);
+            $n++;
+        }
+        return ['purged' => $n];
+    }
+
+    /** A trash entry is visible when its origin is in scope and (owner-only) ours. */
+    private function trashVisible(array $entry): bool
+    {
+        if (!$this->claims->isPathInScope((string) ($entry['original_key'] ?? ''))) {
+            return false;
+        }
+        if ($this->claims->ownerOnly && ($entry['deleted_by'] ?? null) !== $this->claims->userId) {
+            return false;
+        }
+        return true;
+    }
+
+    private function assertTrashScope(array $entry): void
+    {
+        if (!$this->trashVisible($entry)) {
+            throw new ApiException('Trash item not in scope', 403, 'forbidden');
+        }
+    }
+
     public function rename(string $disk, string $path, string $newName): array
     {
         $this->assertDisk($disk);

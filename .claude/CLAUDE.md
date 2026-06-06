@@ -88,7 +88,7 @@ npm run build
 
 ## Current Notes
 
-- The core route file currently has direct delete, not trash/restore/purge routes.
+- Delete: `/delete` is permanent (used for folders/bulk/API). Files have **soft-delete** via `/trash` (+ `/trash/restore|list|purge|empty`) — move-based into `_fluxfiles/trash/<id>/` with a `_fluxfiles/trash.json` manifest (storage-resident, scoped by prefix/owner). The UI deletes single files to trash; folders still delete permanently (P0).
 - `docs/FLUXFILES-ROADMAP.md` (gitignored, local) contains roadmap ideas and may be older than the implemented route surface. Verify implementation before following roadmap endpoints.
 - `docs/METADATA-STORAGE-DESIGN.md` captures the important principle that metadata travels with user storage. `docs/TEST-PLAN.md` is the living test plan.
 - Auth uses `firebase/php-jwt` **v7** (constraint `^7.0`): HS256 keys must be **≥ 32 bytes** or token encode/decode throws. `JwtCompat`/`ImageCompat` shims abstract jwt v5–v7 / intervention v2–v3.

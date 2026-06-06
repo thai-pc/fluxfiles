@@ -270,5 +270,19 @@
         "cors_snippet": "Configuração CORS",
         "iam_snippet": "Política IAM",
         "copy": "Copiar"
+    },
+    "trash": {
+        "title": "Lixeira",
+        "note": "Os arquivos excluídos ficam aqui e podem ser restaurados. Armazenados no seu próprio armazenamento.",
+        "empty": "Esvaziar lixeira",
+        "empty_state": "A lixeira está vazia",
+        "col_name": "Nome",
+        "col_deleted": "Excluído",
+        "restore": "Restaurar",
+        "delete_forever": "Excluir permanentemente",
+        "moved": "Movido para a lixeira",
+        "restored": "Restaurado",
+        "purged": "Excluído permanentemente",
+        "emptied": "Lixeira esvaziada"
     }
 }

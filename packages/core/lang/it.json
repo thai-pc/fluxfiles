@@ -270,5 +270,19 @@
         "cors_snippet": "Configurazione CORS",
         "iam_snippet": "Criterio IAM",
         "copy": "Copia"
+    },
+    "trash": {
+        "title": "Cestino",
+        "note": "I file eliminati vengono conservati qui e possono essere ripristinati. Archiviati nel tuo storage.",
+        "empty": "Svuota cestino",
+        "empty_state": "Il cestino è vuoto",
+        "col_name": "Nome",
+        "col_deleted": "Eliminato",
+        "restore": "Ripristina",
+        "delete_forever": "Elimina definitivamente",
+        "moved": "Spostato nel cestino",
+        "restored": "Ripristinato",
+        "purged": "Eliminato definitivamente",
+        "emptied": "Cestino svuotato"
     }
 }

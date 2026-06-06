@@ -270,5 +270,19 @@
         "cors_snippet": "CORS 設定",
         "iam_snippet": "IAM ポリシー",
         "copy": "コピー"
+    },
+    "trash": {
+        "title": "ゴミ箱",
+        "note": "削除したファイルはここに保管され、復元できます。ご自身のストレージに保存されます。",
+        "empty": "ゴミ箱を空にする",
+        "empty_state": "ゴミ箱は空です",
+        "col_name": "名前",
+        "col_deleted": "削除日時",
+        "restore": "復元",
+        "delete_forever": "完全に削除",
+        "moved": "ゴミ箱に移動しました",
+        "restored": "復元しました",
+        "purged": "完全に削除しました",
+        "emptied": "ゴミ箱を空にしました"
     }
 }

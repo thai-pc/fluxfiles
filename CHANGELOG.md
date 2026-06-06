@@ -3,6 +3,20 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.5] — unreleased
+
+### Added
+
+- **Trash / Restore (soft-delete for files).** Deleting a file now moves it
+  (and its image variants) into a reserved, restorable trash namespace
+  (`_fluxfiles/trash/<id>/` + a `_fluxfiles/trash.json` manifest) instead of
+  destroying it. New endpoints `POST /api/fm/trash`, `/trash/restore`,
+  `/trash/purge`, `/trash/empty` and `GET /trash/list` (gated by the `delete`
+  permission; scoped to the token's prefix/owner). The UI soft-deletes single
+  files and adds a **Trash** panel (restore / delete forever / empty). Folders
+  and `/delete` remain permanent. Storage-resident, no central DB — fits the
+  stateless model. Files-only in this release; folder/subtree trash is planned.
+
 ## [0.2.4] — 2026-06-05
 
 > Released: core `core-v0.2.4` (Packagist), `@fluxfiles/node` 0.1.1 (npm),

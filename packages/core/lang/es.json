@@ -270,5 +270,19 @@
         "cors_snippet": "Configuración CORS",
         "iam_snippet": "Política IAM",
         "copy": "Copiar"
+    },
+    "trash": {
+        "title": "Papelera",
+        "note": "Los archivos eliminados se conservan aquí y se pueden restaurar. Almacenados en tu propio almacenamiento.",
+        "empty": "Vaciar papelera",
+        "empty_state": "La papelera está vacía",
+        "col_name": "Nombre",
+        "col_deleted": "Eliminado",
+        "restore": "Restaurar",
+        "delete_forever": "Eliminar definitivamente",
+        "moved": "Movido a la papelera",
+        "restored": "Restaurado",
+        "purged": "Eliminado definitivamente",
+        "emptied": "Papelera vaciada"
     }
 }

@@ -270,5 +270,19 @@
         "cors_snippet": "CORS-configuratie",
         "iam_snippet": "IAM-beleid",
         "copy": "Kopiëren"
+    },
+    "trash": {
+        "title": "Prullenbak",
+        "note": "Verwijderde bestanden worden hier bewaard en kunnen worden hersteld. Opgeslagen in je eigen opslag.",
+        "empty": "Prullenbak legen",
+        "empty_state": "Prullenbak is leeg",
+        "col_name": "Naam",
+        "col_deleted": "Verwijderd",
+        "restore": "Herstellen",
+        "delete_forever": "Definitief verwijderen",
+        "moved": "Naar prullenbak verplaatst",
+        "restored": "Hersteld",
+        "purged": "Definitief verwijderd",
+        "emptied": "Prullenbak geleegd"
     }
 }

@@ -15,6 +15,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 {
     private const INDEX_KEY = '_fluxfiles/index.json';
     private const DIRS_KEY  = '_fluxfiles/dirs.json';
+    private const TRASH_KEY = '_fluxfiles/trash.json';
     private const AUDIT_KEY = '_fluxfiles/audit.jsonl';
     private const MAX_AUDIT_BYTES = 5 * 1024 * 1024; // 5MB rotation threshold
     private const AUDIT_KEEP_LINES = 5000; // Keep last N entries after rotation
@@ -691,6 +692,65 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             fclose($this->indexLocks[$disk]);
             unset($this->indexLocks[$disk]);
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // Trash index (soft-delete) — id => manifest, file-locked like the others.
+    // ---------------------------------------------------------------------
+
+    /** @return array<string,array> */
+    public function allTrash(string $disk): array
+    {
+        $fs = $this->diskManager->disk($disk);
+        if (!$fs->fileExists(self::TRASH_KEY)) {
+            return [];
+        }
+        try {
+            $data = json_decode($fs->read(self::TRASH_KEY), true);
+            return is_array($data) ? $data : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    public function getTrash(string $disk, string $id): ?array
+    {
+        $all = $this->allTrash($disk);
+        return $all[$id] ?? null;
+    }
+
+    public function addTrash(string $disk, string $id, array $entry): void
+    {
+        $this->acquireIndexLock($disk);
+        try {
+            $all = $this->allTrash($disk);
+            $all[$id] = $entry;
+            $this->saveTrash($disk, $all);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    public function removeTrash(string $disk, string $id): void
+    {
+        $this->acquireIndexLock($disk);
+        try {
+            $all = $this->allTrash($disk);
+            unset($all[$id]);
+            $this->saveTrash($disk, $all);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    private function saveTrash(string $disk, array $all): void
+    {
+        $fs = $this->diskManager->disk($disk);
+        $dir = dirname(self::TRASH_KEY);
+        if ($dir !== '.' && !$fs->directoryExists($dir)) {
+            $fs->createDirectory($dir);
+        }
+        $fs->write(self::TRASH_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
     private function loadIndex(string $disk): array

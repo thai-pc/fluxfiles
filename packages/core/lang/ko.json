@@ -270,5 +270,19 @@
         "cors_snippet": "CORS 구성",
         "iam_snippet": "IAM 정책",
         "copy": "복사"
+    },
+    "trash": {
+        "title": "휴지통",
+        "note": "삭제된 파일은 여기에 보관되며 복원할 수 있습니다. 사용자 저장소에 저장됩니다.",
+        "empty": "휴지통 비우기",
+        "empty_state": "휴지통이 비어 있습니다",
+        "col_name": "이름",
+        "col_deleted": "삭제됨",
+        "restore": "복원",
+        "delete_forever": "영구 삭제",
+        "moved": "휴지통으로 이동됨",
+        "restored": "복원됨",
+        "purged": "영구 삭제됨",
+        "emptied": "휴지통을 비웠습니다"
     }
 }

@@ -270,5 +270,19 @@
         "cors_snippet": "Cấu hình CORS",
         "iam_snippet": "Chính sách IAM",
         "copy": "Sao chép"
+    },
+    "trash": {
+        "title": "Thùng rác",
+        "note": "Tệp đã xóa được giữ ở đây và có thể khôi phục. Lưu trong storage của bạn.",
+        "empty": "Dọn thùng rác",
+        "empty_state": "Thùng rác trống",
+        "col_name": "Tên",
+        "col_deleted": "Đã xóa",
+        "restore": "Khôi phục",
+        "delete_forever": "Xóa vĩnh viễn",
+        "moved": "Đã chuyển vào thùng rác",
+        "restored": "Đã khôi phục",
+        "purged": "Đã xóa vĩnh viễn",
+        "emptied": "Đã dọn thùng rác"
     }
 }
