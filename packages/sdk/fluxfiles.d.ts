@@ -31,6 +31,8 @@ interface FluxFile {
     key?: string;
     name?: string;
     url?: string;
+    /** Stable, non-expiring URL for embedding (public disk / public_url). */
+    permanent_url?: string;
     size?: number;
     mime?: string;
     /** Image dimensions (present for images uploaded through FluxFiles). */

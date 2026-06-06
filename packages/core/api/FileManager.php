@@ -152,6 +152,10 @@ class FileManager
         foreach ($items as &$item) {
             if (($item['type'] ?? '') === 'file') {
                 $item['meta'] = $metaMap[$item['key']] ?? null;
+                $perm = $this->permanentUrl($disk, $item['key']);
+                if ($perm !== null) {
+                    $item['permanent_url'] = $perm;
+                }
                 if (is_array($item['meta'])) {
                     foreach (['mime', 'width', 'height'] as $attr) {
                         if (isset($item['meta'][$attr]) && $item['meta'][$attr] !== null) {
@@ -1364,6 +1368,37 @@ class FileManager
         }
 
         return !empty($variants) ? $variants : null;
+    }
+
+    /**
+     * A stable, non-expiring URL for embedding (editors, saved content), or null
+     * when none exists. Local disks and public disks / disks with a `public_url`
+     * (CDN / custom domain) have one; a private bucket without a public domain
+     * does not (its only URL is a short-lived presigned one).
+     */
+    private function permanentUrl(string $disk, string $path): ?string
+    {
+        $config = $this->disks->config($disk);
+
+        if (($config['driver'] ?? '') === 'local') {
+            return rtrim($config['url'] ?? '/storage/uploads', '/') . '/' . $path;
+        }
+
+        $publicUrl = rtrim($config['public_url'] ?? '', '/');
+        if ($publicUrl !== '') {
+            return $publicUrl . '/' . $path;
+        }
+
+        if (($config['visibility'] ?? 'private') === 'public') {
+            $bucket = $config['bucket'] ?? '';
+            if (!empty($config['endpoint'])) {
+                return rtrim($config['endpoint'], '/') . '/' . $bucket . '/' . $path;
+            }
+            $region = $config['region'] ?? 'us-east-1';
+            return "https://{$bucket}.s3.{$region}.amazonaws.com/{$path}";
+        }
+
+        return null;
     }
 
     private function fileUrl(string $disk, string $path): string

@@ -262,6 +262,8 @@ test('upload stores width/height/mime → exposed on list items', function () {
     assertEqual(120, $row['width'] ?? null, 'width');
     assertEqual(80, $row['height'] ?? null, 'height');
     assertTrue(strpos((string) ($row['mime'] ?? ''), 'image/') === 0, 'mime is image/*');
+    // local disk → a permanent (non-presigned) URL is exposed for embedding
+    assertTrue(!empty($row['permanent_url']) && strpos($row['permanent_url'], 'dim.png') !== false, 'permanent_url present');
 });
 
 // ── 3. Collision on rename / move / copy ────────────────────────────

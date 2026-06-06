@@ -797,6 +797,7 @@ function fluxFilesApp() {
                 basename: item.name, // backward compat
                 size: item.size,
                 disk: this.currentDisk,
+                permanent_url: item.permanent_url || null,
                 mime: item.mime || (item.meta && item.meta.mime) || null,
                 width: item.width || (item.meta && item.meta.width) || null,
                 height: item.height || (item.meta && item.meta.height) || null,

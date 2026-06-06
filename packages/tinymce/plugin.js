@@ -58,13 +58,14 @@
                     var file = files[i];
                     if (!file || file.is_dir) continue;
 
-                    var url = file.url || '';
+                    // Prefer a permanent URL (public disk / public_url) so saved
+                    // content doesn't embed an expiring presigned URL.
+                    var url = file.permanent_url || file.url || '';
                     var name = file.name || file.basename || file.path || '';
                     var meta = file.meta || {};
 
-                    // A private-disk URL is presigned and expires — embedding it in
-                    // saved content yields broken links/images later. Use a public
-                    // disk or public_url for editor embedding.
+                    // Still presigned (private disk, no public_url)? Warn — it will
+                    // expire and break the saved link/image.
                     if (/[?&](X-Amz-|Signature=)/.test(url)) {
                         console.warn('[FluxFiles] Inserting a presigned (expiring) URL — it will break when the URL expires. Use a public disk or public_url for embeds.');
                     }

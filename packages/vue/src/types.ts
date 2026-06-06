@@ -15,6 +15,8 @@ export interface FluxFile {
   height?: number;
   modified?: number;
   url?: string;
+  /** Stable, non-expiring URL for embedding (public disk / public_url). */
+  permanent_url?: string;
   title?: string;
   alt_text?: string;
   caption?: string;

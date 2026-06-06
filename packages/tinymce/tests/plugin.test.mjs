@@ -93,4 +93,17 @@ describe('TinyMCE FluxFiles plugin', () => {
     cfg.onSelect({ name: 'folder', is_dir: true });
     expect(editor.insertContent).not.toHaveBeenCalled();
   });
+
+  it('prefers permanent_url over a presigned url (and does not warn)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: 'https://s3/a.png?X-Amz-Signature=x', permanent_url: 'https://cdn/a.png', name: 'a.png', mime: 'image/png' });
+    const html = editor.insertContent.mock.calls[0][0];
+    expect(html).toContain('https://cdn/a.png');
+    expect(html).not.toContain('X-Amz-');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });

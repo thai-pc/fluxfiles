@@ -11,6 +11,11 @@ All notable changes to FluxFiles are documented here. This project adheres to
   dimensions and MIME type are captured at upload and stored in metadata, so
   listings and the `FM_SELECT` payload expose them directly (no extra `/meta`
   call). Reflected in the React / Vue / SDK `FluxFile` types.
+- **`permanent_url` on file listings and the select payload.** A stable,
+  non-expiring URL for embedding (local disks, public disks, or any disk with a
+  `public_url`); `null` for a private bucket with no public domain. The editor
+  plugins prefer it over the presigned `url`, so saved content doesn't embed an
+  expiring link.
 
 ### Fixed
 
