@@ -30,6 +30,12 @@ All notable changes to FluxFiles are documented here. This project adheres to
   private-disk URL embedded in saved editor content breaks once it expires; use a
   public disk or `public_url` for editor embedding.
 
+### Docs
+
+- Documented embedding with `permanent_url` vs the presigned `url` — the root
+  README gains an "Embedding selected files" section, and the React/Vue selection
+  examples prefer `permanent_url` for saved content.
+
 ## [0.2.5] — 2026-06-06
 
 > Released: core `core-v0.2.5` (Packagist), WordPress plugin
