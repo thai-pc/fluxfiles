@@ -3,6 +3,24 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.5] — 2026-06-06
+
+> Released: core `core-v0.2.5` (Packagist), WordPress plugin
+> `wordpress-v0.2.2` (bundles core 0.2.5).
+
+### Added
+
+- **Trash / Restore (soft-delete).** Deleting a file **or folder** now moves it
+  (variants and, for folders, the whole subtree included) into a reserved,
+  restorable trash namespace (`_fluxfiles/trash/<id>/` + a `_fluxfiles/trash.json`
+  manifest) instead of destroying it. New endpoints `POST /api/fm/trash`,
+  `/trash/restore`, `/trash/purge`, `/trash/empty` and `GET /trash/list` (gated
+  by the `delete` permission; scoped to the token's prefix/owner). The UI
+  soft-deletes everything and adds a **Trash** panel (restore / delete forever /
+  empty); restore re-creates metadata and re-tracks the folder index. `/delete`
+  stays permanent (purge/API). Storage-resident, no central DB — fits the
+  stateless model.
+
 ## [0.2.4] — 2026-06-05
 
 > Released: core `core-v0.2.4` (Packagist), `@fluxfiles/node` 0.1.1 (npm),

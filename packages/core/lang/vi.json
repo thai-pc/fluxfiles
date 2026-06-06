@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Xác nhận",
-        "confirm_file": "Xóa vĩnh viễn \"{name}\"? Hành động này không thể hoàn tác.",
-        "confirm_bulk": "Xóa {count} mục? Không thể hoàn tác.",
+        "confirm_file": "Chuyển \"{name}\" vào thùng rác?",
+        "confirm_bulk": "Chuyển {count} mục vào thùng rác?",
         "deleted": "Đã xóa",
-        "confirm_folder": "Xóa vĩnh viễn thư mục \"{name}\" và tất cả file bên trong? Hành động này không thể hoàn tác.",
-        "confirm_bulk_folders": "Xóa vĩnh viễn {count} mục ({folders} thư mục cùng toàn bộ nội dung)? Hành động này không thể hoàn tác."
+        "confirm_folder": "Chuyển thư mục \"{name}\" và toàn bộ nội dung vào thùng rác?",
+        "confirm_bulk_folders": "Chuyển {count} mục ({folders} thư mục kèm nội dung) vào thùng rác?"
     },
     "search": {
         "placeholder": "Tìm theo tên, tiêu đề, alt text...",
@@ -270,5 +270,19 @@
         "cors_snippet": "Cấu hình CORS",
         "iam_snippet": "Chính sách IAM",
         "copy": "Sao chép"
+    },
+    "trash": {
+        "title": "Thùng rác",
+        "note": "Tệp đã xóa được giữ ở đây và có thể khôi phục. Lưu trong storage của bạn.",
+        "empty": "Dọn thùng rác",
+        "empty_state": "Thùng rác trống",
+        "col_name": "Tên",
+        "col_deleted": "Đã xóa",
+        "restore": "Khôi phục",
+        "delete_forever": "Xóa vĩnh viễn",
+        "moved": "Đã chuyển vào thùng rác",
+        "restored": "Đã khôi phục",
+        "purged": "Đã xóa vĩnh viễn",
+        "emptied": "Đã dọn thùng rác"
     }
 }

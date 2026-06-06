@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Confirmación",
-        "confirm_file": "¿Eliminar permanentemente \"{name}\"? Esta acción no se puede deshacer.",
-        "confirm_bulk": "¿Eliminar {count} elemento(s)? Esta acción no se puede deshacer.",
+        "confirm_file": "¿Mover \"{name}\" a la papelera?",
+        "confirm_bulk": "¿Mover {count} elemento(s) a la papelera?",
         "deleted": "Eliminado",
-        "confirm_folder": "¿Eliminar permanentemente la carpeta \"{name}\" y todo su contenido? Esta acción no se puede deshacer.",
-        "confirm_bulk_folders": "¿Eliminar permanentemente {count} elemento(s) ({folders} carpeta(s) con todo su contenido)? Esta acción no se puede deshacer."
+        "confirm_folder": "¿Mover la carpeta \"{name}\" y todo su contenido a la papelera?",
+        "confirm_bulk_folders": "¿Mover {count} elementos ({folders} carpeta(s) con contenido) a la papelera?"
     },
     "search": {
         "placeholder": "Buscar por nombre, título, texto alternativo...",
@@ -270,5 +270,19 @@
         "cors_snippet": "Configuración CORS",
         "iam_snippet": "Política IAM",
         "copy": "Copiar"
+    },
+    "trash": {
+        "title": "Papelera",
+        "note": "Los archivos eliminados se conservan aquí y se pueden restaurar. Almacenados en tu propio almacenamiento.",
+        "empty": "Vaciar papelera",
+        "empty_state": "La papelera está vacía",
+        "col_name": "Nombre",
+        "col_deleted": "Eliminado",
+        "restore": "Restaurar",
+        "delete_forever": "Eliminar definitivamente",
+        "moved": "Movido a la papelera",
+        "restored": "Restaurado",
+        "purged": "Eliminado definitivamente",
+        "emptied": "Papelera vaciada"
     }
 }

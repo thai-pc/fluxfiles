@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1
-Stable tag: 0.2.1
+Stable tag: 0.2.2
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -38,7 +38,7 @@ image optimization with WebP variants, AI auto-tagging, and full-text search.
 
 == Using an existing upload directory ==
 
-If you already have files under `wp-content/fluxfiles/uploads/` (or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (FTS5) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
+If you already have files under `wp-content/fluxfiles/uploads/` (or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (`_fluxfiles/index.json`) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
 
 To make pre-existing files and folders searchable, use the bundled WP-CLI command:
 
@@ -81,6 +81,10 @@ PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfile
 
 == Changelog ==
 
+= 0.2.2 =
+Bundles FluxFiles core **0.2.5**:
+* **Trash / Restore** — deleting a file or folder now moves it (folders move the whole subtree) to a restorable trash instead of destroying it. A new **Trash** panel lets you restore, delete forever, or empty the trash. Permanent delete is still available via the API.
+
 = 0.2.1 =
 Bundles FluxFiles core **0.2.4**:
 * **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart) with IAM/CORS remediation; an in-app "Bucket health" panel for tokens that can write.
@@ -96,6 +100,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+. Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 0.2.2 =
+Bundles FluxFiles core 0.2.5 — deletes now go to a restorable Trash (files and folders). Install from the release ZIP that includes `vendor/`.
 
 = 0.2.1 =
 Bundles FluxFiles core 0.2.4 (Bucket Doctor, activity log, extension immutability). Install from the release ZIP that includes `vendor/`, or rebuild with `composer install --no-dev`.

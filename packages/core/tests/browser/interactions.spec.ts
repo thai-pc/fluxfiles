@@ -339,6 +339,35 @@ test('bucket doctor: write token opens the panel and reports on the disk', async
   await expect(page.locator('.ff-doctor-summary')).toHaveText(/Healthy/);
 });
 
+test('trash: deleting a file moves it to Trash, and Restore brings it back', async ({ page }) => {
+  await openManager(page, mintToken(['read', 'write', 'delete']));
+  const folder = `pw-trash-${Date.now()}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+  const fname = `t-${Date.now()}.png`;
+  await uploadFile(page, pngFile(fname));
+  const card = cardByName(page, fname);
+  await expect(card).toBeVisible({ timeout: 15_000 });
+
+  // Single-file delete → soft delete to trash (file leaves the grid).
+  await card.click();
+  await page.locator('.ff-toolbar-context .tb-btn.danger').click();
+  await page.locator('.ff-confirm-box .ff-btn-danger').click();
+  await expect(card).toHaveCount(0, { timeout: 15_000 });
+
+  // Trash panel lists it → Restore.
+  await page.getByRole('button', { name: 'Trash', exact: true }).click();
+  const modal = page.locator('.ff-trash-modal');
+  await expect(modal).toBeVisible();
+  const row = modal.locator('.ff-activity-table tbody tr', { hasText: fname });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.getByRole('button', { name: 'Restore' }).click();
+
+  // Close the panel — the file is back in the grid.
+  await modal.locator('.ff-activity-close').click();
+  await expect(cardByName(page, fname)).toBeVisible({ timeout: 15_000 });
+});
+
 test('inline crop → "Save as Copy" produces a cropped file in the grid', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);

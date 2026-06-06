@@ -1731,9 +1731,10 @@ body {
     user-select: none;
 }
 
-/* Activity (audit) + Bucket Doctor panels share the modal box. */
+/* Activity (audit) + Bucket Doctor + Trash panels share the modal box. */
 .ff-activity-modal,
-.ff-doctor-modal {
+.ff-doctor-modal,
+.ff-trash-modal {
     background: var(--ff-bg);
     border-radius: 12px;
     width: min(900px, 94vw);
@@ -1856,6 +1857,9 @@ body {
     overflow: auto;
     max-height: 160px;
 }
+
+/* Trash panel — "Delete forever" action */
+.ff-trash-purge { color: var(--color-text-danger); }
 
 .ff-new-folder-error {
     font-size: 13px;

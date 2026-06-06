@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "确认",
-        "confirm_file": "永久删除 \"{name}\"？此操作无法撤销。",
-        "confirm_bulk": "删除 {count} 个项目？此操作无法撤销。",
+        "confirm_file": "将\"{name}\"移至回收站？",
+        "confirm_bulk": "将 {count} 个项目移至回收站？",
         "deleted": "已删除",
-        "confirm_folder": "永久删除文件夹 \"{name}\" 及其所有文件？此操作无法撤销。",
-        "confirm_bulk_folders": "永久删除 {count} 个项目（{folders} 个文件夹及其所有内容）？此操作无法撤销。"
+        "confirm_folder": "将文件夹\"{name}\"及其全部内容移至回收站？",
+        "confirm_bulk_folders": "将 {count} 个项目（{folders} 个文件夹及其内容）移至回收站？"
     },
     "search": {
         "placeholder": "按名称、标题、替代文本搜索...",
@@ -270,5 +270,19 @@
         "cors_snippet": "CORS 配置",
         "iam_snippet": "IAM 策略",
         "copy": "复制"
+    },
+    "trash": {
+        "title": "回收站",
+        "note": "删除的文件保存在此处，可恢复。存储在您自己的存储中。",
+        "empty": "清空回收站",
+        "empty_state": "回收站为空",
+        "col_name": "名称",
+        "col_deleted": "删除时间",
+        "restore": "恢复",
+        "delete_forever": "永久删除",
+        "moved": "已移至回收站",
+        "restored": "已恢复",
+        "purged": "已永久删除",
+        "emptied": "已清空回收站"
     }
 }

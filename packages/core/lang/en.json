@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Confirm",
-        "confirm_file": "Permanently delete \"{name}\"? This cannot be undone.",
-        "confirm_bulk": "Delete {count} item(s)? This cannot be undone.",
+        "confirm_file": "Move \"{name}\" to trash?",
+        "confirm_bulk": "Move {count} item(s) to trash?",
         "deleted": "Deleted",
-        "confirm_folder": "Permanently delete folder \"{name}\" and all files inside? This cannot be undone.",
-        "confirm_bulk_folders": "Permanently delete {count} items ({folders} folder(s) with all contents)? This cannot be undone."
+        "confirm_folder": "Move folder \"{name}\" and all its contents to trash?",
+        "confirm_bulk_folders": "Move {count} items ({folders} folder(s) with contents) to trash?"
     },
     "search": {
         "placeholder": "Search by name, title, alt text...",
@@ -270,5 +270,19 @@
         "cors_snippet": "CORS configuration",
         "iam_snippet": "IAM policy",
         "copy": "Copy"
+    },
+    "trash": {
+        "title": "Trash",
+        "note": "Deleted files are kept here and can be restored. Stored in your own storage.",
+        "empty": "Empty trash",
+        "empty_state": "Trash is empty",
+        "col_name": "Name",
+        "col_deleted": "Deleted",
+        "restore": "Restore",
+        "delete_forever": "Delete forever",
+        "moved": "Moved to trash",
+        "restored": "Restored",
+        "purged": "Deleted permanently",
+        "emptied": "Trash emptied"
     }
 }

@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Confirmation",
-        "confirm_file": "Supprimer définitivement \"{name}\" ? Cette action est irréversible.",
-        "confirm_bulk": "Supprimer {count} élément(s) ? Cette action est irréversible.",
+        "confirm_file": "Déplacer « {name} » vers la corbeille ?",
+        "confirm_bulk": "Déplacer {count} élément(s) vers la corbeille ?",
         "deleted": "Supprimé",
-        "confirm_folder": "Supprimer définitivement le dossier \"{name}\" et tout son contenu ? Cette action est irréversible.",
-        "confirm_bulk_folders": "Supprimer définitivement {count} élément(s) ({folders} dossier(s) avec tout leur contenu) ? Cette action est irréversible."
+        "confirm_folder": "Déplacer le dossier « {name} » et tout son contenu vers la corbeille ?",
+        "confirm_bulk_folders": "Déplacer {count} éléments ({folders} dossier(s) avec contenu) vers la corbeille ?"
     },
     "search": {
         "placeholder": "Rechercher par nom, titre, texte alternatif...",
@@ -270,5 +270,19 @@
         "cors_snippet": "Configuration CORS",
         "iam_snippet": "Politique IAM",
         "copy": "Copier"
+    },
+    "trash": {
+        "title": "Corbeille",
+        "note": "Les fichiers supprimés sont conservés ici et peuvent être restaurés. Stockés dans votre propre stockage.",
+        "empty": "Vider la corbeille",
+        "empty_state": "La corbeille est vide",
+        "col_name": "Nom",
+        "col_deleted": "Supprimé",
+        "restore": "Restaurer",
+        "delete_forever": "Supprimer définitivement",
+        "moved": "Déplacé vers la corbeille",
+        "restored": "Restauré",
+        "purged": "Supprimé définitivement",
+        "emptied": "Corbeille vidée"
     }
 }

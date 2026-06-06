@@ -176,6 +176,9 @@
                 <button class="ff-theme-toggle-sm" x-show="canDiagnose" @click="openDoctor()" :title="t('doctor.title')" :aria-label="t('doctor.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h4"/></svg>
                 </button>
+                <button class="ff-theme-toggle-sm" x-show="canManageTrash" @click="openTrash()" :title="t('trash.title')" :aria-label="t('trash.title')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6v14a2 2 0 002 2h8a2 2 0 002-2V6M10 11v6M14 11v6"/></svg>
+                </button>
             </div>
             <span class="ff-pills-sep"></span>
             <!-- Row 2: Disk pills -->
@@ -1165,6 +1168,46 @@
                         </template>
                     </div>
                 </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Trash panel ═══ -->
+    <div class="ff-modal-overlay" x-show="showTrash" x-transition @click.self="closeTrash()" style="z-index:60;" x-cloak>
+        <div class="ff-trash-modal" role="dialog" aria-modal="true" :aria-label="t('trash.title')" @keydown.escape.window="showTrash && closeTrash()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('trash.title')"></h3>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <button class="ff-btn ff-btn-ghost" @click="emptyTrashAll()" :disabled="trashLoading || trashEntries.length === 0" x-text="t('trash.empty')"></button>
+                    <button class="ff-activity-close" @click="closeTrash()" :aria-label="t('common.close')">&times;</button>
+                </div>
+            </div>
+            <p class="ff-activity-note" x-text="t('trash.note')"></p>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="trashError" x-text="trashError"></p>
+                <div x-show="trashLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
+                <div x-show="!trashLoading && !trashError && trashEntries.length === 0" class="ff-activity-state" x-text="t('trash.empty_state')"></div>
+                <table class="ff-activity-table" x-show="!trashLoading && trashEntries.length > 0">
+                    <thead>
+                        <tr>
+                            <th x-text="t('trash.col_name')"></th>
+                            <th x-text="t('trash.col_deleted')"></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(e, i) in trashEntries" :key="e.trash_id">
+                            <tr>
+                                <td class="ff-activity-file" :title="e.original_key" x-text="e.name"></td>
+                                <td x-text="formatDate(e.deleted_at)"></td>
+                                <td style="text-align:end;white-space:nowrap;">
+                                    <button class="ff-btn ff-btn-ghost" @click="restoreItem(e.trash_id)" x-text="t('trash.restore')"></button>
+                                    <button class="ff-btn ff-btn-ghost ff-trash-purge" @click="purgeItem(e.trash_id)" x-text="t('trash.delete_forever')"></button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

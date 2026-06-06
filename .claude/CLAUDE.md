@@ -1,6 +1,6 @@
 # FluxFiles AI Context
 
-This directory is for AI agents working on the FluxFiles codebase. Read this file first, then use the linked notes for deeper context.
+This directory is for AI agents working on the FluxFiles codebase. Read this file first, then use the linked notes for deeper context. The repo root [`AGENTS.md`](../AGENTS.md) is the tool-agnostic summary of the same guidance — keep the two roughly in sync.
 
 ## Product Summary
 
@@ -88,7 +88,7 @@ npm run build
 
 ## Current Notes
 
-- The core route file currently has direct delete, not trash/restore/purge routes.
+- Delete: `/delete` is permanent (used by purge/API). Files **and folders** have **soft-delete** via `/trash` (+ `/trash/restore|list|purge|empty`) — move-based into `_fluxfiles/trash/<id>/` with a `_fluxfiles/trash.json` manifest (storage-resident, scoped by prefix/owner; folders move the whole subtree incl. variants). The UI soft-deletes everything to trash.
 - `docs/FLUXFILES-ROADMAP.md` (gitignored, local) contains roadmap ideas and may be older than the implemented route surface. Verify implementation before following roadmap endpoints.
 - `docs/METADATA-STORAGE-DESIGN.md` captures the important principle that metadata travels with user storage. `docs/TEST-PLAN.md` is the living test plan.
 - Auth uses `firebase/php-jwt` **v7** (constraint `^7.0`): HS256 keys must be **≥ 32 bytes** or token encode/decode throws. `JwtCompat`/`ImageCompat` shims abstract jwt v5–v7 / intervention v2–v3.

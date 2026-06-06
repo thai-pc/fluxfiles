@@ -89,6 +89,12 @@ function fluxFilesApp() {
         doctorLoading: false,
         doctorError: '',
 
+        // Trash panel
+        showTrash: false,
+        trashEntries: [],
+        trashLoading: false,
+        trashError: '',
+
         // Auth state
         authRequired: false,
         authState: 'ok', // 'ok' | 'missing' | 'expired' | 'refreshing'
@@ -1300,11 +1306,9 @@ function fluxFilesApp() {
             var errors = 0;
             for (const file of [...this.selected]) {
                 try {
-                    await this.api('DELETE', '/api/fm/delete', {
-                        disk: this.currentDisk,
-                        path: file.key
-                    });
-                    this.postMessage('FM_EVENT', { event: 'delete:done', key: file.key });
+                    // Soft-delete files and folders to trash (restorable).
+                    await this.api('POST', '/api/fm/trash', { disk: this.currentDisk, path: file.key });
+                    this.postMessage('FM_EVENT', { event: 'trash:done', key: file.key });
                 } catch (err) {
                     errors++;
                     console.error('FluxFiles: Delete failed', file.key, err);
@@ -1315,7 +1319,7 @@ function fluxFilesApp() {
 
             this.endBulk();
             if (errors === 0) {
-                this.showToast(this.t('delete.deleted'), 'success');
+                this.showToast(this.t('trash.moved'), 'success');
             }
             this.selected = [];
             this.detailFile = null;
@@ -2030,6 +2034,68 @@ function fluxFilesApp() {
                 document.body.removeChild(ta);
             }
             this.showToast(this.t('copy.copied'), 'success');
+        },
+
+        // Trash (soft-delete) — gated by the 'delete' permission.
+        get canManageTrash() {
+            const perms = this._tokenPayload().perms;
+            return Array.isArray(perms) && perms.includes('delete');
+        },
+
+        async openTrash() {
+            this.showTrash = true;
+            this.trashError = '';
+            await this.loadTrash();
+        },
+
+        async loadTrash() {
+            this.trashLoading = true;
+            this.trashError = '';
+            try {
+                const data = await this.api('GET', '/api/fm/trash/list?disk=' + encodeURIComponent(this.currentDisk));
+                this.trashEntries = Array.isArray(data) ? data : [];
+            } catch (e) {
+                this.trashError = e.message || this.t('error.generic');
+                this.trashEntries = [];
+            } finally {
+                this.trashLoading = false;
+            }
+        },
+
+        closeTrash() {
+            this.showTrash = false;
+        },
+
+        async restoreItem(id) {
+            try {
+                const r = await this.api('POST', '/api/fm/trash/restore', { disk: this.currentDisk, trash_id: id });
+                this.showToast(this.t('trash.restored'), 'success');
+                this.postMessage('FM_EVENT', { event: 'restore:done', key: r && r.key });
+                await this.loadTrash();
+                this.loadFiles();
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 4000);
+            }
+        },
+
+        async purgeItem(id) {
+            try {
+                await this.api('POST', '/api/fm/trash/purge', { disk: this.currentDisk, trash_id: id });
+                this.showToast(this.t('trash.purged'), 'success');
+                await this.loadTrash();
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 4000);
+            }
+        },
+
+        async emptyTrashAll() {
+            try {
+                await this.api('POST', '/api/fm/trash/empty', { disk: this.currentDisk });
+                this.showToast(this.t('trash.emptied'), 'success');
+                await this.loadTrash();
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 4000);
+            }
         },
 
         formatSize(bytes) {

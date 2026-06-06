@@ -117,11 +117,11 @@
     },
     "delete": {
         "confirm_title": "Bevestigen",
-        "confirm_file": "\"{name}\" permanent verwijderen? Dit kan niet ongedaan worden gemaakt.",
-        "confirm_bulk": "{count} item(s) verwijderen? Dit kan niet ongedaan worden gemaakt.",
+        "confirm_file": "\"{name}\" naar de prullenbak verplaatsen?",
+        "confirm_bulk": "{count} item(s) naar de prullenbak verplaatsen?",
         "deleted": "Verwijderd",
-        "confirm_folder": "Map \"{name}\" en alle bestanden erin permanent verwijderen? Dit kan niet ongedaan worden gemaakt.",
-        "confirm_bulk_folders": "{count} item(s) ({folders} map(pen) met alle inhoud) permanent verwijderen? Dit kan niet ongedaan worden gemaakt."
+        "confirm_folder": "Map \"{name}\" en alle inhoud naar de prullenbak verplaatsen?",
+        "confirm_bulk_folders": "{count} items ({folders} map(pen) met inhoud) naar de prullenbak verplaatsen?"
     },
     "search": {
         "placeholder": "Zoek op naam, titel, alt-tekst...",
@@ -270,5 +270,19 @@
         "cors_snippet": "CORS-configuratie",
         "iam_snippet": "IAM-beleid",
         "copy": "Kopiëren"
+    },
+    "trash": {
+        "title": "Prullenbak",
+        "note": "Verwijderde bestanden worden hier bewaard en kunnen worden hersteld. Opgeslagen in je eigen opslag.",
+        "empty": "Prullenbak legen",
+        "empty_state": "Prullenbak is leeg",
+        "col_name": "Naam",
+        "col_deleted": "Verwijderd",
+        "restore": "Herstellen",
+        "delete_forever": "Definitief verwijderen",
+        "moved": "Naar prullenbak verplaatst",
+        "restored": "Hersteld",
+        "purged": "Definitief verwijderd",
+        "emptied": "Prullenbak geleegd"
     }
 }

@@ -270,6 +270,27 @@ function routeRequest(
         return $fm->delete(...jsonBody('disk', 'path'));
     }
 
+    // Trash / restore (soft-delete) — gated by the 'delete' permission inside FM.
+    if ($method === 'POST' && $uri === '/api/fm/trash') {
+        return $fm->trash(...jsonBody('disk', 'path'));
+    }
+    if ($method === 'POST' && $uri === '/api/fm/trash/restore') {
+        $b = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($b) || !isset($b['disk'], $b['trash_id'])) {
+            throw new ApiException('Missing required field: disk/trash_id', 400, 'missing_param');
+        }
+        return $fm->restore((string) $b['disk'], (string) $b['trash_id'], $b['path'] ?? null);
+    }
+    if ($method === 'GET' && $uri === '/api/fm/trash/list') {
+        return $fm->listTrash($_GET['disk'] ?? 'local');
+    }
+    if ($method === 'POST' && $uri === '/api/fm/trash/purge') {
+        return $fm->purgeTrash(...jsonBody('disk', 'trash_id'));
+    }
+    if ($method === 'POST' && $uri === '/api/fm/trash/empty') {
+        return $fm->emptyTrash(...jsonBody('disk'));
+    }
+
     if ($method === 'POST' && $uri === '/api/fm/rename') {
         return $fm->rename(...jsonBody('disk', 'path', 'name'));
     }
@@ -422,6 +443,10 @@ function routeRequest(
 function resolveAuditAction(string $uri): string
 {
     $map = [
+        '/trash/restore' => 'restore',
+        '/trash/purge'   => 'purge',
+        '/trash/empty'   => 'empty_trash',
+        '/trash'      => 'trash',
         '/upload'     => 'upload',
         '/rename'     => 'rename',
         '/delete'     => 'delete',
