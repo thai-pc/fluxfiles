@@ -656,6 +656,9 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `max_files` | int | count | `0` | **Total** number of files allowed under the prefix. `0` = unlimited |
 | `owner_only` | bool | — | `false` | When `true`, users can only delete/rename/move files they uploaded |
 | `byob_disks` | object | — | — | Encrypted BYOB credentials (optional) |
+| `ai_auto_tag` | bool | — | inherit env | Per-tenant AI auto-tag toggle. Omit to inherit `FLUXFILES_AI_AUTO_TAG`; `true`/`false` overrides it |
+| `rate_read` / `rate_write` | int | req/min | `0` | Per-tenant API rate limits. `0` = inherit the server default |
+| `variants` | object | px | — | Per-tenant WebP variant widths, e.g. `{"thumb":150,"medium":768,"large":1920}`. Omit/unknown keys inherit the defaults |
 
 > `ttl` is **not** a claim — it's the `fluxfiles_token()` parameter (in **seconds**)
 > used to compute `exp` = `iat + ttl`.
@@ -676,6 +679,9 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `ownerOnly` | `owner_only` | — | `false` | Restrict destructive ops to the uploader (use with a shared `prefix`). |
 | `maxStorageMb` | `max_storage` | **MB** | `0` | **Total** quota across the prefix (existing files + variants + metadata count). `0` = unlimited. Exceeding it → **413 `quota_exceeded`**. |
 | `maxFiles` | `max_files` | count | `0` | **Total** number of files allowed under the prefix (counts user files; skips internal `_fluxfiles/`/`_variants/`). `0` = unlimited. Exceeding it → **413 `too_many_files`**. |
+| `aiAutoTag` | `ai_auto_tag` | — | `null` | Per-tenant AI auto-tag on upload. `null` = inherit `FLUXFILES_AI_AUTO_TAG`; `true`/`false` overrides it. (The AI provider/key stay server-side.) |
+| `rateRead` / `rateWrite` | `rate_read` / `rate_write` | req/min | `0` | Per-tenant rate limits. `0` = inherit `FLUXFILES_RATE_LIMIT_READ/WRITE`. |
+| `variants` | `variants` | px | `null` | Per-tenant WebP variant widths — a map of `thumb`/`medium`/`large` to a width (16–8000 px). Unset names inherit `150`/`768`/`1920`. |
 
 > **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is
 > **seconds** (`ttl`), and `allowedExt` entries are **bare lowercase extensions**
@@ -784,6 +790,9 @@ files and no restarts** — you just issue a different token.
 | Max number of files | `max_files` |
 | Allowed file types | `allowed_ext` |
 | What they're allowed to do | `perms`, `owner_only` |
+| Whether AI auto-tags their uploads | `ai_auto_tag` |
+| Their API rate limits | `rate_read` / `rate_write` |
+| Their image variant sizes | `variants` |
 
 Drive the numbers from your plans / database — e.g. a free tier vs. a pro tier:
 
@@ -824,11 +833,10 @@ their own S3/R2 bucket. The credentials are AES-256-GCM encrypted **inside** the
 token (`byob_disks`) and decrypted only at runtime, so you never store the
 tenant's data or their keys. See [Storage Disks](#storage-disks).
 
-> **Still global (not per-token) today:** image variant sizes
-> (thumb/medium/large), the AI-tagging provider/key, and the rate-limit numbers
-> are server-wide config, applied to every tenant (rate limits are still counted
-> per user). If you need these per tenant, they'd be a future claim/resolver — open
-> an issue.
+> **Still global (not per-token):** the AI provider + API key (security — keys
+> stay server-side; only the on/off `ai_auto_tag` is per tenant) and the
+> always-blocked dangerous-extension list. Everything else above — including
+> image variant sizes, AI auto-tag and rate limits — is now per tenant.
 
 ---
 
