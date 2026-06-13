@@ -21,8 +21,10 @@ function fluxFilesApp() {
         config: {},
         searchQuery: '',
         // Sort + filter state (persisted per-session)
-        sortBy: 'name',     // 'name' | 'date' | 'size' | 'type'
-        sortDir: 'asc',     // 'asc' | 'desc'
+        // Default to newest-first by date: with many folders/files it's easier to
+        // scan recent items than to hunt alphabetically. Overridable + remembered.
+        sortBy: 'date',     // 'name' | 'date' | 'size' | 'type'
+        sortDir: 'desc',    // 'asc' | 'desc'
         typeFilter: 'all',  // 'all' | 'image' | 'video' | 'audio' | 'document' | 'other'
         sortMenuOpen: false,
         filterMenuOpen: false,

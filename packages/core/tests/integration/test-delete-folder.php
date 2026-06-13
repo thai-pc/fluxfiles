@@ -215,6 +215,17 @@ test('owner_only BLOCKS rename/move of a folder with others\' files', function (
     catch (ApiException $e) { assertEqual('owner_only', $e->getErrorCode(), 'move blocked'); }
 });
 
+test('list() exposes a modified timestamp on folders (so the UI can sort by date)', function () {
+    [$fm] = makeFM();
+    $fm->mkdir('local', 'albums');
+    $dir = null;
+    foreach ($fm->list('local', '') as $it) {
+        if ($it['name'] === 'albums') { $dir = $it; break; }
+    }
+    assertTrue($dir !== null && $dir['type'] === 'dir', 'folder listed');
+    assertTrue(isset($dir['modified']) && is_int($dir['modified']) && $dir['modified'] > 0, 'folder has a numeric modified');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

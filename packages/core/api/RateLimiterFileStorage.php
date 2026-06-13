@@ -33,18 +33,31 @@ class RateLimiterFileStorage
         $windowStart = $now - $this->windowSeconds;
 
         $dir = dirname($this->filePath);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        // Suppress the native warnings: under Laravel a bare mkdir()/fopen() warning
+        // is promoted to a fatal ErrorException, which would fire before the guards
+        // below ever run. With @ the guards turn an unwritable dir into a clear error.
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            throw new ApiException(
+                "Storage is not writable: cannot create '{$dir}' for the rate limiter. "
+                . "Grant the web server user write access to the storage directory.",
+                500,
+                'storage_not_writable'
+            );
         }
 
         // Use exclusive lock for atomic read-check-write
         $isNew = !file_exists($this->filePath);
-        $fp = fopen($this->filePath, 'c+');
+        $fp = @fopen($this->filePath, 'c+');
         if ($fp === false) {
-            throw new ApiException('Rate limiter unavailable', 500);
+            throw new ApiException(
+                "Storage is not writable: cannot open '{$this->filePath}'. Grant the "
+                . "web server user write access to the storage directory.",
+                500,
+                'storage_not_writable'
+            );
         }
         if ($isNew) {
-            chmod($this->filePath, 0600);
+            @chmod($this->filePath, 0600);
         }
 
         try {
