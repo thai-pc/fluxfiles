@@ -84,6 +84,50 @@ $token = FluxFiles::token(auth()->id(), [
 ]);
 ```
 
+### Per-tenant configuration
+
+FluxFiles is stateless — **the token is the per-tenant config.** There's no
+config file or table per customer; you mint a different token, and FluxFiles
+enforces its claims server-side. Drive the values from the tenant's plan:
+
+```php
+use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
+
+$tenant = auth()->user()->tenant;        // your own model
+
+$claims = match ($tenant->plan) {
+    // Free — 5 MB/file, images only, 500 MB quota, 200 files
+    'free' => [
+        'disks'       => ['local'],
+        'max_upload'  => 5,
+        'allowed_ext' => ['jpg', 'jpeg', 'png', 'webp'],
+        'max_storage' => 500,
+        'max_files'   => 200,
+    ],
+    // Pro — 100 MB/file, any safe type, 50 GB quota, unlimited files
+    'pro' => [
+        'disks'       => ['s3'],
+        'max_upload'  => 100,
+        'allowed_ext' => null,
+        'max_storage' => 51200,
+        'max_files'   => 0,
+    ],
+};
+
+$token = FluxFiles::token(auth()->id(), [
+    'prefix' => "tenant_{$tenant->id}/",   // isolates each tenant's files
+    'perms'  => ['read', 'write', 'delete'],
+    ...$claims,
+]);
+```
+
+Always derive `prefix` from the **authenticated** tenant server-side — never from
+client input. For full isolation, give each tenant their **own bucket** with BYOB
+(`byob_disks`). See the root README's
+[Multi-tenant](https://github.com/thai-pc/fluxfiles#multi-tenant) section for the
+full claim list, and [Permissions](#permissions) for the storage each tenant's
+`_fluxfiles/` index needs.
+
 ### Blade Directives
 
 ```blade
