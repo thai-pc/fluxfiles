@@ -269,7 +269,12 @@ class FileManager
 
         // Store ownership + MIME, and image dimensions (so listings and the
         // select payload can carry them without re-opening the object).
-        $attrs = ['uploaded_by' => $this->claims->userId];
+        // size + modified are indexed too, so search results can sort by date/size.
+        $attrs = [
+            'uploaded_by' => $this->claims->userId,
+            'size'        => (int) ($file['size'] ?? 0),
+            'modified'    => time(),
+        ];
         $mime = @mime_content_type($file['tmp_name']);
         if ($mime === false || $mime === null || $mime === '') {
             $mime = $file['type'] ?? null;

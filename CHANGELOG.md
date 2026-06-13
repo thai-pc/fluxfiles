@@ -3,6 +3,28 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.10] — 2026-06-13
+
+> Released: core `core-v0.2.9` (Packagist), Laravel `laravel-v0.2.3`.
+
+### Fixed
+
+- **Search results now honour the active sort.** Previously a search rendered its
+  matches in raw index order, ignoring the Name/Date/Size selection — so the
+  ordering looked random next to the sorted browse view. The picker now sorts
+  search results (files and folders) by the chosen key + direction. To make
+  Date/Size sorting possible there, the search index now stores each file's
+  `size` and `modified`; results from an older index without them fall back to
+  name. Run a reindex (`php artisan fluxfiles:seed …` / the indexer) to backfill
+  existing files — new uploads carry it automatically.
+
+### Changed
+
+- **`fluxfiles/laravel` now requires core `^0.2.8`** (was `^0.2.0`), so
+  `composer require fluxfiles/laravel` pulls a core new enough for the per-tenant
+  claims and the folder-date / search-sort fixes instead of leaving an old core
+  installed.
+
 ## [0.2.9] — 2026-06-13
 
 > Released: Laravel `laravel-v0.2.2`.

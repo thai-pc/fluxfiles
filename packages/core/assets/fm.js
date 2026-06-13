@@ -2243,6 +2243,38 @@ function fluxFilesApp() {
             });
         },
 
+        // Basename of a search row (file or folder) for name sorting.
+        _searchName(row) {
+            const raw = row.name || row.file_key || row.dir_key || row.key || '';
+            return String(raw).split('/').pop().toLowerCase();
+        },
+
+        // Search results respect the active sort. File rows carry size/modified from
+        // the index (core >= 0.2.9); rows from an older index without them fall back
+        // to name. Folder search rows have no size/date, so they sort by name.
+        get sortedSearchResults() {
+            const rows = Array.isArray(this.searchResults) ? this.searchResults.slice() : [];
+            const dir = this.sortDir === 'desc' ? -1 : 1;
+            const by = this.sortBy;
+            return rows.sort((a, b) => {
+                if (by === 'date' || by === 'size') {
+                    const f = by === 'date' ? 'modified' : 'size';
+                    const av = Number(a[f] || 0), bv = Number(b[f] || 0);
+                    if (av < bv) return -1 * dir;
+                    if (av > bv) return 1 * dir;
+                    return this._searchName(a).localeCompare(this._searchName(b), undefined, { numeric: true });
+                }
+                return this._searchName(a).localeCompare(this._searchName(b), undefined, { numeric: true }) * dir;
+            });
+        },
+
+        get sortedSearchFolders() {
+            const rows = Array.isArray(this.searchFolderResults) ? this.searchFolderResults.slice() : [];
+            const dir = this.sortDir === 'desc' ? -1 : 1;
+            return rows.sort((a, b) =>
+                this._searchName(a).localeCompare(this._searchName(b), undefined, { numeric: true }) * dir);
+        },
+
         // Toggle sort: if choosing same key, flip direction; otherwise set new key with asc.
         setSort(by) {
             const allowed = ['name','date','size','type'];

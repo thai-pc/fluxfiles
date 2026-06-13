@@ -226,6 +226,16 @@ test('list() exposes a modified timestamp on folders (so the UI can sort by date
     assertTrue(isset($dir['modified']) && is_int($dir['modified']) && $dir['modified'] > 0, 'folder has a numeric modified');
 });
 
+test('search index carries size + modified (so results can sort by size/date)', function () {
+    [$fm, , $meta] = makeFM();
+    $tmp = tmpTxt(str_repeat('x', 777));
+    $fm->upload('local', '', ['name' => 'quarterly-report.txt', 'size' => filesize($tmp), 'tmp_name' => $tmp], true);
+    $rows = $meta->search('local', 'quarterly');
+    assertTrue(count($rows) >= 1, 'found by search');
+    assertEqual(777, (int) ($rows[0]['size'] ?? 0), 'row carries size');
+    assertTrue(is_int($rows[0]['modified'] ?? null) && $rows[0]['modified'] > 0, 'row carries modified');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
