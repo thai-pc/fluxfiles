@@ -146,6 +146,50 @@ return [
 ];
 ```
 
+## Permissions
+
+FluxFiles keeps **all of its state on disk** (no database). Two locations must be
+writable by the user PHP-FPM runs as (usually `www-data`):
+
+| Path | Holds | Created when |
+| --- | --- | --- |
+| `<local disk root>/_fluxfiles/` | search index, folder index, file locks, audit log, trash manifest, metadata sidecars | first write to that disk (upload / `mkdir` / …) |
+| `config('fluxfiles.storage_path')` (default `storage/fluxfiles/`) | proxy-mode rate-limiter counter (`rate_limit.json`) | first request — see the dedicated section below |
+
+The `_fluxfiles/` directory lives **inside the disk root** you configure (e.g.
+`public_path('uploads')` → `public/uploads/_fluxfiles/`). PHP creates it on the
+first write, so the safest rule is: **let PHP create it — don't pre-create it as
+`root` or your deploy user.**
+
+```bash
+# Make the uploads tree writable by the web server user (adjust www-data to your
+# PHP-FPM user: `ps aux | grep php-fpm | grep -v root`)
+sudo chown -R www-data:www-data /path/to/public/uploads
+sudo chmod -R u+rwX,g+rwX /path/to/public/uploads
+```
+
+> **Symptom → fix.** A `500` with
+> `fopen(.../_fluxfiles/index.lock): Permission denied` (or, on **core ≥ 0.2.7**,
+> a clean `storage_not_writable` error naming the path) means the web server user
+> can't write `_fluxfiles/`. Almost always the directory was pre-created by a
+> different user — `chown` it back to the PHP-FPM user (or delete it and let PHP
+> recreate it):
+>
+> ```bash
+> sudo chown -R www-data:www-data /path/to/public/uploads/_fluxfiles
+> ```
+
+If the disk root is **inside `public/`**, make sure `_fluxfiles/` is not served:
+its contents are internal (the index can reveal file names). For nginx:
+
+```nginx
+location ~ /_fluxfiles/ { deny all; }
+```
+
+> On **S3 / R2** disks there is nothing to chmod — `_fluxfiles/` lives in the
+> bucket as regular objects, governed by your IAM policy (`s3:PutObject` etc.).
+> Run the **Bucket Doctor** to verify those grants.
+
 ## Deployment & permissions (`rate_limit.json`)
 
 In **proxy mode** the rate limiter keeps its counter in a JSON file at
@@ -233,6 +277,10 @@ Make `public/uploads` writable by the PHP process (upload / mkdir / delete):
 chown -R www-data:www-data public/uploads
 chmod -R u+rwX public/uploads
 ```
+
+This also covers the `_fluxfiles/` index directory FluxFiles writes inside the
+root — see [Permissions](#permissions) for the common `_fluxfiles/index.lock`
+permission-denied symptom and fix.
 
 ### 4. Seed metadata + folder index for pre-existing content
 
