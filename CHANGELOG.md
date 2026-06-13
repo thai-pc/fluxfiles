@@ -3,6 +3,27 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.11] — 2026-06-13
+
+> Released: core `core-v0.2.10` (Packagist).
+
+### Added
+
+- **A stable `created` timestamp on files _and_ folders, shown in the UI.** Both
+  list and grid views now display the created date for files and folders. The
+  timestamp is stored as FluxFiles' own metadata (file index + a new `dirs.json`
+  map), so — unlike a storage mtime — it's **stable** (doesn't change when a
+  folder's contents change) and **works on S3 / R2** too, where prefixes have no
+  native timestamp. `list()` exposes `created` on every entry; date sorting now
+  keys on `created` (falling back to the live `modified`), which also fixes
+  folder date-sorting on S3/R2.
+
+  The folder index (`_fluxfiles/dirs.json`) migrates from a list of keys to a
+  `{ "dir/key": <created ts> }` map; the loader still reads the old shape, and a
+  reindex backfills `created` for pre-existing files (best-estimated from mtime).
+  Folders not created through FluxFiles (e.g. raw S3 prefixes) simply show no
+  date until tracked.
+
 ## [0.2.10] — 2026-06-13
 
 > Released: core `core-v0.2.9` (Packagist), Laravel `laravel-v0.2.3`.

@@ -2157,8 +2157,8 @@ function fluxFilesApp() {
             let av, bv;
             switch (this.sortBy) {
                 case 'date':
-                    av = Number(a.modified || 0);
-                    bv = Number(b.modified || 0);
+                    av = Number(a.created || a.modified || 0);
+                    bv = Number(b.created || b.modified || 0);
                     break;
                 case 'size':
                     av = Number(a.size || 0);
@@ -2233,8 +2233,8 @@ function fluxFilesApp() {
             const dir = this.sortDir === 'desc' ? -1 : 1;
             return arr.sort((a, b) => {
                 if (effectiveBy === 'date') {
-                    const av = Number(a.modified || 0);
-                    const bv = Number(b.modified || 0);
+                    const av = Number(a.created || a.modified || 0);
+                    const bv = Number(b.created || b.modified || 0);
                     if (av !== bv) return (av < bv ? -1 : 1) * dir;
                 }
                 const an = String(a.name || '').toLowerCase();
@@ -2258,8 +2258,8 @@ function fluxFilesApp() {
             const by = this.sortBy;
             return rows.sort((a, b) => {
                 if (by === 'date' || by === 'size') {
-                    const f = by === 'date' ? 'modified' : 'size';
-                    const av = Number(a[f] || 0), bv = Number(b[f] || 0);
+                    const val = (r) => by === 'date' ? Number(r.created || r.modified || 0) : Number(r.size || 0);
+                    const av = val(a), bv = val(b);
                     if (av < bv) return -1 * dir;
                     if (av > bv) return 1 * dir;
                     return this._searchName(a).localeCompare(this._searchName(b), undefined, { numeric: true });

@@ -610,6 +610,7 @@
                                         </div>
                                         <div class="fname" x-text="folder.name" :title="folder.name"></div>
                                         <div class="fsize" x-text="t('file.folder')"></div>
+                                        <div class="fdate" x-text="formatDate(folder.created || folder.modified)"></div>
                                         <button class="ff-folder-delete"
                                                 @click.stop="selected = [folder]; confirmDelete()"
                                                 :title="t('common.delete')">
@@ -670,9 +671,7 @@
 
                                         <div class="fname" x-text="file.name" :title="file.name"></div>
                                         <div class="fsize" x-text="formatSize(file.size)"></div>
-                                        <template x-if="view === 'list'">
-                                            <div class="fdate" x-text="formatDate(file.modified)"></div>
-                                        </template>
+                                        <div class="fdate" x-text="formatDate(file.created || file.modified)"></div>
                                     </div>
                                 </template>
                             </div>
