@@ -79,6 +79,8 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 // size + modified let search results sort by size/date, not just name.
                 'size' => $data['size'] ?? $existing['size'] ?? null,
                 'modified' => $data['modified'] ?? $existing['modified'] ?? null,
+                // created is the immutable first-seen time (existing wins on re-save).
+                'created' => $existing['created'] ?? $data['created'] ?? null,
             ]);
 
             if (isset($data['file_hash'])) {
@@ -255,7 +257,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $this->acquireIndexLock($disk);
         try {
             $dirs = $this->loadDirsIndex($disk);
-            $dirs[$dirKey] = true;
+            if (!array_key_exists($dirKey, $dirs)) {
+                $dirs[$dirKey] = time(); // record the folder's created time once
+            }
             $this->saveDirsIndex($disk, $dirs);
         } finally {
             $this->releaseIndexLock($disk);
@@ -289,12 +293,25 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 $acc[] = $p;
                 $d = implode('/', $acc);
                 if ($this->isReservedPath($d)) continue;
-                $dirs[$d] = true;
+                if (!array_key_exists($d, $dirs)) {
+                    $dirs[$d] = time();
+                }
             }
             $this->saveDirsIndex($disk, $dirs);
         } finally {
             $this->releaseIndexLock($disk);
         }
+    }
+
+    /**
+     * Folder created timestamps (our own metadata, so it works on S3/R2 prefixes
+     * too where storage has no folder mtime). Returns dirKey => ?int.
+     *
+     * @return array<string,?int>
+     */
+    public function dirsCreated(string $disk): array
+    {
+        return $this->loadDirsIndex($disk);
     }
 
     public function renameDirPrefix(string $disk, string $oldPrefix, string $newPrefix): int
@@ -311,7 +328,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             foreach ($dirs as $k => $_true) {
                 if ($k === $oldPrefix || str_starts_with($k, $oldPrefix . '/')) {
                     $newKey = $newPrefix . substr($k, strlen($oldPrefix));
-                    $updated[$newKey] = true;
+                    $updated[$newKey] = $_true; // preserve the folder's created time
                     unset($dirs[$k]);
                     $count++;
                 }
@@ -822,6 +839,8 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 // size + modified let search results sort by size/date, not just name.
                 'size' => $data['size'] ?? $existing['size'] ?? null,
                 'modified' => $data['modified'] ?? $existing['modified'] ?? null,
+                // created is the immutable first-seen time (existing wins on re-save).
+                'created' => $existing['created'] ?? $data['created'] ?? null,
             ]);
             $this->saveIndex($disk, $index);
         } finally {
@@ -856,12 +875,16 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             if (!is_array($data)) {
                 return [];
             }
+            // Two on-disk shapes: legacy list of keys `["a","b"]`, and the current
+            // map `{"a": <created ts|null>}`. Normalize to key => (?int created).
+            $isList = array_is_list($data);
             $set = [];
-            foreach ($data as $k) {
+            foreach ($data as $kk => $vv) {
+                $k = $isList ? $vv : $kk;
                 if (!is_string($k)) continue;
                 $k = trim($k, '/');
                 if ($k === '' || $k === '_fluxfiles' || str_contains($k, '/_fluxfiles')) continue;
-                $set[$k] = true;
+                $set[$k] = $isList ? null : (is_numeric($vv) ? (int) $vv : null);
             }
             return $set;
         } catch (\Throwable $e) {
@@ -880,11 +903,11 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $fs->createDirectory($dir);
         }
 
-        $keys = array_keys($dirs);
-        sort($keys, SORT_STRING);
+        ksort($dirs, SORT_STRING);
 
         try {
-            $fs->write(self::DIRS_KEY, json_encode($keys, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            // Map shape `{dirKey: <created ts|null>}` so folder created dates persist.
+            $fs->write(self::DIRS_KEY, json_encode((object) $dirs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         } catch (\Throwable $e) {
             // Silent fail
         }

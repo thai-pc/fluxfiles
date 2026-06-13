@@ -226,6 +226,32 @@ test('list() exposes a modified timestamp on folders (so the UI can sort by date
     assertTrue(isset($dir['modified']) && is_int($dir['modified']) && $dir['modified'] > 0, 'folder has a numeric modified');
 });
 
+test('files and folders carry a stable created timestamp in list()', function () {
+    [$fm, $fs] = makeFM();
+    $fm->mkdir('local', 'Albums');
+    $tmp = tmpTxt('hi');
+    $fm->upload('local', '', ['name' => 'pic.txt', 'size' => filesize($tmp), 'tmp_name' => $tmp], true);
+
+    $byName = [];
+    foreach ($fm->list('local', '') as $it) { $byName[$it['name']] = $it; }
+    assertTrue(is_int($byName['Albums']['created'] ?? null) && $byName['Albums']['created'] > 0, 'folder has created');
+    assertTrue(is_int($byName['pic.txt']['created'] ?? null) && $byName['pic.txt']['created'] > 0, 'file has created');
+
+    // dirs.json is the new map shape {dirKey: created}
+    $dirs = json_decode($fs->read('_fluxfiles/dirs.json'), true);
+    assertTrue(isset($dirs['Albums']) && is_int($dirs['Albums']), 'dirs.json stores folder created');
+});
+
+test('legacy dirs.json (list shape) still loads + folder created stays stable on re-track', function () {
+    [$fm, $fs, $meta] = makeFM();
+    // Simulate a pre-0.2.10 index: a plain list of keys.
+    $fs->write('_fluxfiles/dirs.json', json_encode(['Legacy']));
+    $meta->trackDir('local', 'Legacy');          // re-track must not crash / must keep it
+    $dirs = json_decode($fs->read('_fluxfiles/dirs.json'), true);
+    assertTrue(array_key_exists('Legacy', $dirs), 'legacy folder preserved after migration');
+    assertTrue(count($meta->searchFolders('local', 'leg')) >= 1, 'legacy folder still searchable');
+});
+
 test('search index carries size + modified (so results can sort by size/date)', function () {
     [$fm, , $meta] = makeFM();
     $tmp = tmpTxt(str_repeat('x', 777));

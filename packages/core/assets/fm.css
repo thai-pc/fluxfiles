@@ -1012,6 +1012,15 @@ body {
     color: var(--color-text-tertiary);
 }
 
+/* Created date under the name/size (grid); list view overrides below. */
+.file-card .fdate {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
+.file-card .fdate:empty {
+    display: none;
+}
+
 /* Meta badge on card */
 .ff-meta-badge {
     position: absolute;

@@ -81,8 +81,10 @@ class ExistingFileIndexer
                         'uploaded_by' => $readonly ? '__fluxfiles_readonly__' : $owner,
                     ];
                     // Backfill size + modified so reindexed files can sort in search too.
+                    // created is best-estimated from the file mtime for pre-existing files.
                     try { $data['size'] = $item->fileSize(); } catch (\Throwable $e) {}
                     try { $data['modified'] = $item->lastModified(); } catch (\Throwable $e) {}
+                    try { $data['created'] = $item->lastModified(); } catch (\Throwable $e) {}
 
                     if ($hash) {
                         $fileHash = $this->hashFile($disk, $key);

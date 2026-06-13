@@ -159,7 +159,18 @@ class FileManager
             }
         }
         $metaMap = !empty($fileKeys) ? $this->meta->getBulk($disk, $fileKeys) : [];
+        // Folder created timestamps live in our own dirs index (works on S3/R2 too).
+        $dirsCreated = ($this->meta instanceof StorageMetadataHandler)
+            ? $this->meta->dirsCreated($disk)
+            : [];
         foreach ($items as &$item) {
+            if (($item['type'] ?? '') === 'dir') {
+                $c = $dirsCreated[$item['key']] ?? null;
+                if ($c !== null) {
+                    $item['created'] = (int) $c;
+                }
+                continue;
+            }
             if (($item['type'] ?? '') === 'file') {
                 $item['meta'] = $metaMap[$item['key']] ?? null;
                 $perm = $this->permanentUrl($disk, $item['key']);
@@ -167,7 +178,7 @@ class FileManager
                     $item['permanent_url'] = $perm;
                 }
                 if (is_array($item['meta'])) {
-                    foreach (['mime', 'width', 'height'] as $attr) {
+                    foreach (['mime', 'width', 'height', 'created'] as $attr) {
                         if (isset($item['meta'][$attr]) && $item['meta'][$attr] !== null) {
                             $item[$attr] = $item['meta'][$attr];
                         }
@@ -274,6 +285,7 @@ class FileManager
             'uploaded_by' => $this->claims->userId,
             'size'        => (int) ($file['size'] ?? 0),
             'modified'    => time(),
+            'created'     => time(), // first-upload time; kept immutable by the index merge
         ];
         $mime = @mime_content_type($file['tmp_name']);
         if ($mime === false || $mime === null || $mime === '') {
