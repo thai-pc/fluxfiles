@@ -161,5 +161,25 @@ test('restore/purge reject a path-traversal trash id', function () {
     }
 });
 
+test('unwritable index dir surfaces a clear storage_not_writable error (not a raw fopen warning)', function () {
+    // Reproduce the Laravel field report: the disk root is writable but
+    // `_fluxfiles/` cannot host the lock. Put a *file* where the lock dir should
+    // be — deterministic on any OS/user (even root cannot mkdir over a file).
+    $root = sys_get_temp_dir() . '/fluxfiles-lockfail-' . uniqid();
+    @mkdir($root, 0777, true);
+    file_put_contents($root . '/_fluxfiles', 'x');
+    [$fm] = makeFM('', 'tester', false, $root);
+    try {
+        $fm->mkdir('local', 'whatever');
+        throw new \RuntimeException('mkdir should fail when the index lock dir is unwritable');
+    } catch (ApiException $e) {
+        assertTrue($e->getErrorCode() === 'storage_not_writable', 'clear storage_not_writable code');
+        assertTrue($e->getHttpCode() === 500, 'reported as 500');
+    } finally {
+        @unlink($root . '/_fluxfiles');
+        @rmdir($root);
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

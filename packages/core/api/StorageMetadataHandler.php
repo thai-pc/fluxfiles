@@ -678,13 +678,33 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $config = $this->diskManager->config($disk);
         $root = $config['root'] ?? __DIR__ . '/../storage/uploads';
         $lockDir = $root . '/_fluxfiles';
-        if (!is_dir($lockDir)) {
-            mkdir($lockDir, 0755, true);
+        // Suppress the native warning: under Laravel, HandleExceptions promotes a
+        // bare mkdir()/fopen() warning to a fatal ErrorException, so a non-writable
+        // uploads dir would surface as a cryptic 500 instead of an actionable error.
+        if (!is_dir($lockDir) && !@mkdir($lockDir, 0775, true) && !is_dir($lockDir)) {
+            throw new ApiException(
+                "Storage is not writable: cannot create '{$lockDir}'. Grant the web "
+                . "server user write access to the uploads directory.",
+                500,
+                'storage_not_writable'
+            );
         }
         $lockFile = $lockDir . '/index.lock';
-        $fp = fopen($lockFile, 'c+');
-        if ($fp !== false && flock($fp, LOCK_EX)) {
+        $fp = @fopen($lockFile, 'c+');
+        if ($fp === false) {
+            throw new ApiException(
+                "Storage is not writable: cannot open '{$lockFile}'. Grant the web "
+                . "server user write access (chown/chmod) to the uploads directory.",
+                500,
+                'storage_not_writable'
+            );
+        }
+        // flock can legitimately be unsupported on some filesystems — that stays
+        // best-effort (we just don't hold a lock), but an unwritable dir does not.
+        if (flock($fp, LOCK_EX)) {
             $this->indexLocks[$disk] = $fp;
+        } else {
+            fclose($fp);
         }
     }
 
