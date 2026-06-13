@@ -76,6 +76,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 'mime' => $data['mime'] ?? $existing['mime'] ?? null,
                 'width' => $data['width'] ?? $existing['width'] ?? null,
                 'height' => $data['height'] ?? $existing['height'] ?? null,
+                // size + modified let search results sort by size/date, not just name.
+                'size' => $data['size'] ?? $existing['size'] ?? null,
+                'modified' => $data['modified'] ?? $existing['modified'] ?? null,
             ]);
 
             if (isset($data['file_hash'])) {
@@ -816,6 +819,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 'mime' => $data['mime'] ?? $existing['mime'] ?? null,
                 'width' => $data['width'] ?? $existing['width'] ?? null,
                 'height' => $data['height'] ?? $existing['height'] ?? null,
+                // size + modified let search results sort by size/date, not just name.
+                'size' => $data['size'] ?? $existing['size'] ?? null,
+                'modified' => $data['modified'] ?? $existing['modified'] ?? null,
             ]);
             $this->saveIndex($disk, $index);
         } finally {

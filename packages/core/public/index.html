@@ -553,7 +553,7 @@
                                         <span style="font-weight:400;color:var(--color-text-tertiary);" x-text="'(' + (searchFolderResults || []).length + ')'"></span>
                                     </div>
                                     <div class="file-grid list-view">
-                                        <template x-for="row in searchFolderResults" :key="row.dir_key || row.key">
+                                        <template x-for="row in sortedSearchFolders" :key="row.dir_key || row.key">
                                             <div class="file-card" @click="openSearchFolder(row)">
                                                 <div class="thumb thumb-folder ff-thumb-icon">
                                                     <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
@@ -575,7 +575,7 @@
                                         <span style="font-weight:400;color:var(--color-text-tertiary);" x-text="'(' + (searchResults || []).length + ')'"></span>
                                     </div>
                                     <div class="file-grid list-view">
-                                        <template x-for="row in searchResults" :key="row.file_key || row.key">
+                                        <template x-for="row in sortedSearchResults" :key="row.file_key || row.key">
                                             <div class="file-card" @click="openSearchResult(row)">
                                                 <div class="thumb ff-thumb-icon thumb-file">
                                                     <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
