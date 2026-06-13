@@ -77,6 +77,19 @@ test('token() honours overrides (perms/prefix/owner_only)', function () use ($se
     assertEqual(true, $claims->owner_only ?? false, 'owner_only set');
 });
 
+test('token() emits per-tenant overrides without depending on a core method', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $token = $mgr->token(9, [
+        'ai_auto_tag' => true,
+        'rate_read'   => 200,
+        'variants'    => ['large' => 2560],
+    ]);
+    $claims = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(true, $claims->ai_auto_tag ?? null, 'ai_auto_tag carried');
+    assertEqual(200, $claims->rate_read ?? 0, 'rate_read carried');
+    assertEqual(['large' => 2560], (array) ($claims->variants ?? null), 'variants passed through (core sanitizes on decode)');
+});
+
 test('token() without a secret → throws', function () {
     $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
     $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'] = '';

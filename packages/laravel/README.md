@@ -131,6 +131,11 @@ client input. For full isolation, give each tenant their **own bucket** with BYO
 full claim list, and [Permissions](#permissions) for the storage each tenant's
 `_fluxfiles/` index needs.
 
+> The `ai_auto_tag`, `rate_read` / `rate_write` and `variants` overrides are
+> enforced by **core ≥ 0.2.8** — on an older core they're simply ignored (the
+> adapter still issues a valid token, it just won't crash). Run
+> `composer update fluxfiles/fluxfiles` to pick them up.
+
 ### Blade Directives
 
 ```blade
