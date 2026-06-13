@@ -88,6 +88,15 @@ class FileManager
                 $entry['size']     = $item->fileSize();
                 $entry['modified'] = $item->lastModified();
                 $entry['url']      = $this->fileUrl($disk, $item->path());
+            } else {
+                // Surface the folder mtime when the adapter provides one (local
+                // does; S3/R2 prefixes don't) so the UI can sort folders by date.
+                try {
+                    $mtime = $item->lastModified();
+                    if ($mtime !== null) {
+                        $entry['modified'] = $mtime;
+                    }
+                } catch (\Throwable $e) { /* prefix without a timestamp */ }
             }
 
             $all[] = $entry;
