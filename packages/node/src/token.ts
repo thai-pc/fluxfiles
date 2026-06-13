@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { base64url, hmacSha256, encryptByob } from './crypto';
-import type { ByobDiskConfig, CreateByobTokenOptions, CreateTokenOptions } from './types';
+import type { BaseTokenOptions, ByobDiskConfig, CreateByobTokenOptions, CreateTokenOptions } from './types';
 
 const MIN_SECRET_BYTES = 32;
 
@@ -48,6 +48,7 @@ export function createToken(opts: CreateTokenOptions): string {
     max_files: opts.maxFiles ?? 0,
   };
   if (opts.ownerOnly) payload.owner_only = true;
+  applyTenantOverrides(payload, opts);
   return sign(payload, secret);
 }
 
@@ -81,7 +82,28 @@ export function createByobToken(opts: CreateByobTokenOptions): string {
     byob_disks: encrypted,
   };
   if (opts.ownerOnly) payload.owner_only = true;
+  applyTenantOverrides(payload, opts);
   return sign(payload, secret);
+}
+
+/** Sanitize the per-tenant `variants` claim — matches PHP `Claims::sanitizeVariants`. */
+function sanitizeVariants(v: BaseTokenOptions['variants']): Record<string, number> | null {
+  if (!v || typeof v !== 'object') return null;
+  const out: Record<string, number> = {};
+  for (const name of ['thumb', 'medium', 'large'] as const) {
+    const w = Math.trunc(Number((v as Record<string, unknown>)[name]));
+    if (Number.isFinite(w) && w >= 16 && w <= 8000) out[name] = w;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Copy the optional per-tenant override claims into a payload when set. */
+function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenOptions): void {
+  if (opts.aiAutoTag !== undefined) payload.ai_auto_tag = !!opts.aiAutoTag;
+  if (opts.rateRead && opts.rateRead > 0) payload.rate_read = Math.trunc(opts.rateRead);
+  if (opts.rateWrite && opts.rateWrite > 0) payload.rate_write = Math.trunc(opts.rateWrite);
+  const variants = sanitizeVariants(opts.variants);
+  if (variants) payload.variants = variants;
 }
 
 /**

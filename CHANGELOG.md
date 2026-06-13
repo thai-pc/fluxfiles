@@ -3,6 +3,29 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.8] — 2026-06-13
+
+> Released: core `core-v0.2.8` (Packagist), Laravel `laravel-v0.2.1`, npm
+> `@fluxfiles/node` `node-v0.1.2`.
+
+### Added
+
+- **Per-tenant config claims.** Three settings that used to be server-global can
+  now be set **per token**, enforced server-side, each inheriting the server
+  default when the claim is unset:
+  - `ai_auto_tag` (bool) — turn AI auto-tagging on/off per tenant. The AI
+    provider and API key stay server-side; only the on/off switch is per token.
+  - `rate_read` / `rate_write` (int, req/min) — per-tenant API rate limits;
+    `0` inherits `FLUXFILES_RATE_LIMIT_READ` / `_WRITE`.
+  - `variants` (object) — per-tenant WebP variant widths (`thumb`/`medium`/`large`,
+    16–8000 px); unset names inherit the `150`/`768`/`1920` defaults.
+
+  Issued via the PHP `fluxfiles_token()` helper, `@fluxfiles/node`'s
+  `createToken()` (camelCase `aiAutoTag` / `rateRead` / `rateWrite` / `variants`),
+  and the Laravel `FluxFiles::token([...])` overrides. Tokens stay byte-compatible
+  across PHP and Node; unset claims are omitted so existing tokens are unaffected.
+  The Laravel adapter also gained `rate_limit_read` / `rate_limit_write` config.
+
 ## [0.2.7] — 2026-06-13
 
 > Released: core `core-v0.2.7` (Packagist).

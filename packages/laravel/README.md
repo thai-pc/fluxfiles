@@ -111,6 +111,9 @@ $claims = match ($tenant->plan) {
         'allowed_ext' => null,
         'max_storage' => 51200,
         'max_files'   => 0,
+        'ai_auto_tag' => true,             // AI captions/tags on upload
+        'rate_read'   => 240,              // higher API rate limit
+        'variants'    => ['large' => 2560], // bigger preview variant
     ],
 };
 

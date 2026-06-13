@@ -115,6 +115,8 @@ app.get('/fluxfiles/token', (req, res) => {
 
 `createToken` options: `secret?`, `userId`, `perms?`, `disks?`, `prefix?`,
 `maxUploadMb?`, `allowedExt?`, `ttl?`, `ownerOnly?`, `maxStorageMb?`, `maxFiles?`.
+Per-tenant overrides (omit to inherit the server default): `aiAutoTag?` (bool),
+`rateRead?` / `rateWrite?` (req/min), `variants?` (`{ thumb?, medium?, large? }` px).
 `createByobToken` replaces `disks` with `byobDisks` (a map of name → S3-compatible
 config) and does not take `maxStorageMb`/`maxFiles` (matching the core).
 

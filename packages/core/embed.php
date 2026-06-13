@@ -34,7 +34,11 @@ function fluxfiles_token(
     int $ttl = 3600,
     bool $ownerOnly = false,
     int $maxStorageMb = 0,
-    int $maxFiles = 0
+    int $maxFiles = 0,
+    ?bool $aiAutoTag = null,
+    int $rateRead = 0,
+    int $rateWrite = 0,
+    ?array $variants = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -55,6 +59,20 @@ function fluxfiles_token(
 
     if ($ownerOnly) {
         $payload['owner_only'] = true;
+    }
+    // Optional per-tenant overrides — only embedded when set, to keep tokens lean.
+    if ($aiAutoTag !== null) {
+        $payload['ai_auto_tag'] = $aiAutoTag;
+    }
+    if ($rateRead > 0) {
+        $payload['rate_read'] = $rateRead;
+    }
+    if ($rateWrite > 0) {
+        $payload['rate_write'] = $rateWrite;
+    }
+    $cleanVariants = \FluxFiles\Claims::sanitizeVariants($variants);
+    if ($cleanVariants !== null) {
+        $payload['variants'] = $cleanVariants;
     }
 
     return JwtCompat::encode($payload, $secret);

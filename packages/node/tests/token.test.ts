@@ -44,6 +44,31 @@ describe('createToken', () => {
     expect(c.owner_only).toBe(true);
   });
 
+  it('emits the per-tenant overrides and sanitizes variants (PHP parity)', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        aiAutoTag: true,
+        rateRead: 120,
+        rateWrite: 30,
+        variants: { thumb: 64, medium: 1024, large: 99999 }, // 99999 out of range → dropped
+      }),
+    ) as Record<string, unknown>;
+    expect(c.ai_auto_tag).toBe(true);
+    expect(c.rate_read).toBe(120);
+    expect(c.rate_write).toBe(30);
+    expect(c.variants).toEqual({ thumb: 64, medium: 1024 });
+  });
+
+  it('omits per-tenant overrides when unset (lean token)', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
+    expect(c.ai_auto_tag).toBeUndefined();
+    expect(c.rate_read).toBeUndefined();
+    expect(c.rate_write).toBeUndefined();
+    expect(c.variants).toBeUndefined();
+  });
+
   it('rejects a secret shorter than 32 bytes', () => {
     expect(() => createToken({ secret: 'too-short', userId: 'u' })).toThrow(/at least 32 bytes/);
   });
