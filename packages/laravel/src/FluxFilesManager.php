@@ -71,9 +71,11 @@ class FluxFilesManager
         if (!empty($overrides['rate_write'])) {
             $payload['rate_write'] = (int) $overrides['rate_write'];
         }
-        $variants = \FluxFiles\Claims::sanitizeVariants($overrides['variants'] ?? null);
-        if ($variants !== null) {
-            $payload['variants'] = $variants;
+        // Pass `variants` through as-is; the core re-sanitizes it on decode
+        // (Claims::sanitizeVariants). Done inline so the adapter never hard-depends
+        // on a specific core method — a version mismatch must never be fatal.
+        if (is_array($overrides['variants'] ?? null) && $overrides['variants'] !== []) {
+            $payload['variants'] = $overrides['variants'];
         }
     }
 

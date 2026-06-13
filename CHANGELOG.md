@@ -3,6 +3,22 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.9] — 2026-06-13
+
+> Released: Laravel `laravel-v0.2.2`.
+
+### Fixed
+
+- **Laravel adapter no longer fatals when the core is older than 0.2.8.**
+  `laravel-v0.2.1` called `FluxFiles\Claims::sanitizeVariants()` — a core 0.2.8
+  method — from `FluxFilesManager::token()`, so an install whose `fluxfiles/fluxfiles`
+  hadn't been updated crashed with *"Call to undefined method …sanitizeVariants()"*.
+  The adapter now passes the `variants` claim through inline (the core re-sanitizes
+  it on decode) and reads the `rate_read`/`rate_write` claims defensively (`?? 0`),
+  so a version mismatch degrades gracefully instead of 500-ing. The per-tenant
+  `ai_auto_tag` / rate / `variants` overrides still require core ≥ 0.2.8 to take
+  effect; on an older core they're ignored.
+
 ## [0.2.8] — 2026-06-13
 
 > Released: core `core-v0.2.8` (Packagist), Laravel `laravel-v0.2.1`, npm
