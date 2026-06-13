@@ -26,6 +26,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Embedding in Your App](#embedding-in-your-app)
 - [Storage Disks](#storage-disks)
 - [JWT Token Structure](#jwt-token-structure)
+- [Multi-tenant](#multi-tenant)
 - [API Reference](#api-reference)
 - [Framework Adapters](#framework-adapters)
 - [Internationalization](#internationalization)
@@ -762,6 +763,72 @@ Laravel proxy mode also exposes the same workflow:
 php artisan fluxfiles:seed --disk=local --path=users/42 --dry-run
 php artisan fluxfiles:seed --disk=local --path=users/42 --owner=user-123
 ```
+
+---
+
+## Multi-tenant
+
+FluxFiles is **stateless** — there is no per-tenant configuration stored on the
+server. Instead, **each token _is_ the configuration for that tenant.** Your
+backend mints a short-lived JWT per customer, and the
+[claims](#jwt-token-structure) are enforced server-side on every request. So each
+tenant gets its own storage location, limits and permissions **with no config
+files and no restarts** — you just issue a different token.
+
+| What you set per tenant | Claim |
+|-------------------------|-------|
+| Where their files live (their own sub-folder) | `prefix` |
+| Which storage they use — or **their own bucket** | `disks` / `byob_disks` |
+| Max size of each uploaded file | `max_upload` |
+| Total storage quota | `max_storage` |
+| Max number of files | `max_files` |
+| Allowed file types | `allowed_ext` |
+| What they're allowed to do | `perms`, `owner_only` |
+
+Drive the numbers from your plans / database — e.g. a free tier vs. a pro tier:
+
+```php
+// Free tier — 5 MB/file, images only, 500 MB quota, 200 files
+$token = fluxfiles_token(
+    userId:       "tenant_{$tenant->id}",
+    perms:        ['read', 'write', 'delete'],
+    disks:        ['local'],
+    prefix:       "tenant_{$tenant->id}/",
+    maxUploadMb:  5,
+    allowedExt:   ['jpg', 'jpeg', 'png', 'webp'],
+    ttl:          3600,
+    maxStorageMb: 500,
+    maxFiles:     200,
+);
+
+// Pro tier — 100 MB/file, any safe type, 50 GB quota, unlimited files
+$token = fluxfiles_token(
+    userId:       "tenant_{$tenant->id}",
+    perms:        ['read', 'write', 'delete', 'audit'],
+    disks:        ['s3'],
+    prefix:       "tenant_{$tenant->id}/",
+    maxUploadMb:  100,
+    allowedExt:   null,            // all non-dangerous types
+    ttl:          3600,
+    maxStorageMb: 51200,           // 50 GB
+    maxFiles:     0,               // unlimited
+);
+```
+
+> Issuing tokens from a JS backend instead? `@fluxfiles/node`'s `createToken()`
+> takes the same claims. The Laravel adapter wraps this as
+> `FluxFiles::tokenForUser([...])` — see its README's *Per-tenant configuration*.
+
+**Bring Your Own Bucket (BYOB)** is the strongest isolation: give each tenant
+their own S3/R2 bucket. The credentials are AES-256-GCM encrypted **inside** the
+token (`byob_disks`) and decrypted only at runtime, so you never store the
+tenant's data or their keys. See [Storage Disks](#storage-disks).
+
+> **Still global (not per-token) today:** image variant sizes
+> (thumb/medium/large), the AI-tagging provider/key, and the rate-limit numbers
+> are server-wide config, applied to every tenant (rate limits are still counted
+> per user). If you need these per tenant, they'd be a future claim/resolver — open
+> an issue.
 
 ---
 
