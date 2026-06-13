@@ -48,8 +48,33 @@ class FluxFilesManager
         if (!empty($overrides['owner_only'])) {
             $payload['owner_only'] = true;
         }
+        self::applyTenantOverrides($payload, $overrides);
 
         return JwtCompat::encode($payload, $secret);
+    }
+
+    /**
+     * Copy the optional per-tenant override claims into a payload when present.
+     * Keeps tokens lean (omitted keys inherit the server defaults).
+     *
+     * @param array<string,mixed> $payload
+     * @param array<string,mixed> $overrides
+     */
+    private static function applyTenantOverrides(array &$payload, array $overrides): void
+    {
+        if (isset($overrides['ai_auto_tag'])) {
+            $payload['ai_auto_tag'] = (bool) $overrides['ai_auto_tag'];
+        }
+        if (!empty($overrides['rate_read'])) {
+            $payload['rate_read'] = (int) $overrides['rate_read'];
+        }
+        if (!empty($overrides['rate_write'])) {
+            $payload['rate_write'] = (int) $overrides['rate_write'];
+        }
+        $variants = \FluxFiles\Claims::sanitizeVariants($overrides['variants'] ?? null);
+        if ($variants !== null) {
+            $payload['variants'] = $variants;
+        }
     }
 
     /**
@@ -120,6 +145,7 @@ class FluxFilesManager
         if (!empty($overrides['owner_only'])) {
             $payload['owner_only'] = true;
         }
+        self::applyTenantOverrides($payload, $overrides);
 
         return JwtCompat::encode($payload, $secret);
     }

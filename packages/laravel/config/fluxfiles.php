@@ -82,6 +82,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Rate limits (requests per minute, per user)
+    |--------------------------------------------------------------------------
+    |
+    | Server-wide defaults. A token may raise/lower them per tenant with the
+    | `rate_read` / `rate_write` claims (0 in the claim = inherit these).
+    |
+    */
+    'rate_limit_read'  => (int) env('FLUXFILES_RATE_LIMIT_READ', 60),
+    'rate_limit_write' => (int) env('FLUXFILES_RATE_LIMIT_WRITE', 10),
+
+    /*
+    |--------------------------------------------------------------------------
     | Disks
     |--------------------------------------------------------------------------
     |

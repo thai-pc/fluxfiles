@@ -11,17 +11,33 @@ class ImageOptimizer
     /** @var ImageCompat */
     private $manager;
 
-    private const VARIANTS = [
+    /** Default variant widths (px). Overridable per-tenant via the JWT `variants` claim. */
+    private const DEFAULT_VARIANTS = [
         'thumb'  => 150,
         'medium' => 768,
         'large'  => 1920,
     ];
 
+    /** @var array<string,int> Effective variant widths for this instance. */
+    private $variants;
+
     private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 
-    public function __construct()
+    /**
+     * @param array<string,int>|null $variants Per-tenant width overrides for the
+     *        known size names (thumb/medium/large). Unset names keep the default.
+     */
+    public function __construct(?array $variants = null)
     {
         $this->manager = new ImageCompat();
+        $this->variants = self::DEFAULT_VARIANTS;
+        if ($variants !== null) {
+            foreach (self::DEFAULT_VARIANTS as $name => $_) {
+                if (isset($variants[$name]) && (int) $variants[$name] > 0) {
+                    $this->variants[$name] = (int) $variants[$name];
+                }
+            }
+        }
     }
 
     public function isImage(string $filename): bool
@@ -83,7 +99,7 @@ class ImageOptimizer
 
         $variants = [];
 
-        foreach (self::VARIANTS as $name => $maxWidth) {
+        foreach ($this->variants as $name => $maxWidth) {
             if ($originalWidth <= $maxWidth && $name !== 'thumb') {
                 continue;
             }

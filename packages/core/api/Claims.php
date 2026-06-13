@@ -36,6 +36,18 @@ class Claims
     /** @var int Max number of files allowed under the prefix (0 = unlimited) */
     public $maxFiles;
 
+    /** @var bool|null Per-tenant AI auto-tag toggle. null = inherit server default (FLUXFILES_AI_AUTO_TAG). */
+    public $aiAutoTag;
+
+    /** @var int Per-tenant read rate limit / minute. 0 = inherit server default. */
+    public $rateRead;
+
+    /** @var int Per-tenant write rate limit / minute. 0 = inherit server default. */
+    public $rateWrite;
+
+    /** @var array<string,int>|null Per-tenant image variant widths (thumb/medium/large). null = inherit defaults. */
+    public $variants;
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -46,7 +58,11 @@ class Claims
         int $maxStorageMb,
         bool $ownerOnly = false,
         array $byobDisks = [],
-        int $maxFiles = 0
+        int $maxFiles = 0,
+        ?bool $aiAutoTag = null,
+        int $rateRead = 0,
+        int $rateWrite = 0,
+        ?array $variants = null
     ) {
         $this->userId = $userId;
         $this->permissions = $permissions;
@@ -58,6 +74,35 @@ class Claims
         $this->ownerOnly = $ownerOnly;
         $this->byobDisks = $byobDisks;
         $this->maxFiles = $maxFiles;
+        $this->aiAutoTag = $aiAutoTag;
+        $this->rateRead = max(0, $rateRead);
+        $this->rateWrite = max(0, $rateWrite);
+        $this->variants = $variants;
+    }
+
+    /**
+     * Sanitize a per-tenant `variants` claim: keep only the known size names with
+     * sane positive widths. Returns null when nothing usable remains (= inherit).
+     *
+     * @return array<string,int>|null
+     */
+    public static function sanitizeVariants($raw): ?array
+    {
+        if (!is_array($raw) && !is_object($raw)) {
+            return null;
+        }
+        $out = [];
+        foreach (['thumb', 'medium', 'large'] as $name) {
+            $v = is_object($raw) ? ($raw->$name ?? null) : ($raw[$name] ?? null);
+            if ($v === null) {
+                continue;
+            }
+            $w = (int) $v;
+            if ($w >= 16 && $w <= 8000) {
+                $out[$name] = $w;
+            }
+        }
+        return $out === [] ? null : $out;
     }
 
     /**
@@ -86,7 +131,11 @@ class Claims
             (int) ($payload->max_storage ?? 0),
             (bool) ($payload->owner_only ?? false),
             $byobDisks,
-            (int) ($payload->max_files ?? 0)
+            (int) ($payload->max_files ?? 0),
+            isset($payload->ai_auto_tag) ? (bool) $payload->ai_auto_tag : null,
+            (int) ($payload->rate_read ?? 0),
+            (int) ($payload->rate_write ?? 0),
+            isset($payload->variants) ? self::sanitizeVariants($payload->variants) : null
         );
     }
 

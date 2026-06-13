@@ -175,11 +175,12 @@ try {
         $fm->setAiTagger($aiTagger);
     }
 
-    // Rate limiting (JSON file)
+    // Rate limiting (JSON file). Per-tenant `rate_read`/`rate_write` claims override
+    // the server defaults when set (> 0); otherwise inherit the env limits.
     $rateLimiter = new RateLimiterFileStorage(
         $storagePath . '/rate_limit.json',
-        (int) ($_ENV['FLUXFILES_RATE_LIMIT_READ'] ?? 60),
-        (int) ($_ENV['FLUXFILES_RATE_LIMIT_WRITE'] ?? 10),
+        $claims->rateRead > 0 ? $claims->rateRead : (int) ($_ENV['FLUXFILES_RATE_LIMIT_READ'] ?? 60),
+        $claims->rateWrite > 0 ? $claims->rateWrite : (int) ($_ENV['FLUXFILES_RATE_LIMIT_WRITE'] ?? 10),
         60
     );
     $isWriteAction = in_array($method, ['POST', 'PUT', 'DELETE'], true);

@@ -36,7 +36,8 @@ class FileManager
         $this->disks = $disks;
         $this->claims = $claims;
         $this->meta = $meta;
-        $this->imageOptimizer = new ImageOptimizer();
+        // Per-tenant variant widths come from the token (null = built-in defaults).
+        $this->imageOptimizer = new ImageOptimizer($claims->variants);
     }
 
     public function setQuotaManager(QuotaManager $qm): void
@@ -312,10 +313,12 @@ class FileManager
             }
         }
 
-        // Auto-tag with AI if enabled
+        // Auto-tag with AI if enabled. The token's `ai_auto_tag` claim overrides the
+        // server default per tenant (true/false); when unset, inherit the env flag.
+        $autoTag = $this->claims->aiAutoTag ?? (($_ENV['FLUXFILES_AI_AUTO_TAG'] ?? '') === 'true');
         if ($this->aiTagger !== null
             && $this->imageOptimizer->isImage($name)
-            && ($_ENV['FLUXFILES_AI_AUTO_TAG'] ?? '') === 'true'
+            && $autoTag
         ) {
             try {
                 $imageData = file_get_contents($file['tmp_name']);

@@ -35,6 +35,14 @@ export interface BaseTokenOptions {
   ttl?: number;
   /** Restrict destructive ops to files the user uploaded. */
   ownerOnly?: boolean;
+  /** Per-tenant AI auto-tag toggle. Omit to inherit the server default. */
+  aiAutoTag?: boolean;
+  /** Per-tenant read rate limit (requests/min). `0`/omitted = inherit server default. */
+  rateRead?: number;
+  /** Per-tenant write rate limit (requests/min). `0`/omitted = inherit server default. */
+  rateWrite?: number;
+  /** Per-tenant image variant widths, e.g. `{ thumb: 150, medium: 768, large: 1920 }`. Omit to inherit. */
+  variants?: Partial<Record<'thumb' | 'medium' | 'large', number>> | null;
 }
 
 export interface CreateTokenOptions extends BaseTokenOptions {

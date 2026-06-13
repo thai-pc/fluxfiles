@@ -68,7 +68,10 @@ class FluxFilesController
     private function rateLimit(\FluxFiles\Claims $claims, bool $isWrite): void
     {
         $storagePath = config('fluxfiles.storage_path');
-        $rateLimiter = new RateLimiterFileStorage($storagePath . '/rate_limit.json');
+        // Per-tenant `rate_read`/`rate_write` claims override the server defaults.
+        $readLimit  = $claims->rateRead > 0 ? $claims->rateRead : (int) config('fluxfiles.rate_limit_read', 60);
+        $writeLimit = $claims->rateWrite > 0 ? $claims->rateWrite : (int) config('fluxfiles.rate_limit_write', 10);
+        $rateLimiter = new RateLimiterFileStorage($storagePath . '/rate_limit.json', $readLimit, $writeLimit);
         $rateLimiter->check($claims->userId, $isWrite ? 'write' : 'read');
     }
 
