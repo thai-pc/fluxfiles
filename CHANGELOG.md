@@ -3,6 +3,30 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.7] — 2026-06-13
+
+> Released: core `core-v0.2.7` (Packagist).
+
+### Changed
+
+- **The file manager now sorts by date, newest first, by default** (was name,
+  A→Z). With many folders or files it's far easier to scan recent uploads; the
+  choice is still user-overridable and remembered per browser. Directory
+  listings now also carry a `modified` timestamp where the storage adapter
+  exposes one (local does; S3/R2 prefixes don't), so **folders** sort by date as
+  well — previously only files had a timestamp.
+
+### Fixed
+
+- **An unwritable storage directory now returns a clear, actionable error**
+  instead of a cryptic 500. When the uploads dir isn't writable by the web
+  server user, FluxFiles responds with `storage_not_writable` (500), naming the
+  path and the remediation. Under Laravel, a bare `fopen()`/`mkdir()` warning was
+  being promoted to a fatal `ErrorException` before the core's best-effort lock
+  guard could run; the warnings in `acquireIndexLock` and the rate limiter are
+  now suppressed and converted to a proper exception. (Field report:
+  `fopen(.../_fluxfiles/index.lock): Permission denied`.)
+
 ## [0.2.6] — 2026-06-06
 
 > Released: core `core-v0.2.6` (Packagist); npm `fluxfiles` (SDK) `sdk-v0.2.1`,
