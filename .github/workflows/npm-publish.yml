@@ -67,9 +67,23 @@ jobs:
         working-directory: packages/${{ matrix.pkg }}
         run: npm run build
 
-      - name: Publish (skip if version exists)
+      - name: Publish (skip only if this version already exists)
         if: startsWith(github.ref_name, matrix.tag_prefix)
         working-directory: packages/${{ matrix.pkg }}
-        run: npm publish --access public || echo "Version already published, skipping."
+        # Re-runs must be idempotent, so swallow an "already published" conflict —
+        # but ONLY that. Auth/network/other errors must FAIL the job (a bare
+        # `|| echo` once hid an expired-NPM_TOKEN 404 and went green).
+        run: |
+          set -o pipefail
+          if npm publish --access public 2>&1 | tee /tmp/pub.log; then
+            echo "Published."
+          else
+            if grep -qiE 'cannot publish over|previously published|EPUBLISHCONFLICT|You cannot publish over the previously published versions' /tmp/pub.log; then
+              echo "::notice::Version already published — skipping."
+            else
+              echo "::error::npm publish failed (not an already-published conflict). Check NPM_TOKEN validity/permissions."
+              exit 1
+            fi
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -3,6 +3,28 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.13] — 2026-06-14
+
+> Released: React `react-v0.2.3`, Vue `vue-v0.2.2` (npm).
+
+### Added
+
+- **React/Vue `FluxFile` type now declares `created`** (Unix seconds) alongside
+  the existing `modified`. The field was already present at runtime on selection
+  payloads and list rows; this just types it so editors autocomplete it. The
+  selection examples in both READMEs mention `created`/`modified`.
+
+### Docs / CI
+
+- **Packagist sync lag fixed at the source.** `split.yml` now pings the Packagist
+  update API right after the subtree push, so a release shows up immediately
+  instead of waiting for the slow periodic crawl. Requires the `PACKAGIST_USERNAME`
+  + `PACKAGIST_TOKEN` repo secrets (documented in the README); no-op without them.
+- Guide-file review: `.claude/api-map.md` now documents the `/trash/*` routes +
+  `/disk/doctor` (it had wrongly said no trash/config routes existed) and notes
+  per-tenant config lives in JWT claims; `docs/TEST-PLAN.md` drops a stale FTS5
+  reference (FluxFiles has no SQLite).
+
 ## [0.2.12] — 2026-06-14
 
 > Released: core `core-v0.2.11` (Packagist), WordPress plugin `wordpress-v0.2.3`.
