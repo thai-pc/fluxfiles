@@ -47,7 +47,12 @@ if (!function_exists('storage_path')) {
     function storage_path($path = '') { return '/app/storage' . ($path !== '' ? '/' . $path : ''); }
 }
 
-require_once __DIR__ . '/../../core/vendor/autoload.php';   // FluxFiles\JwtCompat, CredentialEncryptor
+// Default: the sibling core in this monorepo (always newest). CI's floor check
+// overrides FLUXFILES_CORE_AUTOLOAD to point at core built at composer.json's
+// declared floor, so a call to a core API newer than the floor fails here
+// instead of in a user's production app.
+$coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
+require_once $coreAutoload;   // FluxFiles\JwtCompat, CredentialEncryptor
 require_once __DIR__ . '/../src/FluxFilesManager.php';
 
 use FluxFiles\Laravel\FluxFilesManager;
