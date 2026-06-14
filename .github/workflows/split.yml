@@ -56,3 +56,24 @@ jobs:
           git push -f target split-branch:main
           git tag -f "$PACKAGE_TAG" split-branch
           git push -f target "$PACKAGE_TAG"
+
+      # Nudge Packagist to crawl the new tag immediately instead of waiting for
+      # its periodic crawl (which lagged badly — core sat at an old version for
+      # days). No-op (warning, not failure) when the secret isn't configured.
+      - name: Notify Packagist
+        if: startsWith(github.ref_name, matrix.package.tag_prefix)
+        env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+          REMOTE_REPO: ${{ matrix.package.remote }}
+        run: |
+          if [ -z "${PACKAGIST_TOKEN:-}" ]; then
+            echo "::warning::PACKAGIST_TOKEN secret not set — Packagist will only update on its slow periodic crawl. Set PACKAGIST_USERNAME + PACKAGIST_TOKEN to auto-sync."
+            exit 0
+          fi
+          code=$(curl -s -o /tmp/pkg.out -w '%{http_code}' -XPOST \
+            -H 'Content-Type: application/json' \
+            "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
+            -d "{\"repository\":{\"url\":\"https://github.com/thai-pc/${REMOTE_REPO}\"}}")
+          echo "Packagist update for ${REMOTE_REPO}: HTTP ${code}"; cat /tmp/pkg.out || true
+          [ "$code" = "200" ] || echo "::warning::Packagist returned HTTP ${code} (check the PACKAGIST_* secrets / package URL)"

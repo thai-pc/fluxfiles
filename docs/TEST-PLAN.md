@@ -187,7 +187,7 @@ Run unit/integration + `test-api.sh` on **8.1, 8.2, 8.3, 8.4** (CI `core-php` + 
 ---
 
 ## 9. Edge / worst-case ⬜
-unicode/emoji/spaces/>255-char names/`#?&`; huge files → chunk; mid-stream abort; concurrent same-name uploads (race, last-wins); quota boundary; FTS5 search with diacritics/special chars; CMYK/exif-rotated/animated-gif images; i18n 16 languages + RTL (ar) + missing-key fallback.
+unicode/emoji/spaces/>255-char names/`#?&`; huge files → chunk; mid-stream abort; concurrent same-name uploads (race, last-wins); quota boundary; file-based index search (substring; sort by name/date/size) with diacritics/special chars; CMYK/exif-rotated/animated-gif images; i18n 16 languages + RTL (ar) + missing-key fallback.
 
 ---
 

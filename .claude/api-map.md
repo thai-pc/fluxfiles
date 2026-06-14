@@ -52,6 +52,25 @@ All authenticated routes require `Authorization: Bearer <JWT>`.
 - `GET /api/fm/meta?disk=local&path=file.jpg`
   - Returns file URL, size, modified time, mime-ish metadata, and variants.
 
+- `GET /api/fm/disk/doctor?disk=local`
+  - Health-check a disk (read/write/list/presign reachability). Used to validate
+    BYOB credentials before issuing a long-lived token.
+
+## Trash (soft-delete)
+
+Soft-delete is move-based into `_fluxfiles/trash/<id>/` with a `_fluxfiles/trash.json`
+manifest (storage-resident, scoped by prefix/owner). Files **and folders** are
+supported; folders move the whole subtree incl. variants. All gated by the
+`delete` permission. Trash ids are validated `[A-Za-z0-9_-]`.
+
+- `POST /api/fm/trash` — JSON body: `disk`, `path`. Soft-delete to trash.
+- `POST /api/fm/trash/restore` — JSON body: `disk`, `trash_id`, optional `path`.
+- `GET /api/fm/trash/list?disk=local` — list current scope's trash entries.
+- `POST /api/fm/trash/purge` — JSON body: `disk`, `trash_id`. Permanently remove one entry.
+- `POST /api/fm/trash/empty` — JSON body: `disk`. Permanently empty the scope's trash.
+
+> `DELETE /api/fm/delete` is **permanent** (no trash). The UI soft-deletes via `/trash`.
+
 ## Metadata/Search/Quota/Audit
 
 - `GET /api/fm/metadata?disk=local&key=file.jpg`
@@ -91,6 +110,7 @@ All authenticated routes require `Authorization: Bearer <JWT>`.
 
 ## Important Route Notes
 
-- There are currently no active core routes for trash, restore, purge, or config. Some old local command history may reference them; verify routes in `api/index.php` before using.
+- Per-tenant config (`ai_auto_tag`, `rate_read`/`rate_write`, `variants`, upload/ext/quota limits, `owner_only`) is carried in **JWT claims**, not a `/config` route — the token *is* the config.
+- `list`, `search`, and `search-folders` rows include a stable `created` (Unix seconds) alongside `modified`; folders carry `created` too (S3/R2 dir prefixes may lack `modified`). The UI sorts by `created || modified`.
 - Mutating requests validate the `Origin` header against `FLUXFILES_ALLOWED_ORIGINS` when origins are configured.
 - Route responses usually follow `{ "data": ..., "error": null }`; API exceptions include `error_code` when available.
