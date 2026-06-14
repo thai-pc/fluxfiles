@@ -33,7 +33,10 @@
         "select_items": "选择 {count} 项",
         "root": "根目录",
         "selected": "已选择",
-        "refresh": "刷新"
+        "refresh": "刷新",
+        "retry": "重试",
+        "expand": "展开",
+        "collapse": "折叠"
     },
     "toolbar": {
         "upload": "上传",
@@ -189,7 +192,9 @@
         "missing_param": "缺少必要信息",
         "invalid_json": "无效的请求数据",
         "origin_denied": "此来源的访问被拒绝",
-        "ext_changed": "无法更改文件扩展名"
+        "ext_changed": "无法更改文件扩展名",
+        "load_failed": "无法加载此文件夹",
+        "move_into_self": "无法将文件夹移动到其自身内部"
     },
     "presign": {
         "title": "预签名链接",

@@ -33,7 +33,10 @@
         "select_items": "Seleziona {count} elementi",
         "root": "Radice",
         "selected": "selezionato/i",
-        "refresh": "Aggiorna"
+        "refresh": "Aggiorna",
+        "retry": "Riprova",
+        "expand": "Espandi",
+        "collapse": "Comprimi"
     },
     "toolbar": {
         "upload": "Carica",
@@ -189,7 +192,9 @@
         "missing_param": "Informazione richiesta mancante",
         "invalid_json": "Dati richiesta non validi",
         "origin_denied": "Accesso negato da questa origine",
-        "ext_changed": "L’estensione del file non può essere modificata"
+        "ext_changed": "L’estensione del file non può essere modificata",
+        "load_failed": "Impossibile caricare questa cartella",
+        "move_into_self": "Impossibile spostare una cartella dentro sé stessa"
     },
     "presign": {
         "title": "URL prefirmato",

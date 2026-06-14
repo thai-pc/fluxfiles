@@ -33,7 +33,10 @@
         "select_items": "Chọn {count} mục",
         "root": "Gốc",
         "selected": "da chon",
-        "refresh": "Làm mới"
+        "refresh": "Làm mới",
+        "retry": "Thử lại",
+        "expand": "Mở rộng",
+        "collapse": "Thu gọn"
     },
     "toolbar": {
         "upload": "Tải lên",
@@ -189,7 +192,9 @@
         "missing_param": "Thiếu thông tin bắt buộc",
         "invalid_json": "Dữ liệu yêu cầu không hợp lệ",
         "origin_denied": "Truy cập bị từ chối từ nguồn này",
-        "ext_changed": "Không thể thay đổi phần mở rộng của tệp"
+        "ext_changed": "Không thể thay đổi phần mở rộng của tệp",
+        "load_failed": "Không tải được thư mục này",
+        "move_into_self": "Không thể di chuyển thư mục vào chính nó"
     },
     "presign": {
         "title": "URL có thời hạn",

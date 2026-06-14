@@ -33,7 +33,10 @@
         "select_items": "{count} 件を選択",
         "root": "ルート",
         "selected": "選択済み",
-        "refresh": "更新"
+        "refresh": "更新",
+        "retry": "再試行",
+        "expand": "展開",
+        "collapse": "折りたたむ"
     },
     "toolbar": {
         "upload": "アップロード",
@@ -189,7 +192,9 @@
         "missing_param": "必要な情報が不足しています",
         "invalid_json": "無効なリクエストデータ",
         "origin_denied": "このオリジンからのアクセスが拒否されました",
-        "ext_changed": "ファイルの拡張子は変更できません"
+        "ext_changed": "ファイルの拡張子は変更できません",
+        "load_failed": "このフォルダーを読み込めませんでした",
+        "move_into_self": "フォルダーを自分自身の中に移動できません"
     },
     "presign": {
         "title": "署名付きURL",

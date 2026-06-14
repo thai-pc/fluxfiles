@@ -600,31 +600,52 @@ test('bulk move: move multiple files into a subfolder at once', async ({ page })
   await expect(cardByName(page, b)).toBeVisible();
 });
 
-test('sidebar shows the ancestor trail down to the current folder', async ({ page }) => {
+test('sidebar tree auto-expands the path to the current folder', async ({ page }) => {
   const token = mintToken();
   await page.goto(`/public/index.html?token=${token}&disk=local`);
   await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
 
-  // Build A/B, then sit in B so there are two ancestors above it (Root + A).
-  const a = `pw-trail-a-${Date.now()}`;
-  const b = `pw-trail-b-${Date.now()}`;
+  // Build A/B, then sit in B. The tree should auto-expand Root → A → B.
+  const a = `pw-tree-a-${Date.now()}`;
+  const b = `pw-tree-b-${Date.now()}`;
   await createFolder(page, page, a);
   await enterFolder(page, a);
   await createFolder(page, page, b);
   await enterFolder(page, b);
 
-  // Ancestor trail = Root + A (the breadcrumb's vertical twin); B is the current item.
-  const ancestors = page.locator('.ff-sidebar-section .tree-item-ancestor');
-  await expect(ancestors).toHaveCount(2, { timeout: 10_000 });
-  await expect(
-    page.locator('.ff-sidebar-section .tree-item-ancestor', { hasText: a })
-  ).toBeVisible();
-  await expect(page.locator('.ff-tree-divider')).toBeVisible();
+  const tree = page.locator('.ff-sidebar-section');
+  // Parent A is shown as a tree node, and B is the active node (we're inside it).
+  await expect(tree.locator('.tree-node .ti-label', { hasText: a })).toBeVisible({ timeout: 10_000 });
+  const active = tree.locator('.tree-node.active');
+  await expect(active).toHaveCount(1);
+  await expect(active.locator('.ti-label')).toHaveText(b);
+});
 
-  // Current folder is the single active item and shows B's name.
-  const current = page.locator('.ff-sidebar-section .tree-item-current.active');
-  await expect(current).toHaveCount(1);
-  await expect(current.locator('.ti-label')).toHaveText(b);
+test('sidebar tree: chevron collapses/expands a branch without navigating', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const a = `pw-chev-a-${Date.now()}`;
+  const child = `pw-chev-child-${Date.now()}`;
+  await createFolder(page, page, a);
+  await enterFolder(page, a);
+  await createFolder(page, page, child);
+  // Back to root so `a` is a collapsible branch in the tree.
+  await page.locator('.ff-breadcrumb button', { hasText: 'Root' }).click();
+
+  const aNode = page.locator('.ff-sidebar-section .tree-node', { hasText: a }).first();
+  await expect(aNode).toBeVisible({ timeout: 10_000 });
+  const childRow = page.locator('.ff-sidebar-section .tree-node .ti-label', { hasText: child });
+  // `a` stays auto-expanded after we visited it, so its child is already shown.
+  await expect(childRow).toBeVisible({ timeout: 10_000 });
+  // Chevron collapses without navigating: child hidden, path stays at Root.
+  await aNode.locator('.tree-toggle').click();
+  await expect(childRow).toHaveCount(0);
+  await expect(page.locator('.ff-breadcrumb .bc-active')).toHaveText(/Root/);
+  // Chevron expands again: child reappears.
+  await aNode.locator('.tree-toggle').click();
+  await expect(childRow).toBeVisible({ timeout: 10_000 });
 });
 
 test('upload progress UI shows spinner, current filename, and N/total', async ({ page }) => {

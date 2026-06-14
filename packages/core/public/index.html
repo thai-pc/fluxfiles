@@ -240,46 +240,45 @@
             </template>
             <span style="flex-grow:1"></span>
         </div>
-        <!-- Folders section: ancestor trail → current folder → its children -->
+        <!-- Folders section: lazy expand/collapse tree, drag a file/folder onto a node to move it -->
         <div class="ff-sidebar-section">
             <div class="ff-sidebar-label" x-text="t('sidebar.folders')"></div>
 
-            <!-- Ancestors above the current folder (root → … → parent), indented by depth -->
-            <template x-for="(crumb, idx) in breadcrumbs.slice(0, -1)" :key="'anc-' + crumb.path">
-                <button class="tree-item tree-item-ancestor"
-                        :style="'padding-inline-start:' + (10 + idx * 16) + 'px'"
-                        @click="navigate(crumb.path)" :title="crumb.name">
-                    <span class="ti-icon">
-                        <svg x-show="idx === 0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-                        <svg x-show="idx > 0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-                    </span>
-                    <span class="ti-label" x-text="idx === 0 ? t('common.root') : crumb.name"></span>
-                </button>
-            </template>
-
-            <!-- Divider between the ancestor trail and the current folder -->
-            <div class="ff-tree-divider" x-show="breadcrumbs.length > 1"></div>
-
-            <!-- Current folder (active), then its child folders one level deeper -->
-            <button class="tree-item tree-item-current active"
-                    :style="'padding-inline-start:' + (10 + Math.max(0, breadcrumbs.length - 1) * 16) + 'px'"
-                    @click="navigate(currentPath)"
-                    :title="breadcrumbs[breadcrumbs.length - 1].name">
+            <!-- Root (also a drop target) -->
+            <button class="tree-item tree-node"
+                    :class="{ active: currentPath === '', 'drop-target': dropTarget === '' }"
+                    @click="navigate('')"
+                    @dragover="onFolderDragOver('', $event)"
+                    @dragleave="onFolderDragLeave('')"
+                    @drop="onFolderDrop('', $event)">
+                <span class="tree-spacer"></span>
                 <span class="ti-icon">
-                    <svg x-show="currentPath === ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-                    <svg x-show="currentPath !== ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                 </span>
-                <span class="ti-label" x-text="currentPath === '' ? t('common.root') : breadcrumbs[breadcrumbs.length - 1].name"></span>
-                <span class="count" x-text="files.length + folders.length"></span>
+                <span class="ti-label" x-text="t('common.root')"></span>
+                <span class="count" x-text="files.length + folders.length" x-show="currentPath === ''"></span>
             </button>
-            <template x-for="folder in folders" :key="folder.key">
-                <button class="tree-item tree-item-child"
-                        :style="'padding-inline-start:' + (10 + breadcrumbs.length * 16) + 'px'"
-                        @click="navigate(folder.key)" :title="folder.name">
+
+            <!-- Lazy tree: every expanded node's children, flattened with a depth indent -->
+            <template x-for="node in flatTree" :key="node.key">
+                <button class="tree-item tree-node"
+                        :class="{ active: node.key === currentPath, 'drop-target': dropTarget === node.key }"
+                        :style="'padding-inline-start:' + (8 + node.depth * 16) + 'px'"
+                        @click="navigate(node.key)" :title="node.name"
+                        @dragover="onFolderDragOver(node.key, $event)"
+                        @dragleave="onFolderDragLeave(node.key)"
+                        @drop="onFolderDrop(node.key, $event)">
+                    <!-- chevron toggles expand/collapse without navigating -->
+                    <span class="tree-toggle" x-show="node.hasChildren" @click.stop="toggleDir(node.key)"
+                          :aria-label="node.expanded ? t('common.collapse') : t('common.expand')">
+                        <svg class="chev" :class="{ open: node.expanded }" x-show="!node.loading" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3 1.5L6.5 5L3 8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span class="tree-spin" x-show="node.loading"></span>
+                    </span>
+                    <span class="tree-spacer" x-show="!node.hasChildren"></span>
                     <span class="ti-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                     </span>
-                    <span class="ti-label" x-text="folder.name"></span>
+                    <span class="ti-label" x-text="node.name"></span>
                 </button>
             </template>
         </div>
@@ -541,13 +540,30 @@
                 <span x-text="bulkProgress + '%'" style="margin-inline-start:8px;font-size:13px;"></span>
             </div>
 
-            <!-- Loading -->
-            <div class="ff-loading" x-show="loading">
-                <div class="ff-spinner"></div>
+            <!-- Load error — persistent + retry, so a failed load isn't mistaken for an empty folder -->
+            <div class="ff-load-error" x-show="loadError && !loading" x-cloak>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                <p class="fle-title" x-text="t('error.load_failed') || 'Could not load this folder'"></p>
+                <p class="fle-detail" x-text="loadError"></p>
+                <button class="ff-empty-cta" @click="loadFiles()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                    <span x-text="t('common.retry') || 'Retry'"></span>
+                </button>
+            </div>
+
+            <!-- Loading skeleton (shimmer placeholders instead of a blank flash) -->
+            <div class="ff-skeleton-grid" x-show="loading" x-cloak>
+                <template x-for="i in 10" :key="i">
+                    <div class="skel-card">
+                        <div class="skel-thumb"></div>
+                        <div class="skel-line"></div>
+                        <div class="skel-line short"></div>
+                    </div>
+                </template>
             </div>
 
             <!-- File content -->
-            <template x-if="!loading">
+            <template x-if="!loading && !loadError">
                 <div>
                     <!-- Global search results (across disk) -->
                     <template x-if="searchQuery && searchQuery.trim().length >= 2 && searchResults !== null">
@@ -624,7 +640,13 @@
                             <div class="file-grid" :class="{ 'list-view': view === 'list' }">
                                 <template x-for="folder in filteredFolders" :key="folder.key">
                                     <div class="file-card"
-                                         :class="{ selected: isSelected(folder) }"
+                                         :class="{ selected: isSelected(folder), 'drop-target': dropTarget === folder.key, dragging: dragItem && dragItem.key === folder.key }"
+                                         draggable="true"
+                                         @dragstart="onItemDragStart(folder, $event)"
+                                         @dragend="onItemDragEnd()"
+                                         @dragover="onFolderDragOver(folder.key, $event)"
+                                         @dragleave="onFolderDragLeave(folder.key)"
+                                         @drop="onFolderDrop(folder.key, $event)"
                                          @click="toggleFolderSelect(folder, $event)"
                                          @dblclick="navigate(folder.key)"
                                          @contextmenu.prevent="folderContextMenu(folder, $event)">
@@ -657,7 +679,10 @@
                             <div class="file-grid" :class="{ 'list-view': view === 'list' }">
                                 <template x-for="file in filteredFiles" :key="file.key">
                                     <div class="file-card"
-                                         :class="{ selected: isSelected(file) }"
+                                         :class="{ selected: isSelected(file), dragging: dragItem && dragItem.key === file.key }"
+                                         draggable="true"
+                                         @dragstart="onItemDragStart(file, $event)"
+                                         @dragend="onItemDragEnd()"
                                          @click="handleFileClick(file, $event)"
                                          @dblclick="selectFile(file)"
                                          @contextmenu.prevent="openActionSheet(file)">
