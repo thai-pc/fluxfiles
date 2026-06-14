@@ -3,11 +3,12 @@
 /**
  * Regression: navigating into a subfolder when the token has a path `prefix`.
  *
- * list() returns FULL prefixed keys (e.g. "uploads/user_1/posts") and the UI
- * navigates with those keys. scopedPath() used to prefix again
- * ("uploads/user_1/uploads/user_1/posts") so every subfolder came back empty —
- * only the root showed. This locks in the idempotent fix AND its security
- * boundary (one prefix can't reach another's files).
+ * list() returns keys RELATIVE to the token prefix (e.g. "posts", not
+ * "uploads/user_1/posts") so the prefix stays an invisible sandbox detail — the
+ * prefix IS the tenant's root. scopedPath() re-applies the prefix on input and
+ * is idempotent (accepts a relative OR an already-absolute key), so navigation
+ * round-trips. URLs keep the real (prefixed) storage path. This also locks the
+ * security boundary (one prefix can't reach another's files).
  *
  * Usage:
  *   php tests/integration/test-prefix-navigate.php
@@ -64,10 +65,13 @@ $fm = new FileManager($dm, $claims, $meta);
 
 echo "{$yellow}► prefix navigation{$reset}\n";
 
-test('root lists the posts folder', function () use ($fm) {
-    $dirs = array_filter($fm->list('local', ''), fn($e) => ($e['type'] ?? '') === 'dir');
+test('root lists the posts folder with a prefix-RELATIVE key (not the prefix)', function () use ($fm) {
+    $dirs = array_values(array_filter($fm->list('local', ''), fn($e) => ($e['type'] ?? '') === 'dir'));
     $names = array_map(fn($e) => $e['name'], $dirs);
     assertEqual(true, in_array('posts', $names, true), 'root should show posts/ — got ' . json_encode($names));
+    $posts = array_values(array_filter($dirs, fn($e) => $e['name'] === 'posts'))[0];
+    // The prefix ("uploads/user_1") must NOT leak into the key — the tenant's root is the prefix.
+    assertEqual('posts', $posts['key'], 'dir key must be relative to the prefix');
 });
 
 test('navigate with FULL prefixed key returns the files (the bug: was 0)', function () use ($fm) {
@@ -80,9 +84,22 @@ test('navigate with a relative key also works (idempotent both ways)', function 
     assertEqual(2, count($f), 'expected 2 files, got ' . count($f));
 });
 
-test('file URL resolves under the user prefix', function () use ($fm) {
-    $f = files($fm->list('local', 'uploads/user_1/posts'));
-    assertContains('uploads/user_1/posts/', (string) ($f[0]['url'] ?? ''));
+test('file keys are relative; navigating with a returned key round-trips', function () use ($fm) {
+    // Drive it exactly like the UI: read a dir key from the root listing, then
+    // navigate with that key (no prefix knowledge on the client).
+    $dirs = array_values(array_filter($fm->list('local', ''), fn($e) => ($e['type'] ?? '') === 'dir'));
+    $postsKey = array_values(array_filter($dirs, fn($e) => $e['name'] === 'posts'))[0]['key'];
+    assertEqual('posts', $postsKey, 'returned key is relative');
+    $f = files($fm->list('local', $postsKey));
+    assertEqual(2, count($f), 'navigating the returned key must list the files');
+    // File keys are relative too.
+    assertEqual('posts/' . $f[0]['name'], $f[0]['key'], 'file key is prefix-relative');
+});
+
+test('file URL keeps the real (prefixed) storage path even though the key is relative', function () use ($fm) {
+    $f = files($fm->list('local', 'posts'));
+    assertEqual('posts/' . $f[0]['name'], $f[0]['key'], 'key relative');
+    assertContains('uploads/user_1/posts/', (string) ($f[0]['url'] ?? ''));  // URL absolute
 });
 
 echo "{$yellow}► prefix isolation (security){$reset}\n";

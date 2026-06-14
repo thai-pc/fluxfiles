@@ -111,6 +111,7 @@ supported; folders move the whole subtree incl. variants. All gated by the
 ## Important Route Notes
 
 - Per-tenant config (`ai_auto_tag`, `rate_read`/`rate_write`, `variants`, upload/ext/quota limits, `owner_only`) is carried in **JWT claims**, not a `/config` route — the token *is* the config.
+- **Keys are relative to the token `prefix`.** When a token is path-scoped (e.g. `prefix=users/42/`), every `key`/`file_key`/`dir_key`/`next_cursor`/`original_key` returned is **stripped of the prefix** (the prefix is the tenant's root, kept invisible) — e.g. on-disk `users/42/reports` is returned as `reports`. The API accepts both relative and absolute paths on input (scoping is idempotent). `url`/`permanent_url` keep the **real** (prefixed) storage path. With no prefix, keys are unchanged.
 - `list`, `search`, and `search-folders` rows include a stable `created` (Unix seconds) alongside `modified`; folders carry `created` too (S3/R2 dir prefixes may lack `modified`). The UI sorts by `created || modified`.
 - Mutating requests validate the `Origin` header against `FLUXFILES_ALLOWED_ORIGINS` when origins are configured.
 - Route responses usually follow `{ "data": ..., "error": null }`; API exceptions include `error_code` when available.

@@ -213,4 +213,31 @@ class Claims
         }
         return $relative;
     }
+
+    /**
+     * Inverse of scopePath: strip the tenant prefix from an absolute storage key
+     * so the client sees paths relative to ITS root (the prefix is an internal
+     * sandbox detail and must stay invisible — the prefix IS the tenant's root).
+     *
+     * Idempotent: a key that is already relative (not under the prefix) is
+     * returned unchanged. The prefix root itself maps to '' (the relative root).
+     * URLs are NOT run through this — they must keep the real storage path.
+     */
+    public function unscopePath(string $key): string
+    {
+        $prefix = trim($this->pathPrefix, '/');
+        if ($prefix === '') {
+            return ltrim($key, '/');
+        }
+        $key = ltrim(str_replace(["\0", "\x00"], '', $key), '/');
+        if ($key === $prefix) {
+            return '';
+        }
+        if (strpos($key, $prefix . '/') === 0) {
+            return substr($key, strlen($prefix) + 1);
+        }
+        // Already relative (or outside the prefix — shouldn't happen for scoped
+        // storage ops): leave as-is rather than corrupt it.
+        return $key;
+    }
 }

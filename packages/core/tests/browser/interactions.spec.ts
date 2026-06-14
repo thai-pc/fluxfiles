@@ -600,6 +600,33 @@ test('bulk move: move multiple files into a subfolder at once', async ({ page })
   await expect(cardByName(page, b)).toBeVisible();
 });
 
+test('sidebar shows the ancestor trail down to the current folder', async ({ page }) => {
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  // Build A/B, then sit in B so there are two ancestors above it (Root + A).
+  const a = `pw-trail-a-${Date.now()}`;
+  const b = `pw-trail-b-${Date.now()}`;
+  await createFolder(page, page, a);
+  await enterFolder(page, a);
+  await createFolder(page, page, b);
+  await enterFolder(page, b);
+
+  // Ancestor trail = Root + A (the breadcrumb's vertical twin); B is the current item.
+  const ancestors = page.locator('.ff-sidebar-section .tree-item-ancestor');
+  await expect(ancestors).toHaveCount(2, { timeout: 10_000 });
+  await expect(
+    page.locator('.ff-sidebar-section .tree-item-ancestor', { hasText: a })
+  ).toBeVisible();
+  await expect(page.locator('.ff-tree-divider')).toBeVisible();
+
+  // Current folder is the single active item and shows B's name.
+  const current = page.locator('.ff-sidebar-section .tree-item-current.active');
+  await expect(current).toHaveCount(1);
+  await expect(current.locator('.ti-label')).toHaveText(b);
+});
+
 test('upload progress UI shows spinner, current filename, and N/total', async ({ page }) => {
   const token = mintToken();
   await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);

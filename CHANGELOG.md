@@ -3,6 +3,30 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.15] — 2026-06-14
+
+> Released: core `core-v0.2.12` (Packagist).
+
+### Changed
+
+- **API keys are now relative to the token `prefix`** (the prefix is the tenant's
+  root and stays invisible). For a path-scoped token (`prefix=users/42/`), `list`,
+  `search`, `search-folders`, `upload`, `rename`, `move`/`copy`, cross-disk
+  copy/move, `restore` and trash listings return keys with the prefix **stripped**
+  — on-disk `users/42/reports` comes back as `reports`. Fixes the "phantom root"
+  where the breadcrumb/sidebar showed `Root › users › 42 › reports` and a fake
+  "Root" sat above the real (prefix) root. Input still accepts relative **or**
+  absolute paths (scoping is idempotent), and `url`/`permanent_url` keep the real
+  prefixed storage path. **Migration:** if you stored the absolute `key` (with
+  prefix) from a scoped token, it is now returned relative — re-derive or
+  re-scope. Unscoped tokens (no prefix) are unaffected.
+
+### Added
+
+- **Sidebar folder tree shows the ancestor trail** to the current folder
+  (root → … → parent, indented), then the current folder + its children — the
+  vertical twin of the breadcrumb. Reuses `breadcrumbs`; no extra API calls.
+
 ## [0.2.14] — 2026-06-14
 
 > Released: Laravel adapter `laravel-v0.2.4` (Packagist).
