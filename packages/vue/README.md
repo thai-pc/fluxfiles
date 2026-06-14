@@ -33,7 +33,7 @@ const open = ref(false);
 
 function onSelect(file) {
     // For saved content, prefer permanent_url (url is presigned/expiring on
-    // private disks). file also has mime/width/height.
+    // private disks). file also has mime/width/height and created/modified.
     const src = file.permanent_url || file.url;
     console.log(src, file.path);
     open.value = false;

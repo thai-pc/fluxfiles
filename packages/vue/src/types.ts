@@ -13,6 +13,10 @@ export interface FluxFile {
   /** Image dimensions (present for images uploaded through FluxFiles). */
   width?: number;
   height?: number;
+  /** Unix seconds. `created` is a stable upload/mkdir time; `modified` is the
+   *  storage mtime (may be absent for S3/R2 dir prefixes). UI sorts by
+   *  `created || modified`. Present on both file and folder entries. */
+  created?: number;
   modified?: number;
   url?: string;
   /** Stable, non-expiring URL for embedding (public disk / public_url). */

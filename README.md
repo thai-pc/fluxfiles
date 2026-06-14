@@ -1458,6 +1458,20 @@ git tag tinymce-v0.2.0
 
 `core-v*` and `laravel-v*` trigger `.github/workflows/split.yml`. The npm package tags trigger `.github/workflows/npm-publish.yml` for only the matching package. **Push tags one at a time** — pushing more than three tags in a single `git push` skips the tag-triggered workflows.
 
+#### Packagist auto-update (avoid the crawl lag)
+
+After the split job pushes the new tag to the `fluxfiles-core` / `fluxfiles-laravel`
+repos, it pings the Packagist update API so the new version appears **immediately**
+instead of waiting for Packagist's slow periodic crawl. Set two repo secrets once:
+
+- `PACKAGIST_USERNAME` — your packagist.org username.
+- `PACKAGIST_TOKEN` — packagist.org → **Profile → Show API Token**.
+
+Without them the split still succeeds (Packagist just updates on its own schedule).
+As a belt-and-suspenders alternative, enable Packagist's GitHub hook on each split
+repo (packagist.org package page → **Settings → integrations**), so a push updates
+Packagist even outside CI.
+
 ### Manual browser pages
 
 These pages load the SDK/editor plugins from absolute paths (`/fluxfiles.js`,
