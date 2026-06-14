@@ -5,6 +5,15 @@ on:
     branches: ['**']
   pull_request:
 
+# Make every `npm install` resilient to transient registry hiccups (the npm
+# fetch layer retries ECONNRESET / timeouts instead of failing the job).
+env:
+  npm_config_fetch_retries: '5'
+  npm_config_fetch_retry_factor: '2'
+  npm_config_fetch_retry_mintimeout: '20000'
+  npm_config_fetch_retry_maxtimeout: '120000'
+  npm_config_fetch_timeout: '600000'
+
 jobs:
   core-php:
     name: Core (PHP ${{ matrix.php }})
@@ -178,7 +187,7 @@ jobs:
       - name: Install + test ${{ matrix.pkg }}
         working-directory: packages/${{ matrix.pkg }}
         run: |
-          npm install --no-audit --no-fund
+          bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --no-audit --no-fund
           npm test
 
   node-sdk:
@@ -209,7 +218,7 @@ jobs:
       - name: Install + typecheck + build + test @fluxfiles/node
         working-directory: packages/node
         run: |
-          npm install --no-audit --no-fund
+          bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --no-audit --no-fund
           npm run typecheck
           npm run build
           npm test
@@ -239,8 +248,8 @@ jobs:
       - name: Install Playwright + chromium
         working-directory: packages/core/tests/browser
         run: |
-          npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium
+          bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --no-audit --no-fund
+          bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npx playwright install --with-deps chromium
 
       - name: Run Playwright e2e (boots the PHP server, drives the iframe UI)
         working-directory: packages/core/tests/browser
@@ -258,7 +267,7 @@ jobs:
           node-version: '20'
       - name: Build, pack, install each wrapper into a throwaway consumer
         run: |
-          for p in sdk react vue; do npm install --prefix packages/$p --no-audit --no-fund; done
+          for p in sdk react vue; do bash scripts/ci-retry.sh npm install --prefix packages/$p --no-audit --no-fund; done
           bash scripts/pack-smoke.sh all
 
   docker-build:
