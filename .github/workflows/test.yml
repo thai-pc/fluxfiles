@@ -70,6 +70,31 @@ jobs:
       - name: Laravel adapter smoke (stubbed Laravel, uses core autoload)
         run: php packages/laravel/tests/test-laravel-smoke.php
 
+  adapter-core-floor:
+    name: Adapter ↔ core floor guard
+    runs-on: ubuntu-latest
+    steps:
+      # Need full history + tags so the guard can build core at each adapter's
+      # declared composer floor (a `core-vX.Y.Z` monorepo tag) in a worktree.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      # Runs each PHP adapter's smoke against core built at its declared floor.
+      # Fails if an adapter uses a core API newer than its composer.json allows
+      # (the failure mode behind the sanitizeVariants 500). Skips an adapter
+      # whose floor tag isn't released yet (warning, not failure).
+      - name: Check adapters against their declared core floor
+        run: bash scripts/check-adapter-core-floor.sh
+
   api-e2e:
     name: API e2e (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest

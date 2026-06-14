@@ -610,10 +610,13 @@ test('upload progress UI shows spinner, current filename, and N/total', async ({
   await enterFolder(page, folder);
 
   // Hold each upload request ~900ms so the progress bar stays observable.
-  await page.route('**/api/fm/upload', async (route) => {
+  // Guard continue() + unroute by reference: a request still sleeping when we
+  // unroute would otherwise throw "Route is already handled!" and flake.
+  const holdUpload = async (route: import('@playwright/test').Route) => {
     await new Promise((r) => setTimeout(r, 900));
-    await route.continue();
-  });
+    try { await route.continue(); } catch { /* unrouted mid-flight */ }
+  };
+  await page.route('**/api/fm/upload', holdUpload);
 
   const stamp = Date.now();
   const a = `prog-a-${stamp}.png`;
@@ -626,7 +629,7 @@ test('upload progress UI shows spinner, current filename, and N/total', async ({
   await expect(page.locator('.ff-upload-name')).not.toHaveText('');
   await expect(page.locator('.ff-upload-count')).toHaveText(/\([12]\/2\)/);
 
-  await page.unroute('**/api/fm/upload');
+  await page.unroute('**/api/fm/upload', holdUpload);
   // Both files finish and land in the grid.
   await expect(cardByName(page, a)).toBeVisible({ timeout: 15_000 });
   await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });

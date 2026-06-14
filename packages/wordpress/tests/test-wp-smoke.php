@@ -48,7 +48,10 @@ if (!function_exists('wp_generate_password')) {
 if (!function_exists('add_action')) { function add_action(...$a) {} }
 if (!function_exists('add_filter')) { function add_filter(...$a) {} }
 
-require_once __DIR__ . '/../../core/vendor/autoload.php';   // FluxFiles\JwtCompat, CredentialEncryptor
+// See test-laravel-smoke.php: CI's floor check overrides FLUXFILES_CORE_AUTOLOAD
+// to run against core at this adapter's declared composer floor.
+$coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
+require_once $coreAutoload;   // FluxFiles\JwtCompat, CredentialEncryptor
 require_once __DIR__ . '/../includes/FluxFilesPlugin.php';
 
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
