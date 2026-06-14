@@ -41,6 +41,16 @@ Route::delete('metadata', [FluxFilesController::class, 'deleteMetadata']);
 Route::get('search', [FluxFilesController::class, 'search']);
 Route::get('search-folders', [FluxFilesController::class, 'searchFolders']);
 
+// Trash (soft-delete) — gated by the 'delete' permission inside FileManager
+Route::post('trash', [FluxFilesController::class, 'trash']);
+Route::post('trash/restore', [FluxFilesController::class, 'trashRestore']);
+Route::get('trash/list', [FluxFilesController::class, 'trashList']);
+Route::post('trash/purge', [FluxFilesController::class, 'trashPurge']);
+Route::post('trash/empty', [FluxFilesController::class, 'trashEmpty']);
+
+// Bucket Doctor — diagnose a disk backend (creds/permissions/CORS/presign)
+Route::get('disk/doctor', [FluxFilesController::class, 'diskDoctor']);
+
 // Quota
 Route::get('quota', [FluxFilesController::class, 'quota']);
 

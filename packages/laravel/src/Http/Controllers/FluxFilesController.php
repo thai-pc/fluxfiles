@@ -6,6 +6,7 @@ namespace FluxFiles\Laravel\Http\Controllers;
 
 use FluxFiles\ApiException;
 use FluxFiles\AuditLogStorage;
+use FluxFiles\BucketDoctor;
 use FluxFiles\ChunkUploader;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
@@ -645,6 +646,136 @@ class FluxFilesController
                 $claims->pathPrefix,
                 $claims->maxStorageMb
             ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
+
+    public function trash(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk = $request->input('disk');
+            $path = $request->input('path');
+            if (!$disk || $path === null) {
+                throw new ApiException('Missing required field: disk or path', 400, 'missing_param');
+            }
+
+            $result = $fm->trash((string) $disk, (string) $path);
+            $this->logAudit($claims, 'trash', (string) $disk, (string) $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function trashRestore(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk    = $request->input('disk');
+            $trashId = $request->input('trash_id');
+            if (!$disk || !$trashId) {
+                throw new ApiException('Missing required field: disk/trash_id', 400, 'missing_param');
+            }
+
+            $result = $fm->restore((string) $disk, (string) $trashId, $request->input('path'));
+            $this->logAudit($claims, 'restore', (string) $disk, (string) $trashId);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function trashList(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+
+            return $this->ok($fm->listTrash((string) $request->query('disk', 'local')));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function trashPurge(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk    = $request->input('disk');
+            $trashId = $request->input('trash_id');
+            if (!$disk || !$trashId) {
+                throw new ApiException('Missing required field: disk/trash_id', 400, 'missing_param');
+            }
+
+            $result = $fm->purgeTrash((string) $disk, (string) $trashId);
+            $this->logAudit($claims, 'purge', (string) $disk, (string) $trashId);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function trashEmpty(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk = $request->input('disk');
+            if (!$disk) {
+                throw new ApiException('Missing required field: disk', 400, 'missing_param');
+            }
+
+            $result = $fm->emptyTrash((string) $disk);
+            $this->logAudit($claims, 'empty_trash', (string) $disk, '');
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    // Bucket Doctor — diagnose a disk backend (writes/deletes a probe object,
+    // so it requires the 'write' permission on a disk the token may access).
+
+    public function diskDoctor(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            // Build the FileManager so any BYOB disks in the token are registered
+            // on the DiskManager before BucketDoctor probes them.
+            $this->fileManager($claims);
+
+            $disk = (string) $request->query('disk', 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            if (!$claims->hasPerm('write')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
+            $origin = $request->header('Origin') ?: $request->query('origin');
+
+            return $this->ok((new BucketDoctor($this->diskManager))->diagnose($disk, $origin ?: null));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }

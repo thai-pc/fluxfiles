@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.14] — 2026-06-14
+
+> Released: Laravel adapter `laravel-v0.2.4` (Packagist).
+
+### Fixed
+
+- **Laravel proxy returned 404 for `disk/doctor` and the whole `trash/*` family.**
+  The proxy is an explicit route allow-list and these core routes were never
+  added, so Bucket Doctor and soft-delete/restore/empty 404'd in proxy mode.
+  Added the 6 routes + controller handlers (`diskDoctor`, `trash`, `trashRestore`,
+  `trashList`, `trashPurge`, `trashEmpty`), mirroring the core endpoints (same
+  permission/validation; BYOB disks registered before the Doctor probes).
+
+### Tests
+
+- The Laravel smoke now **diffs core's `/api/fm/*` route surface against the proxy**
+  and fails if a core route isn't proxied (would have caught this gap), plus a
+  check that every proxied route maps to a real controller method.
+
 ## [0.2.13] — 2026-06-14
 
 > Released: React `react-v0.2.3`, Vue `vue-v0.2.2` (npm).

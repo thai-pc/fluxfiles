@@ -139,6 +139,40 @@ test("default local disk root matches public storage URL", function () {
     assertEqual("/storage/fluxfiles/uploads", $cfg["disks"]["local"]["url"], "local url");
 });
 
+test('proxy route surface covers every core /api/fm route', function () {
+    // The Laravel proxy is an explicit allow-list, so a core route that isn't
+    // proxied 404s for Laravel users (this is the disk/doctor + trash gap).
+    // Diff core's literal `$uri === '/api/fm/…'` routes against routes/fluxfiles.php.
+    $coreSrc  = (string) file_get_contents(__DIR__ . '/../../core/api/index.php');
+    $routeSrc = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
+
+    preg_match_all("#\\\$uri === '/api/fm/([a-z0-9/_-]+)'#", $coreSrc, $cm);
+    $coreRoutes = array_unique($cm[1]);
+    sort($coreRoutes);
+
+    preg_match_all("#Route::[a-z]+\\(\\s*'([a-z0-9/_{}-]+)'#", $routeSrc, $rm);
+    $proxyRoutes = array_map(fn ($r) => preg_replace('#/\{[^}]+\}#', '', $r), $rm[1]);
+
+    // Core routes that are intentionally NOT proxied (keep empty unless justified).
+    $intentionallyUnproxied = [];
+
+    $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
+    assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));
+});
+
+test('every proxy route maps to an existing controller method', function () {
+    $routeSrc = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
+    $ctrlSrc  = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    preg_match_all("#FluxFilesController::class,\\s*'([a-zA-Z0-9_]+)'#", $routeSrc, $m);
+    $missing = [];
+    foreach (array_unique($m[1]) as $method) {
+        if (!preg_match('#function\s+' . preg_quote($method, '#') . '\s*\(#', $ctrlSrc)) {
+            $missing[] = $method;
+        }
+    }
+    assertTrue($missing === [], 'routes reference missing controller methods: ' . implode(', ', $missing));
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
