@@ -114,11 +114,13 @@ class FileManager
         $total = count($all);
 
         if ($limit > 0) {
-            // Skip past cursor (exclusive)
+            // Skip past cursor (exclusive). The client echoes the relative cursor
+            // we handed out, so re-scope it to the absolute key space first.
             if ($cursor !== '') {
+                $absCursor = $this->scopedPath($cursor);
                 $start = 0;
                 foreach ($all as $i => $it) {
-                    if ($it['key'] === $cursor) {
+                    if ($it['key'] === $absCursor) {
                         $start = $i + 1;
                         break;
                     }
@@ -128,13 +130,13 @@ class FileManager
 
             $page = array_slice($all, 0, $limit);
             $nextCursor = (count($page) === $limit && $limit < count($all))
-                ? $page[count($page) - 1]['key']
+                ? $this->outKey($page[count($page) - 1]['key'])
                 : null;
 
             $this->attachMetadata($disk, $page);
 
             return [
-                'items'       => $page,
+                'items'       => $this->unscopeItems($page),
                 'next_cursor' => $nextCursor,
                 'total'       => $total,
             ];
@@ -142,7 +144,7 @@ class FileManager
 
         // Legacy mode: return flat array with all items + metadata.
         $this->attachMetadata($disk, $all);
-        return $all;
+        return $this->unscopeItems($all);
     }
 
     /**
@@ -241,14 +243,14 @@ class FileManager
                     || str_contains($existingKey, '/_fluxfiles/')
                     || str_contains($existingKey, '/_variants/');
                 if (!$isSystem && $fs->fileExists($existingKey)) {
-                    return [
+                    return $this->unscopeItems([[
                         'key'       => $existingKey,
                         'url'       => $this->fileUrl($disk, $existingKey),
                         'name'      => basename($existingKey),
                         'duplicate' => true,
                         'message'   => 'File already exists. Use force_upload to override.',
                         'variants'  => $this->getFileVariants($disk, $existingKey),
-                    ];
+                    ]])[0];
                 }
                 // Stale / invalid hash entry — purge so it doesn't keep blocking uploads.
                 $this->meta->delete($disk, $existingKey);
@@ -356,7 +358,7 @@ class FileManager
             }
         }
 
-        return $result;
+        return $this->unscopeItems([$result])[0];
     }
 
     public function delete(string $disk, string $path): array
@@ -586,7 +588,7 @@ class FileManager
         try { $fs->deleteDirectory($trashDir); } catch (\Throwable $e) { /* best effort */ }
         $this->meta->removeTrash($disk, $id);
 
-        return ['restored' => true, 'key' => $target];
+        return ['restored' => true, 'key' => $this->outKey($target)];
     }
 
     /** Restore a trashed directory subtree to $target. */
@@ -622,7 +624,7 @@ class FileManager
         try { $fs->deleteDirectory($trashDir); } catch (\Throwable $e) { /* best effort */ }
         $this->meta->removeTrash($disk, $id);
 
-        return ['restored' => true, 'key' => $target];
+        return ['restored' => true, 'key' => $this->outKey($target)];
     }
 
     /** List trash entries the caller may see (scoped to prefix + owner). */
@@ -641,7 +643,7 @@ class FileManager
             $out[] = [
                 'trash_id'     => $id,
                 'name'         => $e['basename'] ?? basename((string) ($e['original_key'] ?? '')),
-                'original_key' => $e['original_key'] ?? '',
+                'original_key' => $this->outKey((string) ($e['original_key'] ?? '')),
                 'is_dir'       => !empty($e['is_dir']),
                 'size'         => $e['size'] ?? 0,
                 'deleted_at'   => $e['deleted_at'] ?? 0,
@@ -843,7 +845,7 @@ class FileManager
         }
 
         return [
-            'key'  => $newPath,
+            'key'  => $this->outKey($newPath),
             'name' => $newName,
             'url'  => $isDir ? null : $this->fileUrl($disk, $newPath),
         ];
@@ -890,7 +892,7 @@ class FileManager
             }
         }
 
-        return ['key' => $scopedTo];
+        return ['key' => $this->outKey($scopedTo)];
     }
 
     public function copy(string $disk, string $from, string $to): array
@@ -915,7 +917,7 @@ class FileManager
             $this->meta->trackParents($disk, $scopedTo);
         }
 
-        return ['key' => $scopedTo];
+        return ['key' => $this->outKey($scopedTo)];
     }
 
     public function crossCopy(string $srcDisk, string $srcPath, string $dstDisk, string $dstPath): array
@@ -967,7 +969,7 @@ class FileManager
         }
 
         return [
-            'key'      => $scopedDst,
+            'key'      => $this->outKey($scopedDst),
             'url'      => $this->fileUrl($dstDisk, $scopedDst),
             'src_disk' => $srcDisk,
             'dst_disk' => $dstDisk,
@@ -1013,7 +1015,7 @@ class FileManager
         }
 
         return [
-            'key'      => $scopedDst,
+            'key'      => $this->outKey($scopedDst),
             'url'      => $this->fileUrl($dstDisk, $scopedDst),
             'src_disk' => $srcDisk,
             'dst_disk' => $dstDisk,
@@ -1203,13 +1205,13 @@ class FileManager
             @unlink($tmpFile);
         }
 
-        return [
-            'key'      => $scopedDst,
+        return $this->unscopeItems([[
+            'key'      => $this->outKey($scopedDst),
             'url'      => $this->fileUrl($disk, $scopedDst),
             'width'    => $result['width'],
             'height'   => $result['height'],
             'variants' => $variants,
-        ];
+        ]])[0];
     }
 
     public function aiTag(string $disk, string $path): array
@@ -1377,9 +1379,9 @@ class FileManager
 
         if ($prefix !== '') {
             // Idempotent prefixing. list() returns full prefixed keys (e.g.
-            // "user_1/posts") and the UI navigates with those keys, so a path
-            // already inside the prefix must NOT be prefixed again (which produced
-            // "user_1/user_1/posts" → empty folder). `..`/`.` were stripped above
+            // "user_1/posts" internally) and accepts relative paths from the UI,
+            // so a path already inside the prefix must NOT be prefixed again (which
+            // produced "user_1/user_1/posts" → empty folder). `..`/`.` were stripped above
             // and the trailing-"/" boundary blocks prefix confusion (user_1 vs
             // user_10), so anything not under the prefix is still sandboxed into it.
             if ($relative === $prefix || strpos($relative, $prefix . '/') === 0) {
@@ -1402,6 +1404,40 @@ class FileManager
         }
 
         return $relative;
+    }
+
+    /**
+     * Strip the tenant prefix from an outbound navigation key so the client sees
+     * paths relative to ITS root (the prefix is an internal sandbox detail). The
+     * inverse of scopedPath(); idempotent. See Claims::unscopePath().
+     */
+    private function outKey(string $key): string
+    {
+        return $this->claims->unscopePath($key);
+    }
+
+    /**
+     * Apply outKey() to the navigation keys in a result set (item `key` and each
+     * variant `key`). `url`/`permanent_url` are deliberately left untouched —
+     * those are real storage URLs and must keep the full path.
+     */
+    private function unscopeItems(array $items): array
+    {
+        foreach ($items as &$it) {
+            if (isset($it['key']) && is_string($it['key'])) {
+                $it['key'] = $this->outKey($it['key']);
+            }
+            if (!empty($it['variants']) && is_array($it['variants'])) {
+                foreach ($it['variants'] as &$v) {
+                    if (isset($v['key']) && is_string($v['key'])) {
+                        $v['key'] = $this->outKey($v['key']);
+                    }
+                }
+                unset($v);
+            }
+        }
+        unset($it);
+        return $items;
     }
 
     /**

@@ -252,6 +252,44 @@ test('scopePath: prefix confusion (user_1 vs user_10) is blocked by the / bounda
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "{$yellow}► unscopePath (strip prefix for client-facing keys){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('unscopePath: strips the prefix from an absolute key', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
+    assertEqual('posts/a.jpg', $claims->unscopePath('uploads/user1/posts/a.jpg'));
+});
+
+test('unscopePath: the prefix root itself maps to the relative root ""', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
+    assertEqual('', $claims->unscopePath('uploads/user1'));
+});
+
+test('unscopePath: no prefix → key unchanged', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0);
+    assertEqual('posts/a.jpg', $claims->unscopePath('posts/a.jpg'));
+});
+
+test('unscopePath: already-relative key is left as-is (idempotent)', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
+    assertEqual('posts/a.jpg', $claims->unscopePath('posts/a.jpg'));
+});
+
+test('unscopePath: round-trips with scopePath', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
+    $abs = $claims->scopePath('posts/a.jpg');           // uploads/user1/posts/a.jpg
+    assertEqual('posts/a.jpg', $claims->unscopePath($abs));
+    // and the client's relative key re-scopes back to the same absolute key
+    assertEqual($abs, $claims->scopePath($claims->unscopePath($abs)));
+});
+
+test('unscopePath: the / boundary keeps user_1 vs user_10 distinct', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'user_1', 10, null, 0);
+    // "user_10/x" is NOT under prefix "user_1" → left unchanged, not mangled
+    assertEqual('user_10/x', $claims->unscopePath('user_10/x'));
+});
+
+// ═══════════════════════════════════════════════════════════════
 echo "{$yellow}► Defaults and allowed extensions{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 

@@ -359,7 +359,16 @@ function routeRequest(
         if (!$claims->hasPerm('read')) {
             throw new ApiException('Permission denied: read', 403, 'permission_denied');
         }
-        return $metaRepo->search($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
+        $rows = $metaRepo->search($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
+        // Strip the tenant prefix so search keys are relative to the client root,
+        // matching list()/navigation (the prefix stays an internal detail).
+        foreach ($rows as &$row) {
+            if (isset($row['file_key'])) {
+                $row['file_key'] = $claims->unscopePath((string) $row['file_key']);
+            }
+        }
+        unset($row);
+        return $rows;
     }
 
     // Search folders (directory index)
@@ -375,7 +384,14 @@ function routeRequest(
         if (!$claims->hasPerm('read')) {
             throw new ApiException('Permission denied: read', 403, 'permission_denied');
         }
-        return $metaRepo->searchFolders($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
+        $rows = $metaRepo->searchFolders($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
+        foreach ($rows as &$row) {
+            if (isset($row['dir_key'])) {
+                $row['dir_key'] = $claims->unscopePath((string) $row['dir_key']);
+            }
+        }
+        unset($row);
+        return $rows;
     }
 
     // Quota
