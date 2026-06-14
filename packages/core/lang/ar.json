@@ -33,7 +33,10 @@
         "select_items": "اختيار {count} عناصر",
         "root": "الجذر",
         "selected": "محدد",
-        "refresh": "تحديث"
+        "refresh": "تحديث",
+        "retry": "إعادة المحاولة",
+        "expand": "توسيع",
+        "collapse": "طي"
     },
     "toolbar": {
         "upload": "رفع",
@@ -189,7 +192,9 @@
         "missing_param": "معلومات مطلوبة مفقودة",
         "invalid_json": "بيانات طلب غير صالحة",
         "origin_denied": "تم رفض الوصول من هذا المصدر",
-        "ext_changed": "لا يمكن تغيير امتداد الملف"
+        "ext_changed": "لا يمكن تغيير امتداد الملف",
+        "load_failed": "تعذّر تحميل هذا المجلد",
+        "move_into_self": "لا يمكن نقل مجلد إلى داخل نفسه"
     },
     "presign": {
         "title": "رابط موقّع مسبقاً",

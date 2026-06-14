@@ -16,6 +16,14 @@ function fluxFilesApp() {
         selected: [],
         view: 'grid',
         loading: false,
+        loadError: null,            // string|null — set when loadFiles() fails (persistent, vs the transient toast)
+        // Sidebar folder tree (lazy expand/collapse)
+        expandedDirs: {},           // { dirKey: true } — which nodes are open
+        dirChildren: {},            // { dirKey: [{key,name}] } — cached child folders ('' = root)
+        treeLoading: {},            // { dirKey: true } — children being fetched
+        // Drag-to-move
+        dragItem: null,             // the file/folder being dragged (internal move)
+        dropTarget: null,           // dir key currently hovered as a drop target
         token: '',
         endpoint: '',
         config: {},
@@ -565,6 +573,7 @@ function fluxFilesApp() {
         // Load files (first page)
         async loadFiles() {
             this.loading = true;
+            this.loadError = null;
             this.listCursor = null;
             this.listTotal = 0;
             try {
@@ -584,13 +593,23 @@ function fluxFilesApp() {
                 this.selected = [];
                 this.detailFile = null;
 
+                // Seed the tree cache with the current dir's children (free — we
+                // just fetched them) and auto-expand the trail down to here.
+                this.dirChildren[this.currentPath] = this.folders.map(d => ({ key: d.key, name: d.name }));
+                this.syncTreeToPath();
+
                 // If the target file from a global search isn't on the first page, keep loading until we find it or pages run out.
                 if (this._pendingSelectKey) {
                     await this._resolvePendingSelection();
                 }
             } catch (err) {
                 console.error('FluxFiles: Failed to load files', err);
-                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
+                // Persistent inline error (+ retry) so a failed load isn't mistaken
+                // for an empty folder once the transient toast fades.
+                this.loadError = err.message || this.t('error.load_failed');
+                this.folders = [];
+                this.files = [];
+                this.showToast(this.loadError, 'error', 4000);
             } finally {
                 this.loading = false;
             }
@@ -766,6 +785,138 @@ function fluxFilesApp() {
             const parts = this.currentPath.split('/').filter(Boolean);
             parts.pop();
             this.navigate(parts.join('/'));
+        },
+
+        // ── Sidebar folder tree (lazy expand/collapse) ──────────────────────
+        // Fetch a directory's child folders once and cache them ('' = root).
+        async loadDirChildren(key) {
+            if (this.dirChildren[key] !== undefined || this.treeLoading[key]) return;
+            this.treeLoading[key] = true;
+            try {
+                const res = await this.api('GET',
+                    '/api/fm/list?disk=' + encodeURIComponent(this.currentDisk) +
+                    '&path=' + encodeURIComponent(key) +
+                    '&limit=' + encodeURIComponent(this.listLimit));
+                const items = Array.isArray(res) ? res : (res?.items || []);
+                this.dirChildren[key] = items
+                    .filter(i => i.type === 'dir')
+                    .map(d => ({ key: d.key, name: d.name }));
+            } catch (e) {
+                this.dirChildren[key] = []; // best-effort: one bad node shouldn't break the tree
+            } finally {
+                delete this.treeLoading[key];
+            }
+        },
+
+        async toggleDir(key) {
+            if (this.expandedDirs[key]) {
+                delete this.expandedDirs[key];
+            } else {
+                this.expandedDirs[key] = true;
+                await this.loadDirChildren(key);
+            }
+        },
+
+        // Auto-expand the trail down to the current folder so the tree always
+        // shows where you are (the breadcrumb's vertical twin) while still
+        // letting you open sibling branches.
+        async syncTreeToPath() {
+            await this.loadDirChildren('');
+            const parts = this.currentPath.split('/').filter(Boolean);
+            let cum = '';
+            for (const p of parts) {
+                cum = cum ? cum + '/' + p : p;
+                this.expandedDirs[cum] = true;
+                await this.loadDirChildren(cum);
+            }
+        },
+
+        // Flatten the expanded tree into renderable rows (Alpine has no recursion).
+        get flatTree() {
+            const rows = [];
+            const walk = (key, depth) => {
+                for (const child of (this.dirChildren[key] || [])) {
+                    const loaded = this.dirChildren[child.key];
+                    rows.push({
+                        key: child.key,
+                        name: child.name,
+                        depth,
+                        expanded: !!this.expandedDirs[child.key],
+                        loading: !!this.treeLoading[child.key],
+                        // Unknown until loaded → show the chevron optimistically.
+                        hasChildren: loaded === undefined ? true : loaded.length > 0,
+                    });
+                    if (this.expandedDirs[child.key]) walk(child.key, depth + 1);
+                }
+            };
+            walk('', 0);
+            return rows;
+        },
+
+        // ── Drag a file/folder onto a folder (sidebar or grid) to move it ────
+        onItemDragStart(item, ev) {
+            this.dragItem = item;
+            try {
+                ev.dataTransfer.effectAllowed = 'move';
+                ev.dataTransfer.setData('application/x-fluxfiles', item.key);
+            } catch (e) { /* some browsers restrict setData */ }
+        },
+        onItemDragEnd() { this.dragItem = null; this.dropTarget = null; },
+
+        // Only react to OUR internal drags — an OS file drag (upload) has no dragItem.
+        onFolderDragOver(key, ev) {
+            if (!this.dragItem) return;
+            ev.preventDefault();
+            try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {}
+            this.dropTarget = key;
+        },
+        onFolderDragLeave(key) { if (this.dropTarget === key) this.dropTarget = null; },
+
+        async onFolderDrop(targetKey, ev) {
+            if (!this.dragItem) return;           // external file drop → leave it to the upload dropzone
+            if (ev) ev.preventDefault();
+            const dragged = this.dragItem;
+            this.dragItem = null;
+            this.dropTarget = null;
+            // Move the whole selection if the dragged item is part of a multi-select.
+            const items = (this.selected.some(s => s.key === dragged.key) && this.selected.length > 1)
+                ? [...this.selected] : [dragged];
+            await this.moveItemsTo(items, targetKey);
+        },
+
+        async moveItemsTo(items, targetDir) {
+            // Filter out no-ops and illegal moves up front so the progress count is honest.
+            const moves = items.filter((it) => {
+                const parent = it.key.includes('/') ? it.key.slice(0, it.key.lastIndexOf('/')) : '';
+                if (parent === targetDir) return false;                      // already there
+                if (it.type === 'dir' && (targetDir === it.key || targetDir.startsWith(it.key + '/'))) {
+                    this.showToast(this.t('error.move_into_self') || 'Cannot move a folder into itself', 'error', 4000);
+                    return false;
+                }
+                return true;
+            });
+            if (moves.length === 0) return;
+
+            this.startBulk('Moving', moves.length);
+            let errors = 0;
+            for (const it of moves) {
+                try {
+                    const dest = (targetDir ? targetDir + '/' : '') + it.name;
+                    await this.api('POST', '/api/fm/move', { disk: this.currentDisk, from: it.key, to: dest });
+                    this.postMessage('FM_EVENT', { event: 'move:done', key: it.key, to: dest });
+                } catch (err) {
+                    errors++;
+                    console.error('FluxFiles: move failed', it.key, err);
+                    this.showToast(err.message || this.t('error.generic'), 'error', 4000);
+                }
+                this.tickBulk();
+            }
+            this.endBulk();
+            if (errors === 0) this.showToast(this.t('common.success'), 'success');
+            this.selected = [];
+            this.detailFile = null;
+            this.dirChildren = {};   // invalidate the tree cache (moved subtrees changed)
+            this.loadFiles();
         },
 
         get breadcrumbs() {

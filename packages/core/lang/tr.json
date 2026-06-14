@@ -33,7 +33,10 @@
         "select_items": "{count} öğe seç",
         "root": "Kök",
         "selected": "seçili",
-        "refresh": "Yenile"
+        "refresh": "Yenile",
+        "retry": "Yeniden dene",
+        "expand": "Genişlet",
+        "collapse": "Daralt"
     },
     "toolbar": {
         "upload": "Yükle",
@@ -189,7 +192,9 @@
         "missing_param": "Gerekli bilgi eksik",
         "invalid_json": "Geçersiz istek verisi",
         "origin_denied": "Bu kaynaktan erişim reddedildi",
-        "ext_changed": "Dosya uzantısı değiştirilemez"
+        "ext_changed": "Dosya uzantısı değiştirilemez",
+        "load_failed": "Bu klasör yüklenemedi",
+        "move_into_self": "Bir klasör kendi içine taşınamaz"
     },
     "presign": {
         "title": "Ön imzalı URL",

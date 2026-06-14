@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added (UI)
+
+- **Sidebar folder tree (lazy expand/collapse).** The sidebar is now a real
+  file-explorer tree: chevrons open/close branches (lazily fetched and cached),
+  the path to the current folder auto-expands, and the current folder is
+  highlighted. Replaces the flat ancestor-trail list.
+- **Drag a file/folder onto a folder to move it.** Drag a card (or a whole
+  multi-selection) onto a folder card or a sidebar tree node to move it there;
+  the target highlights on hover, and moving a folder into itself/a descendant is
+  rejected. (OS file drops still go to the upload dropzone.)
+- **Loading skeleton.** Switching disk/folder shows shimmer placeholders instead
+  of a blank flash.
+- **Persistent load-error state with Retry.** When a folder fails to load it now
+  shows a clear error + a Retry button instead of looking like an empty folder
+  once the toast fades. New `error.load_failed`, `error.move_into_self`,
+  `common.retry`/`expand`/`collapse` strings added across all 16 locales.
+
 ## [0.2.15] — 2026-06-14
 
 > Released: core `core-v0.2.12` (Packagist).

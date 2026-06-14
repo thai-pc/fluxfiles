@@ -33,7 +33,10 @@
         "select_items": "Sélectionner {count} éléments",
         "root": "Racine",
         "selected": "sélectionné(s)",
-        "refresh": "Actualiser"
+        "refresh": "Actualiser",
+        "retry": "Réessayer",
+        "expand": "Développer",
+        "collapse": "Réduire"
     },
     "toolbar": {
         "upload": "Importer",
@@ -189,7 +192,9 @@
         "missing_param": "Information requise manquante",
         "invalid_json": "Données de requête invalides",
         "origin_denied": "Accès refusé depuis cette origine",
-        "ext_changed": "L’extension du fichier ne peut pas être modifiée"
+        "ext_changed": "L’extension du fichier ne peut pas être modifiée",
+        "load_failed": "Impossible de charger ce dossier",
+        "move_into_self": "Impossible de déplacer un dossier dans lui-même"
     },
     "presign": {
         "title": "URL présignée",

@@ -33,7 +33,10 @@
         "select_items": "{count} items selecteren",
         "root": "Hoofdmap",
         "selected": "geselecteerd",
-        "refresh": "Vernieuwen"
+        "refresh": "Vernieuwen",
+        "retry": "Opnieuw",
+        "expand": "Uitvouwen",
+        "collapse": "Samenvouwen"
     },
     "toolbar": {
         "upload": "Uploaden",
@@ -189,7 +192,9 @@
         "missing_param": "Vereiste informatie ontbreekt",
         "invalid_json": "Ongeldige aanvraaggegevens",
         "origin_denied": "Toegang geweigerd vanaf deze bron",
-        "ext_changed": "De bestandsextensie kan niet worden gewijzigd"
+        "ext_changed": "De bestandsextensie kan niet worden gewijzigd",
+        "load_failed": "Kan deze map niet laden",
+        "move_into_self": "Kan een map niet in zichzelf verplaatsen"
     },
     "presign": {
         "title": "Voorondertekende URL",

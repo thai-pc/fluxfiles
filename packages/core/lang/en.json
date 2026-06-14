@@ -33,7 +33,10 @@
         "select_items": "Select {count} items",
         "root": "Root",
         "selected": "selected",
-        "refresh": "Refresh"
+        "refresh": "Refresh",
+        "retry": "Retry",
+        "expand": "Expand",
+        "collapse": "Collapse"
     },
     "toolbar": {
         "upload": "Upload",
@@ -189,7 +192,9 @@
         "missing_param": "Missing required information",
         "invalid_json": "Invalid request data",
         "origin_denied": "Access denied from this origin",
-        "ext_changed": "The file extension cannot be changed"
+        "ext_changed": "The file extension cannot be changed",
+        "load_failed": "Could not load this folder",
+        "move_into_self": "Cannot move a folder into itself"
     },
     "presign": {
         "title": "Presigned URL",

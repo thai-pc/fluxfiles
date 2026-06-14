@@ -429,18 +429,87 @@ body {
 
 .tree-item-child { padding-inline-start: 32px; }
 
-/* Ancestor trail: context leading to the current folder — muted vs the
-   current/active item, but still navigable. */
-.tree-item-ancestor { color: var(--color-text-tertiary); }
-.tree-item-ancestor .ti-icon { opacity: 0.7; }
-.tree-item-ancestor:hover { color: var(--color-text-primary); }
-
-/* Thin rule between the ancestor trail and the current folder + its children. */
-.ff-tree-divider {
-    height: 1px;
-    background: var(--color-border-secondary);
-    margin: 4px 8px;
+/* ── Lazy folder tree ─────────────────────────────────────────────────── */
+/* Expand/collapse chevron — its own hit target, doesn't navigate. */
+.tree-node .tree-toggle {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: var(--color-text-tertiary);
+    margin-inline-start: -2px;
 }
+.tree-node .tree-toggle:hover { background: var(--ff-bg-hover); color: var(--color-text-primary); }
+.tree-node .chev { transition: transform var(--ff-transition); }
+.tree-node .chev.open { transform: rotate(90deg); }
+[dir="rtl"] .tree-node .chev { transform: scaleX(-1); }
+[dir="rtl"] .tree-node .chev.open { transform: scaleX(-1) rotate(90deg); }
+/* Aligns leaf rows (no chevron) with rows that have one. */
+.tree-node .tree-spacer { width: 16px; flex-shrink: 0; }
+.tree-node .tree-spin {
+    width: 10px; height: 10px;
+    border: 1.5px solid var(--color-border-primary);
+    border-top-color: var(--ff-primary);
+    border-radius: 50%;
+    animation: ff-spin 0.6s linear infinite;
+}
+
+/* Drop target highlight (drag a file/folder onto a folder to move it). */
+.tree-item.drop-target,
+.file-card.drop-target {
+    outline: 2px solid var(--ff-primary);
+    outline-offset: -2px;
+    background: color-mix(in srgb, var(--ff-primary) 12%, transparent);
+}
+.file-card.dragging { opacity: 0.45; }
+.file-card[draggable="true"] { cursor: grab; }
+
+/* ── Loading skeleton ─────────────────────────────────────────────────── */
+.ff-skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    padding: 8px 0;
+}
+.skel-card {
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.skel-thumb { height: 80px; border-radius: 8px; }
+.skel-line { height: 10px; border-radius: 5px; }
+.skel-line.short { width: 55%; }
+.skel-thumb, .skel-line {
+    background: linear-gradient(90deg,
+        var(--color-background-secondary) 25%,
+        var(--ff-bg-hover) 37%,
+        var(--color-background-secondary) 63%);
+    background-size: 400% 100%;
+    animation: ff-shimmer 1.4s ease infinite;
+}
+@keyframes ff-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* ── Load error (persistent, with retry) ──────────────────────────────── */
+.ff-load-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 8px;
+    padding: 48px 16px;
+    color: var(--color-text-secondary);
+}
+.ff-load-error > svg { color: var(--ff-danger, #e5484d); opacity: 0.85; }
+.ff-load-error .fle-title { font-weight: 600; color: var(--color-text-primary); margin: 4px 0 0; }
+.ff-load-error .fle-detail { font-size: 13px; color: var(--color-text-tertiary); max-width: 420px; margin: 0; }
+.ff-load-error .ff-empty-cta { margin-top: 8px; }
 
 /* Storage meter */
 .ff-storage-meter {
