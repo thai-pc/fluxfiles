@@ -76,4 +76,8 @@ jobs:
             "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
             -d "{\"repository\":{\"url\":\"https://github.com/thai-pc/${REMOTE_REPO}\"}}")
           echo "Packagist update for ${REMOTE_REPO}: HTTP ${code}"; cat /tmp/pkg.out || true
-          [ "$code" = "200" ] || echo "::warning::Packagist returned HTTP ${code} (check the PACKAGIST_* secrets / package URL)"
+          # Packagist returns 202 (Accepted) on a successful queued update, 200 otherwise.
+          case "$code" in
+            200|202) ;;
+            *) echo "::warning::Packagist returned HTTP ${code} (check the PACKAGIST_* secrets / package URL)" ;;
+          esac

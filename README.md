@@ -1472,6 +1472,25 @@ As a belt-and-suspenders alternative, enable Packagist's GitHub hook on each spl
 repo (packagist.org package page → **Settings → integrations**), so a push updates
 Packagist even outside CI.
 
+`PACKAGIST_USERNAME` and `PACKAGIST_TOKEN` are **two separate secrets — set both**.
+In GitHub's "New repository secret" form the **Name** field is the literal
+`PACKAGIST_USERNAME` (GitHub rejects `-` in names), and your `your-packagist-name`
+value goes in the **Secret** field below it (a `-` there is fine). Confirm with
+`gh secret list -R <owner>/<repo>`. A successful ping returns **HTTP 202**.
+
+#### Release troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| Packagist stuck at the old version, split job green | Set both `PACKAGIST_*` secrets, then `gh run rerun <split-run-id>` to re-ping the already-pushed tag (or click **Update** on the Packagist page once). |
+| Split log: `PACKAGIST_TOKEN secret not set` | Only one secret exists — `gh secret list` and add the missing one. |
+| Ping `HTTP 403 … invalid username/apiToken` | Username = `packagist.org/users/<name>` (not email/GitHub); token from Profile → Show API Token; set without a trailing newline (`printf %s 'value' \| gh secret set …`). |
+| npm publish `404 … PUT …/@fluxfiles/<pkg>` | `NPM_TOKEN` is invalid/expired — rotate the npm **Automation** token and re-run. |
+| `Call to undefined method …` after upgrading an adapter | The adapter's `composer.json` `fluxfiles/fluxfiles` floor is older than the core API it now calls — bump it (the `adapter-core-floor` CI job guards this). |
+
+Always confirm the **registry** updated (`composer show fluxfiles/fluxfiles` /
+`npm view @fluxfiles/<pkg> version`), not just the job colour.
+
 ### Manual browser pages
 
 These pages load the SDK/editor plugins from absolute paths (`/fluxfiles.js`,
