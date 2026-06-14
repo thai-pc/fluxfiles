@@ -177,6 +177,39 @@ test('search narrows the grid to the matching file', async ({ page }) => {
   await expect(cardByName(page, beta)).toHaveCount(0);
 });
 
+test('grid shows a created date on files and folders', async ({ page }) => {
+  const token = mintToken();
+  await openManager(page, token);
+
+  const folder = `pw-date-${Date.now()}`;
+  await createFolder(page, page, folder);
+  // The folder card carries a created date (digit-containing, locale-agnostic).
+  await expect(cardByName(page, folder).locator('.fdate')).toHaveText(/\d/, { timeout: 10_000 });
+
+  await enterFolder(page, folder);
+  const name = `dated-${Date.now()}.png`;
+  await uploadFile(page, pngFile(name));
+  await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
+  await expect(cardByName(page, name).locator('.fdate')).toHaveText(/\d/);
+});
+
+test('search results also render the created date', async ({ page }) => {
+  const token = mintToken();
+  await openManager(page, token);
+
+  const stamp = Date.now();
+  const folder = `pw-sdate-${stamp}`;
+  await createFolder(page, page, folder);
+  await enterFolder(page, folder);
+  const file = `report-${stamp}.png`;
+  await uploadFile(page, pngFile(file));
+  await expect(cardByName(page, file)).toBeVisible({ timeout: 15_000 });
+
+  await page.locator('.ff-search-box input').first().fill(`report-${stamp}`);
+  await expect(cardByName(page, file)).toBeVisible({ timeout: 10_000 });
+  await expect(cardByName(page, file).locator('.fdate')).toHaveText(/\d/);
+});
+
 test('dark-mode toggle adds and removes the `dark` class on <html>', async ({ page }) => {
   const token = mintToken();
   await openManager(page, token);
