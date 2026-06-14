@@ -3,6 +3,31 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.12] — 2026-06-14
+
+> Released: core `core-v0.2.11` (Packagist), WordPress plugin `wordpress-v0.2.3`.
+
+### Added
+
+- **Search results now show the created date**, consistent with the browse views.
+  `searchFolders()` returns `created` for folder hits, and the search result cards
+  (files and folders) render the date.
+
+### Changed
+
+- **WordPress adapter requires core `^0.2.11`** (was `^0.2.0`) — like the Laravel
+  adapter, so installing/updating `fluxfiles/wordpress` pulls a core new enough
+  for the storage-permission fix, per-tenant claims, search sort and created dates
+  (the UI the plugin serves comes from that core).
+
+### Tests
+
+- New dedicated `test-search.php` (name/metadata matching, highlight, `created`/
+  `size`/`modified` on rows, folder search + `created`, `_fluxfiles`/`_variants`
+  exclusion, prefix scoping) and `test-rate-limit.php` (limit enforcement, the
+  429 `rate_limited` code, separate read/write buckets, per-user independence,
+  the higher per-tenant `rate_read` limit).
+
 ## [0.2.11] — 2026-06-13
 
 > Released: core `core-v0.2.10` (Packagist).

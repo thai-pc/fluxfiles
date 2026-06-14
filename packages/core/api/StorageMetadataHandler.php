@@ -378,7 +378,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $q = mb_strtolower($query);
         $results = [];
 
-        foreach ($dirs as $dirKey => $_true) {
+        foreach ($dirs as $dirKey => $created) {
             // Defend against indexes polluted before reserved dirs were filtered.
             if ($this->isReservedPath($dirKey)) {
                 continue;
@@ -392,6 +392,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 $results[] = [
                     'dir_key' => $dirKey,
                     'name'    => $name,
+                    'created' => $created !== null ? (int) $created : null,
                 ];
                 if (count($results) >= $limit) break;
             }
