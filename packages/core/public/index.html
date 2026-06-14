@@ -240,20 +240,42 @@
             </template>
             <span style="flex-grow:1"></span>
         </div>
-        <!-- Folders section -->
+        <!-- Folders section: ancestor trail → current folder → its children -->
         <div class="ff-sidebar-section">
             <div class="ff-sidebar-label" x-text="t('sidebar.folders')"></div>
-            <button class="tree-item"
-                    :class="{ active: currentPath === '' }"
-                    @click="navigate('')">
+
+            <!-- Ancestors above the current folder (root → … → parent), indented by depth -->
+            <template x-for="(crumb, idx) in breadcrumbs.slice(0, -1)" :key="'anc-' + crumb.path">
+                <button class="tree-item tree-item-ancestor"
+                        :style="'padding-inline-start:' + (10 + idx * 16) + 'px'"
+                        @click="navigate(crumb.path)" :title="crumb.name">
+                    <span class="ti-icon">
+                        <svg x-show="idx === 0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                        <svg x-show="idx > 0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                    </span>
+                    <span class="ti-label" x-text="idx === 0 ? t('common.root') : crumb.name"></span>
+                </button>
+            </template>
+
+            <!-- Divider between the ancestor trail and the current folder -->
+            <div class="ff-tree-divider" x-show="breadcrumbs.length > 1"></div>
+
+            <!-- Current folder (active), then its child folders one level deeper -->
+            <button class="tree-item tree-item-current active"
+                    :style="'padding-inline-start:' + (10 + Math.max(0, breadcrumbs.length - 1) * 16) + 'px'"
+                    @click="navigate(currentPath)"
+                    :title="breadcrumbs[breadcrumbs.length - 1].name">
                 <span class="ti-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <svg x-show="currentPath === ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <svg x-show="currentPath !== ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                 </span>
-                <span class="ti-label" x-text="t('common.root')"></span>
-                <span class="count" x-text="files.length + folders.length" x-show="currentPath === ''"></span>
+                <span class="ti-label" x-text="currentPath === '' ? t('common.root') : breadcrumbs[breadcrumbs.length - 1].name"></span>
+                <span class="count" x-text="files.length + folders.length"></span>
             </button>
             <template x-for="folder in folders" :key="folder.key">
-                <button class="tree-item tree-item-child" @click="navigate(folder.key)" :title="folder.name">
+                <button class="tree-item tree-item-child"
+                        :style="'padding-inline-start:' + (10 + breadcrumbs.length * 16) + 'px'"
+                        @click="navigate(folder.key)" :title="folder.name">
                     <span class="ti-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                     </span>

@@ -429,6 +429,19 @@ body {
 
 .tree-item-child { padding-inline-start: 32px; }
 
+/* Ancestor trail: context leading to the current folder — muted vs the
+   current/active item, but still navigable. */
+.tree-item-ancestor { color: var(--color-text-tertiary); }
+.tree-item-ancestor .ti-icon { opacity: 0.7; }
+.tree-item-ancestor:hover { color: var(--color-text-primary); }
+
+/* Thin rule between the ancestor trail and the current folder + its children. */
+.ff-tree-divider {
+    height: 1px;
+    background: var(--color-border-secondary);
+    margin: 4px 8px;
+}
+
 /* Storage meter */
 .ff-storage-meter {
     padding: 8px 10px;
