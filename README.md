@@ -315,7 +315,8 @@ function openFilePicker() {
 
         onSelect(file) {
             // file = { url, permanent_url, key, name, path, size, disk,
-            //          mime, width, height, meta, variants }
+            //          mime, width, height, created, modified, meta, variants }
+            // created = stable upload time (folders carry it too); modified = live mtime.
             // For embedding in SAVED content, prefer permanent_url — `url` is a
             // short-lived presigned URL on private disks and will expire.
             const src = file.permanent_url || file.url;

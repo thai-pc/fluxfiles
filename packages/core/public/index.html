@@ -560,6 +560,7 @@
                                                 </div>
                                                 <div class="fname" x-text="row.name || (row.dir_key || row.key || '').split('/').pop()" :title="row.dir_key || row.key"></div>
                                                 <div class="fsize" x-text="row.dir_key || row.key"></div>
+                                                <div class="fdate" x-text="formatDate(row.created || row.modified)"></div>
                                             </div>
                                         </template>
                                     </div>
@@ -582,6 +583,7 @@
                                                 </div>
                                                 <div class="fname" x-text="(row.file_key || row.key || '').split('/').pop()" :title="row.file_key || row.key"></div>
                                                 <div class="fsize" x-text="row.file_key || row.key"></div>
+                                                <div class="fdate" x-text="formatDate(row.created || row.modified)"></div>
                                             </div>
                                         </template>
                                     </div>
