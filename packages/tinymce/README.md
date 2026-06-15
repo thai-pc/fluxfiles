@@ -46,11 +46,22 @@ tinymce.init({
 
 ## How It Works
 
-- Click the **FluxFiles** toolbar button (folder/browse icon).
-- The FluxFiles picker opens as a modal overlay.
-- Select a file — images are inserted as `<img>` (with `alt` from the file's
-  metadata and `width`/`height` when known), other files as `<a>` links.
-- The modal closes automatically after selection.
+Two ways to pick a file:
+
+1. **Toolbar button** — click the **FluxFiles** button (folder/browse icon). The
+   picker opens; the selection is inserted directly (`<img>` for images with `alt`
+   from metadata and `width`/`height` when known, other files as `<a>` links).
+2. **Native Insert/Edit Image dialog** — the plugin registers a
+   `file_picker_callback`, so the **Source** field of TinyMCE's own image dialog
+   (and the link/media dialogs) gets a *browse* icon. Clicking it opens FluxFiles
+   and fills the dialog's **Source + Alt + Width + Height**, so you can fine-tune
+   the image in the familiar native dialog before inserting (the "Browse Server" /
+   CKFinder pattern — no popup window).
+
+The modal closes automatically after selection.
+
+> The plugin only sets `file_picker_callback` if you haven't provided your own.
+> Disable the native-dialog integration with `fluxfiles_image_dialog: false`.
 
 > **Embedding & expiring URLs.** On a **private** disk the file URL is a
 > *presigned* URL that expires (≤ 24h) — embedding it in saved content will break
@@ -66,6 +77,7 @@ tinymce.init({
 | `fluxfiles_disk` | string | `'local'` | Storage disk |
 | `fluxfiles_locale` | string | `null` | UI language code |
 | `fluxfiles_multiple` | boolean | `false` | Allow multi-file selection |
+| `fluxfiles_image_dialog` | boolean | `true` | Wire `file_picker_callback` into the native image/link/media dialogs |
 
 ## Compatibility
 

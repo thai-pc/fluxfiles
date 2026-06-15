@@ -66,6 +66,13 @@ $('#editor').summernote({
 > focus. It originates inside `summernote-lite.min.js` (not this plugin) and is
 > harmless — selection and insertion work normally.
 
+> **Native image dialog.** Unlike CKEditor 4 and TinyMCE — whose built-in
+> Insert/Edit Image dialogs expose a "Browse Server" / `file_picker_callback`
+> hook that the FluxFiles plugin wires into — Summernote's image dialog has **no
+> such hook** (it only offers an upload field and a URL field). So on Summernote
+> the FluxFiles **toolbar button** is the integration point; it inserts the image
+> with `alt`/`width`/`height` already set from the file's metadata.
+
 > **Embedding & expiring URLs.** On a **private** disk the file URL is a
 > *presigned* URL that expires (≤ 24h) — embedding it in saved content will break
 > once it expires (the plugin logs a `console.warn`). For editor embeds use a

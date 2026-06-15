@@ -16,8 +16,15 @@ function loadPlugin() {
   (0, eval)(pluginCode);
 
   const buttons = {}, menuitems = {};
+  const settings = {};
   const editor = {
-    getParam: (k, d) => ({ fluxfiles_endpoint: 'http://localhost', fluxfiles_token: 'JWT' }[k] ?? d),
+    settings,
+    getParam: (k, d) => {
+      const known = { fluxfiles_endpoint: 'http://localhost', fluxfiles_token: 'JWT' };
+      if (k in known) return known[k];
+      if (k in settings) return settings[k];
+      return d;
+    },
     ui: { registry: {
       addIcon: vi.fn(),
       addButton: (name, def) => { buttons[name] = def; },
@@ -26,7 +33,7 @@ function loadPlugin() {
     insertContent: vi.fn(),
   };
   globalThis.__tmceCb(editor);
-  return { editor, buttons, menuitems, open: globalThis.FluxFiles.open };
+  return { editor, settings, buttons, menuitems, open: globalThis.FluxFiles.open };
 }
 
 describe('TinyMCE FluxFiles plugin', () => {
@@ -105,5 +112,45 @@ describe('TinyMCE FluxFiles plugin', () => {
     expect(html).not.toContain('X-Amz-');
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  // ── Native Insert/Edit Image dialog: file_picker_callback ──────────────
+  it('wires a file_picker_callback (+ types) into the editor for the native dialog', () => {
+    const { settings } = loadPlugin();
+    expect(typeof settings.file_picker_callback).toBe('function');
+    expect(settings.file_picker_types).toContain('image');
+  });
+
+  it('file_picker_callback opens FluxFiles and returns url + alt + dimensions', () => {
+    const { settings, open } = loadPlugin();
+    const cb = vi.fn();
+    settings.file_picker_callback(cb, '', { filetype: 'image' });
+    expect(open).toHaveBeenCalled();
+    open.mock.calls[0][0].onSelect({ url: 'https://cdn/a.png', name: 'a.png', mime: 'image/png', width: 800, height: 600, meta: { alt_text: 'Sunset' } });
+    expect(cb).toHaveBeenCalledWith('https://cdn/a.png', { alt: 'Sunset', width: '800', height: '600' });
+  });
+
+  it('file_picker_callback for a non-image returns link text metadata', () => {
+    const { settings, open } = loadPlugin();
+    const cb = vi.fn();
+    settings.file_picker_callback(cb, '', { filetype: 'file' });
+    open.mock.calls[0][0].onSelect({ url: 'https://cdn/r.pdf', name: 'r.pdf', mime: 'application/pdf', meta: { title: 'Report' } });
+    expect(cb).toHaveBeenCalledWith('https://cdn/r.pdf', { text: 'Report', title: 'Report' });
+  });
+
+  it('respects a host-provided file_picker_callback (does not override)', () => {
+    globalThis.FluxFiles = { open: vi.fn() };
+    globalThis.tinymce = { majorVersion: '6', PluginManager: { add: (_n, cb) => { globalThis.__tmceCb = cb; } } };
+    (0, eval)(pluginCode);
+    const hostCb = () => {};
+    const settings = { file_picker_callback: hostCb };
+    const editor = {
+      settings,
+      getParam: (k, d) => (k === 'file_picker_callback' ? hostCb : ({ fluxfiles_endpoint: 'x', fluxfiles_token: 'y' }[k] ?? (k in settings ? settings[k] : d))),
+      ui: { registry: { addIcon: vi.fn(), addButton: vi.fn(), addMenuItem: vi.fn() } },
+      insertContent: vi.fn(),
+    };
+    globalThis.__tmceCb(editor);
+    expect(settings.file_picker_callback).toBe(hostCb);   // unchanged
   });
 });

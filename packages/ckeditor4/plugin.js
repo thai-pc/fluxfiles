@@ -1,8 +1,14 @@
 /**
  * FluxFiles plugin for CKEditor 4.
  *
- * Adds a toolbar button that opens the FluxFiles picker.
- * Selected images are inserted as <img>, other files as <a>.
+ * Two integration points:
+ *   1. A toolbar button ("FluxFiles") that opens the picker and inserts the
+ *      selection directly (<img> for images, <a> otherwise).
+ *   2. A "Browse FluxFiles" button injected into the native **Image** dialog
+ *      (Image Properties) that opens FluxFiles inline and fills the dialog's
+ *      URL + Alt + Width + Height fields — the "Browse Server" / CKFinder
+ *      pattern, but without a popup window. Disable with
+ *      `config.fluxfiles.imageDialog = false`.
  *
  * Usage:
  *   CKEDITOR.replace('editor', {
@@ -27,57 +33,102 @@
         + 'stroke="#575757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     var ICON_URI = 'data:image/svg+xml,' + encodeURIComponent(ICON_SVG);
 
+    // Normalize a selected file into the bits the insert / dialog paths need.
+    function fileInfo(file) {
+        var url = file.permanent_url || file.url || '';
+        var name = file.name || file.basename || file.path || '';
+        var meta = file.meta || {};
+        if (/[?&](X-Amz-|Signature=)/.test(url)) {
+            console.warn('[FluxFiles] Inserting a presigned (expiring) URL — it will break when the URL expires. Use a public disk or public_url for embeds.');
+        }
+        var isImage = (file.mime && file.mime.indexOf('image/') === 0)
+            || /\.(jpe?g|png|gif|webp|svg|bmp|ico|avif)$/i.test(name);
+        return { url: url, name: name, meta: meta, isImage: isImage, width: file.width || null, height: file.height || null };
+    }
+
+    function open(cfg, multiple, onSelect) {
+        if (typeof FluxFiles === 'undefined') {
+            console.error('[FluxFiles] SDK (fluxfiles.js) is not loaded.');
+            return;
+        }
+        FluxFiles.open({
+            endpoint: cfg.endpoint || '', token: cfg.token || '', disk: cfg.disk || 'local',
+            mode: 'picker', multiple: !!multiple,
+            maxUploadMb: cfg.maxUploadMb || null, maxFiles: cfg.maxFiles || null, locale: cfg.locale || null,
+            onSelect: onSelect
+        });
+    }
+
+    function firstFile(payload) {
+        var f = Array.isArray(payload) ? payload[0] : payload;
+        return (f && !f.is_dir) ? f : null;
+    }
+
+    // ── 2) Native Image dialog: a "Browse FluxFiles" button that fills fields ──
+    // Registered once, globally; reads each editor's own config.
+    if (!CKEDITOR.fluxfilesDialogHook) {
+        CKEDITOR.fluxfilesDialogHook = true;
+        CKEDITOR.on('dialogDefinition', function (ev) {
+            if (ev.data.name !== 'image' && ev.data.name !== 'image2') return;
+            var editor = ev.editor;
+            // Only for editors using this plugin, and not opted out.
+            var cfg = editor && editor.config && editor.config.fluxfiles;
+            if (!cfg || cfg.imageDialog === false) return;
+
+            var def = ev.data.definition;
+            var infoTab = def.getContents('info') || def.getContents('Upload');
+            if (!infoTab) return;
+
+            infoTab.add({
+                type: 'button',
+                id: 'fluxfilesBrowse',
+                label: 'Browse FluxFiles',
+                title: 'Browse FluxFiles',
+                onClick: function () {
+                    var dialog = this.getDialog();
+                    open(cfg, false, function (payload) {
+                        var file = firstFile(payload);
+                        if (!file) return;
+                        var info = fileInfo(file);
+                        var set = function (id, val) {
+                            var el = dialog.getContentElement('info', id);
+                            if (el && val != null && val !== '') el.setValue(String(val));
+                        };
+                        set('txtUrl', info.url);
+                        set('txtAlt', info.meta.alt_text || info.name);
+                        if (info.width) set('txtWidth', info.width);
+                        if (info.height) set('txtHeight', info.height);
+                        // Nudge the dialog to refresh its preview from the new URL.
+                        var urlEl = dialog.getContentElement('info', 'txtUrl');
+                        if (urlEl && typeof urlEl.onChange === 'function') urlEl.onChange();
+                    });
+                }
+            });
+        });
+    }
+
     CKEDITOR.plugins.add('fluxfiles', {
         init: function (editor) {
             var cfg = editor.config.fluxfiles || {};
 
+            // ── 1) Standalone button: insert the selection directly ──────────
             editor.addCommand('openFluxFiles', {
                 exec: function () {
-                    if (typeof FluxFiles === 'undefined') {
-                        console.error('[FluxFiles] SDK (fluxfiles.js) is not loaded.');
-                        return;
-                    }
+                    open(cfg, cfg.multiple, function (payload) {
+                        var files = Array.isArray(payload) ? payload : [payload];
+                        var enc = CKEDITOR.tools.htmlEncode;
+                        for (var i = 0; i < files.length; i++) {
+                            var file = files[i];
+                            if (!file || file.is_dir) continue;
+                            var info = fileInfo(file);
 
-                    FluxFiles.open({
-                        endpoint: cfg.endpoint || '',
-                        token: cfg.token || '',
-                        disk: cfg.disk || 'local',
-                        mode: 'picker',
-                        multiple: !!cfg.multiple,
-                        maxUploadMb: cfg.maxUploadMb || null,
-                        maxFiles: cfg.maxFiles || null,
-                        locale: cfg.locale || null,
-                        onSelect: function (payload) {
-                            var files = Array.isArray(payload) ? payload : [payload];
-                            var enc = CKEDITOR.tools.htmlEncode;
-
-                            for (var i = 0; i < files.length; i++) {
-                                var file = files[i];
-                                if (!file || file.is_dir) continue;
-
-                                // Prefer a permanent URL (public disk / public_url) so saved
-                                // content doesn't embed an expiring presigned URL.
-                                var url = file.permanent_url || file.url || '';
-                                var name = file.name || file.basename || file.path || '';
-                                var meta = file.meta || {};
-
-                                // Still presigned (private disk, no public_url)? Warn — it will
-                                // expire and break the saved link/image.
-                                if (/[?&](X-Amz-|Signature=)/.test(url)) {
-                                    console.warn('[FluxFiles] Inserting a presigned (expiring) URL — it will break when the URL expires. Use a public disk or public_url for embeds.');
-                                }
-
-                                var isImage = (file.mime && file.mime.indexOf('image/') === 0)
-                                    || /\.(jpe?g|png|gif|webp|svg|bmp|ico|avif)$/i.test(name);
-
-                                if (isImage) {
-                                    var dim = '';
-                                    if (file.width) { dim += ' width="' + parseInt(file.width, 10) + '"'; }
-                                    if (file.height) { dim += ' height="' + parseInt(file.height, 10) + '"'; }
-                                    editor.insertHtml('<img src="' + enc(url) + '" alt="' + enc(meta.alt_text || name) + '"' + dim + ' />');
-                                } else {
-                                    editor.insertHtml('<a href="' + enc(url) + '">' + enc(meta.title || name) + '</a>');
-                                }
+                            if (info.isImage) {
+                                var dim = '';
+                                if (info.width) { dim += ' width="' + parseInt(info.width, 10) + '"'; }
+                                if (info.height) { dim += ' height="' + parseInt(info.height, 10) + '"'; }
+                                editor.insertHtml('<img src="' + enc(info.url) + '" alt="' + enc(info.meta.alt_text || info.name) + '"' + dim + ' />');
+                            } else {
+                                editor.insertHtml('<a href="' + enc(info.url) + '">' + enc(info.meta.title || info.name) + '</a>');
                             }
                         }
                     });
