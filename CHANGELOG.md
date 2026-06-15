@@ -3,6 +3,18 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Summernote editor plugin (`@fluxfiles/summernote`).** A new jQuery/Summernote
+  adapter, mirroring the CKEditor 4 / TinyMCE plugins: a toolbar button opens the
+  FluxFiles picker and inserts the selection (`<img>` for images, `<a>` otherwise)
+  at the cursor via `editor.pasteHTML`, preferring `permanent_url` and warning on
+  presigned URLs. Registered via `$.summernote.plugins`; configured with a
+  `fluxfiles` options object. Ships `plugin.min.js`; a manual test page lives at
+  `tests/manual/test-summernote.html`.
+
 ## [0.2.16] — 2026-06-14
 
 > Released: core `core-v0.2.13` (Packagist).

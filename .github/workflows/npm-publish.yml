@@ -8,6 +8,7 @@ on:
       - "vue-v*"
       - "ckeditor4-v*"
       - "tinymce-v*"
+      - "summernote-v*"
 
 jobs:
   publish:
@@ -25,6 +26,9 @@ jobs:
             build: "false"
           - pkg: tinymce
             tag_prefix: "tinymce-"
+            build: "false"
+          - pkg: summernote
+            tag_prefix: "summernote-"
             build: "false"
           - pkg: react
             tag_prefix: "react-"

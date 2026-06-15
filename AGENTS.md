@@ -10,8 +10,8 @@ Read those for detail.
 
 A standalone, embeddable PHP file manager. The core exposes a PHP API + a
 zero-build (Alpine.js + htmx) frontend that hosts embed by iframe/SDK. Adapters
-ship for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, plus a vanilla
-SDK and a Node server-side token SDK.
+ship for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, Summernote, plus
+a vanilla SDK and a Node server-side token SDK.
 
 Capabilities: Local / AWS S3 / Cloudflare R2 (and any S3-compatible store) via
 Flysystem v3; JWT auth with rich claims (perms, disk, path prefix, quota,
@@ -30,7 +30,7 @@ Doctor diagnostics.
   `lang/`, `tests/`.
 - `packages/sdk/` — vanilla browser SDK (`FluxFiles` global).
 - `packages/node/` — server-side token SDK (`@fluxfiles/node`), mints JWTs in JS.
-- `packages/{react,vue,ckeditor4,tinymce}/` — TS wrappers (tsup + vitest).
+- `packages/{react,vue,ckeditor4,tinymce,summernote}/` — JS/TS wrappers (tsup/esbuild + vitest).
 - `packages/{laravel,wordpress}/` — PHP adapters (each bundles/uses the core).
 - `docs/`, `.github/workflows/test.yml`, `docker/`, `scripts/`.
 
@@ -86,7 +86,7 @@ bash packages/core/tests/e2e/test-api.sh
 # Live S3 + Bucket Doctor (env-gated; CI runs it against MinIO)
 FXTEST_S3_* ... php packages/core/tests/e2e/test-s3-live.php
 # Wrapper packages
-cd packages/<react|vue|sdk|ckeditor4|tinymce|node> && npm install && npm test
+cd packages/<react|vue|sdk|ckeditor4|tinymce|summernote|node> && npm install && npm test
 # Adapter smokes (stubbed)
 php packages/wordpress/tests/test-wp-smoke.php
 php packages/laravel/tests/test-laravel-smoke.php

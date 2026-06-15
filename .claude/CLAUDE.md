@@ -4,7 +4,7 @@ This directory is for AI agents working on the FluxFiles codebase. Read this fil
 
 ## Product Summary
 
-FluxFiles is a standalone, embeddable PHP file manager. The core app exposes a PHP API and zero-build frontend that can be embedded by iframe/SDK. The repo also ships adapters for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, and TinyMCE.
+FluxFiles is a standalone, embeddable PHP file manager. The core app exposes a PHP API and zero-build frontend that can be embedded by iframe/SDK. The repo also ships adapters for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, and Summernote.
 
 Primary capabilities:
 
@@ -30,7 +30,7 @@ Primary capabilities:
 - `packages/wordpress/`: WordPress plugin wrapper around the core package.
 - `packages/react/`: React component/hooks wrapper.
 - `packages/vue/`: Vue 3/Nuxt component/composable wrapper.
-- `packages/ckeditor4/`, `packages/tinymce/`: editor integrations.
+- `packages/ckeditor4/`, `packages/tinymce/`, `packages/summernote/`: editor integrations.
 - `docs/`: design and roadmap notes.
 
 More detailed maps:
@@ -98,6 +98,6 @@ npm run build
 ## Tests & Tooling
 
 - Core PHP tests: `packages/core/tests/{unit,integration}/*.php`, e2e `tests/e2e/test-api.sh` + env-gated `tests/e2e/test-s3-live.php`, browser `tests/e2e/browser` (Playwright). Run: `for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done`.
-- Each wrapper owns its tests: `packages/{sdk,react,vue,ckeditor4,tinymce}/tests` (vitest), `packages/{wordpress,laravel}/tests/test-*-smoke.php` (stubbed PHP). `scripts/pack-smoke.sh` verifies published dist/types.
+- Each wrapper owns its tests: `packages/{sdk,react,vue,ckeditor4,tinymce,summernote}/tests` (vitest), `packages/{wordpress,laravel}/tests/test-*-smoke.php` (stubbed PHP). `scripts/pack-smoke.sh` verifies published dist/types.
 - **Adapter↔core floor guard**: `scripts/check-adapter-core-floor.sh` (CI job `adapter-core-floor`) runs each PHP adapter's smoke against core built at the *floor* its `composer.json` declares (via a `core-vX.Y.Z` worktree + `FLUXFILES_CORE_AUTOLOAD`). The plain smokes load the live (newest) core, so they can't catch an adapter using a core API newer than its constraint — this guard does, automatically, so the constraint stays honest without anyone remembering to bump it.
 - Docker: `docker/Dockerfile` (`ARG PHP_VERSION`, runs the suite), `docker/Dockerfile.prod` (nginx+php-fpm), `docker-compose.yml` (app + MinIO), `Makefile` (`make test`/`test-all`/`up`). CI is `.github/workflows/test.yml` (8 jobs).
