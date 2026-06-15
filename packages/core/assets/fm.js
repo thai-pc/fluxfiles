@@ -320,12 +320,19 @@ function fluxFilesApp() {
                     this.loadQuota();
                 }
 
-                // Host proactively pushed a new token (e.g. background refresh)
+                // Host proactively pushed a new token (e.g. background refresh,
+                // or in response to the expired screen's Retry).
                 if (msg.type === 'FM_TOKEN_UPDATED' && msg.payload?.token) {
                     this.token = msg.payload.token;
                     this.authRequired = false;
                     this.authState = 'ok';
                     this._refreshAttempts = 0;
+                    // A fresh token arrived while a load was broken → recover the view.
+                    if (this.loadError) {
+                        this.loadError = null;
+                        this.loadFiles();
+                        this.loadQuota();
+                    }
                 }
 
                 if (msg.type === 'FM_COMMAND') {
@@ -501,16 +508,19 @@ function fluxFilesApp() {
          * Returns true if token was refreshed, false if not.
          */
         async _handleTokenExpired() {
-            // Prevent infinite refresh loops
+            // Coalesce FIRST: concurrent 401s (list + quota + variants…) share ONE
+            // refresh cycle. They must wait on the in-flight refresh rather than
+            // each spending the attempt budget — otherwise a few parallel requests
+            // exhaust it instantly and the manual Retry can never refresh.
+            if (this._refreshPromise) {
+                return this._refreshPromise;
+            }
+
+            // Prevent infinite AUTO-refresh loops (counted per cycle, not per request).
             this._refreshAttempts++;
             if (this._refreshAttempts > 2) {
                 this._showAuthExpired();
                 return false;
-            }
-
-            // Coalesce: if a refresh is already in progress, wait for it
-            if (this._refreshPromise) {
-                return this._refreshPromise;
             }
 
             this.authState = 'refreshing';
@@ -613,6 +623,22 @@ function fluxFilesApp() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        // User-initiated retry after a load error (the Retry button). A manual
+        // retry is a fresh start: clear the auto-refresh loop guard so a
+        // previously-exhausted budget doesn't make Retry a no-op, drop the
+        // expired screen, then reload — which re-asks the host for a token on 401.
+        retryLoad() {
+            this._refreshAttempts = 0;
+            this._refreshPromise = null;
+            this.loadError = null;
+            if (this.authState === 'expired') {
+                this.authRequired = false;
+                this.authState = 'ok';
+            }
+            this.loadFiles();
+            this.loadQuota();
         },
 
         // Load the next page and append to existing folders/files.

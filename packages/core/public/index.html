@@ -545,7 +545,7 @@
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
                 <p class="fle-title" x-text="t('error.load_failed') || 'Could not load this folder'"></p>
                 <p class="fle-detail" x-text="loadError"></p>
-                <button class="ff-empty-cta" @click="loadFiles()">
+                <button class="ff-empty-cta" @click="retryLoad()">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
                     <span x-text="t('common.retry') || 'Retry'"></span>
                 </button>

@@ -3,6 +3,20 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Expired-session "Retry" was a no-op.** When the session expired, the load-error
+  Retry button just re-ran the same request with the dead token and never re-asked
+  the host for a fresh one. Two causes: the token-refresh attempt budget was spent
+  by concurrent 401s (each parallel request counted, instead of one per refresh
+  cycle), and a manual Retry never reset that budget. Now concurrent 401s coalesce
+  *before* counting, and Retry (`retryLoad`) resets the budget, re-requests a token,
+  and reloads — recovering once a valid token arrives. A pushed `FM_TOKEN_UPDATED`
+  also recovers a broken view. Verified end-to-end (embedded iframe + host refresh)
+  with a new Playwright regression test.
+
 ## [0.2.17] — 2026-06-15
 
 > Released: Summernote plugin `summernote-v0.1.0` (npm).
