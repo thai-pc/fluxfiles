@@ -7,13 +7,14 @@
 [![npm](https://img.shields.io/npm/v/@fluxfiles/vue?label=vue&color=42b883)](https://www.npmjs.com/package/@fluxfiles/vue)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor4?label=ckeditor4&color=1eb5ff)](https://www.npmjs.com/package/@fluxfiles/ckeditor4)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/tinymce?label=tinymce&color=2dc26b)](https://www.npmjs.com/package/@fluxfiles/tinymce)
+[![npm](https://img.shields.io/npm/v/@fluxfiles/summernote?label=summernote&color=73a839)](https://www.npmjs.com/package/@fluxfiles/summernote)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/node?label=node&color=339933)](https://www.npmjs.com/package/@fluxfiles/node)
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
 
 Standalone, embeddable file manager built with PHP 8.1+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
 
-Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, and **TinyMCE**.
+Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, **TinyMCE**, and **Summernote**.
 
 ---
 
@@ -51,7 +52,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 | **Metadata** | Title, alt text, caption, tags per file. Stored as S3 object metadata (cloud) or sidecar JSON (local). Full-text search. |
 | **Safety** | Duplicate detection (SHA-256). Rate limiting per user. Audit log with rotation. Per-user storage quota. Origin validation. Dangerous extension blocking. |
 | **UI** | Dark mode (auto/manual). 16 languages with RTL support. Responsive. Bulk operations (multi-select, shift-select). |
-| **Adapters** | Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE |
+| **Adapters** | Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, Summernote |
 
 ---
 
@@ -359,9 +360,9 @@ const embedSrc = file.permanent_url || file.url; // prefer the stable one
 ```
 
 > To make `permanent_url` available for a private S3/R2 bucket, serve it behind a
-> CDN / custom domain and set `public_url` on the disk config. The CKEditor 4 and
-> TinyMCE plugins already prefer `permanent_url` automatically and warn when they
-> have to fall back to a presigned URL.
+> CDN / custom domain and set `public_url` on the disk config. The CKEditor 4,
+> TinyMCE, and Summernote plugins already prefer `permanent_url` automatically and
+> warn when they have to fall back to a presigned URL.
 
 ### Uploading multiple files
 
@@ -1245,6 +1246,38 @@ tinymce.init({
 
 Auto-detects TinyMCE 4 vs 5 API.
 
+### Summernote
+
+```bash
+npm install @fluxfiles/summernote
+```
+
+Summernote loads plugins as a `<script>` after Summernote itself, so reference
+`node_modules/@fluxfiles/summernote/plugin.js` (or the CDN `plugin.min.js`). Load
+jQuery → Summernote → `fluxfiles.js` SDK → the plugin, then add `'fluxfiles'` to a
+toolbar group:
+
+```js
+$('#editor').summernote({
+    toolbar: [
+        ['style', ['bold', 'italic']],
+        ['insert', ['fluxfiles', 'link']]
+    ],
+    fluxfiles: {
+        endpoint: 'https://fm.yourdomain.com',
+        token: 'JWT_TOKEN',
+        disk: 'local',
+        locale: 'en',
+        multiple: false,
+        maxUploadMb: 10,   // MB per file (optional)
+        maxFiles: 0        // max files per batch (0 = unlimited)
+    }
+});
+```
+
+Click the **FluxFiles** toolbar button — images insert as `<img>`, other files as
+`<a>` (via `editor.pasteHTML` at the cursor).
+
 ---
 
 ## Internationalization
@@ -1494,14 +1527,15 @@ Always confirm the **registry** updated (`composer show fluxfiles/fluxfiles` /
 ### Manual browser pages
 
 These pages load the SDK/editor plugins from absolute paths (`/fluxfiles.js`,
-`/ckeditor4/`, `/tinymce/`) that the dev router serves, so **open them through
-the running server**, not via `file://`:
+`/ckeditor4/`, `/tinymce/`, `/summernote/`) that the dev router serves, so **open
+them through the running server**, not via `file://`:
 
 ```bash
 cd packages/core && php -S localhost:8080 router.php   # then open in a browser:
 #   http://localhost:8080/tests/manual/test-sdk.html        — SDK integration
 #   http://localhost:8080/tests/manual/test-ckeditor4.html  — CKEditor 4
 #   http://localhost:8080/tests/manual/test-tinymce.html    — TinyMCE
+#   http://localhost:8080/tests/manual/test-summernote.html — Summernote
 ```
 
 Paste a token from `php packages/core/tests/generate-token.php` into the page's
@@ -1553,6 +1587,7 @@ FluxFiles/
 │   ├── vue/                          # npm: @fluxfiles/vue (TypeScript)
 │   ├── ckeditor4/                    # CKEditor 4 plugin
 │   ├── tinymce/                      # TinyMCE 4/5 plugin
+│   ├── summernote/                   # Summernote plugin
 │   └── sdk/                          # npm: fluxfiles (SDK)
 ├── .env.example                      # Environment template
 ├── CHANGELOG.md

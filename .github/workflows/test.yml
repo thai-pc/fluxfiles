@@ -199,7 +199,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [sdk, react, vue, ckeditor4, tinymce]
+        pkg: [sdk, react, vue, ckeditor4, tinymce, summernote]
     steps:
       - uses: actions/checkout@v6
         with:

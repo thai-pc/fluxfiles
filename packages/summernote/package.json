@@ -1,0 +1,39 @@
+{
+  "name": "@fluxfiles/summernote",
+  "version": "0.1.0",
+  "description": "Summernote plugin for FluxFiles",
+  "license": "MIT",
+  "main": "plugin.js",
+  "unpkg": "plugin.min.js",
+  "jsdelivr": "plugin.min.js",
+  "files": [
+    "plugin.js",
+    "plugin.min.js",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "esbuild plugin.js --minify --legal-comments=none --outfile=plugin.min.js",
+    "test": "vitest run"
+  },
+  "devDependencies": { "esbuild": "^0.28.0", "jsdom": "^25.0.1", "vitest": "^2.1.8" },
+  "publishConfig": { "access": "public" },
+  "author": "thai-pc",
+  "homepage": "https://github.com/thai-pc/fluxfiles#summernote",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thai-pc/fluxfiles.git",
+    "directory": "packages/summernote"
+  },
+  "bugs": { "url": "https://github.com/thai-pc/fluxfiles/issues" },
+  "keywords": [
+    "fluxfiles",
+    "file-manager",
+    "summernote",
+    "plugin",
+    "jquery",
+    "s3",
+    "r2",
+    "upload",
+    "media"
+  ]
+}

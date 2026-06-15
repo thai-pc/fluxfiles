@@ -49,7 +49,7 @@ if ($uri === '/fluxfiles.js' || $uri === '/fluxfiles.min.js') {
 // Dev convenience: serve the editor adapter packages (CKEditor 4 / TinyMCE) from
 // their sibling dirs so the manual test pages under /tests/manual/ can load each
 // plugin + its assets at a stable absolute path. Monorepo checkout only.
-foreach (['ckeditor4', 'tinymce'] as $pkg) {
+foreach (['ckeditor4', 'tinymce', 'summernote'] as $pkg) {
     if (strncmp($uri, "/{$pkg}/", strlen($pkg) + 2) === 0) {
         $base = realpath(__DIR__ . "/../{$pkg}");
         $file = realpath(__DIR__ . '/..' . $uri);
