@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>FluxFiles — Auth Refresh Host (test fixture)</title>
+</head>
+<body style="margin:0">
+    <!--
+      Test fixture: a minimal HOST app that embeds the FluxFiles iframe and
+      participates in the token-refresh protocol. The iframe is created with a
+      (possibly expired) token from ?token=…; when the iframe asks for a refresh
+      (FM_TOKEN_REFRESH), this host replies with FM_TOKEN_UPDATED carrying the
+      token from ?fresh=… . A test toggles window.__hostRefreshEnabled / __fresh
+      to control whether/what the host hands back. Used by the auth-retry e2e.
+    -->
+    <iframe id="fm" style="width:100vw;height:100vh;border:0" referrerpolicy="no-referrer"></iframe>
+    <script>
+        (function () {
+            var params = new URLSearchParams(location.search);
+            var token = params.get('token') || '';
+            var endpoint = params.get('endpoint') || '';
+            // Host-controlled state (a test flips these via page.evaluate).
+            window.__fresh = params.get('fresh') || '';
+            window.__hostRefreshEnabled = params.get('refresh') !== '0';
+            window.__refreshRequests = 0;
+
+            var ifr = document.getElementById('fm');
+            ifr.src = (endpoint || '') + '/public/index.html?token=' + encodeURIComponent(token) + '&disk=local';
+
+            window.addEventListener('message', function (e) {
+                var msg = e.data;
+                if (!msg || msg.source !== 'fluxfiles') return;
+                if (msg.type === 'FM_TOKEN_REFRESH') {
+                    window.__refreshRequests++;
+                    if (!window.__hostRefreshEnabled) return;     // simulate a host that can't refresh
+                    ifr.contentWindow.postMessage({
+                        source: 'fluxfiles',
+                        type: 'FM_TOKEN_UPDATED',
+                        payload: { token: window.__fresh }
+                    }, '*');
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

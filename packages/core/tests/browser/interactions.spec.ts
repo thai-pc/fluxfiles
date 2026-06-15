@@ -713,3 +713,48 @@ test('bulk download: triggers a download for each selected file', async ({ page 
   expect(downloads).toContain(a);
   expect(downloads).toContain(b);
 });
+
+test('expired session: the load-error Retry recovers after a token refresh', async ({ page }) => {
+  // Regression: when the session expires and the auto-refresh budget is spent,
+  // the load-error Retry used to be a no-op (it never re-asked the host for a
+  // token). It must reset the budget, re-request a token, and recover.
+  const fresh = mintToken();
+  const expired = fresh.slice(0, fresh.lastIndexOf('.') + 1) + 'BROKENSIGdeadbeef';
+
+  // The host fixture embeds the iframe and answers FM_TOKEN_REFRESH with ?fresh=.
+  await page.goto(
+    `/tests/manual/test-auth-host.html?endpoint=&refresh=0` +
+    `&token=${encodeURIComponent(expired)}&fresh=${encodeURIComponent(fresh)}`
+  );
+
+  const fm = page.frameLocator('#fm');
+  await expect(fm.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  // Model the user's stuck state: budget exhausted + a persistent load error,
+  // then make the host able to hand back the fresh token.
+  await page.evaluate(() => {
+    const w = (document.getElementById('fm') as HTMLIFrameElement).contentWindow as any;
+    const data = w.Alpine.$data(w.document.querySelector('.ff-app'));
+    data._refreshAttempts = 9;
+    data._refreshPromise = null;
+    data.loading = false;
+    data.authRequired = false;
+    data.authState = 'ok';
+    data.loadError = 'Session expired';
+    data.folders = []; data.files = [];
+    (window as any).__hostRefreshEnabled = true;
+  });
+
+  await expect(fm.locator('.ff-load-error')).toBeVisible();
+  await fm.locator('.ff-load-error .ff-empty-cta').click();   // Retry
+
+  // Recovered: error cleared, budget reset, token swapped to the fresh one.
+  await expect.poll(async () => page.evaluate(() => {
+    const w = (document.getElementById('fm') as HTMLIFrameElement).contentWindow as any;
+    const data = w.Alpine.$data(w.document.querySelector('.ff-app'));
+    return data.loadError === null && data._refreshAttempts === 0 && data.authRequired === false
+      && data.token.endsWith('deadbeef') === false;
+  }), { timeout: 10_000 }).toBe(true);
+
+  await expect(fm.locator('.ff-load-error')).toBeHidden();
+});
