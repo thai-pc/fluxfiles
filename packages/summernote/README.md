@@ -56,8 +56,15 @@ $('#editor').summernote({
 - The FluxFiles picker opens as a modal overlay.
 - Select a file — images are inserted as `<img>` (with `alt` from the file's
   metadata and `width`/`height` when known), other files as `<a>` links — via
-  Summernote's `editor.pasteHTML` (at the cursor).
+  Summernote's `editor.pasteHTML`. The plugin **saves the editing range when the
+  picker opens and restores it before inserting**, so content lands at your
+  original cursor (not at the start of the document).
 - The modal closes automatically after selection.
+
+> **Console note.** Summernote-lite's own popover/handle code may intermittently
+> log a `Cannot read properties of undefined (reading 'top')` while the modal has
+> focus. It originates inside `summernote-lite.min.js` (not this plugin) and is
+> harmless — selection and insertion work normally.
 
 > **Embedding & expiring URLs.** On a **private** disk the file URL is a
 > *presigned* URL that expires (≤ 24h) — embedding it in saved content will break

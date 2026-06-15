@@ -86,6 +86,11 @@
 
         var opts = (context.options && context.options.fluxfiles) || {};
 
+        // Remember the cursor: opening the modal steals focus, which drops
+        // Summernote's editing range. Without this, pasteHTML inserts at the
+        // start of the content and Summernote throws on the lost range.
+        context.invoke('editor.saveRange');
+
         FluxFiles.open({
             endpoint: opts.endpoint || '',
             token: opts.token || '',
@@ -98,10 +103,17 @@
             onSelect: function (payload) {
                 var files = Array.isArray(payload) ? payload : [payload];
 
-                for (var i = 0; i < files.length; i++) {
-                    var file = files[i];
-                    if (!file || file.is_dir) continue;
-                    context.invoke('editor.pasteHTML', fileToHtml(file));
+                // Insertable = real files (skip folders / empty entries).
+                var insertable = files.filter(function (f) { return f && !f.is_dir; });
+                if (insertable.length === 0) return;
+
+                // Restore the editing range + focus before inserting so content
+                // lands at the original cursor (and Summernote has a valid range).
+                context.invoke('editor.restoreRange');
+                context.invoke('editor.focus');
+
+                for (var i = 0; i < insertable.length; i++) {
+                    context.invoke('editor.pasteHTML', fileToHtml(insertable[i]));
                 }
             }
         });

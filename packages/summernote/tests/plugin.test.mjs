@@ -69,6 +69,20 @@ describe('Summernote FluxFiles plugin', () => {
     expect(cfg.mode).toBe('picker');
   });
 
+  it('saves the editing range on open and restores it (+focus) before inserting', () => {
+    const { buttonEl, editorInvoke, open } = loadPlugin();
+    buttonEl.__button.click();
+    // saveRange happens when the picker opens (modal steals focus).
+    expect(editorInvoke).toHaveBeenCalledWith('editor.saveRange');
+    open.mock.calls[0][0].onSelect({ url: 'https://cdn/a.png', name: 'a.png', mime: 'image/png' });
+    const order = editorInvoke.mock.calls.map((c) => c[0]);
+    // restoreRange + focus must precede the first pasteHTML.
+    expect(order).toContain('editor.restoreRange');
+    expect(order).toContain('editor.focus');
+    expect(order.indexOf('editor.restoreRange')).toBeLessThan(order.indexOf('editor.pasteHTML'));
+    expect(order.indexOf('editor.focus')).toBeLessThan(order.indexOf('editor.pasteHTML'));
+  });
+
   it('onSelect inserts an <img> via editor.pasteHTML', () => {
     const { buttonEl, editorInvoke, open } = loadPlugin();
     buttonEl.__button.click();
@@ -124,11 +138,13 @@ describe('Summernote FluxFiles plugin', () => {
     warn.mockRestore();
   });
 
-  it('skips folders (is_dir)', () => {
+  it('skips folders (is_dir): no insert, no range restore', () => {
     const { buttonEl, editorInvoke, open } = loadPlugin();
-    buttonEl.__button.click();
+    buttonEl.__button.click();   // this saves the range
     open.mock.calls[0][0].onSelect({ name: 'folder', is_dir: true });
-    expect(editorInvoke).not.toHaveBeenCalled();
+    const calls = editorInvoke.mock.calls.map((c) => c[0]);
+    expect(calls).not.toContain('editor.pasteHTML');   // nothing inserted
+    expect(calls).not.toContain('editor.restoreRange'); // editor left untouched
   });
 
   it('bails quietly (logs, no throw) when Summernote is absent', () => {
