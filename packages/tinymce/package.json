@@ -9,7 +9,8 @@
   "files": [
     "plugin.js",
     "plugin.min.js",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "esbuild plugin.js --minify --legal-comments=none --outfile=plugin.min.js",

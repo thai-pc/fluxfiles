@@ -3,7 +3,9 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.18] — 2026-06-15
+
+> Released: core `core-v0.2.14` (Packagist).
 
 ### Fixed
 
@@ -16,6 +18,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
   and reloads — recovering once a valid token arrives. A pushed `FM_TOKEN_UPDATED`
   also recovers a broken view. Verified end-to-end (embedded iframe + host refresh)
   with a new Playwright regression test.
+
+### Packaging
+
+- **Ship a `LICENSE` file in every package.** The MIT `LICENSE` lived only at the
+  repo root and in a few wrappers, so the published `fluxfiles/fluxfiles` (and
+  `wordpress`, `sdk`, `ckeditor4`, `tinymce`, `summernote`) packages carried the
+  `license` field but no license text. Added `LICENSE` to all packages and the
+  npm `files` allow-lists.
 
 ## [0.2.17] — 2026-06-15
 

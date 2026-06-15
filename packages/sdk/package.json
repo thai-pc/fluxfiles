@@ -10,7 +10,8 @@
     "files": [
         "fluxfiles.js",
         "fluxfiles.min.js",
-        "fluxfiles.d.ts"
+        "fluxfiles.d.ts",
+        "LICENSE"
     ],
     "scripts": {
         "build": "esbuild fluxfiles.js --minify --legal-comments=none --outfile=fluxfiles.min.js",
