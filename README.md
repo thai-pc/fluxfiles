@@ -1217,7 +1217,9 @@ CKEDITOR.replace('editor', {
 ```
 
 Click the **FluxFiles** toolbar button (inline-SVG folder icon) — images insert
-as `<img>`, other files as `<a>`.
+as `<img>`, other files as `<a>`. The plugin also injects a **Browse FluxFiles**
+button into CKEditor's native *Image Properties* dialog, filling URL/Alt/Width/
+Height (disable with `fluxfiles: { imageDialog: false }`).
 
 ### TinyMCE (4.x / 5.x)
 
@@ -1244,7 +1246,9 @@ tinymce.init({
 });
 ```
 
-Auto-detects TinyMCE 4 vs 5 API.
+Auto-detects TinyMCE 4 vs 5 API. The plugin also registers a `file_picker_callback`
+so TinyMCE's native **Insert/Edit Image** dialog gets a browse icon that sources
+URL/Alt/Width/Height from FluxFiles (disable with `fluxfiles_image_dialog: false`).
 
 ### Summernote
 

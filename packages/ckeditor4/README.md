@@ -47,11 +47,21 @@ CKEDITOR.replace('editor', {
 
 ## How It Works
 
-- Click the **FluxFiles** toolbar button (folder icon) in the **Insert** toolbar group.
-- The FluxFiles picker opens as a modal overlay.
-- Select a file — images are inserted as `<img>` (with `alt` from the file's
-  metadata and `width`/`height` when known), other files as `<a>` links.
-- The modal closes automatically after selection.
+Two ways to pick a file:
+
+1. **Toolbar button** — click the **FluxFiles** button (folder icon) in the
+   **Insert** group. The picker opens; the selection is inserted directly
+   (`<img>` for images with `alt` from metadata and `width`/`height` when known,
+   other files as `<a>` links).
+2. **Native Image dialog** — the plugin injects a **Browse FluxFiles** button into
+   CKEditor's own *Image Properties* dialog. Clicking it opens FluxFiles inline
+   (no popup) and fills the dialog's **URL + Alternative Text + Width + Height**,
+   so you can set border/alignment/etc. in the native dialog before inserting
+   (the "Browse Server" / CKFinder pattern).
+
+The modal closes automatically after selection.
+
+> Disable the native Image-dialog button with `fluxfiles: { imageDialog: false }`.
 
 > **Embedding & expiring URLs.** On a **private** disk the file URL is a
 > *presigned* URL that expires (≤ 24h) — embedding it in saved content will break
@@ -67,6 +77,7 @@ CKEDITOR.replace('editor', {
 | `disk` | string | `'local'` | Storage disk |
 | `locale` | string | `null` | UI language code |
 | `multiple` | boolean | `false` | Allow multi-file selection |
+| `imageDialog` | boolean | `true` | Inject the **Browse FluxFiles** button into the native Image dialog |
 
 ## License
 

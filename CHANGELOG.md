@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added (editor plugins)
+
+- **Native image-dialog integration (the "CKFinder" pattern).** Besides the
+  standalone toolbar button, the editor plugins now plug FluxFiles into the
+  editor's own Insert/Edit Image dialog:
+  - **TinyMCE** registers a `file_picker_callback` (+ `file_picker_types`), so the
+    native image/link/media dialog's Source field gets a browse icon that opens
+    FluxFiles and fills Source/Alt/Width/Height. Opt out with
+    `fluxfiles_image_dialog: false`; a host-provided `file_picker_callback` is
+    respected. Verified on TinyMCE 4 and 5.
+  - **CKEditor 4** injects a **Browse FluxFiles** button into the Image Properties
+    dialog (inline, no popup) that fills URL/Alt/Width/Height. Opt out with
+    `fluxfiles: { imageDialog: false }`.
+  - **Summernote** has no native browse hook, so its toolbar button remains the
+    integration point (documented).
+  Both standalone buttons are unchanged. Verified end-to-end with Playwright.
+
 ## [0.2.18] — 2026-06-15
 
 > Released: core `core-v0.2.14` (Packagist).

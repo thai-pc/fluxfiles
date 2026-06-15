@@ -11,9 +11,12 @@ function loadPlugin() {
   const commands = {};
   const buttons = {};
   globalThis.FluxFiles = { open: vi.fn() };
+  globalThis.__ckOn = {};
   globalThis.CKEDITOR = {
     tools: { htmlEncode: (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])) },
     plugins: { add: (_name, def) => { globalThis.__pluginDef = def; } },
+    // Capture the global dialogDefinition listener the plugin registers once.
+    on: (evt, handler) => { globalThis.__ckOn[evt] = handler; },
   };
   // eslint-disable-next-line no-eval
   (0, eval)(pluginCode);
@@ -113,5 +116,49 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     expect(html).not.toContain('X-Amz-');
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  // ── Native Image dialog: "Browse FluxFiles" button ─────────────────────
+  // Build a fake image-dialog definition and run the captured listener.
+  function runImageDialogDef(editor) {
+    const added = [];
+    const definition = {
+      getContents: (id) => (id === 'info' ? { add: (el) => added.push(el) } : null),
+    };
+    globalThis.__ckOn.dialogDefinition({ data: { name: 'image', definition }, editor });
+    return added;
+  }
+
+  it('registers a dialogDefinition listener and adds a Browse FluxFiles button to the image dialog', () => {
+    const { editor } = loadPlugin();
+    expect(typeof globalThis.__ckOn.dialogDefinition).toBe('function');
+    const added = runImageDialogDef(editor);
+    const btn = added.find((e) => e.id === 'fluxfilesBrowse');
+    expect(btn).toBeTruthy();
+    expect(btn.type).toBe('button');
+    expect(typeof btn.onClick).toBe('function');
+  });
+
+  it('Browse FluxFiles fills url/alt/width/height of the native dialog', () => {
+    const { editor, open } = loadPlugin();
+    const btn = runImageDialogDef(editor).find((e) => e.id === 'fluxfilesBrowse');
+    const values = {};
+    const dialog = {
+      getContentElement: (_tab, id) => ({ setValue: (v) => { values[id] = v; }, getValue: () => values[id] }),
+    };
+    btn.onClick.call({ getDialog: () => dialog });
+    expect(open).toHaveBeenCalled();
+    open.mock.calls[0][0].onSelect({ url: 'https://cdn/a.png', name: 'a.png', mime: 'image/png', width: 800, height: 600, meta: { alt_text: 'A sunset' } });
+    expect(values.txtUrl).toBe('https://cdn/a.png');
+    expect(values.txtAlt).toBe('A sunset');
+    expect(values.txtWidth).toBe('800');
+    expect(values.txtHeight).toBe('600');
+  });
+
+  it('does not add the dialog button when config.fluxfiles.imageDialog === false', () => {
+    const { editor } = loadPlugin();
+    editor.config.fluxfiles.imageDialog = false;
+    const added = runImageDialogDef(editor);
+    expect(added.find((e) => e.id === 'fluxfilesBrowse')).toBeFalsy();
   });
 });
