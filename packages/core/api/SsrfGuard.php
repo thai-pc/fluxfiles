@@ -24,6 +24,16 @@ namespace FluxFiles;
 final class SsrfGuard
 {
     /**
+     * Hosts ("host" or "host:port") allowed past the IP denylist — **TEST USE
+     * ONLY**. There is no env / config / request path that populates this; only
+     * in-process test code sets it (to reach a local fixture server). It is empty
+     * in production, so SSRF enforcement is unconditional there.
+     *
+     * @var string[]
+     */
+    public static array $allowTestHosts = [];
+
+    /**
      * True only for a genuinely public, routable address. Rejects loopback,
      * link-local, private (RFC1918 / ULA), CGNAT, the "this" network, cloud
      * metadata, and IPv4-mapped IPv6 wrappers around any of those.
@@ -201,6 +211,14 @@ final class SsrfGuard
             throw new ApiException('This URL host is not in the import allowlist', 422, 'host_not_allowed');
         }
 
+        // Test-only fixture bypass (see $allowTestHosts). Empty in production.
+        if (self::$allowTestHosts !== []) {
+            $hostPort = $host . (isset($parts['port']) ? ':' . $parts['port'] : '');
+            if (in_array($host, self::$allowTestHosts, true) || in_array($hostPort, self::$allowTestHosts, true)) {
+                return [$host];
+            }
+        }
+
         $ips = self::resolveHostIps($host);
         if ($ips === []) {
             throw new ApiException('Could not resolve the URL host', 422, 'fetch_failed');
@@ -221,6 +239,9 @@ final class SsrfGuard
      */
     public static function assertConnectedIpSafe($ch): void
     {
+        if (self::$allowTestHosts !== []) {
+            return; // a test pinned a local fixture host
+        }
         $ip = (string) curl_getinfo($ch, CURLINFO_PRIMARY_IP);
         if ($ip !== '' && !self::isPublicIp($ip)) {
             throw new ApiException('Connection resolved to a private or reserved address', 422, 'ssrf_blocked');
