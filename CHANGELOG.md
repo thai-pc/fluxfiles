@@ -3,7 +3,10 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.20] — 2026-06-16
+
+> Released: core `core-v0.2.15` (Packagist), Laravel `laravel-v0.2.5`,
+> WordPress plugin `wordpress-v0.2.4`.
 
 ### Added
 
