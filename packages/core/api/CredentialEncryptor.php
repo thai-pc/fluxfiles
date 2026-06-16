@@ -160,22 +160,11 @@ class CredentialEncryptor
             throw new ApiException("BYOB disk '{$diskName}' endpoint host is not allowed", 403, 'endpoint_blocked');
         }
 
-        // Collect candidate IPs: the literal host if it is one, otherwise its A record.
-        $ips = [];
-        if (filter_var($host, FILTER_VALIDATE_IP)) {
-            $ips[] = $host;
-        } else {
-            $resolved = @gethostbyname($host);
-            if ($resolved !== $host && filter_var($resolved, FILTER_VALIDATE_IP)) {
-                $ips[] = $resolved;
-            }
-        }
-
-        foreach ($ips as $ip) {
-            // Cloud metadata endpoints + any private/reserved range.
-            if ($ip === '169.254.169.254' || $ip === '::1'
-                || !filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)
-            ) {
+        // Resolve every form (literal / numeric / A+AAAA) and reject if any maps
+        // to a non-public address. Shared with the URL-import SSRF guard so the
+        // denylist (incl. CGNAT, IPv6 ULA, IPv4-mapped IPv6) stays in one place.
+        foreach (SsrfGuard::resolveHostIps($host) as $ip) {
+            if (!SsrfGuard::isPublicIp($ip)) {
                 throw new ApiException(
                     "BYOB disk '{$diskName}' endpoint resolves to a blocked (internal) address",
                     403,
