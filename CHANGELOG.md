@@ -3,6 +3,18 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.21] — 2026-06-16
+
+> Released: core `core-v0.2.16` (Packagist).
+
+### Changed
+
+- **URL-import size limit is now in MB** for consistency with `max_upload` /
+  `max_storage`. The claim `max_import_size` (bytes) → **`max_import_mb`** (MB),
+  and the env `FLUXFILES_IMPORT_MAX_BYTES` → **`FLUXFILES_IMPORT_MAX_MB`** (MB,
+  default 50). The byte-based names shipped only in 0.2.15 (opt-in, brand new), so
+  this is a clean rename rather than a migration.
+
 ## [0.2.20] — 2026-06-16
 
 > Released: core `core-v0.2.15` (Packagist), Laravel `laravel-v0.2.5`,
