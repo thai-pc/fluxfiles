@@ -21,7 +21,7 @@ namespace FluxFiles;
  */
 final class UrlImporter
 {
-    private const DEFAULT_MAX_BYTES = 52428800;  // 50 MB
+    private const DEFAULT_MAX_MB = 50;
     private const MAX_REDIRECTS = 3;
 
     /** Always rejected regardless of the upload extension policy. */
@@ -61,9 +61,11 @@ final class UrlImporter
             throw new ApiException('A URL is required', 422, 'url_invalid');
         }
 
-        $maxBytes = $this->claims->maxImportSize > 0
-            ? $this->claims->maxImportSize
-            : (int) ($_ENV['FLUXFILES_IMPORT_MAX_BYTES'] ?? self::DEFAULT_MAX_BYTES);
+        // Limit is in MB (like max_upload / max_storage), converted to bytes here.
+        $maxMb = $this->claims->maxImportMb > 0
+            ? $this->claims->maxImportMb
+            : (int) ($_ENV['FLUXFILES_IMPORT_MAX_MB'] ?? self::DEFAULT_MAX_MB);
+        $maxBytes = $maxMb * 1024 * 1024;
 
         $tmp = tempnam(sys_get_temp_dir(), 'ffimp_');
         if ($tmp === false) {

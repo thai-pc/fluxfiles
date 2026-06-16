@@ -71,12 +71,12 @@ $root = sys_get_temp_dir() . '/fluxfiles-importfetch-' . uniqid();
 $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage']]);
 $meta = new StorageMetadataHandler($dm);
 
-function importer(int $maxBytes = 0): UrlImporter
+function importer(int $maxMb = 0): UrlImporter
 {
     global $dm, $meta;
     $claims = new Claims('u1', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, false);
     $claims->allowUrlImport = true;
-    if ($maxBytes > 0) { $claims->maxImportSize = $maxBytes; }
+    if ($maxMb > 0) { $claims->maxImportMb = $maxMb; }
     return new UrlImporter($claims, new FileManager($dm, $claims, $meta));
 }
 
@@ -109,8 +109,8 @@ test('403 → auth_required', function () use ($base) {
     assertCode(fn () => importer()->import('local', "{$base}/forbidden"), 'auth_required');
 });
 
-test('a body larger than max_import_size → size_exceeded', function () use ($base) {
-    assertCode(fn () => importer(50000)->import('local', "{$base}/big"), 'size_exceeded'); // 50 KB cap vs 200 KB body
+test('a body larger than max_import_mb → size_exceeded', function () use ($base) {
+    assertCode(fn () => importer(1)->import('local', "{$base}/big"), 'size_exceeded'); // 1 MB cap vs 2 MB body
 });
 
 test('magic-byte beats a lying Content-Type (HTML served as image/png) → content_denied', function () use ($base) {

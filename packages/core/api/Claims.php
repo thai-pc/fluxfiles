@@ -51,8 +51,8 @@ class Claims
     // ── URL import (Upload from URL) — opt-in per tenant ──────────────────
     /** @var bool Enable URL import for this tenant. Default false (avoid open-proxy abuse). */
     public bool $allowUrlImport = false;
-    /** @var int Max bytes per import. 0 = inherit server default (50 MB). */
-    public int $maxImportSize = 0;
+    /** @var int Max size per import, in MB (consistent with max_upload/max_storage). 0 = inherit server default (50). */
+    public int $maxImportMb = 0;
     /** @var string[]|null Host glob allowlist for imports (e.g. ["*.unsplash.com"]). null = any public host. */
     public ?array $importUrlAllowlist = null;
     /** @var string|null Force imports into this path, ignoring the request path. null = use request path. */
@@ -155,7 +155,7 @@ class Claims
         // URL-import claims (set on the instance so the constructor signature stays
         // stable for positional callers / adapters).
         $c->allowUrlImport = (bool) ($payload->allow_url_import ?? false);
-        $c->maxImportSize = max(0, (int) ($payload->max_import_size ?? 0));
+        $c->maxImportMb = max(0, (int) ($payload->max_import_mb ?? 0));
         if (isset($payload->import_url_allowlist)) {
             $list = array_values(array_filter(array_map(
                 static fn ($h) => strtolower(trim((string) $h)),

@@ -62,7 +62,7 @@ switch ($path) {
 
     case '/big':
         header('Content-Type: application/octet-stream');
-        echo str_repeat('A', 200000); // 200 KB — exceeds the test's tiny cap
+        echo str_repeat('A', 2 * 1024 * 1024); // 2 MB — exceeds the test's 1 MB cap
         break;
 
     case '/html-as-png':
