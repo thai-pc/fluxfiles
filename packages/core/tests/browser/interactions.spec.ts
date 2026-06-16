@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
   mintToken,
+  mintTokenWithClaims,
   pngFile,
   imageFile,
   cardByName,
@@ -757,4 +758,33 @@ test('expired session: the load-error Retry recovers after a token refresh', asy
   }), { timeout: 10_000 }).toBe(true);
 
   await expect(fm.locator('.ff-load-error')).toBeHidden();
+});
+
+test('URL import: button hidden without the claim, shown with it', async ({ page }) => {
+  // Default token: no allow_url_import → the toolbar button is hidden (x-show).
+  await page.goto(`/public/index.html?token=${mintToken()}&disk=local`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.ff-toolbar .tb-btn', { hasText: 'Import URL' })).toBeHidden();
+
+  // Import-enabled token → button visible.
+  await page.goto(`/public/index.html?token=${mintTokenWithClaims({ allow_url_import: true })}&disk=local`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.ff-toolbar .tb-btn', { hasText: 'Import URL' })).toBeVisible();
+});
+
+test('URL import: dialog opens and an SSRF URL shows a human-readable error', async ({ page }) => {
+  await page.goto(`/public/index.html?token=${mintTokenWithClaims({ allow_url_import: true })}&disk=local`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  await page.locator('.ff-toolbar .tb-btn', { hasText: 'Import URL' }).click();
+  await expect(page.locator('.ff-import-modal')).toBeVisible();
+
+  // A loopback URL is blocked by the SSRF guard before any fetch → deterministic.
+  await page.locator('.ff-import-input').fill('http://127.0.0.1/secret');
+  await page.locator('.ff-import-modal .ff-btn-primary').click();
+
+  const err = page.locator('.ff-import-error');
+  await expect(err).toBeVisible({ timeout: 10_000 });
+  await expect(err).toContainText(/public URLs/i);     // human message, not "ssrf_blocked"
+  await expect(err).not.toContainText('ssrf_blocked');
 });

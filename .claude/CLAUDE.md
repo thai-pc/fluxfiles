@@ -10,7 +10,7 @@ Primary capabilities:
 
 - Local, AWS S3, and Cloudflare R2 storage through Flysystem v3.
 - JWT auth with permission, disk, path prefix, upload size, extension, quota, owner-only, and BYOB disk claims.
-- File operations: list, upload, download presign, rename, move, copy, delete, mkdir, cross-disk copy/move.
+- File operations: list, upload, download presign, rename, move, copy, delete, mkdir, cross-disk copy/move, import-from-URL.
 - Metadata: title, alt text, caption, tags, file hash, ownership, search index, folder index, audit log.
 - Image processing: WebP variants, crop/regenerate variants.
 - Optional AI tagging through Claude/OpenAI-compatible vision providers.
@@ -94,6 +94,7 @@ npm run build
 - Auth uses `firebase/php-jwt` **v7** (constraint `^7.0`): HS256 keys must be **≥ 32 bytes** or token encode/decode throws. `JwtCompat`/`ImageCompat` shims abstract jwt v5–v7 / intervention v2–v3.
 - Local metadata sidecars live at `_fluxfiles/meta/{key}.json` (not `{file}.meta.json`), so a user-uploaded `*.meta.json` cannot collide with or overwrite them. S3/R2 use object metadata.
 - `owner_only` is also enforced at folder level (delete/rename/move a folder containing other users' files → 403 via `assertOwnsTree`). BYOB endpoints are SSRF-checked.
+- **URL import** (`POST /api/fm/import-url`, `UrlImporter.php`): synchronous server-side fetch → the upload pipeline. Opt-in per tenant via `allow_url_import` (default false → inert). `SsrfGuard.php` is the shared SSRF denylist (per-hop + post-connect IP check; also used by the BYOB endpoint check). v1 is sync (no Redis/queue — by design); a storage-resident job model would be the v2 path if async is ever needed.
 
 ## Tests & Tooling
 

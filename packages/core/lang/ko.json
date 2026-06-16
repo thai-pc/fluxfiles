@@ -194,7 +194,17 @@
         "origin_denied": "이 출처에서의 접근이 거부되었습니다",
         "ext_changed": "파일 확장자는 변경할 수 없습니다",
         "load_failed": "이 폴더를 불러올 수 없습니다",
-        "move_into_self": "폴더를 자기 자신 안으로 이동할 수 없습니다"
+        "move_into_self": "폴더를 자기 자신 안으로 이동할 수 없습니다",
+        "import_failed": "가져오기 실패.",
+        "ssrf_blocked": "이 URL에 접근할 수 없습니다. 공개 URL만 가져올 수 있습니다.",
+        "size_exceeded": "파일이 너무 커서 가져올 수 없습니다.",
+        "content_denied": "이 파일 형식은 가져올 수 없습니다.",
+        "fetch_failed": "이 URL에서 다운로드하지 못했습니다. 서버를 사용할 수 없을 수 있습니다.",
+        "url_invalid": "유효한 URL이 아닙니다.",
+        "url_scheme_denied": "http(s) URL만 가져올 수 있습니다.",
+        "host_not_allowed": "이 URL 호스트는 허용되지 않습니다.",
+        "redirect_loop": "리디렉션이 너무 많습니다.",
+        "auth_required": "이 URL은 로그인이 필요해 가져올 수 없습니다."
     },
     "presign": {
         "title": "서명된 URL",
@@ -289,5 +299,16 @@
         "restored": "복원됨",
         "purged": "영구 삭제됨",
         "emptied": "휴지통을 비웠습니다"
+    },
+    "import": {
+        "title": "URL에서 가져오기",
+        "button": "URL 가져오기",
+        "placeholder": "가져올 URL 붙여넣기…",
+        "hint": "공개 이미지·동영상·문서를 이 폴더로 가져옵니다.",
+        "do": "가져오기",
+        "retry": "다시 시도",
+        "importing": "가져오는 중…",
+        "success": "가져왔습니다",
+        "another": "다른 URL 가져오기"
     }
 }

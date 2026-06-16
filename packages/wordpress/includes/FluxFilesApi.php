@@ -11,6 +11,7 @@ use FluxFiles\JwtMiddleware;
 use FluxFiles\QuotaManager;
 use FluxFiles\RateLimiterFileStorage;
 use FluxFiles\StorageMetadataHandler;
+use FluxFiles\UrlImporter;
 
 /**
  * REST API controller — registers all FluxFiles endpoints under /wp-json/fluxfiles/v1/.
@@ -82,6 +83,11 @@ class FluxFilesApi
             'methods'             => 'POST',
             'permission_callback' => [self::class, 'checkAuth'],
             'callback'            => [$api, 'handleUpload'],
+        ]);
+        register_rest_route($ns, $p . '/import-url', [
+            'methods'             => 'POST',
+            'permission_callback' => [self::class, 'checkAuth'],
+            'callback'            => [$api, 'handleImportUrl'],
         ]);
         register_rest_route($ns, $p . '/delete', [
             'methods'             => 'DELETE',
@@ -456,6 +462,33 @@ class FluxFilesApi
 
             $result = $fm->mkdir($disk, $path);
             $this->logAudit($claims, 'mkdir', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleImportUrl(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $url = (string) ($body['url'] ?? '');
+            if ($url === '') {
+                throw new ApiException('Missing required field: url', 400, 'missing_param');
+            }
+
+            $disk = (string) ($body['disk'] ?? 'local');
+            $result = (new UrlImporter($claims, $fm))->import($disk, $url, [
+                'path'      => (string) ($body['path'] ?? ''),
+                'filename'  => isset($body['filename']) ? (string) $body['filename'] : null,
+                'overwrite' => filter_var($body['overwrite'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            ]);
+            $this->logAudit($claims, 'url_import', $disk, (string) ($result['key'] ?? ''));
 
             return $this->ok($result);
         } catch (ApiException $e) {

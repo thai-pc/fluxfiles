@@ -194,7 +194,17 @@
         "origin_denied": "このオリジンからのアクセスが拒否されました",
         "ext_changed": "ファイルの拡張子は変更できません",
         "load_failed": "このフォルダーを読み込めませんでした",
-        "move_into_self": "フォルダーを自分自身の中に移動できません"
+        "move_into_self": "フォルダーを自分自身の中に移動できません",
+        "import_failed": "取り込みに失敗しました。",
+        "ssrf_blocked": "この URL にアクセスできません。公開 URL のみ取り込めます。",
+        "size_exceeded": "ファイルが大きすぎて取り込めません。",
+        "content_denied": "このファイル形式は取り込めません。",
+        "fetch_failed": "この URL からダウンロードできませんでした。サーバーが利用できない可能性があります。",
+        "url_invalid": "有効な URL ではありません。",
+        "url_scheme_denied": "http(s) の URL のみ取り込めます。",
+        "host_not_allowed": "この URL のホストは許可されていません。",
+        "redirect_loop": "リダイレクトが多すぎます。",
+        "auth_required": "この URL はサインインが必要なため取り込めません。"
     },
     "presign": {
         "title": "署名付きURL",
@@ -289,5 +299,16 @@
         "restored": "復元しました",
         "purged": "完全に削除しました",
         "emptied": "ゴミ箱を空にしました"
+    },
+    "import": {
+        "title": "URL から取り込み",
+        "button": "URL 取り込み",
+        "placeholder": "取り込む URL を貼り付け…",
+        "hint": "公開された画像・動画・文書をこのフォルダーに取り込みます。",
+        "do": "取り込む",
+        "retry": "再試行",
+        "importing": "取り込み中…",
+        "success": "取り込みました",
+        "another": "別の URL を取り込む"
     }
 }

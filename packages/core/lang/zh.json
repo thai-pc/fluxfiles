@@ -194,7 +194,17 @@
         "origin_denied": "此来源的访问被拒绝",
         "ext_changed": "无法更改文件扩展名",
         "load_failed": "无法加载此文件夹",
-        "move_into_self": "无法将文件夹移动到其自身内部"
+        "move_into_self": "无法将文件夹移动到其自身内部",
+        "import_failed": "导入失败。",
+        "ssrf_blocked": "无法访问此 URL。只能导入公开的 URL。",
+        "size_exceeded": "文件太大，无法导入。",
+        "content_denied": "无法导入此文件类型。",
+        "fetch_failed": "无法从此 URL 下载，服务器可能不可用。",
+        "url_invalid": "这不是有效的 URL。",
+        "url_scheme_denied": "只能导入 http(s) 的 URL。",
+        "host_not_allowed": "不允许此 URL 主机。",
+        "redirect_loop": "重定向次数过多。",
+        "auth_required": "此 URL 需要登录，无法导入。"
     },
     "presign": {
         "title": "预签名链接",
@@ -289,5 +299,16 @@
         "restored": "已恢复",
         "purged": "已永久删除",
         "emptied": "已清空回收站"
+    },
+    "import": {
+        "title": "从 URL 导入",
+        "button": "导入 URL",
+        "placeholder": "粘贴要导入的 URL…",
+        "hint": "将公开的图片、视频或文档导入此文件夹。",
+        "do": "导入",
+        "retry": "重试",
+        "importing": "正在导入…",
+        "success": "导入成功",
+        "another": "再导入一个"
     }
 }

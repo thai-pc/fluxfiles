@@ -3,6 +3,28 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Import from URL** (`POST /api/fm/import-url`). The server fetches a public URL
+  and saves it like a normal upload — no download-then-reupload. **Opt-in per
+  tenant** via the `allow_url_import` claim (default off, so the route is inert
+  until enabled). Reuses the upload pipeline (quota, dedup, variants, AI-tag,
+  metadata) and adds a dedicated SSRF guard (`SsrfGuard`):
+  - blocks loopback / RFC1918 / link-local / CGNAT / cloud-metadata / IPv6
+    ULA / IPv4-mapped IPv6, plus decimal/hex IP obfuscation, on the URL **and
+    every redirect hop**, with a post-connect IP re-check (DNS-rebinding);
+  - streams to a temp file with a hard size cap, magic-byte MIME (never trusts
+    the remote Content-Type) with an executable/markup deny-list, SVG denied
+    unless `FLUXFILES_IMPORT_ALLOW_SVG=true`.
+  - Claims: `allow_url_import`, `max_import_size`, `import_url_allowlist`
+    (host globs), `import_path`, `import_rate_limit` (default 10/min, its own
+    bucket), `import_concurrency`. UI: a gated "Import URL" toolbar button +
+    dialog (16 locales). Proxied by the Laravel and WordPress adapters.
+  - The BYOB endpoint SSRF check now shares `SsrfGuard`, gaining the same
+    IPv6/CGNAT/mapped-address coverage.
+
 ## [0.2.19] — 2026-06-15
 
 > Released: TinyMCE `tinymce-v0.3.0`, CKEditor 4 `ckeditor4-v0.3.0` (npm).

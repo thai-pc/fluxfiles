@@ -105,6 +105,13 @@ function fluxFilesApp() {
         trashLoading: false,
         trashError: '',
 
+        // Import from URL
+        showUrlImport: false,
+        urlImportUrl: '',
+        urlImportState: 'input', // 'input' | 'importing' | 'success' | 'error'
+        urlImportError: '',
+        urlImportResult: null,
+
         // Auth state
         authRequired: false,
         authState: 'ok', // 'ok' | 'missing' | 'expired' | 'refreshing'
@@ -2223,6 +2230,44 @@ function fluxFilesApp() {
         get canManageTrash() {
             const perms = this._tokenPayload().perms;
             return Array.isArray(perms) && perms.includes('delete');
+        },
+
+        // ── Import from URL ─────────────────────────────────────────────────
+        get canImport() {
+            return !!this._tokenPayload().allow_url_import;
+        },
+
+        openUrlImport() {
+            this.urlImportUrl = '';
+            this.urlImportError = '';
+            this.urlImportResult = null;
+            this.urlImportState = 'input';
+            this.showUrlImport = true;
+            this.$nextTick(() => { try { this.$refs.urlImportInput?.focus(); } catch (e) {} });
+        },
+        closeUrlImport() { this.showUrlImport = false; },
+
+        async importUrl() {
+            const url = (this.urlImportUrl || '').trim();
+            if (!url || this.urlImportState === 'importing') return;
+            this.urlImportState = 'importing';
+            this.urlImportError = '';
+            try {
+                const res = await this.api('POST', '/api/fm/import-url', {
+                    disk: this.currentDisk,
+                    path: this.currentPath,
+                    url: url
+                });
+                this.urlImportResult = res;
+                this.urlImportState = 'success';
+                this.showToast(this.t('import.success'), 'success');
+                this.postMessage('FM_EVENT', { event: 'import:done', key: res && res.key });
+                this.loadFiles();
+                this.loadQuota();
+            } catch (err) {
+                this.urlImportState = 'error';
+                this.urlImportError = err.message || this.t('error.import_failed');
+            }
         },
 
         async openTrash() {

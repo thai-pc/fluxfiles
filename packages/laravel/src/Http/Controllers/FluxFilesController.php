@@ -14,6 +14,7 @@ use FluxFiles\JwtMiddleware;
 use FluxFiles\QuotaManager;
 use FluxFiles\RateLimiterFileStorage;
 use FluxFiles\StorageMetadataHandler;
+use FluxFiles\UrlImporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -266,6 +267,32 @@ class FluxFilesController
 
             $result = $fm->copy($disk, $from, $to);
             $this->logAudit($claims, 'copy', $disk, $from);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function importUrl(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $url = (string) $request->input('url', '');
+            if ($url === '') {
+                throw new ApiException('Missing required field: url', 400, 'missing_param');
+            }
+
+            $disk = (string) $request->input('disk', 'local');
+            $result = (new UrlImporter($claims, $fm))->import($disk, $url, [
+                'path'      => (string) $request->input('path', ''),
+                'filename'  => $request->input('filename') !== null ? (string) $request->input('filename') : null,
+                'overwrite' => filter_var($request->input('overwrite', false), FILTER_VALIDATE_BOOLEAN),
+            ]);
+            $this->logAudit($claims, 'url_import', $disk, (string) ($result['key'] ?? ''));
 
             return $this->ok($result);
         } catch (ApiException $e) {

@@ -194,7 +194,17 @@
         "origin_denied": "Toegang geweigerd vanaf deze bron",
         "ext_changed": "De bestandsextensie kan niet worden gewijzigd",
         "load_failed": "Kan deze map niet laden",
-        "move_into_self": "Kan een map niet in zichzelf verplaatsen"
+        "move_into_self": "Kan een map niet in zichzelf verplaatsen",
+        "import_failed": "Importeren mislukt.",
+        "ssrf_blocked": "Deze URL is niet toegankelijk. Alleen openbare URL's kunnen worden geïmporteerd.",
+        "size_exceeded": "Dit bestand is te groot om te importeren.",
+        "content_denied": "Dit bestandstype kan niet worden geïmporteerd.",
+        "fetch_failed": "Kon niet downloaden van deze URL. De server is mogelijk niet beschikbaar.",
+        "url_invalid": "Dat lijkt geen geldige URL.",
+        "url_scheme_denied": "Alleen http(s)-URL's kunnen worden geïmporteerd.",
+        "host_not_allowed": "Deze URL-host is niet toegestaan.",
+        "redirect_loop": "Te veel omleidingen.",
+        "auth_required": "Deze URL vereist aanmelden en kan niet worden geïmporteerd."
     },
     "presign": {
         "title": "Voorondertekende URL",
@@ -289,5 +299,16 @@
         "restored": "Hersteld",
         "purged": "Definitief verwijderd",
         "emptied": "Prullenbak geleegd"
+    },
+    "import": {
+        "title": "Importeren vanaf URL",
+        "button": "URL importeren",
+        "placeholder": "Plak een URL om te importeren…",
+        "hint": "Importeert een openbare afbeelding, video of document in deze map.",
+        "do": "Importeren",
+        "retry": "Opnieuw proberen",
+        "importing": "Importeren…",
+        "success": "Succesvol geïmporteerd",
+        "another": "Nog een importeren"
     }
 }
