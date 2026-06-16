@@ -194,7 +194,17 @@
         "origin_denied": "Bu kaynaktan erişim reddedildi",
         "ext_changed": "Dosya uzantısı değiştirilemez",
         "load_failed": "Bu klasör yüklenemedi",
-        "move_into_self": "Bir klasör kendi içine taşınamaz"
+        "move_into_self": "Bir klasör kendi içine taşınamaz",
+        "import_failed": "İçe aktarma başarısız.",
+        "ssrf_blocked": "Bu URL'ye erişilemiyor. Yalnızca genel URL'ler içe aktarılabilir.",
+        "size_exceeded": "Bu dosya içe aktarılamayacak kadar büyük.",
+        "content_denied": "Bu dosya türü içe aktarılamaz.",
+        "fetch_failed": "Bu URL'den indirilemedi. Sunucu kullanılamıyor olabilir.",
+        "url_invalid": "Bu geçerli bir URL'ye benzemiyor.",
+        "url_scheme_denied": "Yalnızca http(s) URL'leri içe aktarılabilir.",
+        "host_not_allowed": "Bu URL ana bilgisayarına izin verilmiyor.",
+        "redirect_loop": "Çok fazla yönlendirme.",
+        "auth_required": "Bu URL oturum açma gerektiriyor ve içe aktarılamaz."
     },
     "presign": {
         "title": "Ön imzalı URL",
@@ -289,5 +299,16 @@
         "restored": "Geri yüklendi",
         "purged": "Kalıcı olarak silindi",
         "emptied": "Çöp kutusu boşaltıldı"
+    },
+    "import": {
+        "title": "URL'den içe aktar",
+        "button": "URL içe aktar",
+        "placeholder": "İçe aktarılacak URL'yi yapıştırın…",
+        "hint": "Genel bir görseli, videoyu veya belgeyi bu klasöre içe aktarır.",
+        "do": "İçe aktar",
+        "retry": "Tekrar dene",
+        "importing": "İçe aktarılıyor…",
+        "success": "Başarıyla içe aktarıldı",
+        "another": "Başka birini içe aktar"
     }
 }

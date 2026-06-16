@@ -194,7 +194,17 @@
         "origin_denied": "Access denied from this origin",
         "ext_changed": "The file extension cannot be changed",
         "load_failed": "Could not load this folder",
-        "move_into_self": "Cannot move a folder into itself"
+        "move_into_self": "Cannot move a folder into itself",
+        "import_failed": "Import failed.",
+        "ssrf_blocked": "This URL isn't accessible. Only public URLs can be imported.",
+        "size_exceeded": "This file is too large to import.",
+        "content_denied": "This file type can't be imported.",
+        "fetch_failed": "Couldn't download from this URL. The server may be unavailable.",
+        "url_invalid": "That doesn't look like a valid URL.",
+        "url_scheme_denied": "Only http(s) URLs can be imported.",
+        "host_not_allowed": "This URL host isn't allowed.",
+        "redirect_loop": "Too many redirects.",
+        "auth_required": "This URL requires sign-in and can't be imported."
     },
     "presign": {
         "title": "Presigned URL",
@@ -289,5 +299,16 @@
         "restored": "Restored",
         "purged": "Deleted permanently",
         "emptied": "Trash emptied"
+    },
+    "import": {
+        "title": "Import from URL",
+        "button": "Import URL",
+        "placeholder": "Paste a URL to import…",
+        "hint": "Imports a public image, video, or document into this folder.",
+        "do": "Import",
+        "retry": "Try again",
+        "importing": "Importing…",
+        "success": "Imported successfully",
+        "another": "Import another"
     }
 }

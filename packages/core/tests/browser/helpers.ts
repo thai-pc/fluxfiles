@@ -18,6 +18,16 @@ export function mintToken(perms: string[] = ['read', 'write', 'delete']): string
   return execFileSync('php', ['-r', php]).toString().trim();
 }
 
+/** Mint a token carrying arbitrary extra claims (e.g. allow_url_import) via JwtCompat. */
+export function mintTokenWithClaims(extra: Record<string, unknown>): string {
+  const php =
+    `require '${coreDir}/embed.php';` +
+    `$p = array_merge(['sub'=>'e2e-user','perms'=>['read','write','delete'],'disks'=>['local'],` +
+    `'prefix'=>'','max_upload'=>50,'iat'=>time(),'exp'=>time()+86400], json_decode('${JSON.stringify(extra)}', true));` +
+    `echo FluxFiles\\JwtCompat::encode($p, '${TEST_SECRET}');`;
+  return execFileSync('php', ['-r', php]).toString().trim();
+}
+
 /**
  * A tiny valid 1×1 PNG as an in-memory upload (no temp file needed). Bytes
  * appended after the IEND chunk are ignored by GD/decoders but make each file's

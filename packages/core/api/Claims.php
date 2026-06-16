@@ -48,6 +48,20 @@ class Claims
     /** @var array<string,int>|null Per-tenant image variant widths (thumb/medium/large). null = inherit defaults. */
     public $variants;
 
+    // ── URL import (Upload from URL) — opt-in per tenant ──────────────────
+    /** @var bool Enable URL import for this tenant. Default false (avoid open-proxy abuse). */
+    public bool $allowUrlImport = false;
+    /** @var int Max bytes per import. 0 = inherit server default (50 MB). */
+    public int $maxImportSize = 0;
+    /** @var string[]|null Host glob allowlist for imports (e.g. ["*.unsplash.com"]). null = any public host. */
+    public ?array $importUrlAllowlist = null;
+    /** @var string|null Force imports into this path, ignoring the request path. null = use request path. */
+    public ?string $importPath = null;
+    /** @var int Import requests / minute. 0 = inherit default (10). */
+    public int $importRateLimit = 0;
+    /** @var int Max concurrent imports. 0 = inherit default (3). */
+    public int $importConcurrency = 0;
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -121,7 +135,7 @@ class Claims
             }
         }
 
-        return new self(
+        $c = new self(
             (string) ($payload->sub ?? '0'),
             (array) ($payload->perms ?? ['read']),
             (array) ($payload->disks ?? ['local']),
@@ -137,6 +151,23 @@ class Claims
             (int) ($payload->rate_write ?? 0),
             isset($payload->variants) ? self::sanitizeVariants($payload->variants) : null
         );
+
+        // URL-import claims (set on the instance so the constructor signature stays
+        // stable for positional callers / adapters).
+        $c->allowUrlImport = (bool) ($payload->allow_url_import ?? false);
+        $c->maxImportSize = max(0, (int) ($payload->max_import_size ?? 0));
+        if (isset($payload->import_url_allowlist)) {
+            $list = array_values(array_filter(array_map(
+                static fn ($h) => strtolower(trim((string) $h)),
+                (array) $payload->import_url_allowlist
+            )));
+            $c->importUrlAllowlist = $list === [] ? null : $list;
+        }
+        $c->importPath = isset($payload->import_path) ? (string) $payload->import_path : null;
+        $c->importRateLimit = max(0, (int) ($payload->import_rate_limit ?? 0));
+        $c->importConcurrency = max(0, (int) ($payload->import_concurrency ?? 0));
+
+        return $c;
     }
 
     /**

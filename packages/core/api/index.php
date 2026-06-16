@@ -186,6 +186,16 @@ try {
     $isWriteAction = in_array($method, ['POST', 'PUT', 'DELETE'], true);
     $rateLimiter->check($claims->userId, $isWriteAction ? 'write' : 'read');
 
+    // URL import is an outbound HTTP request from the server — give it its own,
+    // tighter bucket (default 10/min) so it can't be abused at the upload rate.
+    if ($uri === '/api/fm/import-url') {
+        $importLimit = $claims->importRateLimit > 0
+            ? $claims->importRateLimit
+            : (int) ($_ENV['FLUXFILES_IMPORT_RATE_LIMIT'] ?? 10);
+        (new RateLimiterFileStorage($storagePath . '/rate_limit.json', $importLimit, $importLimit, 60))
+            ->check($claims->userId, 'import');
+    }
+
     // Audit log (lưu trong user storage)
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
@@ -264,6 +274,26 @@ function routeRequest(
             $_POST['path'] ?? '',
             $_FILES['file'],
             filter_var($_POST['force_upload'] ?? false, FILTER_VALIDATE_BOOLEAN)
+        );
+    }
+
+    // Upload from URL — gated by the `allow_url_import` claim + SSRF guard inside.
+    if ($method === 'POST' && $uri === '/api/fm/import-url') {
+        if (!$claims->hasPerm('write')) {
+            throw new ApiException('Permission denied: write', 403, 'permission_denied');
+        }
+        $b = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($b) || empty($b['url'])) {
+            throw new ApiException('Missing required field: url', 400, 'missing_param');
+        }
+        return (new \FluxFiles\UrlImporter($claims, $fm))->import(
+            (string) ($b['disk'] ?? 'local'),
+            (string) $b['url'],
+            [
+                'path'      => (string) ($b['path'] ?? ''),
+                'filename'  => isset($b['filename']) ? (string) $b['filename'] : null,
+                'overwrite' => filter_var($b['overwrite'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            ]
         );
     }
 
@@ -464,6 +494,7 @@ function resolveAuditAction(string $uri): string
         '/trash/purge'   => 'purge',
         '/trash/empty'   => 'empty_trash',
         '/trash'      => 'trash',
+        '/import-url' => 'url_import',
         '/upload'     => 'upload',
         '/rename'     => 'rename',
         '/delete'     => 'delete',

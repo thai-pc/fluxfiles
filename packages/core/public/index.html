@@ -308,6 +308,10 @@
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 3.5A1.5 1.5 0 012.5 2h2l1 1.5h4A1.5 1.5 0 0111 5v4A1.5 1.5 0 019.5 10.5h-7A1.5 1.5 0 011 9V3.5z" stroke="currentColor" stroke-width="1.1"/><path d="M6 6v3M4.5 7.5h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                 <span x-text="t('toolbar.new_folder')"></span>
             </button>
+            <button class="tb-btn" x-show="canImport" @click="openUrlImport()" :title="t('import.title')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg>
+                <span x-text="t('import.button')"></span>
+            </button>
 
             <div class="ff-sep ff-sep-desktop"></div>
 
@@ -1256,6 +1260,50 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Import from URL modal ═══ -->
+    <div class="ff-modal-overlay" x-show="showUrlImport" x-transition @click.self="closeUrlImport()" style="z-index:60;" x-cloak>
+        <div class="ff-import-modal" role="dialog" aria-modal="true" :aria-label="t('import.title')" @keydown.escape.window="showUrlImport && closeUrlImport()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('import.title')"></h3>
+                <button class="ff-activity-close" @click="closeUrlImport()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <div class="ff-import-body">
+                <!-- State: input -->
+                <template x-if="urlImportState === 'input' || urlImportState === 'error'">
+                    <div>
+                        <input class="ff-import-input" type="url" x-model="urlImportUrl"
+                               :placeholder="t('import.placeholder')"
+                               @keydown.enter="importUrl()" x-ref="urlImportInput" autofocus>
+                        <p class="ff-import-hint" x-text="t('import.hint')"></p>
+                        <p class="ff-import-error" x-show="urlImportState === 'error'" x-text="urlImportError"></p>
+                        <div class="ff-import-actions">
+                            <button class="ff-btn ff-btn-ghost" @click="closeUrlImport()" x-text="t('common.cancel')"></button>
+                            <button class="ff-btn ff-btn-primary" @click="importUrl()" :disabled="!urlImportUrl.trim()"
+                                    x-text="urlImportState === 'error' ? t('import.retry') : t('import.do')"></button>
+                        </div>
+                    </div>
+                </template>
+                <!-- State: importing -->
+                <div x-show="urlImportState === 'importing'" class="ff-import-status">
+                    <div class="ff-spinner"></div>
+                    <p x-text="t('import.importing')"></p>
+                </div>
+                <!-- State: success -->
+                <template x-if="urlImportState === 'success'">
+                    <div class="ff-import-status">
+                        <div class="ff-import-check">✓</div>
+                        <p x-text="t('import.success')"></p>
+                        <p class="ff-import-file" x-text="urlImportResult && urlImportResult.name"></p>
+                        <div class="ff-import-actions">
+                            <button class="ff-btn ff-btn-ghost" @click="urlImportState='input'; urlImportUrl=''" x-text="t('import.another')"></button>
+                            <button class="ff-btn ff-btn-primary" @click="closeUrlImport()" x-text="t('common.close')"></button>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
     </div>

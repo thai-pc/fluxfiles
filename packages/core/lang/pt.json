@@ -194,7 +194,17 @@
         "origin_denied": "Acesso negado desta origem",
         "ext_changed": "Não é possível alterar a extensão do arquivo",
         "load_failed": "Não foi possível carregar esta pasta",
-        "move_into_self": "Não é possível mover uma pasta para dentro dela mesma"
+        "move_into_self": "Não é possível mover uma pasta para dentro dela mesma",
+        "import_failed": "Falha na importação.",
+        "ssrf_blocked": "Esta URL não está acessível. Apenas URLs públicas podem ser importadas.",
+        "size_exceeded": "O arquivo é grande demais para importar.",
+        "content_denied": "Não é possível importar este tipo de arquivo.",
+        "fetch_failed": "Não foi possível baixar desta URL. O servidor pode estar indisponível.",
+        "url_invalid": "Isso não parece uma URL válida.",
+        "url_scheme_denied": "Apenas URLs http(s) podem ser importadas.",
+        "host_not_allowed": "O host desta URL não é permitido.",
+        "redirect_loop": "Redirecionamentos em excesso.",
+        "auth_required": "Esta URL exige login e não pode ser importada."
     },
     "presign": {
         "title": "URL pré-assinada",
@@ -289,5 +299,16 @@
         "restored": "Restaurado",
         "purged": "Excluído permanentemente",
         "emptied": "Lixeira esvaziada"
+    },
+    "import": {
+        "title": "Importar de URL",
+        "button": "Importar URL",
+        "placeholder": "Cole uma URL para importar…",
+        "hint": "Importa uma imagem, vídeo ou documento público para esta pasta.",
+        "do": "Importar",
+        "retry": "Tentar novamente",
+        "importing": "Importando…",
+        "success": "Importado com sucesso",
+        "another": "Importar outra"
     }
 }

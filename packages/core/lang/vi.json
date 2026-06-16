@@ -194,7 +194,17 @@
         "origin_denied": "Truy cập bị từ chối từ nguồn này",
         "ext_changed": "Không thể thay đổi phần mở rộng của tệp",
         "load_failed": "Không tải được thư mục này",
-        "move_into_self": "Không thể di chuyển thư mục vào chính nó"
+        "move_into_self": "Không thể di chuyển thư mục vào chính nó",
+        "import_failed": "Nhập thất bại.",
+        "ssrf_blocked": "Không truy cập được URL này. Chỉ nhập được URL công khai.",
+        "size_exceeded": "Tệp quá lớn để nhập.",
+        "content_denied": "Loại tệp này không nhập được.",
+        "fetch_failed": "Không tải được từ URL này. Máy chủ có thể không khả dụng.",
+        "url_invalid": "URL không hợp lệ.",
+        "url_scheme_denied": "Chỉ nhập được URL http(s).",
+        "host_not_allowed": "Tên miền URL này không được phép.",
+        "redirect_loop": "Quá nhiều chuyển hướng.",
+        "auth_required": "URL này yêu cầu đăng nhập nên không nhập được."
     },
     "presign": {
         "title": "URL có thời hạn",
@@ -289,5 +299,16 @@
         "restored": "Đã khôi phục",
         "purged": "Đã xóa vĩnh viễn",
         "emptied": "Đã dọn thùng rác"
+    },
+    "import": {
+        "title": "Nhập từ URL",
+        "button": "Nhập URL",
+        "placeholder": "Dán URL để nhập…",
+        "hint": "Nhập một ảnh, video hoặc tài liệu công khai vào thư mục này.",
+        "do": "Nhập",
+        "retry": "Thử lại",
+        "importing": "Đang nhập…",
+        "success": "Đã nhập thành công",
+        "another": "Nhập cái khác"
     }
 }

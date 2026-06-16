@@ -20,6 +20,7 @@ Route::get('lang/{locale}', [FluxFilesController::class, 'langGet'])->withoutMid
 // API routes
 Route::get('list', [FluxFilesController::class, 'list']);
 Route::post('upload', [FluxFilesController::class, 'upload']);
+Route::post('import-url', [FluxFilesController::class, 'importUrl']);
 Route::delete('delete', [FluxFilesController::class, 'delete']);
 Route::post('rename', [FluxFilesController::class, 'rename']);
 Route::post('move', [FluxFilesController::class, 'move']);

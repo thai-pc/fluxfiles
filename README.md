@@ -661,6 +661,17 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `ai_auto_tag` | bool | — | inherit env | Per-tenant AI auto-tag toggle. Omit to inherit `FLUXFILES_AI_AUTO_TAG`; `true`/`false` overrides it |
 | `rate_read` / `rate_write` | int | req/min | `0` | Per-tenant API rate limits. `0` = inherit the server default |
 | `variants` | object | px | — | Per-tenant WebP variant widths, e.g. `{"thumb":150,"medium":768,"large":1920}`. Omit/unknown keys inherit the defaults |
+| `allow_url_import` | bool | — | `false` | Enable **Import from URL** (`POST /api/fm/import-url`) for this tenant. Off by default so the server can't be abused as an HTTP proxy |
+| `max_import_size` | int | bytes | `0` | Max bytes per URL import. `0` = inherit the default (50 MB) |
+| `import_url_allowlist` | string[] | hosts | — | Restrict imports to these host globs, e.g. `["*.unsplash.com"]`. Omit = any public host |
+| `import_path` | string | path | — | Force imports into this path, ignoring the request path |
+| `import_rate_limit` / `import_concurrency` | int | — | `10` / `3` | Import-specific rate limit (its own bucket) and max concurrent imports |
+
+> **Import from URL** fetches a public URL server-side and saves it like an upload
+> (`POST /api/fm/import-url` with `{ "url": "…", "path": "…" }`). It's SSRF-guarded
+> (blocks private/metadata/CGNAT/IPv6 targets on every redirect hop, magic-byte MIME
+> deny-list, streaming size cap) and shares the existing quota/dedup/variants/AI-tag
+> pipeline. SVG import is off unless `FLUXFILES_IMPORT_ALLOW_SVG=true`.
 
 > `ttl` is **not** a claim — it's the `fluxfiles_token()` parameter (in **seconds**)
 > used to compute `exp` = `iat + ttl`.
