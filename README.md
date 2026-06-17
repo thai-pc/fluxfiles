@@ -515,13 +515,14 @@ return [
         'url'    => '/storage/uploads',  // public URL prefix
     ],
 
-    // AWS S3
+    // AWS S3 (or any S3-compatible — set AWS_ENDPOINT for MinIO / DO Spaces)
     's3' => [
-        'driver' => 's3',
-        'region' => $_ENV['AWS_DEFAULT_REGION'],
-        'bucket' => $_ENV['AWS_BUCKET'],
-        'key'    => $_ENV['AWS_ACCESS_KEY_ID'],
-        'secret' => $_ENV['AWS_SECRET_ACCESS_KEY'],
+        'driver'   => 's3',
+        'region'   => $_ENV['AWS_DEFAULT_REGION'],
+        'bucket'   => $_ENV['AWS_BUCKET'],
+        'key'      => $_ENV['AWS_ACCESS_KEY_ID'],
+        'secret'   => $_ENV['AWS_SECRET_ACCESS_KEY'],
+        'endpoint' => $_ENV['AWS_ENDPOINT'] ?? '',  // empty = native AWS S3
     ],
 
     // Cloudflare R2 (S3-compatible)
@@ -1659,6 +1660,7 @@ token field.
 | `AWS_SECRET_ACCESS_KEY` | No | — | AWS S3 secret key |
 | `AWS_DEFAULT_REGION` | No | `ap-southeast-1` | AWS region |
 | `AWS_BUCKET` | No | — | S3 bucket name |
+| `AWS_ENDPOINT` | No | — | Custom S3-compatible endpoint (MinIO / DO Spaces / …). Empty = native AWS S3; when set, path-style addressing is used |
 | `AWS_VISIBILITY` | No | `private` | `private` = presigned GET URLs; `public` = direct object URLs (public-read ACL) |
 | `AWS_PUBLIC_URL` | No | — | CDN / custom-domain base for a public disk, e.g. `https://cdn.example.com` |
 | `R2_ACCESS_KEY_ID` | No | — | Cloudflare R2 access key |
