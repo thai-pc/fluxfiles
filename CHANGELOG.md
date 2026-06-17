@@ -3,6 +3,44 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.23] — 2026-06-17
+
+> Released: core `core-v0.2.18` (Packagist), Laravel `laravel-v0.2.7`,
+> WordPress plugin `wordpress-v0.2.6`, CKEditor 4 `ckeditor4-v0.3.1`,
+> TinyMCE `tinymce-v0.3.1`, Summernote `summernote-v0.1.1` (npm).
+
+### Fixed
+
+- **Disk config keys weren't reachable through the adapters.** The core
+  consumes `endpoint`, `visibility` and `public_url` on a disk, but the Laravel
+  and WordPress adapters didn't surface them — so the S3-compatible
+  (MinIO/Spaces), public-disk and CDN/`public_url` flows silently fell back to
+  private native-AWS through those adapters.
+  - Laravel `config/fluxfiles.php`: `s3` gains `AWS_ENDPOINT` / `AWS_VISIBILITY`
+    / `AWS_PUBLIC_URL`; `r2` gains `R2_VISIBILITY` / `R2_PUBLIC_URL`.
+  - WordPress: `diskConfigs()` reads the matching options, with new admin
+    fields (S3 endpoint/visibility/public_url, R2 visibility/public_url).
+- **Core standalone `s3` disk had no custom-endpoint var.** `config/disks.php`
+  now reads `AWS_ENDPOINT` (empty = native AWS), so the bundled MinIO / any
+  S3-compatible can be targeted without editing the file. `DiskManager` already
+  supported the `endpoint` key.
+- **Editor pickers dropped `theme` and `disks`.** The CKEditor 4, TinyMCE and
+  Summernote plugins now forward both to `FluxFiles.open()`, so an editor can
+  match the picker to its light/dark theme and expose multiple disks.
+
+### Added
+
+- **`packages/core/.env.example`** ships with the core package (it loads `.env`
+  from the package root), covering the full env set — `FLUXFILES_*`, `AWS_*`,
+  `R2_*` — verified to match exactly what the code reads.
+
+### Docs
+
+- Completed the root README **Environment Variables** table: `AWS_ENDPOINT`,
+  `AWS_VISIBILITY` / `AWS_PUBLIC_URL`, `R2_VISIBILITY` / `R2_PUBLIC_URL` and the
+  four `FLUXFILES_IMPORT_*` defaults were previously undocumented. Laravel README
+  gains a cloud-storage env block; editor READMEs document `theme` / `disks`.
+
 ## [0.2.22] — 2026-06-17
 
 > Released: core `core-v0.2.17` (Packagist), Laravel `laravel-v0.2.6`,
