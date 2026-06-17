@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cba0fa3a7585d2e690c442b7fda78706",
+    "content-hash": "87d6b7ecd9932b9a965c90d7e1d9e1ce",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -225,16 +225,16 @@
         },
         {
             "name": "fluxfiles/fluxfiles",
-            "version": "v0.2.15",
+            "version": "v0.2.16",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thai-pc/fluxfiles-core.git",
-                "reference": "4ae15eca22ad65940e85b046e4acad6143449525"
+                "reference": "5943715cba28cefe735c007426edbd26830946c2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/4ae15eca22ad65940e85b046e4acad6143449525",
-                "reference": "4ae15eca22ad65940e85b046e4acad6143449525",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/5943715cba28cefe735c007426edbd26830946c2",
+                "reference": "5943715cba28cefe735c007426edbd26830946c2",
                 "shasum": ""
             },
             "require": {
@@ -286,7 +286,7 @@
                 "issues": "https://github.com/thai-pc/fluxfiles/issues",
                 "source": "https://github.com/thai-pc/fluxfiles"
             },
-            "time": "2026-06-16T13:53:40+00:00"
+            "time": "2026-06-16T14:14:51+00:00"
         },
         {
             "name": "graham-campbell/result-type",
