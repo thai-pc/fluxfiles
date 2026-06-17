@@ -9,6 +9,7 @@ on:
       - "ckeditor4-v*"
       - "tinymce-v*"
       - "summernote-v*"
+      - "node-v*"
 
 jobs:
   publish:
@@ -36,6 +37,9 @@ jobs:
           - pkg: vue
             tag_prefix: "vue-"
             build: "true"
+          - pkg: node
+            tag_prefix: "node-"
+            build: "true"   # builds dist/ via tsup (also runs on prepublishOnly)
 
     steps:
       - uses: actions/checkout@v6
