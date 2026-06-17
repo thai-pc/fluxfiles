@@ -75,7 +75,9 @@ The modal closes automatically after selection.
 | `fluxfiles_endpoint` | string | `''` | FluxFiles server URL |
 | `fluxfiles_token` | string | `''` | JWT authentication token |
 | `fluxfiles_disk` | string | `'local'` | Storage disk |
+| `fluxfiles_disks` | string[] | `null` | Disks shown in the picker sidebar |
 | `fluxfiles_locale` | string | `null` | UI language code |
+| `fluxfiles_theme` | string | `null` | Picker theme: `light` / `dark` / `auto` |
 | `fluxfiles_multiple` | boolean | `false` | Allow multi-file selection |
 | `fluxfiles_image_dialog` | boolean | `true` | Wire `file_picker_callback` into the native image/link/media dialogs |
 

@@ -88,7 +88,9 @@ The plugin reads a single `fluxfiles` options object:
 | `endpoint` | string | `''` | FluxFiles server URL |
 | `token` | string | `''` | JWT authentication token |
 | `disk` | string | `'local'` | Storage disk |
+| `disks` | string[] | `null` | Disks shown in the picker sidebar |
 | `locale` | string | `null` | UI language code |
+| `theme` | string | `null` | Picker theme: `light` / `dark` / `auto` |
 | `multiple` | boolean | `false` | Allow multi-file selection |
 | `maxUploadMb` | number | `null` | Per-file upload limit hint |
 | `maxFiles` | number | `null` | Max files hint |

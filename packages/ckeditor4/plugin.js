@@ -18,6 +18,7 @@
  *           token: 'JWT_TOKEN',
  *           disk: 'local',          // optional
  *           locale: 'en',           // optional
+ *           theme: 'dark',          // optional — light | dark | auto
  *           multiple: false          // optional
  *       }
  *   });
@@ -55,6 +56,7 @@
             endpoint: cfg.endpoint || '', token: cfg.token || '', disk: cfg.disk || 'local',
             mode: 'picker', multiple: !!multiple,
             maxUploadMb: cfg.maxUploadMb || null, maxFiles: cfg.maxFiles || null, locale: cfg.locale || null,
+            theme: cfg.theme || null, disks: cfg.disks || null,
             onSelect: onSelect
         });
     }
