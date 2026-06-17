@@ -201,8 +201,48 @@ class FluxFilesPlugin
         if (!empty($overrides['owner_only'])) {
             $payload['owner_only'] = true;
         }
+        self::applyTenantOverrides($payload, $overrides);
 
         return \FluxFiles\JwtCompat::encode($payload, $secret);
+    }
+
+    /**
+     * Forward the optional per-tenant override claims into a token payload. The
+     * core sanitizes/clamps them on decode, so this only copies them — no hard
+     * dependency on a specific core method.
+     *
+     * @param array<string,mixed> $payload
+     * @param array<string,mixed> $overrides
+     */
+    private static function applyTenantOverrides(array &$payload, array $overrides): void
+    {
+        if (isset($overrides['ai_auto_tag'])) {
+            $payload['ai_auto_tag'] = (bool) $overrides['ai_auto_tag'];
+        }
+        if (!empty($overrides['rate_read'])) {
+            $payload['rate_read'] = (int) $overrides['rate_read'];
+        }
+        if (!empty($overrides['rate_write'])) {
+            $payload['rate_write'] = (int) $overrides['rate_write'];
+        }
+        if (is_array($overrides['variants'] ?? null) && $overrides['variants'] !== []) {
+            $payload['variants'] = $overrides['variants'];
+        }
+        // URL-import claims.
+        if (!empty($overrides['allow_url_import'])) {
+            $payload['allow_url_import'] = true;
+        }
+        foreach (['max_import_mb', 'import_rate_limit', 'import_concurrency'] as $intClaim) {
+            if (!empty($overrides[$intClaim])) {
+                $payload[$intClaim] = (int) $overrides[$intClaim];
+            }
+        }
+        if (!empty($overrides['import_path'])) {
+            $payload['import_path'] = (string) $overrides['import_path'];
+        }
+        if (is_array($overrides['import_url_allowlist'] ?? null) && $overrides['import_url_allowlist'] !== []) {
+            $payload['import_url_allowlist'] = array_values($overrides['import_url_allowlist']);
+        }
     }
 
     /**
@@ -258,12 +298,24 @@ class FluxFilesPlugin
         if (!empty($overrides['owner_only'])) {
             $payload['owner_only'] = true;
         }
+        self::applyTenantOverrides($payload, $overrides);
 
         return \FluxFiles\JwtCompat::encode($payload, $secret);
     }
 
     /**
      * Generate a token for the current logged-in user.
+     *
+     * The built-in shortcode / media button / REST proxy mint tokens through
+     * here, so the `fluxfiles_token_overrides` filter is the supported way to
+     * set per-tenant claims (e.g. enable Import from URL) without a custom
+     * token caller:
+     *
+     *   add_filter('fluxfiles_token_overrides', function ($overrides, $userId) {
+     *       $overrides['allow_url_import'] = true;
+     *       $overrides['max_import_mb']    = 20;
+     *       return $overrides;
+     *   }, 10, 2);
      */
     public static function tokenForCurrentUser(array $overrides = []): string
     {
@@ -271,6 +323,13 @@ class FluxFilesPlugin
 
         if ($userId === 0) {
             throw new \RuntimeException('No authenticated WordPress user.');
+        }
+
+        if (function_exists('apply_filters')) {
+            $filtered = apply_filters('fluxfiles_token_overrides', $overrides, $userId);
+            if (is_array($filtered)) {
+                $overrides = $filtered;
+            }
         }
 
         return self::generateToken($userId, $overrides);

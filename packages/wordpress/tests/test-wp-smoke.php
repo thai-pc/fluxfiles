@@ -46,7 +46,20 @@ if (!function_exists('wp_generate_password')) {
     function wp_generate_password($len = 12, $special = true) { return substr(bin2hex(random_bytes($len)), 0, $len); }
 }
 if (!function_exists('add_action')) { function add_action(...$a) {} }
-if (!function_exists('add_filter')) { function add_filter(...$a) {} }
+// Minimal filter registry so we can exercise the fluxfiles_token_overrides hook.
+$GLOBALS['WP_FILTERS'] = [];
+if (!function_exists('add_filter')) {
+    function add_filter($tag, $cb, $priority = 10, $args = 1) { $GLOBALS['WP_FILTERS'][$tag][] = $cb; return true; }
+}
+if (!function_exists('apply_filters')) {
+    function apply_filters($tag, $value, ...$args) {
+        foreach ($GLOBALS['WP_FILTERS'][$tag] ?? [] as $cb) { $value = $cb($value, ...$args); }
+        return $value;
+    }
+}
+if (!function_exists('get_current_user_id')) {
+    function get_current_user_id() { return (int) ($GLOBALS['WP_OPTIONS']['_test_user_id'] ?? 0); }
+}
 
 // See test-laravel-smoke.php: CI's floor check overrides FLUXFILES_CORE_AUTOLOAD
 // to run against core at this adapter's declared composer floor.
@@ -77,6 +90,36 @@ test('generateToken honours overrides (perms/prefix/owner_only)', function () us
     assertEqual(['read'], $claims->perms, 'perms overridden');
     assertEqual('u7/', $claims->prefix, 'prefix overridden');
     assertEqual(true, $claims->owner_only ?? false, 'owner_only set');
+});
+
+test('generateToken forwards URL-import claims', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(13, [
+        'allow_url_import'     => true,
+        'max_import_mb'        => 20,
+        'import_url_allowlist' => ['*.unsplash.com'],
+        'import_path'          => 'imports',
+        'import_rate_limit'    => 5,
+    ]);
+    $claims = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret), $secret);
+    assertEqual(true, $claims->allowUrlImport, 'allow_url_import carried');
+    assertEqual(20, $claims->maxImportMb, 'max_import_mb carried');
+    assertEqual(['*.unsplash.com'], $claims->importUrlAllowlist, 'allowlist carried');
+    assertEqual('imports', $claims->importPath, 'import_path carried');
+    assertEqual(5, $claims->importRateLimit, 'import_rate_limit carried');
+});
+
+test('fluxfiles_token_overrides filter can enable URL import for the built-in flow', function () use ($secret) {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 99; // for get_current_user_id stub
+    add_filter('fluxfiles_token_overrides', function (array $o, int $userId) {
+        $o['allow_url_import'] = true;
+        $o['max_import_mb']    = 30;
+        return $o;
+    }, 10, 2);
+    $token  = FluxFilesPlugin::tokenForCurrentUser();
+    $claims = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret), $secret);
+    assertEqual(true, $claims->allowUrlImport, 'filter enabled import');
+    assertEqual(30, $claims->maxImportMb, 'filter set max_import_mb');
+    $GLOBALS['WP_FILTERS'] = []; // reset
 });
 
 test('generateToken without a secret → throws', function () {

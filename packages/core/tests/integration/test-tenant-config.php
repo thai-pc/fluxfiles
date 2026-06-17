@@ -99,6 +99,38 @@ test('fluxfiles_token omits per-tenant keys when unset (lean token)', function (
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $p = JwtCompat::decode(fluxfiles_token('u1'), $_ENV['FLUXFILES_SECRET']);
     assertTrue(!isset($p->ai_auto_tag) && !isset($p->rate_read) && !isset($p->variants), 'no extra keys');
+    assertTrue(!isset($p->allow_url_import) && !isset($p->max_import_mb), 'no import keys when unset');
+});
+
+test('fluxfiles_token forwards URL-import claims so the feature can be enabled', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $jwt = fluxfiles_token('u1', ['read', 'write'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, [
+            'allow_url_import'     => true,
+            'max_import_mb'        => 20,
+            'import_url_allowlist' => ['*.unsplash.com'],
+            'import_path'          => 'imports',
+            'import_rate_limit'    => 5,
+            'import_concurrency'   => 2,
+        ]);
+    $claims = Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']), $_ENV['FLUXFILES_SECRET']);
+    assertEqual(true, $claims->allowUrlImport, 'allow_url_import');
+    assertEqual(20, $claims->maxImportMb, 'max_import_mb');
+    assertEqual(['*.unsplash.com'], $claims->importUrlAllowlist, 'allowlist');
+    assertEqual('imports', $claims->importPath, 'import_path');
+    assertEqual(5, $claims->importRateLimit, 'import_rate_limit');
+    assertEqual(2, $claims->importConcurrency, 'import_concurrency');
+});
+
+test('fluxfiles_byob_token forwards URL-import claims', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $jwt = fluxfiles_byob_token('u1', [], ['read', 'write'], '', 10, null, 1800, false, [
+        'allow_url_import' => true,
+        'max_import_mb'    => 15,
+    ]);
+    $claims = Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']), $_ENV['FLUXFILES_SECRET']);
+    assertEqual(true, $claims->allowUrlImport, 'byob allow_url_import');
+    assertEqual(15, $claims->maxImportMb, 'byob max_import_mb');
 });
 
 // ── Variant sizes enforcement ─────────────────────────────────────────────

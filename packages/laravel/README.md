@@ -84,6 +84,27 @@ $token = FluxFiles::token(auth()->id(), [
 ]);
 ```
 
+### Enable Import from URL
+
+Import-from-URL is **off by default**. There's nothing to install or configure
+server-side per tenant — enabling it is a token claim. Add the import claims to
+the override array:
+
+```php
+$token = FluxFiles::token(auth()->id(), [
+    'perms'                => ['read', 'write'],
+    'allow_url_import'     => true,                 // required — turns the feature on
+    'max_import_mb'        => 20,                   // optional — cap per import (MB)
+    'import_url_allowlist' => ['*.unsplash.com'],   // optional — restrict source hosts
+    // 'import_path' => 'imports', 'import_rate_limit' => 10, 'import_concurrency' => 3
+]);
+```
+
+The core then accepts `POST /api/fm/import-url` (`{ "url": "…", "path": "…" }`)
+for that token — SSRF-guarded and sharing the quota/dedup/variants pipeline.
+Server-wide defaults (when a claim is omitted) come from `FLUXFILES_IMPORT_*`
+env vars on the core service.
+
 ### Per-tenant configuration
 
 FluxFiles is stateless — **the token is the per-tenant config.** There's no

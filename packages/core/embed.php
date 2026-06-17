@@ -38,7 +38,8 @@ function fluxfiles_token(
     ?bool $aiAutoTag = null,
     int $rateRead = 0,
     int $rateWrite = 0,
-    ?array $variants = null
+    ?array $variants = null,
+    ?array $import = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -74,6 +75,10 @@ function fluxfiles_token(
     if ($cleanVariants !== null) {
         $payload['variants'] = $cleanVariants;
     }
+    // URL-import claims (Claims::fromJwtPayload sanitizes/clamps these on decode).
+    // $import = ['allow_url_import'=>bool, 'max_import_mb'=>int, 'import_url_allowlist'=>string[],
+    //           'import_path'=>string, 'import_rate_limit'=>int, 'import_concurrency'=>int]
+    fluxfiles_apply_import_claims($payload, $import ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -103,7 +108,8 @@ function fluxfiles_byob_token(
     int $maxUploadMb = 10,
     ?array $allowedExt = null,
     int $ttl = 1800,
-    bool $ownerOnly = false
+    bool $ownerOnly = false,
+    ?array $import = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -134,6 +140,7 @@ function fluxfiles_byob_token(
     if ($ownerOnly) {
         $payload['owner_only'] = true;
     }
+    fluxfiles_apply_import_claims($payload, $import ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -160,7 +167,8 @@ function fluxfiles_mixed_token(
     int $maxUploadMb = 10,
     ?array $allowedExt = null,
     int $ttl = 1800,
-    bool $ownerOnly = false
+    bool $ownerOnly = false,
+    ?array $import = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -191,8 +199,36 @@ function fluxfiles_mixed_token(
     if ($ownerOnly) {
         $payload['owner_only'] = true;
     }
+    fluxfiles_apply_import_claims($payload, $import ?? []);
 
     return JwtCompat::encode($payload, $secret);
+}
+
+/**
+ * Forward URL-import claims from an options array into a token payload, when set.
+ * The server (Claims::fromJwtPayload) sanitizes/clamps these on decode, so the
+ * mint side only copies them — no hard dependency on a core method.
+ *
+ * @param array<string,mixed> $payload
+ * @param array<string,mixed> $import allow_url_import, max_import_mb,
+ *        import_url_allowlist, import_path, import_rate_limit, import_concurrency
+ */
+function fluxfiles_apply_import_claims(array &$payload, array $import): void
+{
+    if (!empty($import['allow_url_import'])) {
+        $payload['allow_url_import'] = true;
+    }
+    foreach (['max_import_mb', 'import_rate_limit', 'import_concurrency'] as $k) {
+        if (!empty($import[$k])) {
+            $payload[$k] = (int) $import[$k];
+        }
+    }
+    if (!empty($import['import_path'])) {
+        $payload['import_path'] = (string) $import['import_path'];
+    }
+    if (!empty($import['import_url_allowlist']) && is_array($import['import_url_allowlist'])) {
+        $payload['import_url_allowlist'] = array_values($import['import_url_allowlist']);
+    }
 }
 
 /**

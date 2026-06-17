@@ -48,6 +48,26 @@ const token = createToken({
 });
 ```
 
+### Enable Import from URL
+
+Import-from-URL is **off by default**. Turn it on for a token by setting the
+import options — no server-side per-tenant config is needed:
+
+```ts
+const token = createToken({
+  userId: 'user-42',
+  perms: ['read', 'write'],
+  allowUrlImport: true,                    // required — enables the feature
+  maxImportMb: 20,                         // optional — cap per import (MB)
+  importUrlAllowlist: ['*.unsplash.com'],  // optional — restrict source hosts
+  // importPath, importRateLimit, importConcurrency also supported
+});
+```
+
+The core then accepts `POST /api/fm/import-url` for that token (SSRF-guarded,
+sharing the quota/dedup/variants pipeline). Server-wide defaults come from
+`FLUXFILES_IMPORT_*` env vars on the core service.
+
 ### BYOB — encrypt a user's own bucket credentials
 
 ```ts

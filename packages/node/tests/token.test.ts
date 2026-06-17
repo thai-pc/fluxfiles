@@ -67,6 +67,29 @@ describe('createToken', () => {
     expect(c.rate_read).toBeUndefined();
     expect(c.rate_write).toBeUndefined();
     expect(c.variants).toBeUndefined();
+    expect(c.allow_url_import).toBeUndefined();
+    expect(c.max_import_mb).toBeUndefined();
+  });
+
+  it('forwards URL-import claims so the feature can be enabled (PHP parity)', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        allowUrlImport: true,
+        maxImportMb: 20,
+        importUrlAllowlist: ['*.unsplash.com'],
+        importPath: 'imports',
+        importRateLimit: 5,
+        importConcurrency: 2,
+      }),
+    ) as Record<string, unknown>;
+    expect(c.allow_url_import).toBe(true);
+    expect(c.max_import_mb).toBe(20);
+    expect(c.import_url_allowlist).toEqual(['*.unsplash.com']);
+    expect(c.import_path).toBe('imports');
+    expect(c.import_rate_limit).toBe(5);
+    expect(c.import_concurrency).toBe(2);
   });
 
   it('rejects a secret shorter than 32 bytes', () => {

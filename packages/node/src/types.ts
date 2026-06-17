@@ -43,6 +43,17 @@ export interface BaseTokenOptions {
   rateWrite?: number;
   /** Per-tenant image variant widths, e.g. `{ thumb: 150, medium: 768, large: 1920 }`. Omit to inherit. */
   variants?: Partial<Record<'thumb' | 'medium' | 'large', number>> | null;
+  /** Enable Import-from-URL for this tenant (`POST /api/fm/import-url`). Default off. */
+  allowUrlImport?: boolean;
+  /** Max size per URL import, in MB (same unit as `maxUploadMb`). `0`/omitted = inherit (50). */
+  maxImportMb?: number;
+  /** Restrict imports to these host globs, e.g. `['*.unsplash.com']`. Omit = any public host. */
+  importUrlAllowlist?: string[];
+  /** Force imports into this path, ignoring the request path. */
+  importPath?: string;
+  /** Import-specific rate limit (req/min) and max concurrent imports. `0`/omitted = inherit. */
+  importRateLimit?: number;
+  importConcurrency?: number;
 }
 
 export interface CreateTokenOptions extends BaseTokenOptions {

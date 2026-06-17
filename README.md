@@ -695,10 +695,93 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `aiAutoTag` | `ai_auto_tag` | — | `null` | Per-tenant AI auto-tag on upload. `null` = inherit `FLUXFILES_AI_AUTO_TAG`; `true`/`false` overrides it. (The AI provider/key stay server-side.) |
 | `rateRead` / `rateWrite` | `rate_read` / `rate_write` | req/min | `0` | Per-tenant rate limits. `0` = inherit `FLUXFILES_RATE_LIMIT_READ/WRITE`. |
 | `variants` | `variants` | px | `null` | Per-tenant WebP variant widths — a map of `thumb`/`medium`/`large` to a width (16–8000 px). Unset names inherit `150`/`768`/`1920`. |
+| `import` | `allow_url_import`, … | — | `null` | **Import from URL** config (off unless set). An array: `['allow_url_import' => true, 'max_import_mb' => 20, 'import_url_allowlist' => ['*.unsplash.com'], 'import_path' => 'imports', 'import_rate_limit' => 10, 'import_concurrency' => 3]`. Only the keys you set are embedded; the rest inherit the server defaults. See [Import from URL](#import-from-url). |
 
 > **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is
 > **seconds** (`ttl`), and `allowedExt` entries are **bare lowercase extensions**
 > with no leading dot.
+
+### Import from URL
+
+`POST /api/fm/import-url` fetches a **public** URL server-side and saves it like a
+normal upload (sharing the quota / dedup / variants / AI-tag pipeline). It is
+**off by default** — a token must carry `allow_url_import` to use it, so the
+server can never be abused as an open HTTP proxy. There is **nothing to install
+or configure server-side** to enable it per tenant: like every other limit, it
+lives in the JWT. Enabling it is the **only** step — just set the import claims
+when you mint the token.
+
+```php
+// Core (standalone) — the 15th param is an array of import claims
+$token = fluxfiles_token(
+    'user-42', ['read', 'write'], ['local'], 'users/42', 10, null, 3600, false, 0, 0,
+    null, 0, 0, null,
+    [
+        'allow_url_import'     => true,          // required — enables the feature
+        'max_import_mb'        => 20,            // optional — cap per import (MB)
+        'import_url_allowlist' => ['*.unsplash.com', 'cdn.example.com'], // optional
+        'import_path'          => 'imports',     // optional — force a destination
+        'import_rate_limit'    => 10,            // optional — imports/min
+        'import_concurrency'   => 3,             // optional — max concurrent
+    ]
+);
+```
+
+```php
+// Laravel — FluxFiles facade / FluxFilesManager::token()
+$token = FluxFiles::token($user, [
+    'allow_url_import'     => true,
+    'max_import_mb'        => 20,
+    'import_url_allowlist' => ['*.unsplash.com'],
+]);
+```
+
+```php
+// WordPress — FluxFilesPlugin::generateToken() / tokenForCurrentUser()
+$token = FluxFilesPlugin::tokenForCurrentUser([
+    'allow_url_import' => true,
+    'max_import_mb'    => 20,
+]);
+```
+
+```ts
+// Node — @fluxfiles/node (camelCase options)
+import { createToken } from '@fluxfiles/node';
+
+const token = createToken({
+  userId: 'user-42',
+  perms: ['read', 'write'],
+  allowUrlImport: true,
+  maxImportMb: 20,
+  importUrlAllowlist: ['*.unsplash.com'],
+  // importPath, importRateLimit, importConcurrency also supported
+});
+```
+
+Once the token allows it, call the route (the React/Vue/iframe SDKs proxy it for you):
+
+```bash
+curl -X POST "$ENDPOINT/api/fm/import-url" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://images.unsplash.com/photo-123.jpg","path":"imports"}'
+```
+
+**Server-side defaults** (apply when a token omits the matching claim) are
+optional env vars — see [`.env.example`](.env.example):
+
+| Env var | Default | Purpose |
+|---------|---------|---------|
+| `FLUXFILES_IMPORT_MAX_MB` | `50` | Max MB per import when the token omits `max_import_mb` |
+| `FLUXFILES_IMPORT_RATE_LIMIT` | `10` | Imports/min when the token omits `import_rate_limit` |
+| `FLUXFILES_IMPORT_TIMEOUT` | `30` | Seconds per import fetch |
+| `FLUXFILES_IMPORT_ALLOW_SVG` | `false` | SVG import is off by default (XML can carry script) |
+
+> **Security:** every redirect hop is SSRF-guarded (private/loopback/link-local/
+> CGNAT/metadata/IPv6 targets are rejected, including decimal/hex-obfuscated IPs),
+> the response is MIME-checked by magic bytes against a deny-list, and the body is
+> streamed with a hard size cap. `import_url_allowlist` further restricts which
+> hosts may be fetched.
 
 ### Permissions explained
 
