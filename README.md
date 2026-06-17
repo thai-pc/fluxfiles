@@ -66,7 +66,37 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 ## Quick Start
 
-### 1. Install
+### Run with Docker (fastest)
+
+The standalone app (nginx + php-fpm) is published to GHCR — no PHP/Composer on
+your host. Pull and run:
+
+```bash
+docker run -p 8080:80 \
+  -e FLUXFILES_SECRET="$(openssl rand -hex 32)" \
+  ghcr.io/thai-pc/fluxfiles:latest
+```
+
+Open **http://localhost:8080/public/index.html**. The container reads every
+`FLUXFILES_*`, `AWS_*` and `R2_*` env var (see [Environment Variables](#environment-variables)).
+Persist uploads + runtime state with a volume, and add cloud creds as needed:
+
+```bash
+docker run -p 8080:80 \
+  -e FLUXFILES_SECRET="$(openssl rand -hex 32)" \
+  -e AWS_BUCKET=my-bucket -e AWS_ACCESS_KEY_ID=... -e AWS_SECRET_ACCESS_KEY=... \
+  -v fluxfiles-data:/app/packages/core/storage \
+  ghcr.io/thai-pc/fluxfiles:latest
+```
+
+Images are tagged `latest`, the release version (`0.2.18`) and minor (`0.2`), for
+`linux/amd64` and `linux/arm64`. To build from the monorepo instead:
+`docker compose up` (app + MinIO) or `make up`.
+
+> A JS/non-PHP backend? Run this image as your file service and mint tokens with
+> [`@fluxfiles/node`](packages/node) — no PHP in your own codebase.
+
+### 1. Install (from source)
 
 ```bash
 git clone https://github.com/thai-pc/fluxfiles.git
