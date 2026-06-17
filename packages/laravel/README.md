@@ -33,6 +33,29 @@ php artisan storage:link
 
 The default `local` disk writes to `storage/app/public/fluxfiles/uploads` and returns URLs under `/storage/fluxfiles/uploads`.
 
+### Cloud storage (optional)
+
+The `s3` and `r2` disks read these from `.env` (see `config/fluxfiles.php`):
+
+```env
+# AWS S3 — or any S3-compatible (set AWS_ENDPOINT for MinIO / DO Spaces)
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=ap-southeast-1
+AWS_BUCKET=
+AWS_ENDPOINT=                 # empty = native AWS S3
+AWS_VISIBILITY=private        # 'public' = direct object URLs
+AWS_PUBLIC_URL=               # CDN / custom domain for a public disk
+
+# Cloudflare R2
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_ACCOUNT_ID=
+R2_BUCKET=
+R2_VISIBILITY=private
+R2_PUBLIC_URL=                # r2.dev or custom domain for a public bucket
+```
+
 ## Modes
 
 | Mode | Description |

@@ -137,11 +137,16 @@ class FluxFilesPlugin
         $s3Bucket = get_option('fluxfiles_s3_bucket', '');
         if (!empty($s3Bucket)) {
             $disks['s3'] = [
-                'driver' => 's3',
-                'region' => get_option('fluxfiles_s3_region', 'ap-southeast-1'),
-                'bucket' => $s3Bucket,
-                'key'    => get_option('fluxfiles_s3_key', ''),
-                'secret' => get_option('fluxfiles_s3_secret', ''),
+                'driver'     => 's3',
+                'region'     => get_option('fluxfiles_s3_region', 'ap-southeast-1'),
+                'bucket'     => $s3Bucket,
+                'key'        => get_option('fluxfiles_s3_key', ''),
+                'secret'     => get_option('fluxfiles_s3_secret', ''),
+                // Custom S3-compatible endpoint (MinIO / DO Spaces). Empty = native AWS.
+                'endpoint'   => get_option('fluxfiles_s3_endpoint', ''),
+                // 'private' = presigned URLs (default); 'public' = direct object URLs.
+                'visibility' => get_option('fluxfiles_s3_visibility', 'private'),
+                'public_url' => get_option('fluxfiles_s3_public_url', ''),
             ];
         }
 
@@ -150,12 +155,15 @@ class FluxFilesPlugin
         if (!empty($r2Bucket)) {
             $accountId = get_option('fluxfiles_r2_account_id', '');
             $disks['r2'] = [
-                'driver'   => 's3',
-                'endpoint' => "https://{$accountId}.r2.cloudflarestorage.com",
-                'region'   => 'auto',
-                'bucket'   => $r2Bucket,
-                'key'      => get_option('fluxfiles_r2_key', ''),
-                'secret'   => get_option('fluxfiles_r2_secret', ''),
+                'driver'     => 's3',
+                'endpoint'   => "https://{$accountId}.r2.cloudflarestorage.com",
+                'region'     => 'auto',
+                'bucket'     => $r2Bucket,
+                'key'        => get_option('fluxfiles_r2_key', ''),
+                'secret'     => get_option('fluxfiles_r2_secret', ''),
+                // 'public' needs a public bucket + public_url (r2.dev / custom domain).
+                'visibility' => get_option('fluxfiles_r2_visibility', 'private'),
+                'public_url' => get_option('fluxfiles_r2_public_url', ''),
             ];
         }
 

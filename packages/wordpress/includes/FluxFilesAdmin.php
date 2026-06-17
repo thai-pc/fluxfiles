@@ -121,8 +121,14 @@ class FluxFilesAdmin
         $this->addField('fluxfiles_s3_region', 'Region', 'fluxfiles_s3');
         $this->addField('fluxfiles_s3_key', 'Access Key ID', 'fluxfiles_s3');
         $this->addField('fluxfiles_s3_secret', 'Secret Access Key', 'fluxfiles_s3', 'password');
+        $this->addField('fluxfiles_s3_endpoint', 'Endpoint (MinIO/Spaces — empty for AWS)', 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_visibility', 'Visibility (private | public)', 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_public_url', 'Public URL (CDN/custom domain)', 'fluxfiles_s3');
 
-        foreach (['fluxfiles_s3_bucket', 'fluxfiles_s3_region', 'fluxfiles_s3_key', 'fluxfiles_s3_secret'] as $opt) {
+        foreach ([
+            'fluxfiles_s3_bucket', 'fluxfiles_s3_region', 'fluxfiles_s3_key', 'fluxfiles_s3_secret',
+            'fluxfiles_s3_endpoint', 'fluxfiles_s3_visibility', 'fluxfiles_s3_public_url',
+        ] as $opt) {
             register_setting('fluxfiles', $opt, [
                 'type' => 'string',
                 'sanitize_callback' => 'sanitize_text_field',
@@ -143,8 +149,13 @@ class FluxFilesAdmin
         $this->addField('fluxfiles_r2_account_id', 'Account ID', 'fluxfiles_r2');
         $this->addField('fluxfiles_r2_key', 'Access Key ID', 'fluxfiles_r2');
         $this->addField('fluxfiles_r2_secret', 'Secret Access Key', 'fluxfiles_r2', 'password');
+        $this->addField('fluxfiles_r2_visibility', 'Visibility (private | public)', 'fluxfiles_r2');
+        $this->addField('fluxfiles_r2_public_url', 'Public URL (r2.dev / custom domain)', 'fluxfiles_r2');
 
-        foreach (['fluxfiles_r2_bucket', 'fluxfiles_r2_account_id', 'fluxfiles_r2_key', 'fluxfiles_r2_secret'] as $opt) {
+        foreach ([
+            'fluxfiles_r2_bucket', 'fluxfiles_r2_account_id', 'fluxfiles_r2_key', 'fluxfiles_r2_secret',
+            'fluxfiles_r2_visibility', 'fluxfiles_r2_public_url',
+        ] as $opt) {
             register_setting('fluxfiles', $opt, [
                 'type' => 'string',
                 'sanitize_callback' => 'sanitize_text_field',

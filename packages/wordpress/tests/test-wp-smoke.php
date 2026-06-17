@@ -162,8 +162,31 @@ test('diskConfigs → adds s3 + r2 when options are set', function () {
         assertEqual('my-bucket', $disks['s3']['bucket'] ?? '', 's3 mapped');
         assertEqual('s3', $disks['r2']['driver'] ?? '', 'r2 uses s3 driver');
         assertEqual('https://acc123.r2.cloudflarestorage.com', $disks['r2']['endpoint'] ?? '', 'r2 endpoint built');
+        // New flow keys: present with safe defaults so the core consumes them.
+        assertEqual('private', $disks['s3']['visibility'] ?? '', 's3 visibility defaults private');
+        assertTrue(array_key_exists('endpoint', $disks['s3']), 's3 endpoint key present (MinIO/Spaces)');
+        assertTrue(array_key_exists('public_url', $disks['s3']), 's3 public_url key present');
+        assertEqual('private', $disks['r2']['visibility'] ?? '', 'r2 visibility defaults private');
     } finally {
         unset($GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_r2_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_r2_account_id']);
+    }
+});
+
+test('diskConfigs → s3 endpoint + visibility are settable (MinIO / public flow)', function () {
+    $GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket']     = 'b';
+    $GLOBALS['WP_OPTIONS']['fluxfiles_s3_endpoint']   = 'http://localhost:9000';
+    $GLOBALS['WP_OPTIONS']['fluxfiles_s3_visibility'] = 'public';
+    $GLOBALS['WP_OPTIONS']['fluxfiles_s3_public_url'] = 'https://cdn.example.com';
+    try {
+        $s3 = FluxFilesPlugin::diskConfigs()['s3'];
+        assertEqual('http://localhost:9000', $s3['endpoint'], 's3 endpoint carried');
+        assertEqual('public', $s3['visibility'], 's3 visibility carried');
+        assertEqual('https://cdn.example.com', $s3['public_url'], 's3 public_url carried');
+    } finally {
+        unset(
+            $GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_s3_endpoint'],
+            $GLOBALS['WP_OPTIONS']['fluxfiles_s3_visibility'], $GLOBALS['WP_OPTIONS']['fluxfiles_s3_public_url']
+        );
     }
 });
 
