@@ -54,6 +54,27 @@ A proxy is exposed at `/wp-json/fluxfiles/v1/api/fm/*` — `list`, `upload`,
 `metadata`, … . The current WordPress user's identity is bridged into a short-lived
 FluxFiles JWT server-side; the signing secret never reaches the browser.
 
+## Enable Import from URL
+
+Import-from-URL is **off by default**. The built-in shortcode, media button and
+REST proxy mint tokens through `FluxFilesPlugin::tokenForCurrentUser()`, so the
+supported way to turn it on (or set any per-tenant claim) is the
+`fluxfiles_token_overrides` filter — add this to your theme or a small plugin:
+
+```php
+add_filter('fluxfiles_token_overrides', function (array $overrides, int $userId) {
+    $overrides['allow_url_import']     = true;            // required — enables it
+    $overrides['max_import_mb']        = 20;             // optional — cap per import (MB)
+    $overrides['import_url_allowlist'] = ['*.unsplash.com']; // optional — restrict hosts
+    return $overrides;
+}, 10, 2);
+```
+
+Once enabled, the proxy accepts `POST /wp-json/fluxfiles/v1/api/fm/import-url`
+(`{ "url": "…", "path": "…" }`) — SSRF-guarded, sharing the quota/dedup/variants
+pipeline. Server-wide defaults come from `FLUXFILES_IMPORT_*` env vars on the
+core service.
+
 ## Indexing an existing upload directory
 
 Listing/preview of pre-existing files works out of the box, but **search** relies on

@@ -95,6 +95,23 @@ test('token() emits per-tenant overrides without depending on a core method', fu
     assertEqual(['large' => 2560], (array) ($claims->variants ?? null), 'variants passed through (core sanitizes on decode)');
 });
 
+test('token() forwards URL-import claims so the feature can be enabled', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $token = $mgr->token(11, [
+        'allow_url_import'     => true,
+        'max_import_mb'        => 20,
+        'import_url_allowlist' => ['*.unsplash.com'],
+        'import_path'          => 'imports',
+        'import_rate_limit'    => 5,
+    ]);
+    $claims = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret), $secret);
+    assertEqual(true, $claims->allowUrlImport, 'allow_url_import carried');
+    assertEqual(20, $claims->maxImportMb, 'max_import_mb carried');
+    assertEqual(['*.unsplash.com'], $claims->importUrlAllowlist, 'allowlist carried');
+    assertEqual('imports', $claims->importPath, 'import_path carried');
+    assertEqual(5, $claims->importRateLimit, 'import_rate_limit carried');
+});
+
 test('token() without a secret → throws', function () {
     $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
     $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'] = '';

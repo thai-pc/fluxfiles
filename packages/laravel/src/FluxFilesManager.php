@@ -77,6 +77,23 @@ class FluxFilesManager
         if (is_array($overrides['variants'] ?? null) && $overrides['variants'] !== []) {
             $payload['variants'] = $overrides['variants'];
         }
+
+        // URL-import claims (the core sanitizes/clamps these on decode). Forwarded
+        // inline so token($user, ['allow_url_import' => true, …]) actually enables it.
+        if (!empty($overrides['allow_url_import'])) {
+            $payload['allow_url_import'] = true;
+        }
+        foreach (['max_import_mb', 'import_rate_limit', 'import_concurrency'] as $intClaim) {
+            if (!empty($overrides[$intClaim])) {
+                $payload[$intClaim] = (int) $overrides[$intClaim];
+            }
+        }
+        if (!empty($overrides['import_path'])) {
+            $payload['import_path'] = (string) $overrides['import_path'];
+        }
+        if (is_array($overrides['import_url_allowlist'] ?? null) && $overrides['import_url_allowlist'] !== []) {
+            $payload['import_url_allowlist'] = array_values($overrides['import_url_allowlist']);
+        }
     }
 
     /**

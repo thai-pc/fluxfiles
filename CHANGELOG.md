@@ -3,6 +3,36 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.22] — 2026-06-17
+
+> Released: core `core-v0.2.17` (Packagist), Laravel `laravel-v0.2.6`,
+> WordPress plugin `wordpress-v0.2.5`, Node `@fluxfiles/node` `0.1.3`.
+
+### Fixed
+
+- **Import from URL could not be enabled through the documented token helpers.**
+  Every minting helper used a fixed whitelist and silently dropped the import
+  claims, so `allow_url_import` (and friends) never reached the JWT — the feature
+  only worked if you hand-crafted a raw token. All helpers now forward the six
+  import claims:
+  - **Core** `fluxfiles_token()` / `fluxfiles_byob_token()` / `fluxfiles_mixed_token()`
+    gain an `$import` array param (e.g. `['allow_url_import' => true, 'max_import_mb' => 20]`).
+  - **Laravel** `FluxFiles::token()` / `tokenWithByob()` pass the claims through
+    the override array.
+  - **WordPress** `FluxFilesPlugin::generateToken()` now forwards per-tenant
+    claims (it previously dropped `ai_auto_tag` / rate / `variants` too), and a new
+    **`fluxfiles_token_overrides` filter** lets sites enable import for the
+    built-in shortcode / media button / REST proxy without a custom token caller.
+  - **Node** `createToken()` / `createByobToken()` accept `allowUrlImport`,
+    `maxImportMb`, `importUrlAllowlist`, `importPath`, `importRateLimit`,
+    `importConcurrency`.
+
+### Docs
+
+- New **"Import from URL"** sections in the root, Laravel, WordPress and Node
+  READMEs show how to enable the feature per tenant (it's a token claim — nothing
+  to install server-side) and document the `FLUXFILES_IMPORT_*` server defaults.
+
 ## [0.2.21] — 2026-06-16
 
 > Released: core `core-v0.2.16` (Packagist).

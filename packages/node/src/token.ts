@@ -104,6 +104,16 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.rateWrite && opts.rateWrite > 0) payload.rate_write = Math.trunc(opts.rateWrite);
   const variants = sanitizeVariants(opts.variants);
   if (variants) payload.variants = variants;
+
+  // URL-import claims (the server sanitizes/clamps these on decode).
+  if (opts.allowUrlImport) payload.allow_url_import = true;
+  if (opts.maxImportMb && opts.maxImportMb > 0) payload.max_import_mb = Math.trunc(opts.maxImportMb);
+  if (opts.importRateLimit && opts.importRateLimit > 0) payload.import_rate_limit = Math.trunc(opts.importRateLimit);
+  if (opts.importConcurrency && opts.importConcurrency > 0) payload.import_concurrency = Math.trunc(opts.importConcurrency);
+  if (opts.importPath) payload.import_path = String(opts.importPath);
+  if (Array.isArray(opts.importUrlAllowlist) && opts.importUrlAllowlist.length) {
+    payload.import_url_allowlist = opts.importUrlAllowlist.map((h) => String(h));
+  }
 }
 
 /**
