@@ -12,6 +12,7 @@
  *           token: 'JWT_TOKEN',
  *           disk: 'local',          // optional
  *           locale: 'en',           // optional
+ *           theme: 'dark',          // optional — light | dark | auto
  *           multiple: false          // optional
  *       }
  *   });
@@ -100,6 +101,8 @@
             maxUploadMb: opts.maxUploadMb || null,
             maxFiles: opts.maxFiles || null,
             locale: opts.locale || null,
+            theme: opts.theme || null,
+            disks: opts.disks || null,
             onSelect: function (payload) {
                 var files = Array.isArray(payload) ? payload : [payload];
 

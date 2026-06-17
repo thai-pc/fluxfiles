@@ -14,6 +14,9 @@ return [
         'bucket'     => $_ENV['AWS_BUCKET'] ?? '',
         'key'        => $_ENV['AWS_ACCESS_KEY_ID'] ?? '',
         'secret'     => $_ENV['AWS_SECRET_ACCESS_KEY'] ?? '',
+        // Custom S3-compatible endpoint (MinIO, DigitalOcean Spaces, …). Empty =
+        // native AWS S3. When set, path-style addressing is used automatically.
+        'endpoint'   => $_ENV['AWS_ENDPOINT'] ?? '',
         // 'public'  → direct object URLs (writes use public-read ACL).
         // 'private' → short-lived presigned GET URLs (default; safe on private buckets).
         'visibility' => $_ENV['AWS_VISIBILITY'] ?? 'private',

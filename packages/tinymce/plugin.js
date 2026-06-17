@@ -20,6 +20,7 @@
  *       fluxfiles_token: 'JWT_TOKEN',
  *       fluxfiles_disk: 'local',
  *       fluxfiles_locale: 'en',
+ *       fluxfiles_theme: 'dark',     // optional — light | dark | auto
  *       fluxfiles_multiple: false
  *   });
  *
@@ -41,6 +42,8 @@
             token: editor.getParam('fluxfiles_token', ''),
             disk: editor.getParam('fluxfiles_disk', 'local'),
             locale: editor.getParam('fluxfiles_locale', null),
+            theme: editor.getParam('fluxfiles_theme', null),
+            disks: editor.getParam('fluxfiles_disks', null),
             multiple: editor.getParam('fluxfiles_multiple', false),
             maxUploadMb: editor.getParam('fluxfiles_max_upload_mb', null),
             maxFiles: editor.getParam('fluxfiles_max_files', null)
@@ -80,6 +83,7 @@
             endpoint: c.endpoint, token: c.token, disk: c.disk,
             mode: 'picker', multiple: !!multiple,
             maxUploadMb: c.maxUploadMb, maxFiles: c.maxFiles, locale: c.locale,
+            theme: c.theme, disks: c.disks,
             onSelect: onSelect
         });
     }

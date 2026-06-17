@@ -515,13 +515,14 @@ return [
         'url'    => '/storage/uploads',  // public URL prefix
     ],
 
-    // AWS S3
+    // AWS S3 (or any S3-compatible — set AWS_ENDPOINT for MinIO / DO Spaces)
     's3' => [
-        'driver' => 's3',
-        'region' => $_ENV['AWS_DEFAULT_REGION'],
-        'bucket' => $_ENV['AWS_BUCKET'],
-        'key'    => $_ENV['AWS_ACCESS_KEY_ID'],
-        'secret' => $_ENV['AWS_SECRET_ACCESS_KEY'],
+        'driver'   => 's3',
+        'region'   => $_ENV['AWS_DEFAULT_REGION'],
+        'bucket'   => $_ENV['AWS_BUCKET'],
+        'key'      => $_ENV['AWS_ACCESS_KEY_ID'],
+        'secret'   => $_ENV['AWS_SECRET_ACCESS_KEY'],
+        'endpoint' => $_ENV['AWS_ENDPOINT'] ?? '',  // empty = native AWS S3
     ],
 
     // Cloudflare R2 (S3-compatible)
@@ -1651,14 +1652,23 @@ token field.
 | `FLUXFILES_RATE_LIMIT_READ` | No | `60` | Max read requests per minute per user |
 | `FLUXFILES_RATE_LIMIT_WRITE` | No | `10` | Max write requests per minute per user |
 | `FLUXFILES_STORAGE_PATH` | No | `packages/core/storage` | Dir for runtime state (rate-limit counter). Point at a writable volume for read-only deployments |
+| `FLUXFILES_IMPORT_MAX_MB` | No | `50` | Max MB per URL import when the token omits `max_import_mb` |
+| `FLUXFILES_IMPORT_RATE_LIMIT` | No | `10` | Imports/min when the token omits `import_rate_limit` |
+| `FLUXFILES_IMPORT_TIMEOUT` | No | `30` | Seconds per import fetch |
+| `FLUXFILES_IMPORT_ALLOW_SVG` | No | `false` | Allow SVG imports (off — XML can carry script) |
 | `AWS_ACCESS_KEY_ID` | No | — | AWS S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | No | — | AWS S3 secret key |
 | `AWS_DEFAULT_REGION` | No | `ap-southeast-1` | AWS region |
 | `AWS_BUCKET` | No | — | S3 bucket name |
+| `AWS_ENDPOINT` | No | — | Custom S3-compatible endpoint (MinIO / DO Spaces / …). Empty = native AWS S3; when set, path-style addressing is used |
+| `AWS_VISIBILITY` | No | `private` | `private` = presigned GET URLs; `public` = direct object URLs (public-read ACL) |
+| `AWS_PUBLIC_URL` | No | — | CDN / custom-domain base for a public disk, e.g. `https://cdn.example.com` |
 | `R2_ACCESS_KEY_ID` | No | — | Cloudflare R2 access key |
 | `R2_SECRET_ACCESS_KEY` | No | — | Cloudflare R2 secret key |
 | `R2_ACCOUNT_ID` | No | — | Cloudflare account ID |
 | `R2_BUCKET` | No | — | R2 bucket name |
+| `R2_VISIBILITY` | No | `private` | `private` = presigned GET URLs; `public` needs a public bucket + `R2_PUBLIC_URL` |
+| `R2_PUBLIC_URL` | No | — | Public base URL for a public R2 disk (r2.dev or custom domain) |
 | `FLUXFILES_AI_PROVIDER` | No | — | `claude` or `openai` (empty = disabled) |
 | `FLUXFILES_AI_API_KEY` | No | — | AI provider API key |
 | `FLUXFILES_AI_MODEL` | No | auto | Override AI model (default: `claude-sonnet-4-20250514` / `gpt-4o`) |

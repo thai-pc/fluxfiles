@@ -75,7 +75,9 @@ The modal closes automatically after selection.
 | `endpoint` | string | `''` | FluxFiles server URL |
 | `token` | string | `''` | JWT authentication token |
 | `disk` | string | `'local'` | Storage disk |
+| `disks` | string[] | `null` | Disks shown in the picker sidebar |
 | `locale` | string | `null` | UI language code |
+| `theme` | string | `null` | Picker theme: `light` / `dark` / `auto` |
 | `multiple` | boolean | `false` | Allow multi-file selection |
 | `imageDialog` | boolean | `true` | Inject the **Browse FluxFiles** button into the native Image dialog |
 

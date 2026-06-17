@@ -107,19 +107,28 @@ return [
             'url'    => '/storage/fluxfiles/uploads',
         ],
         's3' => [
-            'driver' => 's3',
-            'region' => env('AWS_DEFAULT_REGION', 'ap-southeast-1'),
-            'bucket' => env('AWS_BUCKET', ''),
-            'key'    => env('AWS_ACCESS_KEY_ID', ''),
-            'secret' => env('AWS_SECRET_ACCESS_KEY', ''),
+            'driver'     => 's3',
+            'region'     => env('AWS_DEFAULT_REGION', 'ap-southeast-1'),
+            'bucket'     => env('AWS_BUCKET', ''),
+            'key'        => env('AWS_ACCESS_KEY_ID', ''),
+            'secret'     => env('AWS_SECRET_ACCESS_KEY', ''),
+            // Custom S3-compatible endpoint (MinIO / DO Spaces). Empty = native AWS.
+            'endpoint'   => env('AWS_ENDPOINT', ''),
+            // 'private' = presigned GET URLs (default); 'public' = direct object URLs.
+            'visibility' => env('AWS_VISIBILITY', 'private'),
+            // CDN / custom-domain base for a public disk, e.g. https://cdn.example.com
+            'public_url' => env('AWS_PUBLIC_URL', ''),
         ],
         'r2' => [
-            'driver'   => 's3',
-            'endpoint' => 'https://' . env('R2_ACCOUNT_ID', '') . '.r2.cloudflarestorage.com',
-            'region'   => 'auto',
-            'bucket'   => env('R2_BUCKET', ''),
-            'key'      => env('R2_ACCESS_KEY_ID', ''),
-            'secret'   => env('R2_SECRET_ACCESS_KEY', ''),
+            'driver'     => 's3',
+            'endpoint'   => 'https://' . env('R2_ACCOUNT_ID', '') . '.r2.cloudflarestorage.com',
+            'region'     => 'auto',
+            'bucket'     => env('R2_BUCKET', ''),
+            'key'        => env('R2_ACCESS_KEY_ID', ''),
+            'secret'     => env('R2_SECRET_ACCESS_KEY', ''),
+            // 'public' needs a public bucket + public_url (r2.dev / custom domain).
+            'visibility' => env('R2_VISIBILITY', 'private'),
+            'public_url' => env('R2_PUBLIC_URL', ''),
         ],
     ],
 
