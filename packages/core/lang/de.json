@@ -64,6 +64,7 @@
         "preview": "Vorschau",
         "copy_url": "URL kopieren",
         "presign_url": "Vorsignierte URL",
+        "too_large_preview": "Datei ist zu groß für die Vorschau. Zum Ansehen herunterladen.",
         "delete": "Löschen",
         "move_to": "Verschieben nach...",
         "items": "{count} Elemente",

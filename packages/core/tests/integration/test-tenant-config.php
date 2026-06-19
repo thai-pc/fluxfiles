@@ -191,10 +191,15 @@ test('fromJwtPayload parses media_preview / preview_url_ttl (and defaults)', fun
     $def = Claims::fromJwtPayload((object) []);
     assertEqual(true, $def->mediaPreview, 'media_preview defaults true');
     assertEqual(0, $def->previewUrlTtl, 'preview_url_ttl defaults 0 (inherit)');
+    assertEqual(0, $def->maxPreviewMb, 'max_preview_mb defaults 0 (inherit)');
 
-    // Negative TTL is clamped to 0 (inherit), not passed through.
-    $neg = Claims::fromJwtPayload((object) ['preview_url_ttl' => -5]);
+    // Negative values are clamped to 0 (inherit), not passed through.
+    $neg = Claims::fromJwtPayload((object) ['preview_url_ttl' => -5, 'max_preview_mb' => -1]);
     assertEqual(0, $neg->previewUrlTtl, 'negative ttl clamped to 0');
+    assertEqual(0, $neg->maxPreviewMb, 'negative max_preview_mb clamped to 0');
+
+    $mp = Claims::fromJwtPayload((object) ['max_preview_mb' => 200]);
+    assertEqual(200, $mp->maxPreviewMb, 'max_preview_mb parsed');
 });
 
 test('Claims::isMediaPath detects video/audio extensions only', function () {

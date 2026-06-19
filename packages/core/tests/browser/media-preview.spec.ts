@@ -137,3 +137,43 @@ test('preview_url_ttl flows into the re-presign request (default 7200)', async (
 
   expect(body).toMatchObject({ ttl: 1800 });
 });
+
+// ── M3: max_preview_mb guard ───────────────────────────────────────────────
+
+test('max_preview_mb: oversized media reports too-large (under cap is fine)', async ({ page }) => {
+  await openManager(page, mintTokenWithClaims({ max_preview_mb: 100 }));
+
+  const r = await page.evaluate(() => {
+    const comp = (window as any).Alpine.$data(document.querySelector('.ff-app'));
+    const MB = 1024 * 1024;
+    return {
+      cap: comp.maxPreviewMb,
+      big: comp.mediaTooLarge({ name: 'movie.mp4', type: 'file', size: 250 * MB }),
+      small: comp.mediaTooLarge({ name: 'clip.mp4', type: 'file', size: 20 * MB }),
+      noSize: comp.mediaTooLarge({ name: 'clip.mp4', type: 'file' }),
+    };
+  });
+
+  expect(r.cap).toBe(100);
+  expect(r.big).toBe(true);     // 250MB > 100MB → too large
+  expect(r.small).toBe(false);  // 20MB under cap
+  expect(r.noSize).toBe(false); // unknown size → don't block
+});
+
+test('max_preview_mb defaults to 500 when the claim is unset', async ({ page }) => {
+  await openManager(page, mintToken());
+
+  const r = await page.evaluate(() => {
+    const comp = (window as any).Alpine.$data(document.querySelector('.ff-app'));
+    const MB = 1024 * 1024;
+    return {
+      cap: comp.maxPreviewMb,
+      at400: comp.mediaTooLarge({ name: 'a.mp4', type: 'file', size: 400 * MB }),
+      at600: comp.mediaTooLarge({ name: 'b.mp4', type: 'file', size: 600 * MB }),
+    };
+  });
+
+  expect(r.cap).toBe(500);
+  expect(r.at400).toBe(false);
+  expect(r.at600).toBe(true);
+});

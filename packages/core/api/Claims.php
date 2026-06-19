@@ -68,6 +68,9 @@ class Claims
     /** @var int Presigned media-URL TTL (seconds) — longer than the default so a
      *           long video doesn't 403 mid-play. 0 = inherit default (7200). */
     public int $previewUrlTtl = 0;
+    /** @var int Max file size (MB) eligible for inline preview; larger media shows
+     *           a "too large" placeholder + download. 0 = inherit default (500). */
+    public int $maxPreviewMb = 0;
 
     public function __construct(
         string $userId,
@@ -177,6 +180,7 @@ class Claims
         // Media-preview claims.
         $c->mediaPreview = isset($payload->media_preview) ? (bool) $payload->media_preview : true;
         $c->previewUrlTtl = max(0, (int) ($payload->preview_url_ttl ?? 0));
+        $c->maxPreviewMb = max(0, (int) ($payload->max_preview_mb ?? 0));
 
         return $c;
     }

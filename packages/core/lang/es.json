@@ -64,6 +64,7 @@
         "preview": "Vista previa",
         "copy_url": "Copiar URL",
         "presign_url": "URL prefirmada",
+        "too_large_preview": "El archivo es demasiado grande para la vista previa. Descárgalo para verlo.",
         "delete": "Eliminar",
         "move_to": "Mover a...",
         "items": "{count} elementos",

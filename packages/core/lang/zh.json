@@ -64,6 +64,7 @@
         "preview": "预览",
         "copy_url": "复制链接",
         "presign_url": "预签名链接",
+        "too_large_preview": "文件过大无法预览，请下载后查看。",
         "delete": "删除",
         "move_to": "移动到...",
         "items": "{count} 个项目",

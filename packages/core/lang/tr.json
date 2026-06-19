@@ -64,6 +64,7 @@
         "preview": "Önizle",
         "copy_url": "URL kopyala",
         "presign_url": "Ön imzalı URL",
+        "too_large_preview": "Dosya önizleme için çok büyük. Görüntülemek için indirin.",
         "delete": "Sil",
         "move_to": "Taşı...",
         "items": "{count} öğe",

@@ -64,6 +64,7 @@
         "preview": "Xem trước",
         "copy_url": "Sao chép URL",
         "presign_url": "URL có thời hạn",
+        "too_large_preview": "Tệp quá lớn để xem trước. Hãy tải xuống để xem.",
         "delete": "Xóa",
         "move_to": "Di chuyển đến...",
         "items": "{count} mục",

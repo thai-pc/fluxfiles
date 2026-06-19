@@ -2163,6 +2163,19 @@ function fluxFilesApp() {
             return (t && t > 0) ? t : 7200;
         },
 
+        // Max file size (MB) eligible for inline media preview; larger files show
+        // a download placeholder instead. Falls back to 500MB.
+        get maxPreviewMb() {
+            const m = parseInt(this._tokenPayload().max_preview_mb, 10);
+            return (m && m > 0) ? m : 500;
+        },
+
+        // True when a media file is too big to preview inline (size known + over cap).
+        mediaTooLarge(file) {
+            if (!file || !file.size) return false;
+            return file.size > this.maxPreviewMb * 1024 * 1024;
+        },
+
         async openActivity() {
             this.showActivity = true;
             this.activityError = '';

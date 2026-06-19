@@ -64,6 +64,7 @@
         "preview": "プレビュー",
         "copy_url": "URLをコピー",
         "presign_url": "署名付きURL",
+        "too_large_preview": "ファイルが大きすぎてプレビューできません。ダウンロードしてご覧ください。",
         "delete": "削除",
         "move_to": "移動先...",
         "items": "{count} 件",

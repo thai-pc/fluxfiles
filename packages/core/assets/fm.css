@@ -1068,6 +1068,18 @@ body {
     height: 48px;
     color: var(--color-text-secondary);
 }
+/* Media-too-large placeholder: icon + message + download button, stacked. */
+.ff-media-toolarge {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+}
+.ff-media-toolarge-msg {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    max-width: 260px;
+    line-height: 1.5;
+}
 
 .dark .thumb-img { background: rgba(59, 130, 246, 0.1); }
 .dark .thumb-doc { background: rgba(234, 179, 8, 0.08); }
