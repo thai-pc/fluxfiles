@@ -63,6 +63,9 @@ R2_PUBLIC_URL=                # r2.dev or custom domain for a public bucket
 | `proxy` (default) | FluxFiles API runs through Laravel routes — no separate server needed |
 | `standalone` | FluxFiles runs on its own server; Laravel only generates tokens and embeds the iframe |
 
+> **Proxy mode:** exclude the route prefix from CSRF or uploads/deletes return
+> **419** — see [CSRF exclusion](#csrf-exclusion-proxy-mode-only).
+
 Set mode in `.env`:
 
 ```env
@@ -241,6 +244,41 @@ return [
     'ai_auto_tag' => env('FLUXFILES_AI_AUTO_TAG', false),
 ];
 ```
+
+### CSRF exclusion (proxy mode only)
+
+In proxy mode the routes run under the **`web`** middleware group (needed for the
+session-based `auth` bridge), which includes Laravel's CSRF protection. The
+FluxFiles SDK authenticates every call with an `Authorization: Bearer <jwt>`
+header — **not** a Laravel CSRF token — so the mutating routes (`upload`,
+`delete`, `move`, `rename`, …) return **419 Page Expired** until you exclude the
+FluxFiles route prefix from CSRF. Use the value of `config('fluxfiles.route_prefix')`
+(default `api/fm`) with a `/*` wildcard.
+
+**The file/location differs by Laravel version:**
+
+**Laravel 11 / 12** — there is no `VerifyCsrfToken.php`; configure it in
+`bootstrap/app.php`:
+
+```php
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->validateCsrfTokens(except: [
+        'api/fm/*',   // = config('fluxfiles.route_prefix') . '/*'
+    ]);
+})
+```
+
+**Laravel 9 / 10** — add it to the `$except` array in
+`app/Http/Middleware/VerifyCsrfToken.php`:
+
+```php
+protected $except = [
+    'api/fm/*',   // = config('fluxfiles.route_prefix') . '/*'
+];
+```
+
+> **Standalone mode** is unaffected — the core runs as its own server with its own
+> Origin-based CSRF check, and Laravel only mints tokens / embeds the iframe.
 
 ## Permissions
 
