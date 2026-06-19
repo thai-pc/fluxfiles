@@ -1683,6 +1683,8 @@ token field.
 | `FLUXFILES_RATE_LIMIT_READ` | No | `60` | Max read requests per minute per user |
 | `FLUXFILES_RATE_LIMIT_WRITE` | No | `10` | Max write requests per minute per user |
 | `FLUXFILES_STORAGE_PATH` | No | `packages/core/storage` | Dir for runtime state (rate-limit counter). Point at a writable volume for read-only deployments |
+| `FLUXFILES_LOCAL_PRIVATE` | No | `false` | Serve `local` disk files through per-file `/api/fm/stream` tokens (Range-capable) instead of static URLs. The disk root must then not be served statically |
+| `FLUXFILES_XACCEL` | No | — | Internal nginx location (e.g. `/_ff_media`) for `X-Accel-Redirect` streaming — nginx serves the bytes with native Range, PHP never copies the file |
 | `FLUXFILES_IMPORT_MAX_MB` | No | `50` | Max MB per URL import when the token omits `max_import_mb` |
 | `FLUXFILES_IMPORT_RATE_LIMIT` | No | `10` | Imports/min when the token omits `import_rate_limit` |
 | `FLUXFILES_IMPORT_TIMEOUT` | No | `30` | Seconds per import fetch |

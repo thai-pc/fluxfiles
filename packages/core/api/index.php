@@ -139,6 +139,14 @@ if ($method === 'GET' && preg_match('#^/api/fm/lang/([a-z]{2,5})$#', $uri, $m)) 
     exit;
 }
 
+// Gated local media stream — authenticated by a per-file stream token in the query
+// string (a <video>/<audio> element can't send an Authorization header), NOT by the
+// main access JWT. Only ever serves files on a local disk marked `private => true`.
+if ($method === 'GET' && $uri === '/api/fm/stream') {
+    handleMediaStream();
+    exit;
+}
+
 try {
     // Auth
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
@@ -163,6 +171,9 @@ try {
     $metaRepo = new StorageMetadataHandler($diskManager);
     $fm = new FileManager($diskManager, $claims, $metaRepo);
     $fm->setQuotaManager(new QuotaManager($diskManager));
+    // Enables gated-local media: file URLs on a `private => true` local disk become
+    // tokened /api/fm/stream links (served by handleMediaStream, above).
+    $fm->setStreamSecret($secret);
 
     // AI Tagger (optional)
     $aiProvider = $_ENV['FLUXFILES_AI_PROVIDER'] ?? '';
@@ -617,6 +628,82 @@ function handleDeleteMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claim
     $fm->assertCanModifyScopedPath($disk, $key);
     $metaRepo->delete($disk, $key);
     return ['deleted' => true];
+}
+
+/**
+ * Serve one file on a gated (private) local disk, authenticated by a per-file
+ * stream token in the query string. Honours HTTP Range so a <video>/<audio> can
+ * seek without re-reading from the start. Emits raw bytes, not JSON.
+ */
+function handleMediaStream(): void
+{
+    $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+    try {
+        $scope = \FluxFiles\StreamToken::verify((string) ($_GET['token'] ?? ''), $secret);
+    } catch (ApiException $e) {
+        http_response_code($e->getHttpCode());
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $e->getMessage();
+        return;
+    }
+
+    $disk = $scope['disk'];
+    $path = $scope['path'];
+
+    // Reject any traversal in the (signed) path defensively.
+    if ($path === '' || strpos($path, "\0") !== false
+        || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Invalid path';
+        return;
+    }
+
+    $diskConfigs = require __DIR__ . '/../config/disks.php';
+    $config = $diskConfigs[$disk] ?? null;
+
+    // Gated streaming is only for local, private disks. S3/R2 always use presigned
+    // URLs (the browser fetches them directly), so they must never reach here.
+    if (!is_array($config) || ($config['driver'] ?? '') !== 'local' || empty($config['private'])) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Streaming not available for this disk';
+        return;
+    }
+
+    $root = realpath($config['root'] ?? (__DIR__ . '/../storage/uploads'));
+    $abs  = realpath(($root ?: '') . '/' . $path);
+    // The resolved file must stay inside the disk root (symlink / traversal guard).
+    if ($root === false || $abs === false || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs)) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Not found';
+        return;
+    }
+
+    // MIME by extension (don't trust on-disk sniffing for active types).
+    $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
+        ->detectMimeTypeFromPath($abs) ?? 'application/octet-stream';
+
+    // Inline only for media/image/pdf; everything else is forced to download so a
+    // stray .html/.svg can't execute in the FluxFiles origin.
+    $inlineOk = (bool) preg_match('#^(video/|audio/|image/(?!svg))|^application/pdf$#', $mime);
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: private, no-store');
+    header('Content-Disposition: ' . ($inlineOk ? 'inline' : 'attachment')
+        . '; filename="' . rawurlencode(basename($abs)) . '"');
+
+    // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
+    // Set FLUXFILES_XACCEL to the internal location mapped to the disk root.
+    $xaccel = $_ENV['FLUXFILES_XACCEL'] ?? '';
+    if ($xaccel !== '') {
+        header('Content-Type: ' . $mime);
+        header('X-Accel-Buffering: no');
+        header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
+        return;
+    }
+
+    \FluxFiles\RangeStreamer::stream($abs, $mime, $_SERVER['HTTP_RANGE'] ?? null);
 }
 
 function handlePresign(FileManager $fm): array

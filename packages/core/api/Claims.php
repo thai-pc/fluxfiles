@@ -71,6 +71,9 @@ class Claims
     /** @var int Max file size (MB) eligible for inline preview; larger media shows
      *           a "too large" placeholder + download. 0 = inherit default (500). */
     public int $maxPreviewMb = 0;
+    /** @var int TTL (seconds) for the per-file stream token used by gated local
+     *           media. 0 = inherit default (3600). */
+    public int $streamTokenTtl = 0;
 
     public function __construct(
         string $userId,
@@ -181,6 +184,7 @@ class Claims
         $c->mediaPreview = isset($payload->media_preview) ? (bool) $payload->media_preview : true;
         $c->previewUrlTtl = max(0, (int) ($payload->preview_url_ttl ?? 0));
         $c->maxPreviewMb = max(0, (int) ($payload->max_preview_mb ?? 0));
+        $c->streamTokenTtl = max(0, (int) ($payload->stream_token_ttl ?? 0));
 
         return $c;
     }

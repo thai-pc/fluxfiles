@@ -28,6 +28,9 @@ class FileManager
     /** @var AiTagger|null */
     private $aiTagger = null;
 
+    /** @var string Secret for minting per-file stream tokens (gated local media). '' = feature off. */
+    private $streamSecret = '';
+
     public function __construct(
         DiskManager $disks,
         Claims $claims,
@@ -48,6 +51,16 @@ class FileManager
     public function setAiTagger(AiTagger $ai): void
     {
         $this->aiTagger = $ai;
+    }
+
+    /**
+     * Enable gated local media: when set, files on a local disk marked
+     * `'private' => true` are served through a per-file /api/fm/stream token
+     * instead of a static URL. Without a secret the feature stays off.
+     */
+    public function setStreamSecret(string $secret): void
+    {
+        $this->streamSecret = $secret;
     }
 
     public function list(string $disk, string $path, int $limit = 0, string $cursor = ''): array
@@ -1471,11 +1484,36 @@ class FileManager
      * (CDN / custom domain) have one; a private bucket without a public domain
      * does not (its only URL is a short-lived presigned one).
      */
+    /**
+     * Is this a local disk served through gated per-file stream tokens? True only
+     * when the disk is local, marked `'private' => true`, and a stream secret is
+     * configured (setStreamSecret). Such a disk has no static/permanent URL.
+     */
+    private function isGatedLocal(array $config): bool
+    {
+        return ($config['driver'] ?? '') === 'local'
+            && !empty($config['private'])
+            && $this->streamSecret !== '';
+    }
+
+    /** Mint the /api/fm/stream?token=… URL for one file on a gated local disk. */
+    private function gatedLocalUrl(string $disk, string $path): string
+    {
+        $ttl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
+        $token = StreamToken::mint($disk, $path, $this->claims->userId, $ttl, $this->streamSecret);
+        return '/api/fm/stream?token=' . rawurlencode($token);
+    }
+
     private function permanentUrl(string $disk, string $path): ?string
     {
         $config = $this->disks->config($disk);
 
         if (($config['driver'] ?? '') === 'local') {
+            // A gated (private) local disk has no stable URL — only the short-lived
+            // tokened stream URL — so there's no permanent URL to embed.
+            if ($this->isGatedLocal($config)) {
+                return null;
+            }
             return rtrim($config['url'] ?? '/storage/uploads', '/') . '/' . $path;
         }
 
@@ -1501,6 +1539,10 @@ class FileManager
         $config = $this->disks->config($disk);
 
         if (($config['driver'] ?? '') === 'local') {
+            // Gated local disk → tokened stream URL; otherwise the static disk URL.
+            if ($this->isGatedLocal($config)) {
+                return $this->gatedLocalUrl($disk, $path);
+            }
             $baseUrl = rtrim($config['url'] ?? '/storage/uploads', '/');
             return $baseUrl . '/' . $path;
         }

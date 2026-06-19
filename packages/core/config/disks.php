@@ -7,6 +7,10 @@ return [
         'driver' => 'local',
         'root'   => __DIR__ . '/../storage/uploads',
         'url'    => '/storage/uploads',
+        // Gated media: when true, files are served through per-file /api/fm/stream
+        // tokens (Range-capable) instead of the static `url`. The disk root must
+        // then NOT be served statically by the web server. Default off.
+        'private' => ($_ENV['FLUXFILES_LOCAL_PRIVATE'] ?? '') === 'true',
     ],
     's3' => [
         'driver'     => 's3',
