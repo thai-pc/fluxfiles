@@ -2150,6 +2150,19 @@ function fluxFilesApp() {
             return Array.isArray(perms) && perms.includes('audit');
         },
 
+        // Inline video/audio preview is on unless the token disables it.
+        get mediaPreviewEnabled() {
+            const v = this._tokenPayload().media_preview;
+            return v === undefined ? true : !!v;
+        },
+
+        // TTL (seconds) used when re-presigning an expiring media URL. Falls back
+        // to 2h when the token doesn't set preview_url_ttl.
+        get previewUrlTtl() {
+            const t = parseInt(this._tokenPayload().preview_url_ttl, 10);
+            return (t && t > 0) ? t : 7200;
+        },
+
         async openActivity() {
             this.showActivity = true;
             this.activityError = '';
@@ -2431,6 +2444,8 @@ function fluxFilesApp() {
 
         isPreviewable(file, type) {
             if (!file || !file.name || file.type === 'dir') return false;
+            // Tenant can disable inline media preview via the media_preview claim.
+            if ((type === 'video' || type === 'audio') && !this.mediaPreviewEnabled) return false;
             const ext = file.name.split('.').pop()?.toLowerCase();
             const map = {
                 image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'],
@@ -2467,7 +2482,7 @@ function fluxFilesApp() {
                     disk: this.currentDisk,
                     path: file.key,
                     method: 'GET',
-                    ttl: 7200,
+                    ttl: this.previewUrlTtl,
                 });
                 if (!data || !data.url) return;
 

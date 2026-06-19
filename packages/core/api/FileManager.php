@@ -1511,7 +1511,12 @@ class FileManager
         // bucket/endpoint URL.
         $visibility = $config['visibility'] ?? 'private';
         if ($visibility !== 'public') {
-            $signed = $this->presignGetUrl($disk, $path, $config);
+            // Media files get a longer presigned TTL (preview_url_ttl) so a long
+            // video doesn't expire mid-playback; everything else uses the disk default.
+            $ttlOverride = ($this->claims->previewUrlTtl > 0 && Claims::isMediaPath($path))
+                ? $this->claims->previewUrlTtl
+                : null;
+            $signed = $this->presignGetUrl($disk, $path, $config, $ttlOverride);
             if ($signed !== null) {
                 return $signed;
             }
@@ -1536,9 +1541,9 @@ class FileManager
      * TTL is taken from the disk's `url_ttl` (default 1 hour), clamped to MAX_PRESIGN_TTL.
      * Returns null if signing is not possible so the caller can fall back.
      */
-    private function presignGetUrl(string $disk, string $path, array $config): ?string
+    private function presignGetUrl(string $disk, string $path, array $config, ?int $ttlOverride = null): ?string
     {
-        $ttl = (int) ($config['url_ttl'] ?? 3600);
+        $ttl = $ttlOverride ?? (int) ($config['url_ttl'] ?? 3600);
         if ($ttl < 1) {
             $ttl = 3600;
         }

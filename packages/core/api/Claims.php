@@ -62,6 +62,13 @@ class Claims
     /** @var int Max concurrent imports. 0 = inherit default (3). */
     public int $importConcurrency = 0;
 
+    // ── Media preview (inline video/audio) ────────────────────────────────
+    /** @var bool Enable inline video/audio preview for this tenant. Default true. */
+    public bool $mediaPreview = true;
+    /** @var int Presigned media-URL TTL (seconds) — longer than the default so a
+     *           long video doesn't 403 mid-play. 0 = inherit default (7200). */
+    public int $previewUrlTtl = 0;
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -167,7 +174,22 @@ class Claims
         $c->importRateLimit = max(0, (int) ($payload->import_rate_limit ?? 0));
         $c->importConcurrency = max(0, (int) ($payload->import_concurrency ?? 0));
 
+        // Media-preview claims.
+        $c->mediaPreview = isset($payload->media_preview) ? (bool) $payload->media_preview : true;
+        $c->previewUrlTtl = max(0, (int) ($payload->preview_url_ttl ?? 0));
+
         return $c;
+    }
+
+    /**
+     * Is this a previewable media file (video/audio)? Mirrors the frontend
+     * `isPreviewable()` extension list. Used to grant media files a longer
+     * presigned-URL TTL so playback doesn't expire mid-stream.
+     */
+    public static function isMediaPath(string $path): bool
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        return in_array($ext, ['mp4', 'webm', 'mov', 'mp3', 'wav', 'ogg', 'flac', 'aac'], true);
     }
 
     /**

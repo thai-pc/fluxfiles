@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { mintToken, openManager } from './helpers';
+import { mintToken, mintTokenWithClaims, openManager } from './helpers';
 
 // M1 — media preview auto-refresh.
 //
@@ -94,4 +94,46 @@ test('re-presign retries are capped to avoid looping on an unplayable file', asy
 
   // _ffRefreshTries caps at 2 → at most 2 presign calls for one element.
   expect(presignCalls).toBeLessThanOrEqual(2);
+});
+
+// ── M2: claims (media_preview / preview_url_ttl) ───────────────────────────
+
+test('media_preview:false disables inline video/audio (images unaffected)', async ({ page }) => {
+  await openManager(page, mintTokenWithClaims({ media_preview: false }));
+
+  const can = await page.evaluate(() => {
+    const comp = (window as any).Alpine.$data(document.querySelector('.ff-app'));
+    return {
+      video: comp.isPreviewable({ name: 'clip.mp4', type: 'file' }, 'video'),
+      audio: comp.isPreviewable({ name: 'song.mp3', type: 'file' }, 'audio'),
+      image: comp.isPreviewable({ name: 'pic.png', type: 'file' }, 'image'),
+    };
+  });
+
+  expect(can.video).toBe(false);
+  expect(can.audio).toBe(false);
+  expect(can.image).toBe(true); // image preview is independent of the media claim
+});
+
+test('preview_url_ttl flows into the re-presign request (default 7200)', async ({ page }) => {
+  await openManager(page, mintTokenWithClaims({ preview_url_ttl: 1800 }));
+
+  let body: Record<string, unknown> | null = null;
+  await page.route('**/api/fm/presign', async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { url: 'https://cdn.example/fresh.mp4' } }),
+    });
+  });
+
+  await page.evaluate(async (oldUrl) => {
+    const comp = (window as any).Alpine.$data(document.querySelector('.ff-app'));
+    const el = document.createElement('video');
+    el.src = oldUrl;
+    await comp.refreshMediaSrc({ key: 'clip.mp4', url: oldUrl }, el);
+  }, 'https://s3.example/clip.mp4?X-Amz-Signature=expired');
+
+  expect(body).toMatchObject({ ttl: 1800 });
 });

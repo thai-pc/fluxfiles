@@ -182,5 +182,29 @@ test('unset ai_auto_tag inherits the env flag', function () {
     assertTrue($sOn->called, 'runs when env on + claim unset');
 });
 
+// ── Media-preview claims (M2) ─────────────────────────────────────────────
+test('fromJwtPayload parses media_preview / preview_url_ttl (and defaults)', function () {
+    $set = Claims::fromJwtPayload((object) ['media_preview' => false, 'preview_url_ttl' => 7200]);
+    assertEqual(false, $set->mediaPreview, 'media_preview parsed');
+    assertEqual(7200, $set->previewUrlTtl, 'preview_url_ttl parsed');
+
+    $def = Claims::fromJwtPayload((object) []);
+    assertEqual(true, $def->mediaPreview, 'media_preview defaults true');
+    assertEqual(0, $def->previewUrlTtl, 'preview_url_ttl defaults 0 (inherit)');
+
+    // Negative TTL is clamped to 0 (inherit), not passed through.
+    $neg = Claims::fromJwtPayload((object) ['preview_url_ttl' => -5]);
+    assertEqual(0, $neg->previewUrlTtl, 'negative ttl clamped to 0');
+});
+
+test('Claims::isMediaPath detects video/audio extensions only', function () {
+    foreach (['a/b/clip.mp4', 'song.MP3', 'x.webm', 'y.mov', 'z.flac', 'w.ogg'] as $p) {
+        assertTrue(Claims::isMediaPath($p), "media: $p");
+    }
+    foreach (['doc.pdf', 'img.jpg', 'data.json', 'noext', 'archive.zip'] as $p) {
+        assertTrue(!Claims::isMediaPath($p), "non-media: $p");
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
