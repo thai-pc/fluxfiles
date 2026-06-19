@@ -2441,6 +2441,54 @@ function fluxFilesApp() {
             return (map[type] || []).includes(ext);
         },
 
+        /**
+         * Silently re-presign an expiring media URL when a <video>/<audio>
+         * element errors mid-playback. S3/R2 GET URLs are presigned and expire
+         * (default ~1h), so a long video — or one paused past expiry — would 403
+         * and stop. We re-fetch a fresh URL via /presign, swap it in, and restore
+         * the playhead + play state so the swap is seamless. Local/static URLs
+         * never expire, so we no-op on them; a small retry cap stops looping on a
+         * genuinely unplayable file.
+         */
+        async refreshMediaSrc(file, el) {
+            if (!file || !el) return;
+            const src = el.currentSrc || el.src || '';
+            // Only expiring presigned URLs are worth refreshing.
+            if (!/[?&](X-Amz-|Signature=)/.test(src)) return;
+            if (el._ffRefreshing) return;
+            el._ffRefreshTries = (el._ffRefreshTries || 0) + 1;
+            if (el._ffRefreshTries > 2) return;   // likely unplayable — stop retrying
+            el._ffRefreshing = true;
+
+            const at = el.currentTime || 0;
+            const wasPlaying = !el.paused && !el.ended;
+            try {
+                const data = await this.api('POST', '/api/fm/presign', {
+                    disk: this.currentDisk,
+                    path: file.key,
+                    method: 'GET',
+                    ttl: 7200,
+                });
+                if (!data || !data.url) return;
+
+                // Restore the playhead once the fresh source has loaded.
+                const restore = () => {
+                    el.removeEventListener('loadedmetadata', restore);
+                    try { if (at > 0) el.currentTime = at; } catch (e) { /* seek may be denied */ }
+                    if (wasPlaying) { el.play().catch(() => {}); }
+                };
+                el.addEventListener('loadedmetadata', restore);
+
+                // Update the model; Alpine re-binds :src on the same element in place.
+                if (file === this.detailFile) { this.detailFile.url = data.url; }
+                else { file.url = data.url; }
+            } catch (e) {
+                // Silent: leave the native error UI; the user can re-open the file.
+            } finally {
+                el._ffRefreshing = false;
+            }
+        },
+
         get filteredFolders() {
             // Folders are always listed regardless of type filter; we only apply search filter + sort.
             const q = (this.searchQuery || '').toLowerCase();
