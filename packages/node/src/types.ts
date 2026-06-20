@@ -85,6 +85,16 @@ export interface BaseTokenOptions {
   watermarkOpacity?: number;
   /** Font size for text watermark. Default 24. */
   watermarkFontSize?: number;
+  /** Usage-summary cache TTL (seconds). `0`/omitted = inherit (900). */
+  usageCacheTtl?: number;
+  /** Percent at which quota status becomes "warning". `0`/omitted = inherit (70). */
+  usageWarningThreshold?: number;
+  /** Percent at which quota status becomes "critical". `0`/omitted = inherit (90). */
+  usageCriticalThreshold?: number;
+  /** Number of largest folders the usage dashboard returns. `0`/omitted = inherit (10). */
+  usageTopFoldersCount?: number;
+  /** Folder grouping depth for the usage breakdown. `0`/omitted = inherit (1). */
+  usageFolderDepth?: number;
 }
 
 export interface CreateTokenOptions extends BaseTokenOptions {

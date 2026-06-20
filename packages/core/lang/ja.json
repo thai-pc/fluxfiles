@@ -56,6 +56,22 @@
         "folders": "フォルダ",
         "smart_filters": "スマートフィルター"
     },
+    "usage": {
+        "title": "ストレージ使用量",
+        "refresh": "更新",
+        "last_updated": "最終更新",
+        "by_type": "種類別",
+        "top_folders": "大きいフォルダ",
+        "files": "ファイル",
+        "warning": "ストレージの残りが少なくなっています。",
+        "critical": "ストレージがほぼ満杯です。整理またはアップグレードしてください。",
+        "image": "画像",
+        "video": "動画",
+        "audio": "音声",
+        "document": "ドキュメント",
+        "archive": "アーカイブ",
+        "other": "その他"
+    },
     "quota": {
         "storage": "ストレージ"
     },

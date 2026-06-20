@@ -56,6 +56,22 @@
         "folders": "文件夹",
         "smart_filters": "智能筛选"
     },
+    "usage": {
+        "title": "存储用量",
+        "refresh": "刷新",
+        "last_updated": "最后更新",
+        "by_type": "按类型",
+        "top_folders": "最大文件夹",
+        "files": "个文件",
+        "warning": "存储空间即将不足。",
+        "critical": "存储空间几乎用尽，请清理或升级。",
+        "image": "图片",
+        "video": "视频",
+        "audio": "音频",
+        "document": "文档",
+        "archive": "压缩包",
+        "other": "其他"
+    },
     "quota": {
         "storage": "存储空间"
     },

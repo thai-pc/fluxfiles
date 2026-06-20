@@ -133,6 +133,16 @@ class FluxFilesManager
                 $payload['watermark_font_size'] = (int) $overrides['watermark_font_size'];
             }
         }
+
+        // Usage-dashboard claims.
+        foreach ([
+            'usage_cache_ttl', 'usage_warning_threshold', 'usage_critical_threshold',
+            'usage_top_folders_count', 'usage_folder_depth',
+        ] as $usageClaim) {
+            if (isset($overrides[$usageClaim]) && $overrides[$usageClaim] !== '') {
+                $payload[$usageClaim] = (int) $overrides[$usageClaim];
+            }
+        }
     }
 
     /**

@@ -215,6 +215,13 @@ try {
             ->check($claims->userId, 'import');
     }
 
+    // A forced usage recompute lists the whole prefix — give it its own tight
+    // bucket (2/min) so it can't be abused to hammer the storage with ListObjects.
+    if ($uri === '/api/fm/usage' && ($_GET['refresh'] ?? '') === 'true') {
+        (new RateLimiterFileStorage($storagePath . '/rate_limit.json', 2, 2, 60))
+            ->check($claims->userId, 'usage_refresh');
+    }
+
     // Audit log (lưu trong user storage)
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
@@ -450,6 +457,10 @@ function routeRequest(
             $claims->pathPrefix,
             $claims->maxStorageMb
         );
+    }
+
+    if ($method === 'GET' && $uri === '/api/fm/usage') {
+        return handleUsage($quotaManager, $diskManager, $claims);
     }
 
     // Audit log — users can only view their own logs
@@ -932,6 +943,78 @@ function ff_serve_bytes(string $data, string $mime, bool $immutable = false): vo
         : 'Cache-Control: private, no-store');
     header('Content-Length: ' . strlen($data));
     echo $data;
+}
+
+/**
+ * Storage usage dashboard. One recursive pass over the prefix (via
+ * getUsageBreakdown) → quota + by-type + top-folders, cached in
+ * `_fluxfiles/usage.json` (per prefix, TTL = usage_cache_ttl). `?refresh=true`
+ * bypasses the cache (rate-limited upstream).
+ */
+function handleUsage(QuotaManager $quotaManager, DiskManager $diskManager, \FluxFiles\Claims $claims): array
+{
+    $disk = $_GET['disk'] ?? 'local';
+    $prefix = $claims->pathPrefix;
+    $refresh = ($_GET['refresh'] ?? '') === 'true';
+    $ttl = $claims->usageCacheTtl > 0 ? $claims->usageCacheTtl : 900;
+
+    $fs = $diskManager->disk($disk);
+    // Cache lives in the tenant's own prefix tree (so each prefix has its own
+    // file — no cross-tenant contention) and is excluded from the breakdown.
+    $pt = trim($prefix, '/');
+    $cachePath = ($pt !== '' ? $pt . '/' : '') . '_fluxfiles/usage.json';
+
+    if (!$refresh && $ttl > 0) {
+        $cached = ff_usage_cache_read($fs, $cachePath, $ttl);
+        if ($cached !== null) {
+            $cached['cache_age_seconds'] = max(0, time() - (int) strtotime($cached['computed_at'] ?? 'now'));
+            return $cached;
+        }
+    }
+
+    $top = $claims->usageTopFoldersCount > 0 ? $claims->usageTopFoldersCount : 10;
+    $depth = $claims->usageFolderDepth > 0 ? $claims->usageFolderDepth : 1;
+    $breakdown = $quotaManager->getUsageBreakdown($disk, $prefix, $top, $depth);
+    $resp = $quotaManager->usageResponse(
+        $breakdown,
+        $claims->maxStorageMb,
+        $claims->usageWarningThreshold,
+        $claims->usageCriticalThreshold
+    );
+
+    if ($ttl > 0) {
+        ff_usage_cache_write($fs, $cachePath, $resp);
+    }
+    $resp['cache_age_seconds'] = 0;
+    return $resp;
+}
+
+/** Read a fresh (< $ttl) cached usage summary at $path, or null. */
+function ff_usage_cache_read($fs, string $path, int $ttl): ?array
+{
+    try {
+        if (!$fs->fileExists($path)) {
+            return null;
+        }
+        $entry = json_decode((string) $fs->read($path), true);
+        if (!is_array($entry)) {
+            return null;
+        }
+        $age = time() - (int) strtotime($entry['computed_at'] ?? '');
+        return ($age >= 0 && $age <= $ttl) ? $entry : null;
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+
+/** Best-effort write of a usage summary to its prefix-scoped cache file. */
+function ff_usage_cache_write($fs, string $path, array $resp): void
+{
+    try {
+        $fs->write($path, (string) json_encode($resp));
+    } catch (\Throwable $e) {
+        /* cache is best-effort */
+    }
 }
 
 function handlePresign(FileManager $fm): array

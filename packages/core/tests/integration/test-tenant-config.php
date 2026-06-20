@@ -235,7 +235,18 @@ test('fromJwtPayload parses webp claims (and defaults)', function () {
     assertEqual(true, $def->allowDownload, 'allow_download defaults true');
     assertEqual(false, Claims::fromJwtPayload((object) ['allow_download' => false])->allowDownload, 'allow_download parsed');
 
+    // Usage-dashboard claims parse + clamp.
+    assertEqual(0, $def->usageCacheTtl, 'usage_cache_ttl default 0 (inherit)');
+    $u = Claims::fromJwtPayload((object) ['usage_cache_ttl' => 600, 'usage_warning_threshold' => 150,
+        'usage_critical_threshold' => 95, 'usage_top_folders_count' => 5, 'usage_folder_depth' => 2]);
+    assertEqual(600, $u->usageCacheTtl, 'cache_ttl');
+    assertEqual(100, $u->usageWarningThreshold, 'warning clamped to 100');
+    assertEqual(95, $u->usageCriticalThreshold, 'critical');
+    assertEqual(5, $u->usageTopFoldersCount, 'top folders');
+    assertEqual(2, $u->usageFolderDepth, 'folder depth');
+
     // Watermark disabled → null; enabled → assembled + clamped.
+    // (usage forwarding via $usage param tested below)
     assertEqual(null, $def->watermark, 'watermark off by default');
     $wm = Claims::fromJwtPayload((object) [
         'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© A',
@@ -251,6 +262,21 @@ test('fromJwtPayload parses webp claims (and defaults)', function () {
     assertEqual('logo', $wm2['type'], 'logo type');
     assertEqual('cfg/logo.png', $wm2['logo_path'], 'logo path');
     assertEqual('bottom-right', $wm2['position'], 'bad position → default');
+});
+
+test('fluxfiles_token forwards usage claims via the $usage param', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, null, null, [
+            'usage_cache_ttl' => 600, 'usage_warning_threshold' => 60,
+            'usage_critical_threshold' => 85, 'usage_top_folders_count' => 5, 'usage_folder_depth' => 2,
+        ]);
+    $c = Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    assertEqual(600, $c->usageCacheTtl, 'cache_ttl forwarded');
+    assertEqual(60, $c->usageWarningThreshold, 'warning forwarded');
+    assertEqual(85, $c->usageCriticalThreshold, 'critical forwarded');
+    assertEqual(5, $c->usageTopFoldersCount, 'top folders forwarded');
+    assertEqual(2, $c->usageFolderDepth, 'folder depth forwarded');
 });
 
 test('fluxfiles_token forwards watermark + allow_download via the $webp param', function () {

@@ -56,6 +56,22 @@
         "folders": "Folders",
         "smart_filters": "Smart filters"
     },
+    "usage": {
+        "title": "Storage usage",
+        "refresh": "Refresh",
+        "last_updated": "Last updated",
+        "by_type": "By type",
+        "top_folders": "Largest folders",
+        "files": "files",
+        "warning": "You're running low on storage.",
+        "critical": "You're almost out of storage. Consider cleaning up or upgrading.",
+        "image": "Images",
+        "video": "Videos",
+        "audio": "Audio",
+        "document": "Documents",
+        "archive": "Archives",
+        "other": "Other"
+    },
     "quota": {
         "storage": "Storage"
     },

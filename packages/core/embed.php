@@ -41,7 +41,8 @@ function fluxfiles_token(
     ?array $variants = null,
     ?array $import = null,
     ?array $media = null,
-    ?array $webp = null
+    ?array $webp = null,
+    ?array $usage = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -83,6 +84,7 @@ function fluxfiles_token(
     fluxfiles_apply_import_claims($payload, $import ?? []);
     fluxfiles_apply_media_claims($payload, $media ?? []);
     fluxfiles_apply_webp_claims($payload, $webp ?? []);
+    fluxfiles_apply_usage_claims($payload, $usage ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -115,7 +117,8 @@ function fluxfiles_byob_token(
     bool $ownerOnly = false,
     ?array $import = null,
     ?array $media = null,
-    ?array $webp = null
+    ?array $webp = null,
+    ?array $usage = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -149,6 +152,7 @@ function fluxfiles_byob_token(
     fluxfiles_apply_import_claims($payload, $import ?? []);
     fluxfiles_apply_media_claims($payload, $media ?? []);
     fluxfiles_apply_webp_claims($payload, $webp ?? []);
+    fluxfiles_apply_usage_claims($payload, $usage ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -178,7 +182,8 @@ function fluxfiles_mixed_token(
     bool $ownerOnly = false,
     ?array $import = null,
     ?array $media = null,
-    ?array $webp = null
+    ?array $webp = null,
+    ?array $usage = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -212,6 +217,7 @@ function fluxfiles_mixed_token(
     fluxfiles_apply_import_claims($payload, $import ?? []);
     fluxfiles_apply_media_claims($payload, $media ?? []);
     fluxfiles_apply_webp_claims($payload, $webp ?? []);
+    fluxfiles_apply_usage_claims($payload, $usage ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -301,6 +307,25 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
         }
         if (!empty($webp['watermark_font_size'])) {
             $payload['watermark_font_size'] = (int) $webp['watermark_font_size'];
+        }
+    }
+}
+
+/**
+ * Forward usage-dashboard claims into a token payload, when set.
+ *
+ * @param array<string,mixed> $payload
+ * @param array<string,mixed> $usage usage_cache_ttl, usage_warning_threshold,
+ *        usage_critical_threshold, usage_top_folders_count, usage_folder_depth
+ */
+function fluxfiles_apply_usage_claims(array &$payload, array $usage): void
+{
+    foreach ([
+        'usage_cache_ttl', 'usage_warning_threshold', 'usage_critical_threshold',
+        'usage_top_folders_count', 'usage_folder_depth',
+    ] as $k) {
+        if (isset($usage[$k]) && $usage[$k] !== '') {
+            $payload[$k] = (int) $usage[$k];
         }
     }
 }

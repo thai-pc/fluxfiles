@@ -173,6 +173,9 @@
                 <button class="ff-theme-toggle-sm" x-show="canAudit" @click="openActivity()" :title="t('audit.title')" :aria-label="t('audit.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                 </button>
+                <button class="ff-theme-toggle-sm" @click="openUsage()" :title="t('usage.title')" :aria-label="t('usage.title')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5"/><path d="M18 3v6h-6"/><path d="M21 3l-9 9"/></svg>
+                </button>
                 <button class="ff-theme-toggle-sm" x-show="canDiagnose" @click="openDoctor()" :title="t('doctor.title')" :aria-label="t('doctor.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h4"/></svg>
                 </button>
@@ -1183,6 +1186,68 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Storage usage dashboard ═══ -->
+    <div class="ff-modal-overlay" x-show="showUsage" x-transition @click.self="closeUsage()" style="z-index:60;" x-cloak>
+        <div class="ff-usage-modal" role="dialog" aria-modal="true" :aria-label="t('usage.title')" @keydown.escape.window="showUsage && closeUsage()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('usage.title')"></h3>
+                <button class="ff-activity-close" @click="closeUsage()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="usageError" x-text="usageError"></p>
+                <div x-show="usageLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
+
+                <template x-if="!usageLoading && usageInfo">
+                    <div class="ff-usage">
+                        <!-- Quota meter + status -->
+                        <div class="ff-usage-meter" :class="usageStatusClass">
+                            <div class="ff-usage-meter-head">
+                                <span x-text="formatSize(usageInfo.quota.used_bytes)"></span>
+                                <span x-show="usageInfo.quota.limit_bytes" x-text="'/ ' + formatSize(usageInfo.quota.limit_bytes) + ' (' + usageInfo.quota.percent + '%)'"></span>
+                            </div>
+                            <div class="meter-bar"><div class="meter-fill" :style="'width:' + (usageInfo.quota.percent || 0) + '%'"></div></div>
+                            <div class="ff-usage-meter-foot">
+                                <span x-text="usageInfo.file_count + ' ' + t('usage.files')"></span>
+                                <button class="ff-btn" @click="refreshUsage()" :disabled="!usageRefreshReady" x-text="t('usage.refresh')"></button>
+                            </div>
+                        </div>
+
+                        <!-- Critical/warning banner -->
+                        <template x-if="usageInfo.quota.status === 'critical'">
+                            <div class="ff-usage-banner is-critical" x-text="t('usage.critical')"></div>
+                        </template>
+                        <template x-if="usageInfo.quota.status === 'warning'">
+                            <div class="ff-usage-banner is-warning" x-text="t('usage.warning')"></div>
+                        </template>
+
+                        <!-- By type -->
+                        <div class="ff-usage-section" x-show="usageInfo.by_type.length">
+                            <h4 x-text="t('usage.by_type')"></h4>
+                            <template x-for="row in usageInfo.by_type" :key="row.type">
+                                <div class="ff-usage-row">
+                                    <span class="ff-usage-row-label" x-text="usageTypeLabel(row.type)"></span>
+                                    <div class="ff-usage-row-bar"><div class="ff-usage-row-fill" :style="'width:' + row.percent + '%'"></div></div>
+                                    <span class="ff-usage-row-size" x-text="formatSize(row.size_bytes)"></span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Top folders -->
+                        <div class="ff-usage-section" x-show="usageInfo.top_folders.length">
+                            <h4 x-text="t('usage.top_folders')"></h4>
+                            <template x-for="f in usageInfo.top_folders" :key="f.path">
+                                <button class="ff-usage-folder" @click="usageGoFolder(f.path)">
+                                    <span class="ff-usage-folder-path" x-text="f.path"></span>
+                                    <span class="ff-usage-folder-meta" x-text="formatSize(f.size_bytes) + ' · ' + f.count + ' ' + t('usage.files')"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
     </div>

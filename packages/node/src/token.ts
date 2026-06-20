@@ -137,6 +137,13 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
     if (opts.watermarkOpacity !== undefined) payload.watermark_opacity = opts.watermarkOpacity;
     if (opts.watermarkFontSize && opts.watermarkFontSize > 0) payload.watermark_font_size = Math.trunc(opts.watermarkFontSize);
   }
+
+  // Usage-dashboard claims.
+  if (opts.usageCacheTtl && opts.usageCacheTtl > 0) payload.usage_cache_ttl = Math.trunc(opts.usageCacheTtl);
+  if (opts.usageWarningThreshold && opts.usageWarningThreshold > 0) payload.usage_warning_threshold = Math.trunc(opts.usageWarningThreshold);
+  if (opts.usageCriticalThreshold && opts.usageCriticalThreshold > 0) payload.usage_critical_threshold = Math.trunc(opts.usageCriticalThreshold);
+  if (opts.usageTopFoldersCount && opts.usageTopFoldersCount > 0) payload.usage_top_folders_count = Math.trunc(opts.usageTopFoldersCount);
+  if (opts.usageFolderDepth && opts.usageFolderDepth > 0) payload.usage_folder_depth = Math.trunc(opts.usageFolderDepth);
 }
 
 /**

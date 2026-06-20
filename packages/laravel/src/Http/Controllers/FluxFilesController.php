@@ -678,6 +678,37 @@ class FluxFilesController
         }
     }
 
+    /**
+     * Storage usage dashboard: quota + per-type/-folder breakdown (one
+     * listContents pass via getUsageBreakdown). Proxy mode recomputes each call
+     * (no cache layer here); the standalone core endpoint adds the file cache.
+     */
+    public function usage(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+
+            $disk = $request->query('disk', 'local');
+            $quotaManager = new QuotaManager($this->diskManager);
+            $top = $claims->usageTopFoldersCount > 0 ? $claims->usageTopFoldersCount : 10;
+            $depth = $claims->usageFolderDepth > 0 ? $claims->usageFolderDepth : 1;
+
+            $breakdown = $quotaManager->getUsageBreakdown($disk, $claims->pathPrefix, $top, $depth);
+            $resp = $quotaManager->usageResponse(
+                $breakdown,
+                $claims->maxStorageMb,
+                $claims->usageWarningThreshold,
+                $claims->usageCriticalThreshold
+            );
+            $resp['cache_age_seconds'] = 0;
+
+            return $this->ok($resp);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
     // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
 
     public function trash(Request $request): JsonResponse

@@ -56,6 +56,22 @@
         "folders": "Cartelle",
         "smart_filters": "Filtri intelligenti"
     },
+    "usage": {
+        "title": "Utilizzo dello spazio",
+        "refresh": "Aggiorna",
+        "last_updated": "Ultimo aggiornamento",
+        "by_type": "Per tipo",
+        "top_folders": "Cartelle più grandi",
+        "files": "file",
+        "warning": "Lo spazio sta per esaurirsi.",
+        "critical": "Spazio quasi esaurito. Valuta di pulire o fare upgrade.",
+        "image": "Immagini",
+        "video": "Video",
+        "audio": "Audio",
+        "document": "Documenti",
+        "archive": "Archivi",
+        "other": "Altro"
+    },
     "quota": {
         "storage": "Archiviazione"
     },

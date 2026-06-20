@@ -56,6 +56,22 @@
         "folders": "Pastas",
         "smart_filters": "Filtros inteligentes"
     },
+    "usage": {
+        "title": "Uso de armazenamento",
+        "refresh": "Atualizar",
+        "last_updated": "Última atualização",
+        "by_type": "Por tipo",
+        "top_folders": "Maiores pastas",
+        "files": "arquivos",
+        "warning": "Seu armazenamento está acabando.",
+        "critical": "Armazenamento quase cheio. Considere limpar ou fazer upgrade.",
+        "image": "Imagens",
+        "video": "Vídeos",
+        "audio": "Áudio",
+        "document": "Documentos",
+        "archive": "Arquivos",
+        "other": "Outros"
+    },
     "quota": {
         "storage": "Armazenamento"
     },
