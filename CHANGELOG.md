@@ -3,6 +3,36 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.31] — 2026-06-21
+
+> Released: core `core-v0.2.26` (Packagist), Node `@fluxfiles/node` `0.1.8`.
+
+### Added
+
+- **SFTP disk driver** — a 3rd storage driver (after local and S3/R2) that turns
+  FluxFiles into a file manager for a VPS / shared host. Built on
+  `league/flysystem-sftp-v3`; **connect/disconnect per request** (no pool, no DB).
+  - Configured via `SFTP_*` env (registers an `sftp` disk when `SFTP_HOST` is set)
+    or **BYOB** (a token carrying the user's own SFTP credentials —
+    `fluxfiles_byob_token`/`createByobToken`, AES-256-GCM-encrypted, SSRF-checked
+    on decode). Password OR private-key auth.
+  - **No static/presigned URL**: downloads/previews stream through the app via a
+    tokened `/api/fm/stream` link (reuses the gated-local-media path; Range not
+    advertised — SFTP is for browsing/editing, not media seeking). Chunk upload
+    and presign reject SFTP (S3-only); uploads go direct (cap per-file with the
+    `max_upload` claim). Bandwidth runs through the app server.
+  - **SSRF-guarded**: `SsrfGuard::assertHostSafe()` rejects loopback / RFC1918 /
+    link-local / CGNAT / cloud-metadata hosts. `FLUXFILES_SSRF_ALLOW_HOSTS`
+    allowlists a trusted host on a private network (VPN'd VPS).
+  - Serving is a **core-standalone / Docker** feature (it streams bytes); the
+    Laravel/WordPress proxies don't expose it.
+
+### Security
+
+- Bumped `guzzlehttp/guzzle` 7.10.5→7.12.1, `guzzlehttp/psr7` →2.12.1,
+  `mtdowling/jmespath.php` →2.9.1 (4 pre-existing AWS-SDK transitive-dep CVEs).
+  `composer audit` is clean.
+
 ## [0.2.30] — 2026-06-20
 
 > Released: core `core-v0.2.25` (Packagist), Laravel `laravel-v0.2.12`,

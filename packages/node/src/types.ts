@@ -6,7 +6,7 @@ export type FluxPermission = 'read' | 'write' | 'delete' | 'audit';
  * decrypted only at runtime by the FluxFiles server. Only S3-compatible
  * storage is allowed — the server rejects the `local` driver.
  */
-export interface ByobDiskConfig {
+export interface ByobS3DiskConfig {
   driver: 's3';
   key: string;
   secret: string;
@@ -18,6 +18,24 @@ export interface ByobDiskConfig {
   /** Public base URL for direct (unsigned) object links on a public disk. */
   public_url?: string;
 }
+
+/**
+ * A BYOB SFTP disk — a user's own SFTP server (e.g. a VPS). Auth is a password OR
+ * a private key. The server SSRF-checks the host (no loopback/private/metadata
+ * targets). SFTP files are streamed through the app (no static/presigned URL).
+ */
+export interface ByobSftpDiskConfig {
+  driver: 'sftp';
+  host: string;
+  username: string;
+  password?: string;
+  private_key?: string;
+  private_key_passphrase?: string;
+  port?: number;
+  root?: string;
+}
+
+export type ByobDiskConfig = ByobS3DiskConfig | ByobSftpDiskConfig;
 
 /** Options shared by all token builders. */
 export interface BaseTokenOptions {

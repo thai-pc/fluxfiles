@@ -34,9 +34,10 @@
   - Tracks parent directories for folder search.
 
 - `api/DiskManager.php`
-  - Builds Flysystem local disks and S3-compatible disks.
+  - Builds Flysystem local, S3-compatible, and **SFTP** disks.
   - R2/MinIO-style endpoints are treated as S3 with path-style endpoint and `retain_visibility` disabled.
-  - BYOB disks can be registered at runtime, but local BYOB disks are rejected.
+  - **SFTP** (`SFTP_*` env, or BYOB): a 3rd driver for VPS/hosting. Connect/disconnect per request (no pool, no DB); password OR private key; host is `SsrfGuard::assertHostSafe`-checked (allowlist via `FLUXFILES_SSRF_ALLOW_HOSTS`). SFTP has no static/presigned URL, so `fileUrl()` returns a tokened `/api/fm/stream` link and `handleMediaStream` reads it via Flysystem (no Range). Chunk upload + presign reject SFTP (S3-only). Serving is core-standalone (the proxies don't expose `/stream`).
+  - BYOB disks can be registered at runtime (s3 or sftp), but local BYOB disks are rejected.
 
 - `api/StorageMetadataHandler.php`
   - Metadata is storage-backed, not database-backed.

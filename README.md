@@ -669,6 +669,43 @@ return [
 
 > **Note:** R2 uses the S3-compatible API. ACL operations are not supported — FluxFiles automatically disables `retain_visibility` for endpoint-based disks.
 
+### SFTP disk (VPS / shared hosting)
+
+A 3rd disk driver (after local and S3/R2) that turns FluxFiles into a file
+manager for an SFTP server — a VPS, shared host, or anything behind SSH. Set the
+`SFTP_*` env vars (see [Environment Variables](#environment-variables)) and an
+`sftp` disk is registered automatically; the tree UI is disk-agnostic, so listing,
+upload, rename, move and delete just work.
+
+```env
+SFTP_HOST=vps.example.com
+SFTP_USERNAME=deploy
+SFTP_PASSWORD=…            # or SFTP_PRIVATE_KEY=<PEM contents>
+SFTP_ROOT=/var/www
+```
+
+How it differs from S3 (by design):
+
+- **Connect/disconnect per request** — no connection pool, no DB. Adds ~200–500 ms
+  per action (SSH handshake); the UI shows a loading state.
+- **No static or presigned URL** — every download/preview is **streamed through
+  the app** via a tokened `/api/fm/stream` link (the same mechanism gated local
+  media uses). So uploads/downloads use app-server bandwidth; **keep per-file size
+  modest** with the token's `max_upload` claim (e.g. 100–200 MB). HTTP Range isn't
+  advertised for SFTP (browse/edit, not media seeking).
+- **Chunk upload and presign are rejected** for an SFTP disk (S3-only) — uploads
+  go direct.
+- **SSRF-guarded**: the SFTP host must resolve to a public address, unless you
+  list it in `FLUXFILES_SSRF_ALLOW_HOSTS` (legit when the box is on your own
+  private network / a VPN'd VPS).
+- **Per-tenant (BYOB)**: mint a token with the user's own SFTP credentials —
+  `fluxfiles_byob_token($u, ['my-vps' => ['driver' => 'sftp', 'host' => …,
+  'username' => …, 'password' => …]])` (or `private_key`). Credentials are
+  AES-256-GCM-encrypted into the JWT and SSRF-checked on decode, never stored.
+- Like gated media and on-demand WebP, SFTP **serving is a core-standalone /
+  Docker feature** (it streams bytes through the app); the Laravel/WordPress
+  proxies don't expose it.
+
 ### Adding a Custom Disk
 
 Add a new entry to `config/disks.php`:
@@ -1836,6 +1873,14 @@ token field.
 | `R2_VISIBILITY` | No | `private` | `private` = presigned GET URLs; `public` needs a public bucket + `R2_PUBLIC_URL` |
 | `R2_PUBLIC_URL` | No | — | Public base URL for a public R2 disk (r2.dev or custom domain) |
 | `R2_URL_TTL` | No | `3600` | Presigned GET-URL lifetime (seconds) on a private R2 disk. Max 24h |
+| `SFTP_HOST` | No | — | Register an `sftp` disk pointing at this host (VPS/shared hosting). Empty = no SFTP disk |
+| `SFTP_PORT` | No | `22` | SFTP port |
+| `SFTP_USERNAME` | No | — | SFTP username |
+| `SFTP_PASSWORD` | No | — | SFTP password (or use `SFTP_PRIVATE_KEY`) |
+| `SFTP_PRIVATE_KEY` | No | — | Private key (PEM contents) — alternative to password |
+| `SFTP_PRIVATE_KEY_PASSPHRASE` | No | — | Passphrase for the private key |
+| `SFTP_ROOT` | No | `/` | Remote root directory the disk is scoped to |
+| `FLUXFILES_SSRF_ALLOW_HOSTS` | No | — | Comma-separated host[:port] trusted past the SSRF public-IP check (SFTP on a private network). Empty = full protection |
 | `FLUXFILES_AI_PROVIDER` | No | — | `claude` or `openai` (empty = disabled) |
 | `FLUXFILES_AI_API_KEY` | No | — | AI provider API key |
 | `FLUXFILES_AI_MODEL` | No | auto | Override AI model (default: `claude-sonnet-4-20250514` / `gpt-4o`) |
