@@ -40,7 +40,8 @@ function fluxfiles_token(
     int $rateWrite = 0,
     ?array $variants = null,
     ?array $import = null,
-    ?array $media = null
+    ?array $media = null,
+    ?array $webp = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -81,6 +82,7 @@ function fluxfiles_token(
     //           'import_path'=>string, 'import_rate_limit'=>int, 'import_concurrency'=>int]
     fluxfiles_apply_import_claims($payload, $import ?? []);
     fluxfiles_apply_media_claims($payload, $media ?? []);
+    fluxfiles_apply_webp_claims($payload, $webp ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -112,7 +114,8 @@ function fluxfiles_byob_token(
     int $ttl = 1800,
     bool $ownerOnly = false,
     ?array $import = null,
-    ?array $media = null
+    ?array $media = null,
+    ?array $webp = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -145,6 +148,7 @@ function fluxfiles_byob_token(
     }
     fluxfiles_apply_import_claims($payload, $import ?? []);
     fluxfiles_apply_media_claims($payload, $media ?? []);
+    fluxfiles_apply_webp_claims($payload, $webp ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -173,7 +177,8 @@ function fluxfiles_mixed_token(
     int $ttl = 1800,
     bool $ownerOnly = false,
     ?array $import = null,
-    ?array $media = null
+    ?array $media = null,
+    ?array $webp = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -206,6 +211,7 @@ function fluxfiles_mixed_token(
     }
     fluxfiles_apply_import_claims($payload, $import ?? []);
     fluxfiles_apply_media_claims($payload, $media ?? []);
+    fluxfiles_apply_webp_claims($payload, $webp ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -255,6 +261,25 @@ function fluxfiles_apply_media_claims(array &$payload, array $media): void
     foreach (['preview_url_ttl', 'max_preview_mb', 'stream_token_ttl'] as $k) {
         if (!empty($media[$k])) {
             $payload[$k] = (int) $media[$k];
+        }
+    }
+}
+
+/**
+ * Forward on-demand WebP claims into a token payload, when set.
+ *
+ * @param array<string,mixed> $payload
+ * @param array<string,mixed> $webp webp_enabled (bool), webp_max_width (int),
+ *        webp_default_quality (int)
+ */
+function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
+{
+    if (array_key_exists('webp_enabled', $webp)) {
+        $payload['webp_enabled'] = (bool) $webp['webp_enabled'];
+    }
+    foreach (['webp_max_width', 'webp_default_quality'] as $k) {
+        if (!empty($webp[$k])) {
+            $payload[$k] = (int) $webp[$k];
         }
     }
 }

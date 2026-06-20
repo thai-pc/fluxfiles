@@ -62,6 +62,12 @@ export interface BaseTokenOptions {
   maxPreviewMb?: number;
   /** TTL (seconds) for per-file gated-local stream tokens. `0`/omitted = inherit (3600). */
   streamTokenTtl?: number;
+  /** Expose the on-demand WebP endpoint (`/api/fm/img`) for images. Omit to inherit the default (true). */
+  webpEnabled?: boolean;
+  /** Max resize width (px) a transform request may ask for. `0`/omitted = inherit (2000). */
+  webpMaxWidth?: number;
+  /** Default WebP quality when a request omits it. `0`/omitted = inherit (80). */
+  webpDefaultQuality?: number;
 }
 
 export interface CreateTokenOptions extends BaseTokenOptions {

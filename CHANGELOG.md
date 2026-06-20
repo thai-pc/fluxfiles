@@ -3,6 +3,41 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.27] — 2026-06-20
+
+> Released: core `core-v0.2.22` (Packagist), Laravel `laravel-v0.2.10`,
+> WordPress plugin `wordpress-v0.2.9`, Node `@fluxfiles/node` `0.1.5`,
+> SDK `fluxfiles` `0.2.2` (npm).
+
+### Added
+
+- **On-demand WebP** (`GET /api/fm/img`). Extends the existing upload-time variant
+  system (fixed thumb/medium/large) with arbitrary on-demand sizes for responsive
+  images. Each image entry in a listing gains an **`img_base`** URL; the host
+  builds a transform with `FluxFiles.imgUrl(file, { width: 800, quality: 80 })`.
+  - First request converts + caches the WebP into the file's `_variants/` dir
+    (so the existing delete/trash cleanup invalidates it for free); the cache key
+    is mtime-stamped, so a re-upload never re-matches a stale image.
+  - **Abuse-bounded**: width is rounded to 100px and clamped to `webp_max_width`,
+    quality snaps to `60`/`75`/`80`/`90` — so a single file can only ever spawn a
+    bounded number of cache variants (no `?width=801,802,…` growth), without any
+    per-request counting.
+  - **Content negotiation**: `?format=auto` serves the original to browsers that
+    don't accept `image/webp`. **SVG and animated GIFs are never converted.** A
+    decompression-bomb guard refuses to decode absurd source dimensions.
+  - Claims `webp_enabled` (default true), `webp_max_width` (2000),
+    `webp_default_quality` (80), forwarded through every token helper
+    (`fluxfiles_token($…, webp: […])`, Laravel/WordPress overrides, Node
+    `createToken`). Auth reuses the per-file query-string token pattern
+    (`ImageToken`, distinct from the media stream token).
+
+### Security
+
+- `/api/fm/img` reads disk/path from the signed token (never the query), rejects a
+  missing/placeholder secret, serves only image files, and forces `nosniff`. A
+  stream token can't be used on `/img` and vice versa. Like gated-local media, it's
+  a core-standalone / Docker feature (the Laravel/WordPress proxies don't expose it).
+
 ## [0.2.26] — 2026-06-20
 
 > Released: core `core-v0.2.21` (Packagist).

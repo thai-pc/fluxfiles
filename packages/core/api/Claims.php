@@ -75,6 +75,14 @@ class Claims
      *           media. 0 = inherit default (3600). */
     public int $streamTokenTtl = 0;
 
+    // ── On-demand WebP transform ──────────────────────────────────────────
+    /** @var bool Expose the on-demand WebP endpoint (`/api/fm/img`) for images. Default true. */
+    public bool $webpEnabled = true;
+    /** @var int Max resize width (px) a transform request may ask for. 0 = inherit default (2000). */
+    public int $webpMaxWidth = 0;
+    /** @var int Default WebP quality when a request omits it. 0 = inherit default (80). */
+    public int $webpDefaultQuality = 0;
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -185,6 +193,11 @@ class Claims
         $c->previewUrlTtl = max(0, (int) ($payload->preview_url_ttl ?? 0));
         $c->maxPreviewMb = max(0, (int) ($payload->max_preview_mb ?? 0));
         $c->streamTokenTtl = max(0, (int) ($payload->stream_token_ttl ?? 0));
+
+        // On-demand WebP claims.
+        $c->webpEnabled = isset($payload->webp_enabled) ? (bool) $payload->webp_enabled : true;
+        $c->webpMaxWidth = max(0, (int) ($payload->webp_max_width ?? 0));
+        $c->webpDefaultQuality = max(0, (int) ($payload->webp_default_quality ?? 0));
 
         return $c;
     }

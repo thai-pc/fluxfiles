@@ -211,6 +211,20 @@
         aiTag: function() { this.command('aiTag'); },
         setLocale: function(locale) { this.command('setLocale', { locale: locale }); },
 
+        // Build an on-demand WebP URL for a selected image file, from its
+        // `img_base` (present on image entries when the webp feature is enabled).
+        // e.g. FluxFiles.imgUrl(file, { width: 800, quality: 80 }). Returns '' when
+        // the file has no img_base (non-image, or the feature is disabled).
+        imgUrl: function(file, opts) {
+            if (!file || !file.img_base) return '';
+            opts = opts || {};
+            var q = [];
+            if (opts.width) q.push('width=' + encodeURIComponent(opts.width));
+            if (opts.quality) q.push('quality=' + encodeURIComponent(opts.quality));
+            if (opts.format) q.push('format=' + encodeURIComponent(opts.format));
+            return file.img_base + (q.length ? '&' + q.join('&') : '');
+        },
+
         updateToken: function(newToken) {
             config.token = newToken;
             if (ready && iframe) {

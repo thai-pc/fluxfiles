@@ -120,6 +120,11 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.previewUrlTtl && opts.previewUrlTtl > 0) payload.preview_url_ttl = Math.trunc(opts.previewUrlTtl);
   if (opts.maxPreviewMb && opts.maxPreviewMb > 0) payload.max_preview_mb = Math.trunc(opts.maxPreviewMb);
   if (opts.streamTokenTtl && opts.streamTokenTtl > 0) payload.stream_token_ttl = Math.trunc(opts.streamTokenTtl);
+
+  // On-demand WebP claims.
+  if (opts.webpEnabled !== undefined) payload.webp_enabled = !!opts.webpEnabled;
+  if (opts.webpMaxWidth && opts.webpMaxWidth > 0) payload.webp_max_width = Math.trunc(opts.webpMaxWidth);
+  if (opts.webpDefaultQuality && opts.webpDefaultQuality > 0) payload.webp_default_quality = Math.trunc(opts.webpDefaultQuality);
 }
 
 /**

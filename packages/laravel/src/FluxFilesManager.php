@@ -104,6 +104,16 @@ class FluxFilesManager
                 $payload[$mediaClaim] = (int) $overrides[$mediaClaim];
             }
         }
+
+        // On-demand WebP claims.
+        if (array_key_exists('webp_enabled', $overrides)) {
+            $payload['webp_enabled'] = (bool) $overrides['webp_enabled'];
+        }
+        foreach (['webp_max_width', 'webp_default_quality'] as $webpClaim) {
+            if (!empty($overrides[$webpClaim])) {
+                $payload[$webpClaim] = (int) $overrides[$webpClaim];
+            }
+        }
     }
 
     /**
