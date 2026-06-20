@@ -17,9 +17,22 @@ Capabilities: Local / AWS S3 / Cloudflare R2 (and any S3-compatible store) via
 Flysystem v3; JWT auth with rich claims (perms, disk, path prefix, quota,
 owner-only, allowed extensions, BYOB); file ops + cross-disk copy/move; file
 soft-delete of files & folders (trash/restore, storage-resident); metadata that travels with
-storage; image WebP variants + crop; optional AI tagging;
+storage; image WebP variants + crop + **on-demand WebP** (`/api/fm/img`); optional AI tagging;
+inline media preview with presigned-URL auto-refresh + **gated local streaming**
+(`/api/fm/stream`, Range); URL import (`/api/fm/import-url`, SSRF-guarded);
 i18n (16 locales, RTL); chunked S3 uploads; rate limiting; audit log; Bucket
 Doctor diagnostics.
+
+Two byte-serving routes are pre-auth, authenticated by a short-lived per-file
+query-string token (an `<video>`/`<img>` can't send headers): `/api/fm/stream`
+(gated local media, `StreamToken`/`RangeStreamer`, opt-in via
+`FLUXFILES_LOCAL_PRIVATE`) and `/api/fm/img` (on-demand WebP, `ImageToken`,
+cached in `_variants/`). Both mint only when a stream secret is wired
+(`FileManager::setStreamSecret`, done by the standalone app, not the proxy
+adapters) — so they're core-standalone / Docker features and the Laravel/WordPress
+route-parity guard whitelists them as intentionally unproxied. Per-tenant claims
+gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`,
+`webp_enabled`/`webp_max_width`/`webp_default_quality`), forwarded by every token helper.
 
 ## Repository layout
 

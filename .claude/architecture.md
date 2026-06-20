@@ -12,6 +12,7 @@
 
 - `api/index.php`
   - Public routes: `/public/index.html`, `/api/fm/lang`, `/api/fm/lang/{locale}`.
+  - Pre-auth byte-serving routes (authenticated by a per-file query-string token, not the main JWT, because `<video>`/`<img>` can't send headers): `/api/fm/stream` (gated local media, Range) and `/api/fm/img` (on-demand WebP). Both reject a missing/placeholder secret and are dispatched before the main auth block.
   - Authenticated routes: all other `/api/fm/*` routes.
   - Loads `.env` from package root or monorepo root.
   - Applies CORS and origin checks for mutating requests.
@@ -20,6 +21,7 @@
 - `api/Claims.php`
   - Decodes the product-specific JWT payload into typed-ish public properties.
   - Important fields: `sub`, `perms`, `disks`, `prefix`, `max_upload`, `allowed_ext`, `max_storage`, `owner_only`, `byob_disks`.
+  - Per-tenant feature claims (set on the instance after construct, so the constructor signature stays stable for positional callers/adapters): `ai_auto_tag`, `rate_read/write`, `variants`; URL-import (`allow_url_import`, …); media-preview (`media_preview`, `preview_url_ttl`, `max_preview_mb`, `stream_token_ttl`); on-demand WebP (`webp_enabled`, `webp_max_width`, `webp_default_quality`). All forwarded by every token helper (core `fluxfiles_token` array params, adapter override arrays, Node `createToken`).
   - `scopePath()` sanitizes `.` and `..`, strips null bytes, and prepends the user's prefix.
   - `isPathInScope()` checks already-scoped keys.
 
@@ -48,10 +50,20 @@
   - Supports multipart uploads for S3-compatible disks through init, presign part, complete, and abort endpoints.
 
 - `api/ImageOptimizer.php`
-  - Generates image variants under internal variant paths. Keep list/delete/copy/move behavior aware of variants.
+  - Generates fixed WebP variants on upload (thumb/medium/large) under `_variants/`. Keep list/delete/copy/move behavior aware of variants.
+  - `transform()` does on-demand resize→WebP (returns null = serve original for SVG/animated-GIF/non-raster/decompression-bomb); `transformCacheKey()` names the cache inside `_variants/` (mtime-stamped, so the existing delete/trash cleanup invalidates it for free). Uses `ImageCompat` (intervention/GD) — no Imagick.
 
 - `api/AiTagger.php`
   - Optional AI metadata generation. Controlled by `FLUXFILES_AI_PROVIDER`, `FLUXFILES_AI_API_KEY`, and `FLUXFILES_AI_MODEL`.
+
+- `api/StreamToken.php` / `api/RangeStreamer.php`
+  - Gated local media (`FLUXFILES_LOCAL_PRIVATE=true`): `StreamToken` is a short-lived, single-file token (`t=stream`) carried in the query string; `RangeStreamer` parses HTTP Range and `fseek`-serves 206/200/416 without rewinding. Production fast path: nginx `X-Accel-Redirect` (`FLUXFILES_XACCEL`) — PHP only verifies the token, nginx streams the bytes.
+
+- `api/ImageToken.php`
+  - Per-file token (`t=img`, distinct from the stream token) for the `/api/fm/img` WebP endpoint; carries the tenant `mw` (max width) + `dq` (default quality) so the pre-auth handler can clamp without the main JWT.
+
+- `api/SsrfGuard.php` / `api/UrlImporter.php`
+  - URL import (`POST /api/fm/import-url`, opt-in via `allow_url_import`): synchronous fetch → upload pipeline. `SsrfGuard` is the shared SSRF denylist (also used by the BYOB endpoint check).
 
 ## Frontend And Embedding
 

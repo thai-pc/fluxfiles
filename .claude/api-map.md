@@ -9,6 +9,7 @@ All routes below are implemented in `packages/core/api/index.php`.
 - `GET /api/fm/lang`: list available locales.
 - `GET /api/fm/lang/{locale}`: fetch locale messages.
 - `GET /api/fm/stream?token=<stream-token>`: gated local media stream (Range-capable). Authenticated by a per-file stream token (not the main JWT), since `<video>`/`<audio>` can't send headers. Only serves files on a `private => true` local disk (`FLUXFILES_LOCAL_PRIVATE=true`).
+- `GET /api/fm/img?token=<image-token>&width=&quality=&format=`: on-demand WebP transform of one image, cached in the file's `_variants/`. Authenticated by a per-file `ImageToken` (distinct type from the stream token; an `<img>` can't send headers). Width is rounded to 100px + clamped to the token's `mw`; quality snaps to 60/75/80/90; `format=auto` serves the original to non-WebP clients. S3/R2 cache hits 302-redirect to a presigned URL; local serves bytes. Exposed per image as `img_base` in `list()` when `webp_enabled` + a stream secret are set.
 
 ## Authenticated File Routes
 
