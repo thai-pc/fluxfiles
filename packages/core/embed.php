@@ -39,7 +39,8 @@ function fluxfiles_token(
     int $rateRead = 0,
     int $rateWrite = 0,
     ?array $variants = null,
-    ?array $import = null
+    ?array $import = null,
+    ?array $media = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -79,6 +80,7 @@ function fluxfiles_token(
     // $import = ['allow_url_import'=>bool, 'max_import_mb'=>int, 'import_url_allowlist'=>string[],
     //           'import_path'=>string, 'import_rate_limit'=>int, 'import_concurrency'=>int]
     fluxfiles_apply_import_claims($payload, $import ?? []);
+    fluxfiles_apply_media_claims($payload, $media ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -109,7 +111,8 @@ function fluxfiles_byob_token(
     ?array $allowedExt = null,
     int $ttl = 1800,
     bool $ownerOnly = false,
-    ?array $import = null
+    ?array $import = null,
+    ?array $media = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -141,6 +144,7 @@ function fluxfiles_byob_token(
         $payload['owner_only'] = true;
     }
     fluxfiles_apply_import_claims($payload, $import ?? []);
+    fluxfiles_apply_media_claims($payload, $media ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -168,7 +172,8 @@ function fluxfiles_mixed_token(
     ?array $allowedExt = null,
     int $ttl = 1800,
     bool $ownerOnly = false,
-    ?array $import = null
+    ?array $import = null,
+    ?array $media = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -200,6 +205,7 @@ function fluxfiles_mixed_token(
         $payload['owner_only'] = true;
     }
     fluxfiles_apply_import_claims($payload, $import ?? []);
+    fluxfiles_apply_media_claims($payload, $media ?? []);
 
     return JwtCompat::encode($payload, $secret);
 }
@@ -228,6 +234,28 @@ function fluxfiles_apply_import_claims(array &$payload, array $import): void
     }
     if (!empty($import['import_url_allowlist']) && is_array($import['import_url_allowlist'])) {
         $payload['import_url_allowlist'] = array_values($import['import_url_allowlist']);
+    }
+}
+
+/**
+ * Forward media-preview claims from an options array into a token payload, when set.
+ * Claims::fromJwtPayload sanitizes/clamps these on decode.
+ *
+ * @param array<string,mixed> $payload
+ * @param array<string,mixed> $media media_preview (bool), preview_url_ttl (int),
+ *        max_preview_mb (int), stream_token_ttl (int)
+ */
+function fluxfiles_apply_media_claims(array &$payload, array $media): void
+{
+    // media_preview is a tri-state: only embed it when explicitly provided, so an
+    // unset claim inherits the default (true).
+    if (array_key_exists('media_preview', $media)) {
+        $payload['media_preview'] = (bool) $media['media_preview'];
+    }
+    foreach (['preview_url_ttl', 'max_preview_mb', 'stream_token_ttl'] as $k) {
+        if (!empty($media[$k])) {
+            $payload[$k] = (int) $media[$k];
+        }
     }
 }
 

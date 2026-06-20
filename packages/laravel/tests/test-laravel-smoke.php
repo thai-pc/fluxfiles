@@ -112,6 +112,21 @@ test('token() forwards URL-import claims so the feature can be enabled', functio
     assertEqual(5, $claims->importRateLimit, 'import_rate_limit carried');
 });
 
+test('token() forwards media-preview claims', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $token = $mgr->token(21, [
+        'media_preview'    => false,
+        'preview_url_ttl'  => 7200,
+        'max_preview_mb'   => 250,
+        'stream_token_ttl' => 1800,
+    ]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertEqual(false, $c->mediaPreview, 'media_preview');
+    assertEqual(7200, $c->previewUrlTtl, 'preview_url_ttl');
+    assertEqual(250, $c->maxPreviewMb, 'max_preview_mb');
+    assertEqual(1800, $c->streamTokenTtl, 'stream_token_ttl');
+});
+
 test('token() without a secret → throws', function () {
     $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
     $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'] = '';
@@ -171,7 +186,11 @@ test('proxy route surface covers every core /api/fm route', function () {
     $proxyRoutes = array_map(fn ($r) => preg_replace('#/\{[^}]+\}#', '', $r), $rm[1]);
 
     // Core routes that are intentionally NOT proxied (keep empty unless justified).
-    $intentionallyUnproxied = [];
+    // - stream: gated-local media (FLUXFILES_LOCAL_PRIVATE) is a core-standalone /
+    //   Docker deployment feature (PHP/nginx Range serving). Laravel proxy mode
+    //   serves its local disk through the framework's own static URLs, so the core
+    //   /stream endpoint doesn't apply here. Proxying it is a future option.
+    $intentionallyUnproxied = ['stream'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

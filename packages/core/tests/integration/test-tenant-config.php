@@ -202,6 +202,26 @@ test('fromJwtPayload parses media_preview / preview_url_ttl (and defaults)', fun
     assertEqual(200, $mp->maxPreviewMb, 'max_preview_mb parsed');
 });
 
+test('fluxfiles_token forwards media claims via the $media param', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, [
+            'media_preview'    => false,
+            'preview_url_ttl'  => 7200,
+            'max_preview_mb'   => 250,
+            'stream_token_ttl' => 1800,
+        ]);
+    $c = Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    assertEqual(false, $c->mediaPreview, 'media_preview forwarded');
+    assertEqual(7200, $c->previewUrlTtl, 'preview_url_ttl forwarded');
+    assertEqual(250, $c->maxPreviewMb, 'max_preview_mb forwarded');
+    assertEqual(1800, $c->streamTokenTtl, 'stream_token_ttl forwarded');
+
+    // Unset $media → defaults (media_preview true, others 0/inherit), no extra keys.
+    $p = JwtCompat::decode(fluxfiles_token('u1'), $_ENV['FLUXFILES_SECRET']);
+    assertTrue(!isset($p->media_preview) && !isset($p->preview_url_ttl), 'lean when unset');
+});
+
 test('Claims::isMediaPath detects video/audio extensions only', function () {
     foreach (['a/b/clip.mp4', 'song.MP3', 'x.webm', 'y.mov', 'z.flac', 'w.ogg'] as $p) {
         assertTrue(Claims::isMediaPath($p), "media: $p");

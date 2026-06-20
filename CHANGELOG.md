@@ -3,6 +3,41 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.24] — 2026-06-20
+
+> Released: core `core-v0.2.19` (Packagist), Laravel `laravel-v0.2.8`,
+> WordPress plugin `wordpress-v0.2.7`, Node `@fluxfiles/node` `0.1.4`.
+
+### Added
+
+- **Media preview hardening + gated local streaming.** Inline video/audio
+  preview already existed; this makes it robust and configurable:
+  - **Auto-refresh** an expiring presigned media URL: when a `<video>`/`<audio>`
+    errors mid-playback the UI silently re-presigns and swaps the source,
+    restoring the playhead — so a long video on a private S3/R2 bucket no longer
+    403s mid-stream. Retry-capped; static URLs are left alone.
+  - **`media_preview`** (bool, default true) toggles inline preview;
+    **`preview_url_ttl`** (default 7200s) gives media files a longer presigned
+    TTL; **`max_preview_mb`** (default 500) shows a "too large" placeholder +
+    download instead of loading a huge player.
+  - **Gated local media** (`FLUXFILES_LOCAL_PRIVATE=true`): a local disk serves
+    files through per-file `/api/fm/stream` tokens (short-lived, single-file,
+    HTTP Range–capable) instead of static URLs, so a `<video>` can't be opened
+    without authorization yet still seeks. Production path uses nginx
+    `X-Accel-Redirect` (`FLUXFILES_XACCEL`) for zero-copy native Range; PHP
+    `fseek` fallback otherwise. New claim **`stream_token_ttl`** (default 3600).
+  - All four media claims forward through `fluxfiles_token($…, media: […])`,
+    Laravel/WordPress `token()` overrides, and Node `createToken({ mediaPreview,
+    … })`. New i18n key `file.too_large_preview` in all 16 locales.
+
+### Security
+
+- The stream endpoint reads disk/path from the *signed* token (never the query),
+  realpath-contains the file in the disk root (symlink/traversal guard), serves
+  only `local` `private` disks, and forces non-inline types to download with
+  `nosniff`. Verified by unit + integration + HTTP e2e tests (Range/206, 416,
+  bad/missing token → 403, traversal → 403).
+
 ## [0.2.23] — 2026-06-17
 
 > Released: core `core-v0.2.18` (Packagist), Laravel `laravel-v0.2.7`,

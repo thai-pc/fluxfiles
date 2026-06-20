@@ -122,6 +122,20 @@ test('fluxfiles_token_overrides filter can enable URL import for the built-in fl
     $GLOBALS['WP_FILTERS'] = []; // reset
 });
 
+test('generateToken forwards media-preview claims', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(23, [
+        'media_preview'    => false,
+        'preview_url_ttl'  => 7200,
+        'max_preview_mb'   => 250,
+        'stream_token_ttl' => 1800,
+    ]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertEqual(false, $c->mediaPreview, 'media_preview');
+    assertEqual(7200, $c->previewUrlTtl, 'preview_url_ttl');
+    assertEqual(250, $c->maxPreviewMb, 'max_preview_mb');
+    assertEqual(1800, $c->streamTokenTtl, 'stream_token_ttl');
+});
+
 test('generateToken without a secret → throws', function () {
     $prev = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
     $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';
