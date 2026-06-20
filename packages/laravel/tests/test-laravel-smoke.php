@@ -136,6 +136,19 @@ test('token() forwards webp claims', function () use ($secret) {
     assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality');
 });
 
+test('token() forwards watermark + allow_download claims', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $token = $mgr->token(41, [
+        'allow_download' => false,
+        'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© Acme',
+        'watermark_position' => 'center', 'watermark_opacity' => 0.5,
+    ]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertEqual(false, $c->allowDownload, 'allow_download');
+    assertEqual('© Acme', $c->watermark['text'], 'watermark text');
+    assertEqual('center', $c->watermark['position'], 'watermark position');
+});
+
 test('token() without a secret → throws', function () {
     $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
     $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'] = '';

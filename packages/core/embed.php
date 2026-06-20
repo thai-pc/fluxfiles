@@ -266,11 +266,14 @@ function fluxfiles_apply_media_claims(array &$payload, array $media): void
 }
 
 /**
- * Forward on-demand WebP claims into a token payload, when set.
+ * Forward image-serving claims into a token payload, when set: on-demand WebP
+ * (`webp_*`), the download gate (`allow_download`), and watermark (`watermark_*`).
+ * The core sanitizes/clamps these on decode.
  *
  * @param array<string,mixed> $payload
- * @param array<string,mixed> $webp webp_enabled (bool), webp_max_width (int),
- *        webp_default_quality (int)
+ * @param array<string,mixed> $webp webp_enabled, webp_max_width, webp_default_quality,
+ *        allow_download, watermark_enabled, watermark_type, watermark_text,
+ *        watermark_logo_path, watermark_position, watermark_opacity, watermark_font_size
  */
 function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
 {
@@ -280,6 +283,24 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     foreach (['webp_max_width', 'webp_default_quality'] as $k) {
         if (!empty($webp[$k])) {
             $payload[$k] = (int) $webp[$k];
+        }
+    }
+    // Download gate + watermark.
+    if (array_key_exists('allow_download', $webp)) {
+        $payload['allow_download'] = (bool) $webp['allow_download'];
+    }
+    if (!empty($webp['watermark_enabled'])) {
+        $payload['watermark_enabled'] = true;
+        foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {
+            if (!empty($webp[$s])) {
+                $payload[$s] = (string) $webp[$s];
+            }
+        }
+        if (isset($webp['watermark_opacity'])) {
+            $payload['watermark_opacity'] = (float) $webp['watermark_opacity'];
+        }
+        if (!empty($webp['watermark_font_size'])) {
+            $payload['watermark_font_size'] = (int) $webp['watermark_font_size'];
         }
     }
 }

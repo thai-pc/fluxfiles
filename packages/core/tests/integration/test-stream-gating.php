@@ -157,6 +157,20 @@ test('no stream secret → no img_base (feature off)', function () {
     assertTrue(!isset($a['img_base']), 'no secret → no img_base');
 });
 
+test('watermark claim → img_base token carries the watermark config', function () use ($SECRET) {
+    [$fm] = makeImgFM(true, true);
+    // Set the watermark on the claims the FM already holds (reflection — claims is private).
+    $cl = (new \ReflectionObject($fm))->getProperty('claims');
+    $cl->setAccessible(true);
+    $cl->getValue($fm)->watermark = ['enabled' => true, 'type' => 'text', 'text' => 'WM', 'position' => 'center', 'opacity' => 0.6, 'font_size' => 24];
+
+    $a = picEntry($fm, 'a.jpg');
+    parse_str(parse_url($a['img_base'], PHP_URL_QUERY), $q);
+    $scope = ImageToken::verify($q['token'], $SECRET);
+    assertEqual(true, $scope['watermark']['enabled'] ?? null, 'img token watermarks');
+    assertEqual('WM', $scope['watermark']['text'] ?? '', 'watermark text in token');
+});
+
 // ── allow_download gating (M3 — preview-only) ─────────────────────────────
 /** Like makeImgFM but with allow_download toggled. */
 function makeDownloadFM(bool $allowDownload): array

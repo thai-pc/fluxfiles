@@ -1542,7 +1542,8 @@ class FileManager
             $ttl,
             $this->streamSecret,
             $maxWidth,
-            $this->claims->webpDefaultQuality
+            $this->claims->webpDefaultQuality,
+            $this->claims->watermark
         );
         return '/api/fm/img?token=' . rawurlencode($token);
     }
