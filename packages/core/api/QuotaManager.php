@@ -129,7 +129,11 @@ class QuotaManager
      * FluxFiles paths (`_fluxfiles/`, `_variants/`) are excluded so the figures
      * reflect user content, matching getFileCount.
      *
-     * @return array{total_size:int,file_count:int,by_type:array<string,array{size:int,count:int}>,by_folder:list<array{path:string,size:int,count:int}>}
+     * `raw_total` is the sum of EVERY file (including `_fluxfiles/`/`_variants/`),
+     * matching getUsage — so the quota meter can reuse this single pass instead of
+     * listing again.
+     *
+     * @return array{total_size:int,raw_total:int,file_count:int,by_type:array<string,array{size:int,count:int}>,by_folder:list<array{path:string,size:int,count:int}>}
      */
     public function getUsageBreakdown(string $disk, string $prefix, int $topFolders = 10, int $folderDepth = 1): array
     {
@@ -138,6 +142,7 @@ class QuotaManager
         $folderDepth = max(1, $folderDepth);
 
         $total = 0;
+        $rawTotal = 0;
         $count = 0;
         $byType = [];
         $byFolder = [];
@@ -148,10 +153,11 @@ class QuotaManager
                 continue;
             }
             $path = $item->path();
+            $size = $item->fileSize() ?? 0;
+            $rawTotal += $size; // includes internal — matches getUsage / the quota meter
             if (strpos($path, '_fluxfiles/') !== false || strpos($path, '_variants/') !== false) {
                 continue;
             }
-            $size = $item->fileSize() ?? 0;
             $total += $size;
             $count++;
 
@@ -181,9 +187,64 @@ class QuotaManager
 
         return [
             'total_size' => $total,
+            'raw_total'  => $rawTotal,
             'file_count' => $count,
             'by_type'    => $byType,
             'by_folder'  => array_slice($folders, 0, max(1, $topFolders)),
+        ];
+    }
+
+    /**
+     * Assemble the dashboard response from a breakdown: quota (raw usage vs limit
+     * + ok/warning/critical status) and per-type percentages (of user content).
+     * Pure — no storage access — so the threshold math is unit-testable.
+     *
+     * @param array $breakdown result of getUsageBreakdown()
+     */
+    public function usageResponse(array $breakdown, int $maxStorageMb, int $warnPct, int $critPct): array
+    {
+        $rawUsed = (int) ($breakdown['raw_total'] ?? 0);
+        $maxBytes = $maxStorageMb > 0 ? $maxStorageMb * 1024 * 1024 : null;
+        $percent = ($maxBytes !== null && $maxBytes > 0) ? round($rawUsed / $maxBytes * 100, 1) : null;
+
+        $warn = $warnPct > 0 ? $warnPct : 70;
+        $crit = $critPct > 0 ? $critPct : 90;
+        $status = 'ok';
+        if ($percent !== null) {
+            if ($percent >= $crit) {
+                $status = 'critical';
+            } elseif ($percent >= $warn) {
+                $status = 'warning';
+            }
+        }
+
+        $userTotal = ((int) ($breakdown['total_size'] ?? 0)) ?: 1; // avoid div-by-zero
+        $byType = [];
+        foreach (($breakdown['by_type'] ?? []) as $type => $agg) {
+            $byType[] = [
+                'type'       => $type,
+                'size_bytes' => $agg['size'],
+                'count'      => $agg['count'],
+                'percent'    => round($agg['size'] / $userTotal * 100, 1),
+            ];
+        }
+        usort($byType, static fn ($a, $b) => $b['size_bytes'] <=> $a['size_bytes']);
+
+        return [
+            'computed_at' => gmdate('c'),
+            'quota' => [
+                'used_bytes'  => $rawUsed,
+                'limit_bytes' => $maxBytes,
+                'percent'     => $percent,
+                'status'      => $status,
+            ],
+            'file_count'    => (int) ($breakdown['file_count'] ?? 0),
+            'content_bytes' => (int) ($breakdown['total_size'] ?? 0),
+            'by_type'       => $byType,
+            'top_folders'   => array_map(
+                static fn ($f) => ['path' => $f['path'], 'size_bytes' => $f['size'], 'count' => $f['count']],
+                $breakdown['by_folder'] ?? []
+            ),
         ];
     }
 

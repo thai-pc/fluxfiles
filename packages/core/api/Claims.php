@@ -94,6 +94,18 @@ class Claims
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
     public ?array $watermark = null;
 
+    // ── Usage dashboard (/api/fm/usage) ───────────────────────────────────
+    /** @var int Usage-summary cache TTL (seconds). 0 = inherit default (900). */
+    public int $usageCacheTtl = 0;
+    /** @var int Percent at which quota status becomes "warning". 0 = inherit (70). */
+    public int $usageWarningThreshold = 0;
+    /** @var int Percent at which quota status becomes "critical". 0 = inherit (90). */
+    public int $usageCriticalThreshold = 0;
+    /** @var int Number of largest folders to return. 0 = inherit (10). */
+    public int $usageTopFoldersCount = 0;
+    /** @var int Folder grouping depth for the breakdown. 0 = inherit (1). */
+    public int $usageFolderDepth = 0;
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -236,6 +248,13 @@ class Claims
         $c->webpDefaultQuality = max(0, (int) ($payload->webp_default_quality ?? 0));
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
         $c->watermark = self::sanitizeWatermark($payload);
+
+        // Usage-dashboard claims.
+        $c->usageCacheTtl = max(0, (int) ($payload->usage_cache_ttl ?? 0));
+        $c->usageWarningThreshold = max(0, min(100, (int) ($payload->usage_warning_threshold ?? 0)));
+        $c->usageCriticalThreshold = max(0, min(100, (int) ($payload->usage_critical_threshold ?? 0)));
+        $c->usageTopFoldersCount = max(0, (int) ($payload->usage_top_folders_count ?? 0));
+        $c->usageFolderDepth = max(0, (int) ($payload->usage_folder_depth ?? 0));
 
         return $c;
     }

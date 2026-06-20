@@ -235,6 +235,16 @@ test('fromJwtPayload parses webp claims (and defaults)', function () {
     assertEqual(true, $def->allowDownload, 'allow_download defaults true');
     assertEqual(false, Claims::fromJwtPayload((object) ['allow_download' => false])->allowDownload, 'allow_download parsed');
 
+    // Usage-dashboard claims parse + clamp.
+    assertEqual(0, $def->usageCacheTtl, 'usage_cache_ttl default 0 (inherit)');
+    $u = Claims::fromJwtPayload((object) ['usage_cache_ttl' => 600, 'usage_warning_threshold' => 150,
+        'usage_critical_threshold' => 95, 'usage_top_folders_count' => 5, 'usage_folder_depth' => 2]);
+    assertEqual(600, $u->usageCacheTtl, 'cache_ttl');
+    assertEqual(100, $u->usageWarningThreshold, 'warning clamped to 100');
+    assertEqual(95, $u->usageCriticalThreshold, 'critical');
+    assertEqual(5, $u->usageTopFoldersCount, 'top folders');
+    assertEqual(2, $u->usageFolderDepth, 'folder depth');
+
     // Watermark disabled → null; enabled → assembled + clamped.
     assertEqual(null, $def->watermark, 'watermark off by default');
     $wm = Claims::fromJwtPayload((object) [

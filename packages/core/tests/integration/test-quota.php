@@ -172,8 +172,41 @@ test('getUsageBreakdown: excludes _fluxfiles/ and _variants/, respects prefix', 
     putBytes($root, 'u2/other.jpg', 700);                    // outside prefix
     $b = $qm->getUsageBreakdown('local', 'u1');
     assertEqual(400, $b['total_size'], 'only u1 user content (variants/_fluxfiles excluded)');
+    assertEqual(2398, $b['raw_total'], 'raw_total includes variants + _fluxfiles (400+999+999)');
     assertEqual(1, $b['file_count'], '1 user file');
     assertEqual('/', $b['by_folder'][0]['path'], 'photo at prefix root');
+});
+
+test('usageResponse: quota status thresholds (ok/warning/critical)', function () {
+    [, $qm] = makeFM(0);
+    $bd = fn (int $raw) => ['raw_total' => $raw, 'total_size' => $raw, 'file_count' => 1, 'by_type' => [], 'by_folder' => []];
+    // 100 MB limit. 50/79/92 MB → ok/warning/critical (defaults 70/90).
+    $r = $qm->usageResponse($bd(50 * 1048576), 100, 0, 0);
+    assertEqual('ok', $r['quota']['status'], '50% → ok');
+    assertEqual(50.0, $r['quota']['percent'], 'percent');
+    assertEqual('warning', $qm->usageResponse($bd(79 * 1048576), 100, 0, 0)['quota']['status'], '79% → warning');
+    assertEqual('critical', $qm->usageResponse($bd(92 * 1048576), 100, 0, 0)['quota']['status'], '92% → critical');
+    // Custom thresholds 50/80.
+    assertEqual('warning', $qm->usageResponse($bd(60 * 1048576), 100, 50, 80)['quota']['status'], 'custom warn 50');
+});
+
+test('usageResponse: no quota limit → percent null, status ok', function () {
+    [, $qm] = makeFM(0);
+    $r = $qm->usageResponse(['raw_total' => 999, 'total_size' => 999, 'file_count' => 1, 'by_type' => [], 'by_folder' => []], 0, 0, 0);
+    assertEqual(null, $r['quota']['percent'], 'no limit → null percent');
+    assertEqual('ok', $r['quota']['status'], 'ok when no limit');
+    assertEqual(null, $r['quota']['limit_bytes'], 'null limit_bytes');
+});
+
+test('usageResponse: by_type percent of user content, sorted desc', function () {
+    [, $qm] = makeFM(0);
+    $bd = ['raw_total' => 1000, 'total_size' => 1000, 'file_count' => 3,
+        'by_type' => ['image' => ['size' => 700, 'count' => 2], 'video' => ['size' => 300, 'count' => 1]],
+        'by_folder' => []];
+    $r = $qm->usageResponse($bd, 0, 0, 0);
+    assertEqual('image', $r['by_type'][0]['type'], 'largest type first');
+    assertEqual(70.0, $r['by_type'][0]['percent'], 'image = 70%');
+    assertEqual(30.0, $r['by_type'][1]['percent'], 'video = 30%');
 });
 
 test('getUsageBreakdown: empty prefix → zeros, no error', function () {
