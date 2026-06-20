@@ -186,10 +186,32 @@ describe('createByobToken', () => {
   it('rejects a non-s3 driver and missing fields', () => {
     expect(() =>
       createByobToken({ secret: SECRET, userId: 'u', byobDisks: { x: { ...disk, driver: 'local' as any } } }),
-    ).toThrow(/driver must be "s3"/);
+    ).toThrow(/driver must be "s3" or "sftp"/);
     expect(() =>
       createByobToken({ secret: SECRET, userId: 'u', byobDisks: { x: { ...disk, bucket: '' } } }),
     ).toThrow(/missing required "bucket"/);
+  });
+
+  it('accepts a BYOB SFTP disk (a user-owned VPS)', () => {
+    const token = createByobToken({
+      secret: SECRET,
+      userId: 'u',
+      byobDisks: {
+        'my-vps': { driver: 'sftp', host: 'vps.example.com', username: 'deploy', password: 'pw', root: '/srv' },
+      },
+    });
+    const c = decodeToken(token);
+    expect(c.disks).toEqual(['my-vps']);
+    expect(c.byob_disks && Object.keys(c.byob_disks)).toEqual(['my-vps']);
+  });
+
+  it('rejects a BYOB SFTP disk without host / username / auth', () => {
+    expect(() =>
+      createByobToken({ secret: SECRET, userId: 'u', byobDisks: { x: { driver: 'sftp', username: 'u', password: 'p' } as any } }),
+    ).toThrow(/missing required "host"/);
+    expect(() =>
+      createByobToken({ secret: SECRET, userId: 'u', byobDisks: { x: { driver: 'sftp', host: 'h.example.com', username: 'u' } as any } }),
+    ).toThrow(/needs a "password" or "private_key"/);
   });
 });
 

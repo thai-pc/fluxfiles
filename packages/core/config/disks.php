@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-return [
+$disks = [
     'local' => [
         'driver' => 'local',
         'root'   => __DIR__ . '/../storage/uploads',
@@ -45,3 +45,21 @@ return [
         'url_ttl'    => (int) ($_ENV['R2_URL_TTL'] ?? 3600),
     ],
 ];
+
+// SFTP disk — only registered when SFTP_HOST is set (a 3rd disk driver for VPS /
+// shared hosting). Connect/disconnect per request; auth is password OR private
+// key. Files are served through the app (no presigned URL), so size is capped.
+if (($_ENV['SFTP_HOST'] ?? '') !== '') {
+    $disks['sftp'] = [
+        'driver'                 => 'sftp',
+        'host'                   => $_ENV['SFTP_HOST'],
+        'port'                   => (int) ($_ENV['SFTP_PORT'] ?? 22),
+        'username'               => $_ENV['SFTP_USERNAME'] ?? '',
+        'password'               => $_ENV['SFTP_PASSWORD'] ?? '',
+        'private_key'            => $_ENV['SFTP_PRIVATE_KEY'] ?? '',
+        'private_key_passphrase' => $_ENV['SFTP_PRIVATE_KEY_PASSPHRASE'] ?? '',
+        'root'                   => $_ENV['SFTP_ROOT'] ?? '/',
+    ];
+}
+
+return $disks;

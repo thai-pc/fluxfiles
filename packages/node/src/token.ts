@@ -151,8 +151,19 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
  * SSRF checks on the endpoint), so this only catches obvious mistakes early.
  */
 function validateByobDisk(name: string, config: ByobDiskConfig): void {
-  if (!config || config.driver !== 's3') {
-    throw new Error(`FluxFiles BYOB disk "${name}": driver must be "s3" (the server rejects "local").`);
+  if (!config || (config.driver !== 's3' && config.driver !== 'sftp')) {
+    throw new Error(`FluxFiles BYOB disk "${name}": driver must be "s3" or "sftp" (the server rejects "local").`);
+  }
+  if (config.driver === 'sftp') {
+    for (const field of ['host', 'username'] as const) {
+      if (!config[field]) {
+        throw new Error(`FluxFiles BYOB disk "${name}": missing required "${field}".`);
+      }
+    }
+    if (!config.password && !config.private_key) {
+      throw new Error(`FluxFiles BYOB disk "${name}": needs a "password" or "private_key".`);
+    }
+    return;
   }
   for (const field of ['key', 'secret', 'bucket'] as const) {
     if (!config[field]) {

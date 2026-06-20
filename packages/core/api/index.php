@@ -31,6 +31,14 @@ foreach ($envDirs as $dir) {
     }
 }
 
+// Trusted SFTP/import hosts allowed past the SSRF public-IP requirement. Legit
+// use: an operator whose SFTP server lives on their own private/reserved network
+// (a VPS behind a VPN). Comma-separated host[:port]; empty = full SSRF protection.
+$ssrfAllow = array_filter(array_map('trim', explode(',', $_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? '')));
+if ($ssrfAllow !== []) {
+    \FluxFiles\SsrfGuard::$allowTestHosts = array_map('strtolower', $ssrfAllow);
+}
+
 // CORS
 $allowedOrigins = array_filter(
     array_map('trim', explode(',', $_ENV['FLUXFILES_ALLOWED_ORIGINS'] ?? ''))
@@ -688,49 +696,77 @@ function handleMediaStream(): void
 
     $diskConfigs = require __DIR__ . '/../config/disks.php';
     $config = $diskConfigs[$disk] ?? null;
+    $driver = is_array($config) ? ($config['driver'] ?? '') : '';
 
-    // Gated streaming is only for local, private disks. S3/R2 always use presigned
-    // URLs (the browser fetches them directly), so they must never reach here.
-    if (!is_array($config) || ($config['driver'] ?? '') !== 'local' || empty($config['private'])) {
+    // Two servable cases: a gated (private) local disk, or any SFTP disk (which
+    // has no static/presigned URL, so it must be streamed through the app). S3/R2
+    // use presigned URLs the browser fetches directly, so they never reach here.
+    $isGatedLocal = $driver === 'local' && !empty($config['private']);
+    $isSftp = $driver === 'sftp';
+    if (!$isGatedLocal && !$isSftp) {
         http_response_code(403);
         header('Content-Type: text/plain; charset=utf-8');
         echo 'Streaming not available for this disk';
         return;
     }
 
-    $root = realpath($config['root'] ?? (__DIR__ . '/../storage/uploads'));
-    $abs  = realpath(($root ?: '') . '/' . $path);
-    // The resolved file must stay inside the disk root (symlink / traversal guard).
-    if ($root === false || $abs === false || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs)) {
-        http_response_code(404);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Not found';
-        return;
-    }
-
     // MIME by extension (don't trust on-disk sniffing for active types).
     $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
-        ->detectMimeTypeFromPath($abs) ?? 'application/octet-stream';
-
+        ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
     // Inline only for media/image/pdf; everything else is forced to download so a
     // stray .html/.svg can't execute in the FluxFiles origin.
     $inlineOk = (bool) preg_match('#^(video/|audio/|image/(?!svg))|^application/pdf$#', $mime);
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: private, no-store');
     header('Content-Disposition: ' . ($inlineOk ? 'inline' : 'attachment')
-        . '; filename="' . rawurlencode(basename($abs)) . '"');
+        . '; filename="' . rawurlencode(basename($path)) . '"');
 
-    // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
-    // Set FLUXFILES_XACCEL to the internal location mapped to the disk root.
-    $xaccel = $_ENV['FLUXFILES_XACCEL'] ?? '';
-    if ($xaccel !== '') {
-        header('Content-Type: ' . $mime);
-        header('X-Accel-Buffering: no');
-        header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
+    if ($isGatedLocal) {
+        $root = realpath($config['root'] ?? (__DIR__ . '/../storage/uploads'));
+        $abs  = realpath(($root ?: '') . '/' . $path);
+        // The resolved file must stay inside the disk root (symlink / traversal guard).
+        if ($root === false || $abs === false || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs)) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Not found';
+            return;
+        }
+        // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
+        $xaccel = $_ENV['FLUXFILES_XACCEL'] ?? '';
+        if ($xaccel !== '') {
+            header('Content-Type: ' . $mime);
+            header('X-Accel-Buffering: no');
+            header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
+            return;
+        }
+        \FluxFiles\RangeStreamer::stream($abs, $mime, $_SERVER['HTTP_RANGE'] ?? null);
         return;
     }
 
-    \FluxFiles\RangeStreamer::stream($abs, $mime, $_SERVER['HTTP_RANGE'] ?? null);
+    // SFTP: read through Flysystem and stream the bytes (no presign, no static URL).
+    // SFTP can't do byte-range natively, so Range is not advertised — the whole
+    // file is sent. SFTP is for browsing/editing VPS files, not media seeking.
+    try {
+        $dm = new DiskManager($diskConfigs);
+        $fs = $dm->disk($disk);
+        if (!$fs->fileExists($path)) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Not found';
+            return;
+        }
+        header('Content-Type: ' . $mime);
+        $stream = $fs->readStream($path);
+        while (!feof($stream)) {
+            echo fread($stream, 8192);
+            @flush();
+        }
+        if (is_resource($stream)) { fclose($stream); }
+    } catch (\Throwable $e) {
+        http_response_code(502);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Stream failed';
+    }
 }
 
 /**
