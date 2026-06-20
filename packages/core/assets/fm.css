@@ -535,6 +535,29 @@ body {
     transition: width 0.3s ease-out;
 }
 
+/* ── Storage usage dashboard ─────────────────────────────────────────── */
+.ff-usage-modal { max-width: 560px; }
+.ff-usage { display: flex; flex-direction: column; gap: 16px; }
+.ff-usage-meter .meter-bar { height: 10px; background: var(--color-border-tertiary); border-radius: 5px; margin-top: 8px; }
+.ff-usage-meter .meter-fill { height: 10px; border-radius: 5px; background: var(--ff-primary); transition: width 0.3s ease-out; }
+.ff-usage-meter.is-warning .meter-fill { background: #e0a800; }
+.ff-usage-meter.is-critical .meter-fill { background: #dc3545; }
+.ff-usage-meter-head { display: flex; gap: 6px; align-items: baseline; font-size: 18px; font-weight: 600; }
+.ff-usage-meter-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--color-text-secondary); }
+.ff-usage-banner { padding: 10px 12px; border-radius: 6px; font-size: 13px; }
+.ff-usage-banner.is-warning { background: rgba(224,168,0,0.12); color: #8a6d00; }
+.ff-usage-banner.is-critical { background: rgba(220,53,69,0.12); color: #b21f2d; }
+.ff-usage-section h4 { font-size: 13px; margin: 0 0 8px; color: var(--color-text-primary); }
+.ff-usage-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
+.ff-usage-row-label { width: 80px; flex-shrink: 0; color: var(--color-text-secondary); }
+.ff-usage-row-bar { flex: 1; height: 8px; background: var(--color-border-tertiary); border-radius: 4px; overflow: hidden; }
+.ff-usage-row-fill { height: 8px; background: var(--ff-primary); border-radius: 4px; }
+.ff-usage-row-size { width: 72px; text-align: right; flex-shrink: 0; color: var(--color-text-secondary); }
+.ff-usage-folder { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 8px 10px; margin-bottom: 4px; background: var(--color-background-secondary); border: none; border-radius: 6px; cursor: pointer; text-align: left; font-size: 12px; }
+.ff-usage-folder:hover { background: var(--color-border-tertiary); }
+.ff-usage-folder-path { color: var(--color-text-primary); font-family: var(--font-mono, monospace); }
+.ff-usage-folder-meta { color: var(--color-text-secondary); flex-shrink: 0; }
+
 /* ══════════════════════════ Main area ══════════════════════════ */
 .ff-main {
     grid-row: 2;
@@ -1834,10 +1857,11 @@ body {
     user-select: none;
 }
 
-/* Activity (audit) + Bucket Doctor + Trash panels share the modal box. */
+/* Activity (audit) + Bucket Doctor + Trash + Usage panels share the modal box. */
 .ff-activity-modal,
 .ff-doctor-modal,
-.ff-trash-modal {
+.ff-trash-modal,
+.ff-usage-modal {
     background: var(--ff-bg);
     border-radius: 12px;
     width: min(900px, 94vw);

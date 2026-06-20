@@ -2662,6 +2662,61 @@ function fluxFilesApp() {
         quotaPercent: 0,
         quotaLabel: '',
 
+        // Usage dashboard
+        showUsage: false,
+        usageInfo: null,
+        usageLoading: false,
+        usageError: '',
+        _usageRefreshAt: 0,
+
+        async openUsage() {
+            this.showUsage = true;
+            await this.loadUsage();
+        },
+        closeUsage() { this.showUsage = false; },
+
+        async loadUsage(refresh) {
+            this.usageLoading = true;
+            this.usageError = '';
+            try {
+                let path = '/api/fm/usage?disk=' + encodeURIComponent(this.currentDisk);
+                if (refresh) { path += '&refresh=true'; }
+                this.usageInfo = await this.api('GET', path);
+            } catch (e) {
+                this.usageError = e.message || 'Failed to load usage';
+            } finally {
+                this.usageLoading = false;
+            }
+        },
+
+        // Refresh button: force a recompute, debounced to 60s (the server also
+        // rate-limits ?refresh=true to 2/min as a backstop).
+        async refreshUsage() {
+            const now = Date.now();
+            if (now - this._usageRefreshAt < 60000) { return; }
+            this._usageRefreshAt = now;
+            await this.loadUsage(true);
+        },
+        get usageRefreshReady() { return Date.now() - this._usageRefreshAt >= 60000; },
+
+        // Quota status → meter colour class.
+        get usageStatusClass() {
+            const s = this.usageInfo && this.usageInfo.quota && this.usageInfo.quota.status;
+            return s === 'critical' ? 'is-critical' : (s === 'warning' ? 'is-warning' : 'is-ok');
+        },
+
+        // Localised label for a type-group key (image/video/.../other).
+        usageTypeLabel(type) {
+            const k = this.t('usage.' + type);
+            return k === 'usage.' + type ? type : k;
+        },
+
+        // Jump from a top-folder row into that folder in the manager.
+        usageGoFolder(path) {
+            this.closeUsage();
+            this.navigate(path === '/' ? '' : path.replace(/^\//, ''));
+        },
+
         async loadQuota() {
             try {
                 const data = await this.api('GET',
