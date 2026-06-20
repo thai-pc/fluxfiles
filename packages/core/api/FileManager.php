@@ -1591,6 +1591,15 @@ class FileManager
             return $baseUrl . '/' . $path;
         }
 
+        // SFTP has neither a static URL nor presigned URLs — every download/preview
+        // is streamed through the app via a tokened /api/fm/stream link (the same
+        // mechanism gated local media uses). Needs a stream secret to be set.
+        if (($config['driver'] ?? '') === 'sftp') {
+            return $this->streamSecret !== ''
+                ? $this->gatedLocalUrl($disk, $path)
+                : ''; // feature off → no servable URL
+        }
+
         // S3/R2. Private disks (the default) are served through short-lived presigned
         // GET URLs so objects work even on private buckets. Public disks return a direct
         // URL — using public_url (CDN / R2 custom domain) when set, otherwise the
