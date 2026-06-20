@@ -232,6 +232,8 @@ test('fromJwtPayload parses webp claims (and defaults)', function () {
     assertEqual(true, $def->webpEnabled, 'webp_enabled defaults true');
     assertEqual(0, $def->webpMaxWidth, 'webp_max_width defaults 0 (inherit)');
     assertEqual(0, $def->webpDefaultQuality, 'webp_default_quality defaults 0 (inherit)');
+    assertEqual(true, $def->allowDownload, 'allow_download defaults true');
+    assertEqual(false, Claims::fromJwtPayload((object) ['allow_download' => false])->allowDownload, 'allow_download parsed');
 });
 
 test('fluxfiles_token forwards webp claims via the $webp param', function () {

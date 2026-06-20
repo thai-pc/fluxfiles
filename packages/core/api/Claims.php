@@ -83,6 +83,12 @@ class Claims
     /** @var int Default WebP quality when a request omits it. 0 = inherit default (80). */
     public int $webpDefaultQuality = 0;
 
+    /** @var bool May this token get clean original download URLs? Default true. When
+     *            false (preview-only / watermark), list() withholds `url`/
+     *            `permanent_url`/`variants` and GET presign is denied — only the
+     *            (watermarked) `img_base` remains for images. */
+    public bool $allowDownload = true;
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -198,6 +204,7 @@ class Claims
         $c->webpEnabled = isset($payload->webp_enabled) ? (bool) $payload->webp_enabled : true;
         $c->webpMaxWidth = max(0, (int) ($payload->webp_max_width ?? 0));
         $c->webpDefaultQuality = max(0, (int) ($payload->webp_default_quality ?? 0));
+        $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
 
         return $c;
     }
