@@ -110,6 +110,46 @@ try {
         assertEqual(404, $st);
     });
 
+    test('chmod: GET reads the mode, POST sets it (cPanel-style)', function () use ($BASE, $tok, $name) {
+        [$st, $body] = http("{$BASE}/api/fm/chmod?disk=sftp&path=" . rawurlencode($name), ["Authorization: Bearer {$tok}"]);
+        assertEqual(200, $st, 'get mode: ' . $body);
+        $mode = json_decode($body, true)['data']['mode'] ?? '';
+        assertTrue(preg_match('/^[0-7]{3}$/', $mode) === 1, "octal mode: {$mode}");
+
+        $ch = curl_init("{$BASE}/api/fm/chmod");
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}", 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'mode' => '600'])]);
+        $b = curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        assertEqual(200, $s, 'set mode: ' . $b);
+        assertEqual('600', json_decode($b, true)['data']['mode'] ?? '', 'mode set to 600');
+
+        [, $g2] = http("{$BASE}/api/fm/chmod?disk=sftp&path=" . rawurlencode($name), ["Authorization: Bearer {$tok}"]);
+        assertEqual('600', json_decode($g2, true)['data']['mode'] ?? '', 'persisted');
+    });
+
+    test('chmod: invalid mode → 422', function () use ($BASE, $tok, $name) {
+        $ch = curl_init("{$BASE}/api/fm/chmod");
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}", 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'mode' => '999'])]);
+        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        assertEqual(422, $s, 'invalid mode rejected');
+    });
+
+    test('chmod: a token with allow_chmod=false → 403 on POST', function () use ($BASE, $SECRET, $prefix, $name) {
+        $ro = \FluxFiles\JwtCompat::encode([
+            'sub' => 'ro', 'perms' => ['read', 'write'], 'disks' => ['sftp'], 'prefix' => $prefix,
+            'max_upload' => 50, 'allow_chmod' => false, 'exp' => time() + 3600,
+        ], $SECRET);
+        $ch = curl_init("{$BASE}/api/fm/chmod");
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer {$ro}", 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'mode' => '755'])]);
+        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        assertEqual(403, $s, 'allow_chmod=false blocks chmod');
+    });
+
     // Cleanup the uploaded file.
     $del = curl_init("{$BASE}/api/fm/delete");
     curl_setopt_array($del, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'DELETE',

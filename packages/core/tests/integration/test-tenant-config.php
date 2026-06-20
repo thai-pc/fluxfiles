@@ -234,6 +234,8 @@ test('fromJwtPayload parses webp claims (and defaults)', function () {
     assertEqual(0, $def->webpDefaultQuality, 'webp_default_quality defaults 0 (inherit)');
     assertEqual(true, $def->allowDownload, 'allow_download defaults true');
     assertEqual(false, Claims::fromJwtPayload((object) ['allow_download' => false])->allowDownload, 'allow_download parsed');
+    assertEqual(true, $def->allowChmod, 'allow_chmod defaults true');
+    assertEqual(false, Claims::fromJwtPayload((object) ['allow_chmod' => false])->allowChmod, 'allow_chmod parsed');
 
     // Usage-dashboard claims parse + clamp.
     assertEqual(0, $def->usageCacheTtl, 'usage_cache_ttl default 0 (inherit)');

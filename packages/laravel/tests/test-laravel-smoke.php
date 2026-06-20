@@ -222,7 +222,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   secret (setStreamSecret), which the Laravel proxy controller does not set —
     //   so list() never emits stream/img URLs in proxy mode, and there are no
     //   broken links. Proxying these byte-serving endpoints is a future option.
-    $intentionallyUnproxied = ['stream', 'img'];
+    // - chmod: only operates on an SFTP disk, which is a core-standalone driver
+    //   (the proxy doesn't expose SFTP), so chmod has nothing to act on in proxy
+    //   mode. Belongs with the SFTP/core-standalone group.
+    $intentionallyUnproxied = ['stream', 'img', 'chmod'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

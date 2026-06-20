@@ -89,6 +89,10 @@ class Claims
      *            (watermarked) `img_base` remains for images. */
     public bool $allowDownload = true;
 
+    /** @var bool May this token change Unix file permissions (chmod) on an SFTP
+     *            disk? Default true (part of the SFTP file-manager toolkit). */
+    public bool $allowChmod = true;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -247,6 +251,7 @@ class Claims
         $c->webpMaxWidth = max(0, (int) ($payload->webp_max_width ?? 0));
         $c->webpDefaultQuality = max(0, (int) ($payload->webp_default_quality ?? 0));
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
+        $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
         $c->watermark = self::sanitizeWatermark($payload);
 
         // Usage-dashboard claims.
