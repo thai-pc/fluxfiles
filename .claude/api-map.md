@@ -100,6 +100,8 @@ supported; folders move the whole subtree incl. variants. All gated by the
 
 - `GET /api/fm/quota?disk=local`
   - Returns quota information using the JWT `max_storage` claim.
+- `GET /api/fm/usage?disk=local[&refresh=true]`
+  - Storage usage dashboard: quota status + size/count by type (extension-based) + largest folders, computed in one `QuotaManager::getUsageBreakdown` pass (excludes `_fluxfiles/`/`_variants/`). Cached per prefix in `_fluxfiles/usage.json` for `usage_cache_ttl`s; `?refresh=true` recomputes (rate-limited 2/min). Claims: `usage_cache_ttl`/`usage_warning_threshold`/`usage_critical_threshold`/`usage_top_folders_count`/`usage_folder_depth`. Proxied by the Laravel adapter (recomputes each call, no cache).
 
 - `GET /api/fm/audit?limit=100&offset=0`
   - Lists current user's audit entries.

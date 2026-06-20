@@ -465,6 +465,35 @@ $token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3
 > (e.g. after purchase) to grant the clean original. Watermark uses the bundled
 > DejaVuSans font for text; like `/api/fm/img` it's a core-standalone feature.
 
+### Usage dashboard
+
+`GET /api/fm/usage` returns a storage breakdown for the token's prefix — quota
+status, size/count by type, and the largest folders — computed **on the fly**
+(no DB, no history). The UI ships a dashboard panel (a toolbar button) with a
+quota meter, a by-type chart, and a clickable top-folders list.
+
+```jsonc
+// GET /api/fm/usage?disk=local
+{
+  "computed_at": "2026-06-20T10:00:00Z",
+  "cache_age_seconds": 0,
+  "quota": { "used_bytes": 4500000000, "limit_bytes": 5000000000, "percent": 90, "status": "critical" },
+  "file_count": 142,
+  "by_type":     [{ "type": "image", "size_bytes": 3000000000, "count": 120, "percent": 66.7 }],
+  "top_folders": [{ "path": "/products", "size_bytes": 3200000000, "count": 100 }]
+}
+```
+
+- **One pass**: the breakdown is computed in the same recursive listing the quota
+  check already runs (by extension — no per-file MIME lookup); `_fluxfiles/` and
+  `_variants/` are excluded. `status` is `ok` / `warning` (≥70%) / `critical` (≥90%),
+  configurable via the `usage_*` claims.
+- **Cache**: the result is cached per prefix in `_fluxfiles/usage.json` for
+  `usage_cache_ttl` seconds (default 15 min; `0` disables it). `?refresh=true`
+  recomputes (rate-limited to 2/min) — the UI's Refresh button is debounced 60s.
+- **`quota_limit` lives in the JWT** ("token is the config"), so changing a
+  tenant's quota only takes effect on their **next** issued token — by design.
+
 ### Uploading multiple files
 
 Multi-file upload is always available in the file manager UI — no special option
@@ -783,6 +812,10 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `watermark_position` | enum | — | `bottom-right` | `top-left` / `top-right` / `bottom-left` / `bottom-right` / `center` |
 | `watermark_opacity` | float | 0–1 | `0.6` | Watermark opacity |
 | `watermark_font_size` | int | px | `24` | Font size for `type=text` (8–200) |
+| `usage_cache_ttl` | int | **seconds** | `900` | Usage-dashboard cache TTL (`GET /api/fm/usage`). `0` disables the cache |
+| `usage_warning_threshold` / `usage_critical_threshold` | int | % | `70` / `90` | Quota % at which the usage status turns `warning` / `critical` |
+| `usage_top_folders_count` | int | — | `10` | How many largest folders the dashboard returns |
+| `usage_folder_depth` | int | — | `1` | Folder grouping depth for the breakdown (`1` = top-level folders) |
 
 > **Import from URL** fetches a public URL server-side and saves it like an upload
 > (`POST /api/fm/import-url` with `{ "url": "…", "path": "…" }`). It's SSRF-guarded
@@ -815,6 +848,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `import` | `allow_url_import`, … | — | `null` | **Import from URL** config (off unless set). An array: `['allow_url_import' => true, 'max_import_mb' => 20, 'import_url_allowlist' => ['*.unsplash.com'], 'import_path' => 'imports', 'import_rate_limit' => 10, 'import_concurrency' => 3]`. Only the keys you set are embedded; the rest inherit the server defaults. See [Import from URL](#import-from-url). |
 | `media` | `media_preview`, … | — | `null` | **Media-preview** config. An array: `['media_preview' => true, 'preview_url_ttl' => 7200, 'max_preview_mb' => 500, 'stream_token_ttl' => 3600]`. Only the keys you set are embedded; the rest inherit the defaults. |
 | `webp` | `webp_enabled`, … | — | `null` | **On-demand WebP** config. An array: `['webp_enabled' => true, 'webp_max_width' => 2000, 'webp_default_quality' => 80]`. Only the keys you set are embedded. See [On-demand WebP](#on-demand-webp). |
+| `usage` | `usage_cache_ttl`, … | — | `null` | **Usage dashboard** config. An array: `['usage_cache_ttl' => 900, 'usage_warning_threshold' => 70, 'usage_critical_threshold' => 90, 'usage_top_folders_count' => 10, 'usage_folder_depth' => 1]`. See [Usage dashboard](#usage-dashboard). |
 
 > **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is
 > **seconds** (`ttl`), and `allowedExt` entries are **bare lowercase extensions**

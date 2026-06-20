@@ -3,6 +3,32 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.30] — 2026-06-20
+
+> Released: core `core-v0.2.25` (Packagist), Laravel `laravel-v0.2.12`,
+> WordPress plugin `wordpress-v0.2.11`, Node `@fluxfiles/node` `0.1.7`.
+
+### Added
+
+- **Storage usage dashboard** (`GET /api/fm/usage`). Returns a breakdown for the
+  token's prefix — quota status, size/count by type, and the largest folders —
+  computed **on the fly** (no DB, no usage history).
+  - **One pass**: the breakdown is computed in the same recursive listing the
+    quota check already runs (type by extension, no per-file MIME lookup);
+    `_fluxfiles/`/`_variants/` are excluded. `status` = ok / warning (≥70%) /
+    critical (≥90%).
+  - **Cache, not DB**: cached per prefix in `_fluxfiles/usage.json` for
+    `usage_cache_ttl`s (default 15 min; 0 disables). `?refresh=true` recomputes
+    (rate-limited to 2/min). The cache lives under `_fluxfiles/`, so it's excluded
+    from its own breakdown.
+  - **UI**: a dashboard panel (toolbar button) with a status-coloured quota meter,
+    a by-type chart, and a clickable top-folders list that navigates into the
+    folder. i18n in all 16 locales.
+  - Claims `usage_cache_ttl` / `_warning_threshold` / `_critical_threshold` /
+    `_top_folders_count` / `_folder_depth`, forwarded through every token helper.
+    Proxied by the Laravel adapter. `quota_limit` stays in the JWT, so a quota
+    change applies on the tenant's next token (token-is-config).
+
 ## [0.2.29] — 2026-06-20
 
 > Released: core `core-v0.2.24` (Packagist), Laravel `laravel-v0.2.11`,
