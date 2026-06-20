@@ -830,6 +830,17 @@ function handleImageTransform(): void
     $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver);
 
     if ($fs->fileExists($cacheKey)) {
+        // S3/R2: redirect to a presigned URL of the cached WebP so the bucket
+        // serves the bytes directly (no app-server egress). Local disks read
+        // cheaply, so we just serve them.
+        if (($diskConfigs[$disk]['driver'] ?? '') === 's3') {
+            $redirect = $dm->presignGetUrl($disk, $cacheKey, 3600);
+            if ($redirect !== null) {
+                header('Cache-Control: private, max-age=600');
+                header('Location: ' . $redirect, true, 302);
+                return;
+            }
+        }
         ff_serve_bytes((string) $fs->read($cacheKey), 'image/webp', true);
         return;
     }

@@ -49,6 +49,27 @@ class DiskManager
     }
 
     /**
+     * Presigned GET URL for an object on an S3-compatible disk, or null when the
+     * disk isn't S3 or presigning fails. Lets a caller redirect (302) to the
+     * bucket instead of proxying the bytes through the app server.
+     */
+    public function presignGetUrl(string $name, string $key, int $ttl = 3600): ?string
+    {
+        $cfg = $this->config($name);
+        if (($cfg['driver'] ?? '') !== 's3') {
+            return null;
+        }
+        try {
+            $client = $this->s3Client($name);
+            $cmd = $client->getCommand('GetObject', ['Bucket' => $cfg['bucket'] ?? '', 'Key' => $key]);
+            return (string) $client->createPresignedRequest($cmd, '+' . max(1, $ttl) . ' seconds')->getUri();
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: presign GET failed — ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Register a BYOB (Bring Your Own Bucket) disk at runtime.
      * Only S3-compatible drivers are allowed — local driver is rejected for security.
      */

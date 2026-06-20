@@ -3,6 +3,18 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.28] — 2026-06-20
+
+> Released: core `core-v0.2.23` (Packagist).
+
+### Changed
+
+- **On-demand WebP cache-hit on S3/R2 now 302-redirects** to a presigned URL of
+  the cached WebP, so the bucket serves the bytes directly instead of the app
+  server reading them back and proxying them (no app egress on repeat views).
+  Local disks still serve the cached bytes directly (a local read is cheap).
+  New `DiskManager::presignGetUrl()` helper. Verified end-to-end against live S3.
+
 ## [0.2.27] — 2026-06-20
 
 > Released: core `core-v0.2.22` (Packagist), Laravel `laravel-v0.2.10`,
