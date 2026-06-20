@@ -33,27 +33,28 @@ Generate test JWT:
 php packages/core/tests/generate-token.php
 ```
 
-Core tests/scripts:
+Core tests/scripts — the canonical run-all is the glob (covers unit + integration,
+including `test-claims`, `test-diskmanager`, `test-tenant-config` (per-tenant claims),
+`test-stream` + `test-stream-gating` (gated media), `test-image-transform` (on-demand
+WebP), etc.):
 
 ```bash
-bash packages/core/tests/e2e/test-api.sh
-php packages/core/tests/integration/test-metadata.php
-php packages/core/tests/unit/test-ratelimiter.php
-php packages/core/tests/unit/test-diskmanager.php
-php packages/core/tests/unit/test-i18n.php
-php packages/core/tests/unit/test-claims.php
-php packages/core/tests/unit/test-owner-only.php
-php packages/core/tests/unit/test-byob.php
-php packages/core/tests/unit/test-visibility.php
-php packages/core/tests/integration/test-images.php
-php packages/core/tests/integration/test-existing-files.php
-php packages/core/tests/integration/test-audit.php
-php packages/core/tests/integration/test-delete-folder.php
-php packages/core/tests/integration/test-aitagger.php
-php packages/core/tests/integration/test-quota.php
-php packages/core/tests/integration/test-crop.php
+for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done
+bash packages/core/tests/e2e/test-api.sh   # HTTP e2e — needs a server on :8080; not idempotent
 php packages/wordpress/tests/test-wp-smoke.php
+php packages/laravel/tests/test-laravel-smoke.php
 ```
+
+Self-booting HTTP e2e (start their own `php -S` + back up/restore `packages/core/.env`;
+need the `curl` extension) — for the pre-auth byte-serving routes:
+
+```bash
+php packages/core/tests/e2e/test-stream-http.php   # gated local media (/api/fm/stream), Range
+php packages/core/tests/e2e/test-img-http.php      # on-demand WebP (/api/fm/img), cache + negotiation
+```
+
+Browser (Playwright; boots `router.php` itself) lives in `packages/core/tests/browser/`
+— includes `media-preview.spec.ts` (presigned-URL auto-refresh, claim gating).
 
 Live S3/R2 test (env-gated; skips if no bucket). Works against MinIO, AWS S3, or R2:
 
