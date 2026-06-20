@@ -112,6 +112,80 @@ test('upload blocked at quota, then ALLOWED after delete frees space (recalc)', 
     assertEqual('second.bin', $r['name'], 'upload succeeds after delete frees quota');
 });
 
+// ── Usage breakdown (dashboard M1) ─────────────────────────────────────────
+/** Write a file of $size bytes at $root/$rel (creating dirs). */
+function putBytes(string $root, string $rel, int $size): void
+{
+    $full = $root . '/' . $rel;
+    @mkdir(dirname($full), 0777, true);
+    file_put_contents($full, str_repeat('x', $size));
+}
+
+test('typeOf maps extensions to groups', function () {
+    assertEqual('image', QuotaManager::typeOf('a/b/photo.JPG'), 'jpg→image');
+    assertEqual('video', QuotaManager::typeOf('clip.mp4'), 'mp4→video');
+    assertEqual('document', QuotaManager::typeOf('report.pdf'), 'pdf→document');
+    assertEqual('archive', QuotaManager::typeOf('backup.zip'), 'zip→archive');
+    assertEqual('other', QuotaManager::typeOf('data.xyz'), 'unknown→other');
+    assertEqual('other', QuotaManager::typeOf('noext'), 'no extension→other');
+});
+
+test('getUsageBreakdown: total, count, by_type from extensions', function () {
+    [, $qm, $root] = makeFM(0);
+    putBytes($root, 'pics/a.jpg', 100);
+    putBytes($root, 'pics/b.png', 200);
+    putBytes($root, 'vid/c.mp4', 500);
+    putBytes($root, 'docs/d.pdf', 50);
+    $b = $qm->getUsageBreakdown('local', '');
+    assertEqual(850, $b['total_size'], 'total = 100+200+500+50');
+    assertEqual(4, $b['file_count'], '4 files');
+    assertEqual(300, $b['by_type']['image']['size'], 'image = jpg+png');
+    assertEqual(2, $b['by_type']['image']['count'], '2 images');
+    assertEqual(500, $b['by_type']['video']['size'], 'video');
+    assertEqual(50, $b['by_type']['document']['size'], 'document');
+});
+
+test('getUsageBreakdown: by_folder sorted by size desc, depth + top N', function () {
+    [, $qm, $root] = makeFM(0);
+    putBytes($root, 'products/2026/a.jpg', 1000);
+    putBytes($root, 'products/2026/b.jpg', 600);   // products → 1600
+    putBytes($root, 'imports/x.png', 300);          // imports → 300
+    putBytes($root, 'top.jpg', 50);                 // root "/" → 50
+    $b = $qm->getUsageBreakdown('local', '', 10, 1);
+    assertEqual('/products', $b['by_folder'][0]['path'], 'largest folder first');
+    assertEqual(1600, $b['by_folder'][0]['size'], 'products size');
+    assertEqual('/imports', $b['by_folder'][1]['path'], 'second');
+    assertEqual('/', $b['by_folder'][2]['path'], 'root files grouped under /');
+    // depth 2 splits products/2026.
+    $b2 = $qm->getUsageBreakdown('local', '', 10, 2);
+    assertEqual('/products/2026', $b2['by_folder'][0]['path'], 'depth 2');
+    // top N cap.
+    $b3 = $qm->getUsageBreakdown('local', '', 2, 1);
+    assertEqual(2, count($b3['by_folder']), 'top 2 only');
+});
+
+test('getUsageBreakdown: excludes _fluxfiles/ and _variants/, respects prefix', function () {
+    [, $qm, $root] = makeFM(0);
+    putBytes($root, 'u1/photo.jpg', 400);
+    putBytes($root, 'u1/_variants/photo_thumb.webp', 999);   // internal → excluded
+    putBytes($root, 'u1/_fluxfiles/index.json', 999);        // internal → excluded
+    putBytes($root, 'u2/other.jpg', 700);                    // outside prefix
+    $b = $qm->getUsageBreakdown('local', 'u1');
+    assertEqual(400, $b['total_size'], 'only u1 user content (variants/_fluxfiles excluded)');
+    assertEqual(1, $b['file_count'], '1 user file');
+    assertEqual('/', $b['by_folder'][0]['path'], 'photo at prefix root');
+});
+
+test('getUsageBreakdown: empty prefix → zeros, no error', function () {
+    [, $qm, $root] = makeFM(0);
+    @mkdir($root . '/empty', 0777, true);
+    $b = $qm->getUsageBreakdown('local', 'empty');
+    assertEqual(0, $b['total_size'], 'zero total');
+    assertEqual(0, $b['file_count'], 'zero count');
+    assertEqual([], $b['by_type'], 'no types');
+    assertEqual([], $b['by_folder'], 'no folders');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

@@ -101,6 +101,92 @@ class QuotaManager
         }
     }
 
+    /** Extension → type group. Anything not listed falls into "other". */
+    private const TYPE_GROUPS = [
+        'image'    => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif', 'heic'],
+        'video'    => ['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v'],
+        'audio'    => ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'],
+        'document' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'md', 'rtf', 'odt'],
+        'archive'  => ['zip', 'rar', 'gz', 'tar', '7z', 'bz2'],
+    ];
+
+    /** Map a filename to its type group (by extension). */
+    public static function typeOf(string $path): string
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        foreach (self::TYPE_GROUPS as $group => $exts) {
+            if (in_array($ext, $exts, true)) {
+                return $group;
+            }
+        }
+        return 'other';
+    }
+
+    /**
+     * One recursive pass over a prefix that computes the usage breakdown the
+     * dashboard needs — total size, file count, size/count by type group (from
+     * the extension, no per-file MIME lookup), and the largest folders. Internal
+     * FluxFiles paths (`_fluxfiles/`, `_variants/`) are excluded so the figures
+     * reflect user content, matching getFileCount.
+     *
+     * @return array{total_size:int,file_count:int,by_type:array<string,array{size:int,count:int}>,by_folder:list<array{path:string,size:int,count:int}>}
+     */
+    public function getUsageBreakdown(string $disk, string $prefix, int $topFolders = 10, int $folderDepth = 1): array
+    {
+        $fs = $this->diskManager->disk($disk);
+        $prefixTrim = trim($prefix, '/');
+        $folderDepth = max(1, $folderDepth);
+
+        $total = 0;
+        $count = 0;
+        $byType = [];
+        $byFolder = [];
+
+        /** @var StorageAttributes $item */
+        foreach ($fs->listContents($prefix, true) as $item) {
+            if (!($item instanceof FileAttributes)) {
+                continue;
+            }
+            $path = $item->path();
+            if (strpos($path, '_fluxfiles/') !== false || strpos($path, '_variants/') !== false) {
+                continue;
+            }
+            $size = $item->fileSize() ?? 0;
+            $total += $size;
+            $count++;
+
+            $type = self::typeOf($path);
+            $byType[$type]['size'] = ($byType[$type]['size'] ?? 0) + $size;
+            $byType[$type]['count'] = ($byType[$type]['count'] ?? 0) + 1;
+
+            // Folder = first $folderDepth segments of the path *relative to the
+            // prefix*, excluding the filename. Files at the root group under "/".
+            $rel = $path;
+            if ($prefixTrim !== '' && strpos($rel, $prefixTrim . '/') === 0) {
+                $rel = substr($rel, strlen($prefixTrim) + 1);
+            }
+            $segments = explode('/', $rel);
+            array_pop($segments); // drop the filename
+            $folder = $segments === [] ? '/' : '/' . implode('/', array_slice($segments, 0, $folderDepth));
+            $byFolder[$folder]['size'] = ($byFolder[$folder]['size'] ?? 0) + $size;
+            $byFolder[$folder]['count'] = ($byFolder[$folder]['count'] ?? 0) + 1;
+        }
+
+        // by_folder → list sorted by size desc, top N.
+        $folders = [];
+        foreach ($byFolder as $fpath => $agg) {
+            $folders[] = ['path' => $fpath, 'size' => $agg['size'], 'count' => $agg['count']];
+        }
+        usort($folders, static fn ($a, $b) => $b['size'] <=> $a['size']);
+
+        return [
+            'total_size' => $total,
+            'file_count' => $count,
+            'by_type'    => $byType,
+            'by_folder'  => array_slice($folders, 0, max(1, $topFolders)),
+        ];
+    }
+
     public function getQuotaInfo(string $disk, string $prefix, int $maxStorageMb): array
     {
         $currentUsage = $this->getUsage($disk, $prefix);
