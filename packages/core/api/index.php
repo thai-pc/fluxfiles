@@ -818,16 +818,24 @@ function handleImageTransform(): void
     $origMime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
         ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
 
+    // Resolve the effective watermark from the token (logo presence → text
+    // fallback) WITHOUT reading the logo bytes yet — enough for the cache key.
+    [$wmEnabled, $wmSigCfg, $logoVer, $wmLogoPath] = ff_resolve_watermark($fs, $scope['watermark'] ?? null, $scope['sub']);
+    $wmSig = \FluxFiles\ImageOptimizer::watermarkSignature($wmSigCfg, $logoVer);
+
     // Content negotiation: format=auto + a client that doesn't accept WebP → serve
-    // the original unchanged (old browsers). Most browsers send image/webp.
-    if ($format === 'auto' && strpos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'image/webp') === false) {
+    // the original unchanged (old browsers). NEVER for a watermarked token — that
+    // would hand back the clean image and defeat the watermark.
+    if (!$wmEnabled && $format === 'auto'
+        && strpos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'image/webp') === false) {
         ff_serve_bytes((string) $fs->read($path), $origMime);
         return;
     }
 
-    // Cache key is stamped with the source mtime so a re-upload never re-matches.
+    // Cache key is stamped with the source mtime (+ watermark signature) so a
+    // re-upload or a config/logo change never re-matches a stale image.
     $ver = (string) (@$fs->lastModified($path) ?: '0');
-    $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver);
+    $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig);
 
     if ($fs->fileExists($cacheKey)) {
         // S3/R2: redirect to a presigned URL of the cached WebP so the bucket
@@ -845,15 +853,72 @@ function handleImageTransform(): void
         return;
     }
 
-    $out = $optimizer->transform((string) $fs->read($path), $width, $quality);
+    // Cache miss: build the full watermark config (now reading the logo bytes).
+    $wmCfg = null;
+    if ($wmEnabled) {
+        $wmCfg = $wmSigCfg;
+        if (($wmSigCfg['type'] ?? '') === 'logo' && $wmLogoPath !== '') {
+            $wmCfg['logo_data'] = (string) $fs->read($wmLogoPath);
+        }
+    }
+
+    $out = $optimizer->transform((string) $fs->read($path), $width, $quality, $wmCfg);
     if ($out === null) {
-        // Animated GIF / SVG / non-raster / bomb → serve the original untouched.
+        // Animated GIF / SVG / non-raster / bomb. A watermarked token must not
+        // leak the clean original, so refuse rather than serve it untouched.
+        if ($wmEnabled) {
+            http_response_code(415);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Cannot watermark this image type';
+            return;
+        }
         ff_serve_bytes((string) $fs->read($path), $origMime);
         return;
     }
 
     try { $fs->write($cacheKey, $out['data']); } catch (\Throwable $e) { /* best-effort cache */ }
     ff_serve_bytes($out['data'], 'image/webp', true);
+}
+
+/**
+ * Resolve a token's watermark into a config usable for the cache key, choosing
+ * the logo-vs-text fallback up front (reads only the logo's mtime, not its bytes).
+ * Returns [enabled, sigConfig|null, logoVer|null, logoPath]. A missing logo file
+ * falls back to a text watermark (warning header) — never to a clean image.
+ *
+ * @return array{0:bool,1:array|null,2:int|null,3:string}
+ */
+function ff_resolve_watermark($fs, ?array $wm, string $sub): array
+{
+    if (!is_array($wm) || empty($wm['enabled'])) {
+        return [false, null, null, ''];
+    }
+    $position = in_array($wm['position'] ?? '', \FluxFiles\ImageOptimizer::WM_POSITIONS, true)
+        ? (string) $wm['position'] : 'bottom-right';
+    $opacity = max(0.0, min(1.0, (float) ($wm['opacity'] ?? 0.6)));
+    $fontSize = max(8, min(200, (int) ($wm['font_size'] ?? 24)));
+    $text = trim((string) ($wm['text'] ?? ''));
+    $logoPath = (string) ($wm['logo_path'] ?? '');
+    $logoSafe = $logoPath !== '' && strpos($logoPath, "\0") === false
+        && !preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $logoPath));
+
+    if (($wm['type'] ?? 'text') === 'logo' && $logoSafe && $fs->fileExists($logoPath)) {
+        $sig = ['enabled' => true, 'type' => 'logo', 'position' => $position, 'opacity' => $opacity, 'logo_path' => $logoPath];
+        return [true, $sig, (int) (@$fs->lastModified($logoPath) ?: 0), $logoPath];
+    }
+
+    if (($wm['type'] ?? 'text') === 'logo') {
+        // Logo configured but missing/unsafe → fall back to text, never clean.
+        header('X-FluxFiles-Warning: watermark-logo-missing');
+        if ($text === '') {
+            $text = $sub !== '' ? $sub : 'PREVIEW';
+        }
+    }
+    if ($text === '') {
+        $text = $sub !== '' ? $sub : 'PREVIEW';
+    }
+    $sig = ['enabled' => true, 'type' => 'text', 'text' => $text, 'position' => $position, 'opacity' => $opacity, 'font_size' => $fontSize];
+    return [true, $sig, null, ''];
 }
 
 /** Emit image bytes with safe headers; $immutable adds a long-lived cache policy. */

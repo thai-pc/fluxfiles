@@ -23,6 +23,9 @@ final class ImageToken
     /**
      * @param int $maxWidth Per-tenant clamp on the requested resize width.
      * @param int $defaultQuality WebP quality used when a request omits it (0 = 80).
+     * @param array|null $watermark Per-tenant watermark config (embedded only when
+     *        enabled): type, text, logo_path, position, opacity, font_size. The
+     *        serve endpoint applies it; the source file is never modified.
      */
     public static function mint(
         string $disk,
@@ -31,11 +34,12 @@ final class ImageToken
         int $ttl,
         string $secret,
         int $maxWidth,
-        int $defaultQuality = 0
+        int $defaultQuality = 0,
+        ?array $watermark = null
     ): string {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
-        return JwtCompat::encode([
+        $payload = [
             't'    => self::TYPE,
             'disk' => $disk,
             'path' => $path,
@@ -44,11 +48,15 @@ final class ImageToken
             'sub'  => $sub,
             'iat'  => $now,
             'exp'  => $now + $ttl,
-        ], $secret);
+        ];
+        if ($watermark !== null && !empty($watermark['enabled'])) {
+            $payload['wm'] = $watermark;
+        }
+        return JwtCompat::encode($payload, $secret);
     }
 
     /**
-     * @return array{disk:string,path:string,maxWidth:int,defaultQuality:int,sub:string}
+     * @return array{disk:string,path:string,maxWidth:int,defaultQuality:int,sub:string,watermark:array|null}
      */
     public static function verify(string $token, string $secret): array
     {
@@ -74,6 +82,7 @@ final class ImageToken
             'maxWidth'       => max(0, (int) ($p->mw ?? 0)),
             'defaultQuality' => max(0, (int) ($p->dq ?? 0)),
             'sub'            => (string) ($p->sub ?? ''),
+            'watermark'      => isset($p->wm) ? (array) json_decode(json_encode($p->wm), true) : null,
         ];
     }
 }

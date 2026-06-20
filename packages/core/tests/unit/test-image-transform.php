@@ -227,6 +227,19 @@ test('ImageToken: mint → verify round-trips disk/path/maxWidth', function () u
     assertEqual('u7', $s['sub']);
 });
 
+test('ImageToken: watermark config round-trips (embedded only when enabled)', function () use ($imgSecret) {
+    $wm = ['enabled' => true, 'type' => 'text', 'text' => '© A', 'position' => 'center', 'opacity' => 0.5];
+    $tok = ImageToken::mint('local', 'a.jpg', 'u', 3600, $imgSecret, 1600, 80, $wm);
+    $s = ImageToken::verify($tok, $imgSecret);
+    assertEqual(true, $s['watermark']['enabled'] ?? null, 'watermark carried');
+    assertEqual('© A', $s['watermark']['text'] ?? '', 'text carried');
+
+    // Disabled watermark is not embedded → verify returns null.
+    $tok2 = ImageToken::mint('local', 'a.jpg', 'u', 3600, $imgSecret, 1600, 80, ['enabled' => false]);
+    assertEqual(null, ImageToken::verify($tok2, $imgSecret)['watermark'], 'disabled → no wm in token');
+    assertEqual(null, ImageToken::verify(ImageToken::mint('local', 'a.jpg', 'u', 3600, $imgSecret, 1600), $imgSecret)['watermark'], 'unset → null');
+});
+
 test('ImageToken: a stream token (t=stream) is rejected here', function () use ($imgSecret) {
     $stream = \FluxFiles\StreamToken::mint('local', 'pic.jpg', 'u', 3600, $imgSecret);
     try { ImageToken::verify($stream, $imgSecret); throw new \RuntimeException('should reject'); }
