@@ -157,5 +157,59 @@ test('no stream secret → no img_base (feature off)', function () {
     assertTrue(!isset($a['img_base']), 'no secret → no img_base');
 });
 
+test('watermark claim → img_base token carries the watermark config', function () use ($SECRET) {
+    [$fm] = makeImgFM(true, true);
+    // Set the watermark on the claims the FM already holds (reflection — claims is private).
+    $cl = (new \ReflectionObject($fm))->getProperty('claims');
+    $cl->setAccessible(true);
+    $cl->getValue($fm)->watermark = ['enabled' => true, 'type' => 'text', 'text' => 'WM', 'position' => 'center', 'opacity' => 0.6, 'font_size' => 24];
+
+    $a = picEntry($fm, 'a.jpg');
+    parse_str(parse_url($a['img_base'], PHP_URL_QUERY), $q);
+    $scope = ImageToken::verify($q['token'], $SECRET);
+    assertEqual(true, $scope['watermark']['enabled'] ?? null, 'img token watermarks');
+    assertEqual('WM', $scope['watermark']['text'] ?? '', 'watermark text in token');
+});
+
+// ── allow_download gating (M3 — preview-only) ─────────────────────────────
+/** Like makeImgFM but with allow_download toggled. */
+function makeDownloadFM(bool $allowDownload): array
+{
+    global $SECRET;
+    $root = sys_get_temp_dir() . '/ff-dl-' . uniqid();
+    @mkdir($root . '/pics', 0777, true);
+    $im = imagecreatetruecolor(40, 30);
+    imagejpeg($im, $root . '/pics/a.jpg', 80);
+    imagedestroy($im);
+
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage/uploads']]);
+    $claims = new Claims('u1', ['read', 'write'], ['local'], '', 50, null, 0);
+    $claims->allowDownload = $allowDownload;
+    $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
+    $fm->setStreamSecret($SECRET);
+    return [$fm];
+}
+
+test('allow_download=false → image entry has no url/permanent_url/variants, keeps img_base', function () {
+    [$fm] = makeDownloadFM(false);
+    $a = picEntry($fm, 'a.jpg');
+    assertTrue(!isset($a['url']), 'no clean url');
+    assertTrue(!isset($a['permanent_url']), 'no permanent_url');
+    assertEqual(null, $a['variants'] ?? null, 'no clean variants');
+    assertTrue(strpos($a['img_base'] ?? '', '/api/fm/img?token=') === 0, 'img_base still present');
+});
+
+test('allow_download=true (default) → url present (unchanged behaviour)', function () {
+    [$fm] = makeDownloadFM(true);
+    $a = picEntry($fm, 'a.jpg');
+    assertTrue(isset($a['url']) && $a['url'] !== '', 'clean url present by default');
+});
+
+test('allow_download=false → GET presign is denied (download_forbidden)', function () {
+    [$fm] = makeDownloadFM(false);
+    try { $fm->presign('local', 'pics/a.jpg', 'GET', 3600); throw new \RuntimeException('should deny'); }
+    catch (\FluxFiles\ApiException $e) { assertEqual('download_forbidden', $e->getErrorCode()); assertEqual(403, $e->getHttpCode()); }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

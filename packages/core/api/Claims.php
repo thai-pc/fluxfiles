@@ -83,6 +83,17 @@ class Claims
     /** @var int Default WebP quality when a request omits it. 0 = inherit default (80). */
     public int $webpDefaultQuality = 0;
 
+    /** @var bool May this token get clean original download URLs? Default true. When
+     *            false (preview-only / watermark), list() withholds `url`/
+     *            `permanent_url`/`variants` and GET presign is denied — only the
+     *            (watermarked) `img_base` remains for images. */
+    public bool $allowDownload = true;
+
+    /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
+     *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
+     *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
+    public ?array $watermark = null;
+
     public function __construct(
         string $userId,
         array $permissions,
@@ -138,6 +149,31 @@ class Claims
             }
         }
         return $out === [] ? null : $out;
+    }
+
+    /**
+     * Assemble + clamp the per-tenant watermark config from `watermark_*` claims.
+     * Returns null when disabled. Done at decode so the serve endpoint can trust it.
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function sanitizeWatermark(object $payload): ?array
+    {
+        if (empty($payload->watermark_enabled)) {
+            return null;
+        }
+        $type = ($payload->watermark_type ?? 'text') === 'logo' ? 'logo' : 'text';
+        $position = in_array($payload->watermark_position ?? '', ImageOptimizer::WM_POSITIONS, true)
+            ? (string) $payload->watermark_position : 'bottom-right';
+        return [
+            'enabled'   => true,
+            'type'      => $type,
+            'text'      => (string) ($payload->watermark_text ?? ''),
+            'logo_path' => (string) ($payload->watermark_logo_path ?? ''),
+            'position'  => $position,
+            'opacity'   => max(0.0, min(1.0, (float) ($payload->watermark_opacity ?? 0.6))),
+            'font_size' => max(8, min(200, (int) ($payload->watermark_font_size ?? 24))),
+        ];
     }
 
     /**
@@ -198,6 +234,8 @@ class Claims
         $c->webpEnabled = isset($payload->webp_enabled) ? (bool) $payload->webp_enabled : true;
         $c->webpMaxWidth = max(0, (int) ($payload->webp_max_width ?? 0));
         $c->webpDefaultQuality = max(0, (int) ($payload->webp_default_quality ?? 0));
+        $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
+        $c->watermark = self::sanitizeWatermark($payload);
 
         return $c;
     }

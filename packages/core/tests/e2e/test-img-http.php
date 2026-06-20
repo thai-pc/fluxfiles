@@ -128,10 +128,59 @@ try {
         assertEqual(403, $st);
     });
 
+    // ── Watermark (M2) ──────────────────────────────────────────────────────
+    test('text watermark: applied, cached under a wm-segment key, differs from clean', function () use ($BASE, $SECRET, $WEBP_ACCEPT, $coreDir) {
+        $wm = ['enabled' => true, 'type' => 'text', 'text' => '© Acme', 'position' => 'bottom-right', 'opacity' => 0.6, 'font_size' => 20];
+        $t = ImageToken::mint('local', 'e2e_img/photo.jpg', 'e2e', 300, $SECRET, 2000, 0, $wm);
+        [$st, $h, $body] = httpGet("{$BASE}/api/fm/img?token=" . rawurlencode($t) . '&width=500&quality=80', $WEBP_ACCEPT);
+        assertEqual(200, $st);
+        assertEqual('image/webp', $h['content-type'] ?? '', 'webp');
+        assertTrue(isWebp($body), 'is webp');
+        // Cache file has a _wm… segment, distinct from the clean _w500_q80 key.
+        $wmFiles = glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w500_q80_*_wm*.webp');
+        assertTrue(!empty($wmFiles), 'watermarked cache written with wm segment');
+    });
+
+    test('watermark token: non-webp client is NOT given the clean original', function () use ($BASE, $SECRET) {
+        $wm = ['enabled' => true, 'type' => 'text', 'text' => 'WM', 'opacity' => 0.7];
+        $t = ImageToken::mint('local', 'e2e_img/photo.jpg', 'e2e', 300, $SECRET, 2000, 0, $wm);
+        [$st, $h, $body] = httpGet("{$BASE}/api/fm/img?token=" . rawurlencode($t) . '&width=400&format=auto', ['Accept: image/png,*/*']);
+        assertEqual(200, $st);
+        assertEqual('image/webp', $h['content-type'] ?? '', 'forced to watermarked webp, not clean jpeg');
+        assertTrue(isWebp($body), 'watermarked webp even for a non-webp client');
+    });
+
+    test('logo watermark missing logo → text fallback + warning header (never clean)', function () use ($BASE, $SECRET, $WEBP_ACCEPT) {
+        $wm = ['enabled' => true, 'type' => 'logo', 'logo_path' => 'e2e_img/_config/nope.png', 'text' => 'FB', 'opacity' => 0.6];
+        $t = ImageToken::mint('local', 'e2e_img/photo.jpg', 'e2e', 300, $SECRET, 2000, 0, $wm);
+        [$st, $h, $body] = httpGet("{$BASE}/api/fm/img?token=" . rawurlencode($t) . '&width=400', $WEBP_ACCEPT);
+        assertEqual(200, $st);
+        assertTrue(stripos($h['x-fluxfiles-warning'] ?? '', 'logo-missing') !== false, 'warning header set');
+        assertTrue(isWebp($body), 'fell back to a (text) watermarked webp, not the clean image');
+    });
+
+    test('logo watermark: real logo composites onto the image', function () use ($BASE, $SECRET, $WEBP_ACCEPT, $uploadRoot) {
+        // Drop a PNG logo into storage and reference it by path.
+        @mkdir($uploadRoot . '/e2e_img/_config', 0777, true);
+        $lg = imagecreatetruecolor(60, 30); imagesavealpha($lg, true);
+        imagefill($lg, 0, 0, imagecolorallocatealpha($lg, 0, 0, 0, 127));
+        imagefilledrectangle($lg, 2, 2, 57, 27, imagecolorallocate($lg, 255, 255, 255));
+        imagepng($lg, $uploadRoot . '/e2e_img/_config/logo.png'); imagedestroy($lg);
+
+        $wm = ['enabled' => true, 'type' => 'logo', 'logo_path' => 'e2e_img/_config/logo.png', 'position' => 'top-left', 'opacity' => 0.8];
+        $t = ImageToken::mint('local', 'e2e_img/photo.jpg', 'e2e', 300, $SECRET, 2000, 0, $wm);
+        [$st, $h, $body] = httpGet("{$BASE}/api/fm/img?token=" . rawurlencode($t) . '&width=600', $WEBP_ACCEPT);
+        assertEqual(200, $st);
+        assertTrue(!isset($h['x-fluxfiles-warning']), 'no missing-logo warning when the logo exists');
+        assertTrue(isWebp($body), 'logo watermarked webp');
+    });
+
 } finally {
     proc_terminate($proc); proc_close($proc);
     @array_map('unlink', glob($uploadRoot . '/e2e_img/_variants/*') ?: []);
     @rmdir($uploadRoot . '/e2e_img/_variants');
+    @array_map('unlink', glob($uploadRoot . '/e2e_img/_config/*') ?: []);
+    @rmdir($uploadRoot . '/e2e_img/_config');
     @unlink($uploadRoot . '/e2e_img/photo.jpg');
     @rmdir($uploadRoot . '/e2e_img');
     if ($envBackup === null) { @unlink($envFile); } else { file_put_contents($envFile, $envBackup); }

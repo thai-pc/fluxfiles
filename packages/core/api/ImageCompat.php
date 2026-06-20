@@ -97,4 +97,58 @@ final class ImageCompat
             $constraint->upsize();
         });
     }
+
+    /**
+     * Composite a logo (binary PNG, ideally with alpha) onto $base at a 9-point
+     * position with the given opacity (0.0–1.0). The logo is scaled down to
+     * $maxLogoWidth first when wider (never upsized). Watermark needs the v3 API.
+     *
+     * @return object the mutated base image
+     */
+    public function placeLogo($base, string $logoData, string $position, float $opacity, int $maxLogoWidth)
+    {
+        if (!$this->isV3) {
+            throw new \RuntimeException('Watermark requires intervention/image v3');
+        }
+        $logo = $this->manager->read($logoData);
+        if ($maxLogoWidth > 0 && $logo->width() > $maxLogoWidth) {
+            $logo = $logo->scaleDown($maxLogoWidth);
+        }
+        $pad = $position === 'center' ? 0 : 20;
+        $op = (int) round(max(0.0, min(1.0, $opacity)) * 100);
+        return $base->place($logo, $position, $pad, $pad, $op);
+    }
+
+    /**
+     * Draw $text onto $base at a 9-point position with the given opacity using
+     * a bundled TTF. v3's align/valign anchor the text box, so no manual text
+     * measurement is needed.
+     *
+     * @return object the mutated base image
+     */
+    public function drawText($base, string $text, string $position, float $opacity, int $fontSize, string $ttfPath)
+    {
+        if (!$this->isV3) {
+            throw new \RuntimeException('Watermark requires intervention/image v3');
+        }
+        $pad = 20;
+        $w = $base->width();
+        $h = $base->height();
+        [$x, $y, $align, $valign] = [
+            'top-left'     => [$pad, $pad, 'left', 'top'],
+            'top-right'    => [$w - $pad, $pad, 'right', 'top'],
+            'bottom-left'  => [$pad, $h - $pad, 'left', 'bottom'],
+            'bottom-right' => [$w - $pad, $h - $pad, 'right', 'bottom'],
+            'center'       => [intdiv($w, 2), intdiv($h, 2), 'center', 'middle'],
+        ][$position] ?? [$w - $pad, $h - $pad, 'right', 'bottom'];
+
+        $alpha = max(0.0, min(1.0, $opacity));
+        return $base->text($text, $x, $y, function ($font) use ($ttfPath, $fontSize, $alpha, $align, $valign) {
+            $font->filename($ttfPath);
+            $font->size($fontSize);
+            $font->color('rgba(255, 255, 255, ' . $alpha . ')');
+            $font->align($align);
+            $font->valign($valign);
+        });
+    }
 }

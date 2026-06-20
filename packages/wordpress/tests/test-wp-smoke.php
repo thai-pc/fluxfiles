@@ -144,6 +144,18 @@ test('generateToken forwards webp claims', function () use ($secret) {
     assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality');
 });
 
+test('generateToken forwards watermark + allow_download claims', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(43, [
+        'allow_download' => false,
+        'watermark_enabled' => true, 'watermark_type' => 'logo', 'watermark_logo_path' => 'cfg/logo.png',
+        'watermark_position' => 'top-right',
+    ]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertEqual(false, $c->allowDownload, 'allow_download');
+    assertEqual('logo', $c->watermark['type'], 'watermark type');
+    assertEqual('cfg/logo.png', $c->watermark['logo_path'], 'watermark logo_path');
+});
+
 test('generateToken without a secret → throws', function () {
     $prev = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
     $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';

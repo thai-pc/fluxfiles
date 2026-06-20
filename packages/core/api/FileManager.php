@@ -101,7 +101,10 @@ class FileManager
                 /** @var FileAttributes $item */
                 $entry['size']     = $item->fileSize();
                 $entry['modified'] = $item->lastModified();
-                $entry['url']      = $this->fileUrl($disk, $item->path());
+                // Preview-only tokens (allow_download=false) get no clean download URL.
+                if ($this->claims->allowDownload) {
+                    $entry['url'] = $this->fileUrl($disk, $item->path());
+                }
             } else {
                 // Surface the folder mtime when the adapter provides one (local
                 // does; S3/R2 prefixes don't) so the UI can sort folders by date.
@@ -188,9 +191,13 @@ class FileManager
             }
             if (($item['type'] ?? '') === 'file') {
                 $item['meta'] = $metaMap[$item['key']] ?? null;
-                $perm = $this->permanentUrl($disk, $item['key']);
-                if ($perm !== null) {
-                    $item['permanent_url'] = $perm;
+                // Preview-only tokens get no stable URL and no clean WebP variants —
+                // the (watermarked) img_base is the only image view they receive.
+                if ($this->claims->allowDownload) {
+                    $perm = $this->permanentUrl($disk, $item['key']);
+                    if ($perm !== null) {
+                        $item['permanent_url'] = $perm;
+                    }
                 }
                 if (is_array($item['meta'])) {
                     foreach (['mime', 'width', 'height', 'created'] as $attr) {
@@ -199,7 +206,9 @@ class FileManager
                         }
                     }
                 }
-                $item['variants'] = $this->getFileVariants($disk, $item['key']);
+                $item['variants'] = $this->claims->allowDownload
+                    ? $this->getFileVariants($disk, $item['key'])
+                    : null;
                 $imgBase = $this->imgBaseUrl($disk, $item['key']);
                 if ($imgBase !== null) {
                     $item['img_base'] = $imgBase;
@@ -1282,6 +1291,11 @@ class FileManager
             throw new ApiException('Invalid presign method: must be GET or PUT', 400);
         }
 
+        // A preview-only token must not be able to mint a clean download URL.
+        if ($method === 'GET' && !$this->claims->allowDownload) {
+            throw new ApiException('Downloading the original is not allowed', 403, 'download_forbidden');
+        }
+
         $this->assertPerm($method === 'GET' ? 'read' : 'write');
 
         if ($ttl < 1) {
@@ -1528,7 +1542,8 @@ class FileManager
             $ttl,
             $this->streamSecret,
             $maxWidth,
-            $this->claims->webpDefaultQuality
+            $this->claims->webpDefaultQuality,
+            $this->claims->watermark
         );
         return '/api/fm/img?token=' . rawurlencode($token);
     }

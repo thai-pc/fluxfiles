@@ -114,6 +114,25 @@ class FluxFilesManager
                 $payload[$webpClaim] = (int) $overrides[$webpClaim];
             }
         }
+
+        // Download gate + watermark.
+        if (array_key_exists('allow_download', $overrides)) {
+            $payload['allow_download'] = (bool) $overrides['allow_download'];
+        }
+        if (!empty($overrides['watermark_enabled'])) {
+            $payload['watermark_enabled'] = true;
+            foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {
+                if (!empty($overrides[$s])) {
+                    $payload[$s] = (string) $overrides[$s];
+                }
+            }
+            if (isset($overrides['watermark_opacity'])) {
+                $payload['watermark_opacity'] = (float) $overrides['watermark_opacity'];
+            }
+            if (!empty($overrides['watermark_font_size'])) {
+                $payload['watermark_font_size'] = (int) $overrides['watermark_font_size'];
+            }
+        }
     }
 
     /**

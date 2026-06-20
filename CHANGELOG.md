@@ -3,6 +3,32 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.29] — 2026-06-20
+
+> Released: core `core-v0.2.24` (Packagist), Laravel `laravel-v0.2.11`,
+> WordPress plugin `wordpress-v0.2.10`, Node `@fluxfiles/node` `0.1.6`.
+
+### Added
+
+- **Watermark** (preview protection for content sellers). The on-demand WebP
+  endpoint (`/api/fm/img`) can overlay a text or logo watermark **on the fly** —
+  the source file is never modified, so there's one source of truth.
+  - **Logo is a file**, not DB config: upload a transparent PNG and point
+    `watermark_logo_path` at it (re-upload to change). A missing/unsafe logo path
+    **falls back to a text watermark** (with `X-FluxFiles-Warning`) — never to a
+    clean image. Built on intervention/image v3 + GD (no Imagick); ships a bundled
+    DejaVuSans font for text. Watermarked output is cached in `_variants/` keyed by
+    config + logo mtime.
+  - **Preview-only gating** via `allow_download` (default true). When `false`,
+    `list()` withholds `url`/`permanent_url`/`variants` for files and GET presign
+    returns `403`, leaving only the watermarked `img_base` — so a preview client
+    can't bypass the watermark by grabbing the clean original. Issue a separate
+    `allow_download => true` token (e.g. after purchase) for the clean file.
+  - Claims `watermark_enabled`/`_type`/`_text`/`_logo_path`/`_position`/`_opacity`/
+    `_font_size` + `allow_download`, sanitized/clamped on decode and forwarded
+    through every token helper. A non-WebP client, an SVG/animated source, or a
+    `?watermark=` override can't make the endpoint hand back a clean image.
+
 ## [0.2.28] — 2026-06-20
 
 > Released: core `core-v0.2.23` (Packagist).

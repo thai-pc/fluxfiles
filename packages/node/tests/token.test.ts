@@ -88,6 +88,28 @@ describe('createToken', () => {
     expect(c.stream_token_ttl).toBe(1800);
   });
 
+  it('forwards watermark + allow_download claims (PHP parity)', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        allowDownload: false,
+        watermarkEnabled: true,
+        watermarkType: 'text',
+        watermarkText: '© Acme',
+        watermarkPosition: 'center',
+        watermarkOpacity: 0.5,
+        watermarkFontSize: 20,
+      }),
+    ) as Record<string, unknown>;
+    expect(c.allow_download).toBe(false);
+    expect(c.watermark_enabled).toBe(true);
+    expect(c.watermark_text).toBe('© Acme');
+    expect(c.watermark_position).toBe('center');
+    expect(c.watermark_opacity).toBe(0.5);
+    expect(c.watermark_font_size).toBe(20);
+  });
+
   it('forwards on-demand WebP claims (PHP parity)', () => {
     const c = decodeToken(
       createToken({

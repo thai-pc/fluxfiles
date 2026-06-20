@@ -68,6 +68,23 @@ export interface BaseTokenOptions {
   webpMaxWidth?: number;
   /** Default WebP quality when a request omits it. `0`/omitted = inherit (80). */
   webpDefaultQuality?: number;
+  /** May this token mint clean original download URLs? Default true. `false` = preview-only
+   *  (list withholds url/permanent_url/variants; GET presign is denied — only watermarked img_base). */
+  allowDownload?: boolean;
+  /** Enable on-the-fly watermark on `/api/fm/img` (source file is never modified). Default off. */
+  watermarkEnabled?: boolean;
+  /** Watermark kind: 'text' or 'logo' (a PNG path in storage). Default 'text'. */
+  watermarkType?: 'text' | 'logo';
+  /** Watermark text (for type 'text'). */
+  watermarkText?: string;
+  /** Storage path to the logo PNG (for type 'logo'); missing → text fallback. */
+  watermarkLogoPath?: string;
+  /** Position: top-left / top-right / bottom-left / bottom-right / center. Default bottom-right. */
+  watermarkPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
+  /** Opacity 0.0–1.0. Default 0.6. */
+  watermarkOpacity?: number;
+  /** Font size for text watermark. Default 24. */
+  watermarkFontSize?: number;
 }
 
 export interface CreateTokenOptions extends BaseTokenOptions {

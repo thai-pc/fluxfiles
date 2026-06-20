@@ -232,6 +232,40 @@ test('fromJwtPayload parses webp claims (and defaults)', function () {
     assertEqual(true, $def->webpEnabled, 'webp_enabled defaults true');
     assertEqual(0, $def->webpMaxWidth, 'webp_max_width defaults 0 (inherit)');
     assertEqual(0, $def->webpDefaultQuality, 'webp_default_quality defaults 0 (inherit)');
+    assertEqual(true, $def->allowDownload, 'allow_download defaults true');
+    assertEqual(false, Claims::fromJwtPayload((object) ['allow_download' => false])->allowDownload, 'allow_download parsed');
+
+    // Watermark disabled → null; enabled → assembled + clamped.
+    assertEqual(null, $def->watermark, 'watermark off by default');
+    $wm = Claims::fromJwtPayload((object) [
+        'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© A',
+        'watermark_position' => 'center', 'watermark_opacity' => 2.5, 'watermark_font_size' => 5,
+    ])->watermark;
+    assertEqual('text', $wm['type'], 'type');
+    assertEqual('center', $wm['position'], 'position');
+    assertEqual(1.0, $wm['opacity'], 'opacity clamped to 1.0');
+    assertEqual(8, $wm['font_size'], 'font_size clamped to min 8');
+    // Bad position → default; logo type carried.
+    $wm2 = Claims::fromJwtPayload((object) ['watermark_enabled' => true, 'watermark_type' => 'logo',
+        'watermark_logo_path' => 'cfg/logo.png', 'watermark_position' => 'nope'])->watermark;
+    assertEqual('logo', $wm2['type'], 'logo type');
+    assertEqual('cfg/logo.png', $wm2['logo_path'], 'logo path');
+    assertEqual('bottom-right', $wm2['position'], 'bad position → default');
+});
+
+test('fluxfiles_token forwards watermark + allow_download via the $webp param', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, null, [
+            'webp_enabled' => true, 'allow_download' => false,
+            'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© Acme',
+            'watermark_position' => 'top-left', 'watermark_opacity' => 0.5, 'watermark_font_size' => 18,
+        ]);
+    $c = Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    assertEqual(false, $c->allowDownload, 'allow_download forwarded');
+    assertEqual('© Acme', $c->watermark['text'], 'watermark text forwarded');
+    assertEqual('top-left', $c->watermark['position'], 'position forwarded');
+    assertEqual(0.5, $c->watermark['opacity'], 'opacity forwarded');
 });
 
 test('fluxfiles_token forwards webp claims via the $webp param', function () {

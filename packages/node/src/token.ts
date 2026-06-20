@@ -125,6 +125,18 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.webpEnabled !== undefined) payload.webp_enabled = !!opts.webpEnabled;
   if (opts.webpMaxWidth && opts.webpMaxWidth > 0) payload.webp_max_width = Math.trunc(opts.webpMaxWidth);
   if (opts.webpDefaultQuality && opts.webpDefaultQuality > 0) payload.webp_default_quality = Math.trunc(opts.webpDefaultQuality);
+
+  // Download gate + watermark.
+  if (opts.allowDownload !== undefined) payload.allow_download = !!opts.allowDownload;
+  if (opts.watermarkEnabled) {
+    payload.watermark_enabled = true;
+    if (opts.watermarkType) payload.watermark_type = opts.watermarkType;
+    if (opts.watermarkText) payload.watermark_text = String(opts.watermarkText);
+    if (opts.watermarkLogoPath) payload.watermark_logo_path = String(opts.watermarkLogoPath);
+    if (opts.watermarkPosition) payload.watermark_position = opts.watermarkPosition;
+    if (opts.watermarkOpacity !== undefined) payload.watermark_opacity = opts.watermarkOpacity;
+    if (opts.watermarkFontSize && opts.watermarkFontSize > 0) payload.watermark_font_size = Math.trunc(opts.watermarkFontSize);
+  }
 }
 
 /**
