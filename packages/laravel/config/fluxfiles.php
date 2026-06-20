@@ -118,6 +118,8 @@ return [
             'visibility' => env('AWS_VISIBILITY', 'private'),
             // CDN / custom-domain base for a public disk, e.g. https://cdn.example.com
             'public_url' => env('AWS_PUBLIC_URL', ''),
+            // Presigned GET-URL lifetime (seconds) on a private disk. Default 1h, max 24h.
+            'url_ttl'    => (int) env('AWS_URL_TTL', 3600),
         ],
         'r2' => [
             'driver'     => 's3',
@@ -129,6 +131,8 @@ return [
             // 'public' needs a public bucket + public_url (r2.dev / custom domain).
             'visibility' => env('R2_VISIBILITY', 'private'),
             'public_url' => env('R2_PUBLIC_URL', ''),
+            // Presigned GET-URL lifetime (seconds) on a private disk. Default 1h, max 24h.
+            'url_ttl'    => (int) env('R2_URL_TTL', 3600),
         ],
     ],
 
