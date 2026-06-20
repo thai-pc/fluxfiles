@@ -147,6 +147,14 @@ if ($method === 'GET' && $uri === '/api/fm/stream') {
     exit;
 }
 
+// On-demand WebP transform — authenticated by a per-file image token in the query
+// string (an <img> can't send an Authorization header). Serves a resized WebP from
+// (or into) the file's _variants/ cache. Never raw bytes of an arbitrary file.
+if ($method === 'GET' && $uri === '/api/fm/img') {
+    handleImageTransform();
+    exit;
+}
+
 try {
     // Auth
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
@@ -712,6 +720,141 @@ function handleMediaStream(): void
     }
 
     \FluxFiles\RangeStreamer::stream($abs, $mime, $_SERVER['HTTP_RANGE'] ?? null);
+}
+
+/**
+ * Snap a requested quality to the nearest allowed step (default 80). A fixed set
+ * of steps bounds the number of cache variants a single file can spawn. (Kept as
+ * a local array, not a top-level const, since this file's route dispatch runs
+ * before the file finishes loading — consts aren't hoisted like functions.)
+ */
+function ff_snap_quality($raw): int
+{
+    $allowedSteps = [60, 75, 80, 90];
+    $q = (int) $raw;
+    if ($q <= 0) {
+        return 80;
+    }
+    $best = 80;
+    $bestDiff = PHP_INT_MAX;
+    foreach ($allowedSteps as $allowed) {
+        $d = abs($allowed - $q);
+        if ($d < $bestDiff) {
+            $bestDiff = $d;
+            $best = $allowed;
+        }
+    }
+    return $best;
+}
+
+/**
+ * Serve an on-demand WebP transform of one image, cached in the file's
+ * _variants/ directory. Authenticated by an image token (query string). The width
+ * is rounded to 100px and clamped to the tenant's max so the number of cacheable
+ * variants per file is mathematically bounded (no per-request counting needed).
+ */
+function handleImageTransform(): void
+{
+    $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+    if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'FLUXFILES_SECRET is not configured';
+        return;
+    }
+    try {
+        $scope = \FluxFiles\ImageToken::verify((string) ($_GET['token'] ?? ''), $secret);
+    } catch (ApiException $e) {
+        http_response_code($e->getHttpCode());
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $e->getMessage();
+        return;
+    }
+
+    $disk = $scope['disk'];
+    $path = $scope['path'];
+    if ($path === '' || strpos($path, "\0") !== false
+        || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Invalid path';
+        return;
+    }
+
+    $optimizer = new \FluxFiles\ImageOptimizer();
+    if (!$optimizer->isImage($path)) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Not an image';
+        return;
+    }
+
+    // Width: round to 100px, clamp to the tenant max (mw, default 2000). 0 = keep size.
+    $maxWidth = $scope['maxWidth'] > 0 ? $scope['maxWidth'] : 2000;
+    $reqWidth = (int) ($_GET['width'] ?? 0);
+    $width = $reqWidth > 0 ? min($maxWidth, max(100, (int) round($reqWidth / 100) * 100)) : 0;
+    $quality = ff_snap_quality($_GET['quality'] ?? 80);
+    $format = ($_GET['format'] ?? 'webp') === 'auto' ? 'auto' : 'webp';
+
+    $diskConfigs = require __DIR__ . '/../config/disks.php';
+    try {
+        $dm = new DiskManager($diskConfigs);
+        $fs = $dm->disk($disk);
+    } catch (\Throwable $e) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Disk not available';
+        return;
+    }
+
+    if (!$fs->fileExists($path)) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Not found';
+        return;
+    }
+
+    $origMime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
+        ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
+
+    // Content negotiation: format=auto + a client that doesn't accept WebP → serve
+    // the original unchanged (old browsers). Most browsers send image/webp.
+    if ($format === 'auto' && strpos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'image/webp') === false) {
+        ff_serve_bytes((string) $fs->read($path), $origMime);
+        return;
+    }
+
+    // Cache key is stamped with the source mtime so a re-upload never re-matches.
+    $ver = (string) (@$fs->lastModified($path) ?: '0');
+    $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver);
+
+    if ($fs->fileExists($cacheKey)) {
+        ff_serve_bytes((string) $fs->read($cacheKey), 'image/webp', true);
+        return;
+    }
+
+    $out = $optimizer->transform((string) $fs->read($path), $width, $quality);
+    if ($out === null) {
+        // Animated GIF / SVG / non-raster / bomb → serve the original untouched.
+        ff_serve_bytes((string) $fs->read($path), $origMime);
+        return;
+    }
+
+    try { $fs->write($cacheKey, $out['data']); } catch (\Throwable $e) { /* best-effort cache */ }
+    ff_serve_bytes($out['data'], 'image/webp', true);
+}
+
+/** Emit image bytes with safe headers; $immutable adds a long-lived cache policy. */
+function ff_serve_bytes(string $data, string $mime, bool $immutable = false): void
+{
+    header('Content-Type: ' . $mime);
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Disposition: inline');
+    header($immutable
+        ? 'Cache-Control: public, max-age=31536000, immutable'
+        : 'Cache-Control: private, no-store');
+    header('Content-Length: ' . strlen($data));
+    echo $data;
 }
 
 function handlePresign(FileManager $fm): array

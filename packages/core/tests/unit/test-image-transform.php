@@ -14,6 +14,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use FluxFiles\ImageOptimizer;
+use FluxFiles\ImageToken;
+use FluxFiles\ApiException;
 
 $green = "\033[32m"; $red = "\033[31m"; $cyan = "\033[36m"; $reset = "\033[0m";
 $passed = 0; $failed = 0;
@@ -140,6 +142,37 @@ test('transformCacheKey: lives in _variants/, ver-stamped, sanitized', function 
     // ver is sanitized (no path-y chars) and truncated to 12.
     $safe = ImageOptimizer::transformCacheKey('a.jpg', 100, 60, '../../etc/passwd');
     assertTrue(strpos($safe, '..') === false && strpos($safe, '/etc') === false, 'ver cannot inject traversal');
+});
+
+// ── ImageToken (auth for the /api/fm/img endpoint) ────────────────────────
+$imgSecret = str_repeat('i', 40);
+
+test('ImageToken: mint → verify round-trips disk/path/maxWidth', function () use ($imgSecret) {
+    $tok = ImageToken::mint('s3', 'users/7/pic.jpg', 'u7', 3600, $imgSecret, 1600);
+    $s = ImageToken::verify($tok, $imgSecret);
+    assertEqual('s3', $s['disk']);
+    assertEqual('users/7/pic.jpg', $s['path']);
+    assertEqual(1600, $s['maxWidth']);
+    assertEqual('u7', $s['sub']);
+});
+
+test('ImageToken: a stream token (t=stream) is rejected here', function () use ($imgSecret) {
+    $stream = \FluxFiles\StreamToken::mint('local', 'pic.jpg', 'u', 3600, $imgSecret);
+    try { ImageToken::verify($stream, $imgSecret); throw new \RuntimeException('should reject'); }
+    catch (ApiException $e) { assertEqual('img_token_invalid', $e->getErrorCode()); }
+});
+
+test('ImageToken: wrong secret / expired → 403', function () use ($imgSecret) {
+    $tok = ImageToken::mint('local', 'a.jpg', 'u', 3600, $imgSecret, 800);
+    try { ImageToken::verify($tok, str_repeat('x', 40)); throw new \RuntimeException('bad sig'); }
+    catch (ApiException $e) { assertEqual('img_token_invalid', $e->getErrorCode()); }
+
+    $expired = \FluxFiles\JwtCompat::encode(
+        ['t' => 'img', 'disk' => 'local', 'path' => 'a.jpg', 'mw' => 800, 'iat' => time() - 100, 'exp' => time() - 10],
+        $imgSecret
+    );
+    try { ImageToken::verify($expired, $imgSecret); throw new \RuntimeException('expired'); }
+    catch (ApiException $e) { assertEqual('img_token_invalid', $e->getErrorCode()); }
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
