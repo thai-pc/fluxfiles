@@ -424,6 +424,54 @@ test('end-to-end BYOB flow', function () use ($secret) {
 // ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════
+// BYOB SFTP (M3) — a user's own SFTP server, SSRF-guarded
+// ═══════════════════════════════════════════════════════════════
+
+test('BYOB SFTP: valid config (public host) passes validation', function () {
+    FluxFiles\CredentialEncryptor::validate('my-vps', [
+        'driver' => 'sftp', 'host' => 'github.com', 'username' => 'deploy', 'password' => 'pw', 'root' => '/srv',
+    ]);
+    assertEqual(true, true, 'no exception');
+});
+
+test('BYOB SFTP: private-key auth (no password) passes', function () {
+    FluxFiles\CredentialEncryptor::validate('vps', [
+        'driver' => 'sftp', 'host' => 'github.com', 'username' => 'deploy', 'private_key' => '-----KEY-----',
+    ]);
+    assertEqual(true, true, 'key auth ok');
+});
+
+test('BYOB SFTP: missing host / username / auth → 400', function () {
+    foreach ([
+        ['driver' => 'sftp', 'username' => 'u', 'password' => 'p'],            // no host
+        ['driver' => 'sftp', 'host' => 'github.com', 'password' => 'p'],       // no username
+        ['driver' => 'sftp', 'host' => 'github.com', 'username' => 'u'],       // no auth
+    ] as $bad) {
+        try {
+            FluxFiles\CredentialEncryptor::validate('x', $bad);
+            throw new \RuntimeException('should have thrown for ' . json_encode($bad));
+        } catch (FluxFiles\ApiException $e) {
+            assertEqual(400, $e->getCode(), 'missing field → 400');
+        }
+    }
+});
+
+test('BYOB SFTP: private/metadata host blocked by SSRF guard', function () {
+    foreach (['169.254.169.254', '127.0.0.1', '10.1.2.3', 'localhost'] as $bad) {
+        try {
+            FluxFiles\CredentialEncryptor::validate('x', ['driver' => 'sftp', 'host' => $bad, 'username' => 'u', 'password' => 'p']);
+            throw new \RuntimeException("should have blocked $bad");
+        } catch (FluxFiles\ApiException $e) {
+            assertEqual('ssrf_blocked', $e->getErrorCode(), "blocked $bad");
+        }
+    }
+});
+
+test('BYOB SFTP: encrypt → decrypt round-trips the SFTP config', function () use ($secret) {
+    $cfg = ['driver' => 'sftp', 'host' => 'sftp.example.org', 'username' => 'deploy', 'password' => 'sekret', 'root' => '/var/www'];
+    $blob = FluxFiles\CredentialEncryptor::encrypt($cfg, $secret);
+    assertEqual($cfg, FluxFiles\CredentialEncryptor::decrypt($blob, $secret), 'creds survive encryption');
+});
 
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
 echo "{$cyan}  Results: {$green}{$passed} passed{$reset}";

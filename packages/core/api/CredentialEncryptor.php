@@ -112,6 +112,24 @@ class CredentialEncryptor
             );
         }
 
+        // BYOB SFTP: a user's own SFTP server (VPS). Host is SSRF-checked so the
+        // config can't aim the server at internal infrastructure.
+        if ($driver === 'sftp') {
+            if (empty($config['host'])) {
+                throw new ApiException("BYOB disk '{$diskName}' is missing 'host'", 400);
+            }
+            if (empty($config['username'])) {
+                throw new ApiException("BYOB disk '{$diskName}' is missing 'username'", 400);
+            }
+            if (empty($config['password']) && empty($config['private_key'])) {
+                throw new ApiException("BYOB disk '{$diskName}' needs a 'password' or 'private_key'", 400);
+            }
+            if (\class_exists('\\FluxFiles\\SsrfGuard')) {
+                SsrfGuard::assertHostSafe((string) $config['host']);
+            }
+            return;
+        }
+
         if ($driver !== 's3') {
             throw new ApiException(
                 "BYOB disk '{$diskName}' has unsupported driver: {$driver}",
