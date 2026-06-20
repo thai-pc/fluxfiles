@@ -169,6 +169,15 @@ test('s3Client() throws ApiException 400 for local disk', function () use (&$tem
     }
 });
 
+test('presignGetUrl() returns null for a local (non-S3) disk', function () use (&$tempDirs) {
+    $root = '/tmp/ff_test_dm_' . uniqid();
+    $tempDirs[] = $root;
+    mkdir($root, 0755, true);
+    $dm = new FluxFiles\DiskManager(['local' => ['driver' => 'local', 'root' => $root]]);
+    assertEqual(null, $dm->presignGetUrl('local', '_variants/x.webp', 3600));
+    assertEqual(null, $dm->presignGetUrl('missing', 'x.webp', 3600)); // unknown disk → null, no throw
+});
+
 // ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► registerByobDisk(){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
