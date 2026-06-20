@@ -428,6 +428,43 @@ const src = FluxFiles.imgUrl(file, { width: 800, quality: 80 });
 > stream secret, so on-demand WebP is a **core-standalone / Docker** feature (the
 > Laravel/WordPress proxies don't expose `/api/fm/img`).
 
+### Watermark (preview protection)
+
+For content sellers (photographers, agencies, stock), the on-demand WebP can
+overlay a **watermark** so clients see previews but can't grab the clean image.
+It's applied **on the fly when serving** — the source file is never modified — so
+there's only ever one source of truth. Enable it with token claims (off by default):
+
+```php
+$token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3600,
+    false, 0, 0, null, 0, 0, null, null, null, [
+        'webp_enabled'      => true,
+        'watermark_enabled' => true,
+        'watermark_type'    => 'text',          // or 'logo'
+        'watermark_text'    => '© Acme Corp',
+        'watermark_position'=> 'bottom-right',
+        'watermark_opacity' => 0.6,
+        'allow_download'    => false,            // ← the important part (see below)
+    ]);
+```
+
+- **Logo watermark:** upload a transparent PNG as a normal file (e.g.
+  `users/42/.config/logo.png`) and set `watermark_type => 'logo'` +
+  `watermark_logo_path`. No DB — the logo is just a file; re-upload to change it.
+  A missing/unsafe logo path **falls back to a text watermark** (with an
+  `X-FluxFiles-Warning` header) — never to a clean image.
+- The watermarked WebP is cached in `_variants/` (keyed by config + logo mtime),
+  so a config or logo change produces a fresh result.
+
+> **⚠️ A watermark only protects if the clean original isn't otherwise reachable.**
+> By default `list()` returns a clean presigned `url` (and `variants`) for every
+> file — a preview client could just use those and bypass the watermark. Set
+> **`allow_download => false`** (preview-only): `list()` then withholds
+> `url`/`permanent_url`/`variants` and GET presign returns `403`, leaving only the
+> watermarked `img_base`. Issue a separate token with `allow_download => true`
+> (e.g. after purchase) to grant the clean original. Watermark uses the bundled
+> DejaVuSans font for text; like `/api/fm/img` it's a core-standalone feature.
+
 ### Uploading multiple files
 
 Multi-file upload is always available in the file manager UI — no special option
@@ -738,6 +775,14 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `webp_enabled` | bool | — | `true` | Expose the on-demand WebP endpoint (`/api/fm/img`) — image entries gain an `img_base` URL. `false` omits it |
 | `webp_max_width` | int | px | `2000` | Max resize width a transform request may ask for (clamped). Bounds the cache-variant count |
 | `webp_default_quality` | int | 1–100 | `80` | WebP quality used when a request omits `quality` (snapped to `60`/`75`/`80`/`90`) |
+| `allow_download` | bool | — | `true` | When `false` (preview-only), `list()` withholds `url`/`permanent_url`/`variants` for files and GET presign returns `403` — only the (watermarked) `img_base` remains for images |
+| `watermark_enabled` | bool | — | `false` | Overlay a watermark on the on-demand WebP (`/api/fm/img`). Off by default; the source file is never modified |
+| `watermark_type` | enum | — | `text` | `text` or `logo` (a PNG path in storage) |
+| `watermark_text` | string | — | — | Text for `type=text` (e.g. `© Acme`) |
+| `watermark_logo_path` | string | path | — | Storage path to the logo PNG for `type=logo`; a missing/unsafe path falls back to a text watermark (never a clean image) |
+| `watermark_position` | enum | — | `bottom-right` | `top-left` / `top-right` / `bottom-left` / `bottom-right` / `center` |
+| `watermark_opacity` | float | 0–1 | `0.6` | Watermark opacity |
+| `watermark_font_size` | int | px | `24` | Font size for `type=text` (8–200) |
 
 > **Import from URL** fetches a public URL server-side and saves it like an upload
 > (`POST /api/fm/import-url` with `{ "url": "…", "path": "…" }`). It's SSRF-guarded
