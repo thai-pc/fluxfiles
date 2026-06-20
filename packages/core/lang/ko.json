@@ -64,6 +64,7 @@
         "preview": "미리보기",
         "copy_url": "URL 복사",
         "presign_url": "서명된 URL",
+        "too_large_preview": "파일이 너무 커서 미리 볼 수 없습니다. 다운로드하여 확인하세요.",
         "delete": "삭제",
         "move_to": "이동...",
         "items": "{count}개 항목",

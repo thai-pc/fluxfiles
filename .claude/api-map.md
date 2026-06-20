@@ -8,6 +8,7 @@ All routes below are implemented in `packages/core/api/index.php`.
 - `GET /public` and `GET /public/`: same UI route.
 - `GET /api/fm/lang`: list available locales.
 - `GET /api/fm/lang/{locale}`: fetch locale messages.
+- `GET /api/fm/stream?token=<stream-token>`: gated local media stream (Range-capable). Authenticated by a per-file stream token (not the main JWT), since `<video>`/`<audio>` can't send headers. Only serves files on a `private => true` local disk (`FLUXFILES_LOCAL_PRIVATE=true`).
 
 ## Authenticated File Routes
 

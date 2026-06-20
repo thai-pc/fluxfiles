@@ -251,6 +251,15 @@ class FluxFilesPlugin
         if (is_array($overrides['import_url_allowlist'] ?? null) && $overrides['import_url_allowlist'] !== []) {
             $payload['import_url_allowlist'] = array_values($overrides['import_url_allowlist']);
         }
+        // Media-preview claims.
+        if (array_key_exists('media_preview', $overrides)) {
+            $payload['media_preview'] = (bool) $overrides['media_preview'];
+        }
+        foreach (['preview_url_ttl', 'max_preview_mb', 'stream_token_ttl'] as $mediaClaim) {
+            if (!empty($overrides[$mediaClaim])) {
+                $payload[$mediaClaim] = (int) $overrides[$mediaClaim];
+            }
+        }
     }
 
     /**

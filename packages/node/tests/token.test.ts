@@ -71,6 +71,23 @@ describe('createToken', () => {
     expect(c.max_import_mb).toBeUndefined();
   });
 
+  it('forwards media-preview claims (PHP parity)', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        mediaPreview: false,
+        previewUrlTtl: 7200,
+        maxPreviewMb: 250,
+        streamTokenTtl: 1800,
+      }),
+    ) as Record<string, unknown>;
+    expect(c.media_preview).toBe(false);
+    expect(c.preview_url_ttl).toBe(7200);
+    expect(c.max_preview_mb).toBe(250);
+    expect(c.stream_token_ttl).toBe(1800);
+  });
+
   it('forwards URL-import claims so the feature can be enabled (PHP parity)', () => {
     const c = decodeToken(
       createToken({

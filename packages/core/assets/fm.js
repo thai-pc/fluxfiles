@@ -2150,6 +2150,32 @@ function fluxFilesApp() {
             return Array.isArray(perms) && perms.includes('audit');
         },
 
+        // Inline video/audio preview is on unless the token disables it.
+        get mediaPreviewEnabled() {
+            const v = this._tokenPayload().media_preview;
+            return v === undefined ? true : !!v;
+        },
+
+        // TTL (seconds) used when re-presigning an expiring media URL. Falls back
+        // to 2h when the token doesn't set preview_url_ttl.
+        get previewUrlTtl() {
+            const t = parseInt(this._tokenPayload().preview_url_ttl, 10);
+            return (t && t > 0) ? t : 7200;
+        },
+
+        // Max file size (MB) eligible for inline media preview; larger files show
+        // a download placeholder instead. Falls back to 500MB.
+        get maxPreviewMb() {
+            const m = parseInt(this._tokenPayload().max_preview_mb, 10);
+            return (m && m > 0) ? m : 500;
+        },
+
+        // True when a media file is too big to preview inline (size known + over cap).
+        mediaTooLarge(file) {
+            if (!file || !file.size) return false;
+            return file.size > this.maxPreviewMb * 1024 * 1024;
+        },
+
         async openActivity() {
             this.showActivity = true;
             this.activityError = '';
@@ -2431,6 +2457,8 @@ function fluxFilesApp() {
 
         isPreviewable(file, type) {
             if (!file || !file.name || file.type === 'dir') return false;
+            // Tenant can disable inline media preview via the media_preview claim.
+            if ((type === 'video' || type === 'audio') && !this.mediaPreviewEnabled) return false;
             const ext = file.name.split('.').pop()?.toLowerCase();
             const map = {
                 image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'],
@@ -2439,6 +2467,54 @@ function fluxFilesApp() {
                 pdf: ['pdf']
             };
             return (map[type] || []).includes(ext);
+        },
+
+        /**
+         * Silently re-presign an expiring media URL when a <video>/<audio>
+         * element errors mid-playback. S3/R2 GET URLs are presigned and expire
+         * (default ~1h), so a long video — or one paused past expiry — would 403
+         * and stop. We re-fetch a fresh URL via /presign, swap it in, and restore
+         * the playhead + play state so the swap is seamless. Local/static URLs
+         * never expire, so we no-op on them; a small retry cap stops looping on a
+         * genuinely unplayable file.
+         */
+        async refreshMediaSrc(file, el) {
+            if (!file || !el) return;
+            const src = el.currentSrc || el.src || '';
+            // Only expiring presigned URLs are worth refreshing.
+            if (!/[?&](X-Amz-|Signature=)/.test(src)) return;
+            if (el._ffRefreshing) return;
+            el._ffRefreshTries = (el._ffRefreshTries || 0) + 1;
+            if (el._ffRefreshTries > 2) return;   // likely unplayable — stop retrying
+            el._ffRefreshing = true;
+
+            const at = el.currentTime || 0;
+            const wasPlaying = !el.paused && !el.ended;
+            try {
+                const data = await this.api('POST', '/api/fm/presign', {
+                    disk: this.currentDisk,
+                    path: file.key,
+                    method: 'GET',
+                    ttl: this.previewUrlTtl,
+                });
+                if (!data || !data.url) return;
+
+                // Restore the playhead once the fresh source has loaded.
+                const restore = () => {
+                    el.removeEventListener('loadedmetadata', restore);
+                    try { if (at > 0) el.currentTime = at; } catch (e) { /* seek may be denied */ }
+                    if (wasPlaying) { el.play().catch(() => {}); }
+                };
+                el.addEventListener('loadedmetadata', restore);
+
+                // Update the model; Alpine re-binds :src on the same element in place.
+                if (file === this.detailFile) { this.detailFile.url = data.url; }
+                else { file.url = data.url; }
+            } catch (e) {
+                // Silent: leave the native error UI; the user can re-open the file.
+            } finally {
+                el._ffRefreshing = false;
+            }
         },
 
         get filteredFolders() {

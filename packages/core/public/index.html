@@ -784,11 +784,21 @@
             <template x-if="detailFile && isPreviewable(detailFile, 'image') && detailFile.url">
                 <img :src="detailFile.url" :alt="detailFile.name">
             </template>
-            <template x-if="detailFile && isPreviewable(detailFile, 'video') && detailFile.url">
-                <video controls style="width:100%;height:100%;object-fit:contain;" :src="detailFile.url"></video>
+            <template x-if="detailFile && isPreviewable(detailFile, 'video') && detailFile.url && !mediaTooLarge(detailFile)">
+                <video controls style="width:100%;height:100%;object-fit:contain;" :src="detailFile.url" @error="refreshMediaSrc(detailFile, $event.target)"></video>
             </template>
-            <template x-if="detailFile && isPreviewable(detailFile, 'audio') && detailFile.url">
-                <audio controls style="width:100%;" :src="detailFile.url"></audio>
+            <template x-if="detailFile && isPreviewable(detailFile, 'audio') && detailFile.url && !mediaTooLarge(detailFile)">
+                <audio controls style="width:100%;" :src="detailFile.url" @error="refreshMediaSrc(detailFile, $event.target)"></audio>
+            </template>
+            <!-- Media over max_preview_mb: skip the heavy <video>/<audio>, offer download. -->
+            <template x-if="detailFile && (isPreviewable(detailFile, 'video') || isPreviewable(detailFile, 'audio')) && mediaTooLarge(detailFile)">
+                <div class="ff-detail-thumb-icon ff-media-toolarge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <p class="ff-media-toolarge-msg" x-text="t('file.too_large_preview')"></p>
+                    <button type="button" class="tb-btn" @click="downloadFile(detailFile)">
+                        <span x-text="t('common.download')"></span>
+                    </button>
+                </div>
             </template>
             <template x-if="detailFile && isPreviewable(detailFile, 'pdf') && detailFile.url">
                 <embed :src="detailFile.url" type="application/pdf" style="width:100%;height:100%;">

@@ -64,6 +64,7 @@
         "preview": "Voorbeeld",
         "copy_url": "URL kopiëren",
         "presign_url": "Voorondertekende URL",
+        "too_large_preview": "Bestand is te groot voor voorbeeld. Download het om te bekijken.",
         "delete": "Verwijderen",
         "move_to": "Verplaatsen naar...",
         "items": "{count} items",

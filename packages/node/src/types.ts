@@ -54,6 +54,14 @@ export interface BaseTokenOptions {
   /** Import-specific rate limit (req/min) and max concurrent imports. `0`/omitted = inherit. */
   importRateLimit?: number;
   importConcurrency?: number;
+  /** Enable inline video/audio preview for this tenant. Omit to inherit the default (true). */
+  mediaPreview?: boolean;
+  /** Presigned media-URL TTL (seconds) — longer so a long video doesn't expire mid-play. `0`/omitted = inherit (7200). */
+  previewUrlTtl?: number;
+  /** Max file size (MB) eligible for inline preview; larger media shows a download placeholder. `0`/omitted = inherit (500). */
+  maxPreviewMb?: number;
+  /** TTL (seconds) for per-file gated-local stream tokens. `0`/omitted = inherit (3600). */
+  streamTokenTtl?: number;
 }
 
 export interface CreateTokenOptions extends BaseTokenOptions {

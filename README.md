@@ -698,6 +698,10 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `import_url_allowlist` | string[] | hosts | — | Restrict imports to these host globs, e.g. `["*.unsplash.com"]`. Omit = any public host |
 | `import_path` | string | path | — | Force imports into this path, ignoring the request path |
 | `import_rate_limit` / `import_concurrency` | int | — | `10` / `3` | Import-specific rate limit (its own bucket) and max concurrent imports |
+| `media_preview` | bool | — | `true` | Inline video/audio preview. `false` falls back to a download link (image/pdf preview unaffected) |
+| `preview_url_ttl` | int | **seconds** | `7200` | Presigned GET-URL TTL for **media** files — longer so a long video doesn't 403 mid-playback. Capped at 24h |
+| `max_preview_mb` | int | **MB** | `500` | Max media size eligible for inline preview; larger files show a "too large" placeholder + download |
+| `stream_token_ttl` | int | **seconds** | `3600` | TTL of the per-file stream token used by gated-local media (`FLUXFILES_LOCAL_PRIVATE`) |
 
 > **Import from URL** fetches a public URL server-side and saves it like an upload
 > (`POST /api/fm/import-url` with `{ "url": "…", "path": "…" }`). It's SSRF-guarded
@@ -728,6 +732,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `rateRead` / `rateWrite` | `rate_read` / `rate_write` | req/min | `0` | Per-tenant rate limits. `0` = inherit `FLUXFILES_RATE_LIMIT_READ/WRITE`. |
 | `variants` | `variants` | px | `null` | Per-tenant WebP variant widths — a map of `thumb`/`medium`/`large` to a width (16–8000 px). Unset names inherit `150`/`768`/`1920`. |
 | `import` | `allow_url_import`, … | — | `null` | **Import from URL** config (off unless set). An array: `['allow_url_import' => true, 'max_import_mb' => 20, 'import_url_allowlist' => ['*.unsplash.com'], 'import_path' => 'imports', 'import_rate_limit' => 10, 'import_concurrency' => 3]`. Only the keys you set are embedded; the rest inherit the server defaults. See [Import from URL](#import-from-url). |
+| `media` | `media_preview`, … | — | `null` | **Media-preview** config. An array: `['media_preview' => true, 'preview_url_ttl' => 7200, 'max_preview_mb' => 500, 'stream_token_ttl' => 3600]`. Only the keys you set are embedded; the rest inherit the defaults. |
 
 > **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is
 > **seconds** (`ttl`), and `allowedExt` entries are **bare lowercase extensions**
@@ -1683,6 +1688,8 @@ token field.
 | `FLUXFILES_RATE_LIMIT_READ` | No | `60` | Max read requests per minute per user |
 | `FLUXFILES_RATE_LIMIT_WRITE` | No | `10` | Max write requests per minute per user |
 | `FLUXFILES_STORAGE_PATH` | No | `packages/core/storage` | Dir for runtime state (rate-limit counter). Point at a writable volume for read-only deployments |
+| `FLUXFILES_LOCAL_PRIVATE` | No | `false` | Serve `local` disk files through per-file `/api/fm/stream` tokens (Range-capable) instead of static URLs. The disk root must then not be served statically |
+| `FLUXFILES_XACCEL` | No | — | Internal nginx location (e.g. `/_ff_media`) for `X-Accel-Redirect` streaming — nginx serves the bytes with native Range, PHP never copies the file |
 | `FLUXFILES_IMPORT_MAX_MB` | No | `50` | Max MB per URL import when the token omits `max_import_mb` |
 | `FLUXFILES_IMPORT_RATE_LIMIT` | No | `10` | Imports/min when the token omits `import_rate_limit` |
 | `FLUXFILES_IMPORT_TIMEOUT` | No | `30` | Seconds per import fetch |

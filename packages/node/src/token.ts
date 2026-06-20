@@ -114,6 +114,12 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (Array.isArray(opts.importUrlAllowlist) && opts.importUrlAllowlist.length) {
     payload.import_url_allowlist = opts.importUrlAllowlist.map((h) => String(h));
   }
+
+  // Media-preview claims (the server sanitizes/clamps these on decode).
+  if (opts.mediaPreview !== undefined) payload.media_preview = !!opts.mediaPreview;
+  if (opts.previewUrlTtl && opts.previewUrlTtl > 0) payload.preview_url_ttl = Math.trunc(opts.previewUrlTtl);
+  if (opts.maxPreviewMb && opts.maxPreviewMb > 0) payload.max_preview_mb = Math.trunc(opts.maxPreviewMb);
+  if (opts.streamTokenTtl && opts.streamTokenTtl > 0) payload.stream_token_ttl = Math.trunc(opts.streamTokenTtl);
 }
 
 /**
