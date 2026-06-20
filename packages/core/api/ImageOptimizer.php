@@ -33,6 +33,15 @@ class ImageOptimizer
      */
     private const MAX_SOURCE_PIXELS = 30000000;
 
+    /** Valid watermark positions (9-point; we expose the 5 useful ones). */
+    public const WM_POSITIONS = ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'];
+
+    /** Bundled TTF for text watermarks (DejaVuSans — freely redistributable). */
+    public static function fontPath(): string
+    {
+        return __DIR__ . '/../assets/fonts/DejaVuSans.ttf';
+    }
+
     /**
      * @param array<string,int>|null $variants Per-tenant width overrides for the
      *        known size names (thumb/medium/large). Unset names keep the default.
@@ -104,9 +113,14 @@ class ImageOptimizer
      * decompression bomb. `$width <= 0` keeps the original dimensions; never
      * upsizes (scaleDown).
      *
+     * Optional $watermark overlays a logo or text after resizing (preview-only
+     * protection; the source is never modified): keys `enabled` (bool), `type`
+     * ('logo'|'text'), `text`, `logo_data` (binary), `position`, `opacity`
+     * (0.0–1.0), `font_size`.
+     *
      * @return array{data: string, width: int, height: int}|null
      */
-    public function transform(string $sourceData, int $width, int $quality): ?array
+    public function transform(string $sourceData, int $width, int $quality, ?array $watermark = null): ?array
     {
         $info = @getimagesizefromstring($sourceData);
         if ($info === false) {
@@ -127,6 +141,9 @@ class ImageOptimizer
         if ($width > 0) {
             $image = $this->manager->scaleDown($image, $width);
         }
+        if ($watermark !== null && !empty($watermark['enabled'])) {
+            $image = $this->applyWatermark($image, $watermark);
+        }
         $encoded = $this->manager->encodeWebp($image, $quality);
 
         return [
@@ -137,19 +154,68 @@ class ImageOptimizer
     }
 
     /**
+     * Overlay a logo or text watermark onto an already-resized image. Logo width
+     * is capped at 25% of the base. Falls back to no-op only when there's nothing
+     * to draw (empty text / missing logo data) — the caller is responsible for the
+     * logo-missing → text fallback so a clean image is never served by accident.
+     *
+     * @return object the mutated image
+     */
+    private function applyWatermark($image, array $wm)
+    {
+        $position = in_array($wm['position'] ?? '', self::WM_POSITIONS, true)
+            ? $wm['position'] : 'bottom-right';
+        $opacity = max(0.0, min(1.0, (float) ($wm['opacity'] ?? 0.6)));
+
+        if (($wm['type'] ?? 'text') === 'logo' && !empty($wm['logo_data'])) {
+            $maxLogoWidth = (int) ($image->width() * 0.25);
+            return $this->manager->placeLogo($image, (string) $wm['logo_data'], $position, $opacity, $maxLogoWidth);
+        }
+
+        $text = trim((string) ($wm['text'] ?? ''));
+        if ($text === '') {
+            return $image; // nothing to draw
+        }
+        $fontSize = max(8, min(200, (int) ($wm['font_size'] ?? 24)));
+        return $this->manager->drawText($image, $text, $position, $opacity, $fontSize, self::fontPath());
+    }
+
+    /**
+     * Short, stable signature of a watermark config + logo version — folded into
+     * the cache key so watermarked and clean variants never collide and a changed
+     * config/logo produces a fresh key. Empty/disabled → 'wm0'.
+     */
+    public static function watermarkSignature(?array $wm, ?int $logoVer = null): string
+    {
+        if (!$wm || empty($wm['enabled'])) {
+            return '';
+        }
+        $parts = [
+            $wm['type'] ?? 'text', $wm['text'] ?? '', $wm['position'] ?? '',
+            (string) ($wm['opacity'] ?? ''), (string) ($wm['font_size'] ?? ''),
+            $wm['logo_path'] ?? '', (string) ($logoVer ?? ''),
+        ];
+        return 'wm' . substr(hash('sha256', implode('|', $parts)), 0, 8);
+    }
+
+    /**
      * Cache key for an on-demand WebP transform. Lives inside the file's
      * `_variants/` directory so the existing delete/trash cleanup (which removes
      * the whole `_variants` subtree) invalidates it for free. `$ver` (the source
      * file's mtime or hash) is embedded so a re-upload produces a new key and the
      * stale cache is never matched again.
      */
-    public static function transformCacheKey(string $key, int $width, int $quality, string $ver): string
+    public static function transformCacheKey(string $key, int $width, int $quality, string $ver, string $variant = ''): string
     {
         $dir = dirname($key);
         $basename = pathinfo($key, PATHINFO_FILENAME);
         $variantsDir = ($dir !== '.' && $dir !== '') ? $dir . '/_variants' : '_variants';
         $ver = substr(preg_replace('/[^A-Za-z0-9]/', '', $ver) ?? '', 0, 12);
-        return $variantsDir . '/' . $basename . '_w' . $width . '_q' . $quality . '_' . $ver . '.webp';
+        // Optional extra segment (e.g. a watermark signature) — appended only when
+        // set, so plain (non-watermarked) keys keep their existing shape.
+        $variant = substr(preg_replace('/[^A-Za-z0-9]/', '', $variant) ?? '', 0, 12);
+        $suffix = $variant !== '' ? '_' . $variant : '';
+        return $variantsDir . '/' . $basename . '_w' . $width . '_q' . $quality . '_' . $ver . $suffix . '.webp';
     }
 
     /**

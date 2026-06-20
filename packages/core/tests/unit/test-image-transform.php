@@ -144,6 +144,77 @@ test('transformCacheKey: lives in _variants/, ver-stamped, sanitized', function 
     assertTrue(strpos($safe, '..') === false && strpos($safe, '/etc') === false, 'ver cannot inject traversal');
 });
 
+/** A small PNG logo with an alpha channel (transparent corner) as binary. */
+function pngLogo(int $w = 80, int $h = 40): string
+{
+    $im = imagecreatetruecolor($w, $h);
+    imagesavealpha($im, true);
+    imagefill($im, 0, 0, imagecolorallocatealpha($im, 0, 0, 0, 127)); // transparent
+    imagefilledrectangle($im, 4, 4, $w - 5, $h - 5, imagecolorallocate($im, 250, 250, 250));
+    ob_start(); imagepng($im); $b = ob_get_clean();
+    imagedestroy($im);
+    return (string) $b;
+}
+
+// ── Watermark (M1) ─────────────────────────────────────────────────────────
+test('transform: text watermark produces a valid WebP (all 5 positions)', function () use ($opt) {
+    foreach (\FluxFiles\ImageOptimizer::WM_POSITIONS as $pos) {
+        $out = $opt->transform(jpegBytes(600, 400), 400, 80, [
+            'enabled' => true, 'type' => 'text', 'text' => '© Acme', 'position' => $pos,
+            'opacity' => 0.6, 'font_size' => 22,
+        ]);
+        assertTrue($out !== null, "watermarked result for $pos");
+        assertTrue(substr($out['data'], 8, 4) === 'WEBP', "is WebP ($pos)");
+        assertEqual(400, $out['width'], "resized then watermarked ($pos)");
+    }
+});
+
+test('transform: logo watermark composites + is a valid WebP', function () use ($opt) {
+    $out = $opt->transform(jpegBytes(800, 600), 400, 80, [
+        'enabled' => true, 'type' => 'logo', 'logo_data' => pngLogo(), 'position' => 'bottom-right',
+        'opacity' => 0.7,
+    ]);
+    assertTrue($out !== null && substr($out['data'], 8, 4) === 'WEBP', 'logo watermarked webp');
+    assertEqual(400, $out['width'], 'width preserved');
+});
+
+test('transform: watermarked output differs from the clean output', function () use ($opt) {
+    $src = jpegBytes(500, 500);
+    $clean = $opt->transform($src, 300, 80);
+    $marked = $opt->transform($src, 300, 80, ['enabled' => true, 'type' => 'text', 'text' => 'WM', 'opacity' => 0.8]);
+    assertTrue($clean['data'] !== $marked['data'], 'watermark changed the pixels');
+});
+
+test('transform: opacity boundaries 0.0 and 1.0 do not error', function () use ($opt) {
+    foreach ([0.0, 1.0] as $op) {
+        $out = $opt->transform(jpegBytes(300, 200), 200, 80, ['enabled' => true, 'type' => 'text', 'text' => 'x', 'opacity' => $op]);
+        assertTrue($out !== null && substr($out['data'], 8, 4) === 'WEBP', "opacity $op ok");
+    }
+});
+
+test('transform: enabled but empty text → no-op (still converts)', function () use ($opt) {
+    $out = $opt->transform(jpegBytes(300, 200), 200, 80, ['enabled' => true, 'type' => 'text', 'text' => '   ']);
+    assertTrue($out !== null && substr($out['data'], 8, 4) === 'WEBP', 'empty text is a safe no-op');
+});
+
+test('watermarkSignature: stable, distinguishes config + logo version', function () {
+    $cfg = ['enabled' => true, 'type' => 'text', 'text' => '© A', 'position' => 'center', 'opacity' => 0.6, 'font_size' => 24];
+    $a = \FluxFiles\ImageOptimizer::watermarkSignature($cfg, 1000);
+    assertTrue(strpos($a, 'wm') === 0 && strlen($a) === 10, 'wm + 8 hex');
+    assertEqual($a, \FluxFiles\ImageOptimizer::watermarkSignature($cfg, 1000), 'stable for same input');
+    assertTrue($a !== \FluxFiles\ImageOptimizer::watermarkSignature($cfg, 2000), 'changes with logo version');
+    assertTrue($a !== \FluxFiles\ImageOptimizer::watermarkSignature(['enabled' => true, 'text' => 'B'] + $cfg, 1000), 'changes with text');
+    assertEqual('', \FluxFiles\ImageOptimizer::watermarkSignature(['enabled' => false]), 'disabled → empty');
+    assertEqual('', \FluxFiles\ImageOptimizer::watermarkSignature(null), 'null → empty');
+});
+
+test('transformCacheKey: watermark variant segment separates marked from clean', function () {
+    $clean = \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111');
+    $marked = \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', 'wmABCD1234');
+    assertEqual('_variants/p_w800_q80_111.webp', $clean, 'clean key unchanged (backward compat)');
+    assertEqual('_variants/p_w800_q80_111_wmABCD1234.webp', $marked, 'watermarked key has the wm segment');
+});
+
 // ── ImageToken (auth for the /api/fm/img endpoint) ────────────────────────
 $imgSecret = str_repeat('i', 40);
 
