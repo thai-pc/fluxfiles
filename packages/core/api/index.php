@@ -793,7 +793,8 @@ function handleImageTransform(): void
     $maxWidth = $scope['maxWidth'] > 0 ? $scope['maxWidth'] : 2000;
     $reqWidth = (int) ($_GET['width'] ?? 0);
     $width = $reqWidth > 0 ? min($maxWidth, max(100, (int) round($reqWidth / 100) * 100)) : 0;
-    $quality = ff_snap_quality($_GET['quality'] ?? 80);
+    $defaultQuality = $scope['defaultQuality'] > 0 ? $scope['defaultQuality'] : 80;
+    $quality = ff_snap_quality($_GET['quality'] ?? $defaultQuality);
     $format = ($_GET['format'] ?? 'webp') === 'auto' ? 'auto' : 'webp';
 
     $diskConfigs = require __DIR__ . '/../config/disks.php';

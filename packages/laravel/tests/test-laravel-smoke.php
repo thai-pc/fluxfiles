@@ -127,6 +127,15 @@ test('token() forwards media-preview claims', function () use ($secret) {
     assertEqual(1800, $c->streamTokenTtl, 'stream_token_ttl');
 });
 
+test('token() forwards webp claims', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $token = $mgr->token(31, ['webp_enabled' => false, 'webp_max_width' => 1600, 'webp_default_quality' => 75]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertEqual(false, $c->webpEnabled, 'webp_enabled');
+    assertEqual(1600, $c->webpMaxWidth, 'webp_max_width');
+    assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality');
+});
+
 test('token() without a secret → throws', function () {
     $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
     $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'] = '';
@@ -186,11 +195,12 @@ test('proxy route surface covers every core /api/fm route', function () {
     $proxyRoutes = array_map(fn ($r) => preg_replace('#/\{[^}]+\}#', '', $r), $rm[1]);
 
     // Core routes that are intentionally NOT proxied (keep empty unless justified).
-    // - stream: gated-local media (FLUXFILES_LOCAL_PRIVATE) is a core-standalone /
-    //   Docker deployment feature (PHP/nginx Range serving). Laravel proxy mode
-    //   serves its local disk through the framework's own static URLs, so the core
-    //   /stream endpoint doesn't apply here. Proxying it is a future option.
-    $intentionallyUnproxied = ['stream'];
+    // - stream / img: gated-local media and on-demand WebP are core-standalone /
+    //   Docker features. Both mint their tokens only when FileManager has a stream
+    //   secret (setStreamSecret), which the Laravel proxy controller does not set —
+    //   so list() never emits stream/img URLs in proxy mode, and there are no
+    //   broken links. Proxying these byte-serving endpoints is a future option.
+    $intentionallyUnproxied = ['stream', 'img'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

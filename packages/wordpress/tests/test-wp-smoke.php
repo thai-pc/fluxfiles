@@ -136,6 +136,14 @@ test('generateToken forwards media-preview claims', function () use ($secret) {
     assertEqual(1800, $c->streamTokenTtl, 'stream_token_ttl');
 });
 
+test('generateToken forwards webp claims', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(33, ['webp_enabled' => false, 'webp_max_width' => 1600, 'webp_default_quality' => 75]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertEqual(false, $c->webpEnabled, 'webp_enabled');
+    assertEqual(1600, $c->webpMaxWidth, 'webp_max_width');
+    assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality');
+});
+
 test('generateToken without a secret → throws', function () {
     $prev = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
     $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';

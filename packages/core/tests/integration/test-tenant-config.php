@@ -222,6 +222,32 @@ test('fluxfiles_token forwards media claims via the $media param', function () {
     assertTrue(!isset($p->media_preview) && !isset($p->preview_url_ttl), 'lean when unset');
 });
 
+test('fromJwtPayload parses webp claims (and defaults)', function () {
+    $set = Claims::fromJwtPayload((object) ['webp_enabled' => false, 'webp_max_width' => 1600, 'webp_default_quality' => 75]);
+    assertEqual(false, $set->webpEnabled, 'webp_enabled parsed');
+    assertEqual(1600, $set->webpMaxWidth, 'webp_max_width parsed');
+    assertEqual(75, $set->webpDefaultQuality, 'webp_default_quality parsed');
+
+    $def = Claims::fromJwtPayload((object) []);
+    assertEqual(true, $def->webpEnabled, 'webp_enabled defaults true');
+    assertEqual(0, $def->webpMaxWidth, 'webp_max_width defaults 0 (inherit)');
+    assertEqual(0, $def->webpDefaultQuality, 'webp_default_quality defaults 0 (inherit)');
+});
+
+test('fluxfiles_token forwards webp claims via the $webp param', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, null, [
+            'webp_enabled'         => false,
+            'webp_max_width'       => 1600,
+            'webp_default_quality' => 75,
+        ]);
+    $c = Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    assertEqual(false, $c->webpEnabled, 'webp_enabled forwarded');
+    assertEqual(1600, $c->webpMaxWidth, 'webp_max_width forwarded');
+    assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality forwarded');
+});
+
 test('Claims::isMediaPath detects video/audio extensions only', function () {
     foreach (['a/b/clip.mp4', 'song.MP3', 'x.webm', 'y.mov', 'z.flac', 'w.ogg'] as $p) {
         assertTrue(Claims::isMediaPath($p), "media: $p");

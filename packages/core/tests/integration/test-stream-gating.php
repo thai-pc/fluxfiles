@@ -17,6 +17,7 @@ use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\StorageMetadataHandler;
 use FluxFiles\StreamToken;
+use FluxFiles\ImageToken;
 
 $green = "\033[32m"; $red = "\033[31m"; $cyan = "\033[36m"; $reset = "\033[0m";
 $passed = 0; $failed = 0;
@@ -95,6 +96,65 @@ test('non-gated local still has a permanent URL', function () {
     $m = new \ReflectionMethod($fm, 'permanentUrl');
     $m->setAccessible(true);
     assertEqual('/storage/uploads/album/clip.mp4', $m->invoke($fm, 'local', 'album/clip.mp4'));
+});
+
+// ── img_base minting (M3) ─────────────────────────────────────────────────
+/** A FileManager with an image file; $webpEnabled toggles the webp feature. */
+function makeImgFM(bool $webpEnabled, bool $withSecret): array
+{
+    global $SECRET;
+    $root = sys_get_temp_dir() . '/ff-img-' . uniqid();
+    @mkdir($root . '/pics', 0777, true);
+    $im = imagecreatetruecolor(40, 30);
+    imagejpeg($im, $root . '/pics/a.jpg', 80);
+    imagedestroy($im);
+    file_put_contents($root . '/pics/notes.txt', 'x');
+
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage/uploads']]);
+    $claims = new Claims('u1', ['read', 'write'], ['local'], '', 50, null, 0);
+    $claims->webpEnabled = $webpEnabled;
+    $claims->webpMaxWidth = 1600;
+    $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
+    if ($withSecret) { $fm->setStreamSecret($SECRET); }
+    return [$fm];
+}
+/** Return the named entry from list('local','pics'). */
+function picEntry(FileManager $fm, string $name): array
+{
+    $res = $fm->list('local', 'pics');
+    foreach (($res['items'] ?? $res) as $it) {
+        if (($it['name'] ?? '') === $name) { return $it; }
+    }
+    return [];
+}
+
+test('webp on + secret → image gets img_base; token scopes the file + maxWidth', function () use ($SECRET) {
+    [$fm] = makeImgFM(true, true);
+    $a = picEntry($fm, 'a.jpg');
+    assertTrue(strpos($a['img_base'] ?? '', '/api/fm/img?token=') === 0, 'image has img_base: ' . ($a['img_base'] ?? ''));
+    parse_str(parse_url($a['img_base'], PHP_URL_QUERY), $q);
+    $scope = ImageToken::verify($q['token'], $SECRET);
+    assertEqual('local', $scope['disk']);
+    assertEqual('pics/a.jpg', $scope['path']);
+    assertEqual(1600, $scope['maxWidth'], 'maxWidth embedded from claim');
+});
+
+test('non-image never gets img_base', function () {
+    [$fm] = makeImgFM(true, true);
+    $txt = picEntry($fm, 'notes.txt');
+    assertTrue(!isset($txt['img_base']), 'txt has no img_base');
+});
+
+test('webp_enabled=false → no img_base even for an image', function () {
+    [$fm] = makeImgFM(false, true);
+    $a = picEntry($fm, 'a.jpg');
+    assertTrue(!isset($a['img_base']), 'feature off → no img_base');
+});
+
+test('no stream secret → no img_base (feature off)', function () {
+    [$fm] = makeImgFM(true, false);
+    $a = picEntry($fm, 'a.jpg');
+    assertTrue(!isset($a['img_base']), 'no secret → no img_base');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

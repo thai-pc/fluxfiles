@@ -88,6 +88,21 @@ describe('createToken', () => {
     expect(c.stream_token_ttl).toBe(1800);
   });
 
+  it('forwards on-demand WebP claims (PHP parity)', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        webpEnabled: false,
+        webpMaxWidth: 1600,
+        webpDefaultQuality: 75,
+      }),
+    ) as Record<string, unknown>;
+    expect(c.webp_enabled).toBe(false);
+    expect(c.webp_max_width).toBe(1600);
+    expect(c.webp_default_quality).toBe(75);
+  });
+
   it('forwards URL-import claims so the feature can be enabled (PHP parity)', () => {
     const c = decodeToken(
       createToken({

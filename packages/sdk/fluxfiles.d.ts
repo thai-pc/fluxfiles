@@ -33,6 +33,8 @@ interface FluxFile {
     url?: string;
     /** Stable, non-expiring URL for embedding (public disk / public_url). */
     permanent_url?: string;
+    /** Base URL for the on-demand WebP endpoint (images only; when the feature is on). Use `FluxFiles.imgUrl(file, …)`. */
+    img_base?: string;
     size?: number;
     mime?: string;
     /** Image dimensions (present for images uploaded through FluxFiles). */
@@ -79,6 +81,8 @@ interface FluxFilesSDK {
     aiTag(): void;
     /** Switch locale/language at runtime. */
     setLocale(locale: string): void;
+    /** Build an on-demand WebP URL for a selected image from its `img_base`. Returns '' if unavailable. */
+    imgUrl(file: FluxFile, opts?: { width?: number; quality?: number; format?: 'webp' | 'auto' }): string;
     /** Push a new token (e.g. after background refresh). */
     updateToken(token: string): void;
     on(event: FluxFilesEventType, callback: (data: unknown) => void): () => void;

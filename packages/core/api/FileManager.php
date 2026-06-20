@@ -200,6 +200,10 @@ class FileManager
                     }
                 }
                 $item['variants'] = $this->getFileVariants($disk, $item['key']);
+                $imgBase = $this->imgBaseUrl($disk, $item['key']);
+                if ($imgBase !== null) {
+                    $item['img_base'] = $imgBase;
+                }
             }
         }
         unset($item);
@@ -1502,6 +1506,31 @@ class FileManager
         $ttl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
         $token = StreamToken::mint($disk, $path, $this->claims->userId, $ttl, $this->streamSecret);
         return '/api/fm/stream?token=' . rawurlencode($token);
+    }
+
+    /**
+     * Base URL for the on-demand WebP endpoint of one image file, or null when
+     * the feature is off (claim disabled, no stream secret, or not an image). The
+     * host appends `&width=…&quality=…`. Reuses the stream secret (= FLUXFILES_SECRET).
+     */
+    private function imgBaseUrl(string $disk, string $path): ?string
+    {
+        if (!$this->claims->webpEnabled || $this->streamSecret === ''
+            || !$this->imageOptimizer->isImage($path)) {
+            return null;
+        }
+        $ttl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
+        $maxWidth = $this->claims->webpMaxWidth > 0 ? $this->claims->webpMaxWidth : 2000;
+        $token = ImageToken::mint(
+            $disk,
+            $path,
+            $this->claims->userId,
+            $ttl,
+            $this->streamSecret,
+            $maxWidth,
+            $this->claims->webpDefaultQuality
+        );
+        return '/api/fm/img?token=' . rawurlencode($token);
     }
 
     private function permanentUrl(string $disk, string $path): ?string

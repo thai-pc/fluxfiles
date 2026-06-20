@@ -22,9 +22,17 @@ final class ImageToken
 
     /**
      * @param int $maxWidth Per-tenant clamp on the requested resize width.
+     * @param int $defaultQuality WebP quality used when a request omits it (0 = 80).
      */
-    public static function mint(string $disk, string $path, string $sub, int $ttl, string $secret, int $maxWidth): string
-    {
+    public static function mint(
+        string $disk,
+        string $path,
+        string $sub,
+        int $ttl,
+        string $secret,
+        int $maxWidth,
+        int $defaultQuality = 0
+    ): string {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
         return JwtCompat::encode([
@@ -32,6 +40,7 @@ final class ImageToken
             'disk' => $disk,
             'path' => $path,
             'mw'   => max(0, $maxWidth),
+            'dq'   => max(0, $defaultQuality),
             'sub'  => $sub,
             'iat'  => $now,
             'exp'  => $now + $ttl,
@@ -39,7 +48,7 @@ final class ImageToken
     }
 
     /**
-     * @return array{disk:string,path:string,maxWidth:int,sub:string}
+     * @return array{disk:string,path:string,maxWidth:int,defaultQuality:int,sub:string}
      */
     public static function verify(string $token, string $secret): array
     {
@@ -60,10 +69,11 @@ final class ImageToken
             throw new ApiException('Image token missing scope', 403, 'img_token_invalid');
         }
         return [
-            'disk'     => $disk,
-            'path'     => $path,
-            'maxWidth' => max(0, (int) ($p->mw ?? 0)),
-            'sub'      => (string) ($p->sub ?? ''),
+            'disk'           => $disk,
+            'path'           => $path,
+            'maxWidth'       => max(0, (int) ($p->mw ?? 0)),
+            'defaultQuality' => max(0, (int) ($p->dq ?? 0)),
+            'sub'            => (string) ($p->sub ?? ''),
         ];
     }
 }
