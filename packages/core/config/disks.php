@@ -26,6 +26,9 @@ return [
         'visibility' => $_ENV['AWS_VISIBILITY'] ?? 'private',
         // Optional CDN / custom domain base for public disks, e.g. https://cdn.example.com
         'public_url' => $_ENV['AWS_PUBLIC_URL'] ?? '',
+        // Presigned GET-URL lifetime (seconds) on a private disk. Default 1h, max 24h.
+        // Media files can override this per tenant with the `preview_url_ttl` claim.
+        'url_ttl'    => (int) ($_ENV['AWS_URL_TTL'] ?? 3600),
     ],
     'r2' => [
         'driver'     => 's3',
@@ -38,5 +41,7 @@ return [
         // (r2.dev or a custom domain); 'private' (default) serves presigned GET URLs.
         'visibility' => $_ENV['R2_VISIBILITY'] ?? 'private',
         'public_url' => $_ENV['R2_PUBLIC_URL'] ?? '',
+        // Presigned GET-URL lifetime (seconds) on a private disk. Default 1h, max 24h.
+        'url_ttl'    => (int) ($_ENV['R2_URL_TTL'] ?? 3600),
     ],
 ];

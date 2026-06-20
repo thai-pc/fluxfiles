@@ -3,6 +3,27 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.25] — 2026-06-20
+
+> Released: core `core-v0.2.20` (Packagist), Laravel `laravel-v0.2.9`,
+> WordPress plugin `wordpress-v0.2.8`.
+
+### Added
+
+- **Configurable presigned-URL lifetime.** The presigned GET-URL TTL on a private
+  S3/R2 disk is now settable via `AWS_URL_TTL` / `R2_URL_TTL` (core + Laravel) and
+  the `fluxfiles_s3_url_ttl` / `fluxfiles_r2_url_ttl` options (WordPress). Default
+  stays **1 hour** (was effectively hardcoded), max 24h. Media files still override
+  per tenant with `preview_url_ttl`. The core already honoured the `url_ttl` disk
+  key — this exposes it through config/env.
+
+### Docs
+
+- Documented that a selected file's `url` is a presigned link that **expires after
+  `url_ttl` (default 1h)** — for saved/embedded content use `permanent_url`
+  (public disk or `public_url`/CDN). Added `AWS_URL_TTL` / `R2_URL_TTL` to the env
+  table and `.env.example`.
+
 ## [0.2.24] — 2026-06-20
 
 > Released: core `core-v0.2.19` (Packagist), Laravel `laravel-v0.2.8`,

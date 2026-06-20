@@ -378,8 +378,10 @@ function openFilePicker() {
 The select payload carries two URLs:
 
 - **`url`** — ready to display immediately. On a **private** disk it's a
-  short-lived **presigned** URL (expires, ≤ 24h). Fine for previewing right after
-  selection; **do not save it** into content.
+  short-lived **presigned** URL — it **expires after `url_ttl` seconds (default
+  1 hour**, configurable per disk via `AWS_URL_TTL` / `R2_URL_TTL`, max 24h).
+  Media files use the longer `preview_url_ttl` claim instead (default 2h). Fine
+  for previewing right after selection; **do not save it** into content.
 - **`permanent_url`** — a stable, non-expiring URL for **embedding in saved
   content** (CMS pages, editor HTML, DB records). Present for local disks, public
   disks, and any disk with a `public_url` (CDN / custom domain). It is **`null`**
@@ -1701,12 +1703,14 @@ token field.
 | `AWS_ENDPOINT` | No | — | Custom S3-compatible endpoint (MinIO / DO Spaces / …). Empty = native AWS S3; when set, path-style addressing is used |
 | `AWS_VISIBILITY` | No | `private` | `private` = presigned GET URLs; `public` = direct object URLs (public-read ACL) |
 | `AWS_PUBLIC_URL` | No | — | CDN / custom-domain base for a public disk, e.g. `https://cdn.example.com` |
+| `AWS_URL_TTL` | No | `3600` | Presigned GET-URL lifetime (seconds) on a private S3 disk. Max 24h. Media files override via the `preview_url_ttl` claim |
 | `R2_ACCESS_KEY_ID` | No | — | Cloudflare R2 access key |
 | `R2_SECRET_ACCESS_KEY` | No | — | Cloudflare R2 secret key |
 | `R2_ACCOUNT_ID` | No | — | Cloudflare account ID |
 | `R2_BUCKET` | No | — | R2 bucket name |
 | `R2_VISIBILITY` | No | `private` | `private` = presigned GET URLs; `public` needs a public bucket + `R2_PUBLIC_URL` |
 | `R2_PUBLIC_URL` | No | — | Public base URL for a public R2 disk (r2.dev or custom domain) |
+| `R2_URL_TTL` | No | `3600` | Presigned GET-URL lifetime (seconds) on a private R2 disk. Max 24h |
 | `FLUXFILES_AI_PROVIDER` | No | — | `claude` or `openai` (empty = disabled) |
 | `FLUXFILES_AI_API_KEY` | No | — | AI provider API key |
 | `FLUXFILES_AI_MODEL` | No | auto | Override AI model (default: `claude-sonnet-4-20250514` / `gpt-4o`) |

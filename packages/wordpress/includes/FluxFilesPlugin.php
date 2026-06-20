@@ -147,6 +147,8 @@ class FluxFilesPlugin
                 // 'private' = presigned URLs (default); 'public' = direct object URLs.
                 'visibility' => get_option('fluxfiles_s3_visibility', 'private'),
                 'public_url' => get_option('fluxfiles_s3_public_url', ''),
+                // Presigned GET-URL lifetime (seconds) on a private disk. Default 1h.
+                'url_ttl'    => (int) get_option('fluxfiles_s3_url_ttl', 3600),
             ];
         }
 
@@ -164,6 +166,8 @@ class FluxFilesPlugin
                 // 'public' needs a public bucket + public_url (r2.dev / custom domain).
                 'visibility' => get_option('fluxfiles_r2_visibility', 'private'),
                 'public_url' => get_option('fluxfiles_r2_public_url', ''),
+                // Presigned GET-URL lifetime (seconds) on a private disk. Default 1h.
+                'url_ttl'    => (int) get_option('fluxfiles_r2_url_ttl', 3600),
             ];
         }
 

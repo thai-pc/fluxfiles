@@ -180,7 +180,9 @@ test('diskConfigs → adds s3 + r2 when options are set', function () {
         assertEqual('private', $disks['s3']['visibility'] ?? '', 's3 visibility defaults private');
         assertTrue(array_key_exists('endpoint', $disks['s3']), 's3 endpoint key present (MinIO/Spaces)');
         assertTrue(array_key_exists('public_url', $disks['s3']), 's3 public_url key present');
+        assertEqual(3600, $disks['s3']['url_ttl'] ?? 0, 's3 url_ttl defaults to 1h');
         assertEqual('private', $disks['r2']['visibility'] ?? '', 'r2 visibility defaults private');
+        assertEqual(3600, $disks['r2']['url_ttl'] ?? 0, 'r2 url_ttl defaults to 1h');
     } finally {
         unset($GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_r2_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_r2_account_id']);
     }
