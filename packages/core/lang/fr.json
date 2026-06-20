@@ -56,6 +56,22 @@
         "folders": "Dossiers",
         "smart_filters": "Filtres intelligents"
     },
+    "usage": {
+        "title": "Utilisation du stockage",
+        "refresh": "Actualiser",
+        "last_updated": "Dernière mise à jour",
+        "by_type": "Par type",
+        "top_folders": "Plus grands dossiers",
+        "files": "fichiers",
+        "warning": "Votre stockage est presque plein.",
+        "critical": "Stockage presque saturé. Pensez à nettoyer ou à mettre à niveau.",
+        "image": "Images",
+        "video": "Vidéos",
+        "audio": "Audio",
+        "document": "Documents",
+        "archive": "Archives",
+        "other": "Autre"
+    },
     "quota": {
         "storage": "Stockage"
     },

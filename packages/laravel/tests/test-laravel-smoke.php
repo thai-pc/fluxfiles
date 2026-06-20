@@ -149,6 +149,15 @@ test('token() forwards watermark + allow_download claims', function () use ($sec
     assertEqual('center', $c->watermark['position'], 'watermark position');
 });
 
+test('token() forwards usage-dashboard claims', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $token = $mgr->token(51, ['usage_cache_ttl' => 600, 'usage_warning_threshold' => 60, 'usage_folder_depth' => 2]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertEqual(600, $c->usageCacheTtl, 'cache_ttl');
+    assertEqual(60, $c->usageWarningThreshold, 'warning');
+    assertEqual(2, $c->usageFolderDepth, 'depth');
+});
+
 test('token() without a secret → throws', function () {
     $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
     $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'] = '';

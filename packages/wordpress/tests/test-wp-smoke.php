@@ -156,6 +156,14 @@ test('generateToken forwards watermark + allow_download claims', function () use
     assertEqual('cfg/logo.png', $c->watermark['logo_path'], 'watermark logo_path');
 });
 
+test('generateToken forwards usage-dashboard claims', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(53, ['usage_cache_ttl' => 600, 'usage_critical_threshold' => 85, 'usage_top_folders_count' => 5]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertEqual(600, $c->usageCacheTtl, 'cache_ttl');
+    assertEqual(85, $c->usageCriticalThreshold, 'critical');
+    assertEqual(5, $c->usageTopFoldersCount, 'top folders');
+});
+
 test('generateToken without a secret → throws', function () {
     $prev = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
     $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';

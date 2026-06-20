@@ -56,6 +56,22 @@
         "folders": "Mappen",
         "smart_filters": "Slimme filters"
     },
+    "usage": {
+        "title": "Opslaggebruik",
+        "refresh": "Vernieuwen",
+        "last_updated": "Laatst bijgewerkt",
+        "by_type": "Per type",
+        "top_folders": "Grootste mappen",
+        "files": "bestanden",
+        "warning": "Je opslag raakt vol.",
+        "critical": "Opslag bijna vol. Overweeg op te ruimen of te upgraden.",
+        "image": "Afbeeldingen",
+        "video": "Video's",
+        "audio": "Audio",
+        "document": "Documenten",
+        "archive": "Archieven",
+        "other": "Overig"
+    },
     "quota": {
         "storage": "Opslag"
     },

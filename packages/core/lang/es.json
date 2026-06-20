@@ -56,6 +56,22 @@
         "folders": "Carpetas",
         "smart_filters": "Filtros inteligentes"
     },
+    "usage": {
+        "title": "Uso de almacenamiento",
+        "refresh": "Actualizar",
+        "last_updated": "Última actualización",
+        "by_type": "Por tipo",
+        "top_folders": "Carpetas más grandes",
+        "files": "archivos",
+        "warning": "Te estás quedando sin almacenamiento.",
+        "critical": "Casi sin almacenamiento. Considera limpiar o mejorar el plan.",
+        "image": "Imágenes",
+        "video": "Vídeos",
+        "audio": "Audio",
+        "document": "Documentos",
+        "archive": "Archivos",
+        "other": "Otros"
+    },
     "quota": {
         "storage": "Almacenamiento"
     },

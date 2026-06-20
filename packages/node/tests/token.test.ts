@@ -88,6 +88,25 @@ describe('createToken', () => {
     expect(c.stream_token_ttl).toBe(1800);
   });
 
+  it('forwards usage-dashboard claims (PHP parity)', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        usageCacheTtl: 600,
+        usageWarningThreshold: 60,
+        usageCriticalThreshold: 85,
+        usageTopFoldersCount: 5,
+        usageFolderDepth: 2,
+      }),
+    ) as Record<string, unknown>;
+    expect(c.usage_cache_ttl).toBe(600);
+    expect(c.usage_warning_threshold).toBe(60);
+    expect(c.usage_critical_threshold).toBe(85);
+    expect(c.usage_top_folders_count).toBe(5);
+    expect(c.usage_folder_depth).toBe(2);
+  });
+
   it('forwards watermark + allow_download claims (PHP parity)', () => {
     const c = decodeToken(
       createToken({

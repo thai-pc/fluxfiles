@@ -56,6 +56,22 @@
         "folders": "Klasörler",
         "smart_filters": "Akıllı filtreler"
     },
+    "usage": {
+        "title": "Depolama kullanımı",
+        "refresh": "Yenile",
+        "last_updated": "Son güncelleme",
+        "by_type": "Türe göre",
+        "top_folders": "En büyük klasörler",
+        "files": "dosya",
+        "warning": "Depolama alanınız azalıyor.",
+        "critical": "Depolama neredeyse dolu. Temizleyin veya yükseltin.",
+        "image": "Görseller",
+        "video": "Videolar",
+        "audio": "Ses",
+        "document": "Belgeler",
+        "archive": "Arşivler",
+        "other": "Diğer"
+    },
     "quota": {
         "storage": "Depolama"
     },

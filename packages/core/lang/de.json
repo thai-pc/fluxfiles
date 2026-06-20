@@ -56,6 +56,22 @@
         "folders": "Ordner",
         "smart_filters": "Intelligente Filter"
     },
+    "usage": {
+        "title": "Speichernutzung",
+        "refresh": "Aktualisieren",
+        "last_updated": "Zuletzt aktualisiert",
+        "by_type": "Nach Typ",
+        "top_folders": "Größte Ordner",
+        "files": "Dateien",
+        "warning": "Ihr Speicher wird knapp.",
+        "critical": "Speicher fast voll. Bitte aufräumen oder upgraden.",
+        "image": "Bilder",
+        "video": "Videos",
+        "audio": "Audio",
+        "document": "Dokumente",
+        "archive": "Archive",
+        "other": "Sonstige"
+    },
     "quota": {
         "storage": "Speicher"
     },

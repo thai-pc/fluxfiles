@@ -56,6 +56,22 @@
         "folders": "Thư mục",
         "smart_filters": "Bộ lọc thông minh"
     },
+    "usage": {
+        "title": "Dung lượng sử dụng",
+        "refresh": "Làm mới",
+        "last_updated": "Cập nhật lần cuối",
+        "by_type": "Theo loại",
+        "top_folders": "Thư mục lớn nhất",
+        "files": "tệp",
+        "warning": "Bạn sắp hết dung lượng.",
+        "critical": "Bạn gần hết dung lượng. Hãy dọn dẹp hoặc nâng cấp.",
+        "image": "Hình ảnh",
+        "video": "Video",
+        "audio": "Âm thanh",
+        "document": "Tài liệu",
+        "archive": "Lưu trữ",
+        "other": "Khác"
+    },
     "quota": {
         "storage": "Dung lượng"
     },
