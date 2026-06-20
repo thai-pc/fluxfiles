@@ -397,6 +397,37 @@ const embedSrc = file.permanent_url || file.url; // prefer the stable one
 > TinyMCE, and Summernote plugins already prefer `permanent_url` automatically and
 > warn when they have to fall back to a presigned URL.
 
+### On-demand WebP
+
+FluxFiles generates three **fixed WebP variants** on upload (`thumb` 150 / `medium`
+768 / `large` 1920 px) — use `file.variants.<size>.url` and you're already serving
+WebP. For **arbitrary sizes on demand** (responsive images, exact widths), each
+image entry also carries an **`img_base`** URL:
+
+```js
+// From a selected/listed file, build a WebP at any size:
+const src = FluxFiles.imgUrl(file, { width: 800, quality: 80 });
+// → /api/fm/img?token=…&width=800&quality=80   (a resized WebP, cached in _variants/)
+```
+
+- **First request** converts + caches the WebP into the file's `_variants/`
+  directory (so the existing delete/trash cleanup invalidates it for free); later
+  requests serve the cache. The cache key is stamped with the source mtime, so a
+  re-upload never re-matches a stale image.
+- **Width** is rounded to 100px and clamped to `webp_max_width`; **quality** snaps
+  to `60`/`75`/`80`/`90`. This bounds the number of cache variants per file
+  (no unbounded growth from `?width=801,802,…`).
+- **Content negotiation:** add `&format=auto` and a browser that doesn't accept
+  `image/webp` is served the original untouched.
+- **SVG and animated GIFs are never converted** (served as-is); `webp_enabled: false`
+  disables the endpoint entirely (no `img_base`).
+
+> `img_base` carries a short-lived per-file token in the query string (an `<img>`
+> can't send an `Authorization` header) — the same tradeoff as the media stream
+> token: single-file scope + short TTL. It mints only when the disk config wires a
+> stream secret, so on-demand WebP is a **core-standalone / Docker** feature (the
+> Laravel/WordPress proxies don't expose `/api/fm/img`).
+
 ### Uploading multiple files
 
 Multi-file upload is always available in the file manager UI — no special option
@@ -704,6 +735,9 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `preview_url_ttl` | int | **seconds** | `7200` | Presigned GET-URL TTL for **media** files — longer so a long video doesn't 403 mid-playback. Capped at 24h |
 | `max_preview_mb` | int | **MB** | `500` | Max media size eligible for inline preview; larger files show a "too large" placeholder + download |
 | `stream_token_ttl` | int | **seconds** | `3600` | TTL of the per-file stream token used by gated-local media (`FLUXFILES_LOCAL_PRIVATE`) |
+| `webp_enabled` | bool | — | `true` | Expose the on-demand WebP endpoint (`/api/fm/img`) — image entries gain an `img_base` URL. `false` omits it |
+| `webp_max_width` | int | px | `2000` | Max resize width a transform request may ask for (clamped). Bounds the cache-variant count |
+| `webp_default_quality` | int | 1–100 | `80` | WebP quality used when a request omits `quality` (snapped to `60`/`75`/`80`/`90`) |
 
 > **Import from URL** fetches a public URL server-side and saves it like an upload
 > (`POST /api/fm/import-url` with `{ "url": "…", "path": "…" }`). It's SSRF-guarded
@@ -735,6 +769,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `variants` | `variants` | px | `null` | Per-tenant WebP variant widths — a map of `thumb`/`medium`/`large` to a width (16–8000 px). Unset names inherit `150`/`768`/`1920`. |
 | `import` | `allow_url_import`, … | — | `null` | **Import from URL** config (off unless set). An array: `['allow_url_import' => true, 'max_import_mb' => 20, 'import_url_allowlist' => ['*.unsplash.com'], 'import_path' => 'imports', 'import_rate_limit' => 10, 'import_concurrency' => 3]`. Only the keys you set are embedded; the rest inherit the server defaults. See [Import from URL](#import-from-url). |
 | `media` | `media_preview`, … | — | `null` | **Media-preview** config. An array: `['media_preview' => true, 'preview_url_ttl' => 7200, 'max_preview_mb' => 500, 'stream_token_ttl' => 3600]`. Only the keys you set are embedded; the rest inherit the defaults. |
+| `webp` | `webp_enabled`, … | — | `null` | **On-demand WebP** config. An array: `['webp_enabled' => true, 'webp_max_width' => 2000, 'webp_default_quality' => 80]`. Only the keys you set are embedded. See [On-demand WebP](#on-demand-webp). |
 
 > **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is
 > **seconds** (`ttl`), and `allowedExt` entries are **bare lowercase extensions**
