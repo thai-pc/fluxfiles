@@ -168,6 +168,17 @@ class DiskManager
      */
     private static function buildSftpAdapter(array $cfg)
     {
+        $root = (string) ($cfg['root'] ?? '/');
+        return new \League\Flysystem\PhpseclibV3\SftpAdapter(self::buildSftpProvider($cfg), $root);
+    }
+
+    /**
+     * Build the SFTP connection provider from a disk config (SSRF-checking the
+     * host). Shared by the Flysystem adapter and the raw-connection path used for
+     * chmod (which Flysystem only exposes as coarse public/private visibility).
+     */
+    private static function buildSftpProvider(array $cfg): \League\Flysystem\PhpseclibV3\SftpConnectionProvider
+    {
         $host = (string) ($cfg['host'] ?? '');
         if ($host === '') {
             throw new ApiException('SFTP disk: missing host', 400, 'sftp_config');
@@ -177,22 +188,35 @@ class DiskManager
         if (\class_exists('\\FluxFiles\\SsrfGuard')) {
             SsrfGuard::assertHostSafe($host);
         }
-
-        $port = (int) ($cfg['port'] ?? 22);
-        $username = (string) ($cfg['username'] ?? '');
-        $root = (string) ($cfg['root'] ?? '/');
-
-        $provider = \League\Flysystem\PhpseclibV3\SftpConnectionProvider::fromArray([
-            'host'           => $host,
-            'username'       => $username,
-            'password'       => ($cfg['password'] ?? '') !== '' ? (string) $cfg['password'] : null,
-            'privateKey'     => ($cfg['private_key'] ?? '') !== '' ? (string) $cfg['private_key'] : null,
-            'passphrase'     => ($cfg['private_key_passphrase'] ?? '') !== '' ? (string) $cfg['private_key_passphrase'] : null,
-            'port'           => $port,
-            'timeout'        => (int) ($cfg['timeout'] ?? 20),
-            'maxTries'       => 2,
+        return \League\Flysystem\PhpseclibV3\SftpConnectionProvider::fromArray([
+            'host'       => $host,
+            'username'   => (string) ($cfg['username'] ?? ''),
+            'password'   => ($cfg['password'] ?? '') !== '' ? (string) $cfg['password'] : null,
+            'privateKey' => ($cfg['private_key'] ?? '') !== '' ? (string) $cfg['private_key'] : null,
+            'passphrase' => ($cfg['private_key_passphrase'] ?? '') !== '' ? (string) $cfg['private_key_passphrase'] : null,
+            'port'       => (int) ($cfg['port'] ?? 22),
+            'timeout'    => (int) ($cfg['timeout'] ?? 20),
+            'maxTries'   => 2,
         ]);
+    }
 
-        return new \League\Flysystem\PhpseclibV3\SftpAdapter($provider, $root);
+    /**
+     * The raw phpseclib SFTP connection for a disk + the disk root, so a caller
+     * can read/set Unix file modes (chmod) — beyond Flysystem's public/private
+     * visibility. Throws for a non-SFTP disk.
+     *
+     * @return array{0:\phpseclib3\Net\SFTP,1:string} [connection, root]
+     */
+    public function sftpConnection(string $name): array
+    {
+        if (!isset($this->configs[$name])) {
+            throw new ApiException("Disk '{$name}' is not configured", 400);
+        }
+        $cfg = $this->configs[$name];
+        if (($cfg['driver'] ?? '') !== 'sftp') {
+            throw new ApiException("Disk '{$name}' is not an SFTP disk", 400, 'not_sftp');
+        }
+        $conn = self::buildSftpProvider($cfg)->provideConnection();
+        return [$conn, rtrim((string) ($cfg['root'] ?? '/'), '/')];
     }
 }
