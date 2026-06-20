@@ -638,6 +638,14 @@ function handleDeleteMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claim
 function handleMediaStream(): void
 {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+    // Mirror the main app's guard: a misconfigured/placeholder secret must not
+    // verify stream tokens either (consistency — the rest of the API is disabled).
+    if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'FLUXFILES_SECRET is not configured';
+        return;
+    }
     try {
         $scope = \FluxFiles\StreamToken::verify((string) ($_GET['token'] ?? ''), $secret);
     } catch (ApiException $e) {

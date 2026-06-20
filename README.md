@@ -1487,6 +1487,7 @@ FLUXFILES_LOCALE=vi
 | **Duplicate detection** | SHA-256 hash prevents redundant uploads |
 | **Audit trail** | All write actions logged with user ID, action, IP, user agent. Rotation at 5MB. |
 | **Presign validation** | Method restricted to GET/PUT only, TTL capped at 86400 seconds |
+| **Gated media stream** | `/api/fm/stream` reads disk/path from the **signed** token (never the query), `realpath`-contains the file in the disk root (symlink/traversal guard), serves only `local` `private` disks, and forces non-inline types to download with `nosniff` |
 | **Error handling** | Generic errors to client, detailed errors to server log only |
 | **Search XSS** | HTML entities escaped before highlight `<mark>` tags applied |
 
@@ -1511,6 +1512,16 @@ Mitigations regardless of delivery:
   token grants as little as possible.
 - **Serve over HTTPS** so tokens aren't exposed on the wire.
 - Don't log full request URLs (which may contain `?token=`) at your proxy.
+
+> **Gated media stream tokens** (`FLUXFILES_LOCAL_PRIVATE=true`): an `<video>`/
+> `<audio>` element can't send an `Authorization` header, so the per-file
+> `/api/fm/stream` token rides the **query string** — and like any URL token, it
+> can leak via access logs / `Referer`. It is deliberately **scoped to a single
+> file** with a short TTL (`stream_token_ttl`, default 1h), so a leak exposes only
+> that one file, briefly. Lower `stream_token_ttl` for a tighter window, serve over
+> HTTPS, and avoid logging full URLs. (This is **not** rate-limited per request:
+> HTTP Range seeking fires many requests per playback, so a per-request limit would
+> throttle legitimate seeking — the single-file scope + short TTL is the control.)
 
 ### Production Checklist
 

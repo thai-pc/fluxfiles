@@ -3,6 +3,22 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.26] — 2026-06-20
+
+> Released: core `core-v0.2.21` (Packagist).
+
+### Security
+
+- **Gated media stream hardening** (follow-up to the security review of M4):
+  - `/api/fm/stream` now rejects a missing/placeholder `FLUXFILES_SECRET` with
+    `500` (consistency with the main API, which is already disabled in that state)
+    instead of attempting to verify tokens.
+  - Documented the stream endpoint's protections (signed disk/path, realpath
+    containment, `local`-`private`-only, forced download + `nosniff` for
+    non-inline types) in the Security table, and the deliberate query-string
+    token tradeoff (single-file scope + short `stream_token_ttl`; intentionally
+    not per-request rate-limited so HTTP Range seeking isn't throttled).
+
 ## [0.2.25] — 2026-06-20
 
 > Released: core `core-v0.2.20` (Packagist), Laravel `laravel-v0.2.9`,
