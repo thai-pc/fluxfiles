@@ -247,6 +247,43 @@ test('S3 disk with endpoint creates Filesystem without error (retain_visibility=
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► SFTP driver{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('SFTP disk builds a Filesystem to a public host (lazy connection)', function () {
+    // github.com resolves to a public IP; the adapter is built without connecting.
+    $dm = new FluxFiles\DiskManager([
+        'sftp' => ['driver' => 'sftp', 'host' => 'github.com', 'username' => 'u', 'password' => 'p', 'root' => '/'],
+    ]);
+    $fs = $dm->disk('sftp');
+    assertEqual(true, $fs instanceof League\Flysystem\Filesystem, 'sftp → Filesystem');
+});
+
+test('SFTP disk to a private/metadata host is rejected by the SSRF guard', function () {
+    foreach (['169.254.169.254', '127.0.0.1', '10.0.0.5', 'localhost'] as $bad) {
+        $dm = new FluxFiles\DiskManager([
+            'sftp' => ['driver' => 'sftp', 'host' => $bad, 'username' => 'u', 'password' => 'p'],
+        ]);
+        try {
+            $dm->disk('sftp');
+            throw new \RuntimeException("Should have blocked $bad");
+        } catch (FluxFiles\ApiException $e) {
+            assertEqual('ssrf_blocked', $e->getErrorCode(), "blocked $bad");
+        }
+    }
+});
+
+test('SFTP disk without a host → clean config error', function () {
+    $dm = new FluxFiles\DiskManager(['sftp' => ['driver' => 'sftp', 'username' => 'u']]);
+    try {
+        $dm->disk('sftp');
+        throw new \RuntimeException('Should have thrown');
+    } catch (FluxFiles\ApiException $e) {
+        assertEqual('sftp_config', $e->getErrorCode());
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
 

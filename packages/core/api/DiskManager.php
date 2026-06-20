@@ -148,10 +148,51 @@ class DiskManager
             if ($wantsAcl) {
                 return new Filesystem($adapter, ['visibility' => 'public']);
             }
+        } elseif ($driver === 'sftp') {
+            $adapter = self::buildSftpAdapter($cfg);
         } else {
             throw new ApiException("Unknown disk driver: {$driver}", 400);
         }
 
         return new Filesystem($adapter);
+    }
+
+    /**
+     * Build a Flysystem SFTP adapter (connect/disconnect per request — no pool,
+     * no DB). Auth is password OR private key (key wins when both are set). The
+     * host is SSRF-checked so an SFTP disk can't be pointed at a loopback /
+     * link-local / cloud-metadata address the way a BYOB S3 endpoint is guarded.
+     *
+     * @param array<string,mixed> $cfg host, port, username, password, private_key,
+     *        private_key_passphrase, root
+     */
+    private static function buildSftpAdapter(array $cfg)
+    {
+        $host = (string) ($cfg['host'] ?? '');
+        if ($host === '') {
+            throw new ApiException('SFTP disk: missing host', 400, 'sftp_config');
+        }
+        // Reuse the SSRF denylist (same guard the BYOB S3 endpoint check uses):
+        // reject loopback / RFC1918 / link-local / CGNAT / cloud-metadata targets.
+        if (\class_exists('\\FluxFiles\\SsrfGuard')) {
+            SsrfGuard::assertHostSafe($host);
+        }
+
+        $port = (int) ($cfg['port'] ?? 22);
+        $username = (string) ($cfg['username'] ?? '');
+        $root = (string) ($cfg['root'] ?? '/');
+
+        $provider = \League\Flysystem\PhpseclibV3\SftpConnectionProvider::fromArray([
+            'host'           => $host,
+            'username'       => $username,
+            'password'       => ($cfg['password'] ?? '') !== '' ? (string) $cfg['password'] : null,
+            'privateKey'     => ($cfg['private_key'] ?? '') !== '' ? (string) $cfg['private_key'] : null,
+            'passphrase'     => ($cfg['private_key_passphrase'] ?? '') !== '' ? (string) $cfg['private_key_passphrase'] : null,
+            'port'           => $port,
+            'timeout'        => (int) ($cfg['timeout'] ?? 20),
+            'maxTries'       => 2,
+        ]);
+
+        return new \League\Flysystem\PhpseclibV3\SftpAdapter($provider, $root);
     }
 }

@@ -232,6 +232,43 @@ final class SsrfGuard
     }
 
     /**
+     * Assert a bare host (no scheme) resolves only to public addresses — the
+     * SFTP-disk equivalent of assertSafeUrl, so an SFTP disk can't be aimed at a
+     * loopback / RFC1918 / link-local / CGNAT / cloud-metadata target. Throws
+     * ApiException(422, ssrf_blocked) otherwise. Returns the resolved IPs.
+     *
+     * @return list<string>
+     */
+    public static function assertHostSafe(string $host): array
+    {
+        $host = strtolower(trim($host, " \t[]"));
+        if ($host === '') {
+            throw new ApiException('SFTP host is required', 422, 'ssrf_blocked');
+        }
+        if ($host === 'localhost'
+            || self::hasSuffix($host, '.localhost')
+            || self::hasSuffix($host, '.local')
+            || self::hasSuffix($host, '.internal')
+        ) {
+            throw new ApiException('This SFTP host is not allowed', 422, 'ssrf_blocked');
+        }
+        // Test-only fixture bypass (shared with assertSafeUrl). Empty in production.
+        if (self::$allowTestHosts !== [] && in_array($host, self::$allowTestHosts, true)) {
+            return [$host];
+        }
+        $ips = self::resolveHostIps($host);
+        if ($ips === []) {
+            throw new ApiException('Could not resolve the SFTP host', 422, 'ssrf_blocked');
+        }
+        foreach ($ips as $ip) {
+            if (!self::isPublicIp($ip)) {
+                throw new ApiException('SFTP host resolves to a private or reserved address', 422, 'ssrf_blocked');
+            }
+        }
+        return $ips;
+    }
+
+    /**
      * Post-connect re-check: the IP curl actually connected to must still be
      * public. Defends DNS rebinding and any redirect that slipped a private hop.
      *
