@@ -46,7 +46,9 @@
         "list_view": "सूची दृश्य",
         "search_hint": "फ़ाइलें और फ़ोल्डर खोजें...",
         "theme_toggle": "लाइट/डार्क टॉगल करें",
-        "language": "भाषा"
+        "language": "भाषा",
+        "fullscreen": "फ़ुलस्क्रीन",
+        "fullscreen_blocked": "यहाँ फ़ुलस्क्रीन उपलब्ध नहीं है"
     },
     "sidebar": {
         "all_files": "सभी फ़ाइलें",
@@ -98,6 +100,11 @@
         "extracted": "{n} फ़ाइलें निकाली गईं",
         "failed": "zip नहीं बना सका",
         "extract_failed": "निकालना विफल"
+    },
+    "zoom": {
+        "in": "ज़ूम इन",
+        "out": "ज़ूम आउट",
+        "reset": "रीसेट करें"
     },
     "quota": {
         "storage": "स्टोरेज"

@@ -46,7 +46,9 @@
         "list_view": "列表视图",
         "search_hint": "搜索文件和文件夹...",
         "theme_toggle": "切换明暗",
-        "language": "语言"
+        "language": "语言",
+        "fullscreen": "全屏",
+        "fullscreen_blocked": "此处无法全屏"
     },
     "sidebar": {
         "all_files": "全部文件",
@@ -98,6 +100,11 @@
         "extracted": "已解压 {n} 个文件",
         "failed": "无法创建压缩包",
         "extract_failed": "解压失败"
+    },
+    "zoom": {
+        "in": "放大",
+        "out": "缩小",
+        "reset": "重置"
     },
     "quota": {
         "storage": "存储空间"

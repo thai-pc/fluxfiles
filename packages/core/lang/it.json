@@ -46,7 +46,9 @@
         "list_view": "Vista elenco",
         "search_hint": "Cerca file e cartelle...",
         "theme_toggle": "Alterna chiaro/scuro",
-        "language": "Lingua"
+        "language": "Lingua",
+        "fullscreen": "Schermo intero",
+        "fullscreen_blocked": "Lo schermo intero non è disponibile qui"
     },
     "sidebar": {
         "all_files": "Tutti i file",
@@ -98,6 +100,11 @@
         "extracted": "{n} file estratti",
         "failed": "Impossibile creare lo zip",
         "extract_failed": "Estrazione non riuscita"
+    },
+    "zoom": {
+        "in": "Ingrandisci",
+        "out": "Riduci",
+        "reset": "Reimposta"
     },
     "quota": {
         "storage": "Archiviazione"

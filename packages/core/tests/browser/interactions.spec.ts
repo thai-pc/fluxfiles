@@ -476,6 +476,9 @@ test('picker mode: double-clicking a file emits FM_SELECT to the host page', asy
   expect(sel.name).toBe(fname);
   expect(sel.disk).toBe('local');
   expect(String(sel.key)).toContain(fname);
+  // The on-demand WebP base rides the select payload, so the host can build any
+  // size via FluxFiles.imgUrl(file, {width, quality}).
+  expect(String(sel.img_base)).toContain('/api/fm/img');
 });
 
 test('picker multiple: selecting several files emits an FM_SELECT array', async ({ page }) => {

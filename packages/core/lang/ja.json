@@ -46,7 +46,9 @@
         "list_view": "リスト表示",
         "search_hint": "ファイルとフォルダを検索...",
         "theme_toggle": "ライト/ダーク切り替え",
-        "language": "言語"
+        "language": "言語",
+        "fullscreen": "全画面",
+        "fullscreen_blocked": "ここでは全画面にできません"
     },
     "sidebar": {
         "all_files": "すべてのファイル",
@@ -98,6 +100,11 @@
         "extracted": "{n} 個のファイルを展開しました",
         "failed": "ZIPを作成できませんでした",
         "extract_failed": "展開に失敗しました"
+    },
+    "zoom": {
+        "in": "拡大",
+        "out": "縮小",
+        "reset": "リセット"
     },
     "quota": {
         "storage": "ストレージ"

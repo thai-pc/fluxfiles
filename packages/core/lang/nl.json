@@ -46,7 +46,9 @@
         "list_view": "Lijstweergave",
         "search_hint": "Bestanden en mappen zoeken...",
         "theme_toggle": "Licht/donker wisselen",
-        "language": "Taal"
+        "language": "Taal",
+        "fullscreen": "Volledig scherm",
+        "fullscreen_blocked": "Volledig scherm is hier niet beschikbaar"
     },
     "sidebar": {
         "all_files": "Alle bestanden",
@@ -98,6 +100,11 @@
         "extracted": "{n} bestanden uitgepakt",
         "failed": "Kon de zip niet maken",
         "extract_failed": "Uitpakken mislukt"
+    },
+    "zoom": {
+        "in": "Inzoomen",
+        "out": "Uitzoomen",
+        "reset": "Resetten"
     },
     "quota": {
         "storage": "Opslag"

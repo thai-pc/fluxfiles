@@ -3,6 +3,31 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.37] — 2026-06-21
+
+> Released: core `core-v0.2.32` (Packagist + Docker), SDK `@fluxfiles/sdk` `0.2.3`,
+> React `@fluxfiles/react` `0.2.4`, Vue `@fluxfiles/vue` `0.2.3`, WordPress
+> `wordpress-v0.2.17` (lock → core 0.2.32). Laravel/Node inherit via `^0.2.30`.
+
+### Added
+
+- **Zoomable image preview** — the fullscreen image lightbox now zooms (wheel /
+  click / +−, 100%–500%, snapped to the cursor), pans by dragging, and has a
+  control bar with a reset (⟲). Escape resets then closes.
+- **Whole-app fullscreen** — a fullscreen button (next to theme/usage) maximises
+  the file manager like a video's fullscreen button (Fullscreen API). Every iframe
+  surface (SDK, React, Vue, WordPress) now grants `allow="…; fullscreen"` so it
+  works embedded. New `toolbar.fullscreen` + `zoom` i18n namespaces ×16.
+
+### Changed
+
+- **`.ff-logo` now leads with the FluxFiles glyph** (the favicon's indigo
+  folder-check SVG) before the wordmark.
+- **`FM_SELECT` now carries `img_base` / `img_srcset` / `img_sizes`**, so a host
+  that picks an image can build any size via `FluxFiles.imgUrl(file, {width,
+  quality})` or use the responsive `srcset` — not just the fixed `variants`. (The
+  on-demand fields were previously only in `list()`.)
+
 ## [0.2.36] — 2026-06-21
 
 > Released: core `core-v0.2.31` (Packagist + Docker). WordPress lock refreshed;

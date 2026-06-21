@@ -46,7 +46,9 @@
         "list_view": "عرض قائمة",
         "search_hint": "البحث في الملفات والمجلدات...",
         "theme_toggle": "تبديل الوضع الفاتح/الداكن",
-        "language": "اللغة"
+        "language": "اللغة",
+        "fullscreen": "ملء الشاشة",
+        "fullscreen_blocked": "ملء الشاشة غير متاح هنا"
     },
     "sidebar": {
         "all_files": "جميع الملفات",
@@ -98,6 +100,11 @@
         "extracted": "تم استخراج {n} ملفًا",
         "failed": "تعذّر إنشاء ملف zip",
         "extract_failed": "فشل الاستخراج"
+    },
+    "zoom": {
+        "in": "تكبير",
+        "out": "تصغير",
+        "reset": "إعادة الضبط"
     },
     "quota": {
         "storage": "التخزين"

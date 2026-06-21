@@ -46,7 +46,9 @@
         "list_view": "Vista en lista",
         "search_hint": "Buscar archivos y carpetas...",
         "theme_toggle": "Alternar claro/oscuro",
-        "language": "Idioma"
+        "language": "Idioma",
+        "fullscreen": "Pantalla completa",
+        "fullscreen_blocked": "La pantalla completa no está disponible aquí"
     },
     "sidebar": {
         "all_files": "Todos los archivos",
@@ -98,6 +100,11 @@
         "extracted": "{n} archivos extraídos",
         "failed": "No se pudo crear el zip",
         "extract_failed": "Error al extraer"
+    },
+    "zoom": {
+        "in": "Acercar",
+        "out": "Alejar",
+        "reset": "Restablecer"
     },
     "quota": {
         "storage": "Almacenamiento"

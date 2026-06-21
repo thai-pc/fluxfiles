@@ -23,7 +23,8 @@
 <!-- Alpine 3 auto-calls the component's init() method — do NOT add x-init="init()"
      here too, or init() runs twice (two message listeners → duplicate FM_CONFIG
      handling → doubled list/quota/lang requests). -->
-<div class="ff-app" x-cloak :class="{ 'ff-sidebar-open': sidebarOpen, 'ff-picker-mode': config.mode === 'picker', 'ff-multiple-mode': config.multiple }" x-data="fluxFilesApp()">
+<div class="ff-app" x-cloak :class="{ 'ff-sidebar-open': sidebarOpen, 'ff-picker-mode': config.mode === 'picker', 'ff-multiple-mode': config.multiple }" x-data="fluxFilesApp()"
+     @fullscreenchange.document="syncFullscreen()" @webkitfullscreenchange.document="syncFullscreen()">
 
     <!-- ═══ i18n boot overlay ═══
          Covers the UI until translation messages are ready so raw i18n keys are
@@ -121,7 +122,14 @@
         <button class="ff-hamburger" @click="sidebarOpen = !sidebarOpen" aria-label="Toggle menu">
             <span></span><span></span><span></span>
         </button>
-        <span class="ff-logo">FluxFiles</span>
+        <span class="ff-logo">
+            <svg class="ff-logo-icon" width="20" height="20" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                <rect width="32" height="32" rx="7" fill="#4F46E5"/>
+                <path d="M8 10a2 2 0 012-2h4l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H10a2 2 0 01-2-2V10z" fill="#fff" fill-opacity="0.92"/>
+                <path d="M12 17l2.5-3 2 2 3.5-4" stroke="#4F46E5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="ff-logo-text">FluxFiles</span>
+        </span>
         <div class="ff-sep ff-sep-desktop"></div>
 
         <!-- Breadcrumb -->
@@ -181,6 +189,10 @@
                 </button>
                 <button class="ff-theme-toggle-sm" x-show="canManageTrash" @click="openTrash()" :title="t('trash.title')" :aria-label="t('trash.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6v14a2 2 0 002 2h8a2 2 0 002-2V6M10 11v6M14 11v6"/></svg>
+                </button>
+                <button class="ff-theme-toggle-sm" @click="toggleFullscreen()" :title="t('toolbar.fullscreen')" :aria-label="t('toolbar.fullscreen')" :aria-pressed="isFullscreen">
+                    <svg x-show="!isFullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
+                    <svg x-show="isFullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 01-2 2H3M16 3v3a2 2 0 002 2h3M8 21v-3a2 2 0 00-2-2H3M16 21v-3a2 2 0 012-2h3"/></svg>
                 </button>
             </div>
             <span class="ff-pills-sep"></span>
@@ -788,7 +800,7 @@
         <!-- Preview thumbnail (click image to view full) -->
         <div class="detail-thumb" x-show="detailFile"
              :class="{ 'detail-thumb-clickable': detailFile && isPreviewable(detailFile, 'image') && detailFile.url }"
-             @click="detailFile && isPreviewable(detailFile, 'image') && detailFile.url && (previewFullscreen = true)">
+             @click="detailFile && isPreviewable(detailFile, 'image') && detailFile.url && (resetZoom(), previewFullscreen = true)">
             <template x-if="detailFile && isPreviewable(detailFile, 'image') && detailFile.url">
                 <img :src="detailFile.url" :srcset="detailFile.img_srcset"
                      :sizes="detailFile.img_srcset ? (detailFile.img_sizes || '(max-width: 640px) 92vw, 380px') : null"
@@ -1028,13 +1040,24 @@
         </div>
     </div>
 
-    <!-- Preview lightbox (full-size image) -->
+    <!-- Preview lightbox (full-size image, zoomable) -->
     <div class="ff-preview-lightbox" x-show="previewFullscreen && detailFile && isPreviewable(detailFile, 'image')" x-transition.opacity
-         @click="previewFullscreen = false"
-         @keydown.escape.window="previewFullscreen = false">
+         @click="zoom.scale === 1 && closePreview()"
+         @keydown.escape.window="previewFullscreen && (zoom.scale > 1 ? resetZoom() : closePreview())"
+         @wheel.prevent="zoomWheel($event)"
+         @mousemove="panMove($event)" @mouseup="endPan()" @mouseleave="endPan()">
         <img :src="detailFile?.url" :srcset="detailFile?.img_srcset"
              :sizes="detailFile?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
-             :alt="detailFile?.name" @click.stop>
+             :alt="detailFile?.name" draggable="false"
+             class="ff-preview-img" :class="{ zoomed: zoom.scale > 1, dragging: zoom.dragging }"
+             :style="'transform: translate(' + zoom.x + 'px,' + zoom.y + 'px) scale(' + zoom.scale + ')'"
+             @click.stop="zoomClick($event)" @dblclick.stop="zoomToggle($event)" @mousedown.stop="startPan($event)">
+        <div class="ff-zoom-bar" @click.stop>
+            <button class="ff-zoom-btn" @click="zoomStep(-0.5)" :disabled="zoom.scale <= 1" :title="t('zoom.out')" aria-label="zoom out">&minus;</button>
+            <span class="ff-zoom-level" x-text="Math.round(zoom.scale * 100) + '%'"></span>
+            <button class="ff-zoom-btn" @click="zoomStep(0.5)" :disabled="zoom.scale >= 5" :title="t('zoom.in')" aria-label="zoom in">+</button>
+            <button class="ff-zoom-btn" @click="resetZoom()" :disabled="zoom.scale === 1" :title="t('zoom.reset')" aria-label="reset zoom">⟲</button>
+        </div>
     </div>
 
     <!-- ═══ New folder modal ═══ -->

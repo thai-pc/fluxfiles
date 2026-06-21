@@ -46,7 +46,9 @@
         "list_view": "Listenansicht",
         "search_hint": "Dateien und Ordner suchen...",
         "theme_toggle": "Hell/Dunkel umschalten",
-        "language": "Sprache"
+        "language": "Sprache",
+        "fullscreen": "Vollbild",
+        "fullscreen_blocked": "Vollbild ist hier nicht verfügbar"
     },
     "sidebar": {
         "all_files": "Alle Dateien",
@@ -98,6 +100,11 @@
         "extracted": "{n} Dateien entpackt",
         "failed": "ZIP konnte nicht erstellt werden",
         "extract_failed": "Entpacken fehlgeschlagen"
+    },
+    "zoom": {
+        "in": "Vergrößern",
+        "out": "Verkleinern",
+        "reset": "Zurücksetzen"
     },
     "quota": {
         "storage": "Speicher"

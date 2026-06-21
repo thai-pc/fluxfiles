@@ -46,7 +46,9 @@
         "list_view": "Dạng danh sách",
         "search_hint": "Tìm kiếm file và thư mục...",
         "theme_toggle": "Chuyển sáng/tối",
-        "language": "Ngôn ngữ"
+        "language": "Ngôn ngữ",
+        "fullscreen": "Toàn màn hình",
+        "fullscreen_blocked": "Không thể bật toàn màn hình ở đây"
     },
     "sidebar": {
         "all_files": "Tất cả file",
@@ -98,6 +100,11 @@
         "extracted": "Đã giải nén {n} tệp",
         "failed": "Không tạo được tệp zip",
         "extract_failed": "Giải nén thất bại"
+    },
+    "zoom": {
+        "in": "Phóng to",
+        "out": "Thu nhỏ",
+        "reset": "Đặt lại"
     },
     "quota": {
         "storage": "Dung lượng"

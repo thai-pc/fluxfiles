@@ -46,7 +46,9 @@
         "list_view": "List view",
         "search_hint": "Search files and folders...",
         "theme_toggle": "Toggle light/dark",
-        "language": "Language"
+        "language": "Language",
+        "fullscreen": "Fullscreen",
+        "fullscreen_blocked": "Fullscreen is not available here"
     },
     "sidebar": {
         "all_files": "All files",
@@ -98,6 +100,11 @@
         "extracted": "Extracted {n} files",
         "failed": "Could not create the zip",
         "extract_failed": "Extract failed"
+    },
+    "zoom": {
+        "in": "Zoom in",
+        "out": "Zoom out",
+        "reset": "Reset zoom"
     },
     "quota": {
         "storage": "Storage"

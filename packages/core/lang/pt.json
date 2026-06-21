@@ -46,7 +46,9 @@
         "list_view": "Visualização em lista",
         "search_hint": "Pesquisar arquivos e pastas...",
         "theme_toggle": "Alternar claro/escuro",
-        "language": "Idioma"
+        "language": "Idioma",
+        "fullscreen": "Tela cheia",
+        "fullscreen_blocked": "A tela cheia não está disponível aqui"
     },
     "sidebar": {
         "all_files": "Todos os arquivos",
@@ -98,6 +100,11 @@
         "extracted": "{n} arquivos extraídos",
         "failed": "Não foi possível criar o zip",
         "extract_failed": "Falha ao extrair"
+    },
+    "zoom": {
+        "in": "Ampliar",
+        "out": "Reduzir",
+        "reset": "Redefinir"
     },
     "quota": {
         "storage": "Armazenamento"
