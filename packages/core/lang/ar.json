@@ -46,7 +46,9 @@
         "list_view": "عرض قائمة",
         "search_hint": "البحث في الملفات والمجلدات...",
         "theme_toggle": "تبديل الوضع الفاتح/الداكن",
-        "language": "اللغة"
+        "language": "اللغة",
+        "fullscreen": "ملء الشاشة",
+        "fullscreen_blocked": "ملء الشاشة غير متاح هنا"
     },
     "sidebar": {
         "all_files": "جميع الملفات",

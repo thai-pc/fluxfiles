@@ -46,7 +46,9 @@
         "list_view": "Vista elenco",
         "search_hint": "Cerca file e cartelle...",
         "theme_toggle": "Alterna chiaro/scuro",
-        "language": "Lingua"
+        "language": "Lingua",
+        "fullscreen": "Schermo intero",
+        "fullscreen_blocked": "Lo schermo intero non è disponibile qui"
     },
     "sidebar": {
         "all_files": "Tutti i file",

@@ -92,7 +92,8 @@ export const FluxFiles = forwardRef<FluxFilesHandle, FluxFilesProps>(
           ref={handle.iframeRef}
           src={handle.iframeSrc}
           style={{ width: '100%', height: '100%', border: 'none' }}
-          allow="clipboard-write"
+          allow="clipboard-write; fullscreen"
+          allowFullScreen
           title="FluxFiles File Manager"
         />
       </div>

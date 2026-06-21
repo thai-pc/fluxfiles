@@ -46,7 +46,9 @@
         "list_view": "Vue en liste",
         "search_hint": "Rechercher fichiers et dossiers...",
         "theme_toggle": "Basculer clair/sombre",
-        "language": "Langue"
+        "language": "Langue",
+        "fullscreen": "Plein écran",
+        "fullscreen_blocked": "Le plein écran n'est pas disponible ici"
     },
     "sidebar": {
         "all_files": "Tous les fichiers",

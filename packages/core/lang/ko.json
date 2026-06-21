@@ -46,7 +46,9 @@
         "list_view": "목록 보기",
         "search_hint": "파일 및 폴더 검색...",
         "theme_toggle": "라이트/다크 전환",
-        "language": "언어"
+        "language": "언어",
+        "fullscreen": "전체 화면",
+        "fullscreen_blocked": "여기서는 전체 화면을 사용할 수 없습니다"
     },
     "sidebar": {
         "all_files": "모든 파일",

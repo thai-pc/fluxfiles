@@ -75,7 +75,8 @@ defineExpose({
       :ref="(el) => { handle.iframeRef.value = el as HTMLIFrameElement | null }"
       :src="handle.iframeSrc.value"
       style="width: 100%; height: 100%; border: none"
-      allow="clipboard-write"
+      allow="clipboard-write; fullscreen"
+      allowfullscreen
       title="FluxFiles File Manager"
     />
   </div>

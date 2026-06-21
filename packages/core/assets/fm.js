@@ -2077,6 +2077,24 @@ function fluxFilesApp() {
             this.applyTheme(isDark ? 'light' : 'dark');
         },
 
+        // ── Fullscreen the whole app (like a video's fullscreen button) ──────
+        isFullscreen: false,
+        _fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; },
+        toggleFullscreen() {
+            if (!this._fsElement()) {
+                const el = document.documentElement;
+                const req = el.requestFullscreen || el.webkitRequestFullscreen;
+                if (!req) { this.showToast(this.t('toolbar.fullscreen_blocked') || 'Fullscreen is not available here', 'error'); return; }
+                const p = req.call(el);
+                // In an embedded iframe this rejects unless the host allows fullscreen.
+                if (p && p.catch) p.catch(() => this.showToast(this.t('toolbar.fullscreen_blocked') || 'Fullscreen is not available here', 'error'));
+            } else {
+                const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                if (exit) exit.call(document);
+            }
+        },
+        syncFullscreen() { this.isFullscreen = !!this._fsElement(); },
+
         _updateThemeClass() {
             const root = document.documentElement;
             let isDark = false;

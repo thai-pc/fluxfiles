@@ -46,7 +46,9 @@
         "list_view": "Список",
         "search_hint": "Поиск файлов и папок...",
         "theme_toggle": "Переключить светлую/тёмную тему",
-        "language": "Язык"
+        "language": "Язык",
+        "fullscreen": "Полный экран",
+        "fullscreen_blocked": "Полноэкранный режим здесь недоступен"
     },
     "sidebar": {
         "all_files": "Все файлы",

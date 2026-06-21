@@ -46,7 +46,9 @@
         "list_view": "Liste görünümü",
         "search_hint": "Dosya ve klasör ara...",
         "theme_toggle": "Açık/koyu tema değiştir",
-        "language": "Dil"
+        "language": "Dil",
+        "fullscreen": "Tam ekran",
+        "fullscreen_blocked": "Tam ekran burada kullanılamıyor"
     },
     "sidebar": {
         "all_files": "Tüm dosyalar",

@@ -46,7 +46,9 @@
         "list_view": "มุมมองรายการ",
         "search_hint": "ค้นหาไฟล์และโฟลเดอร์...",
         "theme_toggle": "สลับธีมสว่าง/มืด",
-        "language": "ภาษา"
+        "language": "ภาษา",
+        "fullscreen": "เต็มจอ",
+        "fullscreen_blocked": "ไม่สามารถแสดงเต็มจอที่นี่ได้"
     },
     "sidebar": {
         "all_files": "ไฟล์ทั้งหมด",

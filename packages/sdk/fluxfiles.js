@@ -137,7 +137,10 @@
             iframe.id = 'fluxfiles-iframe';
             iframe.src = endpoint + '/public/index.html';
             iframe.style.cssText = 'width:100%;height:100%;border:none;';
-            iframe.setAttribute('allow', 'clipboard-write');
+            // `fullscreen` lets the embedded app's "fullscreen" button work; the
+            // legacy attribute covers older browsers.
+            iframe.setAttribute('allow', 'clipboard-write; fullscreen');
+            iframe.setAttribute('allowfullscreen', 'true');
 
             if (!config.container) {
                 // Modal overlay — UI scaled down 5% (icons, text, spacing)

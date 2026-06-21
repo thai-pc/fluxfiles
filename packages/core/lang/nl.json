@@ -46,7 +46,9 @@
         "list_view": "Lijstweergave",
         "search_hint": "Bestanden en mappen zoeken...",
         "theme_toggle": "Licht/donker wisselen",
-        "language": "Taal"
+        "language": "Taal",
+        "fullscreen": "Volledig scherm",
+        "fullscreen_blocked": "Volledig scherm is hier niet beschikbaar"
     },
     "sidebar": {
         "all_files": "Alle bestanden",
