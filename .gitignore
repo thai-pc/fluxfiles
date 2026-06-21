@@ -56,3 +56,4 @@ docs/ROADMAP.md
 packages/sdk/package-lock.json
 packages/ckeditor4/package-lock.json
 packages/tinymce/package-lock.json
+docs/PHASE2-OPTIMIZATION-PLAN.md
