@@ -2870,6 +2870,10 @@ function fluxFilesApp() {
                     css(base + '/theme/material-darker.min.css'),
                 ]);
                 await js(base + '/codemirror.min.js');
+                // The 'simple mode' addon must load before modes built on it
+                // (rust, dockerfile) — otherwise they throw `defineSimpleMode is
+                // not a function` at load. Non-fatal but noisy; load it first.
+                try { await js(base + '/addon/mode/simple.min.js'); } catch (e) { /* skip */ }
                 // Order matters: htmlmixed needs xml/javascript/css; php needs clike+htmlmixed.
                 const modes = [
                     'xml','javascript','css','clike','htmlmixed','php','jsx','python','ruby',
