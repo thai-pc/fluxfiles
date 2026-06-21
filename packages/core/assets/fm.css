@@ -15,8 +15,8 @@
     --border-radius-lg: 16px;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
 
-    --ff-primary: #2563eb;
-    --ff-primary-hover: #1d4ed8;
+    --ff-primary: #8957e5;
+    --ff-primary-hover: #7745d3;
     --ff-bg: var(--color-background-primary);
     --ff-bg-secondary: var(--color-background-secondary);
     --ff-bg-hover: #f1f5f9;
@@ -49,8 +49,8 @@
     --color-background-success: #0d1f14;
     --color-border-secondary: rgba(255,255,255,0.08);
     --color-border-tertiary: rgba(255,255,255,0.05);
-    --ff-primary: #4d8ef8;
-    --ff-primary-hover: #3b7def;
+    --ff-primary: #a98aec;
+    --ff-primary-hover: #9670e8;
     --ff-bg-hover: rgba(255,255,255,0.06);
     --ff-success: #34d399;
     --ff-danger: #f87171;
@@ -1844,8 +1844,8 @@ body {
     width: 48px;
     height: 48px;
     border-radius: 12px;
-    background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
-    color: #2563eb;
+    background: linear-gradient(135deg, #ede9fb 0%, #ddd3f6 100%);
+    color: #8957e5;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1893,7 +1893,7 @@ body {
 .ff-new-folder-input:focus {
     outline: none;
     border-color: var(--ff-primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    box-shadow: 0 0 0 3px rgba(137, 87, 229, 0.15);
 }
 
 .dark .ff-new-folder-input:focus { box-shadow: 0 0 0 3px rgba(77, 142, 248, 0.15); }

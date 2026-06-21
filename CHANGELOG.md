@@ -19,9 +19,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Changed
 
-- **Brand: recolor the logo + favicon to the brand blue (`#1A56A0`).** The core
-  app used indigo (`#4F46E5`) while the marketing site uses blue; the embedded app
-  and the landing now share one mark (the folder-check glyph in `#1A56A0`).
+- **Brand: the primary color is now purple `#8957e5`.** The core UI accent
+  (`--ff-primary` — buttons / links / focus ring, light + dark), the logo, and the
+  favicon all move to `#8957e5`; the marketing site adopts the same accent. One
+  brand across the embedded app and the landing.
 
 ## [0.2.37] — 2026-06-21
 
