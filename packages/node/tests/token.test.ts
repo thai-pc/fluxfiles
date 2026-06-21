@@ -115,6 +115,10 @@ describe('createToken', () => {
         allowDownload: false,
         allowChmod: false,
         allowCodeEdit: true,
+        allowZip: false,
+        allowExtract: false,
+        zipMaxMb: 50,
+        zipMaxFiles: 7,
         watermarkEnabled: true,
         watermarkType: 'text',
         watermarkText: '© Acme',
@@ -126,6 +130,10 @@ describe('createToken', () => {
     expect(c.allow_download).toBe(false);
     expect(c.allow_chmod).toBe(false);
     expect(c.allow_code_edit).toBe(true);
+    expect(c.allow_zip).toBe(false);
+    expect(c.allow_extract).toBe(false);
+    expect(c.zip_max_mb).toBe(50);
+    expect(c.zip_max_files).toBe(7);
     expect(c.watermark_enabled).toBe(true);
     expect(c.watermark_text).toBe('© Acme');
     expect(c.watermark_position).toBe('center');

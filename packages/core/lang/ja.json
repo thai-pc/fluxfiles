@@ -92,6 +92,13 @@
         "unsaved": "未保存の変更",
         "discard_confirm": "未保存の変更を破棄しますか？"
     },
+    "zip": {
+        "download": "ZIPをダウンロード",
+        "extract": "展開",
+        "extracted": "{n} 個のファイルを展開しました",
+        "failed": "ZIPを作成できませんでした",
+        "extract_failed": "展開に失敗しました"
+    },
     "quota": {
         "storage": "ストレージ"
     },

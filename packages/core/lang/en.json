@@ -92,6 +92,13 @@
         "unsaved": "Unsaved changes",
         "discard_confirm": "Discard unsaved changes?"
     },
+    "zip": {
+        "download": "Download ZIP",
+        "extract": "Extract",
+        "extracted": "Extracted {n} files",
+        "failed": "Could not create the zip",
+        "extract_failed": "Extract failed"
+    },
     "quota": {
         "storage": "Storage"
     },

@@ -92,6 +92,13 @@
         "unsaved": "Alterações não salvas",
         "discard_confirm": "Descartar as alterações não salvas?"
     },
+    "zip": {
+        "download": "Baixar ZIP",
+        "extract": "Extrair",
+        "extracted": "{n} arquivos extraídos",
+        "failed": "Não foi possível criar o zip",
+        "extract_failed": "Falha ao extrair"
+    },
     "quota": {
         "storage": "Armazenamento"
     },

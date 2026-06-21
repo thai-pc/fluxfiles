@@ -760,6 +760,33 @@ $token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 
     ]);
 ```
 
+### Zip / Extract
+
+Download a multi-file/-folder selection as a zip, or extract a zip in place —
+both synchronous (no queue/worker; that needs a DB, which FluxFiles doesn't have).
+
+- **`POST /api/fm/zip`** `{disk, paths[], name?}` streams a `.zip` of the selected
+  files **and folders** (recursive), constant-memory via ZipStream (each entry
+  piped through Flysystem, so it works on local/S3/R2/SFTP). Needs read perm +
+  `allow_download`; a pre-flight rejects (`413`) anything over `zip_max_mb` /
+  `zip_max_files` **before** a byte is streamed. It streams binary through the app,
+  so — like media `stream`/`img` — it's a **core-standalone / Docker** endpoint
+  (the Laravel/WordPress proxies don't expose it).
+- **`POST /api/fm/extract`** `{disk, path, dest?}` extracts a `.zip` in place
+  (default dest: a folder named after the archive). Returns JSON, so it **is**
+  proxied by Laravel/WordPress. Two-pass = atomic (validates every entry, then
+  writes — a single bad entry aborts the whole extract).
+
+> 🔒 **Extract is hardened against the classic archive attacks:** **zip-slip**
+> (absolute / `..` / drive-letter entries rejected), **zip-bomb** (uncompressed
+> size + entry-count caps, and the per-token storage **quota** on the total), and
+> the always-on **dangerous-extension** block (a zip can't smuggle a `.php`/`.sh`)
+> plus the token's `ext` allowlist. Nothing is written when any entry fails.
+
+In the UI, a **Download ZIP** button appears in the selection toolbar (and on a
+folder), and an **Extract** action on `.zip` files. Claims: `allow_zip` /
+`allow_extract` (default true), `zip_max_mb` (1024), `zip_max_files` (10000).
+
 ### Adding a Custom Disk
 
 Add a new entry to `config/disks.php`:
@@ -899,6 +926,10 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `srcset_sizes` | string | — | _(unset)_ | When set, emitted as the `img_sizes` attribute to pair with `img_srcset` (e.g. `"(max-width: 600px) 100vw, 50vw"`) |
 | `allow_download` | bool | — | `true` | When `false` (preview-only), `list()` withholds `url`/`permanent_url`/`variants` for files and GET presign returns `403` — only the (watermarked) `img_base` remains for images |
 | `allow_chmod` | bool | — | `true` | Allow changing Unix file permissions (`POST /api/fm/chmod`) on an SFTP disk. `false` makes the SFTP token read-only for permissions |
+| `allow_zip` | bool | — | `true` | Allow zip download of a selection (`POST /api/fm/zip`). Also requires `allow_download`. `false` hides the Download ZIP action |
+| `allow_extract` | bool | — | `true` | Allow extracting a zip in place (`POST /api/fm/extract`). `false` hides the Extract action |
+| `zip_max_mb` | int | **MB** | `1024` | Max total uncompressed size for a zip/extract (pre-flight 413 / bomb cap) |
+| `zip_max_files` | int | — | `10000` | Max file count for a zip/extract |
 | `watermark_enabled` | bool | — | `false` | Overlay a watermark on the on-demand WebP (`/api/fm/img`). Off by default; the source file is never modified |
 | `watermark_type` | enum | — | `text` | `text` or `logo` (a PNG path in storage) |
 | `watermark_text` | string | — | — | Text for `type=text` (e.g. `© Acme`) |

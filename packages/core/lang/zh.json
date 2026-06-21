@@ -92,6 +92,13 @@
         "unsaved": "未保存的更改",
         "discard_confirm": "放弃未保存的更改？"
     },
+    "zip": {
+        "download": "下载 ZIP",
+        "extract": "解压",
+        "extracted": "已解压 {n} 个文件",
+        "failed": "无法创建压缩包",
+        "extract_failed": "解压失败"
+    },
     "quota": {
         "storage": "存储空间"
     },

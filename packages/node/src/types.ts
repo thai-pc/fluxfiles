@@ -100,6 +100,14 @@ export interface BaseTokenOptions {
   /** Allow editing a file's text content (GET/PUT /api/fm/content). Default **false** — editing
    *  config/executable files (wp-config.php, .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
   allowCodeEdit?: boolean;
+  /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
+  allowZip?: boolean;
+  /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */
+  allowExtract?: boolean;
+  /** Max total uncompressed size (MB) for a zip/extract. `0`/omitted = inherit (1024). */
+  zipMaxMb?: number;
+  /** Max file count for a zip/extract. `0`/omitted = inherit (10000). */
+  zipMaxFiles?: number;
   /** Enable on-the-fly watermark on `/api/fm/img` (source file is never modified). Default off. */
   watermarkEnabled?: boolean;
   /** Watermark kind: 'text' or 'logo' (a PNG path in storage). Default 'text'. */

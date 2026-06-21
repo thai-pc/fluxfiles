@@ -309,6 +309,17 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('allow_code_edit', $webp)) {
         $payload['allow_code_edit'] = (bool) $webp['allow_code_edit'];
     }
+    if (array_key_exists('allow_zip', $webp)) {
+        $payload['allow_zip'] = (bool) $webp['allow_zip'];
+    }
+    if (array_key_exists('allow_extract', $webp)) {
+        $payload['allow_extract'] = (bool) $webp['allow_extract'];
+    }
+    foreach (['zip_max_mb', 'zip_max_files'] as $k) {
+        if (!empty($webp[$k])) {
+            $payload[$k] = (int) $webp[$k];
+        }
+    }
     if (!empty($webp['watermark_enabled'])) {
         $payload['watermark_enabled'] = true;
         foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {

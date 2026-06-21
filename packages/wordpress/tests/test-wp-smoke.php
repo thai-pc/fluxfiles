@@ -150,6 +150,7 @@ test('generateToken forwards webp claims', function () use ($secret) {
 test('generateToken forwards watermark + allow_download claims', function () use ($secret) {
     $token = FluxFilesPlugin::generateToken(43, [
         'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true,
+        'allow_zip' => false, 'allow_extract' => false, 'zip_max_files' => 7,
         'watermark_enabled' => true, 'watermark_type' => 'logo', 'watermark_logo_path' => 'cfg/logo.png',
         'watermark_position' => 'top-right',
     ]);
@@ -157,6 +158,9 @@ test('generateToken forwards watermark + allow_download claims', function () use
     assertEqual(false, $c->allowDownload, 'allow_download');
     assertEqual(false, $c->allowChmod, 'allow_chmod');
     assertEqual(true, $c->allowCodeEdit, 'allow_code_edit');
+    assertEqual(false, $c->allowZip, 'allow_zip');
+    assertEqual(false, $c->allowExtract, 'allow_extract');
+    assertEqual(7, $c->zipMaxFiles, 'zip_max_files');
     assertEqual('logo', $c->watermark['type'], 'watermark type');
     assertEqual('cfg/logo.png', $c->watermark['logo_path'], 'watermark logo_path');
 });
