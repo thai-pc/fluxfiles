@@ -122,6 +122,9 @@ class FluxFilesManager
         if (array_key_exists('allow_chmod', $overrides)) {
             $payload['allow_chmod'] = (bool) $overrides['allow_chmod'];
         }
+        if (array_key_exists('allow_code_edit', $overrides)) {
+            $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
+        }
         if (!empty($overrides['watermark_enabled'])) {
             $payload['watermark_enabled'] = true;
             foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {

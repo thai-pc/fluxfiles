@@ -5,7 +5,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.1",
-        "fluxfiles/fluxfiles": "^0.2.27"
+        "fluxfiles/fluxfiles": "^0.2.28"
     },
     "config": {
         "sort-packages": true,

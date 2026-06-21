@@ -146,6 +146,20 @@ class FluxFilesApi
             ],
         ]);
 
+        // Config / code editor (works on any disk)
+        register_rest_route($ns, $p . '/content', [
+            [
+                'methods'             => 'GET',
+                'permission_callback' => [self::class, 'checkAuth'],
+                'callback'            => [$api, 'handleGetContent'],
+            ],
+            [
+                'methods'             => 'PUT',
+                'permission_callback' => [self::class, 'checkAuth'],
+                'callback'            => [$api, 'handlePutContent'],
+            ],
+        ]);
+
         // Search, quota, audit
         register_rest_route($ns, $p . '/search', array_merge($readArgs, [
             'callback' => [$api, 'handleSearch'],
@@ -825,6 +839,46 @@ class FluxFilesApi
     }
 
     // Quota
+
+    // Config / code editor — disk/perm/scope/size/binary checks live inside
+    // FileManager::getContent / putContent (single source of truth).
+
+    public function handleGetContent(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+
+            return $this->ok($fm->getContent(
+                $request->get_param('disk') ?? 'local',
+                (string) ($request->get_param('path') ?? '')
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handlePutContent(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $result = $fm->putContent(
+                (string) ($body['disk'] ?? 'local'),
+                (string) ($body['path'] ?? ''),
+                (string) ($body['content'] ?? '')
+            );
+            $this->logAudit($claims, 'content_edit', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
 
     public function handleQuota(\WP_REST_Request $request): \WP_REST_Response
     {

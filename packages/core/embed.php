@@ -298,6 +298,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('allow_chmod', $webp)) {
         $payload['allow_chmod'] = (bool) $webp['allow_chmod'];
     }
+    if (array_key_exists('allow_code_edit', $webp)) {
+        $payload['allow_code_edit'] = (bool) $webp['allow_code_edit'];
+    }
     if (!empty($webp['watermark_enabled'])) {
         $payload['watermark_enabled'] = true;
         foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {

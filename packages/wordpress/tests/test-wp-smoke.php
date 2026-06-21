@@ -146,13 +146,14 @@ test('generateToken forwards webp claims', function () use ($secret) {
 
 test('generateToken forwards watermark + allow_download claims', function () use ($secret) {
     $token = FluxFilesPlugin::generateToken(43, [
-        'allow_download' => false, 'allow_chmod' => false,
+        'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true,
         'watermark_enabled' => true, 'watermark_type' => 'logo', 'watermark_logo_path' => 'cfg/logo.png',
         'watermark_position' => 'top-right',
     ]);
     $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
     assertEqual(false, $c->allowDownload, 'allow_download');
     assertEqual(false, $c->allowChmod, 'allow_chmod');
+    assertEqual(true, $c->allowCodeEdit, 'allow_code_edit');
     assertEqual('logo', $c->watermark['type'], 'watermark type');
     assertEqual('cfg/logo.png', $c->watermark['logo_path'], 'watermark logo_path');
 });

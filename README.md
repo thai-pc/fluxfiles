@@ -710,6 +710,35 @@ How it differs from S3 (by design):
   Docker feature** (it streams bytes through the app); the Laravel/WordPress
   proxies don't expose it.
 
+### Config / code editor
+
+Edit a file's **text** content in place — the cPanel "Edit" use case for
+`wp-config.php`, `.env`, `nginx.conf`, `deploy.sh`, etc. Works on **any** disk
+(local / S3 / R2 / SFTP), so unlike chmod it **is** proxied by Laravel/WordPress.
+
+- `GET /api/fm/content?disk=&path=` → `{ path, content, size }` (read perm;
+  binary file → 415, file > 5 MB → 413).
+- `PUT /api/fm/content {disk, path, content}` overwrites an **existing** file
+  (write perm; missing file → 404, oversize → 413).
+- In the UI, an **Edit** button appears in the file detail panel for text files,
+  opening a CodeMirror editor (syntax-highlighted by extension; `Ctrl/⌘+S` saves).
+
+> ⚠️ **`allow_code_edit` defaults to `false`.** Editing config/executable files
+> is powerful — a token that can rewrite `wp-config.php`, `.htaccess`, or a
+> deploy script is effectively code execution on that storage. Only mint
+> `allow_code_edit => true` for **trusted admin** tokens, ideally narrowed with a
+> `prefix` and/or an `ext` allowlist (the editor still honours `ext` — `allowed_ext`).
+> The always-on dangerous-extension *upload* block is deliberately **not** applied
+> to editing (that's the whole point), so the claim is the lock.
+
+```php
+// trusted admin token — can edit configs under this tenant's prefix only
+$token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 50, null, 3600,
+    false, 0, 0, null, 0, 0, null, null, null, [
+        'allow_code_edit' => true,
+    ]);
+```
+
 ### Adding a Custom Disk
 
 Add a new entry to `config/disks.php`:
