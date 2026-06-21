@@ -291,9 +291,12 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
             $payload[$k] = (int) $webp[$k];
         }
     }
-    // Download gate + watermark.
+    // Access gates (download / chmod) + watermark.
     if (array_key_exists('allow_download', $webp)) {
         $payload['allow_download'] = (bool) $webp['allow_download'];
+    }
+    if (array_key_exists('allow_chmod', $webp)) {
+        $payload['allow_chmod'] = (bool) $webp['allow_chmod'];
     }
     if (!empty($webp['watermark_enabled'])) {
         $payload['watermark_enabled'] = true;

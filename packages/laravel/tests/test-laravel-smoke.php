@@ -139,12 +139,13 @@ test('token() forwards webp claims', function () use ($secret) {
 test('token() forwards watermark + allow_download claims', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $token = $mgr->token(41, [
-        'allow_download' => false,
+        'allow_download' => false, 'allow_chmod' => false,
         'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© Acme',
         'watermark_position' => 'center', 'watermark_opacity' => 0.5,
     ]);
     $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
     assertEqual(false, $c->allowDownload, 'allow_download');
+    assertEqual(false, $c->allowChmod, 'allow_chmod');
     assertEqual('© Acme', $c->watermark['text'], 'watermark text');
     assertEqual('center', $c->watermark['position'], 'watermark position');
 });

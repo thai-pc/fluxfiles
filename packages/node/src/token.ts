@@ -128,6 +128,7 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
 
   // Download gate + watermark.
   if (opts.allowDownload !== undefined) payload.allow_download = !!opts.allowDownload;
+  if (opts.allowChmod !== undefined) payload.allow_chmod = !!opts.allowChmod;
   if (opts.watermarkEnabled) {
     payload.watermark_enabled = true;
     if (opts.watermarkType) payload.watermark_type = opts.watermarkType;
