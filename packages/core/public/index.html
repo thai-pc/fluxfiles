@@ -899,6 +899,10 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
+                <button class="detail-btn" x-show="canChmod" @click="openChmod(detailFile)" :title="t('chmod.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5a2 2 0 012 2V5H4V3.5a2 2 0 012-2z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/></svg>
+                    <span x-text="t('chmod.title')"></span>
+                </button>
                 <button class="detail-btn" x-show="detailFile?.type !== 'dir'" @click="downloadFile(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('common.download')"></span>
@@ -1245,6 +1249,49 @@
                                     <span class="ff-usage-folder-meta" x-text="formatSize(f.size_bytes) + ' · ' + f.count + ' ' + t('usage.files')"></span>
                                 </button>
                             </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ File permissions (chmod) — SFTP ═══ -->
+    <div class="ff-modal-overlay" x-show="showChmod" x-transition @click.self="closeChmod()" style="z-index:62;" x-cloak>
+        <div class="ff-chmod-modal" role="dialog" aria-modal="true" :aria-label="t('chmod.title')" @keydown.escape.window="showChmod && closeChmod()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('chmod.title')"></h3>
+                <button class="ff-activity-close" @click="closeChmod()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <div class="ff-activity-body">
+                <p class="ff-chmod-file" x-text="chmodFile?.name"></p>
+                <p class="ff-new-folder-error" x-show="chmodError" x-text="chmodError"></p>
+                <div x-show="chmodLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
+                <template x-if="!chmodLoading">
+                    <div class="ff-chmod">
+                        <table class="ff-chmod-grid">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th x-text="t('chmod.read')"></th>
+                                    <th x-text="t('chmod.write')"></th>
+                                    <th x-text="t('chmod.execute')"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(who, wi) in [t('chmod.owner'), t('chmod.group'), t('chmod.world')]" :key="wi">
+                                    <tr>
+                                        <td x-text="who"></td>
+                                        <td><input type="checkbox" :checked="chmodHas(wi, 4)" @change="chmodToggle(wi, 4)"></td>
+                                        <td><input type="checkbox" :checked="chmodHas(wi, 2)" @change="chmodToggle(wi, 2)"></td>
+                                        <td><input type="checkbox" :checked="chmodHas(wi, 1)" @change="chmodToggle(wi, 1)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                        <div class="ff-chmod-foot">
+                            <span class="ff-chmod-octal" x-text="chmodOctal"></span>
+                            <button class="ff-btn ff-btn-primary" @click="applyChmod()" :disabled="chmodLoading" x-text="t('chmod.apply')"></button>
                         </div>
                     </div>
                 </template>

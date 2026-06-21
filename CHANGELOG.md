@@ -3,6 +3,28 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.32] — 2026-06-21
+
+> Released: core `core-v0.2.27` (Packagist), Laravel `laravel-v0.2.13`,
+> WordPress plugin `wordpress-v0.2.12`, Node `@fluxfiles/node` `0.1.9`.
+
+### Added
+
+- **SFTP file permissions (chmod)** — cPanel-style Unix permissions for files on
+  an SFTP disk (S3 has no Unix modes).
+  - `GET /api/fm/chmod?disk=&path=` reads the 3-digit octal mode (read perm);
+    `POST /api/fm/chmod {disk, path, mode}` sets it (write perm + the new
+    `allow_chmod` claim, default true → an SFTP token can be made read-only).
+    Octal-validated (`0?[0-7]{3}`), not recursive, SFTP-only (non-SFTP → 400).
+  - Built on raw phpseclib chmod via `DiskManager::sftpConnection()` (Flysystem
+    only models coarse public/private visibility); the host stays SSRF-checked.
+  - UI: a "Permissions" dialog (Owner/Group/World × Read/Write/Execute, bound live
+    to the octal value), shown only on an SFTP disk when `allow_chmod` is set. New
+    i18n `chmod` namespace in all 16 locales. `list()` now returns `disk_driver`
+    so the UI can offer driver-specific actions.
+  - `allow_chmod` forwarded through every token helper. Like SFTP serving, chmod
+    is a core-standalone route (the Laravel/WordPress proxies don't expose SFTP).
+
 ## [0.2.31] — 2026-06-21
 
 > Released: core `core-v0.2.26` (Packagist), Node `@fluxfiles/node` `0.1.8`.

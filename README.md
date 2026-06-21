@@ -695,6 +695,10 @@ How it differs from S3 (by design):
   advertised for SFTP (browse/edit, not media seeking).
 - **Chunk upload and presign are rejected** for an SFTP disk (S3-only) — uploads
   go direct.
+- **File permissions (chmod)**: SFTP has native Unix permissions (S3 doesn't), so
+  the UI offers a cPanel-style permissions dialog (Owner/Group/World × rwx) on
+  SFTP files. `GET /api/fm/chmod?disk=&path=` reads the octal mode; `POST` with
+  `{disk, path, mode}` sets it (gated by the `allow_chmod` claim, default true).
 - **SSRF-guarded**: the SFTP host must resolve to a public address, unless you
   list it in `FLUXFILES_SSRF_ALLOW_HOSTS` (legit when the box is on your own
   private network / a VPN'd VPS).
@@ -842,6 +846,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `webp_max_width` | int | px | `2000` | Max resize width a transform request may ask for (clamped). Bounds the cache-variant count |
 | `webp_default_quality` | int | 1–100 | `80` | WebP quality used when a request omits `quality` (snapped to `60`/`75`/`80`/`90`) |
 | `allow_download` | bool | — | `true` | When `false` (preview-only), `list()` withholds `url`/`permanent_url`/`variants` for files and GET presign returns `403` — only the (watermarked) `img_base` remains for images |
+| `allow_chmod` | bool | — | `true` | Allow changing Unix file permissions (`POST /api/fm/chmod`) on an SFTP disk. `false` makes the SFTP token read-only for permissions |
 | `watermark_enabled` | bool | — | `false` | Overlay a watermark on the on-demand WebP (`/api/fm/img`). Off by default; the source file is never modified |
 | `watermark_type` | enum | — | `text` | `text` or `logo` (a PNG path in storage) |
 | `watermark_text` | string | — | — | Text for `type=text` (e.g. `© Acme`) |

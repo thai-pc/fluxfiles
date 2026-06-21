@@ -72,6 +72,17 @@
         "archive": "Lưu trữ",
         "other": "Khác"
     },
+    "chmod": {
+        "title": "Phân quyền",
+        "read": "Đọc",
+        "write": "Ghi",
+        "execute": "Thực thi",
+        "owner": "Chủ sở hữu",
+        "group": "Nhóm",
+        "world": "Mọi người",
+        "apply": "Áp dụng",
+        "applied": "Đã cập nhật quyền"
+    },
     "quota": {
         "storage": "Dung lượng"
     },

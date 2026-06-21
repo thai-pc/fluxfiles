@@ -72,6 +72,17 @@
         "archive": "압축파일",
         "other": "기타"
     },
+    "chmod": {
+        "title": "권한",
+        "read": "읽기",
+        "write": "쓰기",
+        "execute": "실행",
+        "owner": "소유자",
+        "group": "그룹",
+        "world": "기타",
+        "apply": "적용",
+        "applied": "권한이 업데이트됨"
+    },
     "quota": {
         "storage": "저장 공간"
     },

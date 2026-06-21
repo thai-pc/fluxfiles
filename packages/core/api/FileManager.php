@@ -155,6 +155,8 @@ class FileManager
                 'items'       => $this->unscopeItems($page),
                 'next_cursor' => $nextCursor,
                 'total'       => $total,
+                // Lets the UI show driver-specific actions (e.g. chmod on SFTP).
+                'disk_driver' => $this->disks->config($disk)['driver'] ?? '',
             ];
         }
 
@@ -1282,6 +1284,58 @@ class FileManager
     }
 
     private const MAX_PRESIGN_TTL = 86400; // 24 hours
+
+    /**
+     * Read the Unix permission mode of a file/dir on an SFTP disk (cPanel-style
+     * file permissions). Returns the 3-digit octal string (e.g. "644"). SFTP only
+     * — S3 has no Unix modes, local serves web uploads.
+     *
+     * @return array{path:string,mode:string}
+     */
+    public function getMode(string $disk, string $path): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('read');
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+
+        [$conn, $root] = $this->disks->sftpConnection($disk);
+        $location = ($root !== '' ? $root . '/' : '') . $scoped;
+        $stat = $conn->stat($location);
+        if (!is_array($stat) || !isset($stat['mode'])) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+        return ['path' => $path, 'mode' => sprintf('%03o', $stat['mode'] & 0777)];
+    }
+
+    /**
+     * Set the Unix permission mode of one file/dir on an SFTP disk. $mode is an
+     * octal string ("644", "0755", "700"); only the low 0777 bits are applied.
+     * Not recursive (one entry at a time — avoids broad accidents). Write perm
+     * required.
+     *
+     * @return array{path:string,mode:string}
+     */
+    public function setMode(string $disk, string $path, string $mode): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+        if (!preg_match('/^0?[0-7]{3}$/', $mode)) {
+            throw new ApiException('Invalid mode: use a 3-digit octal like 644 or 755', 422, 'invalid_mode');
+        }
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+
+        [$conn, $root] = $this->disks->sftpConnection($disk);
+        $location = ($root !== '' ? $root . '/' : '') . $scoped;
+        if ($conn->stat($location) === false) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+        if (!$conn->chmod(octdec($mode), $location, false)) {
+            throw new ApiException('Failed to set permissions', 500, 'chmod_failed');
+        }
+        return ['path' => $path, 'mode' => sprintf('%03o', octdec($mode) & 0777)];
+    }
 
     public function presign(string $disk, string $path, string $method, int $ttl, int $sizeBytes = 0): array
     {

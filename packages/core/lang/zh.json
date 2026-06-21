@@ -72,6 +72,17 @@
         "archive": "压缩包",
         "other": "其他"
     },
+    "chmod": {
+        "title": "权限",
+        "read": "读取",
+        "write": "写入",
+        "execute": "执行",
+        "owner": "所有者",
+        "group": "群组",
+        "world": "其他",
+        "apply": "应用",
+        "applied": "权限已更新"
+    },
     "quota": {
         "storage": "存储空间"
     },

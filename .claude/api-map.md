@@ -91,6 +91,8 @@ supported; folders move the whole subtree incl. variants. All gated by the
 
 - `DELETE /api/fm/metadata`
   - JSON body: `disk`, `key`.
+- `GET /api/fm/chmod?disk=&path=` / `POST /api/fm/chmod {disk, path, mode}`
+  - SFTP file permissions (cPanel-style). GET reads the 3-digit octal mode (read perm); POST sets it (write perm + `allow_chmod` claim, default true; octal `0?[0-7]{3}`, not recursive). SFTP-only (non-SFTP disk → 400). Core-standalone like `/stream` (the Laravel/WP proxies don't expose SFTP).
 
 - `GET /api/fm/search?disk=local&q=query&limit=50`
   - Searches file key/title/alt/caption/tags through the storage-backed index.

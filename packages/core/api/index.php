@@ -410,6 +410,18 @@ function routeRequest(
         return handleDeleteMetadata($metaRepo, $claims, $fm);
     }
 
+    // SFTP file permissions (chmod). Read the current mode, or set a new one.
+    if ($method === 'GET' && $uri === '/api/fm/chmod') {
+        return $fm->getMode($_GET['disk'] ?? '', $_GET['path'] ?? '');
+    }
+    if ($method === 'POST' && $uri === '/api/fm/chmod') {
+        if (!$claims->allowChmod) {
+            throw new ApiException('Changing permissions is not allowed', 403, 'chmod_forbidden');
+        }
+        [$disk, $path, $mode] = jsonBody('disk', 'path', 'mode');
+        return $fm->setMode((string) $disk, (string) $path, (string) $mode);
+    }
+
     // Search
     if ($method === 'GET' && $uri === '/api/fm/search') {
         $q = $_GET['q'] ?? null;

@@ -89,6 +89,8 @@ export interface BaseTokenOptions {
   /** May this token mint clean original download URLs? Default true. `false` = preview-only
    *  (list withholds url/permanent_url/variants; GET presign is denied — only watermarked img_base). */
   allowDownload?: boolean;
+  /** Allow chmod (POST /api/fm/chmod) on an SFTP disk. Default true; `false` = read-only permissions. */
+  allowChmod?: boolean;
   /** Enable on-the-fly watermark on `/api/fm/img` (source file is never modified). Default off. */
   watermarkEnabled?: boolean;
   /** Watermark kind: 'text' or 'logo' (a PNG path in storage). Default 'text'. */

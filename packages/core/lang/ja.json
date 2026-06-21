@@ -72,6 +72,17 @@
         "archive": "アーカイブ",
         "other": "その他"
     },
+    "chmod": {
+        "title": "パーミッション",
+        "read": "読み取り",
+        "write": "書き込み",
+        "execute": "実行",
+        "owner": "所有者",
+        "group": "グループ",
+        "world": "その他",
+        "apply": "適用",
+        "applied": "権限を更新しました"
+    },
     "quota": {
         "storage": "ストレージ"
     },

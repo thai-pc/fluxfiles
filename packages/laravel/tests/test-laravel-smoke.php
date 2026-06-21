@@ -139,12 +139,13 @@ test('token() forwards webp claims', function () use ($secret) {
 test('token() forwards watermark + allow_download claims', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $token = $mgr->token(41, [
-        'allow_download' => false,
+        'allow_download' => false, 'allow_chmod' => false,
         'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© Acme',
         'watermark_position' => 'center', 'watermark_opacity' => 0.5,
     ]);
     $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
     assertEqual(false, $c->allowDownload, 'allow_download');
+    assertEqual(false, $c->allowChmod, 'allow_chmod');
     assertEqual('© Acme', $c->watermark['text'], 'watermark text');
     assertEqual('center', $c->watermark['position'], 'watermark position');
 });
@@ -222,7 +223,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   secret (setStreamSecret), which the Laravel proxy controller does not set —
     //   so list() never emits stream/img URLs in proxy mode, and there are no
     //   broken links. Proxying these byte-serving endpoints is a future option.
-    $intentionallyUnproxied = ['stream', 'img'];
+    // - chmod: only operates on an SFTP disk, which is a core-standalone driver
+    //   (the proxy doesn't expose SFTP), so chmod has nothing to act on in proxy
+    //   mode. Belongs with the SFTP/core-standalone group.
+    $intentionallyUnproxied = ['stream', 'img', 'chmod'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

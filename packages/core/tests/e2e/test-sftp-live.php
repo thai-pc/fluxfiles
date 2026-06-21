@@ -89,6 +89,30 @@ test('readStream returns the exact bytes', function () use ($fs, $key, $body) {
     assertEqual($body, $got, 'round-trip bytes match');
 });
 
+test('chmod: getMode reads, setMode writes a Unix mode (cPanel-style)', function () use ($dm, $cfg, $key) {
+    $claims = new \FluxFiles\Claims('u', ['read', 'write'], ['sftp'], '', 50, null, 0);
+    $fm = new \FluxFiles\FileManager($dm, $claims, new \FluxFiles\StorageMetadataHandler($dm));
+
+    $start = $fm->getMode('sftp', $key);
+    assertTrue(preg_match('/^[0-7]{3}$/', $start['mode']) === 1, 'mode is octal: ' . $start['mode']);
+
+    $set = $fm->setMode('sftp', $key, '700');
+    assertEqual('700', $set['mode'], 'setMode returns the new mode');
+    assertEqual('700', $fm->getMode('sftp', $key)['mode'], 'getMode reflects the change');
+
+    $fm->setMode('sftp', $key, '0644');     // leading-zero form accepted
+    assertEqual('644', $fm->getMode('sftp', $key)['mode'], 'back to 644');
+});
+
+test('chmod: invalid mode → 422', function () use ($dm, $key) {
+    $claims = new \FluxFiles\Claims('u', ['read', 'write'], ['sftp'], '', 50, null, 0);
+    $fm = new \FluxFiles\FileManager($dm, $claims, new \FluxFiles\StorageMetadataHandler($dm));
+    foreach (['999', 'abc', '', '7777', '64'] as $bad) {
+        try { $fm->setMode('sftp', $key, $bad); throw new \RuntimeException("should reject $bad"); }
+        catch (\FluxFiles\ApiException $e) { assertEqual('invalid_mode', $e->getErrorCode(), "rejected $bad"); }
+    }
+});
+
 test('delete removes the file', function () use ($fs, $key) {
     $fs->delete($key);
     assertTrue(!$fs->fileExists($key), 'gone after delete');
