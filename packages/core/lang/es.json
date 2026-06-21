@@ -72,6 +72,17 @@
         "archive": "Archivos",
         "other": "Otros"
     },
+    "chmod": {
+        "title": "Permisos",
+        "read": "Lectura",
+        "write": "Escritura",
+        "execute": "Ejecución",
+        "owner": "Propietario",
+        "group": "Grupo",
+        "world": "Otros",
+        "apply": "Aplicar",
+        "applied": "Permisos actualizados"
+    },
     "quota": {
         "storage": "Almacenamiento"
     },

@@ -604,6 +604,7 @@ function fluxFilesApp() {
                 const items = Array.isArray(res) ? res : (res?.items || []);
                 this.listCursor = Array.isArray(res) ? null : (res?.next_cursor ?? null);
                 this.listTotal = Array.isArray(res) ? items.length : (res?.total ?? items.length);
+                this.diskDriver = Array.isArray(res) ? '' : (res?.disk_driver ?? '');
 
                 this.folders = items.filter(i => i.type === 'dir');
                 this.files = items.filter(i => i.type === 'file');
@@ -2715,6 +2716,73 @@ function fluxFilesApp() {
         usageGoFolder(path) {
             this.closeUsage();
             this.navigate(path === '/' ? '' : path.replace(/^\//, ''));
+        },
+
+        // ── File permissions (chmod) — SFTP disks only ──────────────────────
+        diskDriver: '',
+        showChmod: false,
+        chmodFile: null,
+        chmodBits: 0,          // 0-511 (octal 000-777)
+        chmodLoading: false,
+        chmodError: '',
+
+        // chmod is offered only on an SFTP disk and the token allows it.
+        get canChmod() {
+            return this.diskDriver === 'sftp' && this.tokenAllows('allow_chmod', true);
+        },
+        // Read a tri-state boolean claim from the token (default when unset).
+        tokenAllows(claim, dflt) {
+            const v = this._tokenPayload()[claim];
+            return v === undefined ? dflt : !!v;
+        },
+
+        async openChmod(file) {
+            if (!file) return;
+            this.chmodFile = file;
+            this.showChmod = true;
+            this.chmodError = '';
+            this.chmodLoading = true;
+            try {
+                const data = await this.api('GET',
+                    '/api/fm/chmod?disk=' + encodeURIComponent(this.currentDisk) +
+                    '&path=' + encodeURIComponent(file.key));
+                this.chmodBits = parseInt(data.mode, 8) || 0;
+            } catch (e) {
+                this.chmodError = e.message || 'Failed to read permissions';
+            } finally {
+                this.chmodLoading = false;
+            }
+        },
+        closeChmod() { this.showChmod = false; this.chmodFile = null; },
+
+        // Toggle one rwx bit. who: 0=owner,1=group,2=world; perm: 4=r,2=w,1=x.
+        chmodToggle(who, perm) {
+            const mask = perm << ((2 - who) * 3);
+            this.chmodBits ^= mask;
+        },
+        chmodHas(who, perm) {
+            const mask = perm << ((2 - who) * 3);
+            return (this.chmodBits & mask) !== 0;
+        },
+        get chmodOctal() {
+            return ((this.chmodBits >> 6) & 7).toString() + ((this.chmodBits >> 3) & 7).toString() + (this.chmodBits & 7).toString();
+        },
+
+        async applyChmod() {
+            if (!this.chmodFile) return;
+            this.chmodLoading = true;
+            this.chmodError = '';
+            try {
+                await this.api('POST', '/api/fm/chmod', {
+                    disk: this.currentDisk, path: this.chmodFile.key, mode: this.chmodOctal,
+                });
+                this.showToast(this.t('chmod.applied') || 'Permissions updated');
+                this.closeChmod();
+            } catch (e) {
+                this.chmodError = e.message || 'Failed to set permissions';
+            } finally {
+                this.chmodLoading = false;
+            }
         },
 
         async loadQuota() {

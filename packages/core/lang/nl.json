@@ -72,6 +72,17 @@
         "archive": "Archieven",
         "other": "Overig"
     },
+    "chmod": {
+        "title": "Rechten",
+        "read": "Lezen",
+        "write": "Schrijven",
+        "execute": "Uitvoeren",
+        "owner": "Eigenaar",
+        "group": "Groep",
+        "world": "Overig",
+        "apply": "Toepassen",
+        "applied": "Rechten bijgewerkt"
+    },
     "quota": {
         "storage": "Opslag"
     },

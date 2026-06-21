@@ -558,6 +558,17 @@ body {
 .ff-usage-folder-path { color: var(--color-text-primary); font-family: var(--font-mono, monospace); }
 .ff-usage-folder-meta { color: var(--color-text-secondary); flex-shrink: 0; }
 
+/* ── File permissions (chmod) dialog ─────────────────────────────────── */
+.ff-chmod-modal { max-width: 380px; }
+.ff-chmod-file { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--color-text-secondary); margin-bottom: 12px; word-break: break-all; }
+.ff-chmod-grid { width: 100%; border-collapse: collapse; }
+.ff-chmod-grid th, .ff-chmod-grid td { padding: 7px 8px; text-align: center; font-size: 12px; }
+.ff-chmod-grid th:first-child, .ff-chmod-grid td:first-child { text-align: left; color: var(--color-text-secondary); }
+.ff-chmod-grid thead th { color: var(--color-text-secondary); font-weight: 500; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.ff-chmod-grid input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+.ff-chmod-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+.ff-chmod-octal { font-family: var(--font-mono, monospace); font-size: 20px; font-weight: 600; color: var(--color-text-primary); }
+
 /* ══════════════════════════ Main area ══════════════════════════ */
 .ff-main {
     grid-row: 2;
@@ -1857,11 +1868,12 @@ body {
     user-select: none;
 }
 
-/* Activity (audit) + Bucket Doctor + Trash + Usage panels share the modal box. */
+/* Activity (audit) + Bucket Doctor + Trash + Usage + chmod panels share the box. */
 .ff-activity-modal,
 .ff-doctor-modal,
 .ff-trash-modal,
-.ff-usage-modal {
+.ff-usage-modal,
+.ff-chmod-modal {
     background: var(--ff-bg);
     border-radius: 12px;
     width: min(900px, 94vw);

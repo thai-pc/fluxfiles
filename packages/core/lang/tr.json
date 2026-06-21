@@ -72,6 +72,17 @@
         "archive": "Arşivler",
         "other": "Diğer"
     },
+    "chmod": {
+        "title": "İzinler",
+        "read": "Okuma",
+        "write": "Yazma",
+        "execute": "Çalıştırma",
+        "owner": "Sahip",
+        "group": "Grup",
+        "world": "Diğer",
+        "apply": "Uygula",
+        "applied": "İzinler güncellendi"
+    },
     "quota": {
         "storage": "Depolama"
     },

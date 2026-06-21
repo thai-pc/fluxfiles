@@ -155,6 +155,8 @@ class FileManager
                 'items'       => $this->unscopeItems($page),
                 'next_cursor' => $nextCursor,
                 'total'       => $total,
+                // Lets the UI show driver-specific actions (e.g. chmod on SFTP).
+                'disk_driver' => $this->disks->config($disk)['driver'] ?? '',
             ];
         }
 
