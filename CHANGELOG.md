@@ -3,6 +3,17 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.38] — 2026-06-21
+
+> Released: core `core-v0.2.33` (Packagist + Docker), WordPress `wordpress-v0.2.18`
+> (lock → core 0.2.33). Laravel/Node inherit via `^0.2.30` (no API change).
+
+### Changed
+
+- **Brand: recolor the logo + favicon to the brand blue (`#1A56A0`).** The core
+  app used indigo (`#4F46E5`) while the marketing site uses blue; the embedded app
+  and the landing now share one mark (the folder-check glyph in `#1A56A0`).
+
 ## [0.2.37] — 2026-06-21
 
 > Released: core `core-v0.2.32` (Packagist + Docker), SDK `@fluxfiles/sdk` `0.2.3`,
