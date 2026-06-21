@@ -95,10 +95,25 @@ $method = $_SERVER['REQUEST_METHOD'];
 // Serve UI with pre-injected locale (no flash)
 if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' || $uri === '/public/')) {
     header('Content-Type: text/html; charset=utf-8');
+    // The HTML is dynamic (locale + asset hashes) and must always be revalidated,
+    // otherwise a cached page would keep pointing at the old ?v= asset URLs.
+    header('Cache-Control: no-cache, must-revalidate');
     $localeJson = $i18n->toJson();
     $locale = $i18n->locale();
     $dir = $i18n->direction();
     $html = file_get_contents(__DIR__ . '/../public/index.html');
+    // Cache-bust the UI assets with a short content hash, so a core update is never
+    // served from a stale browser/proxy cache (the static fm.js/fm.css URLs carry no
+    // version of their own). Per-file hash → each invalidates only when it changes.
+    $assetVer = static function (string $file): string {
+        $p = __DIR__ . '/../assets/' . $file;
+        return is_file($p) ? substr(md5_file($p), 0, 10) : (string) time();
+    };
+    $html = str_replace(
+        ['../assets/fm.css"', '../assets/fm.js"'],
+        ['../assets/fm.css?v=' . $assetVer('fm.css') . '"', '../assets/fm.js?v=' . $assetVer('fm.js') . '"'],
+        $html
+    );
     // HEX flags keep these safe to embed inside the inline <script> (no </script> breakout).
     $jsFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
     $injection = "window.__FM_LOCALE__ = { locale: " . json_encode($locale, $jsFlags) . ", dir: " . json_encode($dir, $jsFlags) . ", messages: {$localeJson} };";

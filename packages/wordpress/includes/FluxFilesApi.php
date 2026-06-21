@@ -1130,7 +1130,7 @@ class FluxFilesApi
 
         // Bypass REST JSON serialization — the browser iframe must receive raw HTML
         // with the right content type, not a JSON-wrapped string.
-        $this->sendRaw($html, 'text/html; charset=utf-8', ['Content-Language: ' . $locale]);
+        $this->sendRaw($html, 'text/html; charset=utf-8', ['Content-Language: ' . $locale, 'Cache-Control: no-cache, must-revalidate']);
     }
 
     public function serveUiAsset(\WP_REST_Request $request)
