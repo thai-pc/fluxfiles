@@ -428,6 +428,27 @@ const src = FluxFiles.imgUrl(file, { width: 800, quality: 80 });
 > stream secret, so on-demand WebP is a **core-standalone / Docker** feature (the
 > Laravel/WordPress proxies don't expose `/api/fm/img`).
 
+#### Responsive `srcset`
+
+On top of `img_base`, every image entry also gets a ready-to-use **`img_srcset`**
+string, so the host can drop a responsive image straight from `list()`:
+
+```html
+<img :src="file.url" :srcset="file.img_srcset" :sizes="file.img_sizes || '100vw'" :alt="…">
+<!-- img_srcset = "/api/fm/img?token=…&width=400 400w, …&width=800 800w, …&width=1200 1200w" -->
+```
+
+- The candidate widths come from the token's **`srcset_widths`** ladder (default
+  `[320, 640, 768, 1024, 1366, 1920]`, snapped to 100px and clamped to
+  `webp_max_width`). Each is a cached WebP from the same `/api/fm/img` endpoint.
+- Widths are **capped at the image's natural width** (read from the stored
+  dimensions — no extra I/O), and the source width itself is always offered, so a
+  browser never requests an upscale. Images narrower than 100px get no `img_srcset`.
+- Set the **`srcset_sizes`** claim to also emit an **`img_sizes`** attribute;
+  otherwise the host supplies its own `sizes`. The standalone UI already wires
+  `srcset`/`sizes` onto its detail-panel and lightbox previews.
+- Rides the exact same gate as `img_base` (so it's also core-standalone / Docker).
+
 ### Watermark (preview protection)
 
 For content sellers (photographers, agencies, stock), the on-demand WebP can
@@ -874,6 +895,8 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `webp_enabled` | bool | — | `true` | Expose the on-demand WebP endpoint (`/api/fm/img`) — image entries gain an `img_base` URL. `false` omits it |
 | `webp_max_width` | int | px | `2000` | Max resize width a transform request may ask for (clamped). Bounds the cache-variant count |
 | `webp_default_quality` | int | 1–100 | `80` | WebP quality used when a request omits `quality` (snapped to `60`/`75`/`80`/`90`) |
+| `srcset_widths` | int[] | px | `[320,640,768,1024,1366,1920]` | Responsive `srcset` ladder. `list()` emits these as `img_srcset` on images (snapped to 100px, clamped to `webp_max_width`, capped at the source width) |
+| `srcset_sizes` | string | — | _(unset)_ | When set, emitted as the `img_sizes` attribute to pair with `img_srcset` (e.g. `"(max-width: 600px) 100vw, 50vw"`) |
 | `allow_download` | bool | — | `true` | When `false` (preview-only), `list()` withholds `url`/`permanent_url`/`variants` for files and GET presign returns `403` — only the (watermarked) `img_base` remains for images |
 | `allow_chmod` | bool | — | `true` | Allow changing Unix file permissions (`POST /api/fm/chmod`) on an SFTP disk. `false` makes the SFTP token read-only for permissions |
 | `watermark_enabled` | bool | — | `false` | Overlay a watermark on the on-demand WebP (`/api/fm/img`). Off by default; the source file is never modified |
@@ -918,7 +941,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `variants` | `variants` | px | `null` | Per-tenant WebP variant widths — a map of `thumb`/`medium`/`large` to a width (16–8000 px). Unset names inherit `150`/`768`/`1920`. |
 | `import` | `allow_url_import`, … | — | `null` | **Import from URL** config (off unless set). An array: `['allow_url_import' => true, 'max_import_mb' => 20, 'import_url_allowlist' => ['*.unsplash.com'], 'import_path' => 'imports', 'import_rate_limit' => 10, 'import_concurrency' => 3]`. Only the keys you set are embedded; the rest inherit the server defaults. See [Import from URL](#import-from-url). |
 | `media` | `media_preview`, … | — | `null` | **Media-preview** config. An array: `['media_preview' => true, 'preview_url_ttl' => 7200, 'max_preview_mb' => 500, 'stream_token_ttl' => 3600]`. Only the keys you set are embedded; the rest inherit the defaults. |
-| `webp` | `webp_enabled`, … | — | `null` | **On-demand WebP** config. An array: `['webp_enabled' => true, 'webp_max_width' => 2000, 'webp_default_quality' => 80]`. Only the keys you set are embedded. See [On-demand WebP](#on-demand-webp). |
+| `webp` | `webp_enabled`, … | — | `null` | **On-demand WebP** + responsive config. An array: `['webp_enabled' => true, 'webp_max_width' => 2000, 'webp_default_quality' => 80, 'srcset_widths' => [320, 640, 1024, 1920], 'srcset_sizes' => '100vw']`. Only the keys you set are embedded. See [On-demand WebP](#on-demand-webp). |
 | `usage` | `usage_cache_ttl`, … | — | `null` | **Usage dashboard** config. An array: `['usage_cache_ttl' => 900, 'usage_warning_threshold' => 70, 'usage_critical_threshold' => 90, 'usage_top_folders_count' => 10, 'usage_folder_depth' => 1]`. See [Usage dashboard](#usage-dashboard). |
 
 > **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is

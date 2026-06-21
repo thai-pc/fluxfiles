@@ -129,11 +129,14 @@ test('token() forwards media-preview claims', function () use ($secret) {
 
 test('token() forwards webp claims', function () use ($secret) {
     $mgr = new FluxFilesManager();
-    $token = $mgr->token(31, ['webp_enabled' => false, 'webp_max_width' => 1600, 'webp_default_quality' => 75]);
+    $token = $mgr->token(31, ['webp_enabled' => false, 'webp_max_width' => 1600, 'webp_default_quality' => 75,
+        'srcset_widths' => [400, 1200], 'srcset_sizes' => '100vw']);
     $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
     assertEqual(false, $c->webpEnabled, 'webp_enabled');
     assertEqual(1600, $c->webpMaxWidth, 'webp_max_width');
     assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality');
+    assertEqual([400, 1200], $c->srcsetWidths, 'srcset_widths');
+    assertEqual('100vw', $c->srcsetSizes, 'srcset_sizes');
 });
 
 test('token() forwards watermark + allow_download claims', function () use ($secret) {

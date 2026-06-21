@@ -214,6 +214,14 @@ class FileManager
                 $imgBase = $this->imgBaseUrl($disk, $item['key']);
                 if ($imgBase !== null) {
                     $item['img_base'] = $imgBase;
+                    $natural = isset($item['width']) ? (int) $item['width'] : 0;
+                    $srcset = $this->buildSrcset($imgBase, $natural);
+                    if ($srcset !== '') {
+                        $item['img_srcset'] = $srcset;
+                        if ($this->claims->srcsetSizes !== '') {
+                            $item['img_sizes'] = $this->claims->srcsetSizes;
+                        }
+                    }
                 }
             }
         }
@@ -1666,6 +1674,42 @@ class FileManager
             $this->claims->watermark
         );
         return '/api/fm/img?token=' . rawurlencode($token);
+    }
+
+    /**
+     * Build a responsive `srcset` string from an image's on-demand endpoint base
+     * and the tenant's width ladder. Pure metadata — no image is read. Widths are
+     * capped at the source width (the transform never upsizes) and webp_max_width;
+     * the largest serveable 100px-multiple of the source is always offered as the
+     * full-resolution candidate. Returns '' when there's nothing useful to emit.
+     */
+    private function buildSrcset(string $imgBase, int $naturalWidth): string
+    {
+        // Too small to bother with responsive variants.
+        if ($naturalWidth > 0 && $naturalWidth < 100) {
+            return '';
+        }
+        $maxWidth = $this->claims->webpMaxWidth > 0 ? $this->claims->webpMaxWidth : 2000;
+        // Largest 100px-multiple we can honestly serve (floor → never claim upscale).
+        $ceiling = $naturalWidth > 0
+            ? min($maxWidth, max(100, (int) floor($naturalWidth / 100) * 100))
+            : $maxWidth;
+
+        $widths = [];
+        foreach ($this->claims->srcsetWidths as $w) {
+            if ($w >= 100 && $w <= $ceiling) {
+                $widths[$w] = true;
+            }
+        }
+        $widths[$ceiling] = true;   // always offer the full-resolution candidate
+        $widths = array_keys($widths);
+        sort($widths);
+
+        $parts = [];
+        foreach ($widths as $w) {
+            $parts[] = $imgBase . '&width=' . $w . ' ' . $w . 'w';
+        }
+        return implode(', ', $parts);
     }
 
     private function permanentUrl(string $disk, string $path): ?string

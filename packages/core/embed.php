@@ -278,8 +278,9 @@ function fluxfiles_apply_media_claims(array &$payload, array $media): void
  *
  * @param array<string,mixed> $payload
  * @param array<string,mixed> $webp webp_enabled, webp_max_width, webp_default_quality,
- *        allow_download, watermark_enabled, watermark_type, watermark_text,
- *        watermark_logo_path, watermark_position, watermark_opacity, watermark_font_size
+ *        srcset_widths, srcset_sizes, allow_download, watermark_enabled,
+ *        watermark_type, watermark_text, watermark_logo_path, watermark_position,
+ *        watermark_opacity, watermark_font_size
  */
 function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
 {
@@ -290,6 +291,13 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
         if (!empty($webp[$k])) {
             $payload[$k] = (int) $webp[$k];
         }
+    }
+    // Responsive srcset ladder + sizes (Claims sanitizes the ladder on decode).
+    if (isset($webp['srcset_widths']) && is_array($webp['srcset_widths'])) {
+        $payload['srcset_widths'] = array_values(array_map('intval', $webp['srcset_widths']));
+    }
+    if (!empty($webp['srcset_sizes'])) {
+        $payload['srcset_sizes'] = (string) $webp['srcset_sizes'];
     }
     // Access gates (download / chmod) + watermark.
     if (array_key_exists('allow_download', $webp)) {

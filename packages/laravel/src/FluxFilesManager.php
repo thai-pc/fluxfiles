@@ -114,6 +114,13 @@ class FluxFilesManager
                 $payload[$webpClaim] = (int) $overrides[$webpClaim];
             }
         }
+        // Responsive srcset (Claims sanitizes the ladder on decode).
+        if (isset($overrides['srcset_widths']) && is_array($overrides['srcset_widths'])) {
+            $payload['srcset_widths'] = array_values(array_map('intval', $overrides['srcset_widths']));
+        }
+        if (!empty($overrides['srcset_sizes'])) {
+            $payload['srcset_sizes'] = (string) $overrides['srcset_sizes'];
+        }
 
         // Download gate + watermark.
         if (array_key_exists('allow_download', $overrides)) {

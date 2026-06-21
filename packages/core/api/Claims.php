@@ -83,6 +83,14 @@ class Claims
     /** @var int Default WebP quality when a request omits it. 0 = inherit default (80). */
     public int $webpDefaultQuality = 0;
 
+    /** @var int[] Responsive `srcset` width ladder (px). Snapped to 100px and
+     *            clamped to webp_max_width; list() emits these as `img_srcset`
+     *            on image entries that already get an `img_base`. */
+    public array $srcsetWidths = [320, 640, 768, 1024, 1366, 1920];
+    /** @var string Optional `sizes` attribute, surfaced as `img_sizes` when set
+     *            (empty = omit; the host can supply its own `sizes`). */
+    public string $srcsetSizes = '';
+
     /** @var bool May this token get clean original download URLs? Default true. When
      *            false (preview-only / watermark), list() withholds `url`/
      *            `permanent_url`/`variants` and GET presign is denied — only the
@@ -198,6 +206,40 @@ class Claims
     }
 
     /**
+     * Normalize a responsive `srcset` width ladder: positive ints only, snapped to
+     * 100px (the /api/fm/img cache grain) and clamped to webp_max_width (default
+     * 2000), deduped, sorted ascending, capped at 12. A missing/empty/all-invalid
+     * ladder falls back to the default (itself clamped to the max).
+     *
+     * @param mixed $raw
+     * @return int[]
+     */
+    public static function sanitizeSrcsetWidths($raw, int $webpMaxWidth): array
+    {
+        $default = [320, 640, 768, 1024, 1366, 1920];
+        $max = $webpMaxWidth > 0 ? $webpMaxWidth : 2000;
+        $snap = static fn (int $w): int => min($max, max(100, (int) round($w / 100) * 100));
+
+        $clean = [];
+        foreach ((is_array($raw) ? $raw : []) as $w) {
+            if (is_int($w) || (is_string($w) && ctype_digit($w))) {
+                $w = (int) $w;
+                if ($w > 0) {
+                    $clean[$snap($w)] = true;
+                }
+            }
+        }
+        if ($clean === []) {
+            foreach ($default as $w) {
+                $clean[$snap($w)] = true;
+            }
+        }
+        $clean = array_keys($clean);
+        sort($clean);
+        return array_slice($clean, 0, 12);
+    }
+
+    /**
      * @param object $payload JWT payload
      * @param string $secret  FLUXFILES_SECRET (needed to decrypt BYOB credentials)
      */
@@ -255,6 +297,8 @@ class Claims
         $c->webpEnabled = isset($payload->webp_enabled) ? (bool) $payload->webp_enabled : true;
         $c->webpMaxWidth = max(0, (int) ($payload->webp_max_width ?? 0));
         $c->webpDefaultQuality = max(0, (int) ($payload->webp_default_quality ?? 0));
+        $c->srcsetWidths = self::sanitizeSrcsetWidths($payload->srcset_widths ?? null, $c->webpMaxWidth);
+        $c->srcsetSizes = is_string($payload->srcset_sizes ?? null) ? trim((string) $payload->srcset_sizes) : '';
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);

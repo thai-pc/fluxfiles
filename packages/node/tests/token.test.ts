@@ -141,11 +141,15 @@ describe('createToken', () => {
         webpEnabled: false,
         webpMaxWidth: 1600,
         webpDefaultQuality: 75,
+        srcsetWidths: [400, 1200],
+        srcsetSizes: '100vw',
       }),
     ) as Record<string, unknown>;
     expect(c.webp_enabled).toBe(false);
     expect(c.webp_max_width).toBe(1600);
     expect(c.webp_default_quality).toBe(75);
+    expect(c.srcset_widths).toEqual([400, 1200]);
+    expect(c.srcset_sizes).toBe('100vw');
   });
 
   it('forwards URL-import claims so the feature can be enabled (PHP parity)', () => {

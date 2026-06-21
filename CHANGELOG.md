@@ -3,6 +3,29 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.34] — 2026-06-21
+
+> Released: core `core-v0.2.29` (Packagist), Laravel `laravel-v0.2.15`,
+> WordPress plugin `wordpress-v0.2.14`, Node `@fluxfiles/node` `0.1.11`.
+
+### Added
+
+- **Responsive `srcset`** — every image entry in `list()` now carries a
+  ready-to-use **`img_srcset`** string (and optional **`img_sizes`**) alongside
+  `img_base`, so a host can drop a responsive image straight from the listing.
+  Pure metadata on top of the shipped `/api/fm/img` endpoint — no image is read.
+  - New **`srcset_widths`** claim (`int[]`, default `[320,640,768,1024,1366,1920]`):
+    snapped to 100px (the endpoint's cache grain), clamped to `webp_max_width`,
+    deduped, sorted, capped at 12. **`srcset_sizes`** (string) → emits `img_sizes`.
+  - Candidate widths are **capped at the image's natural width** (from the stored
+    dimensions, zero extra I/O) and the source width is always offered, so a
+    browser never requests an upscale (`transform` only scales down). Images
+    `<100px` wide get no `img_srcset`. Rides the exact `img_base` gate.
+  - Both claims forwarded through every token helper
+    (`fluxfiles_token`/Laravel/WordPress/`@fluxfiles/node`); `img_srcset`/`img_sizes`
+    added to the SDK/React/Vue `FluxFile` types. The standalone UI wires
+    `srcset`/`sizes` onto its detail-panel and lightbox image previews.
+
 ## [0.2.33] — 2026-06-21
 
 > Released: core `core-v0.2.28` (Packagist), Laravel `laravel-v0.2.14`,

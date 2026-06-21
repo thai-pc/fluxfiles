@@ -86,6 +86,12 @@ export interface BaseTokenOptions {
   webpMaxWidth?: number;
   /** Default WebP quality when a request omits it. `0`/omitted = inherit (80). */
   webpDefaultQuality?: number;
+  /** Responsive `srcset` width ladder (px); list() emits these as `img_srcset` on images.
+   *  Snapped to 100px and clamped to webpMaxWidth on decode. Omit to inherit the default
+   *  `[320, 640, 768, 1024, 1366, 1920]`. */
+  srcsetWidths?: number[];
+  /** Optional `sizes` attribute surfaced as `img_sizes` (omit to let the host supply its own). */
+  srcsetSizes?: string;
   /** May this token mint clean original download URLs? Default true. `false` = preview-only
    *  (list withholds url/permanent_url/variants; GET presign is denied — only watermarked img_base). */
   allowDownload?: boolean;
