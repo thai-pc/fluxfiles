@@ -347,11 +347,11 @@
                 <button class="tb-btn" x-show="selected.length > 0" @click="openCrossDisk('copy')">
                     <span x-text="t('bulk.copy_to_disk')"></span>
                 </button>
-                <button class="tb-btn" x-show="selected.length > 0" @click="bulkDownload()">
+                <button class="tb-btn" x-show="showBulkDownload" @click="bulkDownload()">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v5M3.5 4.5L6 7l2.5-2.5M2.5 9.5h7" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.download')"></span>
                 </button>
-                <button class="tb-btn" x-show="selected.length > 0 && canZip" :disabled="zipBusy"
+                <button class="tb-btn" x-show="showBulkZip" :disabled="zipBusy"
                         @click="downloadZip(selected.map(s => s.key), selected.length === 1 ? selected[0].name : null)">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M5 2.5h1.2M5 4h1.2M5 5.5h1.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('zip.download')"></span>

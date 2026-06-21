@@ -684,7 +684,7 @@ test('upload progress UI shows spinner, current filename, and N/total', async ({
   await expect(cardByName(page, b)).toBeVisible({ timeout: 15_000 });
 });
 
-test('bulk download: triggers a download for each selected file', async ({ page }) => {
+test('bulk download: a multi-file selection offers a single Download ZIP', async ({ page }) => {
   const token = mintToken();
   await page.goto(`/public/index.html?token=${token}&disk=local&multiple=1`);
   await expect(page.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
@@ -704,15 +704,14 @@ test('bulk download: triggers a download for each selected file', async ({ page 
   await cardByName(page, a).click({ modifiers: ['ControlOrMeta'] });
   await cardByName(page, b).click({ modifiers: ['ControlOrMeta'] });
 
-  // Collect the per-file downloads bulkDownload() fires (one <a download> per file).
-  const downloads: string[] = [];
-  page.on('download', (d) => downloads.push(d.suggestedFilename()));
+  // Multi-select hides the individual "Download" (browsers block N parallel
+  // downloads) in favour of a single archive.
+  await expect(page.getByRole('button', { name: 'Download', exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Download', exact: true }).click();
-
-  await expect.poll(() => downloads.length, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
-  expect(downloads).toContain(a);
-  expect(downloads).toContain(b);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download ZIP', exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.zip$/);
 });
 
 test('expired session: the load-error Retry recovers after a token refresh', async ({ page }) => {
