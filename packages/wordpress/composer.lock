@@ -225,16 +225,16 @@
         },
         {
             "name": "fluxfiles/fluxfiles",
-            "version": "v0.2.30",
+            "version": "v0.2.31",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thai-pc/fluxfiles-core.git",
-                "reference": "e2c76194bea80a6bbc8107bf5f17a2f577cfdb8e"
+                "reference": "31a877360820c0ba826057442ab8fc2cd9e85b48"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/e2c76194bea80a6bbc8107bf5f17a2f577cfdb8e",
-                "reference": "e2c76194bea80a6bbc8107bf5f17a2f577cfdb8e",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/31a877360820c0ba826057442ab8fc2cd9e85b48",
+                "reference": "31a877360820c0ba826057442ab8fc2cd9e85b48",
                 "shasum": ""
             },
             "require": {
@@ -288,7 +288,7 @@
                 "issues": "https://github.com/thai-pc/fluxfiles/issues",
                 "source": "https://github.com/thai-pc/fluxfiles"
             },
-            "time": "2026-06-21T10:45:37+00:00"
+            "time": "2026-06-21T11:26:50+00:00"
         },
         {
             "name": "graham-campbell/result-type",
