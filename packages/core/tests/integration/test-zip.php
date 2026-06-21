@@ -16,6 +16,7 @@ use FluxFiles\Claims;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\StorageMetadataHandler;
+use FluxFiles\QuotaManager;
 use FluxFiles\ApiException;
 
 $green = "\033[32m"; $red = "\033[31m"; $cyan = "\033[36m"; $reset = "\033[0m";
@@ -168,6 +169,104 @@ test('streamZip output opens as a zip with the right entries + bytes', function 
     assertEqual('aaaa', $za->getFromName('docs/a.txt'), 'content of a.txt');
     assertEqual('bbbbbb', $za->getFromName('docs/sub/b.txt'), 'content of b.txt');
     $za->close();
+});
+
+echo "\n{$cyan}══ Extract — FileManager::extractZip ══{$reset}\n\n";
+
+/** @param array $opts allowExtract zipMaxMb zipMaxFiles maxStorageMb quota(bool) allowedExt user */
+function makeExtractFM(array $opts = []): array {
+    $root = sys_get_temp_dir() . '/ff-ext-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $claims = new Claims($opts['user'] ?? 'u', ['read', 'write'], ['local'], '', 50, $opts['allowedExt'] ?? null, 0);
+    $claims->allowExtract = $opts['allowExtract'] ?? true;
+    $claims->zipMaxMb = $opts['zipMaxMb'] ?? 0;
+    $claims->zipMaxFiles = $opts['zipMaxFiles'] ?? 0;
+    $claims->maxStorageMb = $opts['maxStorageMb'] ?? 0;
+    $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
+    if ($opts['quota'] ?? false) { $fm->setQuotaManager(new QuotaManager($dm)); }
+    return [$fm, $root];
+}
+/** Write a fixture zip at $root/$rel with the given name=>content entries. */
+function putZip(string $root, string $rel, array $entries): void {
+    $abs = $root . '/' . $rel;
+    @mkdir(dirname($abs), 0777, true);
+    $za = new \ZipArchive();
+    $za->open($abs, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+    foreach ($entries as $name => $content) { $za->addFromString($name, $content); }
+    $za->close();
+}
+
+test('extract → files written to the default dest (archive name), tree preserved', function () {
+    [$fm, $root] = makeExtractFM();
+    putZip($root, 'archive.zip', ['a.txt' => 'AA', 'sub/b.txt' => 'BB']);
+    $r = $fm->extractZip('local', 'archive.zip');
+    assertEqual('archive', $r['dest'], 'default dest = archive name');
+    assertEqual(2, $r['extracted'], 'two files');
+    assertEqual('AA', file_get_contents($root . '/archive/a.txt'));
+    assertEqual('BB', file_get_contents($root . '/archive/sub/b.txt'));
+});
+
+test('custom dest folder', function () {
+    [$fm, $root] = makeExtractFM();
+    putZip($root, 'a.zip', ['x.txt' => 'X']);
+    $r = $fm->extractZip('local', 'a.zip', 'unpacked/here');
+    assertEqual('unpacked/here', $r['dest']);
+    assertEqual('X', file_get_contents($root . '/unpacked/here/x.txt'));
+});
+
+test('zip-slip entry (../) → 403 zip_slip, nothing written (atomic pass-1 validation)', function () {
+    [$fm, $root] = makeExtractFM();
+    putZip($root, 'evil.zip', ['../escape.txt' => 'bad', 'ok.txt' => 'good']);
+    expectApi(fn () => $fm->extractZip('local', 'evil.zip'), 'zip_slip');
+    assertTrue(!file_exists($root . '/escape.txt'), 'no escaped file');
+    assertTrue(!file_exists($root . '/evil/ok.txt'), 'no partial extraction');
+});
+
+test('dangerous extension entry (.php) → 403 ext_dangerous, nothing written', function () {
+    [$fm, $root] = makeExtractFM();
+    putZip($root, 'm.zip', ['ok.txt' => 'x', 'shell.php' => '<?php']);
+    expectApi(fn () => $fm->extractZip('local', 'm.zip'), 'ext_dangerous');
+    assertTrue(!file_exists($root . '/m/ok.txt'), 'no partial extraction before the bad entry');
+});
+
+test('entry targeting a system path (_fluxfiles/) → 403 system_path', function () {
+    [$fm, $root] = makeExtractFM();
+    putZip($root, 's.zip', ['_fluxfiles/hack.json' => '{}']);
+    expectApi(fn () => $fm->extractZip('local', 's.zip'), 'system_path');
+});
+
+test('bomb: too many files → 413 zip_too_many', function () {
+    [$fm, $root] = makeExtractFM(['zipMaxFiles' => 1]);
+    putZip($root, 'many.zip', ['a.txt' => '1', 'b.txt' => '2']);
+    expectApi(fn () => $fm->extractZip('local', 'many.zip'), 'zip_too_many');
+});
+
+test('bomb: total uncompressed too large → 413 zip_too_large', function () {
+    [$fm, $root] = makeExtractFM(['zipMaxMb' => 1]);
+    putZip($root, 'big.zip', ['big.bin' => str_repeat('x', 2 * 1024 * 1024)]);
+    expectApi(fn () => $fm->extractZip('local', 'big.zip'), 'zip_too_large');
+});
+
+test('quota exceeded on total uncompressed → 413 quota_exceeded', function () {
+    [$fm, $root] = makeExtractFM(['quota' => true, 'maxStorageMb' => 1]);
+    putZip($root, 'q.zip', ['big.bin' => str_repeat('y', 2 * 1024 * 1024)]); // < bomb cap, > 1MB quota
+    expectApi(fn () => $fm->extractZip('local', 'q.zip'), 'quota_exceeded');
+});
+
+test('gates: allow_extract / not-a-zip / missing / allowed_ext', function () {
+    [$off, $r1] = makeExtractFM(['allowExtract' => false]);
+    putZip($r1, 'a.zip', ['x.txt' => 'x']);
+    expectApi(fn () => $off->extractZip('local', 'a.zip'), 'extract_forbidden');
+
+    [$fm, $r2] = makeExtractFM();
+    file_put_contents($r2 . '/notes.txt', 'x');
+    expectApi(fn () => $fm->extractZip('local', 'notes.txt'), 'not_a_zip');
+    expectApi(fn () => $fm->extractZip('local', 'nope.zip'), 'not_found');
+
+    [$ext, $r3] = makeExtractFM(['allowedExt' => ['txt']]);
+    putZip($r3, 'mixed.zip', ['ok.txt' => 'x', 'pic.jpg' => 'y']);
+    expectApi(fn () => $ext->extractZip('local', 'mixed.zip'), 'ext_not_allowed');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

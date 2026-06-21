@@ -109,14 +109,41 @@ try {
         assertEqual(403, $st);
     });
 
+    // ── Extract (M2) ────────────────────────────────────────────────────────
+    test('POST /extract → writes the tree, returns JSON', function () use ($BASE, $tok, $uploadRoot) {
+        $za = new \ZipArchive();
+        $za->open($uploadRoot . '/e2e_zip/pkg.zip', \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $za->addFromString('one.txt', '1');
+        $za->addFromString('d/two.txt', '2');
+        $za->close();
+        [$st, $ct, $body] = httpPost("{$BASE}/api/fm/extract", ['disk' => 'local', 'path' => 'e2e_zip/pkg.zip'], $tok);
+        assertEqual(200, $st, 'http ' . $st);
+        assertTrue(stripos($ct, 'application/json') !== false, 'json response');
+        $j = json_decode($body, true);
+        assertEqual(2, $j['data']['extracted'] ?? null, 'extracted count');
+        assertEqual('1', file_get_contents($uploadRoot . '/e2e_zip/pkg/one.txt'), 'wrote one.txt');
+        assertEqual('2', file_get_contents($uploadRoot . '/e2e_zip/pkg/d/two.txt'), 'wrote nested');
+    });
+
+    test('POST /extract: a zip-slip archive → 403 JSON, nothing escapes', function () use ($BASE, $tok, $uploadRoot) {
+        $za = new \ZipArchive();
+        $za->open($uploadRoot . '/e2e_zip/slip.zip', \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $za->addFromString('../escape.txt', 'bad');
+        $za->close();
+        [$st, $ct] = httpPost("{$BASE}/api/fm/extract", ['disk' => 'local', 'path' => 'e2e_zip/slip.zip'], $tok);
+        assertEqual(403, $st);
+        assertTrue(stripos($ct, 'application/json') !== false, 'json error');
+        assertTrue(!file_exists($uploadRoot . '/escape.txt'), 'no escaped file');
+    });
+
 } finally {
     proc_terminate($proc); proc_close($proc);
-    @array_map('unlink', glob($uploadRoot . '/e2e_zip/docs/sub/*') ?: []);
-    @array_map('unlink', glob($uploadRoot . '/e2e_zip/docs/*.txt') ?: []);
-    @rmdir($uploadRoot . '/e2e_zip/docs/sub');
-    @rmdir($uploadRoot . '/e2e_zip/docs');
-    @array_map('unlink', glob($uploadRoot . '/e2e_zip/*') ?: []);
-    @rmdir($uploadRoot . '/e2e_zip');
+    $rrm = function (string $dir) use (&$rrm): void {
+        foreach (glob($dir . '/*') ?: [] as $f) { is_dir($f) ? $rrm($f) : @unlink($f); }
+        @rmdir($dir);
+    };
+    $rrm($uploadRoot . '/e2e_zip');
+    @unlink($uploadRoot . '/escape.txt');
     if ($envBackup === null) { @unlink($envFile); } else { file_put_contents($envFile, $envBackup); }
 }
 

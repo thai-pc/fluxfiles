@@ -432,6 +432,16 @@ function routeRequest(
         exit;
     }
 
+    // Extract a zip in place (returns JSON; guarded against slip/bomb/quota/dangerous-ext).
+    if ($method === 'POST' && $uri === '/api/fm/extract') {
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $fm->extractZip(
+            (string) ($body['disk'] ?? 'local'),
+            (string) ($body['path'] ?? ''),
+            isset($body['dest']) ? (string) $body['dest'] : null
+        );
+    }
+
     // SFTP file permissions (chmod). Read the current mode, or set a new one.
     if ($method === 'GET' && $uri === '/api/fm/chmod') {
         return $fm->getMode($_GET['disk'] ?? '', $_GET['path'] ?? '');

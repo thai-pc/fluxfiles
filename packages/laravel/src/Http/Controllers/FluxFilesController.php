@@ -754,6 +754,30 @@ class FluxFilesController
         }
     }
 
+    /**
+     * Extract a zip in place. Slip/bomb/quota/dangerous-ext guards all live inside
+     * FileManager::extractZip (single source of truth).
+     */
+    public function extract(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $result = $fm->extractZip(
+                (string) $request->input('disk', 'local'),
+                (string) $request->input('path', ''),
+                $request->input('dest') !== null ? (string) $request->input('dest') : null
+            );
+            $this->logAudit($claims, 'extract', (string) $request->input('disk', 'local'), (string) $request->input('path', ''));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
     // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
 
     public function trash(Request $request): JsonResponse
