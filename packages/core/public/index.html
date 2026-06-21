@@ -788,7 +788,7 @@
         <!-- Preview thumbnail (click image to view full) -->
         <div class="detail-thumb" x-show="detailFile"
              :class="{ 'detail-thumb-clickable': detailFile && isPreviewable(detailFile, 'image') && detailFile.url }"
-             @click="detailFile && isPreviewable(detailFile, 'image') && detailFile.url && (previewFullscreen = true)">
+             @click="detailFile && isPreviewable(detailFile, 'image') && detailFile.url && (resetZoom(), previewFullscreen = true)">
             <template x-if="detailFile && isPreviewable(detailFile, 'image') && detailFile.url">
                 <img :src="detailFile.url" :srcset="detailFile.img_srcset"
                      :sizes="detailFile.img_srcset ? (detailFile.img_sizes || '(max-width: 640px) 92vw, 380px') : null"
@@ -1028,13 +1028,24 @@
         </div>
     </div>
 
-    <!-- Preview lightbox (full-size image) -->
+    <!-- Preview lightbox (full-size image, zoomable) -->
     <div class="ff-preview-lightbox" x-show="previewFullscreen && detailFile && isPreviewable(detailFile, 'image')" x-transition.opacity
-         @click="previewFullscreen = false"
-         @keydown.escape.window="previewFullscreen = false">
+         @click="zoom.scale === 1 && closePreview()"
+         @keydown.escape.window="previewFullscreen && (zoom.scale > 1 ? resetZoom() : closePreview())"
+         @wheel.prevent="zoomWheel($event)"
+         @mousemove="panMove($event)" @mouseup="endPan()" @mouseleave="endPan()">
         <img :src="detailFile?.url" :srcset="detailFile?.img_srcset"
              :sizes="detailFile?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
-             :alt="detailFile?.name" @click.stop>
+             :alt="detailFile?.name" draggable="false"
+             class="ff-preview-img" :class="{ zoomed: zoom.scale > 1, dragging: zoom.dragging }"
+             :style="'transform: translate(' + zoom.x + 'px,' + zoom.y + 'px) scale(' + zoom.scale + ')'"
+             @click.stop="zoomClick($event)" @dblclick.stop="zoomToggle($event)" @mousedown.stop="startPan($event)">
+        <div class="ff-zoom-bar" @click.stop>
+            <button class="ff-zoom-btn" @click="zoomStep(-0.5)" :disabled="zoom.scale <= 1" :title="t('zoom.out')" aria-label="zoom out">&minus;</button>
+            <span class="ff-zoom-level" x-text="Math.round(zoom.scale * 100) + '%'"></span>
+            <button class="ff-zoom-btn" @click="zoomStep(0.5)" :disabled="zoom.scale >= 5" :title="t('zoom.in')" aria-label="zoom in">+</button>
+            <button class="ff-zoom-btn" @click="resetZoom()" :disabled="zoom.scale === 1" :title="t('zoom.reset')" aria-label="reset zoom">⟲</button>
+        </div>
     </div>
 
     <!-- ═══ New folder modal ═══ -->

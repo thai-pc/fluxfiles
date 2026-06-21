@@ -99,6 +99,11 @@
         "failed": "Zip oluşturulamadı",
         "extract_failed": "Çıkarma başarısız"
     },
+    "zoom": {
+        "in": "Yakınlaştır",
+        "out": "Uzaklaştır",
+        "reset": "Sıfırla"
+    },
     "quota": {
         "storage": "Depolama"
     },

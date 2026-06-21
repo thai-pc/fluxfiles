@@ -99,6 +99,11 @@
         "failed": "ZIPを作成できませんでした",
         "extract_failed": "展開に失敗しました"
     },
+    "zoom": {
+        "in": "拡大",
+        "out": "縮小",
+        "reset": "リセット"
+    },
     "quota": {
         "storage": "ストレージ"
     },

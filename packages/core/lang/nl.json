@@ -99,6 +99,11 @@
         "failed": "Kon de zip niet maken",
         "extract_failed": "Uitpakken mislukt"
     },
+    "zoom": {
+        "in": "Inzoomen",
+        "out": "Uitzoomen",
+        "reset": "Resetten"
+    },
     "quota": {
         "storage": "Opslag"
     },

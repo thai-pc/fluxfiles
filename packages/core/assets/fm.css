@@ -1360,7 +1360,54 @@ body {
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
-    cursor: default;
+    cursor: zoom-in;
+    transform-origin: center center;
+    will-change: transform;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+/* No CSS transition while dragging — the transform must track the cursor 1:1. */
+.ff-preview-lightbox img:not(.dragging) { transition: transform 0.12s ease-out; }
+.ff-preview-lightbox img.zoomed { cursor: grab; }
+.ff-preview-lightbox img.dragging { cursor: grabbing; }
+
+/* Zoom control bar */
+.ff-zoom-bar {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    color: #fff;
+}
+.ff-zoom-btn {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ff-zoom-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.24); }
+.ff-zoom-btn:disabled { opacity: 0.35; cursor: default; }
+.ff-zoom-level {
+    min-width: 46px;
+    text-align: center;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    user-select: none;
 }
 
 .detail-fname {

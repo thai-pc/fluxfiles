@@ -99,6 +99,11 @@
         "failed": "Could not create the zip",
         "extract_failed": "Extract failed"
     },
+    "zoom": {
+        "in": "Zoom in",
+        "out": "Zoom out",
+        "reset": "Reset zoom"
+    },
     "quota": {
         "storage": "Storage"
     },

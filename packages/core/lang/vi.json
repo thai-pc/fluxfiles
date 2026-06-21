@@ -99,6 +99,11 @@
         "failed": "Không tạo được tệp zip",
         "extract_failed": "Giải nén thất bại"
     },
+    "zoom": {
+        "in": "Phóng to",
+        "out": "Thu nhỏ",
+        "reset": "Đặt lại"
+    },
     "quota": {
         "storage": "Dung lượng"
     },

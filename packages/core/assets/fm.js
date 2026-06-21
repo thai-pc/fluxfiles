@@ -2796,6 +2796,50 @@ function fluxFilesApp() {
         _cm: null,          // CodeMirror instance (created lazily, then reused)
         _cmLoading: null,   // promise that resolves once CodeMirror is on the page
 
+        // ── Image preview zoom (lightbox) ───────────────────────────────────
+        zoom: { scale: 1, x: 0, y: 0, dragging: false, _sx: 0, _sy: 0, _ox: 0, _oy: 0 },
+
+        resetZoom() { this.zoom.scale = 1; this.zoom.x = 0; this.zoom.y = 0; this.zoom.dragging = false; },
+
+        // Viewport-center of the lightbox (fixed regardless of the image transform).
+        _lbCenter() {
+            const lb = document.querySelector('.ff-preview-lightbox');
+            const r = lb ? lb.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+            return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+        },
+        // Zoom to `s1`, keeping the point under (clientX, clientY) fixed on screen.
+        zoomTo(s1, clientX, clientY) {
+            s1 = Math.min(5, Math.max(1, Math.round(s1 * 100) / 100));
+            const { cx, cy } = this._lbCenter();
+            const dx = clientX - cx, dy = clientY - cy;
+            const s0 = this.zoom.scale;
+            const vx = (dx - this.zoom.x) / s0, vy = (dy - this.zoom.y) / s0;
+            this.zoom.scale = s1;
+            if (s1 === 1) { this.zoom.x = 0; this.zoom.y = 0; }
+            else { this.zoom.x = dx - s1 * vx; this.zoom.y = dy - s1 * vy; }
+        },
+        zoomWheel(e) { this.zoomTo(this.zoom.scale + (e.deltaY < 0 ? 0.25 : -0.25), e.clientX, e.clientY); },
+        // Click an unzoomed image → zoom to 2× toward the cursor; the +/−/reset
+        // buttons zoom toward the centre.
+        zoomClick(e) { if (this.zoom.scale === 1) this.zoomTo(2, e.clientX, e.clientY); },
+        zoomToggle(e) { this.zoom.scale > 1 ? this.resetZoom() : this.zoomTo(2, e.clientX, e.clientY); },
+        zoomStep(delta) { const c = this._lbCenter(); this.zoomTo(this.zoom.scale + delta, c.cx, c.cy); },
+
+        startPan(e) {
+            if (this.zoom.scale <= 1) return;
+            this.zoom.dragging = true;
+            this.zoom._sx = e.clientX; this.zoom._sy = e.clientY;
+            this.zoom._ox = this.zoom.x; this.zoom._oy = this.zoom.y;
+        },
+        panMove(e) {
+            if (!this.zoom.dragging) return;
+            this.zoom.x = this.zoom._ox + (e.clientX - this.zoom._sx);
+            this.zoom.y = this.zoom._oy + (e.clientY - this.zoom._sy);
+        },
+        endPan() { this.zoom.dragging = false; },
+        // Close the lightbox (and reset zoom for next time).
+        closePreview() { this.previewFullscreen = false; this.resetZoom(); },
+
         // ── Zip download / extract ──────────────────────────────────────────
         zipBusy: false,
 

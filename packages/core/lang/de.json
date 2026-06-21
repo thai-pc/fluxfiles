@@ -99,6 +99,11 @@
         "failed": "ZIP konnte nicht erstellt werden",
         "extract_failed": "Entpacken fehlgeschlagen"
     },
+    "zoom": {
+        "in": "Vergrößern",
+        "out": "Verkleinern",
+        "reset": "Zurücksetzen"
+    },
     "quota": {
         "storage": "Speicher"
     },

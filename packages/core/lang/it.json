@@ -99,6 +99,11 @@
         "failed": "Impossibile creare lo zip",
         "extract_failed": "Estrazione non riuscita"
     },
+    "zoom": {
+        "in": "Ingrandisci",
+        "out": "Riduci",
+        "reset": "Reimposta"
+    },
     "quota": {
         "storage": "Archiviazione"
     },

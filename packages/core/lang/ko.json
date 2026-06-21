@@ -99,6 +99,11 @@
         "failed": "ZIP을 만들 수 없습니다",
         "extract_failed": "압축 해제 실패"
     },
+    "zoom": {
+        "in": "확대",
+        "out": "축소",
+        "reset": "원래대로"
+    },
     "quota": {
         "storage": "저장 공간"
     },
