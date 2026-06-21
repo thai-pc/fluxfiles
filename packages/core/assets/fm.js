@@ -990,6 +990,12 @@ function fluxFilesApp() {
                 height: item.height || (item.meta && item.meta.height) || null,
                 meta: item.meta || null,
                 variants: item.variants || null,
+                // On-demand WebP: img_base lets the host build any size via
+                // FluxFiles.imgUrl(file, {width, quality}); img_srcset/img_sizes are
+                // a ready responsive set. Present only for images when WebP is on.
+                img_base: item.img_base || null,
+                img_srcset: item.img_srcset || null,
+                img_sizes: item.img_sizes || null,
                 type: item.type || 'file',
                 is_dir: item.type === 'dir'
             };

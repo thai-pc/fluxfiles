@@ -132,12 +132,20 @@ body {
 }
 
 .ff-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
     font-size: 15px;
     font-weight: 700;
     color: var(--color-text-primary);
     margin-inline-end: 2px;
     white-space: nowrap;
     letter-spacing: -0.025em;
+}
+.ff-logo-icon {
+    flex-shrink: 0;
+    display: block;
+    border-radius: 6px;
 }
 
 .ff-sep {
