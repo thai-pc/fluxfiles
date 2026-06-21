@@ -83,6 +83,15 @@
         "apply": "Aplicar",
         "applied": "Permisos actualizados"
     },
+    "editor": {
+        "title": "Editar",
+        "save": "Guardar",
+        "saved": "Guardado",
+        "save_failed": "Error al guardar",
+        "load_failed": "No se pudo abrir el archivo",
+        "unsaved": "Cambios sin guardar",
+        "discard_confirm": "¿Descartar los cambios sin guardar?"
+    },
     "quota": {
         "storage": "Almacenamiento"
     },

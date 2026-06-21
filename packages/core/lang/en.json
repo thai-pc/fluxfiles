@@ -83,6 +83,15 @@
         "apply": "Apply",
         "applied": "Permissions updated"
     },
+    "editor": {
+        "title": "Edit",
+        "save": "Save",
+        "saved": "Saved",
+        "save_failed": "Save failed",
+        "load_failed": "Failed to open file",
+        "unsaved": "Unsaved changes",
+        "discard_confirm": "Discard unsaved changes?"
+    },
     "quota": {
         "storage": "Storage"
     },

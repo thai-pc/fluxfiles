@@ -83,6 +83,15 @@
         "apply": "Appliquer",
         "applied": "Permissions mises à jour"
     },
+    "editor": {
+        "title": "Modifier",
+        "save": "Enregistrer",
+        "saved": "Enregistré",
+        "save_failed": "Échec de l'enregistrement",
+        "load_failed": "Impossible d'ouvrir le fichier",
+        "unsaved": "Modifications non enregistrées",
+        "discard_confirm": "Abandonner les modifications non enregistrées ?"
+    },
     "quota": {
         "storage": "Stockage"
     },

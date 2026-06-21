@@ -899,6 +899,10 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
+                <button class="detail-btn" x-show="canEditFile(detailFile)" @click="openEditor(detailFile)" :title="t('editor.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M4 3L1.5 6 4 9M8 3l2.5 3L8 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('editor.title')"></span>
+                </button>
                 <button class="detail-btn" x-show="canChmod" @click="openChmod(detailFile)" :title="t('chmod.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5a2 2 0 012 2V5H4V3.5a2 2 0 012-2z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/></svg>
                     <span x-text="t('chmod.title')"></span>
@@ -1295,6 +1299,34 @@
                         </div>
                     </div>
                 </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Config / code editor ═══ -->
+    <div class="ff-modal-overlay" x-show="showEditor" x-transition @click.self="closeEditor()" style="z-index:63;" x-cloak>
+        <div class="ff-editor-modal" role="dialog" aria-modal="true" :aria-label="t('editor.title')"
+             @keydown.escape.window="showEditor && closeEditor()"
+             @keydown.ctrl.s.prevent="saveEditor()" @keydown.meta.s.prevent="saveEditor()">
+            <div class="ff-activity-head">
+                <h3><span x-text="t('editor.title')"></span><span class="ff-editor-name" x-text="editorFile?.name"></span></h3>
+                <button class="ff-activity-close" @click="closeEditor()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <div class="ff-editor-body">
+                <p class="ff-new-folder-error" x-show="editorError" x-text="editorError"></p>
+                <div x-show="editorLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
+                <textarea id="ff-editor-ta" class="ff-editor-ta" x-show="!editorLoading"
+                          x-model="editorContent" spellcheck="false" autocomplete="off"
+                          autocorrect="off" autocapitalize="off"></textarea>
+            </div>
+            <div class="ff-editor-foot">
+                <span class="ff-editor-status" x-text="editorDirty ? t('editor.unsaved') : ''"></span>
+                <div class="ff-editor-actions">
+                    <button class="ff-btn" @click="closeEditor()" x-text="t('common.cancel')"></button>
+                    <button class="ff-btn ff-btn-primary" @click="saveEditor()"
+                            :disabled="editorSaving || !editorDirty"
+                            x-text="editorSaving ? t('common.loading') : t('editor.save')"></button>
+                </div>
             </div>
         </div>
     </div>

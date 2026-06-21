@@ -83,6 +83,15 @@
         "apply": "Anwenden",
         "applied": "Berechtigungen aktualisiert"
     },
+    "editor": {
+        "title": "Bearbeiten",
+        "save": "Speichern",
+        "saved": "Gespeichert",
+        "save_failed": "Speichern fehlgeschlagen",
+        "load_failed": "Datei konnte nicht geöffnet werden",
+        "unsaved": "Nicht gespeicherte Änderungen",
+        "discard_confirm": "Nicht gespeicherte Änderungen verwerfen?"
+    },
     "quota": {
         "storage": "Speicher"
     },

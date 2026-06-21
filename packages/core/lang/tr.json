@@ -83,6 +83,15 @@
         "apply": "Uygula",
         "applied": "İzinler güncellendi"
     },
+    "editor": {
+        "title": "Düzenle",
+        "save": "Kaydet",
+        "saved": "Kaydedildi",
+        "save_failed": "Kaydetme başarısız",
+        "load_failed": "Dosya açılamadı",
+        "unsaved": "Kaydedilmemiş değişiklikler",
+        "discard_confirm": "Kaydedilmemiş değişiklikler atılsın mı?"
+    },
     "quota": {
         "storage": "Depolama"
     },
