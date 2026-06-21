@@ -1132,14 +1132,31 @@ class FluxFilesController
 
     public function publicIndex(): \Illuminate\Http\Response
     {
-        $path = $this->fluxfilesBasePath() . '/public/index.html';
+        $base = $this->fluxfilesBasePath();
+        $path = $base . '/public/index.html';
 
         if (!file_exists($path)) {
             abort(404, 'FluxFiles public/index.html not found');
         }
 
-        return response(file_get_contents($path), 200)
-            ->header('Content-Type', 'text/html; charset=utf-8');
+        $html = file_get_contents($path);
+        // Cache-bust the UI assets with a content hash, so a core update is never
+        // served from a stale browser/proxy cache (the static fm.js/fm.css URLs
+        // carry no version of their own).
+        $ver = static function (string $file) use ($base): string {
+            $p = $base . '/assets/' . $file;
+            return is_file($p) ? substr(md5_file($p), 0, 10) : (string) time();
+        };
+        $html = str_replace(
+            ['"../assets/fm.css"', '"../assets/fm.js"'],
+            ['"../assets/fm.css?v=' . $ver('fm.css') . '"', '"../assets/fm.js?v=' . $ver('fm.js') . '"'],
+            $html
+        );
+
+        return response($html, 200)
+            ->header('Content-Type', 'text/html; charset=utf-8')
+            // Always revalidate the HTML so the ?v= asset URLs are never stale.
+            ->header('Cache-Control', 'no-cache, must-revalidate');
     }
 
     public function sdkJs(): \Illuminate\Http\Response

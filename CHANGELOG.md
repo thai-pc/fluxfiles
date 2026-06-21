@@ -5,8 +5,17 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.2.38] — 2026-06-21
 
-> Released: core `core-v0.2.33` (Packagist + Docker), WordPress `wordpress-v0.2.18`
-> (lock → core 0.2.33). Laravel/Node inherit via `^0.2.30` (no API change).
+> Released: core `core-v0.2.33` (Packagist + Docker), Laravel `laravel-v0.2.17`,
+> WordPress `wordpress-v0.2.18` (lock → core 0.2.33). Node inherits via `^0.2.30`.
+
+### Fixed
+
+- **Cache-busting for the UI assets.** `fm.js` / `fm.css` were referenced with a
+  fixed URL, so after a core update browsers (and proxies) kept serving the stale
+  cached build. The PHP that serves `public/index.html` now appends a per-file
+  **content hash** (`?v=<md5>`) to each asset URL and marks the (dynamic) HTML
+  `Cache-Control: no-cache` — so an update always loads the new CSS/JS. WordPress
+  already did this; the **core standalone and the Laravel adapter** now do too.
 
 ### Changed
 

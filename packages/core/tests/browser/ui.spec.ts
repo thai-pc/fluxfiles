@@ -15,6 +15,20 @@ function mintToken(): string {
   return execFileSync('php', ['-r', php]).toString().trim();
 }
 
+test('UI assets are cache-busted with a content-hash ?v= and the HTML is no-cache', async ({ page }) => {
+  const token = mintToken();
+  const resp = await page.goto(`/public/index.html?token=${token}&disk=local`);
+  // The dynamic HTML must not be cached, or it would keep the old ?v= URLs.
+  expect((resp?.headers()['cache-control'] || '')).toContain('no-cache');
+  // fm.js / fm.css are referenced with a version query so a core update invalidates them.
+  const versioned = await page.evaluate(() => ({
+    js: document.querySelector('script[src*="fm.js"]')?.getAttribute('src') || '',
+    css: document.querySelector('link[href*="fm.css"]')?.getAttribute('href') || '',
+  }));
+  expect(versioned.js).toMatch(/fm\.js\?v=[a-f0-9]+/);
+  expect(versioned.css).toMatch(/fm\.css\?v=[a-f0-9]+/);
+});
+
 test('valid token → file manager UI renders (no auth screen)', async ({ page }) => {
   const token = mintToken();
   await page.goto(`/public/index.html?token=${token}&disk=local`);
