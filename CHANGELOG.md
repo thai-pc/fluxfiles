@@ -3,6 +3,20 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.36] — 2026-06-21
+
+> Released: core `core-v0.2.31` (Packagist + Docker). WordPress lock refreshed;
+> Laravel/Node inherit it via `^0.2.30` (no API change).
+
+### Changed
+
+- **UI: prefer "Download ZIP" over the broken multi-file download.** A multi-file
+  or folder selection used to fire one `<a download>` per file — which browsers
+  block as N parallel downloads, and which can't handle a folder (no direct URL).
+  Now a multi-selection (or any folder pick) shows a single **Download ZIP**; the
+  individual **Download** stays for a lone file (and is the fallback when
+  `allow_zip` is off).
+
 ## [0.2.35] — 2026-06-21
 
 > Released: core `core-v0.2.30` (Packagist), Laravel `laravel-v0.2.16`,

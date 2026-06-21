@@ -2803,6 +2803,19 @@ function fluxFilesApp() {
         get canZip() {
             return this.tokenAllows('allow_zip', true) && this.tokenAllows('allow_download', true);
         },
+        // Offer "Download ZIP" for a multi-selection or when a folder is selected
+        // (a folder/multi-pick can't be saved as individual files in one click).
+        get showBulkZip() {
+            return this.canZip && (this.selected.length > 1 || this.selected.some(s => s && s.type === 'dir'));
+        },
+        // The plain "Download" (individual) is best for a single file. When zip is
+        // available we hide it for multi/folder picks (the browser blocks N parallel
+        // downloads, and folders have no direct URL) — Download ZIP covers those.
+        // When zip is unavailable, fall back to the old per-file behaviour.
+        get showBulkDownload() {
+            if (!this.canZip) return this.selected.length > 0;
+            return this.selected.length === 1 && this.selected[0] && this.selected[0].type !== 'dir';
+        },
         get canExtract() {
             return this.tokenAllows('allow_extract', true);
         },

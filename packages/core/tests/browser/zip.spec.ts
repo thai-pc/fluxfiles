@@ -35,6 +35,32 @@ test('canZip + canExtractFile gates', async ({ page }) => {
   expect(off).toEqual({ canZip: false, canExtract: false });
 });
 
+test('toolbar: Download vs Download ZIP visibility by selection', async ({ page }) => {
+  await openManager(page, mintToken()); // canZip true
+  const vis = await page.evaluate(() => {
+    const c = (window as any).Alpine.$data(document.querySelector('.ff-app'));
+    const set = (sel: any[]) => { c.selected = sel; return { dl: c.showBulkDownload, zip: c.showBulkZip }; };
+    return {
+      oneFile: set([{ name: 'a.txt', key: 'a.txt', type: 'file' }]),
+      oneFolder: set([{ name: 'd', key: 'd', type: 'dir' }]),
+      multi: set([{ name: 'a', key: 'a', type: 'file' }, { name: 'b', key: 'b', type: 'file' }]),
+    };
+  });
+  // single file → individual Download, no ZIP; folder/multi → ZIP, no individual Download.
+  expect(vis.oneFile).toEqual({ dl: true, zip: false });
+  expect(vis.oneFolder).toEqual({ dl: false, zip: true });
+  expect(vis.multi).toEqual({ dl: false, zip: true });
+
+  // Without zip (allow_zip=false) the individual Download is the fallback for any selection.
+  await openManager(page, mintTokenWithClaims({ allow_zip: false }));
+  const noZip = await page.evaluate(() => {
+    const c = (window as any).Alpine.$data(document.querySelector('.ff-app'));
+    c.selected = [{ name: 'a', key: 'a', type: 'file' }, { name: 'b', key: 'b', type: 'file' }];
+    return { dl: c.showBulkDownload, zip: c.showBulkZip };
+  });
+  expect(noZip).toEqual({ dl: true, zip: false });
+});
+
 test('downloadZip POSTs the selection and saves a .zip', async ({ page }) => {
   await openManager(page, mintToken());
   let posted: any = null;
