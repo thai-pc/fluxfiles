@@ -419,6 +419,29 @@ function routeRequest(
         return $fm->putContent((string) $disk, (string) $path, (string) $content);
     }
 
+    // Zip download — stream a zip of the selected files/folders. Read op; bypasses
+    // the JSON encoder (ZipStream sends its own headers + body, then we exit). A
+    // guard/size violation in zipManifest throws before any byte → normal JSON error.
+    if ($method === 'POST' && $uri === '/api/fm/zip') {
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $fm->streamZip(
+            (string) ($body['disk'] ?? 'local'),
+            is_array($body['paths'] ?? null) ? $body['paths'] : [],
+            isset($body['name']) ? (string) $body['name'] : null
+        );
+        exit;
+    }
+
+    // Extract a zip in place (returns JSON; guarded against slip/bomb/quota/dangerous-ext).
+    if ($method === 'POST' && $uri === '/api/fm/extract') {
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $fm->extractZip(
+            (string) ($body['disk'] ?? 'local'),
+            (string) ($body['path'] ?? ''),
+            isset($body['dest']) ? (string) $body['dest'] : null
+        );
+    }
+
     // SFTP file permissions (chmod). Read the current mode, or set a new one.
     if ($method === 'GET' && $uri === '/api/fm/chmod') {
         return $fm->getMode($_GET['disk'] ?? '', $_GET['path'] ?? '');

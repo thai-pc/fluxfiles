@@ -92,6 +92,13 @@
         "unsaved": "Thay đổi chưa lưu",
         "discard_confirm": "Bỏ các thay đổi chưa lưu?"
     },
+    "zip": {
+        "download": "Tải ZIP",
+        "extract": "Giải nén",
+        "extracted": "Đã giải nén {n} tệp",
+        "failed": "Không tạo được tệp zip",
+        "extract_failed": "Giải nén thất bại"
+    },
     "quota": {
         "storage": "Dung lượng"
     },

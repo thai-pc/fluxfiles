@@ -92,6 +92,13 @@
         "unsaved": "Niet-opgeslagen wijzigingen",
         "discard_confirm": "Niet-opgeslagen wijzigingen verwerpen?"
     },
+    "zip": {
+        "download": "ZIP downloaden",
+        "extract": "Uitpakken",
+        "extracted": "{n} bestanden uitgepakt",
+        "failed": "Kon de zip niet maken",
+        "extract_failed": "Uitpakken mislukt"
+    },
     "quota": {
         "storage": "Opslag"
     },

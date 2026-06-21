@@ -92,6 +92,13 @@
         "unsaved": "असहेजे परिवर्तन",
         "discard_confirm": "असहेजे परिवर्तन छोड़ें?"
     },
+    "zip": {
+        "download": "ZIP डाउनलोड करें",
+        "extract": "निकालें",
+        "extracted": "{n} फ़ाइलें निकाली गईं",
+        "failed": "zip नहीं बना सका",
+        "extract_failed": "निकालना विफल"
+    },
     "quota": {
         "storage": "स्टोरेज"
     },

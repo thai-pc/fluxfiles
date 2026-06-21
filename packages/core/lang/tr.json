@@ -92,6 +92,13 @@
         "unsaved": "Kaydedilmemiş değişiklikler",
         "discard_confirm": "Kaydedilmemiş değişiklikler atılsın mı?"
     },
+    "zip": {
+        "download": "ZIP indir",
+        "extract": "Çıkar",
+        "extracted": "{n} dosya çıkarıldı",
+        "failed": "Zip oluşturulamadı",
+        "extract_failed": "Çıkarma başarısız"
+    },
     "quota": {
         "storage": "Depolama"
     },

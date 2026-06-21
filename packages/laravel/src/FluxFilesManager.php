@@ -132,6 +132,17 @@ class FluxFilesManager
         if (array_key_exists('allow_code_edit', $overrides)) {
             $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
         }
+        if (array_key_exists('allow_zip', $overrides)) {
+            $payload['allow_zip'] = (bool) $overrides['allow_zip'];
+        }
+        if (array_key_exists('allow_extract', $overrides)) {
+            $payload['allow_extract'] = (bool) $overrides['allow_extract'];
+        }
+        foreach (['zip_max_mb', 'zip_max_files'] as $zipClaim) {
+            if (!empty($overrides[$zipClaim])) {
+                $payload[$zipClaim] = (int) $overrides[$zipClaim];
+            }
+        }
         if (!empty($overrides['watermark_enabled'])) {
             $payload['watermark_enabled'] = true;
             foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {

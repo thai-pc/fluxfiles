@@ -60,6 +60,9 @@ Route::get('usage', [FluxFilesController::class, 'usage']);
 Route::get('content', [FluxFilesController::class, 'getContent']);
 Route::put('content', [FluxFilesController::class, 'putContent']);
 
+// Extract a zip in place (works on any disk; returns JSON)
+Route::post('extract', [FluxFilesController::class, 'extract']);
+
 // Audit
 Route::get('audit', [FluxFilesController::class, 'audit']);
 

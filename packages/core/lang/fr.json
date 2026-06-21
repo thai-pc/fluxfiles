@@ -92,6 +92,13 @@
         "unsaved": "Modifications non enregistrées",
         "discard_confirm": "Abandonner les modifications non enregistrées ?"
     },
+    "zip": {
+        "download": "Télécharger le ZIP",
+        "extract": "Extraire",
+        "extracted": "{n} fichiers extraits",
+        "failed": "Impossible de créer le zip",
+        "extract_failed": "Échec de l'extraction"
+    },
     "quota": {
         "storage": "Stockage"
     },

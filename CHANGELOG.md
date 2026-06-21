@@ -3,6 +3,32 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.35] — 2026-06-21
+
+> Released: core `core-v0.2.30` (Packagist), Laravel `laravel-v0.2.16`,
+> WordPress plugin `wordpress-v0.2.15`, Node `@fluxfiles/node` `0.1.12`.
+
+### Added
+
+- **Zip / Extract** (synchronous — no queue/worker, which would need a DB).
+  - **`POST /api/fm/zip`** `{disk, paths[], name?}` streams a `.zip` of the
+    selected files **and folders** (recursive), constant-memory via
+    `maennchen/zipstream-php` (each entry piped through Flysystem → local/S3/R2/
+    SFTP). Read perm + `allow_zip` + `allow_download`; `owner_only` enforced,
+    system files skipped; pre-flight `413` over `zip_max_mb`/`zip_max_files`
+    before any byte. Binary streaming → **core-standalone** (unproxied, like
+    `stream`/`img`).
+  - **`POST /api/fm/extract`** `{disk, path, dest?}` extracts a `.zip` in place.
+    Two-pass = **atomic** (validate every entry → then write; one bad entry
+    aborts everything). Hardened: **zip-slip** (absolute/`..`/drive-letter
+    rejected), **zip-bomb** (uncompressed-size + entry-count caps), **quota**
+    (on the total uncompressed), and the always-on **dangerous-extension** block
+    + `ext` allowlist. Returns JSON → **proxied** by Laravel/WordPress.
+  - Claims `allow_zip` / `allow_extract` (default true), `zip_max_mb` (1024),
+    `zip_max_files` (10000), forwarded through every token helper. UI gains a
+    **Download ZIP** action (selection toolbar + folders) and an **Extract**
+    action on `.zip` files; new `zip` i18n namespace in all 16 locales.
+
 ## [0.2.34] — 2026-06-21
 
 > Released: core `core-v0.2.29` (Packagist), Laravel `laravel-v0.2.15`,

@@ -160,6 +160,11 @@ class FluxFilesApi
             ],
         ]);
 
+        // Extract a zip in place (works on any disk; returns JSON)
+        register_rest_route($ns, $p . '/extract', array_merge($writeArgs, [
+            'callback' => [$api, 'handleExtract'],
+        ]));
+
         // Search, quota, audit
         register_rest_route($ns, $p . '/search', array_merge($readArgs, [
             'callback' => [$api, 'handleSearch'],
@@ -873,6 +878,30 @@ class FluxFilesApi
                 (string) ($body['content'] ?? '')
             );
             $this->logAudit($claims, 'content_edit', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    // Extract a zip in place — slip/bomb/quota/dangerous-ext guards live inside
+    // FileManager::extractZip.
+
+    public function handleExtract(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $result = $fm->extractZip(
+                (string) ($body['disk'] ?? 'local'),
+                (string) ($body['path'] ?? ''),
+                isset($body['dest']) ? (string) $body['dest'] : null
+            );
+            $this->logAudit($claims, 'extract', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
 
             return $this->ok($result);
         } catch (ApiException $e) {

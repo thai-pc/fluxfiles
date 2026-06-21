@@ -92,6 +92,13 @@
         "unsaved": "Nicht gespeicherte Änderungen",
         "discard_confirm": "Nicht gespeicherte Änderungen verwerfen?"
     },
+    "zip": {
+        "download": "ZIP herunterladen",
+        "extract": "Entpacken",
+        "extracted": "{n} Dateien entpackt",
+        "failed": "ZIP konnte nicht erstellt werden",
+        "extract_failed": "Entpacken fehlgeschlagen"
+    },
     "quota": {
         "storage": "Speicher"
     },

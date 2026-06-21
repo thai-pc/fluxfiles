@@ -143,6 +143,7 @@ test('token() forwards watermark + allow_download claims', function () use ($sec
     $mgr = new FluxFilesManager();
     $token = $mgr->token(41, [
         'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true,
+        'allow_zip' => false, 'allow_extract' => false, 'zip_max_mb' => 50,
         'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© Acme',
         'watermark_position' => 'center', 'watermark_opacity' => 0.5,
     ]);
@@ -150,6 +151,9 @@ test('token() forwards watermark + allow_download claims', function () use ($sec
     assertEqual(false, $c->allowDownload, 'allow_download');
     assertEqual(false, $c->allowChmod, 'allow_chmod');
     assertEqual(true, $c->allowCodeEdit, 'allow_code_edit');
+    assertEqual(false, $c->allowZip, 'allow_zip');
+    assertEqual(false, $c->allowExtract, 'allow_extract');
+    assertEqual(50, $c->zipMaxMb, 'zip_max_mb');
     assertEqual('© Acme', $c->watermark['text'], 'watermark text');
     assertEqual('center', $c->watermark['position'], 'watermark position');
 });
@@ -230,7 +234,11 @@ test('proxy route surface covers every core /api/fm route', function () {
     // - chmod: only operates on an SFTP disk, which is a core-standalone driver
     //   (the proxy doesn't expose SFTP), so chmod has nothing to act on in proxy
     //   mode. Belongs with the SFTP/core-standalone group.
-    $intentionallyUnproxied = ['stream', 'img', 'chmod'];
+    // - zip: streams a binary zip to the client (ZipStream → php://output, bypassing
+    //   the JSON encoder); the JSON-returning proxy controllers don't do streaming
+    //   responses, so it's a core-standalone / Docker feature like stream/img.
+    //   (Extract, by contrast, returns JSON and IS proxied.)
+    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

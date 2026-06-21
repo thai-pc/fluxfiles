@@ -2796,6 +2796,71 @@ function fluxFilesApp() {
         _cm: null,          // CodeMirror instance (created lazily, then reused)
         _cmLoading: null,   // promise that resolves once CodeMirror is on the page
 
+        // ── Zip download / extract ──────────────────────────────────────────
+        zipBusy: false,
+
+        // Zip download needs allow_zip and a downloadable token (allow_download).
+        get canZip() {
+            return this.tokenAllows('allow_zip', true) && this.tokenAllows('allow_download', true);
+        },
+        get canExtract() {
+            return this.tokenAllows('allow_extract', true);
+        },
+        canExtractFile(file) {
+            if (!file || file.type === 'dir') return false;
+            const name = (file.name || file.key || '').toLowerCase();
+            return this.canExtract && name.endsWith('.zip');
+        },
+
+        // Download a selection (files/folders) as a zip. POSTs to /api/fm/zip and
+        // saves the streamed blob (an <a download> can't send the Bearer header).
+        async downloadZip(paths, name) {
+            paths = (paths || []).filter(Boolean);
+            if (!paths.length || this.zipBusy) return;
+            this.zipBusy = true;
+            try {
+                const res = await fetch(this.joinUrl('/api/fm/zip'), {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ disk: this.currentDisk, paths, name: name || null }),
+                });
+                if (!res.ok) {
+                    let msg = this.t('zip.failed') || 'Could not create the zip';
+                    try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) { /* non-JSON */ }
+                    this.showToast(msg, 'error');
+                    return;
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = ((name || 'files').replace(/\.zip$/i, '')) + '.zip';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+            } catch (e) {
+                this.showToast(e.message || (this.t('zip.failed') || 'Zip failed'), 'error');
+            } finally {
+                this.zipBusy = false;
+            }
+        },
+
+        // Extract a .zip in place; reloads the listing so the new folder appears.
+        async extractZip(file) {
+            if (!file || this.zipBusy) return;
+            this.zipBusy = true;
+            try {
+                const data = await this.api('POST', '/api/fm/extract', { disk: this.currentDisk, path: file.key });
+                this.showToast(this.t('zip.extracted', { n: data.extracted }) || ('Extracted ' + data.extracted + ' files'));
+                this.loadFiles();
+            } catch (e) {
+                this.showToast(e.message || (this.t('zip.extract_failed') || 'Extract failed'), 'error');
+            } finally {
+                this.zipBusy = false;
+            }
+        },
+
         // The Edit button shows for a text file when the token allows code editing.
         // allow_code_edit defaults FALSE (editing config/executables is opt-in).
         get canEditContent() {

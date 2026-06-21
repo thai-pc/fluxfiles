@@ -351,6 +351,11 @@
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v5M3.5 4.5L6 7l2.5-2.5M2.5 9.5h7" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.download')"></span>
                 </button>
+                <button class="tb-btn" x-show="selected.length > 0 && canZip" :disabled="zipBusy"
+                        @click="downloadZip(selected.map(s => s.key), selected.length === 1 ? selected[0].name : null)">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M5 2.5h1.2M5 4h1.2M5 5.5h1.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('zip.download')"></span>
+                </button>
             </div>
 
             <!-- Mobile: "More" menu (3 dots) -->
@@ -908,6 +913,14 @@
                 <button class="detail-btn" x-show="canChmod" @click="openChmod(detailFile)" :title="t('chmod.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5a2 2 0 012 2V5H4V3.5a2 2 0 012-2z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/></svg>
                     <span x-text="t('chmod.title')"></span>
+                </button>
+                <button class="detail-btn" x-show="canExtractFile(detailFile)" :disabled="zipBusy" @click="extractZip(detailFile)" :title="t('zip.extract')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="2" y="2.5" width="8" height="7" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M6 4v3.5M4.5 6L6 7.5 7.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('zip.extract')"></span>
+                </button>
+                <button class="detail-btn" x-show="detailFile?.type === 'dir' && canZip" :disabled="zipBusy" @click="downloadZip([detailFile.key], detailFile.name)" :title="t('zip.download')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M5 2.5h1.2M5 4h1.2M5 5.5h1.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('zip.download')"></span>
                 </button>
                 <button class="detail-btn" x-show="detailFile?.type !== 'dir'" @click="downloadFile(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>

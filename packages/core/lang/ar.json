@@ -92,6 +92,13 @@
         "unsaved": "تغييرات غير محفوظة",
         "discard_confirm": "هل تريد تجاهل التغييرات غير المحفوظة؟"
     },
+    "zip": {
+        "download": "تنزيل ZIP",
+        "extract": "استخراج",
+        "extracted": "تم استخراج {n} ملفًا",
+        "failed": "تعذّر إنشاء ملف zip",
+        "extract_failed": "فشل الاستخراج"
+    },
     "quota": {
         "storage": "التخزين"
     },

@@ -1712,6 +1712,274 @@ class FileManager
         return implode(', ', $parts);
     }
 
+    /** Default zip/extract limits (overridable per token via zip_max_mb / zip_max_files). */
+    private const ZIP_DEFAULT_MAX_MB = 1024;
+    private const ZIP_DEFAULT_MAX_FILES = 10000;
+
+    /** True for FluxFiles-internal keys that must never be zipped/exposed. */
+    private function isSystemKey(string $key): bool
+    {
+        return str_starts_with($key, '_fluxfiles/') || str_starts_with($key, '_variants/')
+            || str_contains($key, '/_fluxfiles/') || str_contains($key, '/_variants/')
+            || substr($key, -10) === '.meta.json';
+    }
+
+    /**
+     * Expand a selection of files/folders into a flat zip manifest, applying every
+     * guard (disk/read-perm/allow_zip/allow_download, path scope, owner_only, the
+     * system-path skip) plus a pre-flight size/count check — so an oversized
+     * selection is rejected with 413 before a single byte is streamed.
+     *
+     * @param  string[] $paths
+     * @return array{entries: list<array{key:string,name:string,size:int}>, total:int, count:int}
+     */
+    public function zipManifest(string $disk, array $paths): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('read');
+        if (!$this->claims->allowZip) {
+            throw new ApiException('Zip download is not allowed', 403, 'zip_forbidden');
+        }
+        if (!$this->claims->allowDownload) {
+            throw new ApiException('Download is not allowed for this token', 403, 'download_forbidden');
+        }
+        $paths = array_values(array_filter(array_map('strval', $paths), static fn ($p) => $p !== ''));
+        if ($paths === []) {
+            throw new ApiException('No paths to zip', 400, 'zip_empty');
+        }
+
+        $maxFiles = $this->claims->zipMaxFiles > 0 ? $this->claims->zipMaxFiles : self::ZIP_DEFAULT_MAX_FILES;
+        $maxBytes = ($this->claims->zipMaxMb > 0 ? $this->claims->zipMaxMb : self::ZIP_DEFAULT_MAX_MB) * 1024 * 1024;
+
+        $fs = $this->disks->disk($disk);
+        $entries = [];
+        $seen = [];
+        $total = 0;
+
+        $add = function (string $key, string $name, int $size) use (&$entries, &$seen, &$total, $maxFiles, $maxBytes): void {
+            // De-dupe archive names so two same-named picks don't collide.
+            $candidate = $name;
+            $i = 1;
+            while (isset($seen[$candidate])) {
+                $dot = strrpos($name, '.');
+                $candidate = ($dot !== false && $dot > 0)
+                    ? substr($name, 0, $dot) . " ({$i})" . substr($name, $dot)
+                    : $name . " ({$i})";
+                $i++;
+            }
+            $seen[$candidate] = true;
+            $entries[] = ['key' => $key, 'name' => $candidate, 'size' => $size];
+            $total += $size;
+            if (count($entries) > $maxFiles) {
+                throw new ApiException('Too many files to zip', 413, 'zip_too_many', ['max' => $maxFiles]);
+            }
+            if ($total > $maxBytes) {
+                throw new ApiException('Selection is too large to zip', 413, 'zip_too_large', ['max_mb' => (int) ($maxBytes / 1048576)]);
+            }
+        };
+
+        foreach ($paths as $p) {
+            $scoped = $this->scopedPath($p);
+            $this->assertNotSystem($scoped);
+
+            if ($fs->directoryExists($scoped)) {
+                $this->assertOwnsTree($disk, $scoped);
+                // Keep the selected folder itself as the top entry in the archive.
+                $parent = strpos($scoped, '/') !== false ? substr($scoped, 0, strrpos($scoped, '/') + 1) : '';
+                foreach ($fs->listContents($scoped, true) as $item) {
+                    if (!$item->isFile()) {
+                        continue;
+                    }
+                    $key = $item->path();
+                    if ($this->isSystemKey($key)) {
+                        continue;
+                    }
+                    $rel = ($parent !== '' && str_starts_with($key, $parent)) ? substr($key, strlen($parent)) : $key;
+                    $add($key, $rel, (int) ($item->fileSize() ?? 0));
+                }
+            } elseif ($fs->fileExists($scoped)) {
+                if ($this->isSystemKey($scoped)) {
+                    continue;
+                }
+                $this->assertOwner($disk, $scoped);
+                $add($scoped, basename($scoped), (int) $fs->fileSize($scoped));
+            } else {
+                throw new ApiException('Path not found: ' . $p, 404, 'not_found');
+            }
+        }
+
+        if ($entries === []) {
+            throw new ApiException('Nothing to zip', 400, 'zip_empty');
+        }
+        return ['entries' => $entries, 'total' => $total, 'count' => count($entries)];
+    }
+
+    /**
+     * Stream the selection as a zip to php://output. Constant-memory — each entry
+     * is piped through Flysystem readStream. ZipStream sends the HTTP headers
+     * ($sendHeaders=false in tests). zipManifest() runs first, so a guard/size
+     * violation throws (→ JSON error) before any byte is written.
+     *
+     * @param string[] $paths
+     */
+    public function streamZip(string $disk, array $paths, ?string $name = null, bool $sendHeaders = true): void
+    {
+        $manifest = $this->zipManifest($disk, $paths);
+        $fs = $this->disks->disk($disk);
+
+        $zip = new \ZipStream\ZipStream(
+            outputName: $this->zipFilename($name, $paths),
+            contentType: 'application/zip',
+            sendHttpHeaders: $sendHeaders,
+            defaultEnableZeroHeader: true,
+        );
+        foreach ($manifest['entries'] as $e) {
+            $stream = $fs->readStream($e['key']);
+            $zip->addFileFromStream($e['name'], $stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+        $zip->finish();
+    }
+
+    /**
+     * Extract a `.zip` in place into a destination folder (default: a folder named
+     * after the archive, beside it). Two passes: pass 1 validates **every** entry
+     * (zip-slip, dangerous-ext, allowed_ext, system-path, the bomb caps, quota) so
+     * a single bad entry aborts the whole extract before any write; pass 2 writes.
+     *
+     * @return array{extracted:int, dest:string, bytes:int}
+     */
+    public function extractZip(string $disk, string $path, ?string $dest = null): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+        if (!$this->claims->allowExtract) {
+            throw new ApiException('Extracting archives is not allowed', 403, 'extract_forbidden');
+        }
+        if (!class_exists(\ZipArchive::class)) {
+            throw new ApiException('Zip extraction is unavailable on this server', 501, 'zip_unavailable');
+        }
+
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+        $fs = $this->disks->disk($disk);
+        if (!$fs->fileExists($scoped)) {
+            throw new ApiException('Archive not found', 404, 'not_found');
+        }
+        if (strtolower(pathinfo($scoped, PATHINFO_EXTENSION)) !== 'zip') {
+            throw new ApiException('Not a .zip archive', 400, 'not_a_zip');
+        }
+
+        // Destination in user space (so the return value is prefix-relative), then scoped.
+        if ($dest === null || trim($dest) === '') {
+            $dir = strpos($path, '/') !== false ? substr($path, 0, strrpos($path, '/')) : '';
+            $folder = (string) preg_replace('/\.zip$/i', '', basename($path));
+            $destUser = ($dir !== '' ? rtrim($dir, '/') . '/' : '') . $folder;
+        } else {
+            $destUser = trim($dest);
+        }
+        $destScoped = $this->scopedPath($destUser);
+        $this->assertNotSystem($destScoped);
+
+        $maxFiles = $this->claims->zipMaxFiles > 0 ? $this->claims->zipMaxFiles : self::ZIP_DEFAULT_MAX_FILES;
+        $maxBytes = ($this->claims->zipMaxMb > 0 ? $this->claims->zipMaxMb : self::ZIP_DEFAULT_MAX_MB) * 1024 * 1024;
+
+        // ZipArchive needs a local path — copy the archive down (uniform across disks).
+        $tmp = tempnam(sys_get_temp_dir(), 'ffzip');
+        $src = $fs->readStream($scoped);
+        $dstH = fopen($tmp, 'wb');
+        stream_copy_to_stream($src, $dstH);
+        fclose($dstH);
+        if (is_resource($src)) {
+            fclose($src);
+        }
+
+        try {
+            $za = new \ZipArchive();
+            if ($za->open($tmp) !== true) {
+                throw new ApiException('The archive is corrupt or unreadable', 400, 'bad_zip');
+            }
+
+            // ── Pass 1: validate every entry, write nothing ──
+            $plan = [];   // list of ['orig' => entryName, 'rel' => safeRelPath]
+            $total = 0;
+            for ($i = 0; $i < $za->numFiles; $i++) {
+                $stat = $za->statIndex($i);
+                if ($stat === false) {
+                    continue;
+                }
+                $name = (string) $stat['name'];
+                if ($name === '' || substr($name, -1) === '/') {
+                    continue; // directory entry — created implicitly on write
+                }
+                // Zip-slip: reject absolute / drive-letter / any ".." segment.
+                $norm = str_replace('\\', '/', $name);
+                if ($norm[0] === '/' || preg_match('#(^|/)\.\.(/|$)#', $norm) || preg_match('#^[A-Za-z]:#', $norm)) {
+                    throw new ApiException('Archive contains an unsafe path', 403, 'zip_slip', ['entry' => $name]);
+                }
+                $rel = $this->safeRel($norm);
+                if ($rel === '') {
+                    continue;
+                }
+                if ($this->isSystemKey($rel)) {
+                    throw new ApiException('Archive targets a system path', 403, 'system_path', ['entry' => $name]);
+                }
+                // Same policy as upload: block dangerous extensions + honour allowed_ext.
+                $this->assertSafeFilename(basename($rel));
+                $this->assertExt(strtolower(pathinfo($rel, PATHINFO_EXTENSION)));
+
+                $total += (int) $stat['size'];
+                $plan[] = ['orig' => $name, 'rel' => $rel];
+                if (count($plan) > $maxFiles) {
+                    throw new ApiException('Archive has too many files', 413, 'zip_too_many', ['max' => $maxFiles]);
+                }
+                if ($total > $maxBytes) {
+                    throw new ApiException('Archive is too large to extract', 413, 'zip_too_large', ['max_mb' => (int) ($maxBytes / 1048576)]);
+                }
+            }
+            if ($plan === []) {
+                throw new ApiException('The archive has no extractable files', 400, 'zip_empty');
+            }
+            // Quota on the total uncompressed size.
+            if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
+                $this->quotaManager->assertQuota($disk, $this->claims->pathPrefix, $total, $this->claims->maxStorageMb);
+            }
+
+            // ── Pass 2: write everything ──
+            $written = 0;
+            $prefix = $destScoped !== '' ? rtrim($destScoped, '/') . '/' : '';
+            foreach ($plan as $e) {
+                $stream = $za->getStream($e['orig']);
+                if (!is_resource($stream)) {
+                    continue;
+                }
+                $fs->writeStream($prefix . $e['rel'], $stream);
+                fclose($stream);
+                $written++;
+            }
+            $za->close();
+        } finally {
+            @unlink($tmp);
+        }
+
+        return ['extracted' => $written, 'dest' => $destUser, 'bytes' => $total];
+    }
+
+    /** A safe download filename: the caller's name, else a single selection's name, else 'files'. */
+    private function zipFilename(?string $name, array $paths): string
+    {
+        $base = ($name !== null && trim($name) !== '') ? trim($name) : '';
+        if ($base === '' && count($paths) === 1) {
+            $base = basename(rtrim((string) $paths[0], '/'));
+        }
+        $base = (string) preg_replace('/\.zip$/i', '', $base);
+        $base = (string) preg_replace('/[^A-Za-z0-9._ -]+/', '_', $base);
+        $base = trim($base);
+        return ($base === '' ? 'files' : $base) . '.zip';
+    }
+
     private function permanentUrl(string $disk, string $path): ?string
     {
         $config = $this->disks->config($disk);
