@@ -83,6 +83,15 @@
         "apply": "Applica",
         "applied": "Permessi aggiornati"
     },
+    "editor": {
+        "title": "Modifica",
+        "save": "Salva",
+        "saved": "Salvato",
+        "save_failed": "Salvataggio non riuscito",
+        "load_failed": "Impossibile aprire il file",
+        "unsaved": "Modifiche non salvate",
+        "discard_confirm": "Ignorare le modifiche non salvate?"
+    },
     "quota": {
         "storage": "Archiviazione"
     },

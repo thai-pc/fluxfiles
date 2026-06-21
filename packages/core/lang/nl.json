@@ -83,6 +83,15 @@
         "apply": "Toepassen",
         "applied": "Rechten bijgewerkt"
     },
+    "editor": {
+        "title": "Bewerken",
+        "save": "Opslaan",
+        "saved": "Opgeslagen",
+        "save_failed": "Opslaan mislukt",
+        "load_failed": "Bestand kon niet worden geopend",
+        "unsaved": "Niet-opgeslagen wijzigingen",
+        "discard_confirm": "Niet-opgeslagen wijzigingen verwerpen?"
+    },
     "quota": {
         "storage": "Opslag"
     },

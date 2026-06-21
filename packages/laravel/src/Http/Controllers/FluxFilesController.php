@@ -709,6 +709,51 @@ class FluxFilesController
         }
     }
 
+    /**
+     * Config / code editor — read a file's text content. Disk/perm/scope/size/
+     * binary checks all live inside FileManager::getContent (single source of truth).
+     */
+    public function getContent(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+
+            return $this->ok($fm->getContent(
+                $request->query('disk', 'local'),
+                (string) $request->query('path', '')
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    /**
+     * Config / code editor — overwrite a file's text content. The allow_code_edit
+     * claim gate, write perm, allowed_ext, file-must-exist, and size cap are all
+     * enforced inside FileManager::putContent.
+     */
+    public function putContent(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $result = $fm->putContent(
+                (string) $request->input('disk', 'local'),
+                (string) $request->input('path', ''),
+                (string) $request->input('content', '')
+            );
+            $this->logAudit($claims, 'content_edit', (string) $request->input('disk', 'local'), (string) $request->input('path', ''));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
     // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
 
     public function trash(Request $request): JsonResponse

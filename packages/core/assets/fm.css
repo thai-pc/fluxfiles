@@ -1884,6 +1884,67 @@ body {
     overflow: hidden;
 }
 
+/* Config / code editor modal */
+.ff-editor-modal {
+    background: var(--ff-bg);
+    border-radius: 12px;
+    width: min(960px, 96vw);
+    height: min(82vh, 760px);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+.ff-editor-name {
+    margin-inline-start: 8px;
+    font-weight: 400;
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.ff-editor-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    position: relative;
+}
+.ff-editor-body .ff-new-folder-error { margin: 10px 16px 0; }
+.ff-editor-body .ff-activity-state { padding: 24px; }
+.ff-editor-ta {
+    flex: 1;
+    width: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 12px 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    tab-size: 2;
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+}
+/* CodeMirror fills the body once mounted */
+.ff-editor-body .CodeMirror {
+    flex: 1;
+    height: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.ff-editor-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--ff-border);
+}
+.ff-editor-status { font-size: 12px; color: var(--color-text-tertiary); }
+.ff-editor-actions { display: flex; gap: 8px; }
+
 /* Import-from-URL modal (compact) */
 .ff-import-modal {
     background: var(--ff-bg);

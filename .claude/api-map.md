@@ -93,6 +93,8 @@ supported; folders move the whole subtree incl. variants. All gated by the
   - JSON body: `disk`, `key`.
 - `GET /api/fm/chmod?disk=&path=` / `POST /api/fm/chmod {disk, path, mode}`
   - SFTP file permissions (cPanel-style). GET reads the 3-digit octal mode (read perm); POST sets it (write perm + `allow_chmod` claim, default true; octal `0?[0-7]{3}`, not recursive). SFTP-only (non-SFTP disk → 400). Core-standalone like `/stream` (the Laravel/WP proxies don't expose SFTP).
+- `GET /api/fm/content?disk=&path=` / `PUT /api/fm/content {disk, path, content}`
+  - Config/code editor: read/overwrite a file's **text** content (cPanel-style — `wp-config.php`, `.env`, `nginx.conf`, `deploy.sh`). GET needs read perm (binary→415, >5 MB→413). PUT needs write perm **+ `allow_code_edit` claim (default FALSE, opt-in)** and only edits an **existing** file (404 otherwise; no creating new executables). `assertExt` (allowed_ext policy) still applies, but the always-on dangerous-ext upload block does **not** (editing `.php`/`.sh` is the use case). Disk-agnostic (local/S3/R2/SFTP) → **proxied** by Laravel and WordPress (unlike SFTP-only chmod).
 
 - `GET /api/fm/search?disk=local&q=query&limit=50`
   - Searches file key/title/alt/caption/tags through the storage-backed index.

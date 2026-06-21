@@ -56,6 +56,10 @@ Route::get('disk/doctor', [FluxFilesController::class, 'diskDoctor']);
 Route::get('quota', [FluxFilesController::class, 'quota']);
 Route::get('usage', [FluxFilesController::class, 'usage']);
 
+// Config / code editor (works on any disk)
+Route::get('content', [FluxFilesController::class, 'getContent']);
+Route::put('content', [FluxFilesController::class, 'putContent']);
+
 // Audit
 Route::get('audit', [FluxFilesController::class, 'audit']);
 

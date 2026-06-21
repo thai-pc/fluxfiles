@@ -83,6 +83,15 @@
         "apply": "適用",
         "applied": "権限を更新しました"
     },
+    "editor": {
+        "title": "編集",
+        "save": "保存",
+        "saved": "保存しました",
+        "save_failed": "保存に失敗しました",
+        "load_failed": "ファイルを開けません",
+        "unsaved": "未保存の変更",
+        "discard_confirm": "未保存の変更を破棄しますか？"
+    },
     "quota": {
         "storage": "ストレージ"
     },

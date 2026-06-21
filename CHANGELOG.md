@@ -3,6 +3,33 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.33] — 2026-06-21
+
+> Released: core `core-v0.2.28` (Packagist), Laravel `laravel-v0.2.14`,
+> WordPress plugin `wordpress-v0.2.13`, Node `@fluxfiles/node` `0.1.10`.
+
+### Added
+
+- **Config / code editor** — edit a file's **text** content in place (the cPanel
+  "Edit" use case: `wp-config.php`, `.env`, `nginx.conf`, `deploy.sh`). Works on
+  **any** disk (local / S3 / R2 / SFTP) via Flysystem.
+  - `GET /api/fm/content?disk=&path=` → `{path, content, size}` (read perm;
+    binary → 415, > 5 MB → 413). `PUT /api/fm/content {disk, path, content}`
+    overwrites an **existing** file (write perm; missing → 404, oversize → 413).
+  - Gated by the new **`allow_code_edit` claim, default `false`** (opt-in):
+    rewriting a config/executable is effectively code execution, so existing
+    tokens can't suddenly do it. The always-on dangerous-extension *upload* block
+    is deliberately **not** applied to editing (editing `.php`/`.sh` is the point),
+    but the `ext`/`allowed_ext` policy and `prefix` scope still apply — the claim
+    is the lock. Editing **only existing files** (no creating new executables).
+  - UI: an **Edit** button in the file detail panel for text files, opening a
+    CodeMirror 5 editor (lazy-loaded from CDN, syntax by extension, dark theme,
+    `Ctrl/⌘+S` to save); falls back to a plain `<textarea>` if the CDN is blocked.
+    New i18n `editor` namespace in all 16 locales.
+  - Unlike SFTP-only chmod, `/content` is disk-agnostic and therefore **proxied**
+    by both Laravel and WordPress. `allow_code_edit` forwarded through every token
+    helper (`fluxfiles_token`/Laravel/WordPress/`@fluxfiles/node`).
+
 ## [0.2.32] — 2026-06-21
 
 > Released: core `core-v0.2.27` (Packagist), Laravel `laravel-v0.2.13`,

@@ -91,6 +91,9 @@ export interface BaseTokenOptions {
   allowDownload?: boolean;
   /** Allow chmod (POST /api/fm/chmod) on an SFTP disk. Default true; `false` = read-only permissions. */
   allowChmod?: boolean;
+  /** Allow editing a file's text content (GET/PUT /api/fm/content). Default **false** — editing
+   *  config/executable files (wp-config.php, .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
+  allowCodeEdit?: boolean;
   /** Enable on-the-fly watermark on `/api/fm/img` (source file is never modified). Default off. */
   watermarkEnabled?: boolean;
   /** Watermark kind: 'text' or 'logo' (a PNG path in storage). Default 'text'. */

@@ -114,6 +114,7 @@ describe('createToken', () => {
         userId: 'u',
         allowDownload: false,
         allowChmod: false,
+        allowCodeEdit: true,
         watermarkEnabled: true,
         watermarkType: 'text',
         watermarkText: '© Acme',
@@ -124,6 +125,7 @@ describe('createToken', () => {
     ) as Record<string, unknown>;
     expect(c.allow_download).toBe(false);
     expect(c.allow_chmod).toBe(false);
+    expect(c.allow_code_edit).toBe(true);
     expect(c.watermark_enabled).toBe(true);
     expect(c.watermark_text).toBe('© Acme');
     expect(c.watermark_position).toBe('center');

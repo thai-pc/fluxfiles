@@ -83,6 +83,15 @@
         "apply": "应用",
         "applied": "权限已更新"
     },
+    "editor": {
+        "title": "编辑",
+        "save": "保存",
+        "saved": "已保存",
+        "save_failed": "保存失败",
+        "load_failed": "无法打开文件",
+        "unsaved": "未保存的更改",
+        "discard_confirm": "放弃未保存的更改？"
+    },
     "quota": {
         "storage": "存储空间"
     },

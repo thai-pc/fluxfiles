@@ -83,6 +83,15 @@
         "apply": "Áp dụng",
         "applied": "Đã cập nhật quyền"
     },
+    "editor": {
+        "title": "Sửa",
+        "save": "Lưu",
+        "saved": "Đã lưu",
+        "save_failed": "Lưu thất bại",
+        "load_failed": "Không mở được tệp",
+        "unsaved": "Thay đổi chưa lưu",
+        "discard_confirm": "Bỏ các thay đổi chưa lưu?"
+    },
     "quota": {
         "storage": "Dung lượng"
     },

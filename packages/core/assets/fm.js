@@ -2785,6 +2785,185 @@ function fluxFilesApp() {
             }
         },
 
+        // ── Config / code editor — read/edit a file's text content ──────────
+        showEditor: false,
+        editorFile: null,
+        editorContent: '',
+        editorOriginal: '',
+        editorLoading: false,
+        editorSaving: false,
+        editorError: '',
+        _cm: null,          // CodeMirror instance (created lazily, then reused)
+        _cmLoading: null,   // promise that resolves once CodeMirror is on the page
+
+        // The Edit button shows for a text file when the token allows code editing.
+        // allow_code_edit defaults FALSE (editing config/executables is opt-in).
+        get canEditContent() {
+            return this.tokenAllows('allow_code_edit', false);
+        },
+        _fileExt(file) {
+            const name = (file?.name || file?.key || '').toLowerCase();
+            const i = name.lastIndexOf('.');
+            // Dotfiles like ".env" / ".htaccess": treat the whole name as the ext.
+            return i > 0 ? name.slice(i + 1) : (name.startsWith('.') ? name.slice(1) : '');
+        },
+        // Extensions we treat as text-editable (config + common code/markup).
+        editorExtensions: [
+            'txt','text','md','markdown','json','json5','yaml','yml','xml','svg',
+            'html','htm','vue','css','scss','sass','less','js','mjs','cjs','jsx','ts','tsx',
+            'php','phtml','phps','py','rb','pl','pm','lua','sh','bash','zsh','fish',
+            'env','ini','conf','cfg','config','toml','properties','sql','log','csv','tsv',
+            'htaccess','htpasswd','gitignore','gitattributes','dockerignore','dockerfile',
+            'c','h','cpp','cc','hpp','cs','java','go','rs','swift','kt','kts','r','jl','tf','tfvars',
+            'graphql','gql','editorconfig','babelrc','eslintrc','prettierrc','npmrc',
+        ],
+        isTextFile(file) {
+            if (!file || file.type === 'dir') return false;
+            const name = (file.name || file.key || '').toLowerCase();
+            if (name === 'dockerfile' || name === 'makefile' || name === 'procfile') return true;
+            return this.editorExtensions.includes(this._fileExt(file));
+        },
+        canEditFile(file) {
+            return this.canEditContent && this.isTextFile(file);
+        },
+
+        // CodeMirror 5 mode-module name for an extension (null → plain text).
+        _cmMode(ext) {
+            const m = {
+                js:'javascript', mjs:'javascript', cjs:'javascript', json:'application/json',
+                json5:'javascript', ts:'text/typescript', tsx:'jsx', jsx:'jsx',
+                php:'application/x-httpd-php', phtml:'application/x-httpd-php', phps:'application/x-httpd-php',
+                py:'python', rb:'ruby', pl:'perl', pm:'perl', lua:'lua', go:'go', rs:'rust',
+                java:'text/x-java', c:'text/x-csrc', h:'text/x-csrc', cpp:'text/x-c++src',
+                cc:'text/x-c++src', hpp:'text/x-c++src', cs:'text/x-csharp', swift:'swift',
+                kt:'text/x-kotlin', kts:'text/x-kotlin', r:'r',
+                sh:'shell', bash:'shell', zsh:'shell', fish:'shell', env:'shell',
+                conf:'shell', cfg:'shell', config:'shell', ini:'properties', properties:'properties',
+                toml:'toml', css:'css', scss:'text/x-scss', sass:'text/x-sass', less:'text/x-less',
+                html:'htmlmixed', htm:'htmlmixed', vue:'htmlmixed', xml:'xml', svg:'xml',
+                md:'markdown', markdown:'markdown', yaml:'yaml', yml:'yaml', sql:'sql',
+                dockerfile:'dockerfile', graphql:'application/graphql', gql:'application/graphql',
+            };
+            return m[ext] || null;
+        },
+
+        // Lazy-load CodeMirror 5 (core CSS/JS + the common modes) from CDN on first
+        // edit, so it never weighs on initial page load. Failure is non-fatal: the
+        // bound <textarea> is the fallback editor.
+        _ensureCodeMirror() {
+            if (window.CodeMirror) return Promise.resolve();
+            if (this._cmLoading) return this._cmLoading;
+            const base = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16';
+            const css = (href) => new Promise((res) => {
+                const l = document.createElement('link');
+                l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = res;
+                document.head.appendChild(l);
+            });
+            const js = (src) => new Promise((res, rej) => {
+                const s = document.createElement('script');
+                s.src = src; s.onload = res; s.onerror = rej;
+                document.head.appendChild(s);
+            });
+            this._cmLoading = (async () => {
+                await Promise.all([
+                    css(base + '/codemirror.min.css'),
+                    css(base + '/theme/material-darker.min.css'),
+                ]);
+                await js(base + '/codemirror.min.js');
+                // The 'simple mode' addon must load before modes built on it
+                // (rust, dockerfile) — otherwise they throw `defineSimpleMode is
+                // not a function` at load. Non-fatal but noisy; load it first.
+                try { await js(base + '/addon/mode/simple.min.js'); } catch (e) { /* skip */ }
+                // Order matters: htmlmixed needs xml/javascript/css; php needs clike+htmlmixed.
+                const modes = [
+                    'xml','javascript','css','clike','htmlmixed','php','jsx','python','ruby',
+                    'perl','shell','go','rust','lua','swift','sql','yaml','markdown','toml',
+                    'properties','dockerfile','r',
+                ];
+                for (const mode of modes) {
+                    try { await js(base + '/mode/' + mode + '/' + mode + '.min.js'); } catch (e) { /* skip */ }
+                }
+                return true;
+            })();
+            return this._cmLoading;
+        },
+
+        _mountCM() {
+            const ta = document.getElementById('ff-editor-ta');
+            if (!ta || !window.CodeMirror) return;   // textarea fallback already works
+            const mode = this._cmMode(this._fileExt(this.editorFile));
+            const dark = document.documentElement.classList.contains('dark');
+            if (this._cm) {
+                this._cm.setOption('mode', mode);
+                this._cm.setOption('theme', dark ? 'material-darker' : 'default');
+                this._cm.setValue(this.editorContent);
+                this._cm.clearHistory();
+                setTimeout(() => this._cm.refresh(), 0);
+                return;
+            }
+            this._cm = window.CodeMirror.fromTextArea(ta, {
+                mode, lineNumbers: true, lineWrapping: false, indentUnit: 2, tabSize: 2,
+                theme: dark ? 'material-darker' : 'default',
+            });
+            this._cm.setValue(this.editorContent);
+            this._cm.on('change', (cm) => { this.editorContent = cm.getValue(); });
+            setTimeout(() => this._cm.refresh(), 0);
+        },
+
+        async openEditor(file) {
+            if (!file || !this.canEditFile(file)) return;
+            this.editorFile = file;
+            this.showEditor = true;
+            this.editorError = '';
+            this.editorContent = '';
+            this.editorOriginal = '';
+            this.editorLoading = true;
+            try {
+                const data = await this.api('GET',
+                    '/api/fm/content?disk=' + encodeURIComponent(this.currentDisk) +
+                    '&path=' + encodeURIComponent(file.key));
+                this.editorContent = data.content || '';
+                this.editorOriginal = this.editorContent;
+                this.editorLoading = false;
+                await this._ensureCodeMirror();
+                this.$nextTick(() => this._mountCM());
+            } catch (e) {
+                this.editorLoading = false;
+                this.editorError = e.message || this.t('editor.load_failed') || 'Failed to open file';
+            }
+        },
+
+        get editorDirty() { return this.editorContent !== this.editorOriginal; },
+
+        closeEditor() {
+            if (this.editorDirty &&
+                !confirm(this.t('editor.discard_confirm') || 'Discard unsaved changes?')) return;
+            this.showEditor = false;
+            this.editorFile = null;
+            this.editorError = '';
+            if (this._cm) this._cm.setValue('');
+        },
+
+        async saveEditor() {
+            if (!this.editorFile || this.editorSaving || !this.editorDirty) return;
+            this.editorSaving = true;
+            this.editorError = '';
+            try {
+                const data = await this.api('PUT', '/api/fm/content', {
+                    disk: this.currentDisk, path: this.editorFile.key, content: this.editorContent,
+                });
+                this.editorOriginal = this.editorContent;
+                if (this.detailFile && data && typeof data.size === 'number') {
+                    this.detailFile.size = data.size;
+                }
+                this.showToast(this.t('editor.saved') || 'Saved');
+            } catch (e) {
+                this.editorError = e.message || this.t('editor.save_failed') || 'Save failed';
+            } finally {
+                this.editorSaving = false;
+            }
+        },
+
         async loadQuota() {
             try {
                 const data = await this.api('GET',
