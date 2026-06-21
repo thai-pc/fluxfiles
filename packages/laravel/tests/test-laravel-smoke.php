@@ -230,7 +230,11 @@ test('proxy route surface covers every core /api/fm route', function () {
     // - chmod: only operates on an SFTP disk, which is a core-standalone driver
     //   (the proxy doesn't expose SFTP), so chmod has nothing to act on in proxy
     //   mode. Belongs with the SFTP/core-standalone group.
-    $intentionallyUnproxied = ['stream', 'img', 'chmod'];
+    // - zip: streams a binary zip to the client (ZipStream → php://output, bypassing
+    //   the JSON encoder); the JSON-returning proxy controllers don't do streaming
+    //   responses, so it's a core-standalone / Docker feature like stream/img.
+    //   (Extract, by contrast, returns JSON and IS proxied.)
+    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

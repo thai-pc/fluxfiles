@@ -91,6 +91,18 @@ class Claims
      *            (empty = omit; the host can supply its own `sizes`). */
     public string $srcsetSizes = '';
 
+    // ── Zip / extract ─────────────────────────────────────────────────────
+    /** @var bool May this token download a multi-file/-folder selection as a zip
+     *            (`POST /api/fm/zip`)? Default true (also requires allow_download). */
+    public bool $allowZip = true;
+    /** @var bool May this token extract a zip in place (`POST /api/fm/extract`)?
+     *            Default true (write perm + ext/dangerous-ext policy still apply). */
+    public bool $allowExtract = true;
+    /** @var int Max total uncompressed size (MB) for a zip/extract. 0 = inherit (1024). */
+    public int $zipMaxMb = 0;
+    /** @var int Max file count for a zip/extract. 0 = inherit (10000). */
+    public int $zipMaxFiles = 0;
+
     /** @var bool May this token get clean original download URLs? Default true. When
      *            false (preview-only / watermark), list() withholds `url`/
      *            `permanent_url`/`variants` and GET presign is denied — only the
@@ -299,6 +311,10 @@ class Claims
         $c->webpDefaultQuality = max(0, (int) ($payload->webp_default_quality ?? 0));
         $c->srcsetWidths = self::sanitizeSrcsetWidths($payload->srcset_widths ?? null, $c->webpMaxWidth);
         $c->srcsetSizes = is_string($payload->srcset_sizes ?? null) ? trim((string) $payload->srcset_sizes) : '';
+        $c->allowZip = isset($payload->allow_zip) ? (bool) $payload->allow_zip : true;
+        $c->allowExtract = isset($payload->allow_extract) ? (bool) $payload->allow_extract : true;
+        $c->zipMaxMb = max(0, (int) ($payload->zip_max_mb ?? 0));
+        $c->zipMaxFiles = max(0, (int) ($payload->zip_max_files ?? 0));
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
