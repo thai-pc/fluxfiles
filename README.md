@@ -26,8 +26,11 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Quick Start](#quick-start)
 - [Production Deployment](#production-deployment)
 - [Embedding in Your App](#embedding-in-your-app)
+  - [On-demand WebP](#on-demand-webp) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark-preview-protection) · [Usage dashboard](#usage-dashboard)
 - [Storage Disks](#storage-disks)
+  - [SFTP disk](#sftp-disk-vps--shared-hosting) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
+  - [Token parameters & units](#token-parameters--units) · [Import from URL](#import-from-url)
 - [Multi-tenant](#multi-tenant)
 - [API Reference](#api-reference)
 - [Framework Adapters](#framework-adapters)
@@ -36,7 +39,9 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Testing](#testing)
 - [Environment Variables](#environment-variables)
 - [Project Structure](#project-structure)
+- [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson)
 - [Customization](#customization)
+- [Attribution](#attribution)
 - [License](#license)
 
 ---
@@ -45,15 +50,19 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 | Category | Details |
 |----------|---------|
-| **Storage** | Local disk, AWS S3, Cloudflare R2 via Flysystem v3. Cross-disk copy/move with stream transfer. |
-| **Auth** | JWT HS256 with granular claims — permissions, disk access, path scoping, upload limits, file type whitelist, storage quota. BYOB (Bring Your Own Bucket) support. |
-| **File ops** | Upload, download (presigned URL), move, copy, rename, delete, create folders. Chunk upload (S3 multipart) for large files. Bulk operations (multi-select). |
-| **Images** | Auto WebP variants on upload (thumb 150px / medium 768px / large 1920px). Inline crop tool with aspect ratio presets. Variants regenerated after crop. |
+| **Storage** | Local disk, AWS S3, Cloudflare R2, **SFTP** (VPS / shared hosting) via Flysystem v3. Cross-disk copy/move with stream transfer. BYOB (Bring Your Own Bucket) — encrypted per-token credentials. |
+| **Auth** | JWT HS256 with granular claims — permissions, disk access, path scoping, upload limits, file type whitelist, storage quota, owner-only, plus per-feature gates. |
+| **File ops** | Upload, download (presigned URL), move, copy, rename, delete, create folders. Chunk upload (S3 multipart). Bulk multi-select. **Import-from-URL** (SSRF-guarded). **Zip download** of a selection, and **Extract** in place (zip-slip / zip-bomb guarded). |
+| **Trash** | Soft-delete **files and folders** to a storage-resident trash (restore / list / purge / empty); folders move the whole subtree. |
+| **Images** | Auto WebP variants on upload (thumb / medium / large). **On-demand WebP** at any size (`/api/fm/img`) with **responsive `srcset`**. **On-the-fly watermark** (text/logo) for preview protection. Inline crop with aspect presets. |
+| **Media** | Inline image / video / audio / PDF preview, with auto-refresh of expiring URLs. **Gated private local media** streamed through the app (Range-capable, nginx `X-Accel-Redirect`). |
+| **Config / code** | In-browser **code/config editor** (CodeMirror, syntax by extension) for text files. **SFTP `chmod`** — cPanel-style Unix permissions. |
 | **AI** | Claude or OpenAI vision API — auto-tag, alt text, title, caption on upload or manual trigger. |
-| **Metadata** | Title, alt text, caption, tags per file. Stored as S3 object metadata (cloud) or sidecar JSON (local). Full-text search. |
-| **Safety** | Duplicate detection (SHA-256). Rate limiting per user. Audit log with rotation. Per-user storage quota. Origin validation. Dangerous extension blocking. |
-| **UI** | Dark mode (auto/manual). 16 languages with RTL support. Responsive. Bulk operations (multi-select, shift-select). |
-| **Adapters** | Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, Summernote |
+| **Metadata** | Title, alt text, caption, tags per file. S3 object metadata (cloud) or sidecar JSON (local). Full-text file + folder search. |
+| **Insights** | **Storage usage dashboard** — quota + per-type and per-folder breakdown (file-cached). |
+| **Safety** | Duplicate detection (SHA-256). Rate limiting per user. Audit log with rotation. Per-user quota. Origin/CSRF validation. Always-on dangerous-extension blocking. SSRF guard (BYOB + URL import). Zip slip/bomb guards. |
+| **UI** | Dark mode (auto/manual). 16 languages with RTL support. Responsive (mobile overflow menu). Bulk operations (multi-select, shift-select). |
+| **Adapters** | Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, Summernote, plus **`@fluxfiles/node`** (server-side token SDK). |
 
 ---
 
@@ -1249,6 +1258,20 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/presign` | `{disk, path, method, ttl, size?}` | Generate presigned URL (GET or PUT, max 86400s). `size` is required for PUT. |
 | `POST` | `/crop` | `{disk, path, x, y, width, height, save_path?}` | Crop image |
 | `POST` | `/ai-tag` | `{disk, path}` | AI-analyze image (requires AI config) |
+| `POST` | `/import-url` | `{disk, path, url, filename?}` | Server-side fetch a URL into storage (opt-in via `allow_url_import`; SSRF-guarded) |
+
+### Archives, editor & permissions
+
+| Method | Path | Body / Params | Description |
+|--------|------|---------------|-------------|
+| `POST` | `/zip` | `{disk, paths[], name?}` | Stream a **zip** of the selected files/folders (read + `allow_download` + `allow_zip`; pre-flight size caps). Core-standalone (unproxied) |
+| `POST` | `/extract` | `{disk, path, dest?}` | **Extract** a zip in place — atomic, zip-slip / zip-bomb / quota / dangerous-ext guarded (`allow_extract`) |
+| `GET` | `/content?disk=&path=` | — | Read a text file's content (read perm; binary → 415, > 5 MB → 413) |
+| `PUT` | `/content` | `{disk, path, content}` | Overwrite a text/config file (`allow_code_edit`, default **false**; existing files only) |
+| `GET` | `/chmod?disk=&path=` | — | Read an SFTP file's octal mode (SFTP disks only) |
+| `POST` | `/chmod` | `{disk, path, mode}` | Set an SFTP file's mode (write + `allow_chmod`) |
+
+> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP, see [On-demand WebP](#on-demand-webp)) and `GET /stream?token=` (gated private media). Both are core-standalone / Docker features.
 
 ### Metadata
 
@@ -1266,6 +1289,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/search?disk=&q=&limit=` | `limit` default 50 | Full-text search across file names + metadata |
 | `GET` | `/search-folders?disk=&q=&limit=` | `limit` default 50 | Search folder names via the directory index |
 | `GET` | `/quota?disk=` | — | Storage usage: used_mb, max_mb, percentage |
+| `GET` | `/usage?disk=&refresh=` | — | **Usage dashboard** — quota + per-type and per-folder breakdown (file-cached; `refresh=true` recomputes, tight bucket) |
 | `GET` | `/audit?limit=&offset=&action=&from=&to=&path=&actor=` | `limit` default 100 | Activity log, **scoped to the token's prefix**. Requires the `audit` permission (403 otherwise). |
 | `GET` | `/disk/doctor?disk=&origin=` | — | **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write`. |
 
