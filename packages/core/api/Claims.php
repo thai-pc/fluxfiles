@@ -93,6 +93,11 @@ class Claims
      *            disk? Default true (part of the SFTP file-manager toolkit). */
     public bool $allowChmod = true;
 
+    /** @var bool May this token edit a file's text content via /api/fm/content?
+     *            Default FALSE — editing config/executable files (wp-config.php,
+     *            .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
+    public bool $allowCodeEdit = false;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -252,6 +257,7 @@ class Claims
         $c->webpDefaultQuality = max(0, (int) ($payload->webp_default_quality ?? 0));
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
+        $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
         $c->watermark = self::sanitizeWatermark($payload);
 
         // Usage-dashboard claims.

@@ -1285,6 +1285,72 @@ class FileManager
 
     private const MAX_PRESIGN_TTL = 86400; // 24 hours
 
+    /** Max bytes the code editor will read/write (config files are small). */
+    private const MAX_EDIT_BYTES = 5 * 1024 * 1024;
+
+    /**
+     * Read a file's text content for the in-browser editor. Read perm; size-capped
+     * (MAX_EDIT_BYTES → 413) and binary-guarded (a NUL byte → 415). Works on any
+     * disk via Flysystem.
+     *
+     * @return array{path:string,content:string,size:int}
+     */
+    public function getContent(string $disk, string $path): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('read');
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+
+        $fs = $this->disks->disk($disk);
+        if (!$fs->fileExists($scoped)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+        $size = (int) ($fs->fileSize($scoped) ?? 0);
+        if ($size > self::MAX_EDIT_BYTES) {
+            throw new ApiException('File is too large to edit', 413, 'edit_too_large',
+                ['max_mb' => round(self::MAX_EDIT_BYTES / 1048576)]);
+        }
+        $content = (string) $fs->read($scoped);
+        if (strpos($content, "\0") !== false) {
+            throw new ApiException('This is not a text file', 415, 'not_text');
+        }
+        return ['path' => $path, 'content' => $content, 'size' => strlen($content)];
+    }
+
+    /**
+     * Overwrite a file's text content from the editor. Gated by the allow_code_edit
+     * claim (off by default — editing config/executable files is powerful) + write
+     * perm. The file must already EXIST (the editor never creates a new executable),
+     * the extension policy (allowed_ext) still applies, and content is size-capped.
+     * Unlike upload, the always-dangerous-extension block is NOT applied — editing
+     * an existing .php/.sh/.env on a server you manage is the whole point.
+     *
+     * @return array{path:string,size:int}
+     */
+    public function putContent(string $disk, string $path, string $content): array
+    {
+        $this->assertDisk($disk);
+        if (!$this->claims->allowCodeEdit) {
+            throw new ApiException('Editing file content is not allowed', 403, 'edit_forbidden');
+        }
+        $this->assertPerm('write');
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+        $this->assertExt(strtolower(pathinfo($scoped, PATHINFO_EXTENSION)));
+
+        if (strlen($content) > self::MAX_EDIT_BYTES) {
+            throw new ApiException('Content is too large', 413, 'edit_too_large',
+                ['max_mb' => round(self::MAX_EDIT_BYTES / 1048576)]);
+        }
+        $fs = $this->disks->disk($disk);
+        if (!$fs->fileExists($scoped)) {
+            throw new ApiException('File not found (the editor edits existing files only)', 404, 'not_found');
+        }
+        $fs->write($scoped, $content);
+        return ['path' => $path, 'size' => strlen($content)];
+    }
+
     /**
      * Read the Unix permission mode of a file/dir on an SFTP disk (cPanel-style
      * file permissions). Returns the 3-digit octal string (e.g. "644"). SFTP only

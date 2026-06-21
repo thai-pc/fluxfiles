@@ -137,6 +137,37 @@ try {
         assertEqual(422, $s, 'invalid mode rejected');
     });
 
+    test('editor: GET content reads, PUT overwrites (allow_code_edit token)', function () use ($BASE, $SECRET, $prefix, $name) {
+        // The default token has allow_code_edit unset (false) → mint an edit-enabled one.
+        $edit = \FluxFiles\JwtCompat::encode([
+            'sub' => 'ed', 'perms' => ['read', 'write'], 'disks' => ['sftp'], 'prefix' => $prefix,
+            'max_upload' => 50, 'allow_code_edit' => true, 'exp' => time() + 3600,
+        ], $SECRET);
+
+        [$st, $body] = http("{$BASE}/api/fm/content?disk=sftp&path=" . rawurlencode($name), ["Authorization: Bearer {$edit}"]);
+        assertEqual(200, $st, 'get content: ' . $body);
+        assertTrue(strlen(json_decode($body, true)['data']['content'] ?? '') > 0, 'has content');
+
+        $ch = curl_init("{$BASE}/api/fm/content");
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'PUT',
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer {$edit}", 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'content' => "edited via the code editor\n"])]);
+        $b = curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        assertEqual(200, $s, 'put content: ' . $b);
+
+        [, $g2] = http("{$BASE}/api/fm/content?disk=sftp&path=" . rawurlencode($name), ["Authorization: Bearer {$edit}"]);
+        assertEqual("edited via the code editor\n", json_decode($g2, true)['data']['content'] ?? '', 'persisted');
+    });
+
+    test('editor: a token without allow_code_edit → 403 on PUT', function () use ($BASE, $tok, $name) {
+        $ch = curl_init("{$BASE}/api/fm/content");
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'PUT',
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}", 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'content' => 'x'])]);
+        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        assertEqual(403, $s, 'edit forbidden without the claim');
+    });
+
     test('chmod: a token with allow_chmod=false → 403 on POST', function () use ($BASE, $SECRET, $prefix, $name) {
         $ro = \FluxFiles\JwtCompat::encode([
             'sub' => 'ro', 'perms' => ['read', 'write'], 'disks' => ['sftp'], 'prefix' => $prefix,

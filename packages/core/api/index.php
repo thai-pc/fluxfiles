@@ -410,6 +410,15 @@ function routeRequest(
         return handleDeleteMetadata($metaRepo, $claims, $fm);
     }
 
+    // Config / code editor — read a file's text content, or overwrite it.
+    if ($method === 'GET' && $uri === '/api/fm/content') {
+        return $fm->getContent($_GET['disk'] ?? 'local', $_GET['path'] ?? '');
+    }
+    if ($method === 'PUT' && $uri === '/api/fm/content') {
+        [$disk, $path, $content] = jsonBody('disk', 'path', 'content');
+        return $fm->putContent((string) $disk, (string) $path, (string) $content);
+    }
+
     // SFTP file permissions (chmod). Read the current mode, or set a new one.
     if ($method === 'GET' && $uri === '/api/fm/chmod') {
         return $fm->getMode($_GET['disk'] ?? '', $_GET['path'] ?? '');
