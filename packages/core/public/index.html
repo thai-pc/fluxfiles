@@ -785,7 +785,9 @@
              :class="{ 'detail-thumb-clickable': detailFile && isPreviewable(detailFile, 'image') && detailFile.url }"
              @click="detailFile && isPreviewable(detailFile, 'image') && detailFile.url && (previewFullscreen = true)">
             <template x-if="detailFile && isPreviewable(detailFile, 'image') && detailFile.url">
-                <img :src="detailFile.url" :alt="detailFile.name">
+                <img :src="detailFile.url" :srcset="detailFile.img_srcset"
+                     :sizes="detailFile.img_srcset ? (detailFile.img_sizes || '(max-width: 640px) 92vw, 380px') : null"
+                     :alt="detailFile.name">
             </template>
             <template x-if="detailFile && isPreviewable(detailFile, 'video') && detailFile.url && !mediaTooLarge(detailFile)">
                 <video controls style="width:100%;height:100%;object-fit:contain;" :src="detailFile.url" @error="refreshMediaSrc(detailFile, $event.target)"></video>
@@ -1017,7 +1019,9 @@
     <div class="ff-preview-lightbox" x-show="previewFullscreen && detailFile && isPreviewable(detailFile, 'image')" x-transition.opacity
          @click="previewFullscreen = false"
          @keydown.escape.window="previewFullscreen = false">
-        <img :src="detailFile?.url" :alt="detailFile?.name" @click.stop>
+        <img :src="detailFile?.url" :srcset="detailFile?.img_srcset"
+             :sizes="detailFile?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
+             :alt="detailFile?.name" @click.stop>
     </div>
 
     <!-- ═══ New folder modal ═══ -->

@@ -21,6 +21,12 @@ export interface FluxFile {
   url?: string;
   /** Stable, non-expiring URL for embedding (public disk / public_url). */
   permanent_url?: string;
+  /** Base URL for the on-demand WebP endpoint (images only; append `&width=`). */
+  img_base?: string;
+  /** Ready-to-use responsive `srcset` (images only; built from `img_base` + the token's width ladder). */
+  img_srcset?: string;
+  /** `sizes` attribute to pair with `img_srcset` (only when the token sets `srcset_sizes`). */
+  img_sizes?: string;
   title?: string;
   alt_text?: string;
   caption?: string;

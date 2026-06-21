@@ -125,6 +125,8 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.webpEnabled !== undefined) payload.webp_enabled = !!opts.webpEnabled;
   if (opts.webpMaxWidth && opts.webpMaxWidth > 0) payload.webp_max_width = Math.trunc(opts.webpMaxWidth);
   if (opts.webpDefaultQuality && opts.webpDefaultQuality > 0) payload.webp_default_quality = Math.trunc(opts.webpDefaultQuality);
+  if (Array.isArray(opts.srcsetWidths)) payload.srcset_widths = opts.srcsetWidths.map((w) => Math.trunc(w));
+  if (opts.srcsetSizes) payload.srcset_sizes = String(opts.srcsetSizes);
 
   // Download gate + watermark.
   if (opts.allowDownload !== undefined) payload.allow_download = !!opts.allowDownload;

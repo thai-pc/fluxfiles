@@ -35,6 +35,10 @@ interface FluxFile {
     permanent_url?: string;
     /** Base URL for the on-demand WebP endpoint (images only; when the feature is on). Use `FluxFiles.imgUrl(file, …)`. */
     img_base?: string;
+    /** Ready-to-use responsive `srcset` (images only; built from `img_base` + the token's width ladder). */
+    img_srcset?: string;
+    /** `sizes` attribute to pair with `img_srcset` (only when the token sets `srcset_sizes`). */
+    img_sizes?: string;
     size?: number;
     mime?: string;
     /** Image dimensions (present for images uploaded through FluxFiles). */
