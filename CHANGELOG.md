@@ -3,6 +3,20 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.39] — 2026-06-22
+
+> Released: core `core-v0.2.34` (Packagist + Docker). Adapters unchanged
+> (inherit via `^0.2.30`).
+
+### Docs
+
+- **SFTP: document passphrase-protected private keys.** RSA/ED25519 keys with a
+  passphrase were already supported end-to-end (`SFTP_PRIVATE_KEY_PASSPHRASE` env,
+  BYOB `private_key_passphrase`, decrypted by phpseclib at connect time) but only
+  appeared in the env-vars reference table. The SFTP section + BYOB example now
+  call it out. Added `test-sftp-passphrase.php` (plumbing + a real ED25519/RSA
+  passphrase key decrypting via the provider's exact phpseclib path).
+
 ## [0.2.38] — 2026-06-21
 
 > Released: core `core-v0.2.33` (Packagist + Docker), Laravel `laravel-v0.2.17`,

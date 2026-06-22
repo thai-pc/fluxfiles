@@ -710,9 +710,17 @@ upload, rename, move and delete just work.
 ```env
 SFTP_HOST=vps.example.com
 SFTP_USERNAME=deploy
-SFTP_PASSWORD=…            # or SFTP_PRIVATE_KEY=<PEM contents>
+SFTP_PASSWORD=…                       # password auth, OR key auth below
+SFTP_PRIVATE_KEY=<PEM/OpenSSH key>    # RSA or ED25519 (key wins when both are set)
+SFTP_PRIVATE_KEY_PASSPHRASE=…         # set if the key is passphrase-protected
 SFTP_ROOT=/var/www
 ```
+
+> **Key auth:** password OR private key (key wins when both are set). The key may be
+> **RSA or ED25519**, in PEM or OpenSSH format, and **may be passphrase-protected** —
+> set `SFTP_PRIVATE_KEY_PASSPHRASE` (phpseclib decrypts it at connect time). The same
+> works for **BYOB** tokens: pass `private_key` + `private_key_passphrase` in the disk
+> config (they're AES-256-GCM-encrypted into the JWT, never stored).
 
 How it differs from S3 (by design):
 
@@ -734,7 +742,8 @@ How it differs from S3 (by design):
   private network / a VPN'd VPS).
 - **Per-tenant (BYOB)**: mint a token with the user's own SFTP credentials —
   `fluxfiles_byob_token($u, ['my-vps' => ['driver' => 'sftp', 'host' => …,
-  'username' => …, 'password' => …]])` (or `private_key`). Credentials are
+  'username' => …, 'password' => …]])`, or use `'private_key' => …` (RSA/ED25519)
+  with an optional `'private_key_passphrase' => …`. Credentials are
   AES-256-GCM-encrypted into the JWT and SSRF-checked on decode, never stored.
 - Like gated media and on-demand WebP, SFTP **serving is a core-standalone /
   Docker feature** (it streams bytes through the app); the Laravel/WordPress
