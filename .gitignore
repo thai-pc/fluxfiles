@@ -48,7 +48,6 @@ coverage/
 *.log
 
 # Project docs (private)
-PUBLISHING.md
 docs/FLUXFILES-ROADMAP.md
 docs/ROADMAP.md
 # Wrapper lockfiles aren't needed for published libs and break cross-platform
