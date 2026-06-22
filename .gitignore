@@ -57,3 +57,7 @@ packages/sdk/package-lock.json
 packages/ckeditor4/package-lock.json
 packages/tinymce/package-lock.json
 docs/PHASE2-OPTIMIZATION-PLAN.md
+docs/COMMERCIAL-STRATEGY.md
+docs/LICENSING-PLAN.md
+docs/*.SECRET.txt
+docs/license-signing-key*

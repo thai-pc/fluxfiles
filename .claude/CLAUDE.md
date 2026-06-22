@@ -89,8 +89,8 @@ npm run build
 ## Current Notes
 
 - Delete: `/delete` is permanent (used by purge/API). Files **and folders** have **soft-delete** via `/trash` (+ `/trash/restore|list|purge|empty`) — move-based into `_fluxfiles/trash/<id>/` with a `_fluxfiles/trash.json` manifest (storage-resident, scoped by prefix/owner; folders move the whole subtree incl. variants). The UI soft-deletes everything to trash.
-- `docs/FLUXFILES-ROADMAP.md` (gitignored, local) contains roadmap ideas and may be older than the implemented route surface. Verify implementation before following roadmap endpoints.
-- `docs/METADATA-STORAGE-DESIGN.md` captures the important principle that metadata travels with user storage. `docs/TEST-PLAN.md` is the living test plan.
+- `docs/ROADMAP.md` (gitignored, local) is the current roadmap/business-strategy doc, cross-referenced against the codebase; `docs/COMMERCIAL-STRATEGY.md` + `docs/LICENSING-PLAN.md` cover the paid-tier model. Verify implementation before following any roadmap endpoint.
+- `docs/METADATA-STORAGE-DESIGN.md` captures the important principle that metadata travels with user storage.
 - Auth uses `firebase/php-jwt` **v7** (constraint `^7.0`): HS256 keys must be **≥ 32 bytes** or token encode/decode throws. `JwtCompat`/`ImageCompat` shims abstract jwt v5–v7 / intervention v2–v3.
 - Local metadata sidecars live at `_fluxfiles/meta/{key}.json` (not `{file}.meta.json`), so a user-uploaded `*.meta.json` cannot collide with or overwrite them. S3/R2 use object metadata.
 - `owner_only` is also enforced at folder level (delete/rename/move a folder containing other users' files → 403 via `assertOwnsTree`). BYOB endpoints are SSRF-checked.

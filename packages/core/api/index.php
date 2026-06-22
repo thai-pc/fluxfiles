@@ -425,6 +425,12 @@ function routeRequest(
         return handleDeleteMetadata($metaRepo, $claims, $fm);
     }
 
+    // License — the server's commercial edition/status (non-sensitive summary),
+    // so a dashboard can show edition + expiry. Free core → {edition:'free'}.
+    if ($method === 'GET' && $uri === '/api/fm/license') {
+        return \FluxFiles\LicenseManager::fromEnv()->info();
+    }
+
     // Config / code editor — read a file's text content, or overwrite it.
     if ($method === 'GET' && $uri === '/api/fm/content') {
         return $fm->getContent($_GET['disk'] ?? 'local', $_GET['path'] ?? '');
