@@ -111,6 +111,11 @@ supported; folders move the whole subtree incl. variants. All gated by the
 - `GET /api/fm/usage?disk=local[&refresh=true]`
   - Storage usage dashboard: quota status + size/count by type (extension-based) + largest folders, computed in one `QuotaManager::getUsageBreakdown` pass (excludes `_fluxfiles/`/`_variants/`). Cached per prefix in `_fluxfiles/usage.json` for `usage_cache_ttl`s; `?refresh=true` recomputes (rate-limited 2/min). Claims: `usage_cache_ttl`/`usage_warning_threshold`/`usage_critical_threshold`/`usage_top_folders_count`/`usage_folder_depth`. Proxied by the Laravel adapter (recomputes each call, no cache).
 
+- `GET /api/fm/license`
+  - Server's commercial edition/status (non-sensitive): `{edition, status, modules, limits, expires, days_left}`. Free MIT core → `{edition:'free'}`. Verified offline by `LicenseManager` against an embedded Ed25519 public key (`FLUXFILES_LICENSE_KEY` env). Proxied by Laravel + WordPress.
+- `POST /api/fm/optimize` — **paid module** (`fluxfiles/optimize`, proprietary)
+  - Recompresses an image to a smaller WebP (same dims, EXIF stripped). Gated by `ModuleRegistry::require('optimize', …)` — the **3-layer gate**: installed (`class_exists` → else 501 `module_not_installed`) + licensed (`LicenseManager` → 402 `license_required`/`license_expired`) + claim (`allow_optimize` → 403). Free core has no module package → 501. Returns JSON → proxied by Laravel + WordPress. The gate (`ModuleInterface`/`ModuleRegistry`/`Claims::isAllowed`) is the reusable seam for all future paid modules.
+
 - `GET /api/fm/audit?limit=100&offset=0`
   - Lists current user's audit entries.
 

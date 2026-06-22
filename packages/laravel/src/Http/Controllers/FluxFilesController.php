@@ -725,6 +725,28 @@ class FluxFilesController
     }
 
     /**
+     * Optimization (paid module). The 3-layer gate lives in ModuleRegistry: module
+     * installed (501) + licensed (402) + allow_optimize claim (403). Free hosts
+     * without the module package → 501.
+     */
+    public function optimize(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('optimize', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $request->all());
+            $this->logAudit($claims, 'optimize', (string) $request->input('disk', 'local'), (string) $request->input('path', ''));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    /**
      * Config / code editor — read a file's text content. Disk/perm/scope/size/
      * binary checks all live inside FileManager::getContent (single source of truth).
      */

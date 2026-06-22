@@ -309,6 +309,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('allow_code_edit', $webp)) {
         $payload['allow_code_edit'] = (bool) $webp['allow_code_edit'];
     }
+    if (array_key_exists('allow_optimize', $webp)) {
+        $payload['allow_optimize'] = (bool) $webp['allow_optimize'];
+    }
     if (array_key_exists('allow_zip', $webp)) {
         $payload['allow_zip'] = (bool) $webp['allow_zip'];
     }

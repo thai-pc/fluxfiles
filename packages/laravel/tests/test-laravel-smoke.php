@@ -142,7 +142,7 @@ test('token() forwards webp claims', function () use ($secret) {
 test('token() forwards watermark + allow_download claims', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $token = $mgr->token(41, [
-        'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true,
+        'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true, 'allow_optimize' => true,
         'allow_zip' => false, 'allow_extract' => false, 'zip_max_mb' => 50,
         'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© Acme',
         'watermark_position' => 'center', 'watermark_opacity' => 0.5,
@@ -151,6 +151,7 @@ test('token() forwards watermark + allow_download claims', function () use ($sec
     assertEqual(false, $c->allowDownload, 'allow_download');
     assertEqual(false, $c->allowChmod, 'allow_chmod');
     assertEqual(true, $c->allowCodeEdit, 'allow_code_edit');
+    assertEqual(true, $c->allowOptimize, 'allow_optimize');
     assertEqual(false, $c->allowZip, 'allow_zip');
     assertEqual(false, $c->allowExtract, 'allow_extract');
     assertEqual(50, $c->zipMaxMb, 'zip_max_mb');

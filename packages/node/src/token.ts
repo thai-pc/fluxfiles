@@ -132,6 +132,7 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowDownload !== undefined) payload.allow_download = !!opts.allowDownload;
   if (opts.allowChmod !== undefined) payload.allow_chmod = !!opts.allowChmod;
   if (opts.allowCodeEdit !== undefined) payload.allow_code_edit = !!opts.allowCodeEdit;
+  if (opts.allowOptimize !== undefined) payload.allow_optimize = !!opts.allowOptimize;
   if (opts.allowZip !== undefined) payload.allow_zip = !!opts.allowZip;
   if (opts.allowExtract !== undefined) payload.allow_extract = !!opts.allowExtract;
   if (opts.zipMaxMb && opts.zipMaxMb > 0) payload.zip_max_mb = Math.trunc(opts.zipMaxMb);

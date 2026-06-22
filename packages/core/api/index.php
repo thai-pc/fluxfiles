@@ -431,6 +431,15 @@ function routeRequest(
         return \FluxFiles\LicenseManager::fromEnv()->info();
     }
 
+    // Optimization (paid module) — recompress images. Gated by the 3-layer check
+    // in ModuleRegistry: module installed (501) + licensed (402) + allow_optimize
+    // claim (403). Free core has no optimize package → 501 module_not_installed.
+    if ($method === 'POST' && $uri === '/api/fm/optimize') {
+        $module = \FluxFiles\ModuleRegistry::require('optimize', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->run($fm, $diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
+    }
+
     // Config / code editor — read a file's text content, or overwrite it.
     if ($method === 'GET' && $uri === '/api/fm/content') {
         return $fm->getContent($_GET['disk'] ?? 'local', $_GET['path'] ?? '');

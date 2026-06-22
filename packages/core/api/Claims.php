@@ -118,6 +118,11 @@ class Claims
      *            .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
     public bool $allowCodeEdit = false;
 
+    /** @var bool May this token use the (paid) Optimization module (/api/fm/optimize)?
+     *            Default FALSE — opt-in. Even when true, the module's code must be
+     *            installed and the license must cover it (the 3-layer gate). */
+    public bool $allowOptimize = false;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -318,6 +323,7 @@ class Claims
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
+        $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->watermark = self::sanitizeWatermark($payload);
 
         // Usage-dashboard claims.
@@ -365,6 +371,24 @@ class Claims
     public function hasDisk(string $disk): bool
     {
         return in_array($disk, $this->allowedDisks, true);
+    }
+
+    /**
+     * Generic check for a named `allow_*` feature claim — used by ModuleRegistry to
+     * gate a paid module by its declared claim without hard-coding the property.
+     * Unknown claim names are denied (fail-closed). Add a case when a module needs one.
+     */
+    public function isAllowed(string $claim): bool
+    {
+        switch ($claim) {
+            case 'allow_optimize':   return $this->allowOptimize;
+            case 'allow_code_edit':  return $this->allowCodeEdit;
+            case 'allow_zip':        return $this->allowZip;
+            case 'allow_extract':    return $this->allowExtract;
+            case 'allow_chmod':      return $this->allowChmod;
+            case 'allow_download':   return $this->allowDownload;
+            default:                 return false;
+        }
     }
 
     /**
