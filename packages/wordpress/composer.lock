@@ -62,16 +62,16 @@
         },
         {
             "name": "aws/aws-sdk-php",
-            "version": "3.384.9",
+            "version": "3.385.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/aws/aws-sdk-php.git",
-                "reference": "71513f9c05ed1fde0fb95e8c7e7d3c88409d7de9"
+                "reference": "1952d9ce58aca5a5d444f74ed1034f7ba9125002"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/71513f9c05ed1fde0fb95e8c7e7d3c88409d7de9",
-                "reference": "71513f9c05ed1fde0fb95e8c7e7d3c88409d7de9",
+                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/1952d9ce58aca5a5d444f74ed1034f7ba9125002",
+                "reference": "1952d9ce58aca5a5d444f74ed1034f7ba9125002",
                 "shasum": ""
             },
             "require": {
@@ -153,9 +153,9 @@
             "support": {
                 "forum": "https://github.com/aws/aws-sdk-php/discussions",
                 "issues": "https://github.com/aws/aws-sdk-php/issues",
-                "source": "https://github.com/aws/aws-sdk-php/tree/3.384.9"
+                "source": "https://github.com/aws/aws-sdk-php/tree/3.385.3"
             },
-            "time": "2026-06-12T18:10:49+00:00"
+            "time": "2026-06-19T18:07:45+00:00"
         },
         {
             "name": "firebase/php-jwt",
@@ -225,16 +225,16 @@
         },
         {
             "name": "fluxfiles/fluxfiles",
-            "version": "v0.2.32",
+            "version": "v0.2.33",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thai-pc/fluxfiles-core.git",
-                "reference": "987f5859e1de80ae4eacaabcd538c6ce97a37c90"
+                "reference": "ce0772c69fbfced15366485fb92f465b529181ab"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/987f5859e1de80ae4eacaabcd538c6ce97a37c90",
-                "reference": "987f5859e1de80ae4eacaabcd538c6ce97a37c90",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/ce0772c69fbfced15366485fb92f465b529181ab",
+                "reference": "ce0772c69fbfced15366485fb92f465b529181ab",
                 "shasum": ""
             },
             "require": {
@@ -288,7 +288,7 @@
                 "issues": "https://github.com/thai-pc/fluxfiles/issues",
                 "source": "https://github.com/thai-pc/fluxfiles"
             },
-            "time": "2026-06-21T14:15:18+00:00"
+            "time": "2026-06-21T15:29:08+00:00"
         },
         {
             "name": "graham-campbell/result-type",
