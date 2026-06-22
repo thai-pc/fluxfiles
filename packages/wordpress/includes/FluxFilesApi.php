@@ -178,6 +178,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/license', array_merge($readArgs, [
             'callback' => [$api, 'handleLicense'],
         ]));
+        register_rest_route($ns, $p . '/optimize', array_merge($writeArgs, [
+            'callback' => [$api, 'handleOptimize'],
+        ]));
         register_rest_route($ns, $p . '/audit', array_merge($readArgs, [
             'callback' => [$api, 'handleAudit'],
         ]));
@@ -918,6 +921,27 @@ class FluxFilesApi
             $this->rateLimit($this->claims(), false);
 
             return $this->ok(\FluxFiles\LicenseManager::fromEnv()->info());
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    /**
+     * Optimization (paid module) — 3-layer gate inside ModuleRegistry (installed
+     * 501 + licensed 402 + allow_optimize 403). Free hosts → 501.
+     */
+    public function handleOptimize(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('optimize', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $this->body($request));
+            $this->logAudit($claims, 'optimize', (string) ($this->body($request)['disk'] ?? 'local'), (string) ($this->body($request)['path'] ?? ''));
+
+            return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }

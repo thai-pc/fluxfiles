@@ -115,6 +115,7 @@ describe('createToken', () => {
         allowDownload: false,
         allowChmod: false,
         allowCodeEdit: true,
+        allowOptimize: true,
         allowZip: false,
         allowExtract: false,
         zipMaxMb: 50,
@@ -130,6 +131,7 @@ describe('createToken', () => {
     expect(c.allow_download).toBe(false);
     expect(c.allow_chmod).toBe(false);
     expect(c.allow_code_edit).toBe(true);
+    expect(c.allow_optimize).toBe(true);
     expect(c.allow_zip).toBe(false);
     expect(c.allow_extract).toBe(false);
     expect(c.zip_max_mb).toBe(50);

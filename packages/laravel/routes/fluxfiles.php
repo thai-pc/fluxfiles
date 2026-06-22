@@ -59,6 +59,9 @@ Route::get('usage', [FluxFilesController::class, 'usage']);
 // Commercial edition / license status (server-wide; free core → edition:free)
 Route::get('license', [FluxFilesController::class, 'license']);
 
+// Optimization (paid module; gated by ModuleRegistry → 501/402/403 when not entitled)
+Route::post('optimize', [FluxFilesController::class, 'optimize']);
+
 // Config / code editor (works on any disk)
 Route::get('content', [FluxFilesController::class, 'getContent']);
 Route::put('content', [FluxFilesController::class, 'putContent']);

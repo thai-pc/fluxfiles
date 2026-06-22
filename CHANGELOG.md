@@ -28,6 +28,23 @@ All notable changes to FluxFiles are documented here. This project adheres to
   `ROADMAP.md`) and `docs/TEST-PLAN.md` (no longer reflected the shipped test
   suite).
 
+## [Unreleased]
+
+### Added
+
+- **Paid-module gate (`ModuleInterface` + `ModuleRegistry`)** — the reusable seam
+  for commercial add-ons, built on the licensing M0 verifier. A paid endpoint is
+  served only when **all three** layers pass: the module's code is installed
+  (`class_exists` → else `501 module_not_installed`), the license entitles it
+  (`LicenseManager` → `402 license_required`/`license_expired`), and the token
+  carries the claim (`Claims::isAllowed` → `403`). Free MIT core ships none of the
+  module packages, so paid endpoints 501 cleanly.
+- **`POST /api/fm/optimize`** (route + `allow_optimize` claim, default false) — the
+  first paid module: image → smaller WebP (same dimensions, EXIF stripped), gated
+  as above. The engine ships in a separate **proprietary** `fluxfiles/optimize`
+  package (not in this MIT repo); the core only holds the gate + route. Proxied by
+  Laravel + WordPress; `allow_optimize` forwarded through every token helper.
+
 ## [0.2.39] — 2026-06-22
 
 > Released: core `core-v0.2.34` (Packagist + Docker). Adapters unchanged

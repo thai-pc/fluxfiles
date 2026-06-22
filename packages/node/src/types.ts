@@ -100,6 +100,9 @@ export interface BaseTokenOptions {
   /** Allow editing a file's text content (GET/PUT /api/fm/content). Default **false** — editing
    *  config/executable files (wp-config.php, .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
   allowCodeEdit?: boolean;
+  /** Allow the paid Optimization module (POST /api/fm/optimize). Default **false** — opt-in.
+   *  Even when true, the optimize module must be installed + licensed on the server. */
+  allowOptimize?: boolean;
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;
   /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */

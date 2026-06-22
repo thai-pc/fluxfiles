@@ -60,3 +60,6 @@ docs/COMMERCIAL-STRATEGY.md
 docs/LICENSING-PLAN.md
 docs/*.SECRET.txt
 docs/license-signing-key*
+
+# Proprietary paid module (private — not part of the MIT core; lives in a private repo for distribution)
+packages/optimize/
