@@ -1357,335 +1357,43 @@ Send `force_upload=true` (in form data) to upload anyway.
 
 ## Framework Adapters
 
-### Node (server-side token SDK)
+FluxFiles ships an official adapter for every major stack. **Each has its own
+README** with full examples, props/options, and build steps — this section is the
+install + the gist; follow the package link for details.
 
-Mint FluxFiles tokens from any Node backend (Express, Next.js, Nuxt, NestJS) —
-byte-compatible with the PHP core, including encrypted BYOB credentials. Zero
-runtime dependencies.
+| Adapter | Install | What it does | Docs |
+|---|---|---|---|
+| **Node** (token SDK) | `npm i @fluxfiles/node` | Mint JWTs (+ encrypted BYOB) from any Node backend — byte-compatible with the PHP core, zero deps | [`packages/node`](packages/node) |
+| **Laravel** | `composer require fluxfiles/laravel` | `<x-fluxfiles>` Blade component + `FluxFiles::token()` facade + publishable config + route proxy | [`packages/laravel`](packages/laravel) |
+| **WordPress** | release ZIP (bundles `vendor/`) | Plugin: Settings page, `[fluxfiles]` shortcode, Classic-editor media button, REST API at `/wp-json/fluxfiles/v1/` | [`packages/wordpress`](packages/wordpress) |
+| **React** | `npm i @fluxfiles/react` | `<FluxFiles>` / `<FluxFilesModal>` + `useFluxFiles()` hook (TypeScript) | [`packages/react`](packages/react) |
+| **Vue 3 / Nuxt 3** | `npm i @fluxfiles/vue` | `<FluxFiles>` / `<FluxFilesModal>` + composable; Nuxt auto-import plugin | [`packages/vue`](packages/vue) |
+| **CKEditor 4** | `npm i @fluxfiles/ckeditor4` | Toolbar button + native Image-Properties "Browse" | [`packages/ckeditor4`](packages/ckeditor4) |
+| **TinyMCE 4/5** | `npm i @fluxfiles/tinymce` | Toolbar button + native image-dialog file picker | [`packages/tinymce`](packages/tinymce) |
+| **Summernote** | `npm i @fluxfiles/summernote` | Toolbar button (inserts `<img>`/`<a>` at the cursor) | [`packages/summernote`](packages/summernote) |
 
-```bash
-npm install @fluxfiles/node
-```
+The **token-minting** adapters (Node, Laravel, WordPress) emit the **same JWT** as
+the PHP `fluxfiles_token()` helper — identical claims + BYOB encryption. The
+**browser** adapters (React, Vue, the editor plugins) embed the core UI over the
+same iframe + `postMessage` SDK, so anything the standalone UI does, they do too.
 
-```ts
-import { createToken } from '@fluxfiles/node';
-
-const token = createToken({
-  userId: 'user-42',
-  perms: ['read', 'write'],
-  prefix: 'users/42',
-});
-```
-
-See [`packages/node`](packages/node) for BYOB, `verify`/`decode`, and Next.js /
-Express examples.
-
-### Laravel
-
-```bash
-composer require fluxfiles/laravel
-php artisan vendor:publish --tag=fluxfiles-config
-```
-
-Add to `.env`:
-
-```env
-FLUXFILES_ENDPOINT=https://fm.yourdomain.com
-FLUXFILES_SECRET=your-secret-min-32-chars
-```
-
-**Blade component:**
-
-```blade
-{{-- Embedded file browser --}}
-<x-fluxfiles disk="local" mode="browser" height="600px" />
-
-{{-- Modal file picker --}}
-<x-fluxfiles disk="r2" mode="picker" @select="handleFileSelect" />
-```
-
-**Generate token in controller:**
+**Minimal example** — mint a scoped token server-side, then embed/pick:
 
 ```php
-use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
-
-$token = FluxFiles::token(
-    userId: (string) auth()->id(),
-    perms:  ['read', 'write'],
-    disks:  ['local', 's3'],
-    prefix: 'users/' . auth()->id() . '/'
+// Laravel controller
+$token = FluxFiles\Laravel\FluxFilesFacade::token(
+    userId: (string) auth()->id(), perms: ['read', 'write'],
+    disks: ['local', 's3'], prefix: 'users/'.auth()->id().'/'
 );
 ```
-
-**Config** (`config/fluxfiles.php`):
-
-```php
-return [
-    'endpoint'    => env('FLUXFILES_ENDPOINT'),
-    'secret'      => env('FLUXFILES_SECRET'),
-    'disk'        => 'local',
-    'disks'       => ['local', 'r2'],
-    'prefix'      => 'users/{user_id}',
-    'max_upload'  => 50,    // MB — per uploaded file
-    'max_storage' => 500,   // MB — total quota per prefix (0 = unlimited)
-    'allowed_ext' => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'], // lowercase, no dot; null = all safe
-];
+```blade
+<x-fluxfiles disk="s3" mode="browser" height="600px" />   {{-- Blade --}}
 ```
-
-### WordPress
-
-**Install (recommended):** use a **release ZIP** that already includes `vendor/` (GitHub Releases or WordPress.org). Upload via **Plugins → Add New → Upload Plugin**, or extract into `wp-content/plugins/fluxfiles/`. No Composer or SSH on the server.
-
-**Requirements:** PHP **8.1+** on the host (Flysystem 3 needs 8.0.2+; Intervention Image v3 and firebase/php-jwt v7 need 8.1+). Older PHP releases are not supported for the current `fluxfiles/fluxfiles` line.
-
-The Packagist package `fluxfiles/fluxfiles` is **core PHP only**; it does **not** include this WordPress plugin. Source for the plugin folder: [main repository](https://github.com/thai-pc/fluxfiles) (`packages/wordpress`).
-
-**Maintainers / monorepo:** to (re)build `vendor/` before zipping or committing to SVN, run `composer install --no-dev --optimize-autoloader` inside `packages/wordpress`. When developing from the monorepo with `packages/wordpress` next to `packages/core`, you can instead use `composer install -d packages/core` and the plugin will load that `vendor/autoload.php`.
-
-**Activate & Configure:**
-
-1. **Plugins > Installed Plugins** → Activate **FluxFiles**
-2. **Settings > FluxFiles** → fill in:
-   - **Endpoint:** `https://fm.yourdomain.com`
-   - **JWT Secret:** must match `FLUXFILES_SECRET` in `.env`
-   - **Default Disk:** `local`, `s3`, or `r2`
-   - **Path Prefix:** `wp/{user_id}` (isolates files per WP user)
-
-**Shortcode:**
-
-```
-[fluxfiles disk="r2" path="uploads" mode="picker" height="500px" multiple="1"]
-```
-
-Attributes: `disk`, `mode` (`picker`/`browser`), `width`, `height`, `multiple`
-(`1`/`0` — multi-select).
-
-**Media Button:** A "FluxFiles" button appears in the Classic Editor toolbar — opens a modal file picker.
-
-**REST API:** Available at `/wp-json/fluxfiles/v1/`:
-
-```
-GET  /wp-json/fluxfiles/v1/files?disk=local&path=
-POST /wp-json/fluxfiles/v1/upload
-```
-
-**PHP API:**
-
-```php
-$token = FluxFilesPlugin::instance()->generateToken($user_id);
-```
-
-### React
-
-```bash
-npm install @fluxfiles/react
-```
-
-**Components:**
-
 ```tsx
-import { FluxFiles, FluxFilesModal, useFluxFiles } from '@fluxfiles/react';
-
-// Embedded file browser
-function FileBrowser() {
-    return (
-        <FluxFiles
-            endpoint="https://fm.yourdomain.com"
-            token={token}
-            disk="r2"
-            disks={['local', 'r2']}
-            locale="en"
-            theme="auto"
-            onSelect={(file) => console.log(file)}
-            style={{ height: '600px' }}
-        />
-    );
-}
-
-// Modal file picker
-function FilePicker() {
-    const [open, setOpen] = useState(false);
-
-    return (
-        <>
-            <button onClick={() => setOpen(true)}>Choose File</button>
-            <FluxFilesModal
-                open={open}
-                onClose={() => setOpen(false)}
-                endpoint="https://fm.yourdomain.com"
-                token={token}
-                onSelect={(file) => {
-                    console.log(file.url);
-                    setOpen(false);
-                }}
-            />
-        </>
-    );
-}
-
-// Hook for programmatic control
-function AdvancedUsage() {
-    const { ref, navigate, refresh, setDisk, search, aiTag } = useFluxFiles({
-        endpoint: 'https://fm.yourdomain.com',
-        token,
-        onSelect: (file) => console.log(file),
-    });
-
-    return (
-        <div>
-            <FluxFiles ref={ref} endpoint="..." token="..." />
-            <button onClick={() => navigate('/photos')}>Go to Photos</button>
-            <button onClick={() => setDisk('r2')}>Switch to R2</button>
-        </div>
-    );
-}
+// React (same token)
+<FluxFiles endpoint="https://fm.example.com" token={token} disk="s3"
+           onSelect={(file) => console.log(file.url)} style={{ height: 600 }} />
 ```
-
-**Build from source:**
-
-```bash
-cd packages/react
-npm install
-npm run build       # → dist/index.js, dist/index.mjs, dist/index.d.ts
-npm run typecheck   # TypeScript validation
-```
-
-### Vue 3 / Nuxt 3
-
-```bash
-npm install @fluxfiles/vue
-```
-
-```vue
-<script setup>
-import { ref } from 'vue';
-import { FluxFiles, FluxFilesModal } from '@fluxfiles/vue';
-
-const open = ref(false);
-const handleSelect = (file) => console.log(file.url);
-</script>
-
-<template>
-    <!-- Embedded -->
-    <FluxFiles
-        endpoint="https://fm.yourdomain.com"
-        :token="token"
-        disk="local"
-        @select="handleSelect"
-        style="height: 600px"
-    />
-
-    <!-- Modal -->
-    <button @click="open = true">Choose File</button>
-    <FluxFilesModal
-        v-model:open="open"
-        endpoint="https://fm.yourdomain.com"
-        :token="token"
-        @select="handleSelect"
-        @close="open = false"
-    />
-</template>
-```
-
-**Nuxt 3 auto-import:**
-
-```ts
-// nuxt.config.ts
-export default defineNuxtConfig({
-    plugins: ['@fluxfiles/vue/nuxt'],
-});
-```
-
-### CKEditor 4
-
-```bash
-npm install @fluxfiles/ckeditor4
-```
-
-CKEditor 4 loads plugins from a path, so point `addExternal` at the installed
-package (`node_modules/@fluxfiles/ckeditor4/`) or copy the folder into your
-CKEditor `plugins/` directory. Then load `fluxfiles.js` SDK on the page and:
-
-```js
-CKEDITOR.replace('editor', {
-    extraPlugins: 'fluxfiles',
-    fluxfiles: {
-        endpoint: 'https://fm.yourdomain.com',
-        token: 'JWT_TOKEN',
-        disk: 'local',
-        locale: 'en',
-        multiple: false,
-        maxUploadMb: 10,   // MB per file (optional)
-        maxFiles: 0        // max files per batch (0 = unlimited)
-    }
-});
-```
-
-Click the **FluxFiles** toolbar button (inline-SVG folder icon) — images insert
-as `<img>`, other files as `<a>`. The plugin also injects a **Browse FluxFiles**
-button into CKEditor's native *Image Properties* dialog, filling URL/Alt/Width/
-Height (disable with `fluxfiles: { imageDialog: false }`).
-
-### TinyMCE (4.x / 5.x)
-
-```bash
-npm install @fluxfiles/tinymce
-```
-
-TinyMCE loads the plugin from a URL (`external_plugins`), so reference
-`node_modules/@fluxfiles/tinymce/plugin.js` or copy the folder into your TinyMCE
-`plugins/` directory. Then load `fluxfiles.js` SDK and:
-
-```js
-tinymce.init({
-    selector: '#editor',
-    plugins: 'fluxfiles',
-    toolbar: 'undo redo | bold italic | fluxfiles',
-    fluxfiles_endpoint: 'https://fm.yourdomain.com',
-    fluxfiles_token: 'JWT_TOKEN',
-    fluxfiles_disk: 'local',
-    fluxfiles_locale: 'en',
-    fluxfiles_multiple: false,
-    fluxfiles_max_upload_mb: 10,  // MB per file (optional)
-    fluxfiles_max_files: 0        // max files per batch (0 = unlimited)
-});
-```
-
-Auto-detects TinyMCE 4 vs 5 API. The plugin also registers a `file_picker_callback`
-so TinyMCE's native **Insert/Edit Image** dialog gets a browse icon that sources
-URL/Alt/Width/Height from FluxFiles (disable with `fluxfiles_image_dialog: false`).
-
-### Summernote
-
-```bash
-npm install @fluxfiles/summernote
-```
-
-Summernote loads plugins as a `<script>` after Summernote itself, so reference
-`node_modules/@fluxfiles/summernote/plugin.js` (or the CDN `plugin.min.js`). Load
-jQuery → Summernote → `fluxfiles.js` SDK → the plugin, then add `'fluxfiles'` to a
-toolbar group:
-
-```js
-$('#editor').summernote({
-    toolbar: [
-        ['style', ['bold', 'italic']],
-        ['insert', ['fluxfiles', 'link']]
-    ],
-    fluxfiles: {
-        endpoint: 'https://fm.yourdomain.com',
-        token: 'JWT_TOKEN',
-        disk: 'local',
-        locale: 'en',
-        multiple: false,
-        maxUploadMb: 10,   // MB per file (optional)
-        maxFiles: 0        // max files per batch (0 = unlimited)
-    }
-});
-```
-
-Click the **FluxFiles** toolbar button — images insert as `<img>`, other files as
-`<a>` (via `editor.pasteHTML` at the cursor).
 
 ---
 
@@ -1810,156 +1518,32 @@ Mitigations regardless of delivery:
 
 ## Testing
 
-> Install core dependencies first — the PHP tests load `packages/core/vendor/autoload.php`:
->
-> ```bash
-> composer install -d packages/core
-> ```
-
-### Core PHP — unit & integration
+> First: `composer install -d packages/core` — the PHP tests load
+> `packages/core/vendor/autoload.php`.
 
 ```bash
-# Run the whole unit + integration suite
+# Core PHP — unit + integration suite
 for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done
 
-# Or individually
-php packages/core/tests/unit/test-claims.php           # JWT claims parsing + path scoping
-php packages/core/tests/unit/test-diskmanager.php      # DiskManager factory
-php packages/core/tests/unit/test-ratelimiter.php      # Rate limiter
-php packages/core/tests/unit/test-byob.php             # BYOB encryption + token validation
-php packages/core/tests/unit/test-i18n.php             # i18n — validates all 16 language files
-php packages/core/tests/unit/test-i18n.php --api       # i18n API endpoint tests
-php packages/core/tests/integration/test-metadata.php  # Metadata handler
-
-# Generate a token for manual testing
-php packages/core/tests/generate-token.php
-```
-
-### API & live storage (e2e)
-
-```bash
-# Boot the dev server first
+# API e2e (boots a dev server) + env-gated live S3/R2 (MinIO/AWS/R2)
 cd packages/core && php -S 127.0.0.1:8080 router.php &
-
-# HTTP API suite — list, upload, rename, move, copy, delete, metadata, search (42 checks)
 bash packages/core/tests/e2e/test-api.sh
 
-# Live S3/R2 test — env-gated, skips if no bucket. Works against MinIO, AWS S3, or R2.
-FXTEST_S3_LABEL=MinIO FXTEST_S3_ENDPOINT=http://127.0.0.1:9000 \
-FXTEST_S3_REGION=us-east-1 FXTEST_S3_BUCKET=fluxfiles-test \
-FXTEST_S3_KEY=minioadmin FXTEST_S3_SECRET=minioadmin123 \
-FXTEST_S3_VISIBILITY=private FXTEST_S3_CREATE_BUCKET=1 \
-php packages/core/tests/e2e/test-s3-live.php
+# Browser e2e (Playwright drives the real UI in chromium)
+cd packages/core/tests/browser && npm install && npx playwright install chromium && npm test
+
+# Framework wrappers — vitest for JS adapters, stubbed-PHP smokes for PHP adapters
+cd packages/react && npm install && npm test        # (and sdk / vue / ckeditor4 / tinymce / summernote)
+php packages/laravel/tests/test-laravel-smoke.php   # (and wordpress)
+bash scripts/pack-smoke.sh all                       # verifies the published dist/types
+
+# Docker — clean-container runs across a PHP matrix
+make test PHP=8.4   # one version  ·  make test-all  # 8.1–8.4  ·  make up  # app:8080 + MinIO:9000
 ```
 
-### Browser e2e (Playwright)
-
-Boots the real PHP server and drives the standalone UI in chromium — render/auth smoke plus full UI interaction flows (upload, folder create + breadcrumb nav, search, dark-mode toggle, delete, inline crop, single-pick `FM_SELECT`, multi-select `multiple:true` returning an `FM_SELECT` array, and bulk operations (multi-select delete + move + download)).
-
-```bash
-cd packages/core/tests/browser
-npm install && npx playwright install chromium && npm test
-```
-
-### Framework wrappers
-
-Each wrapper owns its tests — vitest + jsdom for the JS adapters, stubbed-PHP smokes for the PHP adapters.
-
-```bash
-# JS wrappers — postMessage protocol
-cd packages/sdk       && npm install && npm test
-cd packages/react     && npm install && npm test
-cd packages/vue       && npm install && npm test
-cd packages/ckeditor4 && npm install && npm test
-cd packages/tinymce   && npm install && npm test
-
-# PHP adapters (need `composer install -d packages/core` first)
-php packages/wordpress/tests/test-wp-smoke.php
-php packages/laravel/tests/test-laravel-smoke.php
-
-# Published-artifact smoke — pack each wrapper, install its tarball into a
-# throwaway consumer, and typecheck (verifies dist/types, not just src/)
-bash scripts/pack-smoke.sh all
-```
-
-### Docker
-
-```bash
-make test PHP=8.4     # run the core suite in a clean container on a given PHP version
-make test-all         # PHP 8.1 – 8.4 matrix
-make up               # dev stack: standalone app (:8080) + MinIO (:9000, console :9001)
-```
-
-CI (`.github/workflows/test.yml`) runs all of the above across 7 jobs (core PHP 8.1–8.4, API e2e, live S3 on MinIO, wrappers, browser e2e, pack-smoke, production Docker image).
-
-### Package publishing
-
-Packages are versioned independently. Do not use a plain `v*` monorepo tag for new releases. Use a package-prefixed tag so CI only publishes the package that changed:
-
-```bash
-# Composer split packages. The split repo receives the semver tag without the prefix.
-git tag core-v0.2.1
-git tag laravel-v0.2.0
-
-# npm packages. The tag version must match each package.json.
-git tag sdk-v0.2.0
-git tag react-v0.2.0
-git tag vue-v0.2.0
-git tag ckeditor4-v0.2.1
-git tag tinymce-v0.2.0
-```
-
-`core-v*` and `laravel-v*` trigger `.github/workflows/split.yml`. The npm package tags trigger `.github/workflows/npm-publish.yml` for only the matching package. **Push tags one at a time** — pushing more than three tags in a single `git push` skips the tag-triggered workflows.
-
-#### Packagist auto-update (avoid the crawl lag)
-
-After the split job pushes the new tag to the `fluxfiles-core` / `fluxfiles-laravel`
-repos, it pings the Packagist update API so the new version appears **immediately**
-instead of waiting for Packagist's slow periodic crawl. Set two repo secrets once:
-
-- `PACKAGIST_USERNAME` — your packagist.org username.
-- `PACKAGIST_TOKEN` — packagist.org → **Profile → Show API Token**.
-
-Without them the split still succeeds (Packagist just updates on its own schedule).
-As a belt-and-suspenders alternative, enable Packagist's GitHub hook on each split
-repo (packagist.org package page → **Settings → integrations**), so a push updates
-Packagist even outside CI.
-
-`PACKAGIST_USERNAME` and `PACKAGIST_TOKEN` are **two separate secrets — set both**.
-In GitHub's "New repository secret" form the **Name** field is the literal
-`PACKAGIST_USERNAME` (GitHub rejects `-` in names), and your `your-packagist-name`
-value goes in the **Secret** field below it (a `-` there is fine). Confirm with
-`gh secret list -R <owner>/<repo>`. A successful ping returns **HTTP 202**.
-
-#### Release troubleshooting
-
-| Symptom | Fix |
-| --- | --- |
-| Packagist stuck at the old version, split job green | Set both `PACKAGIST_*` secrets, then `gh run rerun <split-run-id>` to re-ping the already-pushed tag (or click **Update** on the Packagist page once). |
-| Split log: `PACKAGIST_TOKEN secret not set` | Only one secret exists — `gh secret list` and add the missing one. |
-| Ping `HTTP 403 … invalid username/apiToken` | Username = `packagist.org/users/<name>` (not email/GitHub); token from Profile → Show API Token; set without a trailing newline (`printf %s 'value' \| gh secret set …`). |
-| npm publish `404 … PUT …/@fluxfiles/<pkg>` | `NPM_TOKEN` is invalid/expired — rotate the npm **Automation** token and re-run. |
-| `Call to undefined method …` after upgrading an adapter | The adapter's `composer.json` `fluxfiles/fluxfiles` floor is older than the core API it now calls — bump it (the `adapter-core-floor` CI job guards this). |
-
-Always confirm the **registry** updated (`composer show fluxfiles/fluxfiles` /
-`npm view @fluxfiles/<pkg> version`), not just the job colour.
-
-### Manual browser pages
-
-These pages load the SDK/editor plugins from absolute paths (`/fluxfiles.js`,
-`/ckeditor4/`, `/tinymce/`, `/summernote/`) that the dev router serves, so **open
-them through the running server**, not via `file://`:
-
-```bash
-cd packages/core && php -S localhost:8080 router.php   # then open in a browser:
-#   http://localhost:8080/tests/manual/test-sdk.html        — SDK integration
-#   http://localhost:8080/tests/manual/test-ckeditor4.html  — CKEditor 4
-#   http://localhost:8080/tests/manual/test-tinymce.html    — TinyMCE
-#   http://localhost:8080/tests/manual/test-summernote.html — Summernote
-```
-
-Paste a token from `php packages/core/tests/generate-token.php` into the page's
-token field.
+`.github/workflows/test.yml` runs all of this (10 jobs). For the CI map, the
+adapter↔core floor guard, and the tag→registry release flow, see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
