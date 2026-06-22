@@ -3,6 +3,31 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.40] — 2026-06-22
+
+> Released: core `core-v0.2.35` (Packagist + Docker), Laravel `laravel-v0.2.18`,
+> WordPress `wordpress-v0.2.19`. (Adapter core floors → `^0.2.35`.)
+
+### Added
+
+- **License verifier (`LicenseManager`)** — foundation for the commercial editions
+  (Pro / AI / Enterprise). An **offline** Ed25519 verifier in the MIT core: it
+  embeds FluxFiles' **public** signing key only (the private key stays offline),
+  verifies a compact signed license key, and exposes
+  `edition()/modules()/licensed($m)/status()/expired()/inGrace()/daysLeft()`.
+  Anything absent/malformed/tampered/expired-past-grace → the **free** edition,
+  never an error — the MIT core always runs unlicensed. 14-day default grace.
+  This is layer 2 of the capability/license/claim gate (a paid feature also needs
+  its proprietary module installed **and** the JWT claim).
+- `GET /api/fm/license` → a non-sensitive `{edition, status, modules, limits,
+  expires, days_left}` summary for dashboards; proxied by Laravel + WordPress.
+
+### Removed
+
+- Dropped two stale planning docs — `docs/FLUXFILES-ROADMAP.md` (superseded by
+  `ROADMAP.md`) and `docs/TEST-PLAN.md` (no longer reflected the shipped test
+  suite).
+
 ## [0.2.39] — 2026-06-22
 
 > Released: core `core-v0.2.34` (Packagist + Docker). Adapters unchanged
