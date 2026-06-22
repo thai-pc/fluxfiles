@@ -28,7 +28,11 @@ All notable changes to FluxFiles are documented here. This project adheres to
   `ROADMAP.md`) and `docs/TEST-PLAN.md` (no longer reflected the shipped test
   suite).
 
-## [Unreleased]
+## [0.2.41] — 2026-06-22
+
+> Released: core `core-v0.2.36` (Packagist + Docker), Laravel `laravel-v0.2.19`,
+> WordPress `wordpress-v0.2.20`, Node `@fluxfiles/node` `0.1.13`. Adapter core
+> floors → `^0.2.36`.
 
 ### Added
 
