@@ -2011,6 +2011,9 @@ token field.
 
 ## Project Structure
 
+> **Contributing?** See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the
+> engine and adapters relate, the three integration patterns, and the publish flow.
+
 ```
 FluxFiles/
 ├── packages/

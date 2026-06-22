@@ -4,7 +4,8 @@ Guidance for AI coding agents working in this repo. This is the tool-agnostic
 entry point; the deeper canonical notes live in `.claude/` —
 [`CLAUDE.md`](.claude/CLAUDE.md), [`architecture.md`](.claude/architecture.md),
 [`development.md`](.claude/development.md), [`api-map.md`](.claude/api-map.md).
-Read those for detail.
+Read those for detail. For the human-facing monorepo map (engine ↔ adapters, the
+three integration patterns, the publish topology), see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## What FluxFiles is
 
