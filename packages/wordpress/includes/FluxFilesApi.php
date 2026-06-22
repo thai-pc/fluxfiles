@@ -175,6 +175,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/quota', array_merge($readArgs, [
             'callback' => [$api, 'handleQuota'],
         ]));
+        register_rest_route($ns, $p . '/license', array_merge($readArgs, [
+            'callback' => [$api, 'handleLicense'],
+        ]));
         register_rest_route($ns, $p . '/audit', array_merge($readArgs, [
             'callback' => [$api, 'handleAudit'],
         ]));
@@ -904,6 +907,17 @@ class FluxFilesApi
             $this->logAudit($claims, 'extract', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
 
             return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    public function handleLicense(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $this->rateLimit($this->claims(), false);
+
+            return $this->ok(\FluxFiles\LicenseManager::fromEnv()->info());
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
         }

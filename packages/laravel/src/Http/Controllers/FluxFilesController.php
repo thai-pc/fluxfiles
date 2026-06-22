@@ -710,6 +710,21 @@ class FluxFilesController
     }
 
     /**
+     * Commercial edition / license status (server-wide, non-sensitive). Reads the
+     * app's FLUXFILES_LICENSE_KEY env; free core → {edition:'free'}.
+     */
+    public function license(Request $request): JsonResponse
+    {
+        try {
+            $this->rateLimit($this->claims($request), false);
+
+            return $this->ok(\FluxFiles\LicenseManager::fromEnv()->info());
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode());
+        }
+    }
+
+    /**
      * Config / code editor — read a file's text content. Disk/perm/scope/size/
      * binary checks all live inside FileManager::getContent (single source of truth).
      */
