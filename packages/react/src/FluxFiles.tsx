@@ -1,6 +1,7 @@
 import React, { forwardRef, useImperativeHandle } from 'react';
 import type { FluxFilesProps, FluxFilesHandle } from './types';
 import { useFluxFiles } from './useFluxFiles';
+import { IFRAME_ALLOW } from './iframe';
 
 /**
  * Embedded FluxFiles file manager component.
@@ -92,7 +93,7 @@ export const FluxFiles = forwardRef<FluxFilesHandle, FluxFilesProps>(
           ref={handle.iframeRef}
           src={handle.iframeSrc}
           style={{ width: '100%', height: '100%', border: 'none' }}
-          allow="clipboard-write; fullscreen"
+          allow={IFRAME_ALLOW}
           allowFullScreen
           title="FluxFiles File Manager"
         />

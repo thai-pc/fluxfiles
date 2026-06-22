@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import type { FluxFilesModalProps } from './types';
 import { useFluxFiles } from './useFluxFiles';
+import { IFRAME_ALLOW } from './iframe';
 
 const defaultOverlayStyle: React.CSSProperties = {
   position: 'fixed',
@@ -131,7 +132,7 @@ export function FluxFilesModal({
           ref={handle.iframeRef}
           src={handle.iframeSrc}
           style={{ width: '100%', height: '100%', border: 'none' }}
-          allow="clipboard-write; fullscreen"
+          allow={IFRAME_ALLOW}
           allowFullScreen
           title="FluxFiles File Manager"
         />

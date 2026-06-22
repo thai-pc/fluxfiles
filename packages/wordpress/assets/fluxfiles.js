@@ -3,6 +3,9 @@
 
     var VERSION = 1;
     var SOURCE = 'fluxfiles';
+    // Permissions-Policy granted to the embedded UI iframe (fullscreen + clipboard).
+    // Keep identical across SDK/React/Vue/WordPress — scripts/check-iframe-allow.sh guards it.
+    var IFRAME_ALLOW = 'clipboard-write; fullscreen';
     var iframe = null;
     var listeners = {};
     var config = {};
@@ -132,7 +135,7 @@
             iframe.id = 'fluxfiles-iframe';
             iframe.src = endpoint + '/public/index.html';
             iframe.style.cssText = 'width:100%;height:100%;border:none;';
-            iframe.setAttribute('allow', 'clipboard-write; fullscreen');
+            iframe.setAttribute('allow', IFRAME_ALLOW);
             iframe.setAttribute('allowfullscreen', 'true');
 
             if (!config.container) {

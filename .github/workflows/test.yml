@@ -95,6 +95,18 @@ jobs:
       - name: Check adapters against their declared core floor
         run: bash scripts/check-adapter-core-floor.sh
 
+  iframe-allow:
+    name: iframe allow parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      # Pure-bash guard: SDK / React / Vue / WordPress must grant the identical
+      # iframe `allow` (fullscreen + clipboard) + allowfullscreen — no drift.
+      - name: Check iframe allow parity
+        run: bash scripts/check-iframe-allow.sh
+
   api-e2e:
     name: API e2e (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest

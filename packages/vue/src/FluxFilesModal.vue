@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch, onMounted, onUnmounted } from 'vue';
 import { useFluxFiles } from './useFluxFiles';
+import { IFRAME_ALLOW } from './iframe';
 import type { FluxFile, FluxEvent } from './types';
 
 const props = withDefaults(defineProps<{
@@ -119,7 +120,7 @@ onUnmounted(() => {
           :ref="(el) => { handle.iframeRef.value = el as HTMLIFrameElement | null }"
           :src="handle.iframeSrc.value"
           style="width: 100%; height: 100%; border: none"
-          allow="clipboard-write; fullscreen"
+          :allow="IFRAME_ALLOW"
           allowfullscreen
           title="FluxFiles File Manager"
         />
