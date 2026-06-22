@@ -6,7 +6,8 @@ one package.
 
 > Sibling docs: [`README.md`](../README.md) (usage), [`.claude/architecture.md`](../.claude/architecture.md)
 > (runtime flow + module responsibilities), [`.claude/api-map.md`](../.claude/api-map.md)
-> (routes), [`PUBLISHING.md`](../PUBLISHING.md) (release mechanics).
+> (routes). Release mechanics are automated — see §5 (Publish topology) below and
+> the workflows in `.github/workflows/`.
 
 ---
 
@@ -47,7 +48,7 @@ FluxFiles/
 ├── docker/             Dockerfile · Dockerfile.prod · nginx.conf · entrypoint.sh
 ├── docs/               ARCHITECTURE.md (this) · METADATA-STORAGE-DESIGN.md · (planning docs, gitignored)
 ├── .claude/            CLAUDE.md · architecture.md · api-map.md · development.md   (AI-agent context)
-└── README · CHANGELOG · AGENTS.md · PUBLISHING.md · Makefile · docker-compose.yml
+└── README · CHANGELOG · AGENTS.md · Makefile · docker-compose.yml
 ```
 
 ### Inside `packages/core` (the only thing adapters depend on)
