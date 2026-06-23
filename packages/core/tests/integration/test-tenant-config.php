@@ -238,7 +238,7 @@ test('fromJwtPayload parses webp claims (and defaults)', function () {
     assertEqual(false, Claims::fromJwtPayload((object) ['allow_chmod' => false])->allowChmod, 'allow_chmod parsed');
     assertEqual(false, $def->allowCodeEdit, 'allow_code_edit defaults FALSE (opt-in)');
     assertEqual(true, Claims::fromJwtPayload((object) ['allow_code_edit' => true])->allowCodeEdit, 'allow_code_edit parsed');
-    assertEqual(false, \$def->allowOptimize, 'allow_optimize defaults FALSE (opt-in)');
+    assertEqual(false, $def->allowOptimize, 'allow_optimize defaults FALSE (opt-in)');
     assertEqual(true, Claims::fromJwtPayload((object) ['allow_optimize' => true])->allowOptimize, 'allow_optimize parsed');
     assertEqual(true, $def->allowZip, 'allow_zip defaults true');
     assertEqual(true, $def->allowExtract, 'allow_extract defaults true');
