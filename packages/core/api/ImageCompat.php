@@ -65,6 +65,28 @@ final class ImageCompat
     }
 
     /**
+     * Whether AVIF encoding is available at runtime. Needs intervention v3 (v2 has
+     * no toAvif) AND a GD build compiled with AVIF support (`imageavif()`).
+     */
+    public function avifSupported(): bool
+    {
+        return $this->isV3 && \function_exists('imageavif');
+    }
+
+    /**
+     * Encode the image as AVIF at the given quality (0-100). Smaller than WebP at
+     * the same quality, but slower and not universally supported — callers should
+     * check {@see avifSupported()} first (or fall back to WebP on failure).
+     */
+    public function encodeAvif($image, int $quality = 70): string
+    {
+        if (!$this->avifSupported()) {
+            throw new \RuntimeException('AVIF encoding is not available (needs intervention v3 + GD with AVIF)');
+        }
+        return (string) $image->toAvif($quality);
+    }
+
+    /**
      * Encode the image as JPEG.
      */
     public function encodeJpeg($image, int $quality = 85): string

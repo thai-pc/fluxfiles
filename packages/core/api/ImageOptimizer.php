@@ -120,7 +120,7 @@ class ImageOptimizer
      *
      * @return array{data: string, width: int, height: int}|null
      */
-    public function transform(string $sourceData, int $width, int $quality, ?array $watermark = null): ?array
+    public function transform(string $sourceData, int $width, int $quality, ?array $watermark = null, string $format = 'webp'): ?array
     {
         $info = @getimagesizefromstring($sourceData);
         if ($info === false) {
@@ -144,12 +144,21 @@ class ImageOptimizer
         if ($watermark !== null && !empty($watermark['enabled'])) {
             $image = $this->applyWatermark($image, $watermark);
         }
-        $encoded = $this->manager->encodeWebp($image, $quality);
+        // AVIF when requested AND supported (intervention v3 + GD with AVIF); else
+        // fall back to WebP so a caller never fails just because the build lacks AVIF.
+        if ($format === 'avif' && $this->manager->avifSupported()) {
+            $encoded = $this->manager->encodeAvif($image, $quality);
+            $outFormat = 'avif';
+        } else {
+            $encoded = $this->manager->encodeWebp($image, $quality);
+            $outFormat = 'webp';
+        }
 
         return [
             'data'   => (string) $encoded,
             'width'  => $image->width(),
             'height' => $image->height(),
+            'format' => $outFormat,
         ];
     }
 
