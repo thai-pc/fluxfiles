@@ -103,6 +103,11 @@ export interface BaseTokenOptions {
   /** Allow the paid Optimization module (POST /api/fm/optimize). Default **false** — opt-in.
    *  Even when true, the optimize module must be installed + licensed on the server. */
   allowOptimize?: boolean;
+  /** Auto-optimize images on upload (recompress to WebP in the pipeline). Default false;
+   *  only effective when the optimize module is installed + licensed on the server. */
+  autoOptimize?: boolean;
+  /** WebP quality for optimization, 40–95. `0`/omitted = inherit the server default (82). */
+  optimizeQuality?: number;
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;
   /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */

@@ -2,7 +2,11 @@ import React, { useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FluxFiles } from '@fluxfiles/react';
 
-const TOKEN = new URLSearchParams(location.search).get('token') || '';
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get('token') || '';
+// Endpoint is overridable via ?endpoint= so the Playwright harness can point the
+// real wrapper at whatever port the core backend booted on.
+const ENDPOINT = params.get('endpoint') || 'http://localhost:8088';
 
 function App() {
   const ref = useRef<any>(null);
@@ -20,7 +24,7 @@ function App() {
       <div style={{ height: 500, marginTop: 12, border: '1px solid #ccc' }}>
         <FluxFiles
           ref={ref}
-          endpoint="http://localhost:8088"
+          endpoint={ENDPOINT}
           token={TOKEN}
           disk="local"
           mode="browser"

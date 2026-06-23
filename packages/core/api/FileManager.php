@@ -28,6 +28,11 @@ class FileManager
     /** @var AiTagger|null */
     private $aiTagger = null;
 
+    /** @var callable|null On-upload image optimizer: fn(string $bytes, int $quality): ?array{data,ext}.
+     *            Set ONLY when the paid Optimize module is installed + licensed, so the
+     *            free core never optimizes (the `auto_optimize` claim is inert without it). */
+    private $uploadOptimizer = null;
+
     /** @var string Secret for minting per-file stream tokens (gated local media). '' = feature off. */
     private $streamSecret = '';
 
@@ -51,6 +56,17 @@ class FileManager
     public function setAiTagger(AiTagger $ai): void
     {
         $this->aiTagger = $ai;
+    }
+
+    /**
+     * Wire the on-upload image optimizer (paid Optimize module). The callback is
+     * `fn(string $bytes, int $quality): ?array{data:string, ext:string}` — null to
+     * leave the image untouched. The wiring layer (index.php / adapters) sets this
+     * only when the module is installed + licensed, so the free core never optimizes.
+     */
+    public function setUploadOptimizer(callable $fn): void
+    {
+        $this->uploadOptimizer = $fn;
     }
 
     /**
@@ -261,6 +277,37 @@ class FileManager
             );
         }
 
+        // Auto-optimize on upload (paid Optimize module). Recompress the image in
+        // the temp file BEFORE anything downstream (hash, dims, write, variants) so
+        // they all operate on the optimized bytes + the new .webp name. The hook is
+        // only set when the module is installed + licensed; the `auto_optimize` claim
+        // gates per tenant. Quota was checked on the (larger) original — still safe.
+        $autoSaved = 0;
+        if ($this->claims->autoOptimize
+            && $this->uploadOptimizer !== null
+            && $this->imageOptimizer->isImage($name)
+            && (int) ($file['size'] ?? 0) <= self::AUTO_OPTIMIZE_MAX
+        ) {
+            $bytes = @file_get_contents($file['tmp_name']);
+            if ($bytes !== false && $bytes !== '') {
+                $quality = $this->claims->optimizeQuality > 0 ? $this->claims->optimizeQuality : 82;
+                $opt = ($this->uploadOptimizer)($bytes, $quality);
+                if (is_array($opt) && isset($opt['data']) && strlen($opt['data']) < strlen($bytes)) {
+                    $newName = preg_replace('/\.[^.\/]+$/', '', $name) . '.' . ($opt['ext'] ?? 'webp');
+                    // Re-apply the same upload guards to the new name (allowed_ext / dangerous-ext).
+                    $newExt = strtolower(pathinfo($newName, PATHINFO_EXTENSION));
+                    $this->assertExt($newExt);
+                    $this->assertSafeFilename($newName);
+                    if (@file_put_contents($file['tmp_name'], $opt['data']) !== false) {
+                        $autoSaved = strlen($bytes) - strlen($opt['data']);
+                        $name = $newName;
+                        $ext = $newExt;
+                        $file['size'] = strlen($opt['data']);
+                    }
+                }
+            }
+        }
+
         $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
         $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
@@ -341,6 +388,8 @@ class FileManager
         }
         $this->meta->save($disk, $scoped, $attrs);
 
+        // Record the on-upload optimization savings into the tenant's counter, and
+        // surface them on the upload result so the UI can toast "saved N".
         $result = [
             'key'      => $scoped,
             'url'      => $this->fileUrl($disk, $scoped),
@@ -348,6 +397,11 @@ class FileManager
             'name'     => $name,
             'variants' => null,
         ];
+        if ($autoSaved > 0) {
+            OptimizeStats::record($fs, $this->claims->pathPrefix, $autoSaved, 1);
+            $result['optimized'] = true;
+            $result['saved_bytes'] = $autoSaved;
+        }
 
         // Generate image variants (thumb, medium, large as WebP)
         if ($this->imageOptimizer->isImage($name)) {
@@ -1295,6 +1349,9 @@ class FileManager
 
     /** Max bytes the code editor will read/write (config files are small). */
     private const MAX_EDIT_BYTES = 5 * 1024 * 1024;
+
+    /** Skip on-upload auto-optimize above this size (huge images: too slow inline). */
+    private const AUTO_OPTIMIZE_MAX = 40 * 1024 * 1024;
 
     /**
      * Read a file's text content for the in-browser editor. Read perm; size-capped

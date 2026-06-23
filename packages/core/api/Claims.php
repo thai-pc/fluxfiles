@@ -123,6 +123,13 @@ class Claims
      *            installed and the license must cover it (the 3-layer gate). */
     public bool $allowOptimize = false;
 
+    /** @var bool Auto-optimize images on upload (recompress to WebP in the pipeline)?
+     *            Default FALSE. Like allow_optimize, only effective when the module
+     *            is installed + licensed (the core wires the upload hook then). */
+    public bool $autoOptimize = false;
+    /** @var int WebP quality for optimization (40–95). 0 = inherit default (82). */
+    public int $optimizeQuality = 0;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -324,6 +331,8 @@ class Claims
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
+        $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
+        $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
         $c->watermark = self::sanitizeWatermark($payload);
 
         // Usage-dashboard claims.

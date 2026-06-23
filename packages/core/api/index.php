@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../autoload.php';
 
 use FluxFiles\ApiException;
 use FluxFiles\AuditLogStorage;
@@ -215,6 +215,18 @@ try {
             $_ENV['FLUXFILES_AI_MODEL'] ?? null
         );
         $fm->setAiTagger($aiTagger);
+    }
+
+    // On-upload auto-optimize (paid module). Wire the optimizer hook ONLY when the
+    // token asks for it AND the module is installed AND the license covers it — so
+    // the `auto_optimize` claim is inert on a free core. The module does the work;
+    // FileManager records the savings + renames to .webp.
+    if ($claims->autoOptimize && \FluxFiles\ModuleRegistry::installed('optimize')
+        && \FluxFiles\LicenseManager::fromEnv()->licensed('optimize')) {
+        $optimizeModule = new \FluxFiles\Optimize\OptimizeModule();
+        $fm->setUploadOptimizer(static function (string $bytes, int $quality) use ($optimizeModule) {
+            return $optimizeModule->optimizeBytes($bytes, $quality);
+        });
     }
 
     // Rate limiting (JSON file). Per-tenant `rate_read`/`rate_write` claims override

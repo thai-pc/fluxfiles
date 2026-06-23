@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/autoload.php';
 
 use FluxFiles\JwtCompat;
 
@@ -311,6 +311,12 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     if (array_key_exists('allow_optimize', $webp)) {
         $payload['allow_optimize'] = (bool) $webp['allow_optimize'];
+    }
+    if (array_key_exists('auto_optimize', $webp)) {
+        $payload['auto_optimize'] = (bool) $webp['auto_optimize'];
+    }
+    if (!empty($webp['optimize_quality'])) {
+        $payload['optimize_quality'] = (int) $webp['optimize_quality'];
     }
     if (array_key_exists('allow_zip', $webp)) {
         $payload['allow_zip'] = (bool) $webp['allow_zip'];

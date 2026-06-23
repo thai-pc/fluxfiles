@@ -4,6 +4,8 @@ node_modules/
 
 # Environment
 .env
+# Adapter-e2e .env backup (global-setup restores the real one in teardown)
+packages/core/.env.adapter-e2e.bak
 
 # Storage
 storage/uploads/
@@ -22,6 +24,8 @@ build/
 # Test playground scaffolds (source committed, deps not)
 packages/core/tests/apps/**/node_modules/
 packages/core/tests/apps/node_modules/
+# Generated Laravel proxy e2e app (regenerate: laravel-e2e/setup.sh; source in laravel-e2e/)
+packages/core/tests/apps/laravel-app/
 
 # Playwright runtime artifacts
 .playwright-mcp/
