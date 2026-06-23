@@ -11,6 +11,9 @@ test('lightbox zoom: controls, level, reset, and close gating', async ({ page })
   await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
 
   await cardByName(page, name).click();        // open detail panel
+  // Wait until the thumb is actually clickable (detailFile.url present) before
+  // opening the lightbox — avoids a no-op click before the detail panel settles.
+  await expect(page.locator('.detail-thumb.detail-thumb-clickable')).toBeVisible();
   await page.locator('.detail-thumb').click();  // open the fullscreen lightbox
 
   const lb = page.locator('.ff-preview-lightbox');
@@ -48,6 +51,7 @@ test('zoom clamps to 100%–500% and reopening starts fresh', async ({ page }) =
   await uploadFile(page, imageFile(name, 500, 500));
   await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
   await cardByName(page, name).click();
+  await expect(page.locator('.detail-thumb.detail-thumb-clickable')).toBeVisible();
   await page.locator('.detail-thumb').click();
 
   const lb = page.locator('.ff-preview-lightbox');
