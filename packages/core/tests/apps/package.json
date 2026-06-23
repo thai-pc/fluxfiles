@@ -4,7 +4,11 @@
   "type": "module",
   "scripts": {
     "react": "vite --config react.vite.config.mjs --port 5173",
-    "vue":   "vite --config vue.vite.config.mjs --port 5174"
+    "vue": "vite --config vue.vite.config.mjs --port 5174",
+    "e2e": "playwright test",
+    "setup:laravel": "bash laravel-e2e/setup.sh",
+    "setup:wp": "bash wordpress-e2e/setup.sh",
+    "e2e:wp": "playwright test --config wordpress-e2e/playwright.config.ts"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -12,6 +16,7 @@
     "vue": "^3.5.13"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitejs/plugin-vue": "^5.2.1",
     "vite": "^5.4.11"

@@ -3,15 +3,51 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../autoload.php';
 
 use FluxFiles\DiskManager;
 use FluxFiles\ExistingFileIndexer;
 use FluxFiles\StorageMetadataHandler;
 
 $command = $argv[1] ?? '';
+
+// `serve` — launch the standalone app from wherever the package lives (monorepo
+// checkout OR an installed Composer dependency). It runs PHP's built-in server
+// with the document root set to the package root, so /public, /assets, /api and
+// /storage all resolve. This is the supported way to run FluxFiles standalone
+// after `composer require fluxfiles/fluxfiles` (the package files live under
+// vendor/fluxfiles/fluxfiles/, not your project root).
+if ($command === 'serve') {
+    // Parse --host/--port by hand: getopt() stops at the first non-option arg
+    // ("serve"), so it would never see the flags that come after it.
+    $serveOpts = [];
+    foreach (array_slice($argv, 2) as $arg) {
+        if (preg_match('/^--(host|port)=(.*)$/', $arg, $m)) {
+            $serveOpts[$m[1]] = $m[2];
+        }
+    }
+    $host = (string) ($serveOpts['host'] ?? '127.0.0.1');
+    $port = (string) ($serveOpts['port'] ?? '8080');
+    $root = dirname(__DIR__); // package root: has router.php, public/, api/, assets/, lang/
+    $php = PHP_BINARY ?: 'php';
+
+    fwrite(STDOUT, "FluxFiles standalone → http://{$host}:{$port}/public/\n");
+    fwrite(STDOUT, "Document root: {$root}\n");
+    fwrite(STDOUT, "(Make sure {$root}/.env sets FLUXFILES_SECRET. Press Ctrl+C to stop.)\n\n");
+
+    if (!@chdir($root)) {
+        fwrite(STDERR, "Cannot chdir to package root: {$root}\n");
+        exit(1);
+    }
+    $cmd = escapeshellarg($php) . ' -S ' . escapeshellarg("{$host}:{$port}") . ' ' . escapeshellarg('router.php');
+    passthru($cmd, $code);
+    exit($code);
+}
+
 if (!in_array($command, ['index', 'seed'], true)) {
-    fwrite(STDERR, "Usage: fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
+    fwrite(STDERR, "Usage:\n"
+        . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
+        . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);
 }
 

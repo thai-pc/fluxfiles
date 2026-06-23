@@ -135,6 +135,12 @@ class FluxFilesManager
         if (array_key_exists('allow_optimize', $overrides)) {
             $payload['allow_optimize'] = (bool) $overrides['allow_optimize'];
         }
+        if (array_key_exists('auto_optimize', $overrides)) {
+            $payload['auto_optimize'] = (bool) $overrides['auto_optimize'];
+        }
+        if (!empty($overrides['optimize_quality'])) {
+            $payload['optimize_quality'] = (int) $overrides['optimize_quality'];
+        }
         if (array_key_exists('allow_zip', $overrides)) {
             $payload['allow_zip'] = (bool) $overrides['allow_zip'];
         }

@@ -2,7 +2,10 @@
 import { ref } from 'vue';
 import { FluxFiles } from '@fluxfiles/vue';
 
-const TOKEN = new URLSearchParams(location.search).get('token') || '';
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get('token') || '';
+// Overridable via ?endpoint= so the Playwright harness can point at the booted core port.
+const ENDPOINT = params.get('endpoint') || 'http://localhost:8088';
 const picked = ref<any>(null);
 const isReady = ref(false);
 </script>
@@ -14,7 +17,7 @@ const isReady = ref(false);
     <pre data-testid="picked" style="background: #eee; padding: 8px">{{ picked ? JSON.stringify(picked, null, 2) : '(no selection yet)' }}</pre>
     <div style="height: 500px; margin-top: 12px; border: 1px solid #ccc">
       <FluxFiles
-        endpoint="http://localhost:8088"
+        :endpoint="ENDPOINT"
         :token="TOKEN"
         disk="local"
         mode="browser"
