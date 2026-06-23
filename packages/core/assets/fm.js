@@ -2886,10 +2886,11 @@ function fluxFilesApp() {
         get canOptimize() {
             return this.tokenAllows('allow_optimize', false);
         },
-        // An optimizable image (raster; SVG/animated are skipped server-side anyway).
+        // An optimizable image (raster; SVG/animated are skipped server-side anyway)
+        // or a PDF (Ghostscript on the server; a 501 surfaces as a toast if absent).
         canOptimizeFile(file) {
             if (!file || file.type === 'dir') return false;
-            return this.canOptimize && ['jpg','jpeg','png','gif','webp','bmp','tiff'].includes(this._fileExt(file));
+            return this.canOptimize && ['jpg','jpeg','png','gif','webp','bmp','tiff','pdf'].includes(this._fileExt(file));
         },
         // Bulk: show when 2+ optimizable images are selected.
         get showBulkOptimize() {
