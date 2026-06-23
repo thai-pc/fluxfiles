@@ -45,7 +45,9 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
     const o = opts.value;
     post('FM_CONFIG', {
       disk: o.disk || 'local',
+      disks: o.disks || [o.disk || 'local'],
       token: o.token || '',
+      path: o.path || '',
       mode: o.mode || 'picker',
       multiple: !!o.multiple,
       allowedTypes: o.allowedTypes || null,
@@ -55,6 +57,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
       maxFiles: (typeof o.maxFiles === 'number') ? o.maxFiles : null,
       endpoint: o.endpoint || '',
       locale: o.locale || null,
+      theme: o.theme || null,
     });
   }
 
@@ -110,7 +113,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
   });
 
   watch(
-    () => [opts.value.token, opts.value.disk, opts.value.mode, opts.value.multiple, opts.value.locale],
+    () => [opts.value.token, opts.value.disk, opts.value.mode, opts.value.multiple, opts.value.locale, opts.value.theme],
     () => {
       if (ready.value) sendConfig();
     }

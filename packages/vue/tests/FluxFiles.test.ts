@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import FluxFiles from '../src/FluxFiles.vue';
+import FluxFilesModal from '../src/FluxFilesModal.vue';
 
 const ORIGIN = 'http://localhost';
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -26,10 +27,15 @@ describe('<FluxFiles> Vue wrapper', () => {
     expect(iframe.getAttribute('src')).toBe(ORIGIN + '/public/index.html');
   });
 
-  it('FM_READY → posts FM_CONFIG with the token + emits "ready"', () => {
-    const { wrapper, sent } = setup({ token: 'ABC' });
+  it('FM_READY → posts FM_CONFIG with token + disks + path + theme forwarded', () => {
+    const { wrapper, sent } = setup({ token: 'ABC', disk: 's3', disks: ['local', 's3'], path: 'photos', theme: 'dark' });
     fromIframe('FM_READY');
-    expect(sent.find((m) => m.type === 'FM_CONFIG')?.payload.token).toBe('ABC');
+    const cfg = sent.find((m) => m.type === 'FM_CONFIG');
+    expect(cfg?.payload.token).toBe('ABC');
+    // Regression: disks/path/theme were dropped before (documented but not forwarded).
+    expect(cfg?.payload.disks).toEqual(['local', 's3']);
+    expect(cfg?.payload.path).toBe('photos');
+    expect(cfg?.payload.theme).toBe('dark');
     expect(wrapper.emitted('ready')).toBeTruthy();
   });
 
@@ -55,5 +61,31 @@ describe('<FluxFiles> Vue wrapper', () => {
       data: { source: 'fluxfiles', type: 'FM_SELECT', payload: { url: 'x' } },
     }));
     expect(wrapper.emitted('select')).toBeFalsy();
+  });
+});
+
+describe('<FluxFilesModal> Vue wrapper', () => {
+  // The modal Teleports to <body>, so query the document, not the wrapper.
+  it('renders a visible Close button that emits close + update:open', async () => {
+    const wrapper = mount(FluxFilesModal, {
+      props: { open: true, endpoint: ORIGIN, token: 'JWT' }, attachTo: document.body,
+    });
+    const closeBtn = document.body.querySelector('button[aria-label="Close"]') as HTMLButtonElement;
+    expect(closeBtn, 'modal has a Close button').toBeTruthy();
+    closeBtn.click();
+    expect(wrapper.emitted('close')).toBeTruthy();
+    expect(wrapper.emitted('update:open')?.[0]).toEqual([false]);
+    wrapper.unmount();
+  });
+
+  it('locks body scroll when mounted already-open, restores on unmount', () => {
+    document.body.style.overflow = ''; // clean slate
+    const wrapper = mount(FluxFilesModal, {
+      props: { open: true, endpoint: ORIGIN, token: 'JWT' }, attachTo: document.body,
+    });
+    // Regression: onMounted must apply the lock even though `open` never changed.
+    expect(document.body.style.overflow).toBe('hidden');
+    wrapper.unmount();
+    expect(document.body.style.overflow).toBe('');
   });
 });
