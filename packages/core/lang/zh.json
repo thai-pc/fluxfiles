@@ -105,7 +105,10 @@
         "title": "优化",
         "saved": "节省 {size}（{pct}%）",
         "no_gain": "已优化",
-        "failed": "优化失败"
+        "failed": "优化失败",
+        "savings": "优化节省",
+        "total_saved": "共节省",
+        "auto_saved": "已优化 — 节省 {size}"
     },
     "zoom": {
         "in": "放大",

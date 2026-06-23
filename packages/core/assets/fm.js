@@ -1315,6 +1315,7 @@ function fluxFilesApp() {
             };
 
             let succeeded = 0;
+            let autoSavedBytes = 0; // bytes the server auto-optimized away on upload
             for (let i = 0; i < total; i++) {
                 const file = files[i];
                 this.uploadCurrentIndex = i + 1;
@@ -1330,11 +1331,14 @@ function fluxFilesApp() {
                         setOverall(i, Math.max(0, Math.min(1, frac)));
                     };
 
+                    let res = null;
                     if (file.size > 10 * 1024 * 1024 && this.currentDisk !== 'local') {
-                        await this.chunkUpload(file, this.currentDisk, this.currentPath, onFrac);
+                        res = await this.chunkUpload(file, this.currentDisk, this.currentPath, onFrac);
                     } else {
-                        await this.uploadOne(file, onFrac);
+                        res = await this.uploadOne(file, onFrac);
                     }
+                    // Server auto-optimized the image on upload (paid module) → tally savings.
+                    if (res && res.optimized && res.saved_bytes > 0) autoSavedBytes += res.saved_bytes;
 
                     succeeded++;
                     setOverall(i + 1, 0); // snap to the file boundary
@@ -1353,6 +1357,13 @@ function fluxFilesApp() {
             this.uploadCurrentIndex = 0;
             this.uploadTotal = 0;
             this.uploadPhase = 'uploading';
+            if (autoSavedBytes > 0) {
+                this.showToast(
+                    this.t('optimize.auto_saved', { size: this.formatSize(autoSavedBytes) })
+                        || ('Optimized — saved ' + this.formatSize(autoSavedBytes)),
+                    'success'
+                );
+            }
             this.loadFiles();
         },
 

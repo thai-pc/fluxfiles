@@ -105,7 +105,10 @@
         "title": "Optimize et",
         "saved": "{size} tasarruf ({pct}%)",
         "no_gain": "Zaten optimize",
-        "failed": "Optimizasyon başarısız"
+        "failed": "Optimizasyon başarısız",
+        "savings": "Optimizasyon tasarrufu",
+        "total_saved": "Toplam tasarruf",
+        "auto_saved": "Optimize edildi — {size} tasarruf"
     },
     "zoom": {
         "in": "Yakınlaştır",

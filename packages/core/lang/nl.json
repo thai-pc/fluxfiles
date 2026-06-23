@@ -105,7 +105,10 @@
         "title": "Optimaliseren",
         "saved": "{size} bespaard ({pct}%)",
         "no_gain": "Al geoptimaliseerd",
-        "failed": "Optimalisatie mislukt"
+        "failed": "Optimalisatie mislukt",
+        "savings": "Optimalisatiebesparing",
+        "total_saved": "Totaal bespaard",
+        "auto_saved": "Geoptimaliseerd — {size} bespaard"
     },
     "zoom": {
         "in": "Inzoomen",

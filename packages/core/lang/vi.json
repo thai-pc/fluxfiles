@@ -105,7 +105,10 @@
         "title": "Tối ưu",
         "saved": "Tiết kiệm {size} ({pct}%)",
         "no_gain": "Đã tối ưu rồi",
-        "failed": "Tối ưu thất bại"
+        "failed": "Tối ưu thất bại",
+        "savings": "Tiết kiệm nhờ tối ưu",
+        "total_saved": "Tổng đã tiết kiệm",
+        "auto_saved": "Đã tối ưu — tiết kiệm {size}"
     },
     "zoom": {
         "in": "Phóng to",
