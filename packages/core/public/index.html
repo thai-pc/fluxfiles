@@ -1303,6 +1303,16 @@
                                 </button>
                             </template>
                         </div>
+
+                        <!-- Optimization savings (paid module; /usage returns optimize stats) -->
+                        <div class="ff-usage-section" x-show="usageInfo.optimize && usageInfo.optimize.total_saved_bytes > 0">
+                            <h4 x-text="t('optimize.savings')"></h4>
+                            <div class="ff-usage-row">
+                                <span class="ff-usage-row-label" x-text="t('optimize.total_saved')"></span>
+                                <span style="margin-inline-start:auto; color:var(--color-text-secondary)"
+                                      x-text="formatSize(usageInfo.optimize.total_saved_bytes) + ' · ' + usageInfo.optimize.files_optimized + ' ' + t('usage.files')"></span>
+                            </div>
+                        </div>
                     </div>
                 </template>
             </div>

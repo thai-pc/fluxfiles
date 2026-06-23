@@ -105,7 +105,10 @@
         "title": "최적화",
         "saved": "{size} 절약 ({pct}%)",
         "no_gain": "이미 최적화됨",
-        "failed": "최적화 실패"
+        "failed": "최적화 실패",
+        "savings": "최적화 절감",
+        "total_saved": "총 절감",
+        "auto_saved": "최적화됨 — {size} 절감"
     },
     "zoom": {
         "in": "확대",

@@ -105,7 +105,10 @@
         "title": "Optimize",
         "saved": "Saved {size} ({pct}%)",
         "no_gain": "Already optimized",
-        "failed": "Optimization failed"
+        "failed": "Optimization failed",
+        "savings": "Optimization savings",
+        "total_saved": "Total saved",
+        "auto_saved": "Optimized — saved {size}"
     },
     "zoom": {
         "in": "Zoom in",

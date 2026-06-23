@@ -105,7 +105,10 @@
         "title": "最適化",
         "saved": "{size} 削減（{pct}%）",
         "no_gain": "最適化済み",
-        "failed": "最適化に失敗しました"
+        "failed": "最適化に失敗しました",
+        "savings": "最適化による削減",
+        "total_saved": "合計削減量",
+        "auto_saved": "最適化済み — {size} 削減"
     },
     "zoom": {
         "in": "拡大",

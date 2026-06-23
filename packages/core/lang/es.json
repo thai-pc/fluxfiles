@@ -105,7 +105,10 @@
         "title": "Optimizar",
         "saved": "Ahorrado {size} ({pct}%)",
         "no_gain": "Ya optimizado",
-        "failed": "Error al optimizar"
+        "failed": "Error al optimizar",
+        "savings": "Ahorro por optimización",
+        "total_saved": "Total ahorrado",
+        "auto_saved": "Optimizado — {size} ahorrado"
     },
     "zoom": {
         "in": "Acercar",

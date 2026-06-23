@@ -70,3 +70,36 @@ test('batch optimizeFiles sends paths[]; a gate error surfaces as a toast', asyn
   expect(posted).toMatchObject({ disk: 'local', paths: ['a.jpg', 'b.png'] });
   await expect(page.locator('.ff-toast')).toContainText('license');
 });
+
+test('usage dashboard renders the optimization-savings section (M2)', async ({ page }) => {
+  await openManager(page, mintTokenWithClaims({ allow_optimize: true }));
+  await page.route('**/api/fm/usage*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: {
+      quota: { used_bytes: 1000, limit_bytes: 0, percent: 0, status: 'ok' },
+      file_count: 3, by_type: [], top_folders: [],
+      optimize: { total_saved_bytes: 385673, files_optimized: 5, updated_at: 1700000000 },
+    } }) });
+  });
+  await page.evaluate(() => (window as any).Alpine.$data(document.querySelector('.ff-app')).openUsage());
+  const section = page.locator('.ff-usage-section', { hasText: 'Optimization savings' });
+  await expect(section).toBeVisible();
+  await expect(section).toContainText('5 files');
+});
+
+test('auto-optimize on upload surfaces a savings toast (M2)', async ({ page }) => {
+  await openManager(page, mintTokenWithClaims({ allow_optimize: true, auto_optimize: true }));
+  await page.route('**/api/fm/upload', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      data: { key: 'photo.webp', name: 'photo.webp', optimized: true, saved_bytes: 12345 },
+    }) });
+  });
+  await page.route('**/api/fm/list*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+  });
+  await page.evaluate(() => {
+    const c = (window as any).Alpine.$data(document.querySelector('.ff-app'));
+    const f = new File([new Uint8Array([1, 2, 3, 4])], 'photo.jpg', { type: 'image/png' });
+    return c.uploadFiles([f]);
+  });
+  await expect(page.locator('.ff-toast')).toContainText('saved');
+});
