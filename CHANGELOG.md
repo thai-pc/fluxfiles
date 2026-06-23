@@ -28,6 +28,21 @@ All notable changes to FluxFiles are documented here. This project adheres to
   `ROADMAP.md`) and `docs/TEST-PLAN.md` (no longer reflected the shipped test
   suite).
 
+## [Unreleased]
+
+### Added
+
+- **Optimization M2 — batch + savings counter + UI.** The optimize endpoint now
+  accepts `paths[]` (batch, capped at 200 — one bad file is reported per-item, the
+  rest proceed) alongside single `path`. A storage-resident cumulative counter
+  (`OptimizeStats`, `_fluxfiles/optimize.json` per prefix, no DB) records bytes
+  saved and is surfaced under `optimize` in `GET /api/fm/usage` (for the dashboard).
+  The UI gains an **Optimize** action on images (detail panel) and a bulk
+  **Optimize** in the selection toolbar (2+ images); new `optimize` i18n namespace
+  in all 16 locales. Verified end-to-end against the real (licensed) module: a
+  662 KB JPEG → 191 KB WebP (71% saved). *(The compression engine remains in the
+  proprietary `fluxfiles/optimize` package; this release is the core/UI surface.)*
+
 ## [0.2.41] — 2026-06-22
 
 > Released: core `core-v0.2.36` (Packagist + Docker), Laravel `laravel-v0.2.19`,

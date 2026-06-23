@@ -1074,10 +1074,15 @@ function handleUsage(QuotaManager $quotaManager, DiskManager $diskManager, \Flux
     $pt = trim($prefix, '/');
     $cachePath = ($pt !== '' ? $pt . '/' : '') . '_fluxfiles/usage.json';
 
+    // Cumulative "bytes saved" by the Optimization module — read fresh (cheap, and
+    // it changes on every optimize, so it's never cached with the breakdown).
+    $optimizeStats = \FluxFiles\OptimizeStats::read($fs, $prefix);
+
     if (!$refresh && $ttl > 0) {
         $cached = ff_usage_cache_read($fs, $cachePath, $ttl);
         if ($cached !== null) {
             $cached['cache_age_seconds'] = max(0, time() - (int) strtotime($cached['computed_at'] ?? 'now'));
+            $cached['optimize'] = $optimizeStats;
             return $cached;
         }
     }
@@ -1096,6 +1101,7 @@ function handleUsage(QuotaManager $quotaManager, DiskManager $diskManager, \Flux
         ff_usage_cache_write($fs, $cachePath, $resp);
     }
     $resp['cache_age_seconds'] = 0;
+    $resp['optimize'] = $optimizeStats;
     return $resp;
 }
 

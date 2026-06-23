@@ -101,6 +101,12 @@
         "failed": "ZIPを作成できませんでした",
         "extract_failed": "展開に失敗しました"
     },
+    "optimize": {
+        "title": "最適化",
+        "saved": "{size} 削減（{pct}%）",
+        "no_gain": "最適化済み",
+        "failed": "最適化に失敗しました"
+    },
     "zoom": {
         "in": "拡大",
         "out": "縮小",

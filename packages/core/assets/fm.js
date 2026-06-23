@@ -2868,6 +2868,45 @@ function fluxFilesApp() {
         zipBusy: false,
 
         // Zip download needs allow_zip and a downloadable token (allow_download).
+        // ── Optimization (paid module) ──────────────────────────────────────
+        optimizeBusy: false,
+        // The token must allow optimize (default false). The server still gates on
+        // the module being installed + licensed → a 501/402 surfaces as a toast.
+        get canOptimize() {
+            return this.tokenAllows('allow_optimize', false);
+        },
+        // An optimizable image (raster; SVG/animated are skipped server-side anyway).
+        canOptimizeFile(file) {
+            if (!file || file.type === 'dir') return false;
+            return this.canOptimize && ['jpg','jpeg','png','gif','webp','bmp','tiff'].includes(this._fileExt(file));
+        },
+        // Bulk: show when 2+ optimizable images are selected.
+        get showBulkOptimize() {
+            return this.canOptimize && this.selected.length > 1 && this.selected.every(s => this.canOptimizeFile(s));
+        },
+        async optimizeFiles(paths) {
+            paths = (paths || []).filter(Boolean);
+            if (!paths.length || this.optimizeBusy) return;
+            this.optimizeBusy = true;
+            try {
+                const body = paths.length === 1
+                    ? { disk: this.currentDisk, path: paths[0] }
+                    : { disk: this.currentDisk, paths };
+                const data = await this.api('POST', '/api/fm/optimize', body);
+                const saved = data.total_saved_bytes != null ? data.total_saved_bytes : (data.saved_bytes || 0);
+                if (saved > 0) {
+                    this.showToast(this.t('optimize.saved', { size: this.formatSize(saved), pct: data.saved_pct != null ? data.saved_pct : '' }) || ('Saved ' + this.formatSize(saved)));
+                } else {
+                    this.showToast(this.t('optimize.no_gain') || 'Already optimized');
+                }
+                this.loadFiles();
+            } catch (e) {
+                this.showToast(e.message || (this.t('optimize.failed') || 'Optimize failed'), 'error');
+            } finally {
+                this.optimizeBusy = false;
+            }
+        },
+
         get canZip() {
             return this.tokenAllows('allow_zip', true) && this.tokenAllows('allow_download', true);
         },

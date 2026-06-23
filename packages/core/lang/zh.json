@@ -101,6 +101,12 @@
         "failed": "无法创建压缩包",
         "extract_failed": "解压失败"
     },
+    "optimize": {
+        "title": "优化",
+        "saved": "节省 {size}（{pct}%）",
+        "no_gain": "已优化",
+        "failed": "优化失败"
+    },
     "zoom": {
         "in": "放大",
         "out": "缩小",
