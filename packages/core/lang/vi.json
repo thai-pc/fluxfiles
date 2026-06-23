@@ -101,6 +101,12 @@
         "failed": "Không tạo được tệp zip",
         "extract_failed": "Giải nén thất bại"
     },
+    "optimize": {
+        "title": "Tối ưu",
+        "saved": "Tiết kiệm {size} ({pct}%)",
+        "no_gain": "Đã tối ưu rồi",
+        "failed": "Tối ưu thất bại"
+    },
     "zoom": {
         "in": "Phóng to",
         "out": "Thu nhỏ",

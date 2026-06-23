@@ -101,6 +101,12 @@
         "failed": "ZIP konnte nicht erstellt werden",
         "extract_failed": "Entpacken fehlgeschlagen"
     },
+    "optimize": {
+        "title": "Optimieren",
+        "saved": "{size} gespart ({pct}%)",
+        "no_gain": "Bereits optimiert",
+        "failed": "Optimierung fehlgeschlagen"
+    },
     "zoom": {
         "in": "Vergrößern",
         "out": "Verkleinern",

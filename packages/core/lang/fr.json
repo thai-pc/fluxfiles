@@ -101,6 +101,12 @@
         "failed": "Impossible de créer le zip",
         "extract_failed": "Échec de l'extraction"
     },
+    "optimize": {
+        "title": "Optimiser",
+        "saved": "{size} économisés ({pct}%)",
+        "no_gain": "Déjà optimisé",
+        "failed": "Échec de l'optimisation"
+    },
     "zoom": {
         "in": "Zoom avant",
         "out": "Zoom arrière",

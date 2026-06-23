@@ -14,6 +14,7 @@ const defaultOverlayStyle: React.CSSProperties = {
 };
 
 const defaultModalStyle: React.CSSProperties = {
+  position: 'relative',
   width: '90vw',
   maxWidth: '1200px',
   height: '85vh',
@@ -21,6 +22,25 @@ const defaultModalStyle: React.CSSProperties = {
   borderRadius: '8px',
   overflow: 'hidden',
   boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+};
+
+const closeButtonStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '8px',
+  right: '8px',
+  zIndex: 1,
+  width: '30px',
+  height: '30px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: 'none',
+  borderRadius: '50%',
+  background: 'rgba(0, 0, 0, 0.55)',
+  color: '#fff',
+  fontSize: '18px',
+  lineHeight: 1,
+  cursor: 'pointer',
 };
 
 /**
@@ -51,6 +71,10 @@ export function FluxFilesModal({
   endpoint,
   token,
   disk,
+  disks,
+  path,
+  theme,
+  locale,
   mode = 'picker',
   multiple = false,
   allowedTypes,
@@ -69,10 +93,16 @@ export function FluxFilesModal({
     endpoint,
     token,
     disk,
+    disks,
+    path,
+    theme,
+    locale,
     mode,
     multiple,
     allowedTypes,
+    maxUploadMb,
     maxSize,
+    maxFiles,
     onSelect,
     onClose,
     onReady,
@@ -128,6 +158,14 @@ export function FluxFilesModal({
         className={modalClassName}
         style={modalClassName ? undefined : defaultModalStyle}
       >
+        <button
+          type="button"
+          onClick={() => onClose?.()}
+          aria-label="Close"
+          style={closeButtonStyle}
+        >
+          &times;
+        </button>
         <iframe
           ref={handle.iframeRef}
           src={handle.iframeSrc}

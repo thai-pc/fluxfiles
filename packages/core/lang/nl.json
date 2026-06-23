@@ -101,6 +101,12 @@
         "failed": "Kon de zip niet maken",
         "extract_failed": "Uitpakken mislukt"
     },
+    "optimize": {
+        "title": "Optimaliseren",
+        "saved": "{size} bespaard ({pct}%)",
+        "no_gain": "Al geoptimaliseerd",
+        "failed": "Optimalisatie mislukt"
+    },
     "zoom": {
         "in": "Inzoomen",
         "out": "Uitzoomen",

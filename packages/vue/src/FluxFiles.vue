@@ -8,6 +8,9 @@ const props = withDefaults(defineProps<{
   endpoint: string;
   token: string;
   disk?: string;
+  disks?: string[];
+  path?: string;
+  theme?: 'light' | 'dark' | 'auto';
   mode?: 'picker' | 'browser';
   multiple?: boolean;
   allowedTypes?: string[] | null;
@@ -37,6 +40,9 @@ const handle = useFluxFiles({
   endpoint: props.endpoint,
   token: props.token,
   disk: props.disk,
+  disks: props.disks,
+  path: props.path,
+  theme: props.theme,
   mode: props.mode,
   multiple: props.multiple,
   allowedTypes: props.allowedTypes,

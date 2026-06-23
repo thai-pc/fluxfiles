@@ -368,6 +368,11 @@
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M5 2.5h1.2M5 4h1.2M5 5.5h1.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('zip.download')"></span>
                 </button>
+                <button class="tb-btn" x-show="showBulkOptimize" :disabled="optimizeBusy"
+                        @click="optimizeFiles(selected.map(s => s.key))">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v2M6 8.5v2M1.5 6h2M8.5 6h2M3 3l1.2 1.2M7.8 7.8L9 9M9 3L7.8 4.2M4.2 7.8L3 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('optimize.title')"></span>
+                </button>
             </div>
 
             <!-- Mobile: "More" menu (3 dots) -->
@@ -921,6 +926,10 @@
                 <button class="detail-btn" x-show="canEditFile(detailFile)" @click="openEditor(detailFile)" :title="t('editor.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M4 3L1.5 6 4 9M8 3l2.5 3L8 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('editor.title')"></span>
+                </button>
+                <button class="detail-btn" x-show="canOptimizeFile(detailFile)" :disabled="optimizeBusy" @click="optimizeFiles([detailFile.key])" :title="t('optimize.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v2M6 8.5v2M1.5 6h2M8.5 6h2M3 3l1.2 1.2M7.8 7.8L9 9M9 3L7.8 4.2M4.2 7.8L3 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('optimize.title')"></span>
                 </button>
                 <button class="detail-btn" x-show="canChmod" @click="openChmod(detailFile)" :title="t('chmod.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5a2 2 0 012 2V5H4V3.5a2 2 0 012-2z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/></svg>

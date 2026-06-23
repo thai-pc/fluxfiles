@@ -59,7 +59,9 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
     const opts = optionsRef.current;
     post('FM_CONFIG', {
       disk: opts.disk || 'local',
+      disks: opts.disks || [opts.disk || 'local'],
       token: opts.token || '',
+      path: opts.path || '',
       mode: opts.mode || 'picker',
       multiple: !!opts.multiple,
       allowedTypes: opts.allowedTypes || null,
@@ -69,6 +71,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
       maxFiles: (typeof opts.maxFiles === 'number') ? opts.maxFiles : null,
       endpoint: opts.endpoint || '',
       locale: opts.locale || null,
+      theme: opts.theme || null,
     });
   }, [post]);
 
@@ -128,7 +131,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
     if (ready) {
       sendConfig();
     }
-  }, [options.token, options.disk, options.mode, options.multiple, options.locale, ready, sendConfig]);
+  }, [options.token, options.disk, options.mode, options.multiple, options.locale, options.theme, ready, sendConfig]);
 
   // Command helpers
   const command = useCallback(

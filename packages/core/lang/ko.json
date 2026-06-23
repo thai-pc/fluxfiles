@@ -101,6 +101,12 @@
         "failed": "ZIP을 만들 수 없습니다",
         "extract_failed": "압축 해제 실패"
     },
+    "optimize": {
+        "title": "최적화",
+        "saved": "{size} 절약 ({pct}%)",
+        "no_gain": "이미 최적화됨",
+        "failed": "최적화 실패"
+    },
     "zoom": {
         "in": "확대",
         "out": "축소",

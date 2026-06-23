@@ -48,6 +48,12 @@ export interface FluxFilesConfig {
   endpoint: string;
   token: string;
   disk?: string;
+  /** Disks to expose in the in-app disk switcher (defaults to just the active disk). */
+  disks?: string[];
+  /** Initial folder path to open. */
+  path?: string;
+  /** Color theme passed to the embedded UI: 'light' | 'dark' | 'auto'. */
+  theme?: 'light' | 'dark' | 'auto';
   mode?: 'picker' | 'browser';
   /** When true, onSelect receives array of FluxFile */
   multiple?: boolean;
