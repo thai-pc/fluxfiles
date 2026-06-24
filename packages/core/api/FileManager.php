@@ -98,6 +98,11 @@ class FileManager
             if ($name === '_fluxfiles' || $name === '_variants') {
                 continue;
             }
+            // Hide dotfiles (.env, .gitignore, .git/…) unless the token opts in —
+            // matches Finder / cPanel / Nextcloud, and keeps a `.env` out of sight.
+            if (!$this->claims->showHidden && $name !== '' && $name[0] === '.') {
+                continue;
+            }
             // Hide a LEGACY sidecar ({file}.meta.json next to its file) but show genuine
             // user-uploaded *.meta.json files (no matching base file). New sidecars live
             // under _fluxfiles/meta/ and are already hidden by the check above.

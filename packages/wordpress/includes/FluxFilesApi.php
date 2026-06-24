@@ -812,7 +812,8 @@ class FluxFilesApi
                 $disk,
                 $query,
                 (int) ($request->get_param('limit') ?? 50),
-                $claims->pathPrefix
+                $claims->pathPrefix,
+                $claims->showHidden
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
@@ -842,7 +843,8 @@ class FluxFilesApi
                 $disk,
                 $query,
                 (int) ($request->get_param('limit') ?? 50),
-                $claims->pathPrefix
+                $claims->pathPrefix,
+                $claims->showHidden
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());

@@ -91,6 +91,62 @@ test('search excludes internal _fluxfiles / _variants paths', function () {
     }
 });
 
+test('search hides dotfiles (.env/.gitignore) by default, shows them with includeHidden', function () {
+    [$fm, $meta] = makeFM();
+    $meta->indexFile('local', '.env', ['title' => 'secret env']);
+    $meta->indexFile('local', '.gitignore', ['title' => 'git ignore']);
+    $meta->indexFile('local', 'config/.htaccess', ['title' => 'htaccess']);
+    $meta->indexFile('local', 'readme.txt', ['title' => 'env notes']); // a normal file mentioning "env"
+
+    // Default: no dotfile leaks, even when the query matches one.
+    foreach (['env', 'git', 'htaccess'] as $q) {
+        foreach ($meta->search('local', $q) as $r) {
+            assertTrue(strpos(basename($r['file_key']), '.') !== 0, "no dotfile for '$q': " . $r['file_key']);
+            assertTrue(!str_contains($r['file_key'], '/.'), "no nested dotfile for '$q': " . $r['file_key']);
+        }
+    }
+    // The normal readme is still found.
+    assertEqual(1, count($meta->search('local', 'readme')), 'normal file found');
+
+    // Opt-in surfaces them.
+    $hidden = $meta->search('local', 'env', 50, '', true);
+    $keys = array_column($hidden, 'file_key');
+    assertTrue(in_array('.env', $keys, true), '.env surfaces with includeHidden');
+});
+
+test('searchFolders hides dotfolders (.git) by default', function () {
+    [$fm, $meta] = makeFM();
+    $meta->trackDir('local', '.git');
+    $meta->trackDir('local', '.git/hooks');
+    $meta->trackDir('local', 'photos');
+    assertEqual(0, count($meta->searchFolders('local', 'git')), 'no .git by default');
+    assertTrue(count($meta->searchFolders('local', 'git', 50, '', true)) >= 1, '.git with includeHidden');
+    assertEqual(1, count($meta->searchFolders('local', 'photos')), 'normal folder found');
+});
+
+test('list() hides dotfiles by default; show_hidden surfaces them', function () {
+    $root = sys_get_temp_dir() . '/fluxfiles-hidden-' . uniqid();
+    @mkdir($root, 0777, true);
+    file_put_contents("$root/visible.txt", 'hi');
+    file_put_contents("$root/.env", 'SECRET=1');
+    @mkdir("$root/.git", 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $meta = new StorageMetadataHandler($dm);
+
+    $hide = new FileManager($dm, new Claims('u', ['read', 'write', 'delete'], ['local'], '', 50, null, 0), $meta);
+    $names = array_column($hide->list('local', ''), 'name');
+    assertTrue(in_array('visible.txt', $names, true), 'normal file shown');
+    assertTrue(!in_array('.env', $names, true), '.env hidden by default');
+    assertTrue(!in_array('.git', $names, true), '.git hidden by default');
+
+    $show = new Claims('u', ['read', 'write', 'delete'], ['local'], '', 50, null, 0);
+    $show->showHidden = true;
+    $fmShow = new FileManager($dm, $show, $meta);
+    $namesShown = array_column($fmShow->list('local', ''), 'name');
+    assertTrue(in_array('.env', $namesShown, true), '.env shown with show_hidden');
+    assertTrue(in_array('.git', $namesShown, true), '.git shown with show_hidden');
+});
+
 test('respects the path prefix scope', function () {
     [$fm, $meta] = makeFM();
     $fm->mkdir('local', 'u1');

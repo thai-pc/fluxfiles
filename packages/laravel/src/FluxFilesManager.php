@@ -145,6 +145,9 @@ class FluxFilesManager
             && in_array($overrides['upload_collision'], ['rename', 'overwrite', 'reject'], true)) {
             $payload['upload_collision'] = (string) $overrides['upload_collision'];
         }
+        if (array_key_exists('show_hidden', $overrides)) {
+            $payload['show_hidden'] = (bool) $overrides['show_hidden'];
+        }
         if (array_key_exists('allow_zip', $overrides)) {
             $payload['allow_zip'] = (bool) $overrides['allow_zip'];
         }

@@ -621,7 +621,8 @@ class FluxFilesController
                 $disk,
                 $query,
                 (int) $request->query('limit', 50),
-                $claims->pathPrefix
+                $claims->pathPrefix,
+                $claims->showHidden
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());
@@ -651,7 +652,8 @@ class FluxFilesController
                 $disk,
                 $query,
                 (int) $request->query('limit', 50),
-                $claims->pathPrefix
+                $claims->pathPrefix,
+                $claims->showHidden
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode());

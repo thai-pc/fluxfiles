@@ -509,7 +509,7 @@ function routeRequest(
         if (!$claims->hasPerm('read')) {
             throw new ApiException('Permission denied: read', 403, 'permission_denied');
         }
-        $rows = $metaRepo->search($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
+        $rows = $metaRepo->search($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix, $claims->showHidden);
         // Strip the tenant prefix so search keys are relative to the client root,
         // matching list()/navigation (the prefix stays an internal detail).
         foreach ($rows as &$row) {
@@ -534,7 +534,7 @@ function routeRequest(
         if (!$claims->hasPerm('read')) {
             throw new ApiException('Permission denied: read', 403, 'permission_denied');
         }
-        $rows = $metaRepo->searchFolders($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix);
+        $rows = $metaRepo->searchFolders($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix, $claims->showHidden);
         foreach ($rows as &$row) {
             if (isset($row['dir_key'])) {
                 $row['dir_key'] = $claims->unscopePath((string) $row['dir_key']);

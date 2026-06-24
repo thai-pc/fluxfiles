@@ -190,7 +190,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         return $result;
     }
 
-    public function search(string $disk, string $query, int $limit = 50, string $pathPrefix = ''): array
+    public function search(string $disk, string $query, int $limit = 50, string $pathPrefix = '', bool $includeHidden = false): array
     {
         $index = $this->loadIndex($disk);
         $prefix = trim($pathPrefix, '/');
@@ -200,6 +200,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         foreach ($index as $fileKey => $meta) {
             // Never surface metadata sidecars or image variants as search hits.
             if ($this->isReservedPath($fileKey)) {
+                continue;
+            }
+            // Dotfiles (.env, .gitignore, …) are hidden from search unless opted in.
+            if (!$includeHidden && $this->isHiddenPath($fileKey)) {
                 continue;
             }
             if ($prefix !== '' && $fileKey !== $prefix && strpos($fileKey, $prefix . '/') !== 0) {
@@ -241,6 +245,21 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     {
         foreach (explode('/', trim($key, '/')) as $seg) {
             if ($seg === '_fluxfiles' || $seg === '_variants') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True when any path segment is a dotfile (starts with '.', e.g. .env,
+     * .gitignore, or a file inside a .git/ folder). Such paths are hidden from
+     * search/folder-search unless the caller opts in (see the $includeHidden args).
+     */
+    private function isHiddenPath(string $key): bool
+    {
+        foreach (explode('/', trim($key, '/')) as $seg) {
+            if ($seg !== '' && $seg[0] === '.') {
                 return true;
             }
         }
@@ -371,7 +390,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      * Search folders across disk using directory index.
      * Returns rows: { dir_key, name }
      */
-    public function searchFolders(string $disk, string $query, int $limit = 50, string $pathPrefix = ''): array
+    public function searchFolders(string $disk, string $query, int $limit = 50, string $pathPrefix = '', bool $includeHidden = false): array
     {
         $dirs = $this->loadDirsIndex($disk);
         $prefix = trim($pathPrefix, '/');
@@ -381,6 +400,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         foreach ($dirs as $dirKey => $created) {
             // Defend against indexes polluted before reserved dirs were filtered.
             if ($this->isReservedPath($dirKey)) {
+                continue;
+            }
+            // Hidden folders (.git/, …) are excluded from folder search unless opted in.
+            if (!$includeHidden && $this->isHiddenPath($dirKey)) {
                 continue;
             }
             if ($prefix !== '' && $dirKey !== $prefix && strpos($dirKey, $prefix . '/') !== 0) {
