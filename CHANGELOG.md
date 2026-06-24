@@ -3,6 +3,20 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Optimization — AVIF target + per-tenant tuning claims.** Beyond the M3 AVIF
+  engine, the target format is now selectable per tenant via `optimize_format`
+  (`webp` default | `avif`, falling back to WebP when the build lacks AVIF) — wired
+  through both the `/api/fm/optimize` UI action and on-upload auto-optimize.
+  Three more tuning claims complete the Phase-2 set (request body still overrides):
+  `optimize_keep_original` (default false), `optimize_max_mb` (skip oversized files →
+  `skipped:too_large`, 0 = no limit), and `pdf_level`
+  (`screen|ebook|printer|prepress|default`, default `ebook`). All forwarded by every
+  token helper (embed/Laravel/WordPress/Node) + SDK types.
+
 ## [0.2.42] — 2026-06-24
 
 > Released: core `core-v0.2.37` (Packagist + Docker), Laravel `laravel-v0.2.20`,
