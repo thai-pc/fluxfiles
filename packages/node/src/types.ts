@@ -111,6 +111,12 @@ export interface BaseTokenOptions {
   /** Target format for optimization: `'webp'` (default) or `'avif'` (falls back to
    *  WebP when the server build lacks AVIF). */
   optimizeFormat?: 'webp' | 'avif';
+  /** Keep the original file when optimizing (default false = replace in place). */
+  optimizeKeepOriginal?: boolean;
+  /** Skip optimizing a file larger than this many MB (0/omitted = no limit). */
+  optimizeMaxMb?: number;
+  /** Ghostscript preset for PDF optimization. Default `'ebook'`. */
+  pdfLevel?: 'screen' | 'ebook' | 'printer' | 'prepress' | 'default';
   /** How an upload whose NAME collides with an existing different file is handled
    *  (content dedup is separate, by hash): `'rename'` keep both `<name>-1.<ext>`
    *  (default), `'overwrite'` replace in place, `'reject'` 409 for the host to prompt. */

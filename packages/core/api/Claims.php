@@ -132,6 +132,14 @@ class Claims
     /** @var string Target format for optimization: 'webp' (default) or 'avif'.
      *            AVIF falls back to WebP when the server build lacks AVIF support. */
     public string $optimizeFormat = 'webp';
+    /** @var bool Keep the original file when optimizing via /api/fm/optimize (the
+     *            request body can still override). Default FALSE (replace in place). */
+    public bool $optimizeKeepOriginal = false;
+    /** @var int Skip optimizing a file larger than this many MB (0 = no limit). */
+    public int $optimizeMaxMb = 0;
+    /** @var string Ghostscript preset for PDF optimization:
+     *            screen|ebook|printer|prepress|default. Default 'ebook'. */
+    public string $pdfLevel = 'ebook';
 
     /** @var string How an upload whose NAME collides with an existing different file
      *            (content dedup is separate, by hash) is handled:
@@ -351,6 +359,10 @@ class Claims
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
         $c->optimizeFormat = (($payload->optimize_format ?? 'webp') === 'avif') ? 'avif' : 'webp';
+        $c->optimizeKeepOriginal = (bool) ($payload->optimize_keep_original ?? false);
+        $c->optimizeMaxMb = max(0, (int) ($payload->optimize_max_mb ?? 0));
+        $pdfLevel = strtolower((string) ($payload->pdf_level ?? 'ebook'));
+        $c->pdfLevel = in_array($pdfLevel, ['screen', 'ebook', 'printer', 'prepress', 'default'], true) ? $pdfLevel : 'ebook';
         $collision = strtolower((string) ($payload->upload_collision ?? 'rename'));
         $c->uploadCollision = in_array($collision, ['rename', 'overwrite', 'reject'], true) ? $collision : 'rename';
         $c->showHidden = (bool) ($payload->show_hidden ?? false);

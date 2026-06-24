@@ -359,6 +359,24 @@ test('fluxfiles_token forwards optimize_format (avif); default webp', function (
     assertEqual('webp', $mk(['optimize_format' => 'bogus'])->optimizeFormat, 'invalid → webp');
 });
 
+test('fluxfiles_token forwards optimize tuning claims (keep_original, max_mb, pdf_level)', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $mk = function (array $extra) {
+        $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+            null, 0, 0, null, null, null, $extra);
+        return Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    };
+    $def = $mk([]);
+    assertEqual(false, $def->optimizeKeepOriginal, 'keep_original default false');
+    assertEqual(0, $def->optimizeMaxMb, 'max_mb default 0');
+    assertEqual('ebook', $def->pdfLevel, 'pdf_level default ebook');
+    $c = $mk(['optimize_keep_original' => true, 'optimize_max_mb' => 25, 'pdf_level' => 'screen']);
+    assertEqual(true, $c->optimizeKeepOriginal, 'keep_original forwarded');
+    assertEqual(25, $c->optimizeMaxMb, 'max_mb forwarded');
+    assertEqual('screen', $c->pdfLevel, 'pdf_level forwarded');
+    assertEqual('ebook', $mk(['pdf_level' => 'bogus'])->pdfLevel, 'invalid pdf_level → ebook');
+});
+
 test('Claims::isMediaPath detects video/audio extensions only', function () {
     foreach (['a/b/clip.mp4', 'song.MP3', 'x.webm', 'y.mov', 'z.flac', 'w.ogg'] as $p) {
         assertTrue(Claims::isMediaPath($p), "media: $p");

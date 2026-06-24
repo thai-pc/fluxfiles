@@ -321,6 +321,16 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (isset($webp['optimize_format']) && $webp['optimize_format'] === 'avif') {
         $payload['optimize_format'] = 'avif';
     }
+    if (array_key_exists('optimize_keep_original', $webp)) {
+        $payload['optimize_keep_original'] = (bool) $webp['optimize_keep_original'];
+    }
+    if (!empty($webp['optimize_max_mb'])) {
+        $payload['optimize_max_mb'] = (int) $webp['optimize_max_mb'];
+    }
+    if (isset($webp['pdf_level'])
+        && in_array($webp['pdf_level'], ['screen', 'ebook', 'printer', 'prepress', 'default'], true)) {
+        $payload['pdf_level'] = (string) $webp['pdf_level'];
+    }
     if (isset($webp['upload_collision'])
         && in_array($webp['upload_collision'], ['rename', 'overwrite', 'reject'], true)) {
         $payload['upload_collision'] = (string) $webp['upload_collision'];

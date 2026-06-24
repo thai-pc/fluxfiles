@@ -144,6 +144,16 @@ class FluxFilesManager
         if (isset($overrides['optimize_format']) && $overrides['optimize_format'] === 'avif') {
             $payload['optimize_format'] = 'avif';
         }
+        if (array_key_exists('optimize_keep_original', $overrides)) {
+            $payload['optimize_keep_original'] = (bool) $overrides['optimize_keep_original'];
+        }
+        if (!empty($overrides['optimize_max_mb'])) {
+            $payload['optimize_max_mb'] = (int) $overrides['optimize_max_mb'];
+        }
+        if (isset($overrides['pdf_level'])
+            && in_array($overrides['pdf_level'], ['screen', 'ebook', 'printer', 'prepress', 'default'], true)) {
+            $payload['pdf_level'] = (string) $overrides['pdf_level'];
+        }
         if (isset($overrides['upload_collision'])
             && in_array($overrides['upload_collision'], ['rename', 'overwrite', 'reject'], true)) {
             $payload['upload_collision'] = (string) $overrides['upload_collision'];
