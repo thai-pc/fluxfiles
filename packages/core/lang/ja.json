@@ -265,7 +265,8 @@
         "host_not_allowed": "この URL のホストは許可されていません。",
         "redirect_loop": "リダイレクトが多すぎます。",
         "auth_required": "この URL はサインインが必要なため取り込めません。",
-        "name_conflict": "同じ名前のファイルが既に存在します。"
+        "name_conflict": "同じ名前のファイルが既に存在します。",
+        "folder_exists": "フォルダー「{name}」は既に存在します。"
     },
     "presign": {
         "title": "署名付きURL",

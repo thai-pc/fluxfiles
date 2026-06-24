@@ -101,5 +101,25 @@ test('rename only triggers on a DIFFERENT file (same bytes → hash dedup, not -
     assertTrue(!is_file("$root/c-1.txt"), 'no -1 copy for an identical re-upload');
 });
 
+test('mkdir: fresh folder → created; existing folder → 409 folder_exists', function () {
+    [$fm] = setup('rename');
+    $r = $fm->mkdir('local', 'docs');
+    assertEqual(true, $r['created'] ?? null, 'fresh folder created');
+    // Re-creating the same folder must conflict, not silently 200.
+    try { $fm->mkdir('local', 'docs'); throw new \RuntimeException('expected 409'); }
+    catch (ApiException $e) {
+        assertEqual('folder_exists', $e->getErrorCode());
+        assertEqual(409, $e->getHttpCode());
+        assertEqual('docs', $e->getErrorParams()['name'] ?? null, 'name in params for i18n');
+    }
+});
+
+test('mkdir: a folder name colliding with an existing FILE → 409', function () {
+    [$fm] = setup('rename');
+    upload($fm, 'report', 'i am a file'); // extensionless file named "report"
+    try { $fm->mkdir('local', 'report'); throw new \RuntimeException('expected 409'); }
+    catch (ApiException $e) { assertEqual('folder_exists', $e->getErrorCode()); }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

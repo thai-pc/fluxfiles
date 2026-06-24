@@ -265,7 +265,8 @@
         "host_not_allowed": "Tên miền URL này không được phép.",
         "redirect_loop": "Quá nhiều chuyển hướng.",
         "auth_required": "URL này yêu cầu đăng nhập nên không nhập được.",
-        "name_conflict": "Đã tồn tại tệp trùng tên."
+        "name_conflict": "Đã tồn tại tệp trùng tên.",
+        "folder_exists": "Thư mục “{name}” đã tồn tại."
     },
     "presign": {
         "title": "URL có thời hạn",

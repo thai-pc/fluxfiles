@@ -265,7 +265,8 @@
         "host_not_allowed": "이 URL 호스트는 허용되지 않습니다.",
         "redirect_loop": "리디렉션이 너무 많습니다.",
         "auth_required": "이 URL은 로그인이 필요해 가져올 수 없습니다.",
-        "name_conflict": "같은 이름의 파일이 이미 있습니다."
+        "name_conflict": "같은 이름의 파일이 이미 있습니다.",
+        "folder_exists": "“{name}” 폴더가 이미 있습니다."
     },
     "presign": {
         "title": "서명된 URL",

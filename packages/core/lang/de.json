@@ -265,7 +265,8 @@
         "host_not_allowed": "Dieser URL-Host ist nicht erlaubt.",
         "redirect_loop": "Zu viele Weiterleitungen.",
         "auth_required": "Diese URL erfordert eine Anmeldung und kann nicht importiert werden.",
-        "name_conflict": "Eine Datei mit diesem Namen existiert bereits."
+        "name_conflict": "Eine Datei mit diesem Namen existiert bereits.",
+        "folder_exists": "Der Ordner „{name}“ existiert bereits."
     },
     "presign": {
         "title": "Vorsignierte URL",

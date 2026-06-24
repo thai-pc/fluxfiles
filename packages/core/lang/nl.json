@@ -265,7 +265,8 @@
         "host_not_allowed": "Deze URL-host is niet toegestaan.",
         "redirect_loop": "Te veel omleidingen.",
         "auth_required": "Deze URL vereist aanmelden en kan niet worden geïmporteerd.",
-        "name_conflict": "Er bestaat al een bestand met deze naam."
+        "name_conflict": "Er bestaat al een bestand met deze naam.",
+        "folder_exists": "De map “{name}” bestaat al."
     },
     "presign": {
         "title": "Voorondertekende URL",

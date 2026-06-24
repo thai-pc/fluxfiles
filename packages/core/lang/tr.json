@@ -265,7 +265,8 @@
         "host_not_allowed": "Bu URL ana bilgisayarına izin verilmiyor.",
         "redirect_loop": "Çok fazla yönlendirme.",
         "auth_required": "Bu URL oturum açma gerektiriyor ve içe aktarılamaz.",
-        "name_conflict": "Bu ada sahip bir dosya zaten var."
+        "name_conflict": "Bu ada sahip bir dosya zaten var.",
+        "folder_exists": "“{name}” klasörü zaten var."
     },
     "presign": {
         "title": "Ön imzalı URL",
