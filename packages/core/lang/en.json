@@ -264,7 +264,8 @@
         "url_scheme_denied": "Only http(s) URLs can be imported.",
         "host_not_allowed": "This URL host isn't allowed.",
         "redirect_loop": "Too many redirects.",
-        "auth_required": "This URL requires sign-in and can't be imported."
+        "auth_required": "This URL requires sign-in and can't be imported.",
+        "name_conflict": "A file with this name already exists."
     },
     "presign": {
         "title": "Presigned URL",

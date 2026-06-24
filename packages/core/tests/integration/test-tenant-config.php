@@ -322,6 +322,20 @@ test('fluxfiles_token forwards webp claims via the $webp param', function () {
     assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality forwarded');
 });
 
+test('fluxfiles_token forwards upload_collision; invalid value ignored', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $mk = function (array $extra) {
+        $jwt = fluxfiles_token('u1', ['read', 'write'], ['local'], '', 10, null, 3600, false, 0, 0,
+            null, 0, 0, null, null, null, $extra);
+        return Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    };
+    assertEqual('rename', $mk([])->uploadCollision, 'default rename');
+    assertEqual('overwrite', $mk(['upload_collision' => 'overwrite'])->uploadCollision, 'overwrite forwarded');
+    assertEqual('reject', $mk(['upload_collision' => 'reject'])->uploadCollision, 'reject forwarded');
+    // An invalid value isn't forwarded into the token → Claims defaults to rename.
+    assertEqual('rename', $mk(['upload_collision' => 'nuke'])->uploadCollision, 'invalid → rename');
+});
+
 test('Claims::isMediaPath detects video/audio extensions only', function () {
     foreach (['a/b/clip.mp4', 'song.MP3', 'x.webm', 'y.mov', 'z.flac', 'w.ogg'] as $p) {
         assertTrue(Claims::isMediaPath($p), "media: $p");

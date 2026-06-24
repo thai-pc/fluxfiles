@@ -264,7 +264,8 @@
         "url_scheme_denied": "Alleen http(s)-URL's kunnen worden geïmporteerd.",
         "host_not_allowed": "Deze URL-host is niet toegestaan.",
         "redirect_loop": "Te veel omleidingen.",
-        "auth_required": "Deze URL vereist aanmelden en kan niet worden geïmporteerd."
+        "auth_required": "Deze URL vereist aanmelden en kan niet worden geïmporteerd.",
+        "name_conflict": "Er bestaat al een bestand met deze naam."
     },
     "presign": {
         "title": "Voorondertekende URL",

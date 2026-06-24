@@ -108,6 +108,10 @@ export interface BaseTokenOptions {
   autoOptimize?: boolean;
   /** WebP quality for optimization, 40–95. `0`/omitted = inherit the server default (82). */
   optimizeQuality?: number;
+  /** How an upload whose NAME collides with an existing different file is handled
+   *  (content dedup is separate, by hash): `'rename'` keep both `<name>-1.<ext>`
+   *  (default), `'overwrite'` replace in place, `'reject'` 409 for the host to prompt. */
+  uploadCollision?: 'rename' | 'overwrite' | 'reject';
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;
   /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */

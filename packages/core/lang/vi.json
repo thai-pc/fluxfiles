@@ -264,7 +264,8 @@
         "url_scheme_denied": "Chỉ nhập được URL http(s).",
         "host_not_allowed": "Tên miền URL này không được phép.",
         "redirect_loop": "Quá nhiều chuyển hướng.",
-        "auth_required": "URL này yêu cầu đăng nhập nên không nhập được."
+        "auth_required": "URL này yêu cầu đăng nhập nên không nhập được.",
+        "name_conflict": "Đã tồn tại tệp trùng tên."
     },
     "presign": {
         "title": "URL có thời hạn",

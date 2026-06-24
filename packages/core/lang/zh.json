@@ -264,7 +264,8 @@
         "url_scheme_denied": "只能导入 http(s) 的 URL。",
         "host_not_allowed": "不允许此 URL 主机。",
         "redirect_loop": "重定向次数过多。",
-        "auth_required": "此 URL 需要登录，无法导入。"
+        "auth_required": "此 URL 需要登录，无法导入。",
+        "name_conflict": "已存在同名文件。"
     },
     "presign": {
         "title": "预签名链接",
