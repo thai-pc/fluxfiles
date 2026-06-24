@@ -347,6 +347,18 @@ test('fluxfiles_token forwards show_hidden (default false)', function () {
     assertEqual(true, $mk(['show_hidden' => true])->showHidden, 'forwarded true');
 });
 
+test('fluxfiles_token forwards optimize_format (avif); default webp', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $mk = function (array $extra) {
+        $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+            null, 0, 0, null, null, null, $extra);
+        return Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    };
+    assertEqual('webp', $mk([])->optimizeFormat, 'default webp');
+    assertEqual('avif', $mk(['optimize_format' => 'avif'])->optimizeFormat, 'avif forwarded');
+    assertEqual('webp', $mk(['optimize_format' => 'bogus'])->optimizeFormat, 'invalid → webp');
+});
+
 test('Claims::isMediaPath detects video/audio extensions only', function () {
     foreach (['a/b/clip.mp4', 'song.MP3', 'x.webm', 'y.mov', 'z.flac', 'w.ogg'] as $p) {
         assertTrue(Claims::isMediaPath($p), "media: $p");

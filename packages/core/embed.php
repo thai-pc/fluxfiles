@@ -318,6 +318,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (!empty($webp['optimize_quality'])) {
         $payload['optimize_quality'] = (int) $webp['optimize_quality'];
     }
+    if (isset($webp['optimize_format']) && $webp['optimize_format'] === 'avif') {
+        $payload['optimize_format'] = 'avif';
+    }
     if (isset($webp['upload_collision'])
         && in_array($webp['upload_collision'], ['rename', 'overwrite', 'reject'], true)) {
         $payload['upload_collision'] = (string) $webp['upload_collision'];

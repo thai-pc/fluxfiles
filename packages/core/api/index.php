@@ -224,8 +224,9 @@ try {
     if ($claims->autoOptimize && \FluxFiles\ModuleRegistry::installed('optimize')
         && \FluxFiles\LicenseManager::fromEnv()->licensed('optimize')) {
         $optimizeModule = new \FluxFiles\Optimize\OptimizeModule();
-        $fm->setUploadOptimizer(static function (string $bytes, int $quality) use ($optimizeModule) {
-            return $optimizeModule->optimizeBytes($bytes, $quality);
+        $optimizeFormat = $claims->optimizeFormat;
+        $fm->setUploadOptimizer(static function (string $bytes, int $quality) use ($optimizeModule, $optimizeFormat) {
+            return $optimizeModule->optimizeBytes($bytes, $quality, $optimizeFormat);
         });
     }
 

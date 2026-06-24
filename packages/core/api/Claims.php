@@ -129,6 +129,9 @@ class Claims
     public bool $autoOptimize = false;
     /** @var int WebP quality for optimization (40–95). 0 = inherit default (82). */
     public int $optimizeQuality = 0;
+    /** @var string Target format for optimization: 'webp' (default) or 'avif'.
+     *            AVIF falls back to WebP when the server build lacks AVIF support. */
+    public string $optimizeFormat = 'webp';
 
     /** @var string How an upload whose NAME collides with an existing different file
      *            (content dedup is separate, by hash) is handled:
@@ -347,6 +350,7 @@ class Claims
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
+        $c->optimizeFormat = (($payload->optimize_format ?? 'webp') === 'avif') ? 'avif' : 'webp';
         $collision = strtolower((string) ($payload->upload_collision ?? 'rename'));
         $c->uploadCollision = in_array($collision, ['rename', 'overwrite', 'reject'], true) ? $collision : 'rename';
         $c->showHidden = (bool) ($payload->show_hidden ?? false);

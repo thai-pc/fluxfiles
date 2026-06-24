@@ -135,6 +135,7 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowOptimize !== undefined) payload.allow_optimize = !!opts.allowOptimize;
   if (opts.autoOptimize !== undefined) payload.auto_optimize = !!opts.autoOptimize;
   if (opts.optimizeQuality && opts.optimizeQuality > 0) payload.optimize_quality = Math.trunc(opts.optimizeQuality);
+  if (opts.optimizeFormat === 'avif') payload.optimize_format = 'avif';
   if (opts.uploadCollision && ['rename', 'overwrite', 'reject'].includes(opts.uploadCollision)) {
     payload.upload_collision = opts.uploadCollision;
   }

@@ -141,6 +141,9 @@ class FluxFilesManager
         if (!empty($overrides['optimize_quality'])) {
             $payload['optimize_quality'] = (int) $overrides['optimize_quality'];
         }
+        if (isset($overrides['optimize_format']) && $overrides['optimize_format'] === 'avif') {
+            $payload['optimize_format'] = 'avif';
+        }
         if (isset($overrides['upload_collision'])
             && in_array($overrides['upload_collision'], ['rename', 'overwrite', 'reject'], true)) {
             $payload['upload_collision'] = (string) $overrides['upload_collision'];
