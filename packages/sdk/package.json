@@ -1,44 +1,44 @@
 {
-    "name": "fluxfiles",
-    "version": "0.2.3",
-    "description": "FluxFiles JavaScript SDK — embed the file manager in any web app",
-    "license": "MIT",
-    "main": "fluxfiles.js",
-    "types": "fluxfiles.d.ts",
-    "unpkg": "fluxfiles.min.js",
-    "jsdelivr": "fluxfiles.min.js",
-    "files": [
-        "fluxfiles.js",
-        "fluxfiles.min.js",
-        "fluxfiles.d.ts",
-        "LICENSE"
-    ],
-    "scripts": {
-        "build": "esbuild fluxfiles.js --minify --legal-comments=none --outfile=fluxfiles.min.js",
-        "test": "vitest run"
-    },
-    "devDependencies": {
-        "esbuild": "^0.28.0",
-        "jsdom": "^25.0.1",
-        "vitest": "^2.1.8"
-    },
-    "author": "thai-pc",
-    "homepage": "https://github.com/thai-pc/fluxfiles",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/thai-pc/fluxfiles.git"
-    },
-    "bugs": {
-        "url": "https://github.com/thai-pc/fluxfiles/issues"
-    },
-    "keywords": [
-        "fluxfiles",
-        "file-manager",
-        "sdk",
-        "iframe",
-        "s3",
-        "r2",
-        "upload",
-        "media"
-    ]
+  "name": "fluxfiles",
+  "version": "0.2.4",
+  "description": "FluxFiles JavaScript SDK — embed the file manager in any web app",
+  "license": "MIT",
+  "main": "fluxfiles.js",
+  "types": "fluxfiles.d.ts",
+  "unpkg": "fluxfiles.min.js",
+  "jsdelivr": "fluxfiles.min.js",
+  "files": [
+    "fluxfiles.js",
+    "fluxfiles.min.js",
+    "fluxfiles.d.ts",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "esbuild fluxfiles.js --minify --legal-comments=none --outfile=fluxfiles.min.js",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.8"
+  },
+  "author": "thai-pc",
+  "homepage": "https://github.com/thai-pc/fluxfiles",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thai-pc/fluxfiles.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thai-pc/fluxfiles/issues"
+  },
+  "keywords": [
+    "fluxfiles",
+    "file-manager",
+    "sdk",
+    "iframe",
+    "s3",
+    "r2",
+    "upload",
+    "media"
+  ]
 }
