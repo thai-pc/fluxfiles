@@ -85,10 +85,10 @@ test('delete folder removes every child file + nested subdirs from disk', functi
 
 test('image variants at every depth are removed', function () {
     [$fm, $fs] = makeFM();
-    up($fm, 'folder', 'a.png', imgFile(300, 200));        // → folder/_variants/a_thumb.webp
-    up($fm, 'folder/sub', 'b.png', imgFile(300, 200));    // → folder/sub/_variants/b_thumb.webp
-    assertTrue($fs->fileExists('folder/_variants/a_thumb.webp'), 'variant created (top)');
-    assertTrue($fs->fileExists('folder/sub/_variants/b_thumb.webp'), 'variant created (nested)');
+    up($fm, 'folder', 'a.png', imgFile(300, 200));        // → folder/_variants/a.png_thumb.webp
+    up($fm, 'folder/sub', 'b.png', imgFile(300, 200));    // → folder/sub/_variants/b.png_thumb.webp
+    assertTrue($fs->fileExists('folder/_variants/a.png_thumb.webp'), 'variant created (top)');
+    assertTrue($fs->fileExists('folder/sub/_variants/b.png_thumb.webp'), 'variant created (nested)');
 
     $fm->delete('local', 'folder');
     assertTrue(!$fs->directoryExists('folder/_variants'), 'top variants gone');

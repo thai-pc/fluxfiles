@@ -253,6 +253,24 @@ test('same name, different content → overwrite + variants regenerated', functi
     assertTrue($fs->fileExists('p.jpg'), 'file present');
 });
 
+test('same basename, different extension → distinct variants (no thumb collision)', function () {
+    [$fm, $fs] = makeFM();
+    // a.jpg and a.png are DIFFERENT files that share the basename "a".
+    $rJpg = $fm->upload('local', '', fileArray(makeImage(900, 600, 'jpg'), 'a.jpg'));
+    $rPng = $fm->upload('local', '', fileArray(makeImage(400, 300, 'png'), 'a.png'));
+    // Their thumbs must NOT be the same object key.
+    $jpgThumb = $rJpg['variants']['thumb']['key'];
+    $pngThumb = $rPng['variants']['thumb']['key'];
+    assertTrue($jpgThumb !== $pngThumb, "distinct thumbs (got $jpgThumb vs $pngThumb)");
+    assertTrue(strpos($jpgThumb, 'a.jpg_thumb') !== false, 'jpg thumb is ext-aware');
+    assertTrue(strpos($pngThumb, 'a.png_thumb') !== false, 'png thumb is ext-aware');
+    // Both files list their own variants back (no cross-contamination).
+    $list = [];
+    foreach ($fm->list('local', '') as $it) { $list[$it['name']] = $it; }
+    assertTrue(($list['a.jpg']['variants']['thumb']['key'] ?? '') !== ($list['a.png']['variants']['thumb']['key'] ?? ''),
+        'list() returns distinct thumbs per file');
+});
+
 test('upload stores width/height/mime → exposed on list items', function () {
     [$fm] = makeFM();
     $fm->upload('local', '', fileArray(makeImage(120, 80, 'png'), 'dim.png'));

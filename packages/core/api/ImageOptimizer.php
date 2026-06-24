@@ -255,7 +255,10 @@ class ImageOptimizer
         string $tmpFile
     ): array {
         $dir = dirname($filePath);
-        $basename = pathinfo($filePath, PATHINFO_FILENAME);
+        // Include the FULL filename (with extension) so `a.jpg` and `a.png` get
+        // distinct variants (`a.jpg_thumb.webp` vs `a.png_thumb.webp`) instead of
+        // colliding on a shared `a_thumb.webp`. Must match FileManager::variantKey().
+        $basename = pathinfo($filePath, PATHINFO_BASENAME);
         $variantsDir = ($dir !== '.' && $dir !== '' ? $dir . '/' : '') . '_variants';
 
         $image = $this->manager->read($tmpFile);

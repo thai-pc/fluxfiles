@@ -206,7 +206,7 @@ test('index variants → generates _variants for pre-existing image', function (
     placeImage($root, 'gallery/big.png', 1000, 700);
     $stats = $indexer->index(['disk' => 'local', 'variants' => true]);
     assertTrue($stats['variants'] > 0, 'variants generated');
-    assertTrue($fs->fileExists('gallery/_variants/big_thumb.webp'), 'thumb variant on disk');
+    assertTrue($fs->fileExists('gallery/_variants/big.png_thumb.webp'), 'thumb variant on disk');
 });
 
 
@@ -219,7 +219,7 @@ test("variants can be generated after metadata already exists", function () {
     assertEqual(0, $second["files_indexed"], "metadata was skipped");
     assertEqual(1, $second["skipped"], "existing metadata counted as skipped");
     assertTrue($second["variants"] > 0, "variants generated for skipped file");
-    assertTrue($fs->fileExists("gallery/_variants/already_thumb.webp"), "thumb variant on disk");
+    assertTrue($fs->fileExists("gallery/_variants/already.png_thumb.webp"), "thumb variant on disk");
 });
 
 test('index owner → owner_only then enforced for other users', function () {

@@ -1200,13 +1200,16 @@ class FileManager
         $fs = $this->disks->disk($disk);
         $sizes = ['thumb', 'medium', 'large'];
         foreach ($sizes as $size) {
-            $variant = $this->variantKey($key, $size);
-            try {
-                if ($fs->fileExists($variant)) {
-                    $fs->delete($variant);
+            // Delete both the current (extension-aware) and legacy (extension-less)
+            // variant keys so old caches don't linger after the naming change.
+            foreach ([$this->variantKey($key, $size), $this->legacyVariantKey($key, $size)] as $variant) {
+                try {
+                    if ($fs->fileExists($variant)) {
+                        $fs->delete($variant);
+                    }
+                } catch (\Throwable $e) {
+                    // Best effort cleanup
                 }
-            } catch (\Throwable $e) {
-                // Best effort cleanup
             }
         }
     }
@@ -1225,6 +1228,19 @@ class FileManager
     }
 
     private function variantKey(string $key, string $size): string
+    {
+        $dir = dirname($key);
+        // Full filename incl. extension so `a.jpg` and `a.png` don't share variants.
+        // Must match ImageOptimizer::process(). (Legacy extension-less variants from
+        // before this change are orphaned — harmless cache, cleaned by deleteVariants.)
+        $basename = pathinfo($key, PATHINFO_BASENAME);
+        $variantsDir = ($dir !== '.' && $dir !== '') ? $dir . '/_variants' : '_variants';
+        return $variantsDir . '/' . $basename . '_' . $size . '.webp';
+    }
+
+    /** Legacy (pre-extension) variant key — extension-less basename. Used only to
+     *  clean up old variants on delete so they don't linger after the naming change. */
+    private function legacyVariantKey(string $key, string $size): string
     {
         $dir = dirname($key);
         $basename = pathinfo($key, PATHINFO_FILENAME);
