@@ -139,6 +139,11 @@ class Claims
      *            Invalid values fall back to 'rename'. */
     public string $uploadCollision = 'rename';
 
+    /** @var bool Show dotfiles (names starting with '.', e.g. .env / .gitignore) in
+     *            listings AND search? Default FALSE — dotfiles are hidden, matching
+     *            Finder / cPanel / Nextcloud (a `.env` must not surface in search). */
+    public bool $showHidden = false;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -344,6 +349,7 @@ class Claims
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
         $collision = strtolower((string) ($payload->upload_collision ?? 'rename'));
         $c->uploadCollision = in_array($collision, ['rename', 'overwrite', 'reject'], true) ? $collision : 'rename';
+        $c->showHidden = (bool) ($payload->show_hidden ?? false);
         $c->watermark = self::sanitizeWatermark($payload);
 
         // Usage-dashboard claims.

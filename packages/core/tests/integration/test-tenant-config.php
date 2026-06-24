@@ -336,6 +336,17 @@ test('fluxfiles_token forwards upload_collision; invalid value ignored', functio
     assertEqual('rename', $mk(['upload_collision' => 'nuke'])->uploadCollision, 'invalid → rename');
 });
 
+test('fluxfiles_token forwards show_hidden (default false)', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $mk = function (array $extra) {
+        $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+            null, 0, 0, null, null, null, $extra);
+        return Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    };
+    assertEqual(false, $mk([])->showHidden, 'default false');
+    assertEqual(true, $mk(['show_hidden' => true])->showHidden, 'forwarded true');
+});
+
 test('Claims::isMediaPath detects video/audio extensions only', function () {
     foreach (['a/b/clip.mp4', 'song.MP3', 'x.webm', 'y.mov', 'z.flac', 'w.ogg'] as $p) {
         assertTrue(Claims::isMediaPath($p), "media: $p");

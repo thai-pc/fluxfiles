@@ -322,6 +322,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
         && in_array($webp['upload_collision'], ['rename', 'overwrite', 'reject'], true)) {
         $payload['upload_collision'] = (string) $webp['upload_collision'];
     }
+    if (array_key_exists('show_hidden', $webp)) {
+        $payload['show_hidden'] = (bool) $webp['show_hidden'];
+    }
     if (array_key_exists('allow_zip', $webp)) {
         $payload['allow_zip'] = (bool) $webp['allow_zip'];
     }
