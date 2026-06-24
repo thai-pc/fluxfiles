@@ -5,6 +5,22 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Identical re-uploads are kept as a copy (behavior change).** Content dedup
+  (SHA-256) is now **opt-in** via the new `dedupe_uploads` claim (default off) — by
+  default an identical upload is kept as `name (1).ext` like Finder / Google Drive /
+  Dropbox, instead of being silently refused. Enable the claim to refuse
+  byte-for-byte duplicates and save storage.
+- **Keep-both counter is now ` (1)`, ` (2)`** (was `-1`, `-2`) — matching Finder /
+  Drive / Windows. `force_upload` continues to mean "overwrite in place".
+
+### Fixed
+
+- **Proxied error messages now localise.** The Laravel/WordPress proxy dropped the
+  core's `error_code`/`error_params`, so the embedded UI always showed English (e.g.
+  folder-exists / name-conflict) through an adapter. Both are now forwarded.
+
 ### Added
 
 - **Optimization — AVIF target + per-tenant tuning claims.** Beyond the M3 AVIF

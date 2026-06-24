@@ -36,7 +36,7 @@ function setup(string $policy): array {
     $claims = new Claims('u', ['read', 'write', 'delete'], ['local'], '', 50, null, 0);
     $claims->uploadCollision = $policy;
     $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
-    return [$fm, $dm, $root];
+    return [$fm, $dm, $root, $claims];
 }
 
 /** Simulate a multipart upload of $content as $name (unique bytes → never a hash-dup). */
@@ -63,18 +63,26 @@ test('claim parse: default rename; invalid → rename; valid kept', function () 
     assertEqual('reject', (Claims::fromJwtPayload((object) ['upload_collision' => 'reject']))->uploadCollision);
 });
 
-test('rename (default): keeps both, appends -1/-2, extension preserved', function () {
+test('rename (default): keeps both, appends (1)/(2), extension preserved', function () {
     [$fm, $dm, $root] = setup('rename');
     $r1 = upload($fm, 'doc.txt', 'first');
     assertEqual('doc.txt', $r1['name'], 'first keeps name');
     $r2 = upload($fm, 'doc.txt', 'second-different');
-    assertEqual('doc-1.txt', $r2['name'], 'second → doc-1.txt');
+    assertEqual('doc (1).txt', $r2['name'], 'second → doc (1).txt');
     $r3 = upload($fm, 'doc.txt', 'third-different');
-    assertEqual('doc-2.txt', $r3['name'], 'third → doc-2.txt');
+    assertEqual('doc (2).txt', $r3['name'], 'third → doc (2).txt');
     // All three survive with their own contents.
     assertEqual('first', file_get_contents("$root/doc.txt"));
-    assertEqual('second-different', file_get_contents("$root/doc-1.txt"));
-    assertEqual('third-different', file_get_contents("$root/doc-2.txt"));
+    assertEqual('second-different', file_get_contents("$root/doc (1).txt"));
+    assertEqual('third-different', file_get_contents("$root/doc (2).txt"));
+});
+
+test('rename keeps both even for IDENTICAL content (dedup off by default)', function () {
+    [$fm, $dm, $root] = setup('rename');
+    upload($fm, 'same.txt', 'identical-bytes');
+    $r = upload($fm, 'same.txt', 'identical-bytes'); // same content, dedup OFF → copy
+    assertEqual('same (1).txt', $r['name'], 'identical re-upload → (1), like the OS');
+    assertTrue(is_file("$root/same.txt") && is_file("$root/same (1).txt"), 'both kept');
 });
 
 test('reject: 409 name_conflict when the name is taken', function () {
@@ -90,15 +98,16 @@ test('overwrite: replaces in place, same name', function () {
     $r = upload($fm, 'b.txt', 'new-different');
     assertEqual('b.txt', $r['name'], 'same name');
     assertEqual('new-different', file_get_contents("$root/b.txt"), 'overwritten');
-    assertTrue(!is_file("$root/b-1.txt"), 'no rename copy');
+    assertTrue(!is_file("$root/b (1).txt"), 'no rename copy');
 });
 
-test('rename only triggers on a DIFFERENT file (same bytes → hash dedup, not -1)', function () {
-    [$fm, $dm, $root] = setup('rename');
+test('dedupe_uploads claim ON → identical content is refused (storage saving)', function () {
+    [$fm, $dm, $root, $claims] = setup('rename');
+    $claims->dedupeUploads = true;
     upload($fm, 'c.txt', 'identical-bytes');
-    $r = upload($fm, 'c.txt', 'identical-bytes'); // same content → duplicate path
-    assertTrue(!empty($r['duplicate']), 'hash dedup reports duplicate');
-    assertTrue(!is_file("$root/c-1.txt"), 'no -1 copy for an identical re-upload');
+    $r = upload($fm, 'c.txt', 'identical-bytes'); // same content + dedup ON → duplicate
+    assertTrue(!empty($r['duplicate']), 'hash dedup reports duplicate when claim on');
+    assertTrue(!is_file("$root/c (1).txt"), 'no copy when dedup is enabled');
 });
 
 test('mkdir: fresh folder → created; existing folder → 409 folder_exists', function () {

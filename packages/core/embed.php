@@ -338,6 +338,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('show_hidden', $webp)) {
         $payload['show_hidden'] = (bool) $webp['show_hidden'];
     }
+    if (array_key_exists('dedupe_uploads', $webp)) {
+        $payload['dedupe_uploads'] = (bool) $webp['dedupe_uploads'];
+    }
     if (array_key_exists('allow_zip', $webp)) {
         $payload['allow_zip'] = (bool) $webp['allow_zip'];
     }

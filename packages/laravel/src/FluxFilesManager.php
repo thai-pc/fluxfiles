@@ -161,6 +161,9 @@ class FluxFilesManager
         if (array_key_exists('show_hidden', $overrides)) {
             $payload['show_hidden'] = (bool) $overrides['show_hidden'];
         }
+        if (array_key_exists('dedupe_uploads', $overrides)) {
+            $payload['dedupe_uploads'] = (bool) $overrides['dedupe_uploads'];
+        }
         if (array_key_exists('allow_zip', $overrides)) {
             $payload['allow_zip'] = (bool) $overrides['allow_zip'];
         }

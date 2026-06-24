@@ -72,7 +72,7 @@ function makeEnv(bool $ownerOnly = false, string $userId = 'tester'): array
     $claims = new Claims($userId, ['read', 'write', 'delete'], ['local'], '', 50, null, 0, $ownerOnly);
     $fm = new FileManager($dm, $claims, $meta);
     $indexer = new ExistingFileIndexer($dm, $meta);
-    return [$fm, $dm->disk('local'), $meta, $indexer, $root];
+    return [$fm, $dm->disk('local'), $meta, $indexer, $root, $claims];
 }
 
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
@@ -191,7 +191,8 @@ test('default index counts files + folders, skips system paths', function () {
 });
 
 test('index hash + persist → dedup then works for pre-existing content', function () {
-    [$fm, , , $indexer, $root] = makeEnv();
+    [$fm, , , $indexer, $root, $claims] = makeEnv();
+    $claims->dedupeUploads = true; // dedup is opt-in now
     place($root, 'pre/orig.txt', 'INDEX-DUP');
     $indexer->index(['disk' => 'local', 'hash' => true, 'persist_metadata' => true]);
     $tmp = sys_get_temp_dir() . '/fx-' . uniqid() . '.txt';

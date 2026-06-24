@@ -145,6 +145,7 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
     payload.upload_collision = opts.uploadCollision;
   }
   if (opts.showHidden !== undefined) payload.show_hidden = !!opts.showHidden;
+  if (opts.dedupeUploads !== undefined) payload.dedupe_uploads = !!opts.dedupeUploads;
   if (opts.allowZip !== undefined) payload.allow_zip = !!opts.allowZip;
   if (opts.allowExtract !== undefined) payload.allow_extract = !!opts.allowExtract;
   if (opts.zipMaxMb && opts.zipMaxMb > 0) payload.zip_max_mb = Math.trunc(opts.zipMaxMb);

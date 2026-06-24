@@ -97,7 +97,7 @@ function makeFM(): array
     $meta = new StorageMetadataHandler($dm);
     $claims = new Claims('tester', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, false);
     $fm = new FileManager($dm, $claims, $meta);
-    return [$fm, $dm->disk('local'), $root];
+    return [$fm, $dm->disk('local'), $root, $claims];
 }
 
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
@@ -220,7 +220,8 @@ test('allowedExt restriction → .gif rejected when only jpg/png allowed', funct
 echo "\n{$yellow}► Dedup (SHA-256) & overwrite{$reset}\n";
 
 test('identical content re-upload → duplicate:true (no force)', function () {
-    [$fm] = makeFM();
+    [$fm, , , $claims] = makeFM();
+    $claims->dedupeUploads = true; // dedup is opt-in now
     $img = makeImage(300, 200, 'png');
     $fm->upload('local', '', fileArray($img, 'same.png'));
     // Re-upload identical bytes under a different name; dedup keys on hash.

@@ -124,6 +124,10 @@ export interface BaseTokenOptions {
   /** Show dotfiles (.env, .gitignore, …) in listings + search. Default **false** —
    *  dotfiles are hidden, matching Finder / cPanel / Nextcloud. */
   showHidden?: boolean;
+  /** Refuse byte-for-byte duplicate uploads (SHA-256). Default **false** — an
+   *  identical re-upload is kept as a copy (like Finder / Drive / Dropbox); set true
+   *  to save storage by blocking duplicates. */
+  dedupeUploads?: boolean;
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;
   /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */

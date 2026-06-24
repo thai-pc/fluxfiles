@@ -317,11 +317,13 @@ class FileManager
         $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
 
-        // Duplicate detection (SHA-256). Only report a duplicate if the candidate
-        // actually exists on disk and isn't inside an internal directory — stale
-        // index entries shouldn't surface as phantom duplicates to the user.
+        // Content dedup (SHA-256) — OPT-IN via the `dedupe_uploads` claim. Off by
+        // default so an identical re-upload is kept as a copy (handled by the
+        // name-collision policy below), matching Finder / Google Drive / Dropbox.
+        // When enabled it refuses byte-for-byte duplicates to save storage. Only
+        // reports a duplicate that actually exists on disk and isn't internal.
         $hash = hash_file('sha256', $file['tmp_name']);
-        if ($hash !== false && !$forceUpload) {
+        if ($hash !== false && !$forceUpload && $this->claims->dedupeUploads) {
             $ownerFilter = $this->claims->ownerOnly ? $this->claims->userId : null;
             $existing = $this->meta->findByHash($disk, $hash, $this->claims->pathPrefix, $ownerFilter);
             if ($existing) {
@@ -349,7 +351,7 @@ class FileManager
         // (that returned above), so a name clash means a DIFFERENT file sharing the
         // name. Default 'rename' keeps both (like Drive/Dropbox/WordPress); 'reject'
         // 409s for the host to prompt; 'overwrite' falls through to replace in place.
-        if ($this->claims->uploadCollision !== 'overwrite' && $fs->fileExists($scoped)) {
+        if (!$forceUpload && $this->claims->uploadCollision !== 'overwrite' && $fs->fileExists($scoped)) {
             if ($this->claims->uploadCollision === 'reject') {
                 throw new ApiException('A file with this name already exists', 409, 'name_conflict', ['name' => $name]);
             }
@@ -1385,11 +1387,11 @@ class FileManager
     private const MAX_COLLISION_TRIES = 10000;
 
     /**
-     * Find a non-colliding filename in $dirUser by appending `-1`, `-2`, … to the
+     * Find a non-colliding filename in $dirUser by appending ` (1)`, ` (2)`, … to the
      * base name while preserving the extension (extension immutability), e.g.
-     * `photo.jpg` → `photo-1.jpg`. $dirUser/$name are UNSCOPED (user-relative);
-     * returns the chosen unscoped filename. Falls back to a short random suffix if
-     * the numeric probe is exhausted.
+     * `photo.jpg` → `photo (1).jpg` (Finder / Google Drive / Windows style).
+     * $dirUser/$name are UNSCOPED (user-relative); returns the chosen unscoped
+     * filename. Falls back to a short random suffix if the numeric probe is exhausted.
      */
     private function uniqueName($fs, string $dirUser, string $name): string
     {
@@ -1399,13 +1401,13 @@ class FileManager
         $prefix = $dirUser === '' ? '' : $dirUser . '/';
 
         for ($i = 1; $i <= self::MAX_COLLISION_TRIES; $i++) {
-            $candidate = $base . '-' . $i . $ext;
+            $candidate = $base . ' (' . $i . ')' . $ext;
             if (!$fs->fileExists($this->scopedPath($prefix . $candidate))) {
                 return $candidate;
             }
         }
         // Exhausted (extremely unlikely) — random suffix is effectively collision-free.
-        return $base . '-' . bin2hex(random_bytes(4)) . $ext;
+        return $base . ' (' . bin2hex(random_bytes(4)) . ')' . $ext;
     }
 
     /**

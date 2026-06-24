@@ -345,6 +345,8 @@ test('fluxfiles_token forwards show_hidden (default false)', function () {
     };
     assertEqual(false, $mk([])->showHidden, 'default false');
     assertEqual(true, $mk(['show_hidden' => true])->showHidden, 'forwarded true');
+    assertEqual(false, $mk([])->dedupeUploads, 'dedupe default false');
+    assertEqual(true, $mk(['dedupe_uploads' => true])->dedupeUploads, 'dedupe forwarded');
 });
 
 test('fluxfiles_token forwards optimize_format (avif); default webp', function () {

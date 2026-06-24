@@ -155,6 +155,12 @@ class Claims
      *            Finder / cPanel / Nextcloud (a `.env` must not surface in search). */
     public bool $showHidden = false;
 
+    /** @var bool Block re-uploading identical CONTENT (SHA-256 dedup)? Default FALSE
+     *            — like Finder / Google Drive / Dropbox, an identical upload is kept
+     *            as a copy (via the upload_collision policy), not refused. Set TRUE to
+     *            save storage by refusing byte-for-byte duplicates. */
+    public bool $dedupeUploads = false;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -366,6 +372,7 @@ class Claims
         $collision = strtolower((string) ($payload->upload_collision ?? 'rename'));
         $c->uploadCollision = in_array($collision, ['rename', 'overwrite', 'reject'], true) ? $collision : 'rename';
         $c->showHidden = (bool) ($payload->show_hidden ?? false);
+        $c->dedupeUploads = (bool) ($payload->dedupe_uploads ?? false);
         $c->watermark = self::sanitizeWatermark($payload);
 
         // Usage-dashboard claims.
