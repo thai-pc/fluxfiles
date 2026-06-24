@@ -27,6 +27,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Added
 
+- **Self-hosted update channel (`UpdateClient` + `fluxfiles update`).** Deliver +
+  auto-update paid modules without a third-party platform fee. `fluxfiles update
+  <module> [--check]` asks the vendor update server (`FLUXFILES_UPDATE_URL`) for an
+  Ed25519-**signed manifest** (using `FLUXFILES_LICENSE_KEY`), verifies the manifest
+  + the zip's `sha256`, and installs into `vendor/fluxfiles/<module>/` (Zip-Slip
+  guarded, atomic swap). A reference server is in `docs/update-server.example.php`;
+  WordPress can use Plugin Update Checker against the same endpoint for wp-admin
+  one-click updates. Runtime stays offline — this only pulls new builds.
 - **License enforcement model (`perpetual` | `subscription`).** `LicenseManager`
   reads an `enforcement` field so monthly / annual / lifetime can coexist on one
   offline verifier. `perpetual` (default) — the module keeps running after expiry,

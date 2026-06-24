@@ -44,9 +44,98 @@ if ($command === 'serve') {
     exit($code);
 }
 
+// `update` — self-hosted module updates. Asks the vendor update server (env
+// FLUXFILES_UPDATE_URL) for a SIGNED manifest using the license key (env
+// FLUXFILES_LICENSE_KEY), verifies the manifest + the zip's sha256, and installs
+// the module into vendor/fluxfiles/<module>/. `--check` only reports.
+//   fluxfiles update optimize [--check]
+if ($command === 'update') {
+    $module = '';
+    $checkOnly = false;
+    foreach (array_slice($argv, 2) as $arg) {
+        if ($arg === '--check') { $checkOnly = true; }
+        elseif (strncmp($arg, '--', 2) !== 0 && $module === '') { $module = $arg; }
+    }
+    if ($module === '' || !preg_match('/^[a-z0-9-]+$/', $module)) {
+        fwrite(STDERR, "Usage: fluxfiles update <module> [--check]\n");
+        exit(1);
+    }
+
+    // Load .env from the package root or the host project root so the license +
+    // update URL are available (mirrors the index command below).
+    foreach ([realpath(__DIR__ . '/..'), realpath(__DIR__ . '/../../..')] as $dir) {
+        if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
+            Dotenv\Dotenv::createImmutable($dir)->safeLoad();
+            break;
+        }
+    }
+    $updateBase = rtrim((string) ($_ENV['FLUXFILES_UPDATE_URL'] ?? 'https://updates.fluxfiles.dev'), '/');
+    $license = (string) ($_ENV['FLUXFILES_LICENSE_KEY'] ?? '');
+    if ($license === '') {
+        fwrite(STDERR, "No FLUXFILES_LICENSE_KEY set — updates require a license.\n");
+        exit(1);
+    }
+
+    // Where the module lives: vendor/fluxfiles/<module> relative to the host's
+    // autoloader (two levels up when installed as a dependency), else a sibling of
+    // packages/core in a monorepo checkout.
+    $current = '0.0.0';
+    $installed = \FluxFiles\ModuleRegistry::installed($module);
+
+    $url = $updateBase . '/update/' . rawurlencode($module)
+        . '?license=' . rawurlencode($license) . '&current=' . rawurlencode($current);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => false]);
+    $body = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($body === false || $status !== 200) {
+        fwrite(STDERR, "Update check failed (HTTP {$status}). License invalid/expired, or server unreachable.\n");
+        exit(1);
+    }
+
+    $client = new \FluxFiles\UpdateClient();
+    $manifest = $client->verifyManifest((string) $body);
+    if ($manifest === null) {
+        fwrite(STDERR, "Update manifest failed signature verification — refusing.\n");
+        exit(1);
+    }
+    $version = (string) ($manifest['version'] ?? '');
+    fwrite(STDOUT, "Latest {$module}: {$version}" . ($installed ? '' : ' (not currently installed)') . "\n");
+    if ($checkOnly) {
+        exit(0);
+    }
+
+    fwrite(STDOUT, "Downloading {$module} {$version}…\n");
+    $ch = curl_init((string) $manifest['url']);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 120, CURLOPT_FOLLOWLOCATION => true]);
+    $zip = curl_exec($ch);
+    $zstatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($zip === false || $zstatus !== 200 || !\FluxFiles\UpdateClient::verifyZip((string) $zip, (string) $manifest['sha256'])) {
+        fwrite(STDERR, "Download failed or checksum mismatch — refusing to install.\n");
+        exit(1);
+    }
+
+    // vendor/fluxfiles/<module> next to the host autoloader.
+    $vendorBase = realpath(__DIR__ . '/../../..'); // .../vendor/fluxfiles -> up to vendor/.. ? resolve below
+    $dest = (is_string($vendorBase) && is_dir($vendorBase . '/fluxfiles'))
+        ? $vendorBase . '/fluxfiles/' . $module
+        : dirname(__DIR__, 2) . '/' . $module; // monorepo: packages/<module>
+    try {
+        $client->install((string) $zip, $dest);
+    } catch (\FluxFiles\ApiException $e) {
+        fwrite(STDERR, 'Install failed: ' . $e->getMessage() . "\n");
+        exit(1);
+    }
+    fwrite(STDOUT, "Installed {$module} {$version} → {$dest}\nRun `composer dump-autoload` if needed.\n");
+    exit(0);
+}
+
 if (!in_array($command, ['index', 'seed'], true)) {
     fwrite(STDERR, "Usage:\n"
         . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
+        . "  fluxfiles update <module> [--check]\n"
         . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);
 }
