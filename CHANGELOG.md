@@ -3,6 +3,69 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.42] — 2026-06-24
+
+> Released: core `core-v0.2.37` (Packagist + Docker), Laravel `laravel-v0.2.20`,
+> WordPress `wordpress-v0.2.21`, SDK `fluxfiles` `0.2.4`, React `@fluxfiles/react`
+> `0.2.6`, Vue `@fluxfiles/vue` `0.2.5`, Node `@fluxfiles/node` `0.1.14`.
+> Adapter core floors → `^0.2.37`.
+
+### Added
+
+- **Optimization M2 — on-upload auto-optimize + savings surface.** A new
+  `auto_optimize` claim (with `optimize_quality`) recompresses images in the upload
+  pipeline before storing (mirrors AI auto-tag on upload); the result carries
+  `optimized` + `saved_bytes`, and the UI shows a savings toast. The usage
+  dashboard renders an **Optimization savings** section from the storage-resident
+  counter (`OptimizeStats`, `_fluxfiles/optimize.json`, no DB) already returned by
+  `GET /api/fm/usage`. The `/api/fm/optimize` endpoint also accepts `paths[]`
+  (batch, capped at 200 — one bad file is reported per-item, the rest proceed).
+  New `optimize` i18n namespace ×16 locales. *(The compression engine stays in the
+  proprietary `fluxfiles/optimize` package; this is the core/UI surface.)*
+- **Optimization M3 — AVIF + PDF.** Core gains an AVIF encode primitive
+  (`ImageCompat::avifSupported()`/`encodeAvif()`) and `ImageOptimizer::transform()`
+  takes an optional target format (`webp`|`avif`, falling back to WebP when the
+  build lacks AVIF). The optimize module can now also compress **PDFs** via
+  Ghostscript (availability-gated → `501` when `gs` is absent; hardened shell-out:
+  arg-array, `-dSAFER`, temp sandbox, timeout). The UI's Optimize action now covers
+  PDFs too.
+- **`fluxfiles serve` + autoload tolerance.** The standalone entrypoints no longer
+  hard-require `../vendor/autoload.php`, so the package runs correctly whether it's
+  a monorepo checkout/zip **or** installed as a Composer dependency. New
+  `php vendor/bin/fluxfiles serve --host --port` launches the standalone app from
+  an installed dependency; the README documents the two usage modes.
+
+### Changed
+
+- **Upload name-collision policy (behavior change).** A same-name upload of
+  *different* content used to silently overwrite. It now **keeps both** by default
+  (`<name>-1.<ext>`, `-2`…), matching Google Drive / Dropbox / WordPress. Tunable
+  per tenant via the new `upload_collision` claim: `rename` (default) | `reject`
+  (409 `name_conflict`) | `overwrite` (old behavior). Content dedup (by SHA-256)
+  still takes precedence — an identical re-upload is reported as a duplicate.
+- **Dotfiles are hidden by default (behavior change).** Files/folders whose name
+  starts with `.` (`.env`, `.gitignore`, `.git/`…) no longer appear in listings or
+  search — matching Finder / cPanel / Nextcloud, and keeping a `.env` out of search
+  results. Opt back in per tenant with the new `show_hidden` claim.
+- **`mkdir` on an existing folder now returns `409 folder_exists`** instead of a
+  silent `200` (Flysystem's `createDirectory` is idempotent). The OS reports a
+  conflict there, and so do we; `error.folder_exists` added ×16 locales.
+
+### Fixed
+
+- **Modal Close button is consistent across adapters.** The React/Vue
+  `FluxFilesModal` used a black circular × at the top-right; it now matches the
+  browser SDK overlay (Laravel/WordPress) — a macOS-style window with a grey header
+  and a red traffic-light dot that reveals a faint × on hover.
+
+### Tests
+
+- **Real-adapter Playwright e2e** (`packages/core/tests/apps/`) driving the actual
+  `@fluxfiles/{react,vue}` wrappers, a real Laravel proxy app, and the real
+  WordPress plugin against a live core iframe. The standalone browser suite is now
+  serialized (`workers:1`) to remove cross-file flakiness on the single-threaded
+  `php -S`.
+
 ## [0.2.40] — 2026-06-22
 
 > Released: core `core-v0.2.35` (Packagist + Docker), Laravel `laravel-v0.2.18`,
@@ -27,21 +90,6 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - Dropped two stale planning docs — `docs/FLUXFILES-ROADMAP.md` (superseded by
   `ROADMAP.md`) and `docs/TEST-PLAN.md` (no longer reflected the shipped test
   suite).
-
-## [Unreleased]
-
-### Added
-
-- **Optimization M2 — batch + savings counter + UI.** The optimize endpoint now
-  accepts `paths[]` (batch, capped at 200 — one bad file is reported per-item, the
-  rest proceed) alongside single `path`. A storage-resident cumulative counter
-  (`OptimizeStats`, `_fluxfiles/optimize.json` per prefix, no DB) records bytes
-  saved and is surfaced under `optimize` in `GET /api/fm/usage` (for the dashboard).
-  The UI gains an **Optimize** action on images (detail panel) and a bulk
-  **Optimize** in the selection toolbar (2+ images); new `optimize` i18n namespace
-  in all 16 locales. Verified end-to-end against the real (licensed) module: a
-  662 KB JPEG → 191 KB WebP (71% saved). *(The compression engine remains in the
-  proprietary `fluxfiles/optimize` package; this release is the core/UI surface.)*
 
 ## [0.2.41] — 2026-06-22
 
