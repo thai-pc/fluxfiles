@@ -142,14 +142,45 @@ class LicenseManager
     }
 
     /**
-     * Is $module entitled AND still serviceable (not hard-expired past grace)?
-     * The actual code must ALSO be installed (class_exists) — this is layer 2 only.
+     * Enforcement model: 'perpetual' (annual/lifetime self-host — runtime keeps
+     * working after expiry, only UPDATES stop) or 'subscription' (monthly/hosted —
+     * the module disables after the grace window). Default 'perpetual', so a
+     * customer who paid is never left with a feature switched off by accident.
+     */
+    public function enforcement(): string
+    {
+        $e = (string) ($this->claims['enforcement'] ?? 'perpetual');
+        return $e === 'subscription' ? 'subscription' : 'perpetual';
+    }
+
+    /**
+     * Is $module entitled AND still serviceable? The actual code must ALSO be
+     * installed (class_exists) — this is layer 2 only.
+     *
+     * - subscription: stops working once expired past grace (recurring enforcement).
+     * - perpetual: keeps working forever; `expires` only bounds the UPDATE window
+     *   (see {@see updatesAllowed()}), matching how JetBrains/Sidekiq/most WP plugins
+     *   sell a paid self-host module.
      */
     public function licensed(string $module): bool
     {
-        return $this->verified
-            && in_array($module, $this->modules(), true)
-            && !$this->hardExpired();
+        if (!$this->verified || !in_array($module, $this->modules(), true)) {
+            return false;
+        }
+        if ($this->enforcement() === 'subscription') {
+            return !$this->hardExpired();
+        }
+        return true; // perpetual — runs forever (expiry only gates updates)
+    }
+
+    /**
+     * May this license still pull NEW builds (the download/Composer channel)?
+     * False once past expiry — perpetual installs keep running the version they have,
+     * they just can't update until they renew.
+     */
+    public function updatesAllowed(): bool
+    {
+        return $this->verified && !$this->expired();
     }
 
     /** Expiry timestamp (unix), or null if perpetual/unset. */
@@ -184,7 +215,11 @@ class LicenseManager
         return $this->expired() && !$this->inGrace();
     }
 
-    /** free | active | grace | expired — for UIs. */
+    /**
+     * free | active | grace | expired | perpetual — for UIs.
+     * 'perpetual' = past expiry but still fully functional (annual/lifetime self-host);
+     * updates are off until renewal. 'expired' = a subscription that has shut off.
+     */
     public function status(): string
     {
         if (!$this->verified) {
@@ -193,7 +228,11 @@ class LicenseManager
         if (!$this->expired()) {
             return 'active';
         }
-        return $this->inGrace() ? 'grace' : 'expired';
+        if ($this->inGrace()) {
+            return 'grace';
+        }
+        // Past grace: a perpetual licence still runs (updates off); a subscription stops.
+        return $this->enforcement() === 'perpetual' ? 'perpetual' : 'expired';
     }
 
     /** Whole days until expiry (negative once past). Null if perpetual. */
@@ -220,12 +259,14 @@ class LicenseManager
     public function info(): array
     {
         return [
-            'edition'   => $this->edition(),
-            'status'    => $this->status(),
-            'modules'   => $this->modules(),
-            'limits'    => $this->limits(),
-            'expires'   => $this->expiresAt(),
-            'days_left' => $this->daysLeft(),
+            'edition'        => $this->edition(),
+            'status'         => $this->status(),
+            'enforcement'    => $this->enforcement(),
+            'modules'        => $this->modules(),
+            'limits'         => $this->limits(),
+            'expires'        => $this->expiresAt(),
+            'days_left'      => $this->daysLeft(),
+            'updates_allowed' => $this->updatesAllowed(),
         ];
     }
 

@@ -112,21 +112,35 @@ test('expired but within grace → status grace, module still serviceable', func
     assertEqual(-1, $l->daysLeft());
 });
 
-test('expired beyond grace → hard expired, modules disabled', function () use ($SEC, $KEYS, $NOW) {
+test('SUBSCRIPTION expired beyond grace → hard expired, module disabled', function () use ($SEC, $KEYS, $NOW) {
     $key = mintLicense($SEC, [
-        'edition' => 'pro', 'modules' => ['optimize'],
+        'edition' => 'pro', 'modules' => ['optimize'], 'enforcement' => 'subscription',
         'expires' => $NOW - 30 * 86400, 'grace' => 14 * 86400,
     ]);
     $l = new LicenseManager($key, $KEYS, $NOW);
     assertTrue($l->hardExpired(), 'hard expired');
     assertEqual('expired', $l->status());
-    assertFalse($l->licensed('optimize'), 'module disabled past grace');
+    assertFalse($l->licensed('optimize'), 'subscription module disabled past grace');
+    assertFalse($l->updatesAllowed(), 'no updates once expired');
 });
 
-test('default grace (14d) applies when grace is omitted', function () use ($SEC, $KEYS, $NOW) {
-    $within = new LicenseManager(mintLicense($SEC, ['edition' => 'pro', 'modules' => ['x'], 'expires' => $NOW - 10 * 86400]), $KEYS, $NOW);
+test('PERPETUAL expired beyond grace → still runs, only updates stop', function () use ($SEC, $KEYS, $NOW) {
+    // No enforcement field → defaults to perpetual (annual/lifetime self-host).
+    $key = mintLicense($SEC, [
+        'edition' => 'pro', 'modules' => ['optimize'],
+        'expires' => $NOW - 100 * 86400, 'grace' => 14 * 86400,
+    ]);
+    $l = new LicenseManager($key, $KEYS, $NOW);
+    assertEqual('perpetual', $l->enforcement(), 'defaults to perpetual');
+    assertEqual('perpetual', $l->status(), 'status reflects still-running');
+    assertTrue($l->licensed('optimize'), 'module keeps working after expiry');
+    assertFalse($l->updatesAllowed(), 'but cannot pull new builds until renewal');
+});
+
+test('default grace (14d) applies when grace is omitted (subscription)', function () use ($SEC, $KEYS, $NOW) {
+    $within = new LicenseManager(mintLicense($SEC, ['edition' => 'pro', 'modules' => ['x'], 'enforcement' => 'subscription', 'expires' => $NOW - 10 * 86400]), $KEYS, $NOW);
     assertEqual('grace', $within->status(), '10d past, default 14d grace');
-    $beyond = new LicenseManager(mintLicense($SEC, ['edition' => 'pro', 'modules' => ['x'], 'expires' => $NOW - 20 * 86400]), $KEYS, $NOW);
+    $beyond = new LicenseManager(mintLicense($SEC, ['edition' => 'pro', 'modules' => ['x'], 'enforcement' => 'subscription', 'expires' => $NOW - 20 * 86400]), $KEYS, $NOW);
     assertEqual('expired', $beyond->status(), '20d past default grace');
 });
 
@@ -135,12 +149,13 @@ test('perpetual license (no expires) → active forever', function () use ($SEC,
     assertEqual('active', $l->status());
     assertEqual(null, $l->daysLeft());
     assertTrue($l->licensed('enterprise'));
+    assertTrue($l->updatesAllowed(), 'no expiry → updates always allowed');
 });
 
 test('info() returns a non-sensitive summary', function () use ($SEC, $KEYS, $NOW) {
     $l = new LicenseManager(mintLicense($SEC, ['customer' => 'acme', 'edition' => 'agency', 'modules' => ['optimize', 'share'], 'limits' => ['sites' => 10], 'expires' => $NOW + 5 * 86400]), $KEYS, $NOW);
     $i = $l->info();
-    assertEqual(['edition', 'status', 'modules', 'limits', 'expires', 'days_left'], array_keys($i));
+    assertEqual(['edition', 'status', 'enforcement', 'modules', 'limits', 'expires', 'days_left', 'updates_allowed'], array_keys($i));
     assertEqual('agency', $i['edition']);
     assertEqual(5, $i['days_left']);
     assertTrue(!array_key_exists('customer', $i), 'customer name not leaked');

@@ -99,11 +99,21 @@ test('layer 2: installed but unlicensed → 402 license_required', function () u
     } finally { ModuleRegistry::reset(); }
 });
 
-test('layer 2: licensed but expired past grace → 402 license_expired', function () use ($SEC, $KEYS, $NOW) {
+test('layer 2: SUBSCRIPTION expired past grace → 402 license_expired', function () use ($SEC, $KEYS, $NOW) {
     ModuleRegistry::register('demo', FakeModule::class);
     try {
-        $expired = new LicenseManager(mintLicense($SEC, ['edition' => 'pro', 'modules' => ['demo'], 'expires' => $NOW - 60 * 86400, 'grace' => 14 * 86400]), $KEYS, $NOW);
+        // enforcement=subscription so expiry hard-disables (perpetual would keep running).
+        $expired = new LicenseManager(mintLicense($SEC, ['edition' => 'pro', 'modules' => ['demo'], 'enforcement' => 'subscription', 'expires' => $NOW - 60 * 86400, 'grace' => 14 * 86400]), $KEYS, $NOW);
         expectApi(fn () => ModuleRegistry::require('demo', $expired, claims(true)), 402, 'license_expired');
+    } finally { ModuleRegistry::reset(); }
+});
+
+test('layer 2: PERPETUAL expired past grace → still resolves (runs forever)', function () use ($SEC, $KEYS, $NOW) {
+    ModuleRegistry::register('demo', FakeModule::class);
+    try {
+        $perp = new LicenseManager(mintLicense($SEC, ['edition' => 'pro', 'modules' => ['demo'], 'expires' => $NOW - 60 * 86400, 'grace' => 14 * 86400]), $KEYS, $NOW);
+        $mod = ModuleRegistry::require('demo', $perp, claims(true));
+        assertTrue($mod instanceof FakeModule, 'perpetual licence still resolves after expiry');
     } finally { ModuleRegistry::reset(); }
 });
 

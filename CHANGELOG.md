@@ -27,6 +27,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Added
 
+- **License enforcement model (`perpetual` | `subscription`).** `LicenseManager`
+  reads an `enforcement` field so monthly / annual / lifetime can coexist on one
+  offline verifier. `perpetual` (default) — the module keeps running after expiry,
+  only updates stop (`updatesAllowed()`); `status()` → `perpetual`. `subscription`
+  — the module disables past grace (402), as before. `/api/fm/license` now returns
+  `enforcement` + `updates_allowed`. This makes "annual with perpetual fallback"
+  (the standard self-host model) and lifetime licences safe to sell.
 - **Optimization — AVIF target + per-tenant tuning claims.** Beyond the M3 AVIF
   engine, the target format is now selectable per tenant via `optimize_format`
   (`webp` default | `avif`, falling back to WebP when the build lacks AVIF) — wired
