@@ -1238,6 +1238,15 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
         $fs = $this->disks->disk($disk);
+
+        // Refuse to "create" a folder that already exists (as a folder OR a file
+        // with that name). Flysystem's createDirectory is idempotent and would
+        // silently 200, so without this an existing folder looks freshly created —
+        // the OS (Finder/Explorer) reports a conflict here, and so should we.
+        if ($fs->directoryExists($scoped) || $fs->fileExists($scoped)) {
+            throw new ApiException('A folder with this name already exists', 409, 'folder_exists', ['name' => basename($scoped)]);
+        }
+
         $fs->createDirectory($scoped);
 
         if ($this->meta instanceof StorageMetadataHandler) {

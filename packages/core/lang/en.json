@@ -265,7 +265,8 @@
         "host_not_allowed": "This URL host isn't allowed.",
         "redirect_loop": "Too many redirects.",
         "auth_required": "This URL requires sign-in and can't be imported.",
-        "name_conflict": "A file with this name already exists."
+        "name_conflict": "A file with this name already exists.",
+        "folder_exists": "The folder “{name}” already exists."
     },
     "presign": {
         "title": "Presigned URL",

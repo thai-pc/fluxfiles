@@ -265,7 +265,8 @@
         "host_not_allowed": "不允许此 URL 主机。",
         "redirect_loop": "重定向次数过多。",
         "auth_required": "此 URL 需要登录，无法导入。",
-        "name_conflict": "已存在同名文件。"
+        "name_conflict": "已存在同名文件。",
+        "folder_exists": "文件夹“{name}”已存在。"
     },
     "presign": {
         "title": "预签名链接",

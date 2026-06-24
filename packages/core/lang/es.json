@@ -265,7 +265,8 @@
         "host_not_allowed": "El host de esta URL no está permitido.",
         "redirect_loop": "Demasiadas redirecciones.",
         "auth_required": "Esta URL requiere iniciar sesión y no se puede importar.",
-        "name_conflict": "Ya existe un archivo con este nombre."
+        "name_conflict": "Ya existe un archivo con este nombre.",
+        "folder_exists": "La carpeta «{name}» ya existe."
     },
     "presign": {
         "title": "URL prefirmada",
