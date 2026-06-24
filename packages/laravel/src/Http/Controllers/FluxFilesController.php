@@ -106,9 +106,19 @@ class FluxFilesController
     /**
      * Wrap an error response.
      */
-    private function error(string $message, int $status = 400): JsonResponse
+    private function error(string $message, int $status = 400, ?string $code = null, array $params = []): JsonResponse
     {
-        return response()->json(['data' => null, 'error' => $message], $status);
+        // Forward the core's error_code + error_params so the embedded UI can show a
+        // LOCALISED message (it maps `error.<code>` via i18n). Without these the UI
+        // falls back to the raw English message — the whole point of this passthrough.
+        $resp = ['data' => null, 'error' => $message];
+        if ($code !== null) {
+            $resp['error_code'] = $code;
+        }
+        if ($params !== []) {
+            $resp['error_params'] = $params;
+        }
+        return response()->json($resp, $status);
     }
 
     // -------------------------------------------------------------------------
@@ -129,7 +139,7 @@ class FluxFilesController
                 (string) $request->query('cursor', '')
             ));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -172,7 +182,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         } catch (\Throwable $e) {
             // Never leak a TypeError/HTML error page from the API surface.
             return $this->error('Upload failed: ' . $e->getMessage(), 500);
@@ -198,7 +208,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -222,7 +232,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -246,7 +256,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -270,7 +280,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -296,7 +306,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -319,7 +329,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -344,7 +354,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -369,7 +379,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -405,7 +415,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -441,7 +451,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -469,7 +479,7 @@ class FluxFilesController
                 (int) ($request->input('size') ?? $request->input('size_bytes') ?? 0)
             ));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -489,7 +499,7 @@ class FluxFilesController
 
             return $this->ok($fm->fileMeta($disk, $path));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -519,7 +529,7 @@ class FluxFilesController
 
             return $this->ok($this->metaRepo->get($disk, $key));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -560,7 +570,7 @@ class FluxFilesController
 
             return $this->ok(['saved' => true]);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -592,7 +602,7 @@ class FluxFilesController
 
             return $this->ok(['deleted' => true]);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -625,7 +635,7 @@ class FluxFilesController
                 $claims->showHidden
             ));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -656,7 +666,7 @@ class FluxFilesController
                 $claims->showHidden
             ));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -676,7 +686,7 @@ class FluxFilesController
                 $claims->maxStorageMb
             ));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -707,7 +717,7 @@ class FluxFilesController
 
             return $this->ok($resp);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -722,7 +732,7 @@ class FluxFilesController
 
             return $this->ok(\FluxFiles\LicenseManager::fromEnv()->info());
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -744,7 +754,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -764,7 +774,7 @@ class FluxFilesController
                 (string) $request->query('path', '')
             ));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -789,7 +799,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -813,7 +823,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -837,7 +847,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -859,7 +869,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -872,7 +882,7 @@ class FluxFilesController
 
             return $this->ok($fm->listTrash((string) $request->query('disk', 'local')));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -894,7 +904,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -915,7 +925,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -943,7 +953,7 @@ class FluxFilesController
 
             return $this->ok((new BucketDoctor($this->diskManager))->diagnose($disk, $origin ?: null));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -963,7 +973,7 @@ class FluxFilesController
                 $claims->userId
             ));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -1011,7 +1021,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -1046,7 +1056,7 @@ class FluxFilesController
 
             return $this->ok($chunker->presignPart($disk, $key, $uploadId, (int) $partNumber));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -1086,7 +1096,7 @@ class FluxFilesController
 
             return $this->ok($result);
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -1120,7 +1130,7 @@ class FluxFilesController
 
             return $this->ok($chunker->abort($disk, $key, $uploadId));
         } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode());
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
