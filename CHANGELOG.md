@@ -27,6 +27,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Added
 
+- **`license-gen` vendor tool (`scripts/license-gen.php`).** Mints the Ed25519
+  license tokens `LicenseManager` verifies offline — `--genkey` to create a signing
+  keypair, then `--edition/--modules/--enforcement/--expires/--sites/...` to sign a
+  customer key. Private key via `--key`/`FLUXFILES_LICENSE_PRIVATE_KEY` (never
+  committed); excluded from the customer dist (scripts/ is export-ignore). The only
+  piece needed to start selling manually (buy → run license-gen → email the key);
+  automate later with a payment webhook. Round-trip tested against LicenseManager.
 - **Self-hosted update channel (`UpdateClient` + `fluxfiles update`).** Deliver +
   auto-update paid modules without a third-party platform fee. `fluxfiles update
   <module> [--check]` asks the vendor update server (`FLUXFILES_UPDATE_URL`) for an
