@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { FluxFilesModalProps } from './types';
 import { useFluxFiles } from './useFluxFiles';
 import { IFRAME_ALLOW } from './iframe';
@@ -13,34 +13,48 @@ const defaultOverlayStyle: React.CSSProperties = {
   justifyContent: 'center',
 };
 
+// Matches the browser SDK overlay (Laravel/WordPress) so the close affordance is
+// identical across every adapter: a macOS-style window with a grey header bar.
 const defaultModalStyle: React.CSSProperties = {
-  position: 'relative',
   width: '90vw',
   maxWidth: '1200px',
   height: '85vh',
-  background: '#fff',
-  borderRadius: '8px',
+  background: '#f5f5f7',
+  borderRadius: '10px',
   overflow: 'hidden',
-  boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+  boxShadow: '0 25px 50px rgba(0, 0, 0, 0.22)',
+  display: 'flex',
+  flexDirection: 'column',
 };
 
+const headerStyle: React.CSSProperties = {
+  flexShrink: 0,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-start',
+  padding: '10px 12px',
+  borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+  background: '#f5f5f7',
+};
+
+// macOS traffic-light: a red dot that reveals a faint × on hover/focus.
 const closeButtonStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '8px',
-  right: '8px',
-  zIndex: 1,
-  width: '30px',
-  height: '30px',
+  width: '13px',
+  height: '13px',
+  padding: 0,
+  border: 'none',
+  borderRadius: '50%',
+  background: '#ff5f57',
+  boxShadow: 'inset 0 0 0 0.5px rgba(0, 0, 0, 0.14)',
+  cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  border: 'none',
-  borderRadius: '50%',
-  background: 'rgba(0, 0, 0, 0.55)',
-  color: '#fff',
-  fontSize: '18px',
+  fontSize: '11px',
   lineHeight: 1,
-  cursor: 'pointer',
+  fontWeight: 700,
+  flexShrink: 0,
+  transition: 'filter .15s, color .15s',
 };
 
 /**
@@ -143,6 +157,8 @@ export function FluxFilesModal({
     [onClose]
   );
 
+  const [closeHover, setCloseHover] = useState(false);
+
   if (!open) return null;
 
   return (
@@ -158,22 +174,34 @@ export function FluxFilesModal({
         className={modalClassName}
         style={modalClassName ? undefined : defaultModalStyle}
       >
-        <button
-          type="button"
-          onClick={() => onClose?.()}
-          aria-label="Close"
-          style={closeButtonStyle}
-        >
-          &times;
-        </button>
-        <iframe
-          ref={handle.iframeRef}
-          src={handle.iframeSrc}
-          style={{ width: '100%', height: '100%', border: 'none' }}
-          allow={IFRAME_ALLOW}
-          allowFullScreen
-          title="FluxFiles File Manager"
-        />
+        <div style={headerStyle}>
+          <button
+            type="button"
+            onClick={() => onClose?.()}
+            onMouseEnter={() => setCloseHover(true)}
+            onMouseLeave={() => setCloseHover(false)}
+            onFocus={() => setCloseHover(true)}
+            onBlur={() => setCloseHover(false)}
+            aria-label="Close"
+            style={{
+              ...closeButtonStyle,
+              color: closeHover ? 'rgba(0, 0, 0, 0.55)' : 'rgba(0, 0, 0, 0)',
+              filter: closeHover ? 'brightness(0.93)' : 'none',
+            }}
+          >
+            &times;
+          </button>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <iframe
+            ref={handle.iframeRef}
+            src={handle.iframeSrc}
+            style={{ width: '100%', height: '100%', border: 'none' }}
+            allow={IFRAME_ALLOW}
+            allowFullScreen
+            title="FluxFiles File Manager"
+          />
+        </div>
       </div>
     </div>
   );

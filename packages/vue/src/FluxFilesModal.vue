@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { useFluxFiles } from './useFluxFiles';
 import { IFRAME_ALLOW } from './iframe';
 import type { FluxFile, FluxEvent } from './types';
@@ -63,6 +63,9 @@ function close() {
   emit('update:open', false);
 }
 
+// macOS traffic-light: the red dot reveals a faint × on hover/focus.
+const closeHover = ref(false);
+
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') close();
 }
@@ -115,39 +118,55 @@ onUnmounted(() => unlockBody());
       aria-label="FluxFiles File Manager"
       @click="onOverlayClick"
     >
+      <!-- macOS-style window matching the browser SDK overlay (Laravel/WordPress),
+           so the Close affordance is identical across every adapter. -->
       <div
         :class="modalClass"
         :style="modalClass ? undefined : {
-          position: 'relative',
           width: '90vw',
           maxWidth: '1200px',
           height: '85vh',
-          background: '#fff',
-          borderRadius: '8px',
+          background: '#f5f5f7',
+          borderRadius: '10px',
           overflow: 'hidden',
-          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.22)',
+          display: 'flex',
+          flexDirection: 'column',
         }"
       >
-        <button
-          type="button"
-          aria-label="Close"
-          :style="{
-            position: 'absolute', top: '8px', right: '8px', zIndex: 1,
-            width: '30px', height: '30px', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', border: 'none', borderRadius: '50%',
-            background: 'rgba(0, 0, 0, 0.55)', color: '#fff', fontSize: '18px',
-            lineHeight: 1, cursor: 'pointer',
-          }"
-          @click="close"
-        >&times;</button>
-        <iframe
-          :ref="(el) => { handle.iframeRef.value = el as HTMLIFrameElement | null }"
-          :src="handle.iframeSrc.value"
-          style="width: 100%; height: 100%; border: none"
-          :allow="IFRAME_ALLOW"
-          allowfullscreen
-          title="FluxFiles File Manager"
-        />
+        <div :style="{
+          flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
+          padding: '10px 12px', borderBottom: '1px solid rgba(0, 0, 0, 0.06)', background: '#f5f5f7',
+        }">
+          <button
+            type="button"
+            aria-label="Close"
+            :style="{
+              width: '13px', height: '13px', padding: 0, border: 'none', borderRadius: '50%',
+              background: '#ff5f57', boxShadow: 'inset 0 0 0 0.5px rgba(0, 0, 0, 0.14)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '11px', lineHeight: 1, fontWeight: 700, flexShrink: 0,
+              transition: 'filter .15s, color .15s',
+              color: closeHover ? 'rgba(0, 0, 0, 0.55)' : 'rgba(0, 0, 0, 0)',
+              filter: closeHover ? 'brightness(0.93)' : 'none',
+            }"
+            @click="close"
+            @mouseenter="closeHover = true"
+            @mouseleave="closeHover = false"
+            @focus="closeHover = true"
+            @blur="closeHover = false"
+          >&times;</button>
+        </div>
+        <div :style="{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }">
+          <iframe
+            :ref="(el) => { handle.iframeRef.value = el as HTMLIFrameElement | null }"
+            :src="handle.iframeSrc.value"
+            style="width: 100%; height: 100%; border: none"
+            :allow="IFRAME_ALLOW"
+            allowfullscreen
+            title="FluxFiles File Manager"
+          />
+        </div>
       </div>
     </div>
   </Teleport>
