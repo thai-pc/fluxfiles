@@ -17,6 +17,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Fixed
 
+- **Image variants no longer collide across extensions.** `a.jpg` and `a.png`
+  shared `_variants/a_thumb.webp` and overwrote each other's thumbnails. Variant
+  keys now include the full filename (`a.jpg_thumb.webp` vs `a.png_thumb.webp`).
+  Legacy extension-less variants are orphaned (harmless cache) and cleaned on delete.
 - **Proxied error messages now localise.** The Laravel/WordPress proxy dropped the
   core's `error_code`/`error_params`, so the embedded UI always showed English (e.g.
   folder-exists / name-conflict) through an adapter. Both are now forwarded.
