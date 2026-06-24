@@ -130,6 +130,15 @@ class Claims
     /** @var int WebP quality for optimization (40–95). 0 = inherit default (82). */
     public int $optimizeQuality = 0;
 
+    /** @var string How an upload whose NAME collides with an existing different file
+     *            (content dedup is separate, by hash) is handled:
+     *              'rename'    — keep both; write `<name>-1.<ext>`, `-2`… (default, like
+     *                            Google Drive / Dropbox / WordPress).
+     *              'overwrite' — replace the existing file in place.
+     *              'reject'    — refuse with 409 so the host can prompt the user.
+     *            Invalid values fall back to 'rename'. */
+    public string $uploadCollision = 'rename';
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -333,6 +342,8 @@ class Claims
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
+        $collision = strtolower((string) ($payload->upload_collision ?? 'rename'));
+        $c->uploadCollision = in_array($collision, ['rename', 'overwrite', 'reject'], true) ? $collision : 'rename';
         $c->watermark = self::sanitizeWatermark($payload);
 
         // Usage-dashboard claims.

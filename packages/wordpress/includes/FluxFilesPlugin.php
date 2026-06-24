@@ -299,6 +299,10 @@ class FluxFilesPlugin
         if (!empty($overrides['optimize_quality'])) {
             $payload['optimize_quality'] = (int) $overrides['optimize_quality'];
         }
+        if (isset($overrides['upload_collision'])
+            && in_array($overrides['upload_collision'], ['rename', 'overwrite', 'reject'], true)) {
+            $payload['upload_collision'] = (string) $overrides['upload_collision'];
+        }
         if (array_key_exists('allow_zip', $overrides)) {
             $payload['allow_zip'] = (bool) $overrides['allow_zip'];
         }

@@ -264,7 +264,8 @@
         "url_scheme_denied": "Yalnızca http(s) URL'leri içe aktarılabilir.",
         "host_not_allowed": "Bu URL ana bilgisayarına izin verilmiyor.",
         "redirect_loop": "Çok fazla yönlendirme.",
-        "auth_required": "Bu URL oturum açma gerektiriyor ve içe aktarılamaz."
+        "auth_required": "Bu URL oturum açma gerektiriyor ve içe aktarılamaz.",
+        "name_conflict": "Bu ada sahip bir dosya zaten var."
     },
     "presign": {
         "title": "Ön imzalı URL",

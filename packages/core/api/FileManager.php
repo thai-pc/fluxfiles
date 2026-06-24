@@ -340,6 +340,20 @@ class FileManager
             }
         }
 
+        // Name-collision policy. By this point the content is NOT a hash-duplicate
+        // (that returned above), so a name clash means a DIFFERENT file sharing the
+        // name. Default 'rename' keeps both (like Drive/Dropbox/WordPress); 'reject'
+        // 409s for the host to prompt; 'overwrite' falls through to replace in place.
+        if ($this->claims->uploadCollision !== 'overwrite' && $fs->fileExists($scoped)) {
+            if ($this->claims->uploadCollision === 'reject') {
+                throw new ApiException('A file with this name already exists', 409, 'name_conflict', ['name' => $name]);
+            }
+            // 'rename' → append -1, -2, … to the base name (extension preserved).
+            $name   = $this->uniqueName($fs, rtrim($path, '/'), $name);
+            $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
+            $this->assertNotSystem($scoped);
+        }
+
         // Track parent directories for global folder search (best-effort)
         if ($this->meta instanceof StorageMetadataHandler) {
             $this->meta->trackParents($disk, $scoped);
@@ -1352,6 +1366,33 @@ class FileManager
 
     /** Skip on-upload auto-optimize above this size (huge images: too slow inline). */
     private const AUTO_OPTIMIZE_MAX = 40 * 1024 * 1024;
+
+    /** Hard cap on the rename probe so a pathological folder can't loop forever. */
+    private const MAX_COLLISION_TRIES = 10000;
+
+    /**
+     * Find a non-colliding filename in $dirUser by appending `-1`, `-2`, … to the
+     * base name while preserving the extension (extension immutability), e.g.
+     * `photo.jpg` → `photo-1.jpg`. $dirUser/$name are UNSCOPED (user-relative);
+     * returns the chosen unscoped filename. Falls back to a short random suffix if
+     * the numeric probe is exhausted.
+     */
+    private function uniqueName($fs, string $dirUser, string $name): string
+    {
+        $dot  = strrpos($name, '.');
+        $base = $dot === false ? $name : substr($name, 0, $dot);
+        $ext  = $dot === false ? '' : substr($name, $dot); // includes the leading dot
+        $prefix = $dirUser === '' ? '' : $dirUser . '/';
+
+        for ($i = 1; $i <= self::MAX_COLLISION_TRIES; $i++) {
+            $candidate = $base . '-' . $i . $ext;
+            if (!$fs->fileExists($this->scopedPath($prefix . $candidate))) {
+                return $candidate;
+            }
+        }
+        // Exhausted (extremely unlikely) — random suffix is effectively collision-free.
+        return $base . '-' . bin2hex(random_bytes(4)) . $ext;
+    }
 
     /**
      * Read a file's text content for the in-browser editor. Read perm; size-capped

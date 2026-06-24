@@ -264,7 +264,8 @@
         "url_scheme_denied": "Si possono importare solo URL http(s).",
         "host_not_allowed": "L'host di questa URL non è consentito.",
         "redirect_loop": "Troppi reindirizzamenti.",
-        "auth_required": "Questa URL richiede l'accesso e non può essere importata."
+        "auth_required": "Questa URL richiede l'accesso e non può essere importata.",
+        "name_conflict": "Esiste già un file con questo nome."
     },
     "presign": {
         "title": "URL prefirmato",
