@@ -3,7 +3,11 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.44] — 2026-06-25
+
+> Released: core `core-v0.2.39` (Packagist + Docker), Laravel `laravel-v0.2.22`,
+> WordPress `wordpress-v0.2.23`, Node `@fluxfiles/node` `0.1.16`. Adapter core
+> floors → `^0.2.39`. (SDK/React/Vue unchanged since 0.2.42.)
 
 ### Added
 
