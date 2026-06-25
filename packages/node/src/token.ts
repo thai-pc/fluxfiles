@@ -142,6 +142,13 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowChmod !== undefined) payload.allow_chmod = !!opts.allowChmod;
   if (opts.allowCodeEdit !== undefined) payload.allow_code_edit = !!opts.allowCodeEdit;
   if (opts.allowOptimize !== undefined) payload.allow_optimize = !!opts.allowOptimize;
+  // Other paid-module claims (inert unless the module is installed + licensed).
+  if (opts.allowShare !== undefined) payload.allow_share = !!opts.allowShare;
+  if (opts.allowAiVision !== undefined) payload.allow_ai_vision = !!opts.allowAiVision;
+  if (opts.allowOcr !== undefined) payload.allow_ocr = !!opts.allowOcr;
+  if (opts.allowVirusScan !== undefined) payload.allow_virus_scan = !!opts.allowVirusScan;
+  if (opts.allowBackup !== undefined) payload.allow_backup = !!opts.allowBackup;
+  if (opts.allowC2pa !== undefined) payload.allow_c2pa = !!opts.allowC2pa;
   if (opts.autoOptimize !== undefined) payload.auto_optimize = !!opts.autoOptimize;
   if (opts.optimizeQuality && opts.optimizeQuality > 0) payload.optimize_quality = Math.trunc(opts.optimizeQuality);
   if (opts.optimizeFormat === 'avif') payload.optimize_format = 'avif';

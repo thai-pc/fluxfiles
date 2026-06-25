@@ -7,6 +7,21 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Added
 
+- **Paid-module framework — 6 commercial modules scaffolded.** Beyond Optimize,
+  the core now registers + gates five more modules (3-layer gate: installed +
+  licensed + claim), each shipping as its own proprietary package (gitignored;
+  private repo per module):
+  - **Share** (`allow_share`, `POST /api/fm/share`) — public links with expiry /
+    password / download-cap + view-download counter (engine complete).
+  - **AI Vision** (`allow_ai_vision`, `POST /api/fm/ai-vision`) — bg-removal /
+    upscale / smart-crop (BYO provider key).
+  - **OCR** (`allow_ocr`, `POST /api/fm/ocr`) — text extraction (tesseract / BYO).
+  - **Virus scan** (`allow_virus_scan`, on-upload hook) — ClamAV / BYO VirusTotal.
+  - **Backup Bridge** (`allow_backup`, `POST /api/fm/backup`) — cross-disk sync.
+  - **C2PA** (`allow_c2pa`, `POST /api/fm/c2pa`) — content provenance (c2patool).
+  Core changes are MIT (registry + endpoints + `allow_*` claims forwarded by every
+  token helper); engines that need a binary/provider key are availability-gated
+  (501 until configured). Free core ships none of the packages → all 501 cleanly.
 - **License/edition surface (UX).** The usage dashboard now shows an edition +
   license-status banner from `GET /api/fm/license` (edition pill, status, days-left,
   grace/perpetual/renew-soon notes; `license` i18n namespace ×16). And token helpers

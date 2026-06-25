@@ -131,6 +131,14 @@ export interface BaseTokenOptions {
   /** Edition preset that defaults a tier's claims (`pro`/`agency`/`enterprise`).
    *  DX sugar — explicit claim options still win, and the license gates the code. */
   edition?: 'free' | 'pro' | 'agency' | 'enterprise';
+  /** Paid-module claims (3-layer gate: code installed + licensed + this claim).
+   *  All default off; inert unless the module is installed & licensed on the server. */
+  allowShare?: boolean;
+  allowAiVision?: boolean;
+  allowOcr?: boolean;
+  allowVirusScan?: boolean;
+  allowBackup?: boolean;
+  allowC2pa?: boolean;
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;
   /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */

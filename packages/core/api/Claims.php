@@ -123,6 +123,15 @@ class Claims
      *            installed and the license must cover it (the 3-layer gate). */
     public bool $allowOptimize = false;
 
+    /** @var bool Paid module claims (3-layer gate — code installed + licensed + this
+     *            claim). All default FALSE (opt-in). See ModuleRegistry. */
+    public bool $allowShare = false;       // Branded Share links (fluxfiles/share)
+    public bool $allowAiVision = false;    // AI Vision: bg-removal/upscale/smart-crop (fluxfiles/ai)
+    public bool $allowOcr = false;         // OCR / document text extraction (fluxfiles/ocr)
+    public bool $allowVirusScan = false;   // Virus/malware scan on upload (fluxfiles/virus)
+    public bool $allowBackup = false;      // Backup Bridge: SFTP↔S3 sync (fluxfiles/backup)
+    public bool $allowC2pa = false;        // C2PA content provenance (fluxfiles/c2pa)
+
     /** @var bool Auto-optimize images on upload (recompress to WebP in the pipeline)?
      *            Default FALSE. Like allow_optimize, only effective when the module
      *            is installed + licensed (the core wires the upload hook then). */
@@ -362,6 +371,12 @@ class Claims
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
+        $c->allowShare = (bool) ($payload->allow_share ?? false);
+        $c->allowAiVision = (bool) ($payload->allow_ai_vision ?? false);
+        $c->allowOcr = (bool) ($payload->allow_ocr ?? false);
+        $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);
+        $c->allowBackup = (bool) ($payload->allow_backup ?? false);
+        $c->allowC2pa = (bool) ($payload->allow_c2pa ?? false);
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
         $c->optimizeFormat = (($payload->optimize_format ?? 'webp') === 'avif') ? 'avif' : 'webp';

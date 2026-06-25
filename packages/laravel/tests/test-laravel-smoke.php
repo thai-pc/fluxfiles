@@ -239,7 +239,12 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   the JSON encoder); the JSON-returning proxy controllers don't do streaming
     //   responses, so it's a core-standalone / Docker feature like stream/img.
     //   (Extract, by contrast, returns JSON and IS proxied.)
-    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip'];
+    // - paid module endpoints (share, ai-vision, ocr, backup, c2pa): the module code
+    //   is a separate proprietary package gated by ModuleRegistry. They're wired in
+    //   core; the adapter proxy route for each lands with that module's full release
+    //   (optimize is already proxied as the reference). Scaffolded now, proxied per
+    //   module when its engine ships.
+    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'share', 'ai-vision', 'ocr', 'backup', 'c2pa'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

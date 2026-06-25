@@ -322,6 +322,25 @@ test('fluxfiles_token forwards webp claims via the $webp param', function () {
     assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality forwarded');
 });
 
+test('paid-module claims forward + parse (share/ai/ocr/virus/backup/c2pa)', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, null, [
+            'allow_share' => true, 'allow_ai_vision' => true, 'allow_ocr' => true,
+            'allow_virus_scan' => true, 'allow_backup' => true, 'allow_c2pa' => true,
+        ]);
+    $c = Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    assertEqual(true, $c->allowShare, 'allow_share');
+    assertEqual(true, $c->allowAiVision, 'allow_ai_vision');
+    assertEqual(true, $c->allowOcr, 'allow_ocr');
+    assertEqual(true, $c->allowVirusScan, 'allow_virus_scan');
+    assertEqual(true, $c->allowBackup, 'allow_backup');
+    assertEqual(true, $c->allowC2pa, 'allow_c2pa');
+    // Default off.
+    $def = Claims::fromJwtPayload((object) []);
+    assertEqual(false, $def->allowShare, 'default off');
+});
+
 test('edition preset defaults tier claims; explicit overrides win', function () {
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     // pro edition (18th positional arg) → allow_optimize on by default.

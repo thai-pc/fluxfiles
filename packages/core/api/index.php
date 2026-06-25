@@ -453,6 +453,34 @@ function routeRequest(
         return $module->run($fm, $diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
     }
 
+    // ── Other paid modules — same 3-layer gate (501/402/403). Free core ships none
+    // of these packages → class_exists false → 501 module_not_installed. ───────────
+    if ($method === 'POST' && $uri === '/api/fm/share') {
+        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->createShare($fm, $diskManager, $claims, $secret, $body);
+    }
+    if ($method === 'POST' && $uri === '/api/fm/ai-vision') {
+        $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->run($fm, $diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
+    }
+    if ($method === 'POST' && $uri === '/api/fm/ocr') {
+        $module = \FluxFiles\ModuleRegistry::require('ocr', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->run($fm, $diskManager, $claims, $body);
+    }
+    if ($method === 'POST' && $uri === '/api/fm/backup') {
+        $module = \FluxFiles\ModuleRegistry::require('backup', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->run($fm, $diskManager, $claims, $body);
+    }
+    if ($method === 'POST' && $uri === '/api/fm/c2pa') {
+        $module = \FluxFiles\ModuleRegistry::require('c2pa', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->verify($fm, $diskManager, $claims, $body);
+    }
+
     // Config / code editor — read a file's text content, or overwrite it.
     if ($method === 'GET' && $uri === '/api/fm/content') {
         return $fm->getContent($_GET['disk'] ?? 'local', $_GET['path'] ?? '');

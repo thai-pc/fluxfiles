@@ -65,5 +65,12 @@ docs/LICENSING-PLAN.md
 docs/*.SECRET.txt
 docs/license-signing-key*
 
-# Proprietary paid module (private — not part of the MIT core; lives in a private repo for distribution)
+# Proprietary paid modules (private — not part of the MIT core; each lives in its
+# own private repo for distribution). NEVER commit these to the public monorepo.
 packages/optimize/
+packages/share/
+packages/ai/
+packages/ocr/
+packages/virus/
+packages/backup/
+packages/c2pa/

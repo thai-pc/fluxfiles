@@ -328,6 +328,12 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (!empty($webp['srcset_sizes'])) {
         $payload['srcset_sizes'] = (string) $webp['srcset_sizes'];
     }
+    // Paid-module claims (3-layer gate; inert unless the module is installed+licensed).
+    foreach (['allow_share', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        if (array_key_exists($mc, $webp)) {
+            $payload[$mc] = (bool) $webp[$mc];
+        }
+    }
     // Access gates (download / chmod) + watermark.
     if (array_key_exists('allow_download', $webp)) {
         $payload['allow_download'] = (bool) $webp['allow_download'];

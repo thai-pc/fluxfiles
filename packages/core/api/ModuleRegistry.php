@@ -29,6 +29,12 @@ final class ModuleRegistry
      */
     private static array $map = [
         'optimize' => '\\FluxFiles\\Optimize\\OptimizeModule',
+        'share'    => '\\FluxFiles\\Share\\ShareModule',
+        'ai'       => '\\FluxFiles\\Ai\\AiVisionModule',
+        'ocr'      => '\\FluxFiles\\Ocr\\OcrModule',
+        'virus'    => '\\FluxFiles\\Virus\\VirusScanModule',
+        'backup'   => '\\FluxFiles\\Backup\\BackupModule',
+        'c2pa'     => '\\FluxFiles\\C2pa\\C2paModule',
     ];
 
     /** Snapshot of the built-in map, for reset() in tests. @var array<string,string> */
