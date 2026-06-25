@@ -219,7 +219,7 @@ test('index pre-existing subtree (hash+variants) → variant object + metadata c
     assertTrue($stats['variants'] >= 1, 'variants generated');
     $got = $meta->get('s3test', $preKey);
     assertTrue(is_array($got) && ($got['title'] ?? '') === 'orig', 'metadata persisted (title=orig)');
-    assertTrue($dm->disk('s3test')->fileExists($prefix . '/pre-existing/_variants/orig_thumb.webp'), 'variant object on bucket');
+    assertTrue($dm->disk('s3test')->fileExists($prefix . '/pre-existing/_variants/orig.png_thumb.webp'), 'variant object on bucket');
 });
 
 // ── Chunk / multipart upload (init → presign part → PUT → complete / abort) ──
