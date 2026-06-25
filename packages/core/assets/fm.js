@@ -2038,8 +2038,9 @@ function fluxFilesApp() {
 
         // ── Watermark editor (drag-and-drop, free) ──────────────────────────
         initWatermark() {
-            // Keep the chosen logo/text across re-opens; just reset position sanely.
-            this.wm.x = 0.7; this.wm.y = 0.85;
+            // Keep the chosen logo/text across re-opens; just reset position sanely
+            // (a touch off the bottom-right so the mark stays fully on the preview).
+            this.wm.x = 0.65; this.wm.y = 0.7;
         },
         get wmReady() {
             return this.wm.type === 'logo' ? !!this.wm.logo : this.wm.text.trim() !== '';

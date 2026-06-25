@@ -1063,9 +1063,10 @@
             <!-- Drag canvas: image with a draggable, resizable watermark overlay -->
             <div class="ff-wm-stage" x-ref="wmStage" @mousemove="wmDragMove($event)" @mouseup="wmDragEnd()" @mouseleave="wmDragEnd()">
                 <img :src="detailFile?.url" :alt="detailFile?.name" draggable="false" style="width:100%;display:block;user-select:none;">
-                <!-- logo overlay -->
+                <!-- logo overlay (left/top clamped by width so it mirrors the server's
+                     in-canvas clamp and never overflows the clipped stage) -->
                 <div class="ff-wm-mark" x-show="wm.type === 'logo' && wm.logo"
-                     :style="'left:'+(wm.x*100)+'%;top:'+(wm.y*100)+'%;width:'+(wm.scale*100)+'%;opacity:'+wm.opacity"
+                     :style="'left:'+(Math.min(wm.x, 1-wm.scale)*100)+'%;top:'+(Math.min(wm.y, 1-wm.scale)*100)+'%;width:'+(wm.scale*100)+'%;opacity:'+wm.opacity"
                      @mousedown.prevent="wmDragStart($event, false)">
                     <img :src="wm.logo" draggable="false" style="width:100%;display:block;pointer-events:none;">
                     <div class="ff-wm-handle" @mousedown.prevent.stop="wmDragStart($event, true)"></div>
