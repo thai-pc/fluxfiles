@@ -160,7 +160,8 @@
         "caption": "Bijschrift",
         "caption_hint": "Korte beschrijving onder de afbeelding",
         "saving": "Opslaan...",
-        "saved": "Opgeslagen"
+        "saved": "Opgeslagen",
+        "tab_watermark": "Watermerk"
     },
     "disk": {
         "local": "Lokale schijf",
@@ -393,5 +394,18 @@
             "perpetual": "Eeuwigdurende licentie — draait nog; verleng voor nieuwe updates.",
             "renew_soon": "Verlengt over {days} dagen."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Tekst",
+        "upload_logo": "Logo uploaden",
+        "size": "Grootte",
+        "font_size": "Lettertype",
+        "color": "Kleur",
+        "opacity": "Dekking",
+        "text_placeholder": "Watermerktekst…",
+        "apply": "Watermerk toepassen",
+        "done": "Watermerk toegepast",
+        "failed": "Watermerk mislukt"
     }
 }

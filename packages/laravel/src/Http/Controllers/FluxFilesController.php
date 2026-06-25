@@ -419,6 +419,46 @@ class FluxFilesController
         }
     }
 
+    public function watermark(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk = (string) ($request->input('disk') ?? 'local');
+            $path = (string) ($request->input('path') ?? '');
+            if ($path === '') {
+                throw new ApiException('Missing path', 400);
+            }
+            $wm = [
+                'type'      => $request->input('type') === 'text' ? 'text' : 'logo',
+                'text'      => (string) ($request->input('text') ?? ''),
+                'x'         => (float) ($request->input('x') ?? 0.7),
+                'y'         => (float) ($request->input('y') ?? 0.85),
+                'scale'     => (float) ($request->input('scale') ?? 0.25),
+                'opacity'   => (float) ($request->input('opacity') ?? 0.6),
+                'font_size' => (int) ($request->input('font_size') ?? 24),
+                'color'     => (string) ($request->input('color') ?? '#ffffff'),
+            ];
+            if ($request->input('logo_data')) {
+                $b64 = preg_replace('#^data:[^,]+,#', '', (string) $request->input('logo_data'));
+                $bin = base64_decode((string) $b64, true);
+                if ($bin === false || $bin === '') {
+                    throw new ApiException('Invalid logo data', 400);
+                }
+                $wm['logo_data'] = $bin;
+            }
+            $dest = $request->input('dest');
+            $result = $fm->applyWatermark($disk, $path, $wm, $dest !== '' ? $dest : null);
+            $this->logAudit($claims, 'watermark', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function aiTag(Request $request): JsonResponse
     {
         try {

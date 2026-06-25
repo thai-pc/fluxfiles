@@ -162,6 +162,11 @@ function fluxFilesApp() {
         metaSaveTimer: null,
         seoSectionExpanded: true, // accordion: collapse SEO fields to save space
 
+        // Watermark editor state (drag-and-drop, free)
+        wm: { type: 'logo', logo: '', text: '', x: 0.7, y: 0.85, scale: 0.25, opacity: 0.6, font_size: 24, color: '#ffffff' },
+        wmSaving: false,
+        _wmDrag: null, // { resize, ox, oy, startScale, startX }
+
         // Crop state
         cropActive: false,
         cropSaving: false,
@@ -2028,6 +2033,91 @@ function fluxFilesApp() {
                 this.showToast(this.t('crop.failed', { message: err.message }) || ('Crop failed: ' + err.message), 'error', 4000);
             } finally {
                 this.cropSaving = false;
+            }
+        },
+
+        // ── Watermark editor (drag-and-drop, free) ──────────────────────────
+        initWatermark() {
+            // Keep the chosen logo/text across re-opens; just reset position sanely.
+            this.wm.x = 0.7; this.wm.y = 0.85;
+        },
+        get wmReady() {
+            return this.wm.type === 'logo' ? !!this.wm.logo : this.wm.text.trim() !== '';
+        },
+        // Display font-size (px) on the scaled preview, derived from the on-image size.
+        get wmTextPx() {
+            const img = this.$refs.wmStage && this.$refs.wmStage.querySelector('img');
+            if (!img || !img.naturalWidth) return this.wm.font_size;
+            return Math.max(6, this.wm.font_size * (img.clientWidth / img.naturalWidth));
+        },
+        wmLoadLogo(e) {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = () => { this.wm.logo = r.result; };
+            r.readAsDataURL(f);
+        },
+        wmDragStart(e, resize) {
+            const rect = this.$refs.wmStage.getBoundingClientRect();
+            this._wmDrag = {
+                resize: resize,
+                rect: rect,
+                // pointer offset within the mark, as a fraction of the stage
+                ox: (e.clientX - rect.left) / rect.width - this.wm.x,
+                oy: (e.clientY - rect.top) / rect.height - this.wm.y,
+                startScale: this.wm.scale,
+                startPx: e.clientX,
+            };
+        },
+        wmDragMove(e) {
+            const d = this._wmDrag;
+            if (!d) return;
+            const clamp = (v) => Math.max(0, Math.min(1, v));
+            if (d.resize) {
+                // Drag right → grow logo width (fraction of stage), clamp 0.05–0.9.
+                const delta = (e.clientX - d.startPx) / d.rect.width;
+                this.wm.scale = Math.max(0.05, Math.min(0.9, d.startScale + delta));
+            } else {
+                this.wm.x = clamp((e.clientX - d.rect.left) / d.rect.width - d.ox);
+                this.wm.y = clamp((e.clientY - d.rect.top) / d.rect.height - d.oy);
+            }
+        },
+        wmDragEnd() { this._wmDrag = null; },
+
+        async saveWatermark(mode) {
+            if (!this.wmReady || this.wmSaving) return;
+            this.wmSaving = true;
+            try {
+                const body = {
+                    disk: this.currentDisk,
+                    path: this.detailFile.key,
+                    type: this.wm.type,
+                    x: this.wm.x, y: this.wm.y,
+                    opacity: this.wm.opacity,
+                };
+                if (this.wm.type === 'logo') {
+                    body.logo_data = this.wm.logo; // data: URI; server strips the prefix
+                    body.scale = this.wm.scale;
+                } else {
+                    body.text = this.wm.text;
+                    body.font_size = this.wm.font_size;
+                    body.color = this.wm.color;
+                }
+                if (mode === 'copy') {
+                    const ext = this.detailFile.name.split('.').pop();
+                    const base = this.detailFile.name.replace(/\.[^.]+$/, '');
+                    body.dest = (this.currentPath ? this.currentPath + '/' : '') + base + '_wm.' + ext;
+                }
+                const result = await this.api('POST', '/api/fm/watermark', body);
+                this.postMessage('FM_EVENT', { event: 'watermark:done', key: result.key });
+                this.showToast(this.t('watermark.done') || 'Watermark applied', 'success');
+                this.activeTab = 'info';
+                this.loadFiles();
+            } catch (err) {
+                console.error('FluxFiles: Watermark failed', err);
+                this.showToast(err.message || (this.t('watermark.failed') || 'Watermark failed'), 'error', 4000);
+            } finally {
+                this.wmSaving = false;
             }
         },
 

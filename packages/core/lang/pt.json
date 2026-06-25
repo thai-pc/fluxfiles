@@ -160,7 +160,8 @@
         "caption": "Legenda",
         "caption_hint": "Descrição curta exibida abaixo da imagem",
         "saving": "Salvando...",
-        "saved": "Salvo"
+        "saved": "Salvo",
+        "tab_watermark": "Marca d’água"
     },
     "disk": {
         "local": "Disco local",
@@ -393,5 +394,18 @@
             "perpetual": "Licença perpétua — ainda ativa; renove para novas atualizações.",
             "renew_soon": "Renova em {days} dias."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Texto",
+        "upload_logo": "Enviar logo",
+        "size": "Tamanho",
+        "font_size": "Fonte",
+        "color": "Cor",
+        "opacity": "Opacidade",
+        "text_placeholder": "Texto da marca d’água…",
+        "apply": "Aplicar marca d’água",
+        "done": "Marca d’água aplicada",
+        "failed": "Falha na marca d’água"
     }
 }

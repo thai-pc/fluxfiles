@@ -160,7 +160,8 @@
         "caption": "Bildunterschrift",
         "caption_hint": "Kurzbeschreibung unterhalb des Bildes",
         "saving": "Wird gespeichert...",
-        "saved": "Gespeichert"
+        "saved": "Gespeichert",
+        "tab_watermark": "Wasserzeichen"
     },
     "disk": {
         "local": "Lokaler Speicher",
@@ -393,5 +394,18 @@
             "perpetual": "Dauerlizenz — läuft weiter; für neue Updates verlängern.",
             "renew_soon": "Verlängerung in {days} Tagen."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Text",
+        "upload_logo": "Logo hochladen",
+        "size": "Größe",
+        "font_size": "Schrift",
+        "color": "Farbe",
+        "opacity": "Deckkraft",
+        "text_placeholder": "Wasserzeichentext…",
+        "apply": "Wasserzeichen anwenden",
+        "done": "Wasserzeichen angewendet",
+        "failed": "Wasserzeichen fehlgeschlagen"
     }
 }

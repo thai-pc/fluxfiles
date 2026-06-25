@@ -160,7 +160,8 @@
         "caption": "Caption",
         "caption_hint": "Short description shown below the image",
         "saving": "Saving...",
-        "saved": "Saved"
+        "saved": "Saved",
+        "tab_watermark": "Watermark"
     },
     "disk": {
         "local": "Local disk",
@@ -393,5 +394,18 @@
             "perpetual": "Perpetual license — still running; renew to get new updates.",
             "renew_soon": "Renews in {days} days."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Text",
+        "upload_logo": "Upload logo",
+        "size": "Size",
+        "font_size": "Font",
+        "color": "Color",
+        "opacity": "Opacity",
+        "text_placeholder": "Watermark text…",
+        "apply": "Apply watermark",
+        "done": "Watermark applied",
+        "failed": "Watermark failed"
     }
 }

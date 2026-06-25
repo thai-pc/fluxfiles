@@ -160,7 +160,8 @@
         "caption": "캡션",
         "caption_hint": "이미지 아래에 표시되는 짧은 설명",
         "saving": "저장 중...",
-        "saved": "저장 완료"
+        "saved": "저장 완료",
+        "tab_watermark": "워터마크"
     },
     "disk": {
         "local": "로컬 디스크",
@@ -393,5 +394,18 @@
             "perpetual": "영구 라이선스 — 계속 실행 중; 새 업데이트는 갱신 필요.",
             "renew_soon": "{days}일 후 갱신."
         }
+    },
+    "watermark": {
+        "logo": "로고",
+        "text": "텍스트",
+        "upload_logo": "로고 업로드",
+        "size": "크기",
+        "font_size": "글꼴",
+        "color": "색상",
+        "opacity": "불투명도",
+        "text_placeholder": "워터마크 텍스트…",
+        "apply": "워터마크 적용",
+        "done": "워터마크 적용됨",
+        "failed": "워터마크 실패"
     }
 }

@@ -115,6 +115,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/crop', array_merge($writeArgs, [
             'callback' => [$api, 'handleCrop'],
         ]));
+        register_rest_route($ns, $p . '/watermark', array_merge($writeArgs, [
+            'callback' => [$api, 'handleWatermark'],
+        ]));
         register_rest_route($ns, $p . '/ai-tag', array_merge($writeArgs, [
             'callback' => [$api, 'handleAiTag'],
         ]));
@@ -602,6 +605,46 @@ class FluxFilesApi
                 $body['save_path'] ?? null
             );
             $this->logAudit($claims, 'crop', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function handleWatermark(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $path = (string) ($body['path'] ?? '');
+            if ($path === '') {
+                throw new ApiException('Missing path', 400);
+            }
+            $wm = [
+                'type'      => ($body['type'] ?? 'logo') === 'text' ? 'text' : 'logo',
+                'text'      => (string) ($body['text'] ?? ''),
+                'x'         => (float) ($body['x'] ?? 0.7),
+                'y'         => (float) ($body['y'] ?? 0.85),
+                'scale'     => (float) ($body['scale'] ?? 0.25),
+                'opacity'   => (float) ($body['opacity'] ?? 0.6),
+                'font_size' => (int) ($body['font_size'] ?? 24),
+                'color'     => (string) ($body['color'] ?? '#ffffff'),
+            ];
+            if (!empty($body['logo_data'])) {
+                $b64 = preg_replace('#^data:[^,]+,#', '', (string) $body['logo_data']);
+                $bin = base64_decode((string) $b64, true);
+                if ($bin === false || $bin === '') {
+                    throw new ApiException('Invalid logo data', 400);
+                }
+                $wm['logo_data'] = $bin;
+            }
+            $dest = isset($body['dest']) && $body['dest'] !== '' ? (string) $body['dest'] : null;
+            $result = $fm->applyWatermark((string) ($body['disk'] ?? 'local'), $path, $wm, $dest);
+            $this->logAudit($claims, 'watermark', (string) ($body['disk'] ?? 'local'), $path);
 
             return $this->ok($result);
         } catch (ApiException $e) {

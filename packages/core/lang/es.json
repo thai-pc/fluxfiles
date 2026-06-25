@@ -160,7 +160,8 @@
         "caption": "Leyenda",
         "caption_hint": "Descripción breve que se muestra debajo de la imagen",
         "saving": "Guardando...",
-        "saved": "Guardado"
+        "saved": "Guardado",
+        "tab_watermark": "Marca de agua"
     },
     "disk": {
         "local": "Disco local",
@@ -393,5 +394,18 @@
             "perpetual": "Licencia perpetua — sigue activa; renueva para nuevas actualizaciones.",
             "renew_soon": "Se renueva en {days} días."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Texto",
+        "upload_logo": "Subir logo",
+        "size": "Tamaño",
+        "font_size": "Fuente",
+        "color": "Color",
+        "opacity": "Opacidad",
+        "text_placeholder": "Texto de marca de agua…",
+        "apply": "Aplicar marca de agua",
+        "done": "Marca de agua aplicada",
+        "failed": "Error de marca de agua"
     }
 }

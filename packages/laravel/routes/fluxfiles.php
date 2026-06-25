@@ -29,6 +29,7 @@ Route::post('mkdir', [FluxFilesController::class, 'mkdir']);
 Route::post('cross-copy', [FluxFilesController::class, 'crossCopy']);
 Route::post('cross-move', [FluxFilesController::class, 'crossMove']);
 Route::post('crop', [FluxFilesController::class, 'crop']);
+Route::post('watermark', [FluxFilesController::class, 'watermark']);
 Route::post('ai-tag', [FluxFilesController::class, 'aiTag']);
 Route::post('presign', [FluxFilesController::class, 'presign']);
 Route::get('meta', [FluxFilesController::class, 'meta']);

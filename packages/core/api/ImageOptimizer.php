@@ -105,6 +105,44 @@ class ImageOptimizer
     }
 
     /**
+     * Burn a watermark INTO image bytes (for the drag-and-drop editor — distinct
+     * from the on-the-fly /img overlay). $wm:
+     *   {type:'logo'|'text', logo_data?, text?, x, y (0–1 top-left), scale (0–1 of
+     *    base width, logo only), opacity (0–1), font_size?, color?}.
+     * Returns ['data','mime','width','height'] in the source format.
+     *
+     * @param array<string,mixed> $wm
+     * @return array<string,mixed>
+     */
+    public function burnWatermark(string $imageData, array $wm, string $format = 'png', int $quality = 90): array
+    {
+        $image = $this->manager->read($imageData);
+        $x = (float) ($wm['x'] ?? 0.7);
+        $y = (float) ($wm['y'] ?? 0.85);
+        $opacity = max(0.0, min(1.0, (float) ($wm['opacity'] ?? 0.6)));
+
+        if (($wm['type'] ?? 'logo') === 'logo' && !empty($wm['logo_data'])) {
+            $scale = (float) ($wm['scale'] ?? 0.25);
+            $image = $this->manager->placeLogoAt($image, (string) $wm['logo_data'], $x, $y, $scale, $opacity);
+        } else {
+            $text = trim((string) ($wm['text'] ?? ''));
+            if ($text !== '') {
+                $fontSize = max(8, min(400, (int) ($wm['font_size'] ?? 24)));
+                $color = (string) ($wm['color'] ?? '#ffffff');
+                $image = $this->manager->drawTextAt($image, $text, $x, $y, $fontSize, $opacity, $color, self::fontPath());
+            }
+        }
+
+        switch ($format) {
+            case 'webp': $encoded = $this->manager->encodeWebp($image, $quality); $mime = 'image/webp'; break;
+            case 'jpg':
+            case 'jpeg': $encoded = $this->manager->encodeJpeg($image, $quality); $mime = 'image/jpeg'; break;
+            default:     $encoded = $this->manager->encodePng($image); $mime = 'image/png'; break;
+        }
+        return ['data' => (string) $encoded, 'mime' => $mime, 'width' => $image->width(), 'height' => $image->height()];
+    }
+
+    /**
      * Convert raster image bytes to a resized WebP (on-demand transform).
      *
      * Returns null — meaning "serve the original unchanged" — when the source

@@ -1350,6 +1350,74 @@ class FileManager
         ]])[0];
     }
 
+    /**
+     * Burn a watermark into an image and save it (in place or "save as"). The free
+     * drag-and-drop editor counterpart to the on-the-fly /img overlay. $wm carries
+     * {type, logo_data|text, x, y, scale|font_size, opacity, color}. Mirrors
+     * cropImage: write perm + owner + extension-immutable + variant regen.
+     *
+     * @param array<string,mixed> $wm
+     * @return array<string,mixed>
+     */
+    public function applyWatermark(string $disk, string $path, array $wm, ?string $savePath = null): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+
+        $scopedSrc = $this->scopedPath($path);
+        $this->assertNotSystem($scopedSrc);
+        $this->assertOwner($disk, $scopedSrc);
+        $fs = $this->disks->disk($disk);
+        if (!$fs->fileExists($scopedSrc)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+        if (!$this->imageOptimizer->isImage($scopedSrc)) {
+            throw new ApiException('Not an image', 415, 'not_image');
+        }
+
+        $ext = strtolower(pathinfo($scopedSrc, PATHINFO_EXTENSION));
+        $format = in_array($ext, ['jpg', 'jpeg'], true) ? 'jpg' : ($ext === 'webp' ? 'webp' : 'png');
+        $result = $this->imageOptimizer->burnWatermark((string) $fs->read($scopedSrc), $wm, $format);
+
+        $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
+        $this->assertNotSystem($scopedDst);
+        if ($savePath !== null && $scopedDst !== $scopedSrc) {
+            // Extension is immutable — a watermarked copy keeps the source format.
+            if (strtolower(pathinfo($scopedDst, PATHINFO_EXTENSION)) !== $ext) {
+                throw new ApiException('Cannot change the file extension', 422, 'ext_changed');
+            }
+            $this->validateUploadName(basename($scopedDst), 0);
+            $this->assertTargetAvailable($fs, $scopedDst);
+        }
+        $fs->write($scopedDst, $result['data']);
+
+        // Regenerate variants for the new bytes (best-effort), like cropImage.
+        $tmpFile = tempnam(sys_get_temp_dir(), 'ffwm_');
+        $variants = null;
+        try {
+            file_put_contents($tmpFile, $result['data']);
+            $variants = [];
+            foreach ($this->imageOptimizer->process($fs, $scopedDst, $tmpFile) as $sizeName => $info) {
+                $variants[$sizeName] = [
+                    'url' => $this->fileUrl($disk, $info['key']), 'key' => $info['key'],
+                    'width' => $info['width'], 'height' => $info['height'],
+                ];
+            }
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: Variant regen after watermark failed — ' . $e->getMessage());
+        } finally {
+            @unlink($tmpFile);
+        }
+
+        return $this->unscopeItems([[
+            'key'      => $this->outKey($scopedDst),
+            'url'      => $this->fileUrl($disk, $scopedDst),
+            'width'    => $result['width'],
+            'height'   => $result['height'],
+            'variants' => $variants,
+        ]])[0];
+    }
+
     public function aiTag(string $disk, string $path): array
     {
         $this->assertDisk($disk);

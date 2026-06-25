@@ -160,7 +160,8 @@
         "caption": "Légende",
         "caption_hint": "Courte description affichée sous l'image",
         "saving": "Enregistrement...",
-        "saved": "Enregistré"
+        "saved": "Enregistré",
+        "tab_watermark": "Filigrane"
     },
     "disk": {
         "local": "Disque local",
@@ -393,5 +394,18 @@
             "perpetual": "Licence perpétuelle — toujours active ; renouvelez pour de nouvelles mises à jour.",
             "renew_soon": "Renouvellement dans {days} jours."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Texte",
+        "upload_logo": "Importer un logo",
+        "size": "Taille",
+        "font_size": "Police",
+        "color": "Couleur",
+        "opacity": "Opacité",
+        "text_placeholder": "Texte du filigrane…",
+        "apply": "Appliquer le filigrane",
+        "done": "Filigrane appliqué",
+        "failed": "Échec du filigrane"
     }
 }

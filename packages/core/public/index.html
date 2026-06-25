@@ -879,6 +879,11 @@
                     @click="activeTab = 'crop'; initCrop()"
                     x-show="detailFile && isPreviewable(detailFile, 'image')"
                     x-text="t('metadata.tab_crop')"></button>
+            <button class="ff-tab-btn"
+                    :class="{ active: activeTab === 'watermark' }"
+                    @click="activeTab = 'watermark'; initWatermark()"
+                    x-show="detailFile && isPreviewable(detailFile, 'image')"
+                    x-text="t('metadata.tab_watermark')"></button>
         </div>
 
         <!-- Info tab -->
@@ -1045,6 +1050,63 @@
                 </button>
                 <button class="ff-btn ff-btn-sm" :disabled="cropData.w <= 0 || cropData.h <= 0 || cropSaving" @click="saveCrop('copy')" x-text="t('crop.save_copy')"></button>
                 <button class="ff-btn ff-btn-sm" @click="cancelCrop(); activeTab = 'info'" x-text="t('common.cancel')"></button>
+            </div>
+        </div>
+
+        <!-- Watermark tab (drag-and-drop editor) -->
+        <div class="ff-wm-panel" x-show="activeTab === 'watermark' && detailFile" style="flex:1;overflow-y:auto;">
+            <div class="ff-wm-type">
+                <button class="ff-btn ff-btn-sm" :class="{ 'ff-btn-primary': wm.type === 'logo' }" @click="wm.type = 'logo'" x-text="t('watermark.logo')"></button>
+                <button class="ff-btn ff-btn-sm" :class="{ 'ff-btn-primary': wm.type === 'text' }" @click="wm.type = 'text'" x-text="t('watermark.text')"></button>
+            </div>
+
+            <!-- Drag canvas: image with a draggable, resizable watermark overlay -->
+            <div class="ff-wm-stage" x-ref="wmStage" @mousemove="wmDragMove($event)" @mouseup="wmDragEnd()" @mouseleave="wmDragEnd()">
+                <img :src="detailFile?.url" :alt="detailFile?.name" draggable="false" style="width:100%;display:block;user-select:none;">
+                <!-- logo overlay -->
+                <div class="ff-wm-mark" x-show="wm.type === 'logo' && wm.logo"
+                     :style="'left:'+(wm.x*100)+'%;top:'+(wm.y*100)+'%;width:'+(wm.scale*100)+'%;opacity:'+wm.opacity"
+                     @mousedown.prevent="wmDragStart($event, false)">
+                    <img :src="wm.logo" draggable="false" style="width:100%;display:block;pointer-events:none;">
+                    <div class="ff-wm-handle" @mousedown.prevent.stop="wmDragStart($event, true)"></div>
+                </div>
+                <!-- text overlay -->
+                <div class="ff-wm-mark ff-wm-text" x-show="wm.type === 'text' && wm.text"
+                     :style="'left:'+(wm.x*100)+'%;top:'+(wm.y*100)+'%;opacity:'+wm.opacity+';color:'+wm.color+';font-size:'+wmTextPx+'px'"
+                     @mousedown.prevent="wmDragStart($event, false)" x-text="wm.text"></div>
+            </div>
+
+            <div class="ff-wm-controls">
+                <template x-if="wm.type === 'logo'">
+                    <div class="ff-wm-row">
+                        <label class="ff-btn ff-btn-sm" style="cursor:pointer">
+                            <span x-text="t('watermark.upload_logo')"></span>
+                            <input type="file" accept="image/png,image/webp,image/svg+xml" style="display:none" @change="wmLoadLogo($event)">
+                        </label>
+                        <div class="ff-wm-slider"><label x-text="t('watermark.size')"></label>
+                            <input type="range" min="5" max="90" :value="Math.round(wm.scale*100)" @input="wm.scale = $event.target.value/100"></div>
+                    </div>
+                </template>
+                <template x-if="wm.type === 'text'">
+                    <div class="ff-wm-row">
+                        <input type="text" class="ff-input" :placeholder="t('watermark.text_placeholder')" x-model="wm.text" style="flex:1">
+                        <input type="color" x-model="wm.color" :title="t('watermark.color')">
+                        <div class="ff-wm-slider"><label x-text="t('watermark.font_size')"></label>
+                            <input type="range" min="8" max="120" x-model.number="wm.font_size"></div>
+                    </div>
+                </template>
+                <div class="ff-wm-row">
+                    <div class="ff-wm-slider" style="flex:1"><label x-text="t('watermark.opacity')"></label>
+                        <input type="range" min="10" max="100" :value="Math.round(wm.opacity*100)" @input="wm.opacity = $event.target.value/100"></div>
+                </div>
+            </div>
+
+            <div class="ff-crop-actions">
+                <button class="ff-btn ff-btn-primary ff-btn-sm" :disabled="!wmReady || wmSaving" @click="saveWatermark('replace')">
+                    <span x-show="!wmSaving" x-text="t('watermark.apply')"></span><span x-show="wmSaving" x-text="t('crop.saving')"></span>
+                </button>
+                <button class="ff-btn ff-btn-sm" :disabled="!wmReady || wmSaving" @click="saveWatermark('copy')" x-text="t('crop.save_copy')"></button>
+                <button class="ff-btn ff-btn-sm" @click="activeTab = 'info'" x-text="t('common.cancel')"></button>
             </div>
         </div>
     </div>

@@ -160,7 +160,8 @@
         "caption": "キャプション",
         "caption_hint": "画像の下に表示される短い説明文",
         "saving": "保存中...",
-        "saved": "保存しました"
+        "saved": "保存しました",
+        "tab_watermark": "透かし"
     },
     "disk": {
         "local": "ローカルディスク",
@@ -393,5 +394,18 @@
             "perpetual": "永続ライセンス — 稼働中。新しい更新には更新が必要です。",
             "renew_soon": "{days} 日後に更新。"
         }
+    },
+    "watermark": {
+        "logo": "ロゴ",
+        "text": "テキスト",
+        "upload_logo": "ロゴをアップロード",
+        "size": "サイズ",
+        "font_size": "フォント",
+        "color": "色",
+        "opacity": "不透明度",
+        "text_placeholder": "透かしテキスト…",
+        "apply": "透かしを適用",
+        "done": "透かしを適用しました",
+        "failed": "透かしに失敗しました"
     }
 }

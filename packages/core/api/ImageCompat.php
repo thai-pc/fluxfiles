@@ -142,6 +142,36 @@ final class ImageCompat
     }
 
     /**
+     * Composite a logo at a FREE position (fractional 0–1 of the base) and a free
+     * size (logo width as a fraction of the base width) — for a drag-and-drop
+     * watermark editor. $xPct/$yPct anchor the logo's TOP-LEFT. Clamped so the logo
+     * stays on-canvas. Watermark needs the v3 API.
+     *
+     * @return object the mutated base image
+     */
+    public function placeLogoAt($base, string $logoData, float $xPct, float $yPct, float $widthPct, float $opacity)
+    {
+        if (!$this->isV3) {
+            throw new \RuntimeException('Watermark requires intervention/image v3');
+        }
+        $bw = $base->width();
+        $bh = $base->height();
+        $logo = $this->manager->read($logoData);
+        $targetW = (int) round(max(0.01, min(1.0, $widthPct)) * $bw);
+        if ($targetW > 0 && $logo->width() !== $targetW) {
+            // scale() (not scaleDown) so a small logo can be enlarged on request.
+            $logo = $logo->scale($targetW);
+        }
+        // Offset from top-left; clamp so the (scaled) logo stays inside the canvas.
+        $ox = (int) round(max(0.0, min(1.0, $xPct)) * $bw);
+        $oy = (int) round(max(0.0, min(1.0, $yPct)) * $bh);
+        $ox = max(0, min($ox, $bw - $logo->width()));
+        $oy = max(0, min($oy, $bh - $logo->height()));
+        $op = (int) round(max(0.0, min(1.0, $opacity)) * 100);
+        return $base->place($logo, 'top-left', $ox, $oy, $op);
+    }
+
+    /**
      * Draw $text onto $base at a 9-point position with the given opacity using
      * a bundled TTF. v3's align/valign anchor the text box, so no manual text
      * measurement is needed.
@@ -171,6 +201,34 @@ final class ImageCompat
             $font->color('rgba(255, 255, 255, ' . $alpha . ')');
             $font->align($align);
             $font->valign($valign);
+        });
+    }
+
+    /**
+     * Draw $text at a FREE position (fractional 0–1 of the base, anchoring the text
+     * top-left) with a hex/rgb $color — for the drag-and-drop watermark editor.
+     *
+     * @return object the mutated base image
+     */
+    public function drawTextAt($base, string $text, float $xPct, float $yPct, int $fontSize, float $opacity, string $color, string $ttfPath)
+    {
+        if (!$this->isV3) {
+            throw new \RuntimeException('Watermark requires intervention/image v3');
+        }
+        $x = (int) round(max(0.0, min(1.0, $xPct)) * $base->width());
+        $y = (int) round(max(0.0, min(1.0, $yPct)) * $base->height());
+        $alpha = max(0.0, min(1.0, $opacity));
+        // Accept #rrggbb (default white); apply opacity via rgba when possible.
+        $hex = ltrim($color !== '' ? $color : '#ffffff', '#');
+        $rgb = strlen($hex) === 6
+            ? [hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2))]
+            : [255, 255, 255];
+        return $base->text($text, $x, $y, function ($font) use ($ttfPath, $fontSize, $alpha, $rgb) {
+            $font->filename($ttfPath);
+            $font->size($fontSize);
+            $font->color("rgba({$rgb[0]}, {$rgb[1]}, {$rgb[2]}, {$alpha})");
+            $font->align('left');
+            $font->valign('top');
         });
     }
 }

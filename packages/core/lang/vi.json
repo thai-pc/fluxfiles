@@ -160,7 +160,8 @@
         "caption": "Chú thích",
         "caption_hint": "Mô tả ngắn hiển thị bên dưới ảnh",
         "saving": "Đang lưu...",
-        "saved": "Đã lưu"
+        "saved": "Đã lưu",
+        "tab_watermark": "Đóng dấu"
     },
     "disk": {
         "local": "Ổ đĩa cục bộ",
@@ -393,5 +394,18 @@
             "perpetual": "Giấy phép trọn đời — vẫn chạy; gia hạn để nhận bản cập nhật mới.",
             "renew_soon": "Gia hạn sau {days} ngày."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Chữ",
+        "upload_logo": "Tải logo",
+        "size": "Cỡ",
+        "font_size": "Phông",
+        "color": "Màu",
+        "opacity": "Độ mờ",
+        "text_placeholder": "Nội dung đóng dấu…",
+        "apply": "Áp dụng đóng dấu",
+        "done": "Đã đóng dấu",
+        "failed": "Đóng dấu thất bại"
     }
 }

@@ -160,7 +160,8 @@
         "caption": "说明文字",
         "caption_hint": "显示在图片下方的简短描述",
         "saving": "保存中...",
-        "saved": "已保存"
+        "saved": "已保存",
+        "tab_watermark": "水印"
     },
     "disk": {
         "local": "本地磁盘",
@@ -393,5 +394,18 @@
             "perpetual": "永久许可 — 仍在运行；续订以获取新更新。",
             "renew_soon": "{days} 天后续订。"
         }
+    },
+    "watermark": {
+        "logo": "徽标",
+        "text": "文字",
+        "upload_logo": "上传徽标",
+        "size": "大小",
+        "font_size": "字体",
+        "color": "颜色",
+        "opacity": "不透明度",
+        "text_placeholder": "水印文字…",
+        "apply": "应用水印",
+        "done": "已应用水印",
+        "failed": "水印失败"
     }
 }

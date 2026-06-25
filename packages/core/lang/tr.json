@@ -160,7 +160,8 @@
         "caption": "Altyazı",
         "caption_hint": "Görüntünün altında gösterilen kısa açıklama",
         "saving": "Kaydediliyor...",
-        "saved": "Kaydedildi"
+        "saved": "Kaydedildi",
+        "tab_watermark": "Filigran"
     },
     "disk": {
         "local": "Yerel disk",
@@ -393,5 +394,18 @@
             "perpetual": "Kalıcı lisans — çalışıyor; yeni güncellemeler için yenileyin.",
             "renew_soon": "{days} gün içinde yenilenir."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Metin",
+        "upload_logo": "Logo yükle",
+        "size": "Boyut",
+        "font_size": "Yazı tipi",
+        "color": "Renk",
+        "opacity": "Saydamlık",
+        "text_placeholder": "Filigran metni…",
+        "apply": "Filigran uygula",
+        "done": "Filigran uygulandı",
+        "failed": "Filigran başarısız"
     }
 }

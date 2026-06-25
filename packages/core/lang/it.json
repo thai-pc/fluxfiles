@@ -160,7 +160,8 @@
         "caption": "Didascalia",
         "caption_hint": "Breve descrizione mostrata sotto l'immagine",
         "saving": "Salvataggio...",
-        "saved": "Salvato"
+        "saved": "Salvato",
+        "tab_watermark": "Filigrana"
     },
     "disk": {
         "local": "Disco locale",
@@ -393,5 +394,18 @@
             "perpetual": "Licenza perpetua — ancora attiva; rinnova per nuovi aggiornamenti.",
             "renew_soon": "Si rinnova tra {days} giorni."
         }
+    },
+    "watermark": {
+        "logo": "Logo",
+        "text": "Testo",
+        "upload_logo": "Carica logo",
+        "size": "Dimensione",
+        "font_size": "Carattere",
+        "color": "Colore",
+        "opacity": "Opacità",
+        "text_placeholder": "Testo filigrana…",
+        "apply": "Applica filigrana",
+        "done": "Filigrana applicata",
+        "failed": "Filigrana non riuscita"
     }
 }

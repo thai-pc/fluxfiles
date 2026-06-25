@@ -416,6 +416,38 @@ function routeRequest(
         return handleCrop($fm);
     }
 
+    // Watermark editor (free) — burn a logo/text watermark into an image at a
+    // free position/size. Write perm; logo arrives as base64 in the JSON body.
+    if ($method === 'POST' && $uri === '/api/fm/watermark') {
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $disk = (string) ($body['disk'] ?? 'local');
+        $path = (string) ($body['path'] ?? '');
+        if ($path === '') {
+            throw new ApiException('Missing path', 400, 'missing_param');
+        }
+        $wm = [
+            'type'      => ($body['type'] ?? 'logo') === 'text' ? 'text' : 'logo',
+            'text'      => (string) ($body['text'] ?? ''),
+            'x'         => (float) ($body['x'] ?? 0.7),
+            'y'         => (float) ($body['y'] ?? 0.85),
+            'scale'     => (float) ($body['scale'] ?? 0.25),
+            'opacity'   => (float) ($body['opacity'] ?? 0.6),
+            'font_size' => (int) ($body['font_size'] ?? 24),
+            'color'     => (string) ($body['color'] ?? '#ffffff'),
+        ];
+        if (!empty($body['logo_data'])) {
+            // data:URI or bare base64 → binary.
+            $b64 = preg_replace('#^data:[^,]+,#', '', (string) $body['logo_data']);
+            $bin = base64_decode((string) $b64, true);
+            if ($bin === false || $bin === '') {
+                throw new ApiException('Invalid logo data', 400, 'bad_request');
+            }
+            $wm['logo_data'] = $bin;
+        }
+        $dest = isset($body['dest']) && $body['dest'] !== '' ? (string) $body['dest'] : null;
+        return $fm->applyWatermark($disk, $path, $wm, $dest);
+    }
+
     if ($method === 'POST' && $uri === '/api/fm/ai-tag') {
         return $fm->aiTag(...jsonBody('disk', 'path'));
     }

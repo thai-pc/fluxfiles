@@ -7,6 +7,16 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Added
 
+- **Watermark editor — drag-and-drop, burn-in (free).** Beyond the on-the-fly
+  operator overlay (claim-driven, preview-time), images now have a **Watermark** tab
+  with a visual editor: drag a logo/text to any position, resize the logo by a
+  handle, set opacity (+ font size/color for text), then **Apply** (replace) or
+  **Save as copy** — the watermark is burned into the file. New `POST /api/fm/watermark`
+  (write perm; logo uploaded as base64), `ImageCompat::placeLogoAt()/drawTextAt()`
+  (free x/y + scale), `ImageOptimizer::burnWatermark()`, `FileManager::applyWatermark()`
+  (extension-immutable, variant regen). Proxied by Laravel + WordPress; `watermark`
+  i18n namespace ×16. Engine + UI tested.
+
 - **Paid-module framework — 6 commercial modules scaffolded.** Beyond Optimize,
   the core now registers + gates five more modules (3-layer gate: installed +
   licensed + claim), each shipping as its own proprietary package (gitignored;
