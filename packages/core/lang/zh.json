@@ -372,5 +372,26 @@
         "importing": "正在导入…",
         "success": "导入成功",
         "another": "再导入一个"
+    },
+    "license": {
+        "edition": {
+            "free": "Free",
+            "pro": "Pro",
+            "agency": "Agency",
+            "enterprise": "Enterprise"
+        },
+        "status": {
+            "free": "免费版",
+            "active": "有效",
+            "grace": "宽限期内",
+            "expired": "已过期",
+            "perpetual": "运行中（更新已停止）"
+        },
+        "note": {
+            "grace": "许可证已过期 — 还有 {days} 天宽限期。续订以保持更新和支持。",
+            "expired": "订阅已过期。续订以重新启用。",
+            "perpetual": "永久许可 — 仍在运行；续订以获取新更新。",
+            "renew_soon": "{days} 天后续订。"
+        }
     }
 }

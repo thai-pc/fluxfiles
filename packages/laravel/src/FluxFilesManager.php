@@ -60,8 +60,26 @@ class FluxFilesManager
      * @param array<string,mixed> $payload
      * @param array<string,mixed> $overrides
      */
+    /** @param array<string,mixed> $payload */
+    private static function applyEditionPreset(array &$payload, ?string $edition): void
+    {
+        $presets = [
+            'pro'        => ['allow_optimize' => true, 'allow_share' => true],
+            'agency'     => ['allow_optimize' => true, 'allow_share' => true],
+            'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_virus_scan' => true],
+        ];
+        foreach ($presets[strtolower((string) $edition)] ?? [] as $k => $v) {
+            if (!array_key_exists($k, $payload)) {
+                $payload[$k] = $v;
+            }
+        }
+    }
+
     private static function applyTenantOverrides(array &$payload, array $overrides): void
     {
+        // Edition preset (DX sugar): default a tier's claims before explicit
+        // overrides below (which still win). The license gates the actual code.
+        self::applyEditionPreset($payload, isset($overrides['edition']) ? (string) $overrides['edition'] : null);
         if (isset($overrides['ai_auto_tag'])) {
             $payload['ai_auto_tag'] = (bool) $overrides['ai_auto_tag'];
         }

@@ -93,3 +93,22 @@ test('usage dashboard works against the real endpoint after an upload', async ({
   await expect(modal.locator('.ff-usage-row')).not.toHaveCount(0);
   await expect(modal).toContainText('Images');
 });
+
+test('license banner: edition + grace note from a mocked /license', async ({ page }) => {
+  await openManager(page, mintToken());
+  await page.route('**/api/fm/usage*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: {
+      quota: { used_bytes: 1, limit_bytes: 0, percent: 0, status: 'ok' }, file_count: 0, by_type: [], top_folders: [],
+    } }) }));
+  await page.route('**/api/fm/license', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: {
+      edition: 'pro', status: 'grace', enforcement: 'subscription', modules: ['optimize'], days_left: 7,
+    } }) }));
+
+  await page.getByRole('button', { name: 'Storage usage' }).first().click();
+  const banner = page.locator('.ff-license-banner');
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText('Pro');
+  await expect(banner).toContainText('grace period');
+  await expect(banner).toContainText('7'); // days left
+});

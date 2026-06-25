@@ -3,6 +3,17 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **License/edition surface (UX).** The usage dashboard now shows an edition +
+  license-status banner from `GET /api/fm/license` (edition pill, status, days-left,
+  grace/perpetual/renew-soon notes; `license` i18n namespace ×16). And token helpers
+  gain an **edition preset** — `fluxfiles_token(..., 'pro')` / `edition: 'pro'`
+  (embed, Laravel, WordPress, Node) defaults a tier's claims (e.g. `allow_optimize`,
+  `allow_share`); explicit claims still win and the license still gates the code.
+
 ## [0.2.43] — 2026-06-24
 
 > Released: core `core-v0.2.38` (Packagist + Docker), Laravel `laravel-v0.2.21`,

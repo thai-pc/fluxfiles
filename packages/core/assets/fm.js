@@ -2705,9 +2705,27 @@ function fluxFilesApp() {
         usageError: '',
         _usageRefreshAt: 0,
 
+        // Commercial edition / license status (server-wide; free core → edition:free)
+        licenseInfo: null,
+
         async openUsage() {
             this.showUsage = true;
-            await this.loadUsage();
+            await Promise.all([this.loadUsage(), this.loadLicense()]);
+        },
+
+        // Fetch the non-sensitive license summary once for the dashboard banner.
+        async loadLicense() {
+            if (this.licenseInfo) return;
+            try {
+                this.licenseInfo = await this.api('GET', '/api/fm/license');
+            } catch (_) {
+                this.licenseInfo = { edition: 'free', status: 'free' };
+            }
+        },
+        // Show a renew/grace nudge only when it actually matters.
+        get licenseNeedsAttention() {
+            const s = this.licenseInfo && this.licenseInfo.status;
+            return s === 'grace' || s === 'expired' || s === 'perpetual';
         },
         closeUsage() { this.showUsage = false; },
 

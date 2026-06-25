@@ -372,5 +372,26 @@
         "importing": "İçe aktarılıyor…",
         "success": "Başarıyla içe aktarıldı",
         "another": "Başka birini içe aktar"
+    },
+    "license": {
+        "edition": {
+            "free": "Free",
+            "pro": "Pro",
+            "agency": "Agency",
+            "enterprise": "Enterprise"
+        },
+        "status": {
+            "free": "Ücretsiz sürüm",
+            "active": "Etkin",
+            "grace": "Ek süre",
+            "expired": "Süresi doldu",
+            "perpetual": "Etkin (güncellemeler bitti)"
+        },
+        "note": {
+            "grace": "Lisans doldu — {days} gün ek süre. Güncelleme ve destek için yenileyin.",
+            "expired": "Abonelik doldu. Yeniden etkinleştirmek için yenileyin.",
+            "perpetual": "Kalıcı lisans — çalışıyor; yeni güncellemeler için yenileyin.",
+            "renew_soon": "{days} gün içinde yenilenir."
+        }
     }
 }

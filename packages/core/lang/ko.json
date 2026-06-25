@@ -372,5 +372,26 @@
         "importing": "가져오는 중…",
         "success": "가져왔습니다",
         "another": "다른 URL 가져오기"
+    },
+    "license": {
+        "edition": {
+            "free": "Free",
+            "pro": "Pro",
+            "agency": "Agency",
+            "enterprise": "Enterprise"
+        },
+        "status": {
+            "free": "무료 버전",
+            "active": "활성",
+            "grace": "유예 기간",
+            "expired": "만료됨",
+            "perpetual": "실행 중(업데이트 종료)"
+        },
+        "note": {
+            "grace": "라이선스 만료 — 유예 {days}일 남음. 갱신하여 업데이트·지원 유지.",
+            "expired": "구독이 만료되었습니다. 갱신하여 다시 활성화하세요.",
+            "perpetual": "영구 라이선스 — 계속 실행 중; 새 업데이트는 갱신 필요.",
+            "renew_soon": "{days}일 후 갱신."
+        }
     }
 }

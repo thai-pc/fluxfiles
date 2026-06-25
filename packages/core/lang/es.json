@@ -372,5 +372,26 @@
         "importing": "Importando…",
         "success": "Importado correctamente",
         "another": "Importar otra"
+    },
+    "license": {
+        "edition": {
+            "free": "Free",
+            "pro": "Pro",
+            "agency": "Agency",
+            "enterprise": "Enterprise"
+        },
+        "status": {
+            "free": "Edición gratuita",
+            "active": "Activa",
+            "grace": "Periodo de gracia",
+            "expired": "Caducada",
+            "perpetual": "Activa (actualizaciones finalizadas)"
+        },
+        "note": {
+            "grace": "Licencia caducada — {days} días de gracia. Renueva para mantener actualizaciones y soporte.",
+            "expired": "Suscripción caducada. Renueva para reactivar.",
+            "perpetual": "Licencia perpetua — sigue activa; renueva para nuevas actualizaciones.",
+            "renew_soon": "Se renueva en {days} días."
+        }
     }
 }

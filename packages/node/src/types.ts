@@ -128,6 +128,9 @@ export interface BaseTokenOptions {
    *  identical re-upload is kept as a copy (like Finder / Drive / Dropbox); set true
    *  to save storage by blocking duplicates. */
   dedupeUploads?: boolean;
+  /** Edition preset that defaults a tier's claims (`pro`/`agency`/`enterprise`).
+   *  DX sugar — explicit claim options still win, and the license gates the code. */
+  edition?: 'free' | 'pro' | 'agency' | 'enterprise';
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;
   /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */

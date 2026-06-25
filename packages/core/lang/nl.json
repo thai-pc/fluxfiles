@@ -372,5 +372,26 @@
         "importing": "Importeren…",
         "success": "Succesvol geïmporteerd",
         "another": "Nog een importeren"
+    },
+    "license": {
+        "edition": {
+            "free": "Free",
+            "pro": "Pro",
+            "agency": "Agency",
+            "enterprise": "Enterprise"
+        },
+        "status": {
+            "free": "Gratis editie",
+            "active": "Actief",
+            "grace": "Respijtperiode",
+            "expired": "Verlopen",
+            "perpetual": "Actief (updates beëindigd)"
+        },
+        "note": {
+            "grace": "Licentie verlopen — {days} dagen respijt. Verleng voor updates en support.",
+            "expired": "Abonnement verlopen. Verleng om te heractiveren.",
+            "perpetual": "Eeuwigdurende licentie — draait nog; verleng voor nieuwe updates.",
+            "renew_soon": "Verlengt over {days} dagen."
+        }
     }
 }

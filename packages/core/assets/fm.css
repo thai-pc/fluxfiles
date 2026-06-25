@@ -555,6 +555,15 @@ body {
 .ff-usage-banner { padding: 10px 12px; border-radius: 6px; font-size: 13px; }
 .ff-usage-banner.is-warning { background: rgba(224,168,0,0.12); color: #8a6d00; }
 .ff-usage-banner.is-critical { background: rgba(220,53,69,0.12); color: #b21f2d; }
+/* License / edition banner */
+.ff-license-banner { padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; background: var(--color-bg-secondary, rgba(0,0,0,0.04)); }
+.ff-license-row { display: flex; align-items: center; gap: 8px; }
+.ff-license-edition { font-weight: 600; font-size: 13px; padding: 2px 8px; border-radius: 999px; background: var(--ff-primary); color: #fff; }
+.ff-license-banner.is-free .ff-license-edition { background: var(--color-border-tertiary, #ccc); color: var(--color-text-secondary); }
+.ff-license-status { font-size: 12px; color: var(--color-text-secondary); }
+.ff-license-banner.is-grace, .ff-license-banner.is-expired { background: rgba(224,168,0,0.12); }
+.ff-license-banner.is-expired .ff-license-status { color: #b21f2d; }
+.ff-license-note { margin-top: 6px; font-size: 12px; color: var(--color-text-secondary); }
 .ff-usage-section h4 { font-size: 13px; margin: 0 0 8px; color: var(--color-text-primary); }
 .ff-usage-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
 .ff-usage-row-label { width: 80px; flex-shrink: 0; color: var(--color-text-secondary); }

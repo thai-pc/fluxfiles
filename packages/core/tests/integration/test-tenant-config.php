@@ -322,6 +322,22 @@ test('fluxfiles_token forwards webp claims via the $webp param', function () {
     assertEqual(75, $c->webpDefaultQuality, 'webp_default_quality forwarded');
 });
 
+test('edition preset defaults tier claims; explicit overrides win', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    // pro edition (18th positional arg) → allow_optimize on by default.
+    $pro = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, null, null, null, 'pro');
+    assertEqual(true, Claims::fromJwtPayload(JwtCompat::decode($pro, $_ENV['FLUXFILES_SECRET']))->allowOptimize, 'pro → allow_optimize');
+    // No edition → off.
+    $free = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, null, null, null, null);
+    assertEqual(false, Claims::fromJwtPayload(JwtCompat::decode($free, $_ENV['FLUXFILES_SECRET']))->allowOptimize, 'no edition → off');
+    // Explicit webp override (allow_optimize=false) beats the pro preset.
+    $override = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, null, ['allow_optimize' => false], null, 'pro');
+    assertEqual(false, Claims::fromJwtPayload(JwtCompat::decode($override, $_ENV['FLUXFILES_SECRET']))->allowOptimize, 'explicit override wins');
+});
+
 test('fluxfiles_token forwards upload_collision; invalid value ignored', function () {
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $mk = function (array $extra) {

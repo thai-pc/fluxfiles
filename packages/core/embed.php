@@ -42,7 +42,8 @@ function fluxfiles_token(
     ?array $import = null,
     ?array $media = null,
     ?array $webp = null,
-    ?array $usage = null
+    ?array $usage = null,
+    ?string $edition = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -64,6 +65,10 @@ function fluxfiles_token(
     if ($ownerOnly) {
         $payload['owner_only'] = true;
     }
+    // Edition preset (DX sugar): turns on the right claims for a tier so callers
+    // don't hand-pick each. Applied BEFORE the explicit overrides below, so a
+    // caller can still fine-tune. The license still gates the actual code.
+    fluxfiles_apply_edition_preset($payload, $edition);
     // Optional per-tenant overrides — only embedded when set, to keep tokens lean.
     if ($aiAutoTag !== null) {
         $payload['ai_auto_tag'] = $aiAutoTag;
@@ -87,6 +92,30 @@ function fluxfiles_token(
     fluxfiles_apply_usage_claims($payload, $usage ?? []);
 
     return JwtCompat::encode($payload, $secret);
+}
+
+/**
+ * Apply an edition preset's default claims onto $payload (DX sugar). Only sets a
+ * claim when it's not already present, so explicit overrides win. The license is
+ * still the real gate — a preset just defaults the per-tenant claims for a tier.
+ *
+ * free → nothing · pro → optimize + share · agency → pro + (future) · enterprise → all.
+ *
+ * @param array<string,mixed> $payload
+ */
+function fluxfiles_apply_edition_preset(array &$payload, ?string $edition): void
+{
+    $presets = [
+        'pro'        => ['allow_optimize' => true, 'allow_share' => true],
+        'agency'     => ['allow_optimize' => true, 'allow_share' => true],
+        'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_virus_scan' => true],
+    ];
+    $claims = $presets[strtolower((string) $edition)] ?? [];
+    foreach ($claims as $k => $v) {
+        if (!array_key_exists($k, $payload)) {
+            $payload[$k] = $v;
+        }
+    }
 }
 
 /**

@@ -372,5 +372,26 @@
         "importing": "Đang nhập…",
         "success": "Đã nhập thành công",
         "another": "Nhập cái khác"
+    },
+    "license": {
+        "edition": {
+            "free": "Free",
+            "pro": "Pro",
+            "agency": "Agency",
+            "enterprise": "Enterprise"
+        },
+        "status": {
+            "free": "Bản miễn phí",
+            "active": "Đang hoạt động",
+            "grace": "Trong thời gian gia hạn",
+            "expired": "Đã hết hạn",
+            "perpetual": "Đang chạy (đã ngừng cập nhật)"
+        },
+        "note": {
+            "grace": "Giấy phép đã hết hạn — còn {days} ngày gia hạn. Gia hạn để tiếp tục cập nhật & hỗ trợ.",
+            "expired": "Gói thuê bao đã hết hạn. Gia hạn để kích hoạt lại.",
+            "perpetual": "Giấy phép trọn đời — vẫn chạy; gia hạn để nhận bản cập nhật mới.",
+            "renew_soon": "Gia hạn sau {days} ngày."
+        }
     }
 }

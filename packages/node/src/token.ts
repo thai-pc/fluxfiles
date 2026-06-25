@@ -97,8 +97,17 @@ function sanitizeVariants(v: BaseTokenOptions['variants']): Record<string, numbe
   return Object.keys(out).length ? out : null;
 }
 
+/** Edition preset (DX sugar): default a tier's claims; explicit opts below win. */
+const EDITION_PRESETS: Record<string, Record<string, boolean>> = {
+  pro: { allow_optimize: true, allow_share: true },
+  agency: { allow_optimize: true, allow_share: true },
+  enterprise: { allow_optimize: true, allow_share: true, allow_virus_scan: true },
+};
+
 /** Copy the optional per-tenant override claims into a payload when set. */
 function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenOptions): void {
+  const preset = opts.edition ? EDITION_PRESETS[String(opts.edition).toLowerCase()] : undefined;
+  if (preset) for (const [k, v] of Object.entries(preset)) if (!(k in payload)) payload[k] = v;
   if (opts.aiAutoTag !== undefined) payload.ai_auto_tag = !!opts.aiAutoTag;
   if (opts.rateRead && opts.rateRead > 0) payload.rate_read = Math.trunc(opts.rateRead);
   if (opts.rateWrite && opts.rateWrite > 0) payload.rate_write = Math.trunc(opts.rateWrite);

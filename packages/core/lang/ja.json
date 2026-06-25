@@ -372,5 +372,26 @@
         "importing": "取り込み中…",
         "success": "取り込みました",
         "another": "別の URL を取り込む"
+    },
+    "license": {
+        "edition": {
+            "free": "Free",
+            "pro": "Pro",
+            "agency": "Agency",
+            "enterprise": "Enterprise"
+        },
+        "status": {
+            "free": "無料版",
+            "active": "有効",
+            "grace": "猶予期間中",
+            "expired": "期限切れ",
+            "perpetual": "稼働中（更新は終了）"
+        },
+        "note": {
+            "grace": "ライセンス期限切れ — 猶予 {days} 日。更新とサポート継続には更新を。",
+            "expired": "サブスクリプションが失効しました。更新で再有効化。",
+            "perpetual": "永続ライセンス — 稼働中。新しい更新には更新が必要です。",
+            "renew_soon": "{days} 日後に更新。"
+        }
     }
 }

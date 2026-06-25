@@ -1258,6 +1258,24 @@
                 <p class="ff-new-folder-error" x-show="usageError" x-text="usageError"></p>
                 <div x-show="usageLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
 
+                <!-- Edition / license banner -->
+                <template x-if="licenseInfo">
+                    <div class="ff-license-banner" :class="'is-' + (licenseInfo.status || 'free')">
+                        <div class="ff-license-row">
+                            <span class="ff-license-edition" x-text="t('license.edition.' + (licenseInfo.edition || 'free')) || (licenseInfo.edition || 'free')"></span>
+                            <span class="ff-license-status" x-text="t('license.status.' + (licenseInfo.status || 'free'))"></span>
+                        </div>
+                        <div class="ff-license-note" x-show="licenseNeedsAttention">
+                            <span x-show="licenseInfo.status === 'grace'" x-text="t('license.note.grace', { days: licenseInfo.days_left != null ? Math.max(0, licenseInfo.days_left) : 0 })"></span>
+                            <span x-show="licenseInfo.status === 'expired'" x-text="t('license.note.expired')"></span>
+                            <span x-show="licenseInfo.status === 'perpetual'" x-text="t('license.note.perpetual')"></span>
+                        </div>
+                        <div class="ff-license-note" x-show="licenseInfo.status === 'active' && licenseInfo.days_left != null && licenseInfo.days_left <= 30">
+                            <span x-text="t('license.note.renew_soon', { days: licenseInfo.days_left })"></span>
+                        </div>
+                    </div>
+                </template>
+
                 <template x-if="!usageLoading && usageInfo">
                     <div class="ff-usage">
                         <!-- Quota meter + status -->

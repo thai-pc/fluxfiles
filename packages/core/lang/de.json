@@ -372,5 +372,26 @@
         "importing": "Importiere…",
         "success": "Erfolgreich importiert",
         "another": "Weitere importieren"
+    },
+    "license": {
+        "edition": {
+            "free": "Free",
+            "pro": "Pro",
+            "agency": "Agency",
+            "enterprise": "Enterprise"
+        },
+        "status": {
+            "free": "Kostenlose Edition",
+            "active": "Aktiv",
+            "grace": "Kulanzzeitraum",
+            "expired": "Abgelaufen",
+            "perpetual": "Aktiv (Updates beendet)"
+        },
+        "note": {
+            "grace": "Lizenz abgelaufen — {days} Tage Kulanz. Verlängern für Updates & Support.",
+            "expired": "Abo abgelaufen. Zum Reaktivieren verlängern.",
+            "perpetual": "Dauerlizenz — läuft weiter; für neue Updates verlängern.",
+            "renew_soon": "Verlängerung in {days} Tagen."
+        }
     }
 }
