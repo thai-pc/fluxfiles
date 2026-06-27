@@ -27,7 +27,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Quick Start](#quick-start)
 - [Production Deployment](#production-deployment)
 - [Embedding in Your App](#embedding-in-your-app)
-  - [On-demand WebP](#on-demand-webp) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark-preview-protection) · [Usage dashboard](#usage-dashboard)
+  - [On-demand WebP](#on-demand-webp) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard)
 - [Storage Disks](#storage-disks)
   - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
@@ -492,12 +492,31 @@ string, so the host can drop a responsive image straight from `list()`:
   `srcset`/`sizes` onto its detail-panel and lightbox previews.
 - Rides the exact same gate as `img_base` (so it's also core-standalone / Docker).
 
-### Watermark (preview protection)
+### Watermark
 
-For content sellers (photographers, agencies, stock), the on-demand WebP can
-overlay a **watermark** so clients see previews but can't grab the clean image.
-It's applied **on the fly when serving** — the source file is never modified — so
-there's only ever one source of truth. Enable it with token claims (off by default):
+FluxFiles watermarks images the way the rest of the industry does — two modes for
+two jobs. **For almost everyone it's the first one (burn-in).** The second is an
+advanced mode only for selling images.
+
+#### Watermark editor (burn-in) — the normal way
+
+Open an image → the **Watermark** tab in the detail panel (free) → drag a logo or
+text to any position, resize the logo by its handle, set opacity → **Apply**
+(replace the file) or **Save as copy**. It **burns the watermark into the image**
+(`POST /api/fm/watermark`), exactly like a Photoshop export or a WordPress
+watermark plugin. The file now *is* a watermarked image, so **every consumer
+carries it** — the picker, a download, an `<img>` you insert into TinyMCE /
+CKEditor / Summernote. Extension is preserved; variants regenerate.
+
+> ✅ **Want a watermarked image in your content / blog / CMS? This is it.** Pick it
+> in the editor and the inserted `<img>` shows the watermark. Nothing else to set.
+
+#### Advanced: preview protection for selling images (overlay)
+
+Only if you're building a **stock-photo / photographer store** (Shutterstock,
+Getty, Pixieset…): show watermarked **previews** but never hand out the clean file
+until purchase. The watermark is applied **on the fly when serving** (`/api/fm/img`)
+— the source file is never modified. Enable it with token claims (off by default):
 
 ```php
 $token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3600,
@@ -508,61 +527,44 @@ $token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3
         'watermark_text'    => '© Acme Corp',
         'watermark_position'=> 'bottom-right',
         'watermark_opacity' => 0.6,
-        // No need to set allow_download — an overlay watermark forces it off
-        // automatically (see the note below). The clean original is never served.
     ]);
 ```
 
-- **Logo watermark:** upload a transparent PNG as a normal file (e.g.
-  `users/42/.config/logo.png`) and set `watermark_type => 'logo'` +
-  `watermark_logo_path`. No DB — the logo is just a file; re-upload to change it.
-  A missing/unsafe logo path **falls back to a text watermark** (with an
-  `X-FluxFiles-Warning` header) — never to a clean image.
-- The watermarked WebP is cached in `_variants/` (keyed by config + logo mtime),
-  so a config or logo change produces a fresh result.
+- Enabling `watermark_enabled` **automatically makes the token preview-only**
+  (`allow_download` is forced off): `list()` serves only the watermarked `img_base`,
+  the clean `url`/`permanent_url`/`variants` are withheld, GET presign → `403`, zip
+  is disabled, and the UI marks such images with a **"Preview"** badge. The clean
+  original is never served. To grant it later (after purchase), issue a **separate
+  token without the watermark**.
+- **Logo watermark:** upload a transparent PNG as a normal file and set
+  `watermark_type => 'logo'` + `watermark_logo_path`. A missing/unsafe path falls
+  back to text (never a clean image). Watermarked WebPs are cached in `_variants/`.
 
-> **⚠️ An overlay watermark is automatically preview-only.** A watermark only
-> protects if the clean original isn't reachable some other way — so enabling
-> `watermark_enabled` **forces `allow_download=false`** for that token: `list()`
-> withholds the clean `url`/`permanent_url`/`variants`, GET presign returns `403`,
-> and zip is disabled — only the watermarked `img_base` is served (and the UI marks
-> such images with a **"Preview"** badge). You no longer set `allow_download=false`
-> yourself, and the old contradictory combo (`watermark_enabled` + `allow_download
-> =true`, which served the clean file and protected nothing) is gone. To grant the
-> clean original later (e.g. after purchase), issue a **separate token without the
-> watermark**. Watermark uses the bundled DejaVuSans font for text; like
-> `/api/fm/img` it's a core-standalone feature.
+**How customers actually see the preview** — you don't *embed* it (the `img_base`
+token is short-lived, made for live rendering, not for saving into content). You
+render it **fresh on each page load**, like every stock site:
 
-#### Watermark editor — drag-and-drop, burned in (new)
+```html
+<!-- Your own gallery/product page: call list(), render img_base live -->
+<img :src="endpoint + file.img_base + '&width=800'"
+     :srcset="endpoint + file.img_srcset" :sizes="'100vw'" :alt="file.name">
+```
 
-The overlay above is **preview-time** (applied when serving via `/api/fm/img`; the
-file is never changed) — so an image's clean `url` is unwatermarked, and a file you
-**insert into an editor (TinyMCE/CKEditor) shows no watermark**. That's by design.
+```js
+// or with the SDK helper:
+const src = FluxFiles.imgUrl(file, { width: 800 });   // = img_base + &width=800
+```
 
-When you want the watermark **permanently in the file**, use the **Watermark editor**
-(a tab in the detail panel, free): drag a logo or text to any position, resize the
-logo by its handle, set opacity → **Apply** (replace) or **Save as copy**. It
-**burns the watermark into the image** (`POST /api/fm/watermark`,
-`FileManager::applyWatermark`), so every consumer — the picker, a download, an
-inserted `<img>` — carries it. Extension is preserved; variants regenerate.
+…or just let customers **browse inside the embedded FluxFiles UI** with a
+preview-only token — the cards, detail panel and lightbox already render the
+watermarked images and hide download.
 
-| | On-the-fly overlay (`watermark_*` claims) | Watermark editor (burn-in) |
+| | Burn-in editor (normal) | Overlay (advanced, selling) |
 |---|---|---|
-| Where | Applied at serve time via `/api/fm/img` | Written into the file bytes |
-| Clean original | Kept (the source is untouched) | Replaced (or saved as a copy) |
-| Shows in an inserted `<img>` / download | **No** (use the editor) | **Yes** |
-| Best for | Preview protection (sellers) | Permanent branding on assets |
-
-> **Picking a watermarked image in TinyMCE / CKEditor / Summernote:** what gets
-> inserted depends on the mode. **Burn-in** → the file itself is watermarked, so
-> the inserted `<img>` is **watermarked** (uses the stable `permanent_url`). ✅
-> **Overlay** is serve-time only: the file's `url`/`permanent_url` are the **clean
-> original**, and the watermark lives only on `img_base` — a short-lived token URL
-> that must **not** be saved into content. So pair overlay with
-> `allow_download=false`; the editor then has no embeddable URL and, rather than
-> insert a clean or broken image, it **refuses and warns** ("…burn in the
-> watermark…"). **Rule of thumb: to embed a watermarked image, use the burn-in
-> editor.**
+| Where | Written into the file bytes | Applied at serve time via `/api/fm/img` |
+| Clean original | Replaced (or saved as a copy) | Kept, but never served (preview-only) |
+| Insert into an editor / download | **Yes** | **No** — show it live in your gallery instead |
+| Best for | Branding, putting marked images in content | A stock-photo / photo-seller store |
 
 ### Usage dashboard
 
