@@ -589,15 +589,19 @@ function routeRequest(
             throw new ApiException('This command looks dangerous — confirm to run it', 409, 'terminal_confirm_required');
         }
         [$conn, $root] = $diskManager->sftpConnection($disk);
-        if (!\FluxFiles\SshTerminal::shellAvailable($conn)) {
+        // Resolve cwd against the SFTP ROOT (not the SSH login home) — a relative
+        // path from the client ("html") must be anchored to $root, or `cd html`
+        // runs from /root and every command 404s.
+        $cwd = \FluxFiles\SshTerminal::resolveCwd((string) ($body['cwd'] ?? ''), $root);
+        $timeout = (int) ($_ENV['FLUXFILES_TERMINAL_TIMEOUT'] ?? 30);
+        $result = \FluxFiles\SshTerminal::run($conn, $cmd, $cwd, $timeout);
+        // No separate shell probe (it doubled the SSH round-trips per command):
+        // run() prints a cwd marker on any real shell, so its absence means the
+        // host forces a command / allows SFTP only.
+        if (empty($result['shell_ok'])) {
             throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
         }
-        $cwd = (string) ($body['cwd'] ?? '');
-        if ($cwd === '') {
-            $cwd = $root !== '' ? $root : '.';
-        }
-        $timeout = (int) ($_ENV['FLUXFILES_TERMINAL_TIMEOUT'] ?? 30);
-        return \FluxFiles\SshTerminal::run($conn, $cmd, $cwd, $timeout);
+        return $result;
     }
 
     // Search

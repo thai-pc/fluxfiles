@@ -64,6 +64,25 @@ class SshTerminal
     }
 
     /**
+     * Resolve the client-supplied working directory against the SFTP root. The
+     * client tracks cwd relative to the disk root (like the file manager), so:
+     *   ''            → the root itself (or '.' when no root)
+     *   'html', 'a/b' → anchored under the root ($root/html) — NOT the SSH login
+     *                   home, or `cd html` would run from /root and 404
+     *   '/abs/path'   → used as-is (a `pwd`-reported absolute cwd from a prior run)
+     */
+    public static function resolveCwd(string $cwd, string $root): string
+    {
+        if ($cwd === '') {
+            return $root !== '' ? $root : '.';
+        }
+        if ($cwd[0] === '/') {
+            return $cwd;
+        }
+        return ($root !== '' ? rtrim($root, '/') . '/' : '') . $cwd;
+    }
+
+    /**
      * Probe whether the host actually grants an interactive-capable shell. Many
      * shared hosts allow SFTP but force `internal-sftp` / a `ForceCommand`, so
      * exec() returns nothing or the forced command's output. Returns true only
@@ -84,7 +103,9 @@ class SshTerminal
      * Run $cmd in $cwd. Combines stdout+stderr, recovers the resulting cwd so
      * `cd` persists across calls, and caps the output.
      *
-     * @return array{output:string,cwd:string,exit:int,truncated:bool}
+     * @return array{output:string,cwd:string,exit:int,truncated:bool,shell_ok:bool}
+     *         `shell_ok` is false when the host produced no shell (forced command /
+     *         SFTP-only) — the caller then reports `terminal_no_shell`.
      */
     public static function run(SSH2 $ssh, string $cmd, string $cwd, int $timeout): array
     {
@@ -104,9 +125,13 @@ class SshTerminal
         $exit = $ssh->getExitStatus();
 
         // Recover the resulting cwd from the marker, then strip the marker line.
+        // The marker is printed unconditionally by our wrapper on any real shell,
+        // so its PRESENCE doubles as a "a shell actually ran this" signal — a host
+        // that forces a command / allows only SFTP never produces it.
         $newCwd = $cwd === '.' ? '' : $cwd;
         $mark = preg_quote(self::CWD_MARK, '~');
-        if (preg_match('~' . $mark . '(.*?)\s*$~s', $raw, $m)) {
+        $shellOk = preg_match('~' . $mark . '(.*?)\s*$~s', $raw, $m) === 1;
+        if ($shellOk) {
             $newCwd = trim($m[1]) !== '' ? trim($m[1]) : $newCwd;
         }
         $raw = (string) preg_replace('~\n?' . $mark . '.*$~s', '', $raw);
@@ -122,6 +147,7 @@ class SshTerminal
             'cwd'       => $newCwd,
             'exit'      => is_int($exit) ? $exit : 0,
             'truncated' => $truncated,
+            'shell_ok'  => $shellOk,
         ];
     }
 }

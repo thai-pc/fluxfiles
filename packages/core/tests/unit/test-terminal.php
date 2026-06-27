@@ -71,6 +71,17 @@ test('everyday commands are NOT flagged (no false positives)', function () use (
     }
 });
 
+// cwd resolves against the SFTP root, not the SSH login home (the "directory not
+// found on every command" bug: a relative cwd was run from /root, not /var/www).
+test('resolveCwd anchors a relative cwd under the SFTP root', function () {
+    assertTrue(SshTerminal::resolveCwd('', '/var/www') === '/var/www',          'empty → root');
+    assertTrue(SshTerminal::resolveCwd('html', '/var/www') === '/var/www/html', 'relative → root/relative');
+    assertTrue(SshTerminal::resolveCwd('a/b', '/var/www/') === '/var/www/a/b',  'trailing slash on root handled');
+    assertTrue(SshTerminal::resolveCwd('/etc', '/var/www') === '/etc',          'absolute → as-is');
+    assertTrue(SshTerminal::resolveCwd('', '') === '.',                         'no root, empty → .');
+    assertTrue(SshTerminal::resolveCwd('html', '') === 'html',                  'no root, relative → as-is');
+});
+
 // allow_terminal defaults OFF and only turns on when explicitly set.
 test('allow_terminal claim defaults to false', function () {
     $c = Claims::fromJwtPayload((object) ['sub' => 'u', 'perms' => ['read', 'write'], 'disks' => ['sftp']]);
