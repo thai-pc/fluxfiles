@@ -293,7 +293,32 @@
         "col_time": "시간",
         "col_action": "작업",
         "col_file": "파일",
-        "col_actor": "사용자"
+        "col_actor": "사용자",
+        "action": {
+            "upload": "업로드",
+            "rename": "이름 변경",
+            "delete": "삭제",
+            "move": "이동",
+            "copy": "복사",
+            "mkdir": "폴더 생성",
+            "trash": "휴지통으로 이동",
+            "restore": "복원",
+            "purge": "영구 삭제",
+            "empty_trash": "휴지통 비우기",
+            "url_import": "URL에서 가져오기",
+            "ai_tag": "AI 태그",
+            "crop": "자르기",
+            "watermark": "워터마크",
+            "optimize": "최적화",
+            "chmod": "권한",
+            "extract": "압축 해제",
+            "cross_move": "디스크 간 이동",
+            "cross_copy": "디스크 간 복사",
+            "metadata_update": "메타데이터 업데이트",
+            "chunk_upload": "청크 업로드",
+            "content_update": "내용 편집",
+            "unknown": "기타"
+        }
     },
     "bulk": {
         "move": "이동",

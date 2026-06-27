@@ -293,7 +293,32 @@
         "col_time": "Time",
         "col_action": "Action",
         "col_file": "File",
-        "col_actor": "User"
+        "col_actor": "User",
+        "action": {
+            "upload": "Upload",
+            "rename": "Rename",
+            "delete": "Delete",
+            "move": "Move",
+            "copy": "Copy",
+            "mkdir": "Create folder",
+            "trash": "Move to trash",
+            "restore": "Restore",
+            "purge": "Purge",
+            "empty_trash": "Empty trash",
+            "url_import": "Import from URL",
+            "ai_tag": "AI tag",
+            "crop": "Crop",
+            "watermark": "Watermark",
+            "optimize": "Optimize",
+            "chmod": "Permissions",
+            "extract": "Extract",
+            "cross_move": "Move across disks",
+            "cross_copy": "Copy across disks",
+            "metadata_update": "Update metadata",
+            "chunk_upload": "Chunked upload",
+            "content_update": "Edit content",
+            "unknown": "Other"
+        }
     },
     "bulk": {
         "move": "Move",

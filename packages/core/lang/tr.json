@@ -293,7 +293,32 @@
         "col_time": "Zaman",
         "col_action": "Eylem",
         "col_file": "Dosya",
-        "col_actor": "Kullanıcı"
+        "col_actor": "Kullanıcı",
+        "action": {
+            "upload": "Yükle",
+            "rename": "Yeniden adlandır",
+            "delete": "Sil",
+            "move": "Taşı",
+            "copy": "Kopyala",
+            "mkdir": "Klasör oluştur",
+            "trash": "Çöpe taşı",
+            "restore": "Geri yükle",
+            "purge": "Temizle",
+            "empty_trash": "Çöpü boşalt",
+            "url_import": "URL'den içe aktar",
+            "ai_tag": "AI etiketi",
+            "crop": "Kırp",
+            "watermark": "Filigran",
+            "optimize": "Optimize et",
+            "chmod": "İzinler",
+            "extract": "Ayıkla",
+            "cross_move": "Diskler arası taşı",
+            "cross_copy": "Diskler arası kopyala",
+            "metadata_update": "Meta verileri güncelle",
+            "chunk_upload": "Parçalı yükleme",
+            "content_update": "İçeriği düzenle",
+            "unknown": "Diğer"
+        }
     },
     "bulk": {
         "move": "Taşı",

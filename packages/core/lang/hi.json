@@ -293,7 +293,32 @@
         "col_time": "समय",
         "col_action": "क्रिया",
         "col_file": "फ़ाइल",
-        "col_actor": "उपयोगकर्ता"
+        "col_actor": "उपयोगकर्ता",
+        "action": {
+            "upload": "अपलोड",
+            "rename": "नाम बदलें",
+            "delete": "हटाएँ",
+            "move": "स्थानांतरित करें",
+            "copy": "कॉपी करें",
+            "mkdir": "फ़ोल्डर बनाएँ",
+            "trash": "ट्रैश में डालें",
+            "restore": "पुनर्स्थापित करें",
+            "purge": "साफ़ करें",
+            "empty_trash": "ट्रैश खाली करें",
+            "url_import": "URL से आयात",
+            "ai_tag": "AI टैग",
+            "crop": "क्रॉप",
+            "watermark": "वॉटरमार्क",
+            "optimize": "अनुकूलित करें",
+            "chmod": "अनुमतियाँ",
+            "extract": "निकालें",
+            "cross_move": "डिस्क के बीच स्थानांतरण",
+            "cross_copy": "डिस्क के बीच कॉपी",
+            "metadata_update": "मेटाडेटा अपडेट",
+            "chunk_upload": "खंड अपलोड",
+            "content_update": "सामग्री संपादित करें",
+            "unknown": "अन्य"
+        }
     },
     "bulk": {
         "move": "स्थानांतरित करें",

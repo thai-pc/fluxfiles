@@ -293,7 +293,32 @@
         "col_time": "Ora",
         "col_action": "Azione",
         "col_file": "File",
-        "col_actor": "Utente"
+        "col_actor": "Utente",
+        "action": {
+            "upload": "Carica",
+            "rename": "Rinomina",
+            "delete": "Elimina",
+            "move": "Sposta",
+            "copy": "Copia",
+            "mkdir": "Crea cartella",
+            "trash": "Sposta nel cestino",
+            "restore": "Ripristina",
+            "purge": "Elimina definitivamente",
+            "empty_trash": "Svuota cestino",
+            "url_import": "Importa da URL",
+            "ai_tag": "Tag IA",
+            "crop": "Ritaglia",
+            "watermark": "Filigrana",
+            "optimize": "Ottimizza",
+            "chmod": "Autorizzazioni",
+            "extract": "Estrai",
+            "cross_move": "Sposta tra dischi",
+            "cross_copy": "Copia tra dischi",
+            "metadata_update": "Aggiorna metadati",
+            "chunk_upload": "Caricamento a blocchi",
+            "content_update": "Modifica contenuto",
+            "unknown": "Altro"
+        }
     },
     "bulk": {
         "move": "Sposta",

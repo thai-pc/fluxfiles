@@ -293,7 +293,32 @@
         "col_time": "Hora",
         "col_action": "Ação",
         "col_file": "Arquivo",
-        "col_actor": "Usuário"
+        "col_actor": "Usuário",
+        "action": {
+            "upload": "Enviar",
+            "rename": "Renomear",
+            "delete": "Excluir",
+            "move": "Mover",
+            "copy": "Copiar",
+            "mkdir": "Criar pasta",
+            "trash": "Mover para lixeira",
+            "restore": "Restaurar",
+            "purge": "Limpar",
+            "empty_trash": "Esvaziar lixeira",
+            "url_import": "Importar de URL",
+            "ai_tag": "Etiqueta IA",
+            "crop": "Recortar",
+            "watermark": "Marca d'água",
+            "optimize": "Otimizar",
+            "chmod": "Permissões",
+            "extract": "Extrair",
+            "cross_move": "Mover entre discos",
+            "cross_copy": "Copiar entre discos",
+            "metadata_update": "Atualizar metadados",
+            "chunk_upload": "Envio em partes",
+            "content_update": "Editar conteúdo",
+            "unknown": "Outro"
+        }
     },
     "bulk": {
         "move": "Mover",

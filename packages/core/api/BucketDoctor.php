@@ -35,6 +35,9 @@ class BucketDoctor
         $config = $this->disks->config($disk);
         $driver = $config['driver'] ?? 'local';
 
+        if ($driver === 'sftp') {
+            return $this->sftpReport($disk);
+        }
         if ($driver !== 's3') {
             return $this->localReport($disk, $driver);
         }
@@ -157,6 +160,88 @@ class BucketDoctor
             }
             return $this->warn('cors', 'Could not verify CORS (s3:GetBucketCors not granted).', null);
         }
+    }
+
+    /**
+     * Diagnose an SFTP disk with SFTP-appropriate messages (not the local-FS
+     * report). Surfaces the real failure mode a user hits — wrong password/key,
+     * unreachable host, host-key mismatch, or a read-only / wrong root — instead
+     * of a misleading "Local storage is not writable". Note: FluxFiles only uses
+     * the SFTP subsystem (file transfer); it never opens a shell, so an
+     * SFTP-only account with no terminal access works fine.
+     */
+    private function sftpReport(string $disk): array
+    {
+        $checks = [];
+
+        // 1. Connect + authenticate. Listing the root forces the connection, so a
+        //    wrong password/key, unreachable host, or host-key mismatch lands here.
+        try {
+            $fs = $this->disks->disk($disk);
+            iterator_to_array($fs->listContents('', false));
+            $checks[] = $this->ok('reachability', 'Connected and authenticated to the SFTP host.');
+        } catch (\Throwable $e) {
+            $checks[] = $this->fail(
+                'reachability',
+                'Cannot connect or authenticate: ' . $this->shortMsg($e),
+                'Check SFTP_HOST / SFTP_PORT, the username, and the password OR private key '
+                . '(a wrong password/key authenticates as "Login failed"). If host-key pinning '
+                . 'is enabled, verify SFTP_HOST_FINGERPRINT. The account only needs SFTP '
+                . '(sftp-subsystem) access — an interactive shell is not required.'
+            );
+            return ['disk' => $disk, 'driver' => 'sftp', 'summary' => $this->summarize($checks), 'checks' => $checks, 'remediation' => []];
+        }
+
+        // 2. Write (covers a read-only account or a non-writable root).
+        $probe = self::PROBE_DIR . '/' . bin2hex(random_bytes(8)) . '.txt';
+        $wrote = false;
+        try {
+            $fs->write($probe, 'fluxfiles-doctor');
+            $wrote = true;
+            $checks[] = $this->ok('write', 'Wrote a probe file to the SFTP root.');
+        } catch (\Throwable $e) {
+            $checks[] = $this->fail('write', 'Cannot write: ' . $this->shortMsg($e),
+                'Grant the SFTP user write permission on the root path, or set SFTP_ROOT to a writable directory.');
+        }
+
+        // 3. Read back, then clean up (best-effort).
+        if ($wrote) {
+            try {
+                $fs->read($probe);
+                $checks[] = $this->ok('read', 'Read the probe file back.');
+            } catch (\Throwable $e) {
+                $checks[] = $this->fail('read', 'Cannot read back: ' . $this->shortMsg($e),
+                    'Grant the SFTP user read permission on the root path.');
+            }
+            try {
+                $fs->delete($probe);
+            } catch (\Throwable $e) {
+                // best-effort cleanup — a leftover probe file is harmless
+            }
+        }
+
+        return ['disk' => $disk, 'driver' => 'sftp', 'summary' => $this->summarize($checks), 'checks' => $checks, 'remediation' => []];
+    }
+
+    /**
+     * The most useful one-line reason from an exception. Flysystem wraps the real
+     * phpseclib cause ("Login failed", "Connection closed", host-key mismatch) as
+     * the previous exception, so walk to the root before trimming/capping.
+     */
+    private function shortMsg(\Throwable $e): string
+    {
+        $root = $e;
+        while ($root->getPrevious() !== null) {
+            $root = $root->getPrevious();
+        }
+        $m = trim(explode("\n", $root->getMessage())[0]);
+        if ($m === '') {
+            $m = trim(explode("\n", $e->getMessage())[0]);
+        }
+        if ($m === '') {
+            return (new \ReflectionClass($e))->getShortName();
+        }
+        return strlen($m) > 200 ? substr($m, 0, 197) . '…' : $m;
     }
 
     private function localReport(string $disk, string $driver): array

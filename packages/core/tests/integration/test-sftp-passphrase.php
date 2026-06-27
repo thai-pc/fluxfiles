@@ -158,5 +158,35 @@ test('env SFTP_HOST_FINGERPRINT maps to the disk config', function () use ($HOST
     }
 });
 
+// ── Bucket Doctor: SFTP gets an SFTP-shaped report (not the local-FS one) ──
+// A failing SFTP disk must report driver 'sftp' with a reachability/auth check
+// and SFTP-specific remediation — NOT the misleading "Local storage is not
+// writable". Uses a public TEST-NET IP + a 1s timeout so it fails fast.
+test('BucketDoctor: SFTP failure reports an SFTP-shaped reachability check, not a local report', function () use ($HOST) {
+    $dm = new DiskManager(['vps' => [
+        'driver' => 'sftp', 'host' => $HOST, 'port' => 22, 'username' => 'u',
+        'password' => 'nope', 'root' => '/', 'timeout' => 1,
+    ]]);
+    $report = (new \FluxFiles\BucketDoctor($dm))->diagnose('vps');
+
+    assertEqual('sftp', $report['driver'], 'report is tagged sftp');
+    assertEqual('fail', $report['summary'], 'a dead SFTP host fails');
+    $first = $report['checks'][0] ?? [];
+    assertEqual('reachability', $first['id'] ?? '', 'first check is reachability (connect+auth), not local write');
+    assertTrue(strpos($first['message'] ?? '', 'connect or authenticate') !== false, 'message is about SFTP connect/auth');
+    // The fix must be SFTP-specific, never the local "make the directory writable".
+    assertTrue(strpos($first['fix'] ?? '', 'SFTP_HOST') !== false, 'fix points at SFTP config');
+    assertTrue(strpos($first['fix'] ?? '', 'writable by the web server user') === false, 'no misleading local remediation');
+});
+
+test('BucketDoctor::shortMsg unwraps to the root-cause exception', function () {
+    $m = new \ReflectionMethod(\FluxFiles\BucketDoctor::class, 'shortMsg');
+    $m->setAccessible(true);
+    $doctor = new \FluxFiles\BucketDoctor(new DiskManager([]));
+    $root = new \RuntimeException("Login failed");
+    $wrapped = new \RuntimeException("Unable to list contents for '', shallow listing", 0, $root);
+    assertEqual('Login failed', $m->invoke($doctor, $wrapped), 'returns the deepest cause, not the wrapper');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}" . ($skipped ? "  (skipped: {$skipped})" : '') . "\n";
 exit($failed > 0 ? 1 : 0);

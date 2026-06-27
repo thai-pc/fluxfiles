@@ -293,7 +293,32 @@
         "col_time": "الوقت",
         "col_action": "الإجراء",
         "col_file": "الملف",
-        "col_actor": "المستخدم"
+        "col_actor": "المستخدم",
+        "action": {
+            "upload": "رفع",
+            "rename": "إعادة تسمية",
+            "delete": "حذف",
+            "move": "نقل",
+            "copy": "نسخ",
+            "mkdir": "إنشاء مجلد",
+            "trash": "نقل إلى المهملات",
+            "restore": "استعادة",
+            "purge": "تطهير",
+            "empty_trash": "إفراغ المهملات",
+            "url_import": "استيراد من رابط",
+            "ai_tag": "وسم بالذكاء الاصطناعي",
+            "crop": "اقتصاص",
+            "watermark": "علامة مائية",
+            "optimize": "تحسين",
+            "chmod": "الأذونات",
+            "extract": "استخراج",
+            "cross_move": "نقل بين الأقراص",
+            "cross_copy": "نسخ بين الأقراص",
+            "metadata_update": "تحديث البيانات الوصفية",
+            "chunk_upload": "رفع مجزأ",
+            "content_update": "تعديل المحتوى",
+            "unknown": "أخرى"
+        }
     },
     "bulk": {
         "move": "نقل",

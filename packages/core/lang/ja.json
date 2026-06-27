@@ -293,7 +293,32 @@
         "col_time": "日時",
         "col_action": "操作",
         "col_file": "ファイル",
-        "col_actor": "ユーザー"
+        "col_actor": "ユーザー",
+        "action": {
+            "upload": "アップロード",
+            "rename": "名前変更",
+            "delete": "削除",
+            "move": "移動",
+            "copy": "コピー",
+            "mkdir": "フォルダ作成",
+            "trash": "ゴミ箱へ移動",
+            "restore": "復元",
+            "purge": "完全削除",
+            "empty_trash": "ゴミ箱を空にする",
+            "url_import": "URLからインポート",
+            "ai_tag": "AIタグ",
+            "crop": "切り抜き",
+            "watermark": "透かし",
+            "optimize": "最適化",
+            "chmod": "権限",
+            "extract": "展開",
+            "cross_move": "ディスク間移動",
+            "cross_copy": "ディスク間コピー",
+            "metadata_update": "メタデータ更新",
+            "chunk_upload": "分割アップロード",
+            "content_update": "内容を編集",
+            "unknown": "その他"
+        }
     },
     "bulk": {
         "move": "移動",

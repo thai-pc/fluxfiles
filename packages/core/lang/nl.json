@@ -293,7 +293,32 @@
         "col_time": "Tijd",
         "col_action": "Actie",
         "col_file": "Bestand",
-        "col_actor": "Gebruiker"
+        "col_actor": "Gebruiker",
+        "action": {
+            "upload": "Uploaden",
+            "rename": "Hernoemen",
+            "delete": "Verwijderen",
+            "move": "Verplaatsen",
+            "copy": "Kopiëren",
+            "mkdir": "Map maken",
+            "trash": "Naar prullenbak",
+            "restore": "Herstellen",
+            "purge": "Opschonen",
+            "empty_trash": "Prullenbak legen",
+            "url_import": "Importeren vanaf URL",
+            "ai_tag": "AI-tag",
+            "crop": "Bijsnijden",
+            "watermark": "Watermerk",
+            "optimize": "Optimaliseren",
+            "chmod": "Rechten",
+            "extract": "Uitpakken",
+            "cross_move": "Tussen schijven verplaatsen",
+            "cross_copy": "Tussen schijven kopiëren",
+            "metadata_update": "Metadata bijwerken",
+            "chunk_upload": "Upload in delen",
+            "content_update": "Inhoud bewerken",
+            "unknown": "Overig"
+        }
     },
     "bulk": {
         "move": "Verplaatsen",

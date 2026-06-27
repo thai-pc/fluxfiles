@@ -293,7 +293,32 @@
         "col_time": "时间",
         "col_action": "操作",
         "col_file": "文件",
-        "col_actor": "用户"
+        "col_actor": "用户",
+        "action": {
+            "upload": "上传",
+            "rename": "重命名",
+            "delete": "删除",
+            "move": "移动",
+            "copy": "复制",
+            "mkdir": "新建文件夹",
+            "trash": "移入回收站",
+            "restore": "恢复",
+            "purge": "清除",
+            "empty_trash": "清空回收站",
+            "url_import": "从URL导入",
+            "ai_tag": "AI标签",
+            "crop": "裁剪",
+            "watermark": "水印",
+            "optimize": "优化",
+            "chmod": "权限",
+            "extract": "解压",
+            "cross_move": "跨磁盘移动",
+            "cross_copy": "跨磁盘复制",
+            "metadata_update": "更新元数据",
+            "chunk_upload": "分块上传",
+            "content_update": "编辑内容",
+            "unknown": "其他"
+        }
     },
     "bulk": {
         "move": "移动",

@@ -293,7 +293,32 @@
         "col_time": "เวลา",
         "col_action": "การกระทำ",
         "col_file": "ไฟล์",
-        "col_actor": "ผู้ใช้"
+        "col_actor": "ผู้ใช้",
+        "action": {
+            "upload": "อัปโหลด",
+            "rename": "เปลี่ยนชื่อ",
+            "delete": "ลบ",
+            "move": "ย้าย",
+            "copy": "คัดลอก",
+            "mkdir": "สร้างโฟลเดอร์",
+            "trash": "ย้ายไปถังขยะ",
+            "restore": "กู้คืน",
+            "purge": "ล้าง",
+            "empty_trash": "ล้างถังขยะ",
+            "url_import": "นำเข้าจาก URL",
+            "ai_tag": "แท็ก AI",
+            "crop": "ครอบตัด",
+            "watermark": "ลายน้ำ",
+            "optimize": "ปรับให้เหมาะสม",
+            "chmod": "สิทธิ์",
+            "extract": "แตกไฟล์",
+            "cross_move": "ย้ายข้ามดิสก์",
+            "cross_copy": "คัดลอกข้ามดิสก์",
+            "metadata_update": "อัปเดตข้อมูลเมตา",
+            "chunk_upload": "อัปโหลดเป็นส่วน",
+            "content_update": "แก้ไขเนื้อหา",
+            "unknown": "อื่นๆ"
+        }
     },
     "bulk": {
         "move": "ย้าย",

@@ -293,7 +293,32 @@
         "col_time": "Zeit",
         "col_action": "Aktion",
         "col_file": "Datei",
-        "col_actor": "Benutzer"
+        "col_actor": "Benutzer",
+        "action": {
+            "upload": "Hochladen",
+            "rename": "Umbenennen",
+            "delete": "Löschen",
+            "move": "Verschieben",
+            "copy": "Kopieren",
+            "mkdir": "Ordner erstellen",
+            "trash": "In Papierkorb verschieben",
+            "restore": "Wiederherstellen",
+            "purge": "Bereinigen",
+            "empty_trash": "Papierkorb leeren",
+            "url_import": "Aus URL importieren",
+            "ai_tag": "KI-Tag",
+            "crop": "Zuschneiden",
+            "watermark": "Wasserzeichen",
+            "optimize": "Optimieren",
+            "chmod": "Berechtigungen",
+            "extract": "Entpacken",
+            "cross_move": "Zwischen Datenträgern verschieben",
+            "cross_copy": "Zwischen Datenträgern kopieren",
+            "metadata_update": "Metadaten aktualisieren",
+            "chunk_upload": "Chunk-Upload",
+            "content_update": "Inhalt bearbeiten",
+            "unknown": "Sonstiges"
+        }
     },
     "bulk": {
         "move": "Verschieben",

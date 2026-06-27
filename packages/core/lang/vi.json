@@ -293,7 +293,32 @@
         "col_time": "Thời gian",
         "col_action": "Hành động",
         "col_file": "Tệp",
-        "col_actor": "Người dùng"
+        "col_actor": "Người dùng",
+        "action": {
+            "upload": "Tải lên",
+            "rename": "Đổi tên",
+            "delete": "Xóa",
+            "move": "Di chuyển",
+            "copy": "Sao chép",
+            "mkdir": "Tạo thư mục",
+            "trash": "Chuyển vào thùng rác",
+            "restore": "Khôi phục",
+            "purge": "Dọn sạch",
+            "empty_trash": "Làm trống thùng rác",
+            "url_import": "Nhập từ URL",
+            "ai_tag": "Gắn thẻ AI",
+            "crop": "Cắt ảnh",
+            "watermark": "Đóng dấu",
+            "optimize": "Tối ưu",
+            "chmod": "Phân quyền",
+            "extract": "Giải nén",
+            "cross_move": "Di chuyển giữa ổ đĩa",
+            "cross_copy": "Sao chép giữa ổ đĩa",
+            "metadata_update": "Cập nhật metadata",
+            "chunk_upload": "Tải lên theo khối",
+            "content_update": "Sửa nội dung",
+            "unknown": "Khác"
+        }
     },
     "bulk": {
         "move": "Di chuyển",

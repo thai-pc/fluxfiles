@@ -2355,6 +2355,14 @@ function fluxFilesApp() {
             const v = this.t(k);
             return v === k ? id : v;
         },
+        // Localised label for an audit action code (upload/rename/chmod/…). Falls
+        // back to the raw code so a new server action never shows blank.
+        auditActionLabel(action) {
+            if (!action) return '—';
+            const k = 'audit.action.' + action;
+            const v = this.t(k);
+            return v === k ? action : v;
+        },
 
         async loadDoctor() {
             this.doctorLoading = true;

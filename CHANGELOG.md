@@ -3,6 +3,32 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.49] — 2026-06-27
+
+> Released: core `core-v0.2.44` (Packagist + Docker).
+> (Adapters unchanged — core-only; adapter core floor stays `^0.2.39`.)
+
+### Fixed
+
+- **Bucket Doctor now diagnoses SFTP disks properly.** SFTP previously fell through
+  to the *local* report, so a wrong password / unreachable host / host-key mismatch
+  / read-only account was mislabeled "Local storage is not writable" with a local
+  remediation. There's now a dedicated SFTP branch with connect+auth → write → read
+  checks and SFTP-specific fixes (host/port, password-or-key, host-key fingerprint),
+  and the real cause is unwrapped from the Flysystem wrapper (e.g. "Unable to
+  authenticate using a password" instead of a generic listing error). Note: FluxFiles
+  uses only the SFTP **subsystem** (file transfer) — it never opens a shell, so an
+  SFTP-only account with no terminal access works fine.
+- **Audit log: no more "unknown" actions, and actions are localised.** Write routes
+  for watermark, optimize, extract, chmod and content-edit weren't in the audit
+  action map, so they logged as `unknown`. They're mapped now, and the activity
+  panel renders a localised label per action (`audit.action.*`, 16 languages, raw
+  code as fallback) instead of the raw English token.
+
+### Added
+
+- i18n: `audit.action.*` (23 action labels) across all 16 locales.
+
 ## [0.2.48] — 2026-06-27
 
 > Released: core `core-v0.2.43` (Packagist + Docker).

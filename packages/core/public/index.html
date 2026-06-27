@@ -1310,7 +1310,7 @@
                         <template x-for="(e, i) in activityEntries" :key="i">
                             <tr>
                                 <td x-text="formatDate(e.created_at)"></td>
-                                <td><span class="ff-activity-action" x-text="e.action"></span></td>
+                                <td><span class="ff-activity-action" x-text="auditActionLabel(e.action)"></span></td>
                                 <td class="ff-activity-file" :title="e.file_key" x-text="e.file_key || '—'"></td>
                                 <td x-text="e.user_id || '—'"></td>
                             </tr>

@@ -692,6 +692,11 @@ function resolveAuditAction(string $uri): string
         '/mkdir'      => 'mkdir',
         '/metadata'   => 'metadata_update',
         '/chunk'      => 'chunk_upload',
+        '/watermark'  => 'watermark',
+        '/optimize'   => 'optimize',
+        '/extract'    => 'extract',
+        '/chmod'      => 'chmod',
+        '/content'    => 'content_update',
     ];
 
     foreach ($map as $needle => $action) {
