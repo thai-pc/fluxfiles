@@ -244,6 +244,24 @@ test('diskConfigs → s3 endpoint + visibility are settable (MinIO / public flow
     }
 });
 
+// Session-expiry recovery: the embedded UI must re-mint a JWT from the WP login
+// session (cookie + nonce, NOT the expired JWT) so "Try again" recovers without
+// a page reload. The REST route uses checkLoggedIn (not checkAuth, which rejects
+// an expired Bearer), the handler exists, and both the shortcode and the media
+// button wire onTokenRefresh.
+test('token-refresh recovery wiring is present (api + shortcode + media button)', function () {
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    $scSrc  = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesShortcode.php');
+    $mbSrc  = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesMediaButton.php');
+
+    assertTrue(preg_match('#function\s+handleToken\s*\(#', $apiSrc) === 1, 'API has handleToken()');
+    assertTrue(preg_match('#function\s+checkLoggedIn\s*\(#', $apiSrc) === 1, 'API has checkLoggedIn() permission cb');
+    assertTrue(strpos($apiSrc, "'/token'") !== false, 'API registers the /token route');
+    assertTrue(strpos($apiSrc, "'permission_callback' => [self::class, 'checkLoggedIn']") !== false, 'token route uses checkLoggedIn (not checkAuth)');
+    assertTrue(strpos($scSrc, 'onTokenRefresh') !== false, 'shortcode wires onTokenRefresh');
+    assertTrue(strpos($mbSrc, 'onTokenRefresh') !== false, 'media button wires onTokenRefresh');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

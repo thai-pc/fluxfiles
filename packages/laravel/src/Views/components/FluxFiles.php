@@ -18,6 +18,8 @@ class FluxFiles extends Component
     public array $overrides;
     public ?string $onSelect;
     public ?string $onClose;
+    public ?string $onTokenRefresh;
+    public string $tokenUrl;
 
     public function __construct(
         string $disk = 'local',
@@ -28,6 +30,7 @@ class FluxFiles extends Component
         array $overrides = [],
         ?string $onSelect = null,
         ?string $onClose = null,
+        ?string $onTokenRefresh = null,
     ) {
         $this->disk = $disk;
         $this->mode = $mode;
@@ -38,6 +41,10 @@ class FluxFiles extends Component
         $this->overrides = $overrides;
         $this->onSelect = $onSelect;
         $this->onClose = $onClose;
+        $this->onTokenRefresh = $onTokenRefresh;
+        // Same-origin URL the default onTokenRefresh hook hits to re-mint a JWT
+        // from the Laravel session after the embedded one expires.
+        $this->tokenUrl = url(config('fluxfiles.route_prefix', 'api/fm') . '/token');
     }
 
     public function render(): View

@@ -59,6 +59,11 @@ if (($_ENV['SFTP_HOST'] ?? '') !== '') {
         'private_key'            => $_ENV['SFTP_PRIVATE_KEY'] ?? '',
         'private_key_passphrase' => $_ENV['SFTP_PRIVATE_KEY_PASSPHRASE'] ?? '',
         'root'                   => $_ENV['SFTP_ROOT'] ?? '/',
+        // Host-key pinning (recommended): the expected fingerprint(s) of the
+        // server's host key — without it the client trusts ANY host key (MITM
+        // risk). Colon-hex form (e.g. `aa:bb:..`); md5 for an RSA host key,
+        // sha512 otherwise. Comma-separate to allow several (key rotation).
+        'host_fingerprint'       => $_ENV['SFTP_HOST_FINGERPRINT'] ?? '',
     ];
 }
 

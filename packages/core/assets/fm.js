@@ -2878,6 +2878,9 @@ function fluxFilesApp() {
         chmodBits: 0,          // 0-511 (octal 000-777)
         chmodLoading: false,
         chmodError: '',
+        chmodText: '644',      // the editable octal field (typed value, may be mid-edit)
+        // Common modes for one-click setting (file 6xx, dir/exec 7xx).
+        chmodPresets: ['600', '640', '644', '700', '750', '755'],
 
         // chmod is offered only on an SFTP disk and the token allows it.
         get canChmod() {
@@ -2900,6 +2903,7 @@ function fluxFilesApp() {
                     '/api/fm/chmod?disk=' + encodeURIComponent(this.currentDisk) +
                     '&path=' + encodeURIComponent(file.key));
                 this.chmodBits = parseInt(data.mode, 8) || 0;
+                this.chmodText = this.chmodOctal;
             } catch (e) {
                 this.chmodError = e.message || 'Failed to read permissions';
             } finally {
@@ -2912,6 +2916,7 @@ function fluxFilesApp() {
         chmodToggle(who, perm) {
             const mask = perm << ((2 - who) * 3);
             this.chmodBits ^= mask;
+            this.chmodText = this.chmodOctal; // keep the typed field in sync
         },
         chmodHas(who, perm) {
             const mask = perm << ((2 - who) * 3);
@@ -2920,6 +2925,25 @@ function fluxFilesApp() {
         get chmodOctal() {
             return ((this.chmodBits >> 6) & 7).toString() + ((this.chmodBits >> 3) & 7).toString() + (this.chmodBits & 7).toString();
         },
+        // Symbolic rwx string (e.g. "rwxr-xr-x") — universal, needs no translation.
+        get chmodSymbolic() {
+            let s = '';
+            for (let who = 0; who < 3; who++) {
+                const b = (this.chmodBits >> ((2 - who) * 3)) & 7;
+                s += (b & 4 ? 'r' : '-') + (b & 2 ? 'w' : '-') + (b & 1 ? 'x' : '-');
+            }
+            return s;
+        },
+        // Set bits from an octal string ("755", "0644"); ignores junk so the
+        // editable field can be typed into freely without throwing or jumping.
+        chmodSetOctal(oct) {
+            const m = String(oct).trim().match(/^0?([0-7]{1,3})$/);
+            if (!m) return;
+            this.chmodBits = parseInt(m[1].padStart(3, '0'), 8) & 0o777;
+        },
+        // A preset click sets both the bits and the visible field.
+        chmodPreset(oct) { this.chmodSetOctal(oct); this.chmodText = this.chmodOctal; },
+        chmodIsPreset(oct) { return this.chmodOctal === oct; },
 
         async applyChmod() {
             if (!this.chmodFile) return;

@@ -263,6 +263,23 @@ test('every proxy route maps to an existing controller method', function () {
     assertTrue($missing === [], 'routes reference missing controller methods: ' . implode(', ', $missing));
 });
 
+// Session-expiry recovery: the embedded UI must be able to re-mint a JWT from
+// the Laravel session (NOT the expired JWT) so "Try again" works without a full
+// page reload. Three pieces must line up: the controller method, a session-auth
+// token route in the ServiceProvider, and the blade wiring onTokenRefresh.
+test('token-refresh recovery wiring is present (controller + route + blade)', function () {
+    $ctrlSrc  = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    $provSrc  = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    $bladeSrc = (string) file_get_contents(__DIR__ . '/../src/Views/components/fluxfiles.blade.php');
+
+    assertTrue(preg_match('#function\s+token\s*\(#', $ctrlSrc) === 1, 'controller has token() method');
+    // The refresh route must be registered with the bare middleware (session),
+    // NOT the FluxFilesAuth JWT class — the JWT is expired at refresh time.
+    assertTrue(strpos($provSrc, "'token', [FluxFilesController::class, 'token']") !== false, 'ServiceProvider registers GET token route');
+    assertTrue(strpos($bladeSrc, 'onTokenRefresh') !== false, 'blade wires onTokenRefresh');
+    assertTrue(strpos($bladeSrc, '$tokenUrl') !== false, 'blade fetches the token-refresh URL');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

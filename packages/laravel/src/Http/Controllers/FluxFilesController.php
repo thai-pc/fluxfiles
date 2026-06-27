@@ -777,6 +777,28 @@ class FluxFilesController
     }
 
     /**
+     * Mint a FRESH JWT for the session-authenticated user.
+     *
+     * This route is deliberately NOT behind the FluxFilesAuth (JWT) middleware:
+     * the whole point is that the iframe's JWT has expired, so the embedded UI
+     * (via the SDK `onTokenRefresh` hook) calls this to obtain a new one WITHOUT
+     * a full page reload. Auth here is the Laravel session ('web' + 'auth'); if
+     * the SESSION is also gone, this 401s and the UI falls back to a reload
+     * (which sends the user through login). Mints with the server-side config
+     * defaults — components using custom per-tag `overrides` should supply their
+     * own `:on-token-refresh` to preserve them.
+     */
+    public function token(Request $request): JsonResponse
+    {
+        try {
+            $manager = app(\FluxFiles\Laravel\FluxFilesManager::class);
+            return $this->ok(['token' => $manager->tokenForUser()]);
+        } catch (\Throwable $e) {
+            return $this->error('Unable to refresh token', 401, 'token_refresh_failed');
+        }
+    }
+
+    /**
      * Optimization (paid module). The 3-layer gate lives in ModuleRegistry: module
      * installed (501) + licensed (402) + allow_optimize claim (403). Free hosts
      * without the module package → 501.

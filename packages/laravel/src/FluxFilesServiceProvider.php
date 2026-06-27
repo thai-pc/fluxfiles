@@ -64,6 +64,15 @@ class FluxFilesServiceProvider extends ServiceProvider
         $prefix = config('fluxfiles.route_prefix', 'api/fm');
         $middleware = config('fluxfiles.middleware', ['web', 'auth']);
 
+        // Token refresh — session-authenticated only (NOT the JWT middleware).
+        // The embedded UI's onTokenRefresh hook calls this to mint a fresh JWT
+        // after the old one expires, so a session-valid user recovers without a
+        // full page reload. Registered BEFORE the proxy group so it is not
+        // shadowed by (and does not inherit) the FluxFilesAuth JWT check.
+        Route::prefix($prefix)
+            ->middleware($middleware)
+            ->get('token', [FluxFilesController::class, 'token']);
+
         // API routes with auth middleware
         Route::prefix($prefix)
             ->middleware(array_merge($middleware, [

@@ -57,18 +57,31 @@ test('chmod dialog: reads the mode, checkbox↔octal binding, Apply POSTs', asyn
   const modal = page.locator('.ff-chmod-modal');
   await expect(modal).toBeVisible();
   await expect(modal).toContainText('deploy.sh');
-  // 644 → owner rw, group r, world r. Octal display shows 644.
-  await expect(modal.locator('.ff-chmod-octal')).toHaveText('644');
+  // 644 → owner rw, group r, world r. The editable octal field shows 644,
+  // and the symbolic string mirrors it.
+  await expect(modal.locator('.ff-chmod-octal')).toHaveValue('644');
+  await expect(modal.locator('.ff-chmod-symbolic')).toHaveText('rw-r--r--');
 
   // The grid has 9 checkboxes (3 who × 3 perms).
   await expect(modal.locator('.ff-chmod-grid input[type=checkbox]')).toHaveCount(9);
 
   // Toggle owner-execute (row 0, last checkbox) → 644 becomes 744.
   await modal.locator('tbody tr').nth(0).locator('input[type=checkbox]').nth(2).check();
-  await expect(modal.locator('.ff-chmod-octal')).toHaveText('744');
+  await expect(modal.locator('.ff-chmod-octal')).toHaveValue('744');
+  await expect(modal.locator('.ff-chmod-symbolic')).toHaveText('rwxr--r--');
 
-  // Apply → POST carries the new mode and closes the dialog.
+  // A preset chip applies a whole mode in one click (700 → rwx------).
+  await modal.locator('.ff-chmod-preset', { hasText: '700' }).click();
+  await expect(modal.locator('.ff-chmod-octal')).toHaveValue('700');
+  await expect(modal.locator('tbody tr').nth(0).locator('input[type=checkbox]').nth(0)).toBeChecked();
+  await expect(modal.locator('tbody tr').nth(2).locator('input[type=checkbox]').nth(0)).not.toBeChecked();
+
+  // Typing into the octal field drives the checkboxes too (755).
+  await modal.locator('.ff-chmod-octal').fill('755');
+  await expect(modal.locator('.ff-chmod-symbolic')).toHaveText('rwxr-xr-x');
+
+  // Apply → POST carries the final mode (755) and closes the dialog.
   await modal.getByRole('button', { name: 'Apply' }).click();
   await expect(modal).toBeHidden();
-  expect(getPosted()).toMatchObject({ disk: 'local', path: 'bin/deploy.sh', mode: '744' });
+  expect(getPosted()).toMatchObject({ disk: 'local', path: 'bin/deploy.sh', mode: '755' });
 });

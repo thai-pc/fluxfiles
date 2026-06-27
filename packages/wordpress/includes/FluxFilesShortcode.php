@@ -64,12 +64,29 @@ class FluxFilesShortcode
             'locale'    => $locale,
         ]);
 
+        // Same-origin REST URL + nonce the default onTokenRefresh hook hits to
+        // re-mint a JWT from the WP session after the embedded one expires, so
+        // the iframe's "Try again" recovers without a full page reload.
+        $tokenUrl   = esc_url_raw(rest_url('fluxfiles/v1/api/fm/token'));
+        $tokenUrlJs = wp_json_encode($tokenUrl);
+        $nonceJs    = wp_json_encode(wp_create_nonce('wp_rest'));
+
         return <<<HTML
 <div id="{$containerId}" style="width:{$width};height:{$height}"></div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof FluxFiles !== 'undefined') {
-        FluxFiles.open({$configJson});
+        FluxFiles.open(Object.assign({$configJson}, {
+            onTokenRefresh: function () {
+                return fetch({$tokenUrlJs}, {
+                    credentials: 'same-origin',
+                    headers: { 'X-WP-Nonce': {$nonceJs}, 'Accept': 'application/json' }
+                })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) { return (j && j.data && j.data.token) ? j.data.token : null; })
+                    .catch(function () { return null; });
+            }
+        }));
     }
 });
 </script>

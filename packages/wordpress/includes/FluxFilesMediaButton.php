@@ -86,6 +86,11 @@ class FluxFilesMediaButton
             'locale'   => $locale,
         ]);
 
+        // Same-origin REST URL + nonce for the default onTokenRefresh hook (re-mint
+        // a JWT from the WP session when the embedded one expires → no reload).
+        $tokenUrlJs = wp_json_encode(esc_url_raw(rest_url('fluxfiles/v1/api/fm/token')));
+        $nonceJs    = wp_json_encode(wp_create_nonce('wp_rest'));
+
         ?>
         <div id="fluxfiles-modal" class="fluxfiles-modal" style="display:none;">
             <div class="fluxfiles-modal-overlay"></div>
@@ -111,6 +116,15 @@ class FluxFilesMediaButton
                 modal.style.display = 'flex';
                 if (!opened) {
                     config.container = '#fluxfiles-modal-body';
+                    config.onTokenRefresh = function () {
+                        return fetch(<?php echo $tokenUrlJs; ?>, {
+                            credentials: 'same-origin',
+                            headers: { 'X-WP-Nonce': <?php echo $nonceJs; ?>, 'Accept': 'application/json' }
+                        })
+                            .then(function (r) { return r.ok ? r.json() : null; })
+                            .then(function (j) { return (j && j.data && j.data.token) ? j.data.token : null; })
+                            .catch(function () { return null; });
+                    };
                     config.onSelect = function(file) {
                         if (Array.isArray(file)) {
                             file.forEach(function(f) { insertFile(f); });

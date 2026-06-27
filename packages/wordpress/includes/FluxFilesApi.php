@@ -188,6 +188,18 @@ class FluxFilesApi
             'callback' => [$api, 'handleAudit'],
         ]));
 
+        // Token refresh — mints a fresh JWT for the logged-in WP user (cookie +
+        // REST nonce auth, NOT the JWT). The embedded UI's onTokenRefresh hook
+        // calls this after the iframe's JWT expires, so a still-logged-in user
+        // recovers without a full page reload. It must NOT use `checkAuth`:
+        // that rejects an expired Bearer outright, and the whole point here is
+        // that the JWT is gone — auth is the WP login session instead.
+        register_rest_route($ns, $p . '/token', [
+            'methods'             => 'GET',
+            'callback'            => [$api, 'handleToken'],
+            'permission_callback' => [self::class, 'checkLoggedIn'],
+        ]);
+
         // Chunk upload
         register_rest_route($ns, $p . '/chunk/init', array_merge($writeArgs, [
             'callback' => [$api, 'handleChunkInit'],
@@ -253,6 +265,32 @@ class FluxFilesApi
             }
         }
         return is_user_logged_in();
+    }
+
+    /**
+     * Permission callback for the token-refresh route: the logged-in WP session
+     * only (cookie + REST nonce). Deliberately does NOT accept a Bearer JWT —
+     * the refresh route exists precisely because the JWT has expired.
+     */
+    public static function checkLoggedIn(): bool
+    {
+        return is_user_logged_in();
+    }
+
+    /**
+     * Mint a FRESH JWT for the logged-in WP user. Called by the embedded UI's
+     * onTokenRefresh hook (via the shortcode/media-button wiring) so a session-
+     * valid user recovers from an expired token without a page reload. If the WP
+     * session is also gone the permission_callback 401s first, and the UI shows
+     * its auth screen.
+     */
+    public function handleToken(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            return $this->ok(['token' => FluxFilesPlugin::tokenForCurrentUser()]);
+        } catch (\Throwable $e) {
+            return $this->error('Unable to refresh token', 401);
+        }
     }
 
     // -------------------------------------------------------------------------

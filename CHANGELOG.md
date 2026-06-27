@@ -5,8 +5,46 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Security
+
+- **SFTP host-key pinning (anti-MITM).** The SFTP disk connected without verifying
+  the server's host key, so it trusted *any* key — a man-in-the-middle could
+  impersonate the server. A new `SFTP_HOST_FINGERPRINT` (disk `host_fingerprint`,
+  colon-hex; md5 for an RSA host key, sha512 otherwise; comma-separate for key
+  rotation) is now passed to the connection provider, which rejects a mismatched
+  host. `useAgent` is also forced off (never reach for a server-side ssh-agent).
+  Backward-compatible: unset → previous behaviour, but `.env.example` documents it
+  as recommended with the `ssh-keyscan | ssh-keygen -l` recipe to obtain it.
+
+### Added
+
+- **chmod dialog: quick presets + symbolic mode + typeable octal.** The SFTP
+  file-permissions dialog now has one-click preset chips (`600 640 644 700 750
+  755`), shows the symbolic string (`rwxr-xr-x`) next to the octal, and the octal
+  is an editable field you can type into — all three stay in sync with the rwx
+  checkboxes. No new i18n keys (octal/symbolic are language-neutral).
+
 ### Fixed
 
+- **Session expiry now recovers without a full page reload (Laravel & WordPress).**
+  When the embedded JWT expired, the adapters had no way to mint a fresh one: the
+  Laravel `<x-fluxfiles>` blade and the WordPress shortcode/media-button embedded
+  the SDK *without* an `onTokenRefresh` handler, so the iframe's auto-refresh and
+  its "Try again" button both dead-ended at `FM_TOKEN_FAILED: no_handler` — only a
+  page reload (which re-rendered a new token) worked. Two fixes:
+  - **Adapters now auto-wire `onTokenRefresh`** to a session-authenticated re-mint
+    endpoint — Laravel `GET {prefix}/token` (web/`auth` session, *not* the JWT
+    middleware) and WordPress `GET /fluxfiles/v1/api/fm/token` (cookie + REST
+    nonce, a `checkLoggedIn` permission callback since `checkAuth` rejects an
+    expired Bearer). A still-logged-in user now refreshes silently; if the *session*
+    is also gone the endpoint 401s and the UI falls back to login. Components with
+    custom per-tag `overrides` can pass their own `:on-token-refresh` to preserve
+    them. (React/Vue already expose `onTokenRefresh` — the dev supplies it.)
+  - **The "Try again" button now calls `retryLoad()`** instead of posting
+    `FM_TOKEN_REFRESH` directly. The direct post bypassed `_handleTokenExpired`,
+    which is the only place that registers the `FM_TOKEN_UPDATED` listener — so even
+    a working host handler's new token was never applied. `retryLoad()` resets the
+    refresh-loop guard and re-enters the proper refresh cycle.
 - **Toolbar buttons no longer clipped in a narrow container.** The action toolbar
   (Upload / New folder / Import / bulk Move/Copy/Download…) was a single non-wrapping
   flex row, so in a narrow embed (iframe/modal) the right-most buttons were cut off

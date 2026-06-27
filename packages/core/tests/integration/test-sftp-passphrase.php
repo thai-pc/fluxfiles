@@ -120,5 +120,43 @@ test('a real ED25519 + RSA passphrase key decrypts with the right passphrase (wr
     }
 });
 
+// ── Host-key pinning (anti-MITM) ──────────────────────────────────────────
+$FP = '12:34:56:78:9a:bc:de:f0:12:34:56:78:9a:bc:de:f0';
+
+test('buildSftpProvider forwards a single host_fingerprint as a string', function () use ($HOST, $FP) {
+    $p = buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw', 'host_fingerprint' => $FP]);
+    assertEqual($FP, prop($p, 'hostFingerprint'), 'fingerprint reaches the provider');
+});
+
+test('comma-separated fingerprints → array (key rotation)', function () use ($HOST, $FP) {
+    $second = 'aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99';
+    $p = buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw', 'host_fingerprint' => " {$FP} , {$second} "]);
+    assertEqual([$FP, $second], prop($p, 'hostFingerprint'), 'both fingerprints, trimmed');
+});
+
+test('no host_fingerprint → null (backward-compatible; provider trusts any key)', function () use ($HOST) {
+    $p = buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw']);
+    assertEqual(null, prop($p, 'hostFingerprint'));
+});
+
+test('useAgent is forced off (never reach for a server-side ssh-agent)', function () use ($HOST) {
+    $p = buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw']);
+    assertEqual(false, prop($p, 'useAgent'));
+});
+
+test('env SFTP_HOST_FINGERPRINT maps to the disk config', function () use ($HOST, $FP) {
+    $saved = [$_ENV['SFTP_HOST'] ?? null, $_ENV['SFTP_HOST_FINGERPRINT'] ?? null];
+    $_ENV['SFTP_HOST'] = $HOST; $_ENV['SFTP_HOST_FINGERPRINT'] = $FP;
+    try {
+        $disks = require __DIR__ . '/../../config/disks.php';
+        assertEqual($FP, $disks['sftp']['host_fingerprint'] ?? null);
+    } finally {
+        [$_ENV['SFTP_HOST'], $_ENV['SFTP_HOST_FINGERPRINT']] = $saved;
+        foreach (['SFTP_HOST', 'SFTP_HOST_FINGERPRINT'] as $i => $k) {
+            if ($saved[$i] === null) { unset($_ENV[$k]); }
+        }
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}" . ($skipped ? "  (skipped: {$skipped})" : '') . "\n";
 exit($failed > 0 ? 1 : 0);

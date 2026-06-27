@@ -62,7 +62,7 @@
                 <div style="text-align:center;">
                     <p class="ff-auth-subtitle" x-text="t('auth.expired') || 'Your session has expired. Please reload or re-authenticate.'"></p>
                     <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">
-                        <button class="ff-btn ff-btn-primary" @click="window.parent !== window ? postMessage('FM_TOKEN_REFRESH', { reason: 'manual_retry' }) : location.reload()" x-text="t('auth.retry') || 'Retry'"></button>
+                        <button class="ff-btn ff-btn-primary" @click="window.parent !== window ? retryLoad() : location.reload()" x-text="t('auth.retry') || 'Retry'"></button>
                         <button class="ff-btn" @click="if(window.parent !== window) postMessage('FM_CLOSE', {})" x-show="window.parent !== window" x-text="t('auth.close') || 'Close'"></button>
                     </div>
                 </div>
@@ -1440,8 +1440,16 @@
                                 </template>
                             </tbody>
                         </table>
+                        <div class="ff-chmod-presets">
+                            <template x-for="p in chmodPresets" :key="p">
+                                <button type="button" class="ff-chmod-preset" :class="{ 'is-active': chmodIsPreset(p) }"
+                                        @click="chmodPreset(p)" x-text="p"></button>
+                            </template>
+                        </div>
                         <div class="ff-chmod-foot">
-                            <span class="ff-chmod-octal" x-text="chmodOctal"></span>
+                            <input class="ff-chmod-octal" type="text" inputmode="numeric" maxlength="4"
+                                   x-model="chmodText" @input="chmodSetOctal(chmodText)" :aria-label="t('chmod.title')">
+                            <code class="ff-chmod-symbolic" x-text="chmodSymbolic"></code>
                             <button class="ff-btn ff-btn-primary" @click="applyChmod()" :disabled="chmodLoading" x-text="t('chmod.apply')"></button>
                         </div>
                     </div>

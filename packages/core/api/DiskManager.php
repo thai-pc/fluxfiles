@@ -188,15 +188,28 @@ class DiskManager
         if (\class_exists('\\FluxFiles\\SsrfGuard')) {
             SsrfGuard::assertHostSafe($host);
         }
+        // Host-key pinning: when a fingerprint is configured, the provider rejects
+        // a server whose host key doesn't match (anti-MITM). Comma-separated →
+        // an array so several keys are accepted (rotation). Empty → null (the
+        // provider then trusts any host key — backward-compatible default).
+        $fpRaw = trim((string) ($cfg['host_fingerprint'] ?? ''));
+        $hostFingerprint = null;
+        if ($fpRaw !== '') {
+            $list = array_values(array_filter(array_map('trim', explode(',', $fpRaw)), 'strlen'));
+            $hostFingerprint = count($list) === 1 ? $list[0] : $list;
+        }
+
         return \League\Flysystem\PhpseclibV3\SftpConnectionProvider::fromArray([
-            'host'       => $host,
-            'username'   => (string) ($cfg['username'] ?? ''),
-            'password'   => ($cfg['password'] ?? '') !== '' ? (string) $cfg['password'] : null,
-            'privateKey' => ($cfg['private_key'] ?? '') !== '' ? (string) $cfg['private_key'] : null,
-            'passphrase' => ($cfg['private_key_passphrase'] ?? '') !== '' ? (string) $cfg['private_key_passphrase'] : null,
-            'port'       => (int) ($cfg['port'] ?? 22),
-            'timeout'    => (int) ($cfg['timeout'] ?? 20),
-            'maxTries'   => 2,
+            'host'            => $host,
+            'username'        => (string) ($cfg['username'] ?? ''),
+            'password'        => ($cfg['password'] ?? '') !== '' ? (string) $cfg['password'] : null,
+            'privateKey'      => ($cfg['private_key'] ?? '') !== '' ? (string) $cfg['private_key'] : null,
+            'passphrase'      => ($cfg['private_key_passphrase'] ?? '') !== '' ? (string) $cfg['private_key_passphrase'] : null,
+            'port'            => (int) ($cfg['port'] ?? 22),
+            'useAgent'        => false, // never reach for a local ssh-agent on the server
+            'hostFingerprint' => $hostFingerprint,
+            'timeout'         => (int) ($cfg['timeout'] ?? 20),
+            'maxTries'        => 2,
         ]);
     }
 

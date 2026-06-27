@@ -583,8 +583,23 @@ body {
 .ff-chmod-grid th:first-child, .ff-chmod-grid td:first-child { text-align: left; color: var(--color-text-secondary); }
 .ff-chmod-grid thead th { color: var(--color-text-secondary); font-weight: 500; border-bottom: 0.5px solid var(--color-border-tertiary); }
 .ff-chmod-grid input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
-.ff-chmod-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
-.ff-chmod-octal { font-family: var(--font-mono, monospace); font-size: 20px; font-weight: 600; color: var(--color-text-primary); }
+.ff-chmod-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.ff-chmod-preset {
+    font-family: var(--font-mono, monospace); font-size: 12px; font-weight: 600;
+    padding: 4px 9px; border-radius: 6px; cursor: pointer;
+    border: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-bg-tertiary); color: var(--color-text-secondary);
+}
+.ff-chmod-preset:hover { background: var(--color-bg-hover, var(--color-bg-tertiary)); color: var(--color-text-primary); }
+.ff-chmod-preset.is-active { background: var(--color-accent, #0071e3); color: #fff; border-color: transparent; }
+.ff-chmod-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
+.ff-chmod-octal {
+    font-family: var(--font-mono, monospace); font-size: 20px; font-weight: 600;
+    color: var(--color-text-primary); width: 4.5ch; text-align: center; letter-spacing: 1px;
+    padding: 4px 6px; border-radius: 6px;
+    border: 0.5px solid var(--color-border-tertiary); background: var(--color-bg-secondary);
+}
+.ff-chmod-symbolic { font-family: var(--font-mono, monospace); font-size: 13px; color: var(--color-text-secondary); margin-right: auto; }
 
 /* ══════════════════════════ Main area ══════════════════════════ */
 .ff-main {
