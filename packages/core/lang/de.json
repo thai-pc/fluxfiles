@@ -308,7 +308,8 @@
         "terminal_unsupported": "Das Terminal funktioniert nur auf einem SFTP-Datenträger.",
         "terminal_no_shell": "Dieser Host erlaubt keine Shell (nur SFTP).",
         "terminal_confirm_required": "Dieser Befehl sieht gefährlich aus — zum Ausführen bestätigen.",
-        "watermark_overlay_active": "Einbrennen ist mit einem Vorschau-/Overlay-Wasserzeichen-Token nicht möglich. Verwenden Sie ein herunterladbares Token."
+        "watermark_overlay_active": "Einbrennen ist mit einem Vorschau-/Overlay-Wasserzeichen-Token nicht möglich. Verwenden Sie ein herunterladbares Token.",
+        "no_watermark_backup": "Kein Wasserzeichen zum Entfernen."
     },
     "presign": {
         "title": "Vorsignierte URL",
@@ -358,7 +359,8 @@
             "chunk_upload": "Chunk-Upload",
             "content_update": "Inhalt bearbeiten",
             "unknown": "Sonstiges",
-            "terminal": "Terminal-Befehl"
+            "terminal": "Terminal-Befehl",
+            "watermark_remove": "Wasserzeichen entfernen"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "Wasserzeichentext…",
         "apply": "Wasserzeichen anwenden",
         "done": "Wasserzeichen angewendet",
-        "failed": "Wasserzeichen fehlgeschlagen"
+        "failed": "Wasserzeichen fehlgeschlagen",
+        "remove": "Wasserzeichen entfernen",
+        "removed": "Wasserzeichen entfernt"
     },
     "terminal": {
         "title": "Terminal",

@@ -1385,11 +1385,28 @@ class FileManager
 
         $ext = strtolower(pathinfo($scopedSrc, PATHINFO_EXTENSION));
         $format = in_array($ext, ['jpg', 'jpeg'], true) ? 'jpg' : ($ext === 'webp' ? 'webp' : 'png');
-        $result = $this->imageOptimizer->burnWatermark((string) $fs->read($scopedSrc), $wm, $format);
 
         $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
+        $inPlace = ($scopedDst === $scopedSrc);
+
+        // Non-destructive burn-in: keep the true original so re-editing never STACKS
+        // a second mark and "Remove watermark" can restore it (the model every
+        // serious tool uses — Image Watermark / Easy Watermark / Envira). The
+        // backup is made once, before the first in-place burn; re-edits then read
+        // FROM the clean original, not the already-watermarked file.
+        $backupKey = $this->watermarkBackupKey($scopedSrc);
+        $hasBackup = $fs->fileExists($backupKey);
+        if ($inPlace && !$hasBackup) {
+            $fs->write($backupKey, (string) $fs->read($scopedSrc)); // first burn → snapshot the original
+            $hasBackup = true;
+        }
+        // Always burn from the clean original when we have one (re-edit = re-burn
+        // from scratch at the new position), else from the source itself.
+        $sourceBytes = $hasBackup ? (string) $fs->read($backupKey) : (string) $fs->read($scopedSrc);
+        $result = $this->imageOptimizer->burnWatermark($sourceBytes, $wm, $format);
+
         $this->assertNotSystem($scopedDst);
-        if ($savePath !== null && $scopedDst !== $scopedSrc) {
+        if (!$inPlace) {
             // Extension is immutable — a watermarked copy keeps the source format.
             if (strtolower(pathinfo($scopedDst, PATHINFO_EXTENSION)) !== $ext) {
                 throw new ApiException('Cannot change the file extension', 422, 'ext_changed');
@@ -1398,6 +1415,10 @@ class FileManager
             $this->assertTargetAvailable($fs, $scopedDst);
         }
         $fs->write($scopedDst, $result['data']);
+        if ($inPlace) {
+            // Flag so the UI can offer "Remove watermark" (restore from backup).
+            $this->meta->save($disk, $scopedDst, ['watermarked' => true]);
+        }
 
         // Regenerate variants for the new bytes (best-effort), like cropImage.
         $tmpFile = tempnam(sys_get_temp_dir(), 'ffwm_');
@@ -1423,6 +1444,66 @@ class FileManager
             'width'    => $result['width'],
             'height'   => $result['height'],
             'variants' => $variants,
+            'watermarked' => $inPlace ? true : null,
+        ]])[0];
+    }
+
+    /** Storage key of the kept pre-watermark original for an (already-scoped) image. */
+    private function watermarkBackupKey(string $scopedKey): string
+    {
+        return '_fluxfiles/originals/' . ltrim($scopedKey, '/');
+    }
+
+    /**
+     * Remove an in-place burned-in watermark by restoring the kept original
+     * (the non-destructive counterpart to applyWatermark). 404 when the image was
+     * never watermarked in place (no backup to restore). Write perm + owner +
+     * variant regen, mirroring applyWatermark.
+     *
+     * @return array<string,mixed>
+     */
+    public function removeWatermark(string $disk, string $path): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+        $this->assertOwner($disk, $scoped);
+        $fs = $this->disks->disk($disk);
+
+        $backupKey = $this->watermarkBackupKey($scoped);
+        if (!$fs->fileExists($backupKey)) {
+            throw new ApiException('No watermark to remove', 404, 'no_watermark_backup');
+        }
+        $original = (string) $fs->read($backupKey);
+        $fs->write($scoped, $original);
+        $fs->delete($backupKey);
+        $this->meta->save($disk, $scoped, ['watermarked' => false]);
+
+        // Regenerate variants from the restored original (best-effort).
+        $tmpFile = tempnam(sys_get_temp_dir(), 'ffwm_');
+        $variants = null;
+        try {
+            file_put_contents($tmpFile, $original);
+            $variants = [];
+            foreach ($this->imageOptimizer->process($fs, $scoped, $tmpFile) as $sizeName => $info) {
+                $variants[$sizeName] = [
+                    'url' => $this->fileUrl($disk, $info['key']), 'key' => $info['key'],
+                    'width' => $info['width'], 'height' => $info['height'],
+                ];
+            }
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: Variant regen after watermark removal failed — ' . $e->getMessage());
+        } finally {
+            @unlink($tmpFile);
+        }
+
+        return $this->unscopeItems([[
+            'key'      => $this->outKey($scoped),
+            'url'      => $this->fileUrl($disk, $scoped),
+            'variants' => $variants,
+            'watermarked' => false,
         ]])[0];
     }
 

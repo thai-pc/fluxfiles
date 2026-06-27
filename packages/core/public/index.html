@@ -1122,6 +1122,8 @@
                     <span x-show="!wmSaving" x-text="t('watermark.apply')"></span><span x-show="wmSaving" x-text="t('crop.saving')"></span>
                 </button>
                 <button class="ff-btn ff-btn-sm" :disabled="!wmReady || wmSaving" @click="saveWatermark('copy')" x-text="t('crop.save_copy')"></button>
+                <!-- Non-destructive: a previously burned-in mark can be removed (restores the kept original). -->
+                <button class="ff-btn ff-btn-sm ff-btn-danger" x-show="detailFile?.meta?.watermarked" :disabled="wmSaving" @click="removeWatermark()" x-text="t('watermark.remove')"></button>
                 <button class="ff-btn ff-btn-sm" @click="activeTab = 'info'" x-text="t('common.cancel')"></button>
             </div>
         </div>

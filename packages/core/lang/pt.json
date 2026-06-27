@@ -308,7 +308,8 @@
         "terminal_unsupported": "O terminal só funciona em um disco SFTP.",
         "terminal_no_shell": "Este host não permite shell (apenas SFTP).",
         "terminal_confirm_required": "Este comando parece perigoso — confirme para executá-lo.",
-        "watermark_overlay_active": "A marca permanente não está disponível em um token de pré-visualização/marca d'água sobreposta. Use um token com download."
+        "watermark_overlay_active": "A marca permanente não está disponível em um token de pré-visualização/marca d'água sobreposta. Use um token com download.",
+        "no_watermark_backup": "Nenhuma marca d'água para remover."
     },
     "presign": {
         "title": "URL pré-assinada",
@@ -358,7 +359,8 @@
             "chunk_upload": "Envio em partes",
             "content_update": "Editar conteúdo",
             "unknown": "Outro",
-            "terminal": "Comando de terminal"
+            "terminal": "Comando de terminal",
+            "watermark_remove": "Remover marca d'água"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "Texto da marca d’água…",
         "apply": "Aplicar marca d’água",
         "done": "Marca d’água aplicada",
-        "failed": "Falha na marca d’água"
+        "failed": "Falha na marca d’água",
+        "remove": "Remover marca d'água",
+        "removed": "Marca d'água removida"
     },
     "terminal": {
         "title": "Terminal",

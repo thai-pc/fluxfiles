@@ -107,5 +107,34 @@ test('overlay-watermark token cannot burn in (mutually exclusive) → 409', func
     assertTrue($claims->watermark !== null, 'overlay watermark assembled');
 });
 
+test('in-place burn keeps the original (backup) + flags watermarked; remove restores it', function () {
+    [$fm, $dm, $root] = setup();
+    $orig = (string) file_get_contents("$root/photo.png");
+
+    // Burn in place → file changes, original snapshot kept under _fluxfiles/originals/.
+    $r = $fm->applyWatermark('local', 'photo.png', ['type' => 'text', 'text' => 'A', 'opacity' => 0.8]);
+    assertEqual(true, $r['watermarked'], 'flagged watermarked');
+    $burned = (string) file_get_contents("$root/photo.png");
+    assertTrue($burned !== $orig, 'file changed by burn');
+    assertTrue(is_file("$root/_fluxfiles/originals/photo.png"), 'original backed up');
+    assertEqual($orig, (string) file_get_contents("$root/_fluxfiles/originals/photo.png"), 'backup == true original');
+
+    // Re-burn at a new position → reads FROM the backup, so the backup stays the
+    // pristine original (no stacking onto an already-watermarked file).
+    $fm->applyWatermark('local', 'photo.png', ['type' => 'text', 'text' => 'B', 'x' => 0.1, 'y' => 0.1]);
+    assertEqual($orig, (string) file_get_contents("$root/_fluxfiles/originals/photo.png"), 'backup untouched on re-edit');
+
+    // Remove → restores the original byte-for-byte, drops the backup.
+    $rr = $fm->removeWatermark('local', 'photo.png');
+    assertEqual(false, $rr['watermarked'], 'flag cleared');
+    assertEqual($orig, (string) file_get_contents("$root/photo.png"), 'restored to original');
+    assertTrue(!is_file("$root/_fluxfiles/originals/photo.png"), 'backup removed');
+});
+
+test('remove watermark with no backup → 404', function () {
+    [$fm] = setup();
+    expectApi(fn () => $fm->removeWatermark('local', 'photo.png'), 'no_watermark_backup');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

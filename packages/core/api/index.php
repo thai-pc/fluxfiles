@@ -448,6 +448,11 @@ function routeRequest(
         return $fm->applyWatermark($disk, $path, $wm, $dest);
     }
 
+    // Remove an in-place burned-in watermark by restoring the kept original.
+    if ($method === 'POST' && $uri === '/api/fm/watermark/remove') {
+        return $fm->removeWatermark(...jsonBody('disk', 'path'));
+    }
+
     if ($method === 'POST' && $uri === '/api/fm/ai-tag') {
         return $fm->aiTag(...jsonBody('disk', 'path'));
     }
@@ -739,6 +744,7 @@ function resolveAuditAction(string $uri): string
         '/mkdir'      => 'mkdir',
         '/metadata'   => 'metadata_update',
         '/chunk'      => 'chunk_upload',
+        '/watermark/remove' => 'watermark_remove',
         '/watermark'  => 'watermark',
         '/optimize'   => 'optimize',
         '/extract'    => 'extract',

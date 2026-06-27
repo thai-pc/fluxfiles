@@ -308,7 +308,8 @@
         "terminal_unsupported": "Terminal yalnızca SFTP diskinde çalışır.",
         "terminal_no_shell": "Bu ana makine shell'e izin vermiyor (yalnızca SFTP).",
         "terminal_confirm_required": "Bu komut tehlikeli görünüyor — çalıştırmak için onaylayın.",
-        "watermark_overlay_active": "Önizleme/yer paylaşımlı filigran belirtecinde kalıcı damga kullanılamaz. İndirilebilir bir belirteç kullanın."
+        "watermark_overlay_active": "Önizleme/yer paylaşımlı filigran belirtecinde kalıcı damga kullanılamaz. İndirilebilir bir belirteç kullanın.",
+        "no_watermark_backup": "Kaldırılacak filigran yok."
     },
     "presign": {
         "title": "Ön imzalı URL",
@@ -358,7 +359,8 @@
             "chunk_upload": "Parçalı yükleme",
             "content_update": "İçeriği düzenle",
             "unknown": "Diğer",
-            "terminal": "Terminal komutu"
+            "terminal": "Terminal komutu",
+            "watermark_remove": "Filigranı kaldır"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "Filigran metni…",
         "apply": "Filigran uygula",
         "done": "Filigran uygulandı",
-        "failed": "Filigran başarısız"
+        "failed": "Filigran başarısız",
+        "remove": "Filigranı kaldır",
+        "removed": "Filigran kaldırıldı"
     },
     "terminal": {
         "title": "Terminal",

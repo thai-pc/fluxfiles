@@ -308,7 +308,8 @@
         "terminal_unsupported": "终端仅适用于 SFTP 磁盘。",
         "terminal_no_shell": "此主机不允许 shell（仅 SFTP）。",
         "terminal_confirm_required": "此命令看起来很危险——请确认后运行。",
-        "watermark_overlay_active": "预览/叠加水印令牌不支持烧录水印。请使用可下载的令牌。"
+        "watermark_overlay_active": "预览/叠加水印令牌不支持烧录水印。请使用可下载的令牌。",
+        "no_watermark_backup": "没有可移除的水印。"
     },
     "presign": {
         "title": "预签名链接",
@@ -358,7 +359,8 @@
             "chunk_upload": "分块上传",
             "content_update": "编辑内容",
             "unknown": "其他",
-            "terminal": "终端命令"
+            "terminal": "终端命令",
+            "watermark_remove": "移除水印"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "水印文字…",
         "apply": "应用水印",
         "done": "已应用水印",
-        "failed": "水印失败"
+        "failed": "水印失败",
+        "remove": "移除水印",
+        "removed": "已移除水印"
     },
     "terminal": {
         "title": "终端",

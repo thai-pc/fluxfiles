@@ -2151,6 +2151,26 @@ function fluxFilesApp() {
             }
         },
 
+        // Non-destructive: restore the kept original (removes an in-place burned mark).
+        async removeWatermark() {
+            if (this.wmSaving || !this.detailFile) return;
+            this.wmSaving = true;
+            try {
+                const result = await this.api('POST', '/api/fm/watermark/remove', {
+                    disk: this.currentDisk, path: this.detailFile.key,
+                });
+                this.postMessage('FM_EVENT', { event: 'watermark:removed', key: result.key });
+                this.showToast(this.t('watermark.removed') || 'Watermark removed', 'success');
+                this.activeTab = 'info';
+                this.loadFiles();
+            } catch (err) {
+                console.error('FluxFiles: Watermark removal failed', err);
+                this.showToast(err.message || 'Failed to remove watermark', 'error', 4000);
+            } finally {
+                this.wmSaving = false;
+            }
+        },
+
         // Commands from parent
         handleCommand(payload) {
             switch (payload.action) {

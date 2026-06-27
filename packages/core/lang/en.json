@@ -308,7 +308,8 @@
         "terminal_unsupported": "The terminal only works on an SFTP disk.",
         "terminal_no_shell": "This host doesn't allow a shell (SFTP only).",
         "terminal_confirm_required": "This command looks dangerous — confirm to run it.",
-        "watermark_overlay_active": "Burn-in isn't available on a preview/overlay-watermark token. Use a downloadable token."
+        "watermark_overlay_active": "Burn-in isn't available on a preview/overlay-watermark token. Use a downloadable token.",
+        "no_watermark_backup": "No watermark to remove."
     },
     "presign": {
         "title": "Presigned URL",
@@ -358,7 +359,8 @@
             "chunk_upload": "Chunked upload",
             "content_update": "Edit content",
             "unknown": "Other",
-            "terminal": "Terminal command"
+            "terminal": "Terminal command",
+            "watermark_remove": "Remove watermark"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "Watermark text…",
         "apply": "Apply watermark",
         "done": "Watermark applied",
-        "failed": "Watermark failed"
+        "failed": "Watermark failed",
+        "remove": "Remove watermark",
+        "removed": "Watermark removed"
     },
     "terminal": {
         "title": "Terminal",

@@ -308,7 +308,8 @@
         "terminal_unsupported": "De terminal werkt alleen op een SFTP-schijf.",
         "terminal_no_shell": "Deze host staat geen shell toe (alleen SFTP).",
         "terminal_confirm_required": "Deze opdracht lijkt gevaarlijk — bevestig om uit te voeren.",
-        "watermark_overlay_active": "Inbranden is niet beschikbaar op een preview-/overlay-watermerktoken. Gebruik een downloadbaar token."
+        "watermark_overlay_active": "Inbranden is niet beschikbaar op een preview-/overlay-watermerktoken. Gebruik een downloadbaar token.",
+        "no_watermark_backup": "Geen watermerk om te verwijderen."
     },
     "presign": {
         "title": "Voorondertekende URL",
@@ -358,7 +359,8 @@
             "chunk_upload": "Upload in delen",
             "content_update": "Inhoud bewerken",
             "unknown": "Overig",
-            "terminal": "Terminalopdracht"
+            "terminal": "Terminalopdracht",
+            "watermark_remove": "Watermerk verwijderen"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "Watermerktekst…",
         "apply": "Watermerk toepassen",
         "done": "Watermerk toegepast",
-        "failed": "Watermerk mislukt"
+        "failed": "Watermerk mislukt",
+        "remove": "Watermerk verwijderen",
+        "removed": "Watermerk verwijderd"
     },
     "terminal": {
         "title": "Terminal",

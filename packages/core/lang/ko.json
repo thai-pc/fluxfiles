@@ -308,7 +308,8 @@
         "terminal_unsupported": "터미널은 SFTP 디스크에서만 작동합니다.",
         "terminal_no_shell": "이 호스트는 셸을 허용하지 않습니다(SFTP 전용).",
         "terminal_confirm_required": "이 명령은 위험해 보입니다 — 실행하려면 확인하세요.",
-        "watermark_overlay_active": "미리보기/오버레이 워터마크 토큰에서는 굽기를 사용할 수 없습니다. 다운로드 가능한 토큰을 사용하세요."
+        "watermark_overlay_active": "미리보기/오버레이 워터마크 토큰에서는 굽기를 사용할 수 없습니다. 다운로드 가능한 토큰을 사용하세요.",
+        "no_watermark_backup": "제거할 워터마크가 없습니다."
     },
     "presign": {
         "title": "서명된 URL",
@@ -358,7 +359,8 @@
             "chunk_upload": "청크 업로드",
             "content_update": "내용 편집",
             "unknown": "기타",
-            "terminal": "터미널 명령"
+            "terminal": "터미널 명령",
+            "watermark_remove": "워터마크 제거"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "워터마크 텍스트…",
         "apply": "워터마크 적용",
         "done": "워터마크 적용됨",
-        "failed": "워터마크 실패"
+        "failed": "워터마크 실패",
+        "remove": "워터마크 제거",
+        "removed": "워터마크가 제거되었습니다"
     },
     "terminal": {
         "title": "터미널",

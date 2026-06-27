@@ -308,7 +308,8 @@
         "terminal_unsupported": "ターミナルは SFTP ディスクでのみ使えます。",
         "terminal_no_shell": "このホストはシェルを許可していません（SFTP のみ）。",
         "terminal_confirm_required": "このコマンドは危険に見えます。実行するには確認してください。",
-        "watermark_overlay_active": "プレビュー/オーバーレイ透かしトークンでは焼き込みできません。ダウンロード可能なトークンを使用してください。"
+        "watermark_overlay_active": "プレビュー/オーバーレイ透かしトークンでは焼き込みできません。ダウンロード可能なトークンを使用してください。",
+        "no_watermark_backup": "削除する透かしがありません。"
     },
     "presign": {
         "title": "署名付きURL",
@@ -358,7 +359,8 @@
             "chunk_upload": "分割アップロード",
             "content_update": "内容を編集",
             "unknown": "その他",
-            "terminal": "ターミナルコマンド"
+            "terminal": "ターミナルコマンド",
+            "watermark_remove": "透かしを削除"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "透かしテキスト…",
         "apply": "透かしを適用",
         "done": "透かしを適用しました",
-        "failed": "透かしに失敗しました"
+        "failed": "透かしに失敗しました",
+        "remove": "透かしを削除",
+        "removed": "透かしを削除しました"
     },
     "terminal": {
         "title": "ターミナル",

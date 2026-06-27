@@ -308,7 +308,8 @@
         "terminal_unsupported": "Le terminal ne fonctionne que sur un disque SFTP.",
         "terminal_no_shell": "Cet hôte n'autorise pas de shell (SFTP uniquement).",
         "terminal_confirm_required": "Cette commande semble dangereuse — confirmez pour l'exécuter.",
-        "watermark_overlay_active": "Le marquage permanent n'est pas disponible sur un jeton aperçu/filigrane en superposition. Utilisez un jeton téléchargeable."
+        "watermark_overlay_active": "Le marquage permanent n'est pas disponible sur un jeton aperçu/filigrane en superposition. Utilisez un jeton téléchargeable.",
+        "no_watermark_backup": "Aucun filigrane à supprimer."
     },
     "presign": {
         "title": "URL présignée",
@@ -358,7 +359,8 @@
             "chunk_upload": "Téléversement par morceaux",
             "content_update": "Modifier le contenu",
             "unknown": "Autre",
-            "terminal": "Commande terminal"
+            "terminal": "Commande terminal",
+            "watermark_remove": "Supprimer le filigrane"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "Texte du filigrane…",
         "apply": "Appliquer le filigrane",
         "done": "Filigrane appliqué",
-        "failed": "Échec du filigrane"
+        "failed": "Échec du filigrane",
+        "remove": "Supprimer le filigrane",
+        "removed": "Filigrane supprimé"
     },
     "terminal": {
         "title": "Terminal",

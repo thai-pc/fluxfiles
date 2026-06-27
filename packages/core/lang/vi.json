@@ -308,7 +308,8 @@
         "terminal_unsupported": "Terminal chỉ hoạt động trên ổ đĩa SFTP.",
         "terminal_no_shell": "Host này không cho mở shell (chỉ SFTP).",
         "terminal_confirm_required": "Lệnh này có vẻ nguy hiểm — xác nhận để chạy.",
-        "watermark_overlay_active": "Không thể đóng dấu chìm trên token preview/overlay watermark. Hãy dùng token cho phép tải xuống."
+        "watermark_overlay_active": "Không thể đóng dấu chìm trên token preview/overlay watermark. Hãy dùng token cho phép tải xuống.",
+        "no_watermark_backup": "Không có watermark để gỡ."
     },
     "presign": {
         "title": "URL có thời hạn",
@@ -358,7 +359,8 @@
             "chunk_upload": "Tải lên theo khối",
             "content_update": "Sửa nội dung",
             "unknown": "Khác",
-            "terminal": "Lệnh terminal"
+            "terminal": "Lệnh terminal",
+            "watermark_remove": "Gỡ watermark"
         }
     },
     "bulk": {
@@ -483,7 +485,9 @@
         "text_placeholder": "Nội dung đóng dấu…",
         "apply": "Áp dụng đóng dấu",
         "done": "Đã đóng dấu",
-        "failed": "Đóng dấu thất bại"
+        "failed": "Đóng dấu thất bại",
+        "remove": "Gỡ watermark",
+        "removed": "Đã gỡ watermark"
     },
     "terminal": {
         "title": "Terminal",
