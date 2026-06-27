@@ -539,6 +539,11 @@ $token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3
 - **Logo watermark:** upload a transparent PNG as a normal file and set
   `watermark_type => 'logo'` + `watermark_logo_path`. A missing/unsafe path falls
   back to text (never a clean image). Watermarked WebPs are cached in `_variants/`.
+- **Adapters:** the overlay needs `/api/fm/img`, which the **proxy** adapters don't
+  expose. So it's forwarded only by token minters that target a standalone core —
+  `embed.php`, `@fluxfiles/node`, and the **Laravel adapter in `standalone` mode**.
+  The **WordPress** plugin and **Laravel proxy mode** drop the overlay claim (it
+  would yield broken images); use the **burn-in** route there, which is proxied.
 
 **How customers actually see the preview** — you don't *embed* it (the `img_base`
 token is short-lived, made for live rendering, not for saving into content). You

@@ -139,24 +139,37 @@ test('token() forwards webp claims', function () use ($secret) {
     assertEqual('100vw', $c->srcsetSizes, 'srcset_sizes');
 });
 
-test('token() forwards watermark + allow_download claims', function () use ($secret) {
+test('token() forwards download/zip claims; overlay watermark only in standalone mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
-    $token = $mgr->token(41, [
+    $overrides = [
         'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true, 'allow_optimize' => true,
         'allow_zip' => false, 'allow_extract' => false, 'zip_max_mb' => 50,
         'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© Acme',
         'watermark_position' => 'center', 'watermark_opacity' => 0.5,
-    ]);
-    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    ];
+    // Non-overlay claims always forward.
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($mgr->token(41, $overrides), $secret));
     assertEqual(false, $c->allowDownload, 'allow_download');
     assertEqual(false, $c->allowChmod, 'allow_chmod');
     assertEqual(true, $c->allowCodeEdit, 'allow_code_edit');
     assertEqual(true, $c->allowOptimize, 'allow_optimize');
     assertEqual(false, $c->allowZip, 'allow_zip');
-    assertEqual(false, $c->allowExtract, 'allow_extract');
     assertEqual(50, $c->zipMaxMb, 'zip_max_mb');
-    assertEqual('© Acme', $c->watermark['text'], 'watermark text');
-    assertEqual('center', $c->watermark['position'], 'watermark position');
+
+    // Proxy mode (default): the OVERLAY watermark is dropped — /api/fm/img isn't
+    // proxied, so a watermark token would break (no clean URL, no servable preview).
+    assertEqual(null, $c->watermark, 'overlay watermark NOT forwarded in proxy mode');
+
+    // Standalone mode: the token targets a real core that serves /img → forward it.
+    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
+    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
+    try {
+        $sc = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($mgr->token(41, $overrides), $secret));
+        assertEqual('© Acme', $sc->watermark['text'], 'watermark text (standalone)');
+        assertEqual('center', $sc->watermark['position'], 'watermark position (standalone)');
+    } finally {
+        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
+    }
 });
 
 test('token() forwards usage-dashboard claims', function () use ($secret) {

@@ -147,7 +147,7 @@ test('generateToken forwards webp claims', function () use ($secret) {
     assertEqual('100vw', $c->srcsetSizes, 'srcset_sizes');
 });
 
-test('generateToken forwards watermark + allow_download claims', function () use ($secret) {
+test('generateToken forwards download/zip claims; overlay watermark is NOT forwarded (proxy-only)', function () use ($secret) {
     $token = FluxFilesPlugin::generateToken(43, [
         'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true, 'allow_optimize' => true,
         'allow_zip' => false, 'allow_extract' => false, 'zip_max_files' => 7,
@@ -162,8 +162,10 @@ test('generateToken forwards watermark + allow_download claims', function () use
     assertEqual(false, $c->allowZip, 'allow_zip');
     assertEqual(false, $c->allowExtract, 'allow_extract');
     assertEqual(7, $c->zipMaxFiles, 'zip_max_files');
-    assertEqual('logo', $c->watermark['type'], 'watermark type');
-    assertEqual('cfg/logo.png', $c->watermark['logo_path'], 'watermark logo_path');
+    // WordPress is proxy-only (no /api/fm/img), so the OVERLAY watermark claim is
+    // dropped — forwarding it would break images. Burn-in (POST /api/fm/watermark)
+    // is the WP-supported watermark and works through the proxy.
+    assertEqual(null, $c->watermark, 'overlay watermark NOT forwarded (proxy-only)');
 });
 
 test('generateToken forwards usage-dashboard claims', function () use ($secret) {

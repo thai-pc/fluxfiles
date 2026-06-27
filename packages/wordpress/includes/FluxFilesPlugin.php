@@ -355,20 +355,14 @@ class FluxFilesPlugin
                 $payload[$zipClaim] = (int) $overrides[$zipClaim];
             }
         }
-        if (!empty($overrides['watermark_enabled'])) {
-            $payload['watermark_enabled'] = true;
-            foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {
-                if (!empty($overrides[$s])) {
-                    $payload[$s] = (string) $overrides[$s];
-                }
-            }
-            if (isset($overrides['watermark_opacity'])) {
-                $payload['watermark_opacity'] = (float) $overrides['watermark_opacity'];
-            }
-            if (!empty($overrides['watermark_font_size'])) {
-                $payload['watermark_font_size'] = (int) $overrides['watermark_font_size'];
-            }
-        }
+        // NOTE: the OVERLAY watermark (preview-time, served via /api/fm/img) is
+        // intentionally NOT forwarded. The WordPress plugin is proxy-only (the REST
+        // API never exposes /api/fm/img and sets no stream secret), so list() can't
+        // emit the watermarked img_base; and an overlay watermark forces the token
+        // preview-only (allow_download off in core), which would leave images with
+        // neither a clean URL nor a preview — i.e. broken. Use the burn-in watermark
+        // instead (POST .../api/fm/watermark, handled by handleWatermark), which
+        // writes the mark into the file and is fully proxied.
         // Usage-dashboard claims.
         foreach ([
             'usage_cache_ttl', 'usage_warning_threshold', 'usage_critical_threshold',

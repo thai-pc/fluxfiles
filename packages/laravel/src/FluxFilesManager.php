@@ -198,7 +198,15 @@ class FluxFilesManager
                 $payload[$zipClaim] = (int) $overrides[$zipClaim];
             }
         }
-        if (!empty($overrides['watermark_enabled'])) {
+        // OVERLAY watermark (preview-time, served via /api/fm/img) is forwarded only
+        // in 'standalone' mode — the token then targets a real core that serves /img.
+        // In proxy mode the adapter does NOT expose /api/fm/img and sets no stream
+        // secret, so list() can't emit the watermarked img_base; since an overlay
+        // watermark also forces the token preview-only (allow_download off in core),
+        // forwarding it here would yield images with neither a clean URL nor a
+        // preview — i.e. broken. For a watermark through the proxy, use the burn-in
+        // route (POST /api/fm/watermark) instead, which writes the mark into the file.
+        if (!empty($overrides['watermark_enabled']) && config('fluxfiles.mode') === 'standalone') {
             $payload['watermark_enabled'] = true;
             foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {
                 if (!empty($overrides[$s])) {

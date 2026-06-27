@@ -3,6 +3,28 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.54] — 2026-06-27
+
+> Released: Laravel `fluxfiles/laravel` `laravel-v0.2.24`, WordPress `0.2.25`
+> (manual zip). Core unchanged.
+
+### Fixed
+
+- **Adapters no longer mint a broken overlay-watermark token.** Since an overlay
+  watermark forces the token preview-only (clean URL withheld; only the
+  watermarked `img_base` is served), and the **proxy** adapters don't expose
+  `/api/fm/img` (nor set a stream secret), such a token produced images with
+  *neither* a clean URL *nor* a preview — broken. Now:
+  - **WordPress** (proxy-only) no longer forwards the `watermark_enabled` overlay
+    claim. Use the **burn-in** watermark (`POST …/api/fm/watermark`), which is
+    proxied and writes the mark into the file.
+  - **Laravel** forwards the overlay claim only in **`standalone` mode** (where the
+    token targets a real core that serves `/img`); in proxy mode it's dropped.
+  - `embed.php`, `@fluxfiles/node`, and React/Vue (which target a standalone core)
+    are unaffected — overlay works there. Burn-in works on every adapter.
+
+  README's watermark section documents the adapter behaviour.
+
 ## [0.2.53] — 2026-06-27
 
 > Released: core `core-v0.2.47` (Packagist + Docker). Adapters unchanged.
