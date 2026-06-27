@@ -22,6 +22,8 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 ## Table of Contents
 
 - [Features](#features)
+- [Use cases — what each free feature is for](#use-cases--what-each-free-feature-is-for)
+- [Editions — Free vs Pro](#editions--free-open-source-vs-pro-paid-modules)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Production Deployment](#production-deployment)
@@ -63,6 +65,62 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 | **Safety** | Duplicate detection (SHA-256). Rate limiting per user. Audit log with rotation. Per-user quota. Origin/CSRF validation. Always-on dangerous-extension blocking. SSRF guard (BYOB + URL import). Zip slip/bomb guards. |
 | **UI** | Dark mode (auto/manual). 16 languages with RTL support. Responsive (mobile overflow menu). Bulk operations (multi-select, shift-select). |
 | **Adapters** | Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, Summernote, plus **`@fluxfiles/node`** (server-side token SDK). |
+
+---
+
+## Use cases — what each free feature is for
+
+Every feature below ships in the open-source core. Pick the rows that match what
+you're building; each maps a capability to *when* you'd reach for it and *which
+model* it fits.
+
+| Feature | What it's for | Reach for it when / which model |
+|---|---|---|
+| **Local / S3 / R2 / S3-compatible disks** | Where the bytes live | Local for a single VPS or demo; S3/R2 for SaaS, durability, CDN. R2 has no egress fees |
+| **SFTP disk** | File manager for a VPS / shared host over SSH | Replace cPanel File Manager; manage a web root remotely |
+| **Cross-disk copy/move** | Shuttle files between disks (e.g. local → R2) | Backups, storage migration, "process locally, push to cloud" |
+| **BYOB (Bring Your Own Bucket)** | Each tenant connects **their own** bucket (creds encrypted in the JWT, never stored) | **Multi-tenant SaaS** where the user pays for their own storage |
+| **JWT auth + granular claims** | Per-user scope: perms, disk, path prefix, quota, ext allowlist, owner-only | Any multi-tenant app — stateless, no session DB; your backend mints the token |
+| **Upload / move / copy / rename / delete / mkdir / bulk** | The core file-manager toolkit | Every app that lets users manage files |
+| **Chunk upload (S3 multipart)** | Reliable large-file upload | Video, design files, anything > 10 MB on S3/R2 |
+| **Import from URL** (SSRF-guarded, opt-in) | Pull a remote file in server-side | CMS "import by link", grabbing stock imagery |
+| **Zip download + Extract** (slip/bomb-guarded) | Bundle a selection / unpack an archive in place | Deploys, backups, "send me all these files" |
+| **Trash (files + folders)** | Soft-delete with restore | Protect users from accidental deletion (Drive-style) |
+| **Auto WebP + on-demand WebP + `srcset`** | Fast, lightweight, responsive images | CMS, blog, e-commerce, SEO-sensitive sites |
+| **Crop** | In-browser image cropping with aspect presets | Avatars, thumbnails, hero images |
+| **Watermark — overlay preview** | Watermark *at serve time*, original untouched | **Selling images / stock** — clients see marked previews, not the clean file |
+| **Watermark — editor (burn-in)** | Watermark written *into* the file | Permanent branding on shipped assets |
+| **Inline preview + gated local media** | View image/video/audio/PDF; token-gated streaming | Course platforms, private media, document portals |
+| **Code / config editor** | Edit `wp-config.php`, `.env`, `nginx.conf`… in-browser | cPanel-style admin tooling (opt-in) |
+| **SFTP chmod** | cPanel-style Unix permissions | Managing file permissions on a VPS/host |
+| **SSH terminal** (opt-in) | Run `git` / `composer` / `chmod -R`… on the box | A hosting/control-panel product for devs & agencies |
+| **AI auto-tag** (bring your own API key) | Auto tag / alt / title / caption | SEO, large media libraries, DAM |
+| **Metadata + full-text search** | Title/alt/caption/tags + find files & folders | Digital Asset Management |
+| **Usage dashboard** | Quota + size by type/folder | Show tenants their consumption |
+| **Safety: dedup, rate limit, audit, quota, SSRF/CSRF/zip guards** | Production hardening | Anything user-facing |
+| **16 languages, dark mode, responsive** | Polished embeddable UI | Global, white-label, mobile |
+| **Adapters (Laravel/WP/React/Vue/editors/Node)** | Drop-in for your stack | Skip the integration plumbing |
+
+## Editions — Free (open source) vs Pro (paid modules)
+
+The **entire table above is free** (MIT core). The optional **Pro modules** are
+separate packages gated by a license key — install one and the matching endpoint
+lights up; without it the core returns a clear "not installed / not licensed"
+response. They never block the free features.
+
+| | **Free (core, MIT)** | **Pro (paid module)** |
+|---|---|---|
+| Storage | Local · S3 · R2 · S3-compatible · **SFTP** · BYOB · cross-disk | — |
+| Images | Auto WebP · on-demand WebP · `srcset` · crop · **watermark (overlay + burn-in editor)** | **`optimize`** — bulk AVIF + PDF compression with savings stats |
+| Sharing | Picker / browser embed, presigned URLs | **`share`** — public share links (scoped tokens + counters) |
+| AI | Auto-tag with **your own** Claude/OpenAI key | **`ai-vision`** — managed vision, **`ocr`** — text extraction |
+| Safety | Dedup · rate limit · audit · quota · SSRF/CSRF/zip guards | **`virus`** — upload AV scanning |
+| Ops | SFTP chmod · code editor · **SSH terminal** | **`backup`** — scheduled backups, **`c2pa`** — content credentials |
+| License | MIT, run anywhere | Per-key (perpetual or subscription), offline Ed25519 verification |
+
+> The Pro modules live in separate repositories and are **opt-in**: the free core
+> is fully functional on its own and never nags. See `docs/COMMERCIAL-STRATEGY.md`
+> and `docs/LICENSING-PLAN.md` (local) for the commercial model.
 
 ---
 
