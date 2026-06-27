@@ -211,6 +211,29 @@ if (strpos($jsonOut, '<') === false && strpos($jsonOut, '>') === false) {
     $errors++;
 }
 
+// --- Every error_code thrown by the core must have an `error.<code>` key, or
+//     non-English users see the raw English message. Scan api/*.php for the 3rd
+//     argument of `new ApiException(msg, httpCode, 'code')` and check en.json. ---
+$apiDir = __DIR__ . '/../../api';
+$thrown = [];
+foreach (glob($apiDir . '/*.php') as $php) {
+    $src = (string) file_get_contents($php);
+    if (preg_match_all("/ApiException\\([^,]+,\\s*\\d{3},\\s*'([a-z_]+)'/", $src, $m)) {
+        foreach ($m[1] as $code) {
+            $thrown[$code] = true;
+        }
+    }
+}
+$enErr = $enData['error'] ?? [];
+$missingErr = array_values(array_filter(array_keys($thrown), static fn ($c) => !array_key_exists($c, $enErr)));
+sort($missingErr);
+if ($missingErr === []) {
+    echo "  {$green}✓{$reset} every thrown error_code has an error.* i18n key (" . count($thrown) . " codes)\n";
+} else {
+    echo "  {$red}✗ error_codes thrown without an error.* key (raw English leaks to i18n users): " . implode(', ', $missingErr) . "{$reset}\n";
+    $errors++;
+}
+
 // --- Summary ---
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
 if ($errors === 0) {

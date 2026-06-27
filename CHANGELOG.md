@@ -3,6 +3,27 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.50] — 2026-06-27
+
+> Released: core `core-v0.2.45` (Packagist + Docker).
+> (Adapters unchanged — core-only; adapter core floor stays `^0.2.39`.)
+
+### Fixed
+
+- **Error messages now localise for every error code.** 33 `error_code`s thrown by
+  the core (chmod/zip/extract/trash/sftp/update/edit/disk… e.g. `chmod_forbidden`,
+  `not_sftp`, `zip_slip`, `invalid_mode`, `storage_not_writable`) had no
+  `error.<code>` i18n key, so a non-English user saw the raw English fallback. All
+  are now translated across the 16 locales (394 keys each), so the embedded UI's
+  `t('error.<code>')` shows the message in the user's language.
+
+### Added
+
+- **i18n regression guard:** `test-i18n.php` now scans `api/*.php` for every
+  `ApiException(..., 'code')` and fails if any thrown error code lacks an
+  `error.<code>` key — so a new server error can never again leak raw English to
+  translated UIs.
+
 ## [0.2.49] — 2026-06-27
 
 > Released: core `core-v0.2.44` (Packagist + Docker).
