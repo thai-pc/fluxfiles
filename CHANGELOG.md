@@ -3,7 +3,11 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.45] — 2026-06-27
+
+> Released: core `core-v0.2.40` (Packagist + Docker), SDK `fluxfiles` `0.2.5`,
+> React `@fluxfiles/react` `0.2.7`, Vue `@fluxfiles/vue` `0.2.6`.
+> (Laravel/WordPress/Node unchanged since 0.2.44; adapter core floor stays `^0.2.39`.)
 
 ### Fixed
 
