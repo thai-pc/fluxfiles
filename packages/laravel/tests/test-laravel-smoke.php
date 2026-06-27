@@ -296,6 +296,22 @@ test('token-refresh recovery wiring is present (controller + route + blade)', fu
     assertTrue(strpos($bladeSrc, '$tokenUrl') !== false, 'blade fetches the token-refresh URL');
 });
 
+test('allow_terminal (SSH terminal) forwarded only in standalone mode', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    // Proxy mode (default): /api/fm/terminal isn't proxied → claim dropped.
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_terminal' => true]), $secret));
+    assertEqual(false, $c->allowTerminal, 'terminal dropped in proxy mode');
+    // Standalone mode: token targets a real core that serves /terminal → forward.
+    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
+    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
+    try {
+        $sc = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_terminal' => true]), $secret));
+        assertEqual(true, $sc->allowTerminal, 'terminal forwarded in standalone mode');
+    } finally {
+        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
+    }
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

@@ -511,6 +511,10 @@ CKEditor / Summernote. Extension is preserved; variants regenerate.
 > ✅ **Want a watermarked image in your content / blog / CMS? This is it.** Pick it
 > in the editor and the inserted `<img>` shows the watermark. Nothing else to set.
 
+**Adapter support (burn-in):** works **everywhere** — it's a normal write through
+`POST /api/fm/watermark`, which **all** adapters proxy (Laravel, WordPress) or
+reach via the embedded UI (React, Vue, the TinyMCE/CKEditor/Summernote pickers).
+
 #### Advanced: preview protection for selling images (overlay)
 
 Only if you're building a **stock-photo / photographer store** (Shutterstock,
@@ -868,6 +872,13 @@ $token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 
 > for this opt-in terminal, so a shell-less SFTP account is otherwise unaffected.
 > Like SFTP serving, the terminal is **core-standalone / Docker** (not proxied by
 > the Laravel/WordPress adapters).
+
+**Adapter support (terminal):** `/api/fm/terminal` is core-standalone, so the
+`allow_terminal` claim is forwarded only by token minters that target a real core
+— `embed.php`, `@fluxfiles/node`, and the **Laravel adapter in `standalone` mode**.
+The **WordPress** plugin and **Laravel proxy mode** don't forward it (the endpoint
+isn't proxied there, so the button would 404). React/Vue inherit whatever core
+their host points at. Runs against the standalone PHP server or the Docker image.
 
 ### Config / code editor
 

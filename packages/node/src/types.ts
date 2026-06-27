@@ -100,6 +100,10 @@ export interface BaseTokenOptions {
   /** Allow editing a file's text content (GET/PUT /api/fm/content). Default **false** — editing
    *  config/executable files (wp-config.php, .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
   allowCodeEdit?: boolean;
+  /** Allow the SSH terminal (POST /api/fm/terminal) on an SFTP disk. Default **false** — grants shell
+   *  access as the SSH user, so it's opt-in. Core-standalone: the token must target a real core
+   *  (this SDK does), not a proxy adapter that doesn't serve /api/fm/terminal. */
+  allowTerminal?: boolean;
   /** Allow the paid Optimization module (POST /api/fm/optimize). Default **false** — opt-in.
    *  Even when true, the optimize module must be installed + licensed on the server. */
   allowOptimize?: boolean;

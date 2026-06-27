@@ -141,6 +141,9 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowDownload !== undefined) payload.allow_download = !!opts.allowDownload;
   if (opts.allowChmod !== undefined) payload.allow_chmod = !!opts.allowChmod;
   if (opts.allowCodeEdit !== undefined) payload.allow_code_edit = !!opts.allowCodeEdit;
+  // SSH terminal (SFTP disks). Core-standalone — the token must target a real core
+  // (Node mints for one), not a proxy adapter that doesn't serve /api/fm/terminal.
+  if (opts.allowTerminal !== undefined) payload.allow_terminal = !!opts.allowTerminal;
   if (opts.allowOptimize !== undefined) payload.allow_optimize = !!opts.allowOptimize;
   // Other paid-module claims (inert unless the module is installed + licensed).
   if (opts.allowShare !== undefined) payload.allow_share = !!opts.allowShare;

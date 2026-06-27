@@ -3,6 +3,28 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.55] — 2026-06-27
+
+> Released: Laravel `fluxfiles/laravel` `laravel-v0.2.25`, Node `@fluxfiles/node`
+> `node-v0.1.17`. Core + WordPress unchanged.
+
+### Added
+
+- **`allow_terminal` is now forwardable by the standalone-targeting adapters.**
+  The SSH terminal is core-standalone (`/api/fm/terminal` isn't proxied), so the
+  claim was only mintable via `embed.php`. Now the **Laravel adapter (standalone
+  mode)** and **`@fluxfiles/node`** forward it too (Laravel proxy mode + WordPress
+  still drop it — the endpoint 404s there), making terminal support consistent
+  with the overlay watermark.
+
+### Docs
+
+- **README spells out adapter support for watermark and terminal.** Burn-in
+  watermark works on **every** adapter (proxied `POST /api/fm/watermark`); the
+  overlay watermark and the SSH terminal are core-standalone and forwarded only by
+  `embed.php` / `@fluxfiles/node` / Laravel `standalone` mode (not WordPress or
+  Laravel proxy).
+
 ## [0.2.54] — 2026-06-27
 
 > Released: Laravel `fluxfiles/laravel` `laravel-v0.2.24`, WordPress `0.2.25`

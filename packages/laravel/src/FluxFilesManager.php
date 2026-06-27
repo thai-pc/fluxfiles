@@ -150,6 +150,13 @@ class FluxFilesManager
         if (array_key_exists('allow_code_edit', $overrides)) {
             $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
         }
+        // SSH terminal (SFTP disks) is core-standalone — /api/fm/terminal isn't
+        // proxied. Forward the claim only in 'standalone' mode (token → a real core
+        // that serves it); in proxy mode it's dropped so the button can't appear
+        // for an endpoint that would 404. Same rule as the overlay watermark below.
+        if (!empty($overrides['allow_terminal']) && config('fluxfiles.mode') === 'standalone') {
+            $payload['allow_terminal'] = true;
+        }
         foreach (['allow_share', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];

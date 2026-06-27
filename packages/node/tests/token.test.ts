@@ -143,6 +143,13 @@ describe('createToken', () => {
     expect(c.watermark_font_size).toBe(20);
   });
 
+  it('forwards allow_terminal (SSH terminal) when set, omits it otherwise', () => {
+    const on = decodeToken(createToken({ secret: SECRET, userId: 'u', allowTerminal: true })) as Record<string, unknown>;
+    expect(on.allow_terminal).toBe(true);
+    const off = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
+    expect(off.allow_terminal).toBeUndefined();
+  });
+
   it('forwards on-demand WebP claims (PHP parity)', () => {
     const c = decodeToken(
       createToken({
