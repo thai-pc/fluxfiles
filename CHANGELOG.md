@@ -3,6 +3,19 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Toolbar buttons no longer clipped in a narrow container.** The action toolbar
+  (Upload / New folder / Import / bulk Move/Copy/Download…) was a single non-wrapping
+  flex row, so in a narrow embed (iframe/modal) the right-most buttons were cut off
+  and unreachable. It now **wraps** to additional rows (buttons keep their size).
+  (Can't use `overflow:auto` — it would clip the toolbar's drop-down menus.)
+- **Zoomed image is easy to close.** A zoomed lightbox couldn't be dismissed by a
+  backdrop click (that pans), so it felt stuck. Added an always-visible **× close
+  button**, and **Escape now closes immediately** at any zoom level.
+
 ## [0.2.45] — 2026-06-27
 
 > Released: core `core-v0.2.40` (Packagist + Docker), SDK `fluxfiles` `0.2.5`,

@@ -604,7 +604,14 @@ body {
     padding: 8px 16px;
     border-bottom: 1px solid var(--color-border-tertiary);
     flex-shrink: 0;
+    /* Wrap action buttons to a new line instead of clipping them in a narrow
+       container (embedded iframe/modal). Can't use overflow:auto here — it would
+       clip the toolbar's drop-down menus (sort/filter/more). */
+    flex-wrap: wrap;
+    row-gap: 6px;
 }
+/* Action buttons keep their size (no squish) so labels stay readable; they wrap. */
+.ff-toolbar .tb-btn { flex-shrink: 0; }
 
 .tb-btn {
     display: flex;
@@ -1389,6 +1396,28 @@ body {
 .ff-preview-lightbox img.dragging { cursor: grabbing; }
 
 /* Zoom control bar */
+.ff-preview-close {
+    position: absolute;
+    top: 16px;
+    inset-inline-end: 16px;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--ff-transition);
+}
+.ff-preview-close:hover { background: rgba(0, 0, 0, 0.75); }
+
 .ff-zoom-bar {
     position: absolute;
     bottom: 22px;
@@ -3074,8 +3103,9 @@ body {
 
     /* ── Toolbar (simplified for mobile) ── */
     .ff-toolbar {
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         gap: 6px;
+        row-gap: 6px;
         padding: 8px 12px;
         overflow-x: visible;
         position: relative;

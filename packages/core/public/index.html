@@ -1115,9 +1115,12 @@
     <!-- Preview lightbox (full-size image, zoomable) -->
     <div class="ff-preview-lightbox" x-show="previewFullscreen && detailFile && isPreviewable(detailFile, 'image')" x-transition.opacity
          @click="zoom.scale === 1 && closePreview()"
-         @keydown.escape.window="previewFullscreen && (zoom.scale > 1 ? resetZoom() : closePreview())"
+         @keydown.escape.window="previewFullscreen && closePreview()"
          @wheel.prevent="zoomWheel($event)"
          @mousemove="panMove($event)" @mouseup="endPan()" @mouseleave="endPan()">
+        <!-- Always-visible close: a zoomed image can't be dismissed by a backdrop
+             click (that pans), so this is the reliable way out at any zoom level. -->
+        <button class="ff-preview-close" @click.stop="closePreview()" :title="t('common.close')" :aria-label="t('common.close')">&times;</button>
         <img :src="detailFile?.url" :srcset="detailFile?.img_srcset"
              :sizes="detailFile?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
              :alt="detailFile?.name" draggable="false"

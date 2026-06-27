@@ -63,13 +63,11 @@ test('zoom clamps to 100%–500% and reopening starts fresh', async ({ page }) =
   await expect(level).toHaveText('500%');
   await expect(zin).toBeDisabled();
 
-  // close (escape resets when zoomed → first esc resets, second closes).
-  await page.keyboard.press('Escape');
-  await expect(level).toHaveText('100%');
+  // Escape closes immediately, even when zoomed (one press).
   await page.keyboard.press('Escape');
   await expect(lb).toBeHidden();
 
-  // reopening starts at 100% (zoom was reset on open).
+  // reopening starts at 100% (zoom is reset on open).
   await page.locator('.detail-thumb').click();
   await expect(level).toHaveText('100%');
 });
