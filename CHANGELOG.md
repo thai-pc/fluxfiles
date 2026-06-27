@@ -3,7 +3,12 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.46] — 2026-06-27
+
+> Released: core `core-v0.2.41` (Packagist + Docker), Laravel `fluxfiles/laravel`
+> `laravel-v0.2.23`, WordPress `0.2.24` (manual zip).
+> (SDK/React/Vue/Node unchanged since 0.2.45; adapter core floor stays `^0.2.39`
+> — the session-expiry routes use existing manager methods, no new core API.)
 
 ### Security
 
