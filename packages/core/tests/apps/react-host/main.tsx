@@ -9,6 +9,8 @@ const TOKEN = params.get('token') || '';
 const ENDPOINT = params.get('endpoint') || 'http://localhost:8088';
 // ?ui=modal renders the FluxFilesModal wrapper (for close-button comparison).
 const UI = params.get('ui') || 'embed';
+// ?theme=dark|light|auto — forwarded to the modal so its chrome can be checked.
+const THEME = (params.get('theme') as 'dark' | 'light' | 'auto' | null) || undefined;
 
 function App() {
   const ref = useRef<any>(null);
@@ -26,6 +28,7 @@ function App() {
           token={TOKEN}
           disk="local"
           mode="browser"
+          theme={THEME}
           onReady={() => setReady(true)}
           onClose={() => {}}
         />

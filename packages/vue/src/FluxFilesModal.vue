@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useFluxFiles } from './useFluxFiles';
 import { IFRAME_ALLOW } from './iframe';
 import type { FluxFile, FluxEvent } from './types';
@@ -66,6 +66,16 @@ function close() {
 // macOS traffic-light: the red dot reveals a faint × on hover/focus.
 const closeHover = ref(false);
 
+// Theme the modal CHROME (window + header) so dark mode darkens it too, not just
+// the embedded iframe.
+const chromeDark = computed(() =>
+  props.theme === 'dark' ||
+  (props.theme !== 'light' && typeof window !== 'undefined' && !!window.matchMedia &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches)
+);
+const chromeBg = computed(() => (chromeDark.value ? '#2b2b2e' : '#f5f5f7'));
+const chromeBorder = computed(() => (chromeDark.value ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'));
+
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') close();
 }
@@ -126,7 +136,7 @@ onUnmounted(() => unlockBody());
           width: '90vw',
           maxWidth: '1200px',
           height: '85vh',
-          background: '#f5f5f7',
+          background: chromeBg,
           borderRadius: '10px',
           overflow: 'hidden',
           boxShadow: '0 25px 50px rgba(0, 0, 0, 0.22)',
@@ -136,7 +146,7 @@ onUnmounted(() => unlockBody());
       >
         <div :style="{
           flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
-          padding: '10px 12px', borderBottom: '1px solid rgba(0, 0, 0, 0.06)', background: '#f5f5f7',
+          padding: '10px 12px', borderBottom: '1px solid ' + chromeBorder, background: chromeBg,
         }">
           <button
             type="button"

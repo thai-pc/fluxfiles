@@ -161,6 +161,17 @@ export function FluxFilesModal({
 
   if (!open) return null;
 
+  // Theme the modal CHROME (window + header) to match the embedded UI's theme —
+  // otherwise dark mode only darkens the iframe and the grey header stays light.
+  const dark =
+    theme === 'dark' ||
+    (theme !== 'light' &&
+      typeof window !== 'undefined' &&
+      !!window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const chromeBg = dark ? '#2b2b2e' : '#f5f5f7';
+  const chromeBorder = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+
   return (
     <div
       className={overlayClassName}
@@ -172,9 +183,9 @@ export function FluxFilesModal({
     >
       <div
         className={modalClassName}
-        style={modalClassName ? undefined : defaultModalStyle}
+        style={modalClassName ? undefined : { ...defaultModalStyle, background: chromeBg }}
       >
-        <div style={headerStyle}>
+        <div style={{ ...headerStyle, background: chromeBg, borderBottom: '1px solid ' + chromeBorder }}>
           <button
             type="button"
             onClick={() => onClose?.()}

@@ -495,6 +495,26 @@ $token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3
 > (e.g. after purchase) to grant the clean original. Watermark uses the bundled
 > DejaVuSans font for text; like `/api/fm/img` it's a core-standalone feature.
 
+#### Watermark editor — drag-and-drop, burned in (new)
+
+The overlay above is **preview-time** (applied when serving via `/api/fm/img`; the
+file is never changed) — so an image's clean `url` is unwatermarked, and a file you
+**insert into an editor (TinyMCE/CKEditor) shows no watermark**. That's by design.
+
+When you want the watermark **permanently in the file**, use the **Watermark editor**
+(a tab in the detail panel, free): drag a logo or text to any position, resize the
+logo by its handle, set opacity → **Apply** (replace) or **Save as copy**. It
+**burns the watermark into the image** (`POST /api/fm/watermark`,
+`FileManager::applyWatermark`), so every consumer — the picker, a download, an
+inserted `<img>` — carries it. Extension is preserved; variants regenerate.
+
+| | On-the-fly overlay (`watermark_*` claims) | Watermark editor (burn-in) |
+|---|---|---|
+| Where | Applied at serve time via `/api/fm/img` | Written into the file bytes |
+| Clean original | Kept (the source is untouched) | Replaced (or saved as a copy) |
+| Shows in an inserted `<img>` / download | **No** (use the editor) | **Yes** |
+| Best for | Preview protection (sellers) | Permanent branding on assets |
+
 ### Usage dashboard
 
 `GET /api/fm/usage` returns a storage breakdown for the token's prefix — quota

@@ -146,6 +146,14 @@
             iframe.setAttribute('allowfullscreen', 'true');
 
             if (!config.container) {
+                // Theme the modal chrome to match the embedded UI's theme, so dark
+                // mode darkens the window/header too (not just the iframe content).
+                var chromeDark = config.theme === 'dark' ||
+                    (config.theme !== 'light' && window.matchMedia &&
+                        window.matchMedia('(prefers-color-scheme: dark)').matches);
+                var chromeBg = chromeDark ? '#2b2b2e' : '#f5f5f7';
+                var chromeBorder = chromeDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+
                 // Modal overlay — UI scaled down 5% (icons, text, spacing)
                 var overlay = document.createElement('div');
                 overlay.id = 'fluxfiles-overlay';
@@ -153,11 +161,11 @@
 
                 var modal = document.createElement('div');
                 modal.id = 'fluxfiles-modal';
-                modal.style.cssText = 'width:90vw;height:85vh;max-width:1200px;background:#f5f5f7;border-radius:10px;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.22);display:flex;flex-direction:column;';
+                modal.style.cssText = 'width:90vw;height:85vh;max-width:1200px;background:' + chromeBg + ';border-radius:10px;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.22);display:flex;flex-direction:column;';
 
                 // Header — macOS-style red close button (left) with × icon
                 var header = document.createElement('div');
-                header.style.cssText = 'flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;padding:10px 12px;border-bottom:1px solid rgba(0,0,0,0.06);background:#f5f5f7;';
+                header.style.cssText = 'flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;padding:10px 12px;border-bottom:1px solid ' + chromeBorder + ';background:' + chromeBg + ';';
                 var closeBtn = document.createElement('button');
                 closeBtn.type = 'button';
                 closeBtn.setAttribute('aria-label', 'Close');

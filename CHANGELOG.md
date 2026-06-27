@@ -3,6 +3,23 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Modal chrome now follows dark mode.** The React/Vue `FluxFilesModal` and the
+  browser SDK overlay (Laravel/WordPress) had a hardcoded light-grey window/header,
+  so dark mode only darkened the iframe content. The chrome now honours the `theme`
+  prop (`dark`/`light`, or `auto` → `prefers-color-scheme`). Verified in Playwright.
+
+### Docs
+
+- **Watermark guide: overlay vs. burn-in.** Documented that the `watermark_*`
+  overlay is preview-time only (via `/api/fm/img`; a file's clean `url` and any
+  inserted `<img>` in TinyMCE/CKEditor have no watermark — by design), and that the
+  free **watermark editor** (`POST /api/fm/watermark`) burns it into the file so it
+  appears everywhere. Added a comparison table.
+
 ## [0.2.44] — 2026-06-25
 
 > Released: core `core-v0.2.39` (Packagist + Docker), Laravel `laravel-v0.2.22`,
