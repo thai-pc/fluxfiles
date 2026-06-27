@@ -75,6 +75,31 @@ FLUXFILES_MODE=standalone
 FLUXFILES_ENDPOINT=https://your-fluxfiles-server.com
 ```
 
+## SFTP disk & SSH terminal
+
+Managing a **remote VPS / shared host** (SFTP disk, `chmod`, the SSH terminal) is a
+**standalone-mode** feature. Those serve files *through* the app and the terminal
+holds a live SSH connection, so they aren't proxied through Laravel routes.
+
+- **`standalone` mode (recommended for SFTP/terminal):** run the FluxFiles server
+  (or the Docker image), give it the `SFTP_*` env vars (see the
+  [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)
+  and [SSH terminal](https://github.com/thai-pc/fluxfiles#ssh-terminal-sftp-disks)),
+  and point Laravel at it with `FLUXFILES_ENDPOINT`. Then mint tokens with the
+  `sftp` disk and, opt-in, the terminal:
+
+  ```php
+  $token = $fluxFiles->tokenForUser([
+      'disks'          => ['sftp'],   // an SFTP disk configured on the FluxFiles server
+      'allow_chmod'    => true,       // cPanel-style permissions (default on for SFTP)
+      'allow_terminal' => true,       // SSH terminal — opt-in, off by default
+  ]);
+  ```
+
+- **`proxy` mode:** local / S3 / R2 only. SFTP serving and the terminal aren't
+  available here (the endpoints aren't proxied), so those claims are dropped — use
+  standalone mode for them. **Burn-in watermark** works in both modes.
+
 ## Usage
 
 ### Blade Component

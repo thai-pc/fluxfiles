@@ -166,6 +166,16 @@ All components and the composable expose these methods:
 | `@event` | `FluxEvent` | Action event (upload, delete, move...) |
 | `@close` | — | Modal closed |
 
+## Storage disks, SFTP & terminal
+
+This component just embeds whatever FluxFiles server its `endpoint` points at and
+renders the token your backend mints — so the available disks and features
+(Local / S3 / R2 / **SFTP**, `chmod`, the **SSH terminal**) come from that server +
+token, not from this package. Point `endpoint` at a standalone FluxFiles server
+(or Docker) with an SFTP disk and mint the token with the right claims (e.g. via
+[`@fluxfiles/node`](https://www.npmjs.com/package/@fluxfiles/node)); see the
+[core README](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting).
+
 ## TypeScript
 
 All types are exported:

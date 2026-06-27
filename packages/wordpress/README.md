@@ -99,6 +99,18 @@ creates metadata per file (title from the filename) and tracks folders in
 `_fluxfiles/dirs.json`. No WP-CLI? Re-upload through the UI — new uploads register
 metadata automatically.
 
+## SFTP disk & SSH terminal
+
+The WordPress plugin runs FluxFiles **through the WP REST API (proxy mode)**, which
+serves **Local / S3 / R2** storage. Managing a **remote VPS** over SFTP — the SFTP
+disk, `chmod`, and the SSH **terminal** — streams files through the app and holds a
+live SSH connection, so it's **not available through the WordPress plugin**.
+
+For those, run the **standalone FluxFiles server** (or the Docker image) — see the
+[core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)
+and [SSH terminal](https://github.com/thai-pc/fluxfiles#ssh-terminal-sftp-disks).
+(The **burn-in watermark** does work in WordPress.)
+
 ## Features
 
 - Multi-storage — Local disk, AWS S3, Cloudflare R2 (cursor-based pagination)
