@@ -3,6 +3,21 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.57] — 2026-06-27
+
+> Released: core `core-v0.2.49` (Packagist + Docker). Adapters unchanged.
+
+### Added
+
+- **Non-destructive burn-in watermark (keep original · re-edit · remove).** Burning
+  a watermark in place now snapshots the true original to `_fluxfiles/originals/`
+  on the first burn, so re-editing reads from the clean original (re-positioning no
+  longer stacks a second mark) and a new **Remove watermark** action (`POST
+  /api/fm/watermark/remove`) restores it byte-for-byte. Files carry
+  `meta.watermarked`; the editor shows the Remove button. Matches the model used by
+  the major image-watermark tools (never destroy the original). i18n across 16
+  locales; +2 tests.
+
 ## [0.2.56] — 2026-06-27
 
 > Released: core `core-v0.2.48` (Packagist + Docker). Adapters unchanged.
