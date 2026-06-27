@@ -579,32 +579,15 @@ quota meter, a by-type chart, and a clickable top-folders list.
 
 ### Uploading multiple files
 
-Multi-file upload is always available in the file manager UI — no special option
-needed:
+Always on — drag-drop several files, or pick multiple in the Upload dialog. They
+upload sequentially (one request each; big S3/R2 files use chunk upload) with a
+combined progress bar; each is checked independently (size/ext/quota/dup) so one
+rejection doesn't abort the rest. Caps: **`max_upload`** (MB per file),
+**`max_files`** (total under the prefix, server-side `413`), and the SDK
+**`maxFiles`** (per-batch, client-side).
 
-- **Drag & drop** several files onto the dropzone at once, or
-- Click **Upload** and select multiple files in the OS dialog (the file input is
-  `multiple`).
-
-Files upload **sequentially** (one `POST /api/fm/upload` per file) with a
-combined progress bar; large files on S3/R2 automatically use multipart chunk
-upload. Each file is independently checked for size, extension, quota, and
-duplicates, so one rejected file doesn't abort the rest. After the batch the
-listing refreshes and an `upload:done` `FM_EVENT` fires.
-
-**Limiting how many files** — there's no built-in cap on the *number* of files
-by default. Use:
-- the **`max_files`** JWT claim (`maxFiles` token param) to cap the **total**
-  files under the user's prefix — enforced server-side (`413 too_many_files`);
-- the SDK/component **`maxFiles`** option to cap a single drop/selection batch
-  client-side (a friendlier early rejection).
-
-And **`max_upload`** (`maxUploadMb`, MB) caps the size of each individual file.
-
-> Don't confuse this with the SDK's `multiple: true` option — that controls
-> **picker selection** (returning an array of already-stored files via
-> `FM_SELECT`), not uploading. The two are independent. Selecting several files
-> and using the bulk bar also enables **bulk move / delete / download**.
+> Not the same as the SDK's `multiple: true` — that's **picker selection**
+> (returning an array via `FM_SELECT`), independent of uploading.
 
 ### SDK Commands
 
@@ -659,21 +642,11 @@ unsub(); // remove listener
 
 ### Token Refresh
 
-FluxFiles automatically handles JWT expiration. When the API returns 401:
-
-1. The iframe sends `FM_TOKEN_REFRESH` to the host app
-2. The SDK calls your `onTokenRefresh` callback
-3. You fetch a new JWT from your backend and return it
-4. The SDK sends `FM_TOKEN_UPDATED` back to the iframe
-5. The failed request is automatically retried with the new token
-
-**Behavior details:**
-- Multiple concurrent 401s are coalesced into a single refresh request
-- After 2 consecutive refresh failures, the auth expired screen is shown
-- 10-second timeout — if no response, falls back to expired screen
-- `auth:refreshed` and `auth:expired` events are emitted via `FM_EVENT`
-
-**Proactive refresh:** Call `FluxFiles.updateToken(newJwt)` to push a new token before it expires (e.g. on a timer).
+On a 401 the iframe asks the host for a fresh token (`FM_TOKEN_REFRESH` → your
+`onTokenRefresh` callback returns a new JWT → the failed request retries). Concurrent
+401s are coalesced; after 2 failed refreshes (or a 10s timeout) the auth-expired
+screen shows; `auth:refreshed`/`auth:expired` fire via `FM_EVENT`. To refresh
+proactively, call `FluxFiles.updateToken(newJwt)` (e.g. on a timer).
 
 ### PHP Embed Helper
 
@@ -1098,10 +1071,6 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `webp` | `webp_enabled`, … | — | `null` | **On-demand WebP** + responsive config. An array: `['webp_enabled' => true, 'webp_max_width' => 2000, 'webp_default_quality' => 80, 'srcset_widths' => [320, 640, 1024, 1920], 'srcset_sizes' => '100vw']`. Only the keys you set are embedded. See [On-demand WebP](#on-demand-webp). |
 | `usage` | `usage_cache_ttl`, … | — | `null` | **Usage dashboard** config. An array: `['usage_cache_ttl' => 900, 'usage_warning_threshold' => 70, 'usage_critical_threshold' => 90, 'usage_top_folders_count' => 10, 'usage_folder_depth' => 1]`. See [Usage dashboard](#usage-dashboard). |
 
-> **Quick reference:** sizes are **MB** (`maxUploadMb`, `maxStorageMb`), time is
-> **seconds** (`ttl`), and `allowedExt` entries are **bare lowercase extensions**
-> with no leading dot.
-
 ### Import from URL
 
 `POST /api/fm/import-url` fetches a **public** URL server-side and saves it like a
@@ -1128,36 +1097,16 @@ $token = fluxfiles_token(
 );
 ```
 
-```php
-// Laravel — FluxFiles facade / FluxFilesManager::token()
-$token = FluxFiles::token($user, [
-    'allow_url_import'     => true,
-    'max_import_mb'        => 20,
-    'import_url_allowlist' => ['*.unsplash.com'],
-]);
-```
-
-```php
-// WordPress — FluxFilesPlugin::generateToken() / tokenForCurrentUser()
-$token = FluxFilesPlugin::tokenForCurrentUser([
-    'allow_url_import' => true,
-    'max_import_mb'    => 20,
-]);
-```
-
 ```ts
 // Node — @fluxfiles/node (camelCase options)
-import { createToken } from '@fluxfiles/node';
-
 const token = createToken({
-  userId: 'user-42',
-  perms: ['read', 'write'],
-  allowUrlImport: true,
-  maxImportMb: 20,
-  importUrlAllowlist: ['*.unsplash.com'],
-  // importPath, importRateLimit, importConcurrency also supported
+  userId: 'user-42', perms: ['read', 'write'],
+  allowUrlImport: true, maxImportMb: 20, importUrlAllowlist: ['*.unsplash.com'],
 });
 ```
+
+> Same claims in the adapters — see the **Enable Import from URL** section in each
+> ([Laravel](packages/laravel/README.md) · [WordPress](packages/wordpress/README.md) · [Node](packages/node/README.md)).
 
 Once the token allows it, call the route (the React/Vue/iframe SDKs proxy it for you):
 
@@ -1191,17 +1140,6 @@ optional env vars — see [`.env.example`](.env.example):
 | `read` | List files, view metadata, search, download (presign), get quota |
 | `write` | Upload, rename, copy, move, mkdir, save metadata, crop, AI-tag |
 | `delete` | Delete files and directories |
-
-### Path prefix
-
-The `prefix` claim isolates users to their own directory:
-
-```
-prefix: "users/42/"
-→ User can only access: users/42/*, users/42/photos/*, etc.
-→ Path traversal (../) is stripped before prefix is applied
-→ Null bytes are removed
-```
 
 ### User isolation
 
