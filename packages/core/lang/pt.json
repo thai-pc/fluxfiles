@@ -347,7 +347,17 @@
         "summary_fail": "Problemas",
         "cors_snippet": "Configuração CORS",
         "iam_snippet": "Política IAM",
-        "copy": "Copiar"
+        "copy": "Copiar",
+        "check": {
+            "reachability": "Acessibilidade e listagem",
+            "write": "Gravação",
+            "read": "Leitura",
+            "delete": "Exclusão",
+            "multipart": "Upload multipart",
+            "cors": "CORS",
+            "presign": "URLs pré-assinadas",
+            "versioning": "Versionamento"
+        }
     },
     "trash": {
         "title": "Lixeira",

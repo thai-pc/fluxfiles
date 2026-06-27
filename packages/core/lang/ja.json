@@ -347,7 +347,17 @@
         "summary_fail": "問題あり",
         "cors_snippet": "CORS 設定",
         "iam_snippet": "IAM ポリシー",
-        "copy": "コピー"
+        "copy": "コピー",
+        "check": {
+            "reachability": "到達性と一覧",
+            "write": "書き込み",
+            "read": "読み取り",
+            "delete": "削除",
+            "multipart": "マルチパートアップロード",
+            "cors": "CORS",
+            "presign": "署名付き URL",
+            "versioning": "バージョニング"
+        }
     },
     "trash": {
         "title": "ゴミ箱",

@@ -347,7 +347,17 @@
         "summary_fail": "มีปัญหา",
         "cors_snippet": "การกำหนดค่า CORS",
         "iam_snippet": "นโยบาย IAM",
-        "copy": "คัดลอก"
+        "copy": "คัดลอก",
+        "check": {
+            "reachability": "การเข้าถึงและรายการ",
+            "write": "เขียน",
+            "read": "อ่าน",
+            "delete": "ลบ",
+            "multipart": "อัปโหลดหลายส่วน",
+            "cors": "CORS",
+            "presign": "URL ที่ลงนามล่วงหน้า",
+            "versioning": "การกำหนดเวอร์ชัน"
+        }
     },
     "trash": {
         "title": "ถังขยะ",

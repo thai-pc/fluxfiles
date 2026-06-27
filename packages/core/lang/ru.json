@@ -347,7 +347,17 @@
         "summary_fail": "Проблемы",
         "cors_snippet": "Конфигурация CORS",
         "iam_snippet": "Политика IAM",
-        "copy": "Копировать"
+        "copy": "Копировать",
+        "check": {
+            "reachability": "Доступность и список",
+            "write": "Запись",
+            "read": "Чтение",
+            "delete": "Удаление",
+            "multipart": "Многочастная загрузка",
+            "cors": "CORS",
+            "presign": "Подписанные URL",
+            "versioning": "Версионирование"
+        }
     },
     "trash": {
         "title": "Корзина",

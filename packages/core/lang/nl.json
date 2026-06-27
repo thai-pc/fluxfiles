@@ -347,7 +347,17 @@
         "summary_fail": "Problemen",
         "cors_snippet": "CORS-configuratie",
         "iam_snippet": "IAM-beleid",
-        "copy": "Kopiëren"
+        "copy": "Kopiëren",
+        "check": {
+            "reachability": "Bereikbaarheid & lijst",
+            "write": "Schrijven",
+            "read": "Lezen",
+            "delete": "Verwijderen",
+            "multipart": "Multipart-upload",
+            "cors": "CORS",
+            "presign": "Vooraf-ondertekende URLs",
+            "versioning": "Versiebeheer"
+        }
     },
     "trash": {
         "title": "Prullenbak",

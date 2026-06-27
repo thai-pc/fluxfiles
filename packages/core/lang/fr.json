@@ -347,7 +347,17 @@
         "summary_fail": "Problèmes",
         "cors_snippet": "Configuration CORS",
         "iam_snippet": "Politique IAM",
-        "copy": "Copier"
+        "copy": "Copier",
+        "check": {
+            "reachability": "Accès & liste",
+            "write": "Écriture",
+            "read": "Lecture",
+            "delete": "Suppression",
+            "multipart": "Envoi multipart",
+            "cors": "CORS",
+            "presign": "URL pré-signées",
+            "versioning": "Versioning"
+        }
     },
     "trash": {
         "title": "Corbeille",

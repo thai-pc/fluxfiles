@@ -347,7 +347,17 @@
         "summary_fail": "مشكلات",
         "cors_snippet": "تهيئة CORS",
         "iam_snippet": "سياسة IAM",
-        "copy": "نسخ"
+        "copy": "نسخ",
+        "check": {
+            "reachability": "الوصول والسرد",
+            "write": "الكتابة",
+            "read": "القراءة",
+            "delete": "الحذف",
+            "multipart": "رفع متعدد الأجزاء",
+            "cors": "CORS",
+            "presign": "روابط موقّعة",
+            "versioning": "الإصدارات"
+        }
     },
     "trash": {
         "title": "سلة المهملات",

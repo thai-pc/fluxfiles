@@ -347,7 +347,17 @@
         "summary_fail": "Problemas",
         "cors_snippet": "Configuración CORS",
         "iam_snippet": "Política IAM",
-        "copy": "Copiar"
+        "copy": "Copiar",
+        "check": {
+            "reachability": "Accesibilidad y listado",
+            "write": "Escritura",
+            "read": "Lectura",
+            "delete": "Eliminación",
+            "multipart": "Subida multiparte",
+            "cors": "CORS",
+            "presign": "URL prefirmadas",
+            "versioning": "Versionado"
+        }
     },
     "trash": {
         "title": "Papelera",

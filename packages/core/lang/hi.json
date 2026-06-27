@@ -347,7 +347,17 @@
         "summary_fail": "समस्याएँ",
         "cors_snippet": "CORS कॉन्फ़िगरेशन",
         "iam_snippet": "IAM नीति",
-        "copy": "कॉपी"
+        "copy": "कॉपी",
+        "check": {
+            "reachability": "पहुँच और सूची",
+            "write": "लिखना",
+            "read": "पढ़ना",
+            "delete": "हटाना",
+            "multipart": "मल्टीपार्ट अपलोड",
+            "cors": "CORS",
+            "presign": "प्री-साइन्ड URL",
+            "versioning": "वर्ज़निंग"
+        }
     },
     "trash": {
         "title": "ट्रैश",

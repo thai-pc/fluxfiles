@@ -347,7 +347,17 @@
         "summary_fail": "Sorunlar",
         "cors_snippet": "CORS yapılandırması",
         "iam_snippet": "IAM politikası",
-        "copy": "Kopyala"
+        "copy": "Kopyala",
+        "check": {
+            "reachability": "Erişim ve listeleme",
+            "write": "Yazma",
+            "read": "Okuma",
+            "delete": "Silme",
+            "multipart": "Çok parçalı yükleme",
+            "cors": "CORS",
+            "presign": "Önimzalı URL’ler",
+            "versioning": "Sürümleme"
+        }
     },
     "trash": {
         "title": "Çöp kutusu",

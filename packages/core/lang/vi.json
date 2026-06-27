@@ -347,7 +347,17 @@
         "summary_fail": "Có vấn đề",
         "cors_snippet": "Cấu hình CORS",
         "iam_snippet": "Chính sách IAM",
-        "copy": "Sao chép"
+        "copy": "Sao chép",
+        "check": {
+            "reachability": "Kết nối & liệt kê",
+            "write": "Ghi",
+            "read": "Đọc",
+            "delete": "Xóa",
+            "multipart": "Tải lên nhiều phần",
+            "cors": "CORS",
+            "presign": "URL ký sẵn",
+            "versioning": "Phiên bản"
+        }
     },
     "trash": {
         "title": "Thùng rác",

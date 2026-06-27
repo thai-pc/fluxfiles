@@ -7,6 +7,13 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Fixed
 
+- **Consistent validation-error color.** Inline validation messages were split
+  across two red tokens (`--ff-danger` vs `--color-text-danger`); the import-URL
+  error now uses the same `--color-text-danger` as new-folder/doctor errors.
+- **Bucket/disk doctor check labels are localised.** The permission-check rows
+  showed the raw id (`reachability`, `write`, …) in every language; they now use a
+  `doctor.check.*` label (×16 locales, raw id as fallback). The per-check
+  `message`/`fix` stay English on purpose (provider/AWS technical detail).
 - **Modal chrome now follows dark mode.** The React/Vue `FluxFilesModal` and the
   browser SDK overlay (Laravel/WordPress) had a hardcoded light-grey window/header,
   so dark mode only darkened the iframe content. The chrome now honours the `theme`

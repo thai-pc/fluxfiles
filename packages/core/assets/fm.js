@@ -2347,6 +2347,15 @@ function fluxFilesApp() {
             await this.loadDoctor();
         },
 
+        // Localised label for a doctor check id (reachability/write/…); the raw id
+        // is the fallback when a translation is missing. The check `message`/`fix`
+        // stay in English (they carry the provider's own technical/AWS detail).
+        doctorLabel(id) {
+            const k = 'doctor.check.' + id;
+            const v = this.t(k);
+            return v === k ? id : v;
+        },
+
         async loadDoctor() {
             this.doctorLoading = true;
             this.doctorError = '';

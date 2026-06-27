@@ -2040,7 +2040,9 @@ body {
 }
 .ff-import-input:focus { outline: none; border-color: var(--ff-primary); }
 .ff-import-hint { font-size: 12px; color: var(--color-text-tertiary); margin: 8px 2px 0; }
-.ff-import-error { font-size: 13px; color: var(--ff-danger, #e5484d); margin: 10px 2px 0; }
+/* Inline validation errors share one token (--color-text-danger) for a consistent
+   red across the new-folder, import, doctor, etc. messages. */
+.ff-import-error { font-size: 13px; color: var(--color-text-danger); margin: 10px 2px 0; }
 .ff-import-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .ff-import-status { text-align: center; padding: 18px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .ff-import-status p { margin: 0; color: var(--color-text-secondary); font-size: 14px; }

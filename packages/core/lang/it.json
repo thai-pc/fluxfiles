@@ -347,7 +347,17 @@
         "summary_fail": "Problemi",
         "cors_snippet": "Configurazione CORS",
         "iam_snippet": "Criterio IAM",
-        "copy": "Copia"
+        "copy": "Copia",
+        "check": {
+            "reachability": "Raggiungibilità ed elenco",
+            "write": "Scrittura",
+            "read": "Lettura",
+            "delete": "Eliminazione",
+            "multipart": "Caricamento multipart",
+            "cors": "CORS",
+            "presign": "URL prefirmate",
+            "versioning": "Versioning"
+        }
     },
     "trash": {
         "title": "Cestino",

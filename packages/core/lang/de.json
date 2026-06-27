@@ -347,7 +347,17 @@
         "summary_fail": "Probleme",
         "cors_snippet": "CORS-Konfiguration",
         "iam_snippet": "IAM-Richtlinie",
-        "copy": "Kopieren"
+        "copy": "Kopieren",
+        "check": {
+            "reachability": "Erreichbarkeit & Liste",
+            "write": "Schreiben",
+            "read": "Lesen",
+            "delete": "Löschen",
+            "multipart": "Multipart-Upload",
+            "cors": "CORS",
+            "presign": "Signierte URLs",
+            "versioning": "Versionierung"
+        }
     },
     "trash": {
         "title": "Papierkorb",

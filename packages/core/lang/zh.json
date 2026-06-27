@@ -347,7 +347,17 @@
         "summary_fail": "有问题",
         "cors_snippet": "CORS 配置",
         "iam_snippet": "IAM 策略",
-        "copy": "复制"
+        "copy": "复制",
+        "check": {
+            "reachability": "连接与列举",
+            "write": "写入",
+            "read": "读取",
+            "delete": "删除",
+            "multipart": "分片上传",
+            "cors": "CORS",
+            "presign": "预签名 URL",
+            "versioning": "版本控制"
+        }
     },
     "trash": {
         "title": "回收站",

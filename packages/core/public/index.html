@@ -1496,7 +1496,7 @@
                                 <li class="ff-doctor-check" :class="'is-' + c.status">
                                     <span class="ff-doctor-dot" x-text="({ ok: '✓', warn: '!', fail: '✕', info: 'i' })[c.status] || '·'"></span>
                                     <div>
-                                        <div class="ff-doctor-msg"><b x-text="c.id"></b> — <span x-text="c.message"></span></div>
+                                        <div class="ff-doctor-msg"><b x-text="doctorLabel(c.id)"></b> — <span x-text="c.message"></span></div>
                                         <div class="ff-doctor-fix" x-show="c.fix" x-text="c.fix"></div>
                                     </div>
                                 </li>
