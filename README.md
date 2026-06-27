@@ -22,7 +22,6 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 ## Table of Contents
 
 - [Features](#features)
-- [Use cases — what each free feature is for](#use-cases--what-each-free-feature-is-for)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Production Deployment](#production-deployment)
@@ -49,56 +48,30 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 ## Features
 
-| Category | Details |
-|----------|---------|
-| **Storage** | Local disk, AWS S3, Cloudflare R2, **SFTP** (VPS / shared hosting) via Flysystem v3. Cross-disk copy/move with stream transfer. BYOB (Bring Your Own Bucket) — encrypted per-token credentials. |
-| **Auth** | JWT HS256 with granular claims — permissions, disk access, path scoping, upload limits, file type whitelist, storage quota, owner-only, plus per-feature gates. |
-| **File ops** | Upload, download (presigned URL), move, copy, rename, delete, create folders. Chunk upload (S3 multipart). Bulk multi-select. **Import-from-URL** (SSRF-guarded). **Zip download** of a selection, and **Extract** in place (zip-slip / zip-bomb guarded). |
-| **Trash** | Soft-delete **files and folders** to a storage-resident trash (restore / list / purge / empty); folders move the whole subtree. |
-| **Images** | Auto WebP variants on upload (thumb / medium / large). **On-demand WebP** at any size (`/api/fm/img`) with **responsive `srcset`**. **On-the-fly watermark** (text/logo) for preview protection. Inline crop with aspect presets. |
-| **Media** | Inline image / video / audio / PDF preview, with auto-refresh of expiring URLs. **Gated private local media** streamed through the app (Range-capable, nginx `X-Accel-Redirect`). |
-| **Config / code** | In-browser **code/config editor** (CodeMirror, syntax by extension) for text files. **SFTP `chmod`** — cPanel-style Unix permissions. **SSH terminal** (xterm.js) on SFTP disks — run `git`/`composer`/`chmod` etc. (opt-in, command-runner). |
-| **AI** | Claude or OpenAI vision API — auto-tag, alt text, title, caption on upload or manual trigger. |
-| **Metadata** | Title, alt text, caption, tags per file. S3 object metadata (cloud) or sidecar JSON (local). Full-text file + folder search. |
-| **Insights** | **Storage usage dashboard** — quota + per-type and per-folder breakdown (file-cached). |
-| **Safety** | Duplicate detection (SHA-256). Rate limiting per user. Audit log with rotation. Per-user quota. Origin/CSRF validation. Always-on dangerous-extension blocking. SSRF guard (BYOB + URL import). Zip slip/bomb guards. |
-| **UI** | Dark mode (auto/manual). 16 languages with RTL support. Responsive (mobile overflow menu). Bulk operations (multi-select, shift-select). |
-| **Adapters** | Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, Summernote, plus **`@fluxfiles/node`** (server-side token SDK). |
+Everything here is in the open-source core. The **Best for** column tells you when
+to reach for each one.
 
----
-
-## Use cases — what each free feature is for
-
-Every feature below ships in the open-source core. Pick the rows that match what
-you're building; each maps a capability to *when* you'd reach for it and *which
-model* it fits.
-
-| Feature | What it's for | Reach for it when / which model |
+| Area | Feature | Best for |
 |---|---|---|
-| **Local / S3 / R2 / S3-compatible disks** | Where the bytes live | Local for a single VPS or demo; S3/R2 for SaaS, durability, CDN. R2 has no egress fees |
-| **SFTP disk** | File manager for a VPS / shared host over SSH | Replace cPanel File Manager; manage a web root remotely |
-| **Cross-disk copy/move** | Shuttle files between disks (e.g. local → R2) | Backups, storage migration, "process locally, push to cloud" |
-| **BYOB (Bring Your Own Bucket)** | Each tenant connects **their own** bucket (creds encrypted in the JWT, never stored) | **Multi-tenant SaaS** where the user pays for their own storage |
-| **JWT auth + granular claims** | Per-user scope: perms, disk, path prefix, quota, ext allowlist, owner-only | Any multi-tenant app — stateless, no session DB; your backend mints the token |
-| **Upload / move / copy / rename / delete / mkdir / bulk** | The core file-manager toolkit | Every app that lets users manage files |
-| **Chunk upload (S3 multipart)** | Reliable large-file upload | Video, design files, anything > 10 MB on S3/R2 |
-| **Import from URL** (SSRF-guarded, opt-in) | Pull a remote file in server-side | CMS "import by link", grabbing stock imagery |
-| **Zip download + Extract** (slip/bomb-guarded) | Bundle a selection / unpack an archive in place | Deploys, backups, "send me all these files" |
-| **Trash (files + folders)** | Soft-delete with restore | Protect users from accidental deletion (Drive-style) |
-| **Auto WebP + on-demand WebP + `srcset`** | Fast, lightweight, responsive images | CMS, blog, e-commerce, SEO-sensitive sites |
-| **Crop** | In-browser image cropping with aspect presets | Avatars, thumbnails, hero images |
-| **Watermark — overlay preview** | Watermark *at serve time*, original untouched | **Selling images / stock** — clients see marked previews, not the clean file |
-| **Watermark — editor (burn-in)** | Watermark written *into* the file | Permanent branding on shipped assets |
-| **Inline preview + gated local media** | View image/video/audio/PDF; token-gated streaming | Course platforms, private media, document portals |
-| **Code / config editor** | Edit `wp-config.php`, `.env`, `nginx.conf`… in-browser | cPanel-style admin tooling (opt-in) |
-| **SFTP chmod** | cPanel-style Unix permissions | Managing file permissions on a VPS/host |
-| **SSH terminal** (opt-in) | Run `git` / `composer` / `chmod -R`… on the box | A hosting/control-panel product for devs & agencies |
-| **AI auto-tag** (bring your own API key) | Auto tag / alt / title / caption | SEO, large media libraries, DAM |
-| **Metadata + full-text search** | Title/alt/caption/tags + find files & folders | Digital Asset Management |
-| **Usage dashboard** | Quota + size by type/folder | Show tenants their consumption |
-| **Safety: dedup, rate limit, audit, quota, SSRF/CSRF/zip guards** | Production hardening | Anything user-facing |
-| **16 languages, dark mode, responsive** | Polished embeddable UI | Global, white-label, mobile |
-| **Adapters (Laravel/WP/React/Vue/editors/Node)** | Drop-in for your stack | Skip the integration plumbing |
+| **Storage** | Local · AWS S3 · Cloudflare R2 · any S3-compatible · **SFTP** | Local for one VPS/demo; S3/R2 for SaaS + CDN (R2 = no egress fee); SFTP to manage a VPS/host like cPanel |
+| | **BYOB** — each tenant's own bucket, creds encrypted in the JWT | Multi-tenant SaaS where the user pays for their own storage |
+| | **Cross-disk copy/move** (streamed) | Backups, storage migration, "process locally → push to cloud" |
+| **Auth** | JWT HS256 + granular claims (perms, disk, path prefix, quota, ext allowlist, owner-only) | Any multi-tenant app — stateless, no session DB; your backend mints the token |
+| **Files** | Upload / download / move / copy / rename / delete / mkdir / bulk multi-select | Every app that manages files |
+| | **Chunk upload** (S3 multipart) | Reliable large files (video, design, >10 MB on S3/R2) |
+| | **Import from URL** (SSRF-guarded, opt-in) | CMS "import by link", stock imagery |
+| | **Zip download + Extract** (slip/bomb-guarded) | Deploys, backups, "send me all these files" |
+| | **Trash** — soft-delete files + folders, restore | Undo accidental deletes (Drive-style) |
+| **Images** | Auto WebP variants + **on-demand WebP** at any size + responsive `srcset` | Fast, lightweight, SEO images for CMS/blog/e-commerce |
+| | **Crop** (aspect presets) | Avatars, thumbnails, hero images |
+| | **Watermark** — burn-in editor (and an opt-in serve-time overlay for selling images) | Branding assets; or protecting previews of images you sell |
+| **Media** | Inline image/video/audio/PDF preview + gated private local streaming | Course platforms, private media, document portals |
+| **Admin / hosting** | Code/config editor (CodeMirror), **SFTP chmod**, **SSH terminal** (opt-in) | cPanel-style tooling: edit `.env`/`nginx.conf`, set permissions, run `git`/`composer` |
+| **Metadata** | Title/alt/caption/tags + full-text file & folder search; **AI auto-tag** (BYO key) | Digital Asset Management, SEO, large media libraries |
+| **Insights** | Storage usage dashboard (quota + by type/folder) | Show tenants their consumption |
+| **Safety** | Dedup (SHA-256), rate limiting, audit log, quota, origin/CSRF, dangerous-ext block, SSRF + zip guards | Production hardening, baked in |
+| **UI** | Dark mode (auto/manual), 16 languages + RTL, responsive | Global, white-label, mobile |
+| **Adapters** | Laravel · WordPress · React · Vue/Nuxt · CKEditor 4 · TinyMCE · Summernote · `@fluxfiles/node` | Drop into your stack, skip the plumbing |
 
 ## Requirements
 
