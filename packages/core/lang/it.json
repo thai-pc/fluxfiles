@@ -137,7 +137,8 @@
         "name": "Nome",
         "no_files": "Nessun file in questa cartella",
         "files": "File",
-        "folder": "Cartella"
+        "folder": "Cartella",
+        "preview_only": "Anteprima"
     },
     "upload": {
         "drop_hint": "Trascina i file qui o clicca per caricare",

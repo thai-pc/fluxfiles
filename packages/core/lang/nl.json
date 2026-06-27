@@ -137,7 +137,8 @@
         "name": "Naam",
         "no_files": "Geen bestanden in deze map",
         "files": "Bestanden",
-        "folder": "Map"
+        "folder": "Map",
+        "preview_only": "Voorbeeld"
     },
     "upload": {
         "drop_hint": "Sleep bestanden hierheen of klik om te uploaden",

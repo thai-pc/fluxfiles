@@ -1266,6 +1266,24 @@ body {
     background: var(--ff-success);
 }
 
+/* Preview-only (watermark-protected) image badge — the card shows a watermarked
+   preview; the clean original isn't downloadable. */
+.ff-preview-badge {
+    position: absolute;
+    top: 8px;
+    inset-inline-start: 8px;
+    z-index: 2;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--color-accent, #7c3aed);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
 /* ══════════════════════════ List view ══════════════════════════ */
 .file-grid.list-view {
     grid-template-columns: 1fr;

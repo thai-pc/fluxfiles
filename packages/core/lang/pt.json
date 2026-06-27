@@ -137,7 +137,8 @@
         "name": "Nome",
         "no_files": "Nenhum arquivo nesta pasta",
         "files": "Ficheiros",
-        "folder": "Pasta"
+        "folder": "Pasta",
+        "preview_only": "Pré-visualização"
     },
     "upload": {
         "drop_hint": "Arraste arquivos aqui ou clique para enviar",

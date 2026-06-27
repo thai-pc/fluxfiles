@@ -137,7 +137,8 @@
         "name": "Nom",
         "no_files": "Aucun fichier dans ce dossier",
         "files": "Fichiers",
-        "folder": "Dossier"
+        "folder": "Dossier",
+        "preview_only": "Aperçu"
     },
     "upload": {
         "drop_hint": "Déposez vos fichiers ici ou cliquez pour importer",

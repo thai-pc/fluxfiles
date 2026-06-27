@@ -137,7 +137,8 @@
         "name": "Name",
         "no_files": "Keine Dateien in diesem Ordner",
         "files": "Dateien",
-        "folder": "Ordner"
+        "folder": "Ordner",
+        "preview_only": "Vorschau"
     },
     "upload": {
         "drop_hint": "Dateien hier ablegen oder klicken zum Hochladen",

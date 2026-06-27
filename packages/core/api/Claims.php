@@ -396,6 +396,16 @@ class Claims
         $c->showHidden = (bool) ($payload->show_hidden ?? false);
         $c->dedupeUploads = (bool) ($payload->dedupe_uploads ?? false);
         $c->watermark = self::sanitizeWatermark($payload);
+        // A watermark OVERLAY exists solely to withhold the clean original — serving
+        // it alongside (allow_download=true) would defeat the watermark entirely,
+        // a contradictory/no-op state. So an overlay watermark IMPLIES preview-only:
+        // force allow_download off, and list() then serves only the watermarked
+        // img_base (presign of the original → 403, no clean variants/zip). The
+        // burn-in editor doesn't use this claim, so it's unaffected. To sell the
+        // clean file later, issue a separate token without the watermark.
+        if ($c->watermark !== null) {
+            $c->allowDownload = false;
+        }
 
         // Usage-dashboard claims.
         $c->usageCacheTtl = max(0, (int) ($payload->usage_cache_ttl ?? 0));

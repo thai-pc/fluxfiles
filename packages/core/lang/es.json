@@ -137,7 +137,8 @@
         "name": "Nombre",
         "no_files": "No hay archivos en esta carpeta",
         "files": "Archivos",
-        "folder": "Carpeta"
+        "folder": "Carpeta",
+        "preview_only": "Vista previa"
     },
     "upload": {
         "drop_hint": "Arrastra archivos aquí o haz clic para subir",

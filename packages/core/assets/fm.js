@@ -1041,6 +1041,29 @@ function fluxFilesApp() {
             return file.url;
         },
 
+        // Build a (watermarked) on-demand WebP URL from img_base at a given width.
+        // img_base already carries its per-file token; width 0 = natural size.
+        imgAt(file, width) {
+            if (!file || !file.img_base) return '';
+            return file.img_base + (width ? '&width=' + width : '');
+        },
+        // True when the token is preview-only (e.g. a watermark overlay): the clean
+        // url/variants are withheld and only the watermarked img_base is served.
+        isPreviewOnly(file) {
+            return !!(file && !file.url && (!file.variants || !file.variants.thumb) && file.img_base);
+        },
+        // Best URL to DISPLAY an image at full size (detail/lightbox): the clean
+        // original when available (unchanged behaviour), then a large variant, else
+        // the watermarked img_base (preview-only tokens) so images never break.
+        displayUrl(file, width) {
+            if (!file) return '';
+            if (file.url) return file.url;
+            if (file.variants && file.variants.large && file.variants.large.url) {
+                return file.variants.large.url;
+            }
+            return this.imgAt(file, width || 0);
+        },
+
         previewUrl(file, preferred = 'thumb') {
             if (!file) return '';
             if (file.variants) {
@@ -1051,7 +1074,10 @@ function fluxFilesApp() {
                     return file.variants.thumb.url;
                 }
             }
-            return file.url || '';
+            if (file.url) return file.url;
+            // Preview-only (watermark overlay): fall back to the watermarked WebP so
+            // the card/preview still renders instead of showing a broken image.
+            return this.imgAt(file, preferred === 'thumb' ? 400 : 0);
         },
 
         // Select a specific variant (thumb/medium/large) or 'original'
@@ -3254,8 +3280,16 @@ function fluxFilesApp() {
             }
         },
 
+        // Effective download permission. A watermark OVERLAY couples to preview-only
+        // (the server forces allow_download off), but the raw token claim still reads
+        // true — so mirror the coupling here, otherwise download/zip would wrongly
+        // show for a watermark token.
+        get effAllowDownload() {
+            if (this._tokenPayload().watermark_enabled) return false;
+            return this.tokenAllows('allow_download', true);
+        },
         get canZip() {
-            return this.tokenAllows('allow_zip', true) && this.tokenAllows('allow_download', true);
+            return this.tokenAllows('allow_zip', true) && this.effAllowDownload;
         },
         // Offer "Download ZIP" for a multi-selection or when a folder is selected
         // (a folder/multi-pick can't be saved as individual files in one click).

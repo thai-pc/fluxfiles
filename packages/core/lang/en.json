@@ -137,7 +137,8 @@
         "name": "Name",
         "no_files": "No files in this folder",
         "files": "Files",
-        "folder": "Folder"
+        "folder": "Folder",
+        "preview_only": "Preview"
     },
     "upload": {
         "drop_hint": "Drop files here or click to upload",

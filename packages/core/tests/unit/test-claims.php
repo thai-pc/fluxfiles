@@ -359,6 +359,27 @@ test('embed.php fluxfiles_token without ownerOnly omits owner_only claim', funct
 });
 
 // ═══════════════════════════════════════════════════════════════
+// Watermark overlay ⇒ preview-only (no contradictory clean download)
+// ═══════════════════════════════════════════════════════════════
+
+test('watermark overlay forces allow_download off (even if set true)', function () {
+    $c = FluxFiles\Claims::fromJwtPayload((object) [
+        'sub' => 'u', 'perms' => ['read'], 'disks' => ['local'],
+        'allow_download' => true,                 // explicitly true…
+        'watermark_enabled' => true, 'watermark_text' => '© Acme',
+    ]);
+    assertEqual(false, $c->allowDownload, 'overlay watermark ⇒ allow_download off');
+    assertEqual(true, $c->watermark !== null, 'watermark config assembled');
+});
+
+test('no watermark ⇒ allow_download stays as given', function () {
+    $on = FluxFiles\Claims::fromJwtPayload((object) ['sub' => 'u', 'perms' => ['read'], 'disks' => ['local'], 'allow_download' => true]);
+    assertEqual(true, $on->allowDownload, 'download stays true without a watermark');
+    $off = FluxFiles\Claims::fromJwtPayload((object) ['sub' => 'u', 'perms' => ['read'], 'disks' => ['local'], 'allow_download' => false]);
+    assertEqual(false, $off->allowDownload, 'explicit false respected');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════
 

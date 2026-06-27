@@ -23,7 +23,6 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 - [Features](#features)
 - [Use cases — what each free feature is for](#use-cases--what-each-free-feature-is-for)
-- [Editions — Free vs Pro](#editions--free-open-source-vs-pro-paid-modules)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Production Deployment](#production-deployment)
@@ -100,29 +99,6 @@ model* it fits.
 | **Safety: dedup, rate limit, audit, quota, SSRF/CSRF/zip guards** | Production hardening | Anything user-facing |
 | **16 languages, dark mode, responsive** | Polished embeddable UI | Global, white-label, mobile |
 | **Adapters (Laravel/WP/React/Vue/editors/Node)** | Drop-in for your stack | Skip the integration plumbing |
-
-## Editions — Free (open source) vs Pro (paid modules)
-
-The **entire table above is free** (MIT core). The optional **Pro modules** are
-separate packages gated by a license key — install one and the matching endpoint
-lights up; without it the core returns a clear "not installed / not licensed"
-response. They never block the free features.
-
-| | **Free (core, MIT)** | **Pro (paid module)** |
-|---|---|---|
-| Storage | Local · S3 · R2 · S3-compatible · **SFTP** · BYOB · cross-disk | — |
-| Images | Auto WebP · on-demand WebP · `srcset` · crop · **watermark (overlay + burn-in editor)** | **`optimize`** — bulk AVIF + PDF compression with savings stats |
-| Sharing | Picker / browser embed, presigned URLs | **`share`** — public share links (scoped tokens + counters) |
-| AI | Auto-tag with **your own** Claude/OpenAI key | **`ai-vision`** — managed vision, **`ocr`** — text extraction |
-| Safety | Dedup · rate limit · audit · quota · SSRF/CSRF/zip guards | **`virus`** — upload AV scanning |
-| Ops | SFTP chmod · code editor · **SSH terminal** | **`backup`** — scheduled backups, **`c2pa`** — content credentials |
-| License | MIT, run anywhere | Per-key (perpetual or subscription), offline Ed25519 verification |
-
-> The Pro modules live in separate repositories and are **opt-in**: the free core
-> is fully functional on its own and never nags. See `docs/COMMERCIAL-STRATEGY.md`
-> and `docs/LICENSING-PLAN.md` (local) for the commercial model.
-
----
 
 ## Requirements
 
@@ -532,7 +508,8 @@ $token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3
         'watermark_text'    => '© Acme Corp',
         'watermark_position'=> 'bottom-right',
         'watermark_opacity' => 0.6,
-        'allow_download'    => false,            // ← the important part (see below)
+        // No need to set allow_download — an overlay watermark forces it off
+        // automatically (see the note below). The clean original is never served.
     ]);
 ```
 
@@ -544,14 +521,17 @@ $token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3
 - The watermarked WebP is cached in `_variants/` (keyed by config + logo mtime),
   so a config or logo change produces a fresh result.
 
-> **⚠️ A watermark only protects if the clean original isn't otherwise reachable.**
-> By default `list()` returns a clean presigned `url` (and `variants`) for every
-> file — a preview client could just use those and bypass the watermark. Set
-> **`allow_download => false`** (preview-only): `list()` then withholds
-> `url`/`permanent_url`/`variants` and GET presign returns `403`, leaving only the
-> watermarked `img_base`. Issue a separate token with `allow_download => true`
-> (e.g. after purchase) to grant the clean original. Watermark uses the bundled
-> DejaVuSans font for text; like `/api/fm/img` it's a core-standalone feature.
+> **⚠️ An overlay watermark is automatically preview-only.** A watermark only
+> protects if the clean original isn't reachable some other way — so enabling
+> `watermark_enabled` **forces `allow_download=false`** for that token: `list()`
+> withholds the clean `url`/`permanent_url`/`variants`, GET presign returns `403`,
+> and zip is disabled — only the watermarked `img_base` is served (and the UI marks
+> such images with a **"Preview"** badge). You no longer set `allow_download=false`
+> yourself, and the old contradictory combo (`watermark_enabled` + `allow_download
+> =true`, which served the clean file and protected nothing) is gone. To grant the
+> clean original later (e.g. after purchase), issue a **separate token without the
+> watermark**. Watermark uses the bundled DejaVuSans font for text; like
+> `/api/fm/img` it's a core-standalone feature.
 
 #### Watermark editor — drag-and-drop, burned in (new)
 

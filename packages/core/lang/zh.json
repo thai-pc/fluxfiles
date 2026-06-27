@@ -137,7 +137,8 @@
         "name": "名称",
         "no_files": "此文件夹为空",
         "files": "文件",
-        "folder": "文件夹"
+        "folder": "文件夹",
+        "preview_only": "预览"
     },
     "upload": {
         "drop_hint": "拖放文件到此处，或点击上传",

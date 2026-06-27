@@ -349,7 +349,7 @@
                     <span x-text="t('common.delete')"></span>
                     <span x-show="selected.length > 1" x-text="'(' + selected.length + ')'"></span>
                 </button>
-                <button class="tb-btn" x-show="selected.length === 1 && detailFile" @click="copyUrl(detailFile)">
+                <button class="tb-btn" x-show="selected.length === 1 && detailFile && detailFile.url" @click="copyUrl(detailFile)">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
                 </button>
@@ -421,7 +421,7 @@
                         <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span x-text="t('common.rename')"></span>
                     </button>
-                    <button @click="open = false; copyUrl(detailFile)" x-show="selected.length === 1 && detailFile">
+                    <button @click="open = false; copyUrl(detailFile)" x-show="selected.length === 1 && detailFile && detailFile.url">
                         <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                         <span x-text="t('toolbar.copy_url')"></span>
                     </button>
@@ -729,6 +729,10 @@
                                         <div class="check" x-show="config.multiple" @click.stop="toggleSelect(file, { ctrlKey: true })">✓</div>
                                         <div x-show="hasMetaBadge(file)" class="ff-meta-badge"></div>
 
+                                        <!-- Preview-only (watermark overlay): the shown image is the
+                                             watermarked img_base; the clean original isn't downloadable. -->
+                                        <div x-show="isPreviewOnly(file)" class="ff-preview-badge" x-text="t('file.preview_only')"></div>
+
                                         <!-- Thumbnail -->
                                         <template x-if="isPreviewable(file, 'image') && previewUrl(file, 'thumb')">
                                             <div class="thumb thumb-img">
@@ -815,10 +819,10 @@
 
         <!-- Preview thumbnail (click image to view full) -->
         <div class="detail-thumb" x-show="detailFile"
-             :class="{ 'detail-thumb-clickable': detailFile && isPreviewable(detailFile, 'image') && detailFile.url }"
-             @click="detailFile && isPreviewable(detailFile, 'image') && detailFile.url && (resetZoom(), previewFullscreen = true)">
-            <template x-if="detailFile && isPreviewable(detailFile, 'image') && detailFile.url">
-                <img :src="detailFile.url" :srcset="detailFile.img_srcset"
+             :class="{ 'detail-thumb-clickable': detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile) }"
+             @click="detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile) && (resetZoom(), previewFullscreen = true)">
+            <template x-if="detailFile && isPreviewable(detailFile, 'image') && displayUrl(detailFile)">
+                <img :src="displayUrl(detailFile)" :srcset="detailFile.img_srcset"
                      :sizes="detailFile.img_srcset ? (detailFile.img_sizes || '(max-width: 640px) 92vw, 380px') : null"
                      :alt="detailFile.name">
             </template>
@@ -931,7 +935,7 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M4.5 7l2 2 3-3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.1"/></svg>
                     <span x-text="detailFile?.type === 'dir' ? t('common.select_folder') : t('common.select_file')"></span>
                 </button>
-                <button class="detail-btn" x-show="detailFile?.type !== 'dir'" @click="copyUrl(detailFile)">
+                <button class="detail-btn" x-show="detailFile?.type !== 'dir' && detailFile?.url" @click="copyUrl(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><path d="M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
                 </button>
@@ -959,7 +963,7 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M5 2.5h1.2M5 4h1.2M5 5.5h1.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('zip.download')"></span>
                 </button>
-                <button class="detail-btn" x-show="detailFile?.type !== 'dir'" @click="downloadFile(detailFile)">
+                <button class="detail-btn" x-show="detailFile?.type !== 'dir' && detailFile?.url" @click="downloadFile(detailFile)">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('common.download')"></span>
                 </button>
@@ -1132,7 +1136,7 @@
         <!-- Always-visible close: a zoomed image can't be dismissed by a backdrop
              click (that pans), so this is the reliable way out at any zoom level. -->
         <button class="ff-preview-close" @click.stop="closePreview()" :title="t('common.close')" :aria-label="t('common.close')">&times;</button>
-        <img :src="detailFile?.url" :srcset="detailFile?.img_srcset"
+        <img :src="detailFile ? displayUrl(detailFile) : ''" :srcset="detailFile?.img_srcset"
              :sizes="detailFile?.img_srcset ? (detailFile?.img_sizes || '100vw') : null"
              :alt="detailFile?.name" draggable="false"
              class="ff-preview-img" :class="{ zoomed: zoom.scale > 1, dragging: zoom.dragging }"
@@ -1700,11 +1704,11 @@
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
-                <button x-show="mobileActionSheet?.type !== 'dir'" @click="closeActionSheet(); copyUrl(mobileActionSheet)">
+                <button x-show="mobileActionSheet?.type !== 'dir' && mobileActionSheet?.url" @click="closeActionSheet(); copyUrl(mobileActionSheet)">
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
                 </button>
-                <button x-show="mobileActionSheet?.type !== 'dir'" @click="closeActionSheet(); downloadFile(mobileActionSheet)">
+                <button x-show="mobileActionSheet?.type !== 'dir' && mobileActionSheet?.url" @click="closeActionSheet(); downloadFile(mobileActionSheet)">
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('common.download')"></span>
                 </button>

@@ -3,6 +3,31 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.53] — 2026-06-27
+
+> Released: core `core-v0.2.47` (Packagist + Docker). Adapters unchanged.
+
+### Changed
+
+- **A watermark overlay now implies preview-only — no more contradictory state.**
+  Previously `watermark_enabled` (overlay) + `allow_download=true` was a no-op
+  combination: the clean original was served everywhere, so the watermark
+  protected nothing. The overlay's whole purpose is to withhold the clean image,
+  so it now **forces `allow_download=false`**: `list()` serves only the
+  watermarked `img_base` (clean `url`/`permanent_url`/`variants` withheld, GET
+  presign → 403, no zip). To sell the clean file later, issue a separate token
+  without the watermark. (The burn-in editor is unaffected.)
+
+### Fixed
+
+- **UI no longer offers Download / Copy URL / Download ZIP for a preview-only
+  (watermark) image.** Those actions read the raw `allow_download` token claim
+  (still `true`) while the server enforced the coupling, so they showed but would
+  fail. The card thumbnail, detail panel, and lightbox now render the watermarked
+  `img_base` (instead of a broken image), a **"Preview" badge** marks protected
+  images, and the download/copy/zip actions are hidden when there's no clean URL.
+- i18n: `file.preview_only` badge label across all 16 locales.
+
 ## [0.2.52] — 2026-06-27
 
 > Released: TinyMCE `@fluxfiles/tinymce` `0.3.2`, CKEditor 4 `@fluxfiles/ckeditor4`

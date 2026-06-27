@@ -137,7 +137,8 @@
         "name": "Tên",
         "no_files": "Thư mục này chưa có file nào",
         "files": "Tệp",
-        "folder": "Thư mục"
+        "folder": "Thư mục",
+        "preview_only": "Bản xem"
     },
     "upload": {
         "drop_hint": "Thả file vào đây hoặc nhấn để tải lên",

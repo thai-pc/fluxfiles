@@ -137,7 +137,8 @@
         "name": "Ad",
         "no_files": "Bu klasörde dosya yok",
         "files": "Dosyalar",
-        "folder": "Klasör"
+        "folder": "Klasör",
+        "preview_only": "Önizleme"
     },
     "upload": {
         "drop_hint": "Dosyaları buraya sürükleyin veya yüklemek için tıklayın",

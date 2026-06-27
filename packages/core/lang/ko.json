@@ -137,7 +137,8 @@
         "name": "이름",
         "no_files": "이 폴더에 파일이 없습니다",
         "files": "파일",
-        "folder": "폴더"
+        "folder": "폴더",
+        "preview_only": "미리보기"
     },
     "upload": {
         "drop_hint": "여기에 파일을 끌어다 놓거나 클릭하여 업로드",
