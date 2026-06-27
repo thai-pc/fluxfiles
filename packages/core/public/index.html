@@ -190,6 +190,9 @@
                 <button class="ff-theme-toggle-sm" x-show="canManageTrash" @click="openTrash()" :title="t('trash.title')" :aria-label="t('trash.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6v14a2 2 0 002 2h8a2 2 0 002-2V6M10 11v6M14 11v6"/></svg>
                 </button>
+                <button class="ff-theme-toggle-sm" x-show="canTerminal" @click="openTerminal()" :title="t('terminal.title')" :aria-label="t('terminal.title')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+                </button>
                 <button class="ff-theme-toggle-sm" @click="toggleFullscreen()" :title="t('toolbar.fullscreen')" :aria-label="t('toolbar.fullscreen')" :aria-pressed="isFullscreen">
                     <svg x-show="!isFullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
                     <svg x-show="isFullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 01-2 2H3M16 3v3a2 2 0 002 2h3M8 21v-3a2 2 0 00-2-2H3M16 21v-3a2 2 0 012-2h3"/></svg>
@@ -1468,6 +1471,29 @@
                         </div>
                     </div>
                 </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ SSH terminal (command-runner) — SFTP ═══ -->
+    <div class="ff-modal-overlay" x-show="showTerminal" x-transition @click.self="closeTerminal()" style="z-index:64;" x-cloak>
+        <div class="ff-term-modal" role="dialog" aria-modal="true" :aria-label="t('terminal.title')" @keydown.escape.window="showTerminal && !termConfirm && closeTerminal()">
+            <div class="ff-activity-head">
+                <h3><span x-text="t('terminal.title')"></span> <span class="ff-term-disk" x-text="currentDisk"></span></h3>
+                <button class="ff-activity-close" @click="closeTerminal()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <!-- Host with no shell (shared hosting, internal-sftp/ForceCommand). -->
+            <div x-show="termUnsupported" class="ff-term-unsupported" x-text="t('terminal.unsupported')"></div>
+            <!-- xterm.js mounts here. -->
+            <div x-show="!termUnsupported" class="ff-term-host" x-ref="termHost"></div>
+            <!-- Dangerous-command double-confirm bar. -->
+            <div x-show="termConfirm" class="ff-term-confirm">
+                <span x-text="t('terminal.danger_confirm')"></span>
+                <code x-text="termConfirm && termConfirm.cmd"></code>
+                <div class="ff-term-confirm-actions">
+                    <button class="ff-btn" @click="termCancelConfirm()" x-text="t('common.cancel')"></button>
+                    <button class="ff-btn ff-btn-danger" @click="termRunConfirmed()" x-text="t('terminal.run_anyway')"></button>
+                </div>
             </div>
         </div>
     </div>

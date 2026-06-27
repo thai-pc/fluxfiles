@@ -301,7 +301,12 @@
         "zip_too_large": "The archive is too large.",
         "zip_too_many": "The archive has too many files.",
         "zip_unavailable": "ZIP isn't available.",
-        "storage_not_writable": "Storage is not writable."
+        "storage_not_writable": "Storage is not writable.",
+        "terminal_disabled": "The terminal is disabled on this server.",
+        "terminal_forbidden": "Terminal access isn't allowed.",
+        "terminal_unsupported": "The terminal only works on an SFTP disk.",
+        "terminal_no_shell": "This host doesn't allow a shell (SFTP only).",
+        "terminal_confirm_required": "This command looks dangerous — confirm to run it."
     },
     "presign": {
         "title": "Presigned URL",
@@ -350,7 +355,8 @@
             "metadata_update": "Update metadata",
             "chunk_upload": "Chunked upload",
             "content_update": "Edit content",
-            "unknown": "Other"
+            "unknown": "Other",
+            "terminal": "Terminal command"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "Apply watermark",
         "done": "Watermark applied",
         "failed": "Watermark failed"
+    },
+    "terminal": {
+        "title": "Terminal",
+        "placeholder": "Type a command, press Enter…",
+        "unsupported": "This host doesn't allow a terminal (SFTP only).",
+        "danger_confirm": "This command looks dangerous. Run it anyway?",
+        "run_anyway": "Run anyway",
+        "clear": "Clear",
+        "truncated": "Output truncated."
     }
 }

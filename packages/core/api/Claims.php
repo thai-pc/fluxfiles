@@ -113,6 +113,12 @@ class Claims
      *            disk? Default true (part of the SFTP file-manager toolkit). */
     public bool $allowChmod = true;
 
+    /** @var bool May this token open a shell terminal on an SFTP/SSH disk?
+     *            Default FALSE — this grants shell access as the SSH user, so it
+     *            must be opted in deliberately (and only makes sense on an SFTP
+     *            disk whose host actually allows a shell). */
+    public bool $allowTerminal = false;
+
     /** @var bool May this token edit a file's text content via /api/fm/content?
      *            Default FALSE — editing config/executable files (wp-config.php,
      *            .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
@@ -369,6 +375,7 @@ class Claims
         $c->zipMaxFiles = max(0, (int) ($payload->zip_max_files ?? 0));
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
+        $c->allowTerminal = isset($payload->allow_terminal) ? (bool) $payload->allow_terminal : false;
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->allowShare = (bool) ($payload->allow_share ?? false);
@@ -450,6 +457,7 @@ class Claims
             case 'allow_zip':        return $this->allowZip;
             case 'allow_extract':    return $this->allowExtract;
             case 'allow_chmod':      return $this->allowChmod;
+            case 'allow_terminal':   return $this->allowTerminal;
             case 'allow_download':   return $this->allowDownload;
             default:                 return false;
         }

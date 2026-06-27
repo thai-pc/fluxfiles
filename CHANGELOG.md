@@ -3,6 +3,40 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.51] — 2026-06-27
+
+> Released: core `core-v0.2.46` (Packagist + Docker).
+> (Adapters unchanged — terminal is core-standalone, like stream/img; adapter
+> core floor stays `^0.2.39`.)
+
+### Added
+
+- **SSH terminal for SFTP disks (opt-in).** A built-in terminal (xterm.js) on an
+  SFTP disk: `POST /api/fm/terminal` runs one command per request over the
+  existing SSH connection (phpseclib `exec`), threading the working directory
+  back so `cd`/`pwd` persist. It's a stateless command-runner — great for
+  `git pull` / `composer install` / `chmod -R` / `tar`, but not a PTY (no
+  vim/top/nano, no mid-command stdin). UI uses the FluxFiles palette (dark slate
+  + brand purple). xterm.js is **vendored** in `assets/vendor/xterm/` (no CDN) so
+  it works offline / when a CDN is blocked. Security model:
+  - `allow_terminal` claim, **default OFF** — must be opted in deliberately.
+  - SFTP disks only, requires the `write` permission, audited per command.
+  - Server kill-switch `FLUXFILES_TERMINAL_DISABLED=true`; per-command timeout
+    `FLUXFILES_TERMINAL_TIMEOUT` (default 30s); output capped at 2 MB.
+  - Catastrophic-command guardrail (`rm -rf /`, `mkfs`, fork bomb, `chmod -R 777
+    /`, …) → a two-step confirm in the UI. Opt out with
+    `FLUXFILES_TERMINAL_CONFIRM=false`. This is an ACCIDENT guard, not a sandbox —
+    the real boundary is the SSH user's OS permissions (use a least-privilege user).
+  - **Shared hosting without a shell** (`internal-sftp`/`ForceCommand`) is detected
+    (an `echo` probe) and shown a clear "this host doesn't allow a terminal (SFTP
+    only)" message; the feature degrades instead of hanging.
+- i18n: `terminal.*` UI strings + `error.terminal_*` + `audit.action.terminal`
+  across all 16 locales.
+
+### Changed
+
+- **CI runs on Node 22** (was 20) — the current stable LTS.
+
 ## [0.2.50] — 2026-06-27
 
 > Released: core `core-v0.2.45` (Packagist + Docker).

@@ -301,7 +301,12 @@
         "zip_too_large": "L'archive est trop volumineuse.",
         "zip_too_many": "L'archive contient trop de fichiers.",
         "zip_unavailable": "ZIP n'est pas disponible.",
-        "storage_not_writable": "Le stockage n'est pas accessible en écriture."
+        "storage_not_writable": "Le stockage n'est pas accessible en écriture.",
+        "terminal_disabled": "Le terminal est désactivé sur ce serveur.",
+        "terminal_forbidden": "L'accès au terminal n'est pas autorisé.",
+        "terminal_unsupported": "Le terminal ne fonctionne que sur un disque SFTP.",
+        "terminal_no_shell": "Cet hôte n'autorise pas de shell (SFTP uniquement).",
+        "terminal_confirm_required": "Cette commande semble dangereuse — confirmez pour l'exécuter."
     },
     "presign": {
         "title": "URL présignée",
@@ -350,7 +355,8 @@
             "metadata_update": "Mettre à jour les métadonnées",
             "chunk_upload": "Téléversement par morceaux",
             "content_update": "Modifier le contenu",
-            "unknown": "Autre"
+            "unknown": "Autre",
+            "terminal": "Commande terminal"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "Appliquer le filigrane",
         "done": "Filigrane appliqué",
         "failed": "Échec du filigrane"
+    },
+    "terminal": {
+        "title": "Terminal",
+        "placeholder": "Tapez une commande, puis Entrée…",
+        "unsupported": "Cet hôte ne prend pas en charge le terminal (SFTP uniquement).",
+        "danger_confirm": "Cette commande semble dangereuse. L'exécuter quand même ?",
+        "run_anyway": "Exécuter quand même",
+        "clear": "Effacer",
+        "truncated": "Sortie tronquée."
     }
 }

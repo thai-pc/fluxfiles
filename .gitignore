@@ -1,6 +1,10 @@
 # Dependencies
 vendor/
 node_modules/
+# …but the vendored front-end lib we ship on purpose (xterm.js for the SFTP
+# terminal) must be committed — it's served as a static asset, not installed.
+!packages/core/assets/vendor/
+!packages/core/assets/vendor/**
 
 # Environment
 .env

@@ -301,7 +301,12 @@
         "zip_too_large": "Het archief is te groot.",
         "zip_too_many": "Het archief bevat te veel bestanden.",
         "zip_unavailable": "ZIP is niet beschikbaar.",
-        "storage_not_writable": "Opslag is niet beschrijfbaar."
+        "storage_not_writable": "Opslag is niet beschrijfbaar.",
+        "terminal_disabled": "De terminal is uitgeschakeld op deze server.",
+        "terminal_forbidden": "Terminaltoegang is niet toegestaan.",
+        "terminal_unsupported": "De terminal werkt alleen op een SFTP-schijf.",
+        "terminal_no_shell": "Deze host staat geen shell toe (alleen SFTP).",
+        "terminal_confirm_required": "Deze opdracht lijkt gevaarlijk — bevestig om uit te voeren."
     },
     "presign": {
         "title": "Voorondertekende URL",
@@ -350,7 +355,8 @@
             "metadata_update": "Metadata bijwerken",
             "chunk_upload": "Upload in delen",
             "content_update": "Inhoud bewerken",
-            "unknown": "Overig"
+            "unknown": "Overig",
+            "terminal": "Terminalopdracht"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "Watermerk toepassen",
         "done": "Watermerk toegepast",
         "failed": "Watermerk mislukt"
+    },
+    "terminal": {
+        "title": "Terminal",
+        "placeholder": "Typ een opdracht en druk op Enter…",
+        "unsupported": "Deze host ondersteunt geen terminal (alleen SFTP).",
+        "danger_confirm": "Deze opdracht lijkt gevaarlijk. Toch uitvoeren?",
+        "run_anyway": "Toch uitvoeren",
+        "clear": "Wissen",
+        "truncated": "Uitvoer afgekapt."
     }
 }

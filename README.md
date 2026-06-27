@@ -28,7 +28,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Embedding in Your App](#embedding-in-your-app)
   - [On-demand WebP](#on-demand-webp) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark-preview-protection) · [Usage dashboard](#usage-dashboard)
 - [Storage Disks](#storage-disks)
-  - [SFTP disk](#sftp-disk-vps--shared-hosting) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
+  - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
   - [Token parameters & units](#token-parameters--units) · [Import from URL](#import-from-url)
 - [Multi-tenant](#multi-tenant)
@@ -56,7 +56,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 | **Trash** | Soft-delete **files and folders** to a storage-resident trash (restore / list / purge / empty); folders move the whole subtree. |
 | **Images** | Auto WebP variants on upload (thumb / medium / large). **On-demand WebP** at any size (`/api/fm/img`) with **responsive `srcset`**. **On-the-fly watermark** (text/logo) for preview protection. Inline crop with aspect presets. |
 | **Media** | Inline image / video / audio / PDF preview, with auto-refresh of expiring URLs. **Gated private local media** streamed through the app (Range-capable, nginx `X-Accel-Redirect`). |
-| **Config / code** | In-browser **code/config editor** (CodeMirror, syntax by extension) for text files. **SFTP `chmod`** — cPanel-style Unix permissions. |
+| **Config / code** | In-browser **code/config editor** (CodeMirror, syntax by extension) for text files. **SFTP `chmod`** — cPanel-style Unix permissions. **SSH terminal** (xterm.js) on SFTP disks — run `git`/`composer`/`chmod` etc. (opt-in, command-runner). |
 | **AI** | Claude or OpenAI vision API — auto-tag, alt text, title, caption on upload or manual trigger. |
 | **Metadata** | Title, alt text, caption, tags per file. S3 object metadata (cloud) or sidecar JSON (local). Full-text file + folder search. |
 | **Insights** | **Storage usage dashboard** — quota + per-type and per-folder breakdown (file-cached). |
@@ -769,6 +769,50 @@ How it differs from S3 (by design):
   Docker feature** (it streams bytes through the app); the Laravel/WordPress
   proxies don't expose it.
 
+### SSH terminal (SFTP disks)
+
+When the disk is SFTP, FluxFiles can open a built-in **terminal** (xterm.js) so
+you can run shell commands on the box — `git pull`, `composer install`,
+`php artisan migrate`, `chmod -R`, `tar`, … — without leaving the file manager.
+It runs over the same SSH connection the SFTP disk already uses.
+
+```php
+// opt-in: a trusted admin token for one tenant's site, with the terminal on
+$token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 100, null, 1800,
+    false, 0, 0, null, 0, 0, null, null, null, [
+        'allow_terminal' => true,
+    ]);
+```
+
+- **`POST /api/fm/terminal`** `{disk, cmd, cwd?, confirm?}` runs **one command per
+  request** over `phpseclib`'s SSH `exec`, merges stdout+stderr, and threads the
+  resulting working directory back so `cd`/`pwd` persist across commands. It's a
+  stateless **command-runner**, not a PTY — perfect for build/deploy/maintenance
+  commands, but interactive TUIs (`vim`, `top`, `nano`) and mid-command stdin
+  don't work (run `nano`-free edits via the [code editor](#config--code-editor)).
+- **UI:** a terminal button appears on an SFTP disk; the panel uses the FluxFiles
+  palette (dark slate + brand purple). **xterm.js is vendored** in
+  `assets/vendor/xterm/` (no CDN) so it loads offline / when a CDN is blocked.
+
+> 🔒 **Security model — this grants shell access as the SSH user.** A shell can't
+> be safely sandboxed by filtering its input; the real boundary is the **SSH
+> account's OS permissions** — use a **least-privilege user**. FluxFiles adds:
+> - **`allow_terminal` claim, default `false`** — must be opted in deliberately.
+> - SFTP disks only, requires the **`write`** permission, **audited per command**.
+> - A server **kill-switch** `FLUXFILES_TERMINAL_DISABLED=true`, a per-command
+>   timeout `FLUXFILES_TERMINAL_TIMEOUT` (default 30s), and a 2 MB output cap.
+> - A **catastrophic-command guardrail** (`rm -rf /`, `mkfs`, fork bomb,
+>   `chmod -R 777 /`, …) → a two-step confirm in the UI. This is an *accident*
+>   guard, not a security boundary; opt out with `FLUXFILES_TERMINAL_CONFIRM=false`.
+>
+> **Shared hosting without a shell** (`internal-sftp` / a forced command) is
+> detected automatically and shown a clear "this host doesn't allow a terminal
+> (SFTP only)" message — the feature degrades instead of hanging. Note: FluxFiles
+> only ever uses the SFTP **subsystem** for file ops; the shell is opened *only*
+> for this opt-in terminal, so a shell-less SFTP account is otherwise unaffected.
+> Like SFTP serving, the terminal is **core-standalone / Docker** (not proxied by
+> the Laravel/WordPress adapters).
+
 ### Config / code editor
 
 Edit a file's **text** content in place — the cPanel "Edit" use case for
@@ -964,6 +1008,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `srcset_sizes` | string | — | _(unset)_ | When set, emitted as the `img_sizes` attribute to pair with `img_srcset` (e.g. `"(max-width: 600px) 100vw, 50vw"`) |
 | `allow_download` | bool | — | `true` | When `false` (preview-only), `list()` withholds `url`/`permanent_url`/`variants` for files and GET presign returns `403` — only the (watermarked) `img_base` remains for images |
 | `allow_chmod` | bool | — | `true` | Allow changing Unix file permissions (`POST /api/fm/chmod`) on an SFTP disk. `false` makes the SFTP token read-only for permissions |
+| `allow_terminal` | bool | — | `false` | Allow the **SSH terminal** (`POST /api/fm/terminal`) on an SFTP disk. **Off by default** — grants shell access as the SSH user; also requires `write`. Gate further with a least-privilege SSH account |
 | `allow_zip` | bool | — | `true` | Allow zip download of a selection (`POST /api/fm/zip`). Also requires `allow_download`. `false` hides the Download ZIP action |
 | `allow_extract` | bool | — | `true` | Allow extracting a zip in place (`POST /api/fm/extract`). `false` hides the Extract action |
 | `zip_max_mb` | int | **MB** | `1024` | Max total uncompressed size for a zip/extract (pre-flight 413 / bomb cap) |
@@ -1605,7 +1650,11 @@ adapter↔core floor guard, and the tag→registry release flow, see
 | `SFTP_PRIVATE_KEY` | No | — | Private key (PEM contents) — alternative to password |
 | `SFTP_PRIVATE_KEY_PASSPHRASE` | No | — | Passphrase for the private key |
 | `SFTP_ROOT` | No | `/` | Remote root directory the disk is scoped to |
+| `SFTP_HOST_FINGERPRINT` | No | — | Expected host-key fingerprint(s) for anti-MITM pinning (colon-hex; md5 for an RSA host key, sha512 otherwise; comma-separate for rotation). Empty = trust any host key |
 | `FLUXFILES_SSRF_ALLOW_HOSTS` | No | — | Comma-separated host[:port] trusted past the SSRF public-IP check (SFTP on a private network). Empty = full protection |
+| `FLUXFILES_TERMINAL_DISABLED` | No | `false` | `true` hard-disables the SSH terminal server-wide (overrides the `allow_terminal` claim) |
+| `FLUXFILES_TERMINAL_TIMEOUT` | No | `30` | Per-command timeout (seconds) for the SSH terminal |
+| `FLUXFILES_TERMINAL_CONFIRM` | No | `true` | `false` skips the catastrophic-command double-confirm in the terminal |
 | `FLUXFILES_AI_PROVIDER` | No | — | `claude` or `openai` (empty = disabled) |
 | `FLUXFILES_AI_API_KEY` | No | — | AI provider API key |
 | `FLUXFILES_AI_MODEL` | No | auto | Override AI model (default: `claude-sonnet-4-20250514` / `gpt-4o`) |

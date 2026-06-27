@@ -301,7 +301,12 @@
         "zip_too_large": "Tệp nén quá lớn.",
         "zip_too_many": "Tệp nén có quá nhiều tệp.",
         "zip_unavailable": "ZIP không khả dụng.",
-        "storage_not_writable": "Bộ nhớ không thể ghi."
+        "storage_not_writable": "Bộ nhớ không thể ghi.",
+        "terminal_disabled": "Terminal đã bị tắt trên máy chủ này.",
+        "terminal_forbidden": "Không được phép dùng terminal.",
+        "terminal_unsupported": "Terminal chỉ hoạt động trên ổ đĩa SFTP.",
+        "terminal_no_shell": "Host này không cho mở shell (chỉ SFTP).",
+        "terminal_confirm_required": "Lệnh này có vẻ nguy hiểm — xác nhận để chạy."
     },
     "presign": {
         "title": "URL có thời hạn",
@@ -350,7 +355,8 @@
             "metadata_update": "Cập nhật metadata",
             "chunk_upload": "Tải lên theo khối",
             "content_update": "Sửa nội dung",
-            "unknown": "Khác"
+            "unknown": "Khác",
+            "terminal": "Lệnh terminal"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "Áp dụng đóng dấu",
         "done": "Đã đóng dấu",
         "failed": "Đóng dấu thất bại"
+    },
+    "terminal": {
+        "title": "Terminal",
+        "placeholder": "Nhập lệnh rồi nhấn Enter…",
+        "unsupported": "Host này không hỗ trợ terminal (chỉ SFTP).",
+        "danger_confirm": "Lệnh này có vẻ nguy hiểm. Vẫn chạy chứ?",
+        "run_anyway": "Vẫn chạy",
+        "clear": "Xóa màn hình",
+        "truncated": "Đã cắt bớt output."
     }
 }

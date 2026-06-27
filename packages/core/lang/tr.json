@@ -301,7 +301,12 @@
         "zip_too_large": "Arşiv çok büyük.",
         "zip_too_many": "Arşivde çok fazla dosya var.",
         "zip_unavailable": "ZIP kullanılamıyor.",
-        "storage_not_writable": "Depolama yazılabilir değil."
+        "storage_not_writable": "Depolama yazılabilir değil.",
+        "terminal_disabled": "Bu sunucuda terminal devre dışı.",
+        "terminal_forbidden": "Terminal erişimine izin verilmiyor.",
+        "terminal_unsupported": "Terminal yalnızca SFTP diskinde çalışır.",
+        "terminal_no_shell": "Bu ana makine shell'e izin vermiyor (yalnızca SFTP).",
+        "terminal_confirm_required": "Bu komut tehlikeli görünüyor — çalıştırmak için onaylayın."
     },
     "presign": {
         "title": "Ön imzalı URL",
@@ -350,7 +355,8 @@
             "metadata_update": "Meta verileri güncelle",
             "chunk_upload": "Parçalı yükleme",
             "content_update": "İçeriği düzenle",
-            "unknown": "Diğer"
+            "unknown": "Diğer",
+            "terminal": "Terminal komutu"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "Filigran uygula",
         "done": "Filigran uygulandı",
         "failed": "Filigran başarısız"
+    },
+    "terminal": {
+        "title": "Terminal",
+        "placeholder": "Bir komut yazıp Enter'a basın…",
+        "unsupported": "Bu ana makine terminali desteklemiyor (yalnızca SFTP).",
+        "danger_confirm": "Bu komut tehlikeli görünüyor. Yine de çalıştırılsın mı?",
+        "run_anyway": "Yine de çalıştır",
+        "clear": "Temizle",
+        "truncated": "Çıktı kısaltıldı."
     }
 }

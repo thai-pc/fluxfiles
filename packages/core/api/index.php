@@ -557,6 +557,49 @@ function routeRequest(
         return $fm->setMode((string) $disk, (string) $path, (string) $mode);
     }
 
+    // SSH terminal (command-runner) — SFTP disks only. Stateless: one command per
+    // request; the cwd is threaded back to the client. Hard-gated: a server
+    // kill-switch, the allow_terminal claim, write perm, an SFTP disk that
+    // actually grants a shell, and a double-confirm for catastrophic commands.
+    if ($method === 'POST' && $uri === '/api/fm/terminal') {
+        if (($_ENV['FLUXFILES_TERMINAL_DISABLED'] ?? '') === 'true') {
+            throw new ApiException('The terminal is disabled on this server', 403, 'terminal_disabled');
+        }
+        if (!$claims->allowTerminal) {
+            throw new ApiException('Terminal access is not allowed', 403, 'terminal_forbidden');
+        }
+        $body = jsonBodyAll();
+        if (!$claims->hasPerm('write')) {
+            throw new ApiException('Permission denied: write', 403, 'permission_denied');
+        }
+        $disk = (string) ($body['disk'] ?? '');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+        }
+        if (($diskManager->config($disk)['driver'] ?? '') !== 'sftp') {
+            throw new ApiException('The terminal only works on an SFTP disk', 400, 'terminal_unsupported');
+        }
+        $cmd = trim((string) ($body['cmd'] ?? ''));
+        if ($cmd === '') {
+            throw new ApiException('Missing command', 400, 'missing_param');
+        }
+        // Catastrophic-command guardrail: double-confirm unless the host opted out.
+        $confirmOff = ($_ENV['FLUXFILES_TERMINAL_CONFIRM'] ?? '') === 'false';
+        if (!$confirmOff && empty($body['confirm']) && \FluxFiles\SshTerminal::isDangerous($cmd)) {
+            throw new ApiException('This command looks dangerous — confirm to run it', 409, 'terminal_confirm_required');
+        }
+        [$conn, $root] = $diskManager->sftpConnection($disk);
+        if (!\FluxFiles\SshTerminal::shellAvailable($conn)) {
+            throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
+        }
+        $cwd = (string) ($body['cwd'] ?? '');
+        if ($cwd === '') {
+            $cwd = $root !== '' ? $root : '.';
+        }
+        $timeout = (int) ($_ENV['FLUXFILES_TERMINAL_TIMEOUT'] ?? 30);
+        return \FluxFiles\SshTerminal::run($conn, $cmd, $cwd, $timeout);
+    }
+
     // Search
     if ($method === 'GET' && $uri === '/api/fm/search') {
         $q = $_GET['q'] ?? null;
@@ -697,6 +740,7 @@ function resolveAuditAction(string $uri): string
         '/extract'    => 'extract',
         '/chmod'      => 'chmod',
         '/content'    => 'content_update',
+        '/terminal'   => 'terminal',
     ];
 
     foreach ($map as $needle => $action) {
@@ -706,6 +750,16 @@ function resolveAuditAction(string $uri): string
     }
 
     return 'unknown';
+}
+
+/** The full decoded JSON body (for routes with optional fields). */
+function jsonBodyAll(): array
+{
+    $body = json_decode((string) file_get_contents('php://input'), true);
+    if (!is_array($body)) {
+        throw new ApiException('Invalid JSON body', 400, 'invalid_json');
+    }
+    return $body;
 }
 
 function jsonBody(string ...$keys): array

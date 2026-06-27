@@ -244,7 +244,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   core; the adapter proxy route for each lands with that module's full release
     //   (optimize is already proxied as the reference). Scaffolded now, proxied per
     //   module when its engine ships.
-    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'share', 'ai-vision', 'ocr', 'backup', 'c2pa'];
+    // - terminal: opens a shell over SSH on an SFTP disk (phpseclib exec). It needs
+    //   the live SFTP connection + the allow_terminal claim and is a core-standalone /
+    //   Docker feature; the adapter proxies don't expose a shell.
+    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'share', 'ai-vision', 'ocr', 'backup', 'c2pa'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

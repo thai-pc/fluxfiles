@@ -301,7 +301,12 @@
         "zip_too_large": "アーカイブが大きすぎます。",
         "zip_too_many": "アーカイブのファイル数が多すぎます。",
         "zip_unavailable": "ZIP は利用できません。",
-        "storage_not_writable": "ストレージに書き込めません。"
+        "storage_not_writable": "ストレージに書き込めません。",
+        "terminal_disabled": "このサーバーではターミナルが無効です。",
+        "terminal_forbidden": "ターミナルの使用は許可されていません。",
+        "terminal_unsupported": "ターミナルは SFTP ディスクでのみ使えます。",
+        "terminal_no_shell": "このホストはシェルを許可していません（SFTP のみ）。",
+        "terminal_confirm_required": "このコマンドは危険に見えます。実行するには確認してください。"
     },
     "presign": {
         "title": "署名付きURL",
@@ -350,7 +355,8 @@
             "metadata_update": "メタデータ更新",
             "chunk_upload": "分割アップロード",
             "content_update": "内容を編集",
-            "unknown": "その他"
+            "unknown": "その他",
+            "terminal": "ターミナルコマンド"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "透かしを適用",
         "done": "透かしを適用しました",
         "failed": "透かしに失敗しました"
+    },
+    "terminal": {
+        "title": "ターミナル",
+        "placeholder": "コマンドを入力して Enter…",
+        "unsupported": "このホストはターミナルに対応していません（SFTP のみ）。",
+        "danger_confirm": "このコマンドは危険に見えます。実行しますか？",
+        "run_anyway": "実行する",
+        "clear": "クリア",
+        "truncated": "出力は切り詰められました。"
     }
 }

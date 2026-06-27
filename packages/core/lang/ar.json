@@ -301,7 +301,12 @@
         "zip_too_large": "الأرشيف كبير جدًا.",
         "zip_too_many": "الأرشيف يحتوي على ملفات كثيرة جدًا.",
         "zip_unavailable": "ZIP غير متاح.",
-        "storage_not_writable": "وحدة التخزين غير قابلة للكتابة."
+        "storage_not_writable": "وحدة التخزين غير قابلة للكتابة.",
+        "terminal_disabled": "تم تعطيل الطرفية على هذا الخادم.",
+        "terminal_forbidden": "الوصول إلى الطرفية غير مسموح.",
+        "terminal_unsupported": "تعمل الطرفية فقط على قرص SFTP.",
+        "terminal_no_shell": "هذا المضيف لا يسمح بالـ shell (SFTP فقط).",
+        "terminal_confirm_required": "يبدو هذا الأمر خطيرًا — أكّد لتشغيله."
     },
     "presign": {
         "title": "رابط موقّع مسبقاً",
@@ -350,7 +355,8 @@
             "metadata_update": "تحديث البيانات الوصفية",
             "chunk_upload": "رفع مجزأ",
             "content_update": "تعديل المحتوى",
-            "unknown": "أخرى"
+            "unknown": "أخرى",
+            "terminal": "أمر طرفية"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "تطبيق العلامة",
         "done": "تم تطبيق العلامة",
         "failed": "فشل وضع العلامة"
+    },
+    "terminal": {
+        "title": "الطرفية",
+        "placeholder": "اكتب أمرًا ثم اضغط Enter…",
+        "unsupported": "هذا المضيف لا يدعم الطرفية (SFTP فقط).",
+        "danger_confirm": "يبدو هذا الأمر خطيرًا. هل تريد تشغيله على أي حال؟",
+        "run_anyway": "تشغيل على أي حال",
+        "clear": "مسح",
+        "truncated": "تم اقتطاع المخرجات."
     }
 }

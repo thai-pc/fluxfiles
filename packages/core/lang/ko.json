@@ -301,7 +301,12 @@
         "zip_too_large": "아카이브가 너무 큽니다.",
         "zip_too_many": "아카이브에 파일이 너무 많습니다.",
         "zip_unavailable": "ZIP을 사용할 수 없습니다.",
-        "storage_not_writable": "저장소에 쓸 수 없습니다."
+        "storage_not_writable": "저장소에 쓸 수 없습니다.",
+        "terminal_disabled": "이 서버에서는 터미널이 비활성화되어 있습니다.",
+        "terminal_forbidden": "터미널 사용이 허용되지 않습니다.",
+        "terminal_unsupported": "터미널은 SFTP 디스크에서만 작동합니다.",
+        "terminal_no_shell": "이 호스트는 셸을 허용하지 않습니다(SFTP 전용).",
+        "terminal_confirm_required": "이 명령은 위험해 보입니다 — 실행하려면 확인하세요."
     },
     "presign": {
         "title": "서명된 URL",
@@ -350,7 +355,8 @@
             "metadata_update": "메타데이터 업데이트",
             "chunk_upload": "청크 업로드",
             "content_update": "내용 편집",
-            "unknown": "기타"
+            "unknown": "기타",
+            "terminal": "터미널 명령"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "워터마크 적용",
         "done": "워터마크 적용됨",
         "failed": "워터마크 실패"
+    },
+    "terminal": {
+        "title": "터미널",
+        "placeholder": "명령을 입력하고 Enter…",
+        "unsupported": "이 호스트는 터미널을 지원하지 않습니다(SFTP 전용).",
+        "danger_confirm": "이 명령은 위험해 보입니다. 그래도 실행할까요?",
+        "run_anyway": "그래도 실행",
+        "clear": "지우기",
+        "truncated": "출력이 잘렸습니다."
     }
 }

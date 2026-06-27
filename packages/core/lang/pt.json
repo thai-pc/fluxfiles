@@ -301,7 +301,12 @@
         "zip_too_large": "O arquivo é grande demais.",
         "zip_too_many": "O arquivo tem arquivos demais.",
         "zip_unavailable": "ZIP não está disponível.",
-        "storage_not_writable": "O armazenamento não permite gravação."
+        "storage_not_writable": "O armazenamento não permite gravação.",
+        "terminal_disabled": "O terminal está desativado neste servidor.",
+        "terminal_forbidden": "O acesso ao terminal não é permitido.",
+        "terminal_unsupported": "O terminal só funciona em um disco SFTP.",
+        "terminal_no_shell": "Este host não permite shell (apenas SFTP).",
+        "terminal_confirm_required": "Este comando parece perigoso — confirme para executá-lo."
     },
     "presign": {
         "title": "URL pré-assinada",
@@ -350,7 +355,8 @@
             "metadata_update": "Atualizar metadados",
             "chunk_upload": "Envio em partes",
             "content_update": "Editar conteúdo",
-            "unknown": "Outro"
+            "unknown": "Outro",
+            "terminal": "Comando de terminal"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "Aplicar marca d’água",
         "done": "Marca d’água aplicada",
         "failed": "Falha na marca d’água"
+    },
+    "terminal": {
+        "title": "Terminal",
+        "placeholder": "Digite um comando e pressione Enter…",
+        "unsupported": "Este host não suporta terminal (apenas SFTP).",
+        "danger_confirm": "Este comando parece perigoso. Executar mesmo assim?",
+        "run_anyway": "Executar mesmo assim",
+        "clear": "Limpar",
+        "truncated": "Saída truncada."
     }
 }

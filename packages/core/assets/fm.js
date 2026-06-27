@@ -502,7 +502,10 @@ function fluxFilesApp() {
                         msg = null; // key not found, fall back
                     }
                 }
-                throw new Error(msg || json.error);
+                const err = new Error(msg || json.error);
+                err.code = json.error_code || null;       // let callers branch on the code
+                err.params = json.error_params || null;
+                throw err;
             }
 
             // Reset refresh attempts on any successful request
@@ -2899,6 +2902,182 @@ function fluxFilesApp() {
         tokenAllows(claim, dflt) {
             const v = this._tokenPayload()[claim];
             return v === undefined ? dflt : !!v;
+        },
+
+        // ── SSH terminal (command-runner) — SFTP disks only ─────────────────
+        showTerminal: false,
+        _term: null,            // xterm.js instance
+        _termFit: null,
+        _termLoading: null,
+        termCwd: '',            // tracked working directory (threaded from server)
+        termBusy: false,
+        termUnsupported: false, // host has no shell (SFTP-only)
+        _termLine: '',          // current input line buffer
+        _termHist: [],          // command history
+        _termHistIdx: -1,
+        termConfirm: null,      // { cmd } pending dangerous-command confirmation
+
+        // Offered only on an SFTP disk when the token opts in (default off).
+        get canTerminal() {
+            return this.diskDriver === 'sftp' && this.tokenAllows('allow_terminal', false);
+        },
+
+        async openTerminal() {
+            if (!this.canTerminal) return;
+            this.showTerminal = true;
+            this.termUnsupported = false;
+            await this._ensureXterm();
+            this.$nextTick(() => this._mountTerm());
+        },
+        closeTerminal() {
+            this.showTerminal = false;
+            this.termConfirm = null;
+        },
+
+        // Lazy-load xterm.js on first open, from FluxFiles' OWN vendored copy
+        // (assets/vendor/xterm/) — no third-party CDN, so the terminal works
+        // offline / airgapped and can't break when a CDN is blocked or down.
+        // Loaded lazily so it never weighs on the initial page render.
+        _ensureXterm() {
+            if (window.Terminal) return Promise.resolve();
+            if (this._termLoading) return this._termLoading;
+            const base = '../assets/vendor/xterm';
+            const css = (href) => new Promise((res) => {
+                const l = document.createElement('link');
+                l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = res;
+                document.head.appendChild(l);
+            });
+            const js = (src) => new Promise((res, rej) => {
+                const s = document.createElement('script');
+                s.src = src; s.onload = res; s.onerror = rej;
+                document.head.appendChild(s);
+            });
+            this._termLoading = (async () => {
+                await css(base + '/xterm.min.css');
+                await js(base + '/xterm.min.js');
+                try { await js(base + '/addon-fit.min.js'); } catch (e) { /* fit is optional */ }
+            })().catch(() => { this._termLoading = null; });
+            return this._termLoading;
+        },
+
+        _mountTerm() {
+            if (!window.Terminal) { this.termUnsupported = true; return; }
+            const el = this.$refs.termHost;
+            if (!el) return;
+            if (this._term) { this._term.dispose(); this._term = null; }
+            // FluxFiles palette: dark slate bg + the brand purple accent.
+            const term = new window.Terminal({
+                fontSize: 13,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                cursorBlink: true,
+                theme: {
+                    background: '#1b1b22', foreground: '#e6e6ea', cursor: '#a78bfa',
+                    selectionBackground: '#7c3aed55', black: '#1b1b22', brightBlack: '#6b7280',
+                    blue: '#818cf8', brightBlue: '#a5b4fc', magenta: '#a78bfa', brightMagenta: '#c4b5fd',
+                    green: '#34d399', cyan: '#22d3ee', red: '#f87171', yellow: '#fbbf24', white: '#e6e6ea',
+                },
+            });
+            this._term = term;
+            try {
+                // UMD shape varies by version: window.FitAddon.FitAddon (scoped
+                // @xterm/addon-fit) or window.FitAddon (older). Support both.
+                const FitCtor = window.FitAddon && (window.FitAddon.FitAddon || window.FitAddon);
+                if (typeof FitCtor === 'function') {
+                    this._termFit = new FitCtor();
+                    term.loadAddon(this._termFit);
+                }
+            } catch (e) { /* fit is optional — terminal works without auto-resize */ }
+            term.open(el);
+            try { this._termFit && this._termFit.fit(); } catch (e) { /* ignore */ }
+            term.writeln('\x1b[38;5;141mFluxFiles terminal\x1b[0m \x1b[90m· ' + (this.currentDisk || 'sftp') + ' · ' + this.t('terminal.placeholder') + '\x1b[0m');
+            this.termCwd = this.currentPath || '';
+            this._termLine = '';
+            this._termHistIdx = -1;
+            this._termPrompt();
+            term.onData((d) => this._termOnData(d));
+            setTimeout(() => term.focus(), 50);
+        },
+
+        _termPrompt() {
+            const cwd = this.termCwd || '~';
+            this._term.write('\r\n\x1b[38;5;141m' + cwd + '\x1b[0m \x1b[90m$\x1b[0m ');
+        },
+
+        // Minimal readline: printable chars, Enter, Backspace, Ctrl+C, history.
+        _termOnData(d) {
+            if (this.termBusy || this.termConfirm) return;
+            const t = this._term;
+            if (d === '\r') {                       // Enter
+                const cmd = this._termLine.trim();
+                this._term.write('\r\n');
+                this._termLine = '';
+                if (cmd === 'clear') { t.clear(); this._termPrompt(); return; }
+                if (cmd === '') { this._termPrompt(); return; }
+                this._termHist.push(cmd); this._termHistIdx = this._termHist.length;
+                this._termRun(cmd);
+                return;
+            }
+            if (d === '\x7f') {                      // Backspace
+                if (this._termLine.length > 0) { this._termLine = this._termLine.slice(0, -1); t.write('\b \b'); }
+                return;
+            }
+            if (d === '\x03') {                      // Ctrl+C — abandon the line
+                t.write('^C'); this._termLine = ''; this._termPrompt(); return;
+            }
+            if (d === '\x1b[A' || d === '\x1b[B') {  // history up/down
+                if (this._termHist.length === 0) return;
+                this._termHistIdx += (d === '\x1b[A' ? -1 : 1);
+                this._termHistIdx = Math.max(0, Math.min(this._termHist.length, this._termHistIdx));
+                const next = this._termHist[this._termHistIdx] || '';
+                t.write('\r\x1b[K'); this._termPromptInline(); t.write(next); this._termLine = next;
+                return;
+            }
+            if (d >= ' ' && d !== '\x7f') { this._termLine += d; t.write(d); }
+        },
+        _termPromptInline() {
+            const cwd = this.termCwd || '~';
+            this._term.write('\x1b[38;5;141m' + cwd + '\x1b[0m \x1b[90m$\x1b[0m ');
+        },
+
+        async _termRun(cmd, confirmed) {
+            this.termBusy = true;
+            try {
+                const data = await this.api('POST', '/api/fm/terminal', {
+                    disk: this.currentDisk, cmd: cmd, cwd: this.termCwd, confirm: !!confirmed,
+                });
+                if (data && typeof data.output === 'string' && data.output !== '') {
+                    // xterm needs CRLF; the shell emits LF.
+                    this._term.write(data.output.replace(/\r?\n/g, '\r\n'));
+                }
+                if (data && data.cwd) this.termCwd = data.cwd;
+                if (data && data.truncated) this._term.write('\r\n\x1b[33m' + this.t('terminal.truncated') + '\x1b[0m');
+                if (data && typeof data.exit === 'number' && data.exit !== 0) {
+                    this._term.write('\r\n\x1b[31m[exit ' + data.exit + ']\x1b[0m');
+                }
+                this._termPrompt();
+            } catch (e) {
+                if (e && e.code === 'terminal_confirm_required') {
+                    this.termConfirm = { cmd: cmd };  // surface the confirm bar
+                } else if (e && e.code === 'terminal_no_shell') {
+                    this.termUnsupported = true;
+                } else {
+                    this._term.write('\r\n\x1b[31m' + (e.message || 'Error') + '\x1b[0m');
+                    this._termPrompt();
+                }
+            } finally {
+                this.termBusy = false;
+            }
+        },
+        // Dangerous-command confirm bar actions.
+        termRunConfirmed() {
+            const cmd = this.termConfirm && this.termConfirm.cmd;
+            this.termConfirm = null;
+            if (cmd) this._termRun(cmd, true);
+        },
+        termCancelConfirm() {
+            this.termConfirm = null;
+            this._term.write('\r\n\x1b[90mcancelled\x1b[0m');
+            this._termPrompt();
         },
 
         async openChmod(file) {

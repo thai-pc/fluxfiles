@@ -301,7 +301,12 @@
         "zip_too_large": "อาร์ไคฟ์ใหญ่เกินไป",
         "zip_too_many": "อาร์ไคฟ์มีไฟล์มากเกินไป",
         "zip_unavailable": "ZIP ไม่พร้อมใช้งาน",
-        "storage_not_writable": "ไม่สามารถเขียนลงที่จัดเก็บได้"
+        "storage_not_writable": "ไม่สามารถเขียนลงที่จัดเก็บได้",
+        "terminal_disabled": "เทอร์มินัลถูกปิดใช้งานบนเซิร์ฟเวอร์นี้",
+        "terminal_forbidden": "ไม่อนุญาตให้ใช้เทอร์มินัล",
+        "terminal_unsupported": "เทอร์มินัลใช้ได้กับดิสก์ SFTP เท่านั้น",
+        "terminal_no_shell": "โฮสต์นี้ไม่อนุญาตให้ใช้ shell (SFTP เท่านั้น)",
+        "terminal_confirm_required": "คำสั่งนี้ดูอันตราย — ยืนยันเพื่อเรียกใช้"
     },
     "presign": {
         "title": "URL ลงนามล่วงหน้า",
@@ -350,7 +355,8 @@
             "metadata_update": "อัปเดตข้อมูลเมตา",
             "chunk_upload": "อัปโหลดเป็นส่วน",
             "content_update": "แก้ไขเนื้อหา",
-            "unknown": "อื่นๆ"
+            "unknown": "อื่นๆ",
+            "terminal": "คำสั่งเทอร์มินัล"
         }
     },
     "bulk": {
@@ -476,5 +482,14 @@
         "apply": "ใส่ลายน้ำ",
         "done": "ใส่ลายน้ำแล้ว",
         "failed": "ใส่ลายน้ำไม่สำเร็จ"
+    },
+    "terminal": {
+        "title": "เทอร์มินัล",
+        "placeholder": "พิมพ์คำสั่งแล้วกด Enter…",
+        "unsupported": "โฮสต์นี้ไม่รองรับเทอร์มินัล (SFTP เท่านั้น)",
+        "danger_confirm": "คำสั่งนี้ดูอันตราย ต้องการเรียกใช้ต่อหรือไม่?",
+        "run_anyway": "เรียกใช้ต่อ",
+        "clear": "ล้างจอ",
+        "truncated": "ตัดทอนผลลัพธ์แล้ว"
     }
 }
