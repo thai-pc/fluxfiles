@@ -315,10 +315,10 @@
 
         <!-- Toolbar -->
         <div class="ff-toolbar">
-            <!-- All actions (upload/new folder/import + bulk) on ONE row; this
-                 cluster scrolls horizontally when it overflows instead of wrapping
-                 to a second line. The sort/filter/more dropdowns sit OUTSIDE it so
-                 their pop-up menus are never clipped by the scroll container. -->
+            <!-- Row 1: all actions (upload/new folder/import + bulk) + mobile "more".
+                 The action cluster scrolls horizontally when it overflows instead of
+                 wrapping. The sort/filter/view tail lives on its OWN row below. -->
+            <div class="ff-toolbar-main">
             <div class="ff-toolbar-actions">
             <button class="tb-btn primary" @click="triggerUpload()">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 4l3-3 3 3M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -441,8 +441,10 @@
                     </button>
                 </div>
             </div>
+            </div><!-- /.ff-toolbar-main (row 1) -->
 
-            <div class="ff-toolbar-tail" style="margin-inline-start:auto;display:flex;align-items:center;gap:6px;">
+            <!-- Row 2: filter / sort / view toggle on their own line. -->
+            <div class="ff-toolbar-tail" style="display:flex;align-items:center;gap:6px;">
                 <!-- Type filter -->
                 <div class="ff-dropdown ff-filter-dd" @click.away="filterMenuOpen = false">
                     <button class="tb-btn ff-dd-btn"

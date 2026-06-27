@@ -3,6 +3,20 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.48] — 2026-06-27
+
+> Released: core `core-v0.2.43` (Packagist + Docker).
+> (Adapters unchanged — core-only UI change; adapter core floor stays `^0.2.39`.)
+
+### Changed
+
+- **Toolbar: filter / sort / view moved to their own row.** Following 0.2.47's
+  single-row action cluster, the filter/sort/view "tail" now sits on a separate
+  row below the actions (Upload / New folder / Import + bulk), instead of sharing
+  the line. The action row still scrolls horizontally when crowded; the tail row
+  is right-aligned. Verified across the full SFTP free-feature flow (upload,
+  preview, chmod, rename, trash/restore) in a live browser.
+
 ## [0.2.47] — 2026-06-27
 
 > Released: core `core-v0.2.42` (Packagist + Docker).

@@ -614,15 +614,22 @@ body {
 /* Toolbar */
 .ff-toolbar {
     display: flex;
-    align-items: center;
+    flex-direction: column;   /* two rows: actions, then the filter/sort/view tail */
+    align-items: stretch;
     gap: 8px;
     padding: 8px 16px;
     border-bottom: 1px solid var(--color-border-tertiary);
     flex-shrink: 0;
-    /* Single row — no wrapping. The action cluster (.ff-toolbar-actions) scrolls
-       horizontally when it overflows; the dropdown tail stays pinned at the end. */
-    flex-wrap: nowrap;
 }
+/* Row 1: the action cluster (scrolls) + the mobile "more" button. */
+.ff-toolbar-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+/* Row 2: filter / sort / view dropdowns on their own line, aligned to the end. */
+.ff-toolbar-tail { justify-content: flex-end; }
 /* Upload / New folder / Import + bulk buttons live here, on ONE line. Overflow
    scrolls sideways (overflow-y hidden so the row height never grows). These
    buttons have no pop-up menus, so clipping the overflow is safe — the
