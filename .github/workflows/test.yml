@@ -219,7 +219,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install + test ${{ matrix.pkg }}
         working-directory: packages/${{ matrix.pkg }}
@@ -250,7 +250,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install + typecheck + build + test @fluxfiles/node
         working-directory: packages/node
@@ -280,7 +280,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Playwright + chromium
         working-directory: packages/core/tests/browser
@@ -301,7 +301,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Build, pack, install each wrapper into a throwaway consumer
         run: |
           for p in sdk react vue; do bash scripts/ci-retry.sh npm install --prefix packages/$p --no-audit --no-fund; done
