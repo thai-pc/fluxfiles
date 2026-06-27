@@ -481,6 +481,13 @@ watermark plugin. The file now *is* a watermarked image, so **every consumer
 carries it** — the picker, a download, an `<img>` you insert into TinyMCE /
 CKEditor / Summernote. Extension is preserved; variants regenerate.
 
+**Non-destructive — the original is kept.** Applying in place snapshots the true
+original to `_fluxfiles/originals/`, so it's safe and reversible: re-opening the
+editor re-positions from the clean original (it never stacks a second mark), and a
+**Remove watermark** button (`POST /api/fm/watermark/remove`) restores the
+original byte-for-byte. (Like Image Watermark / Easy Watermark / Envira — never
+lose the original.)
+
 > ✅ **Want a watermarked image in your content / blog / CMS? This is it.** Pick it
 > in the editor and the inserted `<img>` shows the watermark. Nothing else to set.
 
