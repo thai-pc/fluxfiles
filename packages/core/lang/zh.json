@@ -307,7 +307,8 @@
         "terminal_forbidden": "不允许使用终端。",
         "terminal_unsupported": "终端仅适用于 SFTP 磁盘。",
         "terminal_no_shell": "此主机不允许 shell（仅 SFTP）。",
-        "terminal_confirm_required": "此命令看起来很危险——请确认后运行。"
+        "terminal_confirm_required": "此命令看起来很危险——请确认后运行。",
+        "watermark_overlay_active": "预览/叠加水印令牌不支持烧录水印。请使用可下载的令牌。"
     },
     "presign": {
         "title": "预签名链接",

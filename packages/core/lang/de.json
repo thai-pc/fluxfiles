@@ -307,7 +307,8 @@
         "terminal_forbidden": "Terminalzugriff ist nicht erlaubt.",
         "terminal_unsupported": "Das Terminal funktioniert nur auf einem SFTP-Datenträger.",
         "terminal_no_shell": "Dieser Host erlaubt keine Shell (nur SFTP).",
-        "terminal_confirm_required": "Dieser Befehl sieht gefährlich aus — zum Ausführen bestätigen."
+        "terminal_confirm_required": "Dieser Befehl sieht gefährlich aus — zum Ausführen bestätigen.",
+        "watermark_overlay_active": "Einbrennen ist mit einem Vorschau-/Overlay-Wasserzeichen-Token nicht möglich. Verwenden Sie ein herunterladbares Token."
     },
     "presign": {
         "title": "Vorsignierte URL",

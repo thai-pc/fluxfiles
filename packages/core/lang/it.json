@@ -307,7 +307,8 @@
         "terminal_forbidden": "L'accesso al terminale non è consentito.",
         "terminal_unsupported": "Il terminale funziona solo su un disco SFTP.",
         "terminal_no_shell": "Questo host non consente una shell (solo SFTP).",
-        "terminal_confirm_required": "Questo comando sembra pericoloso — conferma per eseguirlo."
+        "terminal_confirm_required": "Questo comando sembra pericoloso — conferma per eseguirlo.",
+        "watermark_overlay_active": "L'impressione permanente non è disponibile su un token anteprima/filigrana in sovrapposizione. Usa un token scaricabile."
     },
     "presign": {
         "title": "URL prefirmato",

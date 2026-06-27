@@ -307,7 +307,8 @@
         "terminal_forbidden": "ターミナルの使用は許可されていません。",
         "terminal_unsupported": "ターミナルは SFTP ディスクでのみ使えます。",
         "terminal_no_shell": "このホストはシェルを許可していません（SFTP のみ）。",
-        "terminal_confirm_required": "このコマンドは危険に見えます。実行するには確認してください。"
+        "terminal_confirm_required": "このコマンドは危険に見えます。実行するには確認してください。",
+        "watermark_overlay_active": "プレビュー/オーバーレイ透かしトークンでは焼き込みできません。ダウンロード可能なトークンを使用してください。"
     },
     "presign": {
         "title": "署名付きURL",

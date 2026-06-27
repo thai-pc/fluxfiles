@@ -307,7 +307,8 @@
         "terminal_forbidden": "ไม่อนุญาตให้ใช้เทอร์มินัล",
         "terminal_unsupported": "เทอร์มินัลใช้ได้กับดิสก์ SFTP เท่านั้น",
         "terminal_no_shell": "โฮสต์นี้ไม่อนุญาตให้ใช้ shell (SFTP เท่านั้น)",
-        "terminal_confirm_required": "คำสั่งนี้ดูอันตราย — ยืนยันเพื่อเรียกใช้"
+        "terminal_confirm_required": "คำสั่งนี้ดูอันตราย — ยืนยันเพื่อเรียกใช้",
+        "watermark_overlay_active": "ไม่สามารถฝังลายน้ำถาวรบนโทเค็นพรีวิว/ลายน้ำซ้อนได้ โปรดใช้โทเค็นที่ดาวน์โหลดได้"
     },
     "presign": {
         "title": "URL ลงนามล่วงหน้า",

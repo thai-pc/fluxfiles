@@ -307,7 +307,8 @@
         "terminal_forbidden": "Terminaltoegang is niet toegestaan.",
         "terminal_unsupported": "De terminal werkt alleen op een SFTP-schijf.",
         "terminal_no_shell": "Deze host staat geen shell toe (alleen SFTP).",
-        "terminal_confirm_required": "Deze opdracht lijkt gevaarlijk — bevestig om uit te voeren."
+        "terminal_confirm_required": "Deze opdracht lijkt gevaarlijk — bevestig om uit te voeren.",
+        "watermark_overlay_active": "Inbranden is niet beschikbaar op een preview-/overlay-watermerktoken. Gebruik een downloadbaar token."
     },
     "presign": {
         "title": "Voorondertekende URL",

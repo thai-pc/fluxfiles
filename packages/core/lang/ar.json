@@ -307,7 +307,8 @@
         "terminal_forbidden": "الوصول إلى الطرفية غير مسموح.",
         "terminal_unsupported": "تعمل الطرفية فقط على قرص SFTP.",
         "terminal_no_shell": "هذا المضيف لا يسمح بالـ shell (SFTP فقط).",
-        "terminal_confirm_required": "يبدو هذا الأمر خطيرًا — أكّد لتشغيله."
+        "terminal_confirm_required": "يبدو هذا الأمر خطيرًا — أكّد لتشغيله.",
+        "watermark_overlay_active": "الدمج الدائم غير متاح على رمز المعاينة/العلامة المائية بالتراكب. استخدم رمزًا قابلاً للتنزيل."
     },
     "presign": {
         "title": "رابط موقّع مسبقاً",

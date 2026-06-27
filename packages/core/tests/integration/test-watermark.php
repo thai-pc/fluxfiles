@@ -94,5 +94,18 @@ test('guards: not an image → 415; missing → 404; no write perm → 403', fun
     expectApi(fn () => $fmRo->applyWatermark('local', 'photo.png', ['type' => 'text', 'text' => 'x']), 'permission_denied');
 });
 
+test('overlay-watermark token cannot burn in (mutually exclusive) → 409', function () {
+    [, $dm, $root] = setup();
+    // A token with an OVERLAY watermark enabled (→ preview-only). Burning in would
+    // double-watermark a file the token can't even download, so it's rejected.
+    $claims = Claims::fromJwtPayload((object) [
+        'sub' => 'u', 'perms' => ['read', 'write'], 'disks' => ['local'],
+        'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© x',
+    ]);
+    $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
+    expectApi(fn () => $fm->applyWatermark('local', 'photo.png', ['type' => 'text', 'text' => 'y']), 'watermark_overlay_active');
+    assertTrue($claims->watermark !== null, 'overlay watermark assembled');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

@@ -548,6 +548,12 @@ watermarked images and hide download.
 | Insert into an editor / download | **Yes** | **No** — show it live in your gallery instead |
 | Best for | Branding, putting marked images in content | A stock-photo / photo-seller store |
 
+> The two are **mutually exclusive per token**: a token with the overlay enabled
+> (`watermark_enabled`) is preview-only, so the burn-in editor (and crop) are hidden
+> in the UI and `POST /api/fm/watermark` returns `409 watermark_overlay_active` —
+> burning a second mark into a file you can't download would just double-watermark
+> it. Burn in with a normal, downloadable token instead.
+
 ### Usage dashboard
 
 `GET /api/fm/usage` returns a storage breakdown for the token's prefix — quota

@@ -1364,6 +1364,14 @@ class FileManager
         $this->assertDisk($disk);
         $this->assertPerm('write');
 
+        // Burn-in and the serve-time OVERLAY are mutually exclusive. An overlay
+        // token is preview-only (the clean file is withheld), so burning a second
+        // mark INTO a file you can't even retrieve would just double-watermark it.
+        // Burn in with a normal, downloadable token instead.
+        if ($this->claims->watermark !== null) {
+            throw new ApiException('Burn-in is not available on a preview/overlay-watermark token', 409, 'watermark_overlay_active');
+        }
+
         $scopedSrc = $this->scopedPath($path);
         $this->assertNotSystem($scopedSrc);
         $this->assertOwner($disk, $scopedSrc);

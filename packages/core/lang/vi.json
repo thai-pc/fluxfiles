@@ -307,7 +307,8 @@
         "terminal_forbidden": "Không được phép dùng terminal.",
         "terminal_unsupported": "Terminal chỉ hoạt động trên ổ đĩa SFTP.",
         "terminal_no_shell": "Host này không cho mở shell (chỉ SFTP).",
-        "terminal_confirm_required": "Lệnh này có vẻ nguy hiểm — xác nhận để chạy."
+        "terminal_confirm_required": "Lệnh này có vẻ nguy hiểm — xác nhận để chạy.",
+        "watermark_overlay_active": "Không thể đóng dấu chìm trên token preview/overlay watermark. Hãy dùng token cho phép tải xuống."
     },
     "presign": {
         "title": "URL có thời hạn",

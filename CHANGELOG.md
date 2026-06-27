@@ -3,6 +3,33 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.56] — 2026-06-27
+
+> Released: core `core-v0.2.48` (Packagist + Docker). Adapters unchanged.
+
+### Fixed
+
+- **SSH terminal: "directory not found on every command" + slowness.** The client
+  tracks cwd relative to the disk root, but the route ran `cd <relative>` from the
+  SSH login home (`/root`), not the SFTP root — so opening the terminal inside a
+  subfolder broke every command. New `SshTerminal::resolveCwd()` anchors a relative
+  cwd under the SFTP root. Also dropped the per-command shell-availability probe (a
+  second SSH round-trip on every command) — `run()` now reports `shell_ok` from its
+  cwd marker, halving the exec round-trips. (Remaining latency is the per-request
+  SSH reconnect, inherent to the stateless model.)
+- **Watermark: the two modes can no longer collide on one image.** With a preview-
+  only **overlay** token the Crop and Watermark **editor tabs were still shown but
+  their canvas used the (withheld) clean `url`** → a broken image; and burning in
+  was possible, double-watermarking a file you can't even download. Now those tabs
+  are hidden for a preview-only token, and `FileManager::applyWatermark()` rejects
+  burn-in when an overlay watermark is active (`409 watermark_overlay_active`,
+  enforced for every caller incl. the adapter proxies). Burn in with a normal,
+  downloadable token instead.
+
+### Added
+
+- i18n: `error.watermark_overlay_active` across all 16 locales.
+
 ## [0.2.55] — 2026-06-27
 
 > Released: Laravel `fluxfiles/laravel` `laravel-v0.2.25`, Node `@fluxfiles/node`

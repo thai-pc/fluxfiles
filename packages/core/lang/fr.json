@@ -307,7 +307,8 @@
         "terminal_forbidden": "L'accès au terminal n'est pas autorisé.",
         "terminal_unsupported": "Le terminal ne fonctionne que sur un disque SFTP.",
         "terminal_no_shell": "Cet hôte n'autorise pas de shell (SFTP uniquement).",
-        "terminal_confirm_required": "Cette commande semble dangereuse — confirmez pour l'exécuter."
+        "terminal_confirm_required": "Cette commande semble dangereuse — confirmez pour l'exécuter.",
+        "watermark_overlay_active": "Le marquage permanent n'est pas disponible sur un jeton aperçu/filigrane en superposition. Utilisez un jeton téléchargeable."
     },
     "presign": {
         "title": "URL présignée",

@@ -892,12 +892,12 @@
             <button class="ff-tab-btn"
                     :class="{ active: activeTab === 'crop' }"
                     @click="activeTab = 'crop'; initCrop()"
-                    x-show="detailFile && isPreviewable(detailFile, 'image')"
+                    x-show="detailFile && isPreviewable(detailFile, 'image') && !isPreviewOnly(detailFile)"
                     x-text="t('metadata.tab_crop')"></button>
             <button class="ff-tab-btn"
                     :class="{ active: activeTab === 'watermark' }"
                     @click="activeTab = 'watermark'; initWatermark()"
-                    x-show="detailFile && isPreviewable(detailFile, 'image')"
+                    x-show="detailFile && isPreviewable(detailFile, 'image') && !isPreviewOnly(detailFile)"
                     x-text="t('metadata.tab_watermark')"></button>
         </div>
 
