@@ -72,7 +72,8 @@
         "audio": "Audio",
         "document": "Dokumente",
         "archive": "Archive",
-        "other": "Sonstige"
+        "other": "Sonstige",
+        "unsupported": "Die Speichernutzung ist für diesen Datenträger nicht verfügbar."
     },
     "chmod": {
         "title": "Berechtigungen",

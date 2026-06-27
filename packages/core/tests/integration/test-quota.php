@@ -219,6 +219,45 @@ test('getUsageBreakdown: empty prefix → zeros, no error', function () {
     assertEqual([], $b['by_folder'], 'no folders');
 });
 
+// ── SFTP guard: usage scans must NOT do a recursive remote walk ────────────
+// On SFTP a recursive listing is ~9 entries/sec, so the storage meter + usage
+// dashboard (which fire on every navigate) would hang. They must short-circuit
+// to supported:false WITHOUT touching the connection. We point the disk at a
+// public TEST-NET IP so even if the guard regressed and tried to connect, the
+// test would fail loudly rather than silently pass.
+test('SFTP: getQuotaInfo reports unsupported without walking', function () {
+    $dm = new DiskManager(['vps' => [
+        'driver' => 'sftp', 'host' => '198.51.100.10', 'username' => 'u', 'password' => 'x', 'root' => '/',
+    ]]);
+    $qm = new QuotaManager($dm);
+    $info = $qm->getQuotaInfo('vps', '', 0);
+    assertEqual(false, $info['supported'], 'quota unsupported on sftp');
+    assertEqual(null, $info['used_bytes'], 'no usage computed');
+});
+
+test('SFTP: getUsageBreakdown reports unsupported without walking', function () {
+    $dm = new DiskManager(['vps' => [
+        'driver' => 'sftp', 'host' => '198.51.100.10', 'username' => 'u', 'password' => 'x', 'root' => '/',
+    ]]);
+    $qm = new QuotaManager($dm);
+    $b = $qm->getUsageBreakdown('vps', '');
+    assertEqual(false, $b['supported'], 'breakdown unsupported on sftp');
+    assertEqual(0, $b['file_count'], 'no count');
+    // usageResponse must propagate the flag so the UI hides the dashboard.
+    $resp = $qm->usageResponse($b, 0, 70, 90);
+    assertEqual(false, $resp['supported'], 'usageResponse carries supported flag');
+});
+
+test('local disk usage stays supported (regression guard)', function () {
+    $dm = new DiskManager(['vps' => [
+        'driver' => 'sftp', 'host' => '198.51.100.10', 'username' => 'u', 'password' => 'x', 'root' => '/',
+    ]]);
+    $qm = new QuotaManager($dm);
+    // A normal (non-sftp) breakdown reports supported:true.
+    $resp = $qm->usageResponse(['raw_total' => 0, 'total_size' => 0, 'file_count' => 0, 'by_type' => [], 'by_folder' => [], 'supported' => true], 0, 70, 90);
+    assertEqual(true, $resp['supported'], 'non-sftp stays supported');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

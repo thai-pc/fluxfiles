@@ -72,7 +72,8 @@
         "audio": "Audio",
         "document": "Documenten",
         "archive": "Archieven",
-        "other": "Overig"
+        "other": "Overig",
+        "unsupported": "Opslaggebruik is niet beschikbaar voor deze schijf."
     },
     "chmod": {
         "title": "Rechten",

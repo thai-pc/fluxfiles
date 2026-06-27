@@ -72,7 +72,8 @@
         "audio": "Âm thanh",
         "document": "Tài liệu",
         "archive": "Lưu trữ",
-        "other": "Khác"
+        "other": "Khác",
+        "unsupported": "Không thể tính dung lượng lưu trữ cho ổ đĩa này."
     },
     "chmod": {
         "title": "Phân quyền",

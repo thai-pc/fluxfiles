@@ -2797,6 +2797,7 @@ function fluxFilesApp() {
         quotaInfo: null,
         quotaPercent: 0,
         quotaLabel: '',
+        quotaSupported: true, // false on SFTP (no cheap recursive usage scan)
 
         // Usage dashboard
         showUsage: false,
@@ -3314,6 +3315,15 @@ function fluxFilesApp() {
                     '/api/fm/quota?disk=' + encodeURIComponent(this.currentDisk));
                 if (data) {
                     this.quotaInfo = data;
+                    // SFTP (and other remote disks with no cheap usage): the server
+                    // reports supported:false instead of running a slow recursive
+                    // walk. Hide the storage meter rather than show a misleading 0.
+                    this.quotaSupported = data.supported !== false;
+                    if (!this.quotaSupported) {
+                        this.quotaPercent = 0;
+                        this.quotaLabel = '';
+                        return;
+                    }
                     const usedMb = data.used_mb || 0;
                     const maxMb = data.max_mb || 0;
                     if (maxMb > 0) {

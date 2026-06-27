@@ -615,18 +615,40 @@ body {
 .ff-toolbar {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     padding: 8px 16px;
     border-bottom: 1px solid var(--color-border-tertiary);
     flex-shrink: 0;
-    /* Wrap action buttons to a new line instead of clipping them in a narrow
-       container (embedded iframe/modal). Can't use overflow:auto here — it would
-       clip the toolbar's drop-down menus (sort/filter/more). */
-    flex-wrap: wrap;
-    row-gap: 6px;
+    /* Single row — no wrapping. The action cluster (.ff-toolbar-actions) scrolls
+       horizontally when it overflows; the dropdown tail stays pinned at the end. */
+    flex-wrap: nowrap;
 }
-/* Action buttons keep their size (no squish) so labels stay readable; they wrap. */
+/* Upload / New folder / Import + bulk buttons live here, on ONE line. Overflow
+   scrolls sideways (overflow-y hidden so the row height never grows). These
+   buttons have no pop-up menus, so clipping the overflow is safe — the
+   sort/filter/more dropdowns are OUTSIDE this container (.ff-toolbar-tail /
+   .ff-mobile-more) and open freely. */
+.ff-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scroll-padding-inline: 4px;
+}
+.ff-toolbar-actions::-webkit-scrollbar { height: 6px; }
+.ff-toolbar-actions::-webkit-scrollbar-thumb {
+    background: var(--color-border-secondary, rgba(0,0,0,.2));
+    border-radius: 3px;
+}
+.ff-toolbar-actions::-webkit-scrollbar-track { background: transparent; }
+/* Action buttons keep their size (no squish) so labels stay readable. */
 .ff-toolbar .tb-btn { flex-shrink: 0; }
+/* The dropdown tail + mobile "more" never shrink or scroll away. */
+.ff-toolbar-tail, .ff-mobile-more { flex-shrink: 0; }
 
 .tb-btn {
     display: flex;
@@ -3118,11 +3140,10 @@ body {
 
     /* ── Toolbar (simplified for mobile) ── */
     .ff-toolbar {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 6px;
-        row-gap: 6px;
         padding: 8px 12px;
-        overflow-x: visible;
+        overflow-x: visible; /* let the tail/more dropdowns escape; actions scroll */
         position: relative;
         z-index: 10;
     }

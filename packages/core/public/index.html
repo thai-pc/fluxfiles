@@ -298,8 +298,8 @@
             </template>
         </div>
 
-        <!-- Storage meter -->
-        <div class="ff-storage-meter" x-show="quotaInfo">
+        <!-- Storage meter (hidden when usage is unsupported, e.g. SFTP) -->
+        <div class="ff-storage-meter" x-show="quotaInfo && quotaSupported">
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                 <span x-text="t('quota.storage')"></span>
                 <span x-text="quotaLabel"></span>
@@ -315,6 +315,11 @@
 
         <!-- Toolbar -->
         <div class="ff-toolbar">
+            <!-- All actions (upload/new folder/import + bulk) on ONE row; this
+                 cluster scrolls horizontally when it overflows instead of wrapping
+                 to a second line. The sort/filter/more dropdowns sit OUTSIDE it so
+                 their pop-up menus are never clipped by the scroll container. -->
+            <div class="ff-toolbar-actions">
             <button class="tb-btn primary" @click="triggerUpload()">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 4l3-3 3 3M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span x-text="t('toolbar.upload')"></span>
@@ -374,6 +379,7 @@
                     <span x-text="t('optimize.title')"></span>
                 </button>
             </div>
+            </div><!-- /.ff-toolbar-actions -->
 
             <!-- Mobile: "More" menu (3 dots) -->
             <div class="ff-mobile-more" x-data="{ open: false }" @click.away="open = false">
@@ -436,7 +442,7 @@
                 </div>
             </div>
 
-            <div style="margin-inline-start:auto;display:flex;align-items:center;gap:6px;">
+            <div class="ff-toolbar-tail" style="margin-inline-start:auto;display:flex;align-items:center;gap:6px;">
                 <!-- Type filter -->
                 <div class="ff-dropdown ff-filter-dd" @click.away="filterMenuOpen = false">
                     <button class="tb-btn ff-dd-btn"
@@ -1342,7 +1348,13 @@
                     </div>
                 </template>
 
-                <template x-if="!usageLoading && usageInfo">
+                <!-- Usage not computed for this disk (e.g. SFTP — a recursive
+                     remote walk would be too slow); show a note instead of zeros. -->
+                <template x-if="!usageLoading && usageInfo && usageInfo.supported === false">
+                    <div class="ff-activity-state" x-text="t('usage.unsupported') || 'Storage usage is not available for this disk.'"></div>
+                </template>
+
+                <template x-if="!usageLoading && usageInfo && usageInfo.supported !== false">
                     <div class="ff-usage">
                         <!-- Quota meter + status -->
                         <div class="ff-usage-meter" :class="usageStatusClass">

@@ -72,7 +72,8 @@
         "audio": "音频",
         "document": "文档",
         "archive": "压缩包",
-        "other": "其他"
+        "other": "其他",
+        "unsupported": "此磁盘不支持存储用量统计。"
     },
     "chmod": {
         "title": "权限",

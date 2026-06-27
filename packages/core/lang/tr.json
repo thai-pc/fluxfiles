@@ -72,7 +72,8 @@
         "audio": "Ses",
         "document": "Belgeler",
         "archive": "Arşivler",
-        "other": "Diğer"
+        "other": "Diğer",
+        "unsupported": "Bu disk için depolama kullanımı kullanılamıyor."
     },
     "chmod": {
         "title": "İzinler",

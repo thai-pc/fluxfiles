@@ -72,7 +72,8 @@
         "audio": "Áudio",
         "document": "Documentos",
         "archive": "Arquivos",
-        "other": "Outros"
+        "other": "Outros",
+        "unsupported": "O uso de armazenamento não está disponível para este disco."
     },
     "chmod": {
         "title": "Permissões",

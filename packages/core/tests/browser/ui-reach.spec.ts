@@ -1,24 +1,46 @@
 import { test, expect } from '@playwright/test';
 import { mintTokenWithClaims, openManager, uploadFile, cardByName, imageFile } from './helpers';
 
-// Two UX bugs: toolbar buttons clipped (no scroll/wrap) in a narrow container, and
+// Two UX bugs: toolbar buttons (upload / new folder / rename / bulk …) should sit
+// on ONE row that scrolls sideways when crowded — not wrap to a second line — and
 // a zoomed image being hard to close.
 
-test('toolbar buttons wrap + stay clickable in a narrow viewport', async ({ page }) => {
-  await page.setViewportSize({ width: 560, height: 700 });
+test('toolbar stays one row and scrolls horizontally when crowded', async ({ page }) => {
+  // Desktop layout (>768px so the bulk context buttons render inline), but narrow
+  // enough that upload+new folder+import + bulk + tail overflow → must scroll, not wrap.
+  await page.setViewportSize({ width: 900, height: 700 });
   await openManager(page, mintTokenWithClaims({ allow_url_import: true }));
-  // Upload + New folder must be fully on-screen and clickable (not clipped).
+
+  // Upload + New folder are on-screen and clickable.
   for (const label of ['Upload', 'New folder']) {
-    const btn = page.locator('.ff-toolbar').getByRole('button', { name: label });
-    await expect(btn).toBeVisible();
-    const box = await btn.boundingBox();
-    expect(box).not.toBeNull();
-    // Right edge within the viewport (not clipped off-screen).
-    expect(box!.x + box!.width).toBeLessThanOrEqual(560 + 1);
+    await expect(page.locator('.ff-toolbar').getByRole('button', { name: label })).toBeVisible();
   }
-  // The toolbar wrapped to more than one row (height > a single button row).
+
+  // The toolbar is a SINGLE row (no wrapping to a 2nd line → height ~ one button).
   const tbH = (await page.locator('.ff-toolbar').boundingBox())!.height;
-  expect(tbH).toBeGreaterThan(44);
+  expect(tbH).toBeLessThan(64);
+
+  // The action cluster scrolls horizontally (overflow-x: auto), so it never wraps.
+  const actions = page.locator('.ff-toolbar-actions');
+  expect(await actions.evaluate((el) => getComputedStyle(el).overflowX)).toBe('auto');
+
+  // Force overflow: upload a file and select it → bulk buttons (rename/delete/move/
+  // copy/download/zip) appear on the same row, exceeding 480px.
+  const name = `tb-${Date.now()}.png`;
+  await uploadFile(page, imageFile(name, 200, 200));
+  await expect(cardByName(page, name)).toBeVisible({ timeout: 15_000 });
+  await cardByName(page, name).click(); // select → bulk buttons show
+  await expect(page.locator('.ff-toolbar-actions').getByRole('button', { name: 'Rename' })).toBeVisible();
+
+  // Now the cluster overflows and is actually scrollable (content wider than box),
+  // and the toolbar is STILL a single row.
+  const m = await actions.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+  expect(m.sw).toBeGreaterThan(m.cw);
+  expect((await page.locator('.ff-toolbar').boundingBox())!.height).toBeLessThan(64);
+
+  // Scrolling reveals the far buttons (scrollLeft moves off zero).
+  await actions.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  expect(await actions.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
 });
 
 test('zoomed image: close button dismisses the lightbox', async ({ page }) => {

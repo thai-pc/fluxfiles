@@ -18,6 +18,21 @@ class QuotaManager
         $this->diskManager = $diskManager;
     }
 
+    /**
+     * True for disks where a full RECURSIVE listing is prohibitively slow —
+     * namely SFTP, where each directory is a separate round-trip (≈ a handful of
+     * entries/second on a real tree, so a server webroot effectively hangs the
+     * UI). For these we skip the *unconditional* usage scans (the storage meter
+     * + usage dashboard that fire on every navigate) and report usage as
+     * "unsupported" instead. Explicit, opt-in quota ENFORCEMENT
+     * (assertQuota/assertFileCount, only when a max_storage/max_files limit is
+     * set) still walks — the admin chose that trade-off.
+     */
+    private function recursiveWalkTooSlow(string $disk): bool
+    {
+        return ($this->diskManager->config($disk)['driver'] ?? '') === 'sftp';
+    }
+
     public function getUsage(string $disk, string $prefix): int
     {
         $fs = $this->diskManager->disk($disk);
@@ -137,6 +152,14 @@ class QuotaManager
      */
     public function getUsageBreakdown(string $disk, string $prefix, int $topFolders = 10, int $folderDepth = 1): array
     {
+        // SFTP: skip the recursive remote walk — it would hang on a real tree.
+        if ($this->recursiveWalkTooSlow($disk)) {
+            return [
+                'total_size' => 0, 'raw_total' => 0, 'file_count' => 0,
+                'by_type' => [], 'by_folder' => [], 'supported' => false,
+            ];
+        }
+
         $fs = $this->diskManager->disk($disk);
         $prefixTrim = trim($prefix, '/');
         $folderDepth = max(1, $folderDepth);
@@ -191,6 +214,7 @@ class QuotaManager
             'file_count' => $count,
             'by_type'    => $byType,
             'by_folder'  => array_slice($folders, 0, max(1, $topFolders)),
+            'supported'  => true,
         ];
     }
 
@@ -232,6 +256,7 @@ class QuotaManager
 
         return [
             'computed_at' => gmdate('c'),
+            'supported'   => (bool) ($breakdown['supported'] ?? true),
             'quota' => [
                 'used_bytes'  => $rawUsed,
                 'limit_bytes' => $maxBytes,
@@ -250,8 +275,23 @@ class QuotaManager
 
     public function getQuotaInfo(string $disk, string $prefix, int $maxStorageMb): array
     {
-        $currentUsage = $this->getUsage($disk, $prefix);
         $maxBytes = $maxStorageMb > 0 ? $maxStorageMb * 1024 * 1024 : null;
+
+        // SFTP: don't run the recursive remote walk on every navigate — report
+        // usage as unknown/unsupported so the storage meter hides itself.
+        if ($this->recursiveWalkTooSlow($disk)) {
+            return [
+                'used_bytes'   => null,
+                'used_mb'      => null,
+                'max_mb'       => $maxStorageMb > 0 ? $maxStorageMb : null,
+                'max_bytes'    => $maxBytes,
+                'remaining_mb' => null,
+                'percentage'   => null,
+                'supported'    => false,
+            ];
+        }
+
+        $currentUsage = $this->getUsage($disk, $prefix);
 
         return [
             'used_bytes'    => $currentUsage,
@@ -260,6 +300,7 @@ class QuotaManager
             'max_bytes'     => $maxBytes,
             'remaining_mb'  => $maxBytes !== null ? round(($maxBytes - $currentUsage) / (1024 * 1024), 2) : null,
             'percentage'    => $maxBytes !== null ? round(($currentUsage / $maxBytes) * 100, 1) : null,
+            'supported'     => true,
         ];
     }
 }

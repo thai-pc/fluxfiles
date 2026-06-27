@@ -72,7 +72,8 @@
         "audio": "Audio",
         "document": "Documents",
         "archive": "Archives",
-        "other": "Other"
+        "other": "Other",
+        "unsupported": "Storage usage is not available for this disk."
     },
     "chmod": {
         "title": "Permissions",

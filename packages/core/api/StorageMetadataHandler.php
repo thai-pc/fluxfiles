@@ -711,12 +711,19 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     }
 
     /**
-     * Acquire an exclusive lock for local disk index operations.
-     * Returns the lock file handle, or null for S3 disks (no local locking possible).
+     * Acquire an exclusive lock for index operations — but ONLY for the local
+     * driver, whose index lives on this server's filesystem. S3/R2 have no local
+     * files, and an SFTP disk's `root` is a path on the REMOTE host (a local
+     * mkdir/fopen on it would hit the app server's own filesystem — usually a
+     * non-existent/unwritable `/var/www` — and falsely report "storage not
+     * writable"). For those remote disks we skip the flock: index writes still
+     * go through Flysystem (disk-aware), the lock is just best-effort and is
+     * impossible to take locally anyway — same as S3 has always been.
      */
     private function acquireIndexLock(string $disk): void
     {
-        if ($this->isS3Compatible($disk) || isset($this->indexLocks[$disk])) {
+        $isLocal = ($this->diskManager->config($disk)['driver'] ?? '') === 'local';
+        if (!$isLocal || isset($this->indexLocks[$disk])) {
             return;
         }
         $config = $this->diskManager->config($disk);

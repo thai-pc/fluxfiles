@@ -72,7 +72,8 @@
         "audio": "오디오",
         "document": "문서",
         "archive": "압축파일",
-        "other": "기타"
+        "other": "기타",
+        "unsupported": "이 디스크에서는 저장 용량 사용량을 확인할 수 없습니다."
     },
     "chmod": {
         "title": "권한",

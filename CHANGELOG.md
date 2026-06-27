@@ -3,6 +3,37 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.47] — 2026-06-27
+
+> Released: core `core-v0.2.42` (Packagist + Docker).
+> (Adapters unchanged — core-only fixes; adapter core floor stays `^0.2.39`.)
+
+### Fixed
+
+- **SFTP no longer hangs the UI on large trees.** The storage meter + usage
+  dashboard ran a *recursive* `listContents` on every navigate; over SFTP that's
+  one round-trip per directory (~9 entries/sec on a real webroot), so a multi-site
+  `/var/www` effectively froze the file list with endless skeletons. Usage is now
+  reported as unsupported for SFTP (no recursive remote walk) — the storage meter
+  hides itself and the dashboard shows a short "not available for this disk" note.
+  Plain listing (one directory, non-recursive) was always fast and is unaffected.
+  Found while testing against a live SFTP server.
+- **SFTP mkdir/upload no longer fails with a false "storage not writable".** The
+  index lock used PHP's *local* `mkdir()/fopen()` on the disk's `root` — but an
+  SFTP disk's `root` is a path on the REMOTE host, so it hit the app server's own
+  (absent/unwritable) `/var/www` and aborted the operation even though the remote
+  write actually succeeded. The local lock is now taken only for the `local`
+  driver (S3/R2/SFTP skip it, as S3 always has); index data still writes through
+  Flysystem (disk-aware), so it lands correctly on the remote.
+
+### Changed
+
+- **Toolbar is now a single scrolling row.** Upload / New folder / Import and the
+  bulk actions (rename, delete, move, copy, download…) stay on ONE row that
+  scrolls horizontally when crowded, instead of wrapping to a second line in a
+  narrow embed. The sort/filter/more dropdowns sit outside the scroll area so
+  their pop-up menus are never clipped.
+
 ## [0.2.46] — 2026-06-27
 
 > Released: core `core-v0.2.41` (Packagist + Docker), Laravel `fluxfiles/laravel`
