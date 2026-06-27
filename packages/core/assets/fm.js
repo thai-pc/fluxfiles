@@ -3280,11 +3280,8 @@ function fluxFilesApp() {
                 const body = paths.length === 1
                     ? { disk: this.currentDisk, path: paths[0] }
                     : { disk: this.currentDisk, paths };
-                // Operator-chosen target format (claim). 'avif' falls back to WebP
-                // server-side when the build lacks AVIF; default stays WebP.
-                if (this._tokenPayload().optimize_format === 'avif') {
-                    body.format = 'avif';
-                }
+                // The optimize module recompresses to WebP. (AVIF is delivered free
+                // on-the-fly by /api/fm/img, so there's no at-rest format choice.)
                 const data = await this.api('POST', '/api/fm/optimize', body);
                 const saved = data.total_saved_bytes != null ? data.total_saved_bytes : (data.saved_bytes || 0);
                 if (saved > 0) {

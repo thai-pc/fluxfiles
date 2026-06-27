@@ -112,9 +112,6 @@ export interface BaseTokenOptions {
   autoOptimize?: boolean;
   /** WebP quality for optimization, 40–95. `0`/omitted = inherit the server default (82). */
   optimizeQuality?: number;
-  /** Target format for optimization: `'webp'` (default) or `'avif'` (falls back to
-   *  WebP when the server build lacks AVIF). */
-  optimizeFormat?: 'webp' | 'avif';
   /** Keep the original file when optimizing (default false = replace in place). */
   optimizeKeepOriginal?: boolean;
   /** Skip optimizing a file larger than this many MB (0/omitted = no limit). */

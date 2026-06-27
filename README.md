@@ -26,7 +26,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Quick Start](#quick-start)
 - [Production Deployment](#production-deployment)
 - [Embedding in Your App](#embedding-in-your-app)
-  - [On-demand WebP](#on-demand-webp) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard)
+  - [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard)
 - [Storage Disks](#storage-disks)
   - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
@@ -413,7 +413,7 @@ const embedSrc = file.permanent_url || file.url; // prefer the stable one
 > TinyMCE, and Summernote plugins already prefer `permanent_url` automatically and
 > warn when they have to fall back to a presigned URL.
 
-### On-demand WebP
+### On-demand WebP & AVIF
 
 FluxFiles generates three **fixed WebP variants** on upload (`thumb` 150 / `medium`
 768 / `large` 1920 px) — use `file.variants.<size>.url` and you're already serving
@@ -421,20 +421,28 @@ WebP. For **arbitrary sizes on demand** (responsive images, exact widths), each
 image entry also carries an **`img_base`** URL:
 
 ```js
-// From a selected/listed file, build a WebP at any size:
+// From a selected/listed file, build a modern image at any size:
 const src = FluxFiles.imgUrl(file, { width: 800, quality: 80 });
-// → /api/fm/img?token=…&width=800&quality=80   (a resized WebP, cached in _variants/)
+// → /api/fm/img?token=…&width=800&quality=80   (resized + cached in _variants/)
 ```
 
-- **First request** converts + caches the WebP into the file's `_variants/`
-  directory (so the existing delete/trash cleanup invalidates it for free); later
-  requests serve the cache. The cache key is stamped with the source mtime, so a
-  re-upload never re-matches a stale image.
+- **AVIF or WebP, negotiated for free.** With the default `format=auto`, the
+  endpoint reads the browser's `Accept` header and serves **AVIF** when accepted
+  (smallest, on builds with GD AVIF support), else **WebP**, else the original
+  untouched for ancient clients. AVIF and WebP cache as separate files and the
+  response sends `Vary: Accept`. Force one with `&format=avif` / `&format=webp`.
+  _(This is core/free — there is no paid "AVIF" tier.)_
+- **First request** converts + caches into the file's `_variants/` directory (so
+  the existing delete/trash cleanup invalidates it for free); later requests serve
+  the cache. The cache key is stamped with the source mtime, so a re-upload never
+  re-matches a stale image.
 - **Width** is rounded to 100px and clamped to `webp_max_width`; **quality** snaps
   to `60`/`75`/`80`/`90`. This bounds the number of cache variants per file
   (no unbounded growth from `?width=801,802,…`).
-- **Content negotiation:** add `&format=auto` and a browser that doesn't accept
-  `image/webp` is served the original untouched.
+- **Box sizing (optional):** add `&height=` with `&fit=cover` (crop to fill the
+  `width×height` box) or `&fit=contain` (default — scale to fit, keep aspect).
+  Add `&dpr=2` (or `3`) to multiply the requested size for retina screens. None
+  of these ever upsize past the source.
 - **SVG and animated GIFs are never converted** (served as-is); `webp_enabled: false`
   disables the endpoint entirely (no `img_base`).
 

@@ -154,7 +154,6 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowC2pa !== undefined) payload.allow_c2pa = !!opts.allowC2pa;
   if (opts.autoOptimize !== undefined) payload.auto_optimize = !!opts.autoOptimize;
   if (opts.optimizeQuality && opts.optimizeQuality > 0) payload.optimize_quality = Math.trunc(opts.optimizeQuality);
-  if (opts.optimizeFormat === 'avif') payload.optimize_format = 'avif';
   if (opts.optimizeKeepOriginal !== undefined) payload.optimize_keep_original = !!opts.optimizeKeepOriginal;
   if (opts.optimizeMaxMb && opts.optimizeMaxMb > 0) payload.optimize_max_mb = Math.trunc(opts.optimizeMaxMb);
   if (opts.pdfLevel && ['screen', 'ebook', 'printer', 'prepress', 'default'].includes(opts.pdfLevel)) {

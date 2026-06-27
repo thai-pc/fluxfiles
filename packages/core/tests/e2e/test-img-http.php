@@ -64,6 +64,7 @@ function httpGet(string $url, array $headers = []): array {
     return [$st, $hdr, (string) $body];
 }
 function isWebp(string $b): bool { return strncmp($b, 'RIFF', 4) === 0 && substr($b, 8, 4) === 'WEBP'; }
+function isAvif(string $b): bool { return substr($b, 4, 4) === 'ftyp' && strpos(substr($b, 8, 24), 'avif') !== false; }
 
 echo "\n{$cyan}══ On-demand WebP transform over HTTP (M2 e2e) ══{$reset}\n\n";
 
@@ -109,6 +110,47 @@ try {
         assertEqual(200, $st);
         assertEqual('image/jpeg', $h['content-type'] ?? '', 'served original jpeg');
         assertTrue(!isWebp($body), 'not converted for a non-webp client');
+    });
+
+    // ── AVIF content negotiation (free in /img) ───────────────────────────────
+    $AVIF_ACCEPT = ['Accept: image/avif,image/webp,*/*'];
+    $avifOk = (new \FluxFiles\ImageOptimizer())->avifSupported();
+
+    test('content negotiation: Accept image/avif → AVIF (or WebP if build lacks AVIF)', function () use ($imgUrl, $AVIF_ACCEPT, $avifOk, $coreDir) {
+        [$st, $h, $body] = httpGet("{$imgUrl}&width=600&quality=80&format=auto", $AVIF_ACCEPT);
+        assertEqual(200, $st);
+        assertTrue(stripos($h['vary'] ?? '', 'accept') !== false, 'Vary: Accept set for negotiation');
+        if ($avifOk) {
+            assertEqual('image/avif', $h['content-type'] ?? '', 'negotiated AVIF');
+            assertTrue(isAvif($body), 'body is AVIF');
+            // AVIF caches to its own .avif file, separate from the .webp variant.
+            assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w600_q80_*.avif')), 'avif cache written');
+        } else {
+            assertEqual('image/webp', $h['content-type'] ?? '', 'falls back to WebP without AVIF support');
+            assertTrue(isWebp($body), 'body is WebP fallback');
+        }
+    });
+
+    test('explicit format=webp ignores an AVIF-capable Accept', function () use ($imgUrl, $AVIF_ACCEPT) {
+        [$st, $h, $body] = httpGet("{$imgUrl}&width=600&quality=80&format=webp", $AVIF_ACCEPT);
+        assertEqual(200, $st);
+        assertEqual('image/webp', $h['content-type'] ?? '', 'forced webp');
+        assertTrue(isWebp($body), 'body is WebP');
+    });
+
+    // ── Box sizing: height + fit + DPR (free) ─────────────────────────────────
+    test('height + fit=cover crops to fill; caches under a _cover key', function () use ($imgUrl, $WEBP_ACCEPT, $coreDir) {
+        [$st, $h] = httpGet("{$imgUrl}&width=400&height=400&fit=cover&quality=80", $WEBP_ACCEPT);
+        assertEqual(200, $st);
+        assertEqual('image/webp', $h['content-type'] ?? '');
+        assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w400_h400_q80_cover_*.webp')), 'cover cache key');
+    });
+
+    test('dpr=2 doubles the physical width (300 → 600) under the hood', function () use ($imgUrl, $WEBP_ACCEPT, $coreDir) {
+        [$st] = httpGet("{$imgUrl}&width=300&dpr=2&quality=80", $WEBP_ACCEPT);
+        assertEqual(200, $st);
+        // 300 CSS px × DPR 2 = 600 physical px → a _w600_ variant, no _w300_.
+        assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w600_q80_*.webp')), 'dpr scaled to w600');
     });
 
     test('bogus token → 403', function () use ($BASE) {

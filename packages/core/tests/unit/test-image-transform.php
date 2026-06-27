@@ -215,6 +215,58 @@ test('transformCacheKey: watermark variant segment separates marked from clean',
     assertEqual('_variants/p_w800_q80_111_wmABCD1234.webp', $marked, 'watermarked key has the wm segment');
 });
 
+// ── transformCacheKey: format + height/fit (AVIF delivery + box sizing) ─────
+test('transformCacheKey: avif and webp cache to distinct files', function () {
+    $webp = \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111');
+    $avif = \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'avif');
+    assertEqual('_variants/p_w800_q80_111.webp', $webp, 'default stays webp (backward compat)');
+    assertEqual('_variants/p_w800_q80_111.avif', $avif, 'avif gets its own .avif key');
+    assertTrue($webp !== $avif, 'formats never collide');
+});
+
+test('transformCacheKey: height + cover fit add key segments', function () {
+    // Width-only key is unchanged (height 0 → no _h segment, no _cover).
+    assertEqual('_variants/p_w800_q80_111.webp',
+        \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'webp', 0, 'contain'));
+    // Height present → _h segment; contain is the default (no fit segment).
+    assertEqual('_variants/p_w800_h600_q80_111.webp',
+        \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'webp', 600, 'contain'));
+    // cover (with a height) adds a _cover segment so a crop never matches a fit.
+    assertEqual('_variants/p_w800_h600_q80_cover_111.webp',
+        \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'webp', 600, 'cover'));
+    // cover without a height is meaningless → no _cover segment.
+    assertEqual('_variants/p_w800_q80_111.webp',
+        \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'webp', 0, 'cover'));
+});
+
+test('transform: height + contain fits within the box (aspect kept, no upsize)', function () use ($opt) {
+    // 800×600 source, box 400×400 contain → scaled to 400×300 (fits within).
+    $out = $opt->transform(jpegBytes(800, 600), 400, 80, null, 'webp', 400, 'contain');
+    assertTrue($out !== null, 'produced output');
+    assertEqual(400, $out['width'], 'width fits box');
+    assertEqual(300, $out['height'], 'height kept aspect ratio');
+});
+
+test('transform: cover crops to fill the box exactly', function () use ($opt) {
+    // 800×600 source, box 400×400 cover → exactly 400×400 (cropped).
+    $out = $opt->transform(jpegBytes(800, 600), 400, 80, null, 'webp', 400, 'cover');
+    assertTrue($out !== null, 'produced output');
+    assertEqual(400, $out['width'], 'cover width exact');
+    assertEqual(400, $out['height'], 'cover height exact');
+});
+
+test('transform: avif requested but unsupported falls back to webp (format reported)', function () use ($opt) {
+    // We can't assume the test box has AVIF; assert the contract holds either way.
+    $out = $opt->transform(jpegBytes(400, 300), 200, 80, null, 'avif');
+    assertTrue($out !== null, 'produced output');
+    if (function_exists('imageavif') && (new \FluxFiles\ImageOptimizer())->avifSupported()) {
+        assertEqual('avif', $out['format'], 'avif when supported');
+    } else {
+        assertEqual('webp', $out['format'], 'falls back to webp when avif unavailable');
+        assertTrue(substr($out['data'], 8, 4) === 'WEBP', 'bytes match the reported format');
+    }
+});
+
 // ── ImageToken (auth for the /api/fm/img endpoint) ────────────────────────
 $imgSecret = str_repeat('i', 40);
 

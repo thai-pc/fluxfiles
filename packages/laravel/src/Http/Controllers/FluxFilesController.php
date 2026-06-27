@@ -459,6 +459,27 @@ class FluxFilesController
         }
     }
 
+    public function watermarkRemove(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk = (string) ($request->input('disk') ?? 'local');
+            $path = (string) ($request->input('path') ?? '');
+            if ($path === '') {
+                throw new ApiException('Missing path', 400);
+            }
+            $result = $fm->removeWatermark($disk, $path);
+            $this->logAudit($claims, 'watermark_remove', $disk, $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function aiTag(Request $request): JsonResponse
     {
         try {

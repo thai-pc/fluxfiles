@@ -83,9 +83,9 @@ test('layer 1: unknown / not-installed module → 501 module_not_installed', fun
     ModuleRegistry::reset();
     // 'demo' isn't in the built-in map and no class is registered for it.
     expectApi(fn () => ModuleRegistry::require('demo', lic(['demo'], $SEC, $KEYS, $NOW), claims(true)), 501, 'module_not_installed');
-    // The canonical 'optimize' id IS mapped but its class isn't installed here.
-    assertEqual(false, ModuleRegistry::installed('optimize'), 'optimize not installed in MIT checkout');
-    expectApi(fn () => ModuleRegistry::require('optimize', lic(['optimize'], $SEC, $KEYS, $NOW), claims(true)), 501, 'module_not_installed');
+    // A canonical paid id ('share') IS mapped but its class isn't installed here.
+    assertEqual(false, ModuleRegistry::installed('share'), 'share not installed in MIT checkout');
+    expectApi(fn () => ModuleRegistry::require('share', lic(['share'], $SEC, $KEYS, $NOW), claims(true)), 501, 'module_not_installed');
 });
 
 test('layer 2: installed but unlicensed → 402 license_required', function () use ($SEC, $KEYS, $NOW) {

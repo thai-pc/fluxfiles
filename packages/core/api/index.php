@@ -217,16 +217,13 @@ try {
         $fm->setAiTagger($aiTagger);
     }
 
-    // On-upload auto-optimize (paid module). Wire the optimizer hook ONLY when the
-    // token asks for it AND the module is installed AND the license covers it — so
-    // the `auto_optimize` claim is inert on a free core. The module does the work;
-    // FileManager records the savings + renames to .webp.
-    if ($claims->autoOptimize && \FluxFiles\ModuleRegistry::installed('optimize')
-        && \FluxFiles\LicenseManager::fromEnv()->licensed('optimize')) {
-        $optimizeModule = new \FluxFiles\Optimize\OptimizeModule();
-        $optimizeFormat = $claims->optimizeFormat;
-        $fm->setUploadOptimizer(static function (string $bytes, int $quality) use ($optimizeModule, $optimizeFormat) {
-            return $optimizeModule->optimizeBytes($bytes, $quality, $optimizeFormat);
+    // On-upload auto-optimize (FREE/core). Wire the optimizer hook when the token
+    // asks for it (`auto_optimize`). The module does the work; FileManager records
+    // the savings + renames to .webp.
+    if ($claims->autoOptimize) {
+        $optimizeModule = new \FluxFiles\OptimizeModule();
+        $fm->setUploadOptimizer(static function (string $bytes, int $quality) use ($optimizeModule) {
+            return $optimizeModule->optimizeBytes($bytes, $quality);
         });
     }
 
@@ -481,11 +478,14 @@ function routeRequest(
         return \FluxFiles\LicenseManager::fromEnv()->info();
     }
 
-    // Optimization (paid module) — recompress images. Gated by the 3-layer check
-    // in ModuleRegistry: module installed (501) + licensed (402) + allow_optimize
-    // claim (403). Free core has no optimize package → 501 module_not_installed.
+    // Optimization (FREE/core) — recompress images to WebP + compress PDFs. Opt-in
+    // per token via `allow_optimize` (it replaces/deletes originals, so it's a
+    // deliberate capability, not on by default); the module itself enforces write.
     if ($method === 'POST' && $uri === '/api/fm/optimize') {
-        $module = \FluxFiles\ModuleRegistry::require('optimize', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        if (!$claims->allowOptimize) {
+            throw new ApiException('This token may not use optimization', 403, 'optimize_forbidden');
+        }
+        $module = new \FluxFiles\OptimizeModule();
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->run($fm, $diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
     }
@@ -1052,13 +1052,41 @@ function handleImageTransform(): void
         return;
     }
 
+    // DPR: device-pixel-ratio multiplier (1–3, snapped) so a CSS width can be
+    // requested while the physical pixels honor a retina screen. Applied to the
+    // requested width/height BEFORE clamping to the tenant max.
+    $dpr = (float) ($_GET['dpr'] ?? 1);
+    $dpr = $dpr >= 2.5 ? 3.0 : ($dpr >= 1.5 ? 2.0 : 1.0);
+
     // Width: round to 100px, clamp to the tenant max (mw, default 2000). 0 = keep size.
     $maxWidth = $scope['maxWidth'] > 0 ? $scope['maxWidth'] : 2000;
-    $reqWidth = (int) ($_GET['width'] ?? 0);
+    $reqWidth = (int) round(((int) ($_GET['width'] ?? 0)) * $dpr);
     $width = $reqWidth > 0 ? min($maxWidth, max(100, (int) round($reqWidth / 100) * 100)) : 0;
+    // Height + fit (box sizing): height rounds to 100px and clamps to the same
+    // dimension ceiling; fit 'cover' crops to fill, else 'contain' fits within.
+    $reqHeight = (int) round(((int) ($_GET['height'] ?? 0)) * $dpr);
+    $height = $reqHeight > 0 ? min($maxWidth, max(100, (int) round($reqHeight / 100) * 100)) : 0;
+    $fit = (($_GET['fit'] ?? 'contain') === 'cover') ? 'cover' : 'contain';
     $defaultQuality = $scope['defaultQuality'] > 0 ? $scope['defaultQuality'] : 80;
     $quality = ff_snap_quality($_GET['quality'] ?? $defaultQuality);
-    $format = ($_GET['format'] ?? 'webp') === 'auto' ? 'auto' : 'webp';
+
+    // Output format: 'avif'/'webp' force it; 'auto' (default) content-negotiates
+    // from Accept — AVIF first (smallest, when the build supports it), then WebP,
+    // else '' = serve the original for ancient clients (resolved below).
+    $reqFormat = strtolower((string) ($_GET['format'] ?? 'auto'));
+    $avifOk = $optimizer->avifSupported();
+    $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
+    if ($reqFormat === 'avif') {
+        $format = $avifOk ? 'avif' : 'webp';
+    } elseif ($reqFormat === 'webp') {
+        $format = 'webp';
+    } elseif ($avifOk && strpos($accept, 'image/avif') !== false) {
+        $format = 'avif';
+    } elseif (strpos($accept, 'image/webp') !== false) {
+        $format = 'webp';
+    } else {
+        $format = ''; // negotiation: client accepts neither modern format
+    }
 
     $diskConfigs = require __DIR__ . '/../config/disks.php';
     try {
@@ -1086,33 +1114,38 @@ function handleImageTransform(): void
     [$wmEnabled, $wmSigCfg, $logoVer, $wmLogoPath] = ff_resolve_watermark($fs, $scope['watermark'] ?? null, $scope['sub']);
     $wmSig = \FluxFiles\ImageOptimizer::watermarkSignature($wmSigCfg, $logoVer);
 
-    // Content negotiation: format=auto + a client that doesn't accept WebP → serve
+    // Content negotiation: a client that accepts neither AVIF nor WebP → serve
     // the original unchanged (old browsers). NEVER for a watermarked token — that
-    // would hand back the clean image and defeat the watermark.
-    if (!$wmEnabled && $format === 'auto'
-        && strpos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'image/webp') === false) {
-        ff_serve_bytes((string) $fs->read($path), $origMime);
-        return;
+    // would hand back the clean image and defeat the watermark; force WebP there.
+    if ($format === '') {
+        if (!$wmEnabled) {
+            ff_serve_bytes((string) $fs->read($path), $origMime);
+            return;
+        }
+        $format = 'webp';
     }
 
-    // Cache key is stamped with the source mtime (+ watermark signature) so a
-    // re-upload or a config/logo change never re-matches a stale image.
+    // Cache key is stamped with the source mtime (+ watermark signature, format,
+    // height/fit) so a re-upload, config/logo change, or a different output
+    // format/size never re-matches a stale image.
     $ver = (string) (@$fs->lastModified($path) ?: '0');
-    $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig);
+    $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig, $format, $height, $fit);
+    $outMime = 'image/' . $format;
 
     if ($fs->fileExists($cacheKey)) {
-        // S3/R2: redirect to a presigned URL of the cached WebP so the bucket
+        // S3/R2: redirect to a presigned URL of the cached image so the bucket
         // serves the bytes directly (no app-server egress). Local disks read
         // cheaply, so we just serve them.
         if (($diskConfigs[$disk]['driver'] ?? '') === 's3') {
             $redirect = $dm->presignGetUrl($disk, $cacheKey, 3600);
             if ($redirect !== null) {
                 header('Cache-Control: private, max-age=600');
+                header('Vary: Accept');
                 header('Location: ' . $redirect, true, 302);
                 return;
             }
         }
-        ff_serve_bytes((string) $fs->read($cacheKey), 'image/webp', true);
+        ff_serve_bytes((string) $fs->read($cacheKey), $outMime, true);
         return;
     }
 
@@ -1125,7 +1158,7 @@ function handleImageTransform(): void
         }
     }
 
-    $out = $optimizer->transform((string) $fs->read($path), $width, $quality, $wmCfg);
+    $out = $optimizer->transform((string) $fs->read($path), $width, $quality, $wmCfg, $format, $height, $fit);
     if ($out === null) {
         // Animated GIF / SVG / non-raster / bomb. A watermarked token must not
         // leak the clean original, so refuse rather than serve it untouched.
@@ -1139,8 +1172,16 @@ function handleImageTransform(): void
         return;
     }
 
+    // Honor the format transform() actually produced (it falls back to WebP if an
+    // AVIF encode isn't available at runtime) so the cache key + Content-Type can
+    // never disagree with the bytes.
+    $outFormat = $out['format'] ?? $format;
+    if ($outFormat !== $format) {
+        $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig, $outFormat, $height, $fit);
+        $outMime = 'image/' . $outFormat;
+    }
     try { $fs->write($cacheKey, $out['data']); } catch (\Throwable $e) { /* best-effort cache */ }
-    ff_serve_bytes($out['data'], 'image/webp', true);
+    ff_serve_bytes($out['data'], $outMime, true);
 }
 
 /**
@@ -1190,6 +1231,9 @@ function ff_serve_bytes(string $data, string $mime, bool $immutable = false): vo
     header('Content-Type: ' . $mime);
     header('X-Content-Type-Options: nosniff');
     header('Content-Disposition: inline');
+    // Output format is content-negotiated from Accept (format=auto → avif/webp),
+    // so caches must key on it to avoid serving the wrong format to a client.
+    header('Vary: Accept');
     header($immutable
         ? 'Cache-Control: public, max-age=31536000, immutable'
         : 'Cache-Control: private, no-store');

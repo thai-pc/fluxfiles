@@ -384,18 +384,6 @@ test('fluxfiles_token forwards show_hidden (default false)', function () {
     assertEqual(true, $mk(['dedupe_uploads' => true])->dedupeUploads, 'dedupe forwarded');
 });
 
-test('fluxfiles_token forwards optimize_format (avif); default webp', function () {
-    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
-    $mk = function (array $extra) {
-        $jwt = fluxfiles_token('u1', ['read'], ['local'], '', 10, null, 3600, false, 0, 0,
-            null, 0, 0, null, null, null, $extra);
-        return Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
-    };
-    assertEqual('webp', $mk([])->optimizeFormat, 'default webp');
-    assertEqual('avif', $mk(['optimize_format' => 'avif'])->optimizeFormat, 'avif forwarded');
-    assertEqual('webp', $mk(['optimize_format' => 'bogus'])->optimizeFormat, 'invalid → webp');
-});
-
 test('fluxfiles_token forwards optimize tuning claims (keep_original, max_mb, pdf_level)', function () {
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $mk = function (array $extra) {

@@ -121,6 +121,37 @@ final class ImageCompat
     }
 
     /**
+     * Resize honoring an optional height and fit mode (on-demand /img sizing).
+     *  - $fit 'cover': crop to fill the $width×$height box exactly (both required);
+     *    the box is shrunk to fit within the source so cover never upsizes either.
+     *  - otherwise ('contain'): scale down to fit within the box, keep aspect ratio,
+     *    never upsize. Either axis may be 0 (= unconstrained on that axis).
+     *
+     * @return object Intervention Image instance (mutated/new — depends on lib)
+     */
+    public function resizeTo($image, int $width, int $height, string $fit = 'contain')
+    {
+        if ($fit === 'cover' && $width > 0 && $height > 0) {
+            if ($this->isV3) {
+                // Shrink the target box (keeping its aspect ratio) until it fits
+                // inside the source, so a cover crop never enlarges past native.
+                $scale = min(1.0, $image->width() / $width, $image->height() / $height);
+                $w = max(1, (int) round($width * $scale));
+                $h = max(1, (int) round($height * $scale));
+                return $image->cover($w, $h);
+            }
+            return $image->fit($width, $height);
+        }
+        if ($this->isV3) {
+            return $image->scaleDown($width ?: null, $height ?: null);
+        }
+        return $image->resize($width ?: null, $height ?: null, function ($constraint) {
+            $constraint->aspectRatio();
+            $constraint->upsize();
+        });
+    }
+
+    /**
      * Composite a logo (binary PNG, ideally with alpha) onto $base at a 9-point
      * position with the given opacity (0.0–1.0). The logo is scaled down to
      * $maxLogoWidth first when wider (never upsized). Watermark needs the v3 API.

@@ -118,6 +118,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/watermark', array_merge($writeArgs, [
             'callback' => [$api, 'handleWatermark'],
         ]));
+        register_rest_route($ns, $p . '/watermark/remove', array_merge($writeArgs, [
+            'callback' => [$api, 'handleWatermarkRemove'],
+        ]));
         register_rest_route($ns, $p . '/ai-tag', array_merge($writeArgs, [
             'callback' => [$api, 'handleAiTag'],
         ]));
@@ -683,6 +686,28 @@ class FluxFilesApi
             $dest = isset($body['dest']) && $body['dest'] !== '' ? (string) $body['dest'] : null;
             $result = $fm->applyWatermark((string) ($body['disk'] ?? 'local'), $path, $wm, $dest);
             $this->logAudit($claims, 'watermark', (string) ($body['disk'] ?? 'local'), $path);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function handleWatermarkRemove(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $path = (string) ($body['path'] ?? '');
+            if ($path === '') {
+                throw new ApiException('Missing path', 400);
+            }
+            $disk = (string) ($body['disk'] ?? 'local');
+            $result = $fm->removeWatermark($disk, $path);
+            $this->logAudit($claims, 'watermark_remove', $disk, $path);
 
             return $this->ok($result);
         } catch (ApiException $e) {

@@ -66,6 +66,16 @@ class ImageOptimizer
     }
 
     /**
+     * Whether AVIF output is available at runtime (intervention v3 + GD with AVIF).
+     * Callers use this to content-negotiate AVIF in `/img`; transform() also falls
+     * back to WebP on its own when AVIF is requested but unsupported.
+     */
+    public function avifSupported(): bool
+    {
+        return $this->manager->avifSupported();
+    }
+
+    /**
      * @return array{data: string, mime: string, width: int, height: int}
      */
     public function crop(
@@ -156,9 +166,14 @@ class ImageOptimizer
      * ('logo'|'text'), `text`, `logo_data` (binary), `position`, `opacity`
      * (0.0–1.0), `font_size`.
      *
-     * @return array{data: string, width: int, height: int}|null
+     * $height (>0) and $fit ('contain'|'cover') enable box sizing: 'contain'
+     * scales down within $width×$height keeping aspect; 'cover' crops to fill the
+     * box exactly. Neither upsizes past the source. $height=0 keeps the legacy
+     * width-only behavior.
+     *
+     * @return array{data: string, width: int, height: int, format: string}|null
      */
-    public function transform(string $sourceData, int $width, int $quality, ?array $watermark = null, string $format = 'webp'): ?array
+    public function transform(string $sourceData, int $width, int $quality, ?array $watermark = null, string $format = 'webp', int $height = 0, string $fit = 'contain'): ?array
     {
         $info = @getimagesizefromstring($sourceData);
         if ($info === false) {
@@ -176,8 +191,8 @@ class ImageOptimizer
         }
 
         $image = $this->manager->read($sourceData);
-        if ($width > 0) {
-            $image = $this->manager->scaleDown($image, $width);
+        if ($width > 0 || $height > 0) {
+            $image = $this->manager->resizeTo($image, $width, $height, $fit);
         }
         if ($watermark !== null && !empty($watermark['enabled'])) {
             $image = $this->applyWatermark($image, $watermark);
@@ -252,7 +267,7 @@ class ImageOptimizer
      * file's mtime or hash) is embedded so a re-upload produces a new key and the
      * stale cache is never matched again.
      */
-    public static function transformCacheKey(string $key, int $width, int $quality, string $ver, string $variant = ''): string
+    public static function transformCacheKey(string $key, int $width, int $quality, string $ver, string $variant = '', string $format = 'webp', int $height = 0, string $fit = 'contain'): string
     {
         $dir = dirname($key);
         $basename = pathinfo($key, PATHINFO_FILENAME);
@@ -262,7 +277,14 @@ class ImageOptimizer
         // set, so plain (non-watermarked) keys keep their existing shape.
         $variant = substr(preg_replace('/[^A-Za-z0-9]/', '', $variant) ?? '', 0, 12);
         $suffix = $variant !== '' ? '_' . $variant : '';
-        return $variantsDir . '/' . $basename . '_w' . $width . '_q' . $quality . '_' . $ver . $suffix . '.webp';
+        // Height + cover are appended only when set, so width-only keys keep their
+        // existing shape (and stay cache-compatible across this change).
+        $dim = $height > 0 ? '_h' . $height : '';
+        $fitSeg = ($fit === 'cover' && $height > 0) ? '_cover' : '';
+        // The output format is part of the key (avif/webp cache as separate files);
+        // default 'webp' keeps existing .webp cache filenames unchanged.
+        $ext = $format === 'avif' ? 'avif' : 'webp';
+        return $variantsDir . '/' . $basename . '_w' . $width . $dim . '_q' . $quality . $fitSeg . '_' . $ver . $suffix . '.' . $ext;
     }
 
     /**

@@ -144,9 +144,6 @@ class Claims
     public bool $autoOptimize = false;
     /** @var int WebP quality for optimization (40–95). 0 = inherit default (82). */
     public int $optimizeQuality = 0;
-    /** @var string Target format for optimization: 'webp' (default) or 'avif'.
-     *            AVIF falls back to WebP when the server build lacks AVIF support. */
-    public string $optimizeFormat = 'webp';
     /** @var bool Keep the original file when optimizing via /api/fm/optimize (the
      *            request body can still override). Default FALSE (replace in place). */
     public bool $optimizeKeepOriginal = false;
@@ -386,7 +383,6 @@ class Claims
         $c->allowC2pa = (bool) ($payload->allow_c2pa ?? false);
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
-        $c->optimizeFormat = (($payload->optimize_format ?? 'webp') === 'avif') ? 'avif' : 'webp';
         $c->optimizeKeepOriginal = (bool) ($payload->optimize_keep_original ?? false);
         $c->optimizeMaxMb = max(0, (int) ($payload->optimize_max_mb ?? 0));
         $pdfLevel = strtolower((string) ($payload->pdf_level ?? 'ebook'));

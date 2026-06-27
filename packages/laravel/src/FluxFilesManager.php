@@ -171,9 +171,6 @@ class FluxFilesManager
         if (!empty($overrides['optimize_quality'])) {
             $payload['optimize_quality'] = (int) $overrides['optimize_quality'];
         }
-        if (isset($overrides['optimize_format']) && $overrides['optimize_format'] === 'avif') {
-            $payload['optimize_format'] = 'avif';
-        }
         if (array_key_exists('optimize_keep_original', $overrides)) {
             $payload['optimize_keep_original'] = (bool) $overrides['optimize_keep_original'];
         }

@@ -356,9 +356,6 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (!empty($webp['optimize_quality'])) {
         $payload['optimize_quality'] = (int) $webp['optimize_quality'];
     }
-    if (isset($webp['optimize_format']) && $webp['optimize_format'] === 'avif') {
-        $payload['optimize_format'] = 'avif';
-    }
     if (array_key_exists('optimize_keep_original', $webp)) {
         $payload['optimize_keep_original'] = (bool) $webp['optimize_keep_original'];
     }
