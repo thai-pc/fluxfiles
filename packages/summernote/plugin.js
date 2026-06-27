@@ -61,6 +61,16 @@
         var name = file.name || file.basename || file.path || '';
         var meta = file.meta || {};
 
+        // Preview-only selection (no permanent_url/url) — e.g. a watermark OVERLAY
+        // with allow_download=false. Its only view is img_base, a short-lived token
+        // URL unsafe to save into content. To embed a *watermarked* image, burn the
+        // watermark into the file first (Watermark editor → Apply). Return '' so the
+        // caller skips it (rather than inserting <img src="">).
+        if (url === '') {
+            console.warn('[FluxFiles] "' + name + '" is preview-only (no embeddable URL — e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor → Apply) or issue a downloadable token to embed it.');
+            return '';
+        }
+
         // Still presigned (private disk, no public_url)? Warn — it will expire
         // and break the saved link/image.
         if (/[?&](X-Amz-|Signature=)/.test(url)) {
@@ -116,7 +126,9 @@
                 context.invoke('editor.focus');
 
                 for (var i = 0; i < insertable.length; i++) {
-                    context.invoke('editor.pasteHTML', fileToHtml(insertable[i]));
+                    var html = fileToHtml(insertable[i]);
+                    if (html === '') continue; // preview-only → already warned
+                    context.invoke('editor.pasteHTML', html);
                 }
             }
         });

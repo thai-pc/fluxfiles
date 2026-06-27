@@ -91,6 +91,17 @@ describe('Summernote FluxFiles plugin', () => {
     expect(pastedHtml(editorInvoke)).toContain('<img src="https://cdn/a.png"');
   });
 
+  it('refuses a preview-only image (watermark overlay / allow_download=false) and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { buttonEl, editorInvoke, open } = loadPlugin();
+    buttonEl.__button.click();
+    open.mock.calls[0][0].onSelect({ name: 'marked.png', mime: 'image/png', img_base: '/api/fm/img?token=t', url: undefined, permanent_url: null });
+    // No pasteHTML call for the preview-only image.
+    expect(pastedHtml(editorInvoke)).toBe('');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('uses meta.alt_text for alt and adds width/height from the payload', () => {
     const { buttonEl, editorInvoke, open } = loadPlugin();
     buttonEl.__button.click();

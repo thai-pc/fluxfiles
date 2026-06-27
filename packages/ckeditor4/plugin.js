@@ -39,12 +39,19 @@
         var url = file.permanent_url || file.url || '';
         var name = file.name || file.basename || file.path || '';
         var meta = file.meta || {};
-        if (/[?&](X-Amz-|Signature=)/.test(url)) {
+        // Preview-only selection (no permanent_url/url) — e.g. a watermark OVERLAY
+        // with allow_download=false. Its only view is img_base, a short-lived token
+        // URL unsafe to save into content. To embed a *watermarked* image, burn the
+        // watermark into the file first (Watermark editor → Apply). Refuse here.
+        var embeddable = url !== '';
+        if (!embeddable) {
+            console.warn('[FluxFiles] "' + name + '" is preview-only (no embeddable URL — e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor → Apply) or issue a downloadable token to embed it.');
+        } else if (/[?&](X-Amz-|Signature=)/.test(url)) {
             console.warn('[FluxFiles] Inserting a presigned (expiring) URL — it will break when the URL expires. Use a public disk or public_url for embeds.');
         }
         var isImage = (file.mime && file.mime.indexOf('image/') === 0)
             || /\.(jpe?g|png|gif|webp|svg|bmp|ico|avif)$/i.test(name);
-        return { url: url, name: name, meta: meta, isImage: isImage, width: file.width || null, height: file.height || null };
+        return { url: url, name: name, meta: meta, isImage: isImage, embeddable: embeddable, width: file.width || null, height: file.height || null };
     }
 
     function open(cfg, multiple, onSelect) {
@@ -92,6 +99,7 @@
                         var file = firstFile(payload);
                         if (!file) return;
                         var info = fileInfo(file);
+                        if (!info.embeddable) return; // preview-only → already warned
                         var set = function (id, val) {
                             var el = dialog.getContentElement('info', id);
                             if (el && val != null && val !== '') el.setValue(String(val));
@@ -123,6 +131,7 @@
                             var file = files[i];
                             if (!file || file.is_dir) continue;
                             var info = fileInfo(file);
+                            if (!info.embeddable) continue; // preview-only → already warned
 
                             if (info.isImage) {
                                 var dim = '';

@@ -93,6 +93,19 @@ describe('TinyMCE FluxFiles plugin', () => {
     warn.mockRestore();
   });
 
+  it('refuses a preview-only image (watermark overlay / allow_download=false) and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    // allow_download=false → list() withholds url/permanent_url/variants; only the
+    // short-lived img_base remains, which must NOT be embedded into saved content.
+    cfg.onSelect({ name: 'marked.png', mime: 'image/png', img_base: '/api/fm/img?token=t', url: undefined, permanent_url: null });
+    expect(editor.insertContent).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('skips folders (is_dir)', () => {
     const { editor, buttons, open } = loadPlugin();
     buttons.fluxfiles.onAction();

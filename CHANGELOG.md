@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.52] — 2026-06-27
+
+> Released: TinyMCE `@fluxfiles/tinymce` `0.3.2`, CKEditor 4 `@fluxfiles/ckeditor4`
+> `0.3.2`, Summernote `@fluxfiles/summernote` `0.1.2` (npm). Core unchanged.
+
+### Fixed
+
+- **Editors no longer insert a clean/broken image for a preview-only file.** When
+  a token is preview-only (`allow_download=false`, e.g. a watermark **overlay**),
+  `list()` withholds `url`/`permanent_url` and only the short-lived `img_base`
+  token URL remains. The TinyMCE / CKEditor 4 / Summernote plugins resolved
+  `permanent_url || url || ''` → they'd insert either the **clean original**
+  (bypassing the watermark) or, with nothing, an empty `<img src="">`. They now
+  detect "no embeddable URL", **skip the insert and warn** ("…burn in the
+  watermark (Watermark editor → Apply) or issue a downloadable token…"). To embed
+  a *watermarked* image, use the **burn-in editor** (its `permanent_url` is stable
+  and watermarked); the overlay is a serve-time preview only. Documented in the
+  watermark section.
+
 ## [0.2.51] — 2026-06-27
 
 > Released: core `core-v0.2.46` (Packagist + Docker).

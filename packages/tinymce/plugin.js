@@ -58,9 +58,19 @@
         var name = file.name || file.basename || file.path || '';
         var meta = file.meta || {};
 
-        // Still presigned (private disk, no public_url)? Warn — it will expire and
-        // break the saved link/image.
-        if (/[?&](X-Amz-|Signature=)/.test(url)) {
+        // Preview-only selection (no permanent_url and no url) — e.g. a watermark
+        // OVERLAY image with allow_download=false. Its only view is img_base, a
+        // short-lived token URL that must NOT be saved into content (it expires →
+        // broken image), and inserting the empty string would yield <img src="">.
+        // To embed a *watermarked* image, burn the watermark into the file first
+        // (Watermark editor → Apply) — that yields a stable, watermarked
+        // permanent_url. So we refuse here rather than insert a clean/broken image.
+        var embeddable = url !== '';
+        if (!embeddable) {
+            console.warn('[FluxFiles] "' + name + '" is preview-only (no embeddable URL — e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor → Apply) or issue a downloadable token to embed it.');
+        } else if (/[?&](X-Amz-|Signature=)/.test(url)) {
+            // Still presigned (private disk, no public_url)? Warn — it will expire
+            // and break the saved link/image.
             console.warn('[FluxFiles] Inserting a presigned (expiring) URL — it will break when the URL expires. Use a public disk or public_url for embeds.');
         }
 
@@ -68,7 +78,7 @@
             || /\.(jpe?g|png|gif|webp|svg|bmp|ico|avif)$/i.test(name);
 
         return {
-            url: url, name: name, meta: meta, isImage: isImage,
+            url: url, name: name, meta: meta, isImage: isImage, embeddable: embeddable,
             width: file.width || null, height: file.height || null
         };
     }
@@ -96,6 +106,7 @@
                 var file = files[i];
                 if (!file || file.is_dir) continue;
                 var info = fileInfo(file);
+                if (!info.embeddable) continue; // preview-only → already warned
 
                 if (info.isImage) {
                     var dim = '';
@@ -118,6 +129,7 @@
                 var file = Array.isArray(payload) ? payload[0] : payload;
                 if (!file || file.is_dir) return;
                 var info = fileInfo(file);
+                if (!info.embeddable) return; // preview-only → already warned
                 var data = {};
 
                 if (meta && meta.filetype === 'image') {

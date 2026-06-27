@@ -68,6 +68,17 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     expect(editor.insertHtml.mock.calls[0][0]).toContain('<img src="https://cdn/a.png"');
   });
 
+  it('refuses a preview-only image (watermark overlay / allow_download=false) and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ name: 'marked.png', mime: 'image/png', img_base: '/api/fm/img?token=t', url: undefined, permanent_url: null });
+    expect(editor.insertHtml).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('uses meta.alt_text for alt and adds width/height from the payload', () => {
     const { editor, open } = loadPlugin();
     editor.execCommand('openFluxFiles');

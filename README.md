@@ -573,6 +573,17 @@ inserted `<img>` — carries it. Extension is preserved; variants regenerate.
 | Shows in an inserted `<img>` / download | **No** (use the editor) | **Yes** |
 | Best for | Preview protection (sellers) | Permanent branding on assets |
 
+> **Picking a watermarked image in TinyMCE / CKEditor / Summernote:** what gets
+> inserted depends on the mode. **Burn-in** → the file itself is watermarked, so
+> the inserted `<img>` is **watermarked** (uses the stable `permanent_url`). ✅
+> **Overlay** is serve-time only: the file's `url`/`permanent_url` are the **clean
+> original**, and the watermark lives only on `img_base` — a short-lived token URL
+> that must **not** be saved into content. So pair overlay with
+> `allow_download=false`; the editor then has no embeddable URL and, rather than
+> insert a clean or broken image, it **refuses and warns** ("…burn in the
+> watermark…"). **Rule of thumb: to embed a watermarked image, use the burn-in
+> editor.**
+
 ### Usage dashboard
 
 `GET /api/fm/usage` returns a storage breakdown for the token's prefix — quota
