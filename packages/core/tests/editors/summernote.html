@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Summernote × FluxFiles harness</title>
+  <link rel="stylesheet" href="/packages/core/tests/editors/node_modules/summernote/dist/summernote-lite.min.css">
+  <script src="/packages/core/tests/editors/node_modules/jquery/dist/jquery.min.js"></script>
+  <script src="/packages/core/tests/editors/node_modules/summernote/dist/summernote-lite.min.js"></script>
+  <script>
+    window.__ffPayload = undefined;
+    window.FluxFiles = {
+      open: function (cfg) { window.__ffOpened = true; if (window.__ffPayload !== undefined) cfg.onSelect(window.__ffPayload); },
+      imgUrl: function (file, opts) { return (file && file.img_base ? file.img_base : '') + (opts && opts.width ? '&width=' + opts.width : ''); }
+    };
+  </script>
+  <!-- The shipped plugin (registers into $.summernote.plugins). -->
+  <script src="/packages/summernote/plugin.min.js"></script>
+</head>
+<body>
+  <div id="ed"></div>
+  <script>
+    jQuery(function ($) {
+      $('#ed').summernote({
+        toolbar: [['fluxfiles', ['fluxfiles']]],
+        fluxfiles: { endpoint: 'http://core.test', token: 'JWT' },
+        callbacks: { onInit: function () { window.__edReady = true; } }
+      });
+    });
+  </script>
+</body>
+</html>

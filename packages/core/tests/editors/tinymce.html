@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TinyMCE × FluxFiles harness</title>
+  <!-- Real TinyMCE (vendored via npm into node_modules). -->
+  <script src="/packages/core/tests/editors/node_modules/tinymce/tinymce.min.js"></script>
+  <script>
+    // Stub the FluxFiles SDK: open() immediately feeds the test-controlled payload
+    // to onSelect, so we exercise the REAL plugin's selection handling (the
+    // watermark logic) without spinning up the core iframe/picker.
+    window.__ffPayload = undefined;
+    window.FluxFiles = {
+      open: function (cfg) { window.__ffOpened = true; if (window.__ffPayload !== undefined) cfg.onSelect(window.__ffPayload); },
+      imgUrl: function (file, opts) { return (file && file.img_base ? file.img_base : '') + (opts && opts.width ? '&width=' + opts.width : ''); }
+    };
+  </script>
+  <!-- The shipped plugin (minified artifact we publish). -->
+  <script src="/packages/tinymce/plugin.min.js"></script>
+</head>
+<body>
+  <textarea id="ed"></textarea>
+  <script>
+    tinymce.init({
+      selector: '#ed',
+      plugins: 'fluxfiles',
+      toolbar: 'fluxfiles',
+      menubar: false,
+      license_key: 'gpl',
+      fluxfiles_endpoint: 'http://core.test',
+      fluxfiles_token: 'JWT',
+      setup: function (editor) { editor.on('init', function () { window.__edReady = true; }); }
+    });
+  </script>
+</body>
+</html>

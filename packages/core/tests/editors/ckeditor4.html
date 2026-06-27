@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CKEditor 4 × FluxFiles harness</title>
+  <script>
+    window.__ffPayload = undefined;
+    window.FluxFiles = {
+      open: function (cfg) { window.__ffOpened = true; if (window.__ffPayload !== undefined) cfg.onSelect(window.__ffPayload); },
+      imgUrl: function (file, opts) { return (file && file.img_base ? file.img_base : '') + (opts && opts.width ? '&width=' + opts.width : ''); }
+    };
+  </script>
+  <!-- Real CKEditor 4 (vendored via npm). -->
+  <script src="/packages/core/tests/editors/node_modules/ckeditor4/ckeditor.js"></script>
+</head>
+<body>
+  <textarea id="ed"></textarea>
+  <script>
+    // Register the shipped plugin from its absolute path (CKE loads external
+    // plugins by name → URL), then build the editor with it on the toolbar.
+    CKEDITOR.plugins.addExternal('fluxfiles', '/packages/ckeditor4/', 'plugin.min.js');
+    var editor = CKEDITOR.replace('ed', {
+      extraPlugins: 'fluxfiles',
+      toolbar: [['FluxFiles']],
+      // Minimal harness has no image plugin, so CKE's ACF would strip <img> on
+      // insert. Disable ACF so the editor keeps exactly what the plugin inserts
+      // (a real app that inserts images already enables img in allowedContent).
+      allowedContent: true,
+      fluxfiles: { endpoint: 'http://core.test', token: 'JWT' }
+    });
+    editor.on('instanceReady', function () { window.__edReady = true; });
+  </script>
+</body>
+</html>

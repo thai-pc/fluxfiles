@@ -1,0 +1,16 @@
+{
+  "name": "@fluxfiles/editors-e2e",
+  "private": true,
+  "description": "Live-browser Playwright tests for the TinyMCE / CKEditor 4 / Summernote plugins against the REAL editor libraries (vendored via npm). Verifies watermark handling: a burn-in (downloadable) image inserts, a preview-only (overlay watermark) image is refused.",
+  "scripts": {
+    "setup": "npm install --ignore-scripts && npx playwright install chromium",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "ckeditor4": "4.22.1",
+    "jquery": "^3.7.1",
+    "summernote": "^0.8.18",
+    "tinymce": "^6.8.6"
+  }
+}

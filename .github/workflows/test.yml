@@ -292,6 +292,40 @@ jobs:
         working-directory: packages/core/tests/browser
         run: npx playwright test
 
+  editor-e2e:
+    name: Editor plugins e2e (real TinyMCE / CKEditor 4 / Summernote)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP (static file server for the harness)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build editor plugins (the tests load the shipped plugin.min.js)
+        run: |
+          for p in tinymce ckeditor4 summernote; do
+            (cd "packages/$p" && bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --no-audit --no-fund && npm run build)
+          done
+
+      - name: Vendor the real editor libs + Playwright
+        working-directory: packages/core/tests/editors
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --ignore-scripts --no-audit --no-fund
+          bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npx playwright install --with-deps chromium
+
+      - name: Run live editor e2e (real editors + shipped plugins, watermark handling)
+        working-directory: packages/core/tests/editors
+        run: npx playwright test
+
   pack-smoke:
     name: Pack & install (published artifacts)
     runs-on: ubuntu-latest
