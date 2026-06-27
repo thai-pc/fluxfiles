@@ -35,6 +35,9 @@ packages/core/tests/apps/laravel-app/
 .playwright-mcp/
 test-results/
 playwright-report/
+# Ad-hoc QA screenshots taken at the repo root during manual browser testing
+# (never part of the source — they slipped in once; keep them out for good).
+/*.png
 
 # OS files
 .DS_Store

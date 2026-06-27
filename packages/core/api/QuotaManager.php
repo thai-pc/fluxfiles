@@ -148,7 +148,10 @@ class QuotaManager
      * matching getUsage — so the quota meter can reuse this single pass instead of
      * listing again.
      *
-     * @return array{total_size:int,raw_total:int,file_count:int,by_type:array<string,array{size:int,count:int}>,by_folder:list<array{path:string,size:int,count:int}>}
+     * `supported` is false (with zeroed figures) on disks where a recursive walk is
+     * too slow (SFTP) — the caller then hides the meter instead of showing a 0.
+     *
+     * @return array{total_size:int,raw_total:int,file_count:int,by_type:array<string,array{size:int,count:int}>,by_folder:list<array{path:string,size:int,count:int}>,supported:bool}
      */
     public function getUsageBreakdown(string $disk, string $prefix, int $topFolders = 10, int $folderDepth = 1): array
     {
