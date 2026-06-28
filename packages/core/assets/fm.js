@@ -2968,10 +2968,20 @@ function fluxFilesApp() {
             return this.diskDriver === 'sftp' && this.tokenAllows('allow_terminal', false);
         },
 
+        // Optional self-hosted PTY server URL (ttyd/gotty/wetty) from the token. When
+        // present, the terminal opens as a true interactive PTY (embedded) instead of
+        // the built-in command-runner. Only http(s) is honored (no javascript:/data:).
+        get termPtyUrl() {
+            const u = String((this._tokenPayload() || {}).terminal_pty_url || '');
+            return /^https?:\/\//i.test(u) ? u : '';
+        },
+
         async openTerminal() {
             if (!this.canTerminal) return;
             this.showTerminal = true;
             this.termUnsupported = false;
+            // PTY mode: just embed the operator's terminal server — no xterm/command-runner.
+            if (this.termPtyUrl) return;
             await this._ensureXterm();
             this.$nextTick(() => this._mountTerm());
         },

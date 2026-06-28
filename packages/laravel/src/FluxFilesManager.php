@@ -156,6 +156,11 @@ class FluxFilesManager
         // for an endpoint that would 404. Same rule as the overlay watermark below.
         if (!empty($overrides['allow_terminal']) && config('fluxfiles.mode') === 'standalone') {
             $payload['allow_terminal'] = true;
+            // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — standalone only,
+            // like allow_terminal (the proxy doesn't expose the terminal endpoint).
+            if (!empty($overrides['terminal_pty_url'])) {
+                $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
+            }
         }
         foreach (['allow_share', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {

@@ -821,6 +821,27 @@ $token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 
   palette (dark slate + brand purple). **xterm.js is vendored** in
   `assets/vendor/xterm/` (no CDN) so it loads offline / when a CDN is blocked.
 
+#### Want a *real* interactive terminal (vim/top/htop)? — `terminal_pty_url` (free, opt-in)
+
+The command-runner can't do interactive TUIs. If you want a true PTY, run **any
+PTY-over-WebSocket server on your own box** — [ttyd](https://github.com/tsl0922/ttyd),
+[gotty](https://github.com/yudai/gotty), or [wetty](https://github.com/butlerx/wetty),
+all free/OSS — and point FluxFiles at it with the **`terminal_pty_url`** claim:
+
+```php
+$token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 100, null, 1800,
+    false, 0, 0, null, 0, 0, null, null, null, [
+        'allow_terminal'   => true,
+        'terminal_pty_url' => 'https://term.acme.com/',   // your self-hosted ttyd/gotty/wetty
+    ]);
+```
+
+When set (and `allow_terminal` is on), the terminal panel **embeds that server** for a
+full interactive shell instead of the command-runner. Empty (default) → the
+command-runner. This is **free/core** — a config toggle, never a paid module. The PTY
+server runs on the customer's own VPS (the box they manage), so FluxFiles' stateless
+core hosts nothing; that server owns its own auth. Only `http(s)` URLs are accepted.
+
 > 🔒 **Security model — this grants shell access as the SSH user.** A shell can't
 > be safely sandboxed by filtering its input; the real boundary is the **SSH
 > account's OS permissions** — use a **least-privilege user**. FluxFiles adds:

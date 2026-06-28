@@ -104,11 +104,17 @@ export interface BaseTokenOptions {
    *  access as the SSH user, so it's opt-in. Core-standalone: the token must target a real core
    *  (this SDK does), not a proxy adapter that doesn't serve /api/fm/terminal. */
   allowTerminal?: boolean;
-  /** Allow the paid Optimization module (POST /api/fm/optimize). Default **false** — opt-in.
-   *  Even when true, the optimize module must be installed + licensed on the server. */
+  /** Optional self-hosted PTY terminal URL (ttyd / gotty / wetty, or any PTY-over-WebSocket
+   *  server the operator runs). When set (and `allowTerminal` is true), the UI embeds it for a
+   *  true interactive terminal instead of the built-in command-runner. Free; must be http(s).
+   *  Core-standalone only (like `allowTerminal`). */
+  terminalPtyUrl?: string;
+  /** Allow the Optimization feature (POST /api/fm/optimize) — recompress images to WebP +
+   *  compress PDFs. **Free/core**; default **false** because it replaces/deletes originals, so
+   *  it's an opt-in capability. */
   allowOptimize?: boolean;
-  /** Auto-optimize images on upload (recompress to WebP in the pipeline). Default false;
-   *  only effective when the optimize module is installed + licensed on the server. */
+  /** Auto-optimize images on upload (recompress to WebP in the pipeline). Default false.
+   *  Free/core. */
   autoOptimize?: boolean;
   /** WebP quality for optimization, 40–95. `0`/omitted = inherit the server default (82). */
   optimizeQuality?: number;

@@ -119,6 +119,15 @@ class Claims
      *            disk whose host actually allows a shell). */
     public bool $allowTerminal = false;
 
+    /** @var string Optional URL of a self-hosted PTY terminal server (ttyd / gotty /
+     *            wetty, or any PTY-over-WebSocket service the operator runs on their
+     *            own box). When set (and `allow_terminal` is on), the UI embeds this
+     *            for a true interactive terminal (vim/top/htop) instead of the
+     *            built-in command-runner. Empty (default) → the stateless
+     *            command-runner. Free feature — opt-in config, never gated by a
+     *            license. Must be http(s) (rejected otherwise). */
+    public string $terminalPtyUrl = '';
+
     /** @var bool May this token edit a file's text content via /api/fm/content?
      *            Default FALSE — editing config/executable files (wp-config.php,
      *            .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
@@ -373,6 +382,10 @@ class Claims
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
         $c->allowTerminal = isset($payload->allow_terminal) ? (bool) $payload->allow_terminal : false;
+        // Only accept an http(s) PTY URL — anything else (javascript:, data:, …) is
+        // dropped so it can never reach an iframe src.
+        $ptyUrl = trim((string) ($payload->terminal_pty_url ?? ''));
+        $c->terminalPtyUrl = preg_match('#^https?://#i', $ptyUrl) ? $ptyUrl : '';
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->allowShare = (bool) ($payload->allow_share ?? false);

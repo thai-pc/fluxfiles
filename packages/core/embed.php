@@ -344,6 +344,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('allow_terminal', $webp)) {
         $payload['allow_terminal'] = (bool) $webp['allow_terminal'];
     }
+    if (!empty($webp['terminal_pty_url'])) {
+        $payload['terminal_pty_url'] = (string) $webp['terminal_pty_url'];
+    }
     if (array_key_exists('allow_code_edit', $webp)) {
         $payload['allow_code_edit'] = (bool) $webp['allow_code_edit'];
     }

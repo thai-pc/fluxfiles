@@ -95,5 +95,22 @@ test('allow_terminal turns on when set true', function () {
     assertTrue($c->isAllowed('allow_terminal') === true, 'isAllowed on');
 });
 
+// terminal_pty_url: optional self-hosted PTY server (free, opt-in); http(s) only.
+test('terminal_pty_url defaults empty (command-runner mode)', function () {
+    $c = Claims::fromJwtPayload((object) ['sub' => 'u']);
+    assertTrue($c->terminalPtyUrl === '', 'empty by default → command-runner');
+});
+
+test('terminal_pty_url accepts http(s), rejects anything else', function () {
+    $ok = Claims::fromJwtPayload((object) ['sub' => 'u', 'terminal_pty_url' => 'https://term.example.com/']);
+    assertTrue($ok->terminalPtyUrl === 'https://term.example.com/', 'https kept');
+    $http = Claims::fromJwtPayload((object) ['sub' => 'u', 'terminal_pty_url' => 'http://10.0.0.5:7681']);
+    assertTrue($http->terminalPtyUrl === 'http://10.0.0.5:7681', 'http kept');
+    foreach (['javascript:alert(1)', 'data:text/html,x', 'ws://x', 'ftp://x', 'not a url'] as $bad) {
+        $c = Claims::fromJwtPayload((object) ['sub' => 'u', 'terminal_pty_url' => $bad]);
+        assertTrue($c->terminalPtyUrl === '', "rejected: {$bad}");
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

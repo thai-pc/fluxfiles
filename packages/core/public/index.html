@@ -1488,12 +1488,23 @@
                 <h3><span x-text="t('terminal.title')"></span> <span class="ff-term-disk" x-text="currentDisk"></span></h3>
                 <button class="ff-activity-close" @click="closeTerminal()" :aria-label="t('common.close')">&times;</button>
             </div>
-            <!-- Host with no shell (shared hosting, internal-sftp/ForceCommand). -->
-            <div x-show="termUnsupported" class="ff-term-unsupported" x-text="t('terminal.unsupported')"></div>
-            <!-- xterm.js mounts here. -->
-            <div x-show="!termUnsupported" class="ff-term-host" x-ref="termHost"></div>
-            <!-- Dangerous-command double-confirm bar. -->
-            <div x-show="termConfirm" class="ff-term-confirm">
+            <!-- PTY mode: embed the operator's self-hosted terminal server (ttyd/gotty/wetty). -->
+            <template x-if="termPtyUrl">
+                <iframe class="ff-term-host" :src="termPtyUrl" title="terminal"
+                        sandbox="allow-scripts allow-same-origin allow-forms"
+                        referrerpolicy="no-referrer" style="border:0;width:100%;"></iframe>
+            </template>
+            <!-- Command-runner mode (default) -->
+            <template x-if="!termPtyUrl">
+                <div>
+                    <!-- Host with no shell (shared hosting, internal-sftp/ForceCommand). -->
+                    <div x-show="termUnsupported" class="ff-term-unsupported" x-text="t('terminal.unsupported')"></div>
+                    <!-- xterm.js mounts here. -->
+                    <div x-show="!termUnsupported" class="ff-term-host" x-ref="termHost"></div>
+                </div>
+            </template>
+            <!-- Dangerous-command double-confirm bar (command-runner only). -->
+            <div x-show="termConfirm && !termPtyUrl" class="ff-term-confirm">
                 <span x-text="t('terminal.danger_confirm')"></span>
                 <code x-text="termConfirm && termConfirm.cmd"></code>
                 <div class="ff-term-confirm-actions">
