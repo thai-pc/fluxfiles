@@ -515,15 +515,20 @@ until purchase. The watermark is applied **on the fly when serving** (`/api/fm/i
 — the source file is never modified. Enable it with token claims (off by default):
 
 ```php
-$token = fluxfiles_token('user-42', ['read'], ['local'], 'users/42', 10, null, 3600,
-    false, 0, 0, null, 0, 0, null, null, null, [
+$token = fluxfiles_token([
+    'user'   => 'user-42',
+    'perms'  => ['read'],
+    'disks'  => ['local'],
+    'prefix' => 'users/42',
+    'claims' => [
         'webp_enabled'      => true,
         'watermark_enabled' => true,
         'watermark_type'    => 'text',          // or 'logo'
         'watermark_text'    => '© Acme Corp',
         'watermark_position'=> 'bottom-right',
         'watermark_opacity' => 0.6,
-    ]);
+    ],
+]);
 ```
 
 - Enabling `watermark_enabled` **automatically makes the token preview-only**
@@ -1147,19 +1152,21 @@ lives in the JWT. Enabling it is the **only** step — just set the import claim
 when you mint the token.
 
 ```php
-// Core (standalone) — the 15th param is an array of import claims
-$token = fluxfiles_token(
-    'user-42', ['read', 'write'], ['local'], 'users/42', 10, null, 3600, false, 0, 0,
-    null, 0, 0, null,
-    [
+// Core (standalone) — options-array form; `import` is the URL-import claim group
+$token = fluxfiles_token([
+    'user'   => 'user-42',
+    'perms'  => ['read', 'write'],
+    'disks'  => ['local'],
+    'prefix' => 'users/42',
+    'import' => [
         'allow_url_import'     => true,          // required — enables the feature
         'max_import_mb'        => 20,            // optional — cap per import (MB)
         'import_url_allowlist' => ['*.unsplash.com', 'cdn.example.com'], // optional
         'import_path'          => 'imports',     // optional — force a destination
         'import_rate_limit'    => 10,            // optional — imports/min
         'import_concurrency'   => 3,             // optional — max concurrent
-    ]
-);
+    ],
+]);
 ```
 
 ```ts

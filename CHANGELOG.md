@@ -3,6 +3,74 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.60] — 2026-06-28
+
+> Released: core `core-v0.2.52`; adapters react `0.2.8`, vue `0.2.7`, sdk `0.2.6`,
+> node `0.1.18`, laravel `0.2.26`, wordpress `0.2.26`.
+
+### Added
+
+- **One options-array token API + `claims` escape hatch.** `fluxfiles_token([...])`
+  now takes a single options object; the `claims` map sets ANY JWT claim by its raw
+  name (the same passthrough added to node/laravel/wordpress) so nothing is unsettable.
+  The legacy positional signature still works.
+- **`docs/CONFIG.md` — single configuration reference** for all 65 JWT claims + server
+  env vars, with a guard test (`test-config-doc.php`) that fails if a claim is
+  undocumented.
+
+### Fixed
+
+- **Watermark: logo over a transparent PNG was darkened.** intervention v3's
+  opacity<100 `place()` composites through an opaque scratch image, so a logo placed
+  on a transparent (alpha) PNG/WebP came out a dark box (JPEG was fine). Opacity is
+  now baked into the logo's alpha and placed at 100% (`ImageCompat::bakeLogoOpacity`).
+- **Modal dark-mode header flashed light (react/vue/sdk).** The modal chrome can't
+  read the cross-origin iframe theme, so it flashed light before a dark theme settled.
+  It now mirrors the embedded UI's anti-flash boot (resolves from
+  `localStorage['fluxfiles_theme']` when theme is auto/unset; persists an explicit one).
+
+### Security
+
+- **JWT-in-URL hardening.** The standalone `?token=<JWT>` is now stripped from the URL
+  on boot (`history.replaceState`) and `/public/index.html` sends
+  `Referrer-Policy: no-referrer` (+ a `<meta referrer>` backup) — a full-privilege JWT
+  can no longer leak via history / access logs / `Referer` / the copy buffer. CSRF uses
+  the `Origin` header, so it's unaffected.
+
+## [0.2.59] — 2026-06-28
+
+> Released: core `core-v0.2.51`. Adapters unchanged.
+
+### Added
+
+- **Free PTY terminal toggle.** The `terminal_pty_url` claim makes the UI embed a
+  self-hosted PTY server (ttyd / gotty / wetty, on the operator's own box) for a true
+  interactive terminal; empty (default) → the stateless command-runner. Free/core, no
+  custom sidecar — only `http(s)` URLs accepted. Forwarded by embed + laravel
+  (standalone) + node SDK.
+
+## [0.2.58] — 2026-06-28
+
+> Released: core `core-v0.2.50` (Packagist + Docker). Adapters unchanged.
+
+### Added
+
+- **Free AVIF delivery in `/api/fm/img`.** `format=auto` (default) content-negotiates
+  **AVIF → WebP → original** from the `Accept` header (AVIF when the build supports it);
+  `format=avif`/`webp` force it. AVIF and WebP cache as separate files; the response
+  sends `Vary: Accept`.
+- **On-demand box sizing.** `/api/fm/img` gains `height` + `fit` (`cover` crops /
+  `contain` fits, default) + `dpr` (1/2/3) — folded into the cache key, never upsizing.
+
+### Changed
+
+- **Optimization is now FREE / core** (was a paid module). Image → WebP recompression
+  at rest + Ghostscript PDF compression + batch + on-upload `auto_optimize` + savings
+  in the usage dashboard now ship in the MIT core (`POST /api/fm/optimize`, opt-in via
+  the free `allow_optimize` claim). The AVIF-at-rest path and the `optimize_format`
+  claim were removed (AVIF is a free delivery feature now); the `packages/optimize/`
+  paid module is retired.
+
 ## [0.2.57] — 2026-06-27
 
 > Released: core `core-v0.2.49` (Packagist + Docker). Adapters unchanged.

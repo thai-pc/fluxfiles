@@ -72,6 +72,19 @@ gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`
   `AiTagger`; "share" = a narrow short-TTL token, not a stateful public endpoint.
 - Don't edit `dist/` or `vendor/` (build artifacts); edit source and rebuild.
   Don't read/print secrets from `.env`.
+- **`docs/CONFIG.md` is the single source of truth for every JWT claim + env var.**
+  Document any new claim there (the `test-config-doc.php` guard enforces it). Mint
+  tokens with the one-options-array API — `fluxfiles_token(['user'=>…, 'claims'=>[…]])`
+  — where `claims` (mirrored in node/laravel/wordpress) sets any claim by raw name.
+- **Never put the main JWT in a URL** — adapters use `postMessage`, API uses
+  `Authorization: Bearer`. `?token=` is dev-only (stripped on boot + `Referrer-Policy:
+  no-referrer`). Per-file `/img`/`/stream` query tokens are fine (1-file scope, short
+  TTL, distinct type). CSRF uses `Origin`, not `Referer`.
+- **BYO-embed over build-and-sell**: where great free OSS self-host exists, embed it via
+  a free config toggle, don't build a competitor (terminal → `terminal_pty_url` ttyd;
+  planned PDF → Stirling, office → Collabora/OnlyOffice, e-sign → DocuSeal).
+- **Optimization is FREE/core** (was paid). Paid modules are now 6: share/ai/ocr/virus/
+  backup/c2pa (gitignored, `ModuleRegistry` 3-layer gate).
 
 ## Setup & common commands
 
@@ -118,6 +131,8 @@ wrappers, node-sdk, browser-e2e, pack-smoke, docker-build).
 - Release flow: bump the package version (package.json / plugin header /
   composer) → add/extend the CHANGELOG entry → `chore(release): <pkg> X.Y.Z`
   commit → annotated tag → push commit + tag.
+- **Push ≤3 release tags per `git push`** — pushing >3 at once silently triggers
+  no publish workflows. Batch the tags when releasing several packages together.
 - npm packages publish from their subdir (`npm publish`; scope access is
   pre-configured). `npm publish` needs the maintainer's 2FA OTP.
 - The WordPress plugin ZIP is built fresh from the current core by
