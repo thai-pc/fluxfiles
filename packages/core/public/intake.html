@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- The portal token rides the URL (?token=). It's a narrow write-only token, but
+       still don't leak it via Referer to sub-resources / outbound links. -->
+  <meta name="referrer" content="no-referrer">
+  <title>Upload files</title>
+  <script>
+    (function () {
+      var t = typeof localStorage !== 'undefined' && localStorage.getItem('fluxfiles_theme');
+      var dark = t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    :root { --bg:#f5f5f7; --card:#fff; --fg:#1b1b22; --muted:#6b7280; --accent:#7c3aed; --border:rgba(0,0,0,.1); --ok:#16a34a; --err:#dc2626; }
+    html.dark { --bg:#16161a; --card:#1f1f25; --fg:#e6e6ea; --muted:#9aa0aa; --border:rgba(255,255,255,.1); }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--fg);
+           min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; width:100%; max-width:520px; padding:28px;
+            box-shadow:0 10px 40px rgba(0,0,0,.10); }
+    h1 { font-size:20px; margin:0 0 4px; }
+    .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
+    .drop { border:2px dashed var(--border); border-radius:12px; padding:34px 16px; text-align:center; cursor:pointer; transition:.15s;
+            color:var(--muted); }
+    .drop.over { border-color:var(--accent); color:var(--fg); background:rgba(124,58,237,.06); }
+    .drop strong { color:var(--accent); }
+    input[type=password] { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:9px; background:transparent; color:var(--fg);
+                           font-size:14px; margin-bottom:14px; }
+    .meta { font-size:12.5px; color:var(--muted); margin-top:14px; line-height:1.7; }
+    .list { margin-top:16px; display:flex; flex-direction:column; gap:8px; }
+    .row { display:flex; align-items:center; gap:10px; font-size:13.5px; }
+    .row .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bar { height:4px; border-radius:3px; background:var(--border); overflow:hidden; flex:0 0 80px; }
+    .bar > i { display:block; height:100%; width:0; background:var(--accent); transition:width .2s; }
+    .st-ok { color:var(--ok); } .st-err { color:var(--err); }
+    .msg { padding:14px; border-radius:10px; font-size:14px; text-align:center; }
+    .msg.err { background:rgba(220,38,38,.1); color:var(--err); }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="gate" class="msg err hidden"></div>
+    <div id="form" class="hidden">
+      <h1 id="label">Upload files</h1>
+      <p class="sub" id="sub">Drop files below to send them securely.</p>
+      <input type="password" id="pw" class="hidden" placeholder="Password required to upload">
+      <div class="drop" id="drop">
+        <div><strong>Choose files</strong> or drag &amp; drop here</div>
+      </div>
+      <input type="file" id="file" multiple class="hidden">
+      <div class="list" id="list"></div>
+      <div class="meta" id="constraints"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var qs = new URLSearchParams(location.search);
+      var token = qs.get('token') || '';
+      var $ = function (id) { return document.getElementById(id); };
+      var gate = $('gate'), form = $('form');
+
+      function fail(text) { gate.textContent = text; gate.classList.remove('hidden'); }
+
+      if (!token) { fail('This upload link is missing its token.'); return; }
+
+      var info = null;
+      fetch('/api/fm/intake/info?token=' + encodeURIComponent(token))
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.j || res.j.error) { fail((res.j && res.j.error) || 'This upload link is invalid or has expired.'); return; }
+          info = res.j.data;
+          render();
+        })
+        .catch(function () { fail('Could not load this upload portal.'); });
+
+      function render() {
+        form.classList.remove('hidden');
+        if (info.label) { $('label').textContent = info.label; }
+        if (info.has_password) { $('pw').classList.remove('hidden'); }
+        var bits = [];
+        if (info.allowed_ext && info.allowed_ext.length) { bits.push('Allowed: ' + info.allowed_ext.join(', ')); }
+        if (info.max_mb) { bits.push('Max ' + info.max_mb + ' MB per file'); }
+        if (info.remaining !== null && info.remaining !== undefined) { bits.push(info.remaining + ' upload(s) remaining'); }
+        $('constraints').textContent = bits.join(' · ');
+      }
+
+      var drop = $('drop'), fileInput = $('file'), list = $('list');
+      drop.addEventListener('click', function () { fileInput.click(); });
+      fileInput.addEventListener('change', function () { handle(fileInput.files); fileInput.value = ''; });
+      ['dragenter', 'dragover'].forEach(function (e) { drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.add('over'); }); });
+      ['dragleave', 'drop'].forEach(function (e) { drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.remove('over'); }); });
+      drop.addEventListener('drop', function (ev) { handle(ev.dataTransfer.files); });
+
+      function handle(files) {
+        for (var i = 0; i < files.length; i++) { upload(files[i]); }
+      }
+
+      function upload(file) {
+        var row = document.createElement('div'); row.className = 'row';
+        var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = file.name;
+        var bar = document.createElement('span'); bar.className = 'bar'; var fill = document.createElement('i'); bar.appendChild(fill);
+        var st = document.createElement('span');
+        row.appendChild(nm); row.appendChild(bar); row.appendChild(st); list.appendChild(row);
+
+        var fd = new FormData();
+        fd.append('token', token);
+        if (info.has_password) { fd.append('password', $('pw').value); }
+        fd.append('file', file);
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/fm/intake/upload');
+        xhr.upload.onprogress = function (e) { if (e.lengthComputable) { fill.style.width = Math.round(e.loaded / e.total * 100) + '%'; } };
+        xhr.onload = function () {
+          var j = {};
+          try { j = JSON.parse(xhr.responseText); } catch (e) {}
+          if (xhr.status >= 200 && xhr.status < 300 && j.data) {
+            fill.style.width = '100%'; st.textContent = '✓'; st.className = 'st-ok';
+            if (j.data.remaining !== null && j.data.remaining !== undefined) {
+              var c = $('constraints'); c.textContent = c.textContent.replace(/\d+ upload\(s\) remaining/, j.data.remaining + ' upload(s) remaining');
+            }
+          } else {
+            st.textContent = (j && j.error) ? '✕ ' + j.error : '✕'; st.className = 'st-err';
+          }
+        };
+        xhr.onerror = function () { st.textContent = '✕'; st.className = 'st-err'; };
+        xhr.send(fd);
+      }
+    })();
+  </script>
+</body>
+</html>

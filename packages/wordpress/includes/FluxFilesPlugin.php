@@ -230,9 +230,9 @@ class FluxFilesPlugin
     private static function applyEditionPreset(array &$payload, ?string $edition): void
     {
         $presets = [
-            'pro'        => ['allow_optimize' => true, 'allow_share' => true],
-            'agency'     => ['allow_optimize' => true, 'allow_share' => true],
-            'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_virus_scan' => true],
+            'pro'        => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
+            'agency'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
+            'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true],
         ];
         foreach ($presets[strtolower((string) $edition)] ?? [] as $k => $v) {
             if (!array_key_exists($k, $payload)) {
@@ -307,7 +307,7 @@ class FluxFilesPlugin
         if (array_key_exists('allow_code_edit', $overrides)) {
             $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
         }
-        foreach (['allow_share', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        foreach (['allow_share', 'allow_intake', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
             }

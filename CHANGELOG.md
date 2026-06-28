@@ -3,6 +3,33 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.62] — 2026-06-28
+
+> Released: core `core-v0.2.54`; node `0.1.19`, laravel `0.2.27`, wordpress `0.2.27`.
+
+### Added
+
+- **Intake / Upload Portals (paid module — the inbound twin of Share).** An operator
+  mints a branded public "send us your files" link; anonymous visitors drop files
+  **into the operator's storage** at a scoped folder, no account. A portal is a
+  narrow **write-scoped token** + a storage-resident record (`_fluxfiles/intakes.json`)
+  for the caps + received-counter; public uploads run through the normal upload
+  pipeline (quota / dedup / variants / search index). New endpoints:
+  `POST /api/fm/intake` (create), `/intake/list`, `/intake/revoke` (operator, gated by
+  the `allow_intake` claim), plus public `GET /api/fm/intake/info` + `POST
+  /api/fm/intake/upload` (authed by the portal token, no main JWT). Per-file size +
+  extension, a total-files cap, optional password, and expiry are enforced. Reference
+  landing page at `/public/intake.html`. The module ships in the private
+  `fluxfiles/intake` package; free core returns `501 module_not_installed`.
+
+### Fixed
+
+- **Paid-module claim gate was broken.** `Claims::isAllowed()` had no case for the
+  module claims (`allow_share`/`allow_ai_vision`/`allow_ocr`/`allow_virus_scan`/
+  `allow_backup`/`allow_c2pa`), so `ModuleRegistry`'s layer-3 check **403'd every paid
+  module** regardless of the token. Added all module claims (incl. `allow_intake`).
+  Also fixed the share create route signing tokens with an undefined `$secret`.
+
 ## [0.2.61] — 2026-06-28
 
 > Released: core `core-v0.2.53`. Adapters unchanged.

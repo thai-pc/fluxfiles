@@ -182,6 +182,15 @@ if ($method === 'GET' && $uri === '/api/fm/img') {
     exit;
 }
 
+// Intake / Upload Portals — PUBLIC endpoints (no main JWT; authenticated by the
+// portal token itself, like /img and /stream). `info` = the landing page's data;
+// `upload` = an anonymous visitor dropping a file into the operator's storage.
+// The create/manage side is authed + gated under the main routes below.
+if ($uri === '/api/fm/intake/info' || $uri === '/api/fm/intake/upload') {
+    handleIntakePublic($method, $uri);
+    exit;
+}
+
 try {
     // Auth
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
@@ -499,7 +508,23 @@ function routeRequest(
     if ($method === 'POST' && $uri === '/api/fm/share') {
         $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
-        return $module->createShare($fm, $diskManager, $claims, $secret, $body);
+        return $module->createShare($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
+    }
+    // Intake / Upload Portals — operator create + manage (public info/upload are
+    // handled before auth). Same 3-layer gate (501/402/403).
+    if ($method === 'POST' && $uri === '/api/fm/intake') {
+        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->createPortal($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
+    }
+    if ($method === 'GET' && $uri === '/api/fm/intake/list') {
+        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->listPortals($diskManager, $claims, (string) ($_GET['disk'] ?? 'local'));
+    }
+    if ($method === 'POST' && $uri === '/api/fm/intake/revoke') {
+        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->revokePortal($diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['jti'] ?? ''));
     }
     if ($method === 'POST' && $uri === '/api/fm/ai-vision') {
         $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\LicenseManager::fromEnv(), $claims);
@@ -1012,6 +1037,77 @@ function ff_snap_quality($raw): int
         }
     }
     return $best;
+}
+
+/**
+ * Public Intake endpoints (no main JWT — authenticated by the portal token itself).
+ *   GET  /api/fm/intake/info?token=…       → the landing page's data (label/caps).
+ *   POST /api/fm/intake/upload {token,password?} + file → anonymous file drop.
+ * Emits the same JSON envelope as the main app and exits.
+ */
+function handleIntakePublic(string $method, string $uri): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+        if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
+            throw new ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
+        }
+        // Gate: the module must be installed + licensed (the portal token is the
+        // per-request auth — there is no main JWT / claim on a public request).
+        if (!\FluxFiles\ModuleRegistry::installed('intake')) {
+            throw new ApiException("The 'intake' module is not installed on this server", 501, 'module_not_installed', ['module' => 'intake']);
+        }
+        if (!\FluxFiles\LicenseManager::fromEnv()->licensed('intake')) {
+            throw new ApiException("The 'intake' module requires a valid license", 402, 'license_required', ['module' => 'intake']);
+        }
+        $module = new \FluxFiles\Intake\IntakeModule();
+        $dm = new DiskManager(require __DIR__ . '/../config/disks.php');
+
+        if ($method === 'GET' && $uri === '/api/fm/intake/info') {
+            $token = (string) ($_GET['token'] ?? '');
+            echo json_encode(['data' => $module->portalInfo($dm, $secret, $token), 'error' => null]);
+            return;
+        }
+
+        if ($method === 'POST' && $uri === '/api/fm/intake/upload') {
+            $token = (string) ($_POST['token'] ?? '');
+            $password = isset($_POST['password']) ? (string) $_POST['password'] : null;
+            if (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                throw new ApiException('No file uploaded', 400, 'no_file');
+            }
+            $file = [
+                'name'     => (string) $_FILES['file']['name'],
+                'tmp_name' => (string) $_FILES['file']['tmp_name'],
+                'size'     => (int) $_FILES['file']['size'],
+                'type'     => (string) ($_FILES['file']['type'] ?? ''),
+                'error'    => (int) $_FILES['file']['error'],
+            ];
+            // Build a FileManager from the portal token's own (write-scoped) claims.
+            try {
+                $payload = \FluxFiles\JwtCompat::decode($token, $secret);
+            } catch (\Throwable $e) {
+                throw new ApiException('Invalid or expired portal link', 403, 'intake_invalid');
+            }
+            $portalClaims = \FluxFiles\Claims::fromJwtPayload($payload);
+            $portalFm = new FileManager($dm, $portalClaims, new StorageMetadataHandler($dm));
+            $portalFm->setStreamSecret($secret);
+            $res = $module->receiveUpload($portalFm, $dm, $secret, $token, $file, $password);
+            echo json_encode(['data' => $res, 'error' => null]);
+            return;
+        }
+
+        throw new ApiException('Not found', 404, 'not_found');
+    } catch (ApiException $e) {
+        http_response_code($e->getHttpCode());
+        $r = ['data' => null, 'error' => $e->getMessage()];
+        if ($e->getErrorCode() !== null) { $r['error_code'] = $e->getErrorCode(); }
+        if ($e->getErrorParams()) { $r['error_params'] = $e->getErrorParams(); }
+        echo json_encode($r);
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        echo json_encode(['data' => null, 'error' => 'Internal server error', 'error_code' => 'server_error']);
+    }
 }
 
 /**

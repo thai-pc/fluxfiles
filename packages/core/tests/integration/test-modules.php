@@ -79,6 +79,15 @@ test('layer 3 (claim): allow_optimize parses; isAllowed maps it', function () {
     assertEqual(false, claims(true)->isAllowed('allow_nonexistent'), 'unknown claim → fail-closed');
 });
 
+test('layer 3: isAllowed maps EVERY paid-module claim (gate would 403 all otherwise)', function () {
+    foreach (['allow_share', 'allow_intake', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $cl) {
+        $on = Claims::fromJwtPayload((object) ['sub' => 'u', $cl => true]);
+        $off = Claims::fromJwtPayload((object) ['sub' => 'u']);
+        assertEqual(true, $on->isAllowed($cl), "{$cl} true → allowed");
+        assertEqual(false, $off->isAllowed($cl), "{$cl} default → denied");
+    }
+});
+
 test('layer 1: unknown / not-installed module → 501 module_not_installed', function () use ($SEC, $KEYS, $NOW) {
     ModuleRegistry::reset();
     // 'demo' isn't in the built-in map and no class is registered for it.

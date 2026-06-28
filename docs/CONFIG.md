@@ -171,6 +171,7 @@ All four accept the same `claims` map.
 | Claim | Type | Default | Module |
 |---|---|---|---|
 | `allow_share` | bool | `false` | Branded Share. |
+| `allow_intake` | bool | `false` | Intake / Upload Portals (public "send us your files" links). |
 | `allow_ai_vision` | bool | `false` | AI Vision (BYO-key). |
 | `allow_ocr` | bool | `false` | OCR. |
 | `allow_virus_scan` | bool | `false` | Virus scan (Enterprise). |

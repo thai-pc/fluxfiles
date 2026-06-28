@@ -99,9 +99,9 @@ function sanitizeVariants(v: BaseTokenOptions['variants']): Record<string, numbe
 
 /** Edition preset (DX sugar): default a tier's claims; explicit opts below win. */
 const EDITION_PRESETS: Record<string, Record<string, boolean>> = {
-  pro: { allow_optimize: true, allow_share: true },
-  agency: { allow_optimize: true, allow_share: true },
-  enterprise: { allow_optimize: true, allow_share: true, allow_virus_scan: true },
+  pro: { allow_optimize: true, allow_share: true, allow_intake: true },
+  agency: { allow_optimize: true, allow_share: true, allow_intake: true },
+  enterprise: { allow_optimize: true, allow_share: true, allow_intake: true, allow_virus_scan: true, allow_c2pa: true },
 };
 
 /** Copy the optional per-tenant override claims into a payload when set. */
@@ -148,6 +148,7 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowOptimize !== undefined) payload.allow_optimize = !!opts.allowOptimize;
   // Other paid-module claims (inert unless the module is installed + licensed).
   if (opts.allowShare !== undefined) payload.allow_share = !!opts.allowShare;
+  if (opts.allowIntake !== undefined) payload.allow_intake = !!opts.allowIntake;
   if (opts.allowAiVision !== undefined) payload.allow_ai_vision = !!opts.allowAiVision;
   if (opts.allowOcr !== undefined) payload.allow_ocr = !!opts.allowOcr;
   if (opts.allowVirusScan !== undefined) payload.allow_virus_scan = !!opts.allowVirusScan;

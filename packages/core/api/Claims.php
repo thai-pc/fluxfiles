@@ -141,6 +141,7 @@ class Claims
     /** @var bool Paid module claims (3-layer gate — code installed + licensed + this
      *            claim). All default FALSE (opt-in). See ModuleRegistry. */
     public bool $allowShare = false;       // Branded Share links (fluxfiles/share)
+    public bool $allowIntake = false;      // Intake / upload portals (fluxfiles/intake)
     public bool $allowAiVision = false;    // AI Vision: bg-removal/upscale/smart-crop (fluxfiles/ai)
     public bool $allowOcr = false;         // OCR / document text extraction (fluxfiles/ocr)
     public bool $allowVirusScan = false;   // Virus/malware scan on upload (fluxfiles/virus)
@@ -389,6 +390,7 @@ class Claims
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->allowShare = (bool) ($payload->allow_share ?? false);
+        $c->allowIntake = (bool) ($payload->allow_intake ?? false);
         $c->allowAiVision = (bool) ($payload->allow_ai_vision ?? false);
         $c->allowOcr = (bool) ($payload->allow_ocr ?? false);
         $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);
@@ -478,6 +480,15 @@ class Claims
             case 'allow_chmod':      return $this->allowChmod;
             case 'allow_terminal':   return $this->allowTerminal;
             case 'allow_download':   return $this->allowDownload;
+            // Paid-module claims — without these the ModuleRegistry 3-layer gate
+            // (layer 3) would 403 every paid module regardless of the token.
+            case 'allow_share':      return $this->allowShare;
+            case 'allow_intake':     return $this->allowIntake;
+            case 'allow_ai_vision':  return $this->allowAiVision;
+            case 'allow_ocr':        return $this->allowOcr;
+            case 'allow_virus_scan': return $this->allowVirusScan;
+            case 'allow_backup':     return $this->allowBackup;
+            case 'allow_c2pa':       return $this->allowC2pa;
             default:                 return false;
         }
     }

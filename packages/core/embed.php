@@ -156,9 +156,9 @@ function _fluxfiles_build_token(array $o): string
 function fluxfiles_apply_edition_preset(array &$payload, ?string $edition): void
 {
     $presets = [
-        'pro'        => ['allow_optimize' => true, 'allow_share' => true],
-        'agency'     => ['allow_optimize' => true, 'allow_share' => true],
-        'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_virus_scan' => true],
+        'pro'        => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
+        'agency'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
+        'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true],
     ];
     $claims = $presets[strtolower((string) $edition)] ?? [];
     foreach ($claims as $k => $v) {
@@ -379,7 +379,7 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
         $payload['srcset_sizes'] = (string) $webp['srcset_sizes'];
     }
     // Paid-module claims (3-layer gate; inert unless the module is installed+licensed).
-    foreach (['allow_share', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+    foreach (['allow_share', 'allow_intake', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
         if (array_key_exists($mc, $webp)) {
             $payload[$mc] = (bool) $webp[$mc];
         }

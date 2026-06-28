@@ -141,6 +141,7 @@ export interface BaseTokenOptions {
   /** Paid-module claims (3-layer gate: code installed + licensed + this claim).
    *  All default off; inert unless the module is installed & licensed on the server. */
   allowShare?: boolean;
+  allowIntake?: boolean;
   allowAiVision?: boolean;
   allowOcr?: boolean;
   allowVirusScan?: boolean;

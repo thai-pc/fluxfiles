@@ -260,7 +260,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     // - terminal: opens a shell over SSH on an SFTP disk (phpseclib exec). It needs
     //   the live SFTP connection + the allow_terminal claim and is a core-standalone /
     //   Docker feature; the adapter proxies don't expose a shell.
-    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'share', 'ai-vision', 'ocr', 'backup', 'c2pa'];
+    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'share', 'ai-vision', 'ocr', 'backup', 'c2pa',
+        // Intake: create/manage are paid + the public info/upload are token-authed
+        // (no main JWT) — core-standalone, like share. Adapters may proxy later.
+        'intake', 'intake/info', 'intake/list', 'intake/revoke', 'intake/upload'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

@@ -76,6 +76,7 @@ docs/license-signing-key*
 # own private repo for distribution). NEVER commit these to the public monorepo.
 packages/optimize/
 packages/share/
+packages/intake/
 packages/ai/
 packages/ocr/
 packages/virus/

@@ -31,6 +31,7 @@ final class ModuleRegistry
         // NOTE: 'optimize' was a paid module but is now FREE/core (\FluxFiles\OptimizeModule),
         // invoked directly by the /api/fm/optimize route — no longer gated here.
         'share'    => '\\FluxFiles\\Share\\ShareModule',
+        'intake'   => '\\FluxFiles\\Intake\\IntakeModule',
         'ai'       => '\\FluxFiles\\Ai\\AiVisionModule',
         'ocr'      => '\\FluxFiles\\Ocr\\OcrModule',
         'virus'    => '\\FluxFiles\\Virus\\VirusScanModule',
