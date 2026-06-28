@@ -185,6 +185,11 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.usageCriticalThreshold && opts.usageCriticalThreshold > 0) payload.usage_critical_threshold = Math.trunc(opts.usageCriticalThreshold);
   if (opts.usageTopFoldersCount && opts.usageTopFoldersCount > 0) payload.usage_top_folders_count = Math.trunc(opts.usageTopFoldersCount);
   if (opts.usageFolderDepth && opts.usageFolderDepth > 0) payload.usage_folder_depth = Math.trunc(opts.usageFolderDepth);
+
+  // Generic escape hatch: ANY claim by its raw (snake_case) name. Merged last so an
+  // explicit claim wins over a preset/group default. The server sanitizes on decode.
+  // See docs/CONFIG.md for the full claim list.
+  if (opts.claims) for (const [k, v] of Object.entries(opts.claims)) if (v !== undefined && v !== null) payload[k] = v;
 }
 
 /**

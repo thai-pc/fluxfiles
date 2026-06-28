@@ -98,6 +98,10 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     // The HTML is dynamic (locale + asset hashes) and must always be revalidated,
     // otherwise a cached page would keep pointing at the old ?v= asset URLs.
     header('Cache-Control: no-cache, must-revalidate');
+    // Security: this page may be opened with a `?token=<JWT>` (standalone mode), so
+    // never leak the URL (token included) via the Referer header to any sub-resource
+    // or outbound link. Does NOT affect the Origin header → CSRF same-origin still works.
+    header('Referrer-Policy: no-referrer');
     $localeJson = $i18n->toJson();
     $locale = $i18n->locale();
     $dir = $i18n->direction();

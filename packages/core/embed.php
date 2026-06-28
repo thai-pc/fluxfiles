@@ -25,7 +25,7 @@ use FluxFiles\JwtCompat;
  *                                 0 = unlimited.
  */
 function fluxfiles_token(
-    string $userId,
+    string|array $userId,
     array $perms = ['read'],
     array $disks = ['local'],
     string $prefix = '',
@@ -43,53 +43,103 @@ function fluxfiles_token(
     ?array $media = null,
     ?array $webp = null,
     ?array $usage = null,
-    ?string $edition = null
+    ?string $edition = null,
+    ?array $extra = null
 ): string {
+    // Recommended form: ONE options array (every claim in one place). Pass an array
+    // as the first arg, e.g.
+    //   fluxfiles_token(['user' => 'u', 'perms' => ['read','write'], 'disks' => ['sftp'],
+    //                    'edition' => 'pro', 'webp' => [...], 'media' => [...],
+    //                    'claims' => ['allow_terminal' => true, 'terminal_pty_url' => '…',
+    //                                 'allow_optimize' => true, 'upload_collision' => 'overwrite']]);
+    // The `claims` map takes ANY of the JWT claims (snake_case) — the single escape
+    // hatch so nothing is unsettable. See docs/CONFIG.md for the full claim list.
+    if (is_array($userId)) {
+        return _fluxfiles_build_token($userId);
+    }
+    // Legacy positional form → fold into the same options builder. `$extra` is a raw
+    // claims map (snake_case) merged last, so positional callers also have the hatch.
+    return _fluxfiles_build_token([
+        'user' => $userId, 'perms' => $perms, 'disks' => $disks, 'prefix' => $prefix,
+        'maxUploadMb' => $maxUploadMb, 'allowedExt' => $allowedExt, 'ttl' => $ttl,
+        'ownerOnly' => $ownerOnly, 'maxStorageMb' => $maxStorageMb, 'maxFiles' => $maxFiles,
+        'aiAutoTag' => $aiAutoTag, 'rateRead' => $rateRead, 'rateWrite' => $rateWrite,
+        'variants' => $variants, 'import' => $import, 'media' => $media, 'webp' => $webp,
+        'usage' => $usage, 'edition' => $edition, 'claims' => $extra,
+    ]);
+}
+
+/**
+ * Build + sign a token from ONE options array. Accepts both camelCase option names
+ * (maxUploadMb) and snake_case claim aliases (max_upload). The `claims` (or `extra`)
+ * key is a raw map of any JWT claims merged last — explicit claims win. Decode-side
+ * `Claims::fromJwtPayload` sanitizes/clamps everything, so raw merge is safe.
+ *
+ * @param array<string,mixed> $o
+ */
+function _fluxfiles_build_token(array $o): string
+{
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
+    $pick = static function (array $keys, $default) use ($o) {
+        foreach ($keys as $k) {
+            if (array_key_exists($k, $o)) { return $o[$k]; }
+        }
+        return $default;
+    };
 
+    $ttl = (int) $pick(['ttl'], 3600);
     $payload = [
-        'sub'         => $userId,
+        'sub'         => (string) $pick(['user', 'userId', 'sub'], ''),
         'iat'         => $now,
         'exp'         => $now + $ttl,
         'jti'         => bin2hex(random_bytes(12)),
-        'perms'       => $perms,
-        'disks'       => $disks,
-        'prefix'      => $prefix,
-        'max_upload'  => $maxUploadMb,
-        'allowed_ext' => $allowedExt,
-        'max_storage' => $maxStorageMb,
-        'max_files'   => $maxFiles,
+        'perms'       => $pick(['perms'], ['read']),
+        'disks'       => $pick(['disks'], ['local']),
+        'prefix'      => (string) $pick(['prefix'], ''),
+        'max_upload'  => (int) $pick(['maxUploadMb', 'max_upload'], 10),
+        'allowed_ext' => $pick(['allowedExt', 'allowed_ext'], null),
+        'max_storage' => (int) $pick(['maxStorageMb', 'max_storage'], 0),
+        'max_files'   => (int) $pick(['maxFiles', 'max_files'], 0),
     ];
 
-    if ($ownerOnly) {
+    if ($pick(['ownerOnly', 'owner_only'], false)) {
         $payload['owner_only'] = true;
     }
-    // Edition preset (DX sugar): turns on the right claims for a tier so callers
-    // don't hand-pick each. Applied BEFORE the explicit overrides below, so a
-    // caller can still fine-tune. The license still gates the actual code.
-    fluxfiles_apply_edition_preset($payload, $edition);
-    // Optional per-tenant overrides — only embedded when set, to keep tokens lean.
+    // Edition preset (DX sugar): turns on a tier's claims; explicit claims still win.
+    fluxfiles_apply_edition_preset($payload, $pick(['edition'], null));
+
+    $aiAutoTag = $pick(['aiAutoTag', 'ai_auto_tag'], null);
     if ($aiAutoTag !== null) {
-        $payload['ai_auto_tag'] = $aiAutoTag;
+        $payload['ai_auto_tag'] = (bool) $aiAutoTag;
     }
+    $rateRead = (int) $pick(['rateRead', 'rate_read'], 0);
     if ($rateRead > 0) {
         $payload['rate_read'] = $rateRead;
     }
+    $rateWrite = (int) $pick(['rateWrite', 'rate_write'], 0);
     if ($rateWrite > 0) {
         $payload['rate_write'] = $rateWrite;
     }
-    $cleanVariants = \FluxFiles\Claims::sanitizeVariants($variants);
+    $cleanVariants = \FluxFiles\Claims::sanitizeVariants($pick(['variants'], null));
     if ($cleanVariants !== null) {
         $payload['variants'] = $cleanVariants;
     }
-    // URL-import claims (Claims::fromJwtPayload sanitizes/clamps these on decode).
-    // $import = ['allow_url_import'=>bool, 'max_import_mb'=>int, 'import_url_allowlist'=>string[],
-    //           'import_path'=>string, 'import_rate_limit'=>int, 'import_concurrency'=>int]
-    fluxfiles_apply_import_claims($payload, $import ?? []);
-    fluxfiles_apply_media_claims($payload, $media ?? []);
-    fluxfiles_apply_webp_claims($payload, $webp ?? []);
-    fluxfiles_apply_usage_claims($payload, $usage ?? []);
+    // Themed claim groups (Claims::fromJwtPayload sanitizes/clamps these on decode).
+    $grp = static fn ($v): array => is_array($v) ? $v : [];
+    fluxfiles_apply_import_claims($payload, $grp($pick(['import'], [])));
+    fluxfiles_apply_media_claims($payload, $grp($pick(['media'], [])));
+    fluxfiles_apply_webp_claims($payload, $grp($pick(['webp'], [])));
+    fluxfiles_apply_usage_claims($payload, $grp($pick(['usage'], [])));
+
+    // Generic escape hatch — ANY claim by its raw (snake_case) name. Merged last so
+    // an explicit claim overrides a preset/group default. Null values are skipped.
+    $claims = $pick(['claims', 'extra'], null);
+    if (is_array($claims)) {
+        foreach ($claims as $k => $v) {
+            if ($v !== null) { $payload[(string) $k] = $v; }
+        }
+    }
 
     return JwtCompat::encode($payload, $secret);
 }

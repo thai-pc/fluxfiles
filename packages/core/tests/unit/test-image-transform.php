@@ -185,6 +185,29 @@ test('transform: watermarked output differs from the clean output', function () 
     assertTrue($clean['data'] !== $marked['data'], 'watermark changed the pixels');
 });
 
+test('burnWatermark: logo over a TRANSPARENT png keeps its color (alpha-blend regression)', function () use ($opt) {
+    // Regression: intervention v3's opacity<100 place() routes through imagecopymerge
+    // on an OPAQUE scratch image, darkening a logo placed over a transparent (alpha)
+    // PNG base — fine on JPEG (no alpha). We bake opacity into the logo's alpha instead.
+    $lg = imagecreatetruecolor(80, 40);
+    imagefilledrectangle($lg, 0, 0, 79, 39, imagecolorallocate($lg, 0, 150, 220)); // bright blue
+    ob_start(); imagepng($lg); $logo = (string) ob_get_clean(); imagedestroy($lg);
+
+    $im = imagecreatetruecolor(300, 200);
+    imagesavealpha($im, true);
+    imagefill($im, 0, 0, imagecolorallocatealpha($im, 0, 0, 0, 127)); // fully transparent base
+    ob_start(); imagepng($im); $base = (string) ob_get_clean(); imagedestroy($im);
+
+    $r = $opt->burnWatermark($base, ['type' => 'logo', 'logo_data' => $logo, 'x' => 0.1, 'y' => 0.1, 'scale' => 0.4, 'opacity' => 0.6], 'png');
+    assertTrue(strncmp($r['data'], "\x89PNG", 4) === 0, 'valid PNG');
+    $img = imagecreatefromstring($r['data']);
+    $px = imagecolorat($img, (int) round(0.1 * $r['width']) + 12, (int) round(0.1 * $r['height']) + 12);
+    [$rr, $gg, $bb] = [($px >> 16) & 255, ($px >> 8) & 255, $px & 255];
+    imagedestroy($img);
+    // Before the fix this came out dark navy (~0,75,110). The logo's blue must survive.
+    assertTrue($rr < 40 && $gg > 120 && $bb > 180, "logo color preserved over transparency, got {$rr},{$gg},{$bb}");
+});
+
 test('transform: opacity boundaries 0.0 and 1.0 do not error', function () use ($opt) {
     foreach ([0.0, 1.0] as $op) {
         $out = $opt->transform(jpegBytes(300, 200), 200, 80, ['enabled' => true, 'type' => 'text', 'text' => 'x', 'opacity' => $op]);

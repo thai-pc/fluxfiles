@@ -168,8 +168,10 @@ final class ImageCompat
             $logo = $logo->scaleDown($maxLogoWidth);
         }
         $pad = $position === 'center' ? 0 : 20;
-        $op = (int) round(max(0.0, min(1.0, $opacity)) * 100);
-        return $base->place($logo, $position, $pad, $pad, $op);
+        // Bake opacity into the logo's alpha, then place at 100% — see bakeLogoOpacity()
+        // for why (intervention's opacity<100 path corrupts a logo over a transparent base).
+        $logo = $this->bakeLogoOpacity($logo, $opacity);
+        return $base->place($logo, $position, $pad, $pad, 100);
     }
 
     /**
@@ -198,8 +200,51 @@ final class ImageCompat
         $oy = (int) round(max(0.0, min(1.0, $yPct)) * $bh);
         $ox = max(0, min($ox, $bw - $logo->width()));
         $oy = max(0, min($oy, $bh - $logo->height()));
-        $op = (int) round(max(0.0, min(1.0, $opacity)) * 100);
-        return $base->place($logo, 'top-left', $ox, $oy, $op);
+        // Bake opacity into the logo's alpha, then place at 100% (see bakeLogoOpacity).
+        $logo = $this->bakeLogoOpacity($logo, $opacity);
+        return $base->place($logo, 'top-left', $ox, $oy, 100);
+    }
+
+    /**
+     * Bake a uniform opacity (0.0–1.0) into a logo by scaling its per-pixel alpha,
+     * so it can be composited at FULL opacity via `place(..., 100)`.
+     *
+     * WHY: intervention v3's `place()` with opacity < 100 routes through GD's
+     * `imagecopymerge` (PlaceModifier::placeTransparent), which builds an OPAQUE
+     * truecolor scratch image — so a logo placed over a **transparent** (alpha) PNG
+     * /WebP base comes out darkened/garbled (a black-tinted box), while it's fine on
+     * an opaque JPEG. Baking opacity into the logo's alpha and placing at 100% uses
+     * the `imagecopy` path (with the base's alpha-blending on), which composites
+     * correctly over transparency. v3-only (GD native); a no-op at full opacity.
+     *
+     * @param object $logo intervention v3 image
+     * @return object the same image, alpha-scaled in place
+     */
+    private function bakeLogoOpacity($logo, float $opacity)
+    {
+        $opacity = max(0.0, min(1.0, $opacity));
+        if (!$this->isV3 || $opacity >= 1.0) {
+            return $logo;
+        }
+        $gd = $logo->core()->native();
+        if (!($gd instanceof \GdImage)) {
+            return $logo;
+        }
+        $w = imagesx($gd);
+        $h = imagesy($gd);
+        imagealphablending($gd, false);
+        imagesavealpha($gd, true);
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $c = imagecolorat($gd, $x, $y);
+                $a = ($c >> 24) & 0x7F;                          // 0 opaque … 127 transparent
+                $na = 127 - (int) round((127 - $a) * $opacity);  // scale toward transparent
+                if ($na !== $a) {
+                    imagesetpixel($gd, $x, $y, ($na << 24) | ($c & 0xFFFFFF));
+                }
+            }
+        }
+        return $logo;
     }
 
     /**

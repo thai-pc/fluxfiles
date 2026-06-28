@@ -369,6 +369,17 @@ class FluxFilesPlugin
                 $payload[$usageClaim] = (int) $overrides[$usageClaim];
             }
         }
+
+        // Generic escape hatch: any JWT claim by its raw snake_case name, e.g.
+        // ['claims' => ['allow_optimize' => true, 'upload_collision' => 'overwrite']].
+        // Merged last so explicit claims win; the core sanitizes on decode. See docs/CONFIG.md.
+        if (!empty($overrides['claims']) && is_array($overrides['claims'])) {
+            foreach ($overrides['claims'] as $k => $v) {
+                if ($v !== null) {
+                    $payload[(string) $k] = $v;
+                }
+            }
+        }
     }
 
     /**

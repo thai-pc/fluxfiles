@@ -164,9 +164,13 @@ When opening FluxFiles directly via `/public/index.html`, configure it with URL 
 | `theme` | No | auto | `light`, `dark`, or auto-detect |
 | `multiple` | No | `false` | `1` or `true` to enable multi-select |
 
-> **Security:** a token in the URL can leak via history/logs/`Referer`. For
-> production, embed via the SDK (token sent over `postMessage`, never in the URL)
-> and keep `ttl` short — see [Token handling](#token-handling).
+> **Security — `?token=` is for dev/standalone only.** A full-privilege JWT in the
+> URL can leak via browser history, server/proxy access logs, the copy buffer, and the
+> `Referer` header. FluxFiles hardens this case: the page sends **`Referrer-Policy:
+> no-referrer`** (+ a `<meta referrer>` backup) and the app **strips `token` from the
+> URL on boot** via `history.replaceState` (it lives in memory after). Still, for
+> **production embed via the SDK / React / Vue** — the token goes over **`postMessage`,
+> never in the URL** — and keep `ttl` short. See [Token handling](#token-handling).
 
 ### 4. Generate a Token
 
@@ -805,10 +809,14 @@ It runs over the same SSH connection the SFTP disk already uses.
 
 ```php
 // opt-in: a trusted admin token for one tenant's site, with the terminal on
-$token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 100, null, 1800,
-    false, 0, 0, null, 0, 0, null, null, null, [
-        'allow_terminal' => true,
-    ]);
+$token = fluxfiles_token([
+    'user'   => 'admin-7',
+    'perms'  => ['read', 'write'],
+    'disks'  => ['sftp'],
+    'prefix' => 'sites/acme/',
+    'ttl'    => 1800,
+    'claims' => ['allow_terminal' => true],
+]);
 ```
 
 - **`POST /api/fm/terminal`** `{disk, cmd, cwd?, confirm?}` runs **one command per
@@ -829,11 +837,16 @@ PTY-over-WebSocket server on your own box** — [ttyd](https://github.com/tsl092
 all free/OSS — and point FluxFiles at it with the **`terminal_pty_url`** claim:
 
 ```php
-$token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 100, null, 1800,
-    false, 0, 0, null, 0, 0, null, null, null, [
+$token = fluxfiles_token([
+    'user'   => 'admin-7',
+    'perms'  => ['read', 'write'],
+    'disks'  => ['sftp'],
+    'prefix' => 'sites/acme/',
+    'claims' => [
         'allow_terminal'   => true,
         'terminal_pty_url' => 'https://term.acme.com/',   // your self-hosted ttyd/gotty/wetty
-    ]);
+    ],
+]);
 ```
 
 When set (and `allow_terminal` is on), the terminal panel **embeds that server** for a
@@ -891,10 +904,14 @@ Edit a file's **text** content in place — the cPanel "Edit" use case for
 
 ```php
 // trusted admin token — can edit configs under this tenant's prefix only
-$token = fluxfiles_token('admin-7', ['read', 'write'], ['sftp'], 'sites/acme/', 50, null, 3600,
-    false, 0, 0, null, 0, 0, null, null, null, [
-        'allow_code_edit' => true,
-    ]);
+$token = fluxfiles_token([
+    'user'   => 'admin-7',
+    'perms'  => ['read', 'write'],
+    'disks'  => ['sftp'],
+    'prefix' => 'sites/acme/',
+    'maxUploadMb' => 50,
+    'claims' => ['allow_code_edit' => true],
+]);
 ```
 
 ### Zip / Extract
@@ -1014,6 +1031,12 @@ Metadata and image variants are transferred together. Quota is checked on the de
 
 ## JWT Token Structure
 
+> 📖 **Full config reference:** [`docs/CONFIG.md`](docs/CONFIG.md) is the single source
+> of truth for **all** JWT claims (with types/defaults) **and** server env vars. The
+> tables below cover the common ones; mint everything in one options object —
+> `fluxfiles_token(['user' => …, 'claims' => […]])` — where `claims` is the escape
+> hatch for any claim by its raw name.
+
 ```json
 {
     "sub":          "user-123",
@@ -1110,7 +1133,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 | `variants` | `variants` | px | `null` | Per-tenant WebP variant widths — a map of `thumb`/`medium`/`large` to a width (16–8000 px). Unset names inherit `150`/`768`/`1920`. |
 | `import` | `allow_url_import`, … | — | `null` | **Import from URL** config (off unless set). An array: `['allow_url_import' => true, 'max_import_mb' => 20, 'import_url_allowlist' => ['*.unsplash.com'], 'import_path' => 'imports', 'import_rate_limit' => 10, 'import_concurrency' => 3]`. Only the keys you set are embedded; the rest inherit the server defaults. See [Import from URL](#import-from-url). |
 | `media` | `media_preview`, … | — | `null` | **Media-preview** config. An array: `['media_preview' => true, 'preview_url_ttl' => 7200, 'max_preview_mb' => 500, 'stream_token_ttl' => 3600]`. Only the keys you set are embedded; the rest inherit the defaults. |
-| `webp` | `webp_enabled`, … | — | `null` | **On-demand WebP** + responsive config. An array: `['webp_enabled' => true, 'webp_max_width' => 2000, 'webp_default_quality' => 80, 'srcset_widths' => [320, 640, 1024, 1920], 'srcset_sizes' => '100vw']`. Only the keys you set are embedded. See [On-demand WebP](#on-demand-webp). |
+| `webp` | `webp_enabled`, … | — | `null` | **On-demand WebP** + responsive config. An array: `['webp_enabled' => true, 'webp_max_width' => 2000, 'webp_default_quality' => 80, 'srcset_widths' => [320, 640, 1024, 1920], 'srcset_sizes' => '100vw']`. Only the keys you set are embedded. See [On-demand WebP](#on-demand-webp--avif). |
 | `usage` | `usage_cache_ttl`, … | — | `null` | **Usage dashboard** config. An array: `['usage_cache_ttl' => 900, 'usage_warning_threshold' => 70, 'usage_critical_threshold' => 90, 'usage_top_folders_count' => 10, 'usage_folder_depth' => 1]`. See [Usage dashboard](#usage-dashboard). |
 
 ### Import from URL
@@ -1365,7 +1388,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/chmod?disk=&path=` | — | Read an SFTP file's octal mode (SFTP disks only) |
 | `POST` | `/chmod` | `{disk, path, mode}` | Set an SFTP file's mode (write + `allow_chmod`) |
 
-> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP, see [On-demand WebP](#on-demand-webp)) and `GET /stream?token=` (gated private media). Both are core-standalone / Docker features.
+> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP, see [On-demand WebP](#on-demand-webp--avif)) and `GET /stream?token=` (gated private media). Both are core-standalone / Docker features.
 
 ### Metadata
 

@@ -370,7 +370,17 @@ function fluxFilesApp() {
             if (window.parent === window) {
                 this.endpoint = window.location.origin;
                 const params = new URLSearchParams(window.location.search);
-                if (params.get('token')) this.token = params.get('token');
+                if (params.get('token')) {
+                    this.token = params.get('token');
+                    // Security: don't leave a full-privilege JWT in the address bar /
+                    // browser history / copy buffer. It's in memory now; strip it from
+                    // the URL immediately so a back-nav or copied link can't leak it.
+                    try {
+                        const u = new URL(window.location.href);
+                        u.searchParams.delete('token');
+                        window.history.replaceState({}, '', u.toString());
+                    } catch (e) { /* non-fatal */ }
+                }
                 if (params.get('disk')) this.currentDisk = params.get('disk');
                 const urlPath = params.get('path');
                 if (urlPath !== null && urlPath !== '') this.currentPath = urlPath;

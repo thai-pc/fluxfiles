@@ -67,14 +67,32 @@ function close() {
 const closeHover = ref(false);
 
 // Theme the modal CHROME (window + header) so dark mode darkens it too, not just
-// the embedded iframe.
-const chromeDark = computed(() =>
-  props.theme === 'dark' ||
-  (props.theme !== 'light' && typeof window !== 'undefined' && !!window.matchMedia &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches)
-);
+// the embedded iframe. The chrome lives in the HOST origin and can't read the
+// iframe's resolved theme, so when `theme` is auto/unset we mirror the embedded UI's
+// anti-flash boot: prefer the last persisted theme (same localStorage key), then the
+// OS preference — this stops the header flashing light before a dark theme settles.
+const THEME_KEY = 'fluxfiles_theme';
+function resolveChromeDark(theme?: 'light' | 'dark' | 'auto'): boolean {
+  if (theme === 'dark') return true;
+  if (theme === 'light') return false;
+  try {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(THEME_KEY) : null;
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
+  } catch {
+    /* blocked storage — fall through */
+  }
+  return typeof window !== 'undefined' && !!window.matchMedia &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+const chromeDark = computed(() => resolveChromeDark(props.theme));
 const chromeBg = computed(() => (chromeDark.value ? '#2b2b2e' : '#f5f5f7'));
 const chromeBorder = computed(() => (chromeDark.value ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'));
+// Persist an explicit theme so the next mount boots the chrome from it (anti-flash).
+watch(() => props.theme, (t) => {
+  if (t !== 'dark' && t !== 'light') return;
+  try { localStorage.setItem(THEME_KEY, t); } catch { /* ignore */ }
+}, { immediate: true });
 
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') close();

@@ -384,6 +384,34 @@ test('fluxfiles_token forwards show_hidden (default false)', function () {
     assertEqual(true, $mk(['dedupe_uploads' => true])->dedupeUploads, 'dedupe forwarded');
 });
 
+test('fluxfiles_token options-array form + `claims` escape hatch', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $dec = fn (string $jwt) => Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+
+    // One options array sets identity + a themed group + arbitrary claims in one place.
+    $c = $dec(fluxfiles_token([
+        'user' => 'u9', 'perms' => ['read', 'write'], 'disks' => ['sftp'], 'edition' => 'pro',
+        'webp' => ['webp_max_width' => 1500],
+        'claims' => [
+            'allow_terminal' => true, 'terminal_pty_url' => 'https://t.example.com/',
+            'upload_collision' => 'overwrite', 'allow_optimize' => false,
+        ],
+    ]));
+    assertEqual('u9', $c->userId, 'user from options');
+    assertEqual(['read', 'write'], $c->permissions, 'perms from options');
+    assertEqual(true, $c->allowTerminal, 'claims: allow_terminal');
+    assertEqual('https://t.example.com/', $c->terminalPtyUrl, 'claims: terminal_pty_url');
+    assertEqual('overwrite', $c->uploadCollision, 'claims: upload_collision');
+    assertEqual(1500, $c->webpMaxWidth, 'webp group still applied');
+    // explicit claim overrides the edition preset (pro defaults allow_optimize true).
+    assertEqual(false, $c->allowOptimize, 'explicit claim beats edition preset');
+
+    // Legacy positional form still works (backward compat).
+    $c2 = $dec(fluxfiles_token('u10', ['read'], ['local'], '', 25));
+    assertEqual('u10', $c2->userId, 'positional user');
+    assertEqual(25, $c2->maxUploadMb, 'positional maxUpload');
+});
+
 test('fluxfiles_token forwards optimize tuning claims (keep_original, max_mb, pdf_level)', function () {
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $mk = function (array $extra) {

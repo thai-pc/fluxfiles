@@ -44,6 +44,18 @@ describe('createToken', () => {
     expect(c.owner_only).toBe(true);
   });
 
+  it('claims escape hatch sets any raw snake_case claim; explicit wins', () => {
+    const c = decodeToken(createToken({
+      secret: SECRET, userId: 'u', edition: 'pro',
+      claims: { allow_terminal: true, terminal_pty_url: 'https://t.example.com/', upload_collision: 'overwrite', allow_optimize: false },
+    }));
+    expect(c.allow_terminal).toBe(true);
+    expect(c.terminal_pty_url).toBe('https://t.example.com/');
+    expect(c.upload_collision).toBe('overwrite');
+    // explicit claim overrides the edition preset (pro defaults allow_optimize true)
+    expect(c.allow_optimize).toBe(false);
+  });
+
   it('emits the per-tenant overrides and sanitizes variants (PHP parity)', () => {
     const c = decodeToken(
       createToken({

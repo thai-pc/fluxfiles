@@ -178,6 +178,11 @@ export interface BaseTokenOptions {
   usageTopFoldersCount?: number;
   /** Folder grouping depth for the usage breakdown. `0`/omitted = inherit (1). */
   usageFolderDepth?: number;
+  /** Generic escape hatch: any JWT claim by its raw snake_case name (e.g.
+   *  `{ allow_terminal: true, terminal_pty_url: '…', upload_collision: 'overwrite' }`).
+   *  Merged last so explicit claims win; the server sanitizes on decode. The single
+   *  place to set claims that don't have a typed option here. See docs/CONFIG.md. */
+  claims?: Record<string, unknown>;
 }
 
 export interface CreateTokenOptions extends BaseTokenOptions {

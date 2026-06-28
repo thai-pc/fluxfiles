@@ -57,6 +57,33 @@ const closeButtonStyle: React.CSSProperties = {
   transition: 'filter .15s, color .15s',
 };
 
+// localStorage key the embedded UI uses for its anti-flash theme boot. The modal
+// chrome lives in the HOST origin (separate from the iframe), so it can't read the
+// iframe's resolved theme — but mirroring the same boot trick keeps the chrome from
+// flashing light before a dark `theme` prop settles (e.g. resolved from a host
+// effect/context a render late, while the iframe is already dark from its own boot).
+const THEME_KEY = 'fluxfiles_theme';
+
+/** Resolve whether the chrome should be dark, without flashing light first. */
+function resolveChromeDark(theme?: 'light' | 'dark' | 'auto'): boolean {
+  if (theme === 'dark') return true;
+  if (theme === 'light') return false;
+  // auto/unset: prefer the last persisted theme (same key the iframe boots from),
+  // then the OS preference — so a repeat open boots in the right theme immediately.
+  try {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(THEME_KEY) : null;
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
+  } catch {
+    /* private mode / blocked storage — fall through to the OS preference */
+  }
+  return (
+    typeof window !== 'undefined' &&
+    !!window.matchMedia &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+}
+
 /**
  * Modal wrapper for FluxFiles.
  *
@@ -124,6 +151,17 @@ export function FluxFilesModal({
     onTokenRefresh,
   });
 
+  // Persist an explicit theme so the next mount boots the chrome from it (anti-flash),
+  // matching the embedded UI's localStorage boot.
+  useEffect(() => {
+    if (theme !== 'dark' && theme !== 'light') return;
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* ignore blocked storage */
+    }
+  }, [theme]);
+
   // Close on escape
   useEffect(() => {
     if (!open) return;
@@ -163,12 +201,7 @@ export function FluxFilesModal({
 
   // Theme the modal CHROME (window + header) to match the embedded UI's theme —
   // otherwise dark mode only darkens the iframe and the grey header stays light.
-  const dark =
-    theme === 'dark' ||
-    (theme !== 'light' &&
-      typeof window !== 'undefined' &&
-      !!window.matchMedia &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const dark = resolveChromeDark(theme);
   const chromeBg = dark ? '#2b2b2e' : '#f5f5f7';
   const chromeBorder = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 

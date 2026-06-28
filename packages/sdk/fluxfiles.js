@@ -148,9 +148,22 @@
             if (!config.container) {
                 // Theme the modal chrome to match the embedded UI's theme, so dark
                 // mode darkens the window/header too (not just the iframe content).
+                // When the theme is auto/unset, mirror the embedded UI's anti-flash
+                // boot: prefer the last persisted theme (same localStorage key), then
+                // the OS preference — so the header doesn't flash light before a dark
+                // theme settles. Persist an explicit theme for the next open.
+                var THEME_KEY = 'fluxfiles_theme';
+                var storedTheme = null;
+                try { storedTheme = window.localStorage && localStorage.getItem(THEME_KEY); } catch (e) {}
+                try {
+                    if (config.theme === 'dark' || config.theme === 'light') localStorage.setItem(THEME_KEY, config.theme);
+                } catch (e) {}
                 var chromeDark = config.theme === 'dark' ||
-                    (config.theme !== 'light' && window.matchMedia &&
-                        window.matchMedia('(prefers-color-scheme: dark)').matches);
+                    (config.theme !== 'light' && (
+                        storedTheme === 'dark' ||
+                        (storedTheme !== 'light' && window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme: dark)').matches)
+                    ));
                 var chromeBg = chromeDark ? '#2b2b2e' : '#f5f5f7';
                 var chromeBorder = chromeDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
