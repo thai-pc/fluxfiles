@@ -269,5 +269,76 @@ test('gates: allow_extract / not-a-zip / missing / allowed_ext', function () {
     expectApi(fn () => $ext->extractZip('local', 'mixed.zip'), 'ext_not_allowed');
 });
 
+// ── F3: extracted files join the upload pipeline (metadata + index + variants) ──
+test('extract registers files: metadata + search index + image variants', function () {
+    $root = sys_get_temp_dir() . '/ff-ext-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $meta = new StorageMetadataHandler($dm);
+    $claims = new Claims('alice', ['read', 'write'], ['local'], '', 50, null, 0);
+    $fm = new FileManager($dm, $claims, $meta);
+
+    // a real PNG (big enough to generate variants) + a text file
+    $im = imagecreatetruecolor(400, 300); imagefilledrectangle($im, 0, 0, 399, 299, imagecolorallocate($im, 10, 120, 200));
+    ob_start(); imagepng($im); $png = ob_get_clean(); imagedestroy($im);
+    putZip($root, 'media.zip', ['photo.png' => $png, 'readme.txt' => 'hi']);
+
+    $r = $fm->extractZip('local', 'media.zip');
+    assertEqual(2, $r['extracted'], 'two extracted');
+
+    // metadata recorded (owner + dims) → also means it's in the search index
+    $m = $meta->get('local', 'media/photo.png');
+    assertTrue(is_array($m), 'metadata sidecar saved for extracted image');
+    assertEqual('alice', $m['uploaded_by'] ?? null, 'owner tagged');
+    // image variants (thumbnails) generated on disk
+    assertTrue(is_dir($root . '/media/_variants'), '_variants dir created');
+    assertTrue(count(glob($root . '/media/_variants/photo*') ?: []) > 0, 'variant files generated');
+    // indexed for search, with dimensions (the index carries width/size, not the sidecar)
+    $hits = $meta->search('local', 'photo', 50);
+    assertTrue(!empty($hits), 'extracted file appears in search');
+    assertEqual(400, $hits[0]['width'] ?? null, 'image width indexed');
+});
+
+// ── F2: extract honours owner_only + the collision policy on existing files ──
+test('extract over another user\'s file with owner_only → 403, original untouched', function () {
+    $root = sys_get_temp_dir() . '/ff-ext-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $meta = new StorageMetadataHandler($dm);
+    @mkdir($root . '/out', 0777, true);
+    file_put_contents($root . '/out/keep.txt', 'BOB-OWNED');
+    $meta->save('local', 'out/keep.txt', ['uploaded_by' => 'bob']);
+
+    $alice = new Claims('alice', ['read', 'write'], ['local'], '', 50, null, 0);
+    $alice->ownerOnly = true;
+    $fm = new FileManager($dm, $alice, $meta);
+    putZip($root, 'a.zip', ['keep.txt' => 'ALICE-NEW']);
+    expectApi(fn () => $fm->extractZip('local', 'a.zip', 'out'), 'owner_only');
+    assertEqual('BOB-OWNED', file_get_contents($root . '/out/keep.txt'), 'original not clobbered');
+});
+
+test('extract collision: default rename keeps both; overwrite replaces', function () {
+    // rename (default) — extracting "keep.txt" beside an existing one keeps both
+    [$fm, $root] = makeExtractFM();
+    @mkdir($root . '/out', 0777, true);
+    file_put_contents($root . '/out/keep.txt', 'OLD');
+    putZip($root, 'a.zip', ['keep.txt' => 'NEW']);
+    $fm->extractZip('local', 'a.zip', 'out');
+    assertEqual('OLD', file_get_contents($root . '/out/keep.txt'), 'original kept');
+    assertEqual('NEW', file_get_contents($root . '/out/keep (1).txt'), 'renamed copy written');
+
+    // overwrite — replaces in place
+    $root2 = sys_get_temp_dir() . '/ff-ext-' . uniqid();
+    @mkdir($root2 . '/out', 0777, true);
+    $dm2 = new DiskManager(['local' => ['driver' => 'local', 'root' => $root2, 'url' => '/s']]);
+    $c2 = new Claims('u', ['read', 'write'], ['local'], '', 50, null, 0);
+    $c2->allowExtract = true; $c2->uploadCollision = 'overwrite';
+    $fm2 = new FileManager($dm2, $c2, new StorageMetadataHandler($dm2));
+    file_put_contents($root2 . '/out/keep.txt', 'OLD');
+    putZip($root2, 'b.zip', ['keep.txt' => 'NEW']);
+    $fm2->extractZip('local', 'b.zip', 'out');
+    assertEqual('NEW', file_get_contents($root2 . '/out/keep.txt'), 'overwritten in place');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

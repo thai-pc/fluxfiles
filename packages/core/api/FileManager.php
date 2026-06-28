@@ -1052,6 +1052,14 @@ class FileManager
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
 
+        // Clean 404 for a missing source (else readStream throws a raw 500).
+        if (!$srcFs->fileExists($scopedSrc)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+        // Don't silently clobber an existing destination — match same-disk copy()
+        // (409 name_exists), so cross-disk can't overwrite another user's file either.
+        $this->assertTargetAvailable($dstFs, $scopedDst);
+
         // Quota check on destination
         if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
             $fileSize = $srcFs->fileSize($scopedSrc);
@@ -1107,6 +1115,12 @@ class FileManager
 
         $srcFs = $this->disks->disk($srcDisk);
         $dstFs = $this->disks->disk($dstDisk);
+
+        // Clean 404 for a missing source; don't silently clobber the destination.
+        if (!$srcFs->fileExists($scopedSrc)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+        $this->assertTargetAvailable($dstFs, $scopedDst);
 
         $stream = $srcFs->readStream($scopedSrc);
         try {
@@ -1632,6 +1646,9 @@ class FileManager
         $this->assertPerm('write');
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        // Overwriting a file's content is a destructive modify — honour owner_only,
+        // like delete/rename/move/crop/watermark do (it was missing here).
+        $this->assertOwner($disk, $scoped);
         $this->assertExt(strtolower(pathinfo($scoped, PATHINFO_EXTENSION)));
 
         if (strlen($content) > self::MAX_EDIT_BYTES) {
@@ -2189,8 +2206,10 @@ class FileManager
                 throw new ApiException('The archive is corrupt or unreadable', 400, 'bad_zip');
             }
 
-            // ── Pass 1: validate every entry, write nothing ──
-            $plan = [];   // list of ['orig' => entryName, 'rel' => safeRelPath]
+            // ── Pass 1: validate every entry + resolve its final target, write nothing ──
+            $prefix = $destScoped !== '' ? rtrim($destScoped, '/') . '/' : '';
+            $collision = $this->claims->uploadCollision; // rename (default) | overwrite | reject
+            $plan = [];   // list of ['orig' => entryName, 'target' => scopedDstKey]
             $total = 0;
             for ($i = 0; $i < $za->numFiles; $i++) {
                 $stat = $za->statIndex($i);
@@ -2217,8 +2236,22 @@ class FileManager
                 $this->assertSafeFilename(basename($rel));
                 $this->assertExt(strtolower(pathinfo($rel, PATHINFO_EXTENSION)));
 
+                // Collision with an existing destination file → honour owner_only +
+                // the upload_collision policy (extract no longer clobbers silently).
+                $target = $prefix . $rel;
+                if ($fs->fileExists($target)) {
+                    $this->assertOwner($disk, $target); // don't overwrite another user's file
+                    if ($collision === 'reject') {
+                        throw new ApiException('A file already exists at the destination', 409, 'name_conflict', ['name' => $rel]);
+                    }
+                    if ($collision !== 'overwrite') { // 'rename' → keep both
+                        $dir = strpos($target, '/') !== false ? substr($target, 0, strrpos($target, '/')) : '';
+                        $target = ($dir !== '' ? $dir . '/' : '') . $this->uniqueName($fs, $dir, basename($target));
+                    }
+                }
+
                 $total += (int) $stat['size'];
-                $plan[] = ['orig' => $name, 'rel' => $rel];
+                $plan[] = ['orig' => $name, 'target' => $target];
                 if (count($plan) > $maxFiles) {
                     throw new ApiException('Archive has too many files', 413, 'zip_too_many', ['max' => $maxFiles]);
                 }
@@ -2234,16 +2267,32 @@ class FileManager
                 $this->quotaManager->assertQuota($disk, $this->claims->pathPrefix, $total, $this->claims->maxStorageMb);
             }
 
-            // ── Pass 2: write everything ──
+            // ── Pass 2: write each entry + register it in the same pipeline as an
+            // upload (metadata + folder index + hash + image variants), so extracted
+            // files get thumbnails and show up in search — not just on disk. ──
             $written = 0;
-            $prefix = $destScoped !== '' ? rtrim($destScoped, '/') . '/' : '';
             foreach ($plan as $e) {
                 $stream = $za->getStream($e['orig']);
                 if (!is_resource($stream)) {
                     continue;
                 }
-                $fs->writeStream($prefix . $e['rel'], $stream);
+                // Spool to a local temp so we can both write to $fs and feed the
+                // metadata/variant pipeline a local path (uniform across disks).
+                $entryTmp = tempnam(sys_get_temp_dir(), 'ffex');
+                $eh = fopen($entryTmp, 'wb');
+                stream_copy_to_stream($stream, $eh);
+                fclose($eh);
                 fclose($stream);
+                try {
+                    $in = fopen($entryTmp, 'rb');
+                    $fs->writeStream($e['target'], $in);
+                    if (is_resource($in)) {
+                        fclose($in);
+                    }
+                    $this->registerExtractedFile($disk, $fs, $e['target'], $entryTmp);
+                } finally {
+                    @unlink($entryTmp);
+                }
                 $written++;
             }
             $za->close();
@@ -2252,6 +2301,55 @@ class FileManager
         }
 
         return ['extracted' => $written, 'dest' => $destUser, 'bytes' => $total];
+    }
+
+    /**
+     * Register a freshly-extracted file in the same pipeline as an upload so it
+     * isn't a second-class citizen: folder index (search), metadata (owner / size /
+     * mime / image dims), content hash (dedup), and image variants (thumbnails).
+     * Best-effort per step — a failure on one file never aborts the extract. AI
+     * auto-tag is intentionally skipped (would be costly per file on a bulk extract).
+     *
+     * @param string $key       scoped destination key (already written to $fs)
+     * @param string $localPath local copy of the file's bytes (for dims/mime/variants)
+     */
+    private function registerExtractedFile(string $disk, $fs, string $key, string $localPath): void
+    {
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->trackParents($disk, $key); // folder search index
+        }
+        $name = basename($key);
+        $attrs = [
+            'uploaded_by' => $this->claims->userId,
+            'size'        => (int) (@filesize($localPath) ?: 0),
+            'modified'    => time(),
+            'created'     => time(),
+        ];
+        $mime = @mime_content_type($localPath);
+        if ($mime !== false && $mime !== '' && $mime !== null) {
+            $attrs['mime'] = $mime;
+        }
+        $isImage = $this->imageOptimizer->isImage($name);
+        if ($isImage) {
+            $dims = @getimagesize($localPath);
+            if (is_array($dims) && isset($dims[0], $dims[1])) {
+                $attrs['width']  = (int) $dims[0];
+                $attrs['height'] = (int) $dims[1];
+            }
+        }
+        $this->meta->save($disk, $key, $attrs); // also adds the file to the search index
+
+        $hash = @hash_file('sha256', $localPath);
+        if ($hash !== false) {
+            $this->meta->saveHash($disk, $key, $hash);
+        }
+        if ($isImage) {
+            try {
+                $this->imageOptimizer->process($fs, $key, $localPath); // thumb/medium/large WebP
+            } catch (\Throwable $e) {
+                error_log('FluxFiles: variant gen for extracted file failed — ' . $e->getMessage());
+            }
+        }
     }
 
     /** A safe download filename: the caller's name, else a single selection's name, else 'files'. */

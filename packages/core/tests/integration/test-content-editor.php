@@ -111,5 +111,27 @@ test('putContent: oversize content → 413', function () {
     catch (ApiException $e) { assertEqual('edit_too_large', $e->getErrorCode()); }
 });
 
+test('putContent: owner_only blocks overwriting another user\'s file (403)', function () {
+    $root = sys_get_temp_dir() . '/ff-edit-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $meta = new StorageMetadataHandler($dm);
+    file_put_contents($root . '/shared.txt', "alice's file");
+    $meta->save('local', 'shared.txt', ['uploaded_by' => 'alice']);
+
+    // bob (owner_only + code_edit) must NOT overwrite alice's file.
+    $bob = new Claims('bob', ['read', 'write'], ['local'], '', 50, null, 0);
+    $bob->ownerOnly = true; $bob->allowCodeEdit = true;
+    try { (new FileManager($dm, $bob, $meta))->putContent('local', 'shared.txt', 'hacked'); throw new \RuntimeException('should 403'); }
+    catch (ApiException $e) { assertEqual('owner_only', $e->getErrorCode()); }
+    assertEqual("alice's file", file_get_contents($root . '/shared.txt'), 'content untouched');
+
+    // alice can edit her own file.
+    $alice = new Claims('alice', ['read', 'write'], ['local'], '', 50, null, 0);
+    $alice->ownerOnly = true; $alice->allowCodeEdit = true;
+    (new FileManager($dm, $alice, $meta))->putContent('local', 'shared.txt', 'edited');
+    assertEqual('edited', file_get_contents($root . '/shared.txt'), 'owner edit works');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

@@ -871,6 +871,24 @@ core hosts nothing; that server owns its own auth. Only `http(s)` URLs are accep
 >   `chmod -R 777 /`, …) → a two-step confirm in the UI. This is an *accident*
 >   guard, not a security boundary; opt out with `FLUXFILES_TERMINAL_CONFIRM=false`.
 >
+> ⚠️ **The terminal is NOT confined to the disk's `root`.** Unlike file operations
+> (which are sandboxed to the SFTP disk `root`), the terminal is a **real shell** —
+> the user can `cd /` and reach anything the SSH account can on the **whole server**
+> (`cat /etc/passwd`, other tenants' folders, …). The `root` is only the terminal's
+> *starting* directory, not a fence. **So if you enable `allow_terminal`, give that
+> SFTP disk a dedicated least-privilege SSH account** scoped at the OS level (or a
+> chroot/jailed user) — never a shared or `root`-level account.
+>
+> 💡 **Why the dangerous-command list is intentionally small:** it's an *accident*
+> guard for a trusted operator (like a "Are you sure?" dialog), **not** a filter
+> against a malicious user. Text matching can't stop a determined shell user
+> (`r''m -rf /`, `$(echo rm) -rf /`, `RM=rm; $RM …` all evade any pattern), and
+> someone with shell access already has the SSH account's full rights anyway. A
+> broad list would just false-positive on normal commands (e.g. `rm -rf node_modules`),
+> training users to click through — so it flags only the few obvious catastrophes.
+> The actual defense is: terminal off by default + a least-privilege SSH account +
+> `write` perm + the server kill-switch.
+>
 > **Shared hosting without a shell** (`internal-sftp` / a forced command) is
 > detected automatically and shown a clear "this host doesn't allow a terminal
 > (SFTP only)" message — the feature degrades instead of hanging. Note: FluxFiles

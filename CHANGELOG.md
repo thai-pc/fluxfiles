@@ -3,6 +3,32 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.61] — 2026-06-28
+
+> Released: core `core-v0.2.53`. Adapters unchanged.
+
+### Fixed
+
+- **Code editor honoured `owner_only`.** `PUT /api/fm/content` now runs the same
+  ownership check as delete/rename/move — with `owner_only` + `allow_code_edit` a user
+  could previously overwrite another user's file content. (403 `owner_only`.)
+- **Extract no longer clobbers silently + extracted files join the pipeline.**
+  `POST /api/fm/extract` now honours `owner_only` and the `upload_collision` policy
+  (rename/overwrite/reject) on existing destination files, and registers each
+  extracted file like an upload — metadata + folder/search index + content hash +
+  image variants (thumbnails) — so extracted images get thumbnails and show up in
+  search instead of being on-disk only.
+- **Cross-disk copy/move stopped silently overwriting the destination.**
+  `crossCopy`/`crossMove` now return `409 name_exists` for an existing destination
+  (matching same-disk `copy`) and a clean `404 not_found` for a missing source —
+  closing a path where they could overwrite another user's file across disks.
+
+### Docs
+
+- README: clarified the SSH terminal is a **real shell not confined to the SFTP
+  `root`** (use a least-privilege SSH account), and why the dangerous-command list is
+  a small accident-guard, not a security filter.
+
 ## [0.2.60] — 2026-06-28
 
 > Released: core `core-v0.2.52`; adapters react `0.2.8`, vue `0.2.7`, sdk `0.2.6`,
