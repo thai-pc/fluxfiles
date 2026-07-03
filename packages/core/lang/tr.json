@@ -306,6 +306,8 @@
         "terminal_disabled": "Bu sunucuda terminal devre dışı.",
         "terminal_forbidden": "Terminal erişimine izin verilmiyor.",
         "optimize_forbidden": "Optimizasyona izin verilmiyor.",
+        "webhook_not_configured": "Bu belirteçte yapılandırılmış bir webhook URL'si yok.",
+        "webhook_blocked": "Webhook URL'si özel veya engellenmiş bir adrese işaret ediyor.",
         "version_not_found": "Bu sürüm bulunamadı.",
         "license_required": "Bu özellik geçerli bir lisans gerektirir.",
         "intake_invalid": "Geçersiz veya süresi dolmuş yükleme bağlantısı.",

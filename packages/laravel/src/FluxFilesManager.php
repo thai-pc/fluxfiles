@@ -162,7 +162,7 @@ class FluxFilesManager
                 $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
             }
         }
-        foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
             }

@@ -143,6 +143,7 @@ class Claims
     public bool $allowShare = false;       // Branded Share links (fluxfiles/share)
     public bool $allowIntake = false;      // Intake / upload portals (fluxfiles/intake)
     public bool $allowVersioning = false;  // File version history (fluxfiles/versioning)
+    public bool $allowWebhooks = false;    // Signed HTTP events on file changes (fluxfiles/webhooks)
     public bool $allowAiVision = false;    // AI Vision: bg-removal/upscale/smart-crop (fluxfiles/ai)
     public bool $allowOcr = false;         // OCR / document text extraction (fluxfiles/ocr)
     public bool $allowVirusScan = false;   // Virus/malware scan on upload (fluxfiles/virus)
@@ -155,6 +156,15 @@ class Claims
     /** @var int Skip versioning a file larger than this many MB (0 = module default, 25).
      *            Avoids snapshotting huge videos on every overwrite. */
     public int $versioningMaxMb = 0;
+
+    /** @var string Webhook endpoint URL (Webhooks module) — signed HTTP POST fired on
+     *            file events. '' = no webhook. http(s) only (validated on decode). */
+    public string $webhookUrl = '';
+    /** @var string[] Event filter — only these events fire the webhook. [] = all events. */
+    public array $webhookEvents = [];
+    /** @var string Secret used to HMAC-sign the webhook payload (X-FluxFiles-Signature).
+     *            '' = fall back to FLUXFILES_SECRET server-side. */
+    public string $webhookSecret = '';
 
     /** @var bool Auto-optimize images on upload (recompress to WebP in the pipeline)?
      *            Default FALSE. Like allow_optimize, only effective when the module
@@ -402,6 +412,21 @@ class Claims
         $c->allowVersioning = (bool) ($payload->allow_versioning ?? false);
         $c->versioningMax = max(0, (int) ($payload->versioning_max ?? 0));
         $c->versioningMaxMb = max(0, (int) ($payload->versioning_max_mb ?? 0));
+        $c->allowWebhooks = (bool) ($payload->allow_webhooks ?? false);
+        // Only accept an http(s) webhook URL (anything else is dropped so it can never
+        // be used to reach a non-HTTP scheme).
+        $whUrl = trim((string) ($payload->webhook_url ?? ''));
+        $c->webhookUrl = preg_match('#^https?://#i', $whUrl) ? $whUrl : '';
+        $whEv = $payload->webhook_events ?? null;
+        if (is_array($whEv)) {
+            $c->webhookEvents = array_values(array_filter(array_map(
+                static fn ($e) => strtolower(trim((string) $e)),
+                $whEv
+            ), 'strlen'));
+        } elseif (is_string($whEv) && trim($whEv) !== '') {
+            $c->webhookEvents = array_values(array_filter(array_map('trim', explode(',', strtolower($whEv))), 'strlen'));
+        }
+        $c->webhookSecret = (string) ($payload->webhook_secret ?? '');
         $c->allowAiVision = (bool) ($payload->allow_ai_vision ?? false);
         $c->allowOcr = (bool) ($payload->allow_ocr ?? false);
         $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);
@@ -496,6 +521,7 @@ class Claims
             case 'allow_share':      return $this->allowShare;
             case 'allow_intake':     return $this->allowIntake;
             case 'allow_versioning': return $this->allowVersioning;
+            case 'allow_webhooks':   return $this->allowWebhooks;
             case 'allow_ai_vision':  return $this->allowAiVision;
             case 'allow_ocr':        return $this->allowOcr;
             case 'allow_virus_scan': return $this->allowVirusScan;

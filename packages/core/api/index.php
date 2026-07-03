@@ -252,6 +252,21 @@ try {
         });
     }
 
+    // Webhooks (paid module). Fire a signed HTTP POST on file events. Wired only when
+    // the token carries a `webhook_url` + `allow_webhooks` AND the module is installed
+    // + licensed. Event-driven = stateless: it fires on the request that caused the
+    // event (no scheduler/queue). Best-effort — a webhook failure never breaks the op.
+    $webhookDispatcher = null;
+    $webhookEvent = null;
+    if ($claims->allowWebhooks && $claims->webhookUrl !== ''
+        && \FluxFiles\ModuleRegistry::installed('webhooks')
+        && \FluxFiles\LicenseManager::fromEnv()->licensed('webhooks')) {
+        $webhooks = new \FluxFiles\Webhooks\WebhooksModule();
+        $webhookDispatcher = static function (string $event, array $context) use ($webhooks, $claims, $secret) {
+            $webhooks->dispatch($claims, $secret, $event, $context);
+        };
+    }
+
     // Rate limiting (JSON file). Per-tenant `rate_read`/`rate_write` claims override
     // the server defaults when set (> 0); otherwise inherit the env limits.
     $rateLimiter = new RateLimiterFileStorage(
@@ -302,9 +317,30 @@ try {
         }
         $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey);
+
+        // Capture the webhook event; it's DISPATCHED AFTER the response is flushed
+        // (below) so a slow/unreachable endpoint never adds to the client's latency.
+        if ($webhookDispatcher !== null) {
+            $webhookEvent = [$auditAction, [
+                'disk' => (string) $auditDisk,
+                'path' => (string) $auditKey,
+                'name' => is_array($data) ? (string) ($data['name'] ?? basename((string) $auditKey)) : '',
+            ]];
+        }
     }
 
     echo json_encode(['data' => $data, 'error' => null]);
+
+    // Fire the webhook (paid module; best-effort) AFTER the response. Under php-fpm
+    // fastcgi_finish_request() flushes the response to the client first, so the sync
+    // HTTP POST is off the request's critical path; elsewhere it runs sync (bounded
+    // by a short timeout in the module).
+    if (!empty($webhookEvent) && $webhookDispatcher !== null) {
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        $webhookDispatcher($webhookEvent[0], $webhookEvent[1]);
+    }
 } catch (ApiException $e) {
     http_response_code($e->getHttpCode());
     $errResp = ['data' => null, 'error' => $e->getMessage()];
@@ -547,6 +583,11 @@ function routeRequest(
         $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->restore($fm, $diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''), (string) ($body['version_id'] ?? ''));
+    }
+    // Webhooks — send a test ping to the configured endpoint so operators can verify it.
+    if ($method === 'POST' && $uri === '/api/fm/webhooks/test') {
+        $module = \FluxFiles\ModuleRegistry::require('webhooks', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->test($claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''));
     }
     if ($method === 'POST' && $uri === '/api/fm/ai-vision') {
         $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\LicenseManager::fromEnv(), $claims);

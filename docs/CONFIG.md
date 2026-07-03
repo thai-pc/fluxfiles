@@ -175,6 +175,10 @@ All four accept the same `claims` map.
 | `allow_versioning` | bool | `false` | File version history (keep prior versions on overwrite; list/restore). |
 | `versioning_max` | int | `10` | Prior versions kept per file (hard cap 100). `0` = default. |
 | `versioning_max_mb` | int (MB) | `25` | Skip versioning files bigger than this. `0` = default. |
+| `allow_webhooks` | bool | `false` | Signed HTTP events on file changes (upload/delete/move…). |
+| `webhook_url` | string (http/s) | — | Endpoint the signed event POST is sent to. Non-http dropped. |
+| `webhook_events` | string[] | _(all)_ | Only these event names fire the webhook. Empty = all. |
+| `webhook_secret` | string | — | HMAC signing secret (`X-FluxFiles-Signature`). Empty = `FLUXFILES_SECRET`. |
 | `allow_ai_vision` | bool | `false` | AI Vision (BYO-key). |
 | `allow_ocr` | bool | `false` | OCR. |
 | `allow_virus_scan` | bool | `false` | Virus scan (Enterprise). |

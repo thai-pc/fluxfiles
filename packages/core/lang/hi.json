@@ -306,6 +306,8 @@
         "terminal_disabled": "इस सर्वर पर टर्मिनल अक्षम है।",
         "terminal_forbidden": "टर्मिनल पहुँच की अनुमति नहीं है।",
         "optimize_forbidden": "ऑप्टिमाइज़ेशन की अनुमति नहीं है।",
+        "webhook_not_configured": "इस टोकन पर कोई webhook URL कॉन्फ़िगर नहीं है।",
+        "webhook_blocked": "webhook URL किसी निजी या अवरुद्ध पते की ओर इशारा करता है।",
         "version_not_found": "वह संस्करण नहीं मिला।",
         "license_required": "इस सुविधा के लिए वैध लाइसेंस आवश्यक है।",
         "intake_invalid": "अपलोड लिंक अमान्य या समाप्त हो गया है।",

@@ -306,6 +306,8 @@
         "terminal_disabled": "Terminal đã bị tắt trên máy chủ này.",
         "terminal_forbidden": "Không được phép dùng terminal.",
         "optimize_forbidden": "Không được phép tối ưu hóa.",
+        "webhook_not_configured": "Token này chưa cấu hình URL webhook.",
+        "webhook_blocked": "URL webhook trỏ tới địa chỉ nội bộ hoặc bị chặn.",
         "version_not_found": "Không tìm thấy phiên bản đó.",
         "license_required": "Tính năng này cần giấy phép hợp lệ.",
         "intake_invalid": "Liên kết tải lên không hợp lệ hoặc đã hết hạn.",

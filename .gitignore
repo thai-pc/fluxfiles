@@ -78,6 +78,7 @@ packages/optimize/
 packages/share/
 packages/intake/
 packages/versioning/
+packages/webhooks/
 packages/ai/
 packages/ocr/
 packages/virus/

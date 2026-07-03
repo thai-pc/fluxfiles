@@ -306,6 +306,8 @@
         "terminal_disabled": "이 서버에서는 터미널이 비활성화되어 있습니다.",
         "terminal_forbidden": "터미널 사용이 허용되지 않습니다.",
         "optimize_forbidden": "최적화가 허용되지 않습니다.",
+        "webhook_not_configured": "이 토큰에 webhook URL이 설정되지 않았습니다.",
+        "webhook_blocked": "webhook URL이 비공개 또는 차단된 주소를 가리킵니다.",
         "version_not_found": "해당 버전을 찾을 수 없습니다.",
         "license_required": "이 기능에는 유효한 라이선스가 필요합니다.",
         "intake_invalid": "업로드 링크가 잘못되었거나 만료되었습니다.",

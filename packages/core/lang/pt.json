@@ -306,6 +306,8 @@
         "terminal_disabled": "O terminal está desativado neste servidor.",
         "terminal_forbidden": "O acesso ao terminal não é permitido.",
         "optimize_forbidden": "A otimização não é permitida.",
+        "webhook_not_configured": "Nenhuma URL de webhook configurada neste token.",
+        "webhook_blocked": "A URL do webhook aponta para um endereço privado ou bloqueado.",
         "version_not_found": "Essa versão não foi encontrada.",
         "license_required": "Este recurso requer uma licença válida.",
         "intake_invalid": "Link de envio inválido ou expirado.",

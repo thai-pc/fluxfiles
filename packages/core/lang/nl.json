@@ -306,6 +306,8 @@
         "terminal_disabled": "De terminal is uitgeschakeld op deze server.",
         "terminal_forbidden": "Terminaltoegang is niet toegestaan.",
         "optimize_forbidden": "Optimaliseren is niet toegestaan.",
+        "webhook_not_configured": "Er is geen webhook-URL geconfigureerd op dit token.",
+        "webhook_blocked": "De webhook-URL wijst naar een privé- of geblokkeerd adres.",
         "version_not_found": "Die versie is niet gevonden.",
         "license_required": "Deze functie vereist een geldige licentie.",
         "intake_invalid": "Ongeldige of verlopen uploadlink.",

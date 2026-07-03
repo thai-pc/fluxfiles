@@ -152,6 +152,10 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowVersioning !== undefined) payload.allow_versioning = !!opts.allowVersioning;
   if (opts.versioningMax && opts.versioningMax > 0) payload.versioning_max = Math.trunc(opts.versioningMax);
   if (opts.versioningMaxMb && opts.versioningMaxMb > 0) payload.versioning_max_mb = Math.trunc(opts.versioningMaxMb);
+  if (opts.allowWebhooks !== undefined) payload.allow_webhooks = !!opts.allowWebhooks;
+  if (opts.webhookUrl) payload.webhook_url = String(opts.webhookUrl);
+  if (opts.webhookEvents && opts.webhookEvents.length) payload.webhook_events = opts.webhookEvents;
+  if (opts.webhookSecret) payload.webhook_secret = String(opts.webhookSecret);
   if (opts.allowAiVision !== undefined) payload.allow_ai_vision = !!opts.allowAiVision;
   if (opts.allowOcr !== undefined) payload.allow_ocr = !!opts.allowOcr;
   if (opts.allowVirusScan !== undefined) payload.allow_virus_scan = !!opts.allowVirusScan;

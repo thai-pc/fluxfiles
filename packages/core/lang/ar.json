@@ -306,6 +306,8 @@
         "terminal_disabled": "تم تعطيل الطرفية على هذا الخادم.",
         "terminal_forbidden": "الوصول إلى الطرفية غير مسموح.",
         "optimize_forbidden": "التحسين غير مسموح به.",
+        "webhook_not_configured": "لا يوجد عنوان webhook مُهيأ على هذا الرمز.",
+        "webhook_blocked": "عنوان webhook يشير إلى عنوان خاص أو محظور.",
         "version_not_found": "لم يتم العثور على هذا الإصدار.",
         "license_required": "تتطلب هذه الميزة ترخيصًا صالحًا.",
         "intake_invalid": "رابط الرفع غير صالح أو منتهي الصلاحية.",

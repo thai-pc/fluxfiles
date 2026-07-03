@@ -3,6 +3,27 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.64] — 2026-07-03
+
+> Released: core `core-v0.2.56`; node `0.1.21`, laravel `0.2.29`, wordpress `0.2.29`.
+
+### Added
+
+- **Webhooks (paid module).** Fires an **HMAC-signed HTTP POST** to a `webhook_url` on
+  file write events (upload/delete/move/copy/mkdir/…) — connect FluxFiles to
+  Zapier/Make/n8n. Event-driven = stateless: it fires on the request that caused the
+  event, **after the response is flushed** (`fastcgi_finish_request`) so a slow
+  endpoint never adds to the client's latency; best-effort (a webhook failure never
+  breaks the op). Payload `{event, timestamp, user, disk, path, name}` +
+  `X-FluxFiles-Signature: sha256=<hmac>`. Claims: `allow_webhooks`, `webhook_url`
+  (http/s only, non-http dropped), `webhook_events` (filter, empty = all),
+  `webhook_secret` (HMAC key). SSRF-guarded (blocks internal targets) with a
+  `FLUXFILES_WEBHOOK_ALLOW_INTERNAL=true` opt-out for a self-hosted n8n. New
+  `POST /api/fm/webhooks/test` ping endpoint. Ships in the private `fluxfiles/webhooks`
+  package; free core returns `501 module_not_installed`.
+- **`.claude/agents/` — project subagents** (spec-writer / coder / reviewer / tester),
+  each preloaded with FluxFiles' conventions, for a spec → code → test → review flow.
+
 ## [0.2.63] — 2026-07-03
 
 > Released: core `core-v0.2.55`; node `0.1.20`, laravel `0.2.28`, wordpress `0.2.28`.

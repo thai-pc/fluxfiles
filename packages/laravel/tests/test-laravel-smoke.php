@@ -265,7 +265,7 @@ test('proxy route surface covers every core /api/fm route', function () {
         // (no main JWT) — core-standalone, like share. Adapters may proxy later.
         'intake', 'intake/info', 'intake/list', 'intake/revoke', 'intake/upload',
         // File versioning: paid + core-standalone (adapters may proxy later).
-        'versions', 'versions/restore'];
+        'versions', 'versions/restore', 'webhooks/test'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

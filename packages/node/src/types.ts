@@ -152,6 +152,14 @@ export interface BaseTokenOptions {
   versioningMax?: number;
   /** Skip versioning files bigger than this many MB. `0`/omitted = default (25). */
   versioningMaxMb?: number;
+  /** Webhooks module: fire a signed HTTP POST on file events. */
+  allowWebhooks?: boolean;
+  /** Endpoint the signed event is POSTed to (http/s only). */
+  webhookUrl?: string;
+  /** Only these event names fire the webhook (e.g. `['upload','delete']`). Empty = all. */
+  webhookEvents?: string[];
+  /** HMAC signing secret for the payload (`X-FluxFiles-Signature`). Empty = server secret. */
+  webhookSecret?: string;
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;
   /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */

@@ -306,6 +306,8 @@
         "terminal_disabled": "เทอร์มินัลถูกปิดใช้งานบนเซิร์ฟเวอร์นี้",
         "terminal_forbidden": "ไม่อนุญาตให้ใช้เทอร์มินัล",
         "optimize_forbidden": "ไม่อนุญาตให้ปรับแต่งให้เหมาะสม",
+        "webhook_not_configured": "ไม่มีการตั้งค่า URL webhook บนโทเค็นนี้",
+        "webhook_blocked": "URL webhook ชี้ไปยังที่อยู่ส่วนตัวหรือถูกบล็อก",
         "version_not_found": "ไม่พบเวอร์ชันนั้น",
         "license_required": "คุณสมบัตินี้ต้องมีใบอนุญาตที่ถูกต้อง",
         "intake_invalid": "ลิงก์อัปโหลดไม่ถูกต้องหรือหมดอายุ",

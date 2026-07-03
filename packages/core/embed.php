@@ -379,7 +379,7 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
         $payload['srcset_sizes'] = (string) $webp['srcset_sizes'];
     }
     // Paid-module claims (3-layer gate; inert unless the module is installed+licensed).
-    foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+    foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
         if (array_key_exists($mc, $webp)) {
             $payload[$mc] = (bool) $webp[$mc];
         }
@@ -420,6 +420,15 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     if (!empty($webp['versioning_max_mb'])) {
         $payload['versioning_max_mb'] = (int) $webp['versioning_max_mb'];
+    }
+    if (!empty($webp['webhook_url'])) {
+        $payload['webhook_url'] = (string) $webp['webhook_url'];
+    }
+    if (!empty($webp['webhook_events'])) {
+        $payload['webhook_events'] = $webp['webhook_events'];
+    }
+    if (!empty($webp['webhook_secret'])) {
+        $payload['webhook_secret'] = (string) $webp['webhook_secret'];
     }
     if (isset($webp['pdf_level'])
         && in_array($webp['pdf_level'], ['screen', 'ebook', 'printer', 'prepress', 'default'], true)) {

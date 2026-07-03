@@ -33,6 +33,7 @@ final class ModuleRegistry
         'share'      => '\\FluxFiles\\Share\\ShareModule',
         'intake'     => '\\FluxFiles\\Intake\\IntakeModule',
         'versioning' => '\\FluxFiles\\Versioning\\VersioningModule',
+        'webhooks'   => '\\FluxFiles\\Webhooks\\WebhooksModule',
         'ai'       => '\\FluxFiles\\Ai\\AiVisionModule',
         'ocr'      => '\\FluxFiles\\Ocr\\OcrModule',
         'virus'    => '\\FluxFiles\\Virus\\VirusScanModule',

@@ -306,6 +306,8 @@
         "terminal_disabled": "此服务器已禁用终端。",
         "terminal_forbidden": "不允许使用终端。",
         "optimize_forbidden": "不允许优化。",
+        "webhook_not_configured": "此令牌未配置 webhook URL。",
+        "webhook_blocked": "webhook URL 指向私有或被阻止的地址。",
         "version_not_found": "未找到该版本。",
         "license_required": "此功能需要有效的许可证。",
         "intake_invalid": "上传链接无效或已过期。",
