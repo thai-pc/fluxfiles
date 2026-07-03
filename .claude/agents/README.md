@@ -27,10 +27,16 @@ spec-writer → coder → tester → reviewer → (you) commit + release
 
 ## How to invoke
 
-- Explicitly: ask "use the **reviewer** subagent to review the webhooks change" (or any
-  agent by name).
-- Automatically: Claude Code may delegate based on each agent's `description` when the
-  task matches.
+- **Slash commands** (`.claude/commands/`) — the quick way:
+  | Command | Runs |
+  |---|---|
+  | `/spec <idea>` | spec-writer → design doc |
+  | `/build <what>` | coder → implement |
+  | `/test [what]` | tester → write + run tests green |
+  | `/review [what]` | reviewer → read-only checklist review |
+  | `/feature <idea>` | the full spec → build → test → review pipeline |
+- Explicitly: ask "use the **reviewer** subagent to review the webhooks change".
+- Automatically: Claude Code may delegate based on each agent's `description`.
 
 Each subagent starts fresh (no shared memory) and loads context by reading
 `.claude/CLAUDE.md`, `.claude/api-map.md`, and `docs/CONFIG.md` — keep those current.
