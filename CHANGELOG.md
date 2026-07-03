@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.63] — 2026-07-03
+
+> Released: core `core-v0.2.55`; node `0.1.20`, laravel `0.2.28`, wordpress `0.2.28`.
+
+### Added
+
+- **File Versioning (paid module).** Keeps prior versions of a file so an overwrite
+  can be undone — list past versions + **restore** any of them, with per-file
+  **retention**. Storage-resident (no DB): before FileManager overwrites a file (the
+  editor's `PUT /api/fm/content` save, or an overwrite upload), the core snapshots the
+  current bytes into `_fluxfiles/versions/<hash>/` + a `manifest.json` (invisible to
+  listing/search/ops). New endpoints `GET /api/fm/versions` +
+  `POST /api/fm/versions/restore` (restore is itself reversible — it snapshots the
+  current bytes first). Claims: `allow_versioning`, `versioning_max` (default 10, cap
+  100), `versioning_max_mb` (default 25, skip huge files). The module ships in the
+  private `fluxfiles/versioning` package; free core returns `501 module_not_installed`.
+  New `FileManager::setVersionKeeper()` hook (like the optimize hook) wires it only
+  when installed + licensed + the claim is set.
+
 ## [0.2.62] — 2026-06-28
 
 > Released: core `core-v0.2.54`; node `0.1.19`, laravel `0.2.27`, wordpress `0.2.27`.

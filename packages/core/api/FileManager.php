@@ -36,6 +36,12 @@ class FileManager
     /** @var string Secret for minting per-file stream tokens (gated local media). '' = feature off. */
     private $streamSecret = '';
 
+    /** @var callable|null Snapshot the current bytes of a file about to be overwritten,
+     *            for the paid Versioning module. `fn(string $disk, string $scopedKey, $fs): void`.
+     *            Set ONLY when the module is installed + licensed, so the free core keeps
+     *            no versions. Called before an overwrite in putContent / upload. */
+    private $versionKeeper = null;
+
     public function __construct(
         DiskManager $disks,
         Claims $claims,
@@ -67,6 +73,30 @@ class FileManager
     public function setUploadOptimizer(callable $fn): void
     {
         $this->uploadOptimizer = $fn;
+    }
+
+    /**
+     * Wire the version keeper (paid Versioning module). The callback snapshots the
+     * CURRENT bytes of a file that's about to be overwritten, so a prior version can
+     * be restored: `fn(string $disk, string $scopedKey, $fs): void`. Set only when the
+     * module is installed + licensed, so the free core keeps no versions.
+     */
+    public function setVersionKeeper(callable $fn): void
+    {
+        $this->versionKeeper = $fn;
+    }
+
+    /** Snapshot the current bytes of $scopedKey before an overwrite (no-op if no keeper). */
+    private function keepVersion(string $disk, string $scopedKey, $fs): void
+    {
+        if ($this->versionKeeper === null) {
+            return;
+        }
+        try {
+            ($this->versionKeeper)($disk, $scopedKey, $fs);
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: version snapshot failed — ' . $e->getMessage());
+        }
     }
 
     /**
@@ -364,6 +394,12 @@ class FileManager
         // Track parent directories for global folder search (best-effort)
         if ($this->meta instanceof StorageMetadataHandler) {
             $this->meta->trackParents($disk, $scoped);
+        }
+
+        // Overwriting an existing file (collision=overwrite or force_upload) →
+        // snapshot the current bytes first (Versioning module).
+        if ($fs->fileExists($scoped)) {
+            $this->keepVersion($disk, $scoped, $fs);
         }
 
         $stream = fopen($file['tmp_name'], 'r');
@@ -1659,6 +1695,9 @@ class FileManager
         if (!$fs->fileExists($scoped)) {
             throw new ApiException('File not found (the editor edits existing files only)', 404, 'not_found');
         }
+        // Snapshot the current content before overwriting it (Versioning module) —
+        // the editor's repeated saves are the prime "give me the old one back" case.
+        $this->keepVersion($disk, $scoped, $fs);
         $fs->write($scoped, $content);
         return ['path' => $path, 'size' => strlen($content)];
     }

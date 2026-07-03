@@ -30,8 +30,9 @@ final class ModuleRegistry
     private static array $map = [
         // NOTE: 'optimize' was a paid module but is now FREE/core (\FluxFiles\OptimizeModule),
         // invoked directly by the /api/fm/optimize route — no longer gated here.
-        'share'    => '\\FluxFiles\\Share\\ShareModule',
-        'intake'   => '\\FluxFiles\\Intake\\IntakeModule',
+        'share'      => '\\FluxFiles\\Share\\ShareModule',
+        'intake'     => '\\FluxFiles\\Intake\\IntakeModule',
+        'versioning' => '\\FluxFiles\\Versioning\\VersioningModule',
         'ai'       => '\\FluxFiles\\Ai\\AiVisionModule',
         'ocr'      => '\\FluxFiles\\Ocr\\OcrModule',
         'virus'    => '\\FluxFiles\\Virus\\VirusScanModule',

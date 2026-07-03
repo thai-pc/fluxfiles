@@ -149,6 +149,9 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   // Other paid-module claims (inert unless the module is installed + licensed).
   if (opts.allowShare !== undefined) payload.allow_share = !!opts.allowShare;
   if (opts.allowIntake !== undefined) payload.allow_intake = !!opts.allowIntake;
+  if (opts.allowVersioning !== undefined) payload.allow_versioning = !!opts.allowVersioning;
+  if (opts.versioningMax && opts.versioningMax > 0) payload.versioning_max = Math.trunc(opts.versioningMax);
+  if (opts.versioningMaxMb && opts.versioningMaxMb > 0) payload.versioning_max_mb = Math.trunc(opts.versioningMaxMb);
   if (opts.allowAiVision !== undefined) payload.allow_ai_vision = !!opts.allowAiVision;
   if (opts.allowOcr !== undefined) payload.allow_ocr = !!opts.allowOcr;
   if (opts.allowVirusScan !== undefined) payload.allow_virus_scan = !!opts.allowVirusScan;

@@ -306,6 +306,7 @@
         "terminal_disabled": "このサーバーではターミナルが無効です。",
         "terminal_forbidden": "ターミナルの使用は許可されていません。",
         "optimize_forbidden": "最適化は許可されていません。",
+        "version_not_found": "そのバージョンが見つかりません。",
         "license_required": "この機能には有効なライセンスが必要です。",
         "intake_invalid": "アップロードリンクが無効か期限切れです。",
         "intake_revoked": "アップロードポータルが見つからないか取り消されています。",

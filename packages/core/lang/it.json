@@ -306,6 +306,7 @@
         "terminal_disabled": "Il terminale è disabilitato su questo server.",
         "terminal_forbidden": "L'accesso al terminale non è consentito.",
         "optimize_forbidden": "L’ottimizzazione non è consentita.",
+        "version_not_found": "Questa versione non è stata trovata.",
         "license_required": "Questa funzione richiede una licenza valida.",
         "intake_invalid": "Link di caricamento non valido o scaduto.",
         "intake_revoked": "Questo portale di caricamento non è stato trovato o è stato revocato.",

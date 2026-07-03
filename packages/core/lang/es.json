@@ -306,6 +306,7 @@
         "terminal_disabled": "La terminal está deshabilitada en este servidor.",
         "terminal_forbidden": "No se permite el acceso a la terminal.",
         "optimize_forbidden": "La optimización no está permitida.",
+        "version_not_found": "No se encontró esa versión.",
         "license_required": "Esta función requiere una licencia válida.",
         "intake_invalid": "Enlace de subida no válido o caducado.",
         "intake_revoked": "Este portal de subida no se encontró o fue revocado.",

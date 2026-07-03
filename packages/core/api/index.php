@@ -240,6 +240,18 @@ try {
         });
     }
 
+    // File versioning (paid module). Wire the version keeper ONLY when the token asks
+    // (`allow_versioning`) AND the module is installed + licensed — so the free core
+    // keeps no versions. FileManager calls it before overwriting an existing file.
+    if ($claims->allowVersioning
+        && \FluxFiles\ModuleRegistry::installed('versioning')
+        && \FluxFiles\LicenseManager::fromEnv()->licensed('versioning')) {
+        $versioning = new \FluxFiles\Versioning\VersioningModule();
+        $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims) {
+            $versioning->keep($fs, $key, $claims);
+        });
+    }
+
     // Rate limiting (JSON file). Per-tenant `rate_read`/`rate_write` claims override
     // the server defaults when set (> 0); otherwise inherit the env limits.
     $rateLimiter = new RateLimiterFileStorage(
@@ -525,6 +537,16 @@ function routeRequest(
         $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->revokePortal($diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['jti'] ?? ''));
+    }
+    // File versioning — list prior versions of a file / restore one. Same 3-layer gate.
+    if ($method === 'GET' && $uri === '/api/fm/versions') {
+        $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->listVersions($fm, $diskManager, $claims, (string) ($_GET['disk'] ?? 'local'), (string) ($_GET['path'] ?? ''));
+    }
+    if ($method === 'POST' && $uri === '/api/fm/versions/restore') {
+        $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->restore($fm, $diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''), (string) ($body['version_id'] ?? ''));
     }
     if ($method === 'POST' && $uri === '/api/fm/ai-vision') {
         $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\LicenseManager::fromEnv(), $claims);

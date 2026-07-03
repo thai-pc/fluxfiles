@@ -142,11 +142,16 @@ export interface BaseTokenOptions {
    *  All default off; inert unless the module is installed & licensed on the server. */
   allowShare?: boolean;
   allowIntake?: boolean;
+  allowVersioning?: boolean;
   allowAiVision?: boolean;
   allowOcr?: boolean;
   allowVirusScan?: boolean;
   allowBackup?: boolean;
   allowC2pa?: boolean;
+  /** Prior versions kept per file (Versioning module). `0`/omitted = default (10, cap 100). */
+  versioningMax?: number;
+  /** Skip versioning files bigger than this many MB. `0`/omitted = default (25). */
+  versioningMaxMb?: number;
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;
   /** Allow extracting a zip in place (POST /api/fm/extract). Default true. */

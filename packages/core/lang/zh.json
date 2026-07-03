@@ -306,6 +306,7 @@
         "terminal_disabled": "此服务器已禁用终端。",
         "terminal_forbidden": "不允许使用终端。",
         "optimize_forbidden": "不允许优化。",
+        "version_not_found": "未找到该版本。",
         "license_required": "此功能需要有效的许可证。",
         "intake_invalid": "上传链接无效或已过期。",
         "intake_revoked": "找不到上传门户或已被撤销。",

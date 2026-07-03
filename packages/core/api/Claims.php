@@ -142,11 +142,19 @@ class Claims
      *            claim). All default FALSE (opt-in). See ModuleRegistry. */
     public bool $allowShare = false;       // Branded Share links (fluxfiles/share)
     public bool $allowIntake = false;      // Intake / upload portals (fluxfiles/intake)
+    public bool $allowVersioning = false;  // File version history (fluxfiles/versioning)
     public bool $allowAiVision = false;    // AI Vision: bg-removal/upscale/smart-crop (fluxfiles/ai)
     public bool $allowOcr = false;         // OCR / document text extraction (fluxfiles/ocr)
     public bool $allowVirusScan = false;   // Virus/malware scan on upload (fluxfiles/virus)
     public bool $allowBackup = false;      // Backup Bridge: SFTP↔S3 sync (fluxfiles/backup)
     public bool $allowC2pa = false;        // C2PA content provenance (fluxfiles/c2pa)
+
+    /** @var int Max prior versions to keep per file (Versioning module). 0 = inherit
+     *            the module default (10). Oldest beyond this are pruned on each snapshot. */
+    public int $versioningMax = 0;
+    /** @var int Skip versioning a file larger than this many MB (0 = module default, 25).
+     *            Avoids snapshotting huge videos on every overwrite. */
+    public int $versioningMaxMb = 0;
 
     /** @var bool Auto-optimize images on upload (recompress to WebP in the pipeline)?
      *            Default FALSE. Like allow_optimize, only effective when the module
@@ -391,6 +399,9 @@ class Claims
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->allowShare = (bool) ($payload->allow_share ?? false);
         $c->allowIntake = (bool) ($payload->allow_intake ?? false);
+        $c->allowVersioning = (bool) ($payload->allow_versioning ?? false);
+        $c->versioningMax = max(0, (int) ($payload->versioning_max ?? 0));
+        $c->versioningMaxMb = max(0, (int) ($payload->versioning_max_mb ?? 0));
         $c->allowAiVision = (bool) ($payload->allow_ai_vision ?? false);
         $c->allowOcr = (bool) ($payload->allow_ocr ?? false);
         $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);
@@ -484,6 +495,7 @@ class Claims
             // (layer 3) would 403 every paid module regardless of the token.
             case 'allow_share':      return $this->allowShare;
             case 'allow_intake':     return $this->allowIntake;
+            case 'allow_versioning': return $this->allowVersioning;
             case 'allow_ai_vision':  return $this->allowAiVision;
             case 'allow_ocr':        return $this->allowOcr;
             case 'allow_virus_scan': return $this->allowVirusScan;

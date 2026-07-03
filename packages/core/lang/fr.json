@@ -306,6 +306,7 @@
         "terminal_disabled": "Le terminal est désactivé sur ce serveur.",
         "terminal_forbidden": "L'accès au terminal n'est pas autorisé.",
         "optimize_forbidden": "L’optimisation n’est pas autorisée.",
+        "version_not_found": "Cette version est introuvable.",
         "license_required": "Cette fonctionnalité nécessite une licence valide.",
         "intake_invalid": "Lien d'envoi invalide ou expiré.",
         "intake_revoked": "Ce portail d'envoi est introuvable ou a été révoqué.",

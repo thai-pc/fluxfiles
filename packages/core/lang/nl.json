@@ -306,6 +306,7 @@
         "terminal_disabled": "De terminal is uitgeschakeld op deze server.",
         "terminal_forbidden": "Terminaltoegang is niet toegestaan.",
         "optimize_forbidden": "Optimaliseren is niet toegestaan.",
+        "version_not_found": "Die versie is niet gevonden.",
         "license_required": "Deze functie vereist een geldige licentie.",
         "intake_invalid": "Ongeldige of verlopen uploadlink.",
         "intake_revoked": "Dit uploadportaal is niet gevonden of ingetrokken.",

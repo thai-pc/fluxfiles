@@ -306,6 +306,7 @@
         "terminal_disabled": "Das Terminal ist auf diesem Server deaktiviert.",
         "terminal_forbidden": "Terminalzugriff ist nicht erlaubt.",
         "optimize_forbidden": "Optimierung ist nicht erlaubt.",
+        "version_not_found": "Diese Version wurde nicht gefunden.",
         "license_required": "Diese Funktion erfordert eine gültige Lizenz.",
         "intake_invalid": "Ungültiger oder abgelaufener Upload-Link.",
         "intake_revoked": "Dieses Upload-Portal wurde nicht gefunden oder widerrufen.",

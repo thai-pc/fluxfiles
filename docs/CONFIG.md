@@ -172,6 +172,9 @@ All four accept the same `claims` map.
 |---|---|---|---|
 | `allow_share` | bool | `false` | Branded Share. |
 | `allow_intake` | bool | `false` | Intake / Upload Portals (public "send us your files" links). |
+| `allow_versioning` | bool | `false` | File version history (keep prior versions on overwrite; list/restore). |
+| `versioning_max` | int | `10` | Prior versions kept per file (hard cap 100). `0` = default. |
+| `versioning_max_mb` | int (MB) | `25` | Skip versioning files bigger than this. `0` = default. |
 | `allow_ai_vision` | bool | `false` | AI Vision (BYO-key). |
 | `allow_ocr` | bool | `false` | OCR. |
 | `allow_virus_scan` | bool | `false` | Virus scan (Enterprise). |
