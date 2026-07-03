@@ -150,6 +150,10 @@ class FluxFilesManager
         if (array_key_exists('allow_code_edit', $overrides)) {
             $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
         }
+        // PDF-tools embed (Stirling-PDF) is pure UI (no core endpoint) → works in any mode.
+        if (!empty($overrides['pdf_tools_url'])) {
+            $payload['pdf_tools_url'] = (string) $overrides['pdf_tools_url'];
+        }
         // SSH terminal (SFTP disks) is core-standalone — /api/fm/terminal isn't
         // proxied. Forward the claim only in 'standalone' mode (token → a real core
         // that serves it); in proxy mode it's dropped so the button can't appear

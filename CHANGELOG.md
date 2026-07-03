@@ -3,6 +3,19 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.65] — 2026-07-03
+
+> Released: core `core-v0.2.57`; node `0.1.22`, laravel `0.2.30`, wordpress `0.2.30`.
+
+### Added
+
+- **PDF tools (free BYO-embed).** The `pdf_tools_url` claim makes the UI show a "PDF
+  tools" button that embeds a self-hosted **Stirling-PDF** (or any web PDF toolkit)
+  for merge/split/OCR/convert — instead of FluxFiles building a competitor. Same
+  pattern as `terminal_pty_url`: free/core config toggle, `http(s)` only (validated in
+  Claims), sandboxed iframe, no new server endpoint (works in every mode incl. the
+  proxy adapters). Forwarded by embed/node/laravel/wordpress. Empty (default) → no button.
+
 ## [0.2.64] — 2026-07-03
 
 > Released: core `core-v0.2.56`; node `0.1.21`, laravel `0.2.29`, wordpress `0.2.29`.

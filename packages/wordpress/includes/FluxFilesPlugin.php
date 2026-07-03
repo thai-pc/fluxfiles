@@ -307,6 +307,10 @@ class FluxFilesPlugin
         if (array_key_exists('allow_code_edit', $overrides)) {
             $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
         }
+        // PDF-tools embed (Stirling-PDF) is pure UI (no core endpoint) → works in any mode.
+        if (!empty($overrides['pdf_tools_url'])) {
+            $payload['pdf_tools_url'] = (string) $overrides['pdf_tools_url'];
+        }
         foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];

@@ -509,5 +509,8 @@
         "run_anyway": "Esegui comunque",
         "clear": "Pulisci",
         "truncated": "Output troncato."
+    },
+    "pdf": {
+        "title": "Strumenti PDF"
     }
 }

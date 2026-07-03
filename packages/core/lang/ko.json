@@ -509,5 +509,8 @@
         "run_anyway": "그래도 실행",
         "clear": "지우기",
         "truncated": "출력이 잘렸습니다."
+    },
+    "pdf": {
+        "title": "PDF 도구"
     }
 }

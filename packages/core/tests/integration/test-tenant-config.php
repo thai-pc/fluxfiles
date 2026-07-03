@@ -384,6 +384,20 @@ test('fluxfiles_token forwards show_hidden (default false)', function () {
     assertEqual(true, $mk(['dedupe_uploads' => true])->dedupeUploads, 'dedupe forwarded');
 });
 
+test('pdf_tools_url: forwarded + http(s)-only (non-http dropped)', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $dec = fn (string $j) => Claims::fromJwtPayload(JwtCompat::decode($j, $_ENV['FLUXFILES_SECRET']));
+    // default empty
+    assertEqual('', $dec(fluxfiles_token(['user' => 'u']))->pdfToolsUrl, 'empty by default');
+    // https forwarded via the claims hatch
+    $c = $dec(fluxfiles_token(['user' => 'u', 'claims' => ['pdf_tools_url' => 'https://pdf.acme.com/']]));
+    assertEqual('https://pdf.acme.com/', $c->pdfToolsUrl, 'https kept');
+    // non-http schemes dropped on decode
+    foreach (['javascript:alert(1)', 'data:text/html,x', 'ftp://x', 'not a url'] as $bad) {
+        assertEqual('', $dec(fluxfiles_token(['user' => 'u', 'claims' => ['pdf_tools_url' => $bad]]))->pdfToolsUrl, "dropped: {$bad}");
+    }
+});
+
 test('fluxfiles_token options-array form + `claims` escape hatch', function () {
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $dec = fn (string $jwt) => Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));

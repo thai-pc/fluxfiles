@@ -509,5 +509,8 @@
         "run_anyway": "Vẫn chạy",
         "clear": "Xóa màn hình",
         "truncated": "Đã cắt bớt output."
+    },
+    "pdf": {
+        "title": "Công cụ PDF"
     }
 }

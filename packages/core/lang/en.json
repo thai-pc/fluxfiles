@@ -509,5 +509,8 @@
         "run_anyway": "Run anyway",
         "clear": "Clear",
         "truncated": "Output truncated."
+    },
+    "pdf": {
+        "title": "PDF tools"
     }
 }

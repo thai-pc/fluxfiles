@@ -75,6 +75,7 @@ All four accept the same `claims` map.
 | `zip_max_files` | int | `10000` | Max file count for a zip/extract. |
 | `allow_terminal` | bool | `false` | SSH command-runner on SFTP disks; needs `write`. Grants shell as the SSH user — opt-in. |
 | `terminal_pty_url` | string (http/s) | `""` | Embed a self-hosted PTY server (ttyd/gotty/wetty) for an interactive terminal; empty → command-runner. Free. |
+| `pdf_tools_url` | string (http/s) | `""` | Embed a self-hosted PDF toolkit (Stirling-PDF) — shows a "PDF tools" button. Empty → no button. Free BYO-embed. |
 | `show_hidden` | bool | `false` | Show dotfiles / hidden entries in listings. |
 
 ### 2.3 Storage, quota & upload

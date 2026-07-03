@@ -509,5 +509,8 @@
         "run_anyway": "Toch uitvoeren",
         "clear": "Wissen",
         "truncated": "Uitvoer afgekapt."
+    },
+    "pdf": {
+        "title": "PDF-hulpmiddelen"
     }
 }

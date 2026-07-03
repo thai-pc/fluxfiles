@@ -509,5 +509,8 @@
         "run_anyway": "仍然运行",
         "clear": "清屏",
         "truncated": "输出已截断。"
+    },
+    "pdf": {
+        "title": "PDF 工具"
     }
 }

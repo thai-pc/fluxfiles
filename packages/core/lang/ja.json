@@ -509,5 +509,8 @@
         "run_anyway": "実行する",
         "clear": "クリア",
         "truncated": "出力は切り詰められました。"
+    },
+    "pdf": {
+        "title": "PDFツール"
     }
 }

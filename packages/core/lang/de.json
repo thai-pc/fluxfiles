@@ -509,5 +509,8 @@
         "run_anyway": "Trotzdem ausführen",
         "clear": "Leeren",
         "truncated": "Ausgabe gekürzt."
+    },
+    "pdf": {
+        "title": "PDF-Werkzeuge"
     }
 }

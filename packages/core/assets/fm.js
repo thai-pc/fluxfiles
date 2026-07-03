@@ -2986,6 +2986,17 @@ function fluxFilesApp() {
             return /^https?:\/\//i.test(u) ? u : '';
         },
 
+        // Optional self-hosted PDF-tools URL (Stirling-PDF) from the token. When set, a
+        // "PDF tools" button embeds it — merge/split/OCR/convert on the operator's own
+        // server. Free BYO-embed, http(s) only. Empty → no button.
+        showPdfTools: false,
+        get pdfToolsUrl() {
+            const u = String((this._tokenPayload() || {}).pdf_tools_url || '');
+            return /^https?:\/\//i.test(u) ? u : '';
+        },
+        openPdfTools() { if (this.pdfToolsUrl) this.showPdfTools = true; },
+        closePdfTools() { this.showPdfTools = false; },
+
         async openTerminal() {
             if (!this.canTerminal) return;
             this.showTerminal = true;

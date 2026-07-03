@@ -509,5 +509,8 @@
         "run_anyway": "Ejecutar de todos modos",
         "clear": "Limpiar",
         "truncated": "Salida truncada."
+    },
+    "pdf": {
+        "title": "Herramientas PDF"
     }
 }
