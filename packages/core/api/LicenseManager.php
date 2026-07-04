@@ -32,7 +32,7 @@ class LicenseManager
      * @var array<string,string>
      */
     private const PUBLIC_KEYS = [
-        'k1' => 'XQ53L9xJZJrIERVbvTHnlZ/pfYJJspUSsbu3330G3vk=',
+        'k1' => 'Q8z6KqN5iYDhzUwSYLqoKjNZi7hdknlh6MOncKx5QRE=',
     ];
 
     /** Default grace window (seconds) after `expires` when `grace` is unset. */

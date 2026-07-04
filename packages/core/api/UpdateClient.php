@@ -29,8 +29,8 @@ final class UpdateClient
      * @var array<string,string>
      */
     private const RELEASE_PUBLIC_KEYS = [
-        // Placeholder — set to the real release public key before selling builds.
-        'r1' => '',
+        // Set at release time; matching private key signs manifests offline (gitignored).
+        'r1' => 'v0LL3IVHN7DfqW8P4cp271O2O46NhBz6tOBictUHIhM=',
     ];
 
     /** @var array<string,string> */

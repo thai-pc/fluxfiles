@@ -3,6 +3,22 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.68] — 2026-07-04
+
+> Released: core `core-v0.2.60`. Adapters unchanged.
+
+### Fixed
+
+- **License signing key rotated (unblocks commercial licensing).** The offline signing
+  secret no longer matched the `k1` public key embedded in `LicenseManager`, so a minted
+  license verified as `free` (paid modules could never unlock). Rotated a fresh Ed25519
+  keypair; embedded the new `k1` public key. `scripts/license-gen.php` now mints licenses
+  the shipped core verifies end-to-end (edition/modules/expiry/sites all carried). The
+  private key stays offline + gitignored.
+- **Release (update-manifest) signing key set.** `UpdateClient::RELEASE_PUBLIC_KEYS['r1']`
+  was an empty placeholder (the self-hosted update channel couldn't verify a manifest).
+  Set to a real key; a signed manifest now round-trips. Private key gitignored.
+
 ## [0.2.67] — 2026-07-04
 
 > Released: core `core-v0.2.59`; node `0.1.24`, laravel `0.2.32`, wordpress `0.2.32`.

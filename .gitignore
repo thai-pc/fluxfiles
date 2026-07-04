@@ -71,6 +71,8 @@ docs/COMMERCIAL-STRATEGY.md
 docs/LICENSING-PLAN.md
 docs/*.SECRET.txt
 docs/license-signing-key*
+docs/release-signing-key*
+docs/*.key
 
 # Proprietary paid modules (private — not part of the MIT core; each lives in its
 # own private repo for distribution). NEVER commit these to the public monorepo.
