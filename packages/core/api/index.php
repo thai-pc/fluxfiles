@@ -609,6 +609,11 @@ function routeRequest(
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->verify($fm, $diskManager, $claims, $body);
     }
+    if ($method === 'POST' && $uri === '/api/fm/c2pa/sign') {
+        $module = \FluxFiles\ModuleRegistry::require('c2pa', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->sign($fm, $diskManager, $claims, $body);
+    }
 
     // Config / code editor — read a file's text content, or overwrite it.
     if ($method === 'GET' && $uri === '/api/fm/content') {

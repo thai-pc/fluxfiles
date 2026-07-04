@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.69] — 2026-07-04
+
+> Released: core `core-v0.2.61`. Adapters unchanged.
+
+### Added
+
+- **`POST /api/fm/c2pa/sign`** route — signs a file with a C2PA provenance manifest via
+  the (private) c2pa module. Paid + core-standalone like the other module endpoints.
+
+### Changed (private paid modules — completed engines)
+
+- The remaining 501 "not implemented" stubs in the paid modules are now real: **AI
+  Vision** calls the operator's provider (remove.bg or a generic HTTP endpoint, BYO-key);
+  **Virus scan** adds a VirusTotal path (privacy-preserving SHA-256 hash lookup — the
+  file bytes never leave the server; fail-closed on API error); **C2PA** implements
+  signing via `c2patool` + a `FLUXFILES_C2PA_MANIFEST` (operator's signing cert/key,
+  never in a token). The module code ships in the private packages; the free core is
+  unchanged besides the new sign route.
+
 ## [0.2.68] — 2026-07-04
 
 > Released: core `core-v0.2.60`. Adapters unchanged.
