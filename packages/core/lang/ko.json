@@ -512,5 +512,8 @@
     },
     "pdf": {
         "title": "PDF 도구"
+    },
+    "office": {
+        "title": "Office에서 열기"
     }
 }

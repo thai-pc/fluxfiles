@@ -112,6 +112,9 @@ export interface BaseTokenOptions {
   /** Optional self-hosted PDF-tools URL (Stirling-PDF, or any web PDF toolkit). When set, the
    *  UI shows a "PDF tools" action that embeds it (merge/split/OCR/convert/…). Free; http(s). */
   pdfToolsUrl?: string;
+  /** Optional self-hosted office suite URL (Collabora/OnlyOffice) for .docx/.xlsx/.pptx…. May
+   *  carry a `{url}` placeholder the UI substitutes with the selected file's URL. Free; http(s). */
+  officeUrl?: string;
   /** Allow the Optimization feature (POST /api/fm/optimize) — recompress images to WebP +
    *  compress PDFs. **Free/core**; default **false** because it replaces/deletes originals, so
    *  it's an opt-in capability. */

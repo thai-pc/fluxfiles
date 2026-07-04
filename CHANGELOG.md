@@ -3,6 +3,20 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.66] — 2026-07-04
+
+> Released: core `core-v0.2.58`; node `0.1.23`, laravel `0.2.31`, wordpress `0.2.31`.
+
+### Added
+
+- **Office embed (free BYO).** The `office_url` claim adds an "Open in Office" action on
+  Office files (.docx/.xlsx/.pptx/.odt/…) that embeds a self-hosted **Collabora / OnlyOffice**.
+  Unlike PDF/terminal (a useful root UI), an office suite opens a *specific* document, so
+  `office_url` may carry a **`{url}` placeholder** the UI substitutes with the selected
+  file's presigned URL (URL-encoded) — the operator's own page does the WOPI/editor wiring,
+  so the core stays stateless. `http(s)` only (validated in Claims), sandboxed iframe, no
+  new server endpoint (works in every mode). Forwarded by embed/node/laravel/wordpress.
+
 ## [0.2.65] — 2026-07-03
 
 > Released: core `core-v0.2.57`; node `0.1.22`, laravel `0.2.30`, wordpress `0.2.30`.

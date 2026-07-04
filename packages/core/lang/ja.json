@@ -512,5 +512,8 @@
     },
     "pdf": {
         "title": "PDFツール"
+    },
+    "office": {
+        "title": "Officeで開く"
     }
 }

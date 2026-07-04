@@ -512,5 +512,8 @@
     },
     "pdf": {
         "title": "Ferramentas PDF"
+    },
+    "office": {
+        "title": "Abrir no Office"
     }
 }

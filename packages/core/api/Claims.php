@@ -135,6 +135,14 @@ class Claims
      *            Free feature — opt-in config, never gated by a license. Must be http(s). */
     public string $pdfToolsUrl = '';
 
+    /** @var string Optional URL of a self-hosted office suite (Collabora / OnlyOffice)
+     *            for opening .docx/.xlsx/.pptx… An office suite opens a SPECIFIC
+     *            document, so this may carry a `{url}` placeholder that the UI
+     *            substitutes with the selected file's URL (the operator's page does the
+     *            WOPI/editor wiring). Empty (default) → no "Open in Office" action.
+     *            Free feature — opt-in config, never gated by a license. Must be http(s). */
+    public string $officeUrl = '';
+
     /** @var bool May this token edit a file's text content via /api/fm/content?
      *            Default FALSE — editing config/executable files (wp-config.php,
      *            .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
@@ -415,6 +423,9 @@ class Claims
         // PDF-tools embed URL — http(s) only (so it can never reach a non-HTTP scheme).
         $pdfUrl = trim((string) ($payload->pdf_tools_url ?? ''));
         $c->pdfToolsUrl = preg_match('#^https?://#i', $pdfUrl) ? $pdfUrl : '';
+        // Office suite embed URL (Collabora/OnlyOffice) — http(s) only.
+        $officeUrl = trim((string) ($payload->office_url ?? ''));
+        $c->officeUrl = preg_match('#^https?://#i', $officeUrl) ? $officeUrl : '';
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->allowShare = (bool) ($payload->allow_share ?? false);

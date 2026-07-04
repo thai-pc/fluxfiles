@@ -2997,6 +2997,38 @@ function fluxFilesApp() {
         openPdfTools() { if (this.pdfToolsUrl) this.showPdfTools = true; },
         closePdfTools() { this.showPdfTools = false; },
 
+        // Optional self-hosted office suite URL (Collabora/OnlyOffice) from the token.
+        // Unlike PDF (a tools UI at the root), an office suite opens a SPECIFIC document,
+        // so office_url may carry a `{url}` placeholder that we substitute with the
+        // selected file's URL — the operator's page (which they build) does the WOPI/
+        // editor wiring. Free BYO-embed, http(s) only. Empty → no button.
+        showOffice: false,
+        officeSrc: '',
+        officeFileName: '',
+        get officeUrl() {
+            const u = String((this._tokenPayload() || {}).office_url || '');
+            return /^https?:\/\//i.test(u) ? u : '';
+        },
+        // Office document types the "Open in Office" action offers.
+        _officeExts: ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf'],
+        canOpenOffice(file) {
+            if (!this.officeUrl || !file || file.type === 'dir' || !file.url) return false;
+            const ext = (file.name || '').split('.').pop().toLowerCase();
+            return this._officeExts.indexOf(ext) !== -1;
+        },
+        openOffice(file) {
+            if (!this.canOpenOffice(file)) return;
+            // Substitute {url} with the file's (presigned) URL; if no placeholder, the
+            // operator's server is embedded as-is.
+            const base = this.officeUrl;
+            this.officeSrc = base.indexOf('{url}') !== -1
+                ? base.replace('{url}', encodeURIComponent(file.url))
+                : base;
+            this.officeFileName = file.name || '';
+            this.showOffice = true;
+        },
+        closeOffice() { this.showOffice = false; this.officeSrc = ''; },
+
         async openTerminal() {
             if (!this.canTerminal) return;
             this.showTerminal = true;

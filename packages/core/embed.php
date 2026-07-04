@@ -400,6 +400,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (!empty($webp['pdf_tools_url'])) {
         $payload['pdf_tools_url'] = (string) $webp['pdf_tools_url'];
     }
+    if (!empty($webp['office_url'])) {
+        $payload['office_url'] = (string) $webp['office_url'];
+    }
     if (array_key_exists('allow_code_edit', $webp)) {
         $payload['allow_code_edit'] = (bool) $webp['allow_code_edit'];
     }

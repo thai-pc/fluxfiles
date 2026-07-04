@@ -954,6 +954,10 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M4 3L1.5 6 4 9M8 3l2.5 3L8 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('editor.title')"></span>
                 </button>
+                <button class="detail-btn" x-show="canOpenOffice(detailFile)" @click="openOffice(detailFile)" :title="t('office.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="2" y="1.5" width="8" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M4 4h4M4 6h4M4 8h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('office.title')"></span>
+                </button>
                 <button class="detail-btn" x-show="canOptimizeFile(detailFile)" :disabled="optimizeBusy" @click="optimizeFiles([detailFile.key])" :title="t('optimize.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v2M6 8.5v2M1.5 6h2M8.5 6h2M3 3l1.2 1.2M7.8 7.8L9 9M9 3L7.8 4.2M4.2 7.8L3 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('optimize.title')"></span>
@@ -1531,6 +1535,21 @@
             </div>
             <template x-if="showPdfTools">
                 <iframe class="ff-term-host" :src="pdfToolsUrl" title="PDF tools"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups"
+                        referrerpolicy="no-referrer" style="border:0;width:100%;"></iframe>
+            </template>
+        </div>
+    </div>
+
+    <!-- ═══ Office — embed the operator's self-hosted Collabora/OnlyOffice (BYO) ═══ -->
+    <div class="ff-modal-overlay" x-show="showOffice" x-transition @click.self="closeOffice()" style="z-index:64;" x-cloak>
+        <div class="ff-term-modal" role="dialog" aria-modal="true" :aria-label="t('office.title')" @keydown.escape.window="showOffice && closeOffice()">
+            <div class="ff-activity-head">
+                <h3><span x-text="t('office.title')"></span> <span class="ff-term-disk" x-text="officeFileName"></span></h3>
+                <button class="ff-activity-close" @click="closeOffice()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <template x-if="showOffice && officeSrc">
+                <iframe class="ff-term-host" :src="officeSrc" title="Office"
                         sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups"
                         referrerpolicy="no-referrer" style="border:0;width:100%;"></iframe>
             </template>

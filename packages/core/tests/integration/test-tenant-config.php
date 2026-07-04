@@ -398,6 +398,18 @@ test('pdf_tools_url: forwarded + http(s)-only (non-http dropped)', function () {
     }
 });
 
+test('office_url: forwarded + http(s)-only ({url} placeholder kept for the UI)', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $dec = fn (string $j) => Claims::fromJwtPayload(JwtCompat::decode($j, $_ENV['FLUXFILES_SECRET']));
+    assertEqual('', $dec(fluxfiles_token(['user' => 'u']))->officeUrl, 'empty by default');
+    // the {url} placeholder is preserved (the UI substitutes the selected file's URL)
+    $tpl = 'https://office.acme.com/open?fileUrl={url}';
+    assertEqual($tpl, $dec(fluxfiles_token(['user' => 'u', 'claims' => ['office_url' => $tpl]]))->officeUrl, 'template kept');
+    foreach (['javascript:alert(1)', 'file:///etc/passwd', 'x'] as $bad) {
+        assertEqual('', $dec(fluxfiles_token(['user' => 'u', 'claims' => ['office_url' => $bad]]))->officeUrl, "dropped: {$bad}");
+    }
+});
+
 test('fluxfiles_token options-array form + `claims` escape hatch', function () {
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $dec = fn (string $jwt) => Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));

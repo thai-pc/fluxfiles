@@ -512,5 +512,8 @@
     },
     "pdf": {
         "title": "أدوات PDF"
+    },
+    "office": {
+        "title": "فتح في Office"
     }
 }

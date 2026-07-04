@@ -146,6 +146,7 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowTerminal !== undefined) payload.allow_terminal = !!opts.allowTerminal;
   if (opts.terminalPtyUrl) payload.terminal_pty_url = String(opts.terminalPtyUrl);
   if (opts.pdfToolsUrl) payload.pdf_tools_url = String(opts.pdfToolsUrl);
+  if (opts.officeUrl) payload.office_url = String(opts.officeUrl);
   if (opts.allowOptimize !== undefined) payload.allow_optimize = !!opts.allowOptimize;
   // Other paid-module claims (inert unless the module is installed + licensed).
   if (opts.allowShare !== undefined) payload.allow_share = !!opts.allowShare;
