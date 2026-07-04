@@ -3,6 +3,21 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.70] — 2026-07-04
+
+> Tooling (no core/package release): the license issuance service.
+
+### Added
+
+- **`services/license-server/`** — the vendor license-issuance back-office (separate
+  from the stateless core). On a purchase webhook it verifies the signature, maps the
+  plan → an Ed25519 license signed with your private key (the same key the core trusts),
+  stores the customer record in SQLite, and returns the key. Webhook adapters for
+  **Lemon Squeezy** (main store) + **Freemius** (WordPress); a Bearer-authed `/issue`
+  for manual keys; `/licenses` + `/revoke` admin endpoints. Idempotent on
+  `(gateway, order_id)`. Verified end-to-end against the real `LicenseManager` (6 tests)
+  + over HTTP. The SQLite DB + private key are gitignored.
+
 ## [0.2.69] — 2026-07-04
 
 > Released: core `core-v0.2.61`. Adapters unchanged.

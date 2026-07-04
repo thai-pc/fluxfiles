@@ -86,3 +86,8 @@ packages/ocr/
 packages/virus/
 packages/backup/
 packages/c2pa/
+
+# License server runtime DB (customer records — never commit)
+services/license-server/data/
+*.sqlite
+*.sqlite-*
