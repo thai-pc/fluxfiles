@@ -3,6 +3,24 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.71] — 2026-07-04
+
+> Released: core `core-v0.2.62`.
+
+### Added
+
+- **Public demo mode (`FLUXFILES_DEMO=1`).** A self-hosted core can serve a safe
+  "try it live" instance that a marketing site embeds by iframe and lets anonymous
+  visitors upload for real. `/public/` mints a hardened per-visitor token — its own
+  `demo/<id>/` sandbox on local, images only, small size/quota/file caps, owner-only,
+  rate-limited, dangerous claims (terminal/import/byob) off — and injects it as
+  `window.__FM_BOOT__`, so the token never reaches the embedding page. Old sandboxes
+  auto-purge after `FLUXFILES_DEMO_TTL_HOURS`. (`DemoMode`, off by default.)
+- **`window.__FM_BOOT__` server-injected boot config.** The UI can boot from a
+  server-injected `{ token, disk, path, theme, … }` without a `?token=` URL (no
+  address-bar leak) and without a postMessage parent — useful for self-hosted
+  single-tenant deploys and the demo above.
+
 ## [0.2.70] — 2026-07-04
 
 > Tooling (no core/package release): the license issuance service.

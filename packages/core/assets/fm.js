@@ -366,6 +366,41 @@ function fluxFilesApp() {
                 capabilities: ['list', 'upload', 'delete', 'move', 'copy', 'mkdir', 'presign', 'metadata', 'cross-copy', 'cross-move', 'bulk-ops', 'ai-tag', 'i18n']
             });
 
+            // Server-injected boot (self-hosted single-tenant / public demo): a page may
+            // set window.__FM_BOOT__ = { token, endpoint?, disk?, disks?, path?, theme?,
+            // locale?, maxUploadMb?, maxFiles? } so the UI boots WITHOUT a ?token= URL
+            // (no address-bar leak) and WITHOUT waiting for a postMessage parent. The
+            // hardened demo (demo.php) injects a heavily-scoped, short-TTL demo token here.
+            if (window.__FM_BOOT__ && window.__FM_BOOT__.token) {
+                const boot = window.__FM_BOOT__;
+                this.endpoint = boot.endpoint || window.location.origin;
+                this.token = boot.token;
+                if (boot.disk) this.currentDisk = boot.disk;
+                if (boot.path) this.currentPath = boot.path;
+                this.config = {
+                    disks: (boot.disks || boot.disk || 'local').split(','),
+                    theme: boot.theme || null,
+                    multiple: boot.multiple !== false,
+                    maxUploadMb: boot.maxUploadMb || null,
+                    maxFiles: boot.maxFiles || null
+                };
+                this._initTheme();
+                (async () => {
+                    if (boot.locale) {
+                        await this.switchLocale(boot.locale);
+                    } else if (!this.i18nReady) {
+                        try {
+                            const res = await fetch(this.joinUrl('/api/fm/lang'));
+                            const sl = res.headers.get('Content-Language') || 'en';
+                            if (sl !== 'en' || !this.i18nReady) await this.switchLocale(sl);
+                        } catch (_) { /* keep default */ }
+                    }
+                    this.loadFiles();
+                    this.loadQuota();
+                })();
+                return;
+            }
+
             // Standalone mode: not in iframe, load locale + files directly
             if (window.parent === window) {
                 this.endpoint = window.location.origin;

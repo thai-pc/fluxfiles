@@ -214,6 +214,9 @@ All four accept the same `claims` map.
 | `FLUXFILES_SSRF_ALLOW_HOSTS` | — | SSRF allow-list (BYOB + import). |
 | `FLUXFILES_LICENSE_KEY` | — | Signed license for paid modules (offline-verified). |
 | `FLUXFILES_UPDATE_URL` | — | Vendor update server for `fluxfiles update <module>` (paid). |
+| `FLUXFILES_DEMO` | `false` | Public "try it live" mode: `/public/` mints a hardened per-visitor token (own `demo/<id>/` sandbox, images only, small caps, owner-only, dangerous claims off) injected as `window.__FM_BOOT__` — safe to embed by iframe on a marketing site. |
+| `FLUXFILES_DEMO_TTL_HOURS` | `6` | Demo sandbox lifetime + token TTL; older sandboxes auto-purge. |
+| `FLUXFILES_DEMO_MAX_MB` / `_QUOTA_MB` / `_MAX_FILES` | `5` / `50` / `30` | Demo per-file size / total quota / file-count caps. |
 
 ---
 

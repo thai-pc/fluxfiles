@@ -127,6 +127,21 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
         $html
     );
     $html = str_replace('<html lang="en">', '<html lang="' . htmlspecialchars($locale) . '" dir="' . htmlspecialchars($dir) . '">', $html);
+
+    // Public demo mode (FLUXFILES_DEMO=1): inject a hardened, per-visitor demo token as
+    // window.__FM_BOOT__ so an embedded iframe lets anonymous visitors upload for real
+    // inside their own `demo/<id>/` sandbox — the token never reaches the marketing site.
+    if (\FluxFiles\DemoMode::enabled()) {
+        require_once __DIR__ . '/../embed.php';
+        $bootJson = json_encode(\FluxFiles\DemoMode::bootConfig(), $jsFlags);
+        $html = str_replace('</head>', "<script>window.__FM_BOOT__ = {$bootJson};</script>\n</head>", $html);
+        // Opportunistic sandbox purge (~5% of demo loads) so old uploads don't pile up.
+        if (random_int(1, 20) === 1) {
+            $localRoot = $_ENV['FLUXFILES_LOCAL_ROOT'] ?? (__DIR__ . '/../storage/uploads');
+            \FluxFiles\DemoMode::purge($localRoot);
+        }
+    }
+
     echo $html;
     exit;
 }
