@@ -958,6 +958,10 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="2" y="1.5" width="8" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M4 4h4M4 6h4M4 8h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('office.title')"></span>
                 </button>
+                <button class="detail-btn" x-show="canEsign(detailFile)" @click="openEsign(detailFile)" :title="t('esign.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M1.5 9c1.5-.5 2-3 3-3s.5 2 1.5 2 2-4 3-4 1 3 1.5 3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 10.5h9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('esign.title')"></span>
+                </button>
                 <button class="detail-btn" x-show="canOptimizeFile(detailFile)" :disabled="optimizeBusy" @click="optimizeFiles([detailFile.key])" :title="t('optimize.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v2M6 8.5v2M1.5 6h2M8.5 6h2M3 3l1.2 1.2M7.8 7.8L9 9M9 3L7.8 4.2M4.2 7.8L3 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('optimize.title')"></span>
@@ -1550,6 +1554,21 @@
             </div>
             <template x-if="showOffice && officeSrc">
                 <iframe class="ff-term-host" :src="officeSrc" title="Office"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups"
+                        referrerpolicy="no-referrer" style="border:0;width:100%;"></iframe>
+            </template>
+        </div>
+    </div>
+
+    <!-- ═══ E-signature — embed the operator's self-hosted DocuSeal (BYO) ═══ -->
+    <div class="ff-modal-overlay" x-show="showEsign" x-transition @click.self="closeEsign()" style="z-index:64;" x-cloak>
+        <div class="ff-term-modal" role="dialog" aria-modal="true" :aria-label="t('esign.title')" @keydown.escape.window="showEsign && closeEsign()">
+            <div class="ff-activity-head">
+                <h3><span x-text="t('esign.title')"></span> <span class="ff-term-disk" x-text="esignFileName"></span></h3>
+                <button class="ff-activity-close" @click="closeEsign()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <template x-if="showEsign && esignSrc">
+                <iframe class="ff-term-host" :src="esignSrc" title="E-signature"
                         sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups"
                         referrerpolicy="no-referrer" style="border:0;width:100%;"></iframe>
             </template>

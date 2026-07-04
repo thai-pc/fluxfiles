@@ -515,5 +515,8 @@
     },
     "office": {
         "title": "Office에서 열기"
+    },
+    "esign": {
+        "title": "서명"
     }
 }

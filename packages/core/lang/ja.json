@@ -515,5 +515,8 @@
     },
     "office": {
         "title": "Officeで開く"
+    },
+    "esign": {
+        "title": "署名"
     }
 }

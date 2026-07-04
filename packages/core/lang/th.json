@@ -515,5 +515,8 @@
     },
     "office": {
         "title": "เปิดใน Office"
+    },
+    "esign": {
+        "title": "ลงนาม"
     }
 }

@@ -410,6 +410,17 @@ test('office_url: forwarded + http(s)-only ({url} placeholder kept for the UI)',
     }
 });
 
+test('esign_url: forwarded + http(s)-only ({url} placeholder kept)', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $dec = fn (string $j) => Claims::fromJwtPayload(JwtCompat::decode($j, $_ENV['FLUXFILES_SECRET']));
+    assertEqual('', $dec(fluxfiles_token(['user' => 'u']))->esignUrl, 'empty by default');
+    $tpl = 'https://sign.acme.com/new?doc={url}';
+    assertEqual($tpl, $dec(fluxfiles_token(['user' => 'u', 'claims' => ['esign_url' => $tpl]]))->esignUrl, 'template kept');
+    foreach (['javascript:alert(1)', 'data:x', 'nope'] as $bad) {
+        assertEqual('', $dec(fluxfiles_token(['user' => 'u', 'claims' => ['esign_url' => $bad]]))->esignUrl, "dropped: {$bad}");
+    }
+});
+
 test('fluxfiles_token options-array form + `claims` escape hatch', function () {
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $dec = fn (string $jwt) => Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));

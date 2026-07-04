@@ -314,6 +314,9 @@ class FluxFilesPlugin
         if (!empty($overrides['office_url'])) {
             $payload['office_url'] = (string) $overrides['office_url'];
         }
+        if (!empty($overrides['esign_url'])) {
+            $payload['esign_url'] = (string) $overrides['esign_url'];
+        }
         foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];

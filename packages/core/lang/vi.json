@@ -515,5 +515,8 @@
     },
     "office": {
         "title": "Mở bằng Office"
+    },
+    "esign": {
+        "title": "Ký tên"
     }
 }

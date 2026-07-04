@@ -515,5 +515,8 @@
     },
     "office": {
         "title": "Office'te aç"
+    },
+    "esign": {
+        "title": "İmzala"
     }
 }

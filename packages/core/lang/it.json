@@ -515,5 +515,8 @@
     },
     "office": {
         "title": "Apri in Office"
+    },
+    "esign": {
+        "title": "Firma"
     }
 }

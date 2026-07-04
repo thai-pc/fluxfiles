@@ -115,6 +115,9 @@ export interface BaseTokenOptions {
   /** Optional self-hosted office suite URL (Collabora/OnlyOffice) for .docx/.xlsx/.pptx…. May
    *  carry a `{url}` placeholder the UI substitutes with the selected file's URL. Free; http(s). */
   officeUrl?: string;
+  /** Optional self-hosted e-signature URL (DocuSeal) for signing PDFs/docs. May carry a `{url}`
+   *  placeholder the UI substitutes with the selected file's URL. Free; http(s). */
+  esignUrl?: string;
   /** Allow the Optimization feature (POST /api/fm/optimize) — recompress images to WebP +
    *  compress PDFs. **Free/core**; default **false** because it replaces/deletes originals, so
    *  it's an opt-in capability. */

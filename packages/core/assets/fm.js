@@ -3029,6 +3029,34 @@ function fluxFilesApp() {
         },
         closeOffice() { this.showOffice = false; this.officeSrc = ''; },
 
+        // Optional self-hosted e-signature URL (DocuSeal) from the token. Signs a
+        // specific document, so esign_url may carry a `{url}` placeholder substituted
+        // with the selected file's URL — the operator's page builds the signing request.
+        // Free BYO-embed, http(s) only. Empty → no button.
+        showEsign: false,
+        esignSrc: '',
+        esignFileName: '',
+        get esignUrl() {
+            const u = String((this._tokenPayload() || {}).esign_url || '');
+            return /^https?:\/\//i.test(u) ? u : '';
+        },
+        _esignExts: ['pdf', 'doc', 'docx', 'odt'],
+        canEsign(file) {
+            if (!this.esignUrl || !file || file.type === 'dir' || !file.url) return false;
+            const ext = (file.name || '').split('.').pop().toLowerCase();
+            return this._esignExts.indexOf(ext) !== -1;
+        },
+        openEsign(file) {
+            if (!this.canEsign(file)) return;
+            const base = this.esignUrl;
+            this.esignSrc = base.indexOf('{url}') !== -1
+                ? base.replace('{url}', encodeURIComponent(file.url))
+                : base;
+            this.esignFileName = file.name || '';
+            this.showEsign = true;
+        },
+        closeEsign() { this.showEsign = false; this.esignSrc = ''; },
+
         async openTerminal() {
             if (!this.canTerminal) return;
             this.showTerminal = true;

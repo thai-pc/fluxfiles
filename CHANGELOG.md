@@ -3,6 +3,20 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.67] — 2026-07-04
+
+> Released: core `core-v0.2.59`; node `0.1.24`, laravel `0.2.32`, wordpress `0.2.32`.
+
+### Added
+
+- **E-signature embed (free BYO).** The `esign_url` claim adds a "Sign" action on
+  PDFs/documents that embeds a self-hosted **DocuSeal** (or any web e-sign tool). Like
+  the office embed, `esign_url` may carry a `{url}` placeholder the UI substitutes with
+  the selected file's presigned URL (URL-encoded) — the operator's page builds the
+  signing request, so the core stays stateless. `http(s)` only (validated in Claims),
+  sandboxed iframe, no new server endpoint. Completes the BYO-embed set (terminal / PDF /
+  office / e-sign). Forwarded by embed/node/laravel/wordpress.
+
 ## [0.2.66] — 2026-07-04
 
 > Released: core `core-v0.2.58`; node `0.1.23`, laravel `0.2.31`, wordpress `0.2.31`.

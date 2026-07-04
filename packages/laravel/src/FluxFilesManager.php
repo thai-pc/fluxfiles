@@ -157,6 +157,9 @@ class FluxFilesManager
         if (!empty($overrides['office_url'])) {
             $payload['office_url'] = (string) $overrides['office_url'];
         }
+        if (!empty($overrides['esign_url'])) {
+            $payload['esign_url'] = (string) $overrides['esign_url'];
+        }
         // SSH terminal (SFTP disks) is core-standalone — /api/fm/terminal isn't
         // proxied. Forward the claim only in 'standalone' mode (token → a real core
         // that serves it); in proxy mode it's dropped so the button can't appear

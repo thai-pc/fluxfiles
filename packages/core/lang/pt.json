@@ -515,5 +515,8 @@
     },
     "office": {
         "title": "Abrir no Office"
+    },
+    "esign": {
+        "title": "Assinar"
     }
 }
