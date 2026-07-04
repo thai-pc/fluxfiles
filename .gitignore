@@ -18,6 +18,7 @@ storage/rate_limit.json
 # Core package storage (runtime/test artifacts)
 packages/core/storage/uploads/
 packages/core/storage/rate_limit.json
+packages/core/storage/demo_ip.json
 
 # Build output
 packages/react/dist/

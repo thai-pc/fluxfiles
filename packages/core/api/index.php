@@ -133,11 +133,18 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     // inside their own `demo/<id>/` sandbox — the token never reaches the marketing site.
     if (\FluxFiles\DemoMode::enabled()) {
         require_once __DIR__ . '/../embed.php';
-        $bootJson = json_encode(\FluxFiles\DemoMode::bootConfig(), $jsFlags);
-        $html = str_replace('</head>', "<script>window.__FM_BOOT__ = {$bootJson};</script>\n</head>", $html);
-        // Opportunistic sandbox purge (~5% of demo loads) so old uploads don't pile up.
+        $stateDir = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
+        $boot = \FluxFiles\DemoMode::bootConfig($stateDir);
+        // Only inject when a token was issued. A throttled IP (too many fresh sandboxes
+        // this hour) gets none → the UI shows the auth-required state, which for the demo
+        // reads as "try again later" and stops one abuser spinning up unlimited sandboxes.
+        if (!empty($boot['token'])) {
+            $bootJson = json_encode($boot, $jsFlags);
+            $html = str_replace('</head>', "<script>window.__FM_BOOT__ = {$bootJson};</script>\n</head>", $html);
+        }
+        // Opportunistic purge (~5% of loads): TTL sweep + global size-budget enforcement.
         if (random_int(1, 20) === 1) {
-            $localRoot = $_ENV['FLUXFILES_LOCAL_ROOT'] ?? (__DIR__ . '/../storage/uploads');
+            $localRoot = $_ENV['FLUXFILES_LOCAL_ROOT'] ?? ($stateDir . '/uploads');
             \FluxFiles\DemoMode::purge($localRoot);
         }
     }
@@ -218,6 +225,11 @@ try {
 
     // Dependencies
     $diskConfigs = require __DIR__ . '/../config/disks.php';
+    // Public demo mode: hard-strip every non-local disk so the demo can never touch
+    // S3/R2/SFTP (no egress cost, no BYOB) — defense-in-depth over the local-only token.
+    if (\FluxFiles\DemoMode::enabled()) {
+        $diskConfigs = \FluxFiles\DemoMode::forceLocalDisks($diskConfigs);
+    }
     $diskManager = new DiskManager($diskConfigs);
 
     // Register BYOB (Bring Your Own Bucket) disks from JWT

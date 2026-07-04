@@ -82,5 +82,51 @@ t('two visitors get distinct sandboxes', function () {
     truthy($pa['prefix'] !== $pb['prefix'], 'different prefixes');
 });
 
+t('forceLocalDisks strips S3/R2/SFTP (no egress cost)', function () {
+    $configs = [
+        'local' => ['driver' => 'local', 'root' => '/tmp'],
+        'my-s3' => ['driver' => 's3', 'bucket' => 'x'],
+        'my-r2' => ['driver' => 's3', 'endpoint' => 'r2'],
+        'sftp'  => ['driver' => 'sftp', 'host' => 'x'],
+    ];
+    $out = DemoMode::forceLocalDisks($configs);
+    eq(['local'], array_keys($out), 'only local survives');
+});
+
+t('per-IP mint throttle blocks after the hourly budget', function () {
+    $dir = sys_get_temp_dir() . '/ff-demo-ip-' . uniqid();
+    @mkdir($dir, 0777, true);
+    $_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+    putenv('FLUXFILES_DEMO_IP_MINTS=3');
+    $allowed = 0;
+    for ($i = 0; $i < 6; $i++) {
+        if (DemoMode::recordMintAllowed($dir)) { $allowed++; }
+    }
+    putenv('FLUXFILES_DEMO_IP_MINTS');
+    eq(3, $allowed, 'exactly the budget (3) allowed, rest blocked');
+    // a different IP is independent
+    $_SERVER['REMOTE_ADDR'] = '198.51.100.9';
+    truthy(DemoMode::recordMintAllowed($dir), 'a fresh IP is not throttled');
+    array_map('unlink', glob("$dir/*") ?: []); @rmdir($dir);
+});
+
+t('bootConfig throttles a NEW visitor over budget (no token)', function () {
+    $dir = sys_get_temp_dir() . '/ff-demo-boot-' . uniqid();
+    @mkdir($dir, 0777, true);
+    $_SERVER['REMOTE_ADDR'] = '203.0.113.20';
+    unset($_COOKIE['ff_demo']);        // simulate a fresh visitor (no cookie)
+    putenv('FLUXFILES_DEMO_IP_MINTS=2');
+    $tokens = 0; $throttled = 0;
+    for ($i = 0; $i < 4; $i++) {
+        // each call is a "new visitor" (no cookie) from the same IP
+        $cfg = DemoMode::bootConfig($dir);
+        if (!empty($cfg['token'])) { $tokens++; } else { $throttled++; }
+    }
+    putenv('FLUXFILES_DEMO_IP_MINTS');
+    truthy($tokens <= 2, 'no more than the budget got tokens');
+    truthy($throttled >= 2, 'the rest were throttled (no token)');
+    array_map('unlink', glob("$dir/*") ?: []); @rmdir($dir);
+});
+
 echo "\n  Total: " . ($p + $f) . "  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f > 0 ? 1 : 0);

@@ -3,6 +3,24 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.72] — 2026-07-04
+
+> Released: core `core-v0.2.63`. Demo-mode anti-abuse hardening.
+
+### Changed
+
+- **Public demo mode is now abuse/cost hardened.** Three layers on top of the
+  already local-only, heavily-scoped demo token:
+  - **No cloud egress, ever.** Demo mode hard-strips every S3/R2/SFTP disk from the
+    config (`forceLocalDisks`) — the demo is local-disk-only by construction, so it
+    cannot run up an S3/R2 bill no matter how hard it's hammered.
+  - **Per-IP mint throttle** (`FLUXFILES_DEMO_IP_MINTS`, default 20/hour): one IP can't
+    spin up unlimited sandboxes. Returning visitors (valid cookie) are never throttled;
+    a throttled IP just gets no fresh token (the UI reads it as "try again later").
+  - **Global disk budget** (`FLUXFILES_DEMO_TOTAL_MB`, default 2000): the opportunistic
+    purge now also deletes the oldest sandboxes when total demo bytes exceed the cap,
+    bounding VPS disk regardless of visitor count.
+
 ## [0.2.71] — 2026-07-04
 
 > Released: core `core-v0.2.62`.
