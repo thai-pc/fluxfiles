@@ -77,17 +77,19 @@
                 url: file.url, key: file.key || file.path, disk: file.disk || cfg.disk,
                 name: file.basename || file.name, mime: file.mime || file.type,
                 width: file.width || (file.meta && file.meta.width) || 0,
-                height: file.height || (file.meta && file.meta.height) || 0
+                height: file.height || (file.meta && file.meta.height) || 0,
+                alt: (file.meta && (file.meta.alt || file.meta.title)) || '',
+                caption: (file.meta && file.meta.caption) || ''
             })
         }).then(function (r) { return r.ok ? r.json() : null; })
           .then(function (j) {
-              onPick({
-                  url: (j && j.data && j.data.url) || file.url,
-                  id: (j && j.data && j.data.id) || 0,
-                  alt: file.basename || file.name || ''
-              });
+              var alt = (file.meta && (file.meta.alt || file.meta.title)) || file.basename || file.name || '';
+              onPick({ url: (j && j.data && j.data.url) || file.url, id: (j && j.data && j.data.id) || 0, alt: alt });
           })
-          .catch(function () { onPick({ url: file.url, id: 0, alt: file.basename || file.name || '' }); });
+          .catch(function () {
+              var alt = (file.meta && (file.meta.alt || file.meta.title)) || file.basename || file.name || '';
+              onPick({ url: file.url, id: 0, alt: alt });
+          });
     }
 
     blocks.registerBlockType('fluxfiles/image', {
@@ -107,19 +109,29 @@
             function onPick(res) {
                 props.setAttributes({ url: res.url, id: res.id, alt: res.alt });
             }
-            var controls = el(
-                blockEditor.BlockControls,
-                null,
-                el(
-                    components.ToolbarGroup,
-                    null,
-                    el(components.ToolbarButton, {
-                        icon: 'edit',
-                        label: __('Replace from FluxFiles', 'fluxfiles'),
-                        onClick: function () { openPicker(onPick); }
-                    })
-                )
-            );
+            function setFeatured() {
+                if (a.id && window.wp.data && window.wp.data.dispatch('core/editor')) {
+                    window.wp.data.dispatch('core/editor').editPost({ featured_media: a.id });
+                    if (window.wp.data.dispatch('core/notices')) {
+                        window.wp.data.dispatch('core/notices').createInfoNotice(
+                            __('Set as featured image.', 'fluxfiles'), { type: 'snackbar', isDismissible: true }
+                        );
+                    }
+                }
+            }
+            var toolbarButtons = [
+                el(components.ToolbarButton, {
+                    icon: 'edit', label: __('Replace from FluxFiles', 'fluxfiles'),
+                    onClick: function () { openPicker(onPick); }
+                })
+            ];
+            if (a.id) {
+                toolbarButtons.push(el(components.ToolbarButton, {
+                    icon: 'star-filled', label: __('Set as featured image', 'fluxfiles'),
+                    onClick: setFeatured
+                }));
+            }
+            var controls = el(blockEditor.BlockControls, null, el(components.ToolbarGroup, null, toolbarButtons));
             if (!a.url) {
                 return el(
                     'div',

@@ -315,6 +315,8 @@ class FluxFilesApi
                 'mime'     => (string) ($body['mime'] ?? ''),
                 'width'    => (int) ($body['width'] ?? 0),
                 'height'   => (int) ($body['height'] ?? 0),
+                'alt'      => (string) ($body['alt'] ?? ''),
+                'caption'  => (string) ($body['caption'] ?? ''),
             ]);
             return $this->ok($res);
         } catch (\Throwable $e) {

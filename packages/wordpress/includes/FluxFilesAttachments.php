@@ -52,9 +52,13 @@ class FluxFilesAttachments
         $disk = (string) ($file['disk'] ?? 'local');
         $name = (string) ($file['basename'] ?? ($file['name'] ?? basename(parse_url($url, PHP_URL_PATH) ?: $key)));
         $mime = (string) ($file['mime'] ?? (wp_check_filetype($name)['type'] ?: 'application/octet-stream'));
+        $alt  = trim((string) ($file['alt'] ?? ''));
+        $caption = trim((string) ($file['caption'] ?? ''));
 
         $existing = self::findByKey($disk, $key);
         if ($existing) {
+            // Refresh alt/caption if the pick carries newer metadata.
+            if ($alt !== '') { update_post_meta($existing, '_wp_attachment_image_alt', $alt); }
             return ['id' => $existing, 'url' => $url, 'mime' => $mime];
         }
 
@@ -62,6 +66,7 @@ class FluxFilesAttachments
             'post_mime_type' => $mime,
             'post_title'     => sanitize_file_name(pathinfo($name, PATHINFO_FILENAME) ?: $name),
             'post_content'   => '',
+            'post_excerpt'   => $caption, // WP stores the caption as the excerpt
             'post_status'    => 'inherit',
             'guid'           => esc_url_raw($url),
         ], false, 0, true);
@@ -73,6 +78,9 @@ class FluxFilesAttachments
         update_post_meta($attachId, self::META_URL, esc_url_raw($url));
         update_post_meta($attachId, self::META_KEY, $key);
         update_post_meta($attachId, self::META_DISK, $disk);
+        if ($alt !== '') {
+            update_post_meta($attachId, '_wp_attachment_image_alt', $alt);
+        }
 
         // Give WP dimensions so responsive images / editors behave (no local sizes —
         // FluxFiles serves resized variants on demand via /img).

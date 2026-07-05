@@ -360,6 +360,26 @@ test('attachment bridge: wired into the plugin (routes + button + block)', funct
     assertTrue(is_file(__DIR__ . '/../includes/FluxFilesBlock.php'), 'block registrar exists');
 });
 
+test('attachment bridge: syncs alt text + caption onto the attachment', function () {
+    $GLOBALS['WP_POSTS'] = [];
+    $res = FluxFilesAttachments::findOrCreate([
+        'url' => 'https://cdn/x/hero.jpg', 'key' => 'x/hero.jpg', 'disk' => 's3',
+        'basename' => 'hero.jpg', 'alt' => 'A mountain at dawn', 'caption' => 'Shot on location',
+    ]);
+    assertEqual('A mountain at dawn', $GLOBALS['WP_POSTS'][$res['id']]['meta']['_wp_attachment_image_alt'], 'alt synced');
+    assertEqual('Shot on location', $GLOBALS['WP_POSTS'][$res['id']]['post']['post_excerpt'], 'caption → excerpt');
+});
+
+test('media parity: featured image + native-picker integration wired', function () {
+    $blockJs = (string) file_get_contents(__DIR__ . '/../assets/block.js');
+    assertTrue(strpos($blockJs, 'featured_media') !== false, 'block can set the featured image');
+    assertTrue(is_file(__DIR__ . '/../assets/media-integration.js'), 'native media integration script exists');
+    assertTrue(is_file(__DIR__ . '/../includes/FluxFilesMediaIntegration.php'), 'native integration registrar exists');
+    $intSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesMediaIntegration.php');
+    assertTrue(strpos($intSrc, 'fluxfiles_replace_picker') !== false, 'native picker is opt-in via a setting');
+    assertTrue(strpos($intSrc, 'wp_enqueue_media') !== false, 'integration loads the native media JS');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

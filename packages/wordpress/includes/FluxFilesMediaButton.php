@@ -150,13 +150,14 @@ class FluxFilesMediaButton
             function emit(file, attachId) {
                 var url = file.url || '';
                 var name = file.basename || file.name || file.path || file.key || '';
+                var alt = (file.meta && (file.meta.alt || file.meta.title)) || name;
                 var isImg = /\.(jpe?g|png|gif|webp|avif|svg)$/i.test(name);
                 var html;
                 if (isImg) {
                     // A real attachment reference (wp-image-<id>) so WP treats it like a
                     // library image; falls back to a bare <img> if the bridge is off.
                     var cls = attachId ? ' class="wp-image-' + attachId + '"' : '';
-                    html = '<img src="' + esc(url) + '" alt="' + esc(name) + '"' + cls + ' />';
+                    html = '<img src="' + esc(url) + '" alt="' + esc(alt) + '"' + cls + ' />';
                 } else {
                     html = '<a href="' + esc(url) + '">' + esc(name) + '</a>';
                 }
@@ -176,7 +177,9 @@ class FluxFilesMediaButton
                         url: file.url, key: file.key || file.path, disk: file.disk || config.disk,
                         name: file.basename || file.name, mime: file.mime || file.type,
                         width: file.width || (file.meta && file.meta.width) || 0,
-                        height: file.height || (file.meta && file.meta.height) || 0
+                        height: file.height || (file.meta && file.meta.height) || 0,
+                        alt: (file.meta && (file.meta.alt || file.meta.title)) || '',
+                        caption: (file.meta && file.meta.caption) || ''
                     })
                 })
                     .then(function (r) { return r.ok ? r.json() : null; })

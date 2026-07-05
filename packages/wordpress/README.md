@@ -62,6 +62,24 @@ WP Media Folder + WP Offload Media. Disable it with the `fluxfiles_enable_offloa
 filter or the settings checkbox. The attachment endpoint (`POST
 /wp-json/fluxfiles/v1/api/fm/attach`) requires the `upload_files` capability.
 
+Picks also **sync alt text + caption** onto the attachment, and the Gutenberg block can
+**set the featured image** from a FluxFiles file.
+
+### Native picker integration (experimental)
+
+Enable **Native picker** (Settings → FluxFiles, off by default) to add a *From FluxFiles*
+button to WordPress's own media modal — so **Featured Image**, the **core Image block**,
+the **Customizer** and third-party pickers can pull from FluxFiles too (each pick becomes
+an offloaded attachment). It's opt-in because extending `wp.media` across every context is
+fragile; the FluxFiles button + Gutenberg block work without it. Toggle via the setting or
+the `fluxfiles_replace_picker` filter. Test on staging first.
+
+> **Not a 100% drop-in of the native library.** Responsive `srcset` isn't auto-generated
+> for offloaded images (FluxFiles' on-demand `/img` resizer is token-gated by design), so
+> WP serves the full-size image with correct dimensions. Everything else — Media Library
+> visibility, insert, alt/caption, featured image, blocks — behaves like a native
+> attachment.
+
 ## REST API
 
 A proxy is exposed at `/wp-json/fluxfiles/v1/api/fm/*` — `list`, `upload`,

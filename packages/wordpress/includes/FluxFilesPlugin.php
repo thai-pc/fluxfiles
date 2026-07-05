@@ -27,6 +27,9 @@ class FluxFilesPlugin
             new FluxFilesAdmin();
             new FluxFilesMediaButton();
         }
+        // Native media-modal integration (experimental, opt-in) — runs in admin +
+        // the Customizer, so it's booted outside the is_admin() block.
+        new FluxFilesMediaIntegration();
 
         // REST API
         add_action('rest_api_init', [FluxFilesApi::class, 'registerRoutes']);

@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.74] — 2026-07-05
+
+> Released: WordPress `wordpress-v0.2.34`. Core unchanged.
+
+### Added (WordPress adapter — closer to native media parity)
+
+- **Alt text + caption sync**: a FluxFiles pick now writes `_wp_attachment_image_alt`
+  and the caption (post excerpt) onto the attachment, and the inserted `<img>` uses the
+  real alt.
+- **Featured image from FluxFiles**: the Gutenberg block gains a "Set as featured image"
+  toolbar action.
+- **Native picker integration (experimental, opt-in)**: a *From FluxFiles* button in
+  WordPress's own `wp.media` modal, so Featured Image, the core Image block and the
+  Customizer can pull from FluxFiles too (each pick → an offloaded attachment). Off by
+  default (`fluxfiles_replace_picker`); the button + block work without it. Documented
+  limitation: responsive `srcset` isn't auto-generated for offloaded images (the on-demand
+  `/img` resizer is token-gated by design) — WP serves the full-size image with correct
+  dimensions.
+
 ## [0.2.73] — 2026-07-05
 
 > Released: WordPress `wordpress-v0.2.33`. Core unchanged.
