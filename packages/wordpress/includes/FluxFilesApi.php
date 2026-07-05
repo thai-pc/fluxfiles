@@ -317,6 +317,7 @@ class FluxFilesApi
                 'height'   => (int) ($body['height'] ?? 0),
                 'alt'      => (string) ($body['alt'] ?? ''),
                 'caption'  => (string) ($body['caption'] ?? ''),
+                'variants' => is_array($body['variants'] ?? null) ? $body['variants'] : null,
             ]);
             return $this->ok($res);
         } catch (\Throwable $e) {

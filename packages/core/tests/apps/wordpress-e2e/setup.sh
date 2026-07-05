@@ -27,6 +27,9 @@ run() { npx --yes @wordpress/env run cli wp "$@"; }
 echo "==> Activating plugin + configuring site"
 run plugin activate fluxfiles >/dev/null 2>&1 || true
 run option update fluxfiles_secret "$SECRET" >/dev/null
+# Enable the experimental native-picker integration so the e2e can assert the
+# "From FluxFiles" button is injected into wp.media on a real WordPress.
+run option update fluxfiles_replace_picker 1 >/dev/null
 run rewrite structure '/%postname%/' --hard >/dev/null 2>&1
 run rewrite flush --hard >/dev/null 2>&1
 

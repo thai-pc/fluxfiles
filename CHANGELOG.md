@@ -3,6 +3,23 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.76] — 2026-07-05
+
+> Released: WordPress `wordpress-v0.2.36`. Core unchanged.
+
+### Added (WordPress adapter — the last low-priority parity items)
+
+- **Responsive srcset for offloaded images.** A pick's FluxFiles WebP variants
+  (thumb 150w / medium 768w / large 1920w + the original) are stored on the attachment and
+  emitted as a real `srcset` via a `wp_calculate_image_srcset` filter — offloaded images
+  are now responsive, not single-size. Variant URLs are stable on the (required) public
+  disk. Passed through the media button, block, native picker + `/attach`.
+- **Classic-editor featured image** is covered by the native-picker integration (the
+  "From FluxFiles" button appears in the classic featured-image `wp.media` panel too).
+- **Native-picker e2e**: a real-WordPress Playwright test enables
+  `fluxfiles_replace_picker` (via setup.sh) and asserts the "From FluxFiles" button is
+  injected into an opened `wp.media` modal — real coverage for the experimental feature.
+
 ## [0.2.75] — 2026-07-05
 
 > Released: WordPress `wordpress-v0.2.35`. Core unchanged.

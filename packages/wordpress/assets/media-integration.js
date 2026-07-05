@@ -67,7 +67,8 @@
                 width: file.width || (file.meta && file.meta.width) || 0,
                 height: file.height || (file.meta && file.meta.height) || 0,
                 alt: (file.meta && (file.meta.alt || file.meta.title)) || '',
-                caption: (file.meta && file.meta.caption) || ''
+                caption: (file.meta && file.meta.caption) || '',
+                variants: file.variants || null
             })
         }).then(function (r) { return r.ok ? r.json() : null; })
           .then(function (j) { return (j && j.data && j.data.id) ? j.data.id : 0; });

@@ -74,13 +74,20 @@ an offloaded attachment). It's opt-in because extending `wp.media` across every 
 fragile; the FluxFiles button + Gutenberg block work without it. Toggle via the setting or
 the `fluxfiles_replace_picker` filter. Test on staging first.
 
-> **Not a 100% drop-in of the native library.** (1) Responsive `srcset` isn't
-> auto-generated for offloaded images (FluxFiles' on-demand `/img` resizer is token-gated
-> by design), so WP serves the full-size image with correct dimensions. (2) Offload needs
-> a disk with **stable public URLs** — a public S3/R2 bucket (or CDN) or a public local
-> disk. Private buckets, SFTP and gated local serve expiring URLs, so they aren't
-> supported for offload. Everything else — Media Library visibility, insert, alt/caption,
-> featured image, blocks — behaves like a native attachment.
+**Responsive srcset.** Offloaded images get a real `srcset` built from FluxFiles'
+upload-time WebP variants (thumb 150w / medium 768w / large 1920w + the original), so a
+`<img>` serves the right size per viewport. Images without stored variants fall back to
+the full-size URL with correct dimensions.
+
+**Featured image** can be set from the Gutenberg block, and — with the native-picker
+integration on — from the classic-editor featured-image panel and everywhere else the
+`wp.media` modal appears.
+
+> **One constraint:** offload needs a disk with **stable public URLs** — a public S3/R2
+> bucket (or CDN) or a public local disk. Private buckets, SFTP and gated local serve
+> expiring URLs, so they aren't supported for offload (migration rejects them). Everything
+> else — Media Library visibility, insert, alt/caption, featured image, srcset, blocks —
+> behaves like a native attachment.
 
 ### Migrate an existing site + housekeeping (WP-CLI)
 

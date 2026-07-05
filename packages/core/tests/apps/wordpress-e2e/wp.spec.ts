@@ -77,3 +77,18 @@ test('wordpress attachment bridge: /attach creates an offloaded attachment (idem
   expect(result.sourceUrl).toBe(url);                  // URL rewritten to FluxFiles
   expect(result.altText).toBe('e2e alt');              // alt synced
 });
+
+// Native-picker integration (experimental): with fluxfiles_replace_picker on (set in
+// setup.sh), the "From FluxFiles" button must be injected into WordPress's own wp.media
+// modal — so Featured Image / core Image block / Customizer can reach FluxFiles. We open
+// a media frame programmatically and assert the button appears (the fragile part is the
+// injection; the select flow reuses the same attach path tested above).
+test('wordpress native picker: "From FluxFiles" button is injected into wp.media', async ({ page }) => {
+  await loginAdmin(page);
+  await page.goto(`${BASE}/wp-admin/post-new.php`, { waitUntil: 'domcontentloaded' });
+  // Wait for the native media JS + our integration script to load.
+  await page.waitForFunction(() => !!(window as any).wp?.media, null, { timeout: 20_000 });
+  // Open a media frame programmatically (same modal Featured Image / blocks use).
+  await page.evaluate(() => (window as any).wp.media({ title: 'e2e', multiple: false }).open());
+  await expect(page.locator('.media-modal .fluxfiles-from-btn')).toBeVisible({ timeout: 15_000 });
+});

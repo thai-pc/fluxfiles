@@ -17,9 +17,10 @@ defined('ABSPATH') || exit;
  */
 class FluxFilesAttachments
 {
-    private const META_URL  = '_fluxfiles_url';
-    private const META_KEY  = '_fluxfiles_key';
-    private const META_DISK = '_fluxfiles_disk';
+    private const META_URL      = '_fluxfiles_url';
+    private const META_KEY      = '_fluxfiles_key';
+    private const META_DISK     = '_fluxfiles_disk';
+    private const META_VARIANTS = '_fluxfiles_variants';
 
     /** Register the URL-rewrite filters. Called once on plugins_loaded. */
     public static function register(): void
@@ -29,6 +30,9 @@ class FluxFilesAttachments
         }
         add_filter('wp_get_attachment_url', [self::class, 'filterUrl'], 10, 2);
         add_filter('wp_get_attachment_image_src', [self::class, 'filterImageSrc'], 10, 4);
+        // Responsive srcset for offloaded images, built from FluxFiles' stored WebP
+        // variants (thumb/medium/large) — their URLs are stable on a public disk.
+        add_filter('wp_calculate_image_srcset', [self::class, 'filterSrcset'], 10, 5);
         // Attachment deleted in WP → optionally delete the backing file in FluxFiles
         // storage too. Off by default (safe: the file survives in your bucket).
         add_action('delete_attachment', [self::class, 'onDelete']);
@@ -82,8 +86,7 @@ class FluxFilesAttachments
             update_post_meta($attachId, '_wp_attachment_image_alt', $alt);
         }
 
-        // Give WP dimensions so responsive images / editors behave (no local sizes —
-        // FluxFiles serves resized variants on demand via /img).
+        // Give WP dimensions so responsive images / editors behave.
         $w = (int) ($file['width'] ?? 0);
         $h = (int) ($file['height'] ?? 0);
         $meta = ['file' => $key, 'sizes' => [], 'image_meta' => []];
@@ -93,7 +96,42 @@ class FluxFilesAttachments
         }
         wp_update_attachment_metadata($attachId, $meta);
 
+        // Persist FluxFiles' upload-time WebP variants (thumb/medium/large) so we can
+        // emit a real responsive srcset for offloaded images. Their URLs are stable on a
+        // public disk (the only kind offload supports); each carries its target width.
+        $srcset = self::variantSrcset($file['variants'] ?? null, $w, $url);
+        if (!empty($srcset)) {
+            update_post_meta($attachId, self::META_VARIANTS, wp_json_encode($srcset));
+        }
+
         return ['id' => (int) $attachId, 'url' => $url, 'mime' => $mime];
+    }
+
+    /** FluxFiles variant name → target width (mirrors ImageOptimizer defaults). */
+    private const VARIANT_WIDTHS = ['thumb' => 150, 'medium' => 768, 'large' => 1920];
+
+    /**
+     * Build a width→url srcset map from a pick's `variants` (+ the full-size image).
+     * @param mixed $variants the pick's variants map: { thumb:{url}, medium:{url}, ... }
+     * @return array<int,string> width => url, ascending
+     */
+    private static function variantSrcset($variants, int $naturalWidth, string $fullUrl): array
+    {
+        $out = [];
+        if (is_array($variants)) {
+            foreach (self::VARIANT_WIDTHS as $name => $width) {
+                $v = $variants[$name] ?? null;
+                $vurl = is_array($v) ? ($v['url'] ?? '') : (is_string($v) ? $v : '');
+                if (is_string($vurl) && $vurl !== '') {
+                    $out[$width] = $vurl;
+                }
+            }
+        }
+        if ($naturalWidth > 0 && $out) {
+            $out[$naturalWidth] = $fullUrl; // include the original as the largest candidate
+        }
+        ksort($out);
+        return $out;
     }
 
     /** Look up an attachment id by its FluxFiles disk+key marker. */
@@ -129,6 +167,34 @@ class FluxFilesAttachments
             $image[0] = $ff;
         }
         return $image;
+    }
+
+    /**
+     * wp_calculate_image_srcset filter → build a real responsive srcset for offloaded
+     * images from FluxFiles' stored WebP variants (thumb/medium/large + original), so a
+     * `<img>` gets multiple widths instead of a single full-size one.
+     *
+     * @param array<int,array<string,mixed>> $sources
+     * @return array<int,array<string,mixed>>
+     */
+    public static function filterSrcset($sources, $sizeArray, $imageSrc, $imageMeta, $attachmentId)
+    {
+        $raw = get_post_meta((int) $attachmentId, self::META_VARIANTS, true);
+        if (!is_string($raw) || $raw === '') {
+            return $sources; // not ours (or no variants) → leave WP's result alone
+        }
+        $map = json_decode($raw, true);
+        if (!is_array($map) || !$map) {
+            return $sources;
+        }
+        $built = [];
+        foreach ($map as $width => $url) {
+            $w = (int) $width;
+            if ($w > 0 && is_string($url) && $url !== '') {
+                $built[$w] = ['url' => $url, 'descriptor' => 'w', 'value' => $w];
+            }
+        }
+        return $built ?: $sources;
     }
 
     /**

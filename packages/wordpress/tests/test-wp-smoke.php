@@ -286,6 +286,7 @@ if (!function_exists('wp_update_attachment_metadata')) {
 }
 if (!function_exists('is_wp_error')) { function is_wp_error($x) { return $x instanceof \WP_Error; } }
 if (!class_exists('WP_Error')) { class WP_Error {} }
+if (!function_exists('wp_json_encode')) { function wp_json_encode($d, $o = 0, $depth = 512) { return json_encode($d, $o, $depth); } }
 if (!function_exists('sanitize_file_name')) { function sanitize_file_name($n) { return preg_replace('/[^A-Za-z0-9._-]/', '-', (string) $n); } }
 if (!function_exists('esc_url_raw')) { function esc_url_raw($u) { return $u; } }
 if (!function_exists('wp_check_filetype')) {
@@ -368,6 +369,34 @@ test('attachment bridge: syncs alt text + caption onto the attachment', function
     ]);
     assertEqual('A mountain at dawn', $GLOBALS['WP_POSTS'][$res['id']]['meta']['_wp_attachment_image_alt'], 'alt synced');
     assertEqual('Shot on location', $GLOBALS['WP_POSTS'][$res['id']]['post']['post_excerpt'], 'caption → excerpt');
+});
+
+test('srcset: offloaded image gets a real responsive srcset from FluxFiles variants', function () {
+    $GLOBALS['WP_POSTS'] = [];
+    $res = FluxFilesAttachments::findOrCreate([
+        'url' => 'https://cdn/p/big.jpg', 'key' => 'p/big.jpg', 'disk' => 's3',
+        'basename' => 'big.jpg', 'width' => 2400, 'height' => 1600,
+        'variants' => [
+            'thumb'  => ['url' => 'https://cdn/p/big-thumb.webp'],
+            'medium' => ['url' => 'https://cdn/p/big-medium.webp'],
+            'large'  => ['url' => 'https://cdn/p/big-large.webp'],
+        ],
+    ]);
+    $stored = json_decode($GLOBALS['WP_POSTS'][$res['id']]['meta']['_fluxfiles_variants'], true);
+    // thumb 150, medium 768, large 1920 + original 2400
+    assertEqual('https://cdn/p/big-thumb.webp', $stored['150'], 'thumb → 150w');
+    assertEqual('https://cdn/p/big-medium.webp', $stored['768'], 'medium → 768w');
+    assertEqual('https://cdn/p/big-large.webp', $stored['1920'], 'large → 1920w');
+    assertEqual('https://cdn/p/big.jpg', $stored['2400'], 'original → natural width');
+
+    // The filter turns stored variants into WP srcset sources.
+    $sources = FluxFilesAttachments::filterSrcset([], [2400, 1600], 'https://cdn/p/big.jpg', [], $res['id']);
+    assertEqual(4, count($sources), 'four srcset candidates');
+    assertEqual('https://cdn/p/big-medium.webp', $sources[768]['url'], 'source keyed by width');
+    assertEqual('w', $sources[768]['descriptor'], 'width descriptor');
+    // A normal attachment (no variants) → WP result untouched.
+    $GLOBALS['WP_POSTS'][777] = ['post' => [], 'meta' => []];
+    assertEqual(['x'], FluxFilesAttachments::filterSrcset(['x'], [100, 100], 'u', [], 777), 'non-FluxFiles untouched');
 });
 
 test('stableUrl: public/local yield stable URLs, private/sftp are rejected', function () {
