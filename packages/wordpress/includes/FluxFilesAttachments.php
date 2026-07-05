@@ -29,9 +29,9 @@ class FluxFilesAttachments
         }
         add_filter('wp_get_attachment_url', [self::class, 'filterUrl'], 10, 2);
         add_filter('wp_get_attachment_image_src', [self::class, 'filterImageSrc'], 10, 4);
-        // Our files live in FluxFiles, not wp-content/uploads — stop WP trying to
-        // delete a local path that never existed on attachment removal.
-        add_filter('wp_delete_file', [self::class, 'guardDelete']);
+        // Attachment deleted in WP → optionally delete the backing file in FluxFiles
+        // storage too. Off by default (safe: the file survives in your bucket).
+        add_action('delete_attachment', [self::class, 'onDelete']);
     }
 
     /**
@@ -131,12 +131,79 @@ class FluxFilesAttachments
         return $image;
     }
 
-    /** Never let WP delete a local path for a FluxFiles-backed attachment. */
-    public static function guardDelete($path)
+    /**
+     * A STABLE public URL for disk+key, or null when the disk can't produce one that
+     * survives (private S3/R2 → expiring presigned; SFTP / gated local → tokened). The
+     * offload bridge needs a stable URL, so migration only targets disks that pass this.
+     *
+     * @param array<string,mixed> $config the disk config
+     */
+    public static function stableUrl(array $config, string $key): ?string
     {
-        // WP passes an absolute uploads path; ours don't exist there, so returning ''
-        // makes wp_delete_file() a no-op for them. Normal files are unaffected because
-        // their path exists and isn't one of ours. We simply guard the obvious case.
-        return $path;
+        $driver = $config['driver'] ?? '';
+        if ($driver === 'local') {
+            // Gated local (FLUXFILES_LOCAL_PRIVATE) serves through tokened /stream → not stable.
+            if (($config['private'] ?? false) === true || ($config['private'] ?? '') === 'true') {
+                return null;
+            }
+            return rtrim((string) ($config['url'] ?? '/storage/uploads'), '/') . '/' . ltrim($key, '/');
+        }
+        if ($driver === 's3') {
+            if (($config['visibility'] ?? 'private') !== 'public') {
+                return null; // private bucket → presigned URLs expire
+            }
+            $base = $config['public_url'] ?? '';
+            if ($base === '' && !empty($config['bucket'])) {
+                $endpoint = rtrim((string) ($config['endpoint'] ?? ''), '/');
+                $base = $endpoint !== '' ? $endpoint . '/' . $config['bucket'] : '';
+            }
+            return $base !== '' ? rtrim((string) $base, '/') . '/' . ltrim($key, '/') : null;
+        }
+        return null; // sftp + anything else → no stable URL
+    }
+
+    /** True when this attachment is backed by a FluxFiles file. */
+    public static function isFluxFiles(int $postId): bool
+    {
+        return get_post_meta($postId, self::META_URL, true) !== '';
+    }
+
+    /** Disk + key an attachment points at, or null if it isn't a FluxFiles attachment. */
+    public static function locate(int $postId): ?array
+    {
+        $key = get_post_meta($postId, self::META_KEY, true);
+        if (!is_string($key) || $key === '') {
+            return null;
+        }
+        return ['disk' => (string) (get_post_meta($postId, self::META_DISK, true) ?: 'local'), 'key' => $key];
+    }
+
+    /**
+     * A FluxFiles-backed attachment was deleted in WP. By default the storage file is
+     * LEFT in place (safe). Set the `fluxfiles_delete_storage` option / filter to also
+     * remove it from your bucket. Never throws (a storage hiccup must not block WP).
+     */
+    public static function onDelete($postId): void
+    {
+        $loc = self::locate((int) $postId);
+        if ($loc === null) {
+            return; // not ours → nothing to do
+        }
+        $delete = apply_filters('fluxfiles_delete_storage', get_option('fluxfiles_delete_storage', '0') === '1', (int) $postId);
+        if (!$delete) {
+            return;
+        }
+        try {
+            $configs = FluxFilesPlugin::diskConfigs();
+            if (!isset($configs[$loc['disk']])) {
+                return;
+            }
+            $fs = (new \FluxFiles\DiskManager($configs))->disk($loc['disk']);
+            if ($fs->fileExists($loc['key'])) {
+                $fs->delete($loc['key']);
+            }
+        } catch (\Throwable) {
+            // best-effort — the WP record is already gone; leave the file if we can't reach storage
+        }
     }
 }

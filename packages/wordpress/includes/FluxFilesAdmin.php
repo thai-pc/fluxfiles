@@ -133,6 +133,19 @@ class FluxFilesAdmin
             'fluxfiles_permissions'
         );
 
+        register_setting('fluxfiles', 'fluxfiles_delete_storage', [
+            'type' => 'string',
+            'sanitize_callback' => static fn ($v) => $v === '1' ? '1' : '0',
+            'default' => '0',
+        ]);
+        add_settings_field(
+            'fluxfiles_delete_storage',
+            'Delete from storage',
+            [$this, 'renderDeleteStorageField'],
+            'fluxfiles',
+            'fluxfiles_permissions'
+        );
+
         // S3 section
         add_settings_section(
             'fluxfiles_s3',
@@ -272,6 +285,19 @@ class FluxFilesAdmin
             $on ? 'checked' : '',
             esc_html__('Add a “From FluxFiles” button to the native WordPress media picker', 'fluxfiles'),
             esc_html__('Experimental: lets Featured Image, the core Image block and the Customizer pull from FluxFiles too. The FluxFiles button + Gutenberg block work without this. Test on staging first.', 'fluxfiles')
+        );
+    }
+
+    public function renderDeleteStorageField(): void
+    {
+        $on = get_option('fluxfiles_delete_storage', '0') === '1';
+        printf(
+            '<input type="hidden" name="fluxfiles_delete_storage" value="0" />'
+            . '<label><input type="checkbox" name="fluxfiles_delete_storage" value="1" %s /> %s</label>'
+            . '<p class="description">%s</p>',
+            $on ? 'checked' : '',
+            esc_html__('Also delete the file from FluxFiles storage when its attachment is deleted', 'fluxfiles'),
+            esc_html__('Off by default: deleting an attachment leaves the file safe in your bucket. Turn on to keep storage in sync with the Media Library.', 'fluxfiles')
         );
     }
 

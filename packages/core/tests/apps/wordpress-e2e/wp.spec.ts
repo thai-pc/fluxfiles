@@ -37,3 +37,43 @@ test('wordpress shortcode: embed boots + REST proxy auth (upload renders a card)
   await uploadFile(fm, pngFile(name));
   await expect(cardByName(fm, name)).toBeVisible({ timeout: 15_000 });
 });
+
+// Attachment bridge (3-in-1): the /attach REST route must create a REAL WP attachment
+// against the real WP DB, and the URL-rewrite filter must serve it from the FluxFiles
+// URL. Exercised through the block editor (which carries a REST nonce), so this covers
+// real wp_insert_attachment + WP_Query idempotency + wp_get_attachment_url — none of
+// which the stubbed PHP smoke can prove.
+test('wordpress attachment bridge: /attach creates an offloaded attachment (idempotent) + URL rewrite', async ({ page }) => {
+  await loginAdmin(page);
+  // The block editor page exposes wpApiSettings.nonce for authenticated REST calls.
+  await page.goto(`${BASE}/wp-admin/post-new.php`, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => !!(window as any).wpApiSettings?.nonce, null, { timeout: 20_000 });
+
+  const url = `https://cdn.example.com/wp/e2e-${Date.now()}.jpg`;
+  const key = url.split('/').slice(-2).join('/');
+
+  const result = await page.evaluate(async ({ base, url, key }) => {
+    const nonce = (window as any).wpApiSettings.nonce as string;
+    const attach = () =>
+      fetch(`${base}/wp-json/fluxfiles/v1/api/fm/attach`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+        body: JSON.stringify({ url, key, disk: 'local', name: key.split('/').pop(), mime: 'image/jpeg', alt: 'e2e alt' }),
+      }).then((r) => r.json());
+
+    const first = await attach();
+    const second = await attach(); // idempotent on (disk,key) → same id
+    const id = first?.data?.id;
+    // REST media item reflects the URL-rewrite filter via source_url.
+    const media = id
+      ? await fetch(`${base}/wp-json/wp/v2/media/${id}`, { credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce } }).then((r) => r.json())
+      : null;
+    return { firstId: id, secondId: second?.data?.id, sourceUrl: media?.source_url, altText: media?.alt_text };
+  }, { base: BASE, url, key });
+
+  expect(result.firstId).toBeGreaterThan(0);           // real attachment created
+  expect(result.secondId).toBe(result.firstId);        // idempotent — no duplicate
+  expect(result.sourceUrl).toBe(url);                  // URL rewritten to FluxFiles
+  expect(result.altText).toBe('e2e alt');              // alt synced
+});

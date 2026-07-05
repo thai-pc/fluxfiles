@@ -3,6 +3,28 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.75] — 2026-07-05
+
+> Released: WordPress `wordpress-v0.2.35`. Core unchanged.
+
+### Added / Fixed (WordPress adapter — close the audit gaps)
+
+- **Delete sync (WP → FluxFiles)**: deleting a FluxFiles-backed attachment can now also
+  delete the storage file — opt-in via Settings → "Delete from storage" /
+  `fluxfiles_delete_storage` (off by default; the file stays safe otherwise). Replaces the
+  dead `wp_delete_file` no-op guard with a real `delete_attachment` handler.
+- **Migration + housekeeping (WP-CLI)**: `wp fluxfiles migrate` moves existing local
+  Media Library attachments into a FluxFiles disk and offloads them (with `--dry-run`,
+  `--limit`, `--delete-local`); `wp fluxfiles verify [--delete]` finds/removes attachments
+  whose backing file is gone (the FluxFiles → WP direction).
+- **Real-WordPress e2e**: a Playwright test hits `/attach` against a live WP (via
+  `@wordpress/env`) and asserts a real attachment is created, is idempotent on (disk,key),
+  serves the rewritten FluxFiles URL, and syncs alt text — real coverage the stubbed smoke
+  couldn't give.
+- **Documented offload requirement**: offload needs a stable public URL (public S3/R2/CDN
+  or public local); private buckets / SFTP / gated local serve expiring URLs and are
+  rejected by migration. `stableUrl()` enforces this.
+
 ## [0.2.74] — 2026-07-05
 
 > Released: WordPress `wordpress-v0.2.34`. Core unchanged.

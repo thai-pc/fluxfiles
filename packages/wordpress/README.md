@@ -74,11 +74,32 @@ an offloaded attachment). It's opt-in because extending `wp.media` across every 
 fragile; the FluxFiles button + Gutenberg block work without it. Toggle via the setting or
 the `fluxfiles_replace_picker` filter. Test on staging first.
 
-> **Not a 100% drop-in of the native library.** Responsive `srcset` isn't auto-generated
-> for offloaded images (FluxFiles' on-demand `/img` resizer is token-gated by design), so
-> WP serves the full-size image with correct dimensions. Everything else — Media Library
-> visibility, insert, alt/caption, featured image, blocks — behaves like a native
-> attachment.
+> **Not a 100% drop-in of the native library.** (1) Responsive `srcset` isn't
+> auto-generated for offloaded images (FluxFiles' on-demand `/img` resizer is token-gated
+> by design), so WP serves the full-size image with correct dimensions. (2) Offload needs
+> a disk with **stable public URLs** — a public S3/R2 bucket (or CDN) or a public local
+> disk. Private buckets, SFTP and gated local serve expiring URLs, so they aren't
+> supported for offload. Everything else — Media Library visibility, insert, alt/caption,
+> featured image, blocks — behaves like a native attachment.
+
+### Migrate an existing site + housekeeping (WP-CLI)
+
+```bash
+# Move existing local Media Library attachments into a FluxFiles disk (offload them).
+# Target must be a public S3/R2 or public local disk.
+wp fluxfiles migrate --disk=s3 --path=wp-media --dry-run   # preview
+wp fluxfiles migrate --disk=s3 --path=wp-media             # apply
+wp fluxfiles migrate --disk=s3 --limit=200 --delete-local  # batch + reclaim local disk
+
+# Verify FluxFiles-backed attachments still point at existing files; remove dead ones.
+wp fluxfiles verify            # report
+wp fluxfiles verify --delete   # remove attachments whose file is gone
+```
+
+**Delete sync.** Deleting an attachment leaves the file safe in your bucket by default;
+enable **Delete from storage** (Settings → FluxFiles, or the `fluxfiles_delete_storage`
+filter) to also remove it. The reverse direction (a file deleted in FluxFiles) is handled
+on demand by `wp fluxfiles verify`.
 
 ## REST API
 

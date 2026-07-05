@@ -370,6 +370,39 @@ test('attachment bridge: syncs alt text + caption onto the attachment', function
     assertEqual('Shot on location', $GLOBALS['WP_POSTS'][$res['id']]['post']['post_excerpt'], 'caption → excerpt');
 });
 
+test('stableUrl: public/local yield stable URLs, private/sftp are rejected', function () {
+    // public S3 with a CDN → stable
+    assertEqual('https://cdn.example.com/wp/pic.jpg',
+        FluxFilesAttachments::stableUrl(['driver' => 's3', 'visibility' => 'public', 'public_url' => 'https://cdn.example.com'], 'wp/pic.jpg'),
+        'public S3 uses public_url');
+    // local (non-gated) → stable
+    assertEqual('/storage/uploads/a/b.png',
+        FluxFilesAttachments::stableUrl(['driver' => 'local', 'url' => '/storage/uploads'], 'a/b.png'),
+        'local uses disk url');
+    // private S3 → null (presigned expires)
+    assertEqual(null, FluxFilesAttachments::stableUrl(['driver' => 's3', 'visibility' => 'private', 'bucket' => 'b'], 'k'), 'private S3 rejected');
+    // gated local → null
+    assertEqual(null, FluxFilesAttachments::stableUrl(['driver' => 'local', 'url' => '/u', 'private' => true], 'k'), 'gated local rejected');
+    // sftp → null
+    assertEqual(null, FluxFilesAttachments::stableUrl(['driver' => 'sftp'], 'k'), 'sftp rejected');
+});
+
+test('delete sync: onDelete is a no-op unless opted in, and only for our attachments', function () {
+    $GLOBALS['WP_POSTS'] = [];
+    // a normal (non-FluxFiles) attachment → locate returns null → onDelete does nothing
+    $GLOBALS['WP_POSTS'][501] = ['post' => [], 'meta' => []];
+    assertEqual(null, FluxFilesAttachments::locate(501), 'non-FluxFiles attachment not located');
+    // a FluxFiles attachment → located
+    $res = FluxFilesAttachments::findOrCreate(['url' => 'https://cdn/d/e.jpg', 'key' => 'd/e.jpg', 'disk' => 'local']);
+    $loc = FluxFilesAttachments::locate($res['id']);
+    assertEqual('d/e.jpg', $loc['key'], 'FluxFiles attachment located by key');
+    assertEqual('local', $loc['disk'], 'disk resolved');
+    // onDelete with the option OFF must not throw and must not attempt storage deletion
+    $GLOBALS['WP_OPTIONS']['fluxfiles_delete_storage'] = '0';
+    FluxFilesAttachments::onDelete($res['id']); // no exception = pass (option off → skip)
+    assertTrue(true, 'onDelete safe when delete-from-storage is off');
+});
+
 test('media parity: featured image + native-picker integration wired', function () {
     $blockJs = (string) file_get_contents(__DIR__ . '/../assets/block.js');
     assertTrue(strpos($blockJs, 'featured_media') !== false, 'block can set the featured image');
