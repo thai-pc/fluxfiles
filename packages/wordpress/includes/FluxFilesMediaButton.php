@@ -90,6 +90,9 @@ class FluxFilesMediaButton
         // a JWT from the WP session when the embedded one expires → no reload).
         $tokenUrlJs = wp_json_encode(esc_url_raw(rest_url('fluxfiles/v1/api/fm/token')));
         $nonceJs    = wp_json_encode(wp_create_nonce('wp_rest'));
+        // Attachment-bridge endpoint: register the pick as a WP attachment (served from
+        // your bucket) so it becomes a real Media Library item, not just raw HTML.
+        $attachUrlJs = wp_json_encode(esc_url_raw(rest_url('fluxfiles/v1/api/fm/attach')));
 
         ?>
         <div id="fluxfiles-modal" class="fluxfiles-modal" style="display:none;">
@@ -142,21 +145,43 @@ class FluxFilesMediaButton
                 modal.style.display = 'none';
             }
 
-            function insertFile(file) {
+            function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+            function emit(file, attachId) {
                 var url = file.url || '';
                 var name = file.basename || file.name || file.path || file.key || '';
-                var html = '';
-
-                if (/\.(jpe?g|png|gif|webp|svg)$/i.test(name)) {
-                    html = '<img src="' + url + '" alt="' + name + '" />';
+                var isImg = /\.(jpe?g|png|gif|webp|avif|svg)$/i.test(name);
+                var html;
+                if (isImg) {
+                    // A real attachment reference (wp-image-<id>) so WP treats it like a
+                    // library image; falls back to a bare <img> if the bridge is off.
+                    var cls = attachId ? ' class="wp-image-' + attachId + '"' : '';
+                    html = '<img src="' + esc(url) + '" alt="' + esc(name) + '"' + cls + ' />';
                 } else {
-                    html = '<a href="' + url + '">' + name + '</a>';
+                    html = '<a href="' + esc(url) + '">' + esc(name) + '</a>';
                 }
-
-                // Classic editor
                 if (typeof window.send_to_editor === 'function') {
                     window.send_to_editor(html);
                 }
+            }
+
+            function insertFile(file) {
+                // Register the pick as a WP attachment (served from your bucket), then
+                // insert it. If the bridge fails/returns nothing, still insert the URL.
+                fetch(<?php echo $attachUrlJs; ?>, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': <?php echo $nonceJs; ?> },
+                    body: JSON.stringify({
+                        url: file.url, key: file.key || file.path, disk: file.disk || config.disk,
+                        name: file.basename || file.name, mime: file.mime || file.type,
+                        width: file.width || (file.meta && file.meta.width) || 0,
+                        height: file.height || (file.meta && file.meta.height) || 0
+                    })
+                })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) { emit(file, j && j.data && j.data.id); })
+                    .catch(function () { emit(file, 0); });
             }
 
             if (btn) btn.addEventListener('click', function(e) {

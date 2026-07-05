@@ -33,6 +33,12 @@ class FluxFilesPlugin
 
         // Shortcode
         new FluxFilesShortcode();
+
+        // Attachment bridge (3-in-1 media manager): register FluxFiles picks as WP
+        // attachments served from your bucket + a Gutenberg block. URL-rewrite filters
+        // load early; the block registers on init.
+        add_action('plugins_loaded', ['FluxFilesAttachments', 'register']);
+        new FluxFilesBlock();
     }
 
     /**

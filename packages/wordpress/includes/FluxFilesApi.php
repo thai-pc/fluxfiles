@@ -203,6 +203,15 @@ class FluxFilesApi
             'permission_callback' => [self::class, 'checkLoggedIn'],
         ]);
 
+        // Attachment bridge: register a picked FluxFiles file as a WP attachment
+        // (served from your bucket) so it works in the Media Library / posts / blocks.
+        // WP-native auth (must be able to upload media), not the JWT.
+        register_rest_route($ns, $p . '/attach', [
+            'methods'             => 'POST',
+            'callback'            => [$api, 'handleAttach'],
+            'permission_callback' => [self::class, 'checkCanUpload'],
+        ]);
+
         // Chunk upload
         register_rest_route($ns, $p . '/chunk/init', array_merge($writeArgs, [
             'callback' => [$api, 'handleChunkInit'],
@@ -278,6 +287,39 @@ class FluxFilesApi
     public static function checkLoggedIn(): bool
     {
         return is_user_logged_in();
+    }
+
+    /** Attachment creation requires the WP media-upload capability. */
+    public static function checkCanUpload(): bool
+    {
+        return is_user_logged_in() && current_user_can('upload_files');
+    }
+
+    /**
+     * Register a picked FluxFiles file as a WP attachment (idempotent) and return its
+     * id + rewritten URL. Body: {url, key?, disk?, name?, mime?, width?, height?}.
+     */
+    public function handleAttach(\WP_REST_Request $request): \WP_REST_Response
+    {
+        $body = $request->get_json_params() ?: $request->get_params();
+        if (empty($body['url'])) {
+            return $this->error('A file url is required', 400);
+        }
+        try {
+            $res = FluxFilesAttachments::findOrCreate([
+                'url'      => (string) $body['url'],
+                'key'      => (string) ($body['key'] ?? ($body['path'] ?? '')),
+                'disk'     => (string) ($body['disk'] ?? 'local'),
+                'name'     => (string) ($body['name'] ?? ($body['basename'] ?? '')),
+                'basename' => (string) ($body['basename'] ?? ($body['name'] ?? '')),
+                'mime'     => (string) ($body['mime'] ?? ''),
+                'width'    => (int) ($body['width'] ?? 0),
+                'height'   => (int) ($body['height'] ?? 0),
+            ]);
+            return $this->ok($res);
+        } catch (\Throwable $e) {
+            return $this->error('Attach failed: ' . $e->getMessage(), 400);
+        }
     }
 
     /**

@@ -42,10 +42,25 @@ runs entirely inside your WordPress install — no separate backend to host.
 | `height`   | `600px`   | Iframe height                                 |
 | `multiple` | `0`       | `1` to allow selecting multiple files         |
 
-### Editor media button
+### Editor media button + Gutenberg block
 
-The plugin adds a **FluxFiles** button to the classic editor that opens the picker
-in a modal and inserts the chosen file(s) into the content.
+The plugin adds a **FluxFiles** button to the classic editor and a **FluxFiles Image**
+block to the block editor. Both open the picker and insert the chosen file(s).
+
+### Media offload (3-in-1 media manager)
+
+With **Media offload** enabled (Settings → FluxFiles, on by default), a picked file is
+registered as a real **WordPress attachment** whose URL points at your FluxFiles storage
+(S3 / R2 / SFTP / local) — the file is *not* copied into `wp-content/uploads`.
+`wp_get_attachment_url()` / `wp_get_attachment_image_src()` are filtered to serve from
+your bucket, so the file shows in the **Media Library** and works in posts, themes and
+blocks exactly like a native attachment — but offloaded to your storage.
+
+This makes one plugin do what usually takes three — **folders** (the FluxFiles UI) +
+**cloud storage** (S3/R2/SFTP) + **offload/URL-rewrite** — replacing FileBird +
+WP Media Folder + WP Offload Media. Disable it with the `fluxfiles_enable_offload`
+filter or the settings checkbox. The attachment endpoint (`POST
+/wp-json/fluxfiles/v1/api/fm/attach`) requires the `upload_files` capability.
 
 ## REST API
 

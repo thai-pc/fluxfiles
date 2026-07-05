@@ -264,6 +264,102 @@ test('token-refresh recovery wiring is present (api + shortcode + media button)'
     assertTrue(strpos($mbSrc, 'onTokenRefresh') !== false, 'media button wires onTokenRefresh');
 });
 
+// ── Attachment bridge (3-in-1 media manager) ────────────────────────────────
+// Stub the WP attachment functions so FluxFilesAttachments can run headless.
+$GLOBALS['WP_POSTS'] = [];   // id => ['post' => [...], 'meta' => [...]]
+$GLOBALS['WP_NEXT_ID'] = 100;
+if (!function_exists('wp_insert_attachment')) {
+    function wp_insert_attachment($args, $file = false, $parent = 0, $wp_error = false) {
+        $id = $GLOBALS['WP_NEXT_ID']++;
+        $GLOBALS['WP_POSTS'][$id] = ['post' => $args, 'meta' => []];
+        return $id;
+    }
+}
+if (!function_exists('update_post_meta')) {
+    function update_post_meta($id, $k, $v) { $GLOBALS['WP_POSTS'][$id]['meta'][$k] = $v; return true; }
+}
+if (!function_exists('get_post_meta')) {
+    function get_post_meta($id, $k, $single = false) { return $GLOBALS['WP_POSTS'][$id]['meta'][$k] ?? ''; }
+}
+if (!function_exists('wp_update_attachment_metadata')) {
+    function wp_update_attachment_metadata($id, $meta) { $GLOBALS['WP_POSTS'][$id]['attmeta'] = $meta; return true; }
+}
+if (!function_exists('is_wp_error')) { function is_wp_error($x) { return $x instanceof \WP_Error; } }
+if (!class_exists('WP_Error')) { class WP_Error {} }
+if (!function_exists('sanitize_file_name')) { function sanitize_file_name($n) { return preg_replace('/[^A-Za-z0-9._-]/', '-', (string) $n); } }
+if (!function_exists('esc_url_raw')) { function esc_url_raw($u) { return $u; } }
+if (!function_exists('wp_check_filetype')) {
+    function wp_check_filetype($f, $m = null) {
+        $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+        $map = ['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp','pdf'=>'application/pdf'];
+        return ['ext' => $ext, 'type' => $map[$ext] ?? ''];
+    }
+}
+// WP_Query stub that searches WP_POSTS meta for the find-by-key lookup.
+if (!class_exists('WP_Query')) {
+    class WP_Query {
+        public array $posts = [];
+        public function __construct($args) {
+            $want = [];
+            foreach ($args['meta_query'] ?? [] as $c) {
+                if (isset($c['key'])) { $want[$c['key']] = $c['value']; }
+            }
+            foreach ($GLOBALS['WP_POSTS'] as $id => $p) {
+                $ok = true;
+                foreach ($want as $k => $v) { if (($p['meta'][$k] ?? null) !== $v) { $ok = false; break; } }
+                if ($ok && $want) { $this->posts[] = $id; }
+            }
+        }
+        public function have_posts(): bool { return count($this->posts) > 0; }
+    }
+}
+require_once __DIR__ . '/../includes/FluxFilesAttachments.php';
+
+test('attachment bridge: findOrCreate creates a WP attachment with FluxFiles markers', function () {
+    $GLOBALS['WP_POSTS'] = [];
+    $res = FluxFilesAttachments::findOrCreate([
+        'url' => 'https://cdn.example.com/s3/photos/cat.jpg', 'key' => 'photos/cat.jpg',
+        'disk' => 's3', 'basename' => 'cat.jpg', 'width' => 800, 'height' => 600,
+    ]);
+    assertTrue($res['id'] > 0, 'returns an attachment id');
+    assertEqual('image/jpeg', $res['mime'], 'mime inferred from name');
+    $meta = $GLOBALS['WP_POSTS'][$res['id']]['meta'];
+    assertEqual('https://cdn.example.com/s3/photos/cat.jpg', $meta['_fluxfiles_url'], 'url marker stored');
+    assertEqual('photos/cat.jpg', $meta['_fluxfiles_key'], 'key marker stored');
+    assertEqual('s3', $meta['_fluxfiles_disk'], 'disk marker stored');
+    assertEqual(800, $GLOBALS['WP_POSTS'][$res['id']]['attmeta']['width'], 'width recorded');
+});
+
+test('attachment bridge: findOrCreate is idempotent on (disk, key)', function () {
+    $GLOBALS['WP_POSTS'] = [];
+    $a = FluxFilesAttachments::findOrCreate(['url' => 'https://x/y/a.png', 'key' => 'y/a.png', 'disk' => 'local']);
+    $b = FluxFilesAttachments::findOrCreate(['url' => 'https://x/y/a.png', 'key' => 'y/a.png', 'disk' => 'local']);
+    assertEqual($a['id'], $b['id'], 'same file → same attachment (no duplicate)');
+    assertEqual(1, count($GLOBALS['WP_POSTS']), 'only one attachment stored');
+});
+
+test('attachment bridge: URL filters rewrite our attachments, leave others alone', function () {
+    $GLOBALS['WP_POSTS'] = [];
+    $res = FluxFilesAttachments::findOrCreate(['url' => 'https://cdn/z/pic.webp', 'key' => 'z/pic.webp', 'disk' => 'r2']);
+    // ours → rewritten to the FluxFiles URL
+    assertEqual('https://cdn/z/pic.webp', FluxFilesAttachments::filterUrl('http://wp/wp-content/uploads/pic.webp', $res['id']), 'our attachment URL rewritten');
+    $img = FluxFilesAttachments::filterImageSrc(['http://wp/local.webp', 800, 600, false], $res['id'], 'full', false);
+    assertEqual('https://cdn/z/pic.webp', $img[0], 'our image src rewritten');
+    // a normal attachment (no marker) → untouched
+    $GLOBALS['WP_POSTS'][999] = ['post' => [], 'meta' => []];
+    assertEqual('http://wp/normal.jpg', FluxFilesAttachments::filterUrl('http://wp/normal.jpg', 999), 'normal attachment untouched');
+});
+
+test('attachment bridge: wired into the plugin (routes + button + block)', function () {
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    $mbSrc  = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesMediaButton.php');
+    assertTrue(strpos($apiSrc, "'/attach'") !== false, 'API registers the /attach route');
+    assertTrue(strpos($apiSrc, 'checkCanUpload') !== false, 'attach route gated by upload_files cap');
+    assertTrue(strpos($mbSrc, 'attach') !== false, 'media button calls the attach endpoint');
+    assertTrue(is_file(__DIR__ . '/../assets/block.js'), 'Gutenberg block script exists');
+    assertTrue(is_file(__DIR__ . '/../includes/FluxFilesBlock.php'), 'block registrar exists');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

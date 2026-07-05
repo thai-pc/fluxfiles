@@ -3,6 +3,27 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.73] — 2026-07-05
+
+> Released: WordPress `wordpress-v0.2.33`. Core unchanged.
+
+### Added (WordPress adapter)
+
+- **Media offload / 3-in-1 media manager** (`FluxFilesAttachments`). A file picked from
+  FluxFiles is now registered as a real **WordPress attachment** whose URL points at your
+  FluxFiles storage (S3/R2/SFTP/local) — never copied into `wp-content/uploads`. URL
+  filters (`wp_get_attachment_url`, `wp_get_attachment_image_src`) rewrite these to serve
+  from your bucket, so files appear in the Media Library and work in posts/themes/blocks
+  like native attachments but stay offloaded. One plugin replaces FileBird + WP Media
+  Folder + WP Offload (folders + cloud + offload in one). Toggle: Settings → FluxFiles
+  "Media offload", or the `fluxfiles_enable_offload` filter (on by default).
+- **Gutenberg block** `fluxfiles/image` (no build step; registered via wp.blocks +
+  wp.element) — pick from FluxFiles inside the block editor; inserts an attachment-backed
+  image served from your bucket.
+- **`POST /wp-json/fluxfiles/v1/api/fm/attach`** — registers a picked file as an
+  attachment (idempotent on disk+key), gated by the `upload_files` capability. The classic
+  media button now creates real attachments (`wp-image-<id>`) instead of raw HTML.
+
 ## [0.2.72] — 2026-07-04
 
 > Released: core `core-v0.2.63`. Demo-mode anti-abuse hardening.
