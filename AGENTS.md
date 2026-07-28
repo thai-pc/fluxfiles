@@ -81,8 +81,9 @@ gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`
   no-referrer`). Per-file `/img`/`/stream` query tokens are fine (1-file scope, short
   TTL, distinct type). CSRF uses `Origin`, not `Referer`.
 - **BYO-embed over build-and-sell**: where great free OSS self-host exists, embed it via
-  a free config toggle, don't build a competitor (terminal → `terminal_pty_url` ttyd;
-  planned PDF → Stirling, office → Collabora/OnlyOffice, e-sign → DocuSeal).
+  a free config toggle, don't build a competitor. All four shipped: terminal →
+  `terminal_pty_url` (ttyd), PDF → `pdf_tools_url` (Stirling), office → `office_url`
+  (Collabora/OnlyOffice), e-sign → `esign_url` (DocuSeal).
 - **Optimization is FREE/core** (was paid). Paid modules are now 6: share/ai/ocr/virus/
   backup/c2pa (gitignored, `ModuleRegistry` 3-layer gate).
 

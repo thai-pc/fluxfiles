@@ -3,6 +3,40 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.77] — 2026-07-28
+
+> Released: Laravel `laravel-v0.2.33`, WordPress `wordpress-v0.2.37`. Core unchanged
+> (test-only additions).
+
+### Fixed
+
+- **Webhooks/Versioning were enable-only from the PHP adapters.** Both adapters
+  forwarded the module *gate* claims (`allow_webhooks`, `allow_versioning`) but none of
+  their config claims, so a Laravel/WordPress host could switch Webhooks on and have it
+  POST nowhere — the module was enabled but inert unless the operator dropped down to the
+  raw `claims` escape hatch. `@fluxfiles/node` had forwarded all of them since the
+  modules shipped; the PHP adapters now match: `versioning_max`, `versioning_max_mb`,
+  `webhook_url`, `webhook_events`, `webhook_secret`. Validation stays in the core (a
+  non-http(s) `webhook_url` is still dropped on decode). Locked by a smoke test in each
+  adapter. `webhook_events` accepts an array **or** a comma-separated string, so a plain
+  config/settings text field works.
+
+### Added
+
+- **Core test coverage for the versioning/webhook claims** (`tests/unit/test-claims.php`).
+  `Claims` validated `webhook_url` to http(s) only — a scheme-confusion guard, since the
+  module POSTs to that URL — with no test behind it; that, the `webhook_events`
+  normalization (array + CSV, trimmed/lowercased), and the `versioning_*` clamping are
+  now locked.
+
+### Docs
+
+- `.claude/CLAUDE.md` + `AGENTS.md` listed the PDF/office/e-sign BYO-embeds as *planned*;
+  all four (`terminal_pty_url`, `pdf_tools_url`, `office_url`, `esign_url`) have shipped.
+- The WordPress plugin now records *why* the SSH terminal claims are not forwarded
+  (proxy-only, no `/api/fm/terminal` endpoint), matching the existing note on the overlay
+  watermark — the remaining forwarding gaps are all deliberate and now all explained.
+
 ## [0.2.76] — 2026-07-05
 
 > Released: WordPress `wordpress-v0.2.36`. Core unchanged.

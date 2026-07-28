@@ -181,6 +181,41 @@ test('token() forwards usage-dashboard claims', function () use ($secret) {
     assertEqual(2, $c->usageFolderDepth, 'depth');
 });
 
+// Regression: the module GATE claims (allow_versioning/allow_webhooks) shipped here
+// but their config claims did not, so a Laravel host could turn Webhooks on and have
+// it POST nowhere. Gate + config must travel together.
+test('token() forwards versioning + webhook config claims, not just the gate', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $token = $mgr->token(52, [
+        'allow_versioning'  => true,
+        'versioning_max'    => 5,
+        'versioning_max_mb' => 50,
+        'allow_webhooks'    => true,
+        'webhook_url'       => 'https://hooks.acme.com/flux',
+        'webhook_events'    => ['upload', 'delete'],
+        'webhook_secret'    => 'whsec_abc123',
+    ]);
+    // Assert on the raw JWT payload, not Claims::fromJwtPayload — forwarding a claim
+    // needs no core API, so this must keep passing against the declared core floor
+    // (a core too old to know these keys simply ignores them). Validation belongs to
+    // the core and is tested there (test-claims.php).
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(true, $p->allow_versioning ?? null, 'versioning gate');
+    assertEqual(5, $p->versioning_max ?? 0, 'versioning_max');
+    assertEqual(50, $p->versioning_max_mb ?? 0, 'versioning_max_mb');
+    assertEqual(true, $p->allow_webhooks ?? null, 'webhooks gate');
+    assertEqual('https://hooks.acme.com/flux', $p->webhook_url ?? '', 'webhook_url');
+    assertEqual(['upload', 'delete'], (array) ($p->webhook_events ?? []), 'webhook_events');
+    assertEqual('whsec_abc123', $p->webhook_secret ?? '', 'webhook_secret');
+
+    // A config file naturally holds a comma-separated string; the core normalizes it.
+    $csv = \FluxFiles\JwtCompat::decode(
+        $mgr->token(53, ['allow_webhooks' => true, 'webhook_events' => 'upload,delete']),
+        $secret
+    );
+    assertEqual('upload,delete', $csv->webhook_events ?? '', 'CSV events forwarded as-is');
+});
+
 test('token() without a secret → throws', function () {
     $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
     $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'] = '';

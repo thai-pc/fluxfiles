@@ -177,6 +177,28 @@ class FluxFilesManager
                 $payload[$mc] = (bool) $overrides[$mc];
             }
         }
+        // Versioning tuning claims (the core clamps these on decode; 0 = its default).
+        foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
+            if (!empty($overrides[$verClaim])) {
+                $payload[$verClaim] = (int) $overrides[$verClaim];
+            }
+        }
+        // Webhook config. Without a URL `allow_webhooks` is inert (the module has
+        // nowhere to POST), so these travel with the gate claim. The core drops a
+        // non-http(s) URL on decode; `webhook_secret` falls back to FLUXFILES_SECRET.
+        if (!empty($overrides['webhook_url'])) {
+            $payload['webhook_url'] = (string) $overrides['webhook_url'];
+        }
+        if (!empty($overrides['webhook_events'])) {
+            // Array or a comma-separated string (the core normalizes both), so a plain
+            // config/text field works as well as a list.
+            $payload['webhook_events'] = is_array($overrides['webhook_events'])
+                ? array_values($overrides['webhook_events'])
+                : (string) $overrides['webhook_events'];
+        }
+        if (!empty($overrides['webhook_secret'])) {
+            $payload['webhook_secret'] = (string) $overrides['webhook_secret'];
+        }
         if (array_key_exists('allow_optimize', $overrides)) {
             $payload['allow_optimize'] = (bool) $overrides['allow_optimize'];
         }

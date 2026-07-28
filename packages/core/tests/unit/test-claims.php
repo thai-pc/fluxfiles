@@ -380,6 +380,60 @@ test('no watermark ⇒ allow_download stays as given', function () {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// Versioning + webhook config claims (the adapters forward these; the
+// validation lives here, so this is where it gets locked)
+// ═══════════════════════════════════════════════════════════════
+
+function claimsWith(array $extra): FluxFiles\Claims
+{
+    return FluxFiles\Claims::fromJwtPayload((object) array_merge(
+        ['sub' => 'u', 'perms' => ['read'], 'disks' => ['local']],
+        $extra
+    ));
+}
+
+test('versioning_max / versioning_max_mb are clamped non-negative, 0 = default', function () {
+    $d = claimsWith([]);
+    assertEqual(0, $d->versioningMax, 'default 0 (module applies its own default)');
+    assertEqual(0, $d->versioningMaxMb, 'default 0');
+
+    $c = claimsWith(['versioning_max' => 5, 'versioning_max_mb' => 50]);
+    assertEqual(5, $c->versioningMax, 'max carried');
+    assertEqual(50, $c->versioningMaxMb, 'max_mb carried');
+
+    $neg = claimsWith(['versioning_max' => -3, 'versioning_max_mb' => -1]);
+    assertEqual(0, $neg->versioningMax, 'negative floored to 0');
+    assertEqual(0, $neg->versioningMaxMb, 'negative floored to 0');
+});
+
+test('webhook_url accepts only http(s) — anything else is dropped', function () {
+    assertEqual('https://hooks.acme.com/f', claimsWith(['webhook_url' => 'https://hooks.acme.com/f'])->webhookUrl, 'https kept');
+    assertEqual('http://hooks.acme.com/f', claimsWith(['webhook_url' => 'http://hooks.acme.com/f'])->webhookUrl, 'http kept');
+    assertEqual('', claimsWith([])->webhookUrl, 'empty by default');
+
+    // A non-HTTP scheme must never survive: the module POSTs to this URL, so a
+    // file:/gopher:/javascript: value would be a scheme-confusion foothold.
+    foreach (['file:///etc/passwd', 'gopher://x/', 'javascript:alert(1)', 'ftp://x/', '//evil.com', 'not a url'] as $bad) {
+        assertEqual('', claimsWith(['webhook_url' => $bad])->webhookUrl, "dropped: {$bad}");
+    }
+});
+
+test('webhook_events is normalized to a lowercase trimmed list; webhook_secret passes through', function () {
+    $c = claimsWith(['webhook_events' => ['  Upload ', 'DELETE', '']]);
+    assertEqual(['upload', 'delete'], $c->webhookEvents, 'trimmed + lowercased, blanks dropped');
+
+    assertEqual([], claimsWith([])->webhookEvents, 'empty by default = all events');
+
+    // A comma-separated string is also accepted, so a plain admin text field works.
+    assertEqual(['upload', 'delete'], claimsWith(['webhook_events' => 'Upload, DELETE'])->webhookEvents, 'CSV string parsed');
+    assertEqual(['upload'], claimsWith(['webhook_events' => 'upload,,'])->webhookEvents, 'blank CSV entries dropped');
+    assertEqual([], claimsWith(['webhook_events' => '   '])->webhookEvents, 'whitespace-only string = all events');
+
+    assertEqual('whsec_abc', claimsWith(['webhook_secret' => 'whsec_abc'])->webhookSecret, 'secret carried');
+    assertEqual('', claimsWith([])->webhookSecret, 'empty = falls back to FLUXFILES_SECRET');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════
 

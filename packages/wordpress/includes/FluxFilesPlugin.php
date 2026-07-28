@@ -316,6 +316,11 @@ class FluxFilesPlugin
         if (array_key_exists('allow_code_edit', $overrides)) {
             $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
         }
+        // NOTE: the SSH terminal is intentionally NOT forwarded — neither `allow_terminal`
+        // nor `terminal_pty_url`. The plugin is proxy-only and the REST API never exposes
+        // /api/fm/terminal, so the panel would have no endpoint to talk to; forwarding the
+        // BYO PTY URL alone would just be dead config (the panel never renders without
+        // the gate claim). Core-standalone only.
         // PDF-tools + office embeds are pure UI (no core endpoint) → work in any mode.
         if (!empty($overrides['pdf_tools_url'])) {
             $payload['pdf_tools_url'] = (string) $overrides['pdf_tools_url'];
@@ -330,6 +335,28 @@ class FluxFilesPlugin
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
             }
+        }
+        // Versioning tuning claims (the core clamps these on decode; 0 = its default).
+        foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
+            if (!empty($overrides[$verClaim])) {
+                $payload[$verClaim] = (int) $overrides[$verClaim];
+            }
+        }
+        // Webhook config. Without a URL `allow_webhooks` is inert (the module has
+        // nowhere to POST), so these travel with the gate claim. The core drops a
+        // non-http(s) URL on decode; `webhook_secret` falls back to FLUXFILES_SECRET.
+        if (!empty($overrides['webhook_url'])) {
+            $payload['webhook_url'] = (string) $overrides['webhook_url'];
+        }
+        if (!empty($overrides['webhook_events'])) {
+            // Array or a comma-separated string (the core normalizes both), so a plain
+            // settings text field works as well as a list.
+            $payload['webhook_events'] = is_array($overrides['webhook_events'])
+                ? array_values($overrides['webhook_events'])
+                : (string) $overrides['webhook_events'];
+        }
+        if (!empty($overrides['webhook_secret'])) {
+            $payload['webhook_secret'] = (string) $overrides['webhook_secret'];
         }
         if (array_key_exists('allow_optimize', $overrides)) {
             $payload['allow_optimize'] = (bool) $overrides['allow_optimize'];
