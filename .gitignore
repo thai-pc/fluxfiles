@@ -92,3 +92,6 @@ packages/c2pa/
 services/license-server/data/
 *.sqlite
 *.sqlite-*
+
+# Claude subagent working artifacts (plans, review findings)
+.claude/work/

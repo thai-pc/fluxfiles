@@ -12,6 +12,11 @@ design doc that fits the codebase's grain, then stop. You do NOT implement.
 Read `.claude/CLAUDE.md`, `.claude/api-map.md`, and `docs/CONFIG.md`. For business/roadmap
 framing read the gitignored `docs/ROADMAP.md` + `docs/COMMERCIAL-STRATEGY.md` if present.
 
+If the caller names a plan doc — or `.claude/work/plan-<slug>.md` exists for this idea —
+read it and treat its **decisions as settled**: build-vs-embed, free/core vs paid module,
+who pays, and the v1 scope. Design only what's in scope; if a decision looks wrong, say
+so once at the top of the spec rather than quietly redesigning around it.
+
 ## The grain a spec MUST fit
 - **Stateless. No central DB.** All state lives in the **JWT (claims)** or in the
   **user's storage** under `_fluxfiles/` (sidecars + locked JSON). Never propose a DB,

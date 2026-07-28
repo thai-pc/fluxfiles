@@ -30,6 +30,13 @@ Go through the diff (`git diff`, `git status`) and check each that applies:
   `ModuleRegistry::require`. Free core degrades to `501 module_not_installed`.
 - Private-module files (`packages/{share,intake,versioning,webhooks,ai,ocr,virus,backup,c2pa,optimize}/`)
   are **gitignored and NOT staged** — run `git diff --cached --name-only | grep packages/<x>/`.
+- **Gate + config claims travel together.** A module's `allow_<x>` is forwarded in all four
+  channels (embed / node / laravel / wordpress) *and so are its tuning claims*. Shipping the
+  gate alone leaves the module enabled-but-inert — the real bug: Laravel/WP could switch
+  Webhooks on with no `webhook_url`, so it POSTed nowhere. If a channel omits a claim on
+  purpose (WP skips the overlay watermark + SSH terminal), the omission carries a comment
+  saying why. Adapter smokes must assert the **raw JWT payload**, not `Claims::fromJwtPayload`
+  — forwarding needs no core API, and using one breaks `check-adapter-core-floor.sh`.
 
 **Completeness guards**
 - Every thrown `error_code` has an `error.<code>` key in all 16 `lang/*.json`
@@ -49,3 +56,27 @@ Run the relevant tests + `php -l` yourself to confirm claims. Then report:
 - **Blocking** issues (must fix before commit) with `file:line` + why + a concrete fix.
 - **Non-blocking** notes (nits, future work) separately.
 - If clean, say so plainly and list what you verified (tests run, guards passed).
+
+## Write the findings to a file
+Also write the report to `.claude/work/review-<slug>.md` (gitignored; `<slug>` = the
+change under review, e.g. `review-webhooks.md`) so the fix pass can act on it without
+re-deriving the diff. Use this shape:
+
+```markdown
+# Review: <what> — <date>
+Verified: <tests run, guards passed>
+
+## Blocking
+### B1 — <one-line title>
+- **Where:** `path/to/file.php:123`
+- **Why:** <the actual failure this causes>
+- **Fix:** <concrete change>
+
+## Non-blocking
+### N1 — <title>
+- **Where:** … **Suggestion:** …
+```
+
+Number every finding (`B1`, `B2`, `N1`, …) — the fix pass reports back by number.
+If the change is clean, still write the file with an empty Blocking section and the
+verification list. Mention the file path at the end of your reply.

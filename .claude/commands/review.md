@@ -12,4 +12,5 @@ paid-module 3-layer gate (`isAllowed` case + registry + `require` + 501 degrade)
 **private-module non-leakage** (`git diff --cached --name-only | grep packages/<x>/`),
 and the completeness guards (`test-i18n.php`, `test-config-doc.php`). It runs the tests
 itself to confirm, and reports **blocking** (with `file:line` + fix) vs **non-blocking**
-findings. It does not edit code.
+findings — numbered `B1`/`N1` and also written to `.claude/work/review-<slug>.md` so
+`/fix` can act on them. It does not edit code.
