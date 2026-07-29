@@ -162,6 +162,28 @@ describe('createToken', () => {
     expect(off.allow_terminal).toBeUndefined();
   });
 
+  it('forwards the three Share landing claims (PHP parity), omits them otherwise', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        allowShare: true,
+        shareUrlTtl: 120,
+        shareBaseUrl: 'https://files.acme.com/public/share.html',
+        sharePreview: false,
+      }),
+    ) as Record<string, unknown>;
+    expect(c.allow_share).toBe(true);
+    expect(c.share_url_ttl).toBe(120);
+    expect(c.share_base_url).toBe('https://files.acme.com/public/share.html');
+    expect(c.share_preview).toBe(false);
+    // Absent = inherit the core defaults (60s / request origin / preview on).
+    const off = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
+    expect(off.share_url_ttl).toBeUndefined();
+    expect(off.share_base_url).toBeUndefined();
+    expect(off.share_preview).toBeUndefined();
+  });
+
   it('forwards on-demand WebP claims (PHP parity)', () => {
     const c = decodeToken(
       createToken({

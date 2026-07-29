@@ -210,6 +210,22 @@ test('generateToken forwards versioning + webhook config claims, not just the ga
     assertEqual('upload,delete', $csv->webhook_events ?? '', 'CSV events forwarded as-is');
 });
 
+// Same rule for Share: the gate claim alone leaves the landing page unconfigurable
+// (link base, presigned-URL TTL, preview policy are all read at create time).
+test('generateToken forwards the share landing config claims, not just the gate', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(56, [
+        'allow_share'    => true,
+        'share_url_ttl'  => 120,
+        'share_base_url' => 'https://files.acme.com/public/share.html',
+        'share_preview'  => false,
+    ]);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(true, $p->allow_share ?? null, 'share gate');
+    assertEqual(120, $p->share_url_ttl ?? 0, 'share_url_ttl');
+    assertEqual('https://files.acme.com/public/share.html', $p->share_base_url ?? '', 'share_base_url');
+    assertEqual(false, $p->share_preview ?? null, 'share_preview');
+});
+
 test('generateToken without a secret → throws', function () {
     $prev = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
     $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';

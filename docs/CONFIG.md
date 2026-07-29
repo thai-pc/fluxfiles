@@ -174,6 +174,9 @@ All four accept the same `claims` map.
 | Claim | Type | Default | Module |
 |---|---|---|---|
 | `allow_share` | bool | `false` | Branded Share. |
+| `share_url_ttl` | int (s) | `60` | Lifetime of the presigned S3/R2 URL a share download redirects to. Clamped `[10, 300]`. On S3/R2 `max_downloads` counts **grants, not downloads** — a handed-out presigned URL stays fetchable until it expires, and this value bounds that window. Read at create time and baked into the share record. |
+| `share_base_url` | string (http/s) | — | Public base the create response builds the recipient link from (e.g. `https://files.acme.com/public/share.html`). Non-http(s) dropped. Empty = the request origin + `/public/share.html` — i.e. derived from the `Host` header, so **set this explicitly behind a proxy/CDN** rather than trusting the forwarded host. |
+| `share_preview` | bool | `true` | Allow the landing page to render an inline preview (images via `/api/fm/img`; PDFs only on uncapped shares — an `<iframe>` of the real bytes *is* a download). `false` = download-only. |
 | `allow_intake` | bool | `false` | Intake / Upload Portals (public "send us your files" links). |
 | `allow_versioning` | bool | `false` | File version history (keep prior versions on overwrite; list/restore). |
 | `versioning_max` | int | `10` | Prior versions kept per file (hard cap 100). `0` = default. |
@@ -212,6 +215,9 @@ All four accept the same `claims` map.
 | `FLUXFILES_IMPORT_ALLOW_SVG` | `false` | Allow SVG via URL import. |
 | `FLUXFILES_IMPORT_MAX_MB` / `_RATE_LIMIT` / `_TIMEOUT` | — | URL-import server defaults. |
 | `FLUXFILES_SSRF_ALLOW_HOSTS` | — | SSRF allow-list (BYOB + import). |
+| `FLUXFILES_SHARE_RATE_LIMIT` | `60` | Public share requests/min per share id (`share/info` + `share/file`). |
+| `FLUXFILES_SHARE_UNLOCK_LIMIT` | `5` | Share password attempts/min per share id **+ client IP**. Stops one guesser; an attacker can rotate `REMOTE_ADDR`, so it is never the only limit. |
+| `FLUXFILES_SHARE_UNLOCK_TOTAL` | `30` | Share password attempts/min per share id, **no IP component** — the ceiling IP rotation can't escape. Keep it comfortably above a shared-office NAT (all recipients behind one IP share the per-IP bucket); lower it for high-value links. |
 | `FLUXFILES_LICENSE_KEY` | — | Signed license for paid modules (offline-verified). |
 | `FLUXFILES_UPDATE_URL` | — | Vendor update server for `fluxfiles update <module>` (paid). |
 | `FLUXFILES_DEMO` | `false` | Public "try it live" mode: `/public/` mints a hardened per-visitor token (own `demo/<id>/` sandbox, images only, small caps, owner-only, dangerous claims off) injected as `window.__FM_BOOT__` — safe to embed by iframe on a marketing site. |

@@ -434,6 +434,38 @@ test('webhook_events is normalized to a lowercase trimmed list; webhook_secret p
 });
 
 // ═══════════════════════════════════════════════════════════════
+// Share landing claims (read at create time, baked into the share record —
+// a public recipient request carries no claims at all)
+// ═══════════════════════════════════════════════════════════════
+
+test('share_url_ttl is clamped to [10, 300]; 0/absent = 60', function () {
+    assertEqual(60, claimsWith([])->shareUrlTtl, 'default 60s');
+    assertEqual(60, claimsWith(['share_url_ttl' => 0])->shareUrlTtl, '0 = default');
+    assertEqual(120, claimsWith(['share_url_ttl' => 120])->shareUrlTtl, 'in-range carried');
+    assertEqual(10, claimsWith(['share_url_ttl' => 1])->shareUrlTtl, 'floor 10s');
+    assertEqual(300, claimsWith(['share_url_ttl' => 86400])->shareUrlTtl, 'ceiling 300s');
+    assertEqual(60, claimsWith(['share_url_ttl' => -5])->shareUrlTtl, 'negative = default');
+});
+
+test('share_base_url accepts only http(s) — anything else is dropped', function () {
+    $ok = 'https://files.acme.com/public/share.html';
+    assertEqual($ok, claimsWith(['share_base_url' => $ok])->shareBaseUrl, 'https kept');
+    assertEqual('http://f.acme.com/s', claimsWith(['share_base_url' => 'http://f.acme.com/s'])->shareBaseUrl, 'http kept');
+    assertEqual('', claimsWith([])->shareBaseUrl, 'empty by default = the request origin');
+    // The create response hands this straight to a UI as a link — a javascript:
+    // value must never survive.
+    foreach (['javascript:alert(1)', 'data:text/html,x', 'file:///etc/passwd', '//evil.com', 'nope'] as $bad) {
+        assertEqual('', claimsWith(['share_base_url' => $bad])->shareBaseUrl, "dropped: {$bad}");
+    }
+});
+
+test('share_preview defaults on and can be switched off', function () {
+    assertEqual(true, claimsWith([])->sharePreview, 'preview on by default');
+    assertEqual(false, claimsWith(['share_preview' => false])->sharePreview, 'download-only');
+    assertEqual(true, claimsWith(['share_preview' => true])->sharePreview, 'explicit on');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════
 

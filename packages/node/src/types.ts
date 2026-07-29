@@ -150,6 +150,17 @@ export interface BaseTokenOptions {
   /** Paid-module claims (3-layer gate: code installed + licensed + this claim).
    *  All default off; inert unless the module is installed & licensed on the server. */
   allowShare?: boolean;
+  /** Share landing: TTL (seconds) of the presigned S3/R2 URL a download redirects to.
+   *  Clamped to [10, 300] by the core; `0`/omitted = 60. On S3/R2 the download cap
+   *  counts **grants**, not GETs — this bounds that window. */
+  shareUrlTtl?: number;
+  /** Public base the share create response builds the recipient link from
+   *  (e.g. `https://files.acme.com/public/share.html`). http(s) only; empty = the
+   *  request origin. */
+  shareBaseUrl?: string;
+  /** Allow the share landing to render an inline preview (images via /api/fm/img;
+   *  PDFs only on uncapped shares). Default true; false = download-only. */
+  sharePreview?: boolean;
   allowIntake?: boolean;
   allowVersioning?: boolean;
   allowAiVision?: boolean;

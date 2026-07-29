@@ -384,6 +384,17 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
             $payload[$mc] = (bool) $webp[$mc];
         }
     }
+    // Share landing config (read at create time and baked into the share record;
+    // the core clamps the TTL and drops a non-http(s) base URL on decode).
+    if (!empty($webp['share_url_ttl'])) {
+        $payload['share_url_ttl'] = (int) $webp['share_url_ttl'];
+    }
+    if (!empty($webp['share_base_url'])) {
+        $payload['share_base_url'] = (string) $webp['share_base_url'];
+    }
+    if (array_key_exists('share_preview', $webp)) {
+        $payload['share_preview'] = (bool) $webp['share_preview'];
+    }
     // Access gates (download / chmod) + watermark.
     if (array_key_exists('allow_download', $webp)) {
         $payload['allow_download'] = (bool) $webp['allow_download'];

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- The share token rides the URL (?token=). It's a narrow read-only token scoped
+       to one file, but still don't leak it via Referer to sub-resources / links. -->
+  <meta name="referrer" content="no-referrer">
+  <title>Shared file</title>
+  <script>
+    (function () {
+      var t = typeof localStorage !== 'undefined' && localStorage.getItem('fluxfiles_theme');
+      var dark = t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    :root { --bg:#f5f5f7; --card:#fff; --fg:#1b1b22; --muted:#6b7280; --accent:#7c3aed; --border:rgba(0,0,0,.1); --ok:#16a34a; --err:#dc2626; }
+    html.dark { --bg:#16161a; --card:#1f1f25; --fg:#e6e6ea; --muted:#9aa0aa; --border:rgba(255,255,255,.1); }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--fg);
+           min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; width:100%; max-width:520px; padding:28px;
+            box-shadow:0 10px 40px rgba(0,0,0,.10); }
+    h1 { font-size:20px; margin:0 0 4px; overflow-wrap:anywhere; }
+    .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
+    .meta { font-size:12.5px; color:var(--muted); margin-top:14px; line-height:1.7; }
+    input[type=password] { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:9px; background:transparent; color:var(--fg);
+                           font-size:14px; margin-bottom:12px; }
+    button { width:100%; padding:11px 14px; border:0; border-radius:9px; background:var(--accent); color:#fff; font-size:14.5px; font-weight:600;
+             cursor:pointer; }
+    button:disabled { opacity:.6; cursor:default; }
+    .preview { margin:18px 0 4px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:rgba(127,127,127,.06); }
+    .preview img { display:block; width:100%; height:auto; }
+    .preview iframe { display:block; width:100%; height:420px; border:0; }
+    .msg { padding:14px; border-radius:10px; font-size:14px; text-align:center; }
+    .msg.err { background:rgba(220,38,38,.1); color:var(--err); }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="gate" class="msg err hidden"></div>
+
+    <div id="lock" class="hidden">
+      <h1>Password required</h1>
+      <p class="sub">This link is protected. Enter the password to continue.</p>
+      <input type="password" id="pw" placeholder="Password" autocomplete="off">
+      <button id="unlock" type="button">Unlock</button>
+      <div class="meta" id="lockmeta"></div>
+    </div>
+
+    <div id="view" class="hidden">
+      <h1 id="name">Shared file</h1>
+      <p class="sub" id="label"></p>
+      <div class="preview hidden" id="preview"></div>
+      <button id="download" type="button">Download</button>
+      <div class="meta" id="meta"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var qs = new URLSearchParams(location.search);
+      var token = qs.get('token') || '';
+      var $ = function (id) { return document.getElementById(id); };
+      var gate = $('gate'), lock = $('lock'), view = $('view');
+      var grant = '';
+
+      function fail(text) {
+        lock.classList.add('hidden'); view.classList.add('hidden');
+        gate.textContent = text; gate.classList.remove('hidden');
+      }
+      function show(el) { gate.classList.add('hidden'); el.classList.remove('hidden'); }
+      function bytes(n) {
+        if (!n && n !== 0) return '';
+        var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0;
+        while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+        return (i === 0 ? n : n.toFixed(1)) + ' ' + u[i];
+      }
+      function when(ts) {
+        if (!ts) return '';
+        try { return new Date(ts * 1000).toLocaleString(); } catch (e) { return ''; }
+      }
+
+      if (!token) { fail('This link is missing its token.'); return; }
+
+      fetch('/api/fm/share/info?token=' + encodeURIComponent(token))
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.j || res.j.error) { fail((res.j && res.j.error) || 'This link is invalid or has expired.'); return; }
+          render(res.j.data);
+        })
+        .catch(function () { fail('Could not load this link.'); });
+
+      function render(info) {
+        // A protected share sends nothing but {has_password, expires, brand} — no
+        // name, no size, no preview — until the password is exchanged for a grant.
+        if (info.has_password && !info.file) {
+          show(lock);
+          $('lockmeta').textContent = info.expires ? 'Expires ' + when(info.expires) : '';
+          return;
+        }
+        show(view);
+        var f = (info.files && info.files[0]) || info.file || {};
+        $('name').textContent = f.name || 'Shared file';
+        $('label').textContent = info.label || '';
+        if (!info.label) { $('label').classList.add('hidden'); }
+
+        // Preview markup is chosen by `kind`, but WHETHER there's a preview at all
+        // is the server's decision (preview_url is absent when it isn't allowed).
+        // The URL must be one of OUR OWN routes: `iframe.src` executes a
+        // `javascript:` value, and `brand` is the declared seam for future
+        // module-supplied values, so never trust the string's scheme.
+        var box = $('preview');
+        box.innerHTML = '';
+        var preview = /^\/api\/fm\/(img|share\/file)\?/.test(String(f.preview_url || '')) ? f.preview_url : '';
+        if (preview && f.kind === 'image') {
+          var img = document.createElement('img');
+          img.src = preview; img.alt = f.name || '';
+          box.appendChild(img); box.classList.remove('hidden');
+        } else if (preview && f.kind === 'pdf') {
+          var frame = document.createElement('iframe');
+          frame.src = preview; frame.setAttribute('title', f.name || 'Preview');
+          box.appendChild(frame); box.classList.remove('hidden');
+        } else {
+          box.classList.add('hidden');
+        }
+
+        var bits = [];
+        if (f.size || f.size === 0) { bits.push(bytes(f.size)); }
+        if (info.expires) { bits.push('Expires ' + when(info.expires)); }
+        if (info.remaining !== null && info.remaining !== undefined) { bits.push(info.remaining + ' download(s) left'); }
+        $('meta').textContent = bits.join(' · ');
+
+        $('download').onclick = function () {
+          var url = '/api/fm/share/file?token=' + encodeURIComponent(token) + '&dl=1';
+          if (grant) { url += '&g=' + encodeURIComponent(grant); }
+          location.href = url;
+        };
+      }
+
+      $('unlock').addEventListener('click', function () {
+        var btn = $('unlock');
+        btn.disabled = true;
+        fetch('/api/fm/share/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token, password: $('pw').value })
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            btn.disabled = false;
+            if (!res.ok || !res.j || res.j.error) {
+              // Never reveal the file on a failed attempt — just the error.
+              $('lockmeta').textContent = (res.j && res.j.error) || 'Wrong password.';
+              return;
+            }
+            grant = res.j.data.grant || '';
+            lock.classList.add('hidden');
+            render(res.j.data);
+          })
+          .catch(function () { btn.disabled = false; $('lockmeta').textContent = 'Could not unlock this link.'; });
+      });
+
+      $('pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') { $('unlock').click(); } });
+    })();
+  </script>
+</body>
+</html>

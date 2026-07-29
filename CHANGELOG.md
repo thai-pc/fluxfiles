@@ -3,6 +3,92 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.78] — 2026-07-28
+
+### Added
+
+- **Share: the public landing page.** An operator could mint a share
+  (`POST /api/fm/share`) and there was no URL a recipient could open —
+  `resolveShare()` had exactly one caller in the repo (its own test). The consumption
+  half now ships in the **free MIT core**: `public/share.html` (single file, no build
+  step, brand-neutral — every brandable value comes from the paid module's response)
+  plus three pre-auth public routes, registered before the auth block next to Intake's
+  and gated **installed + licensed only** (a public request carries no main JWT, so
+  there is no claim to check): `GET /api/fm/share/info`, `POST /api/fm/share/unlock`,
+  `GET /api/fm/share/file`. Free core → `501 module_not_installed`, and the page says
+  the link isn't available (exactly like `intake.html`).
+- **`POST /api/fm/share/revoke` + `GET /api/fm/share/list`** — the module methods
+  existed but were never routed. Revocation is the only kill switch for a link that is
+  now genuinely public, so it ships with the landing. Both are owner-filtered under
+  `owner_only`.
+- **`ShareGrant`** (`api/ShareGrant.php`, `t=share_grant`) — the password never rides a
+  query string: `unlock` exchanges it for a short-TTL, jti-bound grant that the bytes
+  GET carries. Distinct type from `stream`/`img`, so none of the three works on
+  another's endpoint. A password-protected share now reveals **nothing** pre-unlock —
+  not even the filename or size (the filename is often the secret).
+- **Claims `share_url_ttl` (60s, clamped 10–300), `share_base_url` (http/s),
+  `share_preview` (true)** + env `FLUXFILES_SHARE_RATE_LIMIT` (60/min per share),
+  `FLUXFILES_SHARE_UNLOCK_LIMIT` (5/min per share + IP) and
+  `FLUXFILES_SHARE_UNLOCK_TOTAL` (30/min per share, no IP component). All three claims
+  are read at create time and baked into the share record, so a public request needs no
+  claims. Forwarded by `embed.php`, `@fluxfiles/node`, Laravel and WordPress.
+- 8 `error.share_*` keys across all 16 locales (there were zero).
+
+### Fixed
+
+- **A share token was not self-contained.** `resolveShare()` took the tenant prefix as
+  a *caller* argument and `createShare()` never put it in the token, so a public caller
+  had no way to locate `shares.json` — the multi-tenant path was unreachable and
+  untested (every existing test passed `prefix = ''`). The token now carries
+  `store` (like Intake's portal token) and **`resolveShare()` lost its `$prefix`
+  parameter** — the bug class is gone by construction. Shares minted before this change
+  stop resolving; nothing consumed them, so there is no migration.
+- **A share on a public local disk was cosmetic.** The bytes route dispatches on the
+  **disk driver**, never on the file's `url`: `s3` (S3 + R2) enforces + counts and then
+  302s to a `share_url_ttl`-bounded presigned URL, while gated-local, **public-local**
+  and SFTP all stream through the app. A static local URL is never emitted.
+  *Documented limitation:* on S3/R2 `max_downloads` counts **grants, not downloads** — a
+  handed-out presigned URL stays fetchable until it expires; `share_url_ttl` (60s)
+  bounds that window, and an exact cap needs a local/SFTP disk.
+- `DiskManager::presignGetUrl()` takes an optional `$disposition`
+  (`ResponseContentDisposition`), so an S3 share download lands with the right filename
+  instead of the raw object key.
+
+### Security
+
+- **A share/portal token was a fully usable main access JWT.** Both are signed with
+  `FLUXFILES_SECRET` and carry `perms`/`disks`/`prefix`, so a recipient could replay the
+  share token as `Authorization: Bearer` on `/api/fm/content`, `/zip` or `/presign` and
+  read the file with **no password, no `max_downloads`, no `share_url_ttl` and no
+  working revocation** (revoke only deletes the storage record while the JWT lives to
+  `exp`). Both now carry a token TYPE marker — `t=share` / `t=intake`, the existing
+  `StreamToken`/`ImageToken` pattern — and `JwtMiddleware::handle()` refuses **any**
+  typed token (plus the legacy `share`/`intake` booleans) with `403 token_not_access`,
+  translated in all 16 locales. Belt and braces, the share payload also sets
+  `allow_download`/`allow_zip`/`allow_code_edit` to false. Share tokens minted before
+  this change no longer resolve (nothing consumed them); portal links keep working.
+- **Revocation is now durable.** `revokeShare()` writes a tombstone instead of
+  `unset`-ing the record: every landing view rewrites the whole tenant map, so a view
+  interleaving with a revoke used to write the pre-revoke map back and **resurrect the
+  revoked link**. `putRecord()` also refuses to write over a tombstone, `listShares()`
+  skips them, and `save()` prunes them once the token they killed could no longer
+  resolve. (The underlying read-modify-write race remains the accepted stateless trade.)
+- **Password brute force had no ceiling.** The unlock bucket was keyed on
+  `REMOTE_ADDR` — the one value an attacker rotates for free — so attempts were
+  effectively unbounded. A second bucket, `FLUXFILES_SHARE_UNLOCK_TOTAL` (30/min per
+  share, no attacker-controlled component), now caps a whole share; the per-IP bucket
+  stays as the tighter single-guesser limit. A failed unlock records `unlock_fails` on
+  the share record (never `views`), so an attacked link is visible in `share/list`.
+- `?token[]=a` no longer emits an "Array to string conversion" warning ahead of the JSON
+  envelope (which, with `display_errors` on, disclosed the absolute server path). A
+  shared `ff_str_param()` helper collapses any non-scalar param to its default — applied
+  to the share, intake, `/stream` and `/img` token reads.
+- The share bytes route's SFTP branch now sends `Content-Length` + `Accept-Ranges: none`
+  and stops on a mid-stream read failure, instead of appending a JSON error envelope to
+  partial file bytes.
+- `share.html` only accepts a preview URL that matches one of its own routes
+  (`/api/fm/img` or `/api/fm/share/file`) before assigning it to `iframe.src`.
+
 ## [0.2.77] — 2026-07-28
 
 > Released: Laravel `laravel-v0.2.33`, WordPress `wordpress-v0.2.37`. Core unchanged

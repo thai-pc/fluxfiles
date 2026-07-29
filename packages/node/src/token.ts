@@ -151,6 +151,11 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.allowOptimize !== undefined) payload.allow_optimize = !!opts.allowOptimize;
   // Other paid-module claims (inert unless the module is installed + licensed).
   if (opts.allowShare !== undefined) payload.allow_share = !!opts.allowShare;
+  // Share landing config — read at create time and baked into the share record
+  // (the core clamps the TTL and drops a non-http(s) base URL on decode).
+  if (opts.shareUrlTtl && opts.shareUrlTtl > 0) payload.share_url_ttl = Math.trunc(opts.shareUrlTtl);
+  if (opts.shareBaseUrl) payload.share_base_url = String(opts.shareBaseUrl);
+  if (opts.sharePreview !== undefined) payload.share_preview = !!opts.sharePreview;
   if (opts.allowIntake !== undefined) payload.allow_intake = !!opts.allowIntake;
   if (opts.allowVersioning !== undefined) payload.allow_versioning = !!opts.allowVersioning;
   if (opts.versioningMax && opts.versioningMax > 0) payload.versioning_max = Math.trunc(opts.versioningMax);

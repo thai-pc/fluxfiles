@@ -52,8 +52,12 @@ class DiskManager
      * Presigned GET URL for an object on an S3-compatible disk, or null when the
      * disk isn't S3 or presigning fails. Lets a caller redirect (302) to the
      * bucket instead of proxying the bytes through the app server.
+     *
+     * $disposition (optional) is signed into the URL as ResponseContentDisposition,
+     * so a redirected download lands with the right filename/inline behaviour
+     * instead of the raw object key.
      */
-    public function presignGetUrl(string $name, string $key, int $ttl = 3600): ?string
+    public function presignGetUrl(string $name, string $key, int $ttl = 3600, ?string $disposition = null): ?string
     {
         $cfg = $this->config($name);
         if (($cfg['driver'] ?? '') !== 's3') {
@@ -61,7 +65,11 @@ class DiskManager
         }
         try {
             $client = $this->s3Client($name);
-            $cmd = $client->getCommand('GetObject', ['Bucket' => $cfg['bucket'] ?? '', 'Key' => $key]);
+            $params = ['Bucket' => $cfg['bucket'] ?? '', 'Key' => $key];
+            if ($disposition !== null && $disposition !== '') {
+                $params['ResponseContentDisposition'] = $disposition;
+            }
+            $cmd = $client->getCommand('GetObject', $params);
             return (string) $client->createPresignedRequest($cmd, '+' . max(1, $ttl) . ' seconds')->getUri();
         } catch (\Throwable $e) {
             error_log('FluxFiles: presign GET failed — ' . $e->getMessage());

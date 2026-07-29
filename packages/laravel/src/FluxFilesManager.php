@@ -177,6 +177,18 @@ class FluxFilesManager
                 $payload[$mc] = (bool) $overrides[$mc];
             }
         }
+        // Share landing config. Read by the module at create time and baked into the
+        // share record, so these travel with `allow_share` (the core clamps the TTL
+        // and drops a non-http(s) base URL on decode).
+        if (!empty($overrides['share_url_ttl'])) {
+            $payload['share_url_ttl'] = (int) $overrides['share_url_ttl'];
+        }
+        if (!empty($overrides['share_base_url'])) {
+            $payload['share_base_url'] = (string) $overrides['share_base_url'];
+        }
+        if (array_key_exists('share_preview', $overrides)) {
+            $payload['share_preview'] = (bool) $overrides['share_preview'];
+        }
         // Versioning tuning claims (the core clamps these on decode; 0 = its default).
         foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
             if (!empty($overrides[$verClaim])) {

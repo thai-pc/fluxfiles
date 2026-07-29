@@ -216,6 +216,22 @@ test('token() forwards versioning + webhook config claims, not just the gate', f
     assertEqual('upload,delete', $csv->webhook_events ?? '', 'CSV events forwarded as-is');
 });
 
+// Same rule for Share: the gate claim alone leaves the landing page unconfigurable
+// (link base, presigned-URL TTL, preview policy are all read at create time).
+test('token() forwards the share landing config claims, not just the gate', function () use ($secret) {
+    $token = (new FluxFilesManager())->token(56, [
+        'allow_share'    => true,
+        'share_url_ttl'  => 120,
+        'share_base_url' => 'https://files.acme.com/public/share.html',
+        'share_preview'  => false,
+    ]);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(true, $p->allow_share ?? null, 'share gate');
+    assertEqual(120, $p->share_url_ttl ?? 0, 'share_url_ttl');
+    assertEqual('https://files.acme.com/public/share.html', $p->share_base_url ?? '', 'share_base_url');
+    assertEqual(false, $p->share_preview ?? null, 'share_preview');
+});
+
 test('token() without a secret → throws', function () {
     $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
     $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'] = '';
@@ -296,6 +312,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   the live SFTP connection + the allow_terminal claim and is a core-standalone /
     //   Docker feature; the adapter proxies don't expose a shell.
     $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'share', 'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
+        // Share: create/list/revoke are paid + the public landing routes
+        // (info/unlock/file) are token-authed with no main JWT, and `file` emits raw
+        // bytes / a presigned redirect — core-standalone, like intake and stream.
+        'share/info', 'share/unlock', 'share/file', 'share/list', 'share/revoke',
         // Intake: create/manage are paid + the public info/upload are token-authed
         // (no main JWT) — core-standalone, like share. Adapters may proxy later.
         'intake', 'intake/info', 'intake/list', 'intake/revoke', 'intake/upload',

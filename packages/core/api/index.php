@@ -213,6 +213,15 @@ if ($uri === '/api/fm/intake/info' || $uri === '/api/fm/intake/upload') {
     exit;
 }
 
+// Share landing — PUBLIC endpoints (no main JWT; authenticated by the share token
+// itself, like intake/img/stream). `info` = the landing card, `unlock` = exchange a
+// password for a short-lived grant, `file` = the bytes (or a presigned redirect).
+// The create/manage side is authed + gated under the main routes below.
+if ($uri === '/api/fm/share/info' || $uri === '/api/fm/share/unlock' || $uri === '/api/fm/share/file') {
+    handleSharePublic($method, $uri);
+    exit;
+}
+
 try {
     // Auth
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
@@ -583,7 +592,26 @@ function routeRequest(
     if ($method === 'POST' && $uri === '/api/fm/share') {
         $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
-        return $module->createShare($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
+        $res = $module->createShare($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
+        // The recipient URL. The module builds it from `share_base_url` when the
+        // token carries one; otherwise fall back to this request's origin + the
+        // core landing page. The token is returned ONCE and never stored — a listed
+        // share can only be revoked, not re-linked (same posture as an API key).
+        if (empty($res['url']) && !empty($res['token'])) {
+            $res['url'] = ff_request_origin() . '/public/share.html?token=' . rawurlencode((string) $res['token']);
+        }
+        return $res;
+    }
+    // Share list/revoke — revocation is the only kill switch for a link that is
+    // genuinely public, so it ships with the landing. Same 3-layer gate.
+    if ($method === 'GET' && $uri === '/api/fm/share/list') {
+        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->listShares($diskManager, $claims, ff_str_param($_GET, 'disk', 'local'));
+    }
+    if ($method === 'POST' && $uri === '/api/fm/share/revoke') {
+        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        return $module->revokeShare($diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['jti'] ?? ''));
     }
     // Intake / Upload Portals — operator create + manage (public info/upload are
     // handled before auth). Same 3-layer gate (501/402/403).
@@ -594,7 +622,7 @@ function routeRequest(
     }
     if ($method === 'GET' && $uri === '/api/fm/intake/list') {
         $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
-        return $module->listPortals($diskManager, $claims, (string) ($_GET['disk'] ?? 'local'));
+        return $module->listPortals($diskManager, $claims, ff_str_param($_GET, 'disk', 'local'));
     }
     if ($method === 'POST' && $uri === '/api/fm/intake/revoke') {
         $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
@@ -604,7 +632,7 @@ function routeRequest(
     // File versioning — list prior versions of a file / restore one. Same 3-layer gate.
     if ($method === 'GET' && $uri === '/api/fm/versions') {
         $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
-        return $module->listVersions($fm, $diskManager, $claims, (string) ($_GET['disk'] ?? 'local'), (string) ($_GET['path'] ?? ''));
+        return $module->listVersions($fm, $diskManager, $claims, ff_str_param($_GET, 'disk', 'local'), ff_str_param($_GET, 'path'));
     }
     if ($method === 'POST' && $uri === '/api/fm/versions/restore') {
         $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
@@ -1014,7 +1042,7 @@ function handleMediaStream(): void
         return;
     }
     try {
-        $scope = \FluxFiles\StreamToken::verify((string) ($_GET['token'] ?? ''), $secret);
+        $scope = \FluxFiles\StreamToken::verify(ff_str_param($_GET, 'token'), $secret);
     } catch (ApiException $e) {
         http_response_code($e->getHttpCode());
         header('Content-Type: text/plain; charset=utf-8');
@@ -1135,6 +1163,22 @@ function ff_snap_quality($raw): int
 }
 
 /**
+ * One string request parameter, safe against an array-shaped param.
+ *
+ * `?token[]=a` makes `$_GET['token']` an ARRAY, and `(string) $array` emits a PHP
+ * warning — which, with display_errors on, lands ahead of the JSON envelope and
+ * discloses the absolute server path. Anything non-scalar collapses to the default
+ * instead, so a hostile query string can only ever produce a normal 4xx.
+ *
+ * @param array<string,mixed> $src $_GET / $_POST / a decoded JSON body
+ */
+function ff_str_param(array $src, string $key, string $default = ''): string
+{
+    $v = $src[$key] ?? null;
+    return is_scalar($v) ? (string) $v : $default;
+}
+
+/**
  * Public Intake endpoints (no main JWT — authenticated by the portal token itself).
  *   GET  /api/fm/intake/info?token=…       → the landing page's data (label/caps).
  *   POST /api/fm/intake/upload {token,password?} + file → anonymous file drop.
@@ -1160,14 +1204,14 @@ function handleIntakePublic(string $method, string $uri): void
         $dm = new DiskManager(require __DIR__ . '/../config/disks.php');
 
         if ($method === 'GET' && $uri === '/api/fm/intake/info') {
-            $token = (string) ($_GET['token'] ?? '');
+            $token = ff_str_param($_GET, 'token');
             echo json_encode(['data' => $module->portalInfo($dm, $secret, $token), 'error' => null]);
             return;
         }
 
         if ($method === 'POST' && $uri === '/api/fm/intake/upload') {
-            $token = (string) ($_POST['token'] ?? '');
-            $password = isset($_POST['password']) ? (string) $_POST['password'] : null;
+            $token = ff_str_param($_POST, 'token');
+            $password = isset($_POST['password']) ? ff_str_param($_POST, 'password') : null;
             if (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
                 throw new ApiException('No file uploaded', 400, 'no_file');
             }
@@ -1206,6 +1250,329 @@ function handleIntakePublic(string $method, string $uri): void
 }
 
 /**
+ * Public Share endpoints (no main JWT — authenticated by the share token itself).
+ *   GET  /api/fm/share/info?token=…            → the landing card (counts a view).
+ *   POST /api/fm/share/unlock {token,password} → card + a short-lived grant token.
+ *   GET  /api/fm/share/file?token=…[&g=][&dl=] → the bytes (or a presigned 302).
+ *
+ * Gated on installed + licensed only: a public request carries no main JWT, so
+ * there is no claim to check (the share token IS the per-request auth). Every
+ * enforcement decision — password, expiry, cap, revocation, the grant — lives in
+ * the paid module; core only routes, rate-limits, and moves bytes.
+ */
+function handleSharePublic(string $method, string $uri): void
+{
+    // Set per branch, not up front: the info/unlock branches emit JSON, while
+    // `file` emits bytes (or a 302) and picks its own type. The error paths below
+    // set it themselves, so an early throw is still a JSON envelope.
+    try {
+        $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+        if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
+            throw new ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
+        }
+        if (!\FluxFiles\ModuleRegistry::installed('share')) {
+            throw new ApiException("The 'share' module is not installed on this server", 501, 'module_not_installed', ['module' => 'share']);
+        }
+        if (!\FluxFiles\LicenseManager::fromEnv()->licensed('share')) {
+            throw new ApiException("The 'share' module requires a valid license", 402, 'license_required', ['module' => 'share']);
+        }
+        $module = new \FluxFiles\Share\ShareModule();
+        $diskConfigs = require __DIR__ . '/../config/disks.php';
+        $dm = new DiskManager($diskConfigs);
+
+        if ($method === 'GET' && $uri === '/api/fm/share/info') {
+            $token = ff_str_param($_GET, 'token');
+            ff_share_rate_limit($token, 'view');
+            $out = $module->shareInfo($dm, $secret, $token);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['data' => ff_share_payload($out, $token, $secret), 'error' => null]);
+            return;
+        }
+
+        if ($method === 'POST' && $uri === '/api/fm/share/unlock') {
+            $body = json_decode(file_get_contents('php://input') ?: '{}', true);
+            if (!is_array($body)) { $body = []; }   // a scalar JSON body is not a form
+            $token = ff_str_param($body, 'token', ff_str_param($_POST, 'token'));
+            $password = ff_str_param($body, 'password', ff_str_param($_POST, 'password'));
+            // Tighter bucket than info/file: this is the password brute-force surface.
+            ff_share_rate_limit($token, 'unlock');
+            $out = $module->unlockShare($dm, $secret, $token, $password);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['data' => ff_share_payload($out, $token, $secret), 'error' => null]);
+            return;
+        }
+
+        if ($method === 'GET' && $uri === '/api/fm/share/file') {
+            $token = ff_str_param($_GET, 'token');
+            ff_share_rate_limit($token, 'view');
+            // Fixed order: gate → rate limit → enforce + count → THEN bytes. The
+            // module verifies the grant, the expiry and the cap and increments the
+            // download counter; nothing is served if it throws.
+            $res = $module->resolveShare($dm, $secret, $token, null, true, isset($_GET['g']) ? ff_str_param($_GET, 'g') : null);
+            ff_share_send_bytes($dm, $diskConfigs, $res, ($_GET['dl'] ?? '') === '1');
+            return;
+        }
+
+        throw new ApiException('Not found', 404, 'not_found');
+    } catch (ApiException $e) {
+        http_response_code($e->getHttpCode());
+        header('Content-Type: application/json; charset=utf-8');
+        $r = ['data' => null, 'error' => $e->getMessage()];
+        if ($e->getErrorCode() !== null) { $r['error_code'] = $e->getErrorCode(); }
+        if ($e->getErrorParams()) { $r['error_params'] = $e->getErrorParams(); }
+        echo json_encode($r);
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['data' => null, 'error' => 'Internal server error', 'error_code' => 'server_error']);
+    }
+}
+
+/**
+ * Turn the module's info/unlock result into the public JSON payload, minting the
+ * preview URL core-side (the module decides IF a preview is allowed; core owns the
+ * route shapes). Images preview through /api/fm/img — a bounded transform, never
+ * the original bytes, and it never touches the download counter. PDFs preview
+ * through the share bytes route itself, which the module only offers on an
+ * uncapped share (an <iframe> of the real bytes IS a download).
+ *
+ * @param array{info:array<string,mixed>,preview:array<string,mixed>|null} $out
+ * @return array<string,mixed>
+ */
+function ff_share_payload(array $out, string $token, string $secret): array
+{
+    $info = is_array($out['info'] ?? null) ? $out['info'] : [];
+    $prev = is_array($out['preview'] ?? null) ? $out['preview'] : null;
+    if ($prev === null) {
+        return $info;
+    }
+
+    $url = null;
+    $kind = (string) ($prev['kind'] ?? '');
+    $ttl = max(1, (int) ($prev['ttl'] ?? \FluxFiles\ShareGrant::DEFAULT_TTL));
+    if ($kind === 'image') {
+        $imgToken = \FluxFiles\ImageToken::mint(
+            (string) ($prev['disk'] ?? ''),
+            (string) ($prev['path'] ?? ''),
+            (string) ($prev['sub'] ?? 'share'),
+            $ttl,
+            $secret,
+            1600
+        );
+        $url = '/api/fm/img?token=' . rawurlencode($imgToken) . '&width=1200';
+    } elseif ($kind === 'pdf') {
+        $url = '/api/fm/share/file?token=' . rawurlencode($token);
+        if (!empty($info['grant'])) {
+            $url .= '&g=' . rawurlencode((string) $info['grant']);
+        }
+    }
+    if ($url === null) {
+        return $info;
+    }
+
+    if (isset($info['file']) && is_array($info['file'])) {
+        $info['file']['preview_url'] = $url;
+    }
+    if (isset($info['files'][0]) && is_array($info['files'][0])) {
+        $info['files'][0]['preview_url'] = $url;
+    }
+    return $info;
+}
+
+/**
+ * Emit the shared file's bytes. Dispatch is on the DISK DRIVER, never on the
+ * file's `url`: a public local disk has a static URL that would bypass the
+ * password/cap entirely, so local always streams through the app.
+ *
+ *   s3 (S3 + R2)          → 302 to a short-TTL presigned URL (no app egress)
+ *   local (private/public)→ streamed here (Range-capable; never the static URL)
+ *   sftp                  → streamed here (no presign, no static URL)
+ *
+ * @param array<string,mixed> $diskConfigs
+ * @param array<string,mixed> $res resolveShare() result (disk/path/name/mime/url_ttl)
+ */
+function ff_share_send_bytes(DiskManager $dm, array $diskConfigs, array $res, bool $forceDownload): void
+{
+    $disk = (string) ($res['disk'] ?? '');
+    $path = (string) ($res['path'] ?? '');
+    // The path comes from the SIGNED record, but reject a traversal defensively.
+    if ($path === '' || strpos($path, "\0") !== false
+        || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
+        throw new ApiException('Invalid share', 403, 'share_invalid');
+    }
+    $name = basename($path);
+    // MIME by extension (never sniffed — an .html that sniffs as text/html must not
+    // become active content in the FluxFiles origin).
+    $mime = (string) ($res['mime'] ?? '');
+    if ($mime === '') {
+        $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
+            ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
+    }
+    // Inline only for the same safe set as handleMediaStream; everything else (and
+    // an explicit ?dl=1) is forced to attachment.
+    $inline = !$forceDownload && (bool) preg_match('#^(video/|audio/|image/(?!svg))|^application/pdf$#', $mime);
+    $disposition = ff_content_disposition($name, $inline);
+
+    $cfg = is_array($diskConfigs[$disk] ?? null) ? $diskConfigs[$disk] : [];
+    $driver = (string) ($cfg['driver'] ?? '');
+
+    if ($driver === 's3') {
+        // Documented limitation: on S3/R2 the cap counts GRANTS, not downloads — a
+        // handed-out presigned URL stays fetchable until it expires. share_url_ttl
+        // (default 60s, clamped 10–300) bounds that window.
+        $url = $dm->presignGetUrl($disk, $path, max(10, (int) ($res['url_ttl'] ?? 60)), $disposition);
+        if ($url === null) {
+            throw new ApiException('This file is temporarily unavailable', 502, 'share_unavailable');
+        }
+        ff_share_headers($disposition);
+        header('Location: ' . $url, true, 302);
+        return;
+    }
+
+    if ($driver === 'local') {
+        $root = realpath($cfg['root'] ?? (__DIR__ . '/../storage/uploads'));
+        $abs  = realpath(($root ?: '') . '/' . $path);
+        // The resolved file must stay inside the disk root (symlink / traversal guard).
+        if ($root === false || $abs === false || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs)) {
+            throw new ApiException('This file is no longer available', 404, 'share_gone');
+        }
+        ff_share_headers($disposition);
+        // Production fast path for a gated (private) local disk — the same nginx
+        // internal location /api/fm/stream uses. Public local disks stream through
+        // PHP (their root isn't the X-Accel location).
+        $xaccel = $_ENV['FLUXFILES_XACCEL'] ?? '';
+        if ($xaccel !== '' && !empty($cfg['private'])) {
+            header('Content-Type: ' . $mime);
+            header('X-Accel-Buffering: no');
+            header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
+            return;
+        }
+        \FluxFiles\RangeStreamer::stream($abs, $mime, $_SERVER['HTTP_RANGE'] ?? null);
+        return;
+    }
+
+    if ($driver === 'sftp') {
+        $stream = null;
+        try {
+            $fs = $dm->disk($disk);
+            if (!$fs->fileExists($path)) {
+                throw new ApiException('This file is no longer available', 404, 'share_gone');
+            }
+            $size = (int) ($res['size'] ?? 0);
+            $stream = $fs->readStream($path);
+        } catch (ApiException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            // Nothing has been written yet, so a JSON envelope is still correct.
+            throw new ApiException('This file is temporarily unavailable', 502, 'share_unavailable');
+        }
+        ff_share_headers($disposition);
+        header('Content-Type: ' . $mime);
+        // Content-Length so a truncated transfer is detectable as truncated (no
+        // Range support over SFTP here — say so rather than imply it).
+        if ($size > 0) { header('Content-Length: ' . $size); }
+        header('Accept-Ranges: none');
+        try {
+            while (!feof($stream)) {
+                $chunk = fread($stream, 8192);
+                if ($chunk === false) { break; }
+                echo $chunk;
+                @flush();
+            }
+        } catch (\Throwable $e) {
+            // Mid-stream: the headers and part of the body are already out, so an
+            // exception here would append a JSON envelope to partial FILE BYTES (and
+            // warn about headers already sent). Stop instead — the short body against
+            // the declared Content-Length is the client's signal.
+            error_log('FluxFiles share sftp stream failed: ' . $e->getMessage());
+        } finally {
+            if (is_resource($stream)) { fclose($stream); }
+        }
+        return;
+    }
+
+    throw new ApiException('This file is temporarily unavailable', 502, 'share_unavailable');
+}
+
+/** Common response headers for the share bytes route (and its presigned redirect). */
+function ff_share_headers(string $disposition): void
+{
+    header('Content-Disposition: ' . $disposition);
+    header('X-Content-Type-Options: nosniff');
+    // A shared .html/.svg must not run in the FluxFiles origin, and the token must
+    // not leak to a sub-resource or an outbound link.
+    header('Content-Security-Policy: sandbox');
+    header('Cache-Control: private, no-store');
+    header('Referrer-Policy: no-referrer');
+}
+
+/** RFC-5987 Content-Disposition from a display filename (never the storage key). */
+function ff_content_disposition(string $name, bool $inline): string
+{
+    $ascii = preg_replace('/[^\x20-\x7E]/', '_', $name) ?? 'file';
+    $ascii = str_replace(['"', '\\'], '_', $ascii);
+    return ($inline ? 'inline' : 'attachment')
+        . '; filename="' . $ascii . '"'
+        . "; filename*=UTF-8''" . rawurlencode($name);
+}
+
+/**
+ * Per-share rate limit for the public share routes, using the existing JSON-file
+ * limiter: `view` (info + file) and the tighter `unlock` (password attempts, keyed
+ * by share + client IP). The share id is read from the UNVERIFIED payload — it's
+ * only a bucket key, and tampering it invalidates the signature anyway, so it
+ * can't be used to escape the bucket with a working token.
+ */
+function ff_share_rate_limit(string $token, string $kind): void
+{
+    $storagePath = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
+    $jti = ff_share_token_jti($token);
+    $limiter = static function (int $limit) use ($storagePath): RateLimiterFileStorage {
+        return new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit, 60);
+    };
+
+    if ($kind === 'unlock') {
+        // TWO buckets, because either one alone is escapable or self-DoSing:
+        //  · per share + client IP — stops one guesser, but REMOTE_ADDR is free to
+        //    rotate (proxy pool, a single IPv6 /64), so it cannot be the only limit;
+        //  · per share, no attacker-controlled component — the real ceiling. It must
+        //    stay well above a shared-office NAT (every recipient behind one IP shares
+        //    the first bucket, so a handful of people mistyping a password must not
+        //    lock the link), hence a roomier default of 30/min for a whole share.
+        // Both throw the already-translated `rate_limited` (429).
+        $limiter(max(1, (int) ($_ENV['FLUXFILES_SHARE_UNLOCK_LIMIT'] ?? 5)))
+            ->check('share_unlock:' . $jti . ':' . (string) ($_SERVER['REMOTE_ADDR'] ?? ''), 'read');
+        $limiter(max(1, (int) ($_ENV['FLUXFILES_SHARE_UNLOCK_TOTAL'] ?? 30)))
+            ->check('share_unlock_all:' . $jti, 'read');
+        return;
+    }
+
+    $limiter(max(1, (int) ($_ENV['FLUXFILES_SHARE_RATE_LIMIT'] ?? 60)))->check('share:' . $jti, 'read');
+}
+
+/** The share id from a token's unverified payload; a hash of the token otherwise. */
+function ff_share_token_jti(string $token): string
+{
+    $parts = explode('.', $token);
+    if (count($parts) === 3) {
+        $payload = json_decode((string) base64_decode(strtr($parts[1], '-_', '+/')), true);
+        $jti = is_array($payload) ? ($payload['jti'] ?? '') : '';
+        if (is_string($jti) && preg_match('/^[A-Za-z0-9_-]{8,64}$/', $jti)) {
+            return $jti;
+        }
+    }
+    return substr(hash('sha256', $token), 0, 24);
+}
+
+/** This request's own origin (scheme + host), honouring a TLS-terminating proxy. */
+function ff_request_origin(): string
+{
+    $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    return ($isHttps ? 'https' : 'http') . '://' . (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+}
+
+/**
  * Serve an on-demand WebP transform of one image, cached in the file's
  * _variants/ directory. Authenticated by an image token (query string). The width
  * is rounded to 100px and clamped to the tenant's max so the number of cacheable
@@ -1221,7 +1588,7 @@ function handleImageTransform(): void
         return;
     }
     try {
-        $scope = \FluxFiles\ImageToken::verify((string) ($_GET['token'] ?? ''), $secret);
+        $scope = \FluxFiles\ImageToken::verify(ff_str_param($_GET, 'token'), $secret);
     } catch (ApiException $e) {
         http_response_code($e->getHttpCode());
         header('Content-Type: text/plain; charset=utf-8');
@@ -1268,7 +1635,7 @@ function handleImageTransform(): void
     // Output format: 'avif'/'webp' force it; 'auto' (default) content-negotiates
     // from Accept — AVIF first (smallest, when the build supports it), then WebP,
     // else '' = serve the original for ancient clients (resolved below).
-    $reqFormat = strtolower((string) ($_GET['format'] ?? 'auto'));
+    $reqFormat = strtolower(ff_str_param($_GET, 'format', 'auto'));
     $avifOk = $optimizer->avifSupported();
     $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
     if ($reqFormat === 'avif') {

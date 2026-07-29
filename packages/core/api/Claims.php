@@ -172,6 +172,20 @@ class Claims
     public bool $allowBackup = false;      // Backup Bridge: SFTP↔S3 sync (fluxfiles/backup)
     public bool $allowC2pa = false;        // C2PA content provenance (fluxfiles/c2pa)
 
+    // ── Share landing page (read at create time, baked into the share record) ──
+    /** @var int TTL (seconds) of the presigned S3/R2 URL a share download redirects
+     *           to. Clamped to [10, 300]; bounds the "a handed-out presigned URL
+     *           stays fetchable" window (on S3/R2 the cap counts grants, not GETs). */
+    public int $shareUrlTtl = 60;
+    /** @var string Public base the create response builds the recipient link from
+     *            (e.g. https://files.acme.com/public/share.html). http(s) only —
+     *            anything else is dropped so it can never become a javascript: link.
+     *            Empty (default) → the request origin + /public/share.html. */
+    public string $shareBaseUrl = '';
+    /** @var bool May the landing page render an inline preview (images via
+     *            /api/fm/img, PDFs on uncapped shares)? false = download-only. */
+    public bool $sharePreview = true;
+
     /** @var int Max prior versions to keep per file (Versioning module). 0 = inherit
      *            the module default (10). Oldest beyond this are pruned on each snapshot. */
     public int $versioningMax = 0;
@@ -439,6 +453,14 @@ class Claims
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->allowShare = (bool) ($payload->allow_share ?? false);
+        // Share landing claims. The TTL clamps to [10, 300] (0/absent → 60); the base
+        // URL is http(s)-only like terminal_pty_url so it can never become a
+        // javascript: link in a host UI; preview defaults on.
+        $shareTtl = (int) ($payload->share_url_ttl ?? 0);
+        $c->shareUrlTtl = $shareTtl > 0 ? max(10, min(300, $shareTtl)) : 60;
+        $shareBase = trim((string) ($payload->share_base_url ?? ''));
+        $c->shareBaseUrl = preg_match('#^https?://#i', $shareBase) ? $shareBase : '';
+        $c->sharePreview = isset($payload->share_preview) ? (bool) $payload->share_preview : true;
         $c->allowIntake = (bool) ($payload->allow_intake ?? false);
         $c->allowVersioning = (bool) ($payload->allow_versioning ?? false);
         $c->versioningMax = max(0, (int) ($payload->versioning_max ?? 0));
