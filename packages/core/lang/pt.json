@@ -311,6 +311,8 @@
         "webhook_blocked": "A URL do webhook aponta para um endereço privado ou bloqueado.",
         "version_not_found": "Essa versão não foi encontrada.",
         "license_required": "Este recurso requer uma licença válida.",
+        "license_expired": "Sua licença expirou, portanto {module} está indisponível. Renove-a para continuar usando este recurso.",
+        "module_forbidden": "Este token de acesso não tem permissão para usar {module}.",
         "intake_invalid": "Link de envio inválido ou expirado.",
         "intake_revoked": "Este portal de envio não foi encontrado ou foi revogado.",
         "intake_password": "É necessária uma senha para enviar aqui.",

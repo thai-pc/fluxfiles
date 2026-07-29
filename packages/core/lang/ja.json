@@ -311,6 +311,8 @@
         "webhook_blocked": "webhook URLがプライベートまたはブロックされたアドレスを指しています。",
         "version_not_found": "そのバージョンが見つかりません。",
         "license_required": "この機能には有効なライセンスが必要です。",
+        "license_expired": "ライセンスの有効期限が切れているため、{module} は利用できません。引き続き使用するには更新してください。",
+        "module_forbidden": "このアクセストークンでは {module} を使用できません。",
         "intake_invalid": "アップロードリンクが無効か期限切れです。",
         "intake_revoked": "アップロードポータルが見つからないか取り消されています。",
         "intake_password": "ここにアップロードするにはパスワードが必要です。",

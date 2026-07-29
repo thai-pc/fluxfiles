@@ -311,6 +311,8 @@
         "webhook_blocked": "Die Webhook-URL verweist auf eine private oder blockierte Adresse.",
         "version_not_found": "Diese Version wurde nicht gefunden.",
         "license_required": "Diese Funktion erfordert eine gültige Lizenz.",
+        "license_expired": "Ihre Lizenz ist abgelaufen, daher ist {module} nicht verfügbar. Erneuern Sie sie, um die Funktion weiter zu nutzen.",
+        "module_forbidden": "Dieses Zugriffstoken darf {module} nicht verwenden.",
         "intake_invalid": "Ungültiger oder abgelaufener Upload-Link.",
         "intake_revoked": "Dieses Upload-Portal wurde nicht gefunden oder widerrufen.",
         "intake_password": "Zum Hochladen ist ein Passwort erforderlich.",

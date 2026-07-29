@@ -311,6 +311,8 @@
         "webhook_blocked": "L'URL du webhook pointe vers une adresse privée ou bloquée.",
         "version_not_found": "Cette version est introuvable.",
         "license_required": "Cette fonctionnalité nécessite une licence valide.",
+        "license_expired": "Votre licence a expiré, {module} est donc indisponible. Renouvelez-la pour continuer à utiliser cette fonctionnalité.",
+        "module_forbidden": "Ce jeton d'accès n'est pas autorisé à utiliser {module}.",
         "intake_invalid": "Lien d'envoi invalide ou expiré.",
         "intake_revoked": "Ce portail d'envoi est introuvable ou a été révoqué.",
         "intake_password": "Un mot de passe est requis pour envoyer ici.",

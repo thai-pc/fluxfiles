@@ -311,6 +311,8 @@
         "webhook_blocked": "webhook URL 指向私有或被阻止的地址。",
         "version_not_found": "未找到该版本。",
         "license_required": "此功能需要有效的许可证。",
+        "license_expired": "您的许可证已过期，{module} 不可用。请续订以继续使用此功能。",
+        "module_forbidden": "此访问令牌无权使用 {module}。",
         "intake_invalid": "上传链接无效或已过期。",
         "intake_revoked": "找不到上传门户或已被撤销。",
         "intake_password": "在此上传需要密码。",

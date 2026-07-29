@@ -311,6 +311,8 @@
         "webhook_blocked": "L'URL del webhook punta a un indirizzo privato o bloccato.",
         "version_not_found": "Questa versione non è stata trovata.",
         "license_required": "Questa funzione richiede una licenza valida.",
+        "license_expired": "La tua licenza è scaduta, quindi {module} non è disponibile. Rinnovala per continuare a usare questa funzione.",
+        "module_forbidden": "Questo token di accesso non è autorizzato a usare {module}.",
         "intake_invalid": "Link di caricamento non valido o scaduto.",
         "intake_revoked": "Questo portale di caricamento non è stato trovato o è stato revocato.",
         "intake_password": "È richiesta una password per caricare qui.",

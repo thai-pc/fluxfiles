@@ -311,6 +311,8 @@
         "webhook_blocked": "Webhook URL'si özel veya engellenmiş bir adrese işaret ediyor.",
         "version_not_found": "Bu sürüm bulunamadı.",
         "license_required": "Bu özellik geçerli bir lisans gerektirir.",
+        "license_expired": "Lisansınızın süresi doldu, bu nedenle {module} kullanılamıyor. Bu özelliği kullanmaya devam etmek için yenileyin.",
+        "module_forbidden": "Bu erişim belirteci {module} kullanma iznine sahip değil.",
         "intake_invalid": "Geçersiz veya süresi dolmuş yükleme bağlantısı.",
         "intake_revoked": "Bu yükleme portalı bulunamadı veya iptal edildi.",
         "intake_password": "Buraya yüklemek için parola gerekir.",

@@ -311,6 +311,8 @@
         "webhook_blocked": "The webhook URL points at a private or blocked address.",
         "version_not_found": "That version was not found.",
         "license_required": "This feature requires a valid license.",
+        "license_expired": "Your licence has expired, so {module} is unavailable. Renew it to keep using this feature.",
+        "module_forbidden": "This access token is not allowed to use {module}.",
         "intake_invalid": "Invalid or expired upload link.",
         "intake_revoked": "This upload portal was not found or has been revoked.",
         "intake_password": "A password is required to upload here.",

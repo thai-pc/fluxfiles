@@ -223,6 +223,45 @@ foreach (glob($apiDir . '/*.php') as $php) {
             $thrown[$code] = true;
         }
     }
+    // A code passed as an EXPRESSION rather than a literal is invisible to the scan
+    // above. That blind spot hid `license_expired` and every `<claim>_forbidden` for
+    // as long as the module gate has existed — the guard reported green the whole
+    // time. So: find those call sites and REQUIRE each to be declared below, rather
+    // than trying to evaluate PHP with a regex.
+    if (preg_match_all("/ApiException\\([^;]*?,\\s*\\d{3},\\s*([^,)\\s][^,)]*)/", $src, $m2, PREG_OFFSET_CAPTURE)) {
+        foreach ($m2[1] as $hit) {
+            if ($hit[0][0] === "'" || $hit[0][0] === '"') {
+                continue;   // a literal — already collected above
+            }
+            $dynamicSites[] = basename($php) . ':' . (substr_count(substr($src, 0, $hit[1]), "\n") + 1);
+        }
+    }
+}
+
+// Codes the scanner cannot read, and where they come from. A new dynamic site fails
+// the check below until it is added here, so the hole cannot silently reopen.
+$declaredDynamic = [
+    'ModuleRegistry.php' => [
+        'license_required',   // :92 — ternary on the licence status
+        'license_expired',    // :92 — same ternary, past the grace period
+        'module_forbidden',   // :99 — actually `$claim . '_forbidden'` per module;
+                              //       fm.js falls back to this generic key, so one
+                              //       translation covers all nine and any future one.
+    ],
+];
+foreach ($declaredDynamic as $codes) {
+    foreach ($codes as $code) {
+        $thrown[$code] = true;
+    }
+}
+$undeclared = array_values(array_filter(
+    $dynamicSites ?? [],
+    static fn ($site) => !isset($declaredDynamic[explode(':', $site)[0]])
+));
+if ($undeclared !== []) {
+    echo "  {$red}✗ ApiException with a non-literal error_code at " . implode(', ', $undeclared)
+        . " — add its codes to \$declaredDynamic in this file so they get i18n-checked{$reset}\n";
+    $errors++;
 }
 $enErr = $enData['error'] ?? [];
 $missingErr = array_values(array_filter(array_keys($thrown), static fn ($c) => !array_key_exists($c, $enErr)));

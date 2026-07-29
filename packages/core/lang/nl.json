@@ -311,6 +311,8 @@
         "webhook_blocked": "De webhook-URL wijst naar een privé- of geblokkeerd adres.",
         "version_not_found": "Die versie is niet gevonden.",
         "license_required": "Deze functie vereist een geldige licentie.",
+        "license_expired": "Je licentie is verlopen, waardoor {module} niet beschikbaar is. Vernieuw hem om deze functie te blijven gebruiken.",
+        "module_forbidden": "Dit toegangstoken mag {module} niet gebruiken.",
         "intake_invalid": "Ongeldige of verlopen uploadlink.",
         "intake_revoked": "Dit uploadportaal is niet gevonden of ingetrokken.",
         "intake_password": "Een wachtwoord is vereist om hier te uploaden.",

@@ -546,6 +546,16 @@ function fluxFilesApp() {
                     if (msg === 'error.' + json.error_code) {
                         msg = null; // key not found, fall back
                     }
+                    // ModuleRegistry builds the paid-module refusal code at runtime
+                    // (`$claim . '_forbidden'`), so there is no literal for the i18n
+                    // guard to find and a per-module key would have to be re-added for
+                    // every new module. One generic key + {module} covers all of them.
+                    if (msg === null && /^allow_[a-z0-9_]+_forbidden$/.test(json.error_code)) {
+                        var generic = this.t('error.module_forbidden', json.error_params || {});
+                        if (generic !== 'error.module_forbidden') {
+                            msg = generic;
+                        }
+                    }
                 }
                 const err = new Error(msg || json.error);
                 err.code = json.error_code || null;       // let callers branch on the code
