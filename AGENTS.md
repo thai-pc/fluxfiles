@@ -84,8 +84,9 @@ gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`
   a free config toggle, don't build a competitor. All four shipped: terminal →
   `terminal_pty_url` (ttyd), PDF → `pdf_tools_url` (Stirling), office → `office_url`
   (Collabora/OnlyOffice), e-sign → `esign_url` (DocuSeal).
-- **Optimization is FREE/core** (was paid). Paid modules are now 6: share/ai/ocr/virus/
-  backup/c2pa (gitignored, `ModuleRegistry` 3-layer gate).
+- **Optimization is FREE/core** (was paid). Paid modules are **9**: share/intake/
+  versioning/webhooks/ai/ocr/virus/backup/c2pa (gitignored, `ModuleRegistry` 3-layer
+  gate). `ModuleRegistry::$map` is the source of truth — check it, don't trust a count.
 
 ## Setup & common commands
 
