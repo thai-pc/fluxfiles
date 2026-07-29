@@ -5,6 +5,8 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.2.78] — 2026-07-28
 
+> Released: core `core-v0.2.64`; node `0.1.25`, laravel `0.2.34`, wordpress `0.2.38`.
+
 ### Added
 
 - **Share: the public landing page.** An operator could mint a share
