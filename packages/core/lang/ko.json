@@ -241,6 +241,8 @@
         "server_error": "서버 오류. 다시 시도해 주세요.",
         "upload_failed": "업로드 실패. 다시 시도해 주세요",
         "delete_failed": "이 파일을 삭제할 수 없습니다",
+        "move_failed": "이 폴더를 이동할 수 없습니다",
+        "copy_dir_unsupported": "폴더는 복사할 수 없습니다",
         "name_empty": "이름을 입력하세요",
         "name_invalid": "이름에 잘못된 문자가 포함되어 있습니다",
         "name_same": "새 이름이 현재 이름과 같습니다",

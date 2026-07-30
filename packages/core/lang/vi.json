@@ -241,6 +241,8 @@
         "server_error": "Lỗi máy chủ. Vui lòng thử lại.",
         "upload_failed": "Tải lên thất bại. Vui lòng thử lại",
         "delete_failed": "Không thể xóa file này",
+        "move_failed": "Không thể di chuyển thư mục này",
+        "copy_dir_unsupported": "Không thể sao chép thư mục",
         "name_empty": "Tên không được để trống",
         "name_invalid": "Tên chứa ký tự không hợp lệ",
         "name_same": "Tên mới trùng với tên hiện tại",

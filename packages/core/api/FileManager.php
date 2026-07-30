@@ -629,40 +629,53 @@ class FileManager
         return ['trashed' => true, 'trash_id' => $id];
     }
 
-    /** Soft-delete a whole directory subtree (variants included) into trash. */
+    /**
+     * Soft-delete a whole directory subtree (variants included) into trash.
+     *
+     * The manifest records directories as well as files: a subdirectory holding
+     * no files has nothing in `files[]` to imply it, so without `dirs[]` restore
+     * could not bring it back — and on an object store a folder whose entire
+     * content is subfolders would trash to an empty manifest.
+     */
     private function trashDirectory(string $disk, string $scoped, string $id, string $trashDir, $fs): array
     {
         $this->assertOwnsTree($disk, $scoped);
 
-        // Collect paths first so moving files doesn't disturb the recursive listing.
-        $paths = [];
+        // Walk first: the relocation below would disturb a recursive listing, and
+        // per-file metadata has to be snapshotted while it is still in the index.
+        $prefix = rtrim($scoped, '/') . '/';
+        $files  = [];
+        $dirs   = [];
+        $total  = 0;
         try {
             foreach ($fs->listContents($scoped, true) as $item) {
-                if ($item->isFile()) {
-                    $paths[] = $item->path();
+                $rel = substr($item->path(), strlen($prefix));
+                if ($rel === '' || $rel === false) {
+                    continue;
                 }
+                if (!$item->isFile()) {
+                    $dirs[] = $rel;
+                    continue;
+                }
+                // Snapshot metadata for real files (variant files have none).
+                $meta = (strpos($rel, '_variants/') === false) ? ($this->meta->get($disk, $item->path()) ?: []) : [];
+                try { $total += (int) $fs->fileSize($item->path()); } catch (\Throwable $e) { /* best effort */ }
+                $files[] = ['rel' => $rel, 'meta' => $meta];
             }
         } catch (\Throwable $e) {
             throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
         }
 
-        $prefix = rtrim($scoped, '/') . '/';
-        $files  = [];
-        $total  = 0;
-        foreach ($paths as $p) {
-            $rel = substr($p, strlen($prefix));
-            // Snapshot metadata for real files (variant files have none).
-            $meta = (strpos($rel, '_variants/') === false) ? ($this->meta->get($disk, $p) ?: []) : [];
-            try { $total += (int) $fs->fileSize($p); } catch (\Throwable $e) { /* best effort */ }
-            try {
-                $fs->move($p, $trashDir . '/payload/' . $rel);
-            } catch (\Throwable $e) {
-                throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
-            }
-            $files[] = ['rel' => $rel, 'meta' => $meta];
+        // Same driver-aware relocation the rename path uses — one native move on
+        // local/SFTP, a marker-creating walk on object stores — so empty
+        // subdirectories travel into the payload and the source is only dropped
+        // once the payload is in place.
+        try {
+            $this->moveDirectoryTree($disk, $fs, $scoped, $trashDir . '/payload');
+        } catch (\Throwable $e) {
+            throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
         }
 
-        try { $fs->deleteDirectory($scoped); } catch (\Throwable $e) { /* best effort */ }
         $this->meta->deleteChildren($disk, $scoped);
         $this->meta->deleteDirPrefix($disk, $scoped);
 
@@ -675,6 +688,7 @@ class FileManager
             'deleted_at'   => time(),
             'deleted_by'   => $this->claims->userId,
             'files'        => $files,
+            'dirs'         => $dirs,
         ]);
 
         return ['trashed' => true, 'trash_id' => $id];
@@ -738,26 +752,52 @@ class FileManager
         return ['restored' => true, 'key' => $this->outKey($target)];
     }
 
-    /** Restore a trashed directory subtree to $target. */
+    /**
+     * Restore a trashed directory subtree to $target.
+     *
+     * The payload moves back whole (driver-aware, like rename), then `dirs[]` is
+     * re-created so a subdirectory that holds no files comes back even where a
+     * marker didn't survive, and `files[]` replays metadata + the folder index.
+     * Entries written before `dirs[]` existed simply carry none: their payload
+     * only ever held files, so they restore exactly as they used to — the folders
+     * implied by the file paths.
+     */
     private function restoreDirectory(string $disk, string $id, array $entry, string $target, string $trashDir, $fs): array
     {
-        $target = rtrim($target, '/');
-        try {
-            $fs->createDirectory($target); // handles empty folders too
-        } catch (\Throwable $e) { /* best effort */ }
+        $target  = rtrim($target, '/');
+        $payload = $trashDir . '/payload';
+
+        $hasPayload = false;
+        try { $hasPayload = $fs->directoryExists($payload); } catch (\Throwable $e) { /* treat as empty */ }
+
+        if ($hasPayload) {
+            try {
+                $this->moveDirectoryTree($disk, $fs, $payload, $target);
+            } catch (\Throwable $e) {
+                throw new ApiException('Restore failed: ' . $e->getMessage(), 500, 'restore_failed');
+            }
+        } else {
+            try {
+                $fs->createDirectory($target); // an entirely empty folder has no payload
+            } catch (\Throwable $e) { /* best effort */ }
+        }
+
+        foreach (($entry['dirs'] ?? []) as $d) {
+            $rel = $this->safeRel((string) $d); // strip any traversal
+            if ($rel === '') {
+                continue;
+            }
+            try { $fs->createDirectory($target . '/' . $rel); } catch (\Throwable $e) { /* best effort */ }
+            // trackDir ignores reserved segments, so `_variants/` stays out of the index.
+            $this->meta->trackDir($disk, $target . '/' . $rel);
+        }
 
         foreach (($entry['files'] ?? []) as $f) {
             $rel = $this->safeRel((string) ($f['rel'] ?? '')); // strip any traversal
             if ($rel === '') {
                 continue;
             }
-            $src = $trashDir . '/payload/' . $rel;
             $dst = $target . '/' . $rel;
-            try {
-                if ($fs->fileExists($src)) {
-                    $fs->move($src, $dst);
-                }
-            } catch (\Throwable $e) { /* best effort */ }
             if (!empty($f['meta'])) {
                 $this->meta->save($disk, $dst, $f['meta']);
             }
@@ -946,38 +986,15 @@ class FileManager
 
         if ($isDir) {
             $this->assertOwnsTree($disk, $scoped);
-            // For directories: move all contents to new path
-            $scopedPrefix = rtrim($scoped, '/') . '/';
-            foreach ($fs->listContents($scoped, true) as $item) {
-                if ($item->isFile()) {
-                    $relative = substr($item->path(), strlen($scopedPrefix));
-                    $fs->move($item->path(), $newPath . '/' . $relative);
-                }
-            }
-            // Move _variants/ directory
-            $oldVariantsDir = $scopedPrefix . '_variants';
-            $newVariantsDir = rtrim($newPath, '/') . '/_variants';
-            try {
-                if ($fs->directoryExists($oldVariantsDir)) {
-                    foreach ($fs->listContents($oldVariantsDir, true) as $vItem) {
-                        if ($vItem->isFile()) {
-                            $vRelative = substr($vItem->path(), strlen(rtrim($oldVariantsDir, '/') . '/'));
-                            $fs->move($vItem->path(), $newVariantsDir . '/' . $vRelative);
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                error_log('FluxFiles: Variant directory rename failed — ' . $e->getMessage());
-            }
+            // Relocate the whole subtree — files, `_variants/` (it lives inside
+            // the folder) and subdirectories that hold no files at all. This runs
+            // before any index bookkeeping so a failure can never leave the folder
+            // index describing a directory that is no longer there.
+            $this->moveDirectoryTree($disk, $fs, $scoped, $newPath);
             // Move metadata for children
             $this->meta->renameChildren($disk, $scoped, $newPath);
             if ($this->meta instanceof StorageMetadataHandler) {
                 $this->meta->renameDirPrefix($disk, $scoped, $newPath);
-            }
-            try {
-                $fs->deleteDirectory($scoped);
-            } catch (\Throwable $e) {
-                // May already be empty/gone
             }
         } else {
             $fs->move($scoped, $newPath);
@@ -1019,11 +1036,11 @@ class FileManager
 
         if ($isDir) {
             $this->assertOwnsTree($disk, $scopedFrom);
+            $this->moveDirectoryTree($disk, $fs, $scopedFrom, $scopedTo);
         } else {
             $this->assertRelocationExt($scopedFrom, $scopedTo);
+            $fs->move($scopedFrom, $scopedTo);
         }
-
-        $fs->move($scopedFrom, $scopedTo);
 
         // Keep metadata + folder index best-effort in sync
         if ($isDir) {
@@ -1055,6 +1072,19 @@ class FileManager
         $this->assertNotSystem($scopedTo);
         $fs = $this->disks->disk($disk);
         $this->assertTargetAvailable($fs, $scopedTo);
+
+        // Recursive folder copy isn't supported; without this guard the adapter
+        // throws a raw UnableToCopyFile ("the first argument to copy() cannot be
+        // a directory") instead of the API envelope.
+        try {
+            $isDir = $fs->directoryExists($scopedFrom);
+        } catch (\Throwable $e) {
+            $isDir = false;
+        }
+        if ($isDir) {
+            throw new ApiException('Folders cannot be copied', 400, 'copy_dir_unsupported');
+        }
+
         $this->assertRelocationExt($scopedFrom, $scopedTo);
         $fs->copy($scopedFrom, $scopedTo);
 
@@ -1181,6 +1211,88 @@ class FileManager
             'src_disk' => $srcDisk,
             'dst_disk' => $dstDisk,
         ];
+    }
+
+    /**
+     * Relocate a whole directory subtree, empty subdirectories included.
+     *
+     * Local and SFTP expose real directories, so one adapter move() is a rename
+     * syscall: atomic, and it carries every child along — files, `_variants/`,
+     * and folders that hold no files at all. Object stores (S3/R2) have no
+     * directories: there move() is CopyObject+delete on a single key and throws
+     * for a prefix, so the tree is walked instead — directory markers are
+     * recreated at the destination *before* the files move, which is what keeps
+     * a file-less folder from disappearing.
+     *
+     * The source is only dropped once the destination genuinely exists, so a
+     * failed relocation can never leave the caller with neither.
+     */
+    private function moveDirectoryTree(string $disk, $fs, string $from, string $to): void
+    {
+        $from = rtrim($from, '/');
+        $to   = rtrim($to, '/');
+
+        // Moving a folder inside its own subtree would have the walk below drop
+        // the source *and* the destination it just wrote into. Local/SFTP fail
+        // this at the rename syscall, but only with a raw 500 — guard both.
+        if ($to === $from || str_starts_with($to . '/', $from . '/')) {
+            throw new ApiException('Cannot move a folder into itself', 400, 'move_into_self');
+        }
+
+        if ($this->hasRealDirectories($disk)) {
+            $fs->move($from, $to);
+            return;
+        }
+
+        // Collect first so moving objects doesn't disturb the recursive listing.
+        $prefix = $from . '/';
+        $dirs   = [];
+        $files  = [];
+        foreach ($fs->listContents($from, true) as $item) {
+            $rel = substr($item->path(), strlen($prefix));
+            if ($rel === '' || $rel === false) {
+                continue;
+            }
+            if ($item->isFile()) {
+                $files[] = $rel;
+            } else {
+                $dirs[] = $rel;
+            }
+        }
+
+        // The destination must exist even when nothing is moved into it.
+        $fs->createDirectory($to);
+        foreach ($dirs as $rel) {
+            try {
+                $fs->createDirectory($to . '/' . $rel);
+            } catch (\Throwable $e) {
+                // Markers are best effort — a prefix holding files is recreated
+                // implicitly by the moves below.
+            }
+        }
+        foreach ($files as $rel) {
+            $fs->move($prefix . $rel, $to . '/' . $rel);
+        }
+
+        if (!$fs->directoryExists($to)) {
+            throw new ApiException('Folder could not be relocated', 500, 'move_failed');
+        }
+        try {
+            $fs->deleteDirectory($from);
+        } catch (\Throwable $e) {
+            // Destination is in place; a leftover source marker is harmless.
+        }
+    }
+
+    /**
+     * True when the disk's driver has real directories, so a single move()
+     * renames the whole subtree. Object stores (s3/r2) don't — anything not
+     * known to have them takes the safe per-object walk.
+     */
+    private function hasRealDirectories(string $disk): bool
+    {
+        $driver = $this->disks->config($disk)['driver'] ?? 'local';
+        return $driver === 'local' || $driver === 'sftp';
     }
 
     private function copyMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void

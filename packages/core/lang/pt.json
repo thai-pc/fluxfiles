@@ -241,6 +241,8 @@
         "server_error": "Erro no servidor. Tente novamente.",
         "upload_failed": "Falha no upload. Tente novamente",
         "delete_failed": "Não foi possível excluir este arquivo",
+        "move_failed": "Não foi possível mover esta pasta",
+        "copy_dir_unsupported": "Não é possível copiar pastas",
         "name_empty": "O nome não pode estar vazio",
         "name_invalid": "O nome contém caracteres inválidos",
         "name_same": "O novo nome é igual ao atual",

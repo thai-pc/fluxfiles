@@ -46,10 +46,15 @@ All authenticated routes require `Authorization: Bearer <JWT>`.
   - JSON body: `disk`, `path`, `name`.
 
 - `POST /api/fm/move`
-  - JSON body: `disk`, `from`, `to`.
+  - JSON body: `disk`, `from`, `to`. Folder moves/renames relocate the **whole
+    subtree incl. empty subdirectories** (`FileManager::moveDirectoryTree`: one
+    atomic adapter `move()` on local/SFTP, a marker-recreating walk on S3/R2) and
+    only drop the source once the destination exists. Moving a folder into its own
+    subtree → `400 move_into_self`.
 
 - `POST /api/fm/copy`
-  - JSON body: `disk`, `from`, `to`.
+  - JSON body: `disk`, `from`, `to`. Files only — a directory source is rejected
+    with `400 copy_dir_unsupported` (recursive folder copy isn't implemented).
 
 - `POST /api/fm/mkdir`
   - JSON body: `disk`, `path`.

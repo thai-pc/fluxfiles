@@ -241,6 +241,8 @@
         "server_error": "Erreur serveur. Veuillez réessayer.",
         "upload_failed": "Échec du téléchargement. Veuillez réessayer",
         "delete_failed": "Impossible de supprimer ce fichier",
+        "move_failed": "Impossible de déplacer ce dossier",
+        "copy_dir_unsupported": "Les dossiers ne peuvent pas être copiés",
         "name_empty": "Le nom ne peut pas être vide",
         "name_invalid": "Le nom contient des caractères invalides",
         "name_same": "Le nouveau nom est identique au nom actuel",

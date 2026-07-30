@@ -241,6 +241,8 @@
         "server_error": "Serverfout. Probeer het opnieuw.",
         "upload_failed": "Upload mislukt. Probeer het opnieuw",
         "delete_failed": "Dit bestand kon niet worden verwijderd",
+        "move_failed": "Kan deze map niet verplaatsen",
+        "copy_dir_unsupported": "Mappen kunnen niet worden gekopieerd",
         "name_empty": "Naam mag niet leeg zijn",
         "name_invalid": "Naam bevat ongeldige tekens",
         "name_same": "Nieuwe naam is hetzelfde als de huidige",

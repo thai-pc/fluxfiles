@@ -241,6 +241,8 @@
         "server_error": "Sunucu hatası. Lütfen tekrar deneyin.",
         "upload_failed": "Yükleme başarısız. Lütfen tekrar deneyin",
         "delete_failed": "Bu dosya silinemedi",
+        "move_failed": "Bu klasör taşınamadı",
+        "copy_dir_unsupported": "Klasörler kopyalanamaz",
         "name_empty": "İsim boş olamaz",
         "name_invalid": "İsim geçersiz karakterler içeriyor",
         "name_same": "Yeni isim mevcut isimle aynı",

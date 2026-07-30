@@ -276,6 +276,82 @@ test('doctor diagnoses the live bucket (write/read/presign/delete/multipart ok)'
     assertTrue(isset($report['remediation']['cors']) && isset($report['remediation']['iam_policy']), 'remediation snippets present');
 });
 
+// ── Folder rename/move on a real object store. There are no directories in S3,
+// so this is the branch of FileManager::moveDirectoryTree that walks the tree
+// and recreates directory markers. Empty folders exist only as markers, which is
+// exactly what the old per-file rename loop deleted without recreating.
+echo "\n{$yellow}► Folder rename/move{$reset}\n";
+$dirRoot = $prefix . '/dirs';
+test('rename an empty folder keeps it alive under the new name', function () use ($fm, $dm, $dirRoot) {
+    $fs = $dm->disk('s3test');
+    $fm->mkdir('s3test', $dirRoot . '/empty_dir');
+    $fm->rename('s3test', $dirRoot . '/empty_dir', 'empty_renamed');
+    assertTrue($fs->directoryExists($dirRoot . '/empty_renamed'), 'destination exists');
+    assertTrue(!$fs->directoryExists($dirRoot . '/empty_dir'), 'source gone');
+});
+
+test('rename a folder whose only content is a subfolder → child survives', function () use ($fm, $dm, $dirRoot) {
+    $fs = $dm->disk('s3test');
+    $fm->mkdir('s3test', $dirRoot . '/parent/child');
+    $fm->rename('s3test', $dirRoot . '/parent', 'parent2');
+    assertTrue($fs->directoryExists($dirRoot . '/parent2/child'), 'child survived');
+    assertTrue(!$fs->directoryExists($dirRoot . '/parent'), 'source gone');
+});
+
+test('rename a mixed tree relocates files and empty dirs', function () use ($fm, $dm, $dirRoot) {
+    $fs = $dm->disk('s3test');
+    $t = sys_get_temp_dir() . '/fxlive-' . uniqid() . '.txt';
+    file_put_contents($t, 'x');
+    $fm->upload('s3test', $dirRoot . '/tree/docs', ['name' => 'a.txt', 'size' => filesize($t), 'tmp_name' => $t], true);
+    $fm->mkdir('s3test', $dirRoot . '/tree/empty/nested_empty');
+
+    $fm->rename('s3test', $dirRoot . '/tree', 'tree2');
+    assertTrue($fs->fileExists($dirRoot . '/tree2/docs/a.txt'), 'file relocated');
+    assertTrue($fs->directoryExists($dirRoot . '/tree2/empty/nested_empty'), 'empty dir relocated');
+    assertTrue(!$fs->directoryExists($dirRoot . '/tree'), 'source gone');
+});
+
+test('move a folder (prefix copy) relocates the whole subtree', function () use ($fm, $dm, $dirRoot) {
+    $fs = $dm->disk('s3test');
+    $fm->mkdir('s3test', $dirRoot . '/box');
+    $fm->move('s3test', $dirRoot . '/tree2', $dirRoot . '/box/tree2');
+    assertTrue($fs->fileExists($dirRoot . '/box/tree2/docs/a.txt'), 'file relocated');
+    assertTrue($fs->directoryExists($dirRoot . '/box/tree2/empty/nested_empty'), 'empty dir relocated');
+    assertTrue(!$fs->directoryExists($dirRoot . '/tree2'), 'source gone');
+});
+
+// ── Trash/restore of a folder on a real object store. Same walk as rename, but
+// the payload lands under `_fluxfiles/trash/<id>/payload/`. An empty
+// subdirectory exists only as a marker object, so the manifest's `dirs[]` is
+// what makes the soft-delete lossless.
+echo "\n{$yellow}► Folder trash/restore{$reset}\n";
+test('trash+restore a folder keeps files and empty subdirectories', function () use ($fm, $dm, $dirRoot) {
+    $fs = $dm->disk('s3test');
+    $t = sys_get_temp_dir() . '/fxlive-' . uniqid() . '.txt';
+    file_put_contents($t, 'trash-me');
+    $fm->upload('s3test', $dirRoot . '/bin', ['name' => 'doc.txt', 'size' => filesize($t), 'tmp_name' => $t], true);
+    $fm->mkdir('s3test', $dirRoot . '/bin/empty_sub');
+    @unlink($t);
+
+    $id = $fm->trash('s3test', $dirRoot . '/bin')['trash_id'];
+    assertTrue(!$fs->fileExists($dirRoot . '/bin/doc.txt'), 'payload moved out of the way');
+
+    $fm->restore('s3test', $id);
+    assertTrue($fs->fileExists($dirRoot . '/bin/doc.txt'), 'file restored');
+    assertTrue($fs->directoryExists($dirRoot . '/bin/empty_sub'), 'empty subdirectory restored');
+    assertTrue(!$fs->directoryExists('_fluxfiles/trash/' . $id), 'trash payload cleaned up');
+});
+
+test('trash+restore a folder whose only content is a subfolder', function () use ($fm, $dm, $dirRoot) {
+    $fs = $dm->disk('s3test');
+    $fm->mkdir('s3test', $dirRoot . '/onlydirs/child');
+    $id = $fm->trash('s3test', $dirRoot . '/onlydirs')['trash_id'];
+    assertTrue(!$fs->directoryExists($dirRoot . '/onlydirs'), 'source gone');
+
+    $fm->restore('s3test', $id);
+    assertTrue($fs->directoryExists($dirRoot . '/onlydirs/child'), 'child directory restored');
+});
+
 echo "\n{$yellow}► Cleanup{$reset}\n";
 test('delete uploaded file + variants', function () use ($fm, &$uploadedKey) {
     assertTrue(is_string($uploadedKey), 'no uploaded key (upload failed above)');
@@ -285,6 +361,7 @@ test('delete uploaded file + variants', function () use ($fm, &$uploadedKey) {
 foreach ([$prefix . '/put.txt', $preKey, $GLOBALS['_dedupCopyKey'] ?? null] as $k) {
     if ($k) { try { $fm->delete('s3test', $k); } catch (\Throwable $e) {} }
 }
+try { $dm->disk('s3test')->deleteDirectory($dirRoot); } catch (\Throwable $e) {}
 @unlink($tmp);
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

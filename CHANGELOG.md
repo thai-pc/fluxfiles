@@ -3,6 +3,52 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.80] — 2026-07-30
+
+> Released: core `core-v0.2.66`; wordpress `0.2.40` (bundled core only — no plugin
+> source change; the plugin version is the only version a WordPress user can see, and a
+> data-loss fix needs to be tellable apart). Laravel/node unchanged.
+
+### Fixed — silent data loss on directory operations
+
+Reported as "renaming a folder on the Laravel adapter makes it vanish until reload". It
+was neither Laravel-specific nor a display bug: **directories containing no files were
+destroyed**, and the same flaw turned out to run through three operations.
+
+- **Folder rename destroyed empty directories.** `rename()` moved only `isFile()`
+  entries, so the destination only ever came into existence as a side effect of moving a
+  file into it. A folder with no files anywhere had nothing moved, the destination was
+  never created, and `deleteDirectory()` then removed the original — taking any
+  subdirectories with it. The folder index was left holding an entry for a directory that
+  no longer existed, which is what looked like "it comes back after a reload": the listing
+  reads the filesystem (gone) while the tree and search read the index (a phantom).
+- **Folder move was broken on object stores.** The mirror image: `move()` called
+  `$fs->move()` straight on the directory, which is a `rename()` syscall on local/SFTP
+  (correct, atomic) but `CopyObject` on one exact key for S3/R2 — where a directory prefix
+  is not an object — so folder move threw a raw 500. Both now share one
+  `moveDirectoryTree()` that dispatches on the driver, creates every directory before
+  moving files, and deletes the source only once the destination is confirmed to exist.
+- **Trash destroyed empty subdirectories.** `trashDirectory()` recorded only files, so
+  restore rebuilt only the directories implied by file paths. The manifest now carries
+  `dirs[]`; manifests written before this restore exactly as they did before. This one
+  mattered most — the UI sends everything to trash, so users reasonably expect it to be
+  undoable.
+
+### Added
+
+- `400 move_into_self` — moving a folder into its own subtree was guarded only in the
+  browser. On local the rename syscall happened to fail; with the new walk it would have
+  written the destination inside the source and then deleted the source, so a client-side
+  check became server-side data loss on object stores. Now refused server-side.
+- `400 copy_dir_unsupported` instead of a raw `UnableToCopyFile` when copying a folder.
+  Recursive folder copy is still not implemented — it now fails cleanly rather than 500ing.
+
+### Notes
+
+Existing phantom folder-index entries are **not** repaired; the fix stops new ones. They
+surface only as a folder-search hit that 404s when clicked, since `list()` does not read
+the index.
+
 ## [0.2.79] — 2026-07-30
 
 > Released: core `core-v0.2.65`; node `0.1.26`, laravel `0.2.35`, wordpress `0.2.39`.

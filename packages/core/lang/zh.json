@@ -241,6 +241,8 @@
         "server_error": "服务器错误，请重试。",
         "upload_failed": "上传失败，请重试",
         "delete_failed": "无法删除此文件",
+        "move_failed": "无法移动此文件夹",
+        "copy_dir_unsupported": "无法复制文件夹",
         "name_empty": "名称不能为空",
         "name_invalid": "名称包含无效字符",
         "name_same": "新名称与当前名称相同",

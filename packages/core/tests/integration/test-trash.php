@@ -34,11 +34,33 @@ function makeFM(string $prefix = '', string $userId = 'tester', bool $ownerOnly 
     return [$fm, $dm->disk('local'), $root, $meta, $dm];
 }
 
-function upload(FileManager $fm, string $path, string $name, string $content = 'hello'): array
+function upload(FileManager $fm, string $path, string $name, string $content = 'hello', string $disk = 'local'): array
 {
     $tmp = tempnam(sys_get_temp_dir(), 'fxt');
     file_put_contents($tmp, $content);
-    return $fm->upload('local', $path, ['name' => $name, 'tmp_name' => $tmp, 'size' => strlen($content), 'type' => 'text/plain', 'error' => 0]);
+    return $fm->upload($disk, $path, ['name' => $name, 'tmp_name' => $tmp, 'size' => strlen($content), 'type' => 'text/plain', 'error' => 0]);
+}
+
+/**
+ * FileManager whose only disk reports the `s3` driver but is backed by local
+ * storage. `config()['driver']` picks the relocation strategy while the
+ * Filesystem does the work, so the object-store walk (no real directories) is
+ * exercised in CI with no network — same trick as test-folder-rename.php.
+ * Returns [fm, fs, root, meta, dm].
+ */
+function makeObjStoreFM(): array
+{
+    $root = sys_get_temp_dir() . '/fluxfiles-trash-obj-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['objstore' => ['driver' => 's3', 'bucket' => 'fake']]);
+    $fs = new \League\Flysystem\Filesystem(new \League\Flysystem\Local\LocalFilesystemAdapter($root));
+    $p = new \ReflectionProperty(DiskManager::class, 'disks');
+    $p->setAccessible(true);
+    $p->setValue($dm, ['objstore' => $fs]);
+
+    $meta = new StorageMetadataHandler($dm);
+    $claims = new Claims('tester', ['read', 'write', 'delete'], ['objstore'], '', 50, null, 0, false);
+    return [new FileManager($dm, $claims, $meta), $fs, $root, $meta, $dm];
 }
 
 echo "\n{$cyan}══ FluxFiles Trash / Restore ══{$reset}\n\n";
@@ -149,6 +171,153 @@ test('trashed folder is searchable-clean: restore re-tracks the dir index', func
     assertEqual(0, count($meta->searchFolders('local', 'album')), 'folder gone from dir index while trashed');
     $fm->restore('local', $id);
     assertTrue(count($meta->searchFolders('local', 'album')) >= 1, 'folder back in dir index after restore');
+});
+
+// ── directory shapes ────────────────────────────────────────────────────────
+// The UI soft-deletes everything, so trash → restore must be lossless. A
+// subdirectory that holds no files has nothing in `files[]` to imply it, so it
+// only survives if the manifest records directories in their own right.
+
+test('trash+restore a folder containing an EMPTY subdirectory keeps the subdirectory', function () {
+    [$fm, $fs] = makeFM();
+    $fm->mkdir('local', 'box');
+    upload($fm, 'box', 'doc.txt', 'd');
+    $fm->mkdir('local', 'box/empty_sub');
+
+    $id = $fm->trash('local', 'box')['trash_id'];
+    assertTrue(!$fs->directoryExists('box'), 'source folder gone while trashed');
+    $fm->restore('local', $id);
+
+    assertTrue($fs->fileExists('box/doc.txt'), 'file restored');
+    assertTrue($fs->directoryExists('box/empty_sub'), 'empty subdirectory restored');
+});
+
+test('trash+restore a folder whose ONLY content is a subdirectory', function () {
+    [$fm, $fs] = makeFM();
+    $fm->mkdir('local', 'parent/child');
+
+    $id = $fm->trash('local', 'parent')['trash_id'];
+    assertTrue(!$fs->directoryExists('parent'), 'source gone');
+    assertEqual(1, count($fm->listTrash('local')), 'entry recorded');
+    $fm->restore('local', $id);
+
+    assertTrue($fs->directoryExists('parent'), 'parent restored');
+    assertTrue($fs->directoryExists('parent/child'), 'child directory restored');
+});
+
+test('trash+restore a deep tree mixing empty dirs and files', function () {
+    [$fm, $fs] = makeFM();
+    upload($fm, 'tree', 'top.txt', 'top');
+    upload($fm, 'tree/docs', 'a.txt', 'a');
+    upload($fm, 'tree/docs/deep', 'b.txt', 'b');
+    $fm->mkdir('local', 'tree/empty');
+    $fm->mkdir('local', 'tree/docs/also_empty');
+    $fm->mkdir('local', 'tree/empty/nested_empty');
+
+    $id = $fm->trash('local', 'tree')['trash_id'];
+    $fm->restore('local', $id);
+
+    foreach (['tree/top.txt', 'tree/docs/a.txt', 'tree/docs/deep/b.txt'] as $k) {
+        assertTrue($fs->fileExists($k), "file restored: {$k}");
+    }
+    foreach (['tree/empty', 'tree/docs/also_empty', 'tree/empty/nested_empty'] as $d) {
+        assertTrue($fs->directoryExists($d), "empty dir restored: {$d}");
+    }
+    assertEqual('b', $fs->read('tree/docs/deep/b.txt'), 'content intact');
+});
+
+test('restore a directory to a NEW path preserves empty subdirectories', function () {
+    [$fm, $fs] = makeFM();
+    upload($fm, 'src', 'a.txt', 'a');
+    $fm->mkdir('local', 'src/empty_sub');
+
+    $id = $fm->trash('local', 'src')['trash_id'];
+    $r = $fm->restore('local', $id, 'moved');
+
+    assertEqual('moved', $r['key'], 'restored to the new key');
+    assertTrue($fs->fileExists('moved/a.txt'), 'file at new path');
+    assertTrue($fs->directoryExists('moved/empty_sub'), 'empty subdirectory at new path');
+    assertTrue(!$fs->directoryExists('src'), 'original path not recreated');
+});
+
+test('restored empty subdirectories are back in the folder index', function () {
+    [$fm, , , $meta] = makeFM();
+    $fm->mkdir('local', 'album/empty_sub');
+    upload($fm, 'album', 'p.txt');
+
+    $id = $fm->trash('local', 'album')['trash_id'];
+    assertEqual(0, count($meta->searchFolders('local', 'empty_sub')), 'gone from dir index while trashed');
+    $fm->restore('local', $id);
+
+    assertTrue(count($meta->searchFolders('local', 'empty_sub')) >= 1, 'empty subdir back in dir index');
+});
+
+test('trash keeps image variants of a folder subtree and restore brings them back', function () {
+    [$fm, $fs] = makeFM();
+    $png = imagecreatetruecolor(60, 40);
+    $tmp = sys_get_temp_dir() . '/fxt-' . uniqid() . '.png';
+    imagepng($png, $tmp); imagedestroy($png);
+    $fm->upload('local', 'gallery', ['name' => 'a.png', 'tmp_name' => $tmp, 'size' => filesize($tmp), 'error' => 0], true);
+    assertTrue($fs->fileExists('gallery/_variants/a.png_thumb.webp'), 'variant created');
+    $fm->mkdir('local', 'gallery/empty_sub');
+
+    $id = $fm->trash('local', 'gallery')['trash_id'];
+    $fm->restore('local', $id);
+
+    assertTrue($fs->fileExists('gallery/a.png'), 'image restored');
+    assertTrue($fs->fileExists('gallery/_variants/a.png_thumb.webp'), 'variant restored');
+    assertTrue($fs->directoryExists('gallery/empty_sub'), 'empty subdir restored');
+});
+
+test('an old-format manifest (no dirs[]) still restores its files', function () {
+    [$fm, $fs] = makeFM();
+    upload($fm, 'legacy', 'one.txt', 'c1');
+    upload($fm, 'legacy/sub', 'two.txt', 'c2');
+    $fm->mkdir('local', 'legacy/empty_sub');
+    $id = $fm->trash('local', 'legacy')['trash_id'];
+
+    // Rewrite the entry the way pre-dirs[] versions wrote it, and drop the
+    // directory markers their payload never carried.
+    $all = json_decode($fs->read('_fluxfiles/trash.json'), true);
+    unset($all[$id]['dirs']);
+    $fs->write('_fluxfiles/trash.json', json_encode($all));
+    try { $fs->deleteDirectory('_fluxfiles/trash/' . $id . '/payload/empty_sub'); } catch (\Throwable $e) { /* nothing to drop */ }
+
+    $fm->restore('local', $id);
+
+    assertTrue($fs->fileExists('legacy/one.txt'), 'top file restored');
+    assertTrue($fs->fileExists('legacy/sub/two.txt'), 'nested file restored');
+    assertEqual('c2', $fs->read('legacy/sub/two.txt'), 'content intact');
+    assertEqual(0, count($fm->listTrash('local')), 'entry removed after restore');
+});
+
+// ── object-store branch (no real directories) ───────────────────────────────
+
+test('object-store: trash+restore keeps empty subdirectories', function () {
+    [$fm, $fs] = makeObjStoreFM();
+    $fs->write('box/doc.txt', 'd');   // written directly: object metadata needs a live client
+    $fm->mkdir('objstore', 'box/empty_sub');
+    $fm->mkdir('objstore', 'box/deep/nested');
+
+    $id = $fm->trash('objstore', 'box')['trash_id'];
+    assertTrue(!$fs->fileExists('box/doc.txt'), 'payload moved out');
+    $fm->restore('objstore', $id);
+
+    assertTrue($fs->fileExists('box/doc.txt'), 'file restored');
+    assertTrue($fs->directoryExists('box/empty_sub'), 'empty subdirectory restored');
+    assertTrue($fs->directoryExists('box/deep/nested'), 'nested empty subdirectory restored');
+});
+
+test('object-store: a folder whose only content is subfolders trashes with a non-empty manifest', function () {
+    [$fm, $fs, , $meta] = makeObjStoreFM();
+    $fm->mkdir('objstore', 'parent/child');
+
+    $id = $fm->trash('objstore', 'parent')['trash_id'];
+    $entry = $meta->getTrash('objstore', $id);
+    assertTrue(!empty($entry['dirs']), 'manifest records the subdirectory');
+
+    $fm->restore('objstore', $id);
+    assertTrue($fs->directoryExists('parent/child'), 'child directory restored');
 });
 
 test('restore/purge reject a path-traversal trash id', function () {

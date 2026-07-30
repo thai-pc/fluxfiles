@@ -241,6 +241,8 @@
         "server_error": "Errore del server. Riprova.",
         "upload_failed": "Caricamento fallito. Riprova",
         "delete_failed": "Impossibile eliminare questo file",
+        "move_failed": "Impossibile spostare questa cartella",
+        "copy_dir_unsupported": "Le cartelle non possono essere copiate",
         "name_empty": "Il nome non può essere vuoto",
         "name_invalid": "Il nome contiene caratteri non validi",
         "name_same": "Il nuovo nome è uguale a quello attuale",

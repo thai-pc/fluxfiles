@@ -241,6 +241,8 @@
         "server_error": "Server error. Please try again.",
         "upload_failed": "Upload failed. Please try again",
         "delete_failed": "Could not delete this file",
+        "move_failed": "Could not move this folder",
+        "copy_dir_unsupported": "Folders cannot be copied",
         "name_empty": "Name cannot be empty",
         "name_invalid": "Name contains invalid characters",
         "name_same": "New name is the same as current name",
