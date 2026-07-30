@@ -598,7 +598,7 @@ function routeRequest(
         // core landing page. The token is returned ONCE and never stored — a listed
         // share can only be revoked, not re-linked (same posture as an API key).
         if (empty($res['url']) && !empty($res['token'])) {
-            $res['url'] = ff_request_origin() . '/public/share.html?token=' . rawurlencode((string) $res['token']);
+            $res['url'] = ff_public_link_url('share.html', (string) $res['token']);
         }
         return $res;
     }
@@ -618,7 +618,15 @@ function routeRequest(
     if ($method === 'POST' && $uri === '/api/fm/intake') {
         $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
-        return $module->createPortal($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
+        $res = $module->createPortal($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
+        // The recipient URL, exactly like Share above: the module builds it from
+        // `intake_base_url` when the token carries one; otherwise fall back to this
+        // request's origin + the core landing page. The token is returned ONCE and
+        // never stored — a listed portal can only be revoked, not re-linked.
+        if (empty($res['url']) && !empty($res['token'])) {
+            $res['url'] = ff_public_link_url('intake.html', (string) $res['token']);
+        }
+        return $res;
     }
     if ($method === 'GET' && $uri === '/api/fm/intake/list') {
         $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
@@ -1570,6 +1578,17 @@ function ff_request_origin(): string
     $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
         || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
     return ($isHttps ? 'https' : 'http') . '://' . (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+}
+
+/**
+ * Public recipient link for a one-shot module token, when the module built none
+ * (the tenant set no `share_base_url` / `intake_base_url`). Derived from the
+ * request's own origin, i.e. from the `Host` header — behind a proxy/CDN the
+ * operator should set the base-URL claim explicitly instead.
+ */
+function ff_public_link_url(string $page, string $token): string
+{
+    return ff_request_origin() . '/public/' . $page . '?token=' . rawurlencode($token);
 }
 
 /**

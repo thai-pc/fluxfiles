@@ -3,6 +3,48 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.79] — 2026-07-30
+
+> Released: core `core-v0.2.65`; node `0.1.26`, laravel `0.2.35`, wordpress `0.2.39`.
+
+### Security
+
+- **Intake portals leaked between users of the same tenant under `owner_only`.**
+  `IntakeModule` never recorded an `owner` and `listPortals` never filtered on one, so a
+  token scoped with `owner_only` still listed — and could revoke — every other user's
+  portals. `/api/fm/intake/list` has been routed the whole time, so this was reachable
+  today by calling the API directly, not just by the UI now being built. Portals now carry
+  an `owner`, and both `listPortals` and `revokePortal` enforce it.
+  Migration is deliberately **fail-closed**: a portal created before this has no `owner`,
+  so under `owner_only` it becomes invisible and un-revokable while staying live for its
+  visitors until it expires (the 90-day cap makes this self-clearing); the remedy is an
+  operator token without `owner_only`. The `owner` is **not** backfilled to whoever reads
+  the record first — that would hand ownership away.
+- **A revoked intake portal could come back.** `revokePortal` used `unset` while
+  `receiveUpload` rewrites the whole tenant map on every upload, so an interleaved upload
+  restored the deleted record. Revoke now writes a tombstone and `putRecord` refuses to
+  write over one — the same fix Share got in 0.2.78. The underlying read-modify-write race
+  is unchanged and still accepted.
+
+### Fixed
+
+- **Proxy-mode hosts were told they could use Share and Intake.** Both adapters forwarded
+  `allow_share`/`allow_intake` unconditionally even though none of those endpoints are
+  proxied, so a Laravel/WordPress host would render controls for routes that 404. Laravel
+  now forwards them (and `share_url_ttl`/`share_base_url`/`share_preview`/
+  `intake_base_url`) only in `standalone` mode, mirroring the rule `allow_terminal` has
+  followed since it shipped; WordPress drops them entirely. This also covers the
+  `edition: pro|agency|enterprise` presets, which seed those claims straight into the
+  payload and would otherwise have slipped past the gate.
+
+### Added
+
+- **`intake_base_url`** — the public base an intake create response builds its portal link
+  from, mirroring `share_base_url`. Empty falls back to the request origin +
+  `/public/intake.html`, so **set it explicitly behind a proxy/CDN**. Until now
+  `POST /api/fm/intake` returned no recipient URL at all, so there was nothing to hand a
+  visitor. The two fallback call sites are now one testable `ff_public_link_url()` helper.
+
 ## [0.2.78] — 2026-07-28
 
 > Released: core `core-v0.2.64`; node `0.1.25`, laravel `0.2.34`, wordpress `0.2.38`.

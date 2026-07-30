@@ -186,6 +186,13 @@ class Claims
      *            /api/fm/img, PDFs on uncapped shares)? false = download-only. */
     public bool $sharePreview = true;
 
+    /** @var string Public base the intake create response builds the portal link from
+     *            (e.g. https://files.acme.com/public/intake.html). http(s) only —
+     *            anything else is dropped so it can never become a javascript: link.
+     *            Empty (default) → the request origin + /public/intake.html.
+     *            Mirrors shareBaseUrl. */
+    public string $intakeBaseUrl = '';
+
     /** @var int Max prior versions to keep per file (Versioning module). 0 = inherit
      *            the module default (10). Oldest beyond this are pruned on each snapshot. */
     public int $versioningMax = 0;
@@ -462,6 +469,9 @@ class Claims
         $c->shareBaseUrl = preg_match('#^https?://#i', $shareBase) ? $shareBase : '';
         $c->sharePreview = isset($payload->share_preview) ? (bool) $payload->share_preview : true;
         $c->allowIntake = (bool) ($payload->allow_intake ?? false);
+        // Intake portal link base — same http(s)-only rule as share_base_url.
+        $intakeBase = trim((string) ($payload->intake_base_url ?? ''));
+        $c->intakeBaseUrl = preg_match('#^https?://#i', $intakeBase) ? $intakeBase : '';
         $c->allowVersioning = (bool) ($payload->allow_versioning ?? false);
         $c->versioningMax = max(0, (int) ($payload->versioning_max ?? 0));
         $c->versioningMaxMb = max(0, (int) ($payload->versioning_max_mb ?? 0));

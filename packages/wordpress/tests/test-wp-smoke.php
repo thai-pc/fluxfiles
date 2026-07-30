@@ -210,20 +210,31 @@ test('generateToken forwards versioning + webhook config claims, not just the ga
     assertEqual('upload,delete', $csv->webhook_events ?? '', 'CSV events forwarded as-is');
 });
 
-// Same rule for Share: the gate claim alone leaves the landing page unconfigurable
-// (link base, presigned-URL TTL, preview policy are all read at create time).
-test('generateToken forwards the share landing config claims, not just the gate', function () use ($secret) {
+// Share + Intake are NOT forwarded at all: the plugin is proxy-only and the REST API
+// exposes none of the six operator endpoints (nor the public landing routes), so the
+// gate claims would render a button that 404s and their config would be dead. Same
+// reasoning as the SSH terminal.
+test('generateToken never forwards share/intake gates or their config', function () use ($secret) {
     $token = FluxFilesPlugin::generateToken(56, [
-        'allow_share'    => true,
-        'share_url_ttl'  => 120,
-        'share_base_url' => 'https://files.acme.com/public/share.html',
-        'share_preview'  => false,
+        'allow_share'     => true,
+        'allow_intake'    => true,
+        'share_url_ttl'   => 120,
+        'share_base_url'  => 'https://files.acme.com/public/share.html',
+        'share_preview'   => false,
+        'intake_base_url' => 'https://files.acme.com/public/intake.html',
     ]);
     $p = \FluxFiles\JwtCompat::decode($token, $secret);
-    assertEqual(true, $p->allow_share ?? null, 'share gate');
-    assertEqual(120, $p->share_url_ttl ?? 0, 'share_url_ttl');
-    assertEqual('https://files.acme.com/public/share.html', $p->share_base_url ?? '', 'share_base_url');
-    assertEqual(false, $p->share_preview ?? null, 'share_preview');
+    foreach (['allow_share', 'allow_intake', 'share_url_ttl', 'share_base_url', 'share_preview', 'intake_base_url'] as $k) {
+        assertEqual(false, isset($p->$k), "{$k} not present in a minted token");
+    }
+    // …not even via the edition preset, which defaults both gates for 'pro'.
+    $pro = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(57, ['edition' => 'pro']), $secret);
+    assertEqual(false, isset($pro->allow_share), 'edition preset cannot light up share');
+    assertEqual(false, isset($pro->allow_intake), 'edition preset cannot light up intake');
+    assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected (optimize IS proxied)');
+    // The other module gates have no UI button and keep their behaviour.
+    $other = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(58, ['allow_ocr' => true]), $secret);
+    assertEqual(true, $other->allow_ocr ?? null, 'allow_ocr unchanged');
 });
 
 test('generateToken without a secret → throws', function () {

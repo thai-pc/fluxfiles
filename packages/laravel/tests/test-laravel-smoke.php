@@ -216,20 +216,63 @@ test('token() forwards versioning + webhook config claims, not just the gate', f
     assertEqual('upload,delete', $csv->webhook_events ?? '', 'CSV events forwarded as-is');
 });
 
-// Same rule for Share: the gate claim alone leaves the landing page unconfigurable
-// (link base, presigned-URL TTL, preview policy are all read at create time).
-test('token() forwards the share landing config claims, not just the gate', function () use ($secret) {
-    $token = (new FluxFilesManager())->token(56, [
-        'allow_share'    => true,
-        'share_url_ttl'  => 120,
-        'share_base_url' => 'https://files.acme.com/public/share.html',
-        'share_preview'  => false,
-    ]);
-    $p = \FluxFiles\JwtCompat::decode($token, $secret);
-    assertEqual(true, $p->allow_share ?? null, 'share gate');
-    assertEqual(120, $p->share_url_ttl ?? 0, 'share_url_ttl');
-    assertEqual('https://files.acme.com/public/share.html', $p->share_base_url ?? '', 'share_base_url');
-    assertEqual(false, $p->share_preview ?? null, 'share_preview');
+// Share + Intake are core-standalone: not one of their six operator endpoints (nor
+// the public landing routes) is proxied — see the route-parity list below. So the
+// gate claims, and the config that travels with them (link base, presigned-URL TTL,
+// preview policy — all read at create time), are forwarded ONLY in standalone mode.
+// In proxy mode they must be dropped, or the UI renders a button that 404s. Same rule
+// as allow_terminal (tested further down).
+test('share/intake gates + their config: dropped in proxy mode, forwarded in standalone', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $overrides = [
+        'allow_share'     => true,
+        'allow_intake'    => true,
+        'share_url_ttl'   => 120,
+        'share_base_url'  => 'https://files.acme.com/public/share.html',
+        'share_preview'   => false,
+        'intake_base_url' => 'https://files.acme.com/public/intake.html',
+    ];
+    // Assert on the RAW JWT payload, not Claims — the adapter only writes payload
+    // keys (no new core API), so this stays valid against the declared core floor.
+
+    // Proxy mode (default): nothing about share/intake may reach the token.
+    $p = \FluxFiles\JwtCompat::decode($mgr->token(56, $overrides), $secret);
+    foreach (['allow_share', 'allow_intake', 'share_url_ttl', 'share_base_url', 'share_preview', 'intake_base_url'] as $k) {
+        assertEqual(false, isset($p->$k), "{$k} dropped in proxy mode");
+    }
+    // …not even via the edition preset, which defaults both gates for 'pro'.
+    $pro = \FluxFiles\JwtCompat::decode($mgr->token(57, ['edition' => 'pro']), $secret);
+    assertEqual(false, isset($pro->allow_share), 'edition preset cannot light up share in proxy mode');
+    assertEqual(false, isset($pro->allow_intake), 'edition preset cannot light up intake in proxy mode');
+    assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected (optimize IS proxied)');
+
+    // Standalone mode: the token targets a real core that serves them → forward all.
+    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
+    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
+    try {
+        $s = \FluxFiles\JwtCompat::decode($mgr->token(56, $overrides), $secret);
+        assertEqual(true, $s->allow_share ?? null, 'share gate');
+        assertEqual(true, $s->allow_intake ?? null, 'intake gate');
+        assertEqual(120, $s->share_url_ttl ?? 0, 'share_url_ttl');
+        assertEqual('https://files.acme.com/public/share.html', $s->share_base_url ?? '', 'share_base_url');
+        assertEqual(false, $s->share_preview ?? null, 'share_preview');
+        assertEqual('https://files.acme.com/public/intake.html', $s->intake_base_url ?? '', 'intake_base_url');
+        $sp = \FluxFiles\JwtCompat::decode($mgr->token(57, ['edition' => 'pro']), $secret);
+        assertEqual(true, $sp->allow_share ?? null, 'edition preset applies in standalone');
+    } finally {
+        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
+    }
+});
+
+// The other seven module gates have no UI button, so they keep forwarding in both
+// modes (documented in the manager); only share/intake are mode-conditional.
+test('the other module gates still forward in proxy mode', function () use ($secret) {
+    $p = \FluxFiles\JwtCompat::decode(
+        (new FluxFilesManager())->token(58, ['allow_ocr' => true, 'allow_c2pa' => true]),
+        $secret
+    );
+    assertEqual(true, $p->allow_ocr ?? null, 'allow_ocr unchanged');
+    assertEqual(true, $p->allow_c2pa ?? null, 'allow_c2pa unchanged');
 });
 
 test('token() without a secret → throws', function () {

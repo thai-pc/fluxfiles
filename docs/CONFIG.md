@@ -178,6 +178,7 @@ All four accept the same `claims` map.
 | `share_base_url` | string (http/s) | — | Public base the create response builds the recipient link from (e.g. `https://files.acme.com/public/share.html`). Non-http(s) dropped. Empty = the request origin + `/public/share.html` — i.e. derived from the `Host` header, so **set this explicitly behind a proxy/CDN** rather than trusting the forwarded host. |
 | `share_preview` | bool | `true` | Allow the landing page to render an inline preview (images via `/api/fm/img`; PDFs only on uncapped shares — an `<iframe>` of the real bytes *is* a download). `false` = download-only. |
 | `allow_intake` | bool | `false` | Intake / Upload Portals (public "send us your files" links). |
+| `intake_base_url` | string (http/s) | — | Public base the intake create response builds the portal link from (e.g. `https://files.acme.com/public/intake.html`). Non-http(s) dropped. Empty = the request origin + `/public/intake.html` — i.e. derived from the `Host` header, so **set this explicitly behind a proxy/CDN**. Mirrors `share_base_url`. |
 | `allow_versioning` | bool | `false` | File version history (keep prior versions on overwrite; list/restore). |
 | `versioning_max` | int | `10` | Prior versions kept per file (hard cap 100). `0` = default. |
 | `versioning_max_mb` | int (MB) | `25` | Skip versioning files bigger than this. `0` = default. |

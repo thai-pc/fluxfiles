@@ -465,6 +465,18 @@ test('share_preview defaults on and can be switched off', function () {
     assertEqual(true, claimsWith(['share_preview' => true])->sharePreview, 'explicit on');
 });
 
+test('intake_base_url accepts only http(s) — anything else is dropped', function () {
+    $ok = 'https://files.acme.com/public/intake.html';
+    assertEqual($ok, claimsWith(['intake_base_url' => $ok])->intakeBaseUrl, 'https kept');
+    assertEqual('http://f.acme.com/i', claimsWith(['intake_base_url' => 'http://f.acme.com/i'])->intakeBaseUrl, 'http kept');
+    assertEqual('', claimsWith([])->intakeBaseUrl, 'empty by default = the request origin');
+    // The create response hands this straight to a UI as a link — a javascript:
+    // value must never survive (same rule as share_base_url).
+    foreach (['javascript:alert(1)', 'data:text/html,x', 'file:///etc/passwd', 'ftp://x/y', '//evil.com', 'nope'] as $bad) {
+        assertEqual('', claimsWith(['intake_base_url' => $bad])->intakeBaseUrl, "dropped: {$bad}");
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════

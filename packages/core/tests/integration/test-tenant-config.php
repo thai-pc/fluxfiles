@@ -341,6 +341,19 @@ test('paid-module claims forward + parse (share/ai/ocr/virus/backup/c2pa)', func
     assertEqual(false, $def->allowShare, 'default off');
 });
 
+test('intake_base_url forwards through embed.php (like share_base_url)', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $jwt = fluxfiles_token('u1', ['read', 'write'], ['local'], '', 10, null, 3600, false, 0, 0,
+        null, 0, 0, null, null, null, [
+            'allow_intake'    => true,
+            'intake_base_url' => 'https://files.acme.com/public/intake.html',
+        ]);
+    $c = Claims::fromJwtPayload(JwtCompat::decode($jwt, $_ENV['FLUXFILES_SECRET']));
+    assertEqual(true, $c->allowIntake, 'allow_intake');
+    assertEqual('https://files.acme.com/public/intake.html', $c->intakeBaseUrl, 'intake_base_url');
+    assertEqual('', Claims::fromJwtPayload((object) [])->intakeBaseUrl, 'empty = the request origin');
+});
+
 test('edition preset defaults tier claims; explicit overrides win', function () {
     $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     // pro edition (18th positional arg) → allow_optimize on by default.

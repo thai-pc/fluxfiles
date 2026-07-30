@@ -184,6 +184,27 @@ describe('createToken', () => {
     expect(off.share_preview).toBeUndefined();
   });
 
+  it('forwards intakeBaseUrl (PHP parity), and the raw claim escape hatch', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        allowIntake: true,
+        intakeBaseUrl: 'https://files.acme.com/public/intake.html',
+      }),
+    ) as Record<string, unknown>;
+    expect(c.allow_intake).toBe(true);
+    expect(c.intake_base_url).toBe('https://files.acme.com/public/intake.html');
+    // Absent = inherit the core default (the request origin + /public/intake.html).
+    const off = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
+    expect(off.intake_base_url).toBeUndefined();
+    // Raw name passthrough (the documented escape hatch for any claim).
+    const raw = decodeToken(
+      createToken({ secret: SECRET, userId: 'u', claims: { intake_base_url: 'https://x/i' } }),
+    ) as Record<string, unknown>;
+    expect(raw.intake_base_url).toBe('https://x/i');
+  });
+
   it('forwards on-demand WebP claims (PHP parity)', () => {
     const c = decodeToken(
       createToken({

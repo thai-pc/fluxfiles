@@ -162,6 +162,10 @@ export interface BaseTokenOptions {
    *  PDFs only on uncapped shares). Default true; false = download-only. */
   sharePreview?: boolean;
   allowIntake?: boolean;
+  /** Public base the intake create response builds the portal link from
+   *  (e.g. `https://files.acme.com/public/intake.html`). http(s) only; empty = the
+   *  request origin + `/public/intake.html`. Mirrors `shareBaseUrl`. */
+  intakeBaseUrl?: string;
   allowVersioning?: boolean;
   allowAiVision?: boolean;
   allowOcr?: boolean;

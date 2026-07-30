@@ -157,6 +157,9 @@ function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenO
   if (opts.shareBaseUrl) payload.share_base_url = String(opts.shareBaseUrl);
   if (opts.sharePreview !== undefined) payload.share_preview = !!opts.sharePreview;
   if (opts.allowIntake !== undefined) payload.allow_intake = !!opts.allowIntake;
+  // Intake portal link base — same shape as shareBaseUrl (the core drops a
+  // non-http(s) value on decode).
+  if (opts.intakeBaseUrl) payload.intake_base_url = String(opts.intakeBaseUrl);
   if (opts.allowVersioning !== undefined) payload.allow_versioning = !!opts.allowVersioning;
   if (opts.versioningMax && opts.versioningMax > 0) payload.versioning_max = Math.trunc(opts.versioningMax);
   if (opts.versioningMaxMb && opts.versioningMaxMb > 0) payload.versioning_max_mb = Math.trunc(opts.versioningMaxMb);

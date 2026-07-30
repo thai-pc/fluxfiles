@@ -331,22 +331,19 @@ class FluxFilesPlugin
         if (!empty($overrides['esign_url'])) {
             $payload['esign_url'] = (string) $overrides['esign_url'];
         }
-        foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        // NOTE: Share and Intake are intentionally NOT forwarded — neither the gate
+        // claims (`allow_share`/`allow_intake`) nor their config (`share_url_ttl`,
+        // `share_base_url`, `share_preview`, `intake_base_url`). The plugin is
+        // proxy-only and the REST API exposes none of the six operator endpoints (nor
+        // the public landing routes), so the UI would render a button for something
+        // that 404s, and the config alone would be dead. Core-standalone only, same
+        // reasoning as the SSH terminal above. The unset also covers whatever an
+        // edition preset defaulted (`edition: pro` seeds both gates).
+        unset($payload['allow_share'], $payload['allow_intake']);
+        foreach (['allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
             }
-        }
-        // Share landing config. Read by the module at create time and baked into the
-        // share record, so these travel with `allow_share` (the core clamps the TTL
-        // and drops a non-http(s) base URL on decode).
-        if (!empty($overrides['share_url_ttl'])) {
-            $payload['share_url_ttl'] = (int) $overrides['share_url_ttl'];
-        }
-        if (!empty($overrides['share_base_url'])) {
-            $payload['share_base_url'] = (string) $overrides['share_base_url'];
-        }
-        if (array_key_exists('share_preview', $overrides)) {
-            $payload['share_preview'] = (bool) $overrides['share_preview'];
         }
         // Versioning tuning claims (the core clamps these on decode; 0 = its default).
         foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {

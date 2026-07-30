@@ -172,22 +172,44 @@ class FluxFilesManager
                 $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
             }
         }
-        foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        foreach (['allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
             }
         }
-        // Share landing config. Read by the module at create time and baked into the
-        // share record, so these travel with `allow_share` (the core clamps the TTL
-        // and drops a non-http(s) base URL on decode).
-        if (!empty($overrides['share_url_ttl'])) {
-            $payload['share_url_ttl'] = (int) $overrides['share_url_ttl'];
-        }
-        if (!empty($overrides['share_base_url'])) {
-            $payload['share_base_url'] = (string) $overrides['share_base_url'];
-        }
-        if (array_key_exists('share_preview', $overrides)) {
-            $payload['share_preview'] = (bool) $overrides['share_preview'];
+        // Share + Intake are core-standalone: none of their endpoints (create/list/
+        // revoke, and the public landing routes) is proxied. Forward the gate claims —
+        // and the config that travels with them — only in 'standalone' mode (token → a
+        // real core that serves them); in proxy mode they're dropped so the UI can't
+        // render a button for an endpoint that would 404. Same rule as allow_terminal
+        // above. The other seven module claims have no UI button, so they keep their
+        // unconditional behaviour.
+        if (config('fluxfiles.mode') === 'standalone') {
+            foreach (['allow_share', 'allow_intake'] as $mc) {
+                if (array_key_exists($mc, $overrides)) {
+                    $payload[$mc] = (bool) $overrides[$mc];
+                }
+            }
+            // Share landing config. Read by the module at create time and baked into the
+            // share record, so these travel with `allow_share` (the core clamps the TTL
+            // and drops a non-http(s) base URL on decode).
+            if (!empty($overrides['share_url_ttl'])) {
+                $payload['share_url_ttl'] = (int) $overrides['share_url_ttl'];
+            }
+            if (!empty($overrides['share_base_url'])) {
+                $payload['share_base_url'] = (string) $overrides['share_base_url'];
+            }
+            if (array_key_exists('share_preview', $overrides)) {
+                $payload['share_preview'] = (bool) $overrides['share_preview'];
+            }
+            // Intake portal link base — the same role for `allow_intake`.
+            if (!empty($overrides['intake_base_url'])) {
+                $payload['intake_base_url'] = (string) $overrides['intake_base_url'];
+            }
+        } else {
+            // …including whatever an edition preset already defaulted: `edition: pro`
+            // must not light up a Share button in proxy mode either.
+            unset($payload['allow_share'], $payload['allow_intake']);
         }
         // Versioning tuning claims (the core clamps these on decode; 0 = its default).
         foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
