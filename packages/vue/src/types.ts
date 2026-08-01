@@ -108,7 +108,7 @@ export type TokenRefreshHandler = (context: { reason: string; disk?: string; pat
 
 export interface FluxMessage {
   source: 'fluxfiles';
-  type: 'FM_READY' | 'FM_SELECT' | 'FM_EVENT' | 'FM_CLOSE' | 'FM_CONFIG' | 'FM_COMMAND' | 'FM_TOKEN_REFRESH';
+  type: 'FM_READY' | 'FM_SELECT' | 'FM_EVENT' | 'FM_CLOSE' | 'FM_CONFIG' | 'FM_COMMAND' | 'FM_TOKEN_REFRESH' | 'FM_THEME';
   v: number;
   id: string;
   payload: Record<string, unknown>;

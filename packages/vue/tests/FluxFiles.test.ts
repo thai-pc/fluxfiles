@@ -88,4 +88,24 @@ describe('<FluxFilesModal> Vue wrapper', () => {
     wrapper.unmount();
     expect(document.body.style.overflow).toBe('');
   });
+
+  it('FM_THEME → re-themes the modal chrome (window + header) dark at runtime', async () => {
+    const wrapper = mount(FluxFilesModal, {
+      props: { open: true, endpoint: ORIGIN, token: 'JWT', theme: 'light' }, attachTo: document.body,
+    });
+    const closeBtn = document.body.querySelector('button[aria-label="Close"]') as HTMLElement;
+    const header = closeBtn.parentElement as HTMLElement;
+    const modalWin = header.parentElement as HTMLElement; // overlay > modalWin > header > button
+    const lightBg = modalWin.style.background; // light boot resolution
+
+    fromIframe('FM_THEME', { theme: 'dark' });
+    await flush(); // macrotask runs after Vue's reactive DOM flush
+    expect(modalWin.style.background).not.toBe(lightBg); // window recolored
+    expect(header.style.background).toBe(modalWin.style.background); // header matches
+
+    fromIframe('FM_THEME', { theme: 'light' });
+    await flush();
+    expect(modalWin.style.background).toBe(lightBg); // back to light
+    wrapper.unmount();
+  });
 });

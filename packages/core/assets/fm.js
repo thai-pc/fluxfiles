@@ -2324,6 +2324,12 @@ function fluxFilesApp() {
             } else {
                 root.classList.remove('dark');
             }
+            // Tell the host the RESOLVED theme (dark/light, never 'auto') so a modal
+            // wrapper's chrome — which lives in the host origin and can't read this
+            // cross-origin iframe's class — can match it at RUNTIME, not just at boot.
+            // Fires on toggle, host config change, and system change while in 'auto'.
+            // postMessage() is a no-op outside an iframe, so this is safe standalone.
+            this.postMessage('FM_THEME', { theme: isDark ? 'dark' : 'light' });
         },
 
         _initTheme() {

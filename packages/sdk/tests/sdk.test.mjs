@@ -109,6 +109,25 @@ describe('FluxFiles SDK postMessage protocol', () => {
     await flush();
   });
 
+  it('FM_THEME → recolors the SDK modal chrome at runtime and notifies on("FM_THEME")', () => {
+    FluxFiles.open({ endpoint: ORIGIN, token: 't', theme: 'light' });
+    const onTheme = vi.fn();
+    FluxFiles.on('FM_THEME', onTheme);
+    const modal = document.getElementById('fluxfiles-modal');
+    expect(modal).toBeTruthy();
+    const header = modal.firstElementChild;
+    const lightBg = modal.style.background; // #f5f5f7 from the light boot
+
+    fromIframe('FM_THEME', { theme: 'dark' });
+    expect(onTheme).toHaveBeenCalledWith({ theme: 'dark' });
+    expect(modal.style.background).not.toBe(lightBg); // window recolored dark
+    expect(header.style.background).toBe(modal.style.background); // header matches
+
+    fromIframe('FM_THEME', { theme: 'light' });
+    expect(modal.style.background).toBe(lightBg); // back to light
+    FluxFiles.off('FM_THEME', onTheme);
+  });
+
   it('ignores messages from a foreign origin', () => {
     const onSelect = vi.fn();
     FluxFiles.open({ endpoint: ORIGIN, token: 't', onSelect });
