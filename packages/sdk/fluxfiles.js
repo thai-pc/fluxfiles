@@ -100,6 +100,14 @@
                 emit('FM_EVENT', msg.payload);
                 break;
 
+            case 'FM_THEME':
+                // Runtime theme sync: the embedded UI toggled/resolved its theme.
+                // Recolor the SDK-owned modal chrome to match (it can't read the
+                // cross-origin iframe's class), then notify subscribers.
+                applyChromeTheme(!!(msg.payload && msg.payload.theme === 'dark'));
+                emit('FM_THEME', msg.payload);
+                break;
+
             case 'FM_CLOSE':
                 if (typeof config.onClose === 'function') {
                     config.onClose();
@@ -113,6 +121,22 @@
         var cbs = listeners[type] || [];
         for (var i = 0; i < cbs.length; i++) {
             try { cbs[i](data); } catch(ex) { console.error('FluxFiles listener error:', ex); }
+        }
+    }
+
+    // Recolor the SDK-owned modal chrome (window + header) at runtime to match the
+    // embedded UI's resolved theme. No-op when embedded in a host `container` (no chrome)
+    // or when closed. Colors mirror the boot values above.
+    function applyChromeTheme(dark) {
+        var modal = document.getElementById('fluxfiles-modal');
+        if (!modal) return;
+        var bg = dark ? '#2b2b2e' : '#f5f5f7';
+        var border = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+        modal.style.background = bg;
+        var header = modal.firstElementChild; // header is appended before the body
+        if (header) {
+            header.style.background = bg;
+            header.style.borderBottom = '1px solid ' + border;
         }
     }
 

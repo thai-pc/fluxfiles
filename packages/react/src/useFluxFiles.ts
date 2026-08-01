@@ -14,6 +14,9 @@ interface UseFluxFilesOptions extends FluxFilesConfig {
   onReady?: () => void;
   onEvent?: (event: FluxEvent) => void;
   onTokenRefresh?: TokenRefreshHandler;
+  /** Fired when the embedded UI toggles/resolves its theme at runtime, with the resolved
+   *  'dark'/'light' (never 'auto'). Lets a host sync surrounding chrome. */
+  onThemeChange?: (theme?: 'dark' | 'light') => void;
 }
 
 /**
@@ -95,6 +98,11 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
           break;
         case 'FM_EVENT':
           opts.onEvent?.(msg.payload as unknown as FluxEvent);
+          break;
+        case 'FM_THEME':
+          // Embedded UI toggled/resolved its theme at runtime — surface the resolved
+          // 'dark'/'light' so a host can sync surrounding chrome (see FluxFilesModal).
+          opts.onThemeChange?.((msg.payload as { theme?: 'dark' | 'light' })?.theme);
           break;
         case 'FM_TOKEN_REFRESH':
           if (opts.onTokenRefresh) {

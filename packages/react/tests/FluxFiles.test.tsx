@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, act } from '@testing-library/react';
 import React from 'react';
 import { FluxFiles, FluxFilesModal } from '../src';
 
@@ -95,5 +95,26 @@ describe('<FluxFilesModal> React wrapper', () => {
     );
     expect(container.querySelector('iframe')).toBeNull();
     expect(container.querySelector('button[aria-label="Close"]')).toBeNull();
+  });
+
+  it('FM_THEME → re-themes the modal chrome (window + header) dark at runtime', async () => {
+    const { container } = render(
+      React.createElement(FluxFilesModal, { open: true, endpoint: ORIGIN, token: 'JWT', theme: 'light' })
+    );
+    const modalDiv = container.querySelector('[role="dialog"]')!.firstElementChild as HTMLElement;
+    const header = modalDiv.firstElementChild as HTMLElement;
+    const lightBg = modalDiv.style.background; // light boot resolution
+
+    await act(async () => {
+      fromIframe('FM_THEME', { theme: 'dark' });
+    });
+
+    expect(modalDiv.style.background).not.toBe(lightBg); // window recolored
+    expect(header.style.background).toBe(modalDiv.style.background); // header matches
+
+    await act(async () => {
+      fromIframe('FM_THEME', { theme: 'light' });
+    });
+    expect(modalDiv.style.background).toBe(lightBg); // back to light
   });
 });

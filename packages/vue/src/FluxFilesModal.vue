@@ -56,6 +56,8 @@ const handle = useFluxFiles({
   },
   onReady: () => emit('ready'),
   onEvent: (event) => emit('event', event),
+  // Runtime theme sync: the embedded UI toggled/resolved its theme — darken the chrome too.
+  onThemeChange: (t) => { chromeDark.value = t === 'dark'; },
 });
 
 function close() {
@@ -85,7 +87,10 @@ function resolveChromeDark(theme?: 'light' | 'dark' | 'auto'): boolean {
   return typeof window !== 'undefined' && !!window.matchMedia &&
     window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
-const chromeDark = computed(() => resolveChromeDark(props.theme));
+// Stateful: starts from the anti-flash boot resolution, then tracks the embedded UI's
+// runtime theme via FM_THEME (onThemeChange above) and any host-driven `theme` prop change.
+const chromeDark = ref(resolveChromeDark(props.theme));
+watch(() => props.theme, () => { chromeDark.value = resolveChromeDark(props.theme); });
 const chromeBg = computed(() => (chromeDark.value ? '#2b2b2e' : '#f5f5f7'));
 const chromeBorder = computed(() => (chromeDark.value ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'));
 // Persist an explicit theme so the next mount boots the chrome from it (anti-flash).

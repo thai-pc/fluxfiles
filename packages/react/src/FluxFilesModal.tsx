@@ -130,6 +130,11 @@ export function FluxFilesModal({
   overlayClassName,
   modalClassName,
 }: FluxFilesModalProps) {
+  // Chrome dark-ness is stateful: it starts from the anti-flash boot resolution, then
+  // tracks the embedded UI's runtime theme via FM_THEME (onThemeChange below) so toggling
+  // dark mode inside the iframe also darkens the surrounding window/header.
+  const [dark, setDark] = useState(() => resolveChromeDark(theme));
+
   const handle = useFluxFiles({
     endpoint,
     token,
@@ -149,7 +154,13 @@ export function FluxFilesModal({
     onReady,
     onEvent,
     onTokenRefresh,
+    onThemeChange: (t) => setDark(t === 'dark'),
   });
+
+  // Re-resolve when the `theme` prop changes (host-driven override).
+  useEffect(() => {
+    setDark(resolveChromeDark(theme));
+  }, [theme]);
 
   // Persist an explicit theme so the next mount boots the chrome from it (anti-flash),
   // matching the embedded UI's localStorage boot.
@@ -201,7 +212,7 @@ export function FluxFilesModal({
 
   // Theme the modal CHROME (window + header) to match the embedded UI's theme —
   // otherwise dark mode only darkens the iframe and the grey header stays light.
-  const dark = resolveChromeDark(theme);
+  // `dark` is the stateful value declared above (boot resolution + runtime FM_THEME).
   const chromeBg = dark ? '#2b2b2e' : '#f5f5f7';
   const chromeBorder = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
