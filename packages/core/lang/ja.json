@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "署名"
+    },
+    "links": {
+        "label": "ラベル",
+        "label_ph": "任意の名前（後で見分けるため）",
+        "expires_in": "有効期限",
+        "password": "パスワード",
+        "password_hint": "任意。受信者はこのパスワードの入力が必要です。",
+        "copy": "コピー",
+        "once_warning": "このリンクは一度だけ表示されます。今すぐコピーしてください。後から復元はできず、失効のみ可能です。",
+        "close_confirm": "リンクをまだコピーしていません。閉じますか？",
+        "no_url": "公開アドレスが未設定のためリンクを表示できません。トークンに share_base_url または intake_base_url を設定してください。",
+        "link_hidden": "非表示",
+        "link_hidden_hint": "セキュリティ上、リンクは作成時に一度だけ表示されます。失効はできますが再表示はできません。",
+        "col_target": "対象",
+        "col_created": "作成日",
+        "col_expires": "有効期限",
+        "col_password": "パスワード",
+        "expired": "期限切れ",
+        "revoke": "失効",
+        "revoked": "失効しました",
+        "note": "この一覧は現在のディスクのもので、ご自身のストレージに保存されます。",
+        "panel_title": "リンク",
+        "load_error": "一覧を読み込めませんでした。",
+        "pro_badge": "Pro",
+        "pro_learn": "詳細",
+        "pro_title": "FluxFiles Pro で利用できます",
+        "unlimited": "無制限"
+    },
+    "duration": {
+        "1h": "1 時間",
+        "24h": "24 時間",
+        "7d": "7 日",
+        "30d": "30 日",
+        "90d": "90 日"
+    },
+    "share": {
+        "title": "共有リンク",
+        "create": "共有リンクを作成",
+        "manage": "共有リンク",
+        "max_downloads": "ダウンロード上限",
+        "created": "共有リンクを作成しました",
+        "empty": "共有リンクはまだありません。",
+        "col_views": "閲覧",
+        "col_downloads": "ダウンロード",
+        "revoke_confirm": "この共有リンクを失効しますか？持っている人はアクセスできなくなります。",
+        "pro_teaser": "有効期限・パスワード・ダウンロード上限を付けて、自分のストレージからファイルを送れます。"
+    },
+    "intake": {
+        "title": "アップロードポータル",
+        "create": "アップロードポータルを作成",
+        "manage": "アップロードポータル",
+        "max_files": "ファイル数の上限",
+        "max_mb": "1ファイルの最大サイズ（MB）",
+        "allowed_ext": "許可する種類",
+        "allowed_ext_ph": "例: jpg, png, pdf — 空欄ですべて許可",
+        "created": "アップロードポータルを作成しました",
+        "empty": "アップロードポータルはまだありません。",
+        "col_received": "受信数",
+        "revoke_confirm": "このアップロードポータルを失効しますか？誰もファイルを送れなくなります。",
+        "pro_teaser": "アカウントなしで相手からファイルを受け取れます。自分のストレージに直接届きます。"
     }
 }

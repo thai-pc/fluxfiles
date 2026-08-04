@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "Firma"
+    },
+    "links": {
+        "label": "Etichetta",
+        "label_ph": "Nome facoltativo, per riconoscerlo in seguito",
+        "expires_in": "Scade tra",
+        "password": "Password",
+        "password_hint": "Facoltativa. I destinatari dovranno inserirla.",
+        "copy": "Copia",
+        "once_warning": "Questo link viene mostrato una sola volta. Copialo ora: in seguito non è recuperabile, solo revocabile.",
+        "close_confirm": "Non hai ancora copiato il link. Chiudere comunque?",
+        "no_url": "Nessun indirizzo pubblico configurato, quindi il link non può essere mostrato. Imposta share_base_url o intake_base_url nel token.",
+        "link_hidden": "Non mostrato",
+        "link_hidden_hint": "Per sicurezza il link viene mostrato solo una volta, alla creazione. Può essere revocato ma non mostrato di nuovo.",
+        "col_target": "Destinazione",
+        "col_created": "Creato",
+        "col_expires": "Scade",
+        "col_password": "Password",
+        "expired": "Scaduto",
+        "revoke": "Revoca",
+        "revoked": "Revocato",
+        "note": "Questo elenco riguarda il disco corrente e risiede nel tuo archivio.",
+        "panel_title": "Link",
+        "load_error": "Impossibile caricare l'elenco.",
+        "pro_badge": "Pro",
+        "pro_learn": "Scopri di più",
+        "pro_title": "Disponibile in FluxFiles Pro",
+        "unlimited": "Illimitato"
+    },
+    "duration": {
+        "1h": "1 ora",
+        "24h": "24 ore",
+        "7d": "7 giorni",
+        "30d": "30 giorni",
+        "90d": "90 giorni"
+    },
+    "share": {
+        "title": "Link di condivisione",
+        "create": "Crea link di condivisione",
+        "manage": "Link condivisi",
+        "max_downloads": "Limite di download",
+        "created": "Link di condivisione creato",
+        "empty": "Nessun link condiviso.",
+        "col_views": "Visualizzazioni",
+        "col_downloads": "Download",
+        "revoke_confirm": "Revocare questo link? Chi lo possiede perderà l'accesso.",
+        "pro_teaser": "Invia un file con scadenza, password e limite di download — dal tuo archivio."
+    },
+    "intake": {
+        "title": "Portale di caricamento",
+        "create": "Crea portale di caricamento",
+        "manage": "Portali di caricamento",
+        "max_files": "Limite di file",
+        "max_mb": "Dimensione max per file (MB)",
+        "allowed_ext": "Tipi di file consentiti",
+        "allowed_ext_ph": "es. jpg, png, pdf — vuoto per tutti",
+        "created": "Portale di caricamento creato",
+        "empty": "Nessun portale di caricamento.",
+        "col_received": "Ricevuti",
+        "revoke_confirm": "Revocare questo portale? Nessuno potrà più inviarti file.",
+        "pro_teaser": "Fatti inviare file senza che serva un account — direttamente nel tuo archivio."
     }
 }

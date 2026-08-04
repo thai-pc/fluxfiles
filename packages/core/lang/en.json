@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "Sign"
+    },
+    "links": {
+        "label": "Label",
+        "label_ph": "Optional name, so you recognise it later",
+        "expires_in": "Expires in",
+        "password": "Password",
+        "password_hint": "Optional. Recipients must enter it.",
+        "copy": "Copy",
+        "once_warning": "This link is shown once. Copy it now — it can't be recovered later, only revoked.",
+        "close_confirm": "You haven't copied the link yet. Close anyway?",
+        "no_url": "No public address is configured, so the link cannot be shown. Set share_base_url or intake_base_url on the token.",
+        "link_hidden": "Not shown",
+        "link_hidden_hint": "For security the link is shown only once, when it is created. It can be revoked but not shown again.",
+        "col_target": "Target",
+        "col_created": "Created",
+        "col_expires": "Expires",
+        "col_password": "Password",
+        "expired": "Expired",
+        "revoke": "Revoke",
+        "revoked": "Revoked",
+        "note": "This list covers the current disk and lives in your own storage.",
+        "panel_title": "Links",
+        "load_error": "Could not load the list.",
+        "pro_badge": "Pro",
+        "pro_learn": "Learn more",
+        "pro_title": "Available in FluxFiles Pro",
+        "unlimited": "Unlimited"
+    },
+    "duration": {
+        "1h": "1 hour",
+        "24h": "24 hours",
+        "7d": "7 days",
+        "30d": "30 days",
+        "90d": "90 days"
+    },
+    "share": {
+        "title": "Share link",
+        "create": "Create share link",
+        "manage": "Shared links",
+        "max_downloads": "Download limit",
+        "created": "Share link created",
+        "empty": "No shared links yet.",
+        "col_views": "Views",
+        "col_downloads": "Downloads",
+        "revoke_confirm": "Revoke this share link? Anyone holding it loses access.",
+        "pro_teaser": "Send a file with an expiry, a password and a download limit — from your own storage."
+    },
+    "intake": {
+        "title": "Upload portal",
+        "create": "Create upload portal",
+        "manage": "Upload portals",
+        "max_files": "File limit",
+        "max_mb": "Max size per file (MB)",
+        "allowed_ext": "Allowed file types",
+        "allowed_ext_ph": "e.g. jpg, png, pdf — empty for any",
+        "created": "Upload portal created",
+        "empty": "No upload portals yet.",
+        "col_received": "Received",
+        "revoke_confirm": "Revoke this upload portal? Nobody will be able to send files to it.",
+        "pro_teaser": "Let people send you files without an account — straight into your storage."
     }
 }

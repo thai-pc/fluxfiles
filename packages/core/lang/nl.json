@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "Ondertekenen"
+    },
+    "links": {
+        "label": "Label",
+        "label_ph": "Optionele naam, om hem later te herkennen",
+        "expires_in": "Verloopt over",
+        "password": "Wachtwoord",
+        "password_hint": "Optioneel. Ontvangers moeten het invoeren.",
+        "copy": "Kopiëren",
+        "once_warning": "Deze link wordt één keer getoond. Kopieer hem nu — later is hij niet te herstellen, alleen in te trekken.",
+        "close_confirm": "Je hebt de link nog niet gekopieerd. Toch sluiten?",
+        "no_url": "Er is geen openbaar adres geconfigureerd, dus de link kan niet worden getoond. Stel share_base_url of intake_base_url in op het token.",
+        "link_hidden": "Niet getoond",
+        "link_hidden_hint": "Uit veiligheidsoverwegingen wordt de link slechts één keer getoond, bij het aanmaken. Hij kan worden ingetrokken maar niet opnieuw getoond.",
+        "col_target": "Doel",
+        "col_created": "Aangemaakt",
+        "col_expires": "Verloopt",
+        "col_password": "Wachtwoord",
+        "expired": "Verlopen",
+        "revoke": "Intrekken",
+        "revoked": "Ingetrokken",
+        "note": "Deze lijst geldt voor de huidige schijf en staat in je eigen opslag.",
+        "panel_title": "Links",
+        "load_error": "Kon de lijst niet laden.",
+        "pro_badge": "Pro",
+        "pro_learn": "Meer informatie",
+        "pro_title": "Beschikbaar in FluxFiles Pro",
+        "unlimited": "Onbeperkt"
+    },
+    "duration": {
+        "1h": "1 uur",
+        "24h": "24 uur",
+        "7d": "7 dagen",
+        "30d": "30 dagen",
+        "90d": "90 dagen"
+    },
+    "share": {
+        "title": "Deellink",
+        "create": "Deellink maken",
+        "manage": "Deellinks",
+        "max_downloads": "Downloadlimiet",
+        "created": "Deellink aangemaakt",
+        "empty": "Nog geen deellinks.",
+        "col_views": "Weergaven",
+        "col_downloads": "Downloads",
+        "revoke_confirm": "Deze deellink intrekken? Iedereen die hem heeft, verliest de toegang.",
+        "pro_teaser": "Stuur een bestand met vervaldatum, wachtwoord en downloadlimiet — vanuit je eigen opslag."
+    },
+    "intake": {
+        "title": "Uploadportaal",
+        "create": "Uploadportaal maken",
+        "manage": "Uploadportalen",
+        "max_files": "Bestandslimiet",
+        "max_mb": "Max. grootte per bestand (MB)",
+        "allowed_ext": "Toegestane bestandstypen",
+        "allowed_ext_ph": "bijv. jpg, png, pdf — leeg voor alle",
+        "created": "Uploadportaal aangemaakt",
+        "empty": "Nog geen uploadportalen.",
+        "col_received": "Ontvangen",
+        "revoke_confirm": "Dit uploadportaal intrekken? Niemand kan er dan nog bestanden naartoe sturen.",
+        "pro_teaser": "Laat anderen jou bestanden sturen zonder account — rechtstreeks in je opslag."
     }
 }

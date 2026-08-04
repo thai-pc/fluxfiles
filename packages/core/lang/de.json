@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "Signieren"
+    },
+    "links": {
+        "label": "Bezeichnung",
+        "label_ph": "Optionaler Name, um ihn später wiederzuerkennen",
+        "expires_in": "Läuft ab in",
+        "password": "Passwort",
+        "password_hint": "Optional. Empfänger müssen es eingeben.",
+        "copy": "Kopieren",
+        "once_warning": "Dieser Link wird nur einmal angezeigt. Kopieren Sie ihn jetzt — später lässt er sich nicht wiederherstellen, nur widerrufen.",
+        "close_confirm": "Sie haben den Link noch nicht kopiert. Trotzdem schließen?",
+        "no_url": "Es ist keine öffentliche Adresse konfiguriert, daher kann der Link nicht angezeigt werden. Setzen Sie share_base_url oder intake_base_url im Token.",
+        "link_hidden": "Nicht angezeigt",
+        "link_hidden_hint": "Aus Sicherheitsgründen wird der Link nur einmal bei der Erstellung angezeigt. Er kann widerrufen, aber nicht erneut angezeigt werden.",
+        "col_target": "Ziel",
+        "col_created": "Erstellt",
+        "col_expires": "Läuft ab",
+        "col_password": "Passwort",
+        "expired": "Abgelaufen",
+        "revoke": "Widerrufen",
+        "revoked": "Widerrufen",
+        "note": "Diese Liste gilt für die aktuelle Festplatte und liegt in Ihrem eigenen Speicher.",
+        "panel_title": "Links",
+        "load_error": "Liste konnte nicht geladen werden.",
+        "pro_badge": "Pro",
+        "pro_learn": "Mehr erfahren",
+        "pro_title": "Verfügbar in FluxFiles Pro",
+        "unlimited": "Unbegrenzt"
+    },
+    "duration": {
+        "1h": "1 Stunde",
+        "24h": "24 Stunden",
+        "7d": "7 Tage",
+        "30d": "30 Tage",
+        "90d": "90 Tage"
+    },
+    "share": {
+        "title": "Freigabelink",
+        "create": "Freigabelink erstellen",
+        "manage": "Freigabelinks",
+        "max_downloads": "Download-Limit",
+        "created": "Freigabelink erstellt",
+        "empty": "Noch keine Freigabelinks.",
+        "col_views": "Aufrufe",
+        "col_downloads": "Downloads",
+        "revoke_confirm": "Diesen Freigabelink widerrufen? Wer ihn besitzt, verliert den Zugriff.",
+        "pro_teaser": "Senden Sie eine Datei mit Ablaufdatum, Passwort und Download-Limit — aus Ihrem eigenen Speicher."
+    },
+    "intake": {
+        "title": "Upload-Portal",
+        "create": "Upload-Portal erstellen",
+        "manage": "Upload-Portale",
+        "max_files": "Dateilimit",
+        "max_mb": "Max. Größe pro Datei (MB)",
+        "allowed_ext": "Erlaubte Dateitypen",
+        "allowed_ext_ph": "z. B. jpg, png, pdf — leer für alle",
+        "created": "Upload-Portal erstellt",
+        "empty": "Noch keine Upload-Portale.",
+        "col_received": "Empfangen",
+        "revoke_confirm": "Dieses Upload-Portal widerrufen? Niemand kann dann noch Dateien senden.",
+        "pro_teaser": "Lassen Sie andere Ihnen Dateien ohne Konto senden — direkt in Ihren Speicher."
     }
 }

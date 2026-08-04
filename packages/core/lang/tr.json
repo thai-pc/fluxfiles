@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "İmzala"
+    },
+    "links": {
+        "label": "Etiket",
+        "label_ph": "İsteğe bağlı ad, sonradan tanımak için",
+        "expires_in": "Süre sonu",
+        "password": "Parola",
+        "password_hint": "İsteğe bağlı. Alıcıların girmesi gerekir.",
+        "copy": "Kopyala",
+        "once_warning": "Bu bağlantı yalnızca bir kez gösterilir. Şimdi kopyalayın — sonradan geri alınamaz, yalnızca iptal edilebilir.",
+        "close_confirm": "Bağlantıyı henüz kopyalamadınız. Yine de kapatılsın mı?",
+        "no_url": "Herkese açık bir adres yapılandırılmadığı için bağlantı gösterilemiyor. Belirteçte share_base_url veya intake_base_url ayarlayın.",
+        "link_hidden": "Gösterilmiyor",
+        "link_hidden_hint": "Güvenlik nedeniyle bağlantı yalnızca oluşturulurken bir kez gösterilir. İptal edilebilir ama yeniden gösterilemez.",
+        "col_target": "Hedef",
+        "col_created": "Oluşturuldu",
+        "col_expires": "Süre sonu",
+        "col_password": "Parola",
+        "expired": "Süresi doldu",
+        "revoke": "İptal et",
+        "revoked": "İptal edildi",
+        "note": "Bu liste geçerli diske aittir ve kendi depolama alanınızda tutulur.",
+        "panel_title": "Bağlantılar",
+        "load_error": "Liste yüklenemedi.",
+        "pro_badge": "Pro",
+        "pro_learn": "Daha fazla bilgi",
+        "pro_title": "FluxFiles Pro ile kullanılabilir",
+        "unlimited": "Sınırsız"
+    },
+    "duration": {
+        "1h": "1 saat",
+        "24h": "24 saat",
+        "7d": "7 gün",
+        "30d": "30 gün",
+        "90d": "90 gün"
+    },
+    "share": {
+        "title": "Paylaşım bağlantısı",
+        "create": "Paylaşım bağlantısı oluştur",
+        "manage": "Paylaşım bağlantıları",
+        "max_downloads": "İndirme sınırı",
+        "created": "Paylaşım bağlantısı oluşturuldu",
+        "empty": "Henüz paylaşım bağlantısı yok.",
+        "col_views": "Görüntülenme",
+        "col_downloads": "İndirme",
+        "revoke_confirm": "Bu paylaşım bağlantısı iptal edilsin mi? Elinde bulunduran herkes erişimi kaybeder.",
+        "pro_teaser": "Kendi depolama alanınızdan; son kullanma tarihi, parola ve indirme sınırı olan bir dosya gönderin."
+    },
+    "intake": {
+        "title": "Yükleme portalı",
+        "create": "Yükleme portalı oluştur",
+        "manage": "Yükleme portalları",
+        "max_files": "Dosya sınırı",
+        "max_mb": "Dosya başına en fazla boyut (MB)",
+        "allowed_ext": "İzin verilen dosya türleri",
+        "allowed_ext_ph": "örn. jpg, png, pdf — boş bırakılırsa tümü",
+        "created": "Yükleme portalı oluşturuldu",
+        "empty": "Henüz yükleme portalı yok.",
+        "col_received": "Alınan",
+        "revoke_confirm": "Bu yükleme portalı iptal edilsin mi? Kimse buraya dosya gönderemez.",
+        "pro_teaser": "Hesap açmadan size dosya göndermelerini sağlayın — doğrudan depolama alanınıza."
     }
 }

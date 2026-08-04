@@ -95,7 +95,6 @@ test('usage dashboard works against the real endpoint after an upload', async ({
 });
 
 test('license banner: edition + grace note from a mocked /license', async ({ page }) => {
-  await openManager(page, mintToken());
   await page.route('**/api/fm/usage*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: {
       quota: { used_bytes: 1, limit_bytes: 0, percent: 0, status: 'ok' }, file_count: 0, by_type: [], top_folders: [],
@@ -104,6 +103,10 @@ test('license banner: edition + grace note from a mocked /license', async ({ pag
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: {
       edition: 'pro', status: 'grace', enforcement: 'subscription', modules: ['optimize'], days_left: 7,
     } }) }));
+  // The routes go up BEFORE the app loads: the paid-module UI gate (proGate) may
+  // fetch /license during the first render, and loadLicense() memoizes the first
+  // definitive answer — so mocking after openManager would arrive too late.
+  await openManager(page, mintToken());
 
   await page.getByRole('button', { name: 'Storage usage' }).first().click();
   const banner = page.locator('.ff-license-banner');

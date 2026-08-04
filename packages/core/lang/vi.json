@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "Ký tên"
+    },
+    "links": {
+        "label": "Nhãn",
+        "label_ph": "Tên tuỳ chọn, để sau này bạn nhận ra",
+        "expires_in": "Hết hạn sau",
+        "password": "Mật khẩu",
+        "password_hint": "Tuỳ chọn. Người nhận phải nhập mật khẩu này.",
+        "copy": "Sao chép",
+        "once_warning": "Liên kết chỉ hiển thị một lần. Hãy sao chép ngay — sau này không lấy lại được, chỉ có thể thu hồi.",
+        "close_confirm": "Bạn chưa sao chép liên kết. Vẫn đóng chứ?",
+        "no_url": "Chưa cấu hình địa chỉ công khai nên không hiển thị được liên kết. Hãy đặt share_base_url hoặc intake_base_url trong token.",
+        "link_hidden": "Không hiển thị",
+        "link_hidden_hint": "Vì lý do bảo mật, liên kết chỉ hiện một lần lúc tạo. Có thể thu hồi nhưng không hiện lại được.",
+        "col_target": "Đối tượng",
+        "col_created": "Ngày tạo",
+        "col_expires": "Hết hạn",
+        "col_password": "Mật khẩu",
+        "expired": "Đã hết hạn",
+        "revoke": "Thu hồi",
+        "revoked": "Đã thu hồi",
+        "note": "Danh sách này thuộc ổ đĩa hiện tại và nằm trong kho lưu trữ của bạn.",
+        "panel_title": "Liên kết",
+        "load_error": "Không tải được danh sách.",
+        "pro_badge": "Pro",
+        "pro_learn": "Tìm hiểu thêm",
+        "pro_title": "Có trong FluxFiles Pro",
+        "unlimited": "Không giới hạn"
+    },
+    "duration": {
+        "1h": "1 giờ",
+        "24h": "24 giờ",
+        "7d": "7 ngày",
+        "30d": "30 ngày",
+        "90d": "90 ngày"
+    },
+    "share": {
+        "title": "Liên kết chia sẻ",
+        "create": "Tạo liên kết chia sẻ",
+        "manage": "Liên kết đã chia sẻ",
+        "max_downloads": "Giới hạn lượt tải",
+        "created": "Đã tạo liên kết chia sẻ",
+        "empty": "Chưa có liên kết chia sẻ nào.",
+        "col_views": "Lượt xem",
+        "col_downloads": "Lượt tải",
+        "revoke_confirm": "Thu hồi liên kết chia sẻ này? Ai đang giữ nó sẽ mất quyền truy cập.",
+        "pro_teaser": "Gửi tệp kèm hạn dùng, mật khẩu và giới hạn lượt tải — ngay từ kho lưu trữ của bạn."
+    },
+    "intake": {
+        "title": "Cổng nhận tệp",
+        "create": "Tạo cổng nhận tệp",
+        "manage": "Cổng nhận tệp",
+        "max_files": "Giới hạn số tệp",
+        "max_mb": "Dung lượng tối đa mỗi tệp (MB)",
+        "allowed_ext": "Định dạng cho phép",
+        "allowed_ext_ph": "ví dụ jpg, png, pdf — để trống là cho phép tất cả",
+        "created": "Đã tạo cổng nhận tệp",
+        "empty": "Chưa có cổng nhận tệp nào.",
+        "col_received": "Đã nhận",
+        "revoke_confirm": "Thu hồi cổng nhận tệp này? Sẽ không ai gửi tệp vào đây được nữa.",
+        "pro_teaser": "Cho phép người khác gửi tệp cho bạn mà không cần tài khoản — vào thẳng kho lưu trữ của bạn."
     }
 }

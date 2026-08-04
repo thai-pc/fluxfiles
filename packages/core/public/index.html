@@ -194,6 +194,16 @@
                 <button class="ff-theme-toggle-sm" x-show="canManageTrash" @click="openTrash()" :title="t('trash.title')" :aria-label="t('trash.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6v14a2 2 0 002 2h8a2 2 0 002-2V6M10 11v6M14 11v6"/></svg>
                 </button>
+                <!-- Share links / Upload portals. Three states (see fm.js proGate):
+                     'on' opens the panel; 'locked' shows the same icon with a Pro pill and
+                     opens a teaser that makes NO api calls; 'hidden' renders nothing. -->
+                <button class="ff-theme-toggle-sm" x-show="linksToolbarState === 'on'" @click="openLinks()" :title="t('links.panel_title')" :aria-label="t('links.panel_title')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07L11.5 4.5"/><path d="M14 11a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07L12.5 19.5"/></svg>
+                </button>
+                <button class="ff-theme-toggle-sm ff-pro-locked" x-show="linksToolbarState === 'locked'" @click="openLocked()" :title="t('links.pro_title')" :aria-label="t('links.pro_title')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+                    <span class="ff-pro-pill" x-text="t('links.pro_badge')"></span>
+                </button>
                 <button class="ff-theme-toggle-sm" x-show="canTerminal" @click="openTerminal()" :title="t('terminal.title')" :aria-label="t('terminal.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
                 </button>
@@ -966,6 +976,14 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v2M6 8.5v2M1.5 6h2M8.5 6h2M3 3l1.2 1.2M7.8 7.8L9 9M9 3L7.8 4.2M4.2 7.8L3 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('optimize.title')"></span>
                 </button>
+                <button class="detail-btn" x-show="canShareFile" @click="openLinkModal('share')" :title="t('share.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="3" cy="6" r="1.4" stroke="currentColor" stroke-width="1.1"/><circle cx="9" cy="3" r="1.4" stroke="currentColor" stroke-width="1.1"/><circle cx="9" cy="9" r="1.4" stroke="currentColor" stroke-width="1.1"/><path d="M4.3 5.3l3.4-1.6M4.3 6.7l3.4 1.6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('share.title')"></span>
+                </button>
+                <button class="detail-btn" x-show="canPortalFolder" @click="openLinkModal('intake')" :title="t('intake.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M4 4l2-2 2 2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 8v1.5a1 1 0 001 1h6a1 1 0 001-1V8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                    <span x-text="t('intake.title')"></span>
+                </button>
                 <button class="detail-btn" x-show="canChmod" @click="openChmod(detailFile)" :title="t('chmod.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5a2 2 0 012 2V5H4V3.5a2 2 0 012-2z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/></svg>
                     <span x-text="t('chmod.title')"></span>
@@ -1341,6 +1359,218 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Create a share link / upload portal (one shell, two configurations) ═══
+         The body is disjoint on purpose: the field sets differ, and every noun-bearing
+         string comes from share.* or intake.* — never one template with a {noun} param,
+         which mistranslates in the declined locales (ru/tr/ar/de). -->
+    <div class="ff-modal-overlay" x-show="linkModal" x-transition @click.self="closeLinkModal()" style="z-index:62;" x-cloak>
+        <div class="ff-links-modal" role="dialog" aria-modal="true"
+             :aria-label="linkModal === 'share' ? t('share.create') : t('intake.create')"
+             @keydown.escape.window="linkModal && closeLinkModal()">
+            <div class="ff-activity-head">
+                <h3 x-text="linkModal === 'share' ? t('share.create') : t('intake.create')"></h3>
+                <button class="ff-activity-close" @click="closeLinkModal()" :aria-label="t('common.close')">&times;</button>
+            </div>
+
+            <!-- form -->
+            <div class="ff-links-body" x-show="linkStage === 'form'">
+                <p class="ff-links-target" :title="linkTarget?.key" x-text="linkTarget?.name || linkTarget?.key"></p>
+                <label class="ff-links-field">
+                    <span x-text="t('links.label')"></span>
+                    <input type="text" x-model="linkForm.label" :placeholder="t('links.label_ph')" maxlength="80">
+                </label>
+                <label class="ff-links-field">
+                    <span x-text="t('links.expires_in')"></span>
+                    <select x-model.number="linkForm.ttl">
+                        <template x-for="c in linkTtlChoices" :key="c.k">
+                            <option :value="c.v" x-text="t('duration.' + c.k)"></option>
+                        </template>
+                    </select>
+                </label>
+                <label class="ff-links-field">
+                    <span x-text="t('links.password')"></span>
+                    <input type="password" x-model="linkForm.password" autocomplete="new-password">
+                    <small x-text="t('links.password_hint')"></small>
+                </label>
+                <label class="ff-links-field" x-show="linkModal === 'share'">
+                    <span x-text="t('share.max_downloads')"></span>
+                    <input type="number" min="1" x-model="linkForm.max_downloads" :placeholder="t('links.unlimited')">
+                </label>
+                <template x-if="linkModal === 'intake'">
+                    <div>
+                        <label class="ff-links-field">
+                            <span x-text="t('intake.max_files')"></span>
+                            <input type="number" min="1" x-model="linkForm.max_files" :placeholder="t('links.unlimited')">
+                        </label>
+                        <label class="ff-links-field">
+                            <span x-text="t('intake.max_mb')"></span>
+                            <input type="number" min="1" x-model="linkForm.max_mb" :placeholder="t('links.unlimited')">
+                        </label>
+                        <label class="ff-links-field">
+                            <span x-text="t('intake.allowed_ext')"></span>
+                            <input type="text" x-model="linkForm.allowed_ext" :placeholder="t('intake.allowed_ext_ph')">
+                        </label>
+                    </div>
+                </template>
+                <div class="ff-links-actions">
+                    <button class="ff-btn" @click="closeLinkModal()" x-text="t('common.cancel')"></button>
+                    <button class="ff-btn ff-btn-primary" :disabled="linkBusy" @click="submitLink()"
+                            x-text="linkBusy ? t('common.loading') : (linkModal === 'share' ? t('share.create') : t('intake.create'))"></button>
+                </div>
+            </div>
+
+            <!-- one-shot reveal: the token is returned once and never stored -->
+            <div class="ff-links-body" x-show="linkStage === 'done'">
+                <template x-if="linkResult?.url">
+                    <div>
+                        <p class="ff-links-warn" x-text="t('links.once_warning')"></p>
+                        <div class="ff-links-reveal">
+                            <input type="text" readonly :value="linkResult.url" @focus="$event.target.select()" x-ref="linkUrl">
+                            <button class="ff-btn ff-btn-primary" @click="copyLinkUrl()" x-text="t('links.copy')"></button>
+                        </div>
+                    </div>
+                </template>
+                <!-- Degenerate: no base URL configured. Never rebuild a URL from the token. -->
+                <p class="ff-new-folder-error" x-show="!linkResult?.url" x-text="t('links.no_url')"></p>
+                <div class="ff-links-actions">
+                    <button class="ff-btn ff-btn-primary ff-links-done-close" @click="closeLinkModal()" x-text="t('common.close')"></button>
+                </div>
+            </div>
+
+            <!-- terminal error (501/402/403): not retryable, so no submit button -->
+            <div class="ff-links-body" x-show="linkStage === 'error'">
+                <p class="ff-new-folder-error ff-links-error" x-text="linkError"></p>
+                <p x-show="linkErrorIsInstall">
+                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                </p>
+                <div class="ff-links-actions">
+                    <button class="ff-btn ff-btn-primary" @click="closeLinkModal()" x-text="t('common.close')"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Links panel: list + revoke (per disk, storage-resident) ═══ -->
+    <div class="ff-modal-overlay" x-show="showLinks" x-transition @click.self="closeLinks()" style="z-index:60;" x-cloak>
+        <div class="ff-links-panel" role="dialog" aria-modal="true" :aria-label="t('links.panel_title')"
+             @keydown.escape.window="showLinks && closeLinks()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('links.panel_title')"></h3>
+                <button class="ff-activity-close" @click="closeLinks()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <!-- With only one feature enabled the tab bar is pointless — hide it. -->
+            <div class="ff-links-tabs" x-show="shareGate === 'on' && intakeGate === 'on'">
+                <button :class="linksTab === 'share' ? 'active' : ''" @click="setLinksTab('share')" x-text="t('share.manage')"></button>
+                <button :class="linksTab === 'intake' ? 'active' : ''" @click="setLinksTab('intake')" x-text="t('intake.manage')"></button>
+            </div>
+            <p class="ff-activity-note" x-text="t('links.note')"></p>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="linksError" x-text="linksError"></p>
+                <p x-show="linksError && linksErrorIsInstall">
+                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                </p>
+                <div x-show="linksLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
+
+                <!-- Shared links -->
+                <template x-if="linksTab === 'share'">
+                    <div>
+                        <div x-show="!linksLoading && !linksError && shareList.length === 0" class="ff-activity-state" x-text="t('share.empty')"></div>
+                        <table class="ff-activity-table" x-show="!linksLoading && shareList.length > 0">
+                            <thead>
+                                <tr>
+                                    <th x-text="t('links.label')"></th>
+                                    <th x-text="t('links.col_target')"></th>
+                                    <th x-text="t('links.col_expires')"></th>
+                                    <th x-text="t('share.col_views')"></th>
+                                    <th x-text="t('share.col_downloads')"></th>
+                                    <th x-text="t('links.link_hidden')"></th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="r in shareList" :key="r.jti">
+                                    <tr :class="isLinkExpired(r) ? 'ff-links-row-expired' : ''">
+                                        <td>
+                                            <span x-text="r.label || (r.path || '').split('/').pop()"></span>
+                                            <span class="ff-links-lock" x-show="r.has_password" :title="t('links.col_password')">&#128274;</span>
+                                        </td>
+                                        <td class="ff-activity-file" :title="r.path" x-text="r.path || '—'"></td>
+                                        <td :title="formatDate(r.expires)">
+                                            <span x-show="!isLinkExpired(r)" x-text="formatDate(r.expires)"></span>
+                                            <span class="ff-links-badge" x-show="isLinkExpired(r)" x-text="t('links.expired')"></span>
+                                        </td>
+                                        <td x-text="r.views ?? 0"></td>
+                                        <td x-text="(r.downloads ?? 0) + (r.max_downloads ? ' / ' + r.max_downloads : '')"></td>
+                                        <td class="ff-links-hidden" :title="t('links.link_hidden_hint')" x-text="t('links.link_hidden')"></td>
+                                        <td><button class="ff-btn ff-btn-sm" @click="revokeLink(r.jti)" x-text="t('links.revoke')"></button></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+
+                <!-- Upload portals -->
+                <template x-if="linksTab === 'intake'">
+                    <div>
+                        <div x-show="!linksLoading && !linksError && intakeList.length === 0" class="ff-activity-state" x-text="t('intake.empty')"></div>
+                        <table class="ff-activity-table" x-show="!linksLoading && intakeList.length > 0">
+                            <thead>
+                                <tr>
+                                    <th x-text="t('links.label')"></th>
+                                    <th x-text="t('links.col_target')"></th>
+                                    <th x-text="t('links.col_expires')"></th>
+                                    <th x-text="t('intake.col_received')"></th>
+                                    <th x-text="t('intake.allowed_ext')"></th>
+                                    <th x-text="t('links.link_hidden')"></th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="r in intakeList" :key="r.jti">
+                                    <tr :class="isLinkExpired(r) ? 'ff-links-row-expired' : ''">
+                                        <td>
+                                            <span x-text="r.label || (r.path || '').split('/').pop()"></span>
+                                            <span class="ff-links-lock" x-show="r.has_password" :title="t('links.col_password')">&#128274;</span>
+                                        </td>
+                                        <td class="ff-activity-file" :title="r.path" x-text="r.path || '—'"></td>
+                                        <td :title="formatDate(r.expires)">
+                                            <span x-show="!isLinkExpired(r)" x-text="formatDate(r.expires)"></span>
+                                            <span class="ff-links-badge" x-show="isLinkExpired(r)" x-text="t('links.expired')"></span>
+                                        </td>
+                                        <td x-text="(r.received ?? 0) + (r.max_files ? ' / ' + r.max_files : '')"></td>
+                                        <td x-text="(r.allowed_ext && r.allowed_ext.length) ? r.allowed_ext.join(', ') : t('links.unlimited')"></td>
+                                        <td class="ff-links-hidden" :title="t('links.link_hidden_hint')" x-text="t('links.link_hidden')"></td>
+                                        <td><button class="ff-btn ff-btn-sm" @click="revokeLink(r.jti)" x-text="t('links.revoke')"></button></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Locked "Pro" teaser — makes NO api calls; never rendered when framed ═══ -->
+    <div class="ff-modal-overlay" x-show="showLocked" x-transition @click.self="closeLocked()" style="z-index:62;" x-cloak>
+        <div class="ff-links-modal" role="dialog" aria-modal="true" :aria-label="t('links.pro_title')"
+             @keydown.escape.window="showLocked && closeLocked()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('links.pro_title')"></h3>
+                <button class="ff-activity-close" @click="closeLocked()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <div class="ff-links-body">
+                <p class="ff-links-teaser"><strong x-text="t('share.title')"></strong> — <span x-text="t('share.pro_teaser')"></span></p>
+                <p class="ff-links-teaser"><strong x-text="t('intake.title')"></strong> — <span x-text="t('intake.pro_teaser')"></span></p>
+                <div class="ff-links-actions">
+                    <a class="ff-btn ff-btn-primary" href="https://fluxfiles.dev/pricing" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                    <button class="ff-btn" @click="closeLocked()" x-text="t('common.close')"></button>
+                </div>
             </div>
         </div>
     </div>

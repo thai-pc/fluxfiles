@@ -79,6 +79,7 @@ All four accept the same `claims` map.
 | `office_url` | string (http/s) | `""` | Embed a self-hosted office suite (Collabora/OnlyOffice) for .docx/.xlsx/.pptx…; may carry a `{url}` placeholder substituted with the selected file's URL. Empty → no action. Free BYO-embed. |
 | `esign_url` | string (http/s) | `""` | Embed a self-hosted e-signature tool (DocuSeal) for signing PDFs/docs; may carry a `{url}` placeholder substituted with the selected file's URL. Empty → no action. Free BYO-embed. |
 | `show_hidden` | bool | `false` | Show dotfiles / hidden entries in listings. |
+| `pro_hints` | bool | `true` | Show the locked "Pro" affordance for paid modules the token isn't allowed to use. Only ever renders when the server is **unlicensed** *and* the app is **not framed** (top-level `/public/`); on a licensed server the feature is hidden entirely instead, so an operator who deliberately withheld it is never advertised against. `false` = never show it — for operators shipping free core in production. UI-only; no endpoint behaviour changes. |
 
 ### 2.3 Storage, quota & upload
 | Claim | Type | Unit | Default | Notes |

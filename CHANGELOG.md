@@ -3,6 +3,80 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.83] — 2026-08-04
+
+> Released: core `core-v0.2.68`. Adapters unchanged (this is inside the iframe — no
+> `postMessage` command is added, and the React/Vue/SDK/editor wrappers are untouched).
+
+### Added — the operator UI for Share links and Upload portals
+
+Pro (`share` + `intake`) was fully implemented server-side and had **no client**. An
+operator who bought it, installed both packages and opened `/public/` got a file
+manager with no button — the only way in was hand-writing `POST /api/fm/share` against
+a self-minted JWT. That is a delivery defect on an already-sold SKU, not a new feature.
+
+**The UI is free/core.** All minting, enforcement, counters, tombstones and licensing
+stay in the paid packages; a gitignored package cannot inject markup, JS, CSS or locale
+keys into a zero-build Alpine bundle, so putting the client in the module would mean
+inventing an asset-injection system for one consumer. Without the module every button
+gets a `501` and the panel is an empty shell — core supplies only the chrome.
+
+- **Detail panel**: *Share link* on a file (needs `read`), *Upload portal* on a folder
+  (needs `write`). **Toolbar**: a Links panel listing both, per disk, with Revoke.
+- **Create modal** — one shell, two configurations. Label, expiry and password are
+  shared; the field sets are not (`max_downloads` vs `max_files`/`max_mb`/`allowed_ext`),
+  and neither are the TTL bounds. Submit is disabled in flight, because a double click
+  would mint two live links and a duplicate is revocable-only.
+- **One-shot reveal.** The token is returned once and never stored, so the modal shows
+  the URL in a read-only field with Copy and a non-dismissible warning; closing before a
+  copy asks first. The raw token is never rendered, and `FM_EVENT` carries
+  `{jti, expires, has_password}` — no token, no url. A host that wants the link asks the
+  API itself.
+
+### The three-state gate (the part most likely to regress)
+
+`proGate()` discriminates by **licence**, not only by claim:
+
+- **on** — claim on → the full panel; the server still enforces.
+- **hidden** — claim off but this server *is* licensed for the module. The operator
+  deliberately withheld the feature from this tenant, and advertising it inside their
+  product would sell against them.
+- **locked** — claim off **and** the server is unlicensed **and** we are not framed
+  (top-level `/public/`, i.e. the Docker evaluation) **and** `pro_hints` is on → a small
+  Pro affordance that issues no API calls.
+
+This departs from the optimize/terminal precedent (claim-gated, invisible when off) on
+purpose: those are capability toggles whose absence is meant to be invisible, whereas
+Share/Intake *is* the SKU and an unlicensed server has no paying operator to embarrass.
+The departure is bounded to the unlicensed, unframed case. The order short-circuits, so
+the only context paying an extra `GET /api/fm/license` is that evaluation case.
+
+### Also
+
+- **New claim `pro_hints`** (bool, default true) — the hard off switch for the locked
+  affordance, for operators shipping free core in production. UI-only.
+- **`has_password` on both list responses.** `listShares`/`listPortals` stripped
+  `password_hash` but published nothing in its place, so the lock glyph could never
+  render. The flag replaces the hash; the hash still never leaves the server.
+- **`loadLicense()` no longer pins a failure as an answer.** It now memoizes only a
+  definitive response and shares one in-flight promise. Previously a transient error was
+  cached as `edition: free` for the session — harmless while nothing fetched the licence
+  before the dashboard opened, and a real "your Pro server says Free" bug now that the
+  gate can fetch it during the first render.
+- i18n: 52 keys × 16 locales, split so that no noun-bearing string is shared between the
+  two features — in ru/tr/ar/de "share link" and "upload portal" decline differently, so
+  one template with a `{noun}` parameter would mistranslate in 16 locales at once.
+- Errors: `module_not_installed` / `license_required` / `license_expired` render inline
+  in the modal body as a terminal state with a docs link, not as a transient toast — a
+  501 is not retryable. The panel does not fall back to the locked state: the claim is
+  on, so the install is broken and saying so is the useful message.
+
+Tests: `tests/browser/share-intake-ui.spec.ts` (9) — every gating state including
+*licensed-but-withheld* and *framed*, the real 501 against a stock `php -S` with no
+private packages, the one-shot copy/confirm flow, a hostile `javascript:` url rendered
+as text only, and list + revoke. `usage.spec.ts` now installs its route mocks before
+the app loads, because the gate may fetch the licence during the first render.
+
 ## [0.2.82] — 2026-08-04
 
 > Released: react `0.2.9`, vue `0.2.8`, sdk `0.2.7`. Core unchanged (the emitting side

@@ -1832,6 +1832,33 @@ function fluxFilesApp() {
             }
         },
 
+        /**
+         * Copy a string to the clipboard, with the execCommand fallback.
+         * `navigator.clipboard` needs a SECURE CONTEXT, so the fallback is what keeps
+         * plain `http://localhost` dev (and any non-TLS self-host) working. Returns
+         * true when the text actually made it to the clipboard — the one-shot link
+         * reveal relies on that answer to decide whether closing needs a confirm.
+         */
+        async copyText(str) {
+            const text = String(str == null ? '' : str);
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    return !!ok;
+                } catch {
+                    return false;
+                }
+            }
+        },
+
         // Copy URL
         async copyUrl(file) {
             // Build full URL: use active variant if selected
@@ -1840,17 +1867,7 @@ function fluxFilesApp() {
                 const base = this.endpoint || window.location.origin;
                 url = base.replace(/\/$/, '') + '/' + url.replace(/^\//, '');
             }
-            try {
-                await navigator.clipboard.writeText(url);
-                this.showToast(this.t('copy.copied'), 'success');
-            } catch {
-                // Fallback
-                const ta = document.createElement('textarea');
-                ta.value = url;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
+            if (await this.copyText(url)) {
                 this.showToast(this.t('copy.copied'), 'success');
             }
         },
@@ -2932,14 +2949,34 @@ function fluxFilesApp() {
             await Promise.all([this.loadUsage(), this.loadLicense()]);
         },
 
-        // Fetch the non-sensitive license summary once for the dashboard banner.
+        _licenseFetched: false,   // a DEFINITIVE answer arrived (not the error fallback)
+        _licenseInFlight: null,
+
+        /**
+         * Fetch the non-sensitive license summary once, for the dashboard banner and
+         * the paid-module UI gate.
+         *
+         * Two things this must not do. It must not pin the error fallback as if it
+         * were an answer — a transient failure would otherwise make a genuinely
+         * licensed server read as Free for the rest of the session — so only a real
+         * response sets `_licenseFetched` and a failure stays retryable. And it must
+         * not fan out: proGate() can call this from a render, so concurrent callers
+         * share one in-flight promise.
+         */
         async loadLicense() {
-            if (this.licenseInfo) return;
-            try {
-                this.licenseInfo = await this.api('GET', '/api/fm/license');
-            } catch (_) {
-                this.licenseInfo = { edition: 'free', status: 'free' };
-            }
+            if (this._licenseFetched) return;
+            if (this._licenseInFlight) return this._licenseInFlight;
+            this._licenseInFlight = (async () => {
+                try {
+                    this.licenseInfo = await this.api('GET', '/api/fm/license');
+                    this._licenseFetched = true;
+                } catch (_) {
+                    this.licenseInfo = { edition: 'free', status: 'free' };
+                } finally {
+                    this._licenseInFlight = null;
+                }
+            })();
+            return this._licenseInFlight;
         },
         // Show a renew/grace nudge only when it actually matters.
         get licenseNeedsAttention() {
@@ -2947,6 +2984,238 @@ function fluxFilesApp() {
             return s === 'grace' || s === 'expired' || s === 'perpetual';
         },
         closeUsage() { this.showUsage = false; },
+
+        // ══ Share links & Upload portals (paid modules: share / intake) ══════
+        //
+        // Paid-module UI gate — three states, discriminated by LICENSE, not only by claim.
+        //
+        //   'on'     claim on               → the full panel (the server still enforces).
+        //   'hidden' claim off, but this server IS licensed for the module → render nothing.
+        //            The operator has deliberately withheld the feature from this tenant;
+        //            advertising it inside their product would sell against them.
+        //   'locked' claim off AND the server is unlicensed AND we are NOT framed
+        //            (top-level /public/, i.e. the Docker evaluation) AND pro_hints is on
+        //            → a small "Pro" affordance with a docs link.
+        //
+        // This is NOT the optimize/terminal precedent (claim-gated, invisible when off) and
+        // that is on purpose: those are capability toggles whose absence is meant to be
+        // invisible; Share/Intake IS the SKU, and an unlicensed server has no paying
+        // operator to embarrass. The departure is bounded to the unlicensed, unframed case.
+        // Do not "simplify" this to tokenAllows() alone. See docs/OPERATOR-SHARE-INTAKE-UI.md §5.1.
+        proGate(claim, moduleId) {
+            // Order matters: it short-circuits so the common paths cost ZERO extra requests.
+            if (this.tokenAllows(claim, false)) return 'on';        // licensed tenants never fetch the license
+            if (window.parent !== window) return 'hidden';          // every embedded/adapter path exits here
+            if (this.tokenAllows('pro_hints', true) === false) return 'hidden';  // hard off switch
+            if (this.licenseInfo === null) {
+                // Not known yet: kick the (memoized) fetch and stay hidden for this tick.
+                // Alpine re-renders when it resolves, so this settles without a watcher.
+                this.loadLicense();
+                return 'hidden';
+            }
+            const mods = Array.isArray(this.licenseInfo.modules) ? this.licenseInfo.modules : [];
+            return mods.includes(moduleId) ? 'hidden' : 'locked';
+        },
+        get shareGate() { return this.proGate('allow_share', 'share'); },
+        get intakeGate() { return this.proGate('allow_intake', 'intake'); },
+        // The toolbar entry point exists if EITHER feature is usable or advertisable.
+        get linksToolbarState() {
+            if (this.shareGate === 'on' || this.intakeGate === 'on') return 'on';
+            if (this.shareGate === 'locked' || this.intakeGate === 'locked') return 'locked';
+            return 'hidden';
+        },
+        // Capability preconditions, ANDed with the gate (not part of it):
+        // Share needs `read` and a FILE; Intake needs `write` and a FOLDER.
+        _hasPerm(p) {
+            const perms = this._tokenPayload().perms;
+            return Array.isArray(perms) && perms.includes(p);
+        },
+        get canShareFile() {
+            return this.shareGate === 'on' && this._hasPerm('read')
+                && !!this.detailFile && this.detailFile.type !== 'dir';
+        },
+        get canPortalFolder() {
+            return this.intakeGate === 'on' && this._hasPerm('write')
+                && !!this.detailFile && this.detailFile.type === 'dir';
+        },
+
+        showLocked: false,          // the "Pro" teaser modal (issues no API calls)
+        openLocked() { this.showLocked = true; },
+        closeLocked() { this.showLocked = false; },
+
+        // ── Create modal (one shell, two configurations) ─────────────────────
+        linkModal: null,            // null | 'share' | 'intake'
+        linkStage: 'form',          // 'form' | 'done' | 'error'
+        linkBusy: false,
+        linkError: '',
+        linkErrorCode: '',
+        linkResult: null,           // { jti, expires, url, has_password }
+        linkCopied: false,
+        linkTarget: null,           // the file/folder the modal was opened for
+        linkForm: { label: '', ttl: 0, password: '', max_downloads: '', max_files: '', max_mb: '', allowed_ext: '' },
+
+        // TTL choices differ per feature; values are seconds and the module clamps anyway.
+        get linkTtlChoices() {
+            return this.linkModal === 'intake'
+                ? [{ k: '24h', v: 86400 }, { k: '7d', v: 604800 }, { k: '30d', v: 2592000 }, { k: '90d', v: 7776000 }]
+                : [{ k: '1h', v: 3600 }, { k: '24h', v: 86400 }, { k: '7d', v: 604800 }, { k: '30d', v: 2592000 }];
+        },
+
+        openLinkModal(kind) {
+            const f = this.detailFile;
+            if (!f) return;
+            this.linkModal = kind;
+            this.linkTarget = f;
+            this.linkStage = 'form';
+            this.linkBusy = false;
+            this.linkError = '';
+            this.linkErrorCode = '';
+            this.linkResult = null;
+            this.linkCopied = false;
+            this.linkForm = {
+                label: '', password: '', max_downloads: '', max_files: '', max_mb: '', allowed_ext: '',
+                ttl: 604800,   // 7d — offered by both choice lists, so the <select> always matches
+            };
+        },
+
+        closeLinkModal() {
+            // The token is shown once and never stored, so closing the reveal without a
+            // copy loses the link for good — confirm rather than silently discard it.
+            if (this.linkStage === 'done' && !this.linkCopied && this.linkResult && this.linkResult.url) {
+                if (!window.confirm(this.t('links.close_confirm'))) return;
+            }
+            this.linkModal = null;
+            this.linkResult = null;      // drop the one-shot token/url from memory
+            this.linkTarget = null;
+        },
+
+        async submitLink() {
+            if (this.linkBusy) return;   // a double click must never mint two live links
+            this.linkBusy = true;
+            this.linkError = '';
+            this.linkErrorCode = '';
+            const kind = this.linkModal;
+            const num = (v) => {
+                const n = parseInt(v, 10);
+                return Number.isFinite(n) && n > 0 ? n : undefined;
+            };
+            // The key goes out exactly as list() returned it (prefix-relative); the
+            // modules re-scope it. The UI never builds an absolute path.
+            const body = { disk: this.currentDisk, path: this.linkTarget ? this.linkTarget.key : '' };
+            if (this.linkForm.label) body.label = this.linkForm.label;
+            if (this.linkForm.ttl) body.ttl = this.linkForm.ttl;
+            if (this.linkForm.password) body.password = this.linkForm.password;   // POST body only, never a query string
+            if (kind === 'share') {
+                const md = num(this.linkForm.max_downloads); if (md) body.max_downloads = md;
+            } else {
+                const mf = num(this.linkForm.max_files); if (mf) body.max_files = mf;
+                const mm = num(this.linkForm.max_mb); if (mm) body.max_mb = mm;
+                const ext = String(this.linkForm.allowed_ext || '')
+                    .split(/[,\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+                if (ext.length) body.allowed_ext = ext;
+            }
+            try {
+                const res = await this.api('POST', kind === 'share' ? '/api/fm/share' : '/api/fm/intake', body);
+                this.linkResult = res || {};
+                this.linkStage = 'done';
+                this.showToast(this.t(kind === 'share' ? 'share.created' : 'intake.created'), 'success');
+                // Never emit the token or the url — a host that wants the link asks the API.
+                this.postMessage('FM_EVENT', {
+                    event: kind === 'share' ? 'share:created' : 'intake:created',
+                    jti: res && res.jti, expires: res && res.expires, has_password: !!(res && res.has_password),
+                });
+            } catch (e) {
+                // 501/402/403 are terminal, not retryable — render them in the modal body
+                // and hide submit, rather than as a transient toast.
+                this.linkStage = 'error';
+                this.linkError = e.message || this.t('error.generic');
+                this.linkErrorCode = e.code || '';
+            } finally {
+                this.linkBusy = false;
+            }
+        },
+
+        // "Your install/licence is wrong" — earns the docs link. Deliberately does NOT
+        // fall back to the locked affordance: the claim IS on, so the operator's install
+        // is broken and saying so is the useful message.
+        _isInstallError(code) {
+            return ['module_not_installed', 'license_required', 'license_expired'].includes(code);
+        },
+        get linkErrorIsInstall() { return this._isInstallError(this.linkErrorCode); },
+        get linksErrorIsInstall() { return this._isInstallError(this.linksErrorCode); },
+
+        async copyLinkUrl() {
+            const url = this.linkResult && this.linkResult.url;
+            if (!url) return;
+            if (await this.copyText(url)) {
+                this.linkCopied = true;
+                this.showToast(this.t('copy.copied'), 'success');
+            }
+        },
+
+        // ── Links panel (list + revoke) ──────────────────────────────────────
+        showLinks: false,
+        linksTab: 'share',
+        linksLoading: false,
+        linksError: '',
+        linksErrorCode: '',     // kept apart from the create modal's own error state
+        shareList: [],
+        intakeList: [],
+
+        async openLinks() {
+            this.showLinks = true;
+            // With exactly one feature enabled the tab bar is hidden, so open on it.
+            this.linksTab = this.shareGate === 'on' ? 'share' : 'intake';
+            await this.loadLinks();
+        },
+        closeLinks() { this.showLinks = false; },
+
+        async setLinksTab(tab) {
+            this.linksTab = tab;
+            await this.loadLinks();
+        },
+
+        async loadLinks() {
+            this.linksLoading = true;
+            this.linksError = '';
+            this.linksErrorCode = '';
+            const isShare = this.linksTab === 'share';
+            if (isShare ? this.shareGate !== 'on' : this.intakeGate !== 'on') {
+                this.linksLoading = false;
+                return;
+            }
+            const path = (isShare ? '/api/fm/share/list?disk=' : '/api/fm/intake/list?disk=')
+                + encodeURIComponent(this.currentDisk);
+            try {
+                const data = await this.api('GET', path);
+                const rows = Array.isArray(data) ? data : [];
+                if (isShare) { this.shareList = rows; } else { this.intakeList = rows; }
+            } catch (e) {
+                this.linksError = e.message || this.t('links.load_error');
+                this.linksErrorCode = e.code || '';
+                if (isShare) { this.shareList = []; } else { this.intakeList = []; }
+            } finally {
+                this.linksLoading = false;
+            }
+        },
+
+        async revokeLink(jti) {
+            const isShare = this.linksTab === 'share';
+            if (!window.confirm(this.t(isShare ? 'share.revoke_confirm' : 'intake.revoke_confirm'))) return;
+            try {
+                await this.api('POST', isShare ? '/api/fm/share/revoke' : '/api/fm/intake/revoke',
+                    { disk: this.currentDisk, jti });
+                this.showToast(this.t('links.revoked'), 'success');
+                await this.loadLinks();
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 4000);
+            }
+        },
+
+        // An entry past its expiry still lists (revoking it is harmless and clears it).
+        isLinkExpired(row) {
+            return !!(row && row.expires && (row.expires * 1000) < Date.now());
+        },
 
         async loadUsage(refresh) {
             this.usageLoading = true;

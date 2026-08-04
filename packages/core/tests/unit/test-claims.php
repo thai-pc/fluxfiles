@@ -477,6 +477,18 @@ test('intake_base_url accepts only http(s) — anything else is dropped', functi
     }
 });
 
+test('pro_hints defaults ON and is an opt-OUT switch', function () {
+    // Default true is safe because the UI additionally requires an unlicensed AND
+    // unframed server before it renders anything — see docs/OPERATOR-SHARE-INTAKE-UI.md §5.1.
+    assertEqual(true, claimsWith([])->proHints, 'absent → on');
+    assertEqual(false, claimsWith(['pro_hints' => false])->proHints, 'explicit off honoured');
+    assertEqual(true, claimsWith(['pro_hints' => true])->proHints, 'explicit on');
+    // Coercion: a JSON payload can carry 0/1/"" rather than a real bool.
+    assertEqual(false, claimsWith(['pro_hints' => 0])->proHints, '0 → off');
+    assertEqual(false, claimsWith(['pro_hints' => ''])->proHints, 'empty string → off');
+    assertEqual(true, claimsWith(['pro_hints' => 1])->proHints, '1 → on');
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════

@@ -238,6 +238,14 @@ class Claims
      *            Finder / cPanel / Nextcloud (a `.env` must not surface in search). */
     public bool $showHidden = false;
 
+    /** @var bool Show the locked "Pro" affordance for a paid module this token may not
+     *            use? **UI-only — no endpoint behaviour depends on it.** The affordance
+     *            is already bounded to an *unlicensed* server viewed *unframed* (the
+     *            standalone/Docker evaluation), so the default TRUE cannot put an upsell
+     *            inside a paying operator's product. FALSE is the hard off switch, for
+     *            operators shipping the free core in production. */
+    public bool $proHints = true;
+
     /** @var bool Block re-uploading identical CONTENT (SHA-256 dedup)? Default FALSE
      *            — like Finder / Google Drive / Dropbox, an identical upload is kept
      *            as a copy (via the upload_collision policy), not refused. Set TRUE to
@@ -504,6 +512,9 @@ class Claims
         $collision = strtolower((string) ($payload->upload_collision ?? 'rename'));
         $c->uploadCollision = in_array($collision, ['rename', 'overwrite', 'reject'], true) ? $collision : 'rename';
         $c->showHidden = (bool) ($payload->show_hidden ?? false);
+        // Default TRUE (opt-out): the UI only ever renders the affordance on an
+        // unlicensed, unframed server, so an absent claim can't upsell a paying tenant.
+        $c->proHints = isset($payload->pro_hints) ? (bool) $payload->pro_hints : true;
         $c->dedupeUploads = (bool) ($payload->dedupe_uploads ?? false);
         $c->watermark = self::sanitizeWatermark($payload);
         // A watermark OVERLAY exists solely to withhold the clean original — serving

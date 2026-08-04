@@ -2074,6 +2074,8 @@ body {
 .ff-doctor-modal,
 .ff-trash-modal,
 .ff-usage-modal,
+.ff-links-modal,
+.ff-links-panel,
 .ff-chmod-modal {
     background: var(--ff-bg);
     border-radius: 12px;
@@ -3630,4 +3632,137 @@ body {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
+}
+
+/* ═══ Share links & upload portals (operator UI for the share / intake modules) ═══
+   The panel reuses .ff-activity-* wholesale (modal shell, head, note, body, table);
+   only what is genuinely new to this feature is defined here. */
+
+/* The create modal is narrower than the list panel — it is a form, not a table. */
+.ff-links-modal { width: min(520px, 94vw); }
+.ff-links-body { overflow: auto; padding: 8px 20px 20px; }
+
+/* The target the link is being created for. */
+.ff-links-target {
+    margin: 0 0 14px;
+    padding: 8px 10px;
+    background: var(--ff-bg-hover);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ff-links-field { display: block; margin-bottom: 14px; }
+.ff-links-field > span {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+.ff-links-field input,
+.ff-links-field select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--ff-border);
+    border-radius: 6px;
+    background: var(--ff-bg);
+    color: var(--color-text-primary);
+    font-size: 13px;
+}
+.ff-links-field small {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
+
+.ff-links-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+/* One-shot reveal. The warning is deliberately loud and not dismissible: the token
+   is returned once and never stored, so a missed copy is unrecoverable. */
+.ff-links-warn {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    background: var(--ff-warning-bg, rgba(234, 179, 8, 0.12));
+    color: var(--ff-warning-text, #92620a);
+    border: 1px solid var(--ff-warning-border, rgba(234, 179, 8, 0.35));
+}
+.ff-links-reveal { display: flex; gap: 8px; align-items: stretch; }
+.ff-links-reveal input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--ff-border);
+    border-radius: 6px;
+    background: var(--ff-bg-hover);
+    color: var(--color-text-primary);
+    font-family: var(--ff-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 12px;
+}
+
+.ff-links-teaser { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--color-text-secondary); }
+.ff-links-docs { font-size: 13px; color: var(--ff-primary); text-decoration: none; }
+.ff-links-docs:hover { text-decoration: underline; }
+
+/* Tabs (only rendered when BOTH features are enabled). */
+.ff-links-tabs { display: flex; gap: 4px; padding: 0 20px; }
+.ff-links-tabs button {
+    padding: 7px 12px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+}
+.ff-links-tabs button.active { color: var(--ff-primary); border-bottom-color: var(--ff-primary); }
+
+/* List rows. The link column can never show a URL — see links.link_hidden_hint. */
+.ff-links-hidden { color: var(--color-text-tertiary); font-style: italic; cursor: help; }
+.ff-links-lock { margin-inline-start: 4px; font-size: 11px; }
+.ff-links-row-expired { opacity: 0.55; }
+.ff-links-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--ff-bg-hover);
+    color: var(--color-text-tertiary);
+    font-size: 11px;
+}
+
+/* The locked "Pro" affordance in the toolbar. Only ever rendered on an unlicensed,
+   unframed server (see fm.js proGate) — never inside a resold product. */
+.ff-pro-locked { position: relative; }
+.ff-pro-pill {
+    position: absolute;
+    top: -4px;
+    inset-inline-end: -6px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--ff-primary);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 14px;
+    pointer-events: none;
+}
+
+/* The one-shot warning is the only new block with its own colour, so it needs the
+   dark pairing explicitly — the amber-on-cream default is unreadable on a dark modal. */
+.dark .ff-links-warn {
+    background: rgba(234, 179, 8, 0.14);
+    color: #f0c674;
+    border-color: rgba(234, 179, 8, 0.3);
 }

@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "Signer"
+    },
+    "links": {
+        "label": "Libellé",
+        "label_ph": "Nom facultatif, pour le reconnaître plus tard",
+        "expires_in": "Expire dans",
+        "password": "Mot de passe",
+        "password_hint": "Facultatif. Les destinataires devront le saisir.",
+        "copy": "Copier",
+        "once_warning": "Ce lien n'est affiché qu'une fois. Copiez-le maintenant — il ne pourra plus être récupéré, seulement révoqué.",
+        "close_confirm": "Vous n'avez pas encore copié le lien. Fermer quand même ?",
+        "no_url": "Aucune adresse publique n'est configurée, le lien ne peut pas être affiché. Définissez share_base_url ou intake_base_url dans le jeton.",
+        "link_hidden": "Non affiché",
+        "link_hidden_hint": "Par sécurité, le lien n'est affiché qu'une seule fois, à sa création. Il peut être révoqué mais pas réaffiché.",
+        "col_target": "Cible",
+        "col_created": "Créé le",
+        "col_expires": "Expire le",
+        "col_password": "Mot de passe",
+        "expired": "Expiré",
+        "revoke": "Révoquer",
+        "revoked": "Révoqué",
+        "note": "Cette liste concerne le disque actuel et réside dans votre propre stockage.",
+        "panel_title": "Liens",
+        "load_error": "Impossible de charger la liste.",
+        "pro_badge": "Pro",
+        "pro_learn": "En savoir plus",
+        "pro_title": "Disponible dans FluxFiles Pro",
+        "unlimited": "Illimité"
+    },
+    "duration": {
+        "1h": "1 heure",
+        "24h": "24 heures",
+        "7d": "7 jours",
+        "30d": "30 jours",
+        "90d": "90 jours"
+    },
+    "share": {
+        "title": "Lien de partage",
+        "create": "Créer un lien de partage",
+        "manage": "Liens de partage",
+        "max_downloads": "Limite de téléchargements",
+        "created": "Lien de partage créé",
+        "empty": "Aucun lien de partage pour le moment.",
+        "col_views": "Vues",
+        "col_downloads": "Téléchargements",
+        "revoke_confirm": "Révoquer ce lien de partage ? Toute personne le détenant perdra son accès.",
+        "pro_teaser": "Envoyez un fichier avec une date d'expiration, un mot de passe et une limite de téléchargements — depuis votre propre stockage."
+    },
+    "intake": {
+        "title": "Portail de dépôt",
+        "create": "Créer un portail de dépôt",
+        "manage": "Portails de dépôt",
+        "max_files": "Limite de fichiers",
+        "max_mb": "Taille max. par fichier (Mo)",
+        "allowed_ext": "Types de fichiers autorisés",
+        "allowed_ext_ph": "ex. jpg, png, pdf — vide pour tous",
+        "created": "Portail de dépôt créé",
+        "empty": "Aucun portail de dépôt pour le moment.",
+        "col_received": "Reçus",
+        "revoke_confirm": "Révoquer ce portail de dépôt ? Plus personne ne pourra y envoyer de fichiers.",
+        "pro_teaser": "Laissez vos contacts vous envoyer des fichiers sans compte — directement dans votre stockage."
     }
 }

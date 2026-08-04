@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "서명"
+    },
+    "links": {
+        "label": "라벨",
+        "label_ph": "나중에 알아보기 위한 선택 이름",
+        "expires_in": "만료 기간",
+        "password": "비밀번호",
+        "password_hint": "선택 사항. 받는 사람이 입력해야 합니다.",
+        "copy": "복사",
+        "once_warning": "이 링크는 한 번만 표시됩니다. 지금 복사하세요 — 나중에 복구할 수 없고 해지만 가능합니다.",
+        "close_confirm": "아직 링크를 복사하지 않았습니다. 그래도 닫을까요?",
+        "no_url": "공개 주소가 설정되지 않아 링크를 표시할 수 없습니다. 토큰에 share_base_url 또는 intake_base_url을 설정하세요.",
+        "link_hidden": "표시 안 함",
+        "link_hidden_hint": "보안을 위해 링크는 생성 시 한 번만 표시됩니다. 해지는 가능하지만 다시 표시할 수는 없습니다.",
+        "col_target": "대상",
+        "col_created": "생성일",
+        "col_expires": "만료일",
+        "col_password": "비밀번호",
+        "expired": "만료됨",
+        "revoke": "해지",
+        "revoked": "해지됨",
+        "note": "이 목록은 현재 디스크에 한정되며 사용자 저장소에 보관됩니다.",
+        "panel_title": "링크",
+        "load_error": "목록을 불러오지 못했습니다.",
+        "pro_badge": "Pro",
+        "pro_learn": "자세히 보기",
+        "pro_title": "FluxFiles Pro에서 사용할 수 있습니다",
+        "unlimited": "무제한"
+    },
+    "duration": {
+        "1h": "1시간",
+        "24h": "24시간",
+        "7d": "7일",
+        "30d": "30일",
+        "90d": "90일"
+    },
+    "share": {
+        "title": "공유 링크",
+        "create": "공유 링크 만들기",
+        "manage": "공유 링크",
+        "max_downloads": "다운로드 제한",
+        "created": "공유 링크를 만들었습니다",
+        "empty": "아직 공유 링크가 없습니다.",
+        "col_views": "조회",
+        "col_downloads": "다운로드",
+        "revoke_confirm": "이 공유 링크를 해지할까요? 링크를 가진 사람은 접근할 수 없게 됩니다.",
+        "pro_teaser": "만료일, 비밀번호, 다운로드 제한을 걸어 내 저장소에서 파일을 보냅니다."
+    },
+    "intake": {
+        "title": "업로드 포털",
+        "create": "업로드 포털 만들기",
+        "manage": "업로드 포털",
+        "max_files": "파일 수 제한",
+        "max_mb": "파일당 최대 크기(MB)",
+        "allowed_ext": "허용 파일 형식",
+        "allowed_ext_ph": "예: jpg, png, pdf — 비우면 모두 허용",
+        "created": "업로드 포털을 만들었습니다",
+        "empty": "아직 업로드 포털이 없습니다.",
+        "col_received": "받은 수",
+        "revoke_confirm": "이 업로드 포털을 해지할까요? 아무도 파일을 보낼 수 없게 됩니다.",
+        "pro_teaser": "계정 없이도 상대방이 파일을 보낼 수 있습니다 — 내 저장소로 바로 들어옵니다."
     }
 }

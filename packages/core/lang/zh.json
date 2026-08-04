@@ -536,5 +536,65 @@
     },
     "esign": {
         "title": "签署"
+    },
+    "links": {
+        "label": "标签",
+        "label_ph": "可选名称，方便日后识别",
+        "expires_in": "有效期",
+        "password": "密码",
+        "password_hint": "可选。接收者需要输入此密码。",
+        "copy": "复制",
+        "once_warning": "此链接仅显示一次。请立即复制——之后无法找回，只能撤销。",
+        "close_confirm": "你还没有复制链接。仍要关闭吗？",
+        "no_url": "未配置公开地址，无法显示链接。请在令牌中设置 share_base_url 或 intake_base_url。",
+        "link_hidden": "不显示",
+        "link_hidden_hint": "出于安全考虑，链接仅在创建时显示一次。可以撤销，但无法再次显示。",
+        "col_target": "目标",
+        "col_created": "创建时间",
+        "col_expires": "过期时间",
+        "col_password": "密码",
+        "expired": "已过期",
+        "revoke": "撤销",
+        "revoked": "已撤销",
+        "note": "此列表仅限当前磁盘，并保存在你自己的存储中。",
+        "panel_title": "链接",
+        "load_error": "无法加载列表。",
+        "pro_badge": "Pro",
+        "pro_learn": "了解更多",
+        "pro_title": "FluxFiles Pro 提供此功能",
+        "unlimited": "不限"
+    },
+    "duration": {
+        "1h": "1 小时",
+        "24h": "24 小时",
+        "7d": "7 天",
+        "30d": "30 天",
+        "90d": "90 天"
+    },
+    "share": {
+        "title": "分享链接",
+        "create": "创建分享链接",
+        "manage": "分享链接",
+        "max_downloads": "下载次数上限",
+        "created": "分享链接已创建",
+        "empty": "还没有分享链接。",
+        "col_views": "浏览",
+        "col_downloads": "下载",
+        "revoke_confirm": "撤销此分享链接？持有该链接的人将失去访问权限。",
+        "pro_teaser": "从你自己的存储发送文件，可设置有效期、密码和下载次数上限。"
+    },
+    "intake": {
+        "title": "上传门户",
+        "create": "创建上传门户",
+        "manage": "上传门户",
+        "max_files": "文件数量上限",
+        "max_mb": "单个文件大小上限（MB）",
+        "allowed_ext": "允许的文件类型",
+        "allowed_ext_ph": "例如 jpg、png、pdf——留空表示不限",
+        "created": "上传门户已创建",
+        "empty": "还没有上传门户。",
+        "col_received": "已接收",
+        "revoke_confirm": "撤销此上传门户？将无人能再向其发送文件。",
+        "pro_teaser": "让别人无需账号即可向你发送文件——直接进入你的存储。"
     }
 }
