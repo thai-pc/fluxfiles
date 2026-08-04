@@ -156,6 +156,80 @@ jobs:
         if: failure()
         run: cat /tmp/fluxfiles-server.log || true
 
+  # The tests/e2e/*-http.php suites each boot their own `php -S`, back up and restore
+  # packages/core/.env, and use a distinct port — so they run sequentially in one job.
+  # They were previously runnable only by hand, which meant the routing-level behaviour
+  # they cover (stream/img token gating, share enforcement, the virus fail-closed gate)
+  # had no CI at all: test-api.sh was the only e2e that ran.
+  selfboot-e2e:
+    name: Self-booting e2e (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4']
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      # SFTP is the only disk driver with no CI coverage: test-sftp-http.php and
+      # test-sftp-live.php are env-gated and nothing ever set the env. atmoz/sftp needs
+      # its user spec as a command argument, which `services:` cannot express — hence a
+      # plain `docker run`. If it fails to come up we leave FXTEST_SFTP_HOST unset so the
+      # test skips loudly instead of failing the job on infrastructure.
+      - name: Start SFTP server (atmoz/sftp)
+        run: |
+          docker run -d --name ff-sftp -p 2222:22 atmoz/sftp ff:ffpass:::upload
+          for i in $(seq 1 30); do
+            if (echo > /dev/tcp/127.0.0.1/2222) 2>/dev/null; then
+              echo "SFTP ready"
+              {
+                echo "FXTEST_SFTP_HOST=127.0.0.1"
+                echo "FXTEST_SFTP_PORT=2222"
+                echo "FXTEST_SFTP_USERNAME=ff"
+                echo "FXTEST_SFTP_PASSWORD=ffpass"
+                echo "FXTEST_SFTP_ROOT=upload"
+                echo "FXTEST_SFTP_ALLOW_HOST=1"
+              } >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::warning::SFTP container did not come up — test-sftp-http.php will skip"
+
+      - name: Run the self-booting e2e suites
+        working-directory: packages/core
+        run: |
+          fail=0
+          for f in tests/e2e/*-http.php; do
+            echo "::group::$(basename "$f")"
+            php "$f" || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
+
+      # The live SFTP driver suite (not a *-http.php file, so not in the loop above).
+      # It is the counterpart to the s3-minio job: same idea, the other driver.
+      - name: Live SFTP driver suite
+        working-directory: packages/core
+        run: php tests/e2e/test-sftp-live.php
+
+      - name: Stop SFTP server
+        if: always()
+        run: docker rm -f ff-sftp || true
+
   s3-minio:
     name: Live S3 (MinIO)
     runs-on: ubuntu-latest

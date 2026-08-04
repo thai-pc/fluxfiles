@@ -127,8 +127,11 @@ php packages/wordpress/tests/test-wp-smoke.php
 php packages/laravel/tests/test-laravel-smoke.php
 ```
 
-CI is `.github/workflows/test.yml` (8 jobs: core-php, api-e2e, s3-minio,
-wrappers, node-sdk, browser-e2e, pack-smoke, docker-build).
+CI is `.github/workflows/test.yml` (12 jobs: core-php, adapter-core-floor,
+iframe-allow, api-e2e, selfboot-e2e, s3-minio, wrappers, node-sdk, browser-e2e,
+editor-e2e, pack-smoke, docker-build). `selfboot-e2e` runs every
+`tests/e2e/*-http.php` (each boots its own `php -S`) plus `test-sftp-live.php`
+against an `atmoz/sftp` container.
 
 ## Releases & versioning
 
