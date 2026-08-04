@@ -88,6 +88,22 @@ try {
             respond(200, ['ignored' => (string) ($body['type'] ?? '')]);
         }
 
+        // A product nobody mapped. Say WHICH one, because the fix is a one-line change
+        // to FLUXFILES_POLAR_PLAN_MAP and the operator otherwise only sees "Unknown
+        // plan:" with an empty name. Answering 5xx is deliberate: Polar retries, so
+        // fixing the map inside the retry window delivers the licence automatically
+        // instead of leaving a paying customer to open a support ticket.
+        if (($order['plan'] ?? '') === '' || \FluxFiles\LicenseServer\Plans::get($order['plan']) === null) {
+            $productId = (string) ($body['data']['product_id'] ?? '');
+            error_log(sprintf(
+                'polar webhook: product %s is not in FLUXFILES_POLAR_PLAN_MAP (order %s, %s) — add it and redeliver',
+                $productId !== '' ? $productId : '(none)',
+                (string) ($order['order_id'] ?? '?'),
+                (string) ($order['email'] ?? '?')
+            ));
+            respond(503, ['error' => 'plan not configured for this product', 'product_id' => $productId]);
+        }
+
         // Issuing is idempotent on (gateway, order_id), which is what makes Polar's
         // at-least-once delivery safe — a retry returns the same key, never a second one.
         $res = $issuer->issue($order + ['gateway' => 'polar']);
