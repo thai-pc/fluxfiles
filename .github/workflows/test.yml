@@ -192,9 +192,14 @@ jobs:
       - name: Start SFTP server (atmoz/sftp)
         run: |
           docker run -d --name ff-sftp -p 2222:22 atmoz/sftp ff:ffpass:::upload
-          for i in $(seq 1 30); do
-            if (echo > /dev/tcp/127.0.0.1/2222) 2>/dev/null; then
-              echo "SFTP ready"
+          # Readiness must be the SSH BANNER, not an open port: docker binds the host
+          # port the instant the container starts, long before sshd inside is listening,
+          # so a plain TCP probe reports ready far too early and the suite then fails
+          # with 500s that look like application bugs.
+          for i in $(seq 1 60); do
+            banner=$( (exec 3<>/dev/tcp/127.0.0.1/2222 && head -c 4 <&3) 2>/dev/null )
+            if [ "${banner}" = "SSH-" ]; then
+              echo "SFTP ready after ${i}s"
               {
                 echo "FXTEST_SFTP_HOST=127.0.0.1"
                 echo "FXTEST_SFTP_PORT=2222"
@@ -207,7 +212,8 @@ jobs:
             fi
             sleep 1
           done
-          echo "::warning::SFTP container did not come up — test-sftp-http.php will skip"
+          echo "::warning::SFTP container did not come up — the SFTP suites will skip"
+          docker logs ff-sftp 2>&1 | tail -30 || true
 
       - name: Run the self-booting e2e suites
         working-directory: packages/core
@@ -225,6 +231,10 @@ jobs:
       - name: Live SFTP driver suite
         working-directory: packages/core
         run: php tests/e2e/test-sftp-live.php
+
+      - name: SFTP container log on failure
+        if: failure()
+        run: docker logs ff-sftp 2>&1 | tail -50 || true
 
       - name: Stop SFTP server
         if: always()
