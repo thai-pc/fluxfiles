@@ -232,6 +232,12 @@ jobs:
         working-directory: packages/core
         run: php tests/e2e/test-sftp-live.php
 
+      # The other half of the parity matrix: SFTP has real directories like local, but
+      # reaches them over a network adapter with its own move/copy/list semantics.
+      - name: Directory parity (local + SFTP)
+        working-directory: packages/core
+        run: php tests/integration/test-dir-parity.php
+
       - name: SFTP container log on failure
         if: failure()
         run: docker logs ff-sftp 2>&1 | tail -50 || true
@@ -284,6 +290,22 @@ jobs:
           FXTEST_S3_VISIBILITY: private
           FXTEST_S3_CREATE_BUCKET: '1'
         run: php tests/e2e/test-s3-live.php
+
+      # The parity matrix against a REAL object store. It also runs local-only in the
+      # core-php job (it is picked up by that job's tests/integration/*.php loop), but
+      # local alone cannot catch the divergence class it exists for: an operation that
+      # behaves differently when a directory is only a key prefix.
+      - name: Directory parity (local + S3)
+        working-directory: packages/core
+        env:
+          FXTEST_S3_LABEL: MinIO
+          FXTEST_S3_ENDPOINT: http://127.0.0.1:9000
+          FXTEST_S3_REGION: us-east-1
+          FXTEST_S3_BUCKET: fluxfiles-test
+          FXTEST_S3_KEY: minioadmin
+          FXTEST_S3_SECRET: minioadmin123
+          FXTEST_S3_VISIBILITY: private
+        run: php tests/integration/test-dir-parity.php
 
       - name: MinIO log on failure
         if: failure()
