@@ -99,6 +99,10 @@ function api(string $method, string $path, ?array $body = null): array
         CURLOPT_CUSTOMREQUEST => $method,
         CURLOPT_HTTPHEADER => $headers,
         CURLOPT_TIMEOUT => 30,
+        // Deliberately do NOT follow redirects: this request carries a bearer token,
+        // and the collection paths below already end in '/' — the API 307s to the
+        // trailing-slash form otherwise, which on a POST would silently drop the body.
+        CURLOPT_FOLLOWLOCATION => false,
     ] + ($body !== null ? [CURLOPT_POSTFIELDS => json_encode($body)] : []));
     $raw = curl_exec($ch);
     $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -111,7 +115,7 @@ function api(string $method, string $path, ?array $body = null): array
 }
 
 // Existing products first, so a re-run updates the map instead of creating duplicates.
-[$st, $list] = api('GET', '/products?limit=100');
+[$st, $list] = api('GET', '/products/?limit=100');
 if ($st === 401 || $st === 403) {
     echo "  {$red}The token was rejected ({$st}).{$reset} Check it carries products:read/write,\n";
     echo "  and that it belongs to " . ($production ? 'production' : 'the SANDBOX') . " — tokens are not shared between them.\n\n";
@@ -152,7 +156,7 @@ foreach (CATALOGUE as $planId => $spec) {
     if ($spec['recurring'] !== null) {
         $price['recurring_interval'] = $spec['recurring'];
     }
-    [$st, $res] = api('POST', '/products', [
+    [$st, $res] = api('POST', '/products/', [
         'name' => $spec['name'],
         'description' => $spec['description'],
         'recurring_interval' => $spec['recurring'],
