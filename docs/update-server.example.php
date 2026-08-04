@@ -36,12 +36,17 @@ $RELEASE_PRIVATE_KEY = base64_decode((string) getenv('FLUXFILES_RELEASE_PRIVATE_
 $RELEASE_KID         = 'r1';
 $CDN_BASE            = rtrim((string) (getenv('FLUXFILES_CDN_BASE') ?: 'https://cdn.example.com/modules'), '/');
 
-// Your release catalogue: latest version + checksum per module. Generate sha256
-// when you build each zip; update this map (or read it from a JSON file / DB).
-$CATALOGUE = [
-    'optimize' => ['version' => '1.0.0', 'zip' => 'optimize-1.0.0.zip', 'sha256' => '...'],
-    // 'share' => [...],
-];
+// Your release catalogue: latest version + checksum per module, in the shape
+//   ['<module>' => ['version' => '1.0.0', 'zip' => 'share-1.0.0.zip', 'sha256' => '…']]
+//
+// `php scripts/pack-modules.php` generates exactly this, from each module repo's own
+// git tag, and writes it to build/modules/catalogue.json alongside the zips. Serve the
+// SAME bytes it hashed: UpdateClient re-hashes the download and refuses a mismatch, so
+// a rebuilt-but-not-rehashed zip breaks every install.
+$CATALOGUE_FILE = getenv('FLUXFILES_CATALOGUE') ?: __DIR__ . '/../build/modules/catalogue.json';
+$CATALOGUE = is_file($CATALOGUE_FILE)
+    ? (json_decode((string) file_get_contents($CATALOGUE_FILE), true) ?: [])
+    : [];
 
 // ── request ─────────────────────────────────────────────────────────────────
 $module  = preg_replace('/[^a-z0-9-]/', '', (string) ($_GET['module'] ?? basename($_SERVER['PATH_INFO'] ?? '')));
