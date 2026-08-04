@@ -3,6 +3,30 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.82] — 2026-08-04
+
+> Released: react `0.2.9`, vue `0.2.8`, sdk `0.2.7`. Core unchanged (the emitting side
+> shipped with the modal anti-flash work; this is the host-side half).
+
+### Fixed — the modal chrome stayed light after a runtime dark-mode toggle
+
+The modal chrome (React/Vue/SDK) lives in the **host** origin and cannot read the
+cross-origin iframe's resolved theme, so toggling dark mode inside the embedded UI
+only darkened the iframe — the surrounding window and header stayed light. The
+existing fix covered *boot* (resolve from `localStorage`/OS before first paint, see
+`[0.2.60]`); it did not cover the theme changing while the modal was open.
+
+- The iframe now emits **`FM_THEME`** from `_updateThemeClass()` whenever the theme
+  changes — toggle, host config, or an OS change while in `auto` — carrying the
+  **resolved** theme (`'dark'`/`'light'`, never `'auto'`), because the host has no way
+  to resolve `auto` on the iframe's behalf.
+- The SDK routes it and recolors its own modal chrome; it is a no-op when embedded in
+  a host `container` (there is no chrome to recolor).
+- React/Vue expose it as **`onThemeChange`** and make the chrome's `dark`-ness
+  stateful, so it tracks runtime changes on top of the boot-time resolution.
+- Additive message — the `postMessage` protocol stays backward compatible, so an older
+  host paired with a newer iframe simply ignores it.
+
 ## [0.2.81] — 2026-08-04
 
 > Released: core `core-v0.2.67`; wordpress `0.2.41`, laravel `0.2.36` (both adapters
