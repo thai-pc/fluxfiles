@@ -22,27 +22,35 @@ export FLUXFILES_LICENSE_PRIVATE_KEY_FILE=/secure/path/license-signing-key.key
 export FLUXFILES_LICENSE_DB=/var/lib/fluxfiles/licenses.sqlite   # customer DB
 export FLUXFILES_LICENSE_ADMIN_TOKEN=$(openssl rand -hex 24)     # /issue, /licenses, /revoke
 
-# 2. Lemon Squeezy (main store)
-export FLUXFILES_LS_WEBHOOK_SECRET=whsec_...            # LS → Settings → Webhooks
-export FLUXFILES_LS_PLAN_MAP='{"111":"pro","222":"studio"}'   # LS variant_id → plan
-
-# 3. Freemius (WordPress channel)
-export FLUXFILES_FREEMIUS_SECRET=...
-export FLUXFILES_FREEMIUS_PLAN_MAP='{"1001":"pro"}'
+# 2. Polar (the store)
+export FLUXFILES_POLAR_WEBHOOK_SECRET=whsec_...              # Polar → Settings → Webhooks
+export FLUXFILES_POLAR_PLAN_MAP='{"<product_id>":"pro","<product_id>":"studio"}'
 
 # run (dev) — behind nginx/caddy in prod
 php -S 0.0.0.0:9000 server.php
 ```
 
-Point the gateway webhooks at `https://your-host/webhook/lemonsqueezy` and
-`/webhook/freemius`.
+Point the Polar webhook at `https://your-host/webhook/polar`, subscribed to
+**`order.paid`**. Polar sends `order.created` first with `status: pending`; issuing
+there would hand out a licence for a payment that can still fail, so that event is
+acknowledged and ignored.
+
+Polar follows **Standard Webhooks** — the signature covers
+`{webhook-id}.{webhook-timestamp}.{raw-body}`, base64, `v1,`-prefixed in the
+`webhook-signature` header — which is a different scheme from the plain
+`hash_hmac(raw)` most gateways use. `PolarWebhook::verify()` implements it, including
+the 5-minute replay window and multiple signatures during a secret rotation. It accepts
+either `whsec_` interpretation (the string as-is, or base64-decoded per the spec)
+because implementations disagree and guessing wrong silently drops every purchase.
+
+Delivery is at-least-once; issuing is idempotent on `(gateway, order_id)`, so a retry
+returns the same key rather than minting a second one.
 
 ## Endpoints
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/webhook/lemonsqueezy` | HMAC sig | Issue on order/subscription |
-| POST | `/webhook/freemius` | HMAC sig | Issue on WP purchase |
+| POST | `/webhook/polar` | Standard Webhooks sig | Issue on `order.paid` |
 | POST | `/issue` | Bearer admin | Manual issue `{email, plan, sites?, domains?}` |
 | GET | `/licenses[?email=]` | Bearer admin | List / lookup |
 | POST | `/revoke` | Bearer admin | `{jti, status}` mark revoked/refunded |

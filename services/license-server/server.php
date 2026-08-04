@@ -6,8 +6,7 @@ declare(strict_types=1);
  * FluxFiles license issuance server (vendor back-office; NOT part of the stateless
  * core). One front controller:
  *
- *   POST /webhook/lemonsqueezy  — Lemon Squeezy order/subscription webhook (main store)
- *   POST /webhook/freemius      — Freemius webhook (WordPress channel)
+ *   POST /webhook/polar         — Polar order webhook (the store)
  *   POST /issue                 — admin-authed manual issue {email, plan}
  *   GET  /licenses[?email=]     — admin: list / lookup
  *   POST /revoke                — admin: {jti, status} mark revoked/refunded
@@ -17,10 +16,8 @@ declare(strict_types=1);
  *   FLUXFILES_LICENSE_PRIVATE_KEY_FILE  path to the 64-byte Ed25519 secret (base64)
  *   FLUXFILES_LICENSE_DB                sqlite path (default ./data/licenses.sqlite)
  *   FLUXFILES_LICENSE_ADMIN_TOKEN       bearer token for /issue,/licenses,/revoke
- *   FLUXFILES_LS_WEBHOOK_SECRET         Lemon Squeezy webhook signing secret
- *   FLUXFILES_LS_PLAN_MAP               JSON {"<variant_id>":"pro", ...}
- *   FLUXFILES_FREEMIUS_SECRET           Freemius webhook secret
- *   FLUXFILES_FREEMIUS_PLAN_MAP         JSON {"<plan_id>":"pro", ...}
+ *   FLUXFILES_POLAR_WEBHOOK_SECRET      Polar webhook signing secret (whsec_…)
+ *   FLUXFILES_POLAR_PLAN_MAP            JSON {"<product_id>":"pro", ...}
  *
  * Run behind any web server, or for dev:  php -S 127.0.0.1:9000 server.php
  */
@@ -29,10 +26,12 @@ require_once __DIR__ . '/LicenseSigner.php';
 require_once __DIR__ . '/LicenseStore.php';
 require_once __DIR__ . '/Plans.php';
 require_once __DIR__ . '/LicenseIssuer.php';
+require_once __DIR__ . '/PolarWebhook.php';
 
 use FluxFiles\LicenseServer\LicenseSigner;
 use FluxFiles\LicenseServer\LicenseStore;
 use FluxFiles\LicenseServer\LicenseIssuer;
+use FluxFiles\LicenseServer\PolarWebhook;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -62,56 +61,32 @@ try {
 
     $issuer = new LicenseIssuer(new LicenseSigner(), new LicenseStore());
 
-    // ── Lemon Squeezy webhook ────────────────────────────────────────────────
-    if ($method === 'POST' && $uri === '/webhook/lemonsqueezy') {
-        $secret = env('FLUXFILES_LS_WEBHOOK_SECRET');
-        $sig = $_SERVER['HTTP_X_SIGNATURE'] ?? '';
-        if ($secret === '' || !hash_equals(hash_hmac('sha256', $raw, $secret), (string) $sig)) {
-            respond(401, ['error' => 'bad signature']);
+    // ── Polar webhook (Standard Webhooks) ────────────────────────────────────
+    if ($method === 'POST' && $uri === '/webhook/polar') {
+        [$ok, $why] = PolarWebhook::verify(
+            $raw,
+            env('FLUXFILES_POLAR_WEBHOOK_SECRET'),
+            PolarWebhook::headersFromServer($_SERVER)
+        );
+        if (!$ok) {
+            error_log('polar webhook rejected: ' . $why);
+            respond(401, ['error' => 'bad signature']);   // never echo $why to the caller
         }
-        $body = json_decode($raw, true);
-        $event = $body['meta']['event_name'] ?? '';
-        if (!in_array($event, ['order_created', 'subscription_created', 'subscription_payment_success'], true)) {
-            respond(200, ['ignored' => $event]); // ack other events
-        }
-        $attr = $body['data']['attributes'] ?? [];
-        $email = (string) ($attr['user_email'] ?? '');
-        $orderId = (string) ($body['data']['id'] ?? '');
-        $variantId = (string) ($attr['first_order_item']['variant_id'] ?? $attr['variant_id'] ?? '');
-        $map = json_decode(env('FLUXFILES_LS_PLAN_MAP', '{}'), true) ?: [];
-        $plan = $map[$variantId]
-            ?? strtolower((string) ($attr['first_order_item']['variant_name'] ?? $attr['variant_name'] ?? ''));
-        $res = $issuer->issue([
-            'email' => $email, 'plan' => $plan, 'customer' => (string) ($attr['user_name'] ?? $email),
-            'gateway' => 'lemonsqueezy', 'order_id' => $orderId,
-        ]);
-        // LS can store the key on the order via its License API / an email automation;
-        // returning it here lets a fulfillment step pick it up.
-        respond(200, ['issued' => !$res['reused'], 'license_key' => $res['key'], 'jti' => $res['record']['jti']]);
-    }
 
-    // ── Freemius webhook (WordPress) ─────────────────────────────────────────
-    if ($method === 'POST' && $uri === '/webhook/freemius') {
-        $secret = env('FLUXFILES_FREEMIUS_SECRET');
-        $sig = $_SERVER['HTTP_X_SIGNATURE'] ?? $_SERVER['HTTP_FS_SIGNATURE'] ?? '';
-        if ($secret === '' || !hash_equals(hash_hmac('sha256', $raw, $secret), (string) $sig)) {
-            respond(401, ['error' => 'bad signature']);
+        $body = json_decode($raw, true) ?: [];
+        $plans = json_decode(env('FLUXFILES_POLAR_PLAN_MAP', '{}'), true) ?: [];
+        $order = PolarWebhook::extract($body, $plans);
+
+        // Not an event we issue on. ACK it: a non-2xx makes Polar retry forever an
+        // event we will never act on.
+        if ($order === null) {
+            respond(200, ['ignored' => (string) ($body['type'] ?? '')]);
         }
-        $body = json_decode($raw, true);
-        $type = $body['type'] ?? ($body['event'] ?? '');
-        if (!in_array($type, ['license.created', 'subscription.created', 'payment.created'], true)) {
-            respond(200, ['ignored' => $type]);
-        }
-        $obj = $body['objects'] ?? $body['data'] ?? [];
-        $email = (string) ($obj['user']['email'] ?? $obj['email'] ?? '');
-        $planId = (string) ($obj['plan']['id'] ?? $obj['plan_id'] ?? '');
-        $orderId = (string) ($obj['license']['id'] ?? $obj['id'] ?? '');
-        $map = json_decode(env('FLUXFILES_FREEMIUS_PLAN_MAP', '{}'), true) ?: [];
-        $plan = $map[$planId] ?? strtolower((string) ($obj['plan']['name'] ?? 'pro'));
-        $res = $issuer->issue([
-            'email' => $email, 'plan' => $plan, 'gateway' => 'freemius', 'order_id' => $orderId,
-        ]);
-        respond(200, ['issued' => !$res['reused'], 'license_key' => $res['key'], 'jti' => $res['record']['jti']]);
+
+        // Issuing is idempotent on (gateway, order_id), which is what makes Polar's
+        // at-least-once delivery safe — a retry returns the same key, never a second one.
+        $res = $issuer->issue($order + ['gateway' => 'polar']);
+        respond(200, ['issued' => !$res['reused'], 'jti' => $res['record']['jti']]);
     }
 
     // ── Admin: manual issue ──────────────────────────────────────────────────
