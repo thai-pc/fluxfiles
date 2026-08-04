@@ -42,6 +42,14 @@ class FileManager
      *            no versions. Called before an overwrite in putContent / upload. */
     private $versionKeeper = null;
 
+    /** @var callable|null Virus scan of a locally-staged file, for the paid Virus module:
+     *            `fn(string $localPath): array{clean:bool, threat:?string}`. Set ONLY when
+     *            the `allow_virus_scan` claim is on — and the wiring layer resolves the
+     *            module gate INSIDE the callback, so a tenant who asked for scanning but
+     *            has no working scanner gets an error on write rather than silently
+     *            unscanned files. Never set → no scan, no cost. */
+    private $virusScanner = null;
+
     public function __construct(
         DiskManager $disks,
         Claims $claims,
@@ -84,6 +92,42 @@ class FileManager
     public function setVersionKeeper(callable $fn): void
     {
         $this->versionKeeper = $fn;
+    }
+
+    /**
+     * Wire the virus scanner (paid Virus module). The callback scans a file staged on
+     * local disk: `fn(string $localPath): array{clean:bool, threat:?string}`. Set only
+     * when the token carries `allow_virus_scan`; the module/licence gate is resolved
+     * inside the callback so its 501/402/403 surfaces on the write that needed it.
+     */
+    public function setVirusScanner(callable $fn): void
+    {
+        $this->virusScanner = $fn;
+    }
+
+    /**
+     * Reject $localPath if the scanner calls it infected. No scanner wired → no-op.
+     *
+     * **Fail-closed on purpose:** anything the scanner throws (no engine configured,
+     * licence expired, ClamAV down, VirusTotal unreachable) propagates and the write
+     * is refused. Swallowing it would store an unscanned file while the operator
+     * believes scanning is on — the one failure mode a scanner must not have.
+     */
+    private function assertNoVirus(string $localPath, string $name): void
+    {
+        if ($this->virusScanner === null) {
+            return;
+        }
+        $verdict = ($this->virusScanner)($localPath);
+        if (!is_array($verdict) || ($verdict['clean'] ?? false) !== true) {
+            $threat = is_array($verdict) ? (string) ($verdict['threat'] ?? '') : '';
+            throw new ApiException(
+                'This file was rejected by the virus scanner' . ($threat !== '' ? ": {$threat}" : ''),
+                422,
+                'virus_detected',
+                ['name' => $name] + ($threat !== '' ? ['threat' => $threat] : [])
+            );
+        }
     }
 
     /** Snapshot the current bytes of $scopedKey before an overwrite (no-op if no keeper). */
@@ -311,6 +355,12 @@ class FileManager
                 $this->claims->maxFiles
             );
         }
+
+        // Virus scan (paid Virus module) — BEFORE anything reads or rewrites the
+        // bytes, so an infected upload costs only the cheap guards above and no
+        // infected byte ever reaches storage. Scans the ORIGINAL upload: optimize
+        // below derives from it, so scanning the original covers both.
+        $this->assertNoVirus($file['tmp_name'], $name);
 
         // Auto-optimize on upload (paid Optimize module). Recompress the image in
         // the temp file BEFORE anything downstream (hash, dims, write, variants) so
@@ -1807,6 +1857,23 @@ class FileManager
         if (!$fs->fileExists($scoped)) {
             throw new ApiException('File not found (the editor edits existing files only)', 404, 'not_found');
         }
+        // Virus scan (paid Virus module). The editor writes attacker-influenced bytes
+        // to an existing path — a webshell pasted into a .php is exactly what ClamAV
+        // catches — so this path is scanned like an upload. The content is already
+        // capped at MAX_EDIT_BYTES, so staging it to a temp is bounded.
+        if ($this->virusScanner !== null) {
+            $editTmp = tempnam(sys_get_temp_dir(), 'ffedit');
+            if ($editTmp === false || @file_put_contents($editTmp, $content) === false) {
+                if (is_string($editTmp)) { @unlink($editTmp); }
+                throw new ApiException('Could not stage content for scanning', 500, 'virus_failed');
+            }
+            try {
+                $this->assertNoVirus($editTmp, basename($scoped));
+            } finally {
+                @unlink($editTmp);
+            }
+        }
+
         // Snapshot the current content before overwriting it (Versioning module) —
         // the editor's repeated saves are the prime "give me the old one back" case.
         $this->keepVersion($disk, $scoped, $fs);
@@ -2435,6 +2502,25 @@ class FileManager
                 fclose($eh);
                 fclose($stream);
                 try {
+                    // Virus scan (paid Virus module) per entry, BEFORE it is written.
+                    // A threat aborts the whole extract: entries already written were
+                    // each scanned clean, so the guarantee holds — no infected byte is
+                    // ever written — while the rest of a malicious archive is refused.
+                    // Deliberately no rollback: with collision=overwrite an extracted
+                    // entry may have replaced a pre-existing file, and deleting those
+                    // would destroy the user's own data over someone else's archive.
+                    if ($this->virusScanner !== null) {
+                        try {
+                            $this->assertNoVirus($entryTmp, basename($e['target']));
+                        } catch (ApiException $ex) {
+                            throw new ApiException(
+                                $ex->getMessage(),
+                                $ex->getHttpCode(),
+                                $ex->getErrorCode(),
+                                $ex->getErrorParams() + ['entry' => $e['orig'], 'extracted' => $written]
+                            );
+                        }
+                    }
                     $in = fopen($entryTmp, 'rb');
                     $fs->writeStream($e['target'], $in);
                     if (is_resource($in)) {

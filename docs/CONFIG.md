@@ -188,7 +188,7 @@ All four accept the same `claims` map.
 | `webhook_secret` | string | — | HMAC signing secret (`X-FluxFiles-Signature`). Empty = `FLUXFILES_SECRET`. |
 | `allow_ai_vision` | bool | `false` | AI Vision (BYO-key). |
 | `allow_ocr` | bool | `false` | OCR. |
-| `allow_virus_scan` | bool | `false` | Virus scan (Enterprise). |
+| `allow_virus_scan` | bool | `false` | Virus scan (Enterprise). Scans **upload**, **code-editor save** and **each zip-extract entry** before the bytes are written; infected → `422 virus_detected` (audited as `virus_blocked`), nothing stored. **Fail-closed:** with the claim on, a missing/unlicensed module or an unreachable engine refuses the write (`501`/`402`/`403`) rather than storing unscanned — so only set it where a scanner is actually configured. Engine: local ClamAV, else `FLUXFILES_VIRUSTOTAL_KEY` (SHA-256 lookup, bytes never leave). **Not covered:** S3 multipart chunk upload — those bytes go browser→S3 and never reach the app. |
 | `allow_backup` | bool | `false` | Backup Bridge. |
 | `allow_c2pa` | bool | `false` | C2PA provenance (Enterprise). |
 

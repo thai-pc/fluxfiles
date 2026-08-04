@@ -87,6 +87,12 @@ gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`
 - **Optimization is FREE/core** (was paid). Paid modules are **9**: share/intake/
   versioning/webhooks/ai/ocr/virus/backup/c2pa (gitignored, `ModuleRegistry` 3-layer
   gate). `ModuleRegistry::$map` is the source of truth — check it, don't trust a count.
+- **Virus scan is fail-closed.** `allow_virus_scan` wires `FileManager::setVirusScanner()`
+  in `index.php` *and* the Laravel/WP proxies (they build their own `FileManager`). It
+  scans `upload()` / `putContent()` / each `extractZip()` entry **before** writing;
+  anything that stops a scan (module absent, licence, claim, engine down) refuses the
+  write instead of storing unscanned, and `/api/fm/chunk/*` is refused outright because
+  S3-multipart bytes never reach the server.
 
 ## Setup & common commands
 

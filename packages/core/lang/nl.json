@@ -305,6 +305,10 @@
         "zip_too_large": "Het archief is te groot.",
         "zip_too_many": "Het archief bevat te veel bestanden.",
         "zip_unavailable": "ZIP is niet beschikbaar.",
+        "virus_detected": "Dit bestand is geblokkeerd door de virusscanner.",
+        "virus_unscannable": "Chunk-upload kan niet op virussen worden gescand. Gebruik de standaardupload.",
+        "virus_unavailable": "Er is geen virusscanner geconfigureerd op deze server.",
+        "virus_failed": "De virusscan kon niet worden voltooid.",
         "storage_not_writable": "Opslag is niet beschrijfbaar.",
         "terminal_disabled": "De terminal is uitgeschakeld op deze server.",
         "terminal_forbidden": "Terminaltoegang is niet toegestaan.",
@@ -385,6 +389,7 @@
             "content_update": "Inhoud bewerken",
             "unknown": "Overig",
             "terminal": "Terminalopdracht",
+            "virus_blocked": "Geblokkeerd door virusscanner",
             "watermark_remove": "Watermerk verwijderen"
         }
     },

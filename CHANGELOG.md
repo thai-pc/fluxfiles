@@ -3,6 +3,60 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.81] — 2026-08-04
+
+> Released: core `core-v0.2.67`; wordpress `0.2.41`, laravel `0.2.36` (both adapters
+> gained the scanner wiring and now declare a `^0.2.67` core floor — the floor guard
+> skips with a warning until `core-v0.2.67` is tagged, then enforces it).
+> node/react/vue/sdk unchanged.
+
+### Fixed — the Virus module was registered but never called
+
+`ModuleRegistry::$map` has listed `virus => VirusScanModule` since the module gate
+existed, and `allow_virus_scan` has been a parsed claim and an `enterprise` preset
+default the whole time — but **nothing in core ever called it**. `scanBytes()` and
+`uploadHook()` had no call site anywhere, and core had no upload-hook registry for
+`uploadHook()` to be picked up by. A customer could buy the module, install it, mint a
+token with the claim, and every file would be stored unscanned with no error. It was
+the only one of the nine paid modules with no call site.
+
+- **Wired into every write path where the server actually holds the bytes:**
+  `upload()` (which also covers `/api/fm/import-url`, sharing the same pipeline),
+  `putContent()` (the code editor — a webshell pasted into an existing `.php` is
+  exactly what ClamAV catches), and **each entry of `extractZip()`**, scanned before
+  it is written. Infected → `422 virus_detected` and nothing is stored.
+- **Fail-closed, deliberately.** With the claim on, anything that stops a scan from
+  happening — module not installed (`501`), licence missing/expired (`402`), token
+  refused (`403`), engine unreachable (`502`) — refuses the write. Swallowing those
+  would store an unscanned file while the operator believes scanning is on, which is
+  the one failure mode a scanner must not have. A malformed verdict counts as not
+  clean. The module gate resolves **lazily inside the callback**, so a tenant with the
+  claim can still list and read; only writes that needed a scan fail.
+- **The chunk-upload side door is closed.** S3 multipart sends bytes browser→S3 on
+  presigned URLs; they never reach the server and cannot be scanned. `/api/fm/chunk/*`
+  now returns `409 virus_unscannable` while the claim is on, rather than remaining the
+  documented way around the scanner.
+- **The adapters were the same hole.** The Laravel controller and the WordPress REST
+  proxy build their own `FileManager` and handle `/upload` themselves, so a token that
+  was scanned in standalone was silently unscanned through either adapter. Both now
+  wire the scanner with the identical lazy gate.
+- **A blocked file is audited** (`virus_blocked`). The audit log only records
+  successful writes, so without this the one security event a scanner exists to
+  produce would be the only thing it never recorded.
+- **The module now scans by path, not by bytes.** `scanPath()` is the primary entry
+  point: an upload is already a temp file, so a scan no longer loads a whole
+  (possibly multi-GB) file into memory, and ClamAV reads the caller's temp directly
+  instead of a copy. `scanBytes()` remains for in-memory content and delegates to it.
+  VirusTotal hashes the file with `hash_file` — still SHA-256 lookup only, bytes never
+  leave the server.
+- i18n: `virus_detected`, `virus_unavailable`, `virus_failed`, `virus_unscannable` and
+  the `virus_blocked` audit label across all 16 locales.
+
+Tests: `tests/integration/test-virus-scan.php` (13 — the FileManager seam through
+injected scanners: clean, infected, throwing, malformed verdict, and that nothing is
+written or indexed in each refusal) and `tests/e2e/test-virus-http.php` (6 — the
+wiring decision through the real router: fail-closed 501, lazy gate, chunk refusal).
+
 ## [0.2.80] — 2026-07-30
 
 > Released: core `core-v0.2.66`; wordpress `0.2.40` (bundled core only — no plugin

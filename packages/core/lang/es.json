@@ -305,6 +305,10 @@
         "zip_too_large": "El archivo es demasiado grande.",
         "zip_too_many": "El archivo tiene demasiados archivos.",
         "zip_unavailable": "ZIP no está disponible.",
+        "virus_detected": "Este archivo fue bloqueado por el antivirus.",
+        "virus_unscannable": "La subida por bloques no se puede analizar. Usa la subida estándar.",
+        "virus_unavailable": "No hay ningún antivirus configurado en este servidor.",
+        "virus_failed": "No se pudo completar el análisis antivirus.",
         "storage_not_writable": "El almacenamiento no admite escritura.",
         "terminal_disabled": "La terminal está deshabilitada en este servidor.",
         "terminal_forbidden": "No se permite el acceso a la terminal.",
@@ -385,6 +389,7 @@
             "content_update": "Editar contenido",
             "unknown": "Otro",
             "terminal": "Comando de terminal",
+            "virus_blocked": "Bloqueado por antivirus",
             "watermark_remove": "Quitar marca de agua"
         }
     },

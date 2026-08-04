@@ -305,6 +305,10 @@
         "zip_too_large": "Arşiv çok büyük.",
         "zip_too_many": "Arşivde çok fazla dosya var.",
         "zip_unavailable": "ZIP kullanılamıyor.",
+        "virus_detected": "Bu dosya virüs tarayıcı tarafından engellendi.",
+        "virus_unscannable": "Parçalı yükleme virüs taramasından geçirilemez. Standart yüklemeyi kullanın.",
+        "virus_unavailable": "Bu sunucuda yapılandırılmış bir virüs tarayıcı yok.",
+        "virus_failed": "Virüs taraması tamamlanamadı.",
         "storage_not_writable": "Depolama yazılabilir değil.",
         "terminal_disabled": "Bu sunucuda terminal devre dışı.",
         "terminal_forbidden": "Terminal erişimine izin verilmiyor.",
@@ -385,6 +389,7 @@
             "content_update": "İçeriği düzenle",
             "unknown": "Diğer",
             "terminal": "Terminal komutu",
+            "virus_blocked": "Virüs nedeniyle engellendi",
             "watermark_remove": "Filigranı kaldır"
         }
     },

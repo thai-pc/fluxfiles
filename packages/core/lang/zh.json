@@ -305,6 +305,10 @@
         "zip_too_large": "压缩包太大。",
         "zip_too_many": "压缩包文件过多。",
         "zip_unavailable": "ZIP 不可用。",
+        "virus_detected": "该文件已被病毒扫描程序拦截。",
+        "virus_unscannable": "分块上传无法进行病毒扫描。请使用标准上传。",
+        "virus_unavailable": "此服务器未配置病毒扫描程序。",
+        "virus_failed": "病毒扫描未能完成。",
         "storage_not_writable": "存储不可写。",
         "terminal_disabled": "此服务器已禁用终端。",
         "terminal_forbidden": "不允许使用终端。",
@@ -385,6 +389,7 @@
             "content_update": "编辑内容",
             "unknown": "其他",
             "terminal": "终端命令",
+            "virus_blocked": "病毒拦截",
             "watermark_remove": "移除水印"
         }
     },

@@ -305,6 +305,10 @@
         "zip_too_large": "Das Archiv ist zu groß.",
         "zip_too_many": "Das Archiv enthält zu viele Dateien.",
         "zip_unavailable": "ZIP ist nicht verfügbar.",
+        "virus_detected": "Diese Datei wurde vom Virenscanner blockiert.",
+        "virus_unscannable": "Chunk-Upload kann nicht auf Viren geprüft werden. Bitte den normalen Upload verwenden.",
+        "virus_unavailable": "Auf diesem Server ist kein Virenscanner konfiguriert.",
+        "virus_failed": "Der Virenscan konnte nicht abgeschlossen werden.",
         "storage_not_writable": "Der Speicher ist nicht beschreibbar.",
         "terminal_disabled": "Das Terminal ist auf diesem Server deaktiviert.",
         "terminal_forbidden": "Terminalzugriff ist nicht erlaubt.",
@@ -385,6 +389,7 @@
             "content_update": "Inhalt bearbeiten",
             "unknown": "Sonstiges",
             "terminal": "Terminal-Befehl",
+            "virus_blocked": "Vom Virenscanner blockiert",
             "watermark_remove": "Wasserzeichen entfernen"
         }
     },

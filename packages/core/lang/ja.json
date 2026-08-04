@@ -305,6 +305,10 @@
         "zip_too_large": "アーカイブが大きすぎます。",
         "zip_too_many": "アーカイブのファイル数が多すぎます。",
         "zip_unavailable": "ZIP は利用できません。",
+        "virus_detected": "このファイルはウイルススキャンによってブロックされました。",
+        "virus_unscannable": "分割アップロードはウイルススキャンできません。通常のアップロードをご利用ください。",
+        "virus_unavailable": "このサーバーにはウイルススキャナーが設定されていません。",
+        "virus_failed": "ウイルススキャンを完了できませんでした。",
         "storage_not_writable": "ストレージに書き込めません。",
         "terminal_disabled": "このサーバーではターミナルが無効です。",
         "terminal_forbidden": "ターミナルの使用は許可されていません。",
@@ -385,6 +389,7 @@
             "content_update": "内容を編集",
             "unknown": "その他",
             "terminal": "ターミナルコマンド",
+            "virus_blocked": "ウイルスブロック",
             "watermark_remove": "透かしを削除"
         }
     },

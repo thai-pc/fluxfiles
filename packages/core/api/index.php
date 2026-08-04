@@ -288,6 +288,20 @@ try {
         });
     }
 
+    // Virus scan (paid module). Wired whenever the token asks for it — and ONLY on the
+    // claim, unlike the passive hooks above, because this one is fail-closed: the
+    // module/licence gate runs INSIDE the callback (lazily, on the first write that
+    // needs a scan) so a tenant with `allow_virus_scan` but no installed/licensed
+    // module gets 501/402/403 on upload instead of silently unscanned files. Resolving
+    // it here instead would break plain reads for the same tenant.
+    if ($claims->allowVirusScan) {
+        $fm->setVirusScanner(static function (string $localPath) use ($claims): array {
+            /** @var \FluxFiles\Virus\VirusScanModule $virus */
+            $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            return $virus->scanPath($localPath);
+        });
+    }
+
     // Webhooks (paid module). Fire a signed HTTP POST on file events. Wired only when
     // the token carries a `webhook_url` + `allow_webhooks` AND the module is installed
     // + licensed. Event-driven = stateless: it fires on the request that caused the
@@ -378,6 +392,25 @@ try {
         $webhookDispatcher($webhookEvent[0], $webhookEvent[1]);
     }
 } catch (ApiException $e) {
+    // A blocked infected file is the one rejection that must leave a trace: the audit
+    // log only records SUCCESSFUL writes, so without this the security event a virus
+    // scanner exists to produce would be the single thing it never records.
+    if ($e->getErrorCode() === 'virus_detected' && isset($auditLog, $claims)) {
+        $p = $e->getErrorParams();
+        try {
+            // The disk lands in $_POST for a multipart upload and in the JSON body for
+            // the editor/extract paths — resolve both, like the success branch does.
+            $vBody = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+            $auditLog->log(
+                $claims->userId,
+                'virus_blocked',
+                (string) ($_POST['disk'] ?? $vBody['disk'] ?? 'local'),
+                (string) ($p['name'] ?? $p['entry'] ?? '')
+            );
+        } catch (\Throwable $ignored) {
+            // Auditing must never turn a clean 422 into a 500.
+        }
+    }
     http_response_code($e->getHttpCode());
     $errResp = ['data' => null, 'error' => $e->getMessage()];
     if ($e->getErrorCode() !== null) {
@@ -867,7 +900,17 @@ function routeRequest(
         return (new BucketDoctor($diskManager))->diagnose($disk, $origin ?: null);
     }
 
-    // Chunk upload
+    // Chunk upload. S3 multipart sends the bytes browser→S3 on presigned URLs, so they
+    // never reach this server and CANNOT be scanned. A tenant that asked for virus
+    // scanning must not have an unscannable side door — refuse the route rather than
+    // let it quietly become the way around the scanner.
+    if ($claims->allowVirusScan && str_starts_with($uri, '/api/fm/chunk/')) {
+        throw new ApiException(
+            'Chunked upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
+            409,
+            'virus_unscannable'
+        );
+    }
     if ($method === 'POST' && $uri === '/api/fm/chunk/init') {
         return handleChunkInit($chunker, $claims, $fm, $quotaManager);
     }

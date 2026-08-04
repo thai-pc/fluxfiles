@@ -305,6 +305,10 @@
         "zip_too_large": "O arquivo é grande demais.",
         "zip_too_many": "O arquivo tem arquivos demais.",
         "zip_unavailable": "ZIP não está disponível.",
+        "virus_detected": "Este arquivo foi bloqueado pelo antivírus.",
+        "virus_unscannable": "O envio em partes não pode ser verificado. Use o envio padrão.",
+        "virus_unavailable": "Nenhum antivírus está configurado neste servidor.",
+        "virus_failed": "Não foi possível concluir a verificação de vírus.",
         "storage_not_writable": "O armazenamento não permite gravação.",
         "terminal_disabled": "O terminal está desativado neste servidor.",
         "terminal_forbidden": "O acesso ao terminal não é permitido.",
@@ -385,6 +389,7 @@
             "content_update": "Editar conteúdo",
             "unknown": "Outro",
             "terminal": "Comando de terminal",
+            "virus_blocked": "Bloqueado por vírus",
             "watermark_remove": "Remover marca d'água"
         }
     },

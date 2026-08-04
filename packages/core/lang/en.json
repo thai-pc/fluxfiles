@@ -305,6 +305,10 @@
         "zip_too_large": "The archive is too large.",
         "zip_too_many": "The archive has too many files.",
         "zip_unavailable": "ZIP isn't available.",
+        "virus_detected": "This file was blocked by the virus scanner.",
+        "virus_unscannable": "Chunked upload can't be virus-scanned. Use the standard upload.",
+        "virus_unavailable": "No virus scanner is configured on this server.",
+        "virus_failed": "The virus scan could not be completed.",
         "storage_not_writable": "Storage is not writable.",
         "terminal_disabled": "The terminal is disabled on this server.",
         "terminal_forbidden": "Terminal access isn't allowed.",
@@ -385,6 +389,7 @@
             "content_update": "Edit content",
             "unknown": "Other",
             "terminal": "Terminal command",
+            "virus_blocked": "Virus blocked",
             "watermark_remove": "Remove watermark"
         }
     },

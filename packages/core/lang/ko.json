@@ -305,6 +305,10 @@
         "zip_too_large": "아카이브가 너무 큽니다.",
         "zip_too_many": "아카이브에 파일이 너무 많습니다.",
         "zip_unavailable": "ZIP을 사용할 수 없습니다.",
+        "virus_detected": "이 파일은 바이러스 검사에서 차단되었습니다.",
+        "virus_unscannable": "청크 업로드는 바이러스 검사를 할 수 없습니다. 일반 업로드를 사용하세요.",
+        "virus_unavailable": "이 서버에 바이러스 검사기가 구성되어 있지 않습니다.",
+        "virus_failed": "바이러스 검사를 완료하지 못했습니다.",
         "storage_not_writable": "저장소에 쓸 수 없습니다.",
         "terminal_disabled": "이 서버에서는 터미널이 비활성화되어 있습니다.",
         "terminal_forbidden": "터미널 사용이 허용되지 않습니다.",
@@ -385,6 +389,7 @@
             "content_update": "내용 편집",
             "unknown": "기타",
             "terminal": "터미널 명령",
+            "virus_blocked": "바이러스 차단",
             "watermark_remove": "워터마크 제거"
         }
     },

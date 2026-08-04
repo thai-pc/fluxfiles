@@ -305,6 +305,10 @@
         "zip_too_large": "Tệp nén quá lớn.",
         "zip_too_many": "Tệp nén có quá nhiều tệp.",
         "zip_unavailable": "ZIP không khả dụng.",
+        "virus_detected": "Tệp này đã bị trình quét virus chặn.",
+        "virus_unscannable": "Tải lên theo khối không thể quét virus. Hãy dùng cách tải lên thường.",
+        "virus_unavailable": "Máy chủ này chưa cấu hình trình quét virus.",
+        "virus_failed": "Không thể hoàn tất việc quét virus.",
         "storage_not_writable": "Bộ nhớ không thể ghi.",
         "terminal_disabled": "Terminal đã bị tắt trên máy chủ này.",
         "terminal_forbidden": "Không được phép dùng terminal.",
@@ -385,6 +389,7 @@
             "content_update": "Sửa nội dung",
             "unknown": "Khác",
             "terminal": "Lệnh terminal",
+            "virus_blocked": "Chặn do virus",
             "watermark_remove": "Gỡ watermark"
         }
     },

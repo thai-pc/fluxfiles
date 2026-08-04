@@ -61,6 +61,19 @@ class FluxFilesController
         }
         $fm = new FileManager($this->diskManager, $claims, $this->metaRepo);
         $fm->setQuotaManager(new QuotaManager($this->diskManager));
+
+        // Virus scan (paid module) — the proxy handles /upload itself, so without this
+        // a tenant with `allow_virus_scan` would have files stored unscanned here while
+        // the same token is scanned in standalone. The module gate resolves INSIDE the
+        // callback (lazily, on the write that needs it) so plain reads still work and a
+        // missing/unlicensed module surfaces as 501/402/403 on upload — never silence.
+        if (($claims->allowVirusScan ?? false)) {
+            $fm->setVirusScanner(static function (string $localPath) use ($claims): array {
+                /** @var \FluxFiles\Virus\VirusScanModule $virus */
+                $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $claims);
+                return $virus->scanPath($localPath);
+            });
+        }
         return $fm;
     }
 
