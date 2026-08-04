@@ -289,6 +289,10 @@ jobs:
           FXTEST_S3_SECRET: minioadmin123
           FXTEST_S3_VISIBILITY: private
           FXTEST_S3_CREATE_BUCKET: '1'
+          # The container is thrown away at the end of the job, so the prefix-wide
+          # directory scenarios are safe to run here. Everywhere else they need this
+          # opt-in deliberately — see the guards at the top of the script.
+          FXTEST_S3_ALLOW_DESTRUCTIVE: '1'
         run: php tests/e2e/test-s3-live.php
 
       # The parity matrix against a REAL object store. It also runs local-only in the

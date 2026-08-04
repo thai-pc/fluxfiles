@@ -16,6 +16,15 @@
  *   FXTEST_S3_PUBLIC_URL   optional CDN/custom-domain base
  *   FXTEST_S3_CREATE_BUCKET 1 → create bucket if missing (MinIO)
  *
+ * THIS SCRIPT DELETES OBJECTS. Everything it writes lives under a run-unique prefix
+ * `fluxfiles-livetest/<utc>-<rand>/` and every delete is asserted to fall inside it,
+ * but the guards are a seatbelt — point this at a dedicated scratch bucket.
+ *   FXTEST_S3_ALLOW_DESTRUCTIVE=1        run the directory scenarios (prefix-wide
+ *                                        deletes); skipped loudly without it
+ *   FXTEST_S3_I_KNOW_THIS_BUCKET_HAS_REAL_DATA=1
+ *                                        override the "bucket name must look
+ *                                        disposable" refusal
+ *
  * Usage:
  *   FXTEST_S3_LABEL=MinIO FXTEST_S3_BUCKET=... php tests/test-s3-live.php
  */
@@ -50,6 +59,49 @@ if ($bucket === '' || $key === '' || $secret === '') {
     echo "  {$yellow}SKIP{$reset} — bucket/key/secret not provided for {$label}\n\n";
     exit(0);
 }
+
+// ══ Destructive-run guards ═══════════════════════════════════════════════════
+//
+// This script WRITES AND DELETES. It is normally pointed at a throwaway MinIO, but
+// the same env names work against real AWS/R2, and a developer with working
+// credentials in their shell is one command away from running it at production. The
+// guards below are ordered cheapest-first and each closes a different way that goes
+// wrong. None of them replaces the real advice: use a dedicated scratch bucket.
+
+// 1. Refuse a bucket that isn't obviously disposable. Overridable, but only by an
+//    env var too long to type by accident or paste from a README.
+if (!preg_match('/(test|dev|scratch|sandbox|staging|livetest)/i', $bucket)
+    && getenv('FXTEST_S3_I_KNOW_THIS_BUCKET_HAS_REAL_DATA') !== '1') {
+    echo "  {$red}REFUSED{$reset} — bucket '{$bucket}' does not look like a test bucket.\n";
+    echo "  This script deletes objects. Point it at a scratch bucket, or set\n";
+    echo "  FXTEST_S3_I_KNOW_THIS_BUCKET_HAS_REAL_DATA=1 if you are certain.\n\n";
+    exit(1);
+}
+
+// 2. A RUN-UNIQUE prefix. The old fixed constant meant two runs collided, and a
+//    constant is one typo away from addressing the whole bucket.
+$RUN_ID = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(4));
+$prefix = 'fluxfiles-livetest/' . $RUN_ID;
+
+/**
+ * Refuse to delete anything outside this run's own prefix.
+ *
+ * Re-checks the prefix itself every time rather than trusting it was built correctly:
+ * an empty or run-id-less prefix would make every key below "inside" it, which is
+ * precisely the wide delete this exists to prevent.
+ */
+function assertInRun(string $key): void
+{
+    global $prefix, $RUN_ID;
+    if ($prefix === '' || strpos($prefix, $RUN_ID) === false) {
+        throw new \RuntimeException('run prefix is empty or lost its run id — refusing to delete anything');
+    }
+    if ($key !== $prefix && strpos($key, $prefix . '/') !== 0) {
+        throw new \RuntimeException("refusing to delete outside the run prefix: {$key}");
+    }
+}
+function safeDelete(FileManager $fm, string $key): void { assertInRun($key); $fm->delete('s3test', $key); }
+function safeDeleteDirectory($fs, string $key): void { assertInRun($key); $fs->deleteDirectory($key); }
 
 $passed = 0; $failed = 0;
 function test(string $name, callable $fn): void {
@@ -92,7 +144,15 @@ $meta = new StorageMetadataHandler($dm);
 $fm = new FileManager($dm, $claims, $meta);
 $indexer = new FluxFiles\ExistingFileIndexer($dm, $meta);
 
-$prefix = 'fluxfiles-livetest';
+// 3. Preflight: the run prefix must be empty before we touch it. With a random run id
+//    this should be impossible — which is the point: if it ever fires, the prefix is
+//    not what this script thinks it is, and it must not start deleting.
+foreach ($dm->disk('s3test')->listContents($prefix, true) as $_stray) {
+    echo "  {$red}REFUSED{$reset} — run prefix '{$prefix}' already contains objects.\n\n";
+    exit(1);
+}
+echo "  run prefix: {$prefix}\n\n";
+
 $uploadedKey = null;
 $uploadedUrl = null;
 
@@ -249,7 +309,7 @@ test('multipart: initiate → presign part → PUT → complete → readable', f
 
     $get = $fm->presign('s3test', $key, 'GET', 600);
     assertEqual($body, file_get_contents($get['url']), 'completed object content matches');
-    try { $fm->delete('s3test', $key); } catch (\Throwable $e) {}
+    try { safeDelete($fm, $key); } catch (\Throwable $e) {}
 });
 
 test('multipart: initiate → abort (then complete fails)', function () use ($dm, $prefix) {
@@ -280,7 +340,16 @@ test('doctor diagnoses the live bucket (write/read/presign/delete/multipart ok)'
 // so this is the branch of FileManager::moveDirectoryTree that walks the tree
 // and recreates directory markers. Empty folders exist only as markers, which is
 // exactly what the old per-file rename loop deleted without recreating.
+// 4. The directory scenarios have the widest blast radius in the file — they are the
+//    only ones that exercise prefix-wide deletes — so they need a deliberate opt-in
+//    rather than running because someone happened to have credentials. It is a loud
+//    skip, never a silent one.
 echo "\n{$yellow}► Folder rename/move{$reset}\n";
+if (getenv('FXTEST_S3_ALLOW_DESTRUCTIVE') !== '1') {
+    echo "  {$yellow}SKIP{$reset} — set FXTEST_S3_ALLOW_DESTRUCTIVE=1 to run the directory scenarios\n";
+    echo "  (they delete whole prefixes; the parity matrix in tests/integration/test-dir-parity.php\n";
+    echo "   covers the same ground and is what CI relies on)\n";
+} else {
 $dirRoot = $prefix . '/dirs';
 test('rename an empty folder keeps it alive under the new name', function () use ($fm, $dm, $dirRoot) {
     $fs = $dm->disk('s3test');
@@ -351,17 +420,20 @@ test('trash+restore a folder whose only content is a subfolder', function () use
     $fm->restore('s3test', $id);
     assertTrue($fs->directoryExists($dirRoot . '/onlydirs/child'), 'child directory restored');
 });
+} // end FXTEST_S3_ALLOW_DESTRUCTIVE
 
 echo "\n{$yellow}► Cleanup{$reset}\n";
 test('delete uploaded file + variants', function () use ($fm, &$uploadedKey) {
     assertTrue(is_string($uploadedKey), 'no uploaded key (upload failed above)');
-    $fm->delete('s3test', $uploadedKey);
+    safeDelete($fm, $uploadedKey);
 });
 // best-effort cleanup of all test artifacts
 foreach ([$prefix . '/put.txt', $preKey, $GLOBALS['_dedupCopyKey'] ?? null] as $k) {
-    if ($k) { try { $fm->delete('s3test', $k); } catch (\Throwable $e) {} }
+    if ($k) { try { safeDelete($fm, $k); } catch (\Throwable $e) {} }
 }
-try { $dm->disk('s3test')->deleteDirectory($dirRoot); } catch (\Throwable $e) {}
+// Sweep the whole run prefix, not just the pieces we remember: anything this run
+// created lives under it, and the guard proves we cannot reach past it.
+try { safeDeleteDirectory($dm->disk('s3test'), $prefix); } catch (\Throwable $e) {}
 @unlink($tmp);
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
