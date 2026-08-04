@@ -32,6 +32,11 @@ final class Plans
             'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'],
             'sites' => 0, 'ttlDays' => 365, 'enforcement' => 'perpetual',
         ],
+        'studio-monthly' => [
+            'edition' => 'studio',
+            'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'],
+            'sites' => 0, 'ttlDays' => 31, 'enforcement' => 'subscription',
+        ],
         // Enterprise = everything incl. the compliance bundle.
         'enterprise' => [
             'edition' => 'enterprise',

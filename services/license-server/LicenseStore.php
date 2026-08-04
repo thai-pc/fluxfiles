@@ -50,6 +50,24 @@ final class LicenseStore
         )');
         $this->db->exec('CREATE INDEX IF NOT EXISTS idx_email ON licenses(email)');
         $this->db->exec('CREATE INDEX IF NOT EXISTS idx_order ON licenses(gateway, order_id)');
+
+        // When the key was actually delivered to the buyer. NULL means "issued but the
+        // buyer has not been told", which is the state a mail outage leaves behind and
+        // the reason the webhook can retry delivery without minting a second licence.
+        // Added after the first deploys, hence the guarded ALTER rather than a column
+        // in the CREATE above.
+        $cols = $this->db->query('PRAGMA table_info(licenses)')->fetchAll(\PDO::FETCH_COLUMN, 1) ?: [];
+        if (!in_array('mailed_at', $cols, true)) {
+            $this->db->exec('ALTER TABLE licenses ADD COLUMN mailed_at INTEGER');
+        }
+    }
+
+    /** Mark the licence as delivered. Returns false when the row is gone. */
+    public function markMailed(string $jti, ?int $at = null): bool
+    {
+        $s = $this->db->prepare('UPDATE licenses SET mailed_at = ? WHERE jti = ?');
+        $s->execute([$at ?? time(), $jti]);
+        return $s->rowCount() > 0;
     }
 
     /**

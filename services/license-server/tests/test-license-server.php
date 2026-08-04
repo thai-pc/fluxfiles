@@ -108,6 +108,51 @@ test('bad email / unknown plan → rejected', function () use ($secretB64) {
 });
 
 
+// ── Delivery state ───────────────────────────────────────────────────────────
+// A licence that is issued but never delivered is the failure this tracks: without
+// mailed_at, a mail outage leaves a paying customer with no key and every later
+// webhook retry skips sending because the licence already exists.
+
+test('store: a new licence starts undelivered', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'d@x.com','plan'=>'pro','gateway'=>'polar','order_id'=>'DEL-1'])['record'];
+    assertTrue(empty($rec['mailed_at']), 'mailed_at is not set at issue time');
+});
+
+test('store: markMailed records delivery, and only for that licence', function () use ($secretB64) {
+    // Hold ONE store: issuer() builds a fresh ':memory:' database per call, so a
+    // separately constructed store would be a different database entirely.
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $a = $iss->issue(['email'=>'d@x.com','plan'=>'pro','gateway'=>'polar','order_id'=>'DEL-2'])['record'];
+    $b = $iss->issue(['email'=>'d@x.com','plan'=>'pro','gateway'=>'polar','order_id'=>'DEL-3'])['record'];
+    assertTrue($store->markMailed((string) $a['jti'], 1700000000), 'reports the update');
+    assertEqual(1700000000, (int) $store->findByJti((string) $a['jti'])['mailed_at']);
+    assertTrue(empty($store->findByJti((string) $b['jti'])['mailed_at']), 'the other licence is untouched');
+    assertEqual(false, $store->markMailed('no-such-jti'), 'a missing licence reports false');
+});
+
+test('store: mailed_at is added to a database created before it existed', function () {
+    // Deploys predate this column. If the migration did not backfill it, the webhook
+    // would read a missing key as "undelivered" and email on every single retry.
+    $path = sys_get_temp_dir() . '/ff-legacy-' . uniqid() . '.sqlite';
+    $legacy = new PDO('sqlite:' . $path);
+    $legacy->exec('CREATE TABLE licenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, jti TEXT UNIQUE NOT NULL, email TEXT NOT NULL,
+        customer TEXT, plan TEXT, edition TEXT, modules TEXT, sites INTEGER DEFAULT 0,
+        enforcement TEXT, issued INTEGER, expires INTEGER, license_key TEXT NOT NULL,
+        gateway TEXT, order_id TEXT, status TEXT DEFAULT "active", created_at INTEGER)');
+    $legacy->exec("INSERT INTO licenses (jti,email,license_key,created_at) VALUES ('old-1','old@x.com','k',1)");
+    unset($legacy);
+
+    $store = new LicenseStore($path);      // constructing it runs the migration
+    $row = $store->findByJti('old-1');
+    assertTrue($row !== null, 'the pre-existing row survives');
+    assertTrue(array_key_exists('mailed_at', $row), 'the column was added');
+    assertTrue(empty($row['mailed_at']), 'and is null for rows that predate it');
+    assertTrue($store->markMailed('old-1'), 'delivery can now be recorded');
+    @unlink($path);
+});
+
 // ── Licence delivery ─────────────────────────────────────────────────────────
 // Without this the key reached nobody: the webhook returned it in a response body
 // that every gateway discards, so each order needed manual fulfilment.

@@ -63,6 +63,14 @@ const CATALOGUE = [
         'amount' => 24900,          // $249 / year
         'recurring' => 'year',
     ],
+    'studio-monthly' => [
+        'name' => 'FluxFiles Studio (monthly)',
+        'description' => 'Everything in Pro plus file versioning, webhooks and the AI/OCR modules (bring your own API key). Billed monthly.',
+        // Keeps the same annual discount as Pro (which is $9/mo against $79/yr, ~27%
+        // off): 12 × $29 = $348 against $249.
+        'amount' => 2900,           // $29 / month
+        'recurring' => 'month',
+    ],
 ];
 
 $token = (string) (getenv('POLAR_TOKEN') ?: '');
@@ -115,7 +123,10 @@ function api(string $method, string $path, ?array $body = null): array
 }
 
 // Existing products first, so a re-run updates the map instead of creating duplicates.
-[$st, $list] = api('GET', '/products/?limit=100');
+// `is_archived=false` is explicit rather than left to the endpoint's default: an
+// archived product still has a name, and matching one would point the plan map at
+// something customers cannot buy — a checkout that fails only for real buyers.
+[$st, $list] = api('GET', '/products/?limit=100&is_archived=false');
 if ($st === 401 || $st === 403) {
     echo "  {$red}The token was rejected ({$st}).{$reset} Check it carries products:read/write,\n";
     echo "  and that it belongs to " . ($production ? 'production' : 'the SANDBOX') . " — tokens are not shared between them.\n\n";

@@ -108,14 +108,26 @@ try {
         // at-least-once delivery safe — a retry returns the same key, never a second one.
         $res = $issuer->issue($order + ['gateway' => 'polar']);
 
-        // Deliver the key. Only on a FIRST issue: a retried delivery would otherwise
-        // email the buyer the same key again for one purchase. Mail failure never
-        // changes the response — the sale succeeded and the record is stored, so a
-        // non-2xx here would make Polar retry and the buyer doubt the charge.
-        if (!$res['reused']) {
-            (new LicenseMailer())->sendLicense($res['record']);
+        // Deliver the key, keyed on whether it has actually been delivered — NOT on
+        // whether this is a first delivery. Those differ in the case that matters: if
+        // the mail fails after the licence is stored, every later retry is `reused` and
+        // would skip sending, leaving a paying customer with no key and nothing in any
+        // log to say so. Tracking mailed_at makes Polar's retry the recovery mechanism.
+        $jti = (string) $res['record']['jti'];
+        if (empty($res['record']['mailed_at'])) {
+            if ((new LicenseMailer())->sendLicense($res['record'])) {
+                (new LicenseStore())->markMailed($jti);
+            } else {
+                // Answer 5xx so Polar retries: the sale succeeded and the licence is
+                // safely stored, but this endpoint's job — getting the key to the buyer
+                // — has not been done. A visible failed delivery in Polar's dashboard
+                // beats a silent 200 that nobody ever looks at. The retry is safe:
+                // issuing is idempotent, and mailed_at stops a double send.
+                error_log("polar webhook: licence {$jti} issued but not delivered — will retry");
+                respond(503, ['error' => 'issued, delivery pending', 'jti' => $jti]);
+            }
         }
-        respond(200, ['issued' => !$res['reused'], 'jti' => $res['record']['jti']]);
+        respond(200, ['issued' => !$res['reused'], 'jti' => $jti]);
     }
 
     // ── Public: claim the key from the checkout success page ─────────────────
