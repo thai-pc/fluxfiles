@@ -18,8 +18,10 @@ require_once __DIR__ . '/../LicenseStore.php';
 require_once __DIR__ . '/../Plans.php';
 require_once __DIR__ . '/../LicenseIssuer.php';
 require_once __DIR__ . '/../PolarWebhook.php';
+require_once __DIR__ . '/../LicenseMailer.php';
 
 use FluxFiles\LicenseServer\PolarWebhook;
+use FluxFiles\LicenseServer\LicenseMailer;
 use FluxFiles\LicenseServer\LicenseSigner;
 use FluxFiles\LicenseServer\LicenseStore;
 use FluxFiles\LicenseServer\LicenseIssuer;
@@ -105,6 +107,47 @@ test('bad email / unknown plan → rejected', function () use ($secretB64) {
     catch (\InvalidArgumentException $e) { assertTrue(str_contains($e->getMessage(),'plan')); }
 });
 
+
+// ── Licence delivery ─────────────────────────────────────────────────────────
+// Without this the key reached nobody: the webhook returned it in a response body
+// that every gateway discards, so each order needed manual fulfilment.
+
+/** Capture what the 'log' transport writes, so the rendered mail is inspectable. */
+function captureMail(callable $fn): string {
+    $tmp = tempnam(sys_get_temp_dir(), 'ffmail');
+    $prev = ini_get('error_log');
+    ini_set('error_log', $tmp);
+    try { $fn(); } finally { ini_set('error_log', $prev === false ? '' : $prev); }
+    $out = (string) @file_get_contents($tmp);
+    @unlink($tmp);
+    return $out;
+}
+
+test('mail: the key and the activation line reach the body', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'buyer@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-1'])['record'];
+    $out = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendLicense($rec), 'send reports success'));
+    assertTrue(str_contains($out, (string) $rec['license_key']), 'the key itself is in the mail');
+    assertTrue(str_contains($out, 'FLUXFILES_LICENSE_KEY='), 'tells them how to activate it');
+    assertTrue(str_contains($out, 'buyer@acme.com'), 'addressed to the buyer');
+});
+
+test('mail: a bad recipient fails soft, never throws', function () use ($secretB64) {
+    // The sale already succeeded; a mail problem must not become a 500 that makes the
+    // gateway retry and the buyer doubt the charge.
+    $rec = issuer($secretB64)->issue(['email'=>'ok@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-2'])['record'];
+    $rec['email'] = 'not-an-email';
+    $sent = true;
+    $out = captureMail(function () use ($rec, &$sent) { $sent = (new LicenseMailer('log'))->sendLicense($rec); });
+    assertEqual(false, $sent, 'reports failure rather than throwing');
+    assertTrue(str_contains($out, 'no valid recipient'), 'and says why, for the operator');
+});
+
+test('mail: an unconfigured server does not pretend to have sent real mail', function () use ($secretB64) {
+    // Default transport is 'log' precisely so a half-configured deploy is obvious.
+    $rec = issuer($secretB64)->issue(['email'=>'x@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-3'])['record'];
+    $out = captureMail(fn () => (new LicenseMailer())->sendLicense($rec));
+    assertTrue(str_contains($out, '[log transport]'), 'log transport is announced, not silent');
+});
 
 // ── Polar webhook (Standard Webhooks) ────────────────────────────────────────
 // The signature scheme is the piece most likely to fail silently: wrong in one

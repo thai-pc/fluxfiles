@@ -27,7 +27,9 @@ require_once __DIR__ . '/LicenseStore.php';
 require_once __DIR__ . '/Plans.php';
 require_once __DIR__ . '/LicenseIssuer.php';
 require_once __DIR__ . '/PolarWebhook.php';
+require_once __DIR__ . '/LicenseMailer.php';
 
+use FluxFiles\LicenseServer\LicenseMailer;
 use FluxFiles\LicenseServer\LicenseSigner;
 use FluxFiles\LicenseServer\LicenseStore;
 use FluxFiles\LicenseServer\LicenseIssuer;
@@ -46,6 +48,9 @@ function respond(int $code, array $body): void
     exit;
 }
 function env(string $k, string $d = ''): string { $v = getenv($k); return $v === false || $v === '' ? $d : $v; }
+
+/** How long after purchase /claim will still hand back the key (see the endpoint). */
+const CLAIM_WINDOW = 3600;
 function adminOk(): bool
 {
     $token = env('FLUXFILES_LICENSE_ADMIN_TOKEN');
@@ -86,7 +91,50 @@ try {
         // Issuing is idempotent on (gateway, order_id), which is what makes Polar's
         // at-least-once delivery safe — a retry returns the same key, never a second one.
         $res = $issuer->issue($order + ['gateway' => 'polar']);
+
+        // Deliver the key. Only on a FIRST issue: a retried delivery would otherwise
+        // email the buyer the same key again for one purchase. Mail failure never
+        // changes the response — the sale succeeded and the record is stored, so a
+        // non-2xx here would make Polar retry and the buyer doubt the charge.
+        if (!$res['reused']) {
+            (new LicenseMailer())->sendLicense($res['record']);
+        }
         respond(200, ['issued' => !$res['reused'], 'jti' => $res['record']['jti']]);
+    }
+
+    // ── Public: claim the key from the checkout success page ─────────────────
+    //
+    // Polar redirects the buyer to `successUrl?checkout_id={CHECKOUT_ID}`; the page
+    // calls this to show the key immediately instead of making them wait for email.
+    //
+    // This is the ONE unauthenticated endpoint that returns a secret, so it is
+    // deliberately narrow:
+    //   - it never issues, only looks up — the webhook is the only path that mints;
+    //   - a checkout id is a high-entropy value the buyer already holds, and one id
+    //     maps to exactly one order;
+    //   - it 404s for anything not found, so it cannot be used to probe which order
+    //     ids exist;
+    //   - it is time-boxed: after CLAIM_WINDOW the key is email-only. A success URL
+    //     can end up in browser history, a screen share, or a referrer log, and the
+    //     window keeps that from being a permanent handle on the key.
+    if ($method === 'GET' && $uri === '/claim') {
+        $orderId = (string) ($_GET['order_id'] ?? $_GET['checkout_id'] ?? '');
+        if (strlen($orderId) < 12) {
+            respond(404, ['error' => 'not found']);   // too short to be a real id
+        }
+        $rec = (new LicenseStore())->findByOrder('polar', $orderId);
+        if ($rec === null || ($rec['status'] ?? '') !== 'active') {
+            respond(404, ['error' => 'not found']);
+        }
+        $age = time() - (int) ($rec['created_at'] ?? 0);   // stored as a unix int
+        if ($age > CLAIM_WINDOW) {
+            respond(410, ['error' => 'claim window expired', 'hint' => 'the key was emailed to you']);
+        }
+        respond(200, [
+            'license_key' => (string) $rec['license_key'],
+            'edition' => (string) $rec['edition'],
+            'expires' => $rec['expires'] ?? null,
+        ]);
     }
 
     // ── Admin: manual issue ──────────────────────────────────────────────────

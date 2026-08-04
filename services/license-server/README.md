@@ -26,6 +26,15 @@ export FLUXFILES_LICENSE_ADMIN_TOKEN=$(openssl rand -hex 24)     # /issue, /lice
 export FLUXFILES_POLAR_WEBHOOK_SECRET=whsec_...              # Polar → Settings → Webhooks
 export FLUXFILES_POLAR_PLAN_MAP='{"<product_id>":"pro","<product_id>":"studio"}'
 
+# 3. Licence delivery. Default transport is 'log' — an unconfigured server writes the
+#    message to the error log instead of silently pretending it sent mail.
+export FLUXFILES_MAIL_TRANSPORT=smtp          # smtp | sendmail | log
+export FLUXFILES_MAIL_FROM=licenses@your-domain.com
+export FLUXFILES_SMTP_HOST=smtp.provider.com
+export FLUXFILES_SMTP_PORT=587
+export FLUXFILES_SMTP_USER=...
+export FLUXFILES_SMTP_PASS=...
+
 # run (dev) — behind nginx/caddy in prod
 php -S 0.0.0.0:9000 server.php
 ```
@@ -50,7 +59,8 @@ returns the same key rather than minting a second one.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/webhook/polar` | Standard Webhooks sig | Issue on `order.paid` |
+| POST | `/webhook/polar` | Standard Webhooks sig | Issue on `order.paid`, then email the key |
+| GET | `/claim?order_id=` | none (see below) | Hand the key to the checkout success page |
 | POST | `/issue` | Bearer admin | Manual issue `{email, plan, sites?, domains?}` |
 | GET | `/licenses[?email=]` | Bearer admin | List / lookup |
 | POST | `/revoke` | Bearer admin | `{jti, status}` mark revoked/refunded |
@@ -78,3 +88,24 @@ annual), `pro-monthly` (subscription), `studio`, `enterprise`, `lifetime` (no ex
 ```bash
 php services/license-server/tests/test-license-server.php   # from the repo root
 ```
+
+## Getting the key to the buyer
+
+Two paths, on purpose — one is convenient, the other survives a closed tab:
+
+1. **Email**, sent by this service on first issue. Only on a *first* issue: Polar
+   delivers at-least-once, and re-sending on every retry would mail the buyer the same
+   key repeatedly for one purchase. A mail failure is logged and never changes the HTTP
+   response — the sale succeeded and the record is stored, so a non-2xx here would make
+   Polar retry and leave the buyer wondering whether they were charged.
+
+2. **`GET /claim?order_id=…`**, for the checkout success page. Set the Polar success URL
+   to `https://you/success?checkout_id={CHECKOUT_ID}` and have the page call this.
+
+`/claim` is the only unauthenticated endpoint that returns a secret, so it is narrow by
+design: it never issues (the webhook is the only path that mints), it 404s for anything
+not found so it cannot be used to probe which order ids exist, and it stops answering
+after `CLAIM_WINDOW` (1h). That last part matters because a success URL can survive in
+browser history, a screen share or a referrer header, and the window keeps that from
+being a permanent handle on the key. After it closes, email is the way — or the operator
+looks it up through `/licenses`.
