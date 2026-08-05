@@ -553,6 +553,7 @@
         "col_created": "Creado",
         "col_expires": "Caduca",
         "col_password": "Contraseña",
+        "col_link": "Enlace",
         "expired": "Caducado",
         "revoke": "Revocar",
         "revoked": "Revocado",

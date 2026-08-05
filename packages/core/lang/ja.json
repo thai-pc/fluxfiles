@@ -553,6 +553,7 @@
         "col_created": "作成日",
         "col_expires": "有効期限",
         "col_password": "パスワード",
+        "col_link": "リンク",
         "expired": "期限切れ",
         "revoke": "失効",
         "revoked": "失効しました",

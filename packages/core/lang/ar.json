@@ -553,6 +553,7 @@
         "col_created": "تاريخ الإنشاء",
         "col_expires": "تاريخ الانتهاء",
         "col_password": "كلمة المرور",
+        "col_link": "الرابط",
         "expired": "منتهي",
         "revoke": "إبطال",
         "revoked": "تم الإبطال",

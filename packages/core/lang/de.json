@@ -553,6 +553,7 @@
         "col_created": "Erstellt",
         "col_expires": "Läuft ab",
         "col_password": "Passwort",
+        "col_link": "Link",
         "expired": "Abgelaufen",
         "revoke": "Widerrufen",
         "revoked": "Widerrufen",

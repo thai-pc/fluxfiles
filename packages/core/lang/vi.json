@@ -553,6 +553,7 @@
         "col_created": "Ngày tạo",
         "col_expires": "Hết hạn",
         "col_password": "Mật khẩu",
+        "col_link": "Liên kết",
         "expired": "Đã hết hạn",
         "revoke": "Thu hồi",
         "revoked": "Đã thu hồi",

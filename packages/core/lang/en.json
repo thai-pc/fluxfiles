@@ -553,6 +553,7 @@
         "col_created": "Created",
         "col_expires": "Expires",
         "col_password": "Password",
+        "col_link": "Link",
         "expired": "Expired",
         "revoke": "Revoke",
         "revoked": "Revoked",

@@ -553,6 +553,7 @@
         "col_created": "Criado",
         "col_expires": "Expira",
         "col_password": "Senha",
+        "col_link": "Link",
         "expired": "Expirado",
         "revoke": "Revogar",
         "revoked": "Revogado",

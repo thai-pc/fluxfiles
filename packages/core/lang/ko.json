@@ -553,6 +553,7 @@
         "col_created": "생성일",
         "col_expires": "만료일",
         "col_password": "비밀번호",
+        "col_link": "링크",
         "expired": "만료됨",
         "revoke": "해지",
         "revoked": "해지됨",

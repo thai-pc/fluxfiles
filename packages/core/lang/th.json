@@ -553,6 +553,7 @@
         "col_created": "สร้างเมื่อ",
         "col_expires": "หมดอายุ",
         "col_password": "รหัสผ่าน",
+        "col_link": "ลิงก์",
         "expired": "หมดอายุแล้ว",
         "revoke": "เพิกถอน",
         "revoked": "เพิกถอนแล้ว",

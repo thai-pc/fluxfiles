@@ -553,6 +553,7 @@
         "col_created": "Aangemaakt",
         "col_expires": "Verloopt",
         "col_password": "Wachtwoord",
+        "col_link": "Link",
         "expired": "Verlopen",
         "revoke": "Intrekken",
         "revoked": "Ingetrokken",

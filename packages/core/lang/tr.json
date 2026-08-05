@@ -553,6 +553,7 @@
         "col_created": "Oluşturuldu",
         "col_expires": "Süre sonu",
         "col_password": "Parola",
+        "col_link": "Bağlantı",
         "expired": "Süresi doldu",
         "revoke": "İptal et",
         "revoked": "İptal edildi",

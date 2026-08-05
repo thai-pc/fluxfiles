@@ -553,6 +553,7 @@
         "col_created": "Создано",
         "col_expires": "Истекает",
         "col_password": "Пароль",
+        "col_link": "Ссылка",
         "expired": "Истекла",
         "revoke": "Отозвать",
         "revoked": "Отозвано",
