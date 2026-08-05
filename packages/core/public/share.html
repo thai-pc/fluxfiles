@@ -66,6 +66,13 @@
       var $ = function (id) { return document.getElementById(id); };
       var gate = $('gate'), lock = $('lock'), view = $('view');
       var grant = '';
+      // Where the API lives. Defaults to the standalone layout; a host that serves
+      // this page from elsewhere (the WordPress plugin serves it out of wp-content,
+      // with the API under /wp-json/…) sets window.__FM_API_BASE__ before this script
+      // runs. Trailing slash trimmed so the paths below stay readable.
+      // Keep this comment brand-free: the shell is deliberately unbranded so an
+      // operator can white-label it, and a test asserts the served HTML says nothing.
+      var API = String(window.__FM_API_BASE__ || '/api/fm').replace(/\/+$/, '');
 
       function fail(text) {
         lock.classList.add('hidden'); view.classList.add('hidden');
@@ -85,7 +92,7 @@
 
       if (!token) { fail('This link is missing its token.'); return; }
 
-      fetch('/api/fm/share/info?token=' + encodeURIComponent(token))
+      fetch(API + '/share/info?token=' + encodeURIComponent(token))
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok || !res.j || res.j.error) { fail((res.j && res.j.error) || 'This link is invalid or has expired.'); return; }
@@ -134,7 +141,7 @@
         $('meta').textContent = bits.join(' · ');
 
         $('download').onclick = function () {
-          var url = '/api/fm/share/file?token=' + encodeURIComponent(token) + '&dl=1';
+          var url = API + '/share/file?token=' + encodeURIComponent(token) + '&dl=1';
           if (grant) { url += '&g=' + encodeURIComponent(grant); }
           location.href = url;
         };
@@ -143,7 +150,7 @@
       $('unlock').addEventListener('click', function () {
         var btn = $('unlock');
         btn.disabled = true;
-        fetch('/api/fm/share/unlock', {
+        fetch(API + '/share/unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: token, password: $('pw').value })

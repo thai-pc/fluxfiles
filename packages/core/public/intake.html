@@ -62,6 +62,13 @@
     (function () {
       var qs = new URLSearchParams(location.search);
       var token = qs.get('token') || '';
+      // Where the API lives. Defaults to the standalone layout; a host that serves
+      // this page from elsewhere (the WordPress plugin serves it out of wp-content,
+      // with the API under /wp-json/…) sets window.__FM_API_BASE__ before this script
+      // runs. Trailing slash trimmed so the paths below stay readable.
+      // Keep this comment brand-free: the shell is deliberately unbranded so an
+      // operator can white-label it, and a test asserts the served HTML says nothing.
+      var API = String(window.__FM_API_BASE__ || '/api/fm').replace(/\/+$/, '');
       var $ = function (id) { return document.getElementById(id); };
       var gate = $('gate'), form = $('form');
 
@@ -70,7 +77,7 @@
       if (!token) { fail('This upload link is missing its token.'); return; }
 
       var info = null;
-      fetch('/api/fm/intake/info?token=' + encodeURIComponent(token))
+      fetch(API + '/intake/info?token=' + encodeURIComponent(token))
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok || !res.j || res.j.error) { fail((res.j && res.j.error) || 'This upload link is invalid or has expired.'); return; }
@@ -114,7 +121,7 @@
         fd.append('file', file);
 
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/fm/intake/upload');
+        xhr.open('POST', API + '/intake/upload');
         xhr.upload.onprogress = function (e) { if (e.lengthComputable) { fill.style.width = Math.round(e.loaded / e.total * 100) + '%'; } };
         xhr.onload = function () {
           var j = {};

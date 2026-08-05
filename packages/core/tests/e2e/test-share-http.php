@@ -289,9 +289,15 @@ try {
         assertEqual(200, $st);
         assertTrue(stripos($h['content-type'] ?? '', 'text/html') === 0, 'html: ' . ($h['content-type'] ?? ''));
         assertTrue(strpos($body, '<meta name="referrer" content="no-referrer">') !== false, 'referrer meta');
-        foreach (['/api/fm/share/info', '/api/fm/share/unlock', '/api/fm/share/file'] as $route) {
+        // Asserted on the route NAMES, not on a full literal path: the page resolves
+        // its API base at runtime (window.__FM_API_BASE__) so a host that serves it from
+        // elsewhere — the WordPress plugin serves it out of wp-content, with the API
+        // under /wp-json/ — can point it at their own namespace. The default base is
+        // checked separately below, which is what keeps standalone honest.
+        foreach (['/share/info', '/share/unlock', '/share/file'] as $route) {
             assertTrue(strpos($body, $route) !== false, "wired to {$route}");
         }
+        assertTrue(strpos($body, "'/api/fm'") !== false, 'defaults to the standalone API base');
         assertTrue(strpos($body, '<?php') === false, 'no PHP leaked into the landing');
         // Free shell: nothing branded of its own — brand comes from the paid payload.
         assertTrue(strpos($body, 'FluxFiles') === false, 'brand-neutral shell');
