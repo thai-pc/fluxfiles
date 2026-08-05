@@ -191,6 +191,57 @@ class FluxFilesApi
             'callback' => [$api, 'handleAudit'],
         ]));
 
+        // ── Share + Intake ──────────────────────────────────────────────────
+        // Operator side: create/list/revoke, behind the normal JWT + the paid-module
+        // gate. The public recipient routes are registered separately below and are
+        // deliberately NOT behind checkAuth.
+        register_rest_route($ns, $p . '/share', array_merge($writeArgs, [
+            'callback' => [$api, 'handleShareCreate'],
+        ]));
+        register_rest_route($ns, $p . '/share/list', array_merge($readArgs, [
+            'callback' => [$api, 'handleShareList'],
+        ]));
+        register_rest_route($ns, $p . '/share/revoke', array_merge($writeArgs, [
+            'callback' => [$api, 'handleShareRevoke'],
+        ]));
+        register_rest_route($ns, $p . '/intake', array_merge($writeArgs, [
+            'callback' => [$api, 'handleIntakeCreate'],
+        ]));
+        register_rest_route($ns, $p . '/intake/list', array_merge($readArgs, [
+            'callback' => [$api, 'handleIntakeList'],
+        ]));
+        register_rest_route($ns, $p . '/intake/revoke', array_merge($writeArgs, [
+            'callback' => [$api, 'handleIntakeRevoke'],
+        ]));
+
+        // ── PUBLIC recipient routes ─────────────────────────────────────────
+        //
+        // `__return_true` is correct here and must stay: these are the routes a
+        // RECIPIENT hits, someone with no WordPress account and no JWT. They are
+        // authenticated by the share/portal token in the query string — the same
+        // posture as /img and /stream — and every check (signature, expiry, password,
+        // download cap, revocation) happens inside the shared core handler.
+        //
+        // What that means in practice: an unauthenticated caller reaches core code, so
+        // the gate is the token, not this callback. Do not "tighten" this to checkAuth
+        // — that would make every share link 401 for the people it is for.
+        $public = ['permission_callback' => '__return_true'];
+        register_rest_route($ns, $p . '/share/info', array_merge($public, [
+            'methods' => 'GET', 'callback' => [$api, 'handleSharePublicRoute'],
+        ]));
+        register_rest_route($ns, $p . '/share/unlock', array_merge($public, [
+            'methods' => 'POST', 'callback' => [$api, 'handleSharePublicRoute'],
+        ]));
+        register_rest_route($ns, $p . '/share/file', array_merge($public, [
+            'methods' => 'GET', 'callback' => [$api, 'handleSharePublicRoute'],
+        ]));
+        register_rest_route($ns, $p . '/intake/info', array_merge($public, [
+            'methods' => 'GET', 'callback' => [$api, 'handleIntakePublicRoute'],
+        ]));
+        register_rest_route($ns, $p . '/intake/upload', array_merge($public, [
+            'methods' => 'POST', 'callback' => [$api, 'handleIntakePublicRoute'],
+        ]));
+
         // Token refresh — mints a fresh JWT for the logged-in WP user (cookie +
         // REST nonce auth, NOT the JWT). The embedded UI's onTokenRefresh hook
         // calls this after the iframe's JWT expires, so a still-logged-in user
@@ -1096,6 +1147,103 @@ class FluxFilesApi
      * Optimization (paid module) — 3-layer gate inside ModuleRegistry (installed
      * 501 + licensed 402 + allow_optimize 403). Free hosts → 501.
      */
+    // ── Share + Intake ──────────────────────────────────────────────────────
+
+    /**
+     * Operator routes. The paid module does the work; this only supplies WordPress's
+     * FileManager and the recipient link base, and it never touches the returned
+     * token — that is shown once and never stored, exactly as in standalone.
+     */
+    private function shareIntake(\WP_REST_Request $request, string $module, string $op): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, $op !== 'list');
+            $mod = \FluxFiles\ModuleRegistry::require($module, FluxFilesPlugin::license(), $claims);
+            $secret = (string) get_option('fluxfiles_secret', '');
+            $disk = (string) ($request->get_param('disk') ?: 'local');
+
+            if ($op === 'list') {
+                return $this->ok($module === 'share'
+                    ? $mod->listShares($this->diskManager, $claims, $disk)
+                    : $mod->listPortals($this->diskManager, $claims, $disk));
+            }
+            $body = $this->body($request);
+            if ($op === 'revoke') {
+                $jti = (string) ($body['jti'] ?? '');
+                return $this->ok($module === 'share'
+                    ? $mod->revokeShare($this->diskManager, $claims, $disk, $jti)
+                    : $mod->revokePortal($this->diskManager, $claims, $disk, $jti));
+            }
+
+            $fm = $this->fileManager($claims);
+            $res = $module === 'share'
+                ? $mod->createShare($fm, $this->diskManager, $claims, $secret, $body)
+                : $mod->createPortal($fm, $this->diskManager, $claims, $secret, $body);
+
+            // The recipient URL. The module builds it when the token carries a base
+            // URL; otherwise point at the page this plugin serves — a WordPress site
+            // has no /public/share.html at its root the way standalone does.
+            if (empty($res['url']) && !empty($res['token'])) {
+                $res['url'] = FluxFilesPlugin::publicLinkUrl(
+                    $module === 'share' ? 'share.html' : 'intake.html',
+                    (string) $res['token']
+                );
+            }
+            return $this->ok($res);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function handleShareCreate(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'share', 'create'); }
+    public function handleShareList(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'share', 'list'); }
+    public function handleShareRevoke(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'share', 'revoke'); }
+    public function handleIntakeCreate(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'intake', 'create'); }
+    public function handleIntakeList(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'intake', 'list'); }
+    public function handleIntakeRevoke(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'intake', 'revoke'); }
+
+    /**
+     * The PUBLIC recipient routes, delegated to the SAME core handlers standalone uses.
+     *
+     * Nothing about tokens, expiry, passwords, download caps or byte-sending is
+     * reimplemented here — a second copy of that is how a hole appears on one platform
+     * only. This supplies WordPress's DiskManager (its uploads live under wp-content,
+     * not under the core directory, so the default would resolve against a directory
+     * holding none of the files) and then gets out of the way.
+     *
+     * The core handler writes its own response and exits, which is why this returns
+     * nothing meaningful: WP's REST envelope must not wrap a 302 redirect or a byte
+     * stream. `$_GET`/`$_POST` are already populated by PHP for these requests.
+     */
+    private function publicLink(string $which, \WP_REST_Request $request): void
+    {
+        $apiDir = FluxFilesPlugin::corePath('api');
+        if ($apiDir === null || !is_file($apiDir . '/PublicLinks.php')) {
+            // Bundled core missing — say so rather than fataling on a require.
+            status_header(501);
+            wp_send_json(['data' => null, 'error' => 'The FluxFiles core is not available',
+                'error_code' => 'core_missing'], 501);
+        }
+        require_once $apiDir . '/PublicLinks.php';
+        $method = $request->get_method();
+        $uri = '/api/fm/' . $which . '/' . basename((string) $request->get_route());
+
+        // The core handler reads the signing secret and the storage path from $_ENV.
+        $_ENV['FLUXFILES_SECRET'] = (string) get_option('fluxfiles_secret', '');
+        $_ENV['FLUXFILES_STORAGE_PATH'] = FluxFilesPlugin::storagePath();
+
+        if ($which === 'share') {
+            handleSharePublic($method, $uri, $this->diskManager, FluxFilesPlugin::diskConfigs());
+        } else {
+            handleIntakePublic($method, $uri, $this->diskManager, FluxFilesPlugin::diskConfigs());
+        }
+        exit;   // the core handler has already sent status, headers and body
+    }
+
+    public function handleSharePublicRoute(\WP_REST_Request $r): void { $this->publicLink('share', $r); }
+    public function handleIntakePublicRoute(\WP_REST_Request $r): void { $this->publicLink('intake', $r); }
+
     public function handleOptimize(\WP_REST_Request $request): \WP_REST_Response
     {
         try {

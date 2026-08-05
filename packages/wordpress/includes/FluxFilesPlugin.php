@@ -158,6 +158,27 @@ class FluxFilesPlugin
     }
 
     /**
+     * The public URL of a bundled recipient page (share.html / intake.html), with the
+     * one-shot token attached.
+     *
+     * Standalone serves these from /public/ at the site root; a WordPress site has no
+     * such path. They go through public-link.php, which injects the REST base the
+     * static page cannot know — see that file.
+     */
+    public static function publicLinkUrl(string $page, string $token = ''): string
+    {
+        $which = $page === 'intake.html' ? 'intake' : 'share';
+        $args = ['page' => $which];
+        // Token omitted = the BASE url, which is what the *_base_url claims carry: the
+        // module appends `&token=…` itself, so a base that already had one would
+        // produce two and resolve the wrong (first) value.
+        if ($token !== '') {
+            $args['token'] = $token;
+        }
+        return add_query_arg($args, plugins_url('public-link.php', FLUXFILES_PLUGIN_FILE));
+    }
+
+    /**
      * Get disk configurations.
      */
     public static function diskConfigs(): array
@@ -361,15 +382,33 @@ class FluxFilesPlugin
         if (!empty($overrides['esign_url'])) {
             $payload['esign_url'] = (string) $overrides['esign_url'];
         }
-        // NOTE: Share and Intake are intentionally NOT forwarded — neither the gate
-        // claims (`allow_share`/`allow_intake`) nor their config (`share_url_ttl`,
-        // `share_base_url`, `share_preview`, `intake_base_url`). The plugin is
-        // proxy-only and the REST API exposes none of the six operator endpoints (nor
-        // the public landing routes), so the UI would render a button for something
-        // that 404s, and the config alone would be dead. Core-standalone only, same
-        // reasoning as the SSH terminal above. The unset also covers whatever an
-        // edition preset defaulted (`edition: pro` seeds both gates).
-        unset($payload['allow_share'], $payload['allow_intake']);
+        // Share and Intake. These used to be stripped here, because the REST API
+        // exposed none of their endpoints and a forwarded claim would have rendered a
+        // button that 404s. It now proxies all eleven — the six operator routes and the
+        // five public recipient ones — so the claims are forwarded like any other.
+        foreach (['allow_share', 'allow_intake'] as $mc) {
+            if (array_key_exists($mc, $overrides)) {
+                $payload[$mc] = (bool) $overrides[$mc];
+            }
+        }
+        // Share landing config, read by the module at create time and baked into the
+        // record, so it travels with the gate claim (core clamps the TTL and drops a
+        // non-http(s) base URL on decode).
+        if (!empty($overrides['share_url_ttl'])) {
+            $payload['share_url_ttl'] = (int) $overrides['share_url_ttl'];
+        }
+        if (array_key_exists('share_preview', $overrides)) {
+            $payload['share_preview'] = (bool) $overrides['share_preview'];
+        }
+        // The recipient link base. Defaults to this site's own page rather than being
+        // left empty: empty makes the module fall back to the request origin plus
+        // `/public/share.html`, a path a WordPress site does not have.
+        $payload['share_base_url'] = !empty($overrides['share_base_url'])
+            ? (string) $overrides['share_base_url']
+            : self::publicLinkUrl('share.html');
+        $payload['intake_base_url'] = !empty($overrides['intake_base_url'])
+            ? (string) $overrides['intake_base_url']
+            : self::publicLinkUrl('intake.html');
         foreach (['allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];

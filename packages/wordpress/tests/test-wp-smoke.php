@@ -77,6 +77,12 @@ if (!function_exists('add_query_arg')) {
 if (!defined('HOUR_IN_SECONDS')) { define('HOUR_IN_SECONDS', 3600); }
 if (!defined('FLUXFILES_PLUGIN_FILE')) { define('FLUXFILES_PLUGIN_FILE', __DIR__ . '/../fluxfiles.php'); }
 if (!defined('FLUXFILES_VERSION')) { define('FLUXFILES_VERSION', '0.2.41'); }
+if (!function_exists('plugins_url')) {
+    function plugins_url($path = '', $plugin = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($path, '/'); }
+}
+if (!function_exists('rest_url')) {
+    function rest_url($path = '') { return 'http://wp.test/wp-json/' . ltrim($path, '/'); }
+}
 if (!function_exists('get_current_user_id')) {
     function get_current_user_id() { return (int) ($GLOBALS['WP_OPTIONS']['_test_user_id'] ?? 0); }
 }
@@ -234,7 +240,11 @@ test('generateToken forwards versioning + webhook config claims, not just the ga
 // exposes none of the six operator endpoints (nor the public landing routes), so the
 // gate claims would render a button that 404s and their config would be dead. Same
 // reasoning as the SSH terminal.
-test('generateToken never forwards share/intake gates or their config', function () use ($secret) {
+test('generateToken forwards the share/intake gates and their config', function () use ($secret) {
+    // This test used to assert the OPPOSITE: the claims were stripped because the REST
+    // API exposed none of the endpoints, so a forwarded claim meant a button that 404s.
+    // The proxy now serves all eleven routes, so stripping them would instead hide a
+    // feature the customer paid for.
     $token = FluxFilesPlugin::generateToken(56, [
         'allow_share'     => true,
         'allow_intake'    => true,
@@ -244,19 +254,19 @@ test('generateToken never forwards share/intake gates or their config', function
         'intake_base_url' => 'https://files.acme.com/public/intake.html',
     ]);
     $p = \FluxFiles\JwtCompat::decode($token, $secret);
-    foreach (['allow_share', 'allow_intake', 'share_url_ttl', 'share_base_url', 'share_preview', 'intake_base_url'] as $k) {
-        assertEqual(false, isset($p->$k), "{$k} not present in a minted token");
-    }
-    // …not even via the edition preset, which defaults both gates for 'pro'.
-    $pro = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(57, ['edition' => 'pro']), $secret);
-    assertEqual(false, isset($pro->allow_share), 'edition preset cannot light up share');
-    assertEqual(false, isset($pro->allow_intake), 'edition preset cannot light up intake');
-    assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected (optimize IS proxied)');
-    // The other module gates have no UI button and keep their behaviour.
-    $other = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(58, ['allow_ocr' => true]), $secret);
-    assertEqual(true, $other->allow_ocr ?? null, 'allow_ocr unchanged');
-});
+    assertEqual(true, $p->allow_share ?? null, 'share gate forwarded');
+    assertEqual(true, $p->allow_intake ?? null, 'intake gate forwarded');
+    assertEqual(120, $p->share_url_ttl ?? null, 'share_url_ttl forwarded');
+    assertEqual('https://files.acme.com/public/share.html', $p->share_base_url ?? null);
+    assertEqual(false, $p->share_preview ?? null, 'share_preview forwarded');
+    assertEqual('https://files.acme.com/public/intake.html', $p->intake_base_url ?? null);
 
+    // The edition preset lights both gates up, as it always intended to.
+    $pro = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(57, ['edition' => 'pro']), $secret);
+    assertEqual(true, $pro->allow_share ?? null, 'edition preset enables share');
+    assertEqual(true, $pro->allow_intake ?? null, 'edition preset enables intake');
+    assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected');
+});
 test('generateToken without a secret → throws', function () {
     $prev = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
     $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';
@@ -629,6 +639,81 @@ test('plugin declares Update URI so wordpress.org cannot hijack the slug', funct
     // would be served to our users as an update.
     $head = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
     assertTrue(strpos($head, 'Update URI:') !== false, 'Update URI header present');
+});
+
+// ── Share + Intake over the WordPress proxy ──────────────────────────────────
+// WordPress is the channel the strategy calls "bread-and-butter", and until now a
+// customer who bought Pro could not use either hero product here: the REST API
+// exposed none of the endpoints and the plugin stripped the claims.
+
+test('share/intake: the claims are forwarded now that the endpoints exist', function () {
+    $tok = FluxFilesPlugin::generateToken(1, ['allow_share' => true, 'allow_intake' => true]);
+    $p = \FluxFiles\JwtCompat::decode($tok, $GLOBALS['WP_OPTIONS']['fluxfiles_secret']);
+    assertEqual(true, $p->allow_share ?? null, 'allow_share reaches the token');
+    assertEqual(true, $p->allow_intake ?? null, 'allow_intake reaches the token');
+});
+
+test('share/intake: base URLs point at this site, not a path WordPress lacks', function () {
+    // Left empty, the module falls back to the request origin + /public/share.html —
+    // a path a WordPress site does not serve, so every link would 404.
+    $tok = FluxFilesPlugin::generateToken(1, ['allow_share' => true]);
+    $p = \FluxFiles\JwtCompat::decode($tok, $GLOBALS['WP_OPTIONS']['fluxfiles_secret']);
+    $base = (string) ($p->share_base_url ?? '');
+    assertTrue(strpos($base, 'public-link.php') !== false, 'points at the plugin shim');
+    assertTrue(strpos($base, 'page=share') !== false, 'names which page');
+    // The module appends `&token=…` itself. A base that already carried one would
+    // produce two, and the first (empty) one wins.
+    assertTrue(strpos($base, 'token=') === false, 'the base carries NO token');
+});
+
+test('share/intake: an explicit base_url override still wins', function () {
+    $tok = FluxFilesPlugin::generateToken(1, [
+        'allow_share' => true, 'share_base_url' => 'https://files.acme.com/s',
+    ]);
+    $p = \FluxFiles\JwtCompat::decode($tok, $GLOBALS['WP_OPTIONS']['fluxfiles_secret']);
+    assertEqual('https://files.acme.com/s', $p->share_base_url ?? null);
+});
+
+test('the five PUBLIC routes are deliberately unauthenticated', function () {
+    // A recipient has no WordPress account and no JWT — the share token in the query
+    // string is the whole gate. If someone "tightens" these to checkAuth, every share
+    // link 401s for exactly the people it is for, so the intent is asserted here.
+    $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    foreach (['/share/info', '/share/unlock', '/share/file', '/intake/info', '/intake/upload'] as $r) {
+        assertTrue(strpos($api, "\$p . '{$r}'") !== false, "public route registered: {$r}");
+    }
+    assertTrue(strpos($api, "'permission_callback' => '__return_true'") !== false,
+        'public routes use __return_true');
+    // …and the operator routes must NOT be public.
+    foreach (['/share/list', '/share/revoke', '/intake/list', '/intake/revoke'] as $r) {
+        $pos = strpos($api, "\$p . '{$r}'");
+        assertTrue($pos !== false, "operator route registered: {$r}");
+        $window = substr($api, $pos, 200);
+        assertTrue(strpos($window, '__return_true') === false, "{$r} is NOT public");
+    }
+});
+
+test('public routes delegate to core rather than reimplementing the checks', function () {
+    // A second copy of the traversal guards, the MIME rules, the brute-force limiter
+    // and the download counter is how a hole appears on one platform only.
+    $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($api, 'handleSharePublic(') !== false, 'calls the core share handler');
+    assertTrue(strpos($api, 'handleIntakePublic(') !== false, 'calls the core intake handler');
+    assertTrue(strpos($api, 'PublicLinks.php') !== false, 'includes the shared core file');
+    // WordPress uploads live under wp-content, not under the core directory: without
+    // passing its own DiskManager the handler resolves against a directory holding
+    // none of the files.
+    assertTrue(strpos($api, '$this->diskManager, FluxFilesPlugin::diskConfigs()') !== false,
+        'the WP DiskManager is injected');
+});
+
+test('the recipient page shim only serves the two known pages', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../public-link.php');
+    assertTrue(strpos($src, "\$pages = ['share' => 'share.html', 'intake' => 'intake.html']") !== false,
+        'whitelist, not a sanitiser — this value reaches a filesystem read');
+    assertTrue(strpos($src, '__FM_API_BASE__') !== false, 'injects the REST base');
+    assertTrue(strpos($src, 'Referrer-Policy: no-referrer') !== false,
+        'the URL carries the token, so it must not leak in a Referer');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

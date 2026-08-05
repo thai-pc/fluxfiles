@@ -3,6 +3,52 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.85] — 2026-08-05
+
+> Released: core `core-v0.2.69`, wordpress `0.2.43`. Laravel unchanged — it still does
+> not proxy these routes, and its route-parity list still says so.
+
+### Added — Share and Intake work on WordPress
+
+`ROADMAP.md` calls WordPress the hero channel for the file-portal story, and
+`COMMERCIAL-STRATEGY.md` calls persona A (agency/WP) the bread-and-butter of the funnel.
+Neither hero product worked there: the REST proxy exposed none of the endpoints and the
+plugin explicitly stripped `allow_share`/`allow_intake` from every token. A customer
+could buy Pro, and now enter their licence key, and still have nothing to click.
+
+**The recipient pages already existed.** `share.html` and `intake.html` have shipped
+inside the plugin bundle all along — complete, tested and translated — and were simply
+unreachable, because they resolved the API from the site root (`/api/fm/…`) where
+WordPress answers under `/wp-json/`. They now read `window.__FM_API_BASE__`, defaulting
+to the old value so standalone is untouched, and `public-link.php` serves them with the
+REST base injected.
+
+**The public routes call core, not a copy.** The five recipient endpoints
+(`share/info|unlock|file`, `intake/info|upload`) delegate to the same handlers
+standalone uses, moved into `api/PublicLinks.php` so they can be included without
+running index.php's auth and routing as a side effect. Reimplementing them was the
+alternative and was rejected: ~400 lines of traversal guards, MIME-by-extension (never
+sniffed), the two-bucket password brute-force limiter, presigned-redirect versus
+streamed bytes, and the download counter — a second copy is how a hole appears on one
+platform only.
+
+Those five routes are registered `permission_callback => '__return_true'`, which is
+correct and load-bearing: a recipient has no WordPress account and no JWT, and the share
+token in the query string is the whole gate. A test asserts it, because "tightening"
+them to `checkAuth` would 401 every share link for exactly the people it is for.
+
+The handlers are passed WordPress's own DiskManager. Core resolves the local disk to
+`api/../storage/uploads` while WordPress keeps uploads under `wp-content`, so the
+default would have resolved every share against a directory holding none of the files.
+
+`share_base_url` / `intake_base_url` now default to this site's own page rather than
+being left empty — empty makes the module fall back to the request origin plus
+`/public/share.html`, a path a WordPress site does not serve.
+
+One earlier test asserted the exact opposite (that the claims are always stripped). It
+was right when the endpoints did not exist and is now rewritten, with the reasoning kept
+so the reversal is not mistaken for drift.
+
 ## [0.2.84] — 2026-08-05
 
 > Released: wordpress `0.2.42`. Core and the other adapters unchanged.

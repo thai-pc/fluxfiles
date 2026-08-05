@@ -3,7 +3,7 @@
  * Plugin Name: FluxFiles
  * Plugin URI:  https://github.com/thai-pc/fluxfiles
  * Description: Multi-storage file manager with Local/S3/R2 support, image optimization, and full-text search.
- * Version:     0.2.42
+ * Version:     0.2.43
  * Author:      thai-pc
  * Author URI:  https://github.com/thai-pc
  * License:     MIT
@@ -16,7 +16,7 @@
 
 defined('ABSPATH') || exit;
 
-define('FLUXFILES_VERSION', '0.2.42');
+define('FLUXFILES_VERSION', '0.2.43');
 define('FLUXFILES_PLUGIN_FILE', __FILE__);
 define('FLUXFILES_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FLUXFILES_PLUGIN_URL', plugin_dir_url(__FILE__));
