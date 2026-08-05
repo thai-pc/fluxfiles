@@ -34,9 +34,11 @@ $green = "\033[32m"; $red = "\033[31m"; $yellow = "\033[33m"; $cyan = "\033[36m"
 /**
  * What to sell, and for how much.
  *
- * Prices are in CENTS. The ranges come from docs/COMMERCIAL-STRATEGY.md (Pro $59–99/yr,
- * Studio $199–399/yr); the exact number is a business decision, so edit it here before
- * running rather than letting a script pick it.
+ * Prices are in CENTS and MUST match the landing page's own table
+ * (../../../fluxfiles-landing/src/components/Pricing.astro). A static marketing page
+ * cannot ask the API what a product costs, so the two are duplicated — and an
+ * advertised price that differs from the charged one is the worst kind of bug to ship.
+ * The landing is the source of truth for what a customer was promised.
  *
  * Plans deliberately absent:
  *   enterprise — sold custom with an SLA, not self-serve. A checkout button for it
@@ -60,15 +62,13 @@ const CATALOGUE = [
     'studio' => [
         'name' => 'FluxFiles Studio',
         'description' => 'Everything in Pro plus file versioning, webhooks and the AI/OCR modules (bring your own API key). For teams embedding FluxFiles in their own product.',
-        'amount' => 24900,          // $249 / year
+        'amount' => 29900,          // $299 / year — matches the landing's Pricing.astro
         'recurring' => 'year',
     ],
     'studio-monthly' => [
         'name' => 'FluxFiles Studio (monthly)',
         'description' => 'Everything in Pro plus file versioning, webhooks and the AI/OCR modules (bring your own API key). Billed monthly.',
-        // Keeps the same annual discount as Pro (which is $9/mo against $79/yr, ~27%
-        // off): 12 × $29 = $348 against $249.
-        'amount' => 2900,           // $29 / month
+        'amount' => 2900,           // $29 / month — matches the landing
         'recurring' => 'month',
     ],
 ];
