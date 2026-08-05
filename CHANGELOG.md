@@ -3,6 +3,36 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.87] — 2026-08-05
+
+> Released: core `core-v0.2.71`. Adapters unchanged (this is inside the iframe).
+
+### Fixed — the links table's Link column had no header of its own
+
+Both tables in the Links panel labelled their URL column with `links.link_hidden`, a
+string written to explain that a token is shown once and not stored. As a column
+header it read as a sentence where a noun belonged. The column now uses its own
+`links.col_link` key ("Link"), added across all 16 locales; `link_hidden` keeps its
+original job in the reveal modal.
+
+### Added — a runbook for the steps that are infrastructure, not code
+
+`docs/OPERATIONS.md` is the seller-side counterpart to `ACTIVATE.md`: rotate leaked
+tokens, host the module artifacts, deploy the update and licence servers, point Polar's
+webhook at it, create the production products, switch the landing over. Order matters —
+each step depends on the one before — and the known limits are written down (the
+one-hour `/claim` window, no early revoke on cancellation, module floors checked by
+hand) so they are not discovered during a first sale.
+
+`polar-setup.php` now reads its token from the repo-root `.env`, so it never has to be
+typed on a command line or land in shell history. It picks the variable matching the
+environment, which is what stops a sandbox token from reaching production.
+
+*(The runbook and licence server ship in the repository, not in a released package —
+this release is the core change above.)*
+
+---
+
 ## [0.2.86] — 2026-08-05
 
 > Released: core `core-v0.2.70`. Adapters unchanged.
