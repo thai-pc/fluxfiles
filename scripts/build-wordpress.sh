@@ -51,6 +51,12 @@ cp "$SDK_DIR/fluxfiles.js" "$PLUGIN_DIR/assets/fluxfiles.js"
 
 echo "==> Copying core embed helper + license..."
 cp "$CORE_DIR/embed.php" "$PLUGIN_DIR/embed.php"
+# The paid-module autoloader. Composer's `autoload.files` (from the core
+# composer.json used below) references it at the plugin root, and the layout it
+# probes — <plugin>/vendor/fluxfiles/<module>/src/ — is exactly where ACTIVATE.md
+# tells a WordPress customer to unpack the zip. Without this file the plugin loads,
+# the licence verifies, and every paid gate still answers 501.
+cp "$CORE_DIR/modules-autoload.php" "$PLUGIN_DIR/modules-autoload.php"
 [ -f "$ROOT_DIR/LICENSE" ] && cp "$ROOT_DIR/LICENSE" "$PLUGIN_DIR/LICENSE" || true
 
 # The plugin's own composer.json declares its WP-side deps. We install with the

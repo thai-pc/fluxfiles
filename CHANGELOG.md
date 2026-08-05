@@ -3,6 +3,61 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.88] — 2026-08-05
+
+> Released: core `core-v0.2.72`. The WordPress plugin picks this up through its bundled
+> core, so no adapter tag is needed — but a **plugin rebuild is required**, because the
+> bundle is assembled by a script rather than resolved by Composer.
+
+### Fixed — the module autoloader never reached WordPress or Laravel
+
+`0.2.86` fixed "an installed paid module was never actually loaded" for exactly the
+platforms that were easiest to test, and shipped it as if it were general. The
+registration went into `packages/core/autoload.php` — a file only the **standalone**
+entrypoints require (`api/index.php`, `embed.php`, `bin/fluxfiles`). Anything consuming
+core as a library goes through Composer's `vendor/autoload.php` and never touches it.
+That is both PHP adapters.
+
+Measured against one module installed exactly where `ACTIVATE.md` says to put it:
+
+| entrypoint | `class_exists(ShareModule)` before |
+|---|---|
+| `vendor/autoload.php` — WordPress, Laravel | `false` |
+| `packages/core/autoload.php` — standalone | `true` |
+
+So the release immediately before this one, `wordpress 0.2.43`, was hollow in practice.
+It opened the REST routes and stopped stripping `allow_share`/`allow_intake`, but the
+gate's first layer is `class_exists()`, and that still answered false — a WordPress
+customer could buy Pro, enter a valid key, unpack the zip correctly, and get
+`501 module_not_installed` from the channel `ROADMAP.md` calls the hero channel.
+
+The registration now lives in its own file, `packages/core/modules-autoload.php`,
+reached two ways: core's `composer.json` lists it in `autoload.files` (so every library
+consumer gets it), and `autoload.php` requires it (so the standalone path is unchanged).
+A static guard plus `require_once` keeps that to a single `spl_autoload_register` when
+both happen in one process — otherwise every free-core miss would cost two filesystem
+probes instead of one.
+
+`scripts/build-wordpress.sh` copies the new file into the plugin bundle. That script
+assembles the plugin file by file instead of resolving it, so a new root-level runtime
+file is exactly the kind of thing it silently omits — and omitting this one puts the
+plugin back to `501` for everything paid. Verified on a real built bundle, loaded the
+way `fluxfiles.php` loads it.
+
+### The test that should have existed the first time
+
+`tests/integration/test-module-autoload.php` asserts **both** entrypoints separately, in
+child processes — an autoloader is process-global, so checking twice in one process
+passes for the wrong reason. It also pins the things whose loss is silent: the
+`autoload.files` key, the bundle script's copy, single registration, an absent module
+still resolving to nothing (or free core would stop answering `501`), and the
+`^[a-z0-9]+$` module-name guard that stops a crafted class name walking the filesystem.
+
+Confirmed by reverting the fix: three of its seven cases fail, including the WordPress
+one. A test that cannot fail is not a guard.
+
+---
+
 ## [0.2.87] — 2026-08-05
 
 > Released: core `core-v0.2.71`. Adapters unchanged (this is inside the iframe).

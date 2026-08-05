@@ -30,56 +30,11 @@ foreach ($fluxfilesAutoloadCandidates as $fluxfilesAutoload) {
 }
 
 if ($fluxfilesFound) {
-    /**
-     * Autoload the PAID MODULES.
-     *
-     * Composer cannot do this for us. The modules are private packages, so
-     * `composer require fluxfiles/share` has nothing to resolve against; they arrive
-     * as a signed zip that `fluxfiles update <module>` unpacks into
-     * `vendor/fluxfiles/<module>/`. A directory dropped into vendor/ is invisible to
-     * Composer's generated maps — it only knows what is in composer.json — so before
-     * this, a customer could pay, install correctly, and still be told
-     * `501 module_not_installed`, with nothing to suggest why.
-     *
-     * Resolution is lazy and cheap: the closure only touches the filesystem when a
-     * `FluxFiles\<Something>\` class is actually requested, which happens only when a
-     * paid gate runs. `class_exists()` on a free-core install stays a no-op that ends
-     * in a single is_file() miss.
-     */
-    spl_autoload_register(static function (string $class): void {
-        if (strncmp($class, 'FluxFiles\\', 10) !== 0) {
-            return;
-        }
-        $rest = substr($class, 10);
-        $slash = strpos($rest, '\\');
-        if ($slash === false) {
-            return;   // FluxFiles\Foo is core's own namespace, already mapped
-        }
-        // FluxFiles\Share\ShareModule → module dir "share", relative path ShareModule
-        $module = strtolower(substr($rest, 0, $slash));
-        if (!preg_match('/^[a-z0-9]+$/', $module)) {
-            return;   // never let a crafted class name walk the filesystem
-        }
-        $relative = str_replace('\\', '/', substr($rest, $slash + 1)) . '.php';
-
-        // Only the layouts a real install produces. A monorepo sibling
-        // (packages/share next to packages/core) is deliberately NOT searched: it
-        // exists only in this repository, and treating it as installed would make the
-        // free-core path untestable on the one machine that has the private packages —
-        // every "module absent → 501" test would see the module. The suites that DO
-        // want a module loaded require its source explicitly, which is the honest way
-        // to say "this run has it".
-        foreach ([
-            __DIR__ . '/vendor/fluxfiles/' . $module . '/src/',   // package's own vendor
-            __DIR__ . '/../../fluxfiles/' . $module . '/src/',    // host vendor/
-        ] as $base) {
-            $file = $base . $relative;
-            if (is_file($file)) {
-                require_once $file;
-                return;
-            }
-        }
-    });
+    // Paid-module autoloading lives in its own file so that library consumers get it
+    // too: Composer's `autoload.files` pulls it in for anyone who requires
+    // vendor/autoload.php (the Laravel proxy, the WordPress plugin), which never
+    // reaches this file. `require_once` on both paths keeps it a single registration.
+    require_once __DIR__ . '/modules-autoload.php';
     return;
 }
 
