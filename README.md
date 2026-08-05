@@ -1055,7 +1055,10 @@ Metadata and image variants are transferred together. Quota is checked on the de
 ## JWT Token Structure
 
 > 📖 **Full config reference:** [`docs/CONFIG.md`](docs/CONFIG.md) is the single source
-> of truth for **all** JWT claims (with types/defaults) **and** server env vars. The
+> of truth for **all** JWT claims (with types/defaults) **and** server env vars.
+> Bought a paid edition? [`docs/ACTIVATE.md`](docs/ACTIVATE.md) covers installing the
+> module, where the licence key goes on each platform, and which of the three gates a
+> given error is telling you about. The
 > tables below cover the common ones; mint everything in one options object —
 > `fluxfiles_token(['user' => …, 'claims' => […]])` — where `claims` is the escape
 > hatch for any claim by its raw name.

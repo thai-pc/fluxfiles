@@ -3,6 +3,45 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.86] — 2026-08-05
+
+> Released: core `core-v0.2.70`. Adapters unchanged.
+
+### Fixed — an installed paid module was never actually loaded
+
+Writing the activation guide turned up something worse than a missing page: the
+documented install path did not work. `fluxfiles update share` verifies a signed
+manifest, checks the zip's sha256 and unpacks into `vendor/fluxfiles/share/` — and
+then nothing loaded it. Composer only autoloads what is declared in `composer.json`,
+and a private package dropped into `vendor/` is not, so `class_exists()` stayed false
+and the gate answered `501 module_not_installed`. A customer could pay, install
+correctly, and be told the module was not installed, with nothing to suggest why.
+
+`packages/core/autoload.php` now registers a lazy autoloader for `FluxFiles\<Module>\`
+that resolves against the layouts a real install produces. It only touches the
+filesystem when such a class is requested — which happens only when a paid gate runs —
+so free core pays one `is_file()` miss.
+
+A monorepo sibling (`packages/share` next to `packages/core`) is deliberately **not**
+searched. It exists only in this repository, and treating it as installed would make
+the free-core path untestable on the one machine that has the private packages: every
+"module absent → 501" test would see the module. The suites that want a module loaded
+require its source explicitly, which is the honest way to say "this run has it".
+
+### Added — `docs/ACTIVATE.md`
+
+What to do with a licence key, per platform. It leads with the wrong first step almost
+everyone takes — `composer require fluxfiles/share`, which fails because the package is
+private — and covers WordPress separately, since a shared-hosting site has no shell to
+run the installer from and no way to set an environment variable.
+
+It also maps the three gates to what each error means: `501` is the code missing, `402`
+is the licence, `403` is the token. They are separate checks on purpose, and the error
+says which one to fix.
+
+Every command, module id and error code in it was checked against the source rather
+than written from memory.
+
 ## [0.2.85] — 2026-08-05
 
 > Released: core `core-v0.2.69`, wordpress `0.2.43`. Laravel unchanged — it still does
