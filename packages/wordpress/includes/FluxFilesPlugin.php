@@ -102,6 +102,36 @@ class FluxFilesPlugin
     }
 
     /**
+     * The licence key for this install.
+     *
+     * The core reads `FLUXFILES_LICENSE_KEY` from the environment, which is fine for a
+     * Docker or Laravel deploy and useless on the shared hosting most WordPress sites
+     * run on — there is no shell to export it from. So the plugin stores it as an
+     * option and prefers that, falling back to the environment for the minority who
+     * can set one (and so an existing env-based install keeps working untouched).
+     */
+    public static function licenseKey(): string
+    {
+        $opt = trim((string) get_option('fluxfiles_license_key', ''));
+        if ($opt !== '') {
+            return $opt;
+        }
+        return (string) (getenv('FLUXFILES_LICENSE_KEY') ?: ($_ENV['FLUXFILES_LICENSE_KEY'] ?? ''));
+    }
+
+    /**
+     * The licence verifier, built from wherever the key actually lives.
+     *
+     * Every paid-module gate in the plugin must go through this rather than
+     * LicenseManager::fromEnv(), or a customer who pasted a perfectly good key into the
+     * settings screen is told they have no licence.
+     */
+    public static function license(): \FluxFiles\LicenseManager
+    {
+        return new \FluxFiles\LicenseManager(self::licenseKey() ?: null);
+    }
+
+    /**
      * Get the FluxFiles base installation path (project root).
      */
     public static function basePath(): string

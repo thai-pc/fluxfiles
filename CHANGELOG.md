@@ -3,6 +3,54 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.84] — 2026-08-05
+
+> Released: wordpress `0.2.42`. Core and the other adapters unchanged.
+
+### Fixed — a WordPress customer could not activate or update what they bought
+
+Two gaps that only existed on WordPress, and only mattered to people who had paid.
+
+**There was nowhere to put a licence key.** The core reads `FLUXFILES_LICENSE_KEY` from
+the environment, which is fine for Docker or Laravel and useless on the shared hosting
+most WordPress sites run on — there is no shell to export it from. The plugin had
+fourteen settings and none of them was the licence. Dropping Freemius (see `[0.2.83]`)
+removed the last path that would have worked, so Pro was unactivatable on WordPress.
+
+The plugin now stores the key as an option, preferring it over the environment and
+falling back to it so existing env-based installs keep working. Every paid-module gate
+goes through `FluxFilesPlugin::license()` instead of `LicenseManager::fromEnv()` —
+otherwise a customer who pasted a perfectly good key would still be told they had none.
+The settings screen reports the verified edition, status and expiry back, because a key
+field that swallows input and says nothing is indistinguishable from a broken one, and
+it says plainly when a key was *not* accepted rather than showing a reassuring edition
+name the customer does not have. The key is stored verbatim: a signed token is long and
+punctuation-heavy, and `sanitize_text_field` would quietly corrupt a valid one.
+
+**There was no update mechanism at all.** The plugin ships as a zip rather than through
+wordpress.org, so a site had no way to learn a new version existed — including a
+security release. Laravel and standalone have had `fluxfiles update` all along;
+WordPress had nothing.
+
+`FluxFilesUpdater` now checks the FluxFiles update server and hands wp-admin an update
+the normal way. The manifest is **signed** and verified with the same `UpdateClient` and
+embedded release key the CLI uses, and it must name this artifact — a validly signed
+manifest for a different module would otherwise install the wrong zip. WordPress
+downloads the package itself and so never re-checks the manifest's sha256, which makes
+the signature on the URL the protection that actually matters. Results are cached
+(including failures) because this runs on every admin page load. With no endpoint
+configured it registers no hooks at all: a self-hosted install that never phones anywhere
+is a supported setup, not an error to nag about.
+
+The plugin header also gains `Update URI:`. Without it, anyone publishing a plugin under
+this slug on wordpress.org would have their updates served to our users.
+
+Tests: eight more in `test-wp-smoke.php` (33 total), including a behavioural check that
+an update is offered only when genuinely newer — the same version is not offered (an
+update notice that reinstalls the current build is an infinite nag), an older one is
+never offered (a rolled-back server must not downgrade a site), and a cached failure
+offers nothing rather than crashing.
+
 ## [0.2.83] — 2026-08-04
 
 > Released: core `core-v0.2.68`. Adapters unchanged (this is inside the iframe — no

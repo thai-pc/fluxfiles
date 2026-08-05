@@ -71,6 +71,29 @@ class FluxFilesAdmin
             'sanitize_callback' => 'absint',
         ]);
 
+        // ── Licence ─────────────────────────────────────────────────────────
+        // Without this a WordPress customer has no way to activate what they bought:
+        // the core reads the key from the environment, which shared hosting does not
+        // give them. The section shows the verified status back, because a key field
+        // that swallows input and says nothing is indistinguishable from a broken one.
+        add_settings_section(
+            'fluxfiles_license',
+            'Licence',
+            [$this, 'renderLicenseStatus'],
+            'fluxfiles'
+        );
+        register_setting('fluxfiles', 'fluxfiles_license_key', [
+            'type' => 'string',
+            'sanitize_callback' => [$this, 'sanitizeLicenseKey'],
+        ]);
+        add_settings_field(
+            'fluxfiles_license_key',
+            'Licence key',
+            [$this, 'renderLicenseField'],
+            'fluxfiles',
+            'fluxfiles_license'
+        );
+
         // Permissions section
         add_settings_section(
             'fluxfiles_permissions',
@@ -210,6 +233,82 @@ class FluxFilesAdmin
     // -------------------------------------------------------------------------
     // Field renderers
     // -------------------------------------------------------------------------
+
+    /**
+     * A licence key is a long signed token, so it is stored verbatim — no
+     * sanitize_text_field, which would strip characters and turn a valid key into a
+     * silently invalid one. Only surrounding whitespace (from copy-paste) is removed.
+     */
+    public function sanitizeLicenseKey($value): string
+    {
+        return trim((string) $value);
+    }
+
+    /** Verified status, so pasting a key gives an answer instead of silence. */
+    public function renderLicenseStatus(): void
+    {
+        if (!class_exists('\\FluxFiles\\LicenseManager')) {
+            echo '<p>The FluxFiles core is not loaded, so the licence cannot be checked.</p>';
+            return;
+        }
+        $key = FluxFilesPlugin::licenseKey();
+        if ($key === '') {
+            echo '<p>Running the free core. Paid modules stay inactive until a licence key is entered.</p>';
+            return;
+        }
+
+        $lm = FluxFilesPlugin::license();
+        $info = $lm->info();
+        $status = (string) ($info['status'] ?? 'free');
+        $edition = (string) ($info['edition'] ?? 'free');
+
+        // 'free' with a key present means the key did not verify — say so plainly
+        // rather than showing a reassuring edition name the customer does not have.
+        if ($edition === 'free' || $status === 'free') {
+            echo '<div class="notice notice-error inline"><p><strong>This licence key was not accepted.</strong> '
+               . 'Check it was pasted whole, with no line breaks.</p></div>';
+            return;
+        }
+
+        $modules = (array) ($info['modules'] ?? []);
+        $expires = $info['expires'] ?? null;
+        $class = in_array($status, ['expired', 'grace'], true) ? 'notice-warning' : 'notice-success';
+
+        printf(
+            '<div class="notice %s inline"><p><strong>%s</strong> — %s.%s%s</p></div>',
+            esc_attr($class),
+            esc_html(ucfirst($edition)),
+            esc_html($status),
+            $modules ? ' Unlocked: ' . esc_html(implode(', ', $modules)) . '.' : '',
+            $expires ? ' Valid until ' . esc_html(gmdate('Y-m-d', (int) $expires)) . '.' : ''
+        );
+    }
+
+    /**
+     * The key input. An env-provided key is shown as read-only rather than hidden:
+     * an operator who set one and then sees an empty box will paste a second key and
+     * wonder why nothing changes.
+     */
+    public function renderLicenseField(): void
+    {
+        $stored = (string) get_option('fluxfiles_license_key', '');
+        $env = (string) (getenv('FLUXFILES_LICENSE_KEY') ?: ($_ENV['FLUXFILES_LICENSE_KEY'] ?? ''));
+
+        if ($stored === '' && $env !== '') {
+            printf(
+                '<input type="text" class="large-text code" value="%s" readonly disabled />'
+                . '<p class="description">Set by the FLUXFILES_LICENSE_KEY environment variable. '
+                . 'Entering a key here would override it.</p>',
+                esc_attr(substr($env, 0, 24) . '…')
+            );
+        }
+        printf(
+            '<textarea name="fluxfiles_license_key" rows="3" class="large-text code" '
+            . 'placeholder="Paste the key from your purchase email">%s</textarea>'
+            . '<p class="description">Verified offline — nothing is sent to us.</p>',
+            esc_textarea($stored)
+        );
+    }
 
     private function addField(string $name, string $label, string $section, string $type = 'text'): void
     {

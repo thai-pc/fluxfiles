@@ -57,6 +57,26 @@ if (!function_exists('apply_filters')) {
         return $value;
     }
 }
+$GLOBALS['WP_TRANSIENTS'] = [];
+if (!function_exists('get_transient')) {
+    function get_transient($k) { return $GLOBALS['WP_TRANSIENTS'][$k] ?? false; }
+}
+if (!function_exists('set_transient')) {
+    function set_transient($k, $v, $ttl = 0) { $GLOBALS['WP_TRANSIENTS'][$k] = $v; return true; }
+}
+if (!function_exists('delete_transient')) {
+    function delete_transient($k) { unset($GLOBALS['WP_TRANSIENTS'][$k]); return true; }
+}
+if (!function_exists('plugin_basename')) {
+    function plugin_basename($f) { return 'fluxfiles/fluxfiles.php'; }
+}
+if (!function_exists('get_bloginfo')) { function get_bloginfo($k = '') { return '6.5'; } }
+if (!function_exists('add_query_arg')) {
+    function add_query_arg($args, $url) { return $url . '?' . http_build_query($args); }
+}
+if (!defined('HOUR_IN_SECONDS')) { define('HOUR_IN_SECONDS', 3600); }
+if (!defined('FLUXFILES_PLUGIN_FILE')) { define('FLUXFILES_PLUGIN_FILE', __DIR__ . '/../fluxfiles.php'); }
+if (!defined('FLUXFILES_VERSION')) { define('FLUXFILES_VERSION', '0.2.41'); }
 if (!function_exists('get_current_user_id')) {
     function get_current_user_id() { return (int) ($GLOBALS['WP_OPTIONS']['_test_user_id'] ?? 0); }
 }
@@ -501,6 +521,114 @@ test('media parity: featured image + native-picker integration wired', function 
     $intSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesMediaIntegration.php');
     assertTrue(strpos($intSrc, 'fluxfiles_replace_picker') !== false, 'native picker is opt-in via a setting');
     assertTrue(strpos($intSrc, 'wp_enqueue_media') !== false, 'integration loads the native media JS');
+});
+
+// ── Licence key + updates ────────────────────────────────────────────────────
+// A WordPress customer cannot set an environment variable on shared hosting, so
+// without the option they have no way to activate what they bought — and the plugin
+// is distributed as a zip, so without an update check a site never learns a new
+// version exists, including a security release.
+
+test('licence key: the option is used, and the environment is the fallback', function () {
+    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = '  key-from-settings  ';
+    assertEqual('key-from-settings', FluxFilesPlugin::licenseKey(), 'option wins, whitespace trimmed');
+
+    unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
+    putenv('FLUXFILES_LICENSE_KEY=key-from-env');
+    assertEqual('key-from-env', FluxFilesPlugin::licenseKey(), 'falls back to the environment');
+
+    // An operator who CAN set an env var must not be broken by this feature existing.
+    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'key-from-settings';
+    assertEqual('key-from-settings', FluxFilesPlugin::licenseKey(), 'the option overrides the env');
+    putenv('FLUXFILES_LICENSE_KEY');
+    unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
+    assertEqual('', FluxFilesPlugin::licenseKey(), 'neither set → empty, i.e. free core');
+});
+
+test('licence key: gates read it through the plugin, never straight from the env', function () {
+    // LicenseManager::fromEnv() ignores the WP option entirely, so a customer who
+    // pasted a good key into the settings screen would be told they have no licence.
+    $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($api, 'LicenseManager::fromEnv()') === false, 'no fromEnv() left in the REST proxy');
+    assertTrue(substr_count($api, 'FluxFilesPlugin::license()') >= 3, 'gates go through the plugin helper');
+});
+
+test('licence key is stored verbatim, not through sanitize_text_field', function () {
+    // A signed key is long and punctuation-heavy; sanitising it would quietly corrupt
+    // a valid key into an invalid one.
+    $admin = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesAdmin.php');
+    assertTrue(strpos($admin, "'sanitize_callback' => [\$this, 'sanitizeLicenseKey']") !== false,
+        'the key has its own sanitiser');
+    assertTrue(strpos($admin, 'renderLicenseStatus') !== false, 'the screen reports verified status back');
+});
+
+test('updater: a manifest for a DIFFERENT module is refused', function () {
+    // The signature would be perfectly valid — it just describes another artifact.
+    // Without the module check, a valid `share` release could be installed as the
+    // plugin.
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesUpdater.php');
+    assertTrue(strpos($src, "=== self::MODULE") !== false, 'manifest module is checked');
+    assertTrue(strpos($src, 'verifyManifest') !== false, 'the manifest signature is verified');
+});
+
+test('updater: does nothing at all when no endpoint is configured', function () {
+    $GLOBALS['WP_FILTERS'] = [];
+    putenv('FLUXFILES_UPDATE_URL');
+    unset($GLOBALS['WP_OPTIONS']['fluxfiles_update_url']);
+    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
+    FluxFilesUpdater::boot();
+    assertTrue(empty($GLOBALS['WP_FILTERS']['pre_set_site_transient_update_plugins']),
+        'a self-hosted install with no update server registers no hooks');
+});
+
+test('updater: registers the update hooks once an endpoint exists', function () {
+    $GLOBALS['WP_FILTERS'] = [];
+    putenv('FLUXFILES_UPDATE_URL=https://updates.example/update');
+    FluxFilesUpdater::boot();
+    assertTrue(!empty($GLOBALS['WP_FILTERS']['pre_set_site_transient_update_plugins']),
+        'the update transient filter is registered');
+    assertTrue(!empty($GLOBALS['WP_FILTERS']['plugins_api']),
+        'plugins_api is filtered so "View details" does not hit wordpress.org');
+    putenv('FLUXFILES_UPDATE_URL');
+});
+
+test('updater: offers an update only when the manifest is genuinely newer', function () {
+    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
+    $slug = 'fluxfiles/fluxfiles.php';
+
+    // Seed the cache so inject() runs its real logic with no network.
+    $seed = function (array $m) { $GLOBALS['WP_TRANSIENTS']['fluxfiles_update_manifest'] = $m; };
+
+    // Newer → offered, carrying the signed URL as the package.
+    $seed(['version' => '9.9.9', 'url' => 'https://cdn.example/fluxfiles-9.9.9.zip', 'sha256' => 'x']);
+    $t = FluxFilesUpdater::inject((object) ['response' => []]);
+    assertTrue(isset($t->response[$slug]), 'a newer version is offered');
+    assertEqual('9.9.9', $t->response[$slug]->new_version);
+    assertEqual('https://cdn.example/fluxfiles-9.9.9.zip', $t->response[$slug]->package);
+
+    // Same version → nothing. An update notice that reinstalls the current build is
+    // an infinite nag.
+    $seed(['version' => FLUXFILES_VERSION, 'url' => 'https://cdn.example/x.zip', 'sha256' => 'x']);
+    $t = FluxFilesUpdater::inject((object) ['response' => []]);
+    assertTrue(!isset($t->response[$slug]), 'the current version is not offered');
+
+    // OLDER → nothing. A rolled-back server must never downgrade a site.
+    $seed(['version' => '0.0.1', 'url' => 'https://cdn.example/old.zip', 'sha256' => 'x']);
+    $t = FluxFilesUpdater::inject((object) ['response' => []]);
+    assertTrue(!isset($t->response[$slug]), 'an older version is never offered');
+
+    // A cached failure ('' — server down) must not crash or offer anything.
+    $GLOBALS['WP_TRANSIENTS']['fluxfiles_update_manifest'] = '';
+    $t = FluxFilesUpdater::inject((object) ['response' => []]);
+    assertTrue(!isset($t->response[$slug]), 'a failed check offers nothing');
+    delete_transient('fluxfiles_update_manifest');
+});
+
+test('plugin declares Update URI so wordpress.org cannot hijack the slug', function () {
+    // Without this header, a plugin published on wordpress.org under the same slug
+    // would be served to our users as an update.
+    $head = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
+    assertTrue(strpos($head, 'Update URI:') !== false, 'Update URI header present');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

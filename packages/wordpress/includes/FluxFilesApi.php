@@ -378,7 +378,7 @@ class FluxFilesApi
         if (($claims->allowVirusScan ?? false)) {
             $fm->setVirusScanner(static function (string $localPath) use ($claims): array {
                 /** @var \FluxFiles\Virus\VirusScanModule $virus */
-                $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $claims);
+                $virus = \FluxFiles\ModuleRegistry::require('virus', FluxFilesPlugin::license(), $claims);
                 return $virus->scanPath($localPath);
             });
         }
@@ -1086,7 +1086,7 @@ class FluxFilesApi
         try {
             $this->rateLimit($this->claims(), false);
 
-            return $this->ok(\FluxFiles\LicenseManager::fromEnv()->info());
+            return $this->ok(FluxFilesPlugin::license()->info());
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -1103,7 +1103,7 @@ class FluxFilesApi
             $this->rateLimit($claims, true);
             $fm = $this->fileManager($claims);
 
-            $module = \FluxFiles\ModuleRegistry::require('optimize', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $module = \FluxFiles\ModuleRegistry::require('optimize', FluxFilesPlugin::license(), $claims);
             $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $this->body($request));
             $this->logAudit($claims, 'optimize', (string) ($this->body($request)['disk'] ?? 'local'), (string) ($this->body($request)['path'] ?? ''));
 
