@@ -73,8 +73,32 @@ const CATALOGUE = [
     ],
 ];
 
-$token = (string) (getenv('POLAR_TOKEN') ?: '');
 $production = in_array('--production', $argv, true);
+
+/**
+ * The token, from the environment or the repo-root .env.
+ *
+ * Reading .env matters more than it looks: without it the token has to be typed on the
+ * command line every run, which puts a credential that can change prices into the shell
+ * history of whoever is deploying. Sandbox and production are separate organisations
+ * with separate tokens, so they get separate variables and cannot be confused.
+ */
+$tokenVar = $production ? 'POLAR_TOKEN' : 'POLAR_TOKEN_SANDBOX';
+$token = (string) (getenv($tokenVar) ?: getenv('POLAR_TOKEN') ?: '');
+if ($token === '') {
+    $envFile = dirname(__DIR__, 2) . '/.env';
+    if (is_file($envFile)) {
+        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            if (preg_match('/^\s*(POLAR_TOKEN(?:_SANDBOX)?)\s*=\s*(.+)$/', $line, $m)) {
+                $val = trim($m[2], " \t\"'");
+                if ($val !== '' && ($m[1] === $tokenVar || ($token === '' && $m[1] === 'POLAR_TOKEN'))) {
+                    $token = $val;
+                    if ($m[1] === $tokenVar) { break; }
+                }
+            }
+        }
+    }
+}
 $dryRun = in_array('--dry-run', $argv, true);
 $base = $production ? 'https://api.polar.sh/v1' : 'https://sandbox-api.polar.sh/v1';
 
@@ -83,9 +107,11 @@ echo '  environment: ' . ($production ? "{$red}PRODUCTION{$reset}" : "{$green}sa
 echo "  api: {$base}\n\n";
 
 if ($token === '') {
-    echo "  {$red}POLAR_TOKEN is not set.{$reset}\n";
+    echo "  {$red}{$tokenVar} is not set.{$reset}\n";
     echo "  Create one at Polar → Settings → Developers with the products:read and\n";
-    echo "  products:write scopes, then:  POLAR_TOKEN=polar_oat_… php " . basename(__FILE__) . "\n\n";
+    echo "  products:write scopes, then put it in the repo-root .env:\n\n";
+    echo "      {$tokenVar}=polar_oat_…\n\n";
+    echo "  (or pass it for one run: {$tokenVar}=polar_oat_… php " . basename(__FILE__) . ")\n\n";
     exit(1);
 }
 
