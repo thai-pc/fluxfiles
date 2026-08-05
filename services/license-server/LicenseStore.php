@@ -145,6 +145,24 @@ final class LicenseStore
         return $s->fetchAll();
     }
 
+    /**
+     * Licences that were issued but never reached the buyer — the backlog a mail
+     * outage leaves behind. Revoked/refunded rows are excluded: re-sending a key to
+     * someone whose order was reversed is worse than not sending it.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function undelivered(int $limit = 100): array
+    {
+        $s = $this->db->prepare(
+            'SELECT * FROM licenses WHERE mailed_at IS NULL AND status = "active"
+             ORDER BY created_at ASC LIMIT ?'
+        );
+        $s->bindValue(1, $limit, PDO::PARAM_INT);
+        $s->execute();
+        return $s->fetchAll();
+    }
+
     /** Mark a license revoked/refunded (status only — offline verify can't enforce it;
      *  it gates the UPDATE channel + is your record of truth). */
     public function setStatus(string $jti, string $status): bool

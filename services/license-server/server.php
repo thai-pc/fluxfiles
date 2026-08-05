@@ -93,6 +93,10 @@ try {
         // plan:" with an empty name. Answering 5xx is deliberate: Polar retries, so
         // fixing the map inside the retry window delivers the licence automatically
         // instead of leaving a paying customer to open a support ticket.
+        // Unlike a mail outage, this fails only orders of ONE product, so other
+        // products' 200s keep resetting Polar's consecutive-failure counter and the
+        // endpoint survives. Retrying is also the actual fix here: add the id to the
+        // map and the next attempt issues.
         if (($order['plan'] ?? '') === '' || \FluxFiles\LicenseServer\Plans::get($order['plan']) === null) {
             $productId = (string) ($body['data']['product_id'] ?? '');
             error_log(sprintf(
@@ -118,13 +122,17 @@ try {
             if ((new LicenseMailer())->sendLicense($res['record'])) {
                 (new LicenseStore())->markMailed($jti);
             } else {
-                // Answer 5xx so Polar retries: the sale succeeded and the licence is
-                // safely stored, but this endpoint's job — getting the key to the buyer
-                // — has not been done. A visible failed delivery in Polar's dashboard
-                // beats a silent 200 that nobody ever looks at. The retry is safe:
-                // issuing is idempotent, and mailed_at stops a double send.
-                error_log("polar webhook: licence {$jti} issued but not delivered — will retry");
-                respond(503, ['error' => 'issued, delivery pending', 'jti' => $jti]);
+                // Answer 200 even though delivery failed, and this is the opposite of
+                // what it looks like it should be.
+                //
+                // Polar disables an endpoint after 10 CONSECUTIVE non-2xx replies. A
+                // mail outage fails every order at once, so replying 5xx would burn
+                // through those ten in ten sales and take the webhook down for every
+                // future customer — turning "one buyer wasn't emailed" into "no buyer
+                // is ever processed again". The licence is stored, so nothing is lost:
+                // `mailed_at` stays null and POST /redeliver sends the backlog once
+                // mail is working.
+                error_log("polar webhook: licence {$jti} issued but NOT delivered — run POST /redeliver once mail is fixed");
             }
         }
         respond(200, ['issued' => !$res['reused'], 'jti' => $jti]);
@@ -184,6 +192,28 @@ try {
         $store = new LicenseStore();
         $email = (string) ($_GET['email'] ?? '');
         respond(200, ['licenses' => $email !== '' ? $store->findByEmail($email) : $store->all()]);
+    }
+
+    // ── Admin: re-send undelivered licences ──────────────────────────────────
+    //
+    // The recovery path for a mail outage. The webhook answers 200 even when delivery
+    // fails (a 5xx would disable the endpoint after ten consecutive failures, and an
+    // outage fails every order), so the backlog lands here instead. Safe to run at any
+    // time: it only touches licences with no mailed_at, and marks each as it goes.
+    if ($method === 'POST' && $uri === '/redeliver') {
+        if (!adminOk()) { respond(401, ['error' => 'unauthorized']); }
+        $store = new LicenseStore();
+        $mailer = new LicenseMailer();
+        $sent = 0; $failed = 0;
+        foreach ($store->undelivered() as $rec) {
+            if ($mailer->sendLicense($rec)) {
+                $store->markMailed((string) $rec['jti']);
+                $sent++;
+            } else {
+                $failed++;   // stays in the backlog for the next run
+            }
+        }
+        respond(200, ['sent' => $sent, 'failed' => $failed]);
     }
 
     // ── Admin: revoke / refund ───────────────────────────────────────────────
