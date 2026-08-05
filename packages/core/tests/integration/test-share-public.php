@@ -6,9 +6,8 @@
  * and the Content-Disposition / MIME matrix, plus the path-containment guard and
  * the preview-URL payload.
  *
- * Why the eval: `api/index.php` is an executing script (it routes and exits), so a
- * test can't require it. Its top-level `ff_share_*` helpers are therefore extracted
- * VERBATIM from the source and re-declared inside a test namespace — where PHP's
+ * Why the eval: the `ff_share_*` helpers are extracted VERBATIM from the source and
+ * re-declared inside a test namespace — where PHP's
  * function fallback makes their unqualified `header()` calls resolve to our
  * recorder instead of the (silent, uninspectable) CLI builtin. That is the only way
  * to observe "302 vs streamed" without a live web server; the extraction throws if a
@@ -47,13 +46,16 @@ function expectApi(callable $f, string $code, ?int $http = null): void
     }
 }
 
-// ── Extract the route helpers from api/index.php ────────────────────────────
-$indexSrc = (string) file_get_contents(__DIR__ . '/../../api/index.php');
+// ── Extract the route helpers from api/PublicLinks.php ──────────────────────
+// They used to live in api/index.php and moved when WordPress needed to serve the
+// same public routes; a plain require would still not do, because the namespace
+// re-declaration is what lets this test observe header() calls.
+$indexSrc = (string) file_get_contents(__DIR__ . '/../../api/PublicLinks.php');
 $wanted = ['ff_share_send_bytes', 'ff_share_headers', 'ff_content_disposition', 'ff_share_payload', 'ff_share_token_jti', 'ff_share_rate_limit'];
 $code = '';
 foreach ($wanted as $fn) {
     if (!preg_match('#\nfunction ' . $fn . '\(.*?\n\}\n#s', $indexSrc, $m)) {
-        fwrite(STDERR, "FAIL: {$fn}() not found in api/index.php — the share bytes route changed shape.\n");
+        fwrite(STDERR, "FAIL: {$fn}() not found in api/PublicLinks.php — the share bytes route changed shape.\n");
         exit(1);
     }
     $code .= $m[0];
