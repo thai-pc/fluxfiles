@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxFiles — pricing</title>
+<meta name="description" content="An embeddable, multi-storage file manager for developers. Free MIT core; paid modules for share links and upload portals.">
+<!--
+  Deliberately a STATIC page with no build step and no API token.
+
+  Buying goes through Polar "checkout links" — reusable URLs that carry the product
+  and the success URL, so nothing here needs a server or a secret. That is what lets
+  this deploy to GitHub Pages while the licence server lives somewhere else entirely.
+
+  Prices are duplicated from the Polar products on purpose (a static page cannot ask),
+  so they must be changed in both places. services/license-server/polar-setup.php is
+  the source of truth.
+-->
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#14171c; --line:#232830; --ink:#e8ebf0; --dim:#9aa4b2;
+    --accent:#5b8cff; --accent-ink:#fff;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#fbfcfd; --panel:#fff; --line:#e3e8ef; --ink:#111826; --dim:#5b6676; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+  header{padding:72px 0 8px;text-align:center}
+  h1{font-size:clamp(28px,4vw,42px);line-height:1.15;margin:0 0 14px;letter-spacing:-.02em}
+  .lede{color:var(--dim);max-width:620px;margin:0 auto;font-size:17px}
+  .toggle{display:flex;justify-content:center;gap:4px;margin:34px 0 28px}
+  .toggle button{background:var(--panel);border:1px solid var(--line);color:var(--dim);
+    padding:8px 18px;font:inherit;font-size:14px;cursor:pointer}
+  .toggle button:first-child{border-radius:8px 0 0 8px}
+  .toggle button:last-child{border-radius:0 8px 8px 0}
+  .toggle button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  .save{font-size:12px;opacity:.85;margin-inline-start:6px}
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(4,1fr);padding-bottom:28px}
+  @media (max-width:1020px){ .grid{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:560px){ .grid{grid-template-columns:1fr} }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px;display:flex;flex-direction:column}
+  .card.featured{border-color:var(--accent);position:relative}
+  .badge{position:absolute;top:-11px;left:26px;background:var(--accent);color:var(--accent-ink);
+    font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;letter-spacing:.03em}
+  .tier{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:10px}
+  .price{font-size:34px;font-weight:650;letter-spacing:-.02em}
+  .price small{font-size:14px;font-weight:400;color:var(--dim)}
+  .who{color:var(--dim);font-size:14px;margin:10px 0 18px;min-height:42px}
+  ul{list-style:none;padding:0;margin:0 0 24px;font-size:14px;flex:1}
+  li{padding:5px 0 5px 22px;position:relative}
+  li::before{content:"";position:absolute;left:2px;top:12px;width:10px;height:6px;
+    border-left:2px solid var(--accent);border-bottom:2px solid var(--accent);transform:rotate(-45deg)}
+  li.off{color:var(--dim)}
+  li.off::before{border-color:var(--dim);opacity:.4}
+  .buy{display:block;text-align:center;text-decoration:none;padding:11px 16px;border-radius:9px;
+    background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:14px}
+  .buy.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .buy:hover{filter:brightness(1.08)}
+  footer{border-top:1px solid var(--line);margin-top:36px;padding:26px 0 60px;color:var(--dim);font-size:13px;text-align:center}
+  .note{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:12px 16px;color:var(--dim);font-size:13px;margin:0 0 26px;text-align:center}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>File management your users never leave your app for</h1>
+    <p class="lede">An embeddable file manager for Local, S3, R2 and SFTP. The core is
+      MIT and always free — pay only for the modules that send and receive files.</p>
+  </header>
+
+  <p class="note" id="sandbox-note" hidden>
+    Sandbox — payments are simulated. Use card <code>4242 4242 4242 4242</code>, any
+    future expiry and any CVC.
+  </p>
+
+  <div class="toggle" role="group" aria-label="Billing period">
+    <button id="btn-year" aria-pressed="true">Yearly<span class="save">−27%</span></button>
+    <button id="btn-month" aria-pressed="false">Monthly</button>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <div class="tier">Free</div>
+      <div class="price">$0</div>
+      <p class="who">The whole file manager. Self-hosted, MIT licensed.</p>
+      <ul>
+        <li>Local, S3, R2 and SFTP storage</li>
+        <li>Upload, browse, move, trash, search</li>
+        <li>WebP/AVIF delivery, image optimization</li>
+        <li>Embed by iframe, SDK, React, Vue, Laravel, WordPress</li>
+      </ul>
+      <a class="buy ghost" href="https://github.com/thai-pc/fluxfiles">Get the source</a>
+    </section>
+
+    <section class="card featured">
+      <span class="badge">Most popular</span>
+      <div class="tier">Pro</div>
+      <div class="price"><span data-price="pro">$79</span> <small data-per="pro">/ year</small></div>
+      <p class="who">For agencies and freelancers sending deliverables and collecting client files.</p>
+      <ul>
+        <li>Everything in Free</li>
+        <li><strong>Share links</strong> — expiry, password, download cap</li>
+        <li><strong>Upload portals</strong> — clients send you files, no account</li>
+        <li>Unlimited sites · priority support</li>
+      </ul>
+      <a class="buy" data-buy="pro" href="#">Buy Pro</a>
+    </section>
+
+    <section class="card">
+      <div class="tier">Studio</div>
+      <div class="price"><span data-price="studio">$249</span> <small data-per="studio">/ year</small></div>
+      <p class="who">For SaaS teams embedding FluxFiles in their own product.</p>
+      <ul>
+        <li>Everything in Pro</li>
+        <li>File versioning &amp; restore</li>
+        <li>Signed webhooks for your stack</li>
+        <li>AI tagging &amp; OCR (bring your own key)</li>
+      </ul>
+      <a class="buy" data-buy="studio" href="#">Buy Studio</a>
+    </section>
+
+    <section class="card">
+      <div class="tier">Enterprise</div>
+      <div class="price">Custom</div>
+      <p class="who">For regulated environments that need the compliance bundle and an SLA.</p>
+      <ul>
+        <li>Everything in Studio</li>
+        <li>Virus scanning on upload</li>
+        <li>C2PA provenance · backup bridge</li>
+        <li>Audit retention · SLA</li>
+      </ul>
+      <a class="buy ghost" href="mailto:sales@fluxfiles.dev?subject=FluxFiles%20Enterprise">Talk to us</a>
+    </section>
+  </div>
+
+  <footer>
+    Licences are verified offline — FluxFiles never phones home.
+    Payments handled by Polar, our merchant of record.
+  </footer>
+</div>
+
+<script>
+  // Checkout links are static and reusable, so they can live in the page. They carry
+  // no secret: they identify a product, not an account.
+  const LINKS = {
+    'pro':            'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_tlk580iAlvMnGoYspVJyJuQDUTPsyLqe7w72p0V8bWZ/redirect',
+    'pro-monthly':    'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_k8Rzi1qFELOyCnpyUV9JvoKfX3joQwZh9BM4h3gOcIE/redirect',
+    'studio':         'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_VCcFNbN4do2XUGcIEhhkBq2eR6UEm4bSh3jYJ0U6sY8/redirect',
+    'studio-monthly': 'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_na57BP57PBtmPKTHIEMe3CFNEoZTsjtH5LMW70LChKu/redirect',
+  };
+  const PRICE = {
+    year:  { pro: ['$79', '/ year'],  studio: ['$249', '/ year'] },
+    month: { pro: ['$9', '/ month'],  studio: ['$29', '/ month'] },
+  };
+
+  let period = 'year';
+
+  function render() {
+    for (const tier of ['pro', 'studio']) {
+      const [amount, per] = PRICE[period][tier];
+      document.querySelector(`[data-price="${tier}"]`).textContent = amount;
+      document.querySelector(`[data-per="${tier}"]`).textContent = per;
+      // The monthly plans are separate Polar products, so the button target changes
+      // with the toggle — not just the label.
+      const plan = period === 'month' ? `${tier}-monthly` : tier;
+      document.querySelector(`[data-buy="${tier}"]`).href = LINKS[plan] || '#';
+    }
+    document.getElementById('btn-year').setAttribute('aria-pressed', String(period === 'year'));
+    document.getElementById('btn-month').setAttribute('aria-pressed', String(period === 'month'));
+  }
+
+  document.getElementById('btn-year').onclick = () => { period = 'year'; render(); };
+  document.getElementById('btn-month').onclick = () => { period = 'month'; render(); };
+
+  // Say so when the buttons lead to simulated payments, so a sandbox deploy can never
+  // be mistaken for the real shop.
+  if (Object.values(LINKS).some((u) => u.includes('sandbox'))) {
+    document.getElementById('sandbox-note').hidden = false;
+  }
+  render();
+</script>
+</body>
+</html>

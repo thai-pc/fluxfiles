@@ -73,7 +73,7 @@ final class PolarWebhook
      * it, because a non-2xx makes Polar retry an event we will never act on.
      *
      * @param array<string,mixed> $plans product-id → plan-name map
-     * @return array{email:string,plan:string,customer:string,order_id:string}|null
+     * @return array{email:string,plan:string,customer:string,order_id:string,checkout_id:string}|null
      */
     public static function extract(array $body, array $plans): ?array
     {
@@ -103,6 +103,9 @@ final class PolarWebhook
             'plan' => $plan,
             'customer' => (string) ($d['customer']['name'] ?? $d['customer']['email'] ?? $email),
             'order_id' => $orderId,
+            // The success page is redirected with {CHECKOUT_ID}, not the order id, so
+            // without this the buyer's own page could never find their licence.
+            'checkout_id' => (string) ($d['checkout_id'] ?? ''),
         ];
     }
 

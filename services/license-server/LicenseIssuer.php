@@ -68,6 +68,7 @@ final class LicenseIssuer
             'license_key' => $minted['key'],
             'gateway'     => (string) ($order['gateway'] ?? 'manual'),
             'order_id'    => (string) ($order['order_id'] ?? ''),
+            'checkout_id' => (string) ($order['checkout_id'] ?? ''),
             'status'      => 'active',
         ]);
 

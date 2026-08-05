@@ -60,6 +60,12 @@ final class LicenseStore
         if (!in_array('mailed_at', $cols, true)) {
             $this->db->exec('ALTER TABLE licenses ADD COLUMN mailed_at INTEGER');
         }
+        // Polar redirects the buyer with {CHECKOUT_ID}; the webhook only knows the
+        // ORDER id. Storing both is what lets the success page find the licence.
+        if (!in_array('checkout_id', $cols, true)) {
+            $this->db->exec('ALTER TABLE licenses ADD COLUMN checkout_id TEXT');
+            $this->db->exec('CREATE INDEX IF NOT EXISTS idx_checkout ON licenses(checkout_id)');
+        }
     }
 
     /** Mark the licence as delivered. Returns false when the row is gone. */
@@ -86,8 +92,8 @@ final class LicenseStore
             }
         }
         $stmt = $this->db->prepare('INSERT INTO licenses
-            (jti,email,customer,plan,edition,modules,sites,enforcement,issued,expires,license_key,gateway,order_id,status,created_at)
-            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:sites,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:status,:created_at)');
+            (jti,email,customer,plan,edition,modules,sites,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at)
+            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:sites,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at)');
         $row = [
             'jti'         => (string) $rec['jti'],
             'email'       => (string) $rec['email'],
@@ -102,6 +108,7 @@ final class LicenseStore
             'license_key' => (string) $rec['license_key'],
             'gateway'     => (string) ($rec['gateway'] ?? 'manual'),
             'order_id'    => (string) ($rec['order_id'] ?? ''),
+            'checkout_id' => (string) ($rec['checkout_id'] ?? ''),
             'status'      => (string) ($rec['status'] ?? 'active'),
             'created_at'  => time(),
         ];
@@ -128,6 +135,15 @@ final class LicenseStore
     }
 
     /** @return array<int,array<string,mixed>> */
+    /** Find by the checkout id the buyer's success page was redirected with. */
+    public function findByCheckout(string $checkoutId): ?array
+    {
+        if ($checkoutId === '') { return null; }
+        $s = $this->db->prepare('SELECT * FROM licenses WHERE checkout_id = ? LIMIT 1');
+        $s->execute([$checkoutId]);
+        return $s->fetch() ?: null;
+    }
+
     public function findByEmail(string $email): array
     {
         $s = $this->db->prepare('SELECT * FROM licenses WHERE email = ? ORDER BY created_at DESC');

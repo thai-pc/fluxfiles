@@ -153,12 +153,29 @@ try {
     //   - it is time-boxed: after CLAIM_WINDOW the key is email-only. A success URL
     //     can end up in browser history, a screen share, or a referrer log, and the
     //     window keeps that from being a permanent handle on the key.
-    if ($method === 'GET' && $uri === '/claim') {
-        $orderId = (string) ($_GET['order_id'] ?? $_GET['checkout_id'] ?? '');
-        if (strlen($orderId) < 12) {
+    if (($method === 'GET' || $method === 'OPTIONS') && $uri === '/claim') {
+        // The success page is a static site on another origin, so it needs CORS — but
+        // this endpoint hands back a secret, so the allowed origin is configured
+        // explicitly rather than '*'. Unset = no cross-origin access at all.
+        $allowed = env('FLUXFILES_LANDING_ORIGIN');
+        $origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
+        if ($allowed !== '' && $origin !== '' && hash_equals($allowed, $origin)) {
+            header('Access-Control-Allow-Origin: ' . $allowed);
+            header('Vary: Origin');
+        }
+        if ($method === 'OPTIONS') {
+            header('Access-Control-Allow-Methods: GET');
+            respond(204, []);
+        }
+        // Polar redirects the buyer with {CHECKOUT_ID}, which is NOT the order id the
+        // webhook stored — look up by whichever the caller has.
+        $checkoutId = (string) ($_GET['checkout_id'] ?? '');
+        $orderId = (string) ($_GET['order_id'] ?? '');
+        if (strlen($checkoutId) < 12 && strlen($orderId) < 12) {
             respond(404, ['error' => 'not found']);   // too short to be a real id
         }
-        $rec = (new LicenseStore())->findByOrder('polar', $orderId);
+        $store = new LicenseStore();
+        $rec = $checkoutId !== '' ? $store->findByCheckout($checkoutId) : $store->findByOrder('polar', $orderId);
         if ($rec === null || ($rec['status'] ?? '') !== 'active') {
             respond(404, ['error' => 'not found']);
         }
