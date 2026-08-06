@@ -5,7 +5,16 @@ declare(strict_types=1);
 namespace FluxFiles;
 
 /**
- * AI-powered image tagging using Claude or OpenAI vision APIs.
+ * AI-powered image tagging using a vision model.
+ *
+ * Three wire protocols cover every provider we support: Anthropic's Messages API,
+ * Google's generateContent, and the OpenAI chat-completions shape — which most of the
+ * industry has cloned, so OpenRouter/Groq/Mistral/xAI/Ollama and any other
+ * OpenAI-compatible gateway are just a different base URL, not different code.
+ *
+ * Bring your own key: the provider, key and model come from the server environment
+ * (FLUXFILES_AI_PROVIDER / _API_KEY / _MODEL, plus _BASE_URL for a self-hosted or
+ * unlisted OpenAI-compatible endpoint). Nothing is proxied through fluxfiles.dev.
  */
 class AiTagger
 {
@@ -18,18 +27,69 @@ class AiTagger
     /** @var string */
     private $model;
 
-    private const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-4-20250514';
-    private const OPENAI_DEFAULT_MODEL = 'gpt-4o';
+    /** @var string */
+    private $baseUrl;
+
+    /**
+     * Known providers: which wire protocol they speak, their default vision model, and
+     * (for the OpenAI-compatible ones) where that API lives.
+     *
+     * @var array<string, array{api: string, model: string, base?: string}>
+     */
+    private const PROVIDERS = [
+        // Anthropic Messages API
+        'claude'     => ['api' => 'anthropic', 'model' => 'claude-sonnet-4-20250514'],
+        'anthropic'  => ['api' => 'anthropic', 'model' => 'claude-sonnet-4-20250514'],
+
+        // Google Gemini generateContent. The `-latest` alias, not a pinned version:
+        // Google retires point releases for new keys (gemini-2.5-flash already 404s with
+        // "no longer available to new users"), which would strand every install that
+        // never set FLUXFILES_AI_MODEL.
+        'gemini'     => ['api' => 'gemini', 'model' => 'gemini-flash-latest'],
+        'google'     => ['api' => 'gemini', 'model' => 'gemini-flash-latest'],
+
+        // OpenAI and the gateways that speak its chat-completions shape
+        'openai'     => ['api' => 'openai', 'model' => 'gpt-4o',                    'base' => 'https://api.openai.com/v1'],
+        'openrouter' => ['api' => 'openai', 'model' => 'google/gemini-2.5-flash',   'base' => 'https://openrouter.ai/api/v1'],
+        'groq'       => ['api' => 'openai', 'model' => 'meta-llama/llama-4-scout-17b-16e-instruct', 'base' => 'https://api.groq.com/openai/v1'],
+        'mistral'    => ['api' => 'openai', 'model' => 'pixtral-12b-2409',          'base' => 'https://api.mistral.ai/v1'],
+        'xai'        => ['api' => 'openai', 'model' => 'grok-2-vision-1212',        'base' => 'https://api.x.ai/v1'],
+        'grok'       => ['api' => 'openai', 'model' => 'grok-2-vision-1212',        'base' => 'https://api.x.ai/v1'],
+        'ollama'     => ['api' => 'openai', 'model' => 'llama3.2-vision',           'base' => 'http://localhost:11434/v1'],
+
+        // Anything else that speaks OpenAI: set FLUXFILES_AI_BASE_URL + _MODEL yourself.
+        'compatible' => ['api' => 'openai', 'model' => ''],
+    ];
 
     private const MAX_IMAGE_WIDTH = 1024;
+    private const MAX_TOKENS = 2048;
 
-    public function __construct(string $provider, string $apiKey, ?string $model = null)
+    /** Media types every provider accepts; anything else is re-encoded as JPEG. */
+    private const SUPPORTED_MEDIA = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+    public function __construct(string $provider, string $apiKey, ?string $model = null, ?string $baseUrl = null)
     {
-        $this->provider = strtolower($provider);
+        $this->provider = strtolower(trim($provider));
         $this->apiKey = $apiKey;
-        $this->model = $model ?? ($this->provider === 'claude'
-            ? self::CLAUDE_DEFAULT_MODEL
-            : self::OPENAI_DEFAULT_MODEL);
+
+        $spec = self::PROVIDERS[$this->provider] ?? null;
+
+        $this->model = ($model !== null && $model !== '') ? $model : (string) ($spec['model'] ?? '');
+
+        // The base URL falls back to the environment rather than being a required
+        // argument, so the Laravel proxy and the WordPress plugin — which construct this
+        // with three arguments against whatever core version they're pinned to — can
+        // point at a self-hosted endpoint without an adapter release.
+        if ($baseUrl === null || $baseUrl === '') {
+            $baseUrl = $_ENV['FLUXFILES_AI_BASE_URL'] ?? getenv('FLUXFILES_AI_BASE_URL') ?: '';
+        }
+        $this->baseUrl = rtrim($baseUrl !== '' ? $baseUrl : (string) ($spec['base'] ?? ''), '/');
+    }
+
+    /** Provider names accepted by `analyze()`, for docs and error messages. */
+    public static function supportedProviders(): array
+    {
+        return array_keys(self::PROVIDERS);
     }
 
     /**
@@ -37,28 +97,35 @@ class AiTagger
      */
     public function analyze(string $imageData, string $mimeType): array
     {
+        $spec = self::PROVIDERS[$this->provider] ?? null;
+        if ($spec === null) {
+            throw new ApiException(
+                "Unsupported AI provider: {$this->provider} (supported: " . implode(', ', self::supportedProviders()) . ')',
+                400
+            );
+        }
+
         $imageData = $this->resizeForApi($imageData);
         $base64 = base64_encode($imageData);
+        $mediaType = in_array($mimeType, self::SUPPORTED_MEDIA, true) ? $mimeType : 'image/jpeg';
 
-        switch ($this->provider) {
-            case 'claude':
-                return $this->analyzeClaude($base64, $mimeType);
+        switch ($spec['api']) {
+            case 'anthropic':
+                return $this->analyzeAnthropic($base64, $mediaType);
+            case 'gemini':
+                return $this->analyzeGemini($base64, $mediaType);
             case 'openai':
-                return $this->analyzeOpenAI($base64, $mimeType);
+                return $this->analyzeOpenAI($base64, $mediaType);
             default:
                 throw new ApiException("Unsupported AI provider: {$this->provider}", 400);
         }
     }
 
-    private function analyzeClaude(string $base64, string $mimeType): array
+    private function analyzeAnthropic(string $base64, string $mediaType): array
     {
-        $mediaType = in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)
-            ? $mimeType
-            : 'image/jpeg';
-
         $body = [
             'model'      => $this->model,
-            'max_tokens' => 1024,
+            'max_tokens' => self::MAX_TOKENS,
             'messages'   => [
                 [
                     'role'    => 'user',
@@ -81,7 +148,7 @@ class AiTagger
         ];
 
         $response = $this->httpPost(
-            'https://api.anthropic.com/v1/messages',
+            ($this->baseUrl !== '' ? $this->baseUrl : 'https://api.anthropic.com/v1') . '/messages',
             [
                 'x-api-key: ' . $this->apiKey,
                 'anthropic-version: 2023-06-01',
@@ -100,15 +167,66 @@ class AiTagger
         return $this->parseJsonResponse($text);
     }
 
-    private function analyzeOpenAI(string $base64, string $mimeType): array
+    private function analyzeGemini(string $base64, string $mediaType): array
     {
-        $mediaType = in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)
-            ? $mimeType
-            : 'image/jpeg';
+        $body = [
+            'contents' => [
+                [
+                    'parts' => [
+                        ['inline_data' => ['mime_type' => $mediaType, 'data' => $base64]],
+                        ['text' => $this->buildPrompt()],
+                    ],
+                ],
+            ],
+            // Gemini can be told to emit JSON directly, so there is usually no fence for
+            // parseJsonResponse() to strip — it still strips one if a model adds it.
+            'generationConfig' => [
+                'maxOutputTokens' => self::MAX_TOKENS,
+                'responseMimeType' => 'application/json',
+            ],
+        ];
+
+        $base = $this->baseUrl !== '' ? $this->baseUrl : 'https://generativelanguage.googleapis.com/v1beta';
+
+        // The key goes in a header, never in the query string: URLs leak into proxy and
+        // server access logs, and Google supports both.
+        $response = $this->httpPost(
+            $base . '/models/' . rawurlencode($this->model) . ':generateContent',
+            [
+                'x-goog-api-key: ' . $this->apiKey,
+                'Content-Type: application/json',
+            ],
+            $body
+        );
+
+        $text = '';
+        foreach ($response['candidates'][0]['content']['parts'] ?? [] as $part) {
+            if (isset($part['text'])) {
+                $text .= $part['text'];
+            }
+        }
+
+        return $this->parseJsonResponse($text);
+    }
+
+    private function analyzeOpenAI(string $base64, string $mediaType): array
+    {
+        if ($this->baseUrl === '') {
+            throw new ApiException(
+                "AI provider '{$this->provider}' needs FLUXFILES_AI_BASE_URL to be set",
+                400
+            );
+        }
+        if ($this->model === '') {
+            throw new ApiException(
+                "AI provider '{$this->provider}' needs FLUXFILES_AI_MODEL to be set",
+                400
+            );
+        }
 
         $body = [
             'model'      => $this->model,
-            'max_tokens' => 1024,
+            'max_tokens' => self::MAX_TOKENS,
             'messages'   => [
                 [
                     'role'    => 'user',
@@ -128,18 +246,16 @@ class AiTagger
             ],
         ];
 
-        $response = $this->httpPost(
-            'https://api.openai.com/v1/chat/completions',
-            [
-                'Authorization: Bearer ' . $this->apiKey,
-                'Content-Type: application/json',
-            ],
-            $body
-        );
+        $headers = ['Content-Type: application/json'];
+        if ($this->apiKey !== '') {
+            $headers[] = 'Authorization: Bearer ' . $this->apiKey;
+        }
+
+        $response = $this->httpPost($this->baseUrl . '/chat/completions', $headers, $body);
 
         $text = $response['choices'][0]['message']['content'] ?? '';
 
-        return $this->parseJsonResponse($text);
+        return $this->parseJsonResponse(is_string($text) ? $text : '');
     }
 
     private function buildPrompt(): string
@@ -219,7 +335,8 @@ PROMPT;
         }
     }
 
-    private function httpPost(string $url, array $headers, array $body): array
+    /** Protected, not private, so tests can substitute a transport instead of the network. */
+    protected function httpPost(string $url, array $headers, array $body): array
     {
         $ch = curl_init($url);
 

@@ -509,7 +509,11 @@ class FluxFilesController
             $aiTagger = new \FluxFiles\AiTagger(
                 $aiProvider,
                 config('fluxfiles.ai_api_key', env('FLUXFILES_AI_API_KEY', '')),
-                config('fluxfiles.ai_model', env('FLUXFILES_AI_MODEL')) ?: null
+                config('fluxfiles.ai_model', env('FLUXFILES_AI_MODEL')) ?: null,
+                // 4th arg — cores older than this adapter's floor simply ignore it
+                // (PHP drops extra arguments to a userland function), so the base-URL
+                // override is additive and needs no constraint bump.
+                config('fluxfiles.ai_base_url', env('FLUXFILES_AI_BASE_URL')) ?: null
             );
             $fm->setAiTagger($aiTagger);
 

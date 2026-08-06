@@ -184,7 +184,15 @@ return [
     | AI Auto-Tag
     |--------------------------------------------------------------------------
     |
-    | Provider: 'claude' or 'openai' (leave empty to disable).
+    | Provider (leave empty to disable). Bring your own key — nothing is proxied:
+    |   claude | anthropic   Anthropic Messages API
+    |   gemini | google      Google Gemini
+    |   openai               OpenAI
+    |   openrouter, groq, mistral, xai|grok, ollama   OpenAI-compatible gateways
+    |   compatible           any other OpenAI-compatible endpoint
+    |
+    | Model and base URL fall back to the provider's defaults when empty; both are
+    | required with 'compatible' (a self-hosted Ollama/LiteLLM/vLLM or a gateway).
     | Auto-tag on upload: when true, images are automatically tagged on upload.
     |
     */
@@ -202,5 +210,6 @@ return [
     'ai_provider'  => env('FLUXFILES_AI_PROVIDER', ''),
     'ai_api_key'   => env('FLUXFILES_AI_API_KEY', ''),
     'ai_model'     => env('FLUXFILES_AI_MODEL', ''),
+    'ai_base_url'  => env('FLUXFILES_AI_BASE_URL', ''),
     'ai_auto_tag'  => env('FLUXFILES_AI_AUTO_TAG', false),
 ];

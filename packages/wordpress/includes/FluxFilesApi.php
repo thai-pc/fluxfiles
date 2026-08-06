@@ -839,7 +839,11 @@ class FluxFilesApi
             $aiTagger = new \FluxFiles\AiTagger(
                 $aiProvider,
                 get_option('fluxfiles_ai_api_key', ''),
-                get_option('fluxfiles_ai_model', '') ?: null
+                get_option('fluxfiles_ai_model', '') ?: null,
+                // 4th arg — cores older than this plugin's floor ignore it (PHP drops
+                // extra arguments to a userland function), so the base-URL override is
+                // additive and needs no constraint bump.
+                get_option('fluxfiles_ai_base_url', '') ?: null
             );
             $fm->setAiTagger($aiTagger);
 

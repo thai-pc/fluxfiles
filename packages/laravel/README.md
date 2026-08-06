@@ -263,9 +263,12 @@ return [
     ],
 
     'locale'      => env('FLUXFILES_LOCALE', ''),
+    // claude|anthropic, gemini|google, openai, openrouter, groq, mistral,
+    // xai|grok, ollama, or compatible (any OpenAI-compatible endpoint).
     'ai_provider' => env('FLUXFILES_AI_PROVIDER', ''),
     'ai_api_key'  => env('FLUXFILES_AI_API_KEY', ''),
-    'ai_model'    => env('FLUXFILES_AI_MODEL', ''),
+    'ai_model'    => env('FLUXFILES_AI_MODEL', ''),   // empty = provider default
+    'ai_base_url' => env('FLUXFILES_AI_BASE_URL', ''), // self-hosted / gateway
     'ai_auto_tag' => env('FLUXFILES_AI_AUTO_TAG', false),
 ];
 ```

@@ -61,6 +61,66 @@ function makeFM(?AiTagger $tagger = null): array
     return [$fm, $meta];
 }
 
+/**
+ * A tagger that records the request instead of making it. `analyze()` runs for real —
+ * provider dispatch, endpoint construction, auth headers, envelope parsing — and only
+ * the socket is replaced, so these tests cover the code a live call would execute.
+ */
+class ProbeAiTagger extends AiTagger
+{
+    public string $url = '';
+    public array $headers = [];
+    public array $body = [];
+    /** Canned response; the default satisfies all three envelope shapes at once. */
+    public array $envelope;
+
+    protected function httpPost(string $url, array $headers, array $body): array
+    {
+        $this->url = $url; $this->headers = $headers; $this->body = $body;
+        return $this->envelope ?? [];
+    }
+}
+
+/** Re-clothe a configured AiTagger as a ProbeAiTagger, keeping its resolved config. */
+function probe(AiTagger $t, array $envelope = []): ProbeAiTagger
+{
+    $json = '{"tags":["a"],"title":"T","alt_text":"A","caption":"C"}';
+    $p = (new ReflectionClass(ProbeAiTagger::class))->newInstanceWithoutConstructor();
+    foreach (['provider', 'apiKey', 'model', 'baseUrl'] as $prop) {
+        $r = new ReflectionProperty(AiTagger::class, $prop);
+        $r->setAccessible(true);
+        $r->setValue($p, $r->getValue($t));
+    }
+    $p->envelope = $envelope ?: [
+        'content'    => [['type' => 'text', 'text' => $json]],
+        'candidates' => [['content' => ['parts' => [['text' => $json]]]]],
+        'choices'    => [['message' => ['content' => $json]]],
+    ];
+    return $p;
+}
+
+/** Run analyze() against the probe transport and hand back the recorder. */
+function record(AiTagger $t, array $envelope = []): ProbeAiTagger
+{
+    $p = probe($t, $envelope);
+    $p->analyze(file_get_contents(imgFile()), 'image/png');
+    return $p;
+}
+
+function endpointFor(AiTagger $t): string { return record($t)->url; }
+function headersFor(AiTagger $t): array { return record($t)->headers; }
+function analyzeWithStubbedHttp(AiTagger $t, array $envelope): array
+{
+    return probe($t, $envelope)->analyze(file_get_contents(imgFile()), 'image/png');
+}
+
+function modelOf(AiTagger $t): string
+{
+    $r = new ReflectionProperty(AiTagger::class, 'model');
+    $r->setAccessible(true);
+    return (string) $r->getValue($t);
+}
+
 /** Call the private AiTagger::parseJsonResponse via reflection. */
 function parse(string $text): array
 {
@@ -106,10 +166,106 @@ test('invalid JSON → 502', function () {
 });
 
 test('analyze() with unsupported provider → 400', function () {
-    $t = new AiTagger('grok', 'k');
+    $t = new AiTagger('definitely-not-a-provider', 'k');
     $bytes = file_get_contents(imgFile());   // real PNG so resizeForApi() stays quiet
     try { $t->analyze($bytes, 'image/png'); throw new \RuntimeException('should throw'); }
     catch (ApiException $e) { assertEqual(400, $e->getHttpCode(), 'expected 400'); }
+});
+
+echo "\n{$yellow}► Providers{$reset}\n";
+
+// The provider table is the whole point of the class being multi-provider: a name that
+// silently drops out of it turns auto-tagging inert (that is exactly what `gemini` did
+// while the switch only knew claude/openai).
+test('every documented provider is accepted by analyze()', function () {
+    $expected = ['claude', 'anthropic', 'gemini', 'google', 'openai', 'openrouter', 'groq', 'mistral', 'xai', 'grok', 'ollama', 'compatible'];
+    $actual = AiTagger::supportedProviders();
+    foreach ($expected as $p) {
+        assertTrue(in_array($p, $actual, true), "provider '{$p}' missing from the table");
+    }
+});
+
+test('provider name is case- and whitespace-insensitive', function () {
+    // .env values get pasted by humans; '  Gemini ' must not become "unsupported".
+    assertEqual('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent', endpointFor(new AiTagger('  GEMINI ', 'k')), 'trimmed + lowercased');
+});
+
+test('each provider resolves a default model without config', function () {
+    foreach (AiTagger::supportedProviders() as $p) {
+        if ($p === 'compatible') { continue; }   // by definition BYO model
+        assertTrue(modelOf(new AiTagger($p, 'k')) !== '', "provider '{$p}' has no default model");
+    }
+});
+
+test('an explicit model overrides the provider default', function () {
+    assertEqual('gemini-3-pro', modelOf(new AiTagger('gemini', 'k', 'gemini-3-pro')), 'explicit model wins');
+});
+
+test('gemini sends the key as a header, never in the URL', function () {
+    // A query-string key leaks into every proxy and server access log on the way.
+    $t = new AiTagger('gemini', 'super-secret-key');
+    assertTrue(strpos(endpointFor($t), 'super-secret-key') === false, 'key must not appear in the endpoint');
+    assertTrue(in_array('x-goog-api-key: super-secret-key', headersFor($t), true), 'key belongs in x-goog-api-key');
+});
+
+test('openai-compatible gateways get their own base URL', function () {
+    assertEqual('https://openrouter.ai/api/v1/chat/completions', endpointFor(new AiTagger('openrouter', 'k')), 'openrouter');
+    assertEqual('https://api.groq.com/openai/v1/chat/completions', endpointFor(new AiTagger('groq', 'k')), 'groq');
+    assertEqual('https://api.x.ai/v1/chat/completions', endpointFor(new AiTagger('xai', 'k')), 'xai');
+});
+
+test('an explicit base URL overrides the provider default (self-hosted)', function () {
+    $t = new AiTagger('openai', 'k', 'my-model', 'http://gateway.internal:8080/v1/');
+    assertEqual('http://gateway.internal:8080/v1/chat/completions', endpointFor($t), 'trailing slash trimmed, base honoured');
+});
+
+test('FLUXFILES_AI_BASE_URL is picked up when the caller passes none', function () {
+    // The Laravel/WordPress proxies construct with 3 args against a pinned core, so the
+    // env fallback is what lets them reach a self-hosted endpoint without a release.
+    $prev = $_ENV['FLUXFILES_AI_BASE_URL'] ?? null;
+    $_ENV['FLUXFILES_AI_BASE_URL'] = 'http://ollama.internal:11434/v1';
+    try {
+        assertEqual('http://ollama.internal:11434/v1/chat/completions', endpointFor(new AiTagger('compatible', '', 'llava')), 'env base used');
+    } finally {
+        if ($prev === null) { unset($_ENV['FLUXFILES_AI_BASE_URL']); } else { $_ENV['FLUXFILES_AI_BASE_URL'] = $prev; }
+    }
+});
+
+test('`compatible` without a base URL or model → 400, not a blind request', function () {
+    $prev = $_ENV['FLUXFILES_AI_BASE_URL'] ?? null;
+    unset($_ENV['FLUXFILES_AI_BASE_URL']);
+    try {
+        $bytes = file_get_contents(imgFile());
+        try { (new AiTagger('compatible', 'k'))->analyze($bytes, 'image/png'); throw new \RuntimeException('should throw'); }
+        catch (ApiException $e) { assertEqual(400, $e->getHttpCode(), 'expected 400'); }
+    } finally {
+        if ($prev !== null) { $_ENV['FLUXFILES_AI_BASE_URL'] = $prev; }
+    }
+});
+
+test('a keyless local endpoint sends no Authorization header', function () {
+    // Ollama has no credential; sending `Authorization: Bearer ` is a 401 waiting.
+    $h = headersFor(new AiTagger('ollama', ''));
+    foreach ($h as $line) {
+        assertTrue(stripos($line, 'authorization:') !== 0, 'no Authorization header when the key is empty');
+    }
+});
+
+test('every provider parses its own response envelope', function () {
+    // Three wire shapes, three places the text hides. A provider added to the table
+    // without an envelope mapping would return empty metadata, not an error.
+    $json = '{"tags":["a"],"title":"T","alt_text":"A","caption":"C"}';
+    $envelopes = [
+        'claude'     => ['content' => [['type' => 'text', 'text' => $json]]],
+        'gemini'     => ['candidates' => [['content' => ['parts' => [['text' => $json]]]]]],
+        'openai'     => ['choices' => [['message' => ['content' => $json]]]],
+        'openrouter' => ['choices' => [['message' => ['content' => $json]]]],
+    ];
+    foreach ($envelopes as $provider => $envelope) {
+        $r = analyzeWithStubbedHttp(new AiTagger($provider, 'k'), $envelope);
+        assertEqual(['a'], $r['tags'], "{$provider} envelope");
+        assertEqual('T', $r['title'], "{$provider} title");
+    }
 });
 
 echo "\n{$yellow}► FileManager.aiTag (manual){$reset}\n";

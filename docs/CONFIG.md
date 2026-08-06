@@ -212,7 +212,10 @@ All four accept the same `claims` map.
 | `FLUXFILES_TERMINAL_DISABLED` | `false` | Server kill-switch for the SSH terminal. |
 | `FLUXFILES_TERMINAL_CONFIRM` | `true` | `false` disables the dangerous-command double-confirm. |
 | `FLUXFILES_TERMINAL_TIMEOUT` | `30` | Per-command timeout (seconds). |
-| `FLUXFILES_AI_PROVIDER` / `_MODEL` / `_API_KEY` | — | AI vision/tagging provider config (server-side; BYO key). |
+| `FLUXFILES_AI_PROVIDER` | — | AI vision/tagging provider (server-side; BYO key). `claude`/`anthropic`, `gemini`/`google`, `openai`, `openrouter`, `groq`, `mistral`, `xai`/`grok`, `ollama`, or `compatible` for any other OpenAI-compatible endpoint. Empty = disabled. |
+| `FLUXFILES_AI_API_KEY` | — | Key for that provider. Empty is fine for a keyless local endpoint (Ollama). |
+| `FLUXFILES_AI_MODEL` | provider default | Vision model override. Required with `compatible`. |
+| `FLUXFILES_AI_BASE_URL` | provider default | API base-URL override — self-hosted Ollama/LiteLLM/vLLM or a corporate gateway. Required with `compatible`. |
 | `FLUXFILES_AI_AUTO_TAG` | `false` | Default for `ai_auto_tag` (claim overrides). |
 | `FLUXFILES_IMPORT_ALLOW_SVG` | `false` | Allow SVG via URL import. |
 | `FLUXFILES_IMPORT_MAX_MB` / `_RATE_LIMIT` / `_TIMEOUT` | — | URL-import server defaults. |

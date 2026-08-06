@@ -265,7 +265,8 @@ try {
         $aiTagger = new \FluxFiles\AiTagger(
             $aiProvider,
             $_ENV['FLUXFILES_AI_API_KEY'] ?? '',
-            $_ENV['FLUXFILES_AI_MODEL'] ?? null
+            $_ENV['FLUXFILES_AI_MODEL'] ?? null,
+            $_ENV['FLUXFILES_AI_BASE_URL'] ?? null
         );
         $fm->setAiTagger($aiTagger);
     }

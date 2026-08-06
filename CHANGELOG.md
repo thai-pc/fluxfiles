@@ -3,6 +3,55 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.89] — 2026-08-06
+
+> Released: core `core-v0.2.73`. The Laravel and WordPress adapters gained a
+> pass-through argument but **no floor bump** — see below for why none is needed.
+
+### Fixed — `FLUXFILES_AI_PROVIDER=gemini` was documented and rejected
+
+`AiTagger` dispatched on a two-arm `switch`: `claude`/`anthropic` and `openai`.
+Anything else fell through to `400 Unsupported AI provider`. The repository's own
+`.env` had `FLUXFILES_AI_PROVIDER=gemini` with `FLUXFILES_AI_AUTO_TAG=true`, so every
+image upload on that install threw on the auto-tag step. Nothing in the config surface
+said `gemini` was unsupported — the `.env.example` comment read "'claude' or 'openai'",
+which is a hint, not a constraint, and the failure only surfaced at upload time.
+
+The switch is now a provider table. Three wire protocols already covered the field —
+Anthropic Messages, Google `generateContent`, and OpenAI chat-completions, which most
+of the industry has cloned — so adding providers is a table row, not a code path:
+
+| name | protocol | default model |
+|---|---|---|
+| `claude`, `anthropic` | Anthropic Messages | `claude-sonnet-4-20250514` |
+| `gemini`, `google` | Google generateContent | `gemini-flash-latest` |
+| `openai` | OpenAI chat-completions | `gpt-4o` |
+| `openrouter`, `groq`, `mistral`, `xai`, `grok`, `ollama` | OpenAI-compatible | per-gateway |
+| `compatible` | OpenAI-compatible | BYO (`_BASE_URL` + `_MODEL`) |
+
+Provider names are trimmed and lowercased, so a pasted `  Gemini ` resolves.
+
+### Fixed — the pinned Gemini model 404s for new API keys
+
+A live call against a fresh key returned `models/gemini-2.5-flash is no longer
+available to new users`. Google retires point releases for new keys while keeping them
+alive for existing ones, so a pinned version doesn't fail at release time — it fails
+later, for new installs only, and looks like a credentials problem. The default is the
+`-latest` alias, which Google keeps pointed at a live model.
+
+### Added — `FLUXFILES_AI_BASE_URL`
+
+Points the OpenAI-compatible path at a self-hosted or corporate endpoint (Ollama,
+LiteLLM, vLLM, a gateway). Required for `compatible`, optional elsewhere; `analyze()`
+now returns `400` naming the missing setting instead of firing a request at an empty
+base URL. A keyless local endpoint sends no `Authorization` header at all, because
+`Authorization: Bearer ` is a 401 waiting to happen.
+
+**No adapter floor bump.** The adapters pass the base URL as a 4th constructor
+argument, and PHP silently drops extra arguments to a userland function — against a
+core older than the argument, the call still works and the override is simply ignored.
+The constraint stays honest without a coordinated release.
+
 ## [0.2.88] — 2026-08-05
 
 > Released: core `core-v0.2.72`. The WordPress plugin picks this up through its bundled
