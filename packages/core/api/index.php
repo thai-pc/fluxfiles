@@ -923,7 +923,7 @@ function routeRequest(
         return handleChunkPresign($chunker, $claims, $fm);
     }
     if ($method === 'POST' && $uri === '/api/fm/chunk/complete') {
-        return handleChunkComplete($chunker, $claims, $fm, $metaRepo);
+        return handleChunkComplete($chunker, $claims, $fm, $metaRepo, $diskManager);
     }
     if ($method === 'POST' && $uri === '/api/fm/chunk/abort') {
         return handleChunkAbort($chunker, $claims, $fm);
@@ -1636,7 +1636,8 @@ function handleChunkComplete(
     \FluxFiles\ChunkUploader $chunker,
     \FluxFiles\Claims $claims,
     FileManager $fm,
-    StorageMetadataHandler $metaRepo
+    StorageMetadataHandler $metaRepo,
+    DiskManager $diskManager
 ): array
 {
     if (!$claims->hasPerm('write')) {
@@ -1650,6 +1651,13 @@ function handleChunkComplete(
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
     $fm->validateScopedPath($key);
+    // Unlike the direct upload() path, S3 multipart has no collision policy at
+    // all — completing against an existing key overwrites it unconditionally.
+    // Honour owner_only the same way upload()/rename()/move() do before letting
+    // the multipart complete replace bytes that already exist at this key.
+    if ($diskManager->disk($disk)->fileExists($key)) {
+        $fm->assertCanModifyScopedPath($disk, $key);
+    }
     $result = $chunker->complete($disk, $key, $uploadId, $parts);
     $metaRepo->save($disk, $key, [
         'uploaded_by' => $claims->userId,

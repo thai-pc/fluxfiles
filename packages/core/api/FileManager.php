@@ -332,6 +332,12 @@ class FileManager
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
         $this->assertExt($ext);
         $this->assertSafeFilename($name);
+        // Same dangerous-character blacklist rename() enforces — assertSafeFilename()
+        // only blocks dangerous EXTENSIONS, so without this an uploaded name could
+        // still carry <>:"|?* or control chars through to storage/metadata/UI.
+        if (preg_match('/[<>:"\/\\\\|?*\x00-\x1f]/', $name)) {
+            throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
+        }
 
         $sizeMb = ($file['size'] ?? 0) / (1024 * 1024);
         $this->assertUploadSize($sizeMb);
@@ -447,8 +453,12 @@ class FileManager
         }
 
         // Overwriting an existing file (collision=overwrite or force_upload) →
-        // snapshot the current bytes first (Versioning module).
+        // honour owner_only like delete/rename/move/crop/watermark/putContent do
+        // (it was missing here, letting a different tenant overwrite another
+        // user's file in place), then snapshot the current bytes (Versioning
+        // module) before replacing it.
         if ($fs->fileExists($scoped)) {
+            $this->assertOwner($disk, $scoped);
             $this->keepVersion($disk, $scoped, $fs);
         }
 
@@ -1730,6 +1740,7 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertOwner($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
         $name = basename($scoped);
@@ -1921,6 +1932,7 @@ class FileManager
         }
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertOwner($disk, $scoped);
 
         [$conn, $root] = $this->disks->sftpConnection($disk);
         $location = ($root !== '' ? $root . '/' : '') . $scoped;

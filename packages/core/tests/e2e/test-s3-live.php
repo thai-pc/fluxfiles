@@ -324,6 +324,63 @@ test('multipart: initiate → abort (then complete fails)', function () use ($dm
     assertTrue($threw, 'cannot complete an aborted upload');
 });
 
+// ── B2: chunk-complete had ZERO ownership check — reproduces the exact guard
+// index.php's handleChunkComplete now runs (fileExists → assertCanModifyScopedPath)
+// before calling ChunkUploader::complete(), so a different tenant's multipart
+// completion against an existing key is refused instead of silently overwriting it.
+test('B2: owner_only — a different tenant cannot complete a multipart upload over an existing key', function () use ($dm, $prefix) {
+    $chunker = new FluxFiles\ChunkUploader($dm);
+    $key = $prefix . '/chunk/owned.bin';
+
+    // user-A owns the file (a normal, non-chunked upload records uploaded_by).
+    $claimsA = new Claims('user-A', ['read', 'write', 'delete'], ['s3test'], '', 50, null, 0, true);
+    $metaA = new StorageMetadataHandler($dm);
+    $fmA = new FileManager($dm, $claimsA, $metaA);
+    $t = sys_get_temp_dir() . '/fxlive-' . uniqid() . '.bin';
+    file_put_contents($t, 'user-A original');
+    $fmA->upload('s3test', dirname($key) === '.' ? '' : dirname($key), ['name' => basename($key), 'size' => filesize($t), 'tmp_name' => $t], true);
+    @unlink($t);
+
+    // user-B (different owner, same owner_only tenant) attempts a multipart
+    // completion against the SAME key — this is exactly what handleChunkComplete
+    // guards against.
+    $claimsB = new Claims('user-B', ['read', 'write', 'delete'], ['s3test'], '', 50, null, 0, true);
+    $metaB = new StorageMetadataHandler($dm);
+    $fmB = new FileManager($dm, $claimsB, $metaB);
+
+    $init = $chunker->initiate('s3test', $key);
+    $body = str_repeat('ATTACK', 1000);
+    $ps = $chunker->presignPart('s3test', $key, $init['upload_id'], 1, 600);
+    $ch = curl_init($ps['url']);
+    curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $body, CURLOPT_HEADER => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
+    $resp = curl_exec($ch);
+    $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+    preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
+    $etag = trim($m[1] ?? '', '"');
+
+    // Mirrors index.php's handleChunkComplete: gate the completion the same way.
+    $threw = false;
+    try {
+        if ($dm->disk('s3test')->fileExists($key)) {
+            $fmB->assertCanModifyScopedPath('s3test', $key);
+        }
+        $chunker->complete('s3test', $key, $init['upload_id'], [['PartNumber' => 1, 'ETag' => $etag]]);
+    } catch (\FluxFiles\ApiException $e) {
+        $threw = true;
+        assertEqual('owner_only', $e->getErrorCode());
+        assertEqual(403, $e->getHttpCode());
+    }
+    assertTrue($threw, 'expected 403 owner_only, completion must be refused');
+
+    // Original bytes must be untouched — the object was never overwritten.
+    $get = $fmA->presign('s3test', $key, 'GET', 600);
+    assertEqual('user-A original', file_get_contents($get['url']), 'original object untouched');
+
+    try { $chunker->abort('s3test', $key, $init['upload_id']); } catch (\Throwable $e) {}
+    try { safeDelete($fmA, $key); } catch (\Throwable $e) {}
+});
+
 echo "\n{$yellow}► Bucket Doctor{$reset}\n";
 test('doctor diagnoses the live bucket (write/read/presign/delete/multipart ok)', function () use ($dm) {
     $report = (new \FluxFiles\BucketDoctor($dm))->diagnose('s3test', 'https://app.example');

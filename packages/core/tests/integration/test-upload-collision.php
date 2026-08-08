@@ -130,5 +130,101 @@ test('mkdir: a folder name colliding with an existing FILE → 409', function ()
     catch (ApiException $e) { assertEqual('folder_exists', $e->getErrorCode()); }
 });
 
+// ── B1: owner_only must gate overwrite, not just the other destructive ops ──
+
+test('B1: owner_only + upload_collision=overwrite → a different tenant CANNOT overwrite', function () {
+    $root = sys_get_temp_dir() . '/ff-coll-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $meta = new StorageMetadataHandler($dm);
+
+    // user-A uploads the original.
+    $claimsA = new Claims('user-A', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, true);
+    $claimsA->uploadCollision = 'overwrite';
+    $fmA = new FileManager($dm, $claimsA, $meta);
+    upload($fmA, 'shared.txt', 'user-A original');
+
+    // user-B tries to overwrite it via upload_collision=overwrite.
+    $claimsB = new Claims('user-B', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, true);
+    $claimsB->uploadCollision = 'overwrite';
+    $fmB = new FileManager($dm, $claimsB, $meta);
+    try {
+        upload($fmB, 'shared.txt', 'user-B attack');
+        throw new \RuntimeException('expected 403 owner_only');
+    } catch (ApiException $e) {
+        assertEqual('owner_only', $e->getErrorCode());
+        assertEqual(403, $e->getHttpCode());
+    }
+    assertEqual('user-A original', file_get_contents("$root/shared.txt"), 'original bytes untouched');
+});
+
+test('B1: owner_only + force_upload=1 → a different tenant CANNOT overwrite', function () {
+    $root = sys_get_temp_dir() . '/ff-coll-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $meta = new StorageMetadataHandler($dm);
+
+    $claimsA = new Claims('user-A', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, true);
+    $fmA = new FileManager($dm, $claimsA, $meta);
+    upload($fmA, 'shared2.txt', 'user-A original');
+
+    $claimsB = new Claims('user-B', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, true);
+    $fmB = new FileManager($dm, $claimsB, $meta);
+    $tmp = tempnam(sys_get_temp_dir(), 'up');
+    file_put_contents($tmp, 'user-B attack via force_upload');
+    try {
+        try {
+            $fmB->upload('local', '', [
+                'name' => 'shared2.txt',
+                'tmp_name' => $tmp,
+                'size' => filesize($tmp),
+                'error' => 0,
+                'type' => 'text/plain',
+            ], true); // forceUpload=true, mirrors ?force_upload=1
+            throw new \RuntimeException('expected 403 owner_only');
+        } catch (ApiException $e) {
+            assertEqual('owner_only', $e->getErrorCode());
+            assertEqual(403, $e->getHttpCode());
+        }
+    } finally {
+        @unlink($tmp);
+    }
+    assertEqual('user-A original', file_get_contents("$root/shared2.txt"), 'original bytes untouched');
+});
+
+test('B1: owner_only → the OWNER can still overwrite their own file', function () {
+    [$fm, $dm, $root, $claims] = setup('overwrite');
+    $claims->ownerOnly = true;
+    $claims->userId = 'user-A';
+    upload($fm, 'mine.txt', 'first');
+    $r = upload($fm, 'mine.txt', 'second-different');
+    assertEqual('mine.txt', $r['name']);
+    assertEqual('second-different', file_get_contents("$root/mine.txt"));
+});
+
+test('B1: brand-new upload (no existing file) needs no owner check even with owner_only on', function () {
+    $root = sys_get_temp_dir() . '/ff-coll-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $claims = new Claims('user-A', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, true);
+    $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
+    $r = upload($fm, 'fresh.txt', 'brand new');
+    assertEqual('fresh.txt', $r['name']);
+});
+
+// ── Filename character blacklist (mirrors rename()'s regex) ──
+
+test('upload rejects filenames with dangerous characters (mirrors rename())', function () {
+    [$fm] = setup('rename');
+    foreach (['bad<name.txt', 'bad>name.txt', 'bad:name.txt', 'bad"name.txt', 'bad|name.txt', 'bad?name.txt', 'bad*name.txt'] as $name) {
+        try {
+            upload($fm, $name, 'x');
+            throw new \RuntimeException("expected name_invalid for {$name}");
+        } catch (ApiException $e) {
+            assertEqual('name_invalid', $e->getErrorCode(), "for {$name}");
+        }
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
