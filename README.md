@@ -1678,7 +1678,7 @@ bash scripts/pack-smoke.sh all                       # verifies the published di
 make test PHP=8.4   # one version  ·  make test-all  # 8.1–8.4  ·  make up  # app:8080 + MinIO:9000
 ```
 
-`.github/workflows/test.yml` runs all of this (10 jobs). For the CI map, the
+`.github/workflows/test.yml` runs all of this (12 jobs). For the CI map, the
 adapter↔core floor guard, and the tag→registry release flow, see
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

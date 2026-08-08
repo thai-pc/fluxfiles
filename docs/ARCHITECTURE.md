@@ -168,11 +168,13 @@ Notes:
 
 ---
 
-## 6. CI map (`.github/workflows/test.yml`, 10 jobs)
+## 6. CI map (`.github/workflows/test.yml`, 12 jobs)
 
 `core-php` (unit+integration, multi-PHP) · **`adapter-core-floor`** (PHP floors are
-honest) · `api-e2e` · `s3-minio` (live S3 via MinIO) · `wrappers` (react/vue/sdk/
-editors vitest) · `node-sdk` · `browser-e2e` (Playwright) · `pack-smoke` (published
+honest) · `iframe-allow` · `api-e2e` · `selfboot-e2e` (every `tests/e2e/*-http.php`
++ `test-sftp-live.php`, boots its own `php -S` + an `atmoz/sftp` container) ·
+`s3-minio` (live S3 via MinIO) · `wrappers` (react/vue/sdk/editors vitest) ·
+`node-sdk` · `browser-e2e` (Playwright) · `editor-e2e` · `pack-smoke` (published
 dist/types) · `docker-build`. Publishing is separate (`split` / `npm-publish` /
 `docker-publish`).
 
