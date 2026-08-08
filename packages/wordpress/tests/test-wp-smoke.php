@@ -716,6 +716,71 @@ test('the recipient page shim only serves the two known pages', function () {
         'the URL carries the token, so it must not leak in a Referer');
 });
 
+// ── error() passthrough regression (B1) ─────────────────────────────────────
+// error() used to be declared with only (message, status), so every `catch
+// (ApiException $e) { return $this->error($e->getMessage(), $e->getHttpCode(),
+// $e->getErrorCode(), $e->getErrorParams()); }` call site silently dropped the
+// extra two args (PHP does not warn on this). fm.js reads `error_code`/
+// `error_params` off the JSON body to localise the message and branch the UI —
+// without them every WordPress error came through as an unlocalised, code-less
+// string. These tests drive REAL route handlers end-to-end (not error()
+// directly) so a regression at either the signature OR a call site is caught.
+
+// Minimal WP_REST_Request/WP_REST_Response stand-ins — good enough for the
+// handler methods actually used below (get_json_params/get_param/get_params).
+if (!class_exists('WP_REST_Request')) {
+    class WP_REST_Request {
+        private array $body;
+        private array $query;
+        public function __construct(array $body = [], array $query = []) { $this->body = $body; $this->query = $query; }
+        public function get_json_params() { return $this->body; }
+        public function get_params() { return $this->body + $this->query; }
+        public function get_param($key) { return $this->body[$key] ?? $this->query[$key] ?? null; }
+        public function get_file_params() { return []; }
+        public function get_header($name) { return null; }
+        public function get_method() { return 'POST'; }
+        public function get_route() { return ''; }
+    }
+}
+if (!class_exists('WP_REST_Response')) {
+    class WP_REST_Response {
+        private $data;
+        private int $status;
+        public function __construct($data, int $status = 200) { $this->data = $data; $this->status = $status; }
+        public function get_data() { return $this->data; }
+        public function get_status(): int { return $this->status; }
+    }
+}
+
+require_once __DIR__ . '/../includes/FluxFilesApi.php';
+
+$GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read', 'write', 'delete'];
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(1);
+
+test('error(): ApiException code/params reach the REST response body (missing_param)', function () {
+    $api = new FluxFilesApi();
+    $resp = $api->handleImportUrl(new WP_REST_Request(['disk' => 'local'])); // no 'url'
+    assertTrue($resp instanceof WP_REST_Response, 'handler returns a WP_REST_Response');
+    assertEqual(400, $resp->get_status(), 'status forwarded');
+    $data = $resp->get_data();
+    assertEqual('missing_param', $data['error_code'] ?? null, 'error_code present in body');
+    assertTrue(($data['error'] ?? '') !== '', 'human message still present');
+});
+
+test('error(): ApiException params reach the REST response body (folder_exists → name)', function () {
+    $api = new FluxFilesApi();
+    $dirName = 'errtest-dir-' . uniqid();
+    $first = $api->handleMkdir(new WP_REST_Request(['disk' => 'local', 'path' => $dirName]));
+    assertEqual(200, $first->get_status(), 'first mkdir succeeds');
+
+    // Same folder again → 409 with error_code + error_params (the name of the conflict).
+    $second = $api->handleMkdir(new WP_REST_Request(['disk' => 'local', 'path' => $dirName]));
+    $data = $second->get_data();
+    assertEqual(409, $second->get_status(), 'conflict status forwarded');
+    assertEqual('folder_exists', $data['error_code'] ?? null, 'error_code present');
+    assertEqual($dirName, $data['error_params']['name'] ?? null, 'error_params carried through');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

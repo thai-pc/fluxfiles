@@ -439,7 +439,12 @@ class FluxFilesApi
     private function rateLimit(\FluxFiles\Claims $claims, bool $isWrite): void
     {
         $storagePath = FluxFilesPlugin::storagePath();
-        $rateLimiter = new RateLimiterFileStorage($storagePath . '/rate_limit.json');
+        // Per-tenant `rate_read`/`rate_write` claims override the server defaults.
+        // `?? 0` tolerates a core older than 0.2.8 (property absent) — degrade to the
+        // RateLimiterFileStorage default rather than warn/fatal on a version mismatch.
+        $readLimit  = ($claims->rateRead ?? 0) > 0 ? $claims->rateRead : 60;
+        $writeLimit = ($claims->rateWrite ?? 0) > 0 ? $claims->rateWrite : 10;
+        $rateLimiter = new RateLimiterFileStorage($storagePath . '/rate_limit.json', $readLimit, $writeLimit);
         $rateLimiter->check($claims->userId, $isWrite ? 'write' : 'read');
     }
 
@@ -457,9 +462,19 @@ class FluxFilesApi
         return new \WP_REST_Response(['data' => $data, 'error' => null], 200);
     }
 
-    private function error(string $message, int $status = 400): \WP_REST_Response
+    private function error(string $message, int $status = 400, ?string $code = null, array $params = []): \WP_REST_Response
     {
-        return new \WP_REST_Response(['data' => null, 'error' => $message], $status);
+        // Forward the core's error_code + error_params so the embedded UI can show a
+        // LOCALISED message (it maps `error.<code>` via i18n). Without these the UI
+        // falls back to the raw English message — the whole point of this passthrough.
+        $resp = ['data' => null, 'error' => $message];
+        if ($code !== null) {
+            $resp['error_code'] = $code;
+        }
+        if ($params !== []) {
+            $resp['error_params'] = $params;
+        }
+        return new \WP_REST_Response($resp, $status);
     }
 
     /**
