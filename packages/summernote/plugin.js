@@ -46,10 +46,15 @@
         + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
         + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+    // Encode a value for use inside an HTML ATTRIBUTE (src="...", alt="...", href="...").
+    // The DOM textNode→innerHTML trick alone only encodes &/</>  (correct for text-node
+    // context) but leaves `"` untouched, letting a quote in e.g. alt_text break out of the
+    // attribute and inject arbitrary attributes/script (stored XSS). Order matters: encode
+    // `&` first (via the DOM trick) so the following quote replacements aren't re-escaped.
     function escHtml(str) {
         var div = document.createElement('div');
         div.appendChild(document.createTextNode(str || ''));
-        return div.innerHTML;
+        return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     // Build the HTML to insert for one selected file (shared contract with the

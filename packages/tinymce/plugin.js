@@ -30,10 +30,15 @@
 (function () {
     'use strict';
 
+    // Encode a value for use inside an HTML ATTRIBUTE (src="...", alt="...", href="...").
+    // The DOM textNode→innerHTML trick alone only encodes &/</>  (correct for text-node
+    // context) but leaves `"` untouched, letting a quote in e.g. alt_text break out of the
+    // attribute and inject arbitrary attributes/script (stored XSS). Order matters: encode
+    // `&` first (via the DOM trick) so the following quote replacements aren't re-escaped.
     function escHtml(str) {
         var div = document.createElement('div');
         div.appendChild(document.createTextNode(str || ''));
-        return div.innerHTML;
+        return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function cfg(editor) {

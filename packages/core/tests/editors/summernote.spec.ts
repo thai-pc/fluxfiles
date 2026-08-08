@@ -4,6 +4,11 @@ import { test, expect, Page } from '@playwright/test';
 
 const BURN_IN = { url: 'https://cdn.example.com/burned.png', name: 'burned.png', mime: 'image/png', type: 'image' };
 const PREVIEW_ONLY = { name: 'protected.png', mime: 'image/png', img_base: '/api/fm/img?token=t', url: undefined, permanent_url: null };
+// Malicious alt_text containing an unescaped `"` used to break out of the alt="..."
+// attribute and inject an onerror handler (stored XSS). See packages/{ckeditor4,
+// tinymce,summernote} — all three built inserted <img> HTML by string concatenation
+// with an "escaper" that never encoded `"`.
+const XSS_ALT = { url: '/nonexistent.png', name: 'a.png', mime: 'image/png', meta: { alt_text: 'x" onerror="window.__XSS=1" y="' } };
 
 async function ready(page: Page) {
   await page.goto('/packages/core/tests/editors/summernote.html');
@@ -31,4 +36,15 @@ test('preview-only image (watermark overlay) is NOT inserted, and warns', async 
   expect(html).not.toContain('<img');
   expect(html).not.toContain('img_base');
   expect(warnings.join('\n')).toMatch(/preview-only|burn in the watermark/i);
+});
+
+test('a `"` in alt_text is escaped, not left to break out of the alt attribute (stored XSS)', async ({ page }) => {
+  await ready(page);
+  await page.evaluate((p) => { (window as any).__ffPayload = p; }, XSS_ALT as any);
+  await clickButton(page);
+  await expect.poll(() => getCode(page)).toContain('src="/nonexistent.png"');
+  const html = await getCode(page);
+  expect(html).not.toContain('onerror="window.__XSS=1"');
+  const xss = await page.evaluate(() => (window as any).__XSS);
+  expect(xss).toBeUndefined();
 });

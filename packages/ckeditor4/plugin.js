@@ -126,6 +126,10 @@
                 exec: function () {
                     open(cfg, cfg.multiple, function (payload) {
                         var files = Array.isArray(payload) ? payload : [payload];
+                        // Attribute-context values (src/href/alt/title) need htmlEncodeAttr, which
+                        // additionally escapes `"` — plain htmlEncode only does &/</> and lets a
+                        // quote in e.g. alt_text break out of the attribute (stored XSS).
+                        var encAttr = CKEDITOR.tools.htmlEncodeAttr;
                         var enc = CKEDITOR.tools.htmlEncode;
                         for (var i = 0; i < files.length; i++) {
                             var file = files[i];
@@ -137,9 +141,9 @@
                                 var dim = '';
                                 if (info.width) { dim += ' width="' + parseInt(info.width, 10) + '"'; }
                                 if (info.height) { dim += ' height="' + parseInt(info.height, 10) + '"'; }
-                                editor.insertHtml('<img src="' + enc(info.url) + '" alt="' + enc(info.meta.alt_text || info.name) + '"' + dim + ' />');
+                                editor.insertHtml('<img src="' + encAttr(info.url) + '" alt="' + encAttr(info.meta.alt_text || info.name) + '"' + dim + ' />');
                             } else {
-                                editor.insertHtml('<a href="' + enc(info.url) + '">' + enc(info.meta.title || info.name) + '</a>');
+                                editor.insertHtml('<a href="' + encAttr(info.url) + '">' + enc(info.meta.title || info.name) + '</a>');
                             }
                         }
                     });

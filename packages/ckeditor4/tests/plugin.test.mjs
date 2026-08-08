@@ -13,7 +13,13 @@ function loadPlugin() {
   globalThis.FluxFiles = { open: vi.fn() };
   globalThis.__ckOn = {};
   globalThis.CKEDITOR = {
-    tools: { htmlEncode: (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])) },
+    tools: {
+      // Mirrors real CKEditor 4: htmlEncode only escapes &/</> (correct for
+      // text-node context); htmlEncodeAttr additionally escapes `"` and is the
+      // one that must be used for src/alt/href/title attribute values.
+      htmlEncode: (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])),
+      htmlEncodeAttr: (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])).replace(/"/g, '&quot;'),
+    },
     plugins: { add: (_name, def) => { globalThis.__pluginDef = def; } },
     // Capture the global dialogDefinition listener the plugin registers once.
     on: (evt, handler) => { globalThis.__ckOn[evt] = handler; },
@@ -106,6 +112,26 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     cfg.onSelect({ url: 'https://s3/a.png?X-Amz-Signature=abc', name: 'a.png', mime: 'image/png' });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it('escapes a `"` in alt_text so it cannot break out of the alt attribute (stored XSS)', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: '/nonexistent.png', name: 'a.png', mime: 'image/png', meta: { alt_text: 'x" onerror="window.__XSS=1" y="' } });
+    const html = editor.insertHtml.mock.calls[0][0];
+    expect(html).not.toContain('onerror="window.__XSS=1"');
+    expect(html).toContain('alt="x&quot; onerror=&quot;window.__XSS=1&quot; y=&quot;"');
+  });
+
+  it('escapes a `"` in the link href/URL so it cannot break out of the href attribute', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    cfg.onSelect({ url: '/x" onerror="window.__XSS=1" y="', name: 'report.pdf', mime: 'application/pdf' });
+    const html = editor.insertHtml.mock.calls[0][0];
+    expect(html).not.toContain('onerror="window.__XSS=1"');
+    expect(html).toContain('href="/x&quot; onerror=&quot;window.__XSS=1&quot; y=&quot;"');
   });
 
   it('skips folders (is_dir)', () => {

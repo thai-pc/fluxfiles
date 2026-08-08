@@ -149,6 +149,24 @@ describe('Summernote FluxFiles plugin', () => {
     warn.mockRestore();
   });
 
+  it('escapes a `"` in alt_text so it cannot break out of the alt attribute (stored XSS)', () => {
+    const { buttonEl, editorInvoke, open } = loadPlugin();
+    buttonEl.__button.click();
+    open.mock.calls[0][0].onSelect({ url: '/nonexistent.png', name: 'a.png', mime: 'image/png', meta: { alt_text: 'x" onerror="window.__XSS=1" y="' } });
+    const html = pastedHtml(editorInvoke);
+    expect(html).not.toContain('onerror="window.__XSS=1"');
+    expect(html).toContain('alt="x&quot; onerror=&quot;window.__XSS=1&quot; y=&quot;"');
+  });
+
+  it('escapes a `"` in the link href/URL so it cannot break out of the href attribute', () => {
+    const { buttonEl, editorInvoke, open } = loadPlugin();
+    buttonEl.__button.click();
+    open.mock.calls[0][0].onSelect({ url: '/x" onerror="window.__XSS=1" y="', name: 'report.pdf', mime: 'application/pdf' });
+    const html = pastedHtml(editorInvoke);
+    expect(html).not.toContain('onerror="window.__XSS=1"');
+    expect(html).toContain('href="/x&quot; onerror=&quot;window.__XSS=1&quot; y=&quot;"');
+  });
+
   it('skips folders (is_dir): no insert, no range restore', () => {
     const { buttonEl, editorInvoke, open } = loadPlugin();
     buttonEl.__button.click();   // this saves the range
