@@ -62,6 +62,20 @@ describe('<FluxFiles> Vue wrapper', () => {
     }));
     expect(wrapper.emitted('select')).toBeFalsy();
   });
+
+  it('a prop change after FM_READY resends FM_CONFIG with the updated value (reactivity regression)', async () => {
+    const { wrapper, sent } = setup({ token: 'OLD_JWT', theme: 'light' });
+    fromIframe('FM_READY');
+    expect(sent.filter((m) => m.type === 'FM_CONFIG')).toHaveLength(1);
+
+    await wrapper.setProps({ token: 'NEW_JWT', theme: 'dark' });
+    await flush();
+
+    const resends = sent.filter((m) => m.type === 'FM_CONFIG');
+    expect(resends).toHaveLength(2);
+    expect(resends[1].payload.token).toBe('NEW_JWT');
+    expect(resends[1].payload.theme).toBe('dark');
+  });
 });
 
 describe('<FluxFilesModal> Vue wrapper', () => {
@@ -106,6 +120,29 @@ describe('<FluxFilesModal> Vue wrapper', () => {
     fromIframe('FM_THEME', { theme: 'light' });
     await flush();
     expect(modalWin.style.background).toBe(lightBg); // back to light
+    wrapper.unmount();
+  });
+
+  it('a `theme` prop change after FM_READY resends FM_CONFIG to the iframe (not just chrome recolor)', async () => {
+    const wrapper = mount(FluxFilesModal, {
+      props: { open: true, endpoint: ORIGIN, token: 'JWT', theme: 'light' }, attachTo: document.body,
+    });
+    const iframe = document.body.querySelector('[role="dialog"] iframe') as HTMLIFrameElement;
+    const sent: any[] = [];
+    (iframe.contentWindow as any).postMessage = (msg: any) => sent.push(msg);
+
+    fromIframe('FM_READY');
+    expect(sent.filter((m) => m.type === 'FM_CONFIG')).toHaveLength(1);
+
+    await wrapper.setProps({ theme: 'dark' });
+    await flush();
+
+    // Regression: before the fix, useFluxFiles received a plain object literal
+    // captured once at setup(), so the embedded UI's body never got the new
+    // theme even though the chrome (tested above) recolored correctly.
+    const resends = sent.filter((m) => m.type === 'FM_CONFIG');
+    expect(resends).toHaveLength(2);
+    expect(resends[1].payload.theme).toBe('dark');
     wrapper.unmount();
   });
 });

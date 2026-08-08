@@ -36,7 +36,10 @@ const emit = defineEmits<{
   event: [event: FluxEvent];
 }>();
 
-const handle = useFluxFiles({
+// A `computed` IS a Ref, so useFluxFiles' `(options as any).value ?? options`
+// unwrap tracks every prop below — a plain object literal here would freeze
+// useFluxFiles' internal computed/watch sources at their initial setup() values.
+const options = computed(() => ({
   endpoint: props.endpoint,
   token: props.token,
   disk: props.disk,
@@ -51,11 +54,13 @@ const handle = useFluxFiles({
   maxFiles: props.maxFiles,
   locale: props.locale,
   onTokenRefresh: props.onTokenRefresh,
-  onSelect: (file) => emit('select', file),
+  onSelect: (file: FluxFile | FluxFile[]) => emit('select', file),
   onClose: () => emit('close'),
   onReady: () => emit('ready'),
-  onEvent: (event) => emit('event', event),
-});
+  onEvent: (event: FluxEvent) => emit('event', event),
+}));
+
+const handle = useFluxFiles(options);
 
 const containerStyle = computed(() => ({
   width: typeof props.width === 'number' ? `${props.width}px` : props.width,
@@ -72,6 +77,8 @@ defineExpose({
   crossMove: handle.crossMove,
   crop: handle.crop,
   aiTag: handle.aiTag,
+  setLocale: handle.setLocale,
+  updateToken: handle.updateToken,
   ready: handle.ready,
 });
 </script>

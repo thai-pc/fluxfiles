@@ -35,7 +35,12 @@ const emit = defineEmits<{
   'update:open': [value: boolean];
 }>();
 
-const handle = useFluxFiles({
+// A `computed` IS a Ref, so useFluxFiles' `(options as any).value ?? options`
+// unwrap tracks every prop below — a plain object literal here would freeze
+// useFluxFiles' internal computed/watch sources at their initial setup() values,
+// which most notably broke the FM_CONFIG resend on a `theme` prop change (the
+// chrome would recolor via FM_THEME below, but the iframe body never followed).
+const options = computed(() => ({
   endpoint: props.endpoint,
   token: props.token,
   disk: props.disk,
@@ -49,16 +54,18 @@ const handle = useFluxFiles({
   maxSize: props.maxSize,
   maxFiles: props.maxFiles,
   locale: props.locale,
-  onSelect: (file) => emit('select', file),
+  onSelect: (file: FluxFile | FluxFile[]) => emit('select', file),
   onClose: () => {
     emit('close');
     emit('update:open', false);
   },
   onReady: () => emit('ready'),
-  onEvent: (event) => emit('event', event),
+  onEvent: (event: FluxEvent) => emit('event', event),
   // Runtime theme sync: the embedded UI toggled/resolved its theme — darken the chrome too.
-  onThemeChange: (t) => { chromeDark.value = t === 'dark'; },
-});
+  onThemeChange: (t: 'dark' | 'light' | undefined) => { chromeDark.value = t === 'dark'; },
+}));
+
+const handle = useFluxFiles(options);
 
 function close() {
   emit('close');
