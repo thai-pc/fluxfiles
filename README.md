@@ -1729,7 +1729,7 @@ adapter↔core floor guard, and the tag→registry release flow, see
 | `FLUXFILES_TERMINAL_CONFIRM` | No | `true` | `false` skips the catastrophic-command double-confirm in the terminal |
 | `FLUXFILES_AI_PROVIDER` | No | — | `claude`/`anthropic`, `gemini`/`google`, `openai`, `openrouter`, `groq`, `mistral`, `xai`/`grok`, `ollama`, or `compatible` for any other OpenAI-compatible endpoint (empty = disabled) |
 | `FLUXFILES_AI_API_KEY` | No | — | AI provider API key (may be empty for a keyless local endpoint) |
-| `FLUXFILES_AI_MODEL` | No | auto | Override AI model (defaults per provider: `claude-sonnet-4-20250514` / `gemini-2.5-flash` / `gpt-4o` / …). Required with `compatible` |
+| `FLUXFILES_AI_MODEL` | No | auto | Override AI model (defaults per provider: `claude-sonnet-4-20250514` / `gemini-flash-latest` / `gpt-4o` / …). Required with `compatible` |
 | `FLUXFILES_AI_BASE_URL` | No | auto | Override the API base URL — self-hosted Ollama/LiteLLM/vLLM or a corporate gateway. Required with `compatible` |
 | `FLUXFILES_AI_AUTO_TAG` | No | `false` | Auto-tag images on upload |
 
