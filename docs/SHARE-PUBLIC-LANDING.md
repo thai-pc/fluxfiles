@@ -1,7 +1,9 @@
 # Spec — Share module: the public landing page
 
-Status: design, not implemented. Source plan: `.claude/work/plan-share-public-landing.md`
-(its decisions are settled input). Mirrors the shipped Intake precedent.
+Status: implemented and shipped. Source plan: `.claude/work/plan-share-public-landing.md`
+(its decisions are settled input). Mirrors the shipped Intake precedent. See
+`packages/core/api/ShareGrant.php`, `PublicLinks.php`, `packages/core/public/share.html`,
+and the Share routes in `.claude/api-map.md` for the current implementation.
 
 ## 0. Deviations from the plan (flagged once, not re-litigated)
 

@@ -16,7 +16,7 @@
 | ---------------- | ------------------------------------ | ----------------------------------------------------- |
 | **Metadata**     | S3 object metadata (x-amz-meta-*)    | title, alt_text, caption, tags — max 2KB/object       |
 | **Search index** | `_fluxfiles/index.json` in the bucket | Updated when metadata is saved; used for full-text search |
-| **Trash**        | —                                    | (No trash/restore/purge API in core today)            |
+| **Trash**        | `_fluxfiles/trash/<id>/` + `_fluxfiles/trash.json` manifest | Soft-delete, move-based (see Trash below)  |
 | **Audit**        | `_fluxfiles/audit.jsonl`             | Appended on every event                               |
 | **File hash**    | x-amz-meta-file-hash                 | Duplicate detection                                   |
 
@@ -30,7 +30,7 @@
 | ---------------- | ------------------------ | ------------------------------------------------------ |
 | **Metadata**     | `_fluxfiles/meta/{path}.json` | e.g. `photos/2024.jpg` → `_fluxfiles/meta/photos/2024.jpg.json` (kept inside the protected `_fluxfiles/` namespace so a user-uploaded `*.meta.json` can't collide with or overwrite it). Legacy `{path}.meta.json` sidecars are migrated on read. |
 | **Search index** | `_fluxfiles/index.json`  | Cache for fast search                                  |
-| **Trash**        | —                        | (No trash/restore/purge API in core today)             |
+| **Trash**        | `_fluxfiles/trash/<id>/` + `_fluxfiles/trash.json` manifest | Soft-delete, move-based (see Trash below) |
 | **Audit**        | `_fluxfiles/audit.jsonl` | Appended on every event                                |
 
 ---
@@ -48,7 +48,7 @@
 1. `ListObjects` from storage
 2. For S3: `HeadObject` per file to read Metadata (or use the index)
 3. For Local: read the `_fluxfiles/meta/{key}.json` sidecar if present (with a legacy `{key}.meta.json` fallback)
-4. Filter trash (S3: drop the `_trash/` prefix, Local: drop `_trash/`)
+4. Listing/search skip everything under `_fluxfiles/` (trashed items are moved there, so they drop out of both automatically)
 
 ### Search
 
@@ -58,7 +58,13 @@
 
 ### Trash
 
-Core currently has `DELETE /api/fm/delete` (permanent delete). There are no trash/restore/purge endpoints.
+`DELETE /api/fm/delete` is permanent. Soft-delete is move-based into
+`_fluxfiles/trash/<id>/`, tracked by a `_fluxfiles/trash.json` manifest
+(storage-resident, scoped by prefix/owner): `POST /api/fm/trash` (soft-delete),
+`/trash/restore`, `GET /trash/list`, `/trash/purge` (permanent, one entry),
+`/trash/empty` (permanent, whole scope). Files **and folders** are supported —
+a folder trash/restore moves the whole subtree including variants. The UI
+soft-deletes everything via `/trash`.
 
 ---
 
