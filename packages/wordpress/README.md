@@ -37,7 +37,7 @@ runs entirely inside your WordPress install — no separate backend to host.
 | Attribute  | Default   | Description                                   |
 |------------|-----------|-----------------------------------------------|
 | `disk`     | `local`   | Storage disk to open                          |
-| `mode`     | `picker`  | `picker` (select files) or `manager`          |
+| `mode`     | `picker`  | `picker` (select files) or `browser` (free browse) |
 | `width`    | `100%`    | Iframe width                                  |
 | `height`   | `600px`   | Iframe height                                 |
 | `multiple` | `0`       | `1` to allow selecting multiple files         |

@@ -650,9 +650,10 @@ FluxFiles.on('FM_SELECT', (file) => {
 });
 
 FluxFiles.on('FM_EVENT', (event) => {
-    // event.event: 'upload:done', 'delete:done', 'rename:done',
-    //              'move:done', 'copy:done', 'folder:created',
-    //              'crop:done', 'ai_tag:done'
+    // event.event: 'upload:done', 'trash:done', 'rename:done',
+    //              'move:done', 'cross-copy:done', 'cross-move:done',
+    //              'folder:created', 'crop:done', 'ai_tag:done',
+    //              'watermark:done', 'import:done', 'restore:done'
     console.log(event.event, event.key);
 });
 
