@@ -48,6 +48,21 @@ final class Plans
             'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'],
             'sites' => 0, 'ttlDays' => null, 'enforcement' => 'perpetual', // no expiry
         ],
+        // Support = a pure service commitment (no code, no module) — see
+        // docs/ROADMAP.md Phase 4 #10. modules=[] means LicenseManager::licensed()
+        // never unlocks anything; the record exists only so the operator knows who
+        // is on a priority queue. Subscription enforcement because the commitment
+        // stops the moment payment stops, unlike perpetual software licenses.
+        'support' => [
+            'edition' => 'support',
+            'modules' => [],
+            'sites' => 0, 'ttlDays' => 365, 'enforcement' => 'subscription',
+        ],
+        'support-monthly' => [
+            'edition' => 'support',
+            'modules' => [],
+            'sites' => 0, 'ttlDays' => 31, 'enforcement' => 'subscription',
+        ],
     ];
 
     /** @return array<string,array<string,mixed>> */

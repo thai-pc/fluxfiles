@@ -69,6 +69,16 @@ test('Studio + Enterprise + lifetime map correctly', function () use ($secretB64
     assertEqual('active', $lf->status());
 });
 
+test('Support plan unlocks no module (modules=[] gates nothing)', function () use ($secretB64,$keys) {
+    $res = issuer($secretB64)->issue(['email'=>'s@x.com','plan'=>'support','gateway'=>'manual','order_id'=>'sup1']);
+    $lm = new LicenseManager($res['key'], $keys);
+    assertEqual('support', $lm->edition(), 'edition');
+    assertEqual([], $lm->modules(), 'Support has no modules');
+    foreach (['share','intake','versioning','webhooks','ai','ocr','virus','backup','c2pa'] as $m) {
+        assertEqual(false, $lm->licensed($m), "{$m} NOT unlocked by Support");
+    }
+});
+
 test('record stored + retrievable by email', function () use ($secretB64) {
     $store = new LicenseStore(':memory:');
     $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
@@ -192,6 +202,29 @@ test('mail: an unconfigured server does not pretend to have sent real mail', fun
     $rec = issuer($secretB64)->issue(['email'=>'x@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-3'])['record'];
     $out = captureMail(fn () => (new LicenseMailer())->sendLicense($rec));
     assertTrue(str_contains($out, '[log transport]'), 'log transport is announced, not silent');
+});
+
+test('mail: resend transport without an API key fails soft, never throws', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'y@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-4'])['record'];
+    $prevKey = getenv('FLUXFILES_RESEND_API_KEY');
+    putenv('FLUXFILES_RESEND_API_KEY'); // ensure unset
+    $sent = true;
+    try {
+        $sent = (new LicenseMailer('resend'))->sendLicense($rec);
+    } finally {
+        putenv($prevKey === false ? 'FLUXFILES_RESEND_API_KEY' : "FLUXFILES_RESEND_API_KEY={$prevKey}");
+    }
+    assertEqual(false, $sent, 'missing API key reports failure rather than throwing');
+});
+
+test('mail: a Support-only record gets no activation line', function () use ($secretB64) {
+    // modules=[] means no software to activate — the Pro-style FLUXFILES_LICENSE_KEY=
+    // instruction would be wrong here, so the mailer must take the other branch.
+    $rec = issuer($secretB64)->issue(['email'=>'sup@acme.com','plan'=>'support','gateway'=>'polar','order_id'=>'MAIL-SUP'])['record'];
+    $out = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendLicense($rec), 'send reports success'));
+    assertTrue(str_contains($out, 'Priority Support'), 'subject reflects the support subscription');
+    assertTrue(!str_contains($out, 'FLUXFILES_LICENSE_KEY='), 'no activation instruction for a support-only purchase');
+    assertTrue(str_contains($out, 'sup@acme.com'), 'addressed to the buyer');
 });
 
 // ── Polar webhook (Standard Webhooks) ────────────────────────────────────────

@@ -71,6 +71,20 @@ const CATALOGUE = [
         'amount' => 2900,           // $29 / month — matches the landing
         'recurring' => 'month',
     ],
+    // Support = a standalone service subscription, no module unlock — for
+    // self-hosters who want a support relationship without buying Pro/Studio.
+    'support' => [
+        'name' => 'FluxFiles Priority Support',
+        'description' => 'Priority email support with faster response times. No software is unlocked — this is a service subscription for self-hosters who want a support relationship without buying a paid module.',
+        'amount' => 4900,           // $49 / year
+        'recurring' => 'year',
+    ],
+    'support-monthly' => [
+        'name' => 'FluxFiles Priority Support (monthly)',
+        'description' => 'Priority email support with faster response times. Billed monthly.',
+        'amount' => 500,            // $5 / month
+        'recurring' => 'month',
+    ],
 ];
 
 $production = in_array('--production', $argv, true);

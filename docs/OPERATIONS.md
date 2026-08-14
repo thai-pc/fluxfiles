@@ -99,10 +99,15 @@ FLUXFILES_LICENSE_ADMIN_TOKEN=$(openssl rand -hex 24)
 FLUXFILES_POLAR_WEBHOOK_SECRET=whsec_…      # from step 4
 FLUXFILES_POLAR_PLAN_MAP='{"<product_id>":"pro", …}'   # from step 5
 
-FLUXFILES_MAIL_TRANSPORT=smtp               # default is 'log' — it does NOT send
+FLUXFILES_MAIL_TRANSPORT=resend             # default is 'log' — it does NOT send
 FLUXFILES_MAIL_FROM=licenses@your-domain.com
-FLUXFILES_SMTP_HOST=…  FLUXFILES_SMTP_PORT=587
-FLUXFILES_SMTP_USER=…  FLUXFILES_SMTP_PASS=…
+FLUXFILES_MAIL_FROM_NAME=FluxFiles
+FLUXFILES_MAIL_REPLY_TO=support@your-domain.com   # optional
+FLUXFILES_RESEND_API_KEY=re_…               # resend.com → API Keys
+
+# or, transport=smtp instead:
+# FLUXFILES_SMTP_HOST=…  FLUXFILES_SMTP_PORT=587
+# FLUXFILES_SMTP_USER=…  FLUXFILES_SMTP_PASS=…
 
 FLUXFILES_LANDING_ORIGIN=https://fluxfiles.dev   # the ONLY origin /claim answers
 ```
@@ -170,6 +175,10 @@ paste into step 3.
 conversation an instant-buy button would undercut, and lifetime is worth offering only
 once recurring revenue exists.
 
+`support` and `support-monthly` are created like any other plan, but they unlock no
+module (`Plans.php` gives them `modules: []`) — the product is a support relationship,
+sellable standalone to a free-core self-hoster who never buys Pro/Studio/Enterprise.
+
 ---
 
 ## 6. Switch the landing to production
@@ -179,6 +188,7 @@ In `fluxfiles-landing`, generate production checkout links and set:
 ```bash
 PUBLIC_POLAR_PRO_YEARLY=…      PUBLIC_POLAR_PRO_MONTHLY=…
 PUBLIC_POLAR_STUDIO_YEARLY=…   PUBLIC_POLAR_STUDIO_MONTHLY=…
+PUBLIC_POLAR_SUPPORT_YEARLY=…
 ```
 
 A missing variable degrades to the existing "coming soon" button rather than a dead

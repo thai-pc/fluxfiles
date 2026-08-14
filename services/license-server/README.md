@@ -28,12 +28,16 @@ export FLUXFILES_POLAR_PLAN_MAP='{"<product_id>":"pro","<product_id>":"studio"}'
 
 # 3. Licence delivery. Default transport is 'log' — an unconfigured server writes the
 #    message to the error log instead of silently pretending it sent mail.
-export FLUXFILES_MAIL_TRANSPORT=smtp          # smtp | sendmail | log
+export FLUXFILES_MAIL_TRANSPORT=resend        # resend | smtp | sendmail | log
 export FLUXFILES_MAIL_FROM=licenses@your-domain.com
-export FLUXFILES_SMTP_HOST=smtp.provider.com
-export FLUXFILES_SMTP_PORT=587
-export FLUXFILES_SMTP_USER=...
-export FLUXFILES_SMTP_PASS=...
+export FLUXFILES_MAIL_FROM_NAME=FluxFiles
+export FLUXFILES_MAIL_REPLY_TO=support@your-domain.com   # optional
+export FLUXFILES_RESEND_API_KEY=re_...        # resend.com → API Keys
+# — or, transport=smtp instead:
+# export FLUXFILES_SMTP_HOST=smtp.provider.com
+# export FLUXFILES_SMTP_PORT=587
+# export FLUXFILES_SMTP_USER=...
+# export FLUXFILES_SMTP_PASS=...
 
 # run (dev) — behind nginx/caddy in prod
 php -S 0.0.0.0:9000 server.php

@@ -16,7 +16,7 @@ namespace FluxFiles\LicenseServer;
  * holds the Ed25519 signing key is a bad trade for what is a short SMTP conversation.
  *
  * Transport is chosen by env:
- *   FLUXFILES_MAIL_TRANSPORT = smtp | sendmail | log   (default: log)
+ *   FLUXFILES_MAIL_TRANSPORT = resend | smtp | sendmail | log   (default: log)
  *
  * `log` writes the message to error_log instead of sending. That is the default on
  * purpose: an unconfigured server must not look like it delivered mail, and during
@@ -52,11 +52,13 @@ final class LicenseMailer
             return false;
         }
 
-        $subject = 'Your FluxFiles licence key';
-        $body = $this->renderBody($record);
+        $isSupportOnly = trim((string) ($record['modules'] ?? '')) === '';
+        $subject = $isSupportOnly ? 'Your FluxFiles Priority Support subscription' : 'Your FluxFiles licence key';
+        $body = $isSupportOnly ? $this->renderSupportBody($record) : $this->renderBody($record);
 
         try {
             return match ($this->transport) {
+                'resend' => $this->sendResend($to, $subject, $body),
                 'smtp' => $this->sendSmtp($to, $subject, $body),
                 'sendmail' => $this->sendMail($to, $subject, $body),
                 default => $this->sendLog($to, $subject, $body),
@@ -104,6 +106,36 @@ final class LicenseMailer
         TXT;
     }
 
+    /**
+     * Body for a Support-only subscription (modules=[], nothing to activate).
+     * No `FLUXFILES_LICENSE_KEY=` line — a support purchase unlocks no software, so
+     * that instruction would be actively wrong for this record.
+     *
+     * @param array<string,mixed> $record
+     */
+    private function renderSupportBody(array $record): string
+    {
+        $expires = $record['expires'] ?? null;
+        $expiryLine = $expires
+            ? 'Renews/expires: ' . gmdate('Y-m-d', (int) $expires)
+            : 'No expiry on file.';
+
+        return <<<TXT
+        Thanks for subscribing to FluxFiles Priority Support.
+
+        This purchase does not unlock any module or feature — it's a support
+        subscription for faster, prioritized responses on the free MIT core (or any
+        paid modules you already run separately).
+
+        Just reply to this email any time you need help, and it'll be flagged as
+        priority.
+
+        {$expiryLine}
+
+        — FluxFiles
+        TXT;
+    }
+
     private function headers(): array
     {
         return [
@@ -131,6 +163,58 @@ final class LicenseMailer
     private function sendMail(string $to, string $subject, string $body): bool
     {
         return @mail($to, $subject, $body, implode("\r\n", $this->headers()));
+    }
+
+    /**
+     * Resend's HTTP API — one POST, no SMTP conversation to hand-roll.
+     *
+     * Env: FLUXFILES_RESEND_API_KEY (required), FLUXFILES_MAIL_REPLY_TO (optional).
+     * `from` reuses the constructor's $from/$fromName — Resend requires that address
+     * to be on a domain verified in the Resend account, or the send is rejected.
+     */
+    private function sendResend(string $to, string $subject, string $body): bool
+    {
+        $apiKey = (string) (getenv('FLUXFILES_RESEND_API_KEY') ?: '');
+        if ($apiKey === '') {
+            throw new \RuntimeException('FLUXFILES_RESEND_API_KEY is not set');
+        }
+        $replyTo = (string) (getenv('FLUXFILES_MAIL_REPLY_TO') ?: '');
+
+        $payload = [
+            'from' => $this->fromName !== '' ? "{$this->fromName} <{$this->from}>" : $this->from,
+            'to' => [$to],
+            'subject' => $subject,
+            'text' => $body,
+        ];
+        if ($replyTo !== '') {
+            $payload['reply_to'] = $replyTo;
+        }
+
+        $ch = curl_init('https://api.resend.com/emails');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+            ],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
+        ]);
+        $responseBody = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $error = curl_error($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($errno !== 0) {
+            throw new \RuntimeException('Resend request failed: ' . $error);
+        }
+        if ($status < 200 || $status >= 300) {
+            throw new \RuntimeException('Resend API returned ' . $status . ': ' . (string) $responseBody);
+        }
+        return true;
     }
 
     /**
