@@ -30,7 +30,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Storage Disks](#storage-disks)
   - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
-  - [Token parameters & units](#token-parameters--units) · [Import from URL](#import-from-url)
+  - [Import from URL](#import-from-url)
 - [Multi-tenant](#multi-tenant)
 - [API Reference](#api-reference)
 - [Framework Adapters](#framework-adapters)
@@ -1081,88 +1081,11 @@ Metadata and image variants are transferred together. Quota is checked on the de
 }
 ```
 
-| Claim | Type | Unit | Default | Description |
-|-------|------|------|---------|-------------|
-| `sub` | string | — | `"0"` | User identifier |
-| `iat` | int | **Unix seconds** | now | Issued-at timestamp |
-| `exp` | int | **Unix seconds** | now + ttl | Expiry timestamp (token invalid after this) |
-| `perms` | string[] | — | `["read"]` | Permissions: `read`, `write`, `delete` |
-| `disks` | string[] | — | `["local"]` | Allowed storage disks |
-| `prefix` | string | path | `""` | Path scope — user can only access files under this prefix |
-| `max_upload` | int | **MB** | `10` | Max size **per uploaded file**, in megabytes |
-| `allowed_ext` | string[]&#124;null | extensions | `null` | Allowed extensions, lowercase & **no dot** (e.g. `["jpg","png"]`). `null` = allow all non-dangerous types |
-| `max_storage` | int | **MB** | `0` | **Total** storage quota for the prefix, in megabytes. `0` = unlimited |
-| `max_files` | int | count | `0` | **Total** number of files allowed under the prefix. `0` = unlimited |
-| `owner_only` | bool | — | `false` | When `true`, users can only delete/rename/move files they uploaded |
-| `byob_disks` | object | — | — | Encrypted BYOB credentials (optional) |
-| `ai_auto_tag` | bool | — | inherit env | Per-tenant AI auto-tag toggle. Omit to inherit `FLUXFILES_AI_AUTO_TAG`; `true`/`false` overrides it |
-| `rate_read` / `rate_write` | int | req/min | `0` | Per-tenant API rate limits. `0` = inherit the server default |
-| `variants` | object | px | — | Per-tenant WebP variant widths, e.g. `{"thumb":150,"medium":768,"large":1920}`. Omit/unknown keys inherit the defaults |
-| `allow_url_import` | bool | — | `false` | Enable **Import from URL** (`POST /api/fm/import-url`) for this tenant. Off by default so the server can't be abused as an HTTP proxy |
-| `max_import_mb` | int | **MB** | `0` | Max size per URL import, in megabytes (same unit as `max_upload`). `0` = inherit the default (50) |
-| `import_url_allowlist` | string[] | hosts | — | Restrict imports to these host globs, e.g. `["*.unsplash.com"]`. Omit = any public host |
-| `import_path` | string | path | — | Force imports into this path, ignoring the request path |
-| `import_rate_limit` / `import_concurrency` | int | — | `10` / `3` | Import-specific rate limit (its own bucket) and max concurrent imports |
-| `media_preview` | bool | — | `true` | Inline video/audio preview. `false` falls back to a download link (image/pdf preview unaffected) |
-| `preview_url_ttl` | int | **seconds** | `7200` | Presigned GET-URL TTL for **media** files — longer so a long video doesn't 403 mid-playback. Capped at 24h |
-| `max_preview_mb` | int | **MB** | `500` | Max media size eligible for inline preview; larger files show a "too large" placeholder + download |
-| `stream_token_ttl` | int | **seconds** | `3600` | TTL of the per-file stream token used by gated-local media (`FLUXFILES_LOCAL_PRIVATE`) |
-| `webp_enabled` | bool | — | `true` | Expose the on-demand WebP endpoint (`/api/fm/img`) — image entries gain an `img_base` URL. `false` omits it |
-| `webp_max_width` | int | px | `2000` | Max resize width a transform request may ask for (clamped). Bounds the cache-variant count |
-| `webp_default_quality` | int | 1–100 | `80` | WebP quality used when a request omits `quality` (snapped to `60`/`75`/`80`/`90`) |
-| `srcset_widths` | int[] | px | `[320,640,768,1024,1366,1920]` | Responsive `srcset` ladder. `list()` emits these as `img_srcset` on images (snapped to 100px, clamped to `webp_max_width`, capped at the source width) |
-| `srcset_sizes` | string | — | _(unset)_ | When set, emitted as the `img_sizes` attribute to pair with `img_srcset` (e.g. `"(max-width: 600px) 100vw, 50vw"`) |
-| `allow_download` | bool | — | `true` | When `false` (preview-only), `list()` withholds `url`/`permanent_url`/`variants` for files and GET presign returns `403` — only the (watermarked) `img_base` remains for images |
-| `allow_chmod` | bool | — | `true` | Allow changing Unix file permissions (`POST /api/fm/chmod`) on an SFTP disk. `false` makes the SFTP token read-only for permissions |
-| `allow_terminal` | bool | — | `false` | Allow the **SSH terminal** (`POST /api/fm/terminal`) on an SFTP disk. **Off by default** — grants shell access as the SSH user; also requires `write`. Gate further with a least-privilege SSH account |
-| `allow_zip` | bool | — | `true` | Allow zip download of a selection (`POST /api/fm/zip`). Also requires `allow_download`. `false` hides the Download ZIP action |
-| `allow_extract` | bool | — | `true` | Allow extracting a zip in place (`POST /api/fm/extract`). `false` hides the Extract action |
-| `zip_max_mb` | int | **MB** | `1024` | Max total uncompressed size for a zip/extract (pre-flight 413 / bomb cap) |
-| `zip_max_files` | int | — | `10000` | Max file count for a zip/extract |
-| `watermark_enabled` | bool | — | `false` | Overlay a watermark on the on-demand WebP (`/api/fm/img`). Off by default; the source file is never modified |
-| `watermark_type` | enum | — | `text` | `text` or `logo` (a PNG path in storage) |
-| `watermark_text` | string | — | — | Text for `type=text` (e.g. `© Acme`) |
-| `watermark_logo_path` | string | path | — | Storage path to the logo PNG for `type=logo`; a missing/unsafe path falls back to a text watermark (never a clean image) |
-| `watermark_position` | enum | — | `bottom-right` | `top-left` / `top-right` / `bottom-left` / `bottom-right` / `center` |
-| `watermark_opacity` | float | 0–1 | `0.6` | Watermark opacity |
-| `watermark_font_size` | int | px | `24` | Font size for `type=text` (8–200) |
-| `usage_cache_ttl` | int | **seconds** | `900` | Usage-dashboard cache TTL (`GET /api/fm/usage`). `0` disables the cache |
-| `usage_warning_threshold` / `usage_critical_threshold` | int | % | `70` / `90` | Quota % at which the usage status turns `warning` / `critical` |
-| `usage_top_folders_count` | int | — | `10` | How many largest folders the dashboard returns |
-| `usage_folder_depth` | int | — | `1` | Folder grouping depth for the breakdown (`1` = top-level folders) |
-
-> **Import from URL** fetches a public URL server-side and saves it like an upload
-> (`POST /api/fm/import-url` with `{ "url": "…", "path": "…" }`). It's SSRF-guarded
-> (blocks private/metadata/CGNAT/IPv6 targets on every redirect hop, magic-byte MIME
-> deny-list, streaming size cap) and shares the existing quota/dedup/variants/AI-tag
-> pipeline. SVG import is off unless `FLUXFILES_IMPORT_ALLOW_SVG=true`.
-
-> `ttl` is **not** a claim — it's the `fluxfiles_token()` parameter (in **seconds**)
-> used to compute `exp` = `iat + ttl`.
-
-### Token parameters & units
-
-`fluxfiles_token()` parameters, with exact units:
-
-| Parameter | Maps to claim | Unit | Default | Notes |
-|-----------|---------------|------|---------|-------|
-| `userId` | `sub` | — | required | Your app's user id (string). |
-| `perms` | `perms` | — | `['read']` | `read` (list/download/search), `write` (upload/rename/move/copy/mkdir/crop/ai-tag), `delete`. |
-| `disks` | `disks` | — | `['local']` | Disk names the token may use. |
-| `prefix` | `prefix` | path | `''` | Every path is sandboxed under this. `''` = full disk. |
-| `maxUploadMb` | `max_upload` | **MB** | `10` | Max size **per file**. A 25 MB file with `maxUploadMb: 10` → 413. |
-| `allowedExt` | `allowed_ext` | extensions | `null` | Lowercase, no dot, e.g. `['jpg','png','pdf']`. `null` = all non-dangerous types. Dangerous types (`php`, `exe`, …) are **always** blocked regardless. A disallowed type → **403 `ext_not_allowed`**. |
-| `ttl` | `exp` (`= iat + ttl`) | **seconds** | `3600` | Token lifetime. `3600` = 1 hour, `86400` = 1 day. After `exp` the API returns 401 and the SDK triggers token refresh. |
-| `ownerOnly` | `owner_only` | — | `false` | Restrict destructive ops to the uploader (use with a shared `prefix`). |
-| `maxStorageMb` | `max_storage` | **MB** | `0` | **Total** quota across the prefix (existing files + variants + metadata count). `0` = unlimited. Exceeding it → **413 `quota_exceeded`**. |
-| `maxFiles` | `max_files` | count | `0` | **Total** number of files allowed under the prefix (counts user files; skips internal `_fluxfiles/`/`_variants/`). `0` = unlimited. Exceeding it → **413 `too_many_files`**. |
-| `aiAutoTag` | `ai_auto_tag` | — | `null` | Per-tenant AI auto-tag on upload. `null` = inherit `FLUXFILES_AI_AUTO_TAG`; `true`/`false` overrides it. (The AI provider/key stay server-side.) |
-| `rateRead` / `rateWrite` | `rate_read` / `rate_write` | req/min | `0` | Per-tenant rate limits. `0` = inherit `FLUXFILES_RATE_LIMIT_READ/WRITE`. |
-| `variants` | `variants` | px | `null` | Per-tenant WebP variant widths — a map of `thumb`/`medium`/`large` to a width (16–8000 px). Unset names inherit `150`/`768`/`1920`. |
-| `import` | `allow_url_import`, … | — | `null` | **Import from URL** config (off unless set). An array: `['allow_url_import' => true, 'max_import_mb' => 20, 'import_url_allowlist' => ['*.unsplash.com'], 'import_path' => 'imports', 'import_rate_limit' => 10, 'import_concurrency' => 3]`. Only the keys you set are embedded; the rest inherit the server defaults. See [Import from URL](#import-from-url). |
-| `media` | `media_preview`, … | — | `null` | **Media-preview** config. An array: `['media_preview' => true, 'preview_url_ttl' => 7200, 'max_preview_mb' => 500, 'stream_token_ttl' => 3600]`. Only the keys you set are embedded; the rest inherit the defaults. |
-| `webp` | `webp_enabled`, … | — | `null` | **On-demand WebP** + responsive config. An array: `['webp_enabled' => true, 'webp_max_width' => 2000, 'webp_default_quality' => 80, 'srcset_widths' => [320, 640, 1024, 1920], 'srcset_sizes' => '100vw']`. Only the keys you set are embedded. See [On-demand WebP](#on-demand-webp--avif). |
-| `usage` | `usage_cache_ttl`, … | — | `null` | **Usage dashboard** config. An array: `['usage_cache_ttl' => 900, 'usage_warning_threshold' => 70, 'usage_critical_threshold' => 90, 'usage_top_folders_count' => 10, 'usage_folder_depth' => 1]`. See [Usage dashboard](#usage-dashboard). |
+The full claim list (all 81, with types/defaults/units) and every `fluxfiles_token()`
+parameter live in [`docs/CONFIG.md`](docs/CONFIG.md) — kept as the single copy so it
+can't drift from what the code actually reads. The handful used in every app:
+`sub`, `perms`, `disks`, `prefix`, `max_upload`, `allowed_ext`, `ttl` (a
+`fluxfiles_token()` parameter, not a claim — it sets `exp = iat + ttl`, in seconds).
 
 ### Import from URL
 
@@ -1687,52 +1610,17 @@ adapter↔core floor guard, and the tag→registry release flow, see
 
 ## Environment Variables
 
+Only two are required — everything else has a working default:
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `FLUXFILES_SECRET` | **Yes** | — | JWT signing secret (min 32 chars) |
 | `FLUXFILES_ALLOWED_ORIGINS` | **Yes** | — | Comma-separated CORS origins |
-| `FLUXFILES_LOCALE` | No | `en` | UI language (`en`, `vi`, `zh`, `ja`, etc.) |
-| `FLUXFILES_RATE_LIMIT_READ` | No | `60` | Max read requests per minute per user |
-| `FLUXFILES_RATE_LIMIT_WRITE` | No | `10` | Max write requests per minute per user |
-| `FLUXFILES_STORAGE_PATH` | No | `packages/core/storage` | Dir for runtime state (rate-limit counter). Point at a writable volume for read-only deployments |
-| `FLUXFILES_LOCAL_PRIVATE` | No | `false` | Serve `local` disk files through per-file `/api/fm/stream` tokens (Range-capable) instead of static URLs. The disk root must then not be served statically |
-| `FLUXFILES_XACCEL` | No | — | Internal nginx location (e.g. `/_ff_media`) for `X-Accel-Redirect` streaming — nginx serves the bytes with native Range, PHP never copies the file |
-| `FLUXFILES_IMPORT_MAX_MB` | No | `50` | Max MB per URL import when the token omits `max_import_mb` |
-| `FLUXFILES_IMPORT_RATE_LIMIT` | No | `10` | Imports/min when the token omits `import_rate_limit` |
-| `FLUXFILES_IMPORT_TIMEOUT` | No | `30` | Seconds per import fetch |
-| `FLUXFILES_IMPORT_ALLOW_SVG` | No | `false` | Allow SVG imports (off — XML can carry script) |
-| `AWS_ACCESS_KEY_ID` | No | — | AWS S3 access key |
-| `AWS_SECRET_ACCESS_KEY` | No | — | AWS S3 secret key |
-| `AWS_DEFAULT_REGION` | No | `ap-southeast-1` | AWS region |
-| `AWS_BUCKET` | No | — | S3 bucket name |
-| `AWS_ENDPOINT` | No | — | Custom S3-compatible endpoint (MinIO / DO Spaces / …). Empty = native AWS S3; when set, path-style addressing is used |
-| `AWS_VISIBILITY` | No | `private` | `private` = presigned GET URLs; `public` = direct object URLs (public-read ACL) |
-| `AWS_PUBLIC_URL` | No | — | CDN / custom-domain base for a public disk, e.g. `https://cdn.example.com` |
-| `AWS_URL_TTL` | No | `3600` | Presigned GET-URL lifetime (seconds) on a private S3 disk. Max 24h. Media files override via the `preview_url_ttl` claim |
-| `R2_ACCESS_KEY_ID` | No | — | Cloudflare R2 access key |
-| `R2_SECRET_ACCESS_KEY` | No | — | Cloudflare R2 secret key |
-| `R2_ACCOUNT_ID` | No | — | Cloudflare account ID |
-| `R2_BUCKET` | No | — | R2 bucket name |
-| `R2_VISIBILITY` | No | `private` | `private` = presigned GET URLs; `public` needs a public bucket + `R2_PUBLIC_URL` |
-| `R2_PUBLIC_URL` | No | — | Public base URL for a public R2 disk (r2.dev or custom domain) |
-| `R2_URL_TTL` | No | `3600` | Presigned GET-URL lifetime (seconds) on a private R2 disk. Max 24h |
-| `SFTP_HOST` | No | — | Register an `sftp` disk pointing at this host (VPS/shared hosting). Empty = no SFTP disk |
-| `SFTP_PORT` | No | `22` | SFTP port |
-| `SFTP_USERNAME` | No | — | SFTP username |
-| `SFTP_PASSWORD` | No | — | SFTP password (or use `SFTP_PRIVATE_KEY`) |
-| `SFTP_PRIVATE_KEY` | No | — | Private key (PEM contents) — alternative to password |
-| `SFTP_PRIVATE_KEY_PASSPHRASE` | No | — | Passphrase for the private key |
-| `SFTP_ROOT` | No | `/` | Remote root directory the disk is scoped to |
-| `SFTP_HOST_FINGERPRINT` | No | — | Expected host-key fingerprint(s) for anti-MITM pinning (colon-hex; md5 for an RSA host key, sha512 otherwise; comma-separate for rotation). Empty = trust any host key |
-| `FLUXFILES_SSRF_ALLOW_HOSTS` | No | — | Comma-separated host[:port] trusted past the SSRF public-IP check (SFTP on a private network). Empty = full protection |
-| `FLUXFILES_TERMINAL_DISABLED` | No | `false` | `true` hard-disables the SSH terminal server-wide (overrides the `allow_terminal` claim) |
-| `FLUXFILES_TERMINAL_TIMEOUT` | No | `30` | Per-command timeout (seconds) for the SSH terminal |
-| `FLUXFILES_TERMINAL_CONFIRM` | No | `true` | `false` skips the catastrophic-command double-confirm in the terminal |
-| `FLUXFILES_AI_PROVIDER` | No | — | `claude`/`anthropic`, `gemini`/`google`, `openai`, `openrouter`, `groq`, `mistral`, `xai`/`grok`, `ollama`, or `compatible` for any other OpenAI-compatible endpoint (empty = disabled) |
-| `FLUXFILES_AI_API_KEY` | No | — | AI provider API key (may be empty for a keyless local endpoint) |
-| `FLUXFILES_AI_MODEL` | No | auto | Override AI model (defaults per provider: `claude-sonnet-4-20250514` / `gemini-flash-latest` / `gpt-4o` / …). Required with `compatible` |
-| `FLUXFILES_AI_BASE_URL` | No | auto | Override the API base URL — self-hosted Ollama/LiteLLM/vLLM or a corporate gateway. Required with `compatible` |
-| `FLUXFILES_AI_AUTO_TAG` | No | `false` | Auto-tag images on upload |
+
+Storage-disk credentials (`AWS_*`, `R2_*`, `SFTP_*`) are covered in
+[Storage Disks](#storage-disks) above, next to the config that reads them. Everything
+else — rate limits, local-media privacy, URL import, terminal, AI tagging, and more —
+is documented with its default in [`docs/CONFIG.md`](docs/CONFIG.md).
 
 ---
 
