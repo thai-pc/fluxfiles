@@ -217,9 +217,17 @@ All four accept the same `claims` map.
 | `FLUXFILES_AI_MODEL` | provider default | Vision model override. Required with `compatible`. |
 | `FLUXFILES_AI_BASE_URL` | provider default | API base-URL override — self-hosted Ollama/LiteLLM/vLLM or a corporate gateway. Required with `compatible`. |
 | `FLUXFILES_AI_AUTO_TAG` | `false` | Default for `ai_auto_tag` (claim overrides). |
+| `FLUXFILES_AIVISION_PROVIDER` | `removebg` | AI Vision (paid) provider: `removebg` (bg-removal only) or `http` (generic self-hosted endpoint). |
+| `FLUXFILES_AIVISION_KEY` | — | API key for the AI Vision provider (BYO key). |
+| `FLUXFILES_AIVISION_ENDPOINT` | — | Endpoint URL, required when `FLUXFILES_AIVISION_PROVIDER=http`. Operator-trusted (server env, not user input) — no SSRF guard. |
+| `FLUXFILES_AIVISION_TIMEOUT` | `60` | AI Vision provider request timeout (seconds). |
+| `FLUXFILES_C2PA_MANIFEST` | — | Path to the C2PA (paid) signing manifest JSON (claim_generator + cert/key). Empty → `501 c2pa_unconfigured`. |
+| `FLUXFILES_VIRUSTOTAL_KEY` | — | VirusTotal API key — cloud fallback for the Virus module (paid) when local ClamAV isn't installed. SHA-256 lookup only; bytes never leave the server. |
+| `FLUXFILES_VIRUSTOTAL_TIMEOUT` | `20` | VirusTotal request timeout (seconds). |
 | `FLUXFILES_IMPORT_ALLOW_SVG` | `false` | Allow SVG via URL import. |
 | `FLUXFILES_IMPORT_MAX_MB` / `_RATE_LIMIT` / `_TIMEOUT` | — | URL-import server defaults. |
 | `FLUXFILES_SSRF_ALLOW_HOSTS` | — | SSRF allow-list (BYOB + import). |
+| `FLUXFILES_WEBHOOK_ALLOW_INTERNAL` | `false` | Opt out of the Webhooks (paid) SSRF policy — allows loopback/RFC1918/cloud-metadata targets, for a self-hosted receiver (e.g. n8n) on the same box. Also skips the post-connect DNS-rebinding re-check. |
 | `FLUXFILES_SHARE_RATE_LIMIT` | `60` | Public share requests/min per share id (`share/info` + `share/file`). |
 | `FLUXFILES_SHARE_UNLOCK_LIMIT` | `5` | Share password attempts/min per share id **+ client IP**. Stops one guesser; an attacker can rotate `REMOTE_ADDR`, so it is never the only limit. |
 | `FLUXFILES_SHARE_UNLOCK_TOTAL` | `30` | Share password attempts/min per share id, **no IP component** — the ceiling IP rotation can't escape. Keep it comfortably above a shared-office NAT (all recipients behind one IP share the per-IP bucket); lower it for high-value links. |
