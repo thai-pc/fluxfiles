@@ -212,6 +212,45 @@ test('scanning does not delete or truncate the upload temp', function () {
     assertEqual('payload-bytes', (string) $dm->disk('local')->read('keep.txt'), 'bytes survive the scan');
 });
 
+// ── writeScopedFile() (the module write seam: AI Vision, C2PA) ───────────────
+// These modules validate the path with validateUserPath()/assertCanModifyScopedPath()
+// but must route the actual write through writeScopedFile() to inherit allowed_ext,
+// the dangerous-extension check, and virus scanning — the same guarantees every
+// other write path already has. A module reaching for $fs->write() directly would
+// silently skip all three.
+test('writeScopedFile: clean content passes the scanner and is stored', function () {
+    [$fm, $dm] = makeFM(fakeScanner());
+    $scoped = $fm->validateUserPath('out.png');
+    $fm->writeScopedFile('local', $scoped, 'clean-bytes');
+    assertEqual('clean-bytes', (string) $dm->disk('local')->read('out.png'));
+});
+
+test('writeScopedFile: infected content is refused and nothing is written', function () {
+    [$fm, $dm] = makeFM(fakeScanner());
+    $scoped = $fm->validateUserPath('out.png');
+    expectApi(fn () => $fm->writeScopedFile('local', $scoped, 'payload ' . NEEDLE), 422, 'virus_detected');
+    assertTrue(!$dm->disk('local')->fileExists('out.png'), 'infected content must NOT be stored');
+});
+
+test('writeScopedFile: a dangerous double extension is rejected', function () {
+    [$fm, $dm] = makeFM(fakeScanner());
+    $scoped = $fm->validateUserPath('shell.php.jpg');
+    expectApi(fn () => $fm->writeScopedFile('local', $scoped, 'x'), 403, 'ext_dangerous');
+    assertTrue(!$dm->disk('local')->fileExists('shell.php.jpg'));
+});
+
+test('writeScopedFile: honours the allowed_ext claim', function () {
+    $root = sys_get_temp_dir() . '/ff-virus-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $claims = new Claims('u', ['read', 'write'], ['local'], '', 50, ['png'], 0);
+    $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
+    $fm->setVirusScanner(fakeScanner());
+    $scoped = $fm->validateUserPath('out.exe');
+    expectApi(fn () => $fm->writeScopedFile('local', $scoped, 'x'), 403, 'ext_not_allowed');
+    assertTrue(!$dm->disk('local')->fileExists('out.exe'));
+});
+
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
