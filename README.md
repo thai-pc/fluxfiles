@@ -24,15 +24,15 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
-- [Production Deployment](#production-deployment)
+- [Production Deployment](#production-deployment) — full nginx/Apache configs: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - [Embedding in Your App](#embedding-in-your-app)
-  - [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard)
+  - [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard) — internals: [`docs/FEATURES.md`](docs/FEATURES.md)
 - [Storage Disks](#storage-disks)
   - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
   - [Import from URL](#import-from-url)
 - [Multi-tenant](#multi-tenant)
-- [API Reference](#api-reference)
+- [API Reference](#api-reference) — full route tables: [`docs/API.md`](docs/API.md)
 - [Framework Adapters](#framework-adapters)
 - [Internationalization](#internationalization)
 - [Security](#security)
@@ -207,108 +207,13 @@ php packages/core/tests/generate-token.php
 
 ## Production Deployment
 
-### Nginx
+Deploying behind nginx or Apache needs three things: routing `/public/` through
+PHP (for server-side locale injection — a static `try_files` would skip it),
+blocking a handful of sensitive paths (`.env`, `_fluxfiles/`, `rate_limit.json`),
+and neutralizing uploaded HTML/SVG so they can't run as same-origin XSS.
 
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name fm.yourdomain.com;
-    root /var/www/fluxfiles/packages/core;
-
-    # SSL
-    ssl_certificate     /etc/ssl/certs/fm.yourdomain.com.pem;
-    ssl_certificate_key /etc/ssl/private/fm.yourdomain.com.key;
-
-    # Max request body — must be >= the largest `max_upload` (MB) you issue in a
-    # JWT, or nginx rejects big uploads with 413 BEFORE the request reaches PHP.
-    # Set this a bit above your biggest per-file limit (here: 100 MB).
-    client_max_body_size 100M;
-
-    # API — rewrite to PHP router
-    location /api/ {
-        try_files $uri /api/index.php?$query_string;
-    }
-
-    # Public HTML — MUST go through PHP so the resolved locale (messages + dir)
-    # is injected before the UI boots. A plain `try_files $uri ...` would serve
-    # the static index.html first and skip PHP, causing a flash of raw i18n keys.
-    location = /public           { rewrite ^ /api/index.php last; }
-    location = /public/          { rewrite ^ /api/index.php last; }
-    location = /public/index.html { rewrite ^ /api/index.php last; }
-
-    # Static assets (JS, CSS)
-    location /assets/ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # SDK file
-    location = /fluxfiles.js {
-        expires 7d;
-        add_header Cache-Control "public";
-    }
-
-    # Uploaded files (local disk only).
-    # Security: stop MIME-sniffing and neutralize active content (e.g. <script>
-    # inside an uploaded SVG/HTML) so user files can't run as same-origin XSS.
-    location /storage/uploads/ {
-        alias /var/www/fluxfiles/packages/core/storage/uploads/;
-        expires 7d;
-        add_header Cache-Control "public";
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header Content-Security-Policy "sandbox" always;
-        # HTML/SVG are never safe to render inline — force download.
-        location ~* \.(html?|xhtml|shtml|xml|svg)$ {
-            add_header X-Content-Type-Options "nosniff" always;
-            add_header Content-Security-Policy "sandbox" always;
-            add_header Content-Disposition "attachment" always;
-        }
-    }
-
-    # PHP-FPM
-    location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_read_timeout 120;
-    }
-
-    # Block dotfiles and sensitive paths
-    location ~ /\. { deny all; }
-    location ~ ^/(\.env|composer\.|vendor/) { deny all; }
-    location /storage/rate_limit.json { deny all; }
-    location /_fluxfiles/ { deny all; }
-}
-```
-
-### Apache (.htaccess)
-
-```apache
-RewriteEngine On
-
-# API routes
-RewriteRule ^api/(.*)$ api/index.php [QSA,L]
-
-# Public HTML through PHP for locale injection
-RewriteRule ^public/(index\.html)?$ api/index.php [QSA,L]
-
-# Block sensitive files
-<FilesMatch "^\.env|composer\.(json|lock)">
-    Require all denied
-</FilesMatch>
-```
-
-### Directory Permissions
-
-```bash
-# Set ownership
-chown -R www-data:www-data /var/www/fluxfiles/storage/
-
-# Writable directories
-chmod -R 755 storage/
-chmod 600 .env
-chmod 600 storage/rate_limit.json   # if exists
-```
+**Full nginx server block, Apache `.htaccess`, and directory-permissions
+commands: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).**
 
 ### Upload size limits (three layers)
 
@@ -430,25 +335,11 @@ const src = FluxFiles.imgUrl(file, { width: 800, quality: 80 });
 // → /api/fm/img?token=…&width=800&quality=80   (resized + cached in _variants/)
 ```
 
-- **AVIF or WebP, negotiated for free.** With the default `format=auto`, the
-  endpoint reads the browser's `Accept` header and serves **AVIF** when accepted
-  (smallest, on builds with GD AVIF support), else **WebP**, else the original
-  untouched for ancient clients. AVIF and WebP cache as separate files and the
-  response sends `Vary: Accept`. Force one with `&format=avif` / `&format=webp`.
-  _(This is core/free — there is no paid "AVIF" tier.)_
-- **First request** converts + caches into the file's `_variants/` directory (so
-  the existing delete/trash cleanup invalidates it for free); later requests serve
-  the cache. The cache key is stamped with the source mtime, so a re-upload never
-  re-matches a stale image.
-- **Width** is rounded to 100px and clamped to `webp_max_width`; **quality** snaps
-  to `60`/`75`/`80`/`90`. This bounds the number of cache variants per file
-  (no unbounded growth from `?width=801,802,…`).
-- **Box sizing (optional):** add `&height=` with `&fit=cover` (crop to fill the
-  `width×height` box) or `&fit=contain` (default — scale to fit, keep aspect).
-  Add `&dpr=2` (or `3`) to multiply the requested size for retina screens. None
-  of these ever upsize past the source.
-- **SVG and animated GIFs are never converted** (served as-is); `webp_enabled: false`
-  disables the endpoint entirely (no `img_base`).
+AVIF/WebP are content-negotiated for free via `Accept` (`format=auto`, default),
+converted + cached on first request into `_variants/`, and width/quality are
+snapped to a bounded set of sizes so cache growth can't run away. Full mechanics
+— negotiation, caching, box sizing (`fit`/`dpr`), SVG/GIF exclusions:
+[`docs/FEATURES.md#on-demand-webp--avif`](docs/FEATURES.md#on-demand-webp--avif).
 
 > `img_base` carries a short-lived per-file token in the query string (an `<img>`
 > can't send an `Authorization` header) — the same tradeoff as the media stream
@@ -466,22 +357,15 @@ string, so the host can drop a responsive image straight from `list()`:
 <!-- img_srcset = "/api/fm/img?token=…&width=400 400w, …&width=800 800w, …&width=1200 1200w" -->
 ```
 
-- The candidate widths come from the token's **`srcset_widths`** ladder (default
-  `[320, 640, 768, 1024, 1366, 1920]`, snapped to 100px and clamped to
-  `webp_max_width`). Each is a cached WebP from the same `/api/fm/img` endpoint.
-- Widths are **capped at the image's natural width** (read from the stored
-  dimensions — no extra I/O), and the source width itself is always offered, so a
-  browser never requests an upscale. Images narrower than 100px get no `img_srcset`.
-- Set the **`srcset_sizes`** claim to also emit an **`img_sizes`** attribute;
-  otherwise the host supplies its own `sizes`. The standalone UI already wires
-  `srcset`/`sizes` onto its detail-panel and lightbox previews.
-- Rides the exact same gate as `img_base` (so it's also core-standalone / Docker).
+Candidate widths come from the token's `srcset_widths` ladder, capped at the
+image's natural width. Details: [`docs/FEATURES.md#responsive-srcset`](docs/FEATURES.md#responsive-srcset).
 
 ### Watermark
 
 FluxFiles watermarks images the way the rest of the industry does — two modes for
 two jobs. **For almost everyone it's the first one (burn-in).** The second is an
-advanced mode only for selling images.
+advanced mode only for selling images. Full walkthrough of both, including the
+overlay claims and adapter support matrix: [`docs/FEATURES.md#watermark`](docs/FEATURES.md#watermark).
 
 #### Watermark editor (burn-in) — the normal way
 
@@ -491,79 +375,29 @@ text to any position, resize the logo by its handle, set opacity → **Apply**
 (`POST /api/fm/watermark`), exactly like a Photoshop export or a WordPress
 watermark plugin. The file now *is* a watermarked image, so **every consumer
 carries it** — the picker, a download, an `<img>` you insert into TinyMCE /
-CKEditor / Summernote. Extension is preserved; variants regenerate.
-
-**Non-destructive — the original is kept.** Applying in place snapshots the true
-original to `_fluxfiles/originals/`, so it's safe and reversible: re-opening the
-editor re-positions from the clean original (it never stacks a second mark), and a
-**Remove watermark** button (`POST /api/fm/watermark/remove`) restores the
-original byte-for-byte. (Like Image Watermark / Easy Watermark / Envira — never
-lose the original.)
+CKEditor / Summernote. **Non-destructive** — the true original is snapshotted to
+`_fluxfiles/originals/` and a **Remove watermark** button restores it byte-for-byte.
 
 > ✅ **Want a watermarked image in your content / blog / CMS? This is it.** Pick it
 > in the editor and the inserted `<img>` shows the watermark. Nothing else to set.
-
-**Adapter support (burn-in):** works **everywhere** — it's a normal write through
-`POST /api/fm/watermark`, which **all** adapters proxy (Laravel, WordPress) or
-reach via the embedded UI (React, Vue, the TinyMCE/CKEditor/Summernote pickers).
 
 #### Advanced: preview protection for selling images (overlay)
 
 Only if you're building a **stock-photo / photographer store** (Shutterstock,
 Getty, Pixieset…): show watermarked **previews** but never hand out the clean file
-until purchase. The watermark is applied **on the fly when serving** (`/api/fm/img`)
-— the source file is never modified. Enable it with token claims (off by default):
+until purchase — applied on the fly when serving (`/api/fm/img`), source never
+modified. Enable with token claims (off by default; forces the token preview-only):
 
 ```php
 $token = fluxfiles_token([
-    'user'   => 'user-42',
-    'perms'  => ['read'],
-    'disks'  => ['local'],
-    'prefix' => 'users/42',
+    'user' => 'user-42', 'perms' => ['read'], 'disks' => ['local'], 'prefix' => 'users/42',
     'claims' => [
-        'webp_enabled'      => true,
-        'watermark_enabled' => true,
-        'watermark_type'    => 'text',          // or 'logo'
-        'watermark_text'    => '© Acme Corp',
-        'watermark_position'=> 'bottom-right',
-        'watermark_opacity' => 0.6,
+        'webp_enabled' => true, 'watermark_enabled' => true,
+        'watermark_type' => 'text', 'watermark_text' => '© Acme Corp',
+        'watermark_position' => 'bottom-right', 'watermark_opacity' => 0.6,
     ],
 ]);
 ```
-
-- Enabling `watermark_enabled` **automatically makes the token preview-only**
-  (`allow_download` is forced off): `list()` serves only the watermarked `img_base`,
-  the clean `url`/`permanent_url`/`variants` are withheld, GET presign → `403`, zip
-  is disabled, and the UI marks such images with a **"Preview"** badge. The clean
-  original is never served. To grant it later (after purchase), issue a **separate
-  token without the watermark**.
-- **Logo watermark:** upload a transparent PNG as a normal file and set
-  `watermark_type => 'logo'` + `watermark_logo_path`. A missing/unsafe path falls
-  back to text (never a clean image). Watermarked WebPs are cached in `_variants/`.
-- **Adapters:** the overlay needs `/api/fm/img`, which the **proxy** adapters don't
-  expose. So it's forwarded only by token minters that target a standalone core —
-  `embed.php`, `@fluxfiles/node`, and the **Laravel adapter in `standalone` mode**.
-  The **WordPress** plugin and **Laravel proxy mode** drop the overlay claim (it
-  would yield broken images); use the **burn-in** route there, which is proxied.
-
-**How customers actually see the preview** — you don't *embed* it (the `img_base`
-token is short-lived, made for live rendering, not for saving into content). You
-render it **fresh on each page load**, like every stock site:
-
-```html
-<!-- Your own gallery/product page: call list(), render img_base live -->
-<img :src="endpoint + file.img_base + '&width=800'"
-     :srcset="endpoint + file.img_srcset" :sizes="'100vw'" :alt="file.name">
-```
-
-```js
-// or with the SDK helper:
-const src = FluxFiles.imgUrl(file, { width: 800 });   // = img_base + &width=800
-```
-
-…or just let customers **browse inside the embedded FluxFiles UI** with a
-preview-only token — the cards, detail panel and lightbox already render the
-watermarked images and hide download.
 
 | | Burn-in editor (normal) | Overlay (advanced, selling) |
 |---|---|---|
@@ -572,11 +406,9 @@ watermarked images and hide download.
 | Insert into an editor / download | **Yes** | **No** — show it live in your gallery instead |
 | Best for | Branding, putting marked images in content | A stock-photo / photo-seller store |
 
-> The two are **mutually exclusive per token**: a token with the overlay enabled
-> (`watermark_enabled`) is preview-only, so the burn-in editor (and crop) are hidden
-> in the UI and `POST /api/fm/watermark` returns `409 watermark_overlay_active` —
-> burning a second mark into a file you can't download would just double-watermark
-> it. Burn in with a normal, downloadable token instead.
+> The two are **mutually exclusive per token** — see
+> [`docs/FEATURES.md#watermark`](docs/FEATURES.md#watermark) for why, plus the
+> adapter support matrix and how to render live previews on a gallery page.
 
 ### Usage dashboard
 
@@ -861,42 +693,14 @@ command-runner. This is **free/core** — a config toggle, never a paid module. 
 server runs on the customer's own VPS (the box they manage), so FluxFiles' stateless
 core hosts nothing; that server owns its own auth. Only `http(s)` URLs are accepted.
 
-> 🔒 **Security model — this grants shell access as the SSH user.** A shell can't
-> be safely sandboxed by filtering its input; the real boundary is the **SSH
-> account's OS permissions** — use a **least-privilege user**. FluxFiles adds:
-> - **`allow_terminal` claim, default `false`** — must be opted in deliberately.
-> - SFTP disks only, requires the **`write`** permission, **audited per command**.
-> - A server **kill-switch** `FLUXFILES_TERMINAL_DISABLED=true`, a per-command
->   timeout `FLUXFILES_TERMINAL_TIMEOUT` (default 30s), and a 2 MB output cap.
-> - A **catastrophic-command guardrail** (`rm -rf /`, `mkfs`, fork bomb,
->   `chmod -R 777 /`, …) → a two-step confirm in the UI. This is an *accident*
->   guard, not a security boundary; opt out with `FLUXFILES_TERMINAL_CONFIRM=false`.
->
-> ⚠️ **The terminal is NOT confined to the disk's `root`.** Unlike file operations
-> (which are sandboxed to the SFTP disk `root`), the terminal is a **real shell** —
-> the user can `cd /` and reach anything the SSH account can on the **whole server**
-> (`cat /etc/passwd`, other tenants' folders, …). The `root` is only the terminal's
-> *starting* directory, not a fence. **So if you enable `allow_terminal`, give that
-> SFTP disk a dedicated least-privilege SSH account** scoped at the OS level (or a
-> chroot/jailed user) — never a shared or `root`-level account.
->
-> 💡 **Why the dangerous-command list is intentionally small:** it's an *accident*
-> guard for a trusted operator (like a "Are you sure?" dialog), **not** a filter
-> against a malicious user. Text matching can't stop a determined shell user
-> (`r''m -rf /`, `$(echo rm) -rf /`, `RM=rm; $RM …` all evade any pattern), and
-> someone with shell access already has the SSH account's full rights anyway. A
-> broad list would just false-positive on normal commands (e.g. `rm -rf node_modules`),
-> training users to click through — so it flags only the few obvious catastrophes.
-> The actual defense is: terminal off by default + a least-privilege SSH account +
-> `write` perm + the server kill-switch.
->
-> **Shared hosting without a shell** (`internal-sftp` / a forced command) is
-> detected automatically and shown a clear "this host doesn't allow a terminal
-> (SFTP only)" message — the feature degrades instead of hanging. Note: FluxFiles
-> only ever uses the SFTP **subsystem** for file ops; the shell is opened *only*
-> for this opt-in terminal, so a shell-less SFTP account is otherwise unaffected.
-> Like SFTP serving, the terminal is **core-standalone / Docker** (not proxied by
-> the Laravel/WordPress adapters).
+> 🔒 **This grants shell access as the SSH user — it is NOT confined to the
+> disk's `root`.** Use a **least-privilege SSH account**; a shared or `root`-level
+> one gives any `allow_terminal` token the whole server. Guardrails: opt-in claim
+> (default off), `write` perm required, per-command audit, a server kill-switch
+> (`FLUXFILES_TERMINAL_DISABLED`), and an *accident* guard (not a security
+> boundary) against catastrophic commands. Full threat model, why the
+> dangerous-command list is deliberately small, and the shared-hosting/no-shell
+> fallback: [`docs/FEATURES.md#ssh-terminal--security-model`](docs/FEATURES.md#ssh-terminal--security-model).
 
 **Adapter support (terminal):** `/api/fm/terminal` is core-standalone, so the
 `allow_terminal` claim is forwarded only by token minters that target a real core
@@ -1059,8 +863,10 @@ Metadata and image variants are transferred together. Quota is checked on the de
 > of truth for **all** JWT claims (with types/defaults) **and** server env vars.
 > Bought a paid edition? [`docs/ACTIVATE.md`](docs/ACTIVATE.md) covers installing the
 > module, where the licence key goes on each platform, and which of the three gates a
-> given error is telling you about. Selling FluxFiles rather than using it?
-> [`docs/OPERATIONS.md`](docs/OPERATIONS.md) is the deployment runbook. The
+> given error is telling you about. Self-hosting? See
+> [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for web-server config. Selling FluxFiles
+> rather than using it? [`docs/OPERATIONS.md`](docs/OPERATIONS.md) is the "going live"
+> runbook (Polar, licence server, module hosting). The
 > tables below cover the common ones; mint everything in one options object —
 > `fluxfiles_token(['user' => …, 'claims' => […]])` — where `claims` is the escape
 > hatch for any claim by its raw name.
@@ -1295,124 +1101,27 @@ tenant's data or their keys. See [Storage Disks](#storage-disks).
 
 ## API Reference
 
-Base path: `/api/fm/`
-
-All responses follow the format: `{ "data": { ... }, "error": null }`
-On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP status.
-
-### Public Endpoints (no auth)
+Base path: `/api/fm/`. All responses follow `{ "data": {...}, "error": null }`,
+or `{ "data": null, "error": "..." }` on error with the matching HTTP status.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/fm/lang` | List available locales → `[{code, name, dir}]` |
-| `GET` | `/api/fm/lang/{code}` | Get translation messages for a locale |
+| `GET` | `/list?disk=&path=` | List directory contents |
+| `POST` | `/upload` | Upload file (multipart) |
+| `POST` | `/trash` / `DELETE` `/delete` | Soft-delete (restorable) / permanent delete |
+| `POST` | `/rename`, `/move`, `/copy`, `/mkdir` | Standard file ops |
+| `POST` | `/cross-copy`, `/cross-move` | Copy/move between disks |
+| `POST` | `/presign` | Presigned GET/PUT URL |
 
-### File Operations (JWT required)
+**Full reference** — every route (trash, zip/extract, code editor, chmod,
+metadata, search, quota, audit, Bucket Doctor, chunk upload), request/response
+bodies, and the upload/duplicate-detection JSON shapes:
+[`docs/API.md`](docs/API.md).
 
-| Method | Path | Body / Params | Description |
-|--------|------|---------------|-------------|
-| `GET` | `/list?disk=&path=` | — | List directory contents |
-| `POST` | `/upload` | `multipart: disk, path, file, force_upload?` | Upload file |
-| `DELETE` | `/delete` | `{disk, path}` | **Permanently** delete a file or directory (recursive) |
-| `POST` | `/trash` | `{disk, path}` | Soft-delete a **file or folder** to trash (move-based, restorable; folders move the whole subtree) |
-| `POST` | `/trash/restore` | `{disk, trash_id, path?}` | Restore a trashed file/folder (→ 409 if the target is occupied) |
-| `GET` | `/trash/list?disk=` | — | List trash entries (scoped to the token's prefix/owner) |
-| `POST` | `/trash/purge` | `{disk, trash_id}` | Permanently delete one trash item |
-| `POST` | `/trash/empty` | `{disk}` | Permanently delete all visible trash items |
-| `POST` | `/rename` | `{disk, path, name}` | Rename file or directory (a file's extension is fixed — base name only) |
-| `POST` | `/move` | `{disk, from, to}` | Move within same disk (file extension must not change; `allowedExt` enforced) |
-| `POST` | `/copy` | `{disk, from, to}` | Copy within same disk (file extension must not change; `allowedExt` enforced) |
-| `POST` | `/mkdir` | `{disk, path}` | Create directory |
-| `POST` | `/cross-copy` | `{src_disk, src_path, dst_disk, dst_path}` | Copy between disks (file extension must not change; `allowedExt` enforced) |
-| `POST` | `/cross-move` | `{src_disk, src_path, dst_disk, dst_path}` | Move between disks (file extension must not change; `allowedExt` enforced) |
-| `POST` | `/presign` | `{disk, path, method, ttl, size?}` | Generate presigned URL (GET or PUT, max 86400s). `size` is required for PUT. |
-| `POST` | `/crop` | `{disk, path, x, y, width, height, save_path?}` | Crop image |
-| `POST` | `/ai-tag` | `{disk, path}` | AI-analyze image (requires AI config) |
-| `POST` | `/import-url` | `{disk, path, url, filename?}` | Server-side fetch a URL into storage (opt-in via `allow_url_import`; SSRF-guarded) |
-
-### Archives, editor & permissions
-
-| Method | Path | Body / Params | Description |
-|--------|------|---------------|-------------|
-| `POST` | `/zip` | `{disk, paths[], name?}` | Stream a **zip** of the selected files/folders (read + `allow_download` + `allow_zip`; pre-flight size caps). Core-standalone (unproxied) |
-| `POST` | `/extract` | `{disk, path, dest?}` | **Extract** a zip in place — atomic, zip-slip / zip-bomb / quota / dangerous-ext guarded (`allow_extract`) |
-| `GET` | `/content?disk=&path=` | — | Read a text file's content (read perm; binary → 415, > 5 MB → 413) |
-| `PUT` | `/content` | `{disk, path, content}` | Overwrite a text/config file (`allow_code_edit`, default **false**; existing files only) |
-| `GET` | `/chmod?disk=&path=` | — | Read an SFTP file's octal mode (SFTP disks only) |
-| `POST` | `/chmod` | `{disk, path, mode}` | Set an SFTP file's mode (write + `allow_chmod`) |
-
-> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP, see [On-demand WebP](#on-demand-webp--avif)) and `GET /stream?token=` (gated private media). Both are core-standalone / Docker features.
-
-### Metadata
-
-| Method | Path | Body / Params | Description |
-|--------|------|---------------|-------------|
-| `GET` | `/meta?disk=&path=` | — | File info: size, mime, modified |
-| `GET` | `/metadata?disk=&key=` | — | SEO metadata: title, alt_text, caption, tags |
-| `PUT` | `/metadata` | `{disk, key, title, alt_text, caption, tags}` | Save metadata |
-| `DELETE` | `/metadata` | `{disk, key}` | Delete metadata |
-
-### Search, Quota, Audit
-
-| Method | Path | Params | Description |
-|--------|------|--------|-------------|
-| `GET` | `/search?disk=&q=&limit=` | `limit` default 50 | Full-text search across file names + metadata |
-| `GET` | `/search-folders?disk=&q=&limit=` | `limit` default 50 | Search folder names via the directory index |
-| `GET` | `/quota?disk=` | — | Storage usage: used_mb, max_mb, percentage |
-| `GET` | `/usage?disk=&refresh=` | — | **Usage dashboard** — quota + per-type and per-folder breakdown (file-cached; `refresh=true` recomputes, tight bucket) |
-| `GET` | `/audit?limit=&offset=&action=&from=&to=&path=&actor=` | `limit` default 100 | Activity log, **scoped to the token's prefix**. Requires the `audit` permission (403 otherwise). |
-| `GET` | `/disk/doctor?disk=&origin=` | — | **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write`. |
-
-### Chunk Upload (S3 multipart, files > 10MB)
-
-| Method | Path | Body | Description |
-|--------|------|------|-------------|
-| `POST` | `/chunk/init` | `{disk, path, size}` | Initiate → `{upload_id, key, chunk_size}` |
-| `POST` | `/chunk/presign` | `{disk, key, upload_id, part_number}` | Presign URL for part |
-| `POST` | `/chunk/complete` | `{disk, key, upload_id, parts}` | Complete upload |
-| `POST` | `/chunk/abort` | `{disk, key, upload_id}` | Abort upload |
-
-### Upload Response Example
-
-```json
-{
-    "data": {
-        "key": "users/42/photo.jpg",
-        "url": "https://bucket.r2.cloudflarestorage.com/photo.jpg",
-        "name": "photo.jpg",
-        "size": 245760,
-        "variants": {
-            "thumb":  { "url": "...", "key": "..._thumb.webp",  "width": 150, "height": 100 },
-            "medium": { "url": "...", "key": "..._medium.webp", "width": 768, "height": 512 },
-            "large":  { "url": "...", "key": "..._large.webp",  "width": 1920, "height": 1280 }
-        },
-        "ai_tags": {
-            "tags": ["landscape", "mountain", "sunset"],
-            "title": "Mountain sunset landscape",
-            "alt_text": "A mountain range silhouetted against an orange sunset sky",
-            "caption": "Beautiful sunset over mountain peaks with warm orange and purple tones."
-        }
-    },
-    "error": null
-}
-```
-
-### Duplicate Detection
-
-If a file with the same SHA-256 hash exists, upload returns:
-
-```json
-{
-    "data": {
-        "key": "existing/path/photo.jpg",
-        "url": "...",
-        "duplicate": true,
-        "message": "File already exists. Use force_upload to override."
-    }
-}
-```
-
-Send `force_upload=true` (in form data) to upload anyway.
+> **Tokened media endpoints** (query-string token, for `<img>`/`<video>`):
+> `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see
+> [On-demand WebP](#on-demand-webp--avif)) and `GET /stream?token=` (gated
+> private media). Both are core-standalone / Docker features.
 
 ---
 

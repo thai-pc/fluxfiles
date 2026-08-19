@@ -200,8 +200,8 @@ Always derive `prefix` from the **authenticated** tenant server-side — never f
 client input. For full isolation, give each tenant their **own bucket** with BYOB
 (`byob_disks`). See the root README's
 [Multi-tenant](https://github.com/thai-pc/fluxfiles#multi-tenant) section for the
-full claim list, and [Permissions](#permissions) for the storage each tenant's
-`_fluxfiles/` index needs.
+full claim list, and [Permissions & Deployment](#permissions--deployment) for the
+storage each tenant's `_fluxfiles/` index needs.
 
 > The `ai_auto_tag`, `rate_read` / `rate_write` and `variants` overrides are
 > enforced by **core ≥ 0.2.8** — on an older core they're simply ignored (the
@@ -308,7 +308,7 @@ protected $except = [
 > **Standalone mode** is unaffected — the core runs as its own server with its own
 > Origin-based CSRF check, and Laravel only mints tokens / embeds the iframe.
 
-## Permissions
+## Permissions & Deployment
 
 FluxFiles keeps **all of its state on disk** (no database). Two locations must be
 writable by the user PHP-FPM runs as (usually `www-data`):
@@ -316,12 +316,13 @@ writable by the user PHP-FPM runs as (usually `www-data`):
 | Path | Holds | Created when |
 | --- | --- | --- |
 | `<local disk root>/_fluxfiles/` | search index, folder index, file locks, audit log, trash manifest, metadata sidecars | first write to that disk (upload / `mkdir` / …) |
-| `config('fluxfiles.storage_path')` (default `storage/fluxfiles/`) | proxy-mode rate-limiter counter (`rate_limit.json`) | first request — see the dedicated section below |
+| `config('fluxfiles.storage_path')` (default `storage/fluxfiles/`) | proxy-mode rate-limiter counter (`rate_limit.json`) | first request |
 
-The `_fluxfiles/` directory lives **inside the disk root** you configure (e.g.
-`public_path('uploads')` → `public/uploads/_fluxfiles/`). PHP creates it on the
-first write, so the safest rule is: **let PHP create it — don't pre-create it as
-`root` or your deploy user.**
+### `_fluxfiles/`
+
+Lives **inside the disk root** you configure (e.g. `public_path('uploads')` →
+`public/uploads/_fluxfiles/`). PHP creates it on the first write, so the safest
+rule is: **let PHP create it — don't pre-create it as `root` or your deploy user.**
 
 ```bash
 # Make the uploads tree writable by the web server user (adjust www-data to your
@@ -352,14 +353,12 @@ location ~ /_fluxfiles/ { deny all; }
 > bucket as regular objects, governed by your IAM policy (`s3:PutObject` etc.).
 > Run the **Bucket Doctor** to verify those grants.
 
-## Deployment & permissions (`rate_limit.json`)
+### `rate_limit.json`
 
 In **proxy mode** the rate limiter keeps its counter in a JSON file at
 `config('fluxfiles.storage_path')` — by default `storage/fluxfiles/rate_limit.json`
 (override with `FLUXFILES_STORAGE_PATH`). PHP creates the directory `0755` and the
 file **`0600`** automatically on the first request.
-
-What you need on the server:
 
 - The directory must be **writable by the user PHP-FPM runs as** (usually
   `www-data`). Laravel's `storage/` already requires this, so the standard deploy
@@ -441,8 +440,8 @@ chmod -R u+rwX public/uploads
 ```
 
 This also covers the `_fluxfiles/` index directory FluxFiles writes inside the
-root — see [Permissions](#permissions) for the common `_fluxfiles/index.lock`
-permission-denied symptom and fix.
+root — see [Permissions & Deployment](#permissions--deployment) for the common
+`_fluxfiles/index.lock` permission-denied symptom and fix.
 
 ### 4. Seed metadata + folder index for pre-existing content
 
