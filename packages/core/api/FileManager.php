@@ -1540,6 +1540,14 @@ class FileManager
             }
         }
         $fs->write($scopedDst, $result['data']);
+        if ($scopedDst !== $scopedSrc) {
+            // "Save as copy" creates a new file — carry over metadata (title/tags/
+            // uploaded_by) and register it in the search + folder index, same as copy().
+            $this->copyMetadata($disk, $scopedSrc, $disk, $scopedDst);
+            if ($this->meta instanceof StorageMetadataHandler) {
+                $this->meta->trackParents($disk, $scopedDst);
+            }
+        }
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'ffcrop_');
         file_put_contents($tmpFile, $result['data']);
@@ -1640,6 +1648,13 @@ class FileManager
         if ($inPlace) {
             // Flag so the UI can offer "Remove watermark" (restore from backup).
             $this->meta->save($disk, $scopedDst, ['watermarked' => true]);
+        } else {
+            // "Save as copy" creates a new file — carry over metadata (title/tags/
+            // uploaded_by) and register it in the search + folder index, same as copy().
+            $this->copyMetadata($disk, $scopedSrc, $disk, $scopedDst);
+            if ($this->meta instanceof StorageMetadataHandler) {
+                $this->meta->trackParents($disk, $scopedDst);
+            }
         }
 
         // Regenerate variants for the new bytes (best-effort), like cropImage.
@@ -2398,6 +2413,8 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertPerm('read');
+        $this->assertOwner($disk, $scoped);
         $fs = $this->disks->disk($disk);
         if (!$fs->fileExists($scoped)) {
             throw new ApiException('Archive not found', 404, 'not_found');

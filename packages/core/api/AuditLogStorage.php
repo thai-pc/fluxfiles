@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles;
 
 /**
- * Audit log lưu trong storage của user (_fluxfiles/audit.jsonl) — không cần SQLite.
+ * Audit log stored in the user's own storage (_fluxfiles/audit.jsonl) — no SQLite needed.
  */
 class AuditLogStorage
 {
@@ -37,9 +37,8 @@ class AuditLogStorage
     }
 
     /**
-     * List audit entries — đọc từ tất cả disks user có quyền.
-     */
-    /**
+     * List audit entries — reads across every disk the user has access to.
+     *
      * @param ?string $actor  Filter to a single actor (user_id), or null for all.
      * @param ?Claims  $claims Caller claims — entries are scoped to its path prefix.
      * @param array    $filters Optional: action, from (ts), to (ts), path (sub-prefix).

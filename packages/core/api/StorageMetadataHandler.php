@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles;
 
 /**
- * Metadata lưu trực tiếp trong storage của user (S3/R2/Local) — không dùng SQLite.
+ * Metadata stored directly in the user's own storage (S3/R2/Local) — no SQLite.
  *
  * - S3/R2: Object Metadata (x-amz-meta-*) + index file _fluxfiles/index.json
  * - Local: Sidecar at _fluxfiles/meta/{key}.json + index file _fluxfiles/index.json
@@ -40,17 +40,26 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     public function save(string $disk, string $key, array $data): void
     {
-        // Merge with existing so partial updates (e.g. {uploaded_by} right after upload,
-        // or {title, alt_text} from the metadata edit form) don't wipe unrelated fields.
-        $existing = $this->get($disk, $key) ?? [];
-        $merged = array_merge($existing, $data);
+        // Locked so a read-merge-write against the same key from two concurrent
+        // requests can't interleave and lose one side's fields (acquireIndexLock is
+        // re-entrant-safe, so the nested updateIndex() call below sharing the lock
+        // is fine — see its own docblock).
+        $this->acquireIndexLock($disk);
+        try {
+            // Merge with existing so partial updates (e.g. {uploaded_by} right after upload,
+            // or {title, alt_text} from the metadata edit form) don't wipe unrelated fields.
+            $existing = $this->get($disk, $key) ?? [];
+            $merged = array_merge($existing, $data);
 
-        if ($this->isS3Compatible($disk)) {
-            $this->saveToS3($disk, $key, $merged);
-        } else {
-            $this->saveToLocal($disk, $key, $merged);
+            if ($this->isS3Compatible($disk)) {
+                $this->saveToS3($disk, $key, $merged);
+            } else {
+                $this->saveToLocal($disk, $key, $merged);
+            }
+            $this->updateIndex($disk, $key, $merged);
+        } finally {
+            $this->releaseIndexLock($disk);
         }
-        $this->updateIndex($disk, $key, $merged);
     }
 
     /**

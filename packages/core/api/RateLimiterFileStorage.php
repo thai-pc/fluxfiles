@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles;
 
 /**
- * Rate limiter dùng JSON file — không cần SQLite.
+ * Rate limiter backed by a JSON file — no SQLite needed.
  */
 class RateLimiterFileStorage
 {

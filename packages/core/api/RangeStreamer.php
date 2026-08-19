@@ -22,15 +22,21 @@ final class RangeStreamer
      *
      * @return array{0:int,1:int}|null  [start, end] inclusive, or null when the
      *         header is unsatisfiable (caller must answer 416).
-     *         Returns [0, size-1] when $header is null/empty (whole file).
+     *         Returns [0, size-1] when $header is null/empty (whole file), or
+     *         [0, -1] for a 0-byte file with no Range header (empty 200 body).
      */
     public static function parseRange(?string $header, int $size): ?array
     {
-        if ($size <= 0) {
+        if ($size < 0) {
             return null;
         }
         if ($header === null || trim($header) === '') {
-            return [0, $size - 1];
+            // Whole file — a legitimate 0-byte file answers 200 with an empty body,
+            // not 416 (there is no Range header asking for bytes that don't exist).
+            return $size > 0 ? [0, $size - 1] : [0, -1];
+        }
+        if ($size === 0) {
+            return null; // any explicit byte range is unsatisfiable against an empty file
         }
         // Only the single-range "bytes=start-end" form is supported (no multipart).
         if (!preg_match('/^\s*bytes=(\d*)-(\d*)\s*$/', $header, $m)) {

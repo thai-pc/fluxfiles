@@ -162,7 +162,7 @@ final class OptimizeModule
             $destUser = ($dest !== null && trim($dest) !== '') ? $dest : $path;
             $destScoped = $fm->validateUserPath($destUser);
             $fm->assertCanModifyScopedPath($disk, $destScoped);
-            $fs->write($destScoped, $optimized);
+            $fm->writeScopedFile($disk, $destScoped, $optimized);
 
             $saved = $originalBytes - $optimizedBytes;
             return [
@@ -204,7 +204,7 @@ final class OptimizeModule
         $destScoped = $fm->validateUserPath($destUser);
         $fm->assertCanModifyScopedPath($disk, $destScoped);
 
-        $fs->write($destScoped, $result['data']);
+        $fm->writeScopedFile($disk, $destScoped, $result['data']);
 
         // Replace the source unless asked to keep it — via FileManager::delete so
         // metadata sidecars + image variants are cleaned up properly. Removing the

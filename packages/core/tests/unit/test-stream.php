@@ -60,7 +60,12 @@ test('parseRange: unsatisfiable → null (caller sends 416)', function () {
     assertEqual(null, RangeStreamer::parseRange('bytes=-', 100), 'empty range');
     assertEqual(null, RangeStreamer::parseRange('bytes=abc', 100), 'garbage');
     assertEqual(null, RangeStreamer::parseRange('items=0-10', 100), 'wrong unit');
-    assertEqual(null, RangeStreamer::parseRange(null, 0), 'zero size');
+    assertEqual(null, RangeStreamer::parseRange('bytes=0-10', 0), 'explicit range against empty file');
+});
+
+test('parseRange: 0-byte file with no Range header → [0, -1] (empty 200, not 416)', function () {
+    assertEqual([0, -1], RangeStreamer::parseRange(null, 0));
+    assertEqual([0, -1], RangeStreamer::parseRange('', 0));
 });
 
 // ── RangeStreamer::stream (capture headers + body) ────────────────────────
