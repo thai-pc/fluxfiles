@@ -1,9 +1,11 @@
 # Spec — Operator UI for Share links and Intake portals
 
-> Status: design. Implements the approved plan `.claude/work/plan-operator-share-intake-ui.md`
-> (decisions there are settled input). Scope: the **free MIT core** standalone UI
-> (`packages/core/assets/fm.js` + `fm.css` + `public/index.html` + `lang/*.json`), plus four
-> prerequisite fixes in the gitignored paid packages and the two PHP adapters.
+> Status: implemented and shipped. Implements the approved plan
+> `.claude/work/plan-operator-share-intake-ui.md` (decisions there are settled input). Scope:
+> the **free MIT core** standalone UI (`packages/core/assets/fm.js` + `fm.css` +
+> `public/index.html` + `lang/*.json`), plus four prerequisite fixes in the gitignored paid
+> packages and the two PHP adapters. See `51bcc2f feat(core): operator UI for Share links and
+> Upload portals` + follow-ups (`509aa8e`, `d36c7cd`, `1f8b2ec` WordPress support).
 
 ## 0. One objection to the settled decisions
 
