@@ -40,6 +40,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/crop` | `{disk, path, x, y, width, height, save_path?}` | Crop image |
 | `POST` | `/ai-tag` | `{disk, path}` | AI-analyze image (requires AI config) |
 | `POST` | `/import-url` | `{disk, path, url, filename?}` | Server-side fetch a URL into storage (opt-in via `allow_url_import`; SSRF-guarded) |
+| `POST` | `/optimize` | `{disk, path\|paths[], overwrite?}` | Recompress an image to WebP or a PDF via Ghostscript, at rest (**free/core**). Opt-in via `allow_optimize` (needs `write` + `delete`) |
 
 ## Archives, editor & permissions
 
@@ -51,6 +52,9 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `PUT` | `/content` | `{disk, path, content}` | Overwrite a text/config file (`allow_code_edit`, default **false**; existing files only) |
 | `GET` | `/chmod?disk=&path=` | — | Read an SFTP file's octal mode (SFTP disks only) |
 | `POST` | `/chmod` | `{disk, path, mode}` | Set an SFTP file's mode (write + `allow_chmod`) |
+| `POST` | `/watermark` | `{disk, path, type, text?, logo_data?, x, y, scale, opacity, color?, dest?}` | Burn-in watermark editor (logo/text), permanent (**free/core**). Non-destructive: snapshots the original on first burn so it can be undone |
+| `POST` | `/watermark/remove` | `{disk, path}` | Restore the pre-watermark original (404 if none) |
+| `POST` | `/terminal` | `{disk, cmd, cwd?, confirm?}` | Stateless SSH command-runner, **SFTP disks only** (**free/core**). Opt-in via `allow_terminal` (default off) + `write`. Dangerous commands need `confirm` |
 
 > **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media). Both are core-standalone / Docker features.
 
@@ -73,6 +77,30 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/usage?disk=&refresh=` | — | **Usage dashboard** — quota + per-type and per-folder breakdown (file-cached; `refresh=true` recomputes, tight bucket) |
 | `GET` | `/audit?limit=&offset=&action=&from=&to=&path=&actor=` | `limit` default 100 | Activity log, **scoped to the token's prefix**. Requires the `audit` permission (403 otherwise). |
 | `GET` | `/disk/doctor?disk=&origin=` | — | **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write`. |
+| `GET` | `/license` | — | Server's commercial edition/status: `{edition, status, modules, limits, expires, days_left}`. Free MIT core → `{edition:'free'}` |
+
+## Paid Modules
+
+Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` claim) — absent/unlicensed/not-allowed answers `501`/`402`/`403` respectively. All of these are **core-standalone** (not proxied by the Laravel/WordPress adapters) unless noted. See [`.claude/api-map.md`](../.claude/api-map.md) for full behavior.
+
+| Method | Path | Body / Params | Module | Description |
+|--------|------|---------------|--------|-------------|
+| `POST` | `/share` | `{disk, path, ttl?, label?, password?, max_downloads?}` | `share` | Create a public share link. Token is returned once, never stored |
+| `GET` | `/share/list?disk=` | — | `share` | List the caller's own share records |
+| `POST` | `/share/revoke` | `{disk, jti}` | `share` | Revoke a share |
+| `POST` | `/intake` | `{disk, path, ttl?, label?, password?, max_files?, max_mb?, allowed_ext?}` | `intake` | Create a write-only upload portal for a folder |
+| `GET` | `/intake/list?disk=` | — | `intake` | List the caller's own intake portals |
+| `POST` | `/intake/revoke` | `{disk, jti}` | `intake` | Revoke an upload portal |
+| `GET` | `/versions?disk=&path=` | — | `versioning` | List prior versions of a file |
+| `POST` | `/versions/restore` | `{disk, path, version_id}` | `versioning` | Restore a prior version (snapshots current bytes first) |
+| `POST` | `/webhooks/test` | — | `webhooks` | Send a one-off ping to the token's configured `webhook_url` |
+| `POST` | `/ai-vision` | `{disk, path, op, dest?}` | `ai` | BYO-key image ops: `bg_remove` / `upscale` / `smart_crop` |
+| `POST` | `/ocr` | `{disk, path, lang?}` | `ocr` | Extract text from an image via `tesseract`. Returns `{path, chars, text}` |
+| `POST` | `/backup` | `{from_disk, to_disk, path?, overwrite?}` | `backup` | One-way subtree sync between two disks (capped 5000 files/run) |
+| `POST` | `/c2pa` | `{disk, path}` | `c2pa` | Verify Content Credentials (C2PA) via `c2patool` |
+| `POST` | `/c2pa/sign` | `{disk, path, dest?}` | `c2pa` | Sign a file with Content Credentials |
+
+> Virus scanning (`virus` module) has no dedicated endpoint — when `allow_virus_scan` is on, `/upload`, `/import-url`, `/content` (PUT), and `/extract` scan bytes before they're written.
 
 ## Chunk Upload (S3 multipart, files > 10MB)
 
