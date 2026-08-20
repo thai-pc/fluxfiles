@@ -224,6 +224,7 @@ All four accept the same `claims` map.
 | `FLUXFILES_C2PA_MANIFEST` | — | Path to the C2PA (paid) signing manifest JSON (claim_generator + cert/key). Empty → `501 c2pa_unconfigured`. |
 | `FLUXFILES_VIRUSTOTAL_KEY` | — | VirusTotal API key — cloud fallback for the Virus module (paid) when local ClamAV isn't installed. SHA-256 lookup only; bytes never leave the server. |
 | `FLUXFILES_VIRUSTOTAL_TIMEOUT` | `20` | VirusTotal request timeout (seconds). |
+| `FLUXFILES_CLAMSCAN_TIMEOUT` | `60` | Local ClamAV (`clamdscan`) subprocess timeout (seconds). An unresponsive engine is killed and the write refused (fail-closed) rather than hanging the request forever. |
 | `FLUXFILES_IMPORT_ALLOW_SVG` | `false` | Allow SVG via URL import. |
 | `FLUXFILES_IMPORT_MAX_MB` / `_RATE_LIMIT` / `_TIMEOUT` | — | URL-import server defaults. |
 | `FLUXFILES_SSRF_ALLOW_HOSTS` | — | SSRF allow-list (BYOB + import). |
@@ -231,6 +232,9 @@ All four accept the same `claims` map.
 | `FLUXFILES_SHARE_RATE_LIMIT` | `60` | Public share requests/min per share id (`share/info` + `share/file`). |
 | `FLUXFILES_SHARE_UNLOCK_LIMIT` | `5` | Share password attempts/min per share id **+ client IP**. Stops one guesser; an attacker can rotate `REMOTE_ADDR`, so it is never the only limit. |
 | `FLUXFILES_SHARE_UNLOCK_TOTAL` | `30` | Share password attempts/min per share id, **no IP component** — the ceiling IP rotation can't escape. Keep it comfortably above a shared-office NAT (all recipients behind one IP share the per-IP bucket); lower it for high-value links. |
+| `FLUXFILES_INTAKE_RATE_LIMIT` | `60` | Public intake requests/min per portal id (`intake/info`). |
+| `FLUXFILES_INTAKE_UPLOAD_LIMIT` | `10` | Intake upload attempts/min per portal id **+ client IP** — the portal's password brute-force surface (when one is set) and per-uploader flood limit. |
+| `FLUXFILES_INTAKE_UPLOAD_TOTAL` | `60` | Intake upload attempts/min per portal id, **no IP component** — the ceiling IP rotation can't escape. Keep it above the number of legitimate concurrent contributors a portal expects. |
 | `FLUXFILES_LICENSE_KEY` | — | Signed license for paid modules (offline-verified). |
 | `FLUXFILES_UPDATE_URL` | — | Vendor update server for `fluxfiles update <module>` (paid). |
 | `FLUXFILES_DEMO` | `false` | Public "try it live" mode: `/public/` mints a hardened per-visitor token (own `demo/<id>/` sandbox, images only, small caps, owner-only, dangerous claims off) injected as `window.__FM_BOOT__` — safe to embed by iframe on a marketing site. |

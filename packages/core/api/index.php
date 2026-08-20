@@ -288,8 +288,8 @@ try {
         && \FluxFiles\ModuleRegistry::installed('versioning')
         && \FluxFiles\LicenseManager::fromEnv()->licensed('versioning')) {
         $versioning = new \FluxFiles\Versioning\VersioningModule();
-        $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims) {
-            $versioning->keep($fs, $key, $claims);
+        $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager) {
+            $versioning->keep($fs, $key, $claims, $diskManager, $d);
         });
     }
 

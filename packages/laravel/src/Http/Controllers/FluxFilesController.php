@@ -1086,6 +1086,18 @@ class FluxFilesController
             $this->rateLimit($claims, true);
             $fm = $this->fileManager($claims);
 
+            // S3 multipart sends bytes browser→S3 on presigned URLs, so they never
+            // reach this server and CANNOT be scanned. A tenant that asked for virus
+            // scanning must not have an unscannable side door — refuse the whole
+            // chunk route family rather than let it quietly bypass the scanner.
+            if ($claims->allowVirusScan) {
+                throw new ApiException(
+                    'Chunked upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
+                    409,
+                    'virus_unscannable'
+                );
+            }
+
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
             }
@@ -1132,6 +1144,14 @@ class FluxFilesController
             $this->rateLimit($claims, true);
             $fm = $this->fileManager($claims);
 
+            if ($claims->allowVirusScan) {
+                throw new ApiException(
+                    'Chunked upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
+                    409,
+                    'virus_unscannable'
+                );
+            }
+
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
             }
@@ -1167,6 +1187,14 @@ class FluxFilesController
             $this->rateLimit($claims, true);
             $fm = $this->fileManager($claims);
 
+            if ($claims->allowVirusScan) {
+                throw new ApiException(
+                    'Chunked upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
+                    409,
+                    'virus_unscannable'
+                );
+            }
+
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
             }
@@ -1186,6 +1214,13 @@ class FluxFilesController
                 throw new ApiException('Access denied to path', 403);
             }
             $fm->validateScopedPath($key);
+            // Unlike the direct upload() path, S3 multipart has no collision policy at
+            // all — completing against an existing key overwrites it unconditionally.
+            // Honour owner_only the same way upload()/rename()/move() do before letting
+            // the multipart complete replace bytes that already exist at this key.
+            if ($this->diskManager->disk($disk)->fileExists($key)) {
+                $fm->assertCanModifyScopedPath($disk, $key);
+            }
 
             $chunker = new ChunkUploader($this->diskManager);
 
@@ -1206,6 +1241,14 @@ class FluxFilesController
             $claims = $this->claims($request);
             $this->rateLimit($claims, true);
             $fm = $this->fileManager($claims);
+
+            if ($claims->allowVirusScan) {
+                throw new ApiException(
+                    'Chunked upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
+                    409,
+                    'virus_unscannable'
+                );
+            }
 
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);

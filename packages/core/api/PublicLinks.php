@@ -76,6 +76,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
 
         if ($method === 'GET' && $uri === '/api/fm/intake/info') {
             $token = ff_str_param($_GET, 'token');
+            ff_intake_rate_limit($token, 'info');
             echo json_encode(['data' => $module->portalInfo($dm, $secret, $token), 'error' => null]);
             return;
         }
@@ -83,6 +84,9 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
         if ($method === 'POST' && $uri === '/api/fm/intake/upload') {
             $token = ff_str_param($_POST, 'token');
             $password = isset($_POST['password']) ? ff_str_param($_POST, 'password') : null;
+            // Tighter bucket than info: this is both the password brute-force surface
+            // (when the portal has one) and the anonymous-upload flood surface.
+            ff_intake_rate_limit($token, 'upload');
             if (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
                 throw new ApiException('No file uploaded', 400, 'no_file');
             }
@@ -102,6 +106,19 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             $portalClaims = \FluxFiles\Claims::fromJwtPayload($payload);
             $portalFm = new FileManager($dm, $portalClaims, new StorageMetadataHandler($dm));
             $portalFm->setStreamSecret($secret);
+            // Virus scan (paid module) — same fail-closed wiring as index.php/Laravel/
+            // WordPress. Without this, an anonymous intake upload would never be
+            // scanned even when the operator's own token has `allow_virus_scan` on,
+            // since this is the one write path with no operator-authenticated request
+            // behind it. IntakeModule::createPortal() forwards the claim into the
+            // portal JWT precisely so this check can see it here.
+            if ($portalClaims->allowVirusScan) {
+                $portalFm->setVirusScanner(static function (string $localPath) use ($portalClaims): array {
+                    /** @var \FluxFiles\Virus\VirusScanModule $virus */
+                    $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $portalClaims);
+                    return $virus->scanPath($localPath);
+                });
+            }
             $res = $module->receiveUpload($portalFm, $dm, $secret, $token, $file, $password);
             echo json_encode(['data' => $res, 'error' => null]);
             return;
@@ -423,6 +440,35 @@ function ff_share_rate_limit(string $token, string $kind): void
     }
 
     $limiter(max(1, (int) ($_ENV['FLUXFILES_SHARE_RATE_LIMIT'] ?? 60)))->check('share:' . $jti, 'read');
+}
+
+/**
+ * Per-portal rate limit for the public Intake routes, mirroring ff_share_rate_limit()
+ * above (same JSON-file limiter, same 60s window, same unverified-payload jti as the
+ * bucket key — tampering it invalidates the signature anyway). `info` is a single
+ * roomy bucket (the landing page poll); `upload` gets the same two-bucket shape as
+ * share's `unlock` (per portal + client IP, and a no-IP-component portal-wide
+ * ceiling) because it is simultaneously the portal's password brute-force surface
+ * (when one is set) and its anonymous-upload flood surface, and REMOTE_ADDR alone is
+ * never a safe-only limit — it rotates for free behind a proxy pool or IPv6 /64.
+ */
+function ff_intake_rate_limit(string $token, string $kind): void
+{
+    $storagePath = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
+    $jti = ff_share_token_jti($token);
+    $limiter = static function (int $limit) use ($storagePath): RateLimiterFileStorage {
+        return new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit, 60);
+    };
+
+    if ($kind === 'upload') {
+        $limiter(max(1, (int) ($_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'] ?? 10)))
+            ->check('intake_upload:' . $jti . ':' . (string) ($_SERVER['REMOTE_ADDR'] ?? ''), 'read');
+        $limiter(max(1, (int) ($_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL'] ?? 60)))
+            ->check('intake_upload_all:' . $jti, 'read');
+        return;
+    }
+
+    $limiter(max(1, (int) ($_ENV['FLUXFILES_INTAKE_RATE_LIMIT'] ?? 60)))->check('intake:' . $jti, 'read');
 }
 
 /** The share id from a token's unverified payload; a hash of the token otherwise. */

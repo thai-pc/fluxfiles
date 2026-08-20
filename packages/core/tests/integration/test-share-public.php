@@ -51,7 +51,7 @@ function expectApi(callable $f, string $code, ?int $http = null): void
 // same public routes; a plain require would still not do, because the namespace
 // re-declaration is what lets this test observe header() calls.
 $indexSrc = (string) file_get_contents(__DIR__ . '/../../api/PublicLinks.php');
-$wanted = ['ff_share_send_bytes', 'ff_share_headers', 'ff_content_disposition', 'ff_share_payload', 'ff_share_token_jti', 'ff_share_rate_limit'];
+$wanted = ['ff_share_send_bytes', 'ff_share_headers', 'ff_content_disposition', 'ff_share_payload', 'ff_share_token_jti', 'ff_share_rate_limit', 'ff_intake_rate_limit'];
 $code = '';
 foreach ($wanted as $fn) {
     if (!preg_match('#\nfunction ' . $fn . '\(.*?\n\}\n#s', $indexSrc, $m)) {
@@ -744,6 +744,99 @@ if (class_exists('\FluxFiles\Share\ShareModule')) {
 }
 
 rmrf($ROOT);
+
+// ── 8. Intake rate-limit bucket keying ───────────────────────────────────────
+
+test('intake upload: rotating REMOTE_ADDR does NOT escape the per-portal ceiling', function () {
+    $dir = sys_get_temp_dir() . '/ff-intake-rl-' . bin2hex(random_bytes(5));
+    @mkdir($dir, 0777, true);
+    $envKeep = [$_ENV['FLUXFILES_STORAGE_PATH'] ?? null, $_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'] ?? null, $_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL'] ?? null];
+    $addrKeep = $_SERVER['REMOTE_ADDR'] ?? null;
+    $_ENV['FLUXFILES_STORAGE_PATH'] = $dir;
+    $_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'] = '3';   // per portal + IP
+    $_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL'] = '5';   // per portal, whatever the IP
+    try {
+        $tok = \FluxFiles\JwtCompat::encode(
+            ['t' => 'intake', 'jti' => bin2hex(random_bytes(12)), 'intake' => true, 'exp' => time() + 60],
+            str_repeat('k', 40)
+        );
+        $allowed = 0;
+        for ($i = 0; $i < 40; $i++) {
+            $_SERVER['REMOTE_ADDR'] = '203.0.113.' . $i;   // a fresh source every attempt
+            try { \ShareRoutes\ff_intake_rate_limit($tok, 'upload'); $allowed++; }
+            catch (ApiException $e) { assertEqual('rate_limited', $e->getErrorCode()); break; }
+        }
+        assertEqual(5, $allowed, 'the per-portal ceiling stops a rotating uploader');
+
+        // A DIFFERENT portal is unaffected — one flooded portal doesn't lock the rest.
+        $other = \FluxFiles\JwtCompat::encode(
+            ['t' => 'intake', 'jti' => bin2hex(random_bytes(12)), 'intake' => true, 'exp' => time() + 60],
+            str_repeat('k', 40)
+        );
+        \ShareRoutes\ff_intake_rate_limit($other, 'upload');
+        // …and so is the roomier info bucket.
+        \ShareRoutes\ff_intake_rate_limit($tok, 'info');
+    } finally {
+        [$sp, $ul, $ut] = $envKeep;
+        if ($sp === null) { unset($_ENV['FLUXFILES_STORAGE_PATH']); } else { $_ENV['FLUXFILES_STORAGE_PATH'] = $sp; }
+        if ($ul === null) { unset($_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT']); } else { $_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'] = $ul; }
+        if ($ut === null) { unset($_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL']); } else { $_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL'] = $ut; }
+        if ($addrKeep === null) { unset($_SERVER['REMOTE_ADDR']); } else { $_SERVER['REMOTE_ADDR'] = $addrKeep; }
+        rmrf($dir);
+    }
+});
+
+test('intake upload: one IP is still capped tighter than the whole portal', function () {
+    $dir = sys_get_temp_dir() . '/ff-intake-rl-' . bin2hex(random_bytes(5));
+    @mkdir($dir, 0777, true);
+    $keep = [$_ENV['FLUXFILES_STORAGE_PATH'] ?? null, $_SERVER['REMOTE_ADDR'] ?? null];
+    $_ENV['FLUXFILES_STORAGE_PATH'] = $dir;
+    $_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'] = '3';
+    $_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL'] = '30';
+    $_SERVER['REMOTE_ADDR'] = '198.51.100.7';
+    try {
+        $tok = \FluxFiles\JwtCompat::encode(
+            ['t' => 'intake', 'jti' => bin2hex(random_bytes(12)), 'intake' => true, 'exp' => time() + 60],
+            str_repeat('k', 40)
+        );
+        $allowed = 0;
+        for ($i = 0; $i < 10; $i++) {
+            try { \ShareRoutes\ff_intake_rate_limit($tok, 'upload'); $allowed++; }
+            catch (ApiException $e) { break; }
+        }
+        assertEqual(3, $allowed, 'one flooder is stopped long before the portal ceiling');
+    } finally {
+        [$sp, $addr] = $keep;
+        if ($sp === null) { unset($_ENV['FLUXFILES_STORAGE_PATH']); } else { $_ENV['FLUXFILES_STORAGE_PATH'] = $sp; }
+        unset($_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'], $_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL']);
+        if ($addr === null) { unset($_SERVER['REMOTE_ADDR']); } else { $_SERVER['REMOTE_ADDR'] = $addr; }
+        rmrf($dir);
+    }
+});
+
+test('intake info: the roomy bucket is independent of the upload bucket', function () {
+    $dir = sys_get_temp_dir() . '/ff-intake-rl-' . bin2hex(random_bytes(5));
+    @mkdir($dir, 0777, true);
+    $keep = $_ENV['FLUXFILES_STORAGE_PATH'] ?? null;
+    $_ENV['FLUXFILES_STORAGE_PATH'] = $dir;
+    $_ENV['FLUXFILES_INTAKE_RATE_LIMIT'] = '4';
+    try {
+        $tok = \FluxFiles\JwtCompat::encode(
+            ['t' => 'intake', 'jti' => bin2hex(random_bytes(12)), 'intake' => true, 'exp' => time() + 60],
+            str_repeat('k', 40)
+        );
+        $allowed = 0;
+        for ($i = 0; $i < 10; $i++) {
+            try { \ShareRoutes\ff_intake_rate_limit($tok, 'info'); $allowed++; }
+            catch (ApiException $e) { assertEqual('rate_limited', $e->getErrorCode()); break; }
+        }
+        assertEqual(4, $allowed, 'info bucket caps at its own limit');
+    } finally {
+        if ($keep === null) { unset($_ENV['FLUXFILES_STORAGE_PATH']); } else { $_ENV['FLUXFILES_STORAGE_PATH'] = $keep; }
+        unset($_ENV['FLUXFILES_INTAKE_RATE_LIMIT']);
+        rmrf($dir);
+    }
+});
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
