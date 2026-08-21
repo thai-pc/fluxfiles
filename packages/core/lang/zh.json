@@ -283,6 +283,8 @@
         "edit_too_large": "文件太大，无法编辑。",
         "endpoint_blocked": "此端点已被阻止。",
         "extract_forbidden": "不允许解压。",
+        "image_too_large": "此图片过大，无法处理。",
+        "image_undecodable": "此文件不是有效的图片。",
         "img_token_invalid": "图片链接无效或已过期。",
         "invalid_mode": "模式无效——请使用 3 位八进制数字（例如 644）。",
         "invalid_trash_id": "回收站项目无效。",
@@ -446,6 +448,7 @@
         "summary_fail": "有问题",
         "cors_snippet": "CORS 配置",
         "iam_snippet": "IAM 策略",
+        "lifecycle_snippet": "生命周期规则",
         "copy": "复制",
         "check": {
             "reachability": "连接与列举",
@@ -454,6 +457,7 @@
             "delete": "删除",
             "multipart": "分片上传",
             "cors": "CORS",
+            "lifecycle": "生命周期规则",
             "presign": "预签名 URL",
             "versioning": "版本控制"
         }

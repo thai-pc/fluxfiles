@@ -283,6 +283,8 @@
         "edit_too_large": "ไฟล์ใหญ่เกินไปสำหรับการแก้ไข",
         "endpoint_blocked": "เอนด์พอยต์นี้ถูกบล็อก",
         "extract_forbidden": "ไม่อนุญาตให้แตกไฟล์",
+        "image_too_large": "รูปภาพนี้ใหญ่เกินกว่าจะประมวลผลได้",
+        "image_undecodable": "ไฟล์นี้ไม่ใช่รูปภาพที่ถูกต้อง",
         "img_token_invalid": "ลิงก์รูปภาพไม่ถูกต้องหรือหมดอายุ",
         "invalid_mode": "โหมดไม่ถูกต้อง — ใช้เลขฐานแปด 3 หลัก (เช่น 644)",
         "invalid_trash_id": "รายการในถังขยะไม่ถูกต้อง",
@@ -446,6 +448,7 @@
         "summary_fail": "มีปัญหา",
         "cors_snippet": "การกำหนดค่า CORS",
         "iam_snippet": "นโยบาย IAM",
+        "lifecycle_snippet": "กฎวงจรชีวิต",
         "copy": "คัดลอก",
         "check": {
             "reachability": "การเข้าถึงและรายการ",
@@ -454,6 +457,7 @@
             "delete": "ลบ",
             "multipart": "อัปโหลดหลายส่วน",
             "cors": "CORS",
+            "lifecycle": "กฎวงจรชีวิต",
             "presign": "URL ที่ลงนามล่วงหน้า",
             "versioning": "การกำหนดเวอร์ชัน"
         }

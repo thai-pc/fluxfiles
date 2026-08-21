@@ -283,6 +283,8 @@
         "edit_too_large": "ファイルが大きすぎて編集できません。",
         "endpoint_blocked": "このエンドポイントはブロックされています。",
         "extract_forbidden": "展開は許可されていません。",
+        "image_too_large": "この画像は処理するには大きすぎます。",
+        "image_undecodable": "このファイルは有効な画像ではありません。",
         "img_token_invalid": "画像リンクが無効または期限切れです。",
         "invalid_mode": "モードが無効です。3桁の8進数で指定してください（例: 644）。",
         "invalid_trash_id": "ゴミ箱の項目が無効です。",
@@ -446,6 +448,7 @@
         "summary_fail": "問題あり",
         "cors_snippet": "CORS 設定",
         "iam_snippet": "IAM ポリシー",
+        "lifecycle_snippet": "ライフサイクルルール",
         "copy": "コピー",
         "check": {
             "reachability": "到達性と一覧",
@@ -454,6 +457,7 @@
             "delete": "削除",
             "multipart": "マルチパートアップロード",
             "cors": "CORS",
+            "lifecycle": "ライフサイクルルール",
             "presign": "署名付き URL",
             "versioning": "バージョニング"
         }

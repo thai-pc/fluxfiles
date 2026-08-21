@@ -283,6 +283,8 @@
         "edit_too_large": "यह फ़ाइल संपादित करने के लिए बहुत बड़ी है।",
         "endpoint_blocked": "यह एंडपॉइंट अवरुद्ध है।",
         "extract_forbidden": "निष्कर्षण की अनुमति नहीं है।",
+        "image_too_large": "यह छवि संसाधित करने के लिए बहुत बड़ी है।",
+        "image_undecodable": "यह फ़ाइल मान्य छवि नहीं है।",
         "img_token_invalid": "छवि लिंक अमान्य या समाप्त।",
         "invalid_mode": "अमान्य मोड — 3 ऑक्टल अंक उपयोग करें (जैसे 644)।",
         "invalid_trash_id": "अमान्य ट्रैश आइटम।",
@@ -446,6 +448,7 @@
         "summary_fail": "समस्याएँ",
         "cors_snippet": "CORS कॉन्फ़िगरेशन",
         "iam_snippet": "IAM नीति",
+        "lifecycle_snippet": "जीवनचक्र नियम",
         "copy": "कॉपी",
         "check": {
             "reachability": "पहुँच और सूची",
@@ -454,6 +457,7 @@
             "delete": "हटाना",
             "multipart": "मल्टीपार्ट अपलोड",
             "cors": "CORS",
+            "lifecycle": "जीवनचक्र नियम",
             "presign": "प्री-साइन्ड URL",
             "versioning": "वर्ज़निंग"
         }

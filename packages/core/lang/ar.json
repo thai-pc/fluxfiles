@@ -283,6 +283,8 @@
         "edit_too_large": "هذا الملف كبير جدًا للتعديل.",
         "endpoint_blocked": "نقطة النهاية هذه محظورة.",
         "extract_forbidden": "الاستخراج غير مسموح.",
+        "image_too_large": "هذه الصورة كبيرة جدًا لمعالجتها.",
+        "image_undecodable": "هذا الملف ليس صورة صالحة.",
         "img_token_invalid": "رابط الصورة غير صالح أو منتهي الصلاحية.",
         "invalid_mode": "وضع غير صالح — استخدم 3 أرقام ثُمانية (مثل 644).",
         "invalid_trash_id": "عنصر المهملات غير صالح.",
@@ -446,6 +448,7 @@
         "summary_fail": "مشكلات",
         "cors_snippet": "تهيئة CORS",
         "iam_snippet": "سياسة IAM",
+        "lifecycle_snippet": "قاعدة دورة الحياة",
         "copy": "نسخ",
         "check": {
             "reachability": "الوصول والسرد",
@@ -454,6 +457,7 @@
             "delete": "الحذف",
             "multipart": "رفع متعدد الأجزاء",
             "cors": "CORS",
+            "lifecycle": "قاعدة دورة الحياة",
             "presign": "روابط موقّعة",
             "versioning": "الإصدارات"
         }

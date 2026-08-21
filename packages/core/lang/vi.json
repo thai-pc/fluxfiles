@@ -283,6 +283,8 @@
         "edit_too_large": "Tệp quá lớn để chỉnh sửa.",
         "endpoint_blocked": "Endpoint này bị chặn.",
         "extract_forbidden": "Không được phép giải nén.",
+        "image_too_large": "Hình ảnh này quá lớn để xử lý.",
+        "image_undecodable": "Tệp này không phải là hình ảnh hợp lệ.",
         "img_token_invalid": "Liên kết ảnh không hợp lệ hoặc đã hết hạn.",
         "invalid_mode": "Chế độ không hợp lệ — dùng 3 chữ số bát phân (vd: 644).",
         "invalid_trash_id": "Mục trong thùng rác không hợp lệ.",
@@ -446,6 +448,7 @@
         "summary_fail": "Có vấn đề",
         "cors_snippet": "Cấu hình CORS",
         "iam_snippet": "Chính sách IAM",
+        "lifecycle_snippet": "Quy tắc vòng đời",
         "copy": "Sao chép",
         "check": {
             "reachability": "Kết nối & liệt kê",
@@ -454,6 +457,7 @@
             "delete": "Xóa",
             "multipart": "Tải lên nhiều phần",
             "cors": "CORS",
+            "lifecycle": "Quy tắc vòng đời",
             "presign": "URL ký sẵn",
             "versioning": "Phiên bản"
         }

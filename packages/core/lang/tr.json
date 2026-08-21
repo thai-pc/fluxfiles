@@ -283,6 +283,8 @@
         "edit_too_large": "Bu dosya düzenlemek için çok büyük.",
         "endpoint_blocked": "Bu uç nokta engellendi.",
         "extract_forbidden": "Ayıklamaya izin verilmiyor.",
+        "image_too_large": "Bu görsel işlemek için çok büyük.",
+        "image_undecodable": "Bu dosya geçerli bir görsel değil.",
         "img_token_invalid": "Geçersiz veya süresi dolmuş görsel bağlantısı.",
         "invalid_mode": "Geçersiz mod — 3 sekizlik basamak kullanın (örn. 644).",
         "invalid_trash_id": "Geçersiz çöp öğesi.",
@@ -446,6 +448,7 @@
         "summary_fail": "Sorunlar",
         "cors_snippet": "CORS yapılandırması",
         "iam_snippet": "IAM politikası",
+        "lifecycle_snippet": "Yaşam döngüsü kuralı",
         "copy": "Kopyala",
         "check": {
             "reachability": "Erişim ve listeleme",
@@ -454,6 +457,7 @@
             "delete": "Silme",
             "multipart": "Çok parçalı yükleme",
             "cors": "CORS",
+            "lifecycle": "Yaşam döngüsü kuralı",
             "presign": "Önimzalı URL’ler",
             "versioning": "Sürümleme"
         }

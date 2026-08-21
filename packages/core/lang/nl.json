@@ -283,6 +283,8 @@
         "edit_too_large": "Dit bestand is te groot om te bewerken.",
         "endpoint_blocked": "Dit eindpunt is geblokkeerd.",
         "extract_forbidden": "Uitpakken is niet toegestaan.",
+        "image_too_large": "Deze afbeelding is te groot om te verwerken.",
+        "image_undecodable": "Dit bestand is geen geldige afbeelding.",
         "img_token_invalid": "Ongeldige of verlopen afbeeldingslink.",
         "invalid_mode": "Ongeldige modus — gebruik 3 octale cijfers (bijv. 644).",
         "invalid_trash_id": "Ongeldig prullenbak-item.",
@@ -446,6 +448,7 @@
         "summary_fail": "Problemen",
         "cors_snippet": "CORS-configuratie",
         "iam_snippet": "IAM-beleid",
+        "lifecycle_snippet": "Levenscyclusregel",
         "copy": "Kopiëren",
         "check": {
             "reachability": "Bereikbaarheid & lijst",
@@ -454,6 +457,7 @@
             "delete": "Verwijderen",
             "multipart": "Multipart-upload",
             "cors": "CORS",
+            "lifecycle": "Levenscyclusregel",
             "presign": "Vooraf-ondertekende URLs",
             "versioning": "Versiebeheer"
         }

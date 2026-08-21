@@ -283,6 +283,8 @@
         "edit_too_large": "파일이 너무 커서 편집할 수 없습니다.",
         "endpoint_blocked": "이 엔드포인트는 차단되었습니다.",
         "extract_forbidden": "압축 해제가 허용되지 않습니다.",
+        "image_too_large": "이 이미지는 처리하기에 너무 큽니다.",
+        "image_undecodable": "이 파일은 올바른 이미지가 아닙니다.",
         "img_token_invalid": "이미지 링크가 잘못되었거나 만료되었습니다.",
         "invalid_mode": "잘못된 모드입니다 — 3자리 8진수를 사용하세요 (예: 644).",
         "invalid_trash_id": "휴지통 항목이 잘못되었습니다.",
@@ -446,6 +448,7 @@
         "summary_fail": "문제 있음",
         "cors_snippet": "CORS 구성",
         "iam_snippet": "IAM 정책",
+        "lifecycle_snippet": "수명 주기 규칙",
         "copy": "복사",
         "check": {
             "reachability": "연결 및 목록",
@@ -454,6 +457,7 @@
             "delete": "삭제",
             "multipart": "멀티파트 업로드",
             "cors": "CORS",
+            "lifecycle": "수명 주기 규칙",
             "presign": "사전 서명 URL",
             "versioning": "버전 관리"
         }

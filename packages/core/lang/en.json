@@ -283,6 +283,8 @@
         "edit_too_large": "This file is too large to edit.",
         "endpoint_blocked": "This endpoint is blocked.",
         "extract_forbidden": "Extracting archives isn't allowed.",
+        "image_too_large": "This image is too large to process.",
+        "image_undecodable": "This file isn't a valid image.",
         "img_token_invalid": "Invalid or expired image link.",
         "invalid_mode": "Invalid mode — use 3 octal digits (e.g. 644).",
         "invalid_trash_id": "Invalid trash item.",
@@ -446,6 +448,7 @@
         "summary_fail": "Problems",
         "cors_snippet": "CORS configuration",
         "iam_snippet": "IAM policy",
+        "lifecycle_snippet": "Lifecycle rule",
         "copy": "Copy",
         "check": {
             "reachability": "Reachability & list",
@@ -454,6 +457,7 @@
             "delete": "Delete",
             "multipart": "Multipart upload",
             "cors": "CORS",
+            "lifecycle": "Lifecycle rule",
             "presign": "Presigned URLs",
             "versioning": "Versioning"
         }

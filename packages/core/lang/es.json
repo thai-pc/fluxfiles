@@ -283,6 +283,8 @@
         "edit_too_large": "Este archivo es demasiado grande para editarlo.",
         "endpoint_blocked": "Este endpoint está bloqueado.",
         "extract_forbidden": "No se permite la extracción.",
+        "image_too_large": "Esta imagen es demasiado grande para procesarla.",
+        "image_undecodable": "Este archivo no es una imagen válida.",
         "img_token_invalid": "Enlace de imagen no válido o caducado.",
         "invalid_mode": "Modo no válido: use 3 dígitos octales (p. ej. 644).",
         "invalid_trash_id": "Elemento de la papelera no válido.",
@@ -446,6 +448,7 @@
         "summary_fail": "Problemas",
         "cors_snippet": "Configuración CORS",
         "iam_snippet": "Política IAM",
+        "lifecycle_snippet": "Regla de ciclo de vida",
         "copy": "Copiar",
         "check": {
             "reachability": "Accesibilidad y listado",
@@ -454,6 +457,7 @@
             "delete": "Eliminación",
             "multipart": "Subida multiparte",
             "cors": "CORS",
+            "lifecycle": "Regla de ciclo de vida",
             "presign": "URL prefirmadas",
             "versioning": "Versionado"
         }
