@@ -99,8 +99,11 @@ class CredentialEncryptor
      * @param string $diskName Name of the BYOB disk
      * @param array  $config   Decrypted config array
      * @throws ApiException If validation fails
+     * @return string|null For an s3 disk with a custom endpoint that resolved, the
+     *         first validated public IP — so the caller can pin the connection to
+     *         it (see Claims::fromJwtPayload / DiskManager::build). Null otherwise.
      */
-    public static function validate(string $diskName, array $config): void
+    public static function validate(string $diskName, array $config): ?string
     {
         $driver = $config['driver'] ?? '';
 
@@ -127,7 +130,7 @@ class CredentialEncryptor
             if (\class_exists('\\FluxFiles\\SsrfGuard')) {
                 SsrfGuard::assertHostSafe((string) $config['host']);
             }
-            return;
+            return null;
         }
 
         if ($driver !== 's3') {
@@ -152,16 +155,24 @@ class CredentialEncryptor
         // otherwise a BYOB config could turn the server into an SSRF proxy (e.g. cloud
         // metadata at 169.254.169.254, or internal hosts behind the firewall).
         if (!empty($config['endpoint'])) {
-            self::assertSafeEndpoint($diskName, (string) $config['endpoint']);
+            // Return the IP this same check already resolved so the caller can pin
+            // the S3 client's connection to it (CURLOPT_RESOLVE) instead of letting
+            // curl re-resolve the host at actual-connect time, which could be much
+            // later in the request — closing the DNS-rebinding TOCTOU window without
+            // any extra DNS lookup (see Claims::fromJwtPayload / DiskManager::build()).
+            return self::assertSafeEndpoint($diskName, (string) $config['endpoint']);
         }
+        return null;
     }
 
     /**
      * Reject endpoints whose host resolves to a loopback, link-local, private or
-     * otherwise-reserved address — the classic SSRF targets. Validation happens at
-     * token-mint time so a malicious BYOB config never reaches the S3 client.
+     * otherwise-reserved address — the classic SSRF targets. Runs on every request
+     * (Claims::fromJwtPayload calls validate() per-decode, not just at token-mint
+     * time) so a malicious BYOB config never reaches the S3 client. Returns the
+     * first validated public IP for the caller to pin the connection to.
      */
-    private static function assertSafeEndpoint(string $diskName, string $endpoint): void
+    private static function assertSafeEndpoint(string $diskName, string $endpoint): ?string
     {
         $parts = parse_url($endpoint);
         if ($parts === false || empty($parts['host']) || empty($parts['scheme'])) {
@@ -181,7 +192,11 @@ class CredentialEncryptor
         // Resolve every form (literal / numeric / A+AAAA) and reject if any maps
         // to a non-public address. Shared with the URL-import SSRF guard so the
         // denylist (incl. CGNAT, IPv6 ULA, IPv4-mapped IPv6) stays in one place.
-        foreach (SsrfGuard::resolveHostIps($host) as $ip) {
+        // An empty result (host didn't resolve here, e.g. offline test env) is
+        // intentionally NOT treated as a violation — same as before this method
+        // started returning a value — it just means there's nothing to pin to.
+        $ips = SsrfGuard::resolveHostIps($host);
+        foreach ($ips as $ip) {
             if (!SsrfGuard::isPublicIp($ip)) {
                 throw new ApiException(
                     "BYOB disk '{$diskName}' endpoint resolves to a blocked (internal) address",
@@ -190,6 +205,7 @@ class CredentialEncryptor
                 );
             }
         }
+        return $ips[0] ?? null;
     }
 
     /**

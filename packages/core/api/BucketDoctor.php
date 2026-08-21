@@ -108,6 +108,12 @@ class BucketDoctor
         // 6. CORS (warn-only — the #1 cause of broken browser uploads).
         $checks[] = $this->corsCheck($s3, $bucket, $origin);
 
+        // 6b. Lifecycle rule for incomplete multipart uploads (warn-only). A chunked
+        // upload that never completes leaves its parts billed and invisible to a
+        // normal object listing until this rule (or a manual ListMultipartUploads
+        // sweep) cleans them up.
+        $checks[] = $this->lifecycleCheck($s3, $bucket);
+
         // 7. Versioning (informational).
         try {
             $v = $s3->getBucketVersioning(['Bucket' => $bucket]);
@@ -159,6 +165,29 @@ class BucketDoctor
                     'Add a CORS rule allowing GET/PUT from your app origin.');
             }
             return $this->warn('cors', 'Could not verify CORS (s3:GetBucketCors not granted).', null);
+        }
+    }
+
+    private function lifecycleCheck($s3, string $bucket): array
+    {
+        try {
+            $res   = $s3->getBucketLifecycleConfiguration(['Bucket' => $bucket]);
+            $rules = $res['Rules'] ?? [];
+            foreach ($rules as $r) {
+                if (($r['Status'] ?? '') === 'Enabled' && isset($r['AbortIncompleteMultipartUpload']['DaysAfterInitiation'])) {
+                    return $this->ok('lifecycle', 'A lifecycle rule cleans up incomplete multipart uploads after '
+                        . (int) $r['AbortIncompleteMultipartUpload']['DaysAfterInitiation'] . ' day(s).');
+                }
+            }
+            return $this->warn('lifecycle', 'No lifecycle rule aborts incomplete multipart uploads — a failed chunked upload leaves billed, invisible parts in the bucket forever.',
+                'Add an AbortIncompleteMultipartUpload lifecycle rule (see snippet below).');
+        } catch (\Throwable $e) {
+            $code = $e instanceof \Aws\Exception\AwsException ? (string) $e->getAwsErrorCode() : '';
+            if ($code === 'NoSuchLifecycleConfiguration') {
+                return $this->warn('lifecycle', 'No lifecycle configuration — a failed chunked upload leaves billed, invisible parts in the bucket forever.',
+                    'Add an AbortIncompleteMultipartUpload lifecycle rule (see snippet below).');
+            }
+            return $this->warn('lifecycle', 'Could not verify the lifecycle configuration (s3:GetLifecycleConfiguration not granted).', null);
         }
     }
 
@@ -322,6 +351,19 @@ class BucketDoctor
                 'ExposeHeaders'  => ['ETag'],
                 'MaxAgeSeconds'  => 3000,
             ]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+            // A chunked upload that never completes (browser closed, network drop,
+            // the client's own /chunk/abort call itself failing) leaves an incomplete
+            // multipart upload's parts billed and invisible to a normal listing —
+            // only `ListMultipartUploads` shows them. This lifecycle rule is the
+            // bucket-side backstop so those don't accumulate forever.
+            'lifecycle' => json_encode([
+                'Rules' => [[
+                    'ID'     => 'fluxfiles-abort-incomplete-multipart-uploads',
+                    'Status' => 'Enabled',
+                    'Filter' => ['Prefix' => ''],
+                    'AbortIncompleteMultipartUpload' => ['DaysAfterInitiation' => 7],
+                ]],
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
         ];
     }
 

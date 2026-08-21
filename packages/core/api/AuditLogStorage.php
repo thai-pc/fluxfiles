@@ -26,14 +26,21 @@ class AuditLogStorage
         string $disk,
         string $fileKey,
         ?string $ip = null,
-        ?string $userAgent = null
+        ?string $userAgent = null,
+        ?string $detail = null
     ): void {
-        $this->storage->audit($disk, $action, [
+        $context = [
             'user_id'   => $userId,
             'file_key'  => $fileKey,
             'ip'        => $ip ?? ($_SERVER['REMOTE_ADDR'] ?? ''),
             'user_agent' => $userAgent ?? ($_SERVER['HTTP_USER_AGENT'] ?? ''),
-        ]);
+        ];
+        // Free-form extra context (e.g. the SSH command a `terminal` entry ran) —
+        // the audit file_key convention doesn't fit every action.
+        if ($detail !== null && $detail !== '') {
+            $context['detail'] = $detail;
+        }
+        $this->storage->audit($disk, $action, $context);
     }
 
     /**

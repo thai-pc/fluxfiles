@@ -303,6 +303,28 @@ test('aiTag does not overwrite an existing title', function () {
     assertEqual('My Own Title', $meta->get('local', 'c.png')['title'] ?? '', 'existing title preserved');
 });
 
+test('aiTag merges AI tags with existing user-curated tags instead of clobbering them', function () {
+    [$fm, $meta] = makeFM(new StubAiTagger('claude', 'k'));
+    $fm->upload('local', '', fileArr(imgFile(), 'd.png'), true);
+    $meta->save('local', 'd.png', ['tags' => 'my-project, favorite']);
+    $result = $fm->aiTag('local', 'd.png');
+    $saved = $meta->get('local', 'd.png')['tags'] ?? '';
+    assertTrue(strpos($saved, 'my-project') !== false, 'user tag "my-project" survives re-tag');
+    assertTrue(strpos($saved, 'favorite') !== false, 'user tag "favorite" survives re-tag');
+    assertTrue(strpos($saved, 'cat') !== false, 'AI tag "cat" is added');
+    assertTrue(strpos($saved, 'animal') !== false, 'AI tag "animal" is added');
+    assertEqual(4, count($result['tags']), 'response reflects the merged set, not just AI tags');
+});
+
+test('aiTag re-run does not duplicate a tag the AI already suggested before', function () {
+    [$fm, $meta] = makeFM(new StubAiTagger('claude', 'k'));
+    $fm->upload('local', '', fileArr(imgFile(), 'e.png'), true);
+    $fm->aiTag('local', 'e.png'); // first run saves cat, animal
+    $fm->aiTag('local', 'e.png'); // second run must not duplicate them
+    $tags = array_filter(array_map('trim', explode(',', $meta->get('local', 'e.png')['tags'] ?? '')));
+    assertEqual(2, count($tags), 'no duplicate tags after a second identical AI run');
+});
+
 echo "\n{$yellow}► Auto-tag on upload{$reset}\n";
 
 test('FLUXFILES_AI_AUTO_TAG=true auto-tags an uploaded image', function () {

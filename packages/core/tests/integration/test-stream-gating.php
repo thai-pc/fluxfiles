@@ -211,5 +211,29 @@ test('allow_download=false → GET presign is denied (download_forbidden)', func
     catch (\FluxFiles\ApiException $e) { assertEqual('download_forbidden', $e->getErrorCode()); assertEqual(403, $e->getHttpCode()); }
 });
 
+// ── presign() on gated local/SFTP → fresh stream token (refreshMediaSrc) ──
+test('gated local GET presign mints a fresh /api/fm/stream token, not a 400', function () use ($SECRET) {
+    [$fm] = makeFM(true, true);
+    $r = $fm->presign('local', 'album/clip.mp4', 'GET', 3600);
+    assertTrue(strpos($r['url'] ?? '', '/api/fm/stream?token=') === 0, 'got: ' . ($r['url'] ?? ''));
+    assertTrue(($r['expires_at'] ?? 0) > time(), 'expires_at in the future');
+    parse_str(parse_url($r['url'], PHP_URL_QUERY), $q);
+    $scope = StreamToken::verify($q['token'], $SECRET);
+    assertEqual('local', $scope['disk']);
+    assertEqual('album/clip.mp4', $scope['path']);
+});
+
+test('non-gated local GET presign still 400s (no stream tokens to mint)', function () {
+    [$fm] = makeFM(false, true);
+    try { $fm->presign('local', 'album/clip.mp4', 'GET', 3600); throw new \RuntimeException('should 400'); }
+    catch (\FluxFiles\ApiException $e) { assertEqual(400, $e->getHttpCode()); }
+});
+
+test('gated local without a stream secret still 400s (feature off)', function () {
+    [$fm] = makeFM(true, false);
+    try { $fm->presign('local', 'album/clip.mp4', 'GET', 3600); throw new \RuntimeException('should 400'); }
+    catch (\FluxFiles\ApiException $e) { assertEqual(400, $e->getHttpCode()); }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

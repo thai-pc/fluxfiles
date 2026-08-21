@@ -1883,6 +1883,15 @@
                                     <button class="ff-btn ff-btn-ghost" @click="_copyText(doctorReport.remediation.iam_policy)" x-text="t('doctor.copy')"></button>
                                 </div>
                                 <pre x-text="doctorReport.remediation.iam_policy"></pre>
+                                <template x-if="doctorReport.remediation.lifecycle">
+                                    <div>
+                                        <div class="ff-doctor-remed-head">
+                                            <span x-text="t('doctor.lifecycle_snippet')"></span>
+                                            <button class="ff-btn ff-btn-ghost" @click="_copyText(doctorReport.remediation.lifecycle)" x-text="t('doctor.copy')"></button>
+                                        </div>
+                                        <pre x-text="doctorReport.remediation.lifecycle"></pre>
+                                    </div>
+                                </template>
                             </div>
                         </template>
                     </div>

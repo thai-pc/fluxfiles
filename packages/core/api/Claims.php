@@ -396,7 +396,12 @@ class Claims
         if (isset($payload->byob_disks) && is_object($payload->byob_disks) && $secret !== '') {
             foreach ($payload->byob_disks as $diskName => $encryptedBlob) {
                 $config = CredentialEncryptor::decrypt((string) $encryptedBlob, $secret);
-                CredentialEncryptor::validate((string) $diskName, $config);
+                $pinnedIp = CredentialEncryptor::validate((string) $diskName, $config);
+                if ($pinnedIp !== null) {
+                    // See CredentialEncryptor::validate() — closes the DNS-rebinding
+                    // TOCTOU between this check and DiskManager's actual S3 connect.
+                    $config['_pinned_ip'] = $pinnedIp;
+                }
                 $byobDisks[(string) $diskName] = $config;
             }
         }

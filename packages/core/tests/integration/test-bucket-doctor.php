@@ -52,5 +52,18 @@ test('report shape is stable (disk, driver, summary, checks[], remediation)', fu
     }
 });
 
+test('remediation() includes an AbortIncompleteMultipartUpload lifecycle snippet', function () {
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => sys_get_temp_dir(), 'url' => '/storage']]);
+    $doctor = new BucketDoctor($dm);
+    $m = new \ReflectionMethod($doctor, 'remediation');
+    $m->setAccessible(true);
+    $remediation = $m->invoke($doctor, 'my-bucket', 'https://app.example');
+
+    assertTrue(isset($remediation['lifecycle']), 'remediation has a lifecycle key');
+    $rule = json_decode($remediation['lifecycle'], true)['Rules'][0] ?? [];
+    assertEqual('Enabled', $rule['Status'] ?? null, 'rule is enabled');
+    assertTrue(isset($rule['AbortIncompleteMultipartUpload']['DaysAfterInitiation']), 'rule aborts incomplete multipart uploads');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

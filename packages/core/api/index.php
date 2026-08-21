@@ -376,7 +376,10 @@ try {
             $auditKey = (string) $data['key'];
         }
         $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
-        $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey);
+        // Terminal has no path/key — the command itself IS the security-relevant
+        // fact, so it goes in as free-form detail instead of leaving the entry blank.
+        $auditDetail = $auditAction === 'terminal' ? (string) ($body['cmd'] ?? '') : null;
+        $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey, null, null, $auditDetail);
 
         // Capture the webhook event; it's DISPATCHED AFTER the response is flushed
         // (below) so a slow/unreachable endpoint never adds to the client's latency.

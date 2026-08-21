@@ -24,6 +24,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     /** @var array<string, resource> Active file locks keyed by disk name */
     private array $indexLocks = [];
+    private array $auditLocks = [];
 
     public function __construct(DiskManager $diskManager)
     {
@@ -544,6 +545,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                     'file_key'  => $ctx['file_key'] ?? '',
                     'ip'        => $ctx['ip'] ?? null,
                     'user_agent' => $ctx['user_agent'] ?? null,
+                    'detail'    => $ctx['detail'] ?? null,
                     'created_at' => $row['ts'] ?? 0,
                 ];
             }
@@ -561,6 +563,12 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             'context' => $context,
         ]) . "\n";
         $fs = $this->diskManager->disk($disk);
+        // Unlocked read-modify-write here would drop entries under concurrent
+        // writers (two requests both read the same content, each appends one line,
+        // the second write clobbers the first's line) — same race updateIndex()
+        // already guards against with acquireIndexLock(). Uses its own lock file
+        // so a busy audit log can't stall unrelated metadata index writes.
+        $this->acquireAuditLock($disk);
         try {
             $content = '';
             if ($fs->fileExists(self::AUDIT_KEY)) {
@@ -577,6 +585,8 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $fs->write(self::AUDIT_KEY, $content);
         } catch (\Throwable $e) {
             // Silent fail
+        } finally {
+            $this->releaseAuditLock($disk);
         }
     }
 
@@ -731,8 +741,37 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      */
     private function acquireIndexLock(string $disk): void
     {
+        $this->acquireLock($disk, 'index.lock', $this->indexLocks);
+    }
+
+    private function releaseIndexLock(string $disk): void
+    {
+        $this->releaseLock($disk, $this->indexLocks);
+    }
+
+    private function acquireAuditLock(string $disk): void
+    {
+        $this->acquireLock($disk, 'audit.lock', $this->auditLocks);
+    }
+
+    private function releaseAuditLock(string $disk): void
+    {
+        $this->releaseLock($disk, $this->auditLocks);
+    }
+
+    /**
+     * Shared file-lock plumbing for local-disk sidecar writes (index, audit log, …).
+     * Same "local-only, best-effort flock, but an unwritable dir is a hard error"
+     * contract as the original index-only version — see the class-level note above.
+     *
+     * @param resource[] &$locks Keyed by disk — the caller's own lock-slot array
+     *        (e.g. $this->indexLocks), so index and audit locks stay independent
+     *        (a slow audit write must not block metadata index reads/writes).
+     */
+    private function acquireLock(string $disk, string $lockFileName, array &$locks): void
+    {
         $isLocal = ($this->diskManager->config($disk)['driver'] ?? '') === 'local';
-        if (!$isLocal || isset($this->indexLocks[$disk])) {
+        if (!$isLocal || isset($locks[$disk])) {
             return;
         }
         $config = $this->diskManager->config($disk);
@@ -749,7 +788,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 'storage_not_writable'
             );
         }
-        $lockFile = $lockDir . '/index.lock';
+        $lockFile = $lockDir . '/' . $lockFileName;
         $fp = @fopen($lockFile, 'c+');
         if ($fp === false) {
             throw new ApiException(
@@ -762,18 +801,19 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         // flock can legitimately be unsupported on some filesystems — that stays
         // best-effort (we just don't hold a lock), but an unwritable dir does not.
         if (flock($fp, LOCK_EX)) {
-            $this->indexLocks[$disk] = $fp;
+            $locks[$disk] = $fp;
         } else {
             fclose($fp);
         }
     }
 
-    private function releaseIndexLock(string $disk): void
+    /** @param resource[] &$locks */
+    private function releaseLock(string $disk, array &$locks): void
     {
-        if (isset($this->indexLocks[$disk])) {
-            flock($this->indexLocks[$disk], LOCK_UN);
-            fclose($this->indexLocks[$disk]);
-            unset($this->indexLocks[$disk]);
+        if (isset($locks[$disk])) {
+            flock($locks[$disk], LOCK_UN);
+            fclose($locks[$disk]);
+            unset($locks[$disk]);
         }
     }
 

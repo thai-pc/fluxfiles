@@ -1559,11 +1559,25 @@ function fluxFilesApp() {
                     disk, key, upload_id: uploadId, part_number: partNumber
                 });
 
-                // Upload chunk directly to S3/R2
-                const res = await fetch(presignData.url, {
-                    method: 'PUT',
-                    body: chunk
-                });
+                // Upload chunk directly to S3/R2 — retry a couple of times on a
+                // transient failure before giving up. Without checking res.ok, a
+                // failed PUT (e.g. a 403 from an expired presigned URL, or a proxy
+                // error page) still had its null ETag pushed into `parts`, and
+                // chunk/complete would report the upload as done with a missing or
+                // corrupt part.
+                let res, lastErr;
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        res = await fetch(presignData.url, { method: 'PUT', body: chunk });
+                        if (res.ok) { lastErr = null; break; }
+                        lastErr = new Error(`Part ${partNumber} upload failed (HTTP ${res.status})`);
+                    } catch (err) {
+                        res = null;
+                        lastErr = err;
+                    }
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 500 * attempt));
+                }
+                if (lastErr) throw lastErr;
 
                 completedParts++;
                 if (onProgress) onProgress(completedParts / totalParts);
@@ -2603,6 +2617,7 @@ function fluxFilesApp() {
                 this.postMessage('FM_EVENT', { event: 'restore:done', key: r && r.key });
                 await this.loadTrash();
                 this.loadFiles();
+                this.loadQuota();
             } catch (e) {
                 this.showToast(e.message || this.t('error.generic'), 'error', 4000);
             }
@@ -2613,6 +2628,7 @@ function fluxFilesApp() {
                 await this.api('POST', '/api/fm/trash/purge', { disk: this.currentDisk, trash_id: id });
                 this.showToast(this.t('trash.purged'), 'success');
                 await this.loadTrash();
+                this.loadQuota();
             } catch (e) {
                 this.showToast(e.message || this.t('error.generic'), 'error', 4000);
             }
@@ -2623,6 +2639,7 @@ function fluxFilesApp() {
                 await this.api('POST', '/api/fm/trash/empty', { disk: this.currentDisk });
                 this.showToast(this.t('trash.emptied'), 'success');
                 await this.loadTrash();
+                this.loadQuota();
             } catch (e) {
                 this.showToast(e.message || this.t('error.generic'), 'error', 4000);
             }
@@ -2757,8 +2774,10 @@ function fluxFilesApp() {
         async refreshMediaSrc(file, el) {
             if (!file || !el) return;
             const src = el.currentSrc || el.src || '';
-            // Only expiring presigned URLs are worth refreshing.
-            if (!/[?&](X-Amz-|Signature=)/.test(src)) return;
+            // Only expiring URLs are worth refreshing: S3-style presigned query
+            // params, or a gated-local/SFTP /api/fm/stream?token= link (also
+            // short-lived — see StreamToken).
+            if (!/[?&](X-Amz-|Signature=)/.test(src) && !/\/api\/fm\/stream\?.*\btoken=/.test(src)) return;
             if (el._ffRefreshing) return;
             el._ffRefreshTries = (el._ffRefreshTries || 0) + 1;
             if (el._ffRefreshTries > 2) return;   // likely unplayable — stop retrying

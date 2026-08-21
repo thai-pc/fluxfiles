@@ -1178,6 +1178,29 @@ class FileManager
         }
 
         $this->assertRelocationExt($scopedFrom, $scopedTo);
+
+        // Quota/file-count check — same-disk copy() creates a new object just
+        // like upload() does, so it must be bounded the same way (crossCopy()
+        // already checked this on the destination disk; this closed the gap
+        // where repeatedly copying one file in-place bypassed both limits).
+        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
+            $fileSize = (int) ($fs->fileSize($scopedFrom) ?: 0);
+            $this->quotaManager->assertQuota(
+                $disk,
+                $this->claims->pathPrefix,
+                $fileSize,
+                $this->claims->maxStorageMb
+            );
+        }
+        if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
+            $this->quotaManager->assertFileCount(
+                $disk,
+                $this->claims->pathPrefix,
+                1,
+                $this->claims->maxFiles
+            );
+        }
+
         $fs->copy($scopedFrom, $scopedTo);
 
         $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo);
@@ -1279,6 +1302,21 @@ class FileManager
             throw new ApiException('File not found', 404, 'not_found');
         }
         $this->assertTargetAvailable($dstFs, $scopedDst);
+
+        // Quota check on destination — crossCopy() already does this; crossMove()
+        // writes the same way (writeStream to $dstFs) and must be bounded the
+        // same way, since QuotaManager enforces maxStorageMb per-disk, not
+        // globally, so moving in from an unconstrained disk must still respect
+        // the destination's cap.
+        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
+            $fileSize = $srcFs->fileSize($scopedSrc);
+            $this->quotaManager->assertQuota(
+                $dstDisk,
+                $this->claims->pathPrefix,
+                $fileSize,
+                $this->claims->maxStorageMb
+            );
+        }
 
         $stream = $srcFs->readStream($scopedSrc);
         try {
@@ -1564,6 +1602,11 @@ class FileManager
         $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
         $this->assertNotSystem($scopedDst);
         if ($savePath !== null) {
+            // Extension is immutable — a "save as" crop keeps the source format,
+            // same rule applyWatermark() enforces.
+            if (strtolower(pathinfo($scopedDst, PATHINFO_EXTENSION)) !== $ext) {
+                throw new ApiException('Cannot change the file extension', 422, 'ext_changed');
+            }
             $this->validateUploadName(basename($scopedDst), 0);
             // "Save as" to a different path must not silently clobber an existing file
             // (in-place crop, where dst == src, is still allowed to overwrite).
@@ -1571,7 +1614,7 @@ class FileManager
                 $this->assertTargetAvailable($fs, $scopedDst);
             }
         }
-        $fs->write($scopedDst, $result['data']);
+        $this->writeScopedFile($disk, $scopedDst, $result['data']);
         if ($scopedDst !== $scopedSrc) {
             // "Save as copy" creates a new file — carry over metadata (title/tags/
             // uploaded_by) and register it in the search + folder index, same as copy().
@@ -1676,7 +1719,7 @@ class FileManager
             $this->validateUploadName(basename($scopedDst), 0);
             $this->assertTargetAvailable($fs, $scopedDst);
         }
-        $fs->write($scopedDst, $result['data']);
+        $this->writeScopedFile($disk, $scopedDst, $result['data']);
         if ($inPlace) {
             // Flag so the UI can offer "Remove watermark" (restore from backup).
             $this->meta->save($disk, $scopedDst, ['watermarked' => true]);
@@ -1801,17 +1844,30 @@ class FileManager
         $aiResult = $this->aiTagger->analyze($imageData, $mime);
         $existing = $this->meta->get($disk, $scoped);
 
+        // Merge instead of clobber: a re-tag (or a second AI provider) must not wipe
+        // tags the user added by hand. Dedup case-insensitively, keep first-seen casing.
+        $mergedTags = array_values(array_filter(array_map('trim', explode(',', (string) ($existing['tags'] ?? '')))));
+        $seen = array_map('strtolower', $mergedTags);
+        foreach (($aiResult['tags'] ?? []) as $tag) {
+            $tag = trim((string) $tag);
+            if ($tag === '' || in_array(strtolower($tag), $seen, true)) {
+                continue;
+            }
+            $mergedTags[] = $tag;
+            $seen[] = strtolower($tag);
+        }
+
         $data = [
             'title'    => (!empty($existing['title'])) ? $existing['title'] : ($aiResult['title'] ?? null),
             'alt_text' => (!empty($existing['alt_text'])) ? $existing['alt_text'] : ($aiResult['alt_text'] ?? null),
             'caption'  => (!empty($existing['caption'])) ? $existing['caption'] : ($aiResult['caption'] ?? null),
-            'tags'     => implode(', ', $aiResult['tags'] ?? []),
+            'tags'     => implode(', ', $mergedTags),
         ];
 
         $this->meta->save($disk, $scoped, $data);
 
         return [
-            'tags'     => $aiResult['tags'] ?? [],
+            'tags'     => $mergedTags,
             'title'    => $data['title'],
             'alt_text' => $data['alt_text'],
             'caption'  => $data['caption'],
@@ -2019,6 +2075,17 @@ class FileManager
         $config = $this->disks->config($disk);
 
         if (($config['driver'] ?? '') !== 's3') {
+            // Gated local / SFTP media has no S3-style presigned URL — mint a fresh
+            // tokened /api/fm/stream URL instead so a <video>/<audio> element on
+            // these disks can also recover from an expired stream token (the same
+            // /api/fm/presign call the S3 branch below serves).
+            if ($method === 'GET' && ($this->isGatedLocal($config) || (($config['driver'] ?? '') === 'sftp' && $this->streamSecret !== ''))) {
+                $streamTtl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
+                return [
+                    'url'        => $this->gatedLocalUrl($disk, $scoped),
+                    'expires_at' => time() + $streamTtl,
+                ];
+            }
             throw new ApiException('Presigned URLs are only available for S3/R2 disks', 400);
         }
 
@@ -2904,6 +2971,11 @@ class FileManager
      */
     private function assertRelocationExt(string $scopedFrom, string $scopedTo): void
     {
+        // Only rename() used to call assertSafeFilename() — move/copy/crossMove/
+        // crossCopy all funnel through here, so checking it once here closes the
+        // double-extension gap (e.g. "shell.php.jpg") for all four at once.
+        $this->assertSafeFilename(basename($scopedTo));
+
         $srcExt = strtolower(pathinfo($scopedFrom, PATHINFO_EXTENSION));
         $dstExt = strtolower(pathinfo($scopedTo, PATHINFO_EXTENSION));
         if ($srcExt !== $dstExt) {

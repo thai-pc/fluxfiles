@@ -71,6 +71,18 @@ class RateLimiterFileStorage
                 $data = [];
             }
 
+            // Prune keys whose entries have all aged out of the window. Without this
+            // the file grows forever: every distinct userId:actionType pair that ever
+            // hit the API stays in $data, even long after its entries expired.
+            foreach ($data as $k => $entries) {
+                $fresh = array_values(array_filter((array) $entries, fn($ts) => $ts > $windowStart));
+                if (empty($fresh)) {
+                    unset($data[$k]);
+                } else {
+                    $data[$k] = $fresh;
+                }
+            }
+
             $key = $userId . ':' . $actionType;
             $entries = $data[$key] ?? [];
             $entries = array_values(array_filter($entries, fn($ts) => $ts > $windowStart));

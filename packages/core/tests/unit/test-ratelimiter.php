@@ -201,6 +201,30 @@ test('Rate limit resets after window expires', function () use ($testFile) {
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► Stale key pruning{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('an inactive userId:actionType key is pruned once its entries age out', function () use ($testFile) {
+    @unlink($testFile);
+    // 1s window so "user-old"'s entry expires almost immediately.
+    $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 5, writeLimit: 5, windowSeconds: 1);
+    $limiter->check('user-old', 'read');
+
+    $data = json_decode(file_get_contents($testFile), true);
+    assertEqual(true, isset($data['user-old:read']), 'key present right after the request');
+
+    sleep(2);
+
+    // A different user's request is what triggers the prune sweep — it must not
+    // leave user-old's now-stale key sitting in the file forever.
+    $limiter->check('user-new', 'read');
+
+    $data = json_decode(file_get_contents($testFile), true);
+    assertEqual(false, isset($data['user-old:read']), 'stale key pruned from the file');
+    assertEqual(true, isset($data['user-new:read']), 'active key still present');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
 

@@ -121,6 +121,24 @@ class DiskManager
             if (!empty($cfg['endpoint'])) {
                 $s3Params['endpoint'] = $cfg['endpoint'];
                 $s3Params['use_path_style_endpoint'] = true;
+
+                // Pin the connection to the IP CredentialEncryptor::validate() already
+                // resolved+validated this request (see Claims::fromJwtPayload), instead
+                // of letting curl re-resolve the host at actual-connect time — which
+                // could be much later in the request and is exactly the DNS-rebinding
+                // TOCTOU window UrlImporter::assertConnectedIpSafe() defends against
+                // for plain fetches. CURLOPT_RESOLVE keeps the original host for TLS
+                // SNI/cert verification while forcing the connection to that one IP.
+                // No pin (e.g. this disk wasn't built from a JWT-decoded BYOB config,
+                // or the host didn't resolve at validation time) → unchanged behavior.
+                if (!empty($cfg['_pinned_ip'])) {
+                    $epHost = strtolower(trim((string) (parse_url((string) $cfg['endpoint'], PHP_URL_HOST) ?? ''), '[]'));
+                    $epPort = parse_url((string) $cfg['endpoint'], PHP_URL_PORT)
+                        ?? (strtolower((string) parse_url((string) $cfg['endpoint'], PHP_URL_SCHEME)) === 'http' ? 80 : 443);
+                    if ($epHost !== '') {
+                        $s3Params['http']['curl'][CURLOPT_RESOLVE] = ["{$epHost}:{$epPort}:{$cfg['_pinned_ip']}"];
+                    }
+                }
             }
 
             $client = new S3Client($s3Params);
@@ -193,8 +211,15 @@ class DiskManager
         }
         // Reuse the SSRF denylist (same guard the BYOB S3 endpoint check uses):
         // reject loopback / RFC1918 / link-local / CGNAT / cloud-metadata targets.
+        // Connect to the validated IP itself rather than the hostname — SFTP has no
+        // TLS/SNI to preserve, so pinning to the already-checked IP (instead of
+        // letting phpseclib re-resolve the host moments later) closes the same
+        // DNS-rebinding TOCTOU window the BYOB S3 endpoint pin closes.
         if (\class_exists('\\FluxFiles\\SsrfGuard')) {
-            SsrfGuard::assertHostSafe($host);
+            $safeIps = SsrfGuard::assertHostSafe($host);
+            if ($safeIps !== [] && !filter_var($host, FILTER_VALIDATE_IP)) {
+                $host = $safeIps[0];
+            }
         }
         // Host-key pinning: when a fingerprint is configured, the provider rejects
         // a server whose host key doesn't match (anti-MITM). Comma-separated →

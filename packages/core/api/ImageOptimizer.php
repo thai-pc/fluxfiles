@@ -76,6 +76,44 @@ class ImageOptimizer
     }
 
     /**
+     * Decompression-bomb guard for byte-buffer inputs (crop/watermark-burn).
+     * transform() inlines its own copy of this check because a bomb there
+     * should silently fall back to serving the original — these callers are
+     * explicit destructive writes, so a bomb here must fail loudly instead.
+     *
+     * @return array{0:int,1:int} [width, height]
+     */
+    private static function assertDecodableBytes(string $imageData): array
+    {
+        $info = @getimagesizefromstring($imageData);
+        if ($info === false) {
+            throw new ApiException('Not a decodable image', 415, 'image_undecodable');
+        }
+        [$w, $h] = $info;
+        if ($w <= 0 || $h <= 0 || ($w * $h) > self::MAX_SOURCE_PIXELS) {
+            throw new ApiException('Image exceeds maximum decodable size', 413, 'image_too_large');
+        }
+        return [$w, $h];
+    }
+
+    /**
+     * Same guard as assertDecodableBytes(), for a file already on disk
+     * (process() reads a tmp file, not a byte buffer) — reads only the
+     * header via getimagesize() instead of loading the full file.
+     */
+    private static function assertDecodablePath(string $path): void
+    {
+        $info = @getimagesize($path);
+        if ($info === false) {
+            throw new ApiException('Not a decodable image', 415, 'image_undecodable');
+        }
+        [$w, $h] = $info;
+        if ($w <= 0 || $h <= 0 || ($w * $h) > self::MAX_SOURCE_PIXELS) {
+            throw new ApiException('Image exceeds maximum decodable size', 413, 'image_too_large');
+        }
+    }
+
+    /**
      * @return array{data: string, mime: string, width: int, height: int}
      */
     public function crop(
@@ -87,6 +125,17 @@ class ImageOptimizer
         string $format = 'png',
         int $quality = 90
     ): array {
+        [$srcW, $srcH] = self::assertDecodableBytes($imageData);
+
+        // Clamp the crop box to the source bounds — Intervention pads an
+        // out-of-bounds crop with background color instead of erroring, so an
+        // unclamped request (e.g. width=50000 on a 200px source) allocates a
+        // canvas that size regardless of the actual source content.
+        $x = max(0, min($x, $srcW - 1));
+        $y = max(0, min($y, $srcH - 1));
+        $width = max(1, min($width, $srcW - $x));
+        $height = max(1, min($height, $srcH - $y));
+
         $image = $this->manager->read($imageData);
         $image = $image->crop($width, $height, $x, $y);
 
@@ -126,6 +175,8 @@ class ImageOptimizer
      */
     public function burnWatermark(string $imageData, array $wm, string $format = 'png', int $quality = 90): array
     {
+        self::assertDecodableBytes($imageData);
+
         $image = $this->manager->read($imageData);
         $x = (float) ($wm['x'] ?? 0.7);
         $y = (float) ($wm['y'] ?? 0.85);
@@ -314,6 +365,8 @@ class ImageOptimizer
         string $filePath,
         string $tmpFile
     ): array {
+        self::assertDecodablePath($tmpFile);
+
         $dir = dirname($filePath);
         // Include the FULL filename (with extension) so `a.jpg` and `a.png` get
         // distinct variants (`a.jpg_thumb.webp` vs `a.png_thumb.webp`) instead of
