@@ -42,6 +42,13 @@ class FileManager
      *            no versions. Called before an overwrite in putContent / upload. */
     private $versionKeeper = null;
 
+    /** @var callable|null Erase all version history of a file being permanently deleted,
+     *            for the paid Versioning module. `fn(string $disk, string $scopedKey, $fs): void`.
+     *            Set ONLY when the module is installed + licensed. Without this, `/delete`
+     *            would remove the live file but leave a restorable version behind — not
+     *            actually permanent. Called from delete() for the single-file case. */
+    private $versionPurger = null;
+
     /** @var callable|null Virus scan of a locally-staged file, for the paid Virus module:
      *            `fn(string $localPath): array{clean:bool, threat:?string}`. Set ONLY when
      *            the `allow_virus_scan` claim is on — and the wiring layer resolves the
@@ -95,6 +102,17 @@ class FileManager
     }
 
     /**
+     * Wire the version purger (paid Versioning module). The callback erases the full
+     * version history of a file that's being permanently deleted:
+     * `fn(string $disk, string $scopedKey, $fs): void`. Set only when the module is
+     * installed + licensed, so the free core has nothing to purge.
+     */
+    public function setVersionPurger(callable $fn): void
+    {
+        $this->versionPurger = $fn;
+    }
+
+    /**
      * Wire the virus scanner (paid Virus module). The callback scans a file staged on
      * local disk: `fn(string $localPath): array{clean:bool, threat:?string}`. Set only
      * when the token carries `allow_virus_scan`; the module/licence gate is resolved
@@ -140,6 +158,19 @@ class FileManager
             ($this->versionKeeper)($disk, $scopedKey, $fs);
         } catch (\Throwable $e) {
             error_log('FluxFiles: version snapshot failed — ' . $e->getMessage());
+        }
+    }
+
+    /** Erase version history of $scopedKey on permanent delete (no-op if no purger). */
+    private function purgeVersions(string $disk, string $scopedKey, $fs): void
+    {
+        if ($this->versionPurger === null) {
+            return;
+        }
+        try {
+            ($this->versionPurger)($disk, $scopedKey, $fs);
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: version purge failed — ' . $e->getMessage());
         }
     }
 
@@ -607,6 +638,7 @@ class FileManager
                 }
             } else {
                 $this->deleteVariants($disk, $scoped);
+                $this->purgeVersions($disk, $scoped, $fs);
                 $fs->delete($scoped);
                 $this->meta->delete($disk, $scoped);
             }
@@ -2999,5 +3031,43 @@ class FileManager
             }
         }
         $fs->write($scopedPath, $content);
+    }
+
+    /**
+     * Stream-based counterpart to writeScopedFile() for module writes too large to
+     * buffer as a string (Backup's cross-disk sync). Same ext/filename/virus-scan
+     * checks; stages $stream to a local temp file so the scanner (which needs a
+     * local path) can see it regardless of either disk's driver, then streams that
+     * temp file to the destination — never holds the whole file in PHP memory.
+     */
+    public function writeScopedStream(string $disk, string $scopedPath, $stream): void
+    {
+        $this->assertExt(strtolower(pathinfo($scopedPath, PATHINFO_EXTENSION)));
+        $this->assertSafeFilename(basename($scopedPath));
+
+        $fs = $this->disks->disk($disk);
+        $tmp = tempnam(sys_get_temp_dir(), 'ffwss');
+        if ($tmp === false) {
+            throw new ApiException('Could not stage content for scanning', 500, 'virus_failed');
+        }
+        try {
+            $out = fopen($tmp, 'wb');
+            if ($out === false) {
+                throw new ApiException('Could not stage content for scanning', 500, 'virus_failed');
+            }
+            stream_copy_to_stream($stream, $out);
+            fclose($out);
+            if ($this->virusScanner !== null) {
+                $this->assertNoVirus($tmp, basename($scopedPath));
+            }
+            $in = fopen($tmp, 'rb');
+            if ($in === false) {
+                throw new ApiException('Could not stage content for write', 500, 'virus_failed');
+            }
+            $fs->writeStream($scopedPath, $in);
+            if (is_resource($in)) { fclose($in); }
+        } finally {
+            @unlink($tmp);
+        }
     }
 }

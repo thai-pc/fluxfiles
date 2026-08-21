@@ -291,6 +291,11 @@ try {
         $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager) {
             $versioning->keep($fs, $key, $claims, $diskManager, $d);
         });
+        // Erase version history on permanent delete, so `/delete` can't be undone via
+        // a restore of a version saved before it — see VersioningModule::purge().
+        $fm->setVersionPurger(static function (string $d, string $key, $fs) use ($versioning, $diskManager) {
+            $versioning->purge($fs, $key, $diskManager, $d);
+        });
     }
 
     // Virus scan (paid module). Wired whenever the token asks for it — and ONLY on the

@@ -62,6 +62,17 @@ class AiTagger
     ];
 
     private const MAX_IMAGE_WIDTH = 1024;
+
+    /**
+     * Decompression-bomb guard, same bound as ImageOptimizer::MAX_SOURCE_PIXELS:
+     * refuse to decode a source whose pixel count is absurd (a few-KB file can
+     * claim 30000×30000). 30 MP ≈ a 6720×4480 photo — well above any real upload,
+     * far below a memory-exhausting bomb. Unlike ImageOptimizer's on-demand /img
+     * transforms, ai_auto_tag runs unconditionally on upload — this path had no
+     * such check before, so it was reachable by any authenticated uploader,
+     * without a license, whenever ai_auto_tag was on.
+     */
+    private const MAX_SOURCE_PIXELS = 30000000;
     private const MAX_TOKENS = 2048;
 
     /** Media types every provider accepts; anything else is re-encoded as JPEG. */
@@ -296,6 +307,15 @@ PROMPT;
     private function resizeForApi(string $imageData): string
     {
         try {
+            $info = @getimagesizefromstring($imageData);
+            if ($info === false) {
+                return $imageData; // not a raster image GD can decode → send as-is
+            }
+            [$srcW, $srcH] = $info;
+            if ($srcW <= 0 || $srcH <= 0 || ($srcW * $srcH) > self::MAX_SOURCE_PIXELS) {
+                return $imageData; // decompression-bomb guard: skip resize, send original bytes untouched
+            }
+
             $image = imagecreatefromstring($imageData);
             if ($image === false) {
                 return $imageData;
