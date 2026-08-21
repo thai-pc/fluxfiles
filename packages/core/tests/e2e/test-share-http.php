@@ -448,7 +448,7 @@ try {
                 $s = $mint(['path' => 'reports/q3.pdf', 'password' => 's3cret', 'label' => 'Q3']);
                 [$st, , $j] = reqJson('POST', "{$B}/api/fm/share/unlock", ['json' => ['token' => $s['token'], 'password' => 'wrong']]);
                 assertEqual(401, $st);
-                assertEqual('share_password', $j['error_code'] ?? null);
+                assertEqual('share_password_wrong', $j['error_code'] ?? null);
                 assertTrue(strpos(json_encode($j), 'q3.pdf') === false, 'a failed attempt reveals nothing');
 
                 [$st2, , $j2] = reqJson('POST', "{$B}/api/fm/share/unlock", ['json' => ['token' => $s['token'], 'password' => 's3cret']]);

@@ -26,7 +26,9 @@ declare(strict_types=1);
 
 use FluxFiles\ApiException;
 use FluxFiles\DiskManager;
+use FluxFiles\FileManager;
 use FluxFiles\RateLimiterFileStorage;
+use FluxFiles\StorageMetadataHandler;
 
 /**
  * One string request parameter, safe against an array-shaped param.

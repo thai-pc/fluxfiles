@@ -1271,23 +1271,28 @@ function fluxFilesApp() {
             }
         },
 
-        folderContextMenu(folder, event) {
-            // Mobile: show action sheet instead of context menu
+        // Right-click on a file or folder card: mobile gets the action sheet
+        // (bottom drawer), desktop gets a small menu positioned at the cursor.
+        itemContextMenu(item, event) {
             if (window.innerWidth <= 768) {
-                this.mobileActionSheet = folder;
+                this.mobileActionSheet = item;
                 return;
             }
-            // Desktop: select folder and trigger delete confirm
-            this.selected = [folder];
-            this.confirmDelete();
-        },
-
-        openActionSheet(item) {
-            this.mobileActionSheet = item;
+            const menuW = 190, menuH = 250, pad = 8;
+            this.desktopContextMenu = {
+                item,
+                x: Math.max(pad, Math.min(event.clientX, window.innerWidth - menuW - pad)),
+                y: Math.max(pad, Math.min(event.clientY, window.innerHeight - menuH - pad)),
+            };
         },
 
         closeActionSheet() {
             this.mobileActionSheet = null;
+        },
+
+        desktopContextMenu: null,   // { item, x, y } or null
+        closeDesktopContextMenu() {
+            this.desktopContextMenu = null;
         },
 
         // Bulk progress helper

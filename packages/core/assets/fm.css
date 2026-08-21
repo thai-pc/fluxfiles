@@ -3005,6 +3005,46 @@ body {
     gap: 6px;
 }
 
+/* ── Desktop right-click context menu (file/folder cards) ── */
+.ff-context-menu-catcher {
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    background: transparent;
+}
+
+.ff-context-menu {
+    position: fixed;
+    z-index: 251;
+    min-width: 170px;
+    background: var(--color-background-primary);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.ff-context-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 8px;
+    text-align: start;
+}
+
+.ff-context-menu button:hover { background: var(--color-background-secondary); }
+.ff-context-menu button svg { flex-shrink: 0; color: var(--color-text-tertiary); }
+.ff-context-menu .ff-more-divider { height: 0.5px; background: var(--color-border-tertiary); margin: 4px 0; }
+.ff-context-menu .ff-more-danger { color: var(--color-text-danger) !important; }
+.ff-context-menu .ff-more-danger svg { color: var(--color-text-danger) !important; }
+
 /* ══════════════════════════ Responsive Mobile ══════════════════════════ */
 @media (max-width: 768px) {
     :root {
@@ -3062,6 +3102,9 @@ body {
     .ff-logo { font-size: 14px; }
     .ff-sep-desktop { display: none; }
     .ff-disk-pills-desktop { display: none; }
+    /* Right-click always opens the mobile action sheet below this width (see
+       itemContextMenu in fm.js) — the desktop menu should never render here. */
+    .ff-context-menu-catcher, .ff-context-menu { display: none !important; }
 
     /* Mobile search icon button */
     .ff-mobile-search-btn {
@@ -3284,6 +3327,11 @@ body {
     .ff-more-danger { color: var(--color-text-danger) !important; }
     .ff-more-danger svg { color: var(--color-text-danger) !important; }
 
+    /* .ff-pro-pill is normally an absolutely-positioned corner badge on a small
+       square toolbar button; in this wide list row it needs to sit inline at
+       the end instead of floating off the top-right corner. */
+    .ff-more-menu .ff-pro-pill { position: static; margin-inline-start: auto; }
+
     /* ── File grid ── */
     .file-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -3482,6 +3530,13 @@ body {
         padding-bottom: max(8px, env(safe-area-inset-bottom, 0));
     }
 
+    /* Share/intake/chmod/editor/office/esign are opened from buttons inside the
+       detail panel, which is a fullscreen sheet on mobile (z-index 150 above).
+       The desktop 60-64 stacking order for .ff-modal-overlay is oblivious to
+       that, so those dialogs would otherwise open invisibly behind it. Inline
+       z-index styles need !important to be overridden here. */
+    .ff-modal-overlay { z-index: 400 !important; }
+
     .ff-sheet-handle {
         width: 36px;
         height: 4px;
@@ -3565,6 +3620,23 @@ body {
     }
 
     .ff-new-folder-modal { padding: 24px 20px; }
+
+    /* Activity/Doctor/Trash/Usage/Links panels all share .ff-activity-table, which
+       has too many columns (label/target/expires/counts/link/actions) to fit a
+       phone screen without crushing every cell unreadably thin. Use the full width
+       and let the table itself scroll horizontally instead. */
+    .ff-activity-modal,
+    .ff-doctor-modal,
+    .ff-trash-modal,
+    .ff-usage-modal,
+    .ff-links-modal,
+    .ff-links-panel,
+    .ff-chmod-modal {
+        width: 96vw;
+        max-height: 90vh;
+    }
+    .ff-activity-body { padding: 8px 12px 16px; -webkit-overflow-scrolling: touch; }
+    .ff-activity-table { min-width: 640px; }
 
     /* ── Status bar — hide on mobile when bottom bar active ── */
     .ff-status-bar {
