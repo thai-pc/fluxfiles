@@ -156,6 +156,110 @@ test('protected share: nothing but the prompt until unlock, then the card + a gr
   expect(hits[0]).not.toContain('s3cret');
 });
 
+test('download button is disabled when remaining downloads is 0', async ({ page }) => {
+  await page.route('**/api/fm/share/info*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: card({ downloads: 5, max_downloads: 5, remaining: 0 }), error: null }),
+    })
+  );
+  await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+  await expect(page.locator('#download')).toBeDisabled();
+  await expect(page.locator('#download')).toHaveText('No downloads remaining');
+  await expect(page.locator('#meta')).toContainText('0 download(s) left');
+});
+
+test('a failing download shows the error on the card, not a raw JSON navigation', async ({ page }) => {
+  await page.route('**/api/fm/share/info*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: card(), error: null }) })
+  );
+  await page.route('**/api/fm/share/file*', (route) =>
+    route.fulfill({
+      status: 410,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: null, error: 'This link has been used up.', error_code: 'share_exhausted' }),
+    })
+  );
+  await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+  await page.locator('#download').click();
+
+  await expect(page.locator('#dlerr')).toContainText('used up');
+  // The main document never navigated away to the raw JSON body.
+  expect(page.url()).toContain('/public/share.html');
+  await expect(page.locator('#view')).toBeVisible();
+  await expect(page.locator('#download')).toBeDisabled();
+  await expect(page.locator('#download')).toHaveText('No downloads remaining');
+});
+
+test('an invalid grant on download re-locks the card instead of a dead end', async ({ page }) => {
+  const expires = Math.floor(Date.now() / 1000) + 3600;
+  await page.route('**/api/fm/share/info*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { has_password: true, expires, brand: null }, error: null }),
+    })
+  );
+  await page.route('**/api/fm/share/unlock', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { ...card({ has_password: true }), grant: 'GRANT.TOK.EN', grant_expires: expires }, error: null }),
+    })
+  );
+  await page.route('**/api/fm/share/file*', (route) =>
+    route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: null, error: 'Your unlock expired.', error_code: 'share_grant_invalid' }),
+    })
+  );
+
+  await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+  await page.locator('#pw').fill('s3cret');
+  await page.locator('#unlock').click();
+  await expect(page.locator('#view')).toBeVisible();
+
+  await page.locator('#download').click();
+  await expect(page.locator('#lock')).toBeVisible();
+  await expect(page.locator('#view')).toBeHidden();
+  await expect(page.locator('#lockmeta')).toContainText('expired');
+  await expect(page.locator('#pw')).toHaveValue('');
+});
+
+test('a grant past its own expiry re-locks without ever hitting the server', async ({ page }) => {
+  const alreadyExpired = Math.floor(Date.now() / 1000) - 5;
+  await page.route('**/api/fm/share/info*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { has_password: true, expires: alreadyExpired + 3600, brand: null }, error: null }),
+    })
+  );
+  await page.route('**/api/fm/share/unlock', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { ...card({ has_password: true }), grant: 'GRANT.TOK.EN', grant_expires: alreadyExpired }, error: null }),
+    })
+  );
+  const hits: string[] = [];
+  await page.route('**/api/fm/share/file*', (route) => {
+    hits.push(route.request().url());
+    return route.abort();
+  });
+
+  await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+  await page.locator('#pw').fill('s3cret');
+  await page.locator('#unlock').click();
+  await expect(page.locator('#view')).toBeVisible();
+
+  await page.locator('#download').click();
+  await expect(page.locator('#lock')).toBeVisible();
+  expect(hits.length).toBe(0); // caught client-side, never round-tripped to the server
+});
+
 test('preview: an image renders as <img>, a pdf as an <iframe>, and only when the server sent a URL', async ({ page }) => {
   await page.route('**/api/fm/share/info*', (route) =>
     route.fulfill({

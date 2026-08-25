@@ -35,19 +35,21 @@
     .preview iframe { display:block; width:100%; height:420px; border:0; }
     .msg { padding:14px; border-radius:10px; font-size:14px; text-align:center; }
     .msg.err { background:rgba(220,38,38,.1); color:var(--err); }
+    .dlerr { color:var(--err); font-size:12.5px; text-align:center; margin-top:10px; }
     .hidden { display:none; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div id="gate" class="msg err hidden"></div>
+    <div id="gate" class="msg err hidden" role="alert"></div>
 
     <div id="lock" class="hidden">
       <h1>Password required</h1>
       <p class="sub">This link is protected. Enter the password to continue.</p>
+      <label for="pw" class="hidden">Password</label>
       <input type="password" id="pw" placeholder="Password" autocomplete="off">
       <button id="unlock" type="button">Unlock</button>
-      <div class="meta" id="lockmeta"></div>
+      <div class="meta" id="lockmeta" role="alert"></div>
     </div>
 
     <div id="view" class="hidden">
@@ -55,6 +57,7 @@
       <p class="sub" id="label"></p>
       <div class="preview hidden" id="preview"></div>
       <button id="download" type="button">Download</button>
+      <div class="dlerr hidden" id="dlerr" role="alert"></div>
       <div class="meta" id="meta"></div>
     </div>
   </div>
@@ -66,6 +69,7 @@
       var $ = function (id) { return document.getElementById(id); };
       var gate = $('gate'), lock = $('lock'), view = $('view');
       var grant = '';
+      var grantExpires = 0;
       // Where the API lives. Defaults to the standalone layout; a host that serves
       // this page from elsewhere (the WordPress plugin serves it out of wp-content,
       // with the API under /wp-json/…) sets window.__FM_API_BASE__ before this script
@@ -88,6 +92,76 @@
       function when(ts) {
         if (!ts) return '';
         try { return new Date(ts * 1000).toLocaleString(); } catch (e) { return ''; }
+      }
+
+      // A recipient re-enters the password after the grant (600s TTL) lapses — this
+      // is the ONLY way back to the lock screen once unlocked, and it clears the
+      // stale grant so a retried download can't replay it.
+      function requireReauth(msg) {
+        grant = ''; grantExpires = 0;
+        view.classList.add('hidden');
+        $('pw').value = '';
+        $('lockmeta').textContent = msg || 'Your unlock expired — please enter the password again.';
+        lock.classList.remove('hidden');
+      }
+
+      // The download route is stateful (it counts against max_downloads on every
+      // successful hit, and on S3/R2 that hit's response IS a cross-origin 302 to a
+      // presigned URL). That means it can only ever be called ONCE per click — a
+      // separate "check" request would burn a second download for one click, and a
+      // plain `fetch` that follows the redirect would need S3 to allow this origin
+      // in its CORS policy, which isn't guaranteed. So the ONLY safe way to trigger
+      // it is a real navigation. A hidden iframe gets us that, while keeping the
+      // user on the card: our own error responses are always same-origin JSON with
+      // no attachment header, so they land in the iframe's (readable) document; a
+      // real file — local/sftp bytes or the followed S3 redirect — either downloads
+      // without rendering into the frame or lands on a different origin, and either
+      // way `contentDocument` access throws or comes back empty, which we treat as
+      // success (nothing left to report — the browser's own download UI takes over).
+      function startDownload(url) {
+        var dl = $('download');
+        var errBox = $('dlerr');
+        var restoreText = dl.textContent;
+        errBox.classList.add('hidden'); errBox.textContent = '';
+        dl.disabled = true;
+
+        var frame = document.createElement('iframe');
+        frame.style.display = 'none';
+        // Set src BEFORE inserting: an iframe appended with no src first loads
+        // "about:blank" and fires its own load event, which would race with (and
+        // often preempt) the real navigation's load event below.
+        frame.src = url;
+        var done = false;
+        var timer = setTimeout(function () { finish(null, null); }, 6000);
+
+        function finish(errText, errCode) {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          if (frame.parentNode) { frame.parentNode.removeChild(frame); }
+
+          if (!errText) { dl.disabled = false; dl.textContent = restoreText; return; }
+          if (errCode === 'share_grant_invalid') { requireReauth(errText); return; }
+          if (errCode === 'share_exhausted') {
+            dl.disabled = true; dl.textContent = 'No downloads remaining';
+          } else {
+            dl.disabled = false; dl.textContent = restoreText;
+          }
+          errBox.textContent = errText; errBox.classList.remove('hidden');
+        }
+
+        frame.onload = function () {
+          var errText = null, errCode = null;
+          try {
+            var doc = frame.contentDocument;
+            var text = doc && doc.body ? doc.body.textContent : '';
+            var j = text ? JSON.parse(text) : null;
+            if (j && j.error) { errText = j.error; errCode = j.error_code || null; }
+          } catch (e) { /* cross-origin redirect (S3) or real file bytes → success */ }
+          finish(errText, errCode);
+        };
+
+        document.body.appendChild(frame);
       }
 
       if (!token) { fail('This link is missing its token.'); return; }
@@ -140,10 +214,27 @@
         if (info.remaining !== null && info.remaining !== undefined) { bits.push(info.remaining + ' download(s) left'); }
         $('meta').textContent = bits.join(' · ');
 
-        $('download').onclick = function () {
+        // The cap can already be at 0 on load (someone else used the last download
+        // between this page loading for them and for you) — don't offer a button
+        // that's guaranteed to fail.
+        var dl = $('download');
+        $('dlerr').classList.add('hidden'); $('dlerr').textContent = '';
+        if (info.remaining === 0) {
+          dl.disabled = true; dl.textContent = 'No downloads remaining';
+        } else {
+          dl.disabled = false; dl.textContent = 'Download';
+        }
+
+        dl.onclick = function () {
+          // The grant (600s TTL) can lapse while the card just sits open — catch
+          // that client-side instead of bouncing off a guaranteed server error.
+          if (grant && grantExpires && (Date.now() / 1000) >= grantExpires) {
+            requireReauth('Your unlock expired — please enter the password again.');
+            return;
+          }
           var url = API + '/share/file?token=' + encodeURIComponent(token) + '&dl=1';
           if (grant) { url += '&g=' + encodeURIComponent(grant); }
-          location.href = url;
+          startDownload(url);
         };
       }
 
@@ -164,6 +255,7 @@
               return;
             }
             grant = res.j.data.grant || '';
+            grantExpires = Number(res.j.data.grant_expires) || 0;
             lock.classList.add('hidden');
             render(res.j.data);
           })
