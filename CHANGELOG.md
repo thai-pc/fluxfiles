@@ -3,6 +3,64 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.91] — 2026-08-26
+
+> Released: modules `share v1.1.0`, `intake v1.1.0`, `versioning v1.1.0`, `webhooks v1.1.0`,
+> `ai v1.1.0`, `ocr v1.1.0`, `virus v1.1.0`, `backup v1.1.0`, `c2pa v1.1.0`. No core tag —
+> these are private-repo module releases only; each module's composer floor was bumped to
+> `^0.2.74` where it consumes a core API from that tag (`writeScopedFile`,
+> `writeScopedStream`, `assertCanReadTree`, `setVersionPurger`, `SsrfGuard::assertConnectedIpSafe`).
+
+### Fixed — security/reliability pass across all 9 paid modules
+
+Each of the 9 private paid modules had uncommitted fixes sitting alongside pending
+docs-only commits; batched into one `v1.1.0` per module rather than shipping the docs
+alone and leaving these unreleased:
+
+- **share**: `_fluxfiles/shares.json` writes now run under a per-tenant `flock()`
+  (create/download/revoke), closing a lost-update race on concurrent hits; the
+  password-wrong case now returns `share_password_wrong` instead of reusing
+  `share_password` (the "nothing submitted" code).
+- **intake**: same `flock()` treatment for `intakes.json`; `receiveUpload()` reserves a
+  slot atomically before the upload runs and releases it again on failure, so two
+  concurrent uploads near a portal's cap can't both land and a rejected file doesn't
+  permanently burn a reservation; `intake_password`/`intake_password_wrong` split;
+  `allow_virus_scan` now forwarded into the portal's own token so anonymous uploads get
+  the same fail-closed scan as authenticated ones.
+- **versioning**: the manifest read-modify-write (`keep()`, new `purge()`) is now
+  locked per version directory; `restore()` writes through `writeScopedFile()` so a
+  restored version re-runs the same ext/filename checks and virus scan as any other
+  write; new `purge()` erases a file's version history on permanent delete, wired via
+  `setVersionPurger()`, so `/delete` being "permanent" can't be undone by restoring an
+  older version.
+- **webhooks**: added a DNS-rebinding SSRF backstop — `SsrfGuard::assertConnectedIpSafe()`
+  re-checks the IP curl actually connected to after `curl_exec`, even on a failed
+  request, so a rebind that connects to an internal host can't leak its IP back to the
+  caller through the raw `curl_error()` text.
+- **ai**: AI-generated result bytes now write through `writeScopedFile()` instead of a
+  raw Flysystem write, picking up the same scoping/metadata enforcement as any other
+  write.
+- **ocr**: enforces a size cap (`max_upload_mb`, fallback 25MB) before reading a file
+  into memory, and a wall-clock timeout around the `tesseract` subprocess (SIGKILL +
+  `ocr_timeout` on expiry); the `-l` language arg is now whitelist-sanitized in an
+  extracted, unit-tested function.
+- **virus**: `scanWithClam()` is now bounded by `FLUXFILES_CLAMSCAN_TIMEOUT` (default
+  60s) — an unresponsive `clamd` is SIGTERM'd then SIGKILL'd and the write refused
+  (`virus_timeout`, fail-closed) instead of hanging the request forever.
+- **backup**: `run()` walks raw Flysystem, so `owner_only` was never actually enforced —
+  added an explicit `assertCanReadTree()` check before any copying starts; copies now
+  route through `writeScopedStream()` so synced bytes get ext/filename/virus-scan
+  checks; the per-run file cap now only counts files actually copied (skips are free),
+  so a subtree bigger than the cap converges over repeated scheduler runs instead of
+  hitting the same cutoff every time.
+- **c2pa**: `verify()`/`sign()` subprocess calls are now bounded by a 30s timeout
+  (SIGKILL + `c2pa_timeout`); `sign()` no longer returns `c2patool`'s raw stderr to the
+  caller (it could echo back server file-layout paths) — logged server-side instead;
+  signed output now writes through `writeScopedFile()`.
+
+No new claims and no `docs/CONFIG.md` changes — every fix uses claims/core APIs that
+already existed as of `core-v0.2.74`.
+
 ## [0.2.90] — 2026-08-26
 
 > Released: core `core-v0.2.74`. No adapter floor bump — everything in this entry is
