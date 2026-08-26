@@ -3,6 +3,65 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.90] — 2026-08-26
+
+> Released: core `core-v0.2.74`. No adapter floor bump — everything in this entry is
+> standalone-core (`public/share.html`, `Claims.php`, `lang/*.json`); no adapter touches
+> any of it.
+
+### Added — Branded Share (logo/name/color/link on the public landing page)
+
+`ShareModule::card()` and the password-gated `shareInfo()` stub have hardcoded
+`'brand' => null` since Share shipped — a deliberate seam the landing page's own copy
+("Branded Share" / "your logo, your domain") already sold against, unbuilt. Four new
+claims fill it: `share_brand_name` (≤80 chars), `share_brand_logo_url` (http/s only),
+`share_brand_color` (strict `#rgb`/`#rrggbb`), `share_brand_link_url` (http/s only) —
+sanitized in one `Claims::sanitizeShareBrand()`, the same flat-claim-family shape as
+`sanitizeWatermark()`. All four blank ⇒ `null`, so there's no separate enable flag.
+
+**Baked in at create time**, like `share_url_ttl`/`share_preview`: a public share link
+carries no JWT, so `ShareModule::createShare()` reads `$claims->shareBrand` once and
+writes it into the record. Changing an operator's brand claims only affects shares
+created afterward — existing shares keep whatever branding they were created with,
+same trade-off `url_ttl`/`preview` already accept.
+
+Rendering follows the same URL-scheme discipline as the existing `preview_url` case:
+`logo_url`/`link_url` are parsed with `new URL()` and only `http:`/`https:` protocols
+ever reach `img.src`/`a.href`; `color` is re-validated against the strict hex regex
+before it's written to `--accent` via `style.setProperty` — never string-interpolated
+into a `<style>` block. Shows on both the normal card and the password-lock screen
+(a recipient sees the operator's brand before entering the password).
+
+Tests: 5 new cases in `tests/browser/share-landing.spec.ts` (brand-null no-op, full
+render incl. `target=_blank rel=noopener noreferrer`, lock-screen rendering pre-unlock,
+hostile `javascript:`/`data:`/`vbscript:` schemes on both URL fields, invalid-color
+values left at the CSS default) plus the existing free-core `brand === null` regression
+coverage.
+
+### Fixed — the public download button dead-ended on a raw JSON error page
+
+The download route is stateful — every hit counts against `max_downloads`, and on
+S3/R2 a successful hit's response *is* a cross-origin 302 to a presigned URL — so it
+can only ever be triggered by a real navigation, not a `fetch` (a separate "check"
+request would burn a second download for one click, and following the S3 redirect
+needs CORS the bucket may not grant). `share.html` was doing exactly that:
+`location.href = url`, which meant any server error — link exhausted, grant expired —
+navigated the whole tab away to a bare `{"error":...}` body with no way back.
+
+Downloads now go through a hidden iframe: our own error responses are same-origin JSON
+and land in the iframe's readable `contentDocument`; real bytes or a followed
+cross-origin redirect either don't render into the frame or throw on access, and either
+is treated as success (the browser's own download UI takes over). `share_grant_invalid`
+re-locks the card and clears the stale grant instead of erroring; `share_exhausted`
+disables the button in place; a `grant_expires` (600s TTL) that's already lapsed is
+caught client-side on click, before a round-trip that was always going to fail. A `0`
+`remaining` on page load — someone else took the last download between their view and
+yours — now renders "No downloads remaining" up front instead of a doomed button.
+
+### Fixed — two missing i18n keys (`doctor.lifecycle_snippet`, `check.lifecycle`)
+
+Added across all 16 locales.
+
 ## [0.2.89] — 2026-08-06
 
 > Released: core `core-v0.2.73`. The Laravel and WordPress adapters gained a
