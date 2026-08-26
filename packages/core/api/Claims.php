@@ -185,6 +185,11 @@ class Claims
     /** @var bool May the landing page render an inline preview (images via
      *            /api/fm/img, PDFs on uncapped shares)? false = download-only. */
     public bool $sharePreview = true;
+    /** @var bool Log a per-event view/download/unlock_fail record (timestamp + IP +
+     *            user-agent) for a share, alongside the existing aggregate counters.
+     *            Off by default — persists visitor IPs (privacy/compliance footprint).
+     *            Baked into the share record at create time, like sharePreview. */
+    public bool $shareAnalytics = false;
     /** @var array{name:string,logo_url:string,color:string,link_url:string}|null
      *            Sanitized Share brand config (null = no branding). Baked into
      *            the share record at create time (ShareModule::createShare) —
@@ -510,6 +515,7 @@ class Claims
         $shareBase = trim((string) ($payload->share_base_url ?? ''));
         $c->shareBaseUrl = preg_match('#^https?://#i', $shareBase) ? $shareBase : '';
         $c->sharePreview = isset($payload->share_preview) ? (bool) $payload->share_preview : true;
+        $c->shareAnalytics = isset($payload->share_analytics) ? (bool) $payload->share_analytics : false;
         $c->shareBrand = self::sanitizeShareBrand($payload);
         $c->allowIntake = (bool) ($payload->allow_intake ?? false);
         // Intake portal link base — same http(s)-only rule as share_base_url.

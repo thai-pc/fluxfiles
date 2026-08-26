@@ -659,6 +659,21 @@ function routeRequest(
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->revokeShare($diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['jti'] ?? ''));
     }
+    // Share analytics — per-event view/download/unlock_fail log, opt-in via
+    // share_analytics (baked into the share record at create time). Same 3-layer
+    // gate; owner_only enforced inside analytics() like revokeShare().
+    if ($method === 'GET' && $uri === '/api/fm/share/analytics') {
+        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->analytics(
+            $diskManager,
+            $claims,
+            ff_str_param($_GET, 'disk', 'local'),
+            ff_str_param($_GET, 'jti'),
+            max(1, min(500, (int) ($_GET['limit'] ?? 100))),
+            max(0, (int) ($_GET['offset'] ?? 0)),
+            isset($_GET['event']) && $_GET['event'] !== '' ? ff_str_param($_GET, 'event') : null
+        );
+    }
     // Intake / Upload Portals — operator create + manage (public info/upload are
     // handled before auth). Same 3-layer gate (501/402/403).
     if ($method === 'POST' && $uri === '/api/fm/intake') {

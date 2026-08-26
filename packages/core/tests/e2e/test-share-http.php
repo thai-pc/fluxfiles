@@ -740,6 +740,55 @@ try {
                     'no more attempts than the total ceiling allows: ' . json_encode($codes));
             });
 
+            test('analytics: share_analytics=true records a view + download over real HTTP; off by default', function () use ($mint, $B, $PREFIX, $opHdr) {
+                $opAnalytics = fluxfiles_token(['user' => 'analyticsop', 'perms' => ['read', 'write'], 'disks' => ['local'], 'prefix' => $PREFIX,
+                    'ttl' => 600, 'claims' => ['allow_share' => true, 'share_analytics' => true]]);
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/share", [
+                    'json' => ['disk' => 'local', 'path' => 'reports/q3.pdf'],
+                    'headers' => ["Authorization: Bearer {$opAnalytics}"],
+                ]);
+                assertEqual(200, $st);
+                $s = $j['data'];
+
+                // Drive one view (the landing) + one download over real HTTP. curl sends
+                // no User-Agent by default, so set one explicitly to exercise the `ua`
+                // field end to end (PHP's built-in server never sees one otherwise).
+                $uaHdr = ['headers' => ['User-Agent: FluxFiles-e2e-test/1.0']];
+                [$stInfo] = req('GET', "{$B}/api/fm/share/info?token=" . rawurlencode($s['token']), $uaHdr);
+                assertEqual(200, $stInfo);
+                [$stFile] = req('GET', "{$B}/api/fm/share/file?token=" . rawurlencode($s['token']), $uaHdr);
+                assertEqual(200, $stFile);
+
+                [$stA, , $jA] = reqJson('GET', "{$B}/api/fm/share/analytics?disk=local&jti=" . rawurlencode($s['jti']),
+                    ['headers' => ["Authorization: Bearer {$opAnalytics}"]]);
+                assertEqual(200, $stA);
+                assertEqual($s['jti'], $jA['data']['jti']);
+                assertEqual(true, $jA['data']['analytics_enabled']);
+                assertEqual(2, $jA['data']['total']);
+                $types = array_column($jA['data']['events'], 'type');
+                sort($types);
+                assertEqual(['download', 'view'], $types);
+                foreach ($jA['data']['events'] as $ev) {
+                    assertTrue(is_string($ev['ip']), 'ip is a string (possibly empty over loopback)');
+                    assertEqual('FluxFiles-e2e-test/1.0', $ev['ua'], 'the ua sent on the request was captured');
+                    assertTrue($ev['ts'] > 0, 'a unix timestamp');
+                }
+
+                // event= filter narrows it.
+                [, , $jDl] = reqJson('GET', "{$B}/api/fm/share/analytics?disk=local&jti=" . rawurlencode($s['jti']) . '&event=download',
+                    ['headers' => ["Authorization: Bearer {$opAnalytics}"]]);
+                assertEqual(1, $jDl['data']['total']);
+                assertEqual('download', $jDl['data']['events'][0]['type']);
+
+                // A share minted WITHOUT share_analytics: off by default, no events, but
+                // still a clean 200 (never a bug-looking response).
+                $s2 = $mint(['path' => 'reports/q3.pdf']);
+                [$stOff, , $jOff] = reqJson('GET', "{$B}/api/fm/share/analytics?disk=local&jti=" . rawurlencode($s2['jti']), ['headers' => $opHdr]);
+                assertEqual(200, $stOff);
+                assertEqual(false, $jOff['data']['analytics_enabled']);
+                assertEqual([], $jOff['data']['events']);
+            });
+
             stop($srv3);
         }
     }
