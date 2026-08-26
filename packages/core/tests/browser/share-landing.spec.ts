@@ -327,6 +327,78 @@ test('preview: a non-FluxFiles preview_url is never assigned to iframe.src', asy
   }
 });
 
+test('brand: null renders nothing on the view card', async ({ page }) => {
+  await page.route('**/api/fm/share/info*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: card(), error: null }) })
+  );
+  await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+  await expect(page.locator('#view')).toBeVisible();
+  await expect(page.locator('#brandView')).toBeHidden();
+});
+
+test('brand: name, logo and link render on the view card', async ({ page }) => {
+  const brand = { name: 'Acme Corp', logo_url: 'https://acme.example/logo.png', color: '#123456', link_url: 'https://acme.example/' };
+  await page.route('**/api/fm/share/info*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: card({ brand }), error: null }) })
+  );
+  await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+  await expect(page.locator('#view')).toBeVisible();
+  await expect(page.locator('#brandView')).toBeVisible();
+  await expect(page.locator('#brandView img')).toHaveAttribute('src', brand.logo_url);
+  await expect(page.locator('#brandView')).toContainText(brand.name);
+  await expect(page.locator('#brandView a')).toHaveAttribute('href', brand.link_url);
+  await expect(page.locator('#brandView a')).toHaveAttribute('target', '_blank');
+  await expect(page.locator('#brandView a')).toHaveAttribute('rel', 'noopener noreferrer');
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  expect(accent).toBe(brand.color);
+});
+
+test('brand: also renders on the password-lock screen, before unlock', async ({ page }) => {
+  const expires = Math.floor(Date.now() / 1000) + 3600;
+  const brand = { name: 'Acme Corp', logo_url: 'https://acme.example/logo.png', color: '', link_url: '' };
+  await page.route('**/api/fm/share/info*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { has_password: true, expires, brand }, error: null }) })
+  );
+  await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+  await expect(page.locator('#lock')).toBeVisible();
+  await expect(page.locator('#brandLock')).toBeVisible();
+  await expect(page.locator('#brandLock img')).toHaveAttribute('src', brand.logo_url);
+  await expect(page.locator('#brandLock')).toContainText(brand.name);
+  // No link_url → no wrapping <a>, but the name/logo still show.
+  await expect(page.locator('#brandLock a')).toHaveCount(0);
+});
+
+test('brand: hostile logo_url/link_url schemes never reach img.src/a.href', async ({ page }) => {
+  for (const hostile of ['javascript:window.__pwned=1', 'data:text/html,<script>window.__pwned=1</script>', 'vbscript:msgbox(1)']) {
+    await page.unroute('**/api/fm/share/info*').catch(() => {});
+    const brand = { name: 'Acme Corp', logo_url: hostile, color: '', link_url: hostile };
+    await page.route('**/api/fm/share/info*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: card({ brand }), error: null }) })
+    );
+    await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+    await expect(page.locator('#view')).toBeVisible();
+    // Only the name is left — no logo, no link wrapper, since both were refused.
+    await expect(page.locator('#brandView img')).toHaveCount(0);
+    await expect(page.locator('#brandView a')).toHaveCount(0);
+    await expect(page.locator('#brandView')).toContainText(brand.name);
+    expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__pwned)).toBeUndefined();
+  }
+});
+
+test('brand: an invalid color is ignored, leaving --accent at its default', async ({ page }) => {
+  for (const bad of ['not-a-color', 'red', '#12345', 'javascript:alert(1)']) {
+    await page.unroute('**/api/fm/share/info*').catch(() => {});
+    const brand = { name: 'Acme Corp', logo_url: '', color: bad, link_url: '' };
+    await page.route('**/api/fm/share/info*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: card({ brand }), error: null }) })
+    );
+    await page.goto(`/public/share.html?token=${encodeURIComponent(TOKEN)}`);
+    // Default --accent is #7c3aed per the inline :root style — never overwritten by a bad value.
+    const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+    expect(accent.toLowerCase()).toBe('#7c3aed');
+  }
+});
+
 test('dark mode boots from the stored theme before first paint', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('fluxfiles_theme', 'dark'));
   await page.goto('/public/share.html');

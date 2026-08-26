@@ -185,6 +185,11 @@ class Claims
     /** @var bool May the landing page render an inline preview (images via
      *            /api/fm/img, PDFs on uncapped shares)? false = download-only. */
     public bool $sharePreview = true;
+    /** @var array{name:string,logo_url:string,color:string,link_url:string}|null
+     *            Sanitized Share brand config (null = no branding). Baked into
+     *            the share record at create time (ShareModule::createShare) —
+     *            a public request has no claims to read live. */
+    public ?array $shareBrand = null;
 
     /** @var string Public base the intake create response builds the portal link from
      *            (e.g. https://files.acme.com/public/intake.html). http(s) only —
@@ -352,6 +357,30 @@ class Claims
     }
 
     /**
+     * Assemble the per-tenant Share "brand" config from `share_brand_*` claims.
+     * Returns null when every field is empty — no explicit enabled flag needed
+     * (unlike watermark) since this is cosmetic display data with no serve-time
+     * cost. Done at decode so ShareModule::createShare() can bake a sanitized
+     * copy into the record.
+     *
+     * @return array{name:string,logo_url:string,color:string,link_url:string}|null
+     */
+    public static function sanitizeShareBrand(object $payload): ?array
+    {
+        $name = mb_substr(trim((string) ($payload->share_brand_name ?? '')), 0, 80);
+        $logo = trim((string) ($payload->share_brand_logo_url ?? ''));
+        $logo = preg_match('#^https?://#i', $logo) ? $logo : '';
+        $color = trim((string) ($payload->share_brand_color ?? ''));
+        $color = preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/i', $color) ? $color : '';
+        $link = trim((string) ($payload->share_brand_link_url ?? ''));
+        $link = preg_match('#^https?://#i', $link) ? $link : '';
+        if ($name === '' && $logo === '' && $color === '' && $link === '') {
+            return null;
+        }
+        return ['name' => $name, 'logo_url' => $logo, 'color' => $color, 'link_url' => $link];
+    }
+
+    /**
      * Normalize a responsive `srcset` width ladder: positive ints only, snapped to
      * 100px (the /api/fm/img cache grain) and clamped to webp_max_width (default
      * 2000), deduped, sorted ascending, capped at 12. A missing/empty/all-invalid
@@ -481,6 +510,7 @@ class Claims
         $shareBase = trim((string) ($payload->share_base_url ?? ''));
         $c->shareBaseUrl = preg_match('#^https?://#i', $shareBase) ? $shareBase : '';
         $c->sharePreview = isset($payload->share_preview) ? (bool) $payload->share_preview : true;
+        $c->shareBrand = self::sanitizeShareBrand($payload);
         $c->allowIntake = (bool) ($payload->allow_intake ?? false);
         // Intake portal link base — same http(s)-only rule as share_base_url.
         $intakeBase = trim((string) ($payload->intake_base_url ?? ''));

@@ -390,6 +390,54 @@ try {
                 assertTrue(strpos($raw, '"disk"') === false, "disk name leaked: {$raw}");
             });
 
+            test('operator: share_brand_* claims are baked into the record and returned to the recipient', function () use ($B, $PREFIX) {
+                $opBrand = fluxfiles_token(['user' => 'brandop', 'perms' => ['read', 'write'], 'disks' => ['local'], 'prefix' => $PREFIX,
+                    'ttl' => 600, 'claims' => [
+                        'allow_share' => true,
+                        'share_brand_name' => 'Acme Corp',
+                        'share_brand_logo_url' => 'https://acme.example/logo.png',
+                        'share_brand_color' => '#7c3aed',
+                        'share_brand_link_url' => 'https://acme.example',
+                    ]]);
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/share", [
+                    'json' => ['disk' => 'local', 'path' => 'reports/q3.pdf'],
+                    'headers' => ["Authorization: Bearer {$opBrand}"],
+                ]);
+                assertEqual(200, $st);
+                $s = $j['data'];
+
+                [$st2, , $j2] = reqJson('GET', "{$B}/api/fm/share/info?token=" . rawurlencode($s['token']));
+                assertEqual(200, $st2);
+                assertEqual([
+                    'name' => 'Acme Corp',
+                    'logo_url' => 'https://acme.example/logo.png',
+                    'color' => '#7c3aed',
+                    'link_url' => 'https://acme.example',
+                ], $j2['data']['brand'], 'brand baked in at create time');
+            });
+
+            test('operator: a token with no share_brand_* claims still mints brand=null', function () use ($mint, $B) {
+                $s = $mint(['path' => 'reports/q3.pdf']);
+                [$st, , $j] = reqJson('GET', "{$B}/api/fm/share/info?token=" . rawurlencode($s['token']));
+                assertEqual(200, $st);
+                assertEqual(null, $j['data']['brand'], 'no brand claims => null, unaffected');
+            });
+
+            test('password: brand is visible on the pre-unlock card too', function () use ($B, $PREFIX) {
+                $opBrand = fluxfiles_token(['user' => 'brandop2', 'perms' => ['read', 'write'], 'disks' => ['local'], 'prefix' => $PREFIX,
+                    'ttl' => 600, 'claims' => ['allow_share' => true, 'share_brand_name' => 'Acme Corp']]);
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/share", [
+                    'json' => ['disk' => 'local', 'path' => 'reports/q3.pdf', 'password' => 's3cret'],
+                    'headers' => ["Authorization: Bearer {$opBrand}"],
+                ]);
+                assertEqual(200, $st);
+                $s = $j['data'];
+                [$st2, , $j2] = reqJson('GET', "{$B}/api/fm/share/info?token=" . rawurlencode($s['token']));
+                assertEqual(200, $st2);
+                assertEqual(['has_password', 'expires', 'brand'], array_keys($j2['data']));
+                assertEqual('Acme Corp', $j2['data']['brand']['name'] ?? null, 'branding shown even before unlock');
+            });
+
             test('recipient: GET /share/file → the bytes, inline, with the hardening headers', function () use ($mint, $B) {
                 $s = $mint(['path' => 'reports/q3.pdf']);
                 [$st, $h, $body] = req('GET', "{$B}/api/fm/share/file?token=" . rawurlencode($s['token']));

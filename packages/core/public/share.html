@@ -37,6 +37,10 @@
     .msg.err { background:rgba(220,38,38,.1); color:var(--err); }
     .dlerr { color:var(--err); font-size:12.5px; text-align:center; margin-top:10px; }
     .hidden { display:none; }
+    .brand { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+    .brand img { height:28px; width:auto; border-radius:4px; }
+    .brand span { font-weight:600; font-size:14px; }
+    .brand a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:8px; }
   </style>
 </head>
 <body>
@@ -44,6 +48,7 @@
     <div id="gate" class="msg err hidden" role="alert"></div>
 
     <div id="lock" class="hidden">
+      <div id="brandLock" class="brand hidden"></div>
       <h1>Password required</h1>
       <p class="sub">This link is protected. Enter the password to continue.</p>
       <label for="pw" class="hidden">Password</label>
@@ -53,6 +58,7 @@
     </div>
 
     <div id="view" class="hidden">
+      <div id="brandView" class="brand hidden"></div>
       <h1 id="name">Shared file</h1>
       <p class="sub" id="label"></p>
       <div class="preview hidden" id="preview"></div>
@@ -92,6 +98,56 @@
       function when(ts) {
         if (!ts) return '';
         try { return new Date(ts * 1000).toLocaleString(); } catch (e) { return ''; }
+      }
+
+      // `brand` is operator-supplied (paid module config), so logo_url/link_url
+      // must be validated with a real URL parser (not a regex on the raw string —
+      // logo_url/link_url may legitimately point at ANY http(s) host, unlike
+      // preview_url which must match our own route allowlist) before ever
+      // touching img.src/a.href, and color is re-checked against a strict hex
+      // pattern before it reaches a CSS custom property.
+      function safeHttpUrl(raw) {
+        if (!raw) return '';
+        try {
+          var u = new URL(String(raw), location.href);
+          return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+        } catch (e) { return ''; }
+      }
+      function renderBrand(el, brand) {
+        el.innerHTML = '';
+        if (!brand) { el.classList.add('hidden'); return; }
+
+        var logo = safeHttpUrl(brand.logo_url);
+        var link = safeHttpUrl(brand.link_url);
+        var name = String(brand.name || '');
+        var has = false;
+
+        var container = document.createElement('span');
+        if (logo) {
+          var img = document.createElement('img');
+          img.src = logo; img.alt = name;
+          container.appendChild(img); has = true;
+        }
+        if (name) {
+          var label = document.createElement('span');
+          label.textContent = name;
+          container.appendChild(label); has = true;
+        }
+        container.style.display = 'contents';
+
+        if (link && has) {
+          var a = document.createElement('a');
+          a.href = link; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          a.appendChild(container);
+          el.appendChild(a);
+        } else {
+          el.appendChild(container);
+        }
+
+        if (brand.color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(brand.color)) {
+          document.documentElement.style.setProperty('--accent', brand.color);
+        }
+        el.classList.toggle('hidden', !has);
       }
 
       // A recipient re-enters the password after the grant (600s TTL) lapses — this
@@ -178,10 +234,12 @@
         // A protected share sends nothing but {has_password, expires, brand} — no
         // name, no size, no preview — until the password is exchanged for a grant.
         if (info.has_password && !info.file) {
+          renderBrand($('brandLock'), info.brand);
           show(lock);
           $('lockmeta').textContent = info.expires ? 'Expires ' + when(info.expires) : '';
           return;
         }
+        renderBrand($('brandView'), info.brand);
         show(view);
         var f = (info.files && info.files[0]) || info.file || {};
         $('name').textContent = f.name || 'Shared file';

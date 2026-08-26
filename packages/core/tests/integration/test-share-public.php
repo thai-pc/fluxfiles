@@ -382,6 +382,21 @@ test('payload: no preview → the card is passed through untouched, preview_url 
     assertEqual(null, $p['files'][0]['preview_url']);
 });
 
+test('payload: a non-null brand is passed through untouched (sanitized at create time, not here)', function () use ($card) {
+    $brand = ['name' => 'Acme Corp', 'logo_url' => 'https://acme.example/logo.png', 'color' => '#7c3aed', 'link_url' => 'https://acme.example'];
+    $out = $card(['brand' => $brand]);
+    $p = \ShareRoutes\ff_share_payload($out, 'sharetoken', str_repeat('k', 40));
+    assertEqual($brand, $p['brand'], 'brand is opaque display data — no re-validation here');
+});
+
+test('payload: a locked (pre-unlock) card with a brand still surfaces it', function () {
+    $brand = ['name' => 'Acme Corp', 'logo_url' => '', 'color' => '', 'link_url' => ''];
+    $locked = ['info' => ['has_password' => true, 'expires' => time() + 600, 'brand' => $brand], 'preview' => null];
+    $p = \ShareRoutes\ff_share_payload($locked, 'tok', str_repeat('k', 40));
+    assertEqual(['has_password', 'expires', 'brand'], array_keys($p));
+    assertEqual($brand, $p['brand']);
+});
+
 test('payload: an image preview is a scoped /img token, never the raw bytes route', function () use ($card) {
     $secret = str_repeat('k', 40);
     $out = $card();
