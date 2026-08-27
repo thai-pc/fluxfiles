@@ -3,6 +3,58 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.93] — 2026-08-27
+
+> Released: `core-v0.2.76`, module `intake v1.2.0`. Intake's composer floor bumped to
+> `^0.2.76` (the new `/api/fm/intake/analytics` route calls `IntakeModule::analytics()`
+> directly).
+
+### Added — Intake branding + per-event analytics
+
+Deepens Intake (the inbound twin of Share, and the other named hero SKU) to match
+what Share got in `0.2.92`, closing the gap between the two paid heroes:
+
+- **Branding**: new `intake_brand_name`/`intake_brand_logo_url`/`intake_brand_color`/
+  `intake_brand_link_url` claims, sanitized via a `sanitizeBrandFields()` helper now
+  shared with Share (`sanitizeShareBrand()` refactored to call it). Baked into the
+  portal record at `createPortal()` time; rendered on the public `intake.html`
+  landing page the same way `share.html` renders Share's branding.
+- **Analytics**: new opt-in `intake_analytics` claim (default `false`) logs a
+  per-event JSONL record (`_fluxfiles/intake-events/<jti>.jsonl`) for every
+  `received` and `rejected` upload attempt, the latter carrying a `reason`
+  (password/cap/ext/size/quota/virus) and both carrying the file's `name`. New
+  `GET /api/fm/intake/analytics` endpoint (`disk`, `jti`, `limit`, `offset`,
+  `event` params), `owner_only`-gated like the portal itself. The `rejected`
+  aggregate counter on `intakes.json` is unconditional (mirrors Share's
+  `unlock_fails`); only the per-event log is gated by the claim.
+- **Fixed alongside**: `revokePortal()`'s tombstone now retains `owner` (was
+  missing — `owner_only` couldn't be checked on a revoked portal); `cleanLabel()`
+  gained a configurable max-length param instead of a hardcoded 120.
+- New `packages/core/tests/e2e/test-intake-http.php` self-booting HTTP e2e suite
+  (Intake previously had no e2e coverage at this level, unlike Share).
+
+New claims documented in `docs/CONFIG.md`. See `docs/INTAKE-BRANDING-ANALYTICS-DESIGN.md`
+for the full design.
+
+## [0.2.92] — 2026-08-26
+
+> Released: `core-v0.2.75`, module `share v1.2.0`. No composer floor changes beyond
+> `share`'s own bump to `^0.2.75` (consumes the new `Claims::$shareAnalytics`).
+
+### Added — Share per-event analytics
+
+Deepens Share (the flagship paid SKU) beyond its existing aggregate `views`/
+`downloads`/`unlock_fails` counters: a new opt-in `share_analytics` claim (default
+`false`, kept separate from `allow_share` since it persists visitor IP/user-agent —
+a privacy/compliance footprint the plain counters don't have) logs a per-event JSONL
+record (`_fluxfiles/share-events/<jti>.jsonl`) for every `view`/`download`/
+`unlock_fail` on a share. New `GET /api/fm/share/analytics` endpoint (`disk`, `jti`,
+`limit`, `offset`, `event` params), `owner_only`-gated; the revoke tombstone now
+retains `owner` so this still works on a revoked share. Rotates at 1MB / keeps the
+last 2000 lines per share; the per-share event file is deleted when its tombstone is
+pruned. Zero new i18n strings — reuses existing `share_revoked`/`perm_denied` error
+codes. See `docs/SHARE-ANALYTICS-DESIGN.md` for the full design.
+
 ## [0.2.91] — 2026-08-26
 
 > Released: modules `share v1.1.0`, `intake v1.1.0`, `versioning v1.1.0`, `webhooks v1.1.0`,
