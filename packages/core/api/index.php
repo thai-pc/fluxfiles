@@ -698,6 +698,21 @@ function routeRequest(
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->revokePortal($diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['jti'] ?? ''));
     }
+    // Intake analytics — per-event received/rejected log, opt-in via intake_analytics
+    // (baked into the portal record at create time). Same 3-layer gate; owner_only
+    // enforced inside analytics() like revokePortal().
+    if ($method === 'GET' && $uri === '/api/fm/intake/analytics') {
+        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->analytics(
+            $diskManager,
+            $claims,
+            ff_str_param($_GET, 'disk', 'local'),
+            ff_str_param($_GET, 'jti'),
+            max(1, min(500, (int) ($_GET['limit'] ?? 100))),
+            max(0, (int) ($_GET['offset'] ?? 0)),
+            isset($_GET['event']) && $_GET['event'] !== '' ? ff_str_param($_GET, 'event') : null
+        );
+    }
     // File versioning — list prior versions of a file / restore one. Same 3-layer gate.
     if ($method === 'GET' && $uri === '/api/fm/versions') {
         $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);

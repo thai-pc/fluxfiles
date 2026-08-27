@@ -203,6 +203,20 @@ class Claims
      *            Mirrors shareBaseUrl. */
     public string $intakeBaseUrl = '';
 
+    /** @var array{name:string,logo_url:string,color:string,link_url:string}|null
+     *            Sanitized Intake brand config (null = no branding). Baked into
+     *            the portal record at create time (IntakeModule::createPortal) —
+     *            a public request has no claims to read live. Mirrors shareBrand. */
+    public ?array $intakeBrand = null;
+
+    /** @var bool Log a per-event received/rejected record (timestamp + IP +
+     *            user-agent + filename + rejection reason) for a portal,
+     *            alongside the existing aggregate `received`/`rejected`
+     *            counters. Off by default — persists visitor IPs (privacy/
+     *            compliance footprint). Baked into the portal record at create
+     *            time, like intakeBrand. */
+    public bool $intakeAnalytics = false;
+
     /** @var int Max prior versions to keep per file (Versioning module). 0 = inherit
      *            the module default (10). Oldest beyond this are pruned on each snapshot. */
     public int $versioningMax = 0;
@@ -362,27 +376,68 @@ class Claims
     }
 
     /**
-     * Assemble the per-tenant Share "brand" config from `share_brand_*` claims.
-     * Returns null when every field is empty — no explicit enabled flag needed
-     * (unlike watermark) since this is cosmetic display data with no serve-time
-     * cost. Done at decode so ShareModule::createShare() can bake a sanitized
-     * copy into the record.
+     * Assemble a per-tenant "brand" config, shared by Share (`share_brand_*`) and
+     * Intake (`intake_brand_*`) — the two are byte-for-byte identical apart from
+     * the claim prefix. Returns null when every field is empty — no explicit
+     * enabled flag needed (unlike watermark) since this is cosmetic display data
+     * with no serve-time cost. Done at decode so {Share,Intake}Module::create*()
+     * can bake a sanitized copy into the record.
      *
+     * The per-prefix reads below are literal property accesses on $payload
+     * (not a dynamic lookup built from $prefix) so the config-doc coverage
+     * guard (tests/unit/test-config-doc.php, which greps this file for a
+     * literal `$payload->` property access) keeps catching every claim this
+     * reads.
+     *
+     * @param string $prefix 'share_brand' or 'intake_brand'
      * @return array{name:string,logo_url:string,color:string,link_url:string}|null
      */
-    public static function sanitizeShareBrand(object $payload): ?array
+    private static function sanitizeBrandFields(object $payload, string $prefix): ?array
     {
-        $name = mb_substr(trim((string) ($payload->share_brand_name ?? '')), 0, 80);
-        $logo = trim((string) ($payload->share_brand_logo_url ?? ''));
+        if ($prefix === 'share_brand') {
+            $rawName = $payload->share_brand_name ?? '';
+            $rawLogo = $payload->share_brand_logo_url ?? '';
+            $rawColor = $payload->share_brand_color ?? '';
+            $rawLink = $payload->share_brand_link_url ?? '';
+        } else {
+            $rawName = $payload->intake_brand_name ?? '';
+            $rawLogo = $payload->intake_brand_logo_url ?? '';
+            $rawColor = $payload->intake_brand_color ?? '';
+            $rawLink = $payload->intake_brand_link_url ?? '';
+        }
+        $name = mb_substr(trim((string) $rawName), 0, 80);
+        $logo = trim((string) $rawLogo);
         $logo = preg_match('#^https?://#i', $logo) ? $logo : '';
-        $color = trim((string) ($payload->share_brand_color ?? ''));
+        $color = trim((string) $rawColor);
         $color = preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/i', $color) ? $color : '';
-        $link = trim((string) ($payload->share_brand_link_url ?? ''));
+        $link = trim((string) $rawLink);
         $link = preg_match('#^https?://#i', $link) ? $link : '';
         if ($name === '' && $logo === '' && $color === '' && $link === '') {
             return null;
         }
         return ['name' => $name, 'logo_url' => $logo, 'color' => $color, 'link_url' => $link];
+    }
+
+    /**
+     * Assemble the per-tenant Share "brand" config from `share_brand_*` claims.
+     * See sanitizeBrandFields() — zero behavior change from before the refactor.
+     *
+     * @return array{name:string,logo_url:string,color:string,link_url:string}|null
+     */
+    public static function sanitizeShareBrand(object $payload): ?array
+    {
+        return self::sanitizeBrandFields($payload, 'share_brand');
+    }
+
+    /**
+     * Assemble the per-tenant Intake "brand" config from `intake_brand_*` claims.
+     * See sanitizeBrandFields() — identical shape to sanitizeShareBrand().
+     *
+     * @return array{name:string,logo_url:string,color:string,link_url:string}|null
+     */
+    public static function sanitizeIntakeBrand(object $payload): ?array
+    {
+        return self::sanitizeBrandFields($payload, 'intake_brand');
     }
 
     /**
@@ -521,6 +576,8 @@ class Claims
         // Intake portal link base — same http(s)-only rule as share_base_url.
         $intakeBase = trim((string) ($payload->intake_base_url ?? ''));
         $c->intakeBaseUrl = preg_match('#^https?://#i', $intakeBase) ? $intakeBase : '';
+        $c->intakeBrand = self::sanitizeIntakeBrand($payload);
+        $c->intakeAnalytics = isset($payload->intake_analytics) ? (bool) $payload->intake_analytics : false;
         $c->allowVersioning = (bool) ($payload->allow_versioning ?? false);
         $c->versioningMax = max(0, (int) ($payload->versioning_max ?? 0));
         $c->versioningMaxMb = max(0, (int) ($payload->versioning_max_mb ?? 0));

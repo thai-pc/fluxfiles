@@ -185,6 +185,11 @@ All four accept the same `claims` map.
 | `share_brand_link_url` | string (http/s) | — | Branded Share: link behind the brand name/logo on the landing page. Non-http(s) dropped. |
 | `allow_intake` | bool | `false` | Intake / Upload Portals (public "send us your files" links). |
 | `intake_base_url` | string (http/s) | — | Public base the intake create response builds the portal link from (e.g. `https://files.acme.com/public/intake.html`). Non-http(s) dropped. Empty = the request origin + `/public/intake.html` — i.e. derived from the `Host` header, so **set this explicitly behind a proxy/CDN**. Mirrors `share_base_url`. |
+| `intake_analytics` | bool | `false` | Log a per-event record (timestamp, type `received`/`rejected`, IP, user-agent, reason, filename) for a portal, in addition to the existing `received`/`rejected` counters. Off by default — persists visitor IP addresses (privacy/compliance footprint), unlike the plain counters. Baked into the portal record at create time, like `intake_base_url`. |
+| `intake_brand_name` | string | — | Intake branding: display name shown on the upload-portal landing page. Max 80 chars. Baked into the portal record at create time, like `intake_base_url`. |
+| `intake_brand_logo_url` | string (http/s) | — | Intake branding: logo image URL rendered on the landing page. Non-http(s) dropped. Operator hosts the file themselves (same BYO-embed model as `office_url`). |
+| `intake_brand_color` | string (hex) | — | Intake branding: accent color, e.g. `#7c3aed`. Must match `^#([0-9a-f]{3}\|[0-9a-f]{6})$`; anything else dropped. |
+| `intake_brand_link_url` | string (http/s) | — | Intake branding: link behind the brand name/logo on the landing page. Non-http(s) dropped. |
 | `allow_versioning` | bool | `false` | File version history (keep prior versions on overwrite; list/restore). |
 | `versioning_max` | int | `10` | Prior versions kept per file (hard cap 100). `0` = default. |
 | `versioning_max_mb` | int (MB) | `25` | Skip versioning files bigger than this. `0` = default. |

@@ -477,6 +477,79 @@ test('intake_base_url accepts only http(s) — anything else is dropped', functi
     }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// Branding (Share + Intake) — Claims::sanitizeBrandFields() via its two
+// public wrappers. Byte-for-byte identical validation, different prefixes.
+// ═══════════════════════════════════════════════════════════════
+
+test('sanitizeShareBrand / sanitizeIntakeBrand: all-blank payload → null', function () {
+    assertEqual(null, FluxFiles\Claims::sanitizeShareBrand((object) []));
+    assertEqual(null, FluxFiles\Claims::sanitizeIntakeBrand((object) []));
+});
+
+test('sanitizeShareBrand: valid full set is sanitized and carried', function () {
+    $b = FluxFiles\Claims::sanitizeShareBrand((object) [
+        'share_brand_name' => 'Acme Inc.',
+        'share_brand_logo_url' => 'https://acme.example/logo.png',
+        'share_brand_color' => '#7C3AED',
+        'share_brand_link_url' => 'https://acme.example',
+    ]);
+    assertEqual([
+        'name' => 'Acme Inc.',
+        'logo_url' => 'https://acme.example/logo.png',
+        'color' => '#7C3AED',
+        'link_url' => 'https://acme.example',
+    ], $b);
+});
+
+test('sanitizeIntakeBrand: valid full set is sanitized and carried (same shape as Share)', function () {
+    $b = FluxFiles\Claims::sanitizeIntakeBrand((object) [
+        'intake_brand_name' => 'Acme Bookkeeping',
+        'intake_brand_logo_url' => 'https://acme.example/logo.png',
+        'intake_brand_color' => '#123',
+        'intake_brand_link_url' => 'https://acme.example/upload',
+    ]);
+    assertEqual([
+        'name' => 'Acme Bookkeeping',
+        'logo_url' => 'https://acme.example/logo.png',
+        'color' => '#123',
+        'link_url' => 'https://acme.example/upload',
+    ], $b);
+});
+
+test('sanitizeIntakeBrand: bad logo_url scheme is dropped to ""', function () {
+    $b = FluxFiles\Claims::sanitizeIntakeBrand((object) [
+        'intake_brand_name' => 'x',
+        'intake_brand_logo_url' => 'javascript:alert(1)',
+    ]);
+    assertEqual('', $b['logo_url'], 'non-http(s) scheme dropped');
+});
+
+test('sanitizeIntakeBrand: bad color formats are dropped, valid 3/6-digit hex kept', function () {
+    foreach (['red', '123456', '#12', '#1234567', '#gggggg'] as $bad) {
+        $b = FluxFiles\Claims::sanitizeIntakeBrand((object) ['intake_brand_name' => 'x', 'intake_brand_color' => $bad]);
+        assertEqual('', $b['color'], "dropped: {$bad}");
+    }
+    assertEqual('#abc', FluxFiles\Claims::sanitizeIntakeBrand((object) ['intake_brand_name' => 'x', 'intake_brand_color' => '#abc'])['color']);
+    assertEqual('#aabbcc', FluxFiles\Claims::sanitizeIntakeBrand((object) ['intake_brand_name' => 'x', 'intake_brand_color' => '#aabbcc'])['color']);
+});
+
+test('sanitizeIntakeBrand: name truncated at 80 chars', function () {
+    $long = str_repeat('a', 200);
+    $b = FluxFiles\Claims::sanitizeIntakeBrand((object) ['intake_brand_name' => $long]);
+    assertEqual(80, strlen($b['name']));
+});
+
+test('fromJwtPayload wires intakeBrand + intakeAnalytics', function () {
+    $c = claimsWith([]);
+    assertEqual(null, $c->intakeBrand, 'no brand claims → null');
+    assertEqual(false, $c->intakeAnalytics, 'default off');
+
+    $c2 = claimsWith(['intake_brand_name' => 'Acme', 'intake_analytics' => true]);
+    assertEqual('Acme', $c2->intakeBrand['name'] ?? null, 'brand baked into Claims');
+    assertEqual(true, $c2->intakeAnalytics);
+});
+
 test('pro_hints defaults ON and is an opt-OUT switch', function () {
     // Default true is safe because the UI additionally requires an unlicensed AND
     // unframed server before it renders anything — see docs/OPERATOR-SHARE-INTAKE-UI.md §5.1.

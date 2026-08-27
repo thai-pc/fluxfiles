@@ -40,12 +40,17 @@
     .msg { padding:14px; border-radius:10px; font-size:14px; text-align:center; }
     .msg.err { background:rgba(220,38,38,.1); color:var(--err); }
     .hidden { display:none; }
+    .brand { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+    .brand img { height:28px; width:auto; border-radius:4px; }
+    .brand span { font-weight:600; font-size:14px; }
+    .brand a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:8px; }
   </style>
 </head>
 <body>
   <div class="card">
     <div id="gate" class="msg err hidden"></div>
     <div id="form" class="hidden">
+      <div id="brand" class="brand hidden"></div>
       <h1 id="label">Upload files</h1>
       <p class="sub" id="sub">Drop files below to send them securely.</p>
       <input type="password" id="pw" class="hidden" placeholder="Password required to upload">
@@ -74,6 +79,56 @@
 
       function fail(text) { gate.textContent = text; gate.classList.remove('hidden'); }
 
+      // `brand` is operator-supplied (paid module config), so logo_url/link_url
+      // must be validated with a real URL parser (not a regex on the raw string —
+      // logo_url/link_url may legitimately point at ANY http(s) host, unlike our
+      // own routes) before ever touching img.src/a.href, and color is re-checked
+      // against a strict hex pattern before it reaches a CSS custom property.
+      // Ported verbatim from share.html — keep the two in sync.
+      function safeHttpUrl(raw) {
+        if (!raw) return '';
+        try {
+          var u = new URL(String(raw), location.href);
+          return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+        } catch (e) { return ''; }
+      }
+      function renderBrand(el, brand) {
+        el.innerHTML = '';
+        if (!brand) { el.classList.add('hidden'); return; }
+
+        var logo = safeHttpUrl(brand.logo_url);
+        var link = safeHttpUrl(brand.link_url);
+        var name = String(brand.name || '');
+        var has = false;
+
+        var container = document.createElement('span');
+        if (logo) {
+          var img = document.createElement('img');
+          img.src = logo; img.alt = name;
+          container.appendChild(img); has = true;
+        }
+        if (name) {
+          var label = document.createElement('span');
+          label.textContent = name;
+          container.appendChild(label); has = true;
+        }
+        container.style.display = 'contents';
+
+        if (link && has) {
+          var a = document.createElement('a');
+          a.href = link; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          a.appendChild(container);
+          el.appendChild(a);
+        } else {
+          el.appendChild(container);
+        }
+
+        if (brand.color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(brand.color)) {
+          document.documentElement.style.setProperty('--accent', brand.color);
+        }
+        el.classList.toggle('hidden', !has);
+      }
+
       if (!token) { fail('This upload link is missing its token.'); return; }
 
       var info = null;
@@ -87,6 +142,7 @@
         .catch(function () { fail('Could not load this upload portal.'); });
 
       function render() {
+        renderBrand($('brand'), info.brand);
         form.classList.remove('hidden');
         if (info.label) { $('label').textContent = info.label; }
         if (info.has_password) { $('pw').classList.remove('hidden'); }
