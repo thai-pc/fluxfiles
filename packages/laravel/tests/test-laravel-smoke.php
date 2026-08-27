@@ -358,10 +358,10 @@ test('proxy route surface covers every core /api/fm route', function () {
         // Share: create/list/revoke are paid + the public landing routes
         // (info/unlock/file) are token-authed with no main JWT, and `file` emits raw
         // bytes / a presigned redirect — core-standalone, like intake and stream.
-        'share/info', 'share/unlock', 'share/file', 'share/list', 'share/revoke',
+        'share/info', 'share/unlock', 'share/file', 'share/list', 'share/revoke', 'share/analytics',
         // Intake: create/manage are paid + the public info/upload are token-authed
         // (no main JWT) — core-standalone, like share. Adapters may proxy later.
-        'intake', 'intake/info', 'intake/list', 'intake/revoke', 'intake/upload',
+        'intake', 'intake/info', 'intake/list', 'intake/revoke', 'intake/upload', 'intake/analytics',
         // File versioning: paid + core-standalone (adapters may proxy later).
         'versions', 'versions/restore', 'webhooks/test'];
 
