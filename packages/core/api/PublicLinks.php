@@ -123,6 +123,46 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             }
             $res = $module->receiveUpload($portalFm, $dm, $secret, $token, $file, $password);
             echo json_encode(['data' => $res, 'error' => null]);
+
+            // Notify-on-receipt (paid: Intake + Webhooks): fired AFTER the response is
+            // on the wire, same ordering as the main flow's webhook dispatch
+            // (index.php, post-response fastcgi_finish_request() then dispatch) — a
+            // webhook POST has a multi-second timeout and an anonymous sender has no
+            // reason to wait on a third-party endpoint's response time. Manual
+            // installed()/licensed() checks, NOT ModuleRegistry::require() — require()
+            // throws, which is right for a gate that must block the request (like the
+            // virus scanner above) and wrong here: the response is already sent, so an
+            // exception at this point can't become an HTTP error anymore. Best-effort:
+            // WebhooksModule::dispatch() never throws on its own, the try/catch below
+            // is belt-and-suspenders for the same fail-open invariant.
+            if (function_exists('fastcgi_finish_request')) {
+                fastcgi_finish_request();
+            }
+            try {
+                if (\FluxFiles\ModuleRegistry::installed('webhooks')
+                    && \FluxFiles\LicenseManager::fromEnv()->licensed('webhooks')) {
+                    $jti = (string) ($payload->jti ?? '');
+                    $store = (string) ($payload->store ?? '');
+                    $whDisk = $portalClaims->allowedDisks[0] ?? '';
+                    $wh = $module->webhookConfigFor($dm, $whDisk, $store, $jti);
+                    if ($wh !== null) {
+                        $webhooks = new \FluxFiles\Webhooks\WebhooksModule();
+                        $whClaims = new \FluxFiles\Claims($wh['owner'], [], [], '', 0, null, 0);
+                        $whClaims->webhookUrl = $wh['url'];
+                        $whClaims->webhookEvents = $wh['events'];
+                        $whClaims->webhookSecret = $wh['secret'];
+                        $webhooks->dispatch($whClaims, $secret, 'intake_received', [
+                            'disk'         => $wh['disk'],
+                            'path'         => $wh['path'],
+                            'name'         => is_array($res) ? (string) ($res['name'] ?? '') : '',
+                            'portal_label' => $wh['label'],
+                            'portal_jti'   => $jti,
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                error_log('[fluxfiles] intake notify-on-receipt failed: ' . $e->getMessage());
+            }
             return;
         }
 
