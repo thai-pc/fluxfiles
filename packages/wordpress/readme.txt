@@ -1,6 +1,6 @@
 === FluxFiles ===
 Contributors: thaipc
-Tags: file-manager, media, s3, r2, upload, cloud-storage
+Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1
@@ -8,7 +8,7 @@ Stable tag: 0.2.43
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-Multi-storage file manager with Local/S3/R2 support, image optimization, and full-text search.
+Multi-storage file manager with Local/S3/R2 support. Optional paid add-ons: branded Share links and client Upload Portals.
 
 == Description ==
 
@@ -26,6 +26,24 @@ image optimization with WebP variants, AI auto-tagging, and full-text search.
 * Shortcode: `[fluxfiles]`
 * Classic editor media button integration
 * Dark mode with auto-detection
+* WordPress attachment bridge — files picked in FluxFiles register as real WP attachments, with a Gutenberg block
+
+= File portals (paid add-on) =
+
+The plugin itself is 100% free (MIT), but if you need to *exchange* files with clients — not
+just manage your own media library — FluxFiles also sells two optional Pro modules that plug
+into the same JWT token your site already issues:
+
+* **Branded Share** — turn any file or folder into a shareable link with an expiry, a
+  password, a download cap, and view analytics. No account needed on the recipient's side.
+* **Upload Portals** — the reverse: a branded "send us your files" link you hand to a client.
+  They drop files in from a browser, no account, no plugin install on their end — the files
+  land straight in your configured disk (Local/S3/R2).
+
+Both are separate paid modules (see [fluxfiles.io/pricing](https://fluxfiles.io/pricing)) that
+drop into `wp-content/plugins/fluxfiles/vendor/fluxfiles/` alongside a license key — the free
+plugin works fully without them, and nothing about your site's media library changes if you
+never install them.
 
 == Installation ==
 
@@ -71,6 +89,20 @@ No. The plugin bundles the full FluxFiles backend. Everything runs within your W
 = What PHP version is required? =
 
 PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfiles`). Anything below 8.1 is not supported on the current release line.
+
+= Do I need to pay for Share links or Upload Portals? =
+
+Only if you want them. The plugin you're installing here is the free MIT core and covers the
+full file manager (multi-storage, image optimization, search, AI tagging, media library
+integration). Branded Share links and client Upload Portals are separate paid modules — see
+[fluxfiles.io/pricing](https://fluxfiles.io/pricing) for details. Without them the plugin still
+works exactly as described above, minus those two features.
+
+= Can I use FluxFiles for my WordPress media library? =
+
+Yes. Files picked through the FluxFiles UI register as real WordPress attachments — the media
+library, `wp_get_attachment_url()`, and the Gutenberg block all see them, even though the bytes
+live on S3/R2/local storage FluxFiles manages, not `wp-content/uploads/`.
 
 == Screenshots ==
 
