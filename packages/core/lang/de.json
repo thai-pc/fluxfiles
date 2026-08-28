@@ -476,6 +476,18 @@
         "purged": "Endgültig gelöscht",
         "emptied": "Papierkorb geleert"
     },
+    "versions": {
+        "title": "Versionsverlauf",
+        "note": "Frühere Versionen dieser Datei werden automatisch bei jedem Überschreiben gespeichert.",
+        "empty_state": "Noch keine früheren Versionen.",
+        "col_date": "Gespeichert",
+        "col_size": "Größe",
+        "col_saved_by": "Gespeichert von",
+        "restore": "Wiederherstellen",
+        "restore_confirm": "Diese Version wiederherstellen? Die aktuelle Datei wird ersetzt (zuvor wird ein Snapshot davon gespeichert, das kann also rückgängig gemacht werden).",
+        "restored": "Version wiederhergestellt",
+        "pro_teaser": "Jede frühere Version einer Datei behalten und jedes Überschreiben rückgängig machen."
+    },
     "import": {
         "title": "Von URL importieren",
         "button": "URL importieren",

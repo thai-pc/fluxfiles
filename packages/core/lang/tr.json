@@ -476,6 +476,18 @@
         "purged": "Kalıcı olarak silindi",
         "emptied": "Çöp kutusu boşaltıldı"
     },
+    "versions": {
+        "title": "Sürüm geçmişi",
+        "note": "Bu dosyanın önceki sürümleri her üzerine yazmada otomatik olarak saklanır.",
+        "empty_state": "Henüz önceki bir sürüm yok.",
+        "col_date": "Kaydedildi",
+        "col_size": "Boyut",
+        "col_saved_by": "Kaydeden",
+        "restore": "Geri yükle",
+        "restore_confirm": "Bu sürüm geri yüklensin mi? Mevcut dosyanın yerini alacak (önce mevcut dosyanın bir anlık görüntüsü kaydedilir, bu yüzden bu işlem geri alınabilir).",
+        "restored": "Sürüm geri yüklendi",
+        "pro_teaser": "Bir dosyanın her önceki sürümünü saklayın ve herhangi bir üzerine yazmayı geri alın."
+    },
     "import": {
         "title": "URL'den içe aktar",
         "button": "URL içe aktar",

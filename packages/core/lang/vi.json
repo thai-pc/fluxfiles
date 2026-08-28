@@ -476,6 +476,18 @@
         "purged": "Đã xóa vĩnh viễn",
         "emptied": "Đã dọn thùng rác"
     },
+    "versions": {
+        "title": "Lịch sử phiên bản",
+        "note": "Các phiên bản trước của tệp này được tự động lưu lại mỗi khi bị ghi đè.",
+        "empty_state": "Chưa có phiên bản trước đó.",
+        "col_date": "Đã lưu",
+        "col_size": "Kích thước",
+        "col_saved_by": "Lưu bởi",
+        "restore": "Khôi phục",
+        "restore_confirm": "Khôi phục phiên bản này? Tệp hiện tại sẽ bị thay thế (một bản sao của tệp hiện tại được lưu trước, nên bạn có thể hoàn tác).",
+        "restored": "Đã khôi phục phiên bản",
+        "pro_teaser": "Giữ lại mọi phiên bản trước của tệp và hoàn tác bất kỳ lần ghi đè nào."
+    },
     "import": {
         "title": "Nhập từ URL",
         "button": "Nhập URL",

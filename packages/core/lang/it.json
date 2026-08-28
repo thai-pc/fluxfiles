@@ -476,6 +476,18 @@
         "purged": "Eliminato definitivamente",
         "emptied": "Cestino svuotato"
     },
+    "versions": {
+        "title": "Cronologia versioni",
+        "note": "Le versioni precedenti di questo file vengono conservate automaticamente a ogni sovrascrittura.",
+        "empty_state": "Nessuna versione precedente ancora disponibile.",
+        "col_date": "Salvato",
+        "col_size": "Dimensione",
+        "col_saved_by": "Salvato da",
+        "restore": "Ripristina",
+        "restore_confirm": "Ripristinare questa versione? Il file attuale verrà sostituito (prima viene salvata una copia, quindi è reversibile).",
+        "restored": "Versione ripristinata",
+        "pro_teaser": "Conserva ogni versione precedente di un file e annulla qualsiasi sovrascrittura."
+    },
     "import": {
         "title": "Importa da URL",
         "button": "Importa URL",

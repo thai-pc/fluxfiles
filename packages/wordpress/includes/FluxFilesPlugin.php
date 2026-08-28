@@ -409,15 +409,13 @@ class FluxFilesPlugin
         $payload['intake_base_url'] = !empty($overrides['intake_base_url'])
             ? (string) $overrides['intake_base_url']
             : self::publicLinkUrl('intake.html');
-        foreach (['allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        // NOTE: versioning is intentionally NOT forwarded — neither `allow_versioning`
+        // nor `versioning_max`/`versioning_max_mb`. The plugin is proxy-only and the
+        // REST API never exposes /api/fm/versions*, so the History panel would have no
+        // endpoint to talk to. Core-standalone only, same rule as the SSH terminal above.
+        foreach (['allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
-            }
-        }
-        // Versioning tuning claims (the core clamps these on decode; 0 = its default).
-        foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
-            if (!empty($overrides[$verClaim])) {
-                $payload[$verClaim] = (int) $overrides[$verClaim];
             }
         }
         // Webhook config. Without a URL `allow_webhooks` is inert (the module has

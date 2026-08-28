@@ -476,6 +476,18 @@
         "purged": "Deleted permanently",
         "emptied": "Trash emptied"
     },
+    "versions": {
+        "title": "Version history",
+        "note": "Prior versions of this file, kept automatically on every overwrite.",
+        "empty_state": "No prior versions yet.",
+        "col_date": "Saved",
+        "col_size": "Size",
+        "col_saved_by": "Saved by",
+        "restore": "Restore",
+        "restore_confirm": "Restore this version? The current file will be replaced (a snapshot of it is kept first, so this can be undone).",
+        "restored": "Version restored",
+        "pro_teaser": "Keep every prior version of a file and roll back any overwrite."
+    },
     "import": {
         "title": "Import from URL",
         "button": "Import URL",

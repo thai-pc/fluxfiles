@@ -2645,6 +2645,63 @@ function fluxFilesApp() {
             }
         },
 
+        // ── Version history (paid `versioning` module) ────────────────────────
+        showVersions: false,
+        versionTarget: null,        // the file the panel was opened for
+        versionEntries: [],
+        versionsLoading: false,
+        versionsError: '',
+        versionsErrorCode: '',
+
+        openVersionHistory(item) {
+            if (!item || item.type === 'dir') return;
+            this.versionTarget = item;
+            this.showVersions = true;
+            this.versionsError = '';
+            this.versionsErrorCode = '';
+            this.loadVersions();
+        },
+
+        closeVersions() {
+            this.showVersions = false;
+        },
+
+        async loadVersions() {
+            if (!this.versionTarget) return;
+            this.versionsLoading = true;
+            this.versionsError = '';
+            this.versionsErrorCode = '';
+            try {
+                const data = await this.api('GET', '/api/fm/versions?disk=' + encodeURIComponent(this.currentDisk)
+                    + '&path=' + encodeURIComponent(this.versionTarget.key));
+                this.versionEntries = Array.isArray(data.versions) ? data.versions : [];
+            } catch (e) {
+                this.versionEntries = [];
+                this.versionsError = e.message || this.t('error.generic');
+                this.versionsErrorCode = e.code || '';
+            } finally {
+                this.versionsLoading = false;
+            }
+        },
+
+        async restoreVersion(id) {
+            if (!this.versionTarget) return;
+            if (!window.confirm(this.t('versions.restore_confirm'))) return;
+            try {
+                await this.api('POST', '/api/fm/versions/restore', {
+                    disk: this.currentDisk, path: this.versionTarget.key, version_id: id,
+                });
+                this.showToast(this.t('versions.restored'), 'success');
+                this.postMessage('FM_EVENT', { event: 'version:restored', key: this.versionTarget.key, version_id: id });
+                await this.loadVersions();
+                this.loadFiles();
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 4000);
+            }
+        },
+
+        get versionsErrorIsInstall() { return this._isInstallError(this.versionsErrorCode); },
+
         formatSize(bytes) {
             if (!bytes) return '0 B';
             const units = ['B', 'KB', 'MB', 'GB'];
@@ -3042,10 +3099,15 @@ function fluxFilesApp() {
         },
         get shareGate() { return this.proGate('allow_share', 'share'); },
         get intakeGate() { return this.proGate('allow_intake', 'intake'); },
+        get versionGate() { return this.proGate('allow_versioning', 'versioning'); },
         // The toolbar entry point exists if EITHER feature is usable or advertisable.
+        // Versioning has no toolbar 'on' behavior of its own (it's opened per-file from
+        // the detail panel / context menu), but its 'locked' teaser rides the same pill
+        // rather than adding a second affordance — see docs/OPERATOR-SHARE-INTAKE-UI.md
+        // "one affordance per app, not one per file".
         get linksToolbarState() {
             if (this.shareGate === 'on' || this.intakeGate === 'on') return 'on';
-            if (this.shareGate === 'locked' || this.intakeGate === 'locked') return 'locked';
+            if (this.shareGate === 'locked' || this.intakeGate === 'locked' || this.versionGate === 'locked') return 'locked';
             return 'hidden';
         },
         // Capability preconditions, ANDed with the gate (not part of it):
@@ -3061,6 +3123,10 @@ function fluxFilesApp() {
         get canPortalFolder() {
             return this.intakeGate === 'on' && this._hasPerm('write')
                 && !!this.detailFile && this.detailFile.type === 'dir';
+        },
+        get canVersionFile() {
+            return this.versionGate === 'on'
+                && !!this.detailFile && this.detailFile.type !== 'dir';
         },
 
         showLocked: false,          // the "Pro" teaser modal (issues no API calls)

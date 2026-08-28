@@ -186,6 +186,11 @@ test('token() forwards usage-dashboard claims', function () use ($secret) {
 // it POST nowhere. Gate + config must travel together.
 test('token() forwards versioning + webhook config claims, not just the gate', function () use ($secret) {
     $mgr = new FluxFilesManager();
+    // Versioning is core-standalone-only (see the dedicated mode test further down),
+    // so mint in standalone mode here to exercise the gate+config pairing together
+    // with webhooks, which forwards in any mode.
+    $prevMode = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
+    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
     $token = $mgr->token(52, [
         'allow_versioning'  => true,
         'versioning_max'    => 5,
@@ -195,6 +200,7 @@ test('token() forwards versioning + webhook config claims, not just the gate', f
         'webhook_events'    => ['upload', 'delete'],
         'webhook_secret'    => 'whsec_abc123',
     ]);
+    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prevMode;
     // Assert on the raw JWT payload, not Claims::fromJwtPayload — forwarding a claim
     // needs no core API, so this must keep passing against the declared core floor
     // (a core too old to know these keys simply ignores them). Validation belongs to
@@ -416,6 +422,33 @@ test('allow_terminal (SSH terminal) forwarded only in standalone mode', function
     try {
         $sp = \FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_terminal' => true]), $secret);
         assertEqual(true, ($sp->allow_terminal ?? false), 'terminal claim forwarded in standalone mode');
+    } finally {
+        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
+    }
+});
+
+test('allow_versioning (+ its tuning claims) forwarded only in standalone mode', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $overrides = [
+        'allow_versioning'  => true,
+        'versioning_max'    => 5,
+        'versioning_max_mb' => 50,
+    ];
+
+    // Proxy mode (default): /api/fm/versions* isn't proxied → claim + config dropped.
+    $p = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
+    assertEqual(false, isset($p->allow_versioning), 'versioning gate dropped in proxy mode');
+    assertEqual(false, isset($p->versioning_max), 'versioning_max dropped in proxy mode');
+    assertEqual(false, isset($p->versioning_max_mb), 'versioning_max_mb dropped in proxy mode');
+
+    // Standalone mode: token targets a real core that serves /versions* → forward.
+    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
+    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
+    try {
+        $sp = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
+        assertEqual(true, ($sp->allow_versioning ?? false), 'versioning gate forwarded in standalone mode');
+        assertEqual(5, $sp->versioning_max ?? 0, 'versioning_max forwarded in standalone mode');
+        assertEqual(50, $sp->versioning_max_mb ?? 0, 'versioning_max_mb forwarded in standalone mode');
     } finally {
         $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
     }

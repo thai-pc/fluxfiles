@@ -2076,7 +2076,8 @@ body {
 .ff-usage-modal,
 .ff-links-modal,
 .ff-links-panel,
-.ff-chmod-modal {
+.ff-chmod-modal,
+.ff-versions-modal {
     background: var(--ff-bg);
     border-radius: 12px;
     width: min(900px, 94vw);
@@ -3631,7 +3632,8 @@ body {
     .ff-usage-modal,
     .ff-links-modal,
     .ff-links-panel,
-    .ff-chmod-modal {
+    .ff-chmod-modal,
+    .ff-versions-modal {
         width: 96vw;
         max-height: 90vh;
     }

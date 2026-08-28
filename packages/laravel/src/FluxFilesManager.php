@@ -172,7 +172,20 @@ class FluxFilesManager
                 $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
             }
         }
-        foreach (['allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        // Versioning is core-standalone — /api/fm/versions* isn't proxied. Forward the
+        // gate claim only in 'standalone' mode (token → a real core that serves it); in
+        // proxy mode it's dropped so the button can't appear for an endpoint that would
+        // 404. Same rule as allow_terminal above.
+        if (!empty($overrides['allow_versioning']) && config('fluxfiles.mode') === 'standalone') {
+            $payload['allow_versioning'] = true;
+            // Versioning tuning claims (the core clamps these on decode; 0 = its default).
+            foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
+                if (!empty($overrides[$verClaim])) {
+                    $payload[$verClaim] = (int) $overrides[$verClaim];
+                }
+            }
+        }
+        foreach (['allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
             }
@@ -210,12 +223,6 @@ class FluxFilesManager
             // …including whatever an edition preset already defaulted: `edition: pro`
             // must not light up a Share button in proxy mode either.
             unset($payload['allow_share'], $payload['allow_intake']);
-        }
-        // Versioning tuning claims (the core clamps these on decode; 0 = its default).
-        foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
-            if (!empty($overrides[$verClaim])) {
-                $payload[$verClaim] = (int) $overrides[$verClaim];
-            }
         }
         // Webhook config. Without a URL `allow_webhooks` is inert (the module has
         // nowhere to POST), so these travel with the gate claim. The core drops a

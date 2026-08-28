@@ -971,6 +971,10 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
+                <button class="detail-btn" x-show="canVersionFile" @click="openVersionHistory(detailFile)" :title="t('versions.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/><path d="M6 3.5V6l1.8 1.1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('versions.title')"></span>
+                </button>
                 <button class="detail-btn" x-show="canEditFile(detailFile)" @click="openEditor(detailFile)" :title="t('editor.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M4 3L1.5 6 4 9M8 3l2.5 3L8 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('editor.title')"></span>
@@ -1578,6 +1582,7 @@
             <div class="ff-links-body">
                 <p class="ff-links-teaser"><strong x-text="t('share.title')"></strong> — <span x-text="t('share.pro_teaser')"></span></p>
                 <p class="ff-links-teaser"><strong x-text="t('intake.title')"></strong> — <span x-text="t('intake.pro_teaser')"></span></p>
+                <p class="ff-links-teaser"><strong x-text="t('versions.title')"></strong> — <span x-text="t('versions.pro_teaser')"></span></p>
                 <div class="ff-links-actions">
                     <a class="ff-btn ff-btn-primary" href="https://fluxfiles.dev/pricing" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
                     <button class="ff-btn" @click="closeLocked()" x-text="t('common.close')"></button>
@@ -1940,6 +1945,47 @@
         </div>
     </div>
 
+    <!-- ═══ Version history panel (paid `versioning` module) ═══ -->
+    <div class="ff-modal-overlay" x-show="showVersions" x-transition @click.self="closeVersions()" style="z-index:60;" x-cloak>
+        <div class="ff-versions-modal" role="dialog" aria-modal="true" :aria-label="t('versions.title')" @keydown.escape.window="showVersions && closeVersions()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('versions.title')"></h3>
+                <button class="ff-activity-close" @click="closeVersions()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <p class="ff-activity-note" x-text="t('versions.note')"></p>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="versionsError" x-text="versionsError"></p>
+                <p x-show="versionsError && versionsErrorIsInstall">
+                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                </p>
+                <div x-show="versionsLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
+                <div x-show="!versionsLoading && !versionsError && versionEntries.length === 0" class="ff-activity-state" x-text="t('versions.empty_state')"></div>
+                <table class="ff-activity-table" x-show="!versionsLoading && versionEntries.length > 0">
+                    <thead>
+                        <tr>
+                            <th x-text="t('versions.col_date')"></th>
+                            <th x-text="t('versions.col_size')"></th>
+                            <th x-text="t('versions.col_saved_by')"></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="v in versionEntries" :key="v.id">
+                            <tr>
+                                <td x-text="formatDate(v.ts)"></td>
+                                <td x-text="formatSize(v.size)"></td>
+                                <td x-text="v.saved_by || '—'"></td>
+                                <td style="text-align:end;white-space:nowrap;">
+                                    <button class="ff-btn ff-btn-ghost" @click="restoreVersion(v.id)" x-text="t('versions.restore')"></button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ Import from URL modal ═══ -->
     <div class="ff-modal-overlay" x-show="showUrlImport" x-transition @click.self="closeUrlImport()" style="z-index:60;" x-cloak>
         <div class="ff-import-modal" role="dialog" aria-modal="true" :aria-label="t('import.title')" @keydown.escape.window="showUrlImport && closeUrlImport()">
@@ -2027,6 +2073,10 @@
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
+                <button x-show="versionGate === 'on' && mobileActionSheet?.type !== 'dir'" @click="closeActionSheet(); openVersionHistory(mobileActionSheet)">
+                    <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/><path d="M6 3.5V6l1.8 1.1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('versions.title')"></span>
+                </button>
                 <button x-show="mobileActionSheet?.type !== 'dir' && mobileActionSheet?.url" @click="closeActionSheet(); copyUrl(mobileActionSheet)">
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
@@ -2063,6 +2113,10 @@
                 <button @click="openRename(desktopContextMenu.item); closeDesktopContextMenu()">
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
+                </button>
+                <button x-show="versionGate === 'on' && desktopContextMenu.item?.type !== 'dir'" @click="openVersionHistory(desktopContextMenu.item); closeDesktopContextMenu()">
+                    <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/><path d="M6 3.5V6l1.8 1.1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('versions.title')"></span>
                 </button>
                 <button x-show="desktopContextMenu.item?.type !== 'dir' && desktopContextMenu.item?.url" @click="copyUrl(desktopContextMenu.item); closeDesktopContextMenu()">
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>

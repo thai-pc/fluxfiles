@@ -476,6 +476,18 @@
         "purged": "Definitief verwijderd",
         "emptied": "Prullenbak geleegd"
     },
+    "versions": {
+        "title": "Versiegeschiedenis",
+        "note": "Eerdere versies van dit bestand worden automatisch bewaard bij elke overschrijving.",
+        "empty_state": "Nog geen eerdere versies.",
+        "col_date": "Opgeslagen",
+        "col_size": "Grootte",
+        "col_saved_by": "Opgeslagen door",
+        "restore": "Herstellen",
+        "restore_confirm": "Deze versie herstellen? Het huidige bestand wordt vervangen (er wordt eerst een momentopname van bewaard, dus dit kan ongedaan worden gemaakt).",
+        "restored": "Versie hersteld",
+        "pro_teaser": "Bewaar elke eerdere versie van een bestand en maak elke overschrijving ongedaan."
+    },
     "import": {
         "title": "Importeren vanaf URL",
         "button": "URL importeren",
