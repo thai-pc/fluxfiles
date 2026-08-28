@@ -869,7 +869,10 @@ Metadata and image variants are transferred together. Quota is checked on the de
 > runbook (Polar, licence server, module hosting). The
 > tables below cover the common ones; mint everything in one options object —
 > `fluxfiles_token(['user' => …, 'claims' => […]])` — where `claims` is the escape
-> hatch for any claim by its raw name.
+> hatch for any claim by its raw name. Want a ready-made config for a specific
+> vertical (agency client sites, photo studio delivery, SaaS multi-tenant, ...)
+> instead of assembling claims from scratch? See
+> [`docs/INDUSTRY-PRESETS.md`](docs/INDUSTRY-PRESETS.md).
 
 ```json
 {
