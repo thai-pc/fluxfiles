@@ -52,12 +52,18 @@ test('hidden: pro_hints=false is a hard off switch — no affordance, no license
 test('hidden: licensed but withheld → nothing renders (never sell against the operator)', async ({ page }) => {
   // The most likely silent regression: simplifying proGate to tokenAllows() alone
   // would turn this into a "locked" upsell inside a product that already paid.
+  //
+  // The shared toolbar pill (linksToolbarState) also folds in Versioning's gate, so
+  // this license must cover all three modules it can render for — omitting one (e.g.
+  // 'versioning') would make proGate() correctly report THAT module as genuinely
+  // unlicensed, which would show the pill as 'locked' for a reason unrelated to the
+  // regression this test guards against.
   await page.route('**/api/fm/license*', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: { edition: 'pro', status: 'active', modules: ['share', 'intake'] },
+        data: { edition: 'pro', status: 'active', modules: ['share', 'intake', 'versioning'] },
         error: null,
       }),
     })

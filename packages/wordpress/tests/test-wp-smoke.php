@@ -202,14 +202,11 @@ test('generateToken forwards usage-dashboard claims', function () use ($secret) 
     assertEqual(5, $c->usageTopFoldersCount, 'top folders');
 });
 
-// Regression: the module GATE claims (allow_versioning/allow_webhooks) shipped here
-// but their config claims did not, so a WP host could turn Webhooks on and have it
-// POST nowhere. Gate + config must travel together.
-test('generateToken forwards versioning + webhook config claims, not just the gate', function () use ($secret) {
+// Regression: the module GATE claim (allow_webhooks) shipped here but its config
+// claims did not, so a WP host could turn Webhooks on and have it POST nowhere.
+// Gate + config must travel together.
+test('generateToken forwards webhook config claims, not just the gate', function () use ($secret) {
     $token = FluxFilesPlugin::generateToken(54, [
-        'allow_versioning'  => true,
-        'versioning_max'    => 5,
-        'versioning_max_mb' => 50,
         'allow_webhooks'    => true,
         'webhook_url'       => 'https://hooks.acme.com/flux',
         'webhook_events'    => ['upload', 'delete'],
@@ -220,9 +217,6 @@ test('generateToken forwards versioning + webhook config claims, not just the ga
     // (a core too old to know these keys simply ignores them). Validation belongs to
     // the core and is tested there (test-claims.php).
     $p = \FluxFiles\JwtCompat::decode($token, $secret);
-    assertEqual(true, $p->allow_versioning ?? null, 'versioning gate');
-    assertEqual(5, $p->versioning_max ?? 0, 'versioning_max');
-    assertEqual(50, $p->versioning_max_mb ?? 0, 'versioning_max_mb');
     assertEqual(true, $p->allow_webhooks ?? null, 'webhooks gate');
     assertEqual('https://hooks.acme.com/flux', $p->webhook_url ?? '', 'webhook_url');
     assertEqual(['upload', 'delete'], (array) ($p->webhook_events ?? []), 'webhook_events');
@@ -234,6 +228,20 @@ test('generateToken forwards versioning + webhook config claims, not just the ga
         $secret
     );
     assertEqual('upload,delete', $csv->webhook_events ?? '', 'CSV events forwarded as-is');
+});
+
+// Versioning is core-standalone — /api/fm/versions* isn't proxied, so the plugin
+// must drop the gate and its tuning claims entirely (same rule as SSH terminal).
+test('generateToken does NOT forward versioning claims (no proxied endpoint)', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(56, [
+        'allow_versioning'  => true,
+        'versioning_max'    => 5,
+        'versioning_max_mb' => 50,
+    ]);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(false, isset($p->allow_versioning), 'versioning gate dropped');
+    assertEqual(false, isset($p->versioning_max), 'versioning_max dropped');
+    assertEqual(false, isset($p->versioning_max_mb), 'versioning_max_mb dropped');
 });
 
 // Share + Intake are NOT forwarded at all: the plugin is proxy-only and the REST API
