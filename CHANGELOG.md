@@ -3,6 +3,84 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.95] — 2026-08-29
+
+> Released: `core-v0.2.77`, modules `audit-export v1.0.0` (new) and `sso v1.0.0`
+> (new). Both new modules' composer floors are `^0.2.77` — they consume
+> `ModuleRegistry::requireServer()`, `Claims::$allowAuditExport`/
+> `$auditRetentionDays`, and `StorageMetadataHandler::readAuditArchive()`/
+> `purgeAuditBefore()`, all first shipped in that core tag.
+
+### Added — Enterprise Compliance Bundle: audit export + SSO bridge
+
+Fills the last two gaps in the Enterprise compliance story (virus scan + C2PA
+provenance already shipped): audit log retention/export, and a login screen
+for the standalone UI.
+
+- **Free/core fix**: `StorageMetadataHandler::audit()`'s 5MB/5000-line
+  rotation used to destructively drop old entries; it now archives the
+  dropped tail to `_fluxfiles/audit/archive/audit-<ts>-<hex>.jsonl` under the
+  same lock before truncating — no module required, ships for every install.
+  New `readAuditArchive()`/`purgeAuditBefore()` storage primitives and
+  `AuditLogStorage::exportAll()` (merges live + archived, tenant-scoped,
+  capped).
+- **New paid module `audit-export`**: `GET /api/fm/audit/export` streams the
+  full audit history as a file download, NDJSON or CSV (CSV rows are
+  formula/DDE-injection guarded — a leading `=`/`+`/`-`/`@`/tab/CR gets
+  quote-prefixed). `POST /api/fm/audit/purge` deletes entries older than a
+  cutoff. Purge is **admin-only** (requires an unscoped token, since
+  `audit.jsonl` is per-disk, not per-tenant) and separately checks
+  `hasDisk()`, since `pathPrefix` and `allowedDisks` are independent claims.
+  New `allow_audit_export`/`audit_retention_days` claims.
+- **New paid module `sso`**: an OIDC login bridge for the standalone
+  `/public` UI, for deployments with no host app minting tokens via
+  `fluxfiles_token()`. Three pre-auth routes — `/sso/login`, `/sso/callback`,
+  `/sso/exchange` — gated by a new `ModuleRegistry::requireServer()`
+  (installed + licensed only; there's no `Claims` yet for the usual
+  per-token check, so the third gate is the server env flag
+  `FLUXFILES_SSO_ENABLED`). Group-to-claims mapping via
+  `FLUXFILES_SSO_CLAIMS_MAP` (dot-path group claim, first match wins,
+  fail-closed `403 sso_no_mapping`). The real JWT is only ever handed off
+  through a URL **fragment** (`#boot=<one-time token>`, 60s TTL), traded for
+  the real token over a `POST` body — never a query string, never logged.
+  Per-client-IP rate limiting on all three routes
+  (`FLUXFILES_SSO_{LOGIN,CALLBACK,EXCHANGE}_LIMIT`).
+- Hardening from review: closed a WHATWG backslash-normalization
+  open-redirect bypass in the login flow, stopped a 500 response from
+  leaking the missing env var's name to the client, caught malformed-JWKS
+  parses instead of leaking an uncaught exception with a 200 status, made
+  `purgeAuditBefore()` fail loudly instead of silently swallowing errors on
+  a destructive admin-only operation, and locked the OIDC discovery/JWKS
+  disk cache to directories the process actually owns (closes a local
+  cache-poisoning path when `FLUXFILES_STORAGE_PATH` is unset).
+- New claims + env vars documented in `docs/CONFIG.md`; new routes in
+  `docs/API.md` and `.claude/api-map.md`.
+
+## [0.2.94] — 2026-08-28
+
+> Released: `core-v0.2.77` — the same core tag as `0.2.95` above (both are
+> core-side changes stacked on `core-v0.2.76`, released together). No paid-
+> module version bump: `versioning`'s server side is untouched, only its UI
+> wrapper.
+
+### Added — Versioning operator UI
+
+`VersioningModule` and its `/api/fm/versions*` routes were fully implemented
+server-side but had no client, mirroring the gap already closed for
+Share/Intake.
+
+- fm.js/index.html: a Version History modal (open/close/load/restore), a
+  detail-panel button, and context-menu + action-sheet entries, folded into
+  the existing toolbar Pro-lock pill via the same three-state `proGate`
+  (on/hidden/locked) treatment as the other standalone paid SKUs.
+- `versions.*` i18n namespace added across all 16 locales.
+- **Fixed alongside**: Laravel and WordPress forwarded
+  `allow_versioning`/`versioning_max`/`versioning_max_mb` unconditionally,
+  but `/api/fm/versions*` isn't proxied by either adapter — the same class of
+  bug already fixed for `allow_terminal`/`allow_share`/`allow_intake`.
+  Laravel now mode-gates the claim behind `standalone` mode; WordPress drops
+  it entirely.
+
 ## [0.2.93] — 2026-08-27
 
 > Released: `core-v0.2.76`, module `intake v1.2.0`. Intake's composer floor bumped to
