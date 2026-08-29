@@ -272,7 +272,9 @@ test('generateToken forwards the share/intake gates and their config', function 
         'share_url_ttl'   => 120,
         'share_base_url'  => 'https://files.acme.com/public/share.html',
         'share_preview'   => false,
+        'share_analytics' => true,
         'intake_base_url' => 'https://files.acme.com/public/intake.html',
+        'intake_analytics' => true,
     ]);
     $p = \FluxFiles\JwtCompat::decode($token, $secret);
     assertEqual(true, $p->allow_share ?? null, 'share gate forwarded');
@@ -280,7 +282,9 @@ test('generateToken forwards the share/intake gates and their config', function 
     assertEqual(120, $p->share_url_ttl ?? null, 'share_url_ttl forwarded');
     assertEqual('https://files.acme.com/public/share.html', $p->share_base_url ?? null);
     assertEqual(false, $p->share_preview ?? null, 'share_preview forwarded');
+    assertEqual(true, $p->share_analytics ?? null, 'share_analytics forwarded');
     assertEqual('https://files.acme.com/public/intake.html', $p->intake_base_url ?? null);
+    assertEqual(true, $p->intake_analytics ?? null, 'intake_analytics forwarded');
 
     // The edition preset lights both gates up, as it always intended to.
     $pro = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(57, ['edition' => 'pro']), $secret);

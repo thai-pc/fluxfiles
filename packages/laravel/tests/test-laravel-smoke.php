@@ -236,14 +236,16 @@ test('share/intake gates + their config: dropped in proxy mode, forwarded in sta
         'share_url_ttl'   => 120,
         'share_base_url'  => 'https://files.acme.com/public/share.html',
         'share_preview'   => false,
+        'share_analytics' => true,
         'intake_base_url' => 'https://files.acme.com/public/intake.html',
+        'intake_analytics' => true,
     ];
     // Assert on the RAW JWT payload, not Claims — the adapter only writes payload
     // keys (no new core API), so this stays valid against the declared core floor.
 
     // Proxy mode (default): nothing about share/intake may reach the token.
     $p = \FluxFiles\JwtCompat::decode($mgr->token(56, $overrides), $secret);
-    foreach (['allow_share', 'allow_intake', 'share_url_ttl', 'share_base_url', 'share_preview', 'intake_base_url'] as $k) {
+    foreach (['allow_share', 'allow_intake', 'share_url_ttl', 'share_base_url', 'share_preview', 'share_analytics', 'intake_base_url', 'intake_analytics'] as $k) {
         assertEqual(false, isset($p->$k), "{$k} dropped in proxy mode");
     }
     // …not even via the edition preset, which defaults both gates for 'pro'.
@@ -262,7 +264,9 @@ test('share/intake gates + their config: dropped in proxy mode, forwarded in sta
         assertEqual(120, $s->share_url_ttl ?? 0, 'share_url_ttl');
         assertEqual('https://files.acme.com/public/share.html', $s->share_base_url ?? '', 'share_base_url');
         assertEqual(false, $s->share_preview ?? null, 'share_preview');
+        assertEqual(true, $s->share_analytics ?? null, 'share_analytics');
         assertEqual('https://files.acme.com/public/intake.html', $s->intake_base_url ?? '', 'intake_base_url');
+        assertEqual(true, $s->intake_analytics ?? null, 'intake_analytics');
         $sp = \FluxFiles\JwtCompat::decode($mgr->token(57, ['edition' => 'pro']), $secret);
         assertEqual(true, $sp->allow_share ?? null, 'edition preset applies in standalone');
     } finally {

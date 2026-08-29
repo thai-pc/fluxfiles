@@ -400,6 +400,9 @@ class FluxFilesPlugin
         if (array_key_exists('share_preview', $overrides)) {
             $payload['share_preview'] = (bool) $overrides['share_preview'];
         }
+        if (array_key_exists('share_analytics', $overrides)) {
+            $payload['share_analytics'] = (bool) $overrides['share_analytics'];
+        }
         // The recipient link base. Defaults to this site's own page rather than being
         // left empty: empty makes the module fall back to the request origin plus
         // `/public/share.html`, a path a WordPress site does not have.
@@ -409,6 +412,9 @@ class FluxFilesPlugin
         $payload['intake_base_url'] = !empty($overrides['intake_base_url'])
             ? (string) $overrides['intake_base_url']
             : self::publicLinkUrl('intake.html');
+        if (array_key_exists('intake_analytics', $overrides)) {
+            $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
+        }
         // NOTE: versioning is intentionally NOT forwarded — neither `allow_versioning`
         // nor `versioning_max`/`versioning_max_mb`. The plugin is proxy-only and the
         // REST API never exposes /api/fm/versions*, so the History panel would have no

@@ -232,9 +232,15 @@ class FluxFilesManager
             if (array_key_exists('share_preview', $overrides)) {
                 $payload['share_preview'] = (bool) $overrides['share_preview'];
             }
+            if (array_key_exists('share_analytics', $overrides)) {
+                $payload['share_analytics'] = (bool) $overrides['share_analytics'];
+            }
             // Intake portal link base — the same role for `allow_intake`.
             if (!empty($overrides['intake_base_url'])) {
                 $payload['intake_base_url'] = (string) $overrides['intake_base_url'];
+            }
+            if (array_key_exists('intake_analytics', $overrides)) {
+                $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
             }
         } else {
             // …including whatever an edition preset already defaulted: `edition: pro`
