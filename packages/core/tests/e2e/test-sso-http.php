@@ -367,7 +367,23 @@ try {
         if ($license === '') {
             echo "\n  {$yellow}skip{$reset} phase 4 (no offline signing key on this machine — expected in CI)\n";
         } else {
-            echo "\n{$cyan}── phase 4: licensed (fixture IdP, real journey) ──{$reset}\n\n";
+            echo "\n{$cyan}── phase 4a: misconfigured (licensed, but an OIDC env var is missing) ──{$reset}\n\n";
+            // FLUXFILES_SSO_OIDC_ISSUER deliberately omitted — it's read first, so this
+            // fails inside requireEnv() before any network call to the (fixture-not-yet-up) IdP.
+            file_put_contents($envFile, $baseEnv . "FLUXFILES_SSO_ENABLED=true\nFLUXFILES_LICENSE_KEY={$license}\n");
+            [$srvMisconfig, $BMisconfig] = boot(8135, $modRouter);
+
+            test('login with a missing OIDC env var -> 500 sso_misconfigured, without naming the var to an unauthenticated caller', function () use ($BMisconfig) {
+                [$st, $h, $body] = req('GET', "{$BMisconfig}/api/fm/sso/login");
+                assertEqual(500, $st, $body);
+                assertTrue(stripos($h['content-type'] ?? '', 'text/plain') === 0);
+                assertTrue(stripos($body, 'misconfigured') !== false, $body);
+                assertTrue(stripos($body, 'FLUXFILES_SSO_OIDC_ISSUER') === false, "leaks the specific env var name: {$body}");
+            });
+
+            stop($srvMisconfig);
+
+            echo "\n{$cyan}── phase 4b: licensed (fixture IdP, real journey) ──{$reset}\n\n";
 
             // The "IdP unreachable" case is run BEFORE the fixture process starts —
             // OidcDiscovery only caches SUCCESSFUL fetches, so a failed fetch here can't
