@@ -39,6 +39,8 @@ final class ModuleRegistry
         'virus'    => '\\FluxFiles\\Virus\\VirusScanModule',
         'backup'   => '\\FluxFiles\\Backup\\BackupModule',
         'c2pa'     => '\\FluxFiles\\C2pa\\C2paModule',
+        'audit-export' => '\\FluxFiles\\AuditExport\\AuditExportModule',
+        'sso'          => '\\FluxFiles\\Sso\\SsoModule',
     ];
 
     /** Snapshot of the built-in map, for reset() in tests. @var array<string,string> */
@@ -99,6 +101,29 @@ final class ModuleRegistry
             throw new ApiException("This token may not use the '{$id}' module", 403, $claim . '_forbidden', ['module' => $id]);
         }
 
+        return new $class();
+    }
+
+    /**
+     * Layers 1+2 only (installed + licensed) — for routes that run before a
+     * request-scoped Claims object exists (the SSO login/callback/exchange routes
+     * are pre-auth: there is no JWT yet to build Claims from). Layer 3 for those
+     * routes is an explicit server env-flag check done by the caller, not here.
+     */
+    public static function requireServer(string $id, LicenseManager $license): ModuleInterface
+    {
+        $class = self::$map[$id] ?? null;
+        if ($class === null || !class_exists($class)) {
+            throw new ApiException("The '{$id}' module is not installed on this server", 501, 'module_not_installed', ['module' => $id]);
+        }
+
+        if (!$license->licensed($id)) {
+            $status = $license->status();
+            $code = $status === 'expired' ? 'license_expired' : 'license_required';
+            throw new ApiException("The '{$id}' module requires a valid license ({$status})", 402, $code, ['module' => $id, 'status' => $status]);
+        }
+
+        /** @var class-string<ModuleInterface> $class */
         return new $class();
     }
 }

@@ -733,11 +733,17 @@ test('expired session: the load-error Retry recovers after a token refresh', asy
   const fm = page.frameLocator('#fm');
   await expect(fm.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
 
-  // Model the user's stuck state: budget exhausted + a persistent load error,
-  // then make the host able to hand back the fresh token.
-  await page.evaluate(() => {
+  // Model the user's stuck state: an attached (expired) token, budget
+  // exhausted, a persistent load error, then make the host able to hand back
+  // the fresh token. `token` must be set explicitly here — the iframe is
+  // embedded (window.parent !== window), and the embedded boot path only ever
+  // picks up a token from an FM_CONFIG postMessage, never the iframe src's own
+  // `?token=` query string (that's a standalone-only convenience), so the
+  // live session being modeled has to be injected directly.
+  await page.evaluate((tok) => {
     const w = (document.getElementById('fm') as HTMLIFrameElement).contentWindow as any;
     const data = w.Alpine.$data(w.document.querySelector('.ff-app'));
+    data.token = tok;
     data._refreshAttempts = 9;
     data._refreshPromise = null;
     data.loading = false;
@@ -746,7 +752,7 @@ test('expired session: the load-error Retry recovers after a token refresh', asy
     data.loadError = 'Session expired';
     data.folders = []; data.files = [];
     (window as any).__hostRefreshEnabled = true;
-  });
+  }, expired);
 
   await expect(fm.locator('.ff-load-error')).toBeVisible();
   await fm.locator('.ff-load-error .ff-empty-cta').click();   // Retry

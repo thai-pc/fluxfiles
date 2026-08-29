@@ -92,6 +92,7 @@ function fluxFilesApp() {
         activityLoading: false,
         activityError: '',
         activityFilter: { action: '', path: '', from: '', to: '' },
+        auditExportBusy: false,
 
         // Bucket Doctor panel
         showDoctor: false,
@@ -404,6 +405,24 @@ function fluxFilesApp() {
             // Standalone mode: not in iframe, load locale + files directly
             if (window.parent === window) {
                 this.endpoint = window.location.origin;
+
+                // SSO bridge, step 4: /api/fm/sso/callback redirects back here with
+                // #boot=<one-time token> in the URL FRAGMENT — fragments are never
+                // sent to the server or written to access/Referer logs, unlike a
+                // query string. Strip it immediately (same defensive move as the
+                // ?token= handling below) so a reload/back-nav/copied link can't
+                // replay it, then exchange it for the real JWT over a POST body in
+                // initLocale() below. The real JWT itself never touches a URL.
+                let ssoBootToken = null;
+                if (window.location.hash.indexOf('#boot=') === 0) {
+                    ssoBootToken = decodeURIComponent(window.location.hash.slice('#boot='.length));
+                    try {
+                        const u = new URL(window.location.href);
+                        u.hash = '';
+                        window.history.replaceState({}, '', u.toString());
+                    } catch (e) { /* non-fatal */ }
+                }
+
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('token')) {
                     this.token = params.get('token');
@@ -449,6 +468,26 @@ function fluxFilesApp() {
                             // keep default 'en'
                         }
                     }
+                    if (ssoBootToken && !this.token) {
+                        try {
+                            const res = await fetch(this.joinUrl('/api/fm/sso/exchange'), {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ token: ssoBootToken }),
+                            });
+                            const json = await res.json();
+                            if (json.error || !json.data || !json.data.token) {
+                                const msg = json.error_code ? this.t('error.' + json.error_code) : null;
+                                throw new Error((msg && msg !== 'error.' + json.error_code) ? msg : (json.error || 'SSO exchange failed'));
+                            }
+                            // Held in memory only (this.token), never persisted — same
+                            // rule as every other token path in this file.
+                            this.token = json.data.token;
+                        } catch (e) {
+                            this.showToast(e.message || (this.t('error.sso_boot_token_invalid') || 'Your sign-in link has expired. Please sign in again.'), 'error', 4000);
+                        }
+                    }
+
                     if (this.token) {
                         this.loadFiles();
                         this.loadQuota();
@@ -525,8 +564,17 @@ function fluxFilesApp() {
 
             const res = await fetch(url, opts);
 
-            // 401 — token expired or invalid
+            // 401 — token expired or invalid. Only run the shared
+            // refresh/expiry machinery when a token was actually attached:
+            // an anonymous pre-login probe (e.g. the license-info fetch on
+            // the method-cards screen) legitimately gets a 401 with no
+            // session having ever existed, and must not be misread as an
+            // existing session expiring (that would wrongly flip authState
+            // away from 'missing' into 'refreshing'/'expired').
             if (res.status === 401 && !_isRetry) {
+                if (!this.token) {
+                    throw new Error('Unauthorized');
+                }
                 const refreshed = await this._handleTokenExpired();
                 if (refreshed) {
                     // Retry the original request with new token
@@ -3100,6 +3148,49 @@ function fluxFilesApp() {
         get shareGate() { return this.proGate('allow_share', 'share'); },
         get intakeGate() { return this.proGate('allow_intake', 'intake'); },
         get versionGate() { return this.proGate('allow_versioning', 'versioning'); },
+        // Audit export (paid module: audit-export) — surfaced only inside the
+        // Activity Log panel, which is itself gated by canAudit (the `audit` perm).
+        // Unlike Share/Intake this has no toolbar entry point of its own, so
+        // 'locked' just renders the same Pro-teaser inline instead of a separate button.
+        get auditExportGate() { return this.proGate('allow_audit_export', 'audit-export'); },
+        // GET /api/fm/audit/export streams a raw NDJSON/CSV file, not the JSON
+        // envelope — fetch + blob + a synthetic <a download>, same pattern as
+        // downloadZip() (an <a href> navigation can't send the Bearer header, and
+        // the JWT must never appear in the URL as a query param either).
+        async downloadAuditExport(format) {
+            if (this.auditExportBusy) return;
+            this.auditExportBusy = true;
+            try {
+                const q = new URLSearchParams({ format });
+                const f = this.activityFilter;
+                if (f.action) q.set('action', f.action);
+                if (f.path) q.set('path', f.path);
+                if (f.from) { const t = Date.parse(f.from); if (!isNaN(t)) q.set('from', String(Math.floor(t / 1000))); }
+                if (f.to) { const t = Date.parse(f.to); if (!isNaN(t)) q.set('to', String(Math.floor(t / 1000))); }
+                const res = await fetch(this.joinUrl('/api/fm/audit/export?' + q.toString()), {
+                    headers: { 'Authorization': 'Bearer ' + this.token },
+                });
+                if (!res.ok) {
+                    let msg = this.t('audit.export_failed') || 'Could not export the audit log';
+                    try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) { /* non-JSON */ }
+                    this.showToast(msg, 'error');
+                    return;
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'audit-export.' + (format === 'csv' ? 'csv' : 'ndjson');
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+            } catch (e) {
+                this.showToast(e.message || (this.t('audit.export_failed') || 'Audit export failed'), 'error');
+            } finally {
+                this.auditExportBusy = false;
+            }
+        },
         // The toolbar entry point exists if EITHER feature is usable or advertisable.
         // Versioning has no toolbar 'on' behavior of its own (it's opened per-file from
         // the detail panel / context menu), but its 'locked' teaser rides the same pill

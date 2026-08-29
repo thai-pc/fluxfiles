@@ -171,6 +171,12 @@ class Claims
     public bool $allowVirusScan = false;   // Virus/malware scan on upload (fluxfiles/virus)
     public bool $allowBackup = false;      // Backup Bridge: SFTP↔S3 sync (fluxfiles/backup)
     public bool $allowC2pa = false;        // C2PA content provenance (fluxfiles/c2pa)
+    public bool $allowAuditExport = false; // Audit log export/purge (fluxfiles/audit-export)
+
+    /** @var int Days of audit history a purge call should keep, resolved server-side
+     *           by the /api/fm/audit/purge route when the request body omits `before`.
+     *           0 = no default cutoff (the route requires an explicit `before` then). */
+    public int $auditRetentionDays = 0;
 
     // ── Share landing page (read at create time, baked into the share record) ──
     /** @var int TTL (seconds) of the presigned S3/R2 URL a share download redirects
@@ -601,6 +607,8 @@ class Claims
         $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);
         $c->allowBackup = (bool) ($payload->allow_backup ?? false);
         $c->allowC2pa = (bool) ($payload->allow_c2pa ?? false);
+        $c->allowAuditExport = (bool) ($payload->allow_audit_export ?? false);
+        $c->auditRetentionDays = max(0, (int) ($payload->audit_retention_days ?? 0));
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
         $c->optimizeKeepOriginal = (bool) ($payload->optimize_keep_original ?? false);
@@ -699,6 +707,7 @@ class Claims
             case 'allow_virus_scan': return $this->allowVirusScan;
             case 'allow_backup':     return $this->allowBackup;
             case 'allow_c2pa':       return $this->allowC2pa;
+            case 'allow_audit_export': return $this->allowAuditExport;
             default:                 return false;
         }
     }

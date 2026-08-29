@@ -244,6 +244,19 @@ test('generateToken does NOT forward versioning claims (no proxied endpoint)', f
     assertEqual(false, isset($p->versioning_max_mb), 'versioning_max_mb dropped');
 });
 
+// Audit export/purge is core-standalone — /api/fm/audit/export and
+// /api/fm/audit/purge aren't proxied, so the plugin must drop the gate and its
+// retention-days claim entirely (same rule as versioning/SSH terminal).
+test('generateToken does NOT forward audit-export claims (no proxied endpoint)', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(57, [
+        'allow_audit_export'   => true,
+        'audit_retention_days' => 365,
+    ]);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(false, isset($p->allow_audit_export), 'audit-export gate dropped');
+    assertEqual(false, isset($p->audit_retention_days), 'audit_retention_days dropped');
+});
+
 // Share + Intake are NOT forwarded at all: the plugin is proxy-only and the REST API
 // exposes none of the six operator endpoints (nor the public landing routes), so the
 // gate claims would render a button that 404s and their config would be dead. Same

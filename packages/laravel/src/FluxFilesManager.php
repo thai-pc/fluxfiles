@@ -185,6 +185,23 @@ class FluxFilesManager
                 }
             }
         }
+        // Audit export/purge is core-standalone — /api/fm/audit/export and
+        // /api/fm/audit/purge aren't proxied. Forward the gate claim only in
+        // 'standalone' mode (token → a real core that serves them); in proxy mode
+        // it's dropped so the UI can't render a button for an endpoint that would
+        // 404. Same rule as allow_terminal/allow_versioning above.
+        if (!empty($overrides['allow_audit_export']) && config('fluxfiles.mode') === 'standalone') {
+            $payload['allow_audit_export'] = true;
+            if (!empty($overrides['audit_retention_days'])) {
+                $payload['audit_retention_days'] = (int) $overrides['audit_retention_days'];
+            }
+        }
+        // NOTE: SSO (FLUXFILES_SSO_*) is NOT a claim-forwarding concern at all — those
+        // are pure server env vars that configure the standalone /public UI's own
+        // login endpoint (/api/fm/sso/login|callback|exchange). They never travel
+        // inside a JWT, so there is nothing for token()/tokenForUser() to forward here,
+        // in either mode. SSO only applies to deployments with no host app minting
+        // tokens in the first place.
         foreach (['allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];

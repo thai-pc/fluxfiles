@@ -153,6 +153,14 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
         }
     }
 
+    // SSO bridge (paid module): tell the standalone UI whether to show the
+    // "Sign in with SSO" button. Non-sensitive — a bool + the fixed, public login
+    // path; the real IdP/client config never leaves the server.
+    if (($_ENV['FLUXFILES_SSO_ENABLED'] ?? '') === 'true' && \FluxFiles\ModuleRegistry::installed('sso')) {
+        $ssoJson = json_encode(['enabled' => true, 'loginUrl' => '/api/fm/sso/login'], $jsFlags);
+        $html = str_replace('</head>', "<script>window.__FM_SSO__ = {$ssoJson};</script>\n</head>", $html);
+    }
+
     echo $html;
     exit;
 }
@@ -223,6 +231,25 @@ if ($uri === '/api/fm/intake/info' || $uri === '/api/fm/intake/upload') {
 // The create/manage side is authed + gated under the main routes below.
 if ($uri === '/api/fm/share/info' || $uri === '/api/fm/share/unlock' || $uri === '/api/fm/share/file') {
     handleSharePublic($method, $uri);
+    exit;
+}
+
+// SSO bridge (paid module) — PUBLIC endpoints, no main JWT (there isn't one yet).
+// `login` 302s to the IdP, `callback` completes the OIDC exchange and 302s back to
+// the UI with a one-time bootstrap token in the URL *fragment*, `exchange` trades
+// that fragment token for the real access JWT via a POST body. Gated by the
+// FLUXFILES_SSO_ENABLED server flag + the module's own install/license layers,
+// checked inside each handler — never by a JWT claim (there's no token yet).
+if ($method === 'GET' && $uri === '/api/fm/sso/login') {
+    handleSsoLogin();
+    exit;
+}
+if ($method === 'GET' && $uri === '/api/fm/sso/callback') {
+    handleSsoCallback();
+    exit;
+}
+if ($method === 'POST' && $uri === '/api/fm/sso/exchange') {
+    handleSsoExchange();
     exit;
 }
 
@@ -374,6 +401,18 @@ try {
         // isn't blank. Only fills when empty, so other actions are unchanged.
         if ($auditKey === '' && is_array($data) && isset($data['key'])) {
             $auditKey = (string) $data['key'];
+        }
+        // Every path above (request body AND $data['key']) is tenant-relative —
+        // FileManager::outKey()/unscopePath() strips the prefix before a path
+        // ever reaches the client or comes back from one. isPathInScope() (used
+        // by list()/exportAll() to keep tenants from reading each other's
+        // entries) matches on the FULL scoped path, so logging the relative one
+        // verbatim made a scoped tenant's own actions permanently invisible to
+        // themselves — the prefix check could never match. Re-apply the same
+        // prefixing FileManager used for the operation itself (idempotent, so
+        // this is safe even if a path were already scoped).
+        if ($auditKey !== '') {
+            $auditKey = $claims->scopePath((string) $auditKey);
         }
         $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
         // Terminal has no path/key — the command itself IS the security-relevant
@@ -927,6 +966,47 @@ function routeRequest(
         );
     }
 
+    // Audit export (paid module) — a full, unpaginated download of the tenant's
+    // audit history (live + archived), as NDJSON or CSV. Bypasses the JSON encoder
+    // like /api/fm/zip: the module streams its own headers + body, then we exit.
+    if ($method === 'GET' && $uri === '/api/fm/audit/export') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        /** @var \FluxFiles\AuditExport\AuditExportModule $module */
+        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module->export($auditLog, $claims, [
+            'action' => $_GET['action'] ?? null,
+            'from'   => $_GET['from'] ?? null,
+            'to'     => $_GET['to'] ?? null,
+            'path'   => $_GET['path'] ?? null,
+            'actor'  => $_GET['actor'] ?? null,
+        ], (string) ($_GET['format'] ?? 'ndjson'));
+        exit;
+    }
+
+    // Audit purge (paid module) — destructive, so admin-only: the audit log is
+    // stored per-DISK, not per-tenant, so a path-scoped token could otherwise purge
+    // lines belonging to other tenants sharing the same disk.
+    if ($method === 'POST' && $uri === '/api/fm/audit/purge') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        if (trim($claims->pathPrefix, '/') !== '') {
+            throw new ApiException('Audit purge requires an unscoped (admin) token', 403, 'forbidden');
+        }
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $before = isset($body['before']) && $body['before'] !== ''
+            ? (int) $body['before']
+            : ($claims->auditRetentionDays > 0 ? time() - ($claims->auditRetentionDays * 86400) : 0);
+        if ($before <= 0) {
+            throw new ApiException('An explicit `before` cutoff (or a token audit_retention_days) is required', 400, 'audit_purge_no_cutoff');
+        }
+        /** @var \FluxFiles\AuditExport\AuditExportModule $module */
+        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->purge($metaRepo, $claims, (string) ($body['disk'] ?? 'local'), $before);
+    }
+
     // Bucket Doctor — diagnose a disk's storage backend (creds, permissions,
     // CORS, presign). Requires write (it writes/deletes a probe object) on a
     // disk the token may access; the host can run it on an ephemeral BYOB token
@@ -973,6 +1053,7 @@ function routeRequest(
 function resolveAuditAction(string $uri): string
 {
     $map = [
+        '/audit/purge' => 'audit_purge',
         '/trash/restore' => 'restore',
         '/trash/purge'   => 'purge',
         '/trash/empty'   => 'empty_trash',
@@ -1117,6 +1198,92 @@ function handleDeleteMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claim
     $fm->assertCanModifyScopedPath($disk, $key);
     $metaRepo->delete($disk, $key);
     return ['deleted' => true];
+}
+
+/**
+ * SSO bridge, step 1: start a login round-trip. Validates the return path,
+ * signs an SsoStateToken, and delegates to the paid module to build the IdP's
+ * authorization URL (from OidcDiscovery) and 302 there. Emits plain text on
+ * failure — this is a browser navigation, not a fetch(), so there's no JSON
+ * envelope to return errors in (same posture as handleMediaStream).
+ */
+function handleSsoLogin(): void
+{
+    try {
+        if (($_ENV['FLUXFILES_SSO_ENABLED'] ?? '') !== 'true') {
+            throw new ApiException('SSO is not enabled on this server', 403, 'sso_disabled');
+        }
+        /** @var \FluxFiles\Sso\SsoModule $module */
+        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
+
+        // Open-redirect guard: only a same-origin relative path is honoured — no
+        // scheme, no `//` (protocol-relative), no `://` anywhere in the value.
+        $redirect = ff_str_param($_GET, 'redirect', '/public/index.html');
+        if ($redirect === '' || $redirect[0] !== '/' || strpos($redirect, '//') === 0 || strpos($redirect, '://') !== false) {
+            $redirect = '/public/index.html';
+        }
+
+        $module->login($redirect);
+    } catch (ApiException $e) {
+        http_response_code($e->getHttpCode());
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $e->getMessage();
+    }
+}
+
+/**
+ * SSO bridge, step 2: the IdP redirects back here with `code`/`state`. Delegates
+ * to the paid module, which verifies `state`, exchanges `code` at the token
+ * endpoint, verifies the `id_token` via JWKS, resolves claims, mints the real
+ * access JWT, wraps it in a 60s SsoBootToken, and 302s back to
+ * `/public/index.html#boot=<token>` — a URL *fragment*, never a query string, so
+ * the real JWT's carrier never reaches server access logs.
+ */
+function handleSsoCallback(): void
+{
+    try {
+        if (($_ENV['FLUXFILES_SSO_ENABLED'] ?? '') !== 'true') {
+            throw new ApiException('SSO is not enabled on this server', 403, 'sso_disabled');
+        }
+        /** @var \FluxFiles\Sso\SsoModule $module */
+        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
+
+        $module->callback(ff_str_param($_GET, 'code'), ff_str_param($_GET, 'state'));
+    } catch (ApiException $e) {
+        http_response_code($e->getHttpCode());
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $e->getMessage();
+    }
+}
+
+/**
+ * SSO bridge, step 3: the browser's boot script trades the fragment's one-time
+ * SsoBootToken for the real access JWT, via a POST body — the only way the real
+ * JWT is ever transmitted. Standard JSON envelope (this IS a fetch(), unlike
+ * login/callback above), same try/catch shape as handleIntakePublic/handleSharePublic.
+ */
+function handleSsoExchange(): void
+{
+    try {
+        if (($_ENV['FLUXFILES_SSO_ENABLED'] ?? '') !== 'true') {
+            throw new ApiException('SSO is not enabled on this server', 403, 'sso_disabled');
+        }
+        /** @var \FluxFiles\Sso\SsoModule $module */
+        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
+
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $result = $module->exchange(ff_str_param($body, 'token'));
+        echo json_encode(['data' => $result, 'error' => null]);
+    } catch (ApiException $e) {
+        http_response_code($e->getHttpCode());
+        $r = ['data' => null, 'error' => $e->getMessage()];
+        if ($e->getErrorCode() !== null) { $r['error_code'] = $e->getErrorCode(); }
+        if ($e->getErrorParams()) { $r['error_params'] = $e->getErrorParams(); }
+        echo json_encode($r);
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        echo json_encode(['data' => null, 'error' => 'Internal server error', 'error_code' => 'server_error']);
+    }
 }
 
 /**

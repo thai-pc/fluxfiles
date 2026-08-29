@@ -37,7 +37,13 @@ function makeAudit(array $disks = ['local']): array
     $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage']]);
     $meta = new StorageMetadataHandler($dm);
     $audit = new AuditLogStorage($meta, $disks);
-    return [$audit, $dm->disk('local'), $root];
+    return [$audit, $dm->disk('local'), $root, $meta];
+}
+
+/** One synthetic audit JSONL line, old-enough or fresh depending on $ts. */
+function auditLine(int $ts, string $userId, string $fileKey): string
+{
+    return json_encode(['ts' => $ts, 'action' => 'upload', 'context' => ['user_id' => $userId, 'file_key' => $fileKey]]);
 }
 
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
@@ -123,6 +129,106 @@ test('many writes rotate but keep the log readable', function () {
 test('reading audit on a disk with no log yields empty (graceful)', function () {
     [$audit] = makeAudit();
     assertEqual([], $audit->list(), 'no log → empty list, no error');
+});
+
+test('rotation archives the dropped tail instead of discarding it', function () {
+    [$audit, $fs, $root, $meta] = makeAudit();
+
+    // Pre-seed a live log big enough to force audit()'s size-based rotation
+    // (MAX_AUDIT_BYTES = 5MB), well past AUDIT_KEEP_LINES (5000) too, so both
+    // thresholds actually engage. Written directly to bypass 50k+ slow log()
+    // calls — audit() only cares what's already on disk when it runs.
+    $sample = auditLine(1_700_000_000, 'rot-user', 'rot/file-00000.png');
+    $lineLen = strlen($sample) + 1; // + newline
+    $keepLines = 5000;
+    $n = intdiv(5 * 1024 * 1024, $lineLen) + $keepLines + 500;
+    $lines = [];
+    for ($i = 0; $i < $n; $i++) {
+        $lines[] = auditLine(1_700_000_000 + $i, 'rot-user', sprintf('rot/file-%05d.png', $i));
+    }
+    $fs->write('_fluxfiles/audit.jsonl', implode("\n", $lines) . "\n");
+    assertTrue(strlen($fs->read('_fluxfiles/audit.jsonl')) > 5 * 1024 * 1024, 'seed file exceeds the rotation threshold');
+
+    $audit->log('rotator', 'trigger-rotate', 'local', 'trigger.txt');
+
+    $archived = $meta->readAuditArchive('local');
+    $droppedCount = $n - $keepLines;
+    assertEqual($droppedCount, count($archived), 'every dropped line landed in the archive, none silently lost');
+    assertTrue($fs->directoryExists('_fluxfiles/audit/archive/'), 'archive directory created');
+
+    $live = $meta->readAudit('local');
+    assertEqual($keepLines + 1, count($live), 'live log keeps the last N lines plus the new entry');
+    $liveKeys = array_column($live, 'file_key');
+    assertTrue(in_array('trigger.txt', $liveKeys, true), 'the entry that triggered rotation is in the live log');
+    assertTrue(in_array(sprintf('rot/file-%05d.png', $n - 1), $liveKeys, true), 'the newest pre-existing entry survived rotation');
+    assertTrue(!in_array(sprintf('rot/file-%05d.png', 0), $liveKeys, true), 'the oldest pre-existing entry was rotated out of the live log');
+
+    $archivedKeys = array_column($archived, 'file_key');
+    assertTrue(in_array(sprintf('rot/file-%05d.png', 0), $archivedKeys, true), 'the oldest entry is preserved in the archive');
+    assertTrue(!in_array(sprintf('rot/file-%05d.png', $n - 1), $archivedKeys, true), 'kept lines are not duplicated into the archive');
+});
+
+test('readAuditArchive merges entries across multiple archive files', function () {
+    [, $fs, , $meta] = makeAudit();
+    $fs->write('_fluxfiles/audit/archive/audit-1000-aaa.jsonl', auditLine(1000, 'u', 'a.txt') . "\n");
+    $fs->write('_fluxfiles/audit/archive/audit-2000-bbb.jsonl', auditLine(2000, 'u', 'b.txt') . "\n" . auditLine(2001, 'u', 'c.txt') . "\n");
+
+    $entries = $meta->readAuditArchive('local');
+    assertEqual(3, count($entries), 'entries from both archive files are merged');
+    $keys = array_column($entries, 'file_key');
+    sort($keys);
+    assertEqual(['a.txt', 'b.txt', 'c.txt'], $keys, 'all three archived entries present');
+});
+
+test('purgeAuditBefore deletes fully-old archives, keeps mixed ones, trims the live log', function () {
+    [$audit, $fs, , $meta] = makeAudit();
+    $cutoff = 5000;
+
+    // Fully old archive → deleted entirely.
+    $fs->write('_fluxfiles/audit/archive/audit-old.jsonl', auditLine(1000, 'u', 'old1.txt') . "\n" . auditLine(2000, 'u', 'old2.txt') . "\n");
+    // Mixed archive (one old, one new line) → must survive untouched; purge only
+    // drops archives that are ENTIRELY older than the cutoff.
+    $fs->write('_fluxfiles/audit/archive/audit-mixed.jsonl', auditLine(1500, 'u', 'mixed-old.txt') . "\n" . auditLine(9000, 'u', 'mixed-new.txt') . "\n");
+    // Live log: two old lines, one new line.
+    $fs->write('_fluxfiles/audit.jsonl', auditLine(1200, 'u', 'live-old-1.txt') . "\n" . auditLine(3000, 'u', 'live-old-2.txt') . "\n" . auditLine(9999, 'u', 'live-new.txt') . "\n");
+
+    $result = $meta->purgeAuditBefore('local', $cutoff);
+    assertEqual(1, $result['archives_deleted'], 'only the fully-old archive is deleted');
+    assertEqual(2, $result['live_lines_removed'], 'both old live lines removed');
+
+    assertTrue(!$fs->fileExists('_fluxfiles/audit/archive/audit-old.jsonl'), 'fully-old archive file is gone');
+    assertTrue($fs->fileExists('_fluxfiles/audit/archive/audit-mixed.jsonl'), 'mixed archive file survives');
+
+    $remainingArchived = $meta->readAuditArchive('local');
+    assertEqual(2, count($remainingArchived), 'the surviving mixed archive still has both its lines (purge is file-granular, not line-granular for archives)');
+
+    $liveKeys = array_column($meta->readAudit('local'), 'file_key');
+    assertEqual(['live-new.txt'], $liveKeys, 'only the new live line remains');
+
+    // The audit lock must be released cleanly — a subsequent write must not stall.
+    $audit->log('u', 'post-purge-write', 'local', 'after.txt');
+    assertTrue(in_array('after.txt', array_column($meta->readAudit('local'), 'file_key'), true), 'writes after purge still succeed (lock released)');
+});
+
+test('exportAll merges live + archived entries with the same scoping/filters as list()', function () {
+    [$audit, $fs, , $meta] = makeAudit();
+    $fs->write('_fluxfiles/audit/archive/audit-a.jsonl', json_encode(['ts' => 1000, 'action' => 'upload', 'context' => ['user_id' => 'tenant-42', 'file_key' => 'users/42/old.png']]) . "\n");
+    $audit->log('tenant-42', 'delete', 'local', 'users/42/new.png');
+    $audit->log('tenant-99', 'upload', 'local', 'users/99/secret.png');
+
+    $all = $audit->exportAll();
+    assertEqual(3, count($all), 'export merges live + archive across all entries');
+
+    $scoped = new \FluxFiles\Claims('tenant-42', ['read'], ['local'], 'users/42', 10, null, 0, false);
+    $scopedRows = $audit->exportAll($scoped);
+    assertEqual(2, count($scopedRows), 'export respects tenant path-prefix scoping');
+    foreach ($scopedRows as $e) {
+        assertTrue(strpos($e['file_key'], 'users/42/') === 0, 'only in-scope entries returned');
+    }
+
+    $filtered = $audit->exportAll(null, ['action' => 'delete']);
+    assertEqual(1, count($filtered), 'export respects the action filter');
+    assertEqual('users/42/new.png', $filtered[0]['file_key'], 'the matching entry');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

@@ -77,6 +77,19 @@
                 <div>
                     <p class="ff-auth-subtitle">Authentication required to access the file manager.</p>
 
+                    <!-- SSO bridge (paid module: sso): __FM_SSO__ is injected server-side only
+                         when FLUXFILES_SSO_ENABLED=true and the module is installed+licensed
+                         (see index.php). Real browser navigation, not fetch — it has to reach
+                         the IdP via a 302 redirect chain. Absent (the common case), nothing here
+                         changes from today's dev-only method cards. -->
+                    <template x-if="window.__FM_SSO__ && window.__FM_SSO__.enabled">
+                        <div style="margin: 16px 0;">
+                            <a class="ff-btn ff-btn-primary" style="width:100%; box-sizing:border-box; text-align:center;" :href="window.__FM_SSO__.loginUrl">
+                                Sign in with SSO
+                            </a>
+                        </div>
+                    </template>
+
                     <div class="ff-auth-divider"></div>
 
                     <!-- Method cards -->
@@ -1349,6 +1362,11 @@
                 <input type="date" x-model="activityFilter.from" :title="t('audit.filter_from')">
                 <input type="date" x-model="activityFilter.to" :title="t('audit.filter_to')">
                 <button class="ff-btn ff-btn-primary" @click="loadActivity()" x-text="t('audit.apply')"></button>
+                <!-- Audit export (paid module: audit-export). 'on' → real downloads,
+                     'locked' → the same generic Pro teaser used by Links, 'hidden' → nothing. -->
+                <button class="ff-btn" x-show="auditExportGate === 'on'" :disabled="auditExportBusy" @click="downloadAuditExport('ndjson')" x-text="t('audit.export_ndjson')"></button>
+                <button class="ff-btn" x-show="auditExportGate === 'on'" :disabled="auditExportBusy" @click="downloadAuditExport('csv')" x-text="t('audit.export_csv')"></button>
+                <button class="ff-btn ff-pro-locked-audit" x-show="auditExportGate === 'locked'" @click="openLocked()" :title="t('links.pro_title')" x-text="t('audit.export_pro')"></button>
             </div>
             <div class="ff-activity-body">
                 <p class="ff-new-folder-error" x-show="activityError" x-text="activityError"></p>

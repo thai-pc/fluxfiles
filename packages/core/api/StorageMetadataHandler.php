@@ -17,6 +17,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private const DIRS_KEY  = '_fluxfiles/dirs.json';
     private const TRASH_KEY = '_fluxfiles/trash.json';
     private const AUDIT_KEY = '_fluxfiles/audit.jsonl';
+    private const AUDIT_ARCHIVE_DIR = '_fluxfiles/audit/archive/';
     private const MAX_AUDIT_BYTES = 5 * 1024 * 1024; // 5MB rotation threshold
     private const AUDIT_KEEP_LINES = 5000; // Keep last N entries after rotation
 
@@ -577,8 +578,15 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 // Rotate if audit log exceeds size threshold
                 if (strlen($content) > self::MAX_AUDIT_BYTES) {
                     $lines = array_filter(explode("\n", $content));
-                    $lines = array_slice($lines, -self::AUDIT_KEEP_LINES);
-                    $content = implode("\n", $lines) . "\n";
+                    $kept = array_slice($lines, -self::AUDIT_KEEP_LINES);
+                    $dropped = array_slice($lines, 0, count($lines) - count($kept));
+                    // Archive the dropped prefix before it's gone for good — a
+                    // rotation must never be the only copy of compliance history.
+                    if ($dropped !== []) {
+                        $archiveKey = self::AUDIT_ARCHIVE_DIR . 'audit-' . time() . '-' . bin2hex(random_bytes(3)) . '.jsonl';
+                        $fs->write($archiveKey, implode("\n", $dropped) . "\n");
+                    }
+                    $content = implode("\n", $kept) . "\n";
                 }
             }
             $content .= $entry;
@@ -588,6 +596,107 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         } finally {
             $this->releaseAuditLock($disk);
         }
+    }
+
+    /**
+     * Every archived rotation file for a disk, parsed with the same row shape as
+     * readAudit() — so callers can merge live + archived transparently.
+     */
+    public function readAuditArchive(string $disk): array
+    {
+        $fs = $this->diskManager->disk($disk);
+        $entries = [];
+        try {
+            if (!$fs->directoryExists(self::AUDIT_ARCHIVE_DIR)) {
+                return [];
+            }
+            foreach ($fs->listContents(self::AUDIT_ARCHIVE_DIR, false) as $item) {
+                if (!$item->isFile() || !str_ends_with($item->path(), '.jsonl')) {
+                    continue;
+                }
+                $content = $fs->read($item->path());
+                foreach (array_filter(explode("\n", $content)) as $line) {
+                    $row = json_decode($line, true);
+                    if (!is_array($row)) continue;
+                    $ctx = $row['context'] ?? [];
+                    $entries[] = [
+                        'user_id'    => $ctx['user_id'] ?? '',
+                        'action'     => $row['action'] ?? '',
+                        'disk'       => $disk,
+                        'file_key'   => $ctx['file_key'] ?? '',
+                        'ip'         => $ctx['ip'] ?? null,
+                        'user_agent' => $ctx['user_agent'] ?? null,
+                        'detail'     => $ctx['detail'] ?? null,
+                        'created_at' => $row['ts'] ?? 0,
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            return $entries;
+        }
+        return $entries;
+    }
+
+    /**
+     * Deletes archive files that are entirely older than $beforeTs, and trims the
+     * live audit log of lines older than $beforeTs. Pure storage primitive — no
+     * Claims/license awareness, that gating happens at the calling route since this
+     * is destructive and per-disk (not per-tenant).
+     *
+     * @return array{archives_deleted:int, live_lines_removed:int}
+     */
+    public function purgeAuditBefore(string $disk, int $beforeTs): array
+    {
+        $fs = $this->diskManager->disk($disk);
+        $archivesDeleted = 0;
+        $liveLinesRemoved = 0;
+        $this->acquireAuditLock($disk);
+        try {
+            if ($fs->directoryExists(self::AUDIT_ARCHIVE_DIR)) {
+                foreach ($fs->listContents(self::AUDIT_ARCHIVE_DIR, false) as $item) {
+                    if (!$item->isFile() || !str_ends_with($item->path(), '.jsonl')) {
+                        continue;
+                    }
+                    $content = $fs->read($item->path());
+                    $lines = array_filter(explode("\n", $content));
+                    $allOld = true;
+                    foreach ($lines as $line) {
+                        $row = json_decode($line, true);
+                        if (!is_array($row) || (int) ($row['ts'] ?? 0) >= $beforeTs) {
+                            $allOld = false;
+                            break;
+                        }
+                    }
+                    if ($allOld) {
+                        $fs->delete($item->path());
+                        $archivesDeleted++;
+                    }
+                }
+            }
+
+            if ($fs->fileExists(self::AUDIT_KEY)) {
+                $content = $fs->read(self::AUDIT_KEY);
+                $lines = array_filter(explode("\n", $content));
+                $kept = [];
+                foreach ($lines as $line) {
+                    $row = json_decode($line, true);
+                    if (is_array($row) && (int) ($row['ts'] ?? 0) < $beforeTs) {
+                        $liveLinesRemoved++;
+                        continue;
+                    }
+                    $kept[] = $line;
+                }
+                if ($liveLinesRemoved > 0) {
+                    $fs->write(self::AUDIT_KEY, $kept === [] ? '' : implode("\n", $kept) . "\n");
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silent fail — matches audit()'s own posture (best-effort logging path).
+        } finally {
+            $this->releaseAuditLock($disk);
+        }
+
+        return ['archives_deleted' => $archivesDeleted, 'live_lines_removed' => $liveLinesRemoved];
     }
 
     // --- Private ---

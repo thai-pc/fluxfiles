@@ -10,6 +10,7 @@ namespace FluxFiles;
 class AuditLogStorage
 {
     private const MAX_LIST = 500;
+    private const MAX_EXPORT = 200000; // Hard ceiling to bound memory on export
 
     private StorageMetadataHandler $storage;
     private array $claimsDisks;
@@ -99,5 +100,58 @@ class AuditLogStorage
         $all = array_values($all);
         usort($all, fn($a, $b) => ($b['created_at'] ?? 0) <=> ($a['created_at'] ?? 0));
         return array_slice($all, $offset, $limit);
+    }
+
+    /**
+     * Every audit entry across live + archived logs, scoped and filtered the same
+     * way as list() — but with no pagination (capped by MAX_EXPORT so a runaway
+     * disk's history can't exhaust memory). Paid-module gated at the route; this is
+     * a plain storage read.
+     */
+    public function exportAll(?Claims $claims = null, array $filters = []): array
+    {
+        $all = [];
+        foreach ($this->claimsDisks as $disk) {
+            try {
+                $all = array_merge($all, $this->storage->readAudit($disk), $this->storage->readAuditArchive($disk));
+            } catch (\Throwable $e) {
+                // Skip disk if error
+            }
+        }
+
+        if ($claims !== null && trim($claims->pathPrefix, '/') !== '') {
+            $all = array_filter(
+                $all,
+                fn($e) => $claims->isPathInScope((string) ($e['file_key'] ?? ''))
+            );
+        }
+
+        $action = isset($filters['action']) ? trim((string) $filters['action']) : '';
+        if ($action !== '') {
+            $all = array_filter($all, fn($e) => ($e['action'] ?? '') === $action);
+        }
+        if (isset($filters['from']) && $filters['from'] !== null && $filters['from'] !== '') {
+            $from = (int) $filters['from'];
+            $all = array_filter($all, fn($e) => ((int) ($e['created_at'] ?? 0)) >= $from);
+        }
+        if (isset($filters['to']) && $filters['to'] !== null && $filters['to'] !== '') {
+            $to = (int) $filters['to'];
+            $all = array_filter($all, fn($e) => ((int) ($e['created_at'] ?? 0)) <= $to);
+        }
+        $path = isset($filters['path']) ? trim((string) $filters['path'], '/') : '';
+        if ($path !== '') {
+            $all = array_filter($all, function ($e) use ($path) {
+                $k = trim((string) ($e['file_key'] ?? ''), '/');
+                return $k === $path || strpos($k, $path . '/') === 0;
+            });
+        }
+        if (isset($filters['actor']) && $filters['actor'] !== null && $filters['actor'] !== '') {
+            $actor = (string) $filters['actor'];
+            $all = array_filter($all, fn($e) => ($e['user_id'] ?? '') === $actor);
+        }
+
+        $all = array_values($all);
+        usort($all, fn($a, $b) => ($b['created_at'] ?? 0) <=> ($a['created_at'] ?? 0));
+        return array_slice($all, 0, self::MAX_EXPORT);
     }
 }

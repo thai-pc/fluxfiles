@@ -3820,10 +3820,11 @@ body {
    unframed server (see fm.js proGate) — never inside a resold product.
    `.ff-pro-locked` names ONLY the desktop toolbar pill — tests/browser/share-intake-ui.spec.ts
    asserts on it as the single locked affordance. The mobile "More" menu's equivalent
-   entry uses `.ff-pro-locked-mobile` so it never collides with that locator (Playwright
+   entry uses `.ff-pro-locked-mobile`, and the Activity Log's audit-export teaser uses
+   `.ff-pro-locked-audit`, so neither ever collides with that locator (Playwright
    strict mode counts DOM matches regardless of visibility, so two `.ff-pro-locked`
    elements broke every assertion in that spec even though only one is ever visible). */
-.ff-pro-locked, .ff-pro-locked-mobile { position: relative; }
+.ff-pro-locked, .ff-pro-locked-mobile, .ff-pro-locked-audit { position: relative; }
 .ff-pro-pill {
     position: absolute;
     top: -4px;

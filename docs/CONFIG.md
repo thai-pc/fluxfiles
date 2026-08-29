@@ -202,6 +202,8 @@ All four accept the same `claims` map.
 | `allow_virus_scan` | bool | `false` | Virus scan (Enterprise). Scans **upload**, **code-editor save** and **each zip-extract entry** before the bytes are written; infected → `422 virus_detected` (audited as `virus_blocked`), nothing stored. **Fail-closed:** with the claim on, a missing/unlicensed module or an unreachable engine refuses the write (`501`/`402`/`403`) rather than storing unscanned — so only set it where a scanner is actually configured. Engine: local ClamAV, else `FLUXFILES_VIRUSTOTAL_KEY` (SHA-256 lookup, bytes never leave). **Not covered:** S3 multipart chunk upload — those bytes go browser→S3 and never reach the app. |
 | `allow_backup` | bool | `false` | Backup Bridge. |
 | `allow_c2pa` | bool | `false` | C2PA provenance (Enterprise). |
+| `allow_audit_export` | bool | `false` | Audit Export (Enterprise). Gates `GET /api/fm/audit/export` (streams NDJSON/CSV) and `POST /api/fm/audit/purge` (the latter also requires an unscoped/admin token — see below). Both are core-standalone; the Laravel/WordPress proxies don't implement either route. |
+| `audit_retention_days` | int (days) | `0` | Default cutoff for `/api/fm/audit/purge` when the request body omits an explicit `before`. `0` = no default — purge then requires an explicit `before`, or it returns `400 audit_purge_no_cutoff`. Purely a default; never triggers an automatic/background purge. |
 
 > The `edition` preset (`pro`/`agency`/`enterprise`) defaults some of these on; an
 > explicit claim always wins. The **license** still gates the actual code.
@@ -252,6 +254,15 @@ All four accept the same `claims` map.
 | `FLUXFILES_DEMO_MAX_MB` / `_QUOTA_MB` / `_MAX_FILES` | `5` / `50` / `30` | Demo per-file size / total quota / file-count caps. |
 | `FLUXFILES_DEMO_TOTAL_MB` | `2000` | Global demo disk budget across ALL sandboxes; purge deletes oldest first when over. |
 | `FLUXFILES_DEMO_IP_MINTS` | `20` | Max NEW sandboxes one IP may mint per hour (anti sandbox-spam; returning visitors with a cookie are never throttled). Demo mode also **hard-strips S3/R2/SFTP** disks → local-only, zero egress cost. |
+| `FLUXFILES_SSO_ENABLED` | `false` | Server kill-switch for the SSO Bridge (paid). `true` turns on the three pre-auth routes (`/api/fm/sso/login\|callback\|exchange`) and the `window.__FM_SSO__` injection on `/public/index.html`. Not a claim — this gates the standalone UI's own login screen, for deployments with no host app minting tokens; it never travels inside a JWT. |
+| `FLUXFILES_SSO_OIDC_ISSUER` | — | OIDC issuer base URL. `{issuer}/.well-known/openid-configuration` is fetched (and cached) to discover the authorization/token/JWKS endpoints. Operator-trusted (server env, not user input) — no SSRF guard, same posture as `FLUXFILES_AIVISION_ENDPOINT`. |
+| `FLUXFILES_SSO_OIDC_CLIENT_ID` | — | OIDC client id registered with the IdP. |
+| `FLUXFILES_SSO_OIDC_CLIENT_SECRET` | — | OIDC client secret. Server-side only — never sent to the browser. |
+| `FLUXFILES_SSO_OIDC_REDIRECT_URI` | — | Must exactly match the redirect URI registered with the IdP, e.g. `https://files.acme.com/api/fm/sso/callback`. |
+| `FLUXFILES_SSO_CLAIMS_MAP` | — | JSON object: IdP group/role name → a `fluxfiles_token()` options object (`perms`/`disks`/`prefix`/`claims`/etc). First matching group wins. Which group claim is read is set by `FLUXFILES_SSO_GROUPS_CLAIM`. |
+| `FLUXFILES_SSO_DEFAULT_CLAIMS` | — | Fallback options object used when no group in `FLUXFILES_SSO_CLAIMS_MAP` matches. Empty = fail closed (`403 sso_no_mapping`) rather than granting a silent default. |
+| `FLUXFILES_SSO_GROUPS_CLAIM` | `groups` | Dot-path into the decoded `id_token` for the group/role list, e.g. Keycloak's `realm_access.roles`. |
+| `FLUXFILES_SSO_TOKEN_TTL` | `28800` | TTL (seconds) of the real access JWT minted after a successful SSO login (8 hours). |
 
 ---
 

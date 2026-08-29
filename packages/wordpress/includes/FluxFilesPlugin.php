@@ -413,6 +413,15 @@ class FluxFilesPlugin
         // nor `versioning_max`/`versioning_max_mb`. The plugin is proxy-only and the
         // REST API never exposes /api/fm/versions*, so the History panel would have no
         // endpoint to talk to. Core-standalone only, same rule as the SSH terminal above.
+        // NOTE: audit export/purge is intentionally NOT forwarded either — neither
+        // `allow_audit_export` nor `audit_retention_days`. Same reasoning: the REST
+        // API never exposes /api/fm/audit/export or /api/fm/audit/purge, so a button
+        // built on this claim would have no endpoint to talk to. Core-standalone only.
+        // NOTE: SSO (FLUXFILES_SSO_*) is NOT a claim-forwarding concern at all — those
+        // are pure server env vars configuring the standalone /public UI's own login
+        // endpoint. They never travel inside a JWT, so there is nothing to forward
+        // here either. SSO only applies to deployments with no host app (like this
+        // plugin) minting tokens in the first place.
         foreach (['allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
