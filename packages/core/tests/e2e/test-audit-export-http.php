@@ -384,6 +384,16 @@ try {
                 assertTrue(strpos((string) json_encode($j2), 'very-old.txt') === false, 'the retention-purged entry is gone');
             });
 
+            test('purge: unscoped admin token scoped to a DIFFERENT disk cannot purge this one (pathPrefix and allowedDisks are independent claims)', function () use ($B) {
+                // An empty prefix makes the admin-only check pass, but 'disks' => ['s3']
+                // never granted access to 'local' — purge must still be rejected.
+                $s3OnlyAdmin = fluxfiles_token(['user' => 'root', 'perms' => ['read', 'write', 'audit'], 'disks' => ['s3'], 'prefix' => '', 'ttl' => 600,
+                    'claims' => ['allow_audit_export' => true]]);
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/audit/purge", ['json' => ['disk' => 'local', 'before' => time()], 'headers' => ["Authorization: Bearer {$s3OnlyAdmin}"]]);
+                assertEqual(403, $st);
+                assertEnvelope($j, 'disk_not_allowed');
+            });
+
             stop($srv3);
         }
     }

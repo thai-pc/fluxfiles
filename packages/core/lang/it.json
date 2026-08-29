@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "Per eliminare la cronologia di controllo è necessaria una data limite esplicita (o un'impostazione di conservazione dell'account).",
     "sso_boot_token_invalid": "Il link di accesso è scaduto. Effettua nuovamente l'accesso.",
     "sso_disabled": "Il Single Sign-On non è abilitato su questo server.",
+    "sso_id_token_invalid": "Impossibile verificare la risposta del provider di identità. Effettua nuovamente l'accesso.",
     "sso_idp_unreachable": "Impossibile contattare il provider di identità. Riprova a breve.",
+    "sso_misconfigured": "Il Single Sign-On non è configurato correttamente su questo server.",
+    "sso_no_mapping": "Il tuo account non è assegnato a nessun gruppo con accesso. Contatta il tuo amministratore.",
     "sso_state_token_invalid": "La sessione di accesso è scaduta. Effettua nuovamente l'accesso."
   },
   "presign": {

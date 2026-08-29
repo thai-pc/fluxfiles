@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "Une date limite explicite (ou un paramètre de rétention du compte) est requise pour purger l'historique d'audit.",
     "sso_boot_token_invalid": "Votre lien de connexion a expiré. Veuillez vous reconnecter.",
     "sso_disabled": "L'authentification unique (SSO) n'est pas activée sur ce serveur.",
+    "sso_id_token_invalid": "La réponse du fournisseur d'identité n'a pas pu être vérifiée. Veuillez vous reconnecter.",
     "sso_idp_unreachable": "Impossible de joindre le fournisseur d'identité. Veuillez réessayer sous peu.",
+    "sso_misconfigured": "L'authentification unique (SSO) n'est pas configurée correctement sur ce serveur.",
+    "sso_no_mapping": "Votre compte n'est assigné à aucun groupe disposant d'un accès. Contactez votre administrateur.",
     "sso_state_token_invalid": "Votre session de connexion a expiré. Veuillez vous reconnecter."
   },
   "presign": {

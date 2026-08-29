@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "Zum Löschen des Audit-Verlaufs ist ein explizites Stichdatum (oder eine Aufbewahrungseinstellung des Kontos) erforderlich.",
     "sso_boot_token_invalid": "Ihr Anmeldelink ist abgelaufen. Bitte melden Sie sich erneut an.",
     "sso_disabled": "Single Sign-on ist auf diesem Server nicht aktiviert.",
+    "sso_id_token_invalid": "Die Antwort des Identitätsanbieters konnte nicht verifiziert werden. Bitte melden Sie sich erneut an.",
     "sso_idp_unreachable": "Der Identitätsanbieter konnte nicht erreicht werden. Bitte versuchen Sie es in Kürze erneut.",
+    "sso_misconfigured": "Single Sign-on ist auf diesem Server nicht korrekt konfiguriert.",
+    "sso_no_mapping": "Ihrem Konto ist keine Gruppe mit Zugriff zugewiesen. Wenden Sie sich an Ihren Administrator.",
     "sso_state_token_invalid": "Ihre Anmeldesitzung ist abgelaufen. Bitte melden Sie sich erneut an."
   },
   "presign": {

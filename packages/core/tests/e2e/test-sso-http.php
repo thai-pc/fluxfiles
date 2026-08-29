@@ -483,12 +483,16 @@ try {
                 assertEnvelope($j, 'sso_boot_token_invalid');
             });
 
-            test('open-redirect guard: an absolute/protocol-relative redirect is rejected in favor of the default', function () use ($B, $IDP_BASE) {
-                foreach (['https://evil.example/steal', '//evil.example/steal'] as $bad) {
+            test('open-redirect guard: an absolute/protocol-relative/backslash redirect is downgraded to the default', function () use ($B, $SECRET) {
+                // '/\evil.example' is a WHATWG scheme-relative bypass: browsers normalize
+                // backslash to slash for http(s), so this resolves identically to
+                // '//evil.example' even though it starts with '/' and has no literal '//'.
+                foreach (['https://evil.example/steal', '//evil.example/steal', '/\\evil.example/steal'] as $bad) {
                     [$st, $h] = req('GET', "{$B}/api/fm/sso/login?redirect=" . rawurlencode($bad));
-                    assertEqual(302, $st);
+                    assertEqual(302, $st, $bad);
                     $q = parseQuery($h['location'] ?? '');
-                    $state = \FluxFiles\SsoStateToken::verify($q['state'], $GLOBALS['SECRET'] ?? '');
+                    $state = \FluxFiles\SsoStateToken::verify($q['state'], $SECRET);
+                    assertEqual('/public/index.html', $state['redirect'], "redirect not downgraded for: {$bad}");
                 }
             });
 

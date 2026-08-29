@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "감사 기록을 삭제하려면 명시적인 기준 날짜(또는 계정 보존 설정)가 필요합니다.",
     "sso_boot_token_invalid": "로그인 링크가 만료되었습니다. 다시 로그인해 주세요.",
     "sso_disabled": "이 서버에서는 SSO(싱글 사인온)가 활성화되어 있지 않습니다.",
+    "sso_id_token_invalid": "ID 공급자의 응답을 확인할 수 없습니다. 다시 로그인해 주세요.",
     "sso_idp_unreachable": "ID 공급자에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+    "sso_misconfigured": "이 서버에서는 SSO(싱글 사인온)가 올바르게 구성되어 있지 않습니다.",
+    "sso_no_mapping": "귀하의 계정이 액세스 권한이 있는 그룹에 할당되지 않았습니다. 관리자에게 문의하세요.",
     "sso_state_token_invalid": "로그인 세션이 만료되었습니다. 다시 로그인해 주세요."
   },
   "presign": {

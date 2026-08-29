@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "Denetim geçmişini temizlemek için belirli bir kesim tarihi (veya hesap saklama ayarı) gereklidir.",
     "sso_boot_token_invalid": "Oturum açma bağlantınızın süresi doldu. Lütfen tekrar oturum açın.",
     "sso_disabled": "Bu sunucuda tek oturum açma (SSO) etkin değil.",
+    "sso_id_token_invalid": "Kimlik sağlayıcısının yanıtı doğrulanamadı. Lütfen tekrar oturum açın.",
     "sso_idp_unreachable": "Kimlik sağlayıcısına ulaşılamadı. Lütfen kısa süre sonra tekrar deneyin.",
+    "sso_misconfigured": "Bu sunucuda tek oturum açma (SSO) doğru şekilde yapılandırılmamış.",
+    "sso_no_mapping": "Hesabınız erişimi olan hiçbir gruba atanmamış. Lütfen yöneticinizle iletişime geçin.",
     "sso_state_token_invalid": "Oturum açma oturumunuzun süresi doldu. Lütfen tekrar oturum açın."
   },
   "presign": {

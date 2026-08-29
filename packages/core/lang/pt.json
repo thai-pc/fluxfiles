@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "É necessária uma data limite explícita (ou uma configuração de retenção da conta) para eliminar o histórico de auditoria.",
     "sso_boot_token_invalid": "O seu link de início de sessão expirou. Inicie sessão novamente.",
     "sso_disabled": "O logon único (SSO) não está ativado neste servidor.",
+    "sso_id_token_invalid": "Não foi possível verificar a resposta do provedor de identidade. Inicie sessão novamente.",
     "sso_idp_unreachable": "Não foi possível contactar o provedor de identidade. Tente novamente em breve.",
+    "sso_misconfigured": "O logon único (SSO) não está configurado corretamente neste servidor.",
+    "sso_no_mapping": "A sua conta não está atribuída a nenhum grupo com acesso. Contacte o seu administrador.",
     "sso_state_token_invalid": "A sua sessão de início de sessão expirou. Inicie sessão novamente."
   },
   "presign": {

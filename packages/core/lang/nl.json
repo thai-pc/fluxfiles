@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "Er is een expliciete afkapdatum (of een bewaarinstelling van het account) nodig om de auditgeschiedenis te wissen.",
     "sso_boot_token_invalid": "Uw aanmeldlink is verlopen. Meld u opnieuw aan.",
     "sso_disabled": "Single sign-on is niet ingeschakeld op deze server.",
+    "sso_id_token_invalid": "De reactie van de identiteitsprovider kon niet worden geverifieerd. Meld u opnieuw aan.",
     "sso_idp_unreachable": "Kan geen verbinding maken met de identiteitsprovider. Probeer het straks opnieuw.",
+    "sso_misconfigured": "Single sign-on is niet correct geconfigureerd op deze server.",
+    "sso_no_mapping": "Uw account is niet toegewezen aan een groep met toegang. Neem contact op met uw beheerder.",
     "sso_state_token_invalid": "Uw aanmeldsessie is verlopen. Meld u opnieuw aan."
   },
   "presign": {

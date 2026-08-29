@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "清除审计历史记录需要明确的截止日期（或账户保留设置）。",
     "sso_boot_token_invalid": "您的登录链接已过期，请重新登录。",
     "sso_disabled": "此服务器未启用单点登录（SSO）。",
+    "sso_id_token_invalid": "无法验证身份提供商的响应，请重新登录。",
     "sso_idp_unreachable": "无法连接到身份提供商，请稍后重试。",
+    "sso_misconfigured": "此服务器上的单点登录（SSO）配置不正确。",
+    "sso_no_mapping": "您的账户未分配到任何有访问权限的组，请联系管理员。",
     "sso_state_token_invalid": "您的登录会话已过期，请重新登录。"
   },
   "presign": {

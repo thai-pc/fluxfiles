@@ -996,6 +996,13 @@ function routeRequest(
             throw new ApiException('Audit purge requires an unscoped (admin) token', 403, 'forbidden');
         }
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $disk = (string) ($body['disk'] ?? 'local');
+        // pathPrefix and allowedDisks are independent claims — an unscoped token can
+        // still be limited to specific disks, so the tenant-prefix check above does
+        // NOT imply disk access. Same check every other disk-taking route makes.
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
         $before = isset($body['before']) && $body['before'] !== ''
             ? (int) $body['before']
             : ($claims->auditRetentionDays > 0 ? time() - ($claims->auditRetentionDays * 86400) : 0);
@@ -1004,7 +1011,7 @@ function routeRequest(
         }
         /** @var \FluxFiles\AuditExport\AuditExportModule $module */
         $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
-        return $module->purge($metaRepo, $claims, (string) ($body['disk'] ?? 'local'), $before);
+        return $module->purge($metaRepo, $claims, $disk, $before);
     }
 
     // Bucket Doctor — diagnose a disk's storage backend (creds, permissions,
@@ -1216,13 +1223,11 @@ function handleSsoLogin(): void
         /** @var \FluxFiles\Sso\SsoModule $module */
         $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
 
-        // Open-redirect guard: only a same-origin relative path is honoured — no
-        // scheme, no `//` (protocol-relative), no `://` anywhere in the value.
+        // Open-redirect guard lives entirely in SsoModule::login() (via its
+        // private sanitizeRedirect()) — passing the raw value through here
+        // rather than re-validating keeps the check in exactly one place, so
+        // a future refinement can't fix one copy and miss the other.
         $redirect = ff_str_param($_GET, 'redirect', '/public/index.html');
-        if ($redirect === '' || $redirect[0] !== '/' || strpos($redirect, '//') === 0 || strpos($redirect, '://') !== false) {
-            $redirect = '/public/index.html';
-        }
-
         $module->login($redirect);
     } catch (ApiException $e) {
         http_response_code($e->getHttpCode());

@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "Se requiere una fecha límite explícita (o una configuración de retención de la cuenta) para purgar el historial de auditoría.",
     "sso_boot_token_invalid": "Su enlace de inicio de sesión ha caducado. Vuelva a iniciar sesión.",
     "sso_disabled": "El inicio de sesión único (SSO) no está habilitado en este servidor.",
+    "sso_id_token_invalid": "No se pudo verificar la respuesta del proveedor de identidad. Vuelva a iniciar sesión.",
     "sso_idp_unreachable": "No se pudo conectar con el proveedor de identidad. Inténtelo de nuevo en breve.",
+    "sso_misconfigured": "El inicio de sesión único (SSO) no está configurado correctamente en este servidor.",
+    "sso_no_mapping": "Su cuenta no está asignada a ningún grupo con acceso. Contacte a su administrador.",
     "sso_state_token_invalid": "Su sesión de inicio de sesión ha caducado. Vuelva a iniciar sesión."
   },
   "presign": {

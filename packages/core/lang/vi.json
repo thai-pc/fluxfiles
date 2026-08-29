@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "Cần có mốc thời gian cụ thể (hoặc thiết lập thời gian lưu trữ của tài khoản) để xóa lịch sử hoạt động.",
     "sso_boot_token_invalid": "Liên kết đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
     "sso_disabled": "Đăng nhập một lần (SSO) chưa được bật trên máy chủ này.",
+    "sso_id_token_invalid": "Không thể xác minh phản hồi từ nhà cung cấp danh tính. Vui lòng đăng nhập lại.",
     "sso_idp_unreachable": "Không thể kết nối tới nhà cung cấp danh tính. Vui lòng thử lại sau.",
+    "sso_misconfigured": "Đăng nhập một lần (SSO) chưa được cấu hình đúng trên máy chủ này.",
+    "sso_no_mapping": "Tài khoản của bạn chưa được gán vào nhóm nào có quyền truy cập. Vui lòng liên hệ quản trị viên.",
     "sso_state_token_invalid": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
   },
   "presign": {

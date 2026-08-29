@@ -344,7 +344,10 @@
     "audit_purge_no_cutoff": "An explicit cutoff date (or account retention setting) is required to purge audit history.",
     "sso_boot_token_invalid": "Your sign-in link has expired. Please sign in again.",
     "sso_disabled": "Single sign-on is not enabled on this server.",
+    "sso_id_token_invalid": "The identity provider's response could not be verified. Please sign in again.",
     "sso_idp_unreachable": "Could not reach the identity provider. Please try again shortly.",
+    "sso_misconfigured": "Single sign-on is not configured correctly on this server.",
+    "sso_no_mapping": "Your account isn't assigned to any group with access. Contact your administrator.",
     "sso_state_token_invalid": "Your sign-in session has expired. Please sign in again."
   },
   "presign": {
