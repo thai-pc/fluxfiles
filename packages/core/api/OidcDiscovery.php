@@ -97,7 +97,7 @@ final class OidcDiscovery
     private function readCache(string $key): ?array
     {
         $path = $this->cacheDir . '/' . $key . '.json';
-        if (!is_file($path)) {
+        if (!is_file($path) || !$this->isOwnedByUs($path)) {
             return null;
         }
         $raw = @file_get_contents($path);
@@ -114,10 +114,32 @@ final class OidcDiscovery
 
     private function writeCache(string $key, array $data): void
     {
-        if (!is_dir($this->cacheDir) && !@mkdir($this->cacheDir, 0775, true) && !is_dir($this->cacheDir)) {
+        if (!is_dir($this->cacheDir) && !@mkdir($this->cacheDir, 0700, true) && !is_dir($this->cacheDir)) {
             return; // Cache is best-effort; a fresh fetch next call is fine.
         }
+        // Without a dedicated FLUXFILES_STORAGE_PATH, this directory lives under
+        // the shared sys_get_temp_dir() at a fixed, predictable name — another
+        // local user/process could have pre-created it. Since this cache holds
+        // the JWKS used to verify id_token signatures, trusting a directory we
+        // don't own would let a local attacker plant a forged key and bypass
+        // signature verification entirely. Refuse to read/write it.
+        if (!$this->isOwnedByUs($this->cacheDir)) {
+            return;
+        }
         $data['_cached_at'] = time();
-        @file_put_contents($this->cacheDir . '/' . $key . '.json', json_encode($data));
+        $path = $this->cacheDir . '/' . $key . '.json';
+        @file_put_contents($path, json_encode($data));
+        @chmod($path, 0600);
+    }
+
+    /** True if $path is owned by the current process user, or ownership can't be determined on this platform. */
+    private function isOwnedByUs(string $path): bool
+    {
+        $mine = function_exists('posix_geteuid') ? posix_geteuid() : getmyuid();
+        if ($mine === false) {
+            return true;
+        }
+        $owner = @fileowner($path);
+        return $owner !== false && $owner === $mine;
     }
 }

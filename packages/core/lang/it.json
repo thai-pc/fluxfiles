@@ -342,6 +342,7 @@
     "watermark_overlay_active": "L'impressione permanente non è disponibile su un token anteprima/filigrana in sovrapposizione. Usa un token scaricabile.",
     "no_watermark_backup": "Nessuna filigrana da rimuovere.",
     "audit_purge_no_cutoff": "Per eliminare la cronologia di controllo è necessaria una data limite esplicita (o un'impostazione di conservazione dell'account).",
+    "audit_purge_failed": "Impossibile eliminare la cronologia di controllo. Riprova.",
     "sso_boot_token_invalid": "Il link di accesso è scaduto. Effettua nuovamente l'accesso.",
     "sso_disabled": "Il Single Sign-On non è abilitato su questo server.",
     "sso_id_token_invalid": "Impossibile verificare la risposta del provider di identità. Effettua nuovamente l'accesso.",

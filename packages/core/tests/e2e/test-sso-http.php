@@ -134,7 +134,14 @@ function stop($p): void {
 
 $envFile = $coreDir . '/.env';
 $envBackup = is_file($envFile) ? file_get_contents($envFile) : null;
-$baseEnv = "FLUXFILES_SECRET={$SECRET}\nFLUXFILES_RATE_LIMIT_READ=100000\nFLUXFILES_RATE_LIMIT_WRITE=100000\nFLUXFILES_STORAGE_PATH={$stateDir}\n";
+// The SSO pre-auth routes have their own per-IP rate limiter (ff_sso_rate_limit(),
+// keyed on REMOTE_ADDR since there's no token/id yet). Every request this suite
+// makes comes from 127.0.0.1, and phase 4b alone fires well over the production
+// defaults (login=20/min, callback=10/min, exchange=30/min) — so raise the
+// ceiling for the whole run; enforcement itself gets a dedicated test below with
+// a temporarily tightened limit.
+$baseEnv = "FLUXFILES_SECRET={$SECRET}\nFLUXFILES_RATE_LIMIT_READ=100000\nFLUXFILES_RATE_LIMIT_WRITE=100000\nFLUXFILES_STORAGE_PATH={$stateDir}\n"
+    . "FLUXFILES_SSO_LOGIN_LIMIT=100000\nFLUXFILES_SSO_CALLBACK_LIMIT=100000\nFLUXFILES_SSO_EXCHANGE_LIMIT=100000\n";
 file_put_contents($envFile, $baseEnv);
 
 // The module src isn't a composer dep in dev, so phases 3+4 boot through a wrapper
@@ -388,12 +395,13 @@ try {
             // The "IdP unreachable" case is run BEFORE the fixture process starts —
             // OidcDiscovery only caches SUCCESSFUL fetches, so a failed fetch here can't
             // poison a later successful-fetch test in this same phase.
-            file_put_contents($envFile, $baseEnv
+            $phase4bEnv = $baseEnv
                 . "FLUXFILES_SSO_ENABLED=true\nFLUXFILES_LICENSE_KEY={$license}\n"
                 . "FLUXFILES_SSO_OIDC_ISSUER={$IDP_BASE}\nFLUXFILES_SSO_OIDC_CLIENT_ID=test-client\n"
                 . "FLUXFILES_SSO_OIDC_CLIENT_SECRET=test-secret\nFLUXFILES_SSO_OIDC_REDIRECT_URI=http://127.0.0.1:8133/api/fm/sso/callback\n"
                 . "FLUXFILES_SSO_CLAIMS_MAP=" . json_encode(['engineers' => ['perms' => ['read', 'write'], 'disks' => ['local'], 'prefix' => $PREFIX, 'ttl' => 600]]) . "\n"
-                . "FLUXFILES_SSO_GROUPS_CLAIM=groups\n");
+                . "FLUXFILES_SSO_GROUPS_CLAIM=groups\n";
+            file_put_contents($envFile, $phase4bEnv);
             [$srv4, $B] = boot(8133, $modRouter);
 
             test('login before the IdP exists → the callback errors with sso_idp_unreachable (uncached failure)', function () use ($B) {
@@ -636,6 +644,34 @@ try {
                 $code2 = mkCode(['claims' => $baseClaims($nonce)]);
                 [$st2] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code2) . "&state=" . rawurlencode($state));
                 assertEqual(302, $st2, 'no server-side single-use tracking in v1, by design (see SsoBootToken docblock)');
+            });
+
+            test('per-IP rate limit on /sso/login actually enforces (429 once the ceiling is hit, then recovers under the normal limit)', function () use ($B, $envFile, $phase4bEnv, $stateDir) {
+                // .env is reloaded fresh on every request (Dotenv::safeLoad() in
+                // index.php), so tightening the limit here takes effect without a
+                // server restart — same trick used to isolate this from the generous
+                // ceiling the rest of the suite runs under. The bucket file is shared
+                // across this whole run (same FLUXFILES_STORAGE_PATH throughout), and
+                // earlier tests already logged /sso/login hits against this same IP
+                // under the generous limit — clear it so "first 3 pass" is deterministic
+                // instead of depending on how many logins ran before this test.
+                @unlink($stateDir . '/rate_limit.json');
+                file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_LOGIN_LIMIT=3\n");
+                try {
+                    $statuses = [];
+                    for ($i = 0; $i < 4; $i++) {
+                        [$st] = req('GET', "{$B}/api/fm/sso/login?redirect=" . rawurlencode('/public/index.html'));
+                        $statuses[] = $st;
+                    }
+                    assertEqual([302, 302, 302, 429], $statuses, 'first 3 pass, 4th is rate-limited: ' . json_encode($statuses));
+
+                    [$st429, $h429, $body429] = req('GET', "{$B}/api/fm/sso/login?redirect=" . rawurlencode('/public/index.html'));
+                    assertEqual(429, $st429, $body429);
+                    assertTrue(stripos($h429['content-type'] ?? '', 'text/plain') === 0, 'plain text, matches the rest of /sso/login\'s error responses');
+                } finally {
+                    // Restore the generous ceiling for anything still to come in this phase.
+                    file_put_contents($envFile, $phase4bEnv);
+                }
             });
 
             stop($idpProc);

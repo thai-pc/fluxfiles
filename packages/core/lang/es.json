@@ -342,6 +342,7 @@
     "watermark_overlay_active": "La marca permanente no está disponible en un token de vista previa/marca de agua superpuesta. Use un token descargable.",
     "no_watermark_backup": "No hay marca de agua para quitar.",
     "audit_purge_no_cutoff": "Se requiere una fecha límite explícita (o una configuración de retención de la cuenta) para purgar el historial de auditoría.",
+    "audit_purge_failed": "No se pudo purgar el historial de auditoría. Inténtalo de nuevo.",
     "sso_boot_token_invalid": "Su enlace de inicio de sesión ha caducado. Vuelva a iniciar sesión.",
     "sso_disabled": "El inicio de sesión único (SSO) no está habilitado en este servidor.",
     "sso_id_token_invalid": "No se pudo verificar la respuesta del proveedor de identidad. Vuelva a iniciar sesión.",

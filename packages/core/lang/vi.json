@@ -342,6 +342,7 @@
     "watermark_overlay_active": "Không thể đóng dấu chìm trên token preview/overlay watermark. Hãy dùng token cho phép tải xuống.",
     "no_watermark_backup": "Không có watermark để gỡ.",
     "audit_purge_no_cutoff": "Cần có mốc thời gian cụ thể (hoặc thiết lập thời gian lưu trữ của tài khoản) để xóa lịch sử hoạt động.",
+    "audit_purge_failed": "Không thể xóa lịch sử hoạt động. Vui lòng thử lại.",
     "sso_boot_token_invalid": "Liên kết đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
     "sso_disabled": "Đăng nhập một lần (SSO) chưa được bật trên máy chủ này.",
     "sso_id_token_invalid": "Không thể xác minh phản hồi từ nhà cung cấp danh tính. Vui lòng đăng nhập lại.",

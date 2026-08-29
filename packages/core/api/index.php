@@ -1220,6 +1220,7 @@ function handleSsoLogin(): void
         if (($_ENV['FLUXFILES_SSO_ENABLED'] ?? '') !== 'true') {
             throw new ApiException('SSO is not enabled on this server', 403, 'sso_disabled');
         }
+        ff_sso_rate_limit('login');
         /** @var \FluxFiles\Sso\SsoModule $module */
         $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
 
@@ -1233,6 +1234,10 @@ function handleSsoLogin(): void
         http_response_code($e->getHttpCode());
         header('Content-Type: text/plain; charset=utf-8');
         echo $e->getMessage();
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Internal server error';
     }
 }
 
@@ -1250,6 +1255,7 @@ function handleSsoCallback(): void
         if (($_ENV['FLUXFILES_SSO_ENABLED'] ?? '') !== 'true') {
             throw new ApiException('SSO is not enabled on this server', 403, 'sso_disabled');
         }
+        ff_sso_rate_limit('callback');
         /** @var \FluxFiles\Sso\SsoModule $module */
         $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
 
@@ -1258,6 +1264,10 @@ function handleSsoCallback(): void
         http_response_code($e->getHttpCode());
         header('Content-Type: text/plain; charset=utf-8');
         echo $e->getMessage();
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Internal server error';
     }
 }
 
@@ -1273,6 +1283,7 @@ function handleSsoExchange(): void
         if (($_ENV['FLUXFILES_SSO_ENABLED'] ?? '') !== 'true') {
             throw new ApiException('SSO is not enabled on this server', 403, 'sso_disabled');
         }
+        ff_sso_rate_limit('exchange');
         /** @var \FluxFiles\Sso\SsoModule $module */
         $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
 

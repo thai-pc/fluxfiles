@@ -263,6 +263,9 @@ All four accept the same `claims` map.
 | `FLUXFILES_SSO_DEFAULT_CLAIMS` | — | Fallback options object used when no group in `FLUXFILES_SSO_CLAIMS_MAP` matches. Empty = fail closed (`403 sso_no_mapping`) rather than granting a silent default. |
 | `FLUXFILES_SSO_GROUPS_CLAIM` | `groups` | Dot-path into the decoded `id_token` for the group/role list, e.g. Keycloak's `realm_access.roles`. |
 | `FLUXFILES_SSO_TOKEN_TTL` | `28800` | TTL (seconds) of the real access JWT minted after a successful SSO login (8 hours). |
+| `FLUXFILES_SSO_LOGIN_LIMIT` | `20` | `/api/fm/sso/login` requests/min per client IP. There's no token/id to bucket by yet at this pre-auth stage, so IP is the only key. |
+| `FLUXFILES_SSO_CALLBACK_LIMIT` | `10` | `/api/fm/sso/callback` requests/min per client IP — the tightest of the three, since each hit triggers a real outbound cURL to the IdP's token endpoint. |
+| `FLUXFILES_SSO_EXCHANGE_LIMIT` | `30` | `/api/fm/sso/exchange` requests/min per client IP. |
 
 ---
 

@@ -342,6 +342,7 @@
     "watermark_overlay_active": "Burn-in isn't available on a preview/overlay-watermark token. Use a downloadable token.",
     "no_watermark_backup": "No watermark to remove.",
     "audit_purge_no_cutoff": "An explicit cutoff date (or account retention setting) is required to purge audit history.",
+    "audit_purge_failed": "Failed to purge audit history. Please try again.",
     "sso_boot_token_invalid": "Your sign-in link has expired. Please sign in again.",
     "sso_disabled": "Single sign-on is not enabled on this server.",
     "sso_id_token_invalid": "The identity provider's response could not be verified. Please sign in again.",

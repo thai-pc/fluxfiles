@@ -342,6 +342,7 @@
     "watermark_overlay_active": "미리보기/오버레이 워터마크 토큰에서는 굽기를 사용할 수 없습니다. 다운로드 가능한 토큰을 사용하세요.",
     "no_watermark_backup": "제거할 워터마크가 없습니다.",
     "audit_purge_no_cutoff": "감사 기록을 삭제하려면 명시적인 기준 날짜(또는 계정 보존 설정)가 필요합니다.",
+    "audit_purge_failed": "감사 기록 삭제에 실패했습니다. 다시 시도해 주세요.",
     "sso_boot_token_invalid": "로그인 링크가 만료되었습니다. 다시 로그인해 주세요.",
     "sso_disabled": "이 서버에서는 SSO(싱글 사인온)가 활성화되어 있지 않습니다.",
     "sso_id_token_invalid": "ID 공급자의 응답을 확인할 수 없습니다. 다시 로그인해 주세요.",

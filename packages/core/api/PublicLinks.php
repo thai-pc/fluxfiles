@@ -513,6 +513,33 @@ function ff_intake_rate_limit(string $token, string $kind): void
     $limiter(max(1, (int) ($_ENV['FLUXFILES_INTAKE_RATE_LIMIT'] ?? 60)))->check('intake:' . $jti, 'read');
 }
 
+/**
+ * Per-client-IP rate limit for the SSO bridge's three pre-auth routes
+ * (`login`/`callback`/`exchange`), mirroring ff_share_rate_limit()'s JSON-file
+ * limiter. Unlike share/intake, there is no token/id to bucket by until AFTER
+ * `callback` verifies `state` — so `REMOTE_ADDR` is the only key available,
+ * same rotation caveat as the IP half of `share_unlock`/`intake_upload`
+ * (not a safe-ONLY limit on its own, but there is no better key pre-auth).
+ * `callback` gets the tightest default: it triggers a real outbound cURL to
+ * the IdP's token endpoint per hit, the most expensive of the three.
+ */
+function ff_sso_rate_limit(string $kind): void
+{
+    $storagePath = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    $limiter = static function (int $limit) use ($storagePath): RateLimiterFileStorage {
+        return new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit, 60);
+    };
+
+    $limits = [
+        'login' => (int) ($_ENV['FLUXFILES_SSO_LOGIN_LIMIT'] ?? 20),
+        'callback' => (int) ($_ENV['FLUXFILES_SSO_CALLBACK_LIMIT'] ?? 10),
+        'exchange' => (int) ($_ENV['FLUXFILES_SSO_EXCHANGE_LIMIT'] ?? 30),
+    ];
+    $limit = max(1, $limits[$kind] ?? 20);
+    $limiter($limit)->check('sso_' . $kind . ':' . $ip, 'read');
+}
+
 /** The share id from a token's unverified payload; a hash of the token otherwise. */
 function ff_share_token_jti(string $token): string
 {

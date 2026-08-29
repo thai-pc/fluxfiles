@@ -342,6 +342,7 @@
     "watermark_overlay_active": "A marca permanente não está disponível em um token de pré-visualização/marca d'água sobreposta. Use um token com download.",
     "no_watermark_backup": "Nenhuma marca d'água para remover.",
     "audit_purge_no_cutoff": "É necessária uma data limite explícita (ou uma configuração de retenção da conta) para eliminar o histórico de auditoria.",
+    "audit_purge_failed": "Falha ao eliminar o histórico de auditoria. Tente novamente.",
     "sso_boot_token_invalid": "O seu link de início de sessão expirou. Inicie sessão novamente.",
     "sso_disabled": "O logon único (SSO) não está ativado neste servidor.",
     "sso_id_token_invalid": "Não foi possível verificar a resposta do provedor de identidade. Inicie sessão novamente.",

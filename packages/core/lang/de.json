@@ -342,6 +342,7 @@
     "watermark_overlay_active": "Einbrennen ist mit einem Vorschau-/Overlay-Wasserzeichen-Token nicht möglich. Verwenden Sie ein herunterladbares Token.",
     "no_watermark_backup": "Kein Wasserzeichen zum Entfernen.",
     "audit_purge_no_cutoff": "Zum Löschen des Audit-Verlaufs ist ein explizites Stichdatum (oder eine Aufbewahrungseinstellung des Kontos) erforderlich.",
+    "audit_purge_failed": "Löschen des Audit-Verlaufs fehlgeschlagen. Bitte versuchen Sie es erneut.",
     "sso_boot_token_invalid": "Ihr Anmeldelink ist abgelaufen. Bitte melden Sie sich erneut an.",
     "sso_disabled": "Single Sign-on ist auf diesem Server nicht aktiviert.",
     "sso_id_token_invalid": "Die Antwort des Identitätsanbieters konnte nicht verifiziert werden. Bitte melden Sie sich erneut an.",

@@ -342,6 +342,7 @@
     "watermark_overlay_active": "Önizleme/yer paylaşımlı filigran belirtecinde kalıcı damga kullanılamaz. İndirilebilir bir belirteç kullanın.",
     "no_watermark_backup": "Kaldırılacak filigran yok.",
     "audit_purge_no_cutoff": "Denetim geçmişini temizlemek için belirli bir kesim tarihi (veya hesap saklama ayarı) gereklidir.",
+    "audit_purge_failed": "Denetim geçmişi temizlenemedi. Lütfen tekrar deneyin.",
     "sso_boot_token_invalid": "Oturum açma bağlantınızın süresi doldu. Lütfen tekrar oturum açın.",
     "sso_disabled": "Bu sunucuda tek oturum açma (SSO) etkin değil.",
     "sso_id_token_invalid": "Kimlik sağlayıcısının yanıtı doğrulanamadı. Lütfen tekrar oturum açın.",

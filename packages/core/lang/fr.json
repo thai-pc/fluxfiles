@@ -342,6 +342,7 @@
     "watermark_overlay_active": "Le marquage permanent n'est pas disponible sur un jeton aperçu/filigrane en superposition. Utilisez un jeton téléchargeable.",
     "no_watermark_backup": "Aucun filigrane à supprimer.",
     "audit_purge_no_cutoff": "Une date limite explicite (ou un paramètre de rétention du compte) est requise pour purger l'historique d'audit.",
+    "audit_purge_failed": "Échec de la purge de l'historique d'audit. Veuillez réessayer.",
     "sso_boot_token_invalid": "Votre lien de connexion a expiré. Veuillez vous reconnecter.",
     "sso_disabled": "L'authentification unique (SSO) n'est pas activée sur ce serveur.",
     "sso_id_token_invalid": "La réponse du fournisseur d'identité n'a pas pu être vérifiée. Veuillez vous reconnecter.",

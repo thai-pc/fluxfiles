@@ -342,6 +342,7 @@
     "watermark_overlay_active": "预览/叠加水印令牌不支持烧录水印。请使用可下载的令牌。",
     "no_watermark_backup": "没有可移除的水印。",
     "audit_purge_no_cutoff": "清除审计历史记录需要明确的截止日期（或账户保留设置）。",
+    "audit_purge_failed": "清除审计历史记录失败，请重试。",
     "sso_boot_token_invalid": "您的登录链接已过期，请重新登录。",
     "sso_disabled": "此服务器未启用单点登录（SSO）。",
     "sso_id_token_invalid": "无法验证身份提供商的响应，请重新登录。",

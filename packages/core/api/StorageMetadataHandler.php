@@ -691,7 +691,13 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 }
             }
         } catch (\Throwable $e) {
-            // Silent fail — matches audit()'s own posture (best-effort logging path).
+            // Unlike audit()'s best-effort logging path, this is a destructive,
+            // admin-only operation — a caller must be able to tell "purge failed"
+            // from "purge succeeded, nothing matched the cutoff". Log for the
+            // operator and surface a proper error instead of returning fake
+            // success counts for a possibly-partial purge.
+            error_log("FluxFiles audit purge failed on disk '{$disk}': " . $e->getMessage());
+            throw new ApiException('Audit purge failed', 500, 'audit_purge_failed');
         } finally {
             $this->releaseAuditLock($disk);
         }
