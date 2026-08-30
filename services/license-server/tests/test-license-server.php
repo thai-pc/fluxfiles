@@ -64,6 +64,8 @@ test('Studio + Enterprise + lifetime map correctly', function () use ($secretB64
     assertEqual('studio', $st->edition()); assertEqual(true, $st->licensed('webhooks'));
     $en = new LicenseManager($iss->issue(['email'=>'a@b.co','plan'=>'enterprise','order_id'=>'e1'])['key'], $keys);
     assertEqual(true, $en->licensed('c2pa'), 'enterprise has c2pa');
+    assertEqual(true, $en->licensed('audit-export'), 'enterprise has audit-export');
+    assertEqual(true, $en->licensed('sso'), 'enterprise has sso');
     $lf = new LicenseManager($iss->issue(['email'=>'a@b.co','plan'=>'lifetime','order_id'=>'l1'])['key'], $keys);
     assertEqual(null, $lf->expiresAt(), 'lifetime = no expiry');
     assertEqual('active', $lf->status());
