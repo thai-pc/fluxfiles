@@ -4,6 +4,7 @@ defined('ABSPATH') || exit;
 
 use FluxFiles\ApiException;
 use FluxFiles\AuditLogStorage;
+use FluxFiles\BucketDoctor;
 use FluxFiles\ChunkUploader;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
@@ -171,6 +172,29 @@ class FluxFilesApi
             'callback' => [$api, 'handleExtract'],
         ]));
 
+        // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
+        register_rest_route($ns, $p . '/trash', array_merge($writeArgs, [
+            'callback' => [$api, 'handleTrash'],
+        ]));
+        register_rest_route($ns, $p . '/trash/restore', array_merge($writeArgs, [
+            'callback' => [$api, 'handleTrashRestore'],
+        ]));
+        register_rest_route($ns, $p . '/trash/list', array_merge($readArgs, [
+            'callback' => [$api, 'handleTrashList'],
+        ]));
+        register_rest_route($ns, $p . '/trash/purge', array_merge($writeArgs, [
+            'callback' => [$api, 'handleTrashPurge'],
+        ]));
+        register_rest_route($ns, $p . '/trash/empty', array_merge($writeArgs, [
+            'callback' => [$api, 'handleTrashEmpty'],
+        ]));
+
+        // Bucket Doctor — diagnose a disk backend (writes/deletes a probe object,
+        // so it requires the 'write' permission on a disk the token may access).
+        register_rest_route($ns, $p . '/disk/doctor', array_merge($readArgs, [
+            'callback' => [$api, 'handleDiskDoctor'],
+        ]));
+
         // Search, quota, audit
         register_rest_route($ns, $p . '/search', array_merge($readArgs, [
             'callback' => [$api, 'handleSearch'],
@@ -181,6 +205,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/quota', array_merge($readArgs, [
             'callback' => [$api, 'handleQuota'],
         ]));
+        register_rest_route($ns, $p . '/usage', array_merge($readArgs, [
+            'callback' => [$api, 'handleUsage'],
+        ]));
         register_rest_route($ns, $p . '/license', array_merge($readArgs, [
             'callback' => [$api, 'handleLicense'],
         ]));
@@ -189,6 +216,11 @@ class FluxFilesApi
         ]));
         register_rest_route($ns, $p . '/audit', array_merge($readArgs, [
             'callback' => [$api, 'handleAudit'],
+        ]));
+
+        // Webhooks (paid module) — send a test ping to the configured endpoint
+        register_rest_route($ns, $p . '/webhooks/test', array_merge($writeArgs, [
+            'callback' => [$api, 'handleWebhooksTest'],
         ]));
 
         // ── Share + Intake ──────────────────────────────────────────────────
@@ -421,6 +453,32 @@ class FluxFilesApi
         $fm = new FileManager($this->diskManager, $claims, $this->metaRepo);
         $fm->setQuotaManager(new QuotaManager($this->diskManager));
 
+        // On-upload auto-optimize (FREE/core). Wire the optimizer hook when the token
+        // asks for it (`auto_optimize`) — mirrors index.php's wiring. The module does
+        // the work; FileManager records the savings + renames to .webp.
+        if ($claims->autoOptimize ?? false) {
+            $optimizeModule = new \FluxFiles\OptimizeModule();
+            $fm->setUploadOptimizer(static function (string $bytes, int $quality) use ($optimizeModule) {
+                return $optimizeModule->optimizeBytes($bytes, $quality);
+            });
+        }
+
+        // On-upload AI auto-tag. Wired only when the token asks for it (`ai_auto_tag`)
+        // AND an AI provider is configured server-side — without one this stays a
+        // no-op. FileManager::upload() re-checks $this->aiTagger !== null itself
+        // before calling analyze(), the same gate the manual ai-tag action uses.
+        if ($claims->aiAutoTag) {
+            $aiProvider = get_option('fluxfiles_ai_provider', '');
+            if (!empty($aiProvider)) {
+                $fm->setAiTagger(new \FluxFiles\AiTagger(
+                    $aiProvider,
+                    get_option('fluxfiles_ai_api_key', ''),
+                    get_option('fluxfiles_ai_model', '') ?: null,
+                    get_option('fluxfiles_ai_base_url', '') ?: null
+                ));
+            }
+        }
+
         // Virus scan (paid module) — this REST proxy handles /upload itself, so without
         // the wiring a tenant with `allow_virus_scan` would get unscanned files here
         // while the same token is scanned in standalone. The module gate resolves INSIDE
@@ -452,6 +510,25 @@ class FluxFilesApi
     {
         $audit = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
         $audit->log($claims->userId, $action, $disk, $key);
+    }
+
+    /**
+     * Fire a webhook for a file-changing action (paid module). Gated the same
+     * 3-layer way index.php's inline wiring does it (installed + licensed +
+     * `allow_webhooks` + a configured `webhook_url`) — best-effort, never throws
+     * into the request path (WebhooksModule::dispatch swallows its own failures).
+     *
+     * @param array<string,mixed> $context
+     */
+    private function dispatchWebhook(\FluxFiles\Claims $claims, string $event, array $context): void
+    {
+        if (!$claims->allowWebhooks || $claims->webhookUrl === ''
+            || !\FluxFiles\ModuleRegistry::installed('webhooks')
+            || !FluxFilesPlugin::license()->licensed('webhooks')) {
+            return;
+        }
+        $secret = (string) get_option('fluxfiles_secret', '');
+        (new \FluxFiles\Webhooks\WebhooksModule())->dispatch($claims, $secret, $event, $context);
     }
 
     /**
@@ -532,6 +609,11 @@ class FluxFilesApi
                 $request->get_param('disk') ?? 'local',
                 $request->get_param('path') ?? ''
             );
+            $this->dispatchWebhook($claims, 'upload', [
+                'disk' => $request->get_param('disk') ?? 'local',
+                'path' => $request->get_param('path') ?? '',
+                'name' => (string) ($result['name'] ?? basename((string) ($request->get_param('path') ?? ''))),
+            ]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -556,6 +638,7 @@ class FluxFilesApi
 
             $result = $fm->delete($disk, $path);
             $this->logAudit($claims, 'delete', $disk, $path);
+            $this->dispatchWebhook($claims, 'delete', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -581,6 +664,7 @@ class FluxFilesApi
 
             $result = $fm->rename($disk, $path, $name);
             $this->logAudit($claims, 'rename', $disk, $path);
+            $this->dispatchWebhook($claims, 'rename', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -606,6 +690,7 @@ class FluxFilesApi
 
             $result = $fm->move($disk, $from, $to);
             $this->logAudit($claims, 'move', $disk, $from);
+            $this->dispatchWebhook($claims, 'move', ['disk' => $disk, 'path' => $from, 'name' => basename($from)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -631,6 +716,7 @@ class FluxFilesApi
 
             $result = $fm->copy($disk, $from, $to);
             $this->logAudit($claims, 'copy', $disk, $from);
+            $this->dispatchWebhook($claims, 'copy', ['disk' => $disk, 'path' => $from, 'name' => basename($from)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -655,6 +741,7 @@ class FluxFilesApi
 
             $result = $fm->mkdir($disk, $path);
             $this->logAudit($claims, 'mkdir', $disk, $path);
+            $this->dispatchWebhook($claims, 'mkdir', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -682,6 +769,11 @@ class FluxFilesApi
                 'overwrite' => filter_var($body['overwrite'] ?? false, FILTER_VALIDATE_BOOLEAN),
             ]);
             $this->logAudit($claims, 'url_import', $disk, (string) ($result['key'] ?? ''));
+            $this->dispatchWebhook($claims, 'url_import', [
+                'disk' => $disk,
+                'path' => (string) ($result['key'] ?? ''),
+                'name' => basename((string) ($result['key'] ?? '')),
+            ]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -708,6 +800,7 @@ class FluxFilesApi
 
             $result = $fm->crossCopy($srcDisk, $srcPath, $dstDisk, $dstPath);
             $this->logAudit($claims, 'cross_copy', $srcDisk, $srcPath);
+            $this->dispatchWebhook($claims, 'cross_copy', ['disk' => $srcDisk, 'path' => $srcPath, 'name' => basename($srcPath)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -734,6 +827,7 @@ class FluxFilesApi
 
             $result = $fm->crossMove($srcDisk, $srcPath, $dstDisk, $dstPath);
             $this->logAudit($claims, 'cross_move', $srcDisk, $srcPath);
+            $this->dispatchWebhook($claims, 'cross_move', ['disk' => $srcDisk, 'path' => $srcPath, 'name' => basename($srcPath)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -770,6 +864,7 @@ class FluxFilesApi
                 $body['save_path'] ?? null
             );
             $this->logAudit($claims, 'crop', $disk, $path);
+            $this->dispatchWebhook($claims, 'crop', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -810,6 +905,7 @@ class FluxFilesApi
             $dest = isset($body['dest']) && $body['dest'] !== '' ? (string) $body['dest'] : null;
             $result = $fm->applyWatermark((string) ($body['disk'] ?? 'local'), $path, $wm, $dest);
             $this->logAudit($claims, 'watermark', (string) ($body['disk'] ?? 'local'), $path);
+            $this->dispatchWebhook($claims, 'watermark', ['disk' => (string) ($body['disk'] ?? 'local'), 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -832,6 +928,7 @@ class FluxFilesApi
             $disk = (string) ($body['disk'] ?? 'local');
             $result = $fm->removeWatermark($disk, $path);
             $this->logAudit($claims, 'watermark_remove', $disk, $path);
+            $this->dispatchWebhook($claims, 'watermark_remove', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -872,6 +969,7 @@ class FluxFilesApi
 
             $result = $fm->aiTag($disk, $path);
             $this->logAudit($claims, 'ai_tag', $disk, $path);
+            $this->dispatchWebhook($claims, 'ai_tag', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -983,6 +1081,7 @@ class FluxFilesApi
             $this->metaRepo->save($disk, $key, $data);
             $this->metaRepo->syncToS3Tags($disk, $key, $data, $this->diskManager);
             $this->logAudit($claims, 'metadata_update', $disk, $key);
+            $this->dispatchWebhook($claims, 'metadata_update', ['disk' => $disk, 'path' => $key, 'name' => basename($key)]);
 
             return $this->ok(['saved' => true]);
         } catch (ApiException $e) {
@@ -1120,6 +1219,11 @@ class FluxFilesApi
                 (string) ($body['content'] ?? '')
             );
             $this->logAudit($claims, 'content_edit', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->dispatchWebhook($claims, 'content_edit', [
+                'disk' => (string) ($body['disk'] ?? 'local'),
+                'path' => (string) ($body['path'] ?? ''),
+                'name' => basename((string) ($body['path'] ?? '')),
+            ]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -1144,8 +1248,182 @@ class FluxFilesApi
                 isset($body['dest']) ? (string) $body['dest'] : null
             );
             $this->logAudit($claims, 'extract', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->dispatchWebhook($claims, 'extract', [
+                'disk' => (string) ($body['disk'] ?? 'local'),
+                'path' => (string) ($body['path'] ?? ''),
+                'name' => basename((string) ($body['path'] ?? '')),
+            ]);
 
             return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
+
+    public function handleTrash(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $disk = $body['disk'] ?? null;
+            $path = $body['path'] ?? null;
+            if (!$disk || $path === null) {
+                throw new ApiException('Missing required field: disk or path', 400, 'missing_param');
+            }
+
+            $result = $fm->trash((string) $disk, (string) $path);
+            $this->logAudit($claims, 'trash', (string) $disk, (string) $path);
+            $this->dispatchWebhook($claims, 'trash', ['disk' => (string) $disk, 'path' => (string) $path, 'name' => basename((string) $path)]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function handleTrashRestore(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $disk = $body['disk'] ?? null;
+            $trashId = $body['trash_id'] ?? null;
+            if (!$disk || !$trashId) {
+                throw new ApiException('Missing required field: disk/trash_id', 400, 'missing_param');
+            }
+
+            $result = $fm->restore((string) $disk, (string) $trashId, $body['path'] ?? null);
+            $this->logAudit($claims, 'restore', (string) $disk, (string) $trashId);
+            $this->dispatchWebhook($claims, 'restore', ['disk' => (string) $disk, 'path' => (string) $trashId, 'name' => basename((string) $trashId)]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function handleTrashList(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+
+            return $this->ok($fm->listTrash((string) ($request->get_param('disk') ?? 'local')));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function handleTrashPurge(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $disk = $body['disk'] ?? null;
+            $trashId = $body['trash_id'] ?? null;
+            if (!$disk || !$trashId) {
+                throw new ApiException('Missing required field: disk/trash_id', 400, 'missing_param');
+            }
+
+            $result = $fm->purgeTrash((string) $disk, (string) $trashId);
+            $this->logAudit($claims, 'purge', (string) $disk, (string) $trashId);
+            $this->dispatchWebhook($claims, 'purge', ['disk' => (string) $disk, 'path' => (string) $trashId, 'name' => basename((string) $trashId)]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function handleTrashEmpty(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $disk = $body['disk'] ?? null;
+            if (!$disk) {
+                throw new ApiException('Missing required field: disk', 400, 'missing_param');
+            }
+
+            $result = $fm->emptyTrash((string) $disk);
+            $this->logAudit($claims, 'empty_trash', (string) $disk, '');
+            $this->dispatchWebhook($claims, 'empty_trash', ['disk' => (string) $disk, 'path' => '', 'name' => '']);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    // Bucket Doctor — diagnose a disk backend (writes/deletes a probe object,
+    // so it requires the 'write' permission on a disk the token may access).
+
+    public function handleDiskDoctor(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            // Build the FileManager so any BYOB disks in the token are registered
+            // on the DiskManager before BucketDoctor probes them.
+            $this->fileManager($claims);
+
+            $disk = (string) ($request->get_param('disk') ?: 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            if (!$claims->hasPerm('write')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
+            $origin = $request->get_header('origin') ?: $request->get_param('origin');
+
+            return $this->ok((new BucketDoctor($this->diskManager))->diagnose($disk, $origin ?: null));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Storage usage dashboard: quota + per-type/-folder breakdown (one
+     * listContents pass via getUsageBreakdown). Proxy mode recomputes each call
+     * (no cache layer here); the standalone core endpoint adds the file cache.
+     */
+    public function handleUsage(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+
+            $disk = (string) ($request->get_param('disk') ?? 'local');
+            $quotaManager = new QuotaManager($this->diskManager);
+            $top = $claims->usageTopFoldersCount > 0 ? $claims->usageTopFoldersCount : 10;
+            $depth = $claims->usageFolderDepth > 0 ? $claims->usageFolderDepth : 1;
+
+            $breakdown = $quotaManager->getUsageBreakdown($disk, $claims->pathPrefix, $top, $depth);
+            $resp = $quotaManager->usageResponse(
+                $breakdown,
+                $claims->maxStorageMb,
+                $claims->usageWarningThreshold,
+                $claims->usageCriticalThreshold
+            );
+            $resp['cache_age_seconds'] = 0;
+
+            return $this->ok($resp);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -1271,8 +1549,33 @@ class FluxFilesApi
             $fm = $this->fileManager($claims);
 
             $module = \FluxFiles\ModuleRegistry::require('optimize', FluxFilesPlugin::license(), $claims);
-            $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $this->body($request));
-            $this->logAudit($claims, 'optimize', (string) ($this->body($request)['disk'] ?? 'local'), (string) ($this->body($request)['path'] ?? ''));
+            $body = $this->body($request);
+            $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
+            $this->logAudit($claims, 'optimize', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->dispatchWebhook($claims, 'optimize', [
+                'disk' => (string) ($body['disk'] ?? 'local'),
+                'path' => (string) ($body['path'] ?? ''),
+                'name' => basename((string) ($body['path'] ?? '')),
+            ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Webhooks (paid module) — send a test ping to the configured endpoint so
+     * operators can verify it. Same 3-layer gate as ModuleRegistry::require().
+     */
+    public function handleWebhooksTest(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+
+            $module = \FluxFiles\ModuleRegistry::require('webhooks', FluxFilesPlugin::license(), $claims);
+            $result = $module->test($claims, (string) get_option('fluxfiles_secret', ''));
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -1357,6 +1660,7 @@ class FluxFilesApi
             $chunker = new ChunkUploader($this->diskManager);
             $result = $chunker->initiate($disk, $scopedPath);
             $this->logAudit($claims, 'chunk_upload', $disk, $scopedPath);
+            $this->dispatchWebhook($claims, 'chunk_upload', ['disk' => $disk, 'path' => $scopedPath, 'name' => basename($scopedPath)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {

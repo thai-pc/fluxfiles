@@ -74,6 +74,9 @@ Route::post('extract', [FluxFilesController::class, 'extract']);
 // Audit
 Route::get('audit', [FluxFilesController::class, 'audit']);
 
+// Webhooks (paid module) — send a test ping to the configured endpoint
+Route::post('webhooks/test', [FluxFilesController::class, 'webhooksTest']);
+
 // Chunk upload (multipart)
 Route::post('chunk/init', [FluxFilesController::class, 'chunkInit']);
 Route::post('chunk/presign', [FluxFilesController::class, 'chunkPresign']);

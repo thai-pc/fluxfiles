@@ -373,7 +373,7 @@ test('proxy route surface covers every core /api/fm route', function () {
         // (no main JWT) — core-standalone, like share. Adapters may proxy later.
         'intake', 'intake/info', 'intake/list', 'intake/revoke', 'intake/upload', 'intake/analytics',
         // File versioning: paid + core-standalone (adapters may proxy later).
-        'versions', 'versions/restore', 'webhooks/test',
+        'versions', 'versions/restore',
         // Audit export/purge: paid + core-standalone, same posture as versioning
         // (export streams a raw file download rather than the JSON envelope, and
         // purge is admin-only tooling — neither has a matching proxy route yet).

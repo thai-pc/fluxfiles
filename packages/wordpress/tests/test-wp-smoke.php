@@ -806,6 +806,81 @@ test('error(): ApiException params reach the REST response body (folder_exists �
     assertEqual($dirName, $data['error_params']['name'] ?? null, 'error_params carried through');
 });
 
+// ── Route parity vs core (Phase 0 item 5) ────────────────────────────────────
+// Mirrors packages/laravel/tests/test-laravel-smoke.php's "proxy route surface
+// covers every core /api/fm route" test. WordPress registers routes via
+// `register_rest_route($ns, $p . '/path', ...)` — dynamic segments use PCRE
+// named groups (`(?P<locale>[a-z]{2,5})`), not Laravel's `{param}` style, so
+// the normalising regex differs, but the diff-against-an-allowlist shape is
+// identical.
+test('proxy route surface covers every core /api/fm route', function () {
+    $coreSrc = (string) file_get_contents(__DIR__ . '/../../core/api/index.php');
+    $apiSrc  = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+
+    preg_match_all("#\\\$uri === '/api/fm/([a-z0-9/_-]+)'#", $coreSrc, $cm);
+    $coreRoutes = array_unique($cm[1]);
+    sort($coreRoutes);
+
+    preg_match_all("#register_rest_route\\(\\s*\\\$ns,\\s*\\\$p\\s*\\.\\s*'([^']+)'#", $apiSrc, $wm);
+    $proxyRoutes = array_map(function ($r) {
+        // Strip a trailing PCRE named group the same way Laravel strips `{param}`.
+        $r = preg_replace('#/\(\?P<[a-zA-Z_]+>.*?\)#', '', $r);
+        return ltrim($r, '/');
+    }, $wm[1]);
+
+    // Core routes that are intentionally NOT proxied (keep in sync with Laravel's
+    // allowlist minus share/intake, which WordPress already proxies in full —
+    // CRUD, the public landing routes, AND analytics are still missing everywhere,
+    // see below).
+    // - stream / img: gated-local media and on-demand WebP are core-standalone /
+    //   Docker features. Both mint tokens only when FileManager has a stream
+    //   secret (setStreamSecret), which the WordPress proxy does not set — so
+    //   list() never emits stream/img URLs here, and there are no broken links.
+    // - chmod: only operates on an SFTP disk, a core-standalone driver the proxy
+    //   doesn't expose.
+    // - zip: streams a binary zip to the client (ZipStream → php://output); the
+    //   JSON-returning REST handlers don't do raw streaming responses, so it's a
+    //   core-standalone / Docker feature like stream/img. (Extract, by contrast,
+    //   returns JSON and IS proxied.)
+    // - paid module endpoints not yet wired here (ai-vision, ocr, backup, c2pa,
+    //   c2pa/sign, versions, versions/restore, audit/export, audit/purge): the
+    //   module code is a separate proprietary package gated by ModuleRegistry.
+    //   Each lands with that module's full proxy release (optimize + webhooks
+    //   are already proxied as the reference).
+    // - share/analytics, intake/analytics: WordPress proxies the rest of share +
+    //   intake (CRUD + the five public recipient routes), but no analytics
+    //   endpoint exists in any adapter yet (see Phase 1's open item).
+    // - terminal: opens a shell over SSH on an SFTP disk — core-standalone /
+    //   Docker feature, the proxy doesn't expose SFTP.
+    // - SSO bridge (sso/login, sso/callback, sso/exchange): pre-auth routes for
+    //   the standalone /public UI's own login screen. A WordPress site already
+    //   authenticates via the plugin's own token minting, so there's nothing to
+    //   proxy here.
+    $intentionallyUnproxied = [
+        'stream', 'img', 'chmod', 'zip', 'terminal',
+        'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
+        'versions', 'versions/restore',
+        'audit/export', 'audit/purge',
+        'share/analytics', 'intake/analytics',
+        'sso/login', 'sso/callback', 'sso/exchange',
+    ];
+
+    $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
+    assertTrue($missing === [], 'core routes not proxied by WordPress: ' . implode(', ', $missing));
+});
+
+test('every proxied route maps to an existing FluxFilesApi method', function () {
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    preg_match_all("#'callback'\\s*=>\\s*\\[\\\$api,\\s*'([a-zA-Z0-9_]+)'\\]#", $apiSrc, $m);
+    $missing = [];
+    foreach (array_unique($m[1]) as $method) {
+        if (!preg_match('#function\s+' . preg_quote($method, '#') . '\s*\(#', $apiSrc)) {
+            $missing[] = $method;
+        }
+    }
+    assertTrue($missing === [], 'routes reference missing FluxFilesApi methods: ' . implode(', ', $missing));
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
