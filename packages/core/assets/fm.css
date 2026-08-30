@@ -1777,6 +1777,10 @@ body {
 .ff-btn-ghost:hover { background: var(--ff-bg-hover); color: var(--color-text-primary); }
 .ff-btn-sm { padding: 5px 10px; font-size: 12px; }
 
+.ff-aivision-ops { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ff-aivision-ops .ff-btn { border-color: var(--color-border-secondary); }
+.ff-aivision-ops .ff-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+
 /* ══════════════════════════ Preview ══════════════════════════ */
 .ff-preview {
     border-bottom: 0.5px solid var(--color-border-tertiary);
@@ -2077,7 +2081,8 @@ body {
 .ff-links-modal,
 .ff-links-panel,
 .ff-chmod-modal,
-.ff-versions-modal {
+.ff-versions-modal,
+.ff-aivision-modal {
     background: var(--ff-bg);
     border-radius: 12px;
     width: min(900px, 94vw);
@@ -3633,7 +3638,8 @@ body {
     .ff-links-modal,
     .ff-links-panel,
     .ff-chmod-modal,
-    .ff-versions-modal {
+    .ff-versions-modal,
+    .ff-aivision-modal {
         width: 96vw;
         max-height: 90vh;
     }

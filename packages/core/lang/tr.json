@@ -501,6 +501,17 @@
     "restored": "Sürüm geri yüklendi",
     "pro_teaser": "Bir dosyanın her önceki sürümünü saklayın ve herhangi bir üzerine yazmayı geri alın."
   },
+  "aivision": {
+    "title": "AI Vision",
+    "note": "Bu görselin arka planını kaldırın, çözünürlüğünü artırın veya akıllıca kırpın. Her işlem, orijinalin yanına yeni bir dosya olarak kaydedilir.",
+    "bg_remove": "Arka planı kaldır",
+    "upscale": "Çözünürlüğü artır",
+    "smart_crop": "Akıllı kırpma",
+    "busy": "İşleniyor…",
+    "done": "AI Vision tamamlandı",
+    "done_at": "{path} olarak kaydedildi",
+    "pro_teaser": "Kendi AI sağlayıcı anahtarınızla arka planları kaldırın, çözünürlüğü artırın ve görselleri akıllıca kırpın."
+  },
   "import": {
     "title": "URL'den içe aktar",
     "button": "URL içe aktar",

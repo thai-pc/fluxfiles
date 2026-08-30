@@ -501,6 +501,17 @@
     "restored": "Version restaurée",
     "pro_teaser": "Conservez chaque version précédente d'un fichier et annulez n'importe quel remplacement."
   },
+  "aivision": {
+    "title": "Vision IA",
+    "note": "Supprimez l'arrière-plan, agrandissez ou recadrez intelligemment cette image. Chaque action enregistre un nouveau fichier à côté de l'original.",
+    "bg_remove": "Supprimer l'arrière-plan",
+    "upscale": "Agrandir",
+    "smart_crop": "Recadrage intelligent",
+    "busy": "Traitement en cours…",
+    "done": "Vision IA terminée",
+    "done_at": "Enregistré sous {path}",
+    "pro_teaser": "Supprimez l'arrière-plan, agrandissez et recadrez intelligemment vos images avec votre propre clé de fournisseur IA."
+  },
   "import": {
     "title": "Importer depuis une URL",
     "button": "Importer une URL",

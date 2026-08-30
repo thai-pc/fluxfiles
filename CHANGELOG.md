@@ -3,6 +3,26 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.96] — 2026-08-30
+
+> Released: `core-v0.2.78`. No paid-module version bump: `AiVisionModule`'s
+> server side (`/api/fm/ai-vision`, `allow_ai_vision` claim) is untouched,
+> only its UI wrapper.
+
+### Added — AI Vision operator UI
+
+`AiVisionModule` and its `/api/fm/ai-vision` route (bg-remove / upscale /
+smart-crop via a BYO vision-provider key) were fully implemented server-side
+but had no client, the same gap already closed for Share/Intake/Versioning.
+
+- fm.js/index.html: an AI Vision modal (bg_remove/upscale/smart_crop actions,
+  busy/error/result states), a detail-panel button, and context-menu +
+  action-sheet entries — raster-only (`canAiVisionFile` mirrors
+  `ImageOptimizer::isImage()`'s extension set, no SVG), folded into the same
+  three-state `proGate('allow_ai_vision', 'ai')` (on/hidden/locked) treatment
+  as the other standalone paid SKUs.
+- `aivision.*` i18n namespace (9 keys) added across all 16 locales.
+
 ## [0.2.95] — 2026-08-29
 
 > Released: `core-v0.2.77`, modules `audit-export v1.0.0` (new) and `sso v1.0.0`

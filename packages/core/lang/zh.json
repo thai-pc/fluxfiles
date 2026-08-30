@@ -501,6 +501,17 @@
     "restored": "版本已恢复",
     "pro_teaser": "保留文件的每个历史版本，并可撤销任何覆盖操作。"
   },
+  "aivision": {
+    "title": "AI 视觉",
+    "note": "去除背景、放大分辨率，或智能裁剪此图片。每个操作都会在原文件旁保存一个新文件。",
+    "bg_remove": "去除背景",
+    "upscale": "放大分辨率",
+    "smart_crop": "智能裁剪",
+    "busy": "处理中…",
+    "done": "AI 视觉已完成",
+    "done_at": "已保存为 {path}",
+    "pro_teaser": "使用您自己的 AI 服务商密钥去除背景、放大分辨率并智能裁剪图片。"
+  },
   "import": {
     "title": "从 URL 导入",
     "button": "导入 URL",

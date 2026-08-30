@@ -501,6 +501,17 @@
     "restored": "Version wiederhergestellt",
     "pro_teaser": "Jede frühere Version einer Datei behalten und jedes Überschreiben rückgängig machen."
   },
+  "aivision": {
+    "title": "KI-Bildbearbeitung",
+    "note": "Hintergrund entfernen, hochskalieren oder dieses Bild intelligent zuschneiden. Jede Aktion speichert eine neue Datei neben dem Original.",
+    "bg_remove": "Hintergrund entfernen",
+    "upscale": "Hochskalieren",
+    "smart_crop": "Intelligenter Zuschnitt",
+    "busy": "Wird bearbeitet…",
+    "done": "KI-Bildbearbeitung abgeschlossen",
+    "done_at": "Gespeichert als {path}",
+    "pro_teaser": "Hintergründe entfernen, Bilder hochskalieren und intelligent zuschneiden – mit deinem eigenen KI-Anbieter-Schlüssel."
+  },
   "import": {
     "title": "Von URL importieren",
     "button": "URL importieren",

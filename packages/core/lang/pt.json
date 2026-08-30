@@ -501,6 +501,17 @@
     "restored": "Versão restaurada",
     "pro_teaser": "Mantenha cada versão anterior de um arquivo e reverta qualquer substituição."
   },
+  "aivision": {
+    "title": "AI Vision",
+    "note": "Remova o fundo, amplie a resolução ou recorte esta imagem de forma inteligente. Cada ação salva um novo arquivo ao lado do original.",
+    "bg_remove": "Remover fundo",
+    "upscale": "Ampliar resolução",
+    "smart_crop": "Recorte inteligente",
+    "busy": "Processando…",
+    "done": "AI Vision concluído",
+    "done_at": "Salvo como {path}",
+    "pro_teaser": "Remova fundos, amplie a resolução e recorte imagens de forma inteligente com sua própria chave de provedor de IA."
+  },
   "import": {
     "title": "Importar de URL",
     "button": "Importar URL",

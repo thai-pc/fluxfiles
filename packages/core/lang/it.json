@@ -501,6 +501,17 @@
     "restored": "Versione ripristinata",
     "pro_teaser": "Conserva ogni versione precedente di un file e annulla qualsiasi sovrascrittura."
   },
+  "aivision": {
+    "title": "AI Vision",
+    "note": "Rimuovi lo sfondo, esegui l'upscaling o ritaglia questa immagine in modo intelligente. Ogni azione salva un nuovo file accanto all'originale.",
+    "bg_remove": "Rimuovi sfondo",
+    "upscale": "Upscaling",
+    "smart_crop": "Ritaglio intelligente",
+    "busy": "Elaborazione…",
+    "done": "AI Vision completata",
+    "done_at": "Salvato come {path}",
+    "pro_teaser": "Rimuovi sfondi, esegui l'upscaling e ritaglia le immagini in modo intelligente con la tua chiave del provider AI."
+  },
   "import": {
     "title": "Importa da URL",
     "button": "Importa URL",

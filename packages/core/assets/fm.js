@@ -2750,6 +2750,60 @@ function fluxFilesApp() {
 
         get versionsErrorIsInstall() { return this._isInstallError(this.versionsErrorCode); },
 
+        // ── AI Vision (paid `ai` module: bg-remove / upscale / smart-crop) ────
+        // Studio/Enterprise throw-in per docs/COMMERCIAL-STRATEGY.md — not a
+        // standalone SKU, gated the same way as every other paid module.
+        showAiVision: false,
+        aiVisionTarget: null,       // the file the panel was opened for
+        aiVisionBusyOp: '',         // '' | 'bg_remove' | 'upscale' | 'smart_crop'
+        aiVisionError: '',
+        aiVisionErrorCode: '',
+        aiVisionResultPath: '',     // path of the last successfully produced file
+
+        // Raster-only, matches ImageOptimizer::isImage() server-side exactly
+        // (no svg — /api/fm/ai-vision would 415 not_image on it).
+        canAiVisionFile(file) {
+            return this.aiVisionGate === 'on' && this._hasPerm('write') && !!file && file.type !== 'dir'
+                && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(this._fileExt(file));
+        },
+
+        openAiVision(item) {
+            if (!this.canAiVisionFile(item)) return;
+            this.aiVisionTarget = item;
+            this.showAiVision = true;
+            this.aiVisionError = '';
+            this.aiVisionErrorCode = '';
+            this.aiVisionResultPath = '';
+        },
+
+        closeAiVision() {
+            this.showAiVision = false;
+        },
+
+        async runAiVision(op) {
+            if (!this.aiVisionTarget || this.aiVisionBusyOp) return;
+            this.aiVisionBusyOp = op;
+            this.aiVisionError = '';
+            this.aiVisionErrorCode = '';
+            this.aiVisionResultPath = '';
+            try {
+                const data = await this.api('POST', '/api/fm/ai-vision', {
+                    disk: this.currentDisk, path: this.aiVisionTarget.key, op,
+                });
+                this.aiVisionResultPath = data.path || '';
+                this.showToast(this.t('aivision.done'), 'success');
+                this.postMessage('FM_EVENT', { event: 'aivision:done', key: this.aiVisionTarget.key, op, result: this.aiVisionResultPath });
+                this.loadFiles();
+            } catch (e) {
+                this.aiVisionError = e.message || this.t('error.generic');
+                this.aiVisionErrorCode = e.code || '';
+            } finally {
+                this.aiVisionBusyOp = '';
+            }
+        },
+
+        get aiVisionErrorIsInstall() { return this._isInstallError(this.aiVisionErrorCode); },
+
         formatSize(bytes) {
             if (!bytes) return '0 B';
             const units = ['B', 'KB', 'MB', 'GB'];
@@ -3148,6 +3202,9 @@ function fluxFilesApp() {
         get shareGate() { return this.proGate('allow_share', 'share'); },
         get intakeGate() { return this.proGate('allow_intake', 'intake'); },
         get versionGate() { return this.proGate('allow_versioning', 'versioning'); },
+        // AI Vision (paid module: ai) — no toolbar entry of its own, surfaced
+        // per-file (detail panel / context menu / action sheet) like Versioning.
+        get aiVisionGate() { return this.proGate('allow_ai_vision', 'ai'); },
         // Audit export (paid module: audit-export) — surfaced only inside the
         // Activity Log panel, which is itself gated by canAudit (the `audit` perm).
         // Unlike Share/Intake this has no toolbar entry point of its own, so

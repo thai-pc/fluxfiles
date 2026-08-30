@@ -87,7 +87,9 @@ gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`
 - **Optimization is FREE/core** (was paid). Paid modules are **11**: share/intake/
   versioning/webhooks/ai/ocr/virus/backup/c2pa/audit-export/sso (gitignored,
   `ModuleRegistry` 3-layer gate). `ModuleRegistry::$map` is the source of truth —
-  check it, don't trust a count.
+  check it, don't trust a count. Of these, only Share/Intake/Versioning/AI Vision/
+  Audit-export have operator UI so far — OCR/Virus/Backup/C2PA/Webhooks/SSO are
+  engine-only (API/config, no UI).
 - **Virus scan is fail-closed.** `allow_virus_scan` wires `FileManager::setVirusScanner()`
   in `index.php` *and* the Laravel/WP proxies (they build their own `FileManager`). It
   scans `upload()` / `putContent()` / each `extractZip()` entry **before** writing;

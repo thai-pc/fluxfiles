@@ -1000,6 +1000,10 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M1.5 9c1.5-.5 2-3 3-3s.5 2 1.5 2 2-4 3-4 1 3 1.5 3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 10.5h9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('esign.title')"></span>
                 </button>
+                <button class="detail-btn" x-show="canAiVisionFile(detailFile)" @click="openAiVision(detailFile)" :title="t('aivision.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="2" width="9" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M2.5 8.5L4.5 5.5l1.7 2 1.6-2.3L9.5 8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="4.1" r="0.6" fill="currentColor"/></svg>
+                    <span x-text="t('aivision.title')"></span>
+                </button>
                 <button class="detail-btn" x-show="canOptimizeFile(detailFile)" :disabled="optimizeBusy" @click="optimizeFiles([detailFile.key])" :title="t('optimize.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v2M6 8.5v2M1.5 6h2M8.5 6h2M3 3l1.2 1.2M7.8 7.8L9 9M9 3L7.8 4.2M4.2 7.8L3 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('optimize.title')"></span>
@@ -2004,6 +2008,41 @@
         </div>
     </div>
 
+    <!-- ═══ AI Vision panel (paid `ai` module: bg-remove / upscale / smart-crop) ═══ -->
+    <div class="ff-modal-overlay" x-show="showAiVision" x-transition @click.self="closeAiVision()" style="z-index:60;" x-cloak>
+        <div class="ff-aivision-modal" role="dialog" aria-modal="true" :aria-label="t('aivision.title')" @keydown.escape.window="showAiVision && closeAiVision()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('aivision.title')"></h3>
+                <button class="ff-activity-close" @click="closeAiVision()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <p class="ff-activity-note" x-text="t('aivision.note')"></p>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="aiVisionError" x-text="aiVisionError"></p>
+                <p x-show="aiVisionError && aiVisionErrorIsInstall">
+                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                </p>
+                <p class="ff-activity-state" x-show="aiVisionResultPath" x-text="t('aivision.done_at', { path: aiVisionResultPath })"></p>
+                <div class="ff-aivision-ops">
+                    <button class="ff-btn ff-btn-ghost" :disabled="!!aiVisionBusyOp" @click="runAiVision('bg_remove')">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="2" width="9" height="8" rx="1" stroke="currentColor" stroke-width="1.1" stroke-dasharray="1.6 1.2"/><circle cx="6" cy="6" r="2.2" stroke="currentColor" stroke-width="1.1"/></svg>
+                        <span x-show="aiVisionBusyOp !== 'bg_remove'" x-text="t('aivision.bg_remove')"></span>
+                        <span x-show="aiVisionBusyOp === 'bg_remove'" x-text="t('aivision.busy')"></span>
+                    </button>
+                    <button class="ff-btn ff-btn-ghost" :disabled="!!aiVisionBusyOp" @click="runAiVision('upscale')">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M1.5 6.5v3a1 1 0 001 1h3M10.5 5.5v-3a1 1 0 00-1-1h-3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><path d="M1.5 10.5l3-3M10.5 1.5l-3 3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                        <span x-show="aiVisionBusyOp !== 'upscale'" x-text="t('aivision.upscale')"></span>
+                        <span x-show="aiVisionBusyOp === 'upscale'" x-text="t('aivision.busy')"></span>
+                    </button>
+                    <button class="ff-btn ff-btn-ghost" :disabled="!!aiVisionBusyOp" @click="runAiVision('smart_crop')">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M3 1v8a1 1 0 001 1h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><path d="M1 3h8a1 1 0 011 1v8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                        <span x-show="aiVisionBusyOp !== 'smart_crop'" x-text="t('aivision.smart_crop')"></span>
+                        <span x-show="aiVisionBusyOp === 'smart_crop'" x-text="t('aivision.busy')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ Import from URL modal ═══ -->
     <div class="ff-modal-overlay" x-show="showUrlImport" x-transition @click.self="closeUrlImport()" style="z-index:60;" x-cloak>
         <div class="ff-import-modal" role="dialog" aria-modal="true" :aria-label="t('import.title')" @keydown.escape.window="showUrlImport && closeUrlImport()">
@@ -2095,6 +2134,10 @@
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/><path d="M6 3.5V6l1.8 1.1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('versions.title')"></span>
                 </button>
+                <button x-show="canAiVisionFile(mobileActionSheet)" @click="closeActionSheet(); openAiVision(mobileActionSheet)">
+                    <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="2" width="9" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M2.5 8.5L4.5 5.5l1.7 2 1.6-2.3L9.5 8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="4.1" r="0.6" fill="currentColor"/></svg>
+                    <span x-text="t('aivision.title')"></span>
+                </button>
                 <button x-show="mobileActionSheet?.type !== 'dir' && mobileActionSheet?.url" @click="closeActionSheet(); copyUrl(mobileActionSheet)">
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
@@ -2135,6 +2178,10 @@
                 <button x-show="versionGate === 'on' && desktopContextMenu.item?.type !== 'dir'" @click="openVersionHistory(desktopContextMenu.item); closeDesktopContextMenu()">
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/><path d="M6 3.5V6l1.8 1.1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('versions.title')"></span>
+                </button>
+                <button x-show="canAiVisionFile(desktopContextMenu.item)" @click="openAiVision(desktopContextMenu.item); closeDesktopContextMenu()">
+                    <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="2" width="9" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M2.5 8.5L4.5 5.5l1.7 2 1.6-2.3L9.5 8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="4.1" r="0.6" fill="currentColor"/></svg>
+                    <span x-text="t('aivision.title')"></span>
                 </button>
                 <button x-show="desktopContextMenu.item?.type !== 'dir' && desktopContextMenu.item?.url" @click="copyUrl(desktopContextMenu.item); closeDesktopContextMenu()">
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>

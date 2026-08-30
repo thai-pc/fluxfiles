@@ -501,6 +501,17 @@
     "restored": "Version restored",
     "pro_teaser": "Keep every prior version of a file and roll back any overwrite."
   },
+  "aivision": {
+    "title": "AI Vision",
+    "note": "Remove the background, upscale, or smart-crop this image. Each action saves a new file next to the original.",
+    "bg_remove": "Remove background",
+    "upscale": "Upscale",
+    "smart_crop": "Smart crop",
+    "busy": "Working…",
+    "done": "AI Vision finished",
+    "done_at": "Saved as {path}",
+    "pro_teaser": "Remove backgrounds, upscale, and smart-crop images with your own AI provider key."
+  },
   "import": {
     "title": "Import from URL",
     "button": "Import URL",

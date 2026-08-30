@@ -501,6 +501,17 @@
     "restored": "Versie hersteld",
     "pro_teaser": "Bewaar elke eerdere versie van een bestand en maak elke overschrijving ongedaan."
   },
+  "aivision": {
+    "title": "AI Vision",
+    "note": "Verwijder de achtergrond, schaal op, of snijd deze afbeelding slim bij. Elke actie slaat een nieuw bestand op naast het origineel.",
+    "bg_remove": "Achtergrond verwijderen",
+    "upscale": "Opschalen",
+    "smart_crop": "Slim bijsnijden",
+    "busy": "Bezig…",
+    "done": "AI Vision voltooid",
+    "done_at": "Opgeslagen als {path}",
+    "pro_teaser": "Verwijder achtergronden, schaal op en snijd afbeeldingen slim bij met je eigen AI-providersleutel."
+  },
   "import": {
     "title": "Importeren vanaf URL",
     "button": "URL importeren",

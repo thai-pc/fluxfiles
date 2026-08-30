@@ -501,6 +501,17 @@
     "restored": "Đã khôi phục phiên bản",
     "pro_teaser": "Giữ lại mọi phiên bản trước của tệp và hoàn tác bất kỳ lần ghi đè nào."
   },
+  "aivision": {
+    "title": "AI Vision",
+    "note": "Xóa nền, tăng độ phân giải, hoặc cắt ảnh thông minh cho tệp này. Mỗi thao tác lưu thành một tệp mới bên cạnh tệp gốc.",
+    "bg_remove": "Xóa nền",
+    "upscale": "Tăng độ phân giải",
+    "smart_crop": "Cắt ảnh thông minh",
+    "busy": "Đang xử lý…",
+    "done": "AI Vision đã hoàn tất",
+    "done_at": "Đã lưu thành {path}",
+    "pro_teaser": "Xóa nền, tăng độ phân giải và cắt ảnh thông minh bằng khóa nhà cung cấp AI của riêng bạn."
+  },
   "import": {
     "title": "Nhập từ URL",
     "button": "Nhập URL",
