@@ -215,45 +215,36 @@ class FluxFilesManager
                 $payload[$mc] = (bool) $overrides[$mc];
             }
         }
-        // Share + Intake are core-standalone: none of their endpoints (create/list/
-        // revoke, and the public landing routes) is proxied. Forward the gate claims —
-        // and the config that travels with them — only in 'standalone' mode (token → a
-        // real core that serves them); in proxy mode they're dropped so the UI can't
-        // render a button for an endpoint that would 404. Same rule as allow_terminal
-        // above. The other seven module claims have no UI button, so they keep their
-        // unconditional behaviour.
-        if (config('fluxfiles.mode') === 'standalone') {
-            foreach (['allow_share', 'allow_intake'] as $mc) {
-                if (array_key_exists($mc, $overrides)) {
-                    $payload[$mc] = (bool) $overrides[$mc];
-                }
+        // Share + Intake now have routes in both modes (proxy: FluxFilesController's
+        // shareIntake()/publicLink() dispatchers; standalone: index.php), so the
+        // gate claims — and the config that travels with them — forward
+        // unconditionally, matching WordPress's FluxFilesPlugin.
+        foreach (['allow_share', 'allow_intake'] as $mc) {
+            if (array_key_exists($mc, $overrides)) {
+                $payload[$mc] = (bool) $overrides[$mc];
             }
-            // Share landing config. Read by the module at create time and baked into the
-            // share record, so these travel with `allow_share` (the core clamps the TTL
-            // and drops a non-http(s) base URL on decode).
-            if (!empty($overrides['share_url_ttl'])) {
-                $payload['share_url_ttl'] = (int) $overrides['share_url_ttl'];
-            }
-            if (!empty($overrides['share_base_url'])) {
-                $payload['share_base_url'] = (string) $overrides['share_base_url'];
-            }
-            if (array_key_exists('share_preview', $overrides)) {
-                $payload['share_preview'] = (bool) $overrides['share_preview'];
-            }
-            if (array_key_exists('share_analytics', $overrides)) {
-                $payload['share_analytics'] = (bool) $overrides['share_analytics'];
-            }
-            // Intake portal link base — the same role for `allow_intake`.
-            if (!empty($overrides['intake_base_url'])) {
-                $payload['intake_base_url'] = (string) $overrides['intake_base_url'];
-            }
-            if (array_key_exists('intake_analytics', $overrides)) {
-                $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
-            }
-        } else {
-            // …including whatever an edition preset already defaulted: `edition: pro`
-            // must not light up a Share button in proxy mode either.
-            unset($payload['allow_share'], $payload['allow_intake']);
+        }
+        // Share landing config. Read by the module at create time and baked into the
+        // share record, so these travel with `allow_share` (the core clamps the TTL
+        // and drops a non-http(s) base URL on decode).
+        if (!empty($overrides['share_url_ttl'])) {
+            $payload['share_url_ttl'] = (int) $overrides['share_url_ttl'];
+        }
+        if (!empty($overrides['share_base_url'])) {
+            $payload['share_base_url'] = (string) $overrides['share_base_url'];
+        }
+        if (array_key_exists('share_preview', $overrides)) {
+            $payload['share_preview'] = (bool) $overrides['share_preview'];
+        }
+        if (array_key_exists('share_analytics', $overrides)) {
+            $payload['share_analytics'] = (bool) $overrides['share_analytics'];
+        }
+        // Intake portal link base — the same role for `allow_intake`.
+        if (!empty($overrides['intake_base_url'])) {
+            $payload['intake_base_url'] = (string) $overrides['intake_base_url'];
+        }
+        if (array_key_exists('intake_analytics', $overrides)) {
+            $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
         }
         // Webhook config. Without a URL `allow_webhooks` is inert (the module has
         // nowhere to POST), so these travel with the gate claim. The core drops a
@@ -459,5 +450,21 @@ class FluxFilesManager
     public function sdkUrl(): string
     {
         return $this->endpoint() . '/fluxfiles.js';
+    }
+
+    /**
+     * The public URL of a bundled recipient page (share.html / intake.html), with
+     * the one-shot token attached. Served from this app's own site root by
+     * FluxFilesController::publicPage() (registered outside the FluxFilesAuth
+     * group), mirroring WordPress's FluxFilesPlugin::publicLinkUrl().
+     */
+    public static function publicLinkUrl(string $page, string $token = ''): string
+    {
+        $base = rtrim(config('app.url'), '/') . '/public/' . $page;
+
+        // Token omitted = the BASE url, which is what the *_base_url claims carry:
+        // the module appends `&token=…` itself, so a base that already had one
+        // would produce two and resolve the wrong (first) value.
+        return $token !== '' ? $base . '?token=' . urlencode($token) : $base;
     }
 }

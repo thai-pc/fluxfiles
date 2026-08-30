@@ -1182,6 +1182,158 @@ class FluxFilesController
         }
     }
 
+    // ── Share + Intake (paid module) ─────────────────────────────────────────
+
+    /**
+     * Operator routes: create/list/revoke/analytics. The paid module does the
+     * work; this only supplies Laravel's FileManager/DiskManager and the
+     * recipient link base, and it never touches the returned token — that is
+     * shown once and never stored, exactly as in standalone.
+     */
+    private function shareIntake(Request $request, string $module, string $op): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, in_array($op, ['create', 'revoke'], true));
+            $mod = \FluxFiles\ModuleRegistry::require($module, \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $disk = (string) ($request->input('disk') ?? $request->query('disk') ?? 'local');
+
+            if ($op === 'list') {
+                return $this->ok($module === 'share'
+                    ? $mod->listShares($this->diskManager, $claims, $disk)
+                    : $mod->listPortals($this->diskManager, $claims, $disk));
+            }
+            if ($op === 'analytics') {
+                $event = $request->query('event');
+                return $this->ok($mod->analytics(
+                    $this->diskManager,
+                    $claims,
+                    (string) $request->query('disk', 'local'),
+                    (string) $request->query('jti', ''),
+                    max(1, min(500, (int) $request->query('limit', 100))),
+                    max(0, (int) $request->query('offset', 0)),
+                    $event !== null && $event !== '' ? (string) $event : null
+                ));
+            }
+            if ($op === 'revoke') {
+                $jti = (string) ($request->input('jti') ?? '');
+                return $this->ok($module === 'share'
+                    ? $mod->revokeShare($this->diskManager, $claims, $disk, $jti)
+                    : $mod->revokePortal($this->diskManager, $claims, $disk, $jti));
+            }
+
+            $fm = $this->fileManager($claims);
+            $secret = (string) config('fluxfiles.secret');
+            $body = $request->all();
+            $res = $module === 'share'
+                ? $mod->createShare($fm, $this->diskManager, $claims, $secret, $body)
+                : $mod->createPortal($fm, $this->diskManager, $claims, $secret, $body);
+
+            // The recipient URL. The module builds it when the token carries a base
+            // URL (`share_base_url`/`intake_base_url`); otherwise fall back to the
+            // recipient landing page this adapter serves at its own site root.
+            if (empty($res['url']) && !empty($res['token'])) {
+                $res['url'] = \FluxFiles\Laravel\FluxFilesManager::publicLinkUrl(
+                    $module === 'share' ? 'share.html' : 'intake.html',
+                    (string) $res['token']
+                );
+            }
+
+            return $this->ok($res);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function share(Request $r): JsonResponse { return $this->shareIntake($r, 'share', 'create'); }
+    public function shareList(Request $r): JsonResponse { return $this->shareIntake($r, 'share', 'list'); }
+    public function shareRevoke(Request $r): JsonResponse { return $this->shareIntake($r, 'share', 'revoke'); }
+    public function shareAnalytics(Request $r): JsonResponse { return $this->shareIntake($r, 'share', 'analytics'); }
+    public function intake(Request $r): JsonResponse { return $this->shareIntake($r, 'intake', 'create'); }
+    public function intakeList(Request $r): JsonResponse { return $this->shareIntake($r, 'intake', 'list'); }
+    public function intakeRevoke(Request $r): JsonResponse { return $this->shareIntake($r, 'intake', 'revoke'); }
+    public function intakeAnalytics(Request $r): JsonResponse { return $this->shareIntake($r, 'intake', 'analytics'); }
+
+    /**
+     * The PUBLIC recipient routes, delegated to the SAME core handlers standalone
+     * uses (PublicLinks.php). Nothing about tokens, expiry, passwords, download
+     * caps or byte-sending is reimplemented here — a second copy of that is how a
+     * hole appears on one platform only. This supplies Laravel's DiskManager and
+     * then gets out of the way.
+     *
+     * The core handler writes its own status/headers/body and never returns a
+     * value, which is why this method returns void: the response must not be
+     * wrapped in the normal JSON envelope (a share/file hit can be a raw byte
+     * stream or a 302 redirect). `$_GET`/`$_POST`/`$_FILES`/php://input are
+     * already populated by PHP for these requests — Laravel's Request object
+     * doesn't remove them.
+     */
+    private function publicLink(string $which, string $uri): void
+    {
+        $core = $this->fluxfilesBasePath() . '/api/PublicLinks.php';
+        if (!is_file($core)) {
+            http_response_code(501);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['data' => null, 'error' => 'The FluxFiles core is not available', 'error_code' => 'core_missing']);
+            exit;
+        }
+        require_once $core;
+
+        // The core handler reads the signing secret and the storage path from $_ENV.
+        $_ENV['FLUXFILES_SECRET'] = (string) config('fluxfiles.secret');
+        $_ENV['FLUXFILES_STORAGE_PATH'] = (string) config('fluxfiles.storage_path');
+
+        $method = request()->method();
+        $diskConfigs = config('fluxfiles.disks');
+
+        if ($which === 'share') {
+            \handleSharePublic($method, $uri, $this->diskManager, $diskConfigs);
+        } else {
+            \handleIntakePublic($method, $uri, $this->diskManager, $diskConfigs);
+        }
+        exit; // the core handler has already sent status, headers and body
+    }
+
+    public function shareInfo(): void { $this->publicLink('share', '/api/fm/share/info'); }
+    public function shareUnlock(): void { $this->publicLink('share', '/api/fm/share/unlock'); }
+    public function shareFile(): void { $this->publicLink('share', '/api/fm/share/file'); }
+    public function intakeInfo(): void { $this->publicLink('intake', '/api/fm/intake/info'); }
+    public function intakeUpload(): void { $this->publicLink('intake', '/api/fm/intake/upload'); }
+
+    /**
+     * Recipient landing pages (share.html / intake.html), bundled with core and
+     * served from this adapter's own site root. A static page cannot know where
+     * this app's API lives (a custom `fluxfiles.route_prefix` changes it), so
+     * `window.__FM_API_BASE__` is injected the same way WordPress's
+     * public-link.php does it. Headers match standalone/WordPress: the URL
+     * carries the recipient token, so it must never leak in a Referer or be
+     * cached by a shared proxy.
+     */
+    private function publicPage(string $file): \Illuminate\Http\Response
+    {
+        $path = $this->fluxfilesBasePath() . '/public/' . $file;
+
+        if (!file_exists($path)) {
+            abort(404, "FluxFiles {$file} not found");
+        }
+
+        $html = (string) file_get_contents($path);
+        $apiBase = rtrim((string) config('app.url'), '/') . '/' . trim((string) config('fluxfiles.route_prefix', 'api/fm'), '/');
+        $inject = '<script>window.__FM_API_BASE__=' . json_encode($apiBase) . ';</script>';
+        $html = str_contains($html, '</head>')
+            ? str_replace('</head>', $inject . '</head>', $html)
+            : $inject . $html;
+
+        return response($html, 200)
+            ->header('Content-Type', 'text/html; charset=utf-8')
+            ->header('Referrer-Policy', 'no-referrer')
+            ->header('X-Content-Type-Options', 'nosniff')
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function sharePage(): \Illuminate\Http\Response { return $this->publicPage('share.html'); }
+    public function intakePage(): \Illuminate\Http\Response { return $this->publicPage('intake.html'); }
+
     // Chunk upload routes
 
     public function chunkInit(Request $request): JsonResponse

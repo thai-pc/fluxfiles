@@ -85,5 +85,25 @@ class FluxFilesServiceProvider extends ServiceProvider
         Route::get('public/index.html', [FluxFilesController::class, 'publicIndex']);
         Route::get('assets/{file}', [FluxFilesController::class, 'asset'])
             ->where('file', '[a-zA-Z0-9._-]+');
+
+        // PUBLIC recipient routes — reached by someone with no Laravel session and
+        // no JWT, authenticated only by the share/portal token in the query
+        // string/body/upload (same posture as /img and /stream). Registered with
+        // NO middleware — not even 'web' — same as the static asset routes above:
+        // 'web' applies CSRF verification, which would 403 an external POST
+        // (share/unlock, intake/upload) that carries no Laravel CSRF token, and
+        // the FluxFilesAuth group above would 401 the very people these links are
+        // for. See FluxFilesController::publicLink() for the full rationale — do
+        // not "tighten" these into the auth group.
+        Route::prefix($prefix)->get('share/info', [FluxFilesController::class, 'shareInfo']);
+        Route::prefix($prefix)->post('share/unlock', [FluxFilesController::class, 'shareUnlock']);
+        Route::prefix($prefix)->get('share/file', [FluxFilesController::class, 'shareFile']);
+        Route::prefix($prefix)->get('intake/info', [FluxFilesController::class, 'intakeInfo']);
+        Route::prefix($prefix)->post('intake/upload', [FluxFilesController::class, 'intakeUpload']);
+
+        // Recipient landing pages (share.html / intake.html) — same public
+        // posture, alongside the other static asset routes above.
+        Route::get('public/share.html', [FluxFilesController::class, 'sharePage']);
+        Route::get('public/intake.html', [FluxFilesController::class, 'intakePage']);
     }
 }

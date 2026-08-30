@@ -77,6 +77,19 @@ Route::get('audit', [FluxFilesController::class, 'audit']);
 // Webhooks (paid module) — send a test ping to the configured endpoint
 Route::post('webhooks/test', [FluxFilesController::class, 'webhooksTest']);
 
+// Share + Intake (paid module) — operator side: create/list/revoke/analytics.
+// The public recipient routes (share/info, share/unlock, share/file, intake/info,
+// intake/upload) and the recipient landing pages are registered separately in
+// FluxFilesServiceProvider, outside the auth middleware group.
+Route::post('share', [FluxFilesController::class, 'share']);
+Route::get('share/list', [FluxFilesController::class, 'shareList']);
+Route::post('share/revoke', [FluxFilesController::class, 'shareRevoke']);
+Route::get('share/analytics', [FluxFilesController::class, 'shareAnalytics']);
+Route::post('intake', [FluxFilesController::class, 'intake']);
+Route::get('intake/list', [FluxFilesController::class, 'intakeList']);
+Route::post('intake/revoke', [FluxFilesController::class, 'intakeRevoke']);
+Route::get('intake/analytics', [FluxFilesController::class, 'intakeAnalytics']);
+
 // Chunk upload (multipart)
 Route::post('chunk/init', [FluxFilesController::class, 'chunkInit']);
 Route::post('chunk/presign', [FluxFilesController::class, 'chunkPresign']);

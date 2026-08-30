@@ -236,6 +236,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/share/revoke', array_merge($writeArgs, [
             'callback' => [$api, 'handleShareRevoke'],
         ]));
+        register_rest_route($ns, $p . '/share/analytics', array_merge($readArgs, [
+            'callback' => [$api, 'handleShareAnalytics'],
+        ]));
         register_rest_route($ns, $p . '/intake', array_merge($writeArgs, [
             'callback' => [$api, 'handleIntakeCreate'],
         ]));
@@ -244,6 +247,9 @@ class FluxFilesApi
         ]));
         register_rest_route($ns, $p . '/intake/revoke', array_merge($writeArgs, [
             'callback' => [$api, 'handleIntakeRevoke'],
+        ]));
+        register_rest_route($ns, $p . '/intake/analytics', array_merge($readArgs, [
+            'callback' => [$api, 'handleIntakeAnalytics'],
         ]));
 
         // ── PUBLIC recipient routes ─────────────────────────────────────────
@@ -1455,7 +1461,7 @@ class FluxFilesApi
     {
         try {
             $claims = $this->claims();
-            $this->rateLimit($claims, $op !== 'list');
+            $this->rateLimit($claims, !in_array($op, ['list', 'analytics'], true));
             $mod = \FluxFiles\ModuleRegistry::require($module, FluxFilesPlugin::license(), $claims);
             $secret = (string) get_option('fluxfiles_secret', '');
             $disk = (string) ($request->get_param('disk') ?: 'local');
@@ -1464,6 +1470,18 @@ class FluxFilesApi
                 return $this->ok($module === 'share'
                     ? $mod->listShares($this->diskManager, $claims, $disk)
                     : $mod->listPortals($this->diskManager, $claims, $disk));
+            }
+            if ($op === 'analytics') {
+                $event = $request->get_param('event');
+                return $this->ok($mod->analytics(
+                    $this->diskManager,
+                    $claims,
+                    $disk,
+                    (string) ($request->get_param('jti') ?: ''),
+                    max(1, min(500, (int) ($request->get_param('limit') ?: 100))),
+                    max(0, (int) ($request->get_param('offset') ?: 0)),
+                    $event !== null && $event !== '' ? (string) $event : null
+                ));
             }
             $body = $this->body($request);
             if ($op === 'revoke') {
@@ -1496,9 +1514,11 @@ class FluxFilesApi
     public function handleShareCreate(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'share', 'create'); }
     public function handleShareList(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'share', 'list'); }
     public function handleShareRevoke(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'share', 'revoke'); }
+    public function handleShareAnalytics(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'share', 'analytics'); }
     public function handleIntakeCreate(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'intake', 'create'); }
     public function handleIntakeList(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'intake', 'list'); }
     public function handleIntakeRevoke(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'intake', 'revoke'); }
+    public function handleIntakeAnalytics(\WP_REST_Request $r): \WP_REST_Response { return $this->shareIntake($r, 'intake', 'analytics'); }
 
     /**
      * The PUBLIC recipient routes, delegated to the SAME core handlers standalone uses.

@@ -222,13 +222,12 @@ test('token() forwards versioning + webhook config claims, not just the gate', f
     assertEqual('upload,delete', $csv->webhook_events ?? '', 'CSV events forwarded as-is');
 });
 
-// Share + Intake are core-standalone: not one of their six operator endpoints (nor
-// the public landing routes) is proxied — see the route-parity list below. So the
-// gate claims, and the config that travels with them (link base, presigned-URL TTL,
-// preview policy — all read at create time), are forwarded ONLY in standalone mode.
-// In proxy mode they must be dropped, or the UI renders a button that 404s. Same rule
-// as allow_terminal (tested further down).
-test('share/intake gates + their config: dropped in proxy mode, forwarded in standalone', function () use ($secret) {
+// Share + Intake now have routes in BOTH modes (proxy: FluxFilesController's
+// shareIntake()/publicLink() dispatchers; standalone: index.php), so the gate
+// claims — and the config that travels with them (link base, presigned-URL TTL,
+// preview policy, analytics — all read at create time) — forward unconditionally
+// in both modes, same as the other module gates below.
+test('share/intake gates + their config forward in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $overrides = [
         'allow_share'     => true,
@@ -242,40 +241,25 @@ test('share/intake gates + their config: dropped in proxy mode, forwarded in sta
     ];
     // Assert on the RAW JWT payload, not Claims — the adapter only writes payload
     // keys (no new core API), so this stays valid against the declared core floor.
-
-    // Proxy mode (default): nothing about share/intake may reach the token.
     $p = \FluxFiles\JwtCompat::decode($mgr->token(56, $overrides), $secret);
-    foreach (['allow_share', 'allow_intake', 'share_url_ttl', 'share_base_url', 'share_preview', 'share_analytics', 'intake_base_url', 'intake_analytics'] as $k) {
-        assertEqual(false, isset($p->$k), "{$k} dropped in proxy mode");
-    }
-    // …not even via the edition preset, which defaults both gates for 'pro'.
-    $pro = \FluxFiles\JwtCompat::decode($mgr->token(57, ['edition' => 'pro']), $secret);
-    assertEqual(false, isset($pro->allow_share), 'edition preset cannot light up share in proxy mode');
-    assertEqual(false, isset($pro->allow_intake), 'edition preset cannot light up intake in proxy mode');
-    assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected (optimize IS proxied)');
+    assertEqual(true, $p->allow_share ?? null, 'share gate');
+    assertEqual(true, $p->allow_intake ?? null, 'intake gate');
+    assertEqual(120, $p->share_url_ttl ?? 0, 'share_url_ttl');
+    assertEqual('https://files.acme.com/public/share.html', $p->share_base_url ?? '', 'share_base_url');
+    assertEqual(false, $p->share_preview ?? null, 'share_preview');
+    assertEqual(true, $p->share_analytics ?? null, 'share_analytics');
+    assertEqual('https://files.acme.com/public/intake.html', $p->intake_base_url ?? '', 'intake_base_url');
+    assertEqual(true, $p->intake_analytics ?? null, 'intake_analytics');
 
-    // Standalone mode: the token targets a real core that serves them → forward all.
-    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
-    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
-    try {
-        $s = \FluxFiles\JwtCompat::decode($mgr->token(56, $overrides), $secret);
-        assertEqual(true, $s->allow_share ?? null, 'share gate');
-        assertEqual(true, $s->allow_intake ?? null, 'intake gate');
-        assertEqual(120, $s->share_url_ttl ?? 0, 'share_url_ttl');
-        assertEqual('https://files.acme.com/public/share.html', $s->share_base_url ?? '', 'share_base_url');
-        assertEqual(false, $s->share_preview ?? null, 'share_preview');
-        assertEqual(true, $s->share_analytics ?? null, 'share_analytics');
-        assertEqual('https://files.acme.com/public/intake.html', $s->intake_base_url ?? '', 'intake_base_url');
-        assertEqual(true, $s->intake_analytics ?? null, 'intake_analytics');
-        $sp = \FluxFiles\JwtCompat::decode($mgr->token(57, ['edition' => 'pro']), $secret);
-        assertEqual(true, $sp->allow_share ?? null, 'edition preset applies in standalone');
-    } finally {
-        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
-    }
+    // …including via the edition preset, which defaults both gates for 'pro'.
+    $pro = \FluxFiles\JwtCompat::decode($mgr->token(57, ['edition' => 'pro']), $secret);
+    assertEqual(true, $pro->allow_share ?? null, 'edition preset lights up share in proxy mode');
+    assertEqual(true, $pro->allow_intake ?? null, 'edition preset lights up intake in proxy mode');
+    assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected');
 });
 
-// The other seven module gates have no UI button, so they keep forwarding in both
-// modes (documented in the manager); only share/intake are mode-conditional.
+// The other module gates have no mode-conditional history, so they keep forwarding
+// in both modes too (documented in the manager).
 test('the other module gates still forward in proxy mode', function () use ($secret) {
     $p = \FluxFiles\JwtCompat::decode(
         (new FluxFilesManager())->token(58, ['allow_ocr' => true, 'allow_c2pa' => true]),
@@ -340,7 +324,16 @@ test('proxy route surface covers every core /api/fm route', function () {
     $coreRoutes = array_unique($cm[1]);
     sort($coreRoutes);
 
-    preg_match_all("#Route::[a-z]+\\(\\s*'([a-z0-9/_{}-]+)'#", $routeSrc, $rm);
+    // Share/Intake's public recipient routes live in the ServiceProvider (they must
+    // be registered outside the FluxFilesAuth group), not routes/fluxfiles.php —
+    // scan both so this guard reflects true adapter route coverage.
+    $provSrcForParity = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    // Matches both `Route::get('path', ...)` (routes/fluxfiles.php) and the
+    // chained `Route::prefix($prefix)->get('path', ...)` form used for the
+    // public recipient routes in FluxFilesServiceProvider — `->where(...)`
+    // is deliberately excluded so its first string arg (a param name, not a
+    // path) never gets mistaken for a route.
+    preg_match_all("#(?:Route::|->)(?:get|post|put|patch|delete)\\(\\s*'([a-z0-9/_{}.-]+)'#", $routeSrc . "\n" . $provSrcForParity, $rm);
     $proxyRoutes = array_map(fn ($r) => preg_replace('#/\{[^}]+\}#', '', $r), $rm[1]);
 
     // Core routes that are intentionally NOT proxied (keep empty unless justified).
@@ -364,14 +357,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     // - terminal: opens a shell over SSH on an SFTP disk (phpseclib exec). It needs
     //   the live SFTP connection + the allow_terminal claim and is a core-standalone /
     //   Docker feature; the adapter proxies don't expose a shell.
-    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'share', 'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
-        // Share: create/list/revoke are paid + the public landing routes
-        // (info/unlock/file) are token-authed with no main JWT, and `file` emits raw
-        // bytes / a presigned redirect — core-standalone, like intake and stream.
-        'share/info', 'share/unlock', 'share/file', 'share/list', 'share/revoke', 'share/analytics',
-        // Intake: create/manage are paid + the public info/upload are token-authed
-        // (no main JWT) — core-standalone, like share. Adapters may proxy later.
-        'intake', 'intake/info', 'intake/list', 'intake/revoke', 'intake/upload', 'intake/analytics',
+    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
+        // Share + Intake (operator create/list/revoke/analytics AND the public
+        // info/unlock/file/upload landing routes) are now fully proxied — see
+        // routes/fluxfiles.php + FluxFilesServiceProvider::registerRoutes().
         // File versioning: paid + core-standalone (adapters may proxy later).
         'versions', 'versions/restore',
         // Audit export/purge: paid + core-standalone, same posture as versioning
@@ -391,8 +380,9 @@ test('proxy route surface covers every core /api/fm route', function () {
 
 test('every proxy route maps to an existing controller method', function () {
     $routeSrc = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
+    $provSrc  = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
     $ctrlSrc  = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    preg_match_all("#FluxFilesController::class,\\s*'([a-zA-Z0-9_]+)'#", $routeSrc, $m);
+    preg_match_all("#FluxFilesController::class,\\s*'([a-zA-Z0-9_]+)'#", $routeSrc . "\n" . $provSrc, $m);
     $missing = [];
     foreach (array_unique($m[1]) as $method) {
         if (!preg_match('#function\s+' . preg_quote($method, '#') . '\s*\(#', $ctrlSrc)) {

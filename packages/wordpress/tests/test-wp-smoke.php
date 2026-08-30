@@ -830,8 +830,7 @@ test('proxy route surface covers every core /api/fm route', function () {
 
     // Core routes that are intentionally NOT proxied (keep in sync with Laravel's
     // allowlist minus share/intake, which WordPress already proxies in full —
-    // CRUD, the public landing routes, AND analytics are still missing everywhere,
-    // see below).
+    // CRUD, the public landing routes, AND analytics.
     // - stream / img: gated-local media and on-demand WebP are core-standalone /
     //   Docker features. Both mint tokens only when FileManager has a stream
     //   secret (setStreamSecret), which the WordPress proxy does not set — so
@@ -847,9 +846,6 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   module code is a separate proprietary package gated by ModuleRegistry.
     //   Each lands with that module's full proxy release (optimize + webhooks
     //   are already proxied as the reference).
-    // - share/analytics, intake/analytics: WordPress proxies the rest of share +
-    //   intake (CRUD + the five public recipient routes), but no analytics
-    //   endpoint exists in any adapter yet (see Phase 1's open item).
     // - terminal: opens a shell over SSH on an SFTP disk — core-standalone /
     //   Docker feature, the proxy doesn't expose SFTP.
     // - SSO bridge (sso/login, sso/callback, sso/exchange): pre-auth routes for
@@ -861,7 +857,6 @@ test('proxy route surface covers every core /api/fm route', function () {
         'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
         'versions', 'versions/restore',
         'audit/export', 'audit/purge',
-        'share/analytics', 'intake/analytics',
         'sso/login', 'sso/callback', 'sso/exchange',
     ];
 
