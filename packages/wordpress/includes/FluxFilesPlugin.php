@@ -423,12 +423,16 @@ class FluxFilesPlugin
         // `allow_audit_export` nor `audit_retention_days`. Same reasoning: the REST
         // API never exposes /api/fm/audit/export or /api/fm/audit/purge, so a button
         // built on this claim would have no endpoint to talk to. Core-standalone only.
+        // NOTE: AI Vision is intentionally NOT forwarded either — `allow_ai_vision` now
+        // gates a UI button (detail panel + context menu + action sheet), but the REST
+        // API never exposes /api/fm/ai-vision, so that button would have no endpoint to
+        // talk to. Core-standalone only, same reasoning as versioning/audit-export above.
         // NOTE: SSO (FLUXFILES_SSO_*) is NOT a claim-forwarding concern at all — those
         // are pure server env vars configuring the standalone /public UI's own login
         // endpoint. They never travel inside a JWT, so there is nothing to forward
         // here either. SSO only applies to deployments with no host app (like this
         // plugin) minting tokens in the first place.
-        foreach (['allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        foreach (['allow_webhooks', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
             }

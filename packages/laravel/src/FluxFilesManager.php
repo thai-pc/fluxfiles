@@ -196,13 +196,21 @@ class FluxFilesManager
                 $payload['audit_retention_days'] = (int) $overrides['audit_retention_days'];
             }
         }
+        // AI Vision is core-standalone — /api/fm/ai-vision isn't proxied. It now has
+        // a UI button (detail panel + context menu + action sheet), so forward the
+        // gate claim only in 'standalone' mode; in proxy mode it's dropped so the
+        // button can't appear for an endpoint that would 404. Same rule as
+        // allow_terminal/allow_versioning/allow_audit_export above.
+        if (!empty($overrides['allow_ai_vision']) && config('fluxfiles.mode') === 'standalone') {
+            $payload['allow_ai_vision'] = true;
+        }
         // NOTE: SSO (FLUXFILES_SSO_*) is NOT a claim-forwarding concern at all — those
         // are pure server env vars that configure the standalone /public UI's own
         // login endpoint (/api/fm/sso/login|callback|exchange). They never travel
         // inside a JWT, so there is nothing for token()/tokenForUser() to forward here,
         // in either mode. SSO only applies to deployments with no host app minting
         // tokens in the first place.
-        foreach (['allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+        foreach (['allow_webhooks', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
             if (array_key_exists($mc, $overrides)) {
                 $payload[$mc] = (bool) $overrides[$mc];
             }
