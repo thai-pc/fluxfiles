@@ -101,7 +101,7 @@ All four accept the same `claims` map.
 ### 2.5 On-demand images — WebP / AVIF / srcset (free; `GET /api/fm/img`)
 | Claim | Type | Default | Notes |
 |---|---|---|---|
-| `webp_enabled` | bool | `true` | Expose `/api/fm/img` (image entries gain `img_base`). Requires a stream secret. |
+| `webp_enabled` | bool | `true` | Expose `/api/fm/img` (image entries gain `img_base`). Requires a stream secret. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.77 for Laravel; WordPress specifically needs ≥ 0.2.79, since gated-media URLs only resolve under its REST namespace from that floor on). |
 | `webp_max_width` | int (px) | `2000` | Max resize width (clamped); bounds the cache-variant count. |
 | `webp_default_quality` | int | `80` | Quality when omitted (snaps to 60/75/80/90). |
 | `srcset_widths` | int[] (px) | `[320,640,768,1024,1366,1920]` | Responsive `srcset` ladder → `img_srcset`. |
@@ -130,7 +130,7 @@ All four accept the same `claims` map.
 | `media_preview` | bool | — | `true` | Inline video/audio preview (else download link). |
 | `preview_url_ttl` | int | s | `7200` | Presigned TTL for media (longer, so long videos don't 403). Cap 24h. |
 | `max_preview_mb` | int | MB | `500` | Max media size eligible for inline preview. |
-| `stream_token_ttl` | int | s | `3600` | TTL of the per-file stream token (gated local media, `FLUXFILES_LOCAL_PRIVATE`). |
+| `stream_token_ttl` | int | s | `3600` | TTL of the per-file stream token (gated local media, `FLUXFILES_LOCAL_PRIVATE`). Proxied by the Laravel/WordPress adapters too (same core-floor caveat as `webp_enabled` above — `/api/fm/stream` and `/api/fm/img` share the fix). |
 
 ### 2.8 Optimization (free/core; `POST /api/fm/optimize`)
 | Claim | Type | Unit | Default | Notes |
