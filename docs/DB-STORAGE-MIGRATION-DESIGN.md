@@ -461,26 +461,39 @@ tables in this design.
 **Interface:** a new `RateLimiterStorageInterface` (separate from
 `MetadataRepositoryInterface` — `RateLimiterFileStorage` is a standalone
 class with no relationship to `StorageMetadataHandler` today, and there is
-no reason to entangle them) with one method:
+no reason to entangle them) with one method, matching
+`RateLimiterFileStorage`'s existing signature exactly:
 
 ```php
 interface RateLimiterStorageInterface
 {
-    public function check(string $identifier, string $actionType, int $limit, int $windowSeconds): void; // throws ApiException(429, 'rate_limited')
+    public function check(string $identifier, string $actionType): void; // throws ApiException(429, 'rate_limited')
 }
 ```
 
 `RateLimiterFileStorage` and the new `RateLimiterDbStorage` both implement
-it. Every call site (`index.php`, `PublicLinks.php`) picks the
-implementation via the same `FLUXFILES_STORAGE_BACKEND` env var §4
-introduces for the metadata repository — one switch, not a second one.
-Note the signature bakes in `$limit`/`$windowSeconds` per call (matching how
-callers construct a fresh `RateLimiterFileStorage(..., $limit, $limit, 60)`
-today) rather than fixing them at the object's construction time only,
-because several call sites already build a differently-limited instance per
-request (`import`, `usage_refresh`, every `PublicLinks.php` bucket) — the DB
-implementation must accept the same per-call limit, not assume one fixed
-pair of thresholds for the table's lifetime.
+it, each taking `$limit`/`$writeLimit`/`$windowSeconds` in its own
+**constructor**, not in `check()`. Verified directly against every real call
+site (`index.php:359,374,381`; `PublicLinks.php:465,502,531`): all of them
+already build a *fresh* `RateLimiterFileStorage($path, $limit, $limit, 60)`
+per request — including `import` and `usage_refresh`, the two cases an
+earlier draft of this section cited as needing a per-call limit — and then
+call `->check($identifier, $actionType)` with **no** limit/window arguments
+at all. That pattern is exactly what a 2-argument `check()` supports: the
+call site already re-constructs the limiter with whatever threshold applies
+to *this* request before calling `check()`, so `RateLimiterDbStorage($limit,
+$writeLimit, $windowSeconds)` can be swapped in with the identical
+call-site shape, one-for-one, with no widened interface needed.
+>
+> An earlier draft of this section proposed adding `$limit`/`$windowSeconds`
+> as `check()` parameters instead, reasoning that "several call sites
+> already build a differently-limited instance per request" — that's true,
+> but it argues for the opposite conclusion: a differently-limited
+> **instance** is already how every call site expresses a per-request
+> limit, via the constructor. Widening `check()` itself would just duplicate
+> that value in two places for no behavioral gain, and would make
+> `RateLimiterDbStorage` deviate from `RateLimiterFileStorage`'s existing,
+> already-adequate signature for no reason. Fixed above.
 
 **Left as a deliberate v1 boundary, not solved here:** a pluggable
 cache-backed limiter (APCu/Redis, sorted-set or `INCR`+`EXPIRE`, the
