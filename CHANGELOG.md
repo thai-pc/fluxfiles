@@ -3,6 +3,34 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.99] — 2026-08-31
+
+> Released: `ckeditor4-v0.3.3`, `tinymce-v0.3.3`, `summernote-v0.1.3`,
+> `vue-v0.2.9`. No core/Laravel/WordPress change in this entry.
+
+### Fixed — Editor plugins: stored XSS via unescaped `"` in inserted attributes
+
+The CKEditor 4, TinyMCE, and Summernote plugins built `<img src="..." alt="...">`/
+`<a href="...">` markup with `CKEDITOR.tools.htmlEncode`-equivalent helpers that
+only escape `&`/`<`/`>` — correct for text-node context, not attribute-value
+context. A file's `alt_text`/title/URL containing a `"` (settable by any user
+who can rename or set metadata on a file the editor operator can browse) could
+break out of the attribute and inject arbitrary HTML/JS into the inserted
+content — a stored XSS. Fixed by using each editor's attribute-escaping helper
+(`htmlEncodeAttr` for CKEditor 4; equivalent inline escapers added for TinyMCE/
+Summernote) for every `src`/`href`/`alt`/`title` value, with regression tests
+asserting a crafted `alt_text`/URL can no longer break out of its attribute.
+
+### Fixed — Vue: `useFluxFiles` froze props at initial mount
+
+`FluxFiles.vue` passed a plain object literal to `useFluxFiles`, so a `computed`
+wrapping mutable props (`token`, `disk`, `locale`, etc.) was never read — prop
+changes after mount (e.g. a refreshed token) silently had no effect. Wrapped
+the options in a `computed()` so `useFluxFiles`' internal `(options as any).value
+?? options` unwrap tracks every prop. Also exposed `setLocale`/`updateToken`
+on the component's `defineExpose()`, which existed on the underlying handle
+but weren't reachable from a `<FluxFiles>` template ref.
+
 ## [0.2.98] — 2026-08-31
 
 > Released: `core-v0.2.79`, `wordpress-v0.2.44`. Laravel untouched by this
