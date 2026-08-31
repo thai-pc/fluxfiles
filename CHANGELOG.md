@@ -3,6 +3,43 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.98] — 2026-08-31
+
+> Released: `core-v0.2.79`, `wordpress-v0.2.44`. Laravel untouched by this
+> entry — its floor stays `^0.2.77`.
+
+### Fixed — WordPress proxy: gated stream/img URLs 404'd on a real site
+
+Found while running the real-adapter e2e for stream/img (not by inspection):
+`FileManager::gatedLocalUrl()`/`imgBaseUrl()` hardcoded a bare `/api/fm/...`
+path, correct only when the API is mounted at the iframe's own origin root
+(true for standalone and the Laravel proxy). WordPress's REST API never
+resolves at a bare root — only under `/wp-json/{namespace}/...` — so every
+`<img>`/`<video>` pointed at gated media (`fluxfiles_local_private`) 404'd
+in a real WordPress browser. This is a total-failure bug, not a cosmetic
+one: any WordPress site with gated local media enabled had broken previews.
+
+- New `FileManager::setApiBasePath(string $base)` (core), defaulting to
+  `/api/fm` — unchanged behavior for standalone/Laravel. WordPress's shared
+  `fileManager()` builder now calls it with
+  `rest_url('fluxfiles/v1') . '/api/fm'`.
+- WordPress adapter's core floor bumped to `^0.2.79` (the tag that first
+  ships `setApiBasePath()`).
+
+## [0.2.97] — 2026-08-31
+
+> Released: `laravel-v0.2.37`. No core or WordPress change in this entry.
+
+### Fixed — Laravel proxy: stream/img served wrong Content-Type
+
+A controller action returning `void`/`null` lets Laravel's kernel build its
+own default `Response`, and Symfony's `Response::sendHeaders()` always
+re-asserts `Content-Type` — silently overwriting the real image/video MIME
+type `stream()`/`img()`/`serveBytes()` already sent, so every `<img>`/
+`<video>` hitting these endpoints got back `text/html`. Added the same
+`exit;` after raw output that `publicLink()` already used, plus a static
+regression test guarding against a bare `return;` creeping back in.
+
 ## [0.2.96] — 2026-08-30
 
 > Released: `core-v0.2.78`. No paid-module version bump: `AiVisionModule`'s
