@@ -74,6 +74,10 @@ Route::post('extract', [FluxFilesController::class, 'extract']);
 // Audit
 Route::get('audit', [FluxFilesController::class, 'audit']);
 
+// Audit export/purge (paid module)
+Route::get('audit/export', [FluxFilesController::class, 'auditExport']);
+Route::post('audit/purge', [FluxFilesController::class, 'auditPurge']);
+
 // Webhooks (paid module) — send a test ping to the configured endpoint
 Route::post('webhooks/test', [FluxFilesController::class, 'webhooksTest']);
 

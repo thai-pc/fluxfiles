@@ -218,6 +218,14 @@ class FluxFilesApi
             'callback' => [$api, 'handleAudit'],
         ]));
 
+        // Audit export/purge (paid module)
+        register_rest_route($ns, $p . '/audit/export', array_merge($readArgs, [
+            'callback' => [$api, 'handleAuditExport'],
+        ]));
+        register_rest_route($ns, $p . '/audit/purge', array_merge($writeArgs, [
+            'callback' => [$api, 'handleAuditPurge'],
+        ]));
+
         // Webhooks (paid module) — send a test ping to the configured endpoint
         register_rest_route($ns, $p . '/webhooks/test', array_merge($writeArgs, [
             'callback' => [$api, 'handleWebhooksTest'],
@@ -1715,6 +1723,79 @@ class FluxFilesApi
                 (int) ($request->get_param('offset') ?? 0),
                 $claims->userId
             ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Audit export (paid module) — a full, unpaginated download of the tenant's
+     * audit history (live + archived), as NDJSON or CSV. Bypasses the ok()/error()
+     * JSON envelope: the module sends its own headers + body directly via native
+     * header()/echo, then we exit — same posture as publicLink() above.
+     */
+    public function handleAuditExport(\WP_REST_Request $request): void
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
+            $module = \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
+            $audit = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
+            $module->export($audit, $claims, [
+                'action' => $request->get_param('action'),
+                'from'   => $request->get_param('from'),
+                'to'     => $request->get_param('to'),
+                'path'   => $request->get_param('path'),
+                'actor'  => $request->get_param('actor'),
+            ], (string) ($request->get_param('format') ?: 'ndjson'));
+        } catch (ApiException $e) {
+            status_header($e->getHttpCode());
+            wp_send_json(['data' => null, 'error' => $e->getMessage(),
+                'error_code' => $e->getErrorCode(), 'error_params' => $e->getErrorParams()], $e->getHttpCode());
+        }
+        exit;
+    }
+
+    /**
+     * Audit purge (paid module) — destructive, so admin-only: the audit log is
+     * stored per-DISK, not per-tenant, so a path-scoped token could otherwise
+     * purge lines belonging to other tenants sharing the same disk.
+     */
+    public function handleAuditPurge(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+            if (trim($claims->pathPrefix, '/') !== '') {
+                throw new ApiException('Audit purge requires an unscoped (admin) token', 403, 'forbidden');
+            }
+
+            $body = $this->body($request);
+            $disk = (string) ($body['disk'] ?? 'local');
+            // pathPrefix and allowedDisks are independent claims — an unscoped
+            // token can still be limited to specific disks, so the tenant-prefix
+            // check above does NOT imply disk access.
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+
+            $before = isset($body['before']) && $body['before'] !== ''
+                ? (int) $body['before']
+                : ($claims->auditRetentionDays > 0 ? time() - ($claims->auditRetentionDays * 86400) : 0);
+            if ($before <= 0) {
+                throw new ApiException('An explicit `before` cutoff (or a token audit_retention_days) is required', 400, 'audit_purge_no_cutoff');
+            }
+
+            $module = \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
+
+            return $this->ok($module->purge($this->metaRepo, $claims, $disk, $before));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }

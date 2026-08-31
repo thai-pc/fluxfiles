@@ -245,17 +245,17 @@ test('generateToken forwards versioning claims', function () use ($secret) {
     assertEqual(50, $p->versioning_max_mb ?? 0, 'versioning_max_mb forwarded');
 });
 
-// Audit export/purge is core-standalone — /api/fm/audit/export and
-// /api/fm/audit/purge aren't proxied, so the plugin must drop the gate and its
-// retention-days claim entirely (same rule as SSH terminal).
-test('generateToken does NOT forward audit-export claims (no proxied endpoint)', function () use ($secret) {
+// Audit export/purge now has proxy routes (/api/fm/audit/export + /audit/purge,
+// see FluxFilesApi's handleAuditExport()/handleAuditPurge()), so the gate and
+// its retention-days tuning claim forward unconditionally — same as versioning.
+test('generateToken forwards audit-export claims', function () use ($secret) {
     $token = FluxFilesPlugin::generateToken(57, [
         'allow_audit_export'   => true,
         'audit_retention_days' => 365,
     ]);
     $p = \FluxFiles\JwtCompat::decode($token, $secret);
-    assertEqual(false, isset($p->allow_audit_export), 'audit-export gate dropped');
-    assertEqual(false, isset($p->audit_retention_days), 'audit_retention_days dropped');
+    assertEqual(true, ($p->allow_audit_export ?? false), 'audit-export gate forwarded');
+    assertEqual(365, $p->audit_retention_days ?? 0, 'audit_retention_days forwarded');
 });
 
 // Share + Intake are NOT forwarded at all: the plugin is proxy-only and the REST API
@@ -843,10 +843,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   core-standalone / Docker feature like stream/img. (Extract, by contrast,
     //   returns JSON and IS proxied.)
     // - paid module endpoints not yet wired here (ai-vision, ocr, backup, c2pa,
-    //   c2pa/sign, audit/export, audit/purge): the module code is a separate
-    //   proprietary package gated by ModuleRegistry. Each lands with that
-    //   module's full proxy release (optimize + webhooks + versioning are
-    //   already proxied as the reference).
+    //   c2pa/sign): the module code is a separate proprietary package gated by
+    //   ModuleRegistry. Each lands with that module's full proxy release
+    //   (optimize + webhooks + versioning + audit-export are already proxied
+    //   as the reference).
     // - terminal: opens a shell over SSH on an SFTP disk — core-standalone /
     //   Docker feature, the proxy doesn't expose SFTP.
     // - SSO bridge (sso/login, sso/callback, sso/exchange): pre-auth routes for
@@ -856,7 +856,6 @@ test('proxy route surface covers every core /api/fm route', function () {
     $intentionallyUnproxied = [
         'stream', 'img', 'chmod', 'zip', 'terminal',
         'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
-        'audit/export', 'audit/purge',
         'sso/login', 'sso/callback', 'sso/exchange',
     ];
 

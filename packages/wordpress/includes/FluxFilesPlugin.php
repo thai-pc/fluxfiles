@@ -428,14 +428,19 @@ class FluxFilesPlugin
                 $payload[$verClaim] = (int) $overrides[$verClaim];
             }
         }
-        // NOTE: audit export/purge is intentionally NOT forwarded either — neither
-        // `allow_audit_export` nor `audit_retention_days`. Same reasoning: the REST
-        // API never exposes /api/fm/audit/export or /api/fm/audit/purge, so a button
-        // built on this claim would have no endpoint to talk to. Core-standalone only.
+        // Audit export/purge now proxies too (see FluxFilesApi's
+        // handleAuditExport()/handleAuditPurge()), so the gate + its retention-days
+        // tuning claim forward like any other, same as allow_versioning above.
+        if (array_key_exists('allow_audit_export', $overrides)) {
+            $payload['allow_audit_export'] = (bool) $overrides['allow_audit_export'];
+        }
+        if (!empty($overrides['audit_retention_days'])) {
+            $payload['audit_retention_days'] = (int) $overrides['audit_retention_days'];
+        }
         // NOTE: AI Vision is intentionally NOT forwarded either — `allow_ai_vision` now
         // gates a UI button (detail panel + context menu + action sheet), but the REST
         // API never exposes /api/fm/ai-vision, so that button would have no endpoint to
-        // talk to. Core-standalone only, same reasoning as audit-export above.
+        // talk to. Core-standalone only, same reasoning as the SSH terminal above.
         // NOTE: SSO (FLUXFILES_SSO_*) is NOT a claim-forwarding concern at all — those
         // are pure server env vars configuring the standalone /public UI's own login
         // endpoint. They never travel inside a JWT, so there is nothing to forward

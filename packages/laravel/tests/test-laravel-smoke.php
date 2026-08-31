@@ -355,13 +355,9 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   Docker feature; the adapter proxies don't expose a shell.
     $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
         // Share + Intake (operator create/list/revoke/analytics AND the public
-        // info/unlock/file/upload landing routes) and file Versioning (list/restore)
-        // are now fully proxied — see routes/fluxfiles.php +
+        // info/unlock/file/upload landing routes), file Versioning (list/restore),
+        // and Audit export/purge are now fully proxied — see routes/fluxfiles.php +
         // FluxFilesServiceProvider::registerRoutes().
-        // Audit export/purge: paid + core-standalone, same posture Versioning used to
-        // have (export streams a raw file download rather than the JSON envelope, and
-        // purge is admin-only tooling — neither has a matching proxy route yet).
-        'audit/export', 'audit/purge',
         // SSO bridge: pre-auth routes for the standalone /public UI's own login
         // screen. They exist to gate deployments with NO host app minting tokens —
         // Laravel apps already authenticate via fluxfiles_token(), so there is
@@ -443,28 +439,19 @@ test('allow_versioning (+ its tuning claims) forwards in proxy mode', function (
     assertEqual(50, $p->versioning_max_mb ?? 0, 'versioning_max_mb forwarded in proxy mode');
 });
 
-test('allow_audit_export (+ audit_retention_days) forwarded only in standalone mode', function () use ($secret) {
+test('allow_audit_export (+ audit_retention_days) forwards in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $overrides = [
         'allow_audit_export'   => true,
         'audit_retention_days' => 365,
     ];
 
-    // Proxy mode (default): /api/fm/audit/export|purge aren't proxied → dropped.
+    // Audit export/purge now has routes in both modes (proxy: auditExport()/
+    // auditPurge(); standalone: index.php), so the gate + its tuning claim
+    // forward unconditionally — proxy mode (default) included.
     $p = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
-    assertEqual(false, isset($p->allow_audit_export), 'audit-export gate dropped in proxy mode');
-    assertEqual(false, isset($p->audit_retention_days), 'audit_retention_days dropped in proxy mode');
-
-    // Standalone mode: token targets a real core that serves /audit/export|purge.
-    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
-    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
-    try {
-        $sp = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
-        assertEqual(true, ($sp->allow_audit_export ?? false), 'audit-export gate forwarded in standalone mode');
-        assertEqual(365, $sp->audit_retention_days ?? 0, 'audit_retention_days forwarded in standalone mode');
-    } finally {
-        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
-    }
+    assertEqual(true, ($p->allow_audit_export ?? false), 'audit-export gate forwarded in proxy mode');
+    assertEqual(365, $p->audit_retention_days ?? 0, 'audit_retention_days forwarded in proxy mode');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

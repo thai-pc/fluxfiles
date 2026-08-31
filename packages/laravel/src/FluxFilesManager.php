@@ -185,23 +185,21 @@ class FluxFilesManager
                 $payload[$verClaim] = (int) $overrides[$verClaim];
             }
         }
-        // Audit export/purge is core-standalone — /api/fm/audit/export and
-        // /api/fm/audit/purge aren't proxied. Forward the gate claim only in
-        // 'standalone' mode (token → a real core that serves them); in proxy mode
-        // it's dropped so the UI can't render a button for an endpoint that would
-        // 404. Same rule as allow_terminal above (allow_versioning is no longer
-        // standalone-only — see above).
-        if (!empty($overrides['allow_audit_export']) && config('fluxfiles.mode') === 'standalone') {
-            $payload['allow_audit_export'] = true;
-            if (!empty($overrides['audit_retention_days'])) {
-                $payload['audit_retention_days'] = (int) $overrides['audit_retention_days'];
-            }
+        // Audit export/purge now has routes in both modes (proxy: FluxFilesController's
+        // auditExport()/auditPurge(); standalone: index.php), so the gate claim — and
+        // its retention-days tuning claim — forward unconditionally, matching
+        // allow_versioning above.
+        if (array_key_exists('allow_audit_export', $overrides)) {
+            $payload['allow_audit_export'] = (bool) $overrides['allow_audit_export'];
+        }
+        if (!empty($overrides['audit_retention_days'])) {
+            $payload['audit_retention_days'] = (int) $overrides['audit_retention_days'];
         }
         // AI Vision is core-standalone — /api/fm/ai-vision isn't proxied. It now has
         // a UI button (detail panel + context menu + action sheet), so forward the
         // gate claim only in 'standalone' mode; in proxy mode it's dropped so the
         // button can't appear for an endpoint that would 404. Same rule as
-        // allow_terminal/allow_audit_export above (allow_versioning is no longer
+        // allow_terminal above (allow_versioning/allow_audit_export are no longer
         // standalone-only — see above).
         if (!empty($overrides['allow_ai_vision']) && config('fluxfiles.mode') === 'standalone') {
             $payload['allow_ai_vision'] = true;
