@@ -239,6 +239,23 @@ class FluxFilesApi
             'callback' => [$api, 'handleVersionsRestore'],
         ]));
 
+        // AI Vision / OCR / Backup Bridge / C2PA (paid modules)
+        register_rest_route($ns, $p . '/ai-vision', array_merge($writeArgs, [
+            'callback' => [$api, 'handleAiVision'],
+        ]));
+        register_rest_route($ns, $p . '/ocr', array_merge($writeArgs, [
+            'callback' => [$api, 'handleOcr'],
+        ]));
+        register_rest_route($ns, $p . '/backup', array_merge($writeArgs, [
+            'callback' => [$api, 'handleBackup'],
+        ]));
+        register_rest_route($ns, $p . '/c2pa', array_merge($writeArgs, [
+            'callback' => [$api, 'handleC2pa'],
+        ]));
+        register_rest_route($ns, $p . '/c2pa/sign', array_merge($writeArgs, [
+            'callback' => [$api, 'handleC2paSign'],
+        ]));
+
         // ── Share + Intake ──────────────────────────────────────────────────
         // Operator side: create/list/revoke, behind the normal JWT + the paid-module
         // gate. The public recipient routes are registered separately below and are
@@ -1683,6 +1700,123 @@ class FluxFilesApi
                 (string) ($body['path'] ?? ''),
                 (string) ($body['version_id'] ?? '')
             );
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * AI Vision (paid module) — bg-remove/upscale/smart-crop. Same 3-layer gate
+     * as handleOptimize() above; also needs a fresh ImageOptimizer, for the same reason.
+     */
+    public function handleAiVision(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('ai', FluxFilesPlugin::license(), $claims);
+            $body = $this->body($request);
+            $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
+            $this->logAudit($claims, 'ai_vision', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->dispatchWebhook($claims, 'ai_vision', [
+                'disk' => (string) ($body['disk'] ?? 'local'),
+                'path' => (string) ($body['path'] ?? ''),
+                'name' => basename((string) ($body['path'] ?? '')),
+            ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * OCR (paid module) — text extraction; result is returned, never persisted.
+     */
+    public function handleOcr(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('ocr', FluxFilesPlugin::license(), $claims);
+            $result = $module->run($fm, $this->diskManager, $claims, $this->body($request));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Backup Bridge (paid module) — one-way subtree sync between disks.
+     */
+    public function handleBackup(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('backup', FluxFilesPlugin::license(), $claims);
+            $body = $this->body($request);
+            $result = $module->run($fm, $this->diskManager, $claims, $body);
+            $this->logAudit($claims, 'backup', (string) ($body['from_disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->dispatchWebhook($claims, 'backup', [
+                'disk' => (string) ($body['from_disk'] ?? 'local'),
+                'path' => (string) ($body['path'] ?? ''),
+                'name' => basename((string) ($body['path'] ?? '')),
+            ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * C2PA content provenance (paid module) — verify a file's manifest (read-only).
+     */
+    public function handleC2pa(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('c2pa', FluxFilesPlugin::license(), $claims);
+            $result = $module->verify($fm, $this->diskManager, $claims, $this->body($request));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * C2PA content provenance (paid module) — sign a file, producing a manifest.
+     */
+    public function handleC2paSign(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('c2pa', FluxFilesPlugin::license(), $claims);
+            $body = $this->body($request);
+            $result = $module->sign($fm, $this->diskManager, $claims, $body);
+            $this->logAudit($claims, 'c2pa_sign', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->dispatchWebhook($claims, 'c2pa_sign', [
+                'disk' => (string) ($body['disk'] ?? 'local'),
+                'path' => (string) ($body['path'] ?? ''),
+                'name' => basename((string) ($body['path'] ?? '')),
+            ]);
 
             return $this->ok($result);
         } catch (ApiException $e) {

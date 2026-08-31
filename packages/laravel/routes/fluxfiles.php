@@ -85,6 +85,13 @@ Route::post('webhooks/test', [FluxFilesController::class, 'webhooksTest']);
 Route::get('versions', [FluxFilesController::class, 'versions']);
 Route::post('versions/restore', [FluxFilesController::class, 'versionsRestore']);
 
+// AI Vision / OCR / Backup Bridge / C2PA (paid modules)
+Route::post('ai-vision', [FluxFilesController::class, 'aiVision']);
+Route::post('ocr', [FluxFilesController::class, 'ocr']);
+Route::post('backup', [FluxFilesController::class, 'backup']);
+Route::post('c2pa', [FluxFilesController::class, 'c2pa']);
+Route::post('c2pa/sign', [FluxFilesController::class, 'c2paSign']);
+
 // Share + Intake (paid module) — operator side: create/list/revoke/analytics.
 // The public recipient routes (share/info, share/unlock, share/file, intake/info,
 // intake/upload) and the recipient landing pages are registered separately in

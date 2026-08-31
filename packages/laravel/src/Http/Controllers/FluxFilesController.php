@@ -1327,6 +1327,122 @@ class FluxFilesController
         }
     }
 
+    // ── AI Vision / OCR / Backup / C2PA (paid modules) ─────────────────────────
+
+    /**
+     * AI Vision (paid module) — bg-remove/upscale/smart-crop. Same 3-layer gate
+     * as optimize() above; also needs a fresh ImageOptimizer, for the same reason.
+     */
+    public function aiVision(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $request->all());
+            $this->logAudit($claims, 'ai_vision', (string) $request->input('disk', 'local'), (string) $request->input('path', ''));
+            $this->dispatchWebhook($claims, 'ai_vision', [
+                'disk' => (string) $request->input('disk', 'local'),
+                'path' => (string) $request->input('path', ''),
+                'name' => basename((string) $request->input('path', '')),
+            ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * OCR (paid module) — text extraction; result is returned, never persisted.
+     */
+    public function ocr(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('ocr', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $result = $module->run($fm, $this->diskManager, $claims, $request->all());
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Backup Bridge (paid module) — one-way subtree sync between disks.
+     */
+    public function backup(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('backup', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $result = $module->run($fm, $this->diskManager, $claims, $request->all());
+            $this->logAudit($claims, 'backup', (string) $request->input('from_disk', 'local'), (string) $request->input('path', ''));
+            $this->dispatchWebhook($claims, 'backup', [
+                'disk' => (string) $request->input('from_disk', 'local'),
+                'path' => (string) $request->input('path', ''),
+                'name' => basename((string) $request->input('path', '')),
+            ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * C2PA content provenance (paid module) — verify a file's manifest (read-only).
+     */
+    public function c2pa(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('c2pa', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $result = $module->verify($fm, $this->diskManager, $claims, $request->all());
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * C2PA content provenance (paid module) — sign a file, producing a manifest.
+     */
+    public function c2paSign(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $module = \FluxFiles\ModuleRegistry::require('c2pa', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $result = $module->sign($fm, $this->diskManager, $claims, $request->all());
+            $this->logAudit($claims, 'c2pa_sign', (string) $request->input('disk', 'local'), (string) $request->input('path', ''));
+            $this->dispatchWebhook($claims, 'c2pa_sign', [
+                'disk' => (string) $request->input('disk', 'local'),
+                'path' => (string) $request->input('path', ''),
+                'name' => basename((string) $request->input('path', '')),
+            ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     // ── Share + Intake (paid module) ─────────────────────────────────────────
 
     /**

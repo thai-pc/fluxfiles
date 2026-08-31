@@ -197,11 +197,11 @@ All four accept the same `claims` map.
 | `webhook_url` | string (http/s) | — | Endpoint the signed event POST is sent to. Non-http dropped. |
 | `webhook_events` | string[] | _(all)_ | Only these event names fire the webhook. Empty = all. |
 | `webhook_secret` | string | — | HMAC signing secret (`X-FluxFiles-Signature`). Empty = `FLUXFILES_SECRET`. |
-| `allow_ai_vision` | bool | `false` | AI Vision (BYO-key): bg-remove/upscale/smart-crop, with an operator UI (detail panel + context menu + action sheet). Gates `POST /api/fm/ai-vision`, which is core-standalone — the Laravel proxy forwards this claim only in `standalone` mode; the WordPress plugin (proxy-only) never forwards it. |
-| `allow_ocr` | bool | `false` | OCR. |
+| `allow_ai_vision` | bool | `false` | AI Vision (BYO-key): bg-remove/upscale/smart-crop, with an operator UI (detail panel + context menu + action sheet). Gates `POST /api/fm/ai-vision`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.39). |
+| `allow_ocr` | bool | `false` | OCR. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.39). |
 | `allow_virus_scan` | bool | `false` | Virus scan (Enterprise). Scans **upload**, **code-editor save** and **each zip-extract entry** before the bytes are written; infected → `422 virus_detected` (audited as `virus_blocked`), nothing stored. **Fail-closed:** with the claim on, a missing/unlicensed module or an unreachable engine refuses the write (`501`/`402`/`403`) rather than storing unscanned — so only set it where a scanner is actually configured. Engine: local ClamAV, else `FLUXFILES_VIRUSTOTAL_KEY` (SHA-256 lookup, bytes never leave). **Not covered:** S3 multipart chunk upload — those bytes go browser→S3 and never reach the app. |
-| `allow_backup` | bool | `false` | Backup Bridge. |
-| `allow_c2pa` | bool | `false` | C2PA provenance (Enterprise). |
+| `allow_backup` | bool | `false` | Backup Bridge. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.39). |
+| `allow_c2pa` | bool | `false` | C2PA provenance (Enterprise). Gates `POST /api/fm/c2pa` (verify) and `POST /api/fm/c2pa/sign`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.61 for `c2pa/sign`). |
 | `allow_audit_export` | bool | `false` | Audit Export (Enterprise). Gates `GET /api/fm/audit/export` (streams NDJSON/CSV) and `POST /api/fm/audit/purge` (the latter also requires an unscoped/admin token — see below). Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.77). |
 | `audit_retention_days` | int (days) | `0` | Default cutoff for `/api/fm/audit/purge` when the request body omits an explicit `before`. `0` = no default — purge then requires an explicit `before`, or it returns `400 audit_purge_no_cutoff`. Purely a default; never triggers an automatic/background purge. |
 

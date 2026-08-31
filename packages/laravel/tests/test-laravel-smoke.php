@@ -345,19 +345,14 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   the JSON encoder); the JSON-returning proxy controllers don't do streaming
     //   responses, so it's a core-standalone / Docker feature like stream/img.
     //   (Extract, by contrast, returns JSON and IS proxied.)
-    // - paid module endpoints (share, ai-vision, ocr, backup, c2pa): the module code
-    //   is a separate proprietary package gated by ModuleRegistry. They're wired in
-    //   core; the adapter proxy route for each lands with that module's full release
-    //   (optimize is already proxied as the reference). Scaffolded now, proxied per
-    //   module when its engine ships.
     // - terminal: opens a shell over SSH on an SFTP disk (phpseclib exec). It needs
     //   the live SFTP connection + the allow_terminal claim and is a core-standalone /
     //   Docker feature; the adapter proxies don't expose a shell.
-    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
+    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal',
         // Share + Intake (operator create/list/revoke/analytics AND the public
         // info/unlock/file/upload landing routes), file Versioning (list/restore),
-        // and Audit export/purge are now fully proxied — see routes/fluxfiles.php +
-        // FluxFilesServiceProvider::registerRoutes().
+        // Audit export/purge, and AI Vision/OCR/Backup Bridge/C2PA are now fully
+        // proxied — see routes/fluxfiles.php + FluxFilesServiceProvider::registerRoutes().
         // SSO bridge: pre-auth routes for the standalone /public UI's own login
         // screen. They exist to gate deployments with NO host app minting tokens —
         // Laravel apps already authenticate via fluxfiles_token(), so there is
@@ -452,6 +447,17 @@ test('allow_audit_export (+ audit_retention_days) forwards in proxy mode', funct
     $p = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
     assertEqual(true, ($p->allow_audit_export ?? false), 'audit-export gate forwarded in proxy mode');
     assertEqual(365, $p->audit_retention_days ?? 0, 'audit_retention_days forwarded in proxy mode');
+});
+
+test('allow_ai_vision forwards in proxy mode', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+
+    // AI Vision now has a route in both modes (proxy: aiVision(); standalone:
+    // index.php), so the gate forwards unconditionally — proxy mode (default)
+    // included. Previously this was standalone-only (see allow_terminal above
+    // for the pattern this test replaces).
+    $p = \FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_ai_vision' => true]), $secret);
+    assertEqual(true, ($p->allow_ai_vision ?? false), 'ai-vision gate forwarded in proxy mode');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

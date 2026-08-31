@@ -195,14 +195,12 @@ class FluxFilesManager
         if (!empty($overrides['audit_retention_days'])) {
             $payload['audit_retention_days'] = (int) $overrides['audit_retention_days'];
         }
-        // AI Vision is core-standalone — /api/fm/ai-vision isn't proxied. It now has
-        // a UI button (detail panel + context menu + action sheet), so forward the
-        // gate claim only in 'standalone' mode; in proxy mode it's dropped so the
-        // button can't appear for an endpoint that would 404. Same rule as
-        // allow_terminal above (allow_versioning/allow_audit_export are no longer
-        // standalone-only — see above).
-        if (!empty($overrides['allow_ai_vision']) && config('fluxfiles.mode') === 'standalone') {
-            $payload['allow_ai_vision'] = true;
+        // AI Vision now has a proxy route too (FluxFilesController::aiVision(), see
+        // routes/fluxfiles.php), so the gate claim forwards unconditionally, matching
+        // allow_versioning/allow_audit_export above (allow_terminal is still the only
+        // standalone-only holdout).
+        if (array_key_exists('allow_ai_vision', $overrides)) {
+            $payload['allow_ai_vision'] = (bool) $overrides['allow_ai_vision'];
         }
         // NOTE: SSO (FLUXFILES_SSO_*) is NOT a claim-forwarding concern at all — those
         // are pure server env vars that configure the standalone /public UI's own
