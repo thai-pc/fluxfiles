@@ -36,8 +36,8 @@ root README's *On-demand WebP & AVIF* section for the request example).
 > `img_base` carries a short-lived per-file token in the query string (an `<img>`
 > can't send an `Authorization` header) — the same tradeoff as the media stream
 > token: single-file scope + short TTL. It mints only when the disk config wires a
-> stream secret, so on-demand WebP is a **core-standalone / Docker** feature (the
-> Laravel/WordPress proxies don't expose `/api/fm/img`).
+> stream secret, which core-standalone always does and the Laravel/WordPress
+> proxies now do too (`GET /api/fm/img` is proxied by both).
 
 ## Responsive `srcset`
 
@@ -54,7 +54,7 @@ root README for the markup example).
 - Set the **`srcset_sizes`** claim to also emit an **`img_sizes`** attribute;
   otherwise the host supplies its own `sizes`. The standalone UI already wires
   `srcset`/`sizes` onto its detail-panel and lightbox previews.
-- Rides the exact same gate as `img_base` (so it's also core-standalone / Docker).
+- Rides the exact same gate as `img_base` (proxied by both Laravel and WordPress too).
 
 ## Watermark
 
@@ -119,11 +119,16 @@ $token = fluxfiles_token([
 - **Logo watermark:** upload a transparent PNG as a normal file and set
   `watermark_type => 'logo'` + `watermark_logo_path`. A missing/unsafe path falls
   back to text (never a clean image). Watermarked WebPs are cached in `_variants/`.
-- **Adapters:** the overlay needs `/api/fm/img`, which the **proxy** adapters don't
-  expose. So it's forwarded only by token minters that target a standalone core —
-  `embed.php`, `@fluxfiles/node`, and the **Laravel adapter in `standalone` mode**.
-  The **WordPress** plugin and **Laravel proxy mode** drop the overlay claim (it
-  would yield broken images); use the **burn-in** route there, which is proxied.
+- **Adapters:** `/api/fm/img` itself is now proxied by both Laravel and WordPress
+  (gated-local media streaming and on-demand WebP work through the proxy — see the
+  sections above), but the overlay **compositing** was intentionally not ported
+  there. So `watermark_enabled` is still forwarded only by token minters that
+  target a standalone core — `embed.php`, `@fluxfiles/node`, and the **Laravel
+  adapter in `standalone` mode**. The **WordPress** plugin and **Laravel proxy
+  mode** drop the claim: forwarding it would mint a preview-only token (overlay
+  forces `allow_download` off) whose `/img` request the proxy's handler would
+  serve unwatermarked — worse than not forwarding it. Use the **burn-in** route
+  there instead, which is proxied.
 
 **How customers actually see the preview** — you don't *embed* it (the `img_base`
 token is short-lived, made for live rendering, not for saving into content). You

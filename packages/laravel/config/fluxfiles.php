@@ -105,6 +105,11 @@ return [
             'driver' => 'local',
             'root'   => env('FLUXFILES_LOCAL_ROOT', storage_path('app/public/fluxfiles/uploads')),
             'url'    => '/storage/fluxfiles/uploads',
+            // true = files are NOT served from the public 'url' above; the UI's
+            // list() marks them gated and the embedded client fetches bytes via
+            // the signed `/api/fm/stream` route instead (mirrors core's
+            // FLUXFILES_LOCAL_PRIVATE). Only matters once 'root' is not web-served.
+            'private' => (bool) env('FLUXFILES_LOCAL_PRIVATE', false),
         ],
         's3' => [
             'driver'     => 's3',

@@ -101,6 +101,14 @@ class FluxFilesServiceProvider extends ServiceProvider
         Route::prefix($prefix)->get('intake/info', [FluxFilesController::class, 'intakeInfo']);
         Route::prefix($prefix)->post('intake/upload', [FluxFilesController::class, 'intakeUpload']);
 
+        // Gated media stream/img — reached with a per-file signed token in the
+        // query string (an <img>/<video> element can't send an Authorization
+        // header), same public posture as the share/intake routes above. See
+        // FluxFilesController::stream()/img() (ported from index.php's
+        // handleMediaStream()/handleImageTransform()).
+        Route::prefix($prefix)->get('stream', [FluxFilesController::class, 'stream']);
+        Route::prefix($prefix)->get('img', [FluxFilesController::class, 'img']);
+
         // Recipient landing pages (share.html / intake.html) — same public
         // posture, alongside the other static asset routes above.
         Route::get('public/share.html', [FluxFilesController::class, 'sharePage']);

@@ -276,6 +276,16 @@ test('generateToken forwards terminal gate', function () use ($secret) {
     assertEqual(true, ($p->allow_terminal ?? false), 'terminal gate forwarded');
 });
 
+test('gated media stream/img is wired (setStreamSecret + local disk private key)', function () {
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($apiSrc, 'setStreamSecret(') !== false, 'fileManager() wires setStreamSecret()');
+    assertTrue(strpos($apiSrc, 'StreamToken::verify(') !== false, 'handleStream() verifies a StreamToken');
+    assertTrue(strpos($apiSrc, 'ImageToken::verify(') !== false, 'handleImg() verifies an ImageToken');
+
+    $disks = FluxFilesPlugin::diskConfigs();
+    assertTrue(array_key_exists('private', $disks['local']), "local disk config has a 'private' key");
+});
+
 test('generateToken forwards the share/intake gates and their config', function () use ($secret) {
     // This test used to assert the OPPOSITE: the claims were stripped because the REST
     // API exposed none of the endpoints, so a forwarded claim meant a button that 404s.
@@ -846,25 +856,22 @@ test('proxy route surface covers every core /api/fm route', function () {
     // Core routes that are intentionally NOT proxied (keep in sync with Laravel's
     // allowlist minus share/intake, which WordPress already proxies in full —
     // CRUD, the public landing routes, AND analytics.
-    // - stream / img: gated-local media and on-demand WebP are core-standalone /
-    //   Docker features. Both mint tokens only when FileManager has a stream
-    //   secret (setStreamSecret), which the WordPress proxy does not set — so
-    //   list() never emits stream/img URLs here, and there are no broken links.
     // - chmod: only operates on an SFTP disk, a core-standalone driver the proxy
     //   doesn't expose.
     // - zip: streams a binary zip to the client (ZipStream → php://output); the
     //   JSON-returning REST handlers don't do raw streaming responses, so it's a
-    //   core-standalone / Docker feature like stream/img. (Extract, by contrast,
-    //   returns JSON and IS proxied.)
+    //   core-standalone / Docker feature. (Extract, by contrast, returns JSON and
+    //   IS proxied.)
     // - SSO bridge (sso/login, sso/callback, sso/exchange): pre-auth routes for
     //   the standalone /public UI's own login screen. A WordPress site already
     //   authenticates via the plugin's own token minting, so there's nothing to
     //   proxy here.
-    // AI Vision/OCR/Backup Bridge/C2PA and the SSH terminal are now fully proxied
-    // too — see FluxFilesApi's handleAiVision()/handleOcr()/handleBackup()/
-    // handleC2pa()/handleC2paSign()/handleTerminal().
+    // AI Vision/OCR/Backup Bridge/C2PA, the SSH terminal, and gated media
+    // stream/img are now fully proxied too — see FluxFilesApi's
+    // handleAiVision()/handleOcr()/handleBackup()/handleC2pa()/handleC2paSign()/
+    // handleTerminal()/handleStream()/handleImg().
     $intentionallyUnproxied = [
-        'stream', 'img', 'chmod', 'zip',
+        'chmod', 'zip',
         'sso/login', 'sso/callback', 'sso/exchange',
     ];
 

@@ -61,6 +61,10 @@ class FluxFilesController
         }
         $fm = new FileManager($this->diskManager, $claims, $this->metaRepo);
         $fm->setQuotaManager(new QuotaManager($this->diskManager));
+        // Turns on isGatedLocal()/gatedLocalUrl()/imgBaseUrl() inside list() —
+        // unconditional, same as index.php. Without this, list() never emits
+        // img_base/gatedLocal URLs even though /stream and /img are now routed.
+        $fm->setStreamSecret((string) config('fluxfiles.secret'));
 
         // On-upload auto-optimize (FREE/core). Wire the optimizer hook when the token
         // asks for it (`auto_optimize`) — mirrors index.php's wiring. The module does
@@ -1493,6 +1497,289 @@ class FluxFilesController
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
+    }
+
+    // ── Gated media stream / on-demand image transform (free/core) ────────────
+    //
+    // Both are ported from index.php's handleMediaStream()/handleImageTransform()
+    // almost verbatim, using this adapter's own DiskManager/disk config instead
+    // of a fresh one built from core's config/disks.php file. Unauthenticated by
+    // the normal JWT (see FluxFilesServiceProvider — registered with NO
+    // middleware): the <img>/<video> element carries its own short-lived,
+    // single-file StreamToken/ImageToken in the query string instead.
+    //
+    // Watermark-overlay resolution (ff_resolve_watermark() in index.php) is
+    // intentionally NOT ported: ImageToken::mint() only embeds a `wm` scope when
+    // `watermark_enabled` is truthy, and this adapter's FluxFilesManager never
+    // forwards that claim in proxy mode (see docs/FEATURES.md — overlay preview
+    // stays a core-standalone/embed-only feature), so a proxy-minted ImageToken
+    // never carries one. If that ever changes, this needs the watermark branch.
+
+    private function qStrParam(Request $request, string $key, string $default = ''): string
+    {
+        $v = $request->query($key);
+        return is_scalar($v) ? (string) $v : $default;
+    }
+
+    /** Snap a requested quality to the nearest allowed step (bounds cache variants). */
+    private function snapQuality($raw): int
+    {
+        $allowedSteps = [60, 75, 80, 90];
+        $q = (int) $raw;
+        if ($q <= 0) {
+            return 80;
+        }
+        $best = 80;
+        $bestDiff = PHP_INT_MAX;
+        foreach ($allowedSteps as $allowed) {
+            $d = abs($allowed - $q);
+            if ($d < $bestDiff) {
+                $bestDiff = $d;
+                $best = $allowed;
+            }
+        }
+        return $best;
+    }
+
+    /** Emit image bytes with safe headers; $immutable adds a long-lived cache policy. */
+    private function serveBytes(string $data, string $mime, bool $immutable = false): void
+    {
+        header('Content-Type: ' . $mime);
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Disposition: inline');
+        header('Vary: Accept');
+        header($immutable
+            ? 'Cache-Control: public, max-age=31536000, immutable'
+            : 'Cache-Control: private, no-store');
+        header('Content-Length: ' . strlen($data));
+        echo $data;
+    }
+
+    /**
+     * Serve one file on a gated (private) local disk, or any SFTP disk (no static
+     * URL exists for either), authenticated by a per-file stream token. Honours
+     * HTTP Range so a <video>/<audio> can seek. Emits raw bytes, not JSON.
+     */
+    public function stream(Request $request): void
+    {
+        $secret = (string) config('fluxfiles.secret');
+        if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
+            http_response_code(500);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'FLUXFILES_SECRET is not configured';
+            return;
+        }
+        try {
+            $scope = \FluxFiles\StreamToken::verify($this->qStrParam($request, 'token'), $secret);
+        } catch (ApiException $e) {
+            http_response_code($e->getHttpCode());
+            header('Content-Type: text/plain; charset=utf-8');
+            echo $e->getMessage();
+            return;
+        }
+
+        $disk = $scope['disk'];
+        $path = $scope['path'];
+
+        if ($path === '' || strpos($path, "\0") !== false
+            || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Invalid path';
+            return;
+        }
+
+        $config = $this->diskManager->config($disk);
+        $driver = $config['driver'] ?? '';
+        $isGatedLocal = $driver === 'local' && !empty($config['private']);
+        $isSftp = $driver === 'sftp';
+        if (!$isGatedLocal && !$isSftp) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Streaming not available for this disk';
+            return;
+        }
+
+        $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
+            ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
+        $inlineOk = (bool) preg_match('#^(video/|audio/|image/(?!svg))|^application/pdf$#', $mime);
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: private, no-store');
+        header('Content-Disposition: ' . ($inlineOk ? 'inline' : 'attachment')
+            . '; filename="' . rawurlencode(basename($path)) . '"');
+
+        if ($isGatedLocal) {
+            $root = realpath((string) ($config['root'] ?? ''));
+            $abs = $root !== false ? realpath($root . '/' . $path) : false;
+            if ($root === false || $abs === false || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs)) {
+                http_response_code(404);
+                header('Content-Type: text/plain; charset=utf-8');
+                echo 'Not found';
+                return;
+            }
+            // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
+            $xaccel = (string) env('FLUXFILES_XACCEL', '');
+            if ($xaccel !== '') {
+                header('Content-Type: ' . $mime);
+                header('X-Accel-Buffering: no');
+                header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
+                return;
+            }
+            \FluxFiles\RangeStreamer::stream($abs, $mime, $request->server('HTTP_RANGE'));
+            return;
+        }
+
+        // SFTP: read through Flysystem and stream the bytes — no byte-range support
+        // (SFTP can't do it natively), the whole file is sent.
+        try {
+            $fs = $this->diskManager->disk($disk);
+            if (!$fs->fileExists($path)) {
+                http_response_code(404);
+                header('Content-Type: text/plain; charset=utf-8');
+                echo 'Not found';
+                return;
+            }
+            header('Content-Type: ' . $mime);
+            $stream = $fs->readStream($path);
+            while (!feof($stream)) {
+                echo fread($stream, 8192);
+                @flush();
+            }
+            if (is_resource($stream)) { fclose($stream); }
+        } catch (\Throwable $e) {
+            http_response_code(502);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Stream failed';
+        }
+    }
+
+    /**
+     * Serve an on-demand WebP/AVIF transform of one image, cached in the file's
+     * _variants/ directory. Authenticated by an image token (query string).
+     */
+    public function img(Request $request): void
+    {
+        $secret = (string) config('fluxfiles.secret');
+        if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
+            http_response_code(500);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'FLUXFILES_SECRET is not configured';
+            return;
+        }
+        try {
+            $scope = \FluxFiles\ImageToken::verify($this->qStrParam($request, 'token'), $secret);
+        } catch (ApiException $e) {
+            http_response_code($e->getHttpCode());
+            header('Content-Type: text/plain; charset=utf-8');
+            echo $e->getMessage();
+            return;
+        }
+
+        $disk = $scope['disk'];
+        $path = $scope['path'];
+        if ($path === '' || strpos($path, "\0") !== false
+            || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Invalid path';
+            return;
+        }
+
+        $optimizer = new \FluxFiles\ImageOptimizer();
+        if (!$optimizer->isImage($path)) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Not an image';
+            return;
+        }
+
+        $dpr = (float) $request->query('dpr', 1);
+        $dpr = $dpr >= 2.5 ? 3.0 : ($dpr >= 1.5 ? 2.0 : 1.0);
+
+        $maxWidth = $scope['maxWidth'] > 0 ? $scope['maxWidth'] : 2000;
+        $reqWidth = (int) round(((int) $request->query('width', 0)) * $dpr);
+        $width = $reqWidth > 0 ? min($maxWidth, max(100, (int) round($reqWidth / 100) * 100)) : 0;
+        $reqHeight = (int) round(((int) $request->query('height', 0)) * $dpr);
+        $height = $reqHeight > 0 ? min($maxWidth, max(100, (int) round($reqHeight / 100) * 100)) : 0;
+        $fit = ($request->query('fit', 'contain') === 'cover') ? 'cover' : 'contain';
+        $defaultQuality = $scope['defaultQuality'] > 0 ? $scope['defaultQuality'] : 80;
+        $quality = $this->snapQuality($request->query('quality', $defaultQuality));
+
+        $reqFormat = strtolower($this->qStrParam($request, 'format', 'auto'));
+        $avifOk = $optimizer->avifSupported();
+        $accept = (string) $request->header('Accept', '');
+        if ($reqFormat === 'avif') {
+            $format = $avifOk ? 'avif' : 'webp';
+        } elseif ($reqFormat === 'webp') {
+            $format = 'webp';
+        } elseif ($avifOk && strpos($accept, 'image/avif') !== false) {
+            $format = 'avif';
+        } elseif (strpos($accept, 'image/webp') !== false) {
+            $format = 'webp';
+        } else {
+            $format = ''; // negotiation: client accepts neither modern format
+        }
+
+        try {
+            $fs = $this->diskManager->disk($disk);
+        } catch (\Throwable $e) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Disk not available';
+            return;
+        }
+
+        if (!$fs->fileExists($path)) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Not found';
+            return;
+        }
+
+        $origMime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
+            ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
+
+        // No watermark scope ever reaches this adapter — see the class-note above.
+        if ($format === '') {
+            $this->serveBytes((string) $fs->read($path), $origMime);
+            return;
+        }
+
+        $ver = (string) (@$fs->lastModified($path) ?: '0');
+        $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, '', $format, $height, $fit);
+        $outMime = 'image/' . $format;
+
+        if ($fs->fileExists($cacheKey)) {
+            // S3/R2: redirect to a presigned URL of the cached image (no app egress).
+            if (($this->diskManager->config($disk)['driver'] ?? '') === 's3') {
+                $redirect = $this->diskManager->presignGetUrl($disk, $cacheKey, 3600);
+                if ($redirect !== null) {
+                    header('Cache-Control: private, max-age=600');
+                    header('Vary: Accept');
+                    header('Location: ' . $redirect, true, 302);
+                    return;
+                }
+            }
+            $this->serveBytes((string) $fs->read($cacheKey), $outMime, true);
+            return;
+        }
+
+        $out = $optimizer->transform((string) $fs->read($path), $width, $quality, null, $format, $height, $fit);
+        if ($out === null) {
+            // Animated GIF / SVG / non-raster / bomb — serve the original untouched.
+            $this->serveBytes((string) $fs->read($path), $origMime);
+            return;
+        }
+
+        // Honor the format transform() actually produced (falls back to WebP if an
+        // AVIF encode isn't available at runtime) so cache key + Content-Type agree.
+        $outFormat = $out['format'] ?? $format;
+        if ($outFormat !== $format) {
+            $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, '', $outFormat, $height, $fit);
+            $outMime = 'image/' . $outFormat;
+        }
+        try { $fs->write($cacheKey, $out['data']); } catch (\Throwable $e) { /* best-effort cache */ }
+        $this->serveBytes($out['data'], $outMime, true);
     }
 
     // ── Share + Intake (paid module) ─────────────────────────────────────────

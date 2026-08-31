@@ -29,10 +29,11 @@ query-string token (an `<video>`/`<img>` can't send headers): `/api/fm/stream`
 (gated local media, `StreamToken`/`RangeStreamer`, opt-in via
 `FLUXFILES_LOCAL_PRIVATE`) and `/api/fm/img` (on-demand WebP, `ImageToken`,
 cached in `_variants/`). Both mint only when a stream secret is wired
-(`FileManager::setStreamSecret`, done by the standalone app, not the proxy
-adapters) — so they're core-standalone / Docker features and the Laravel/WordPress
-route-parity guard whitelists them as intentionally unproxied. Per-tenant claims
-gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`,
+(`FileManager::setStreamSecret`) — the standalone app always does this, and the
+Laravel/WordPress proxy adapters now do too, so both routes are fully proxied
+(ported from `index.php`'s inline handlers directly into each adapter's
+controller, since they aren't extracted into a reusable core file). Per-tenant
+claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_token_ttl`,
 `webp_enabled`/`webp_max_width`/`webp_default_quality`), forwarded by every token helper.
 
 ## Repository layout

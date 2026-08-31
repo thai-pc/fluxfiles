@@ -333,23 +333,20 @@ test('proxy route surface covers every core /api/fm route', function () {
     $proxyRoutes = array_map(fn ($r) => preg_replace('#/\{[^}]+\}#', '', $r), $rm[1]);
 
     // Core routes that are intentionally NOT proxied (keep empty unless justified).
-    // - stream / img: gated-local media and on-demand WebP are core-standalone /
-    //   Docker features. Both mint their tokens only when FileManager has a stream
-    //   secret (setStreamSecret), which the Laravel proxy controller does not set —
-    //   so list() never emits stream/img URLs in proxy mode, and there are no
-    //   broken links. Proxying these byte-serving endpoints is a future option.
     // - chmod: only operates on an SFTP disk, which is a core-standalone driver
     //   (the proxy doesn't expose SFTP), so chmod has nothing to act on in proxy
     //   mode. Belongs with the SFTP/core-standalone group.
     // - zip: streams a binary zip to the client (ZipStream → php://output, bypassing
     //   the JSON encoder); the JSON-returning proxy controllers don't do streaming
-    //   responses, so it's a core-standalone / Docker feature like stream/img.
+    //   responses, so it stays a core-standalone / Docker feature (byte streaming
+    //   like stream/img, but zip specifically was never ported).
     //   (Extract, by contrast, returns JSON and IS proxied.)
-    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip',
+    $intentionallyUnproxied = ['chmod', 'zip',
         // Share + Intake (operator create/list/revoke/analytics AND the public
         // info/unlock/file/upload landing routes), file Versioning (list/restore),
-        // Audit export/purge, AI Vision/OCR/Backup Bridge/C2PA, and the SSH terminal
-        // are now fully proxied — see routes/fluxfiles.php + FluxFilesServiceProvider::registerRoutes().
+        // Audit export/purge, AI Vision/OCR/Backup Bridge/C2PA, the SSH terminal,
+        // and gated media stream/img are now fully proxied — see
+        // routes/fluxfiles.php + FluxFilesServiceProvider::registerRoutes().
         // SSO bridge: pre-auth routes for the standalone /public UI's own login
         // screen. They exist to gate deployments with NO host app minting tokens —
         // Laravel apps already authenticate via fluxfiles_token(), so there is
@@ -442,6 +439,21 @@ test('allow_ai_vision forwards in proxy mode', function () use ($secret) {
     // for the pattern this test replaces).
     $p = \FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_ai_vision' => true]), $secret);
     assertEqual(true, ($p->allow_ai_vision ?? false), 'ai-vision gate forwarded in proxy mode');
+});
+
+test('gated media stream/img is wired (setStreamSecret + local disk private key)', function () {
+    // Unlike every other phase, stream/img has no claim to de-gate — media-preview/
+    // webp claims already forwarded fine, only the *serving* endpoints were missing.
+    // What must be true instead: setStreamSecret() is called unconditionally (so
+    // list() actually emits img_base/gatedLocal URLs), and the local disk config
+    // has a 'private' switch for FileManager::isGatedLocal() to read.
+    $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(strpos($ctrlSrc, 'setStreamSecret(') !== false, 'fileManager() wires setStreamSecret()');
+    assertTrue(strpos($ctrlSrc, 'StreamToken::verify(') !== false, 'stream() verifies a StreamToken');
+    assertTrue(strpos($ctrlSrc, 'ImageToken::verify(') !== false, 'img() verifies an ImageToken');
+
+    $cfg = require __DIR__ . '/../config/fluxfiles.php';
+    assertTrue(array_key_exists('private', $cfg['disks']['local']), "local disk config has a 'private' key");
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

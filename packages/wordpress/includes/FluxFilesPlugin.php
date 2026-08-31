@@ -190,6 +190,11 @@ class FluxFilesPlugin
                 'driver' => 'local',
                 'root'   => $storagePath . '/uploads',
                 'url'    => content_url('fluxfiles/uploads'),
+                // true = files are NOT served from the public 'url' above; the UI's
+                // list() marks them gated and the embedded client fetches bytes via
+                // the signed `/api/fm/stream` route instead. Off by default (the WP
+                // content dir is normally web-served).
+                'private' => (bool) get_option('fluxfiles_local_private', false),
             ],
         ];
 

@@ -301,13 +301,16 @@ class FluxFilesManager
             }
         }
         // OVERLAY watermark (preview-time, served via /api/fm/img) is forwarded only
-        // in 'standalone' mode — the token then targets a real core that serves /img.
-        // In proxy mode the adapter does NOT expose /api/fm/img and sets no stream
-        // secret, so list() can't emit the watermarked img_base; since an overlay
-        // watermark also forces the token preview-only (allow_download off in core),
-        // forwarding it here would yield images with neither a clean URL nor a
-        // preview — i.e. broken. For a watermark through the proxy, use the burn-in
-        // route (POST /api/fm/watermark) instead, which writes the mark into the file.
+        // in 'standalone' mode. /api/fm/img is proxied in BOTH modes now (see
+        // FluxFilesController::img()), but that port intentionally does NOT
+        // implement the watermark-compositing branch — it only ever serves the
+        // plain resized transform. Forwarding watermark_enabled in proxy mode
+        // would mint a token whose overlay the proxy's /img silently ignores,
+        // handing out an unwatermarked "preview" — worse than not forwarding it,
+        // since an overlay watermark also forces the token preview-only
+        // (allow_download off in core), so there'd be no clean URL either. For a
+        // watermark through the proxy, use the burn-in route (POST
+        // /api/fm/watermark) instead, which writes the mark into the file.
         if (!empty($overrides['watermark_enabled']) && config('fluxfiles.mode') === 'standalone') {
             $payload['watermark_enabled'] = true;
             foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {

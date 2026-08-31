@@ -56,7 +56,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/watermark/remove` | `{disk, path}` | Restore the pre-watermark original (404 if none) |
 | `POST` | `/terminal` | `{disk, cmd, cwd?, confirm?}` | Stateless SSH command-runner, **SFTP disks only** (**free/core**). Opt-in via `allow_terminal` (default off) + `write`. Dangerous commands need `confirm` |
 
-> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media). Both are core-standalone / Docker features.
+> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media). Proxied by core-standalone, Laravel, and WordPress alike.
 
 ## Metadata
 
