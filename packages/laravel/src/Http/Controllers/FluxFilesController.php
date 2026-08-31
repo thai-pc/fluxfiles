@@ -144,10 +144,11 @@ class FluxFilesController
         \FluxFiles\Claims $claims,
         string $action,
         string $disk,
-        string $key
+        string $key,
+        ?string $detail = null
     ): void {
         $audit = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
-        $audit->log($claims->userId, $action, $disk, $key);
+        $audit->log($claims->userId, $action, $disk, $key, null, null, $detail);
     }
 
     /**
@@ -1436,6 +1437,57 @@ class FluxFilesController
                 'path' => (string) $request->input('path', ''),
                 'name' => basename((string) $request->input('path', '')),
             ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * SSH terminal (command-runner) — SFTP disks only. Free/core, not a
+     * ModuleRegistry module. Mirrors index.php's /api/fm/terminal gate order
+     * exactly: server kill-switch, allow_terminal claim, write perm, disk ACL,
+     * driver check, dangerous-command double-confirm, then run.
+     */
+    public function terminal(Request $request): JsonResponse
+    {
+        try {
+            if (($_ENV['FLUXFILES_TERMINAL_DISABLED'] ?? '') === 'true') {
+                throw new ApiException('The terminal is disabled on this server', 403, 'terminal_disabled');
+            }
+            $claims = $this->claims($request);
+            if (!$claims->allowTerminal) {
+                throw new ApiException('Terminal access is not allowed', 403, 'terminal_forbidden');
+            }
+            $this->rateLimit($claims, true);
+            if (!$claims->hasPerm('write')) {
+                throw new ApiException('Permission denied: write', 403, 'permission_denied');
+            }
+            $disk = (string) $request->input('disk', '');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+            }
+            if (($this->diskManager->config($disk)['driver'] ?? '') !== 'sftp') {
+                throw new ApiException('The terminal only works on an SFTP disk', 400, 'terminal_unsupported');
+            }
+            $cmd = trim((string) $request->input('cmd', ''));
+            if ($cmd === '') {
+                throw new ApiException('Missing command', 400, 'missing_param');
+            }
+            $confirmOff = ($_ENV['FLUXFILES_TERMINAL_CONFIRM'] ?? '') === 'false';
+            if (!$confirmOff && empty($request->input('confirm')) && \FluxFiles\SshTerminal::isDangerous($cmd)) {
+                throw new ApiException('This command looks dangerous — confirm to run it', 409, 'terminal_confirm_required');
+            }
+            [$conn, $root] = $this->diskManager->sftpConnection($disk);
+            $cwd = \FluxFiles\SshTerminal::resolveCwd((string) $request->input('cwd', ''), $root);
+            $timeout = (int) ($_ENV['FLUXFILES_TERMINAL_TIMEOUT'] ?? 30);
+            $result = \FluxFiles\SshTerminal::run($conn, $cmd, $cwd, $timeout);
+            if (empty($result['shell_ok'])) {
+                throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
+            }
+            $this->logAudit($claims, 'terminal', $disk, '', $cmd);
+            $this->dispatchWebhook($claims, 'terminal', ['disk' => $disk, 'path' => '', 'name' => '']);
 
             return $this->ok($result);
         } catch (ApiException $e) {

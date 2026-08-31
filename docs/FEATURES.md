@@ -197,5 +197,5 @@ section covers the threat model behind its guardrails.
 > (SFTP only)" message — the feature degrades instead of hanging. Note: FluxFiles
 > only ever uses the SFTP **subsystem** for file ops; the shell is opened *only*
 > for this opt-in terminal, so a shell-less SFTP account is otherwise unaffected.
-> Like SFTP serving, the terminal is **core-standalone / Docker** (not proxied by
-> the Laravel/WordPress adapters).
+> The terminal is proxied by the Laravel/WordPress adapters too, on the same
+> gate and guardrails as core-standalone.

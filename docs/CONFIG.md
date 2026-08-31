@@ -73,7 +73,7 @@ All four accept the same `claims` map.
 | `allow_extract` | bool | `true` | Allow `POST /api/fm/extract`. |
 | `zip_max_mb` | int (MB) | `1024` | Max total uncompressed size for a zip/extract (bomb cap). |
 | `zip_max_files` | int | `10000` | Max file count for a zip/extract. |
-| `allow_terminal` | bool | `false` | SSH command-runner on SFTP disks; needs `write`. Grants shell as the SSH user — opt-in. |
+| `allow_terminal` | bool | `false` | SSH command-runner on SFTP disks; needs `write`. Grants shell as the SSH user — opt-in. Gates `POST /api/fm/terminal`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.46). |
 | `terminal_pty_url` | string (http/s) | `""` | Embed a self-hosted PTY server (ttyd/gotty/wetty) for an interactive terminal; empty → command-runner. Free. |
 | `pdf_tools_url` | string (http/s) | `""` | Embed a self-hosted PDF toolkit (Stirling-PDF) — shows a "PDF tools" button. Empty → no button. Free BYO-embed. |
 | `office_url` | string (http/s) | `""` | Embed a self-hosted office suite (Collabora/OnlyOffice) for .docx/.xlsx/.pptx…; may carry a `{url}` placeholder substituted with the selected file's URL. Empty → no action. Free BYO-embed. |

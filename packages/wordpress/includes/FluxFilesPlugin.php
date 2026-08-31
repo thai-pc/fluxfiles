@@ -367,11 +367,16 @@ class FluxFilesPlugin
         if (array_key_exists('allow_code_edit', $overrides)) {
             $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
         }
-        // NOTE: the SSH terminal is intentionally NOT forwarded — neither `allow_terminal`
-        // nor `terminal_pty_url`. The plugin is proxy-only and the REST API never exposes
-        // /api/fm/terminal, so the panel would have no endpoint to talk to; forwarding the
-        // BYO PTY URL alone would just be dead config (the panel never renders without
-        // the gate claim). Core-standalone only.
+        // SSH terminal now proxies too (see FluxFilesApi's handleTerminal()), so the
+        // gate forwards like any other, same as allow_versioning/allow_audit_export above.
+        if (array_key_exists('allow_terminal', $overrides)) {
+            $payload['allow_terminal'] = (bool) $overrides['allow_terminal'];
+        }
+        // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — pure UI config,
+        // works in any mode like pdf_tools_url/office_url/esign_url below.
+        if (!empty($overrides['terminal_pty_url'])) {
+            $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
+        }
         // PDF-tools + office embeds are pure UI (no core endpoint) → work in any mode.
         if (!empty($overrides['pdf_tools_url'])) {
             $payload['pdf_tools_url'] = (string) $overrides['pdf_tools_url'];

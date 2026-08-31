@@ -160,17 +160,17 @@ class FluxFilesManager
         if (!empty($overrides['esign_url'])) {
             $payload['esign_url'] = (string) $overrides['esign_url'];
         }
-        // SSH terminal (SFTP disks) is core-standalone — /api/fm/terminal isn't
-        // proxied. Forward the claim only in 'standalone' mode (token → a real core
-        // that serves it); in proxy mode it's dropped so the button can't appear
-        // for an endpoint that would 404. Same rule as the overlay watermark below.
-        if (!empty($overrides['allow_terminal']) && config('fluxfiles.mode') === 'standalone') {
-            $payload['allow_terminal'] = true;
-            // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — standalone only,
-            // like allow_terminal (the proxy doesn't expose the terminal endpoint).
-            if (!empty($overrides['terminal_pty_url'])) {
-                $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
-            }
+        // SSH terminal (SFTP disks) now has a proxy route too
+        // (FluxFilesController::terminal(), see routes/fluxfiles.php), so the gate
+        // claim forwards unconditionally, matching allow_versioning/allow_audit_export/
+        // allow_ai_vision above.
+        if (array_key_exists('allow_terminal', $overrides)) {
+            $payload['allow_terminal'] = (bool) $overrides['allow_terminal'];
+        }
+        // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — pure UI config,
+        // works in any mode like pdf_tools_url/office_url/esign_url above.
+        if (!empty($overrides['terminal_pty_url'])) {
+            $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
         }
         // Versioning now has routes in both modes (proxy: FluxFilesController's
         // versions()/versionsRestore() + the version-keeper hook wired in

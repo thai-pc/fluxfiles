@@ -92,6 +92,9 @@ Route::post('backup', [FluxFilesController::class, 'backup']);
 Route::post('c2pa', [FluxFilesController::class, 'c2pa']);
 Route::post('c2pa/sign', [FluxFilesController::class, 'c2paSign']);
 
+// SSH terminal (command-runner, SFTP disks only; free/core, not a paid module)
+Route::post('terminal', [FluxFilesController::class, 'terminal']);
+
 // Share + Intake (paid module) — operator side: create/list/revoke/analytics.
 // The public recipient routes (share/info, share/unlock, share/file, intake/info,
 // intake/upload) and the recipient landing pages are registered separately in

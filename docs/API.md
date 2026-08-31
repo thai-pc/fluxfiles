@@ -81,7 +81,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 
 ## Paid Modules
 
-Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` claim) — absent/unlicensed/not-allowed answers `501`/`402`/`403` respectively. All of these are **core-standalone** (not proxied by the Laravel/WordPress adapters) unless noted. See [`.claude/api-map.md`](../.claude/api-map.md) for full behavior.
+Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` claim) — absent/unlicensed/not-allowed answers `501`/`402`/`403` respectively. All of these are proxied by the Laravel/WordPress adapters too (see [`docs/CONFIG.md`](CONFIG.md) for each claim's minimum core version). See [`.claude/api-map.md`](../.claude/api-map.md) for full behavior.
 
 | Method | Path | Body / Params | Module | Description |
 |--------|------|---------------|--------|-------------|

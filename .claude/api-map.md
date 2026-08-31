@@ -162,7 +162,7 @@ supported; folders move the whole subtree incl. variants. All gated by the
 - `POST /api/fm/watermark/remove {disk, path}` — restores the pre-watermark original from the backup (`404 no_watermark_backup` if none), clears `meta.watermarked`. Proxied by Laravel + WordPress.
 
 - `POST /api/fm/terminal {disk, cmd, cwd?, confirm?}` — **FREE / core**, SFTP disks only
-  - Stateless SSH **command-runner** (one `exec` per request over phpseclib; cwd threaded back). Hard-gated: server kill-switch `FLUXFILES_TERMINAL_DISABLED`, the `allow_terminal` claim (default off), `write` perm, an SFTP disk that grants a shell, a dangerous-command double-confirm (`409 terminal_confirm_required`). Core-standalone (NOT proxied; laravel forwards the claim only in standalone mode). **Free PTY upgrade:** the `terminal_pty_url` claim makes the UI embed a self-hosted ttyd/gotty/wetty instead — no server-side endpoint change.
+  - Stateless SSH **command-runner** (one `exec` per request over phpseclib; cwd threaded back). Hard-gated: server kill-switch `FLUXFILES_TERMINAL_DISABLED`, the `allow_terminal` claim (default off), `write` perm, an SFTP disk that grants a shell, a dangerous-command double-confirm (`409 terminal_confirm_required`). Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.46) — the gate forwards unconditionally in both. **Free PTY upgrade:** the `terminal_pty_url` claim makes the UI embed a self-hosted ttyd/gotty/wetty instead — no server-side endpoint change.
 
 - `GET /api/fm/audit?limit=100&offset=0`
   - Lists current user's audit entries.

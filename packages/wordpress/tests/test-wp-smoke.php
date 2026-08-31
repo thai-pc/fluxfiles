@@ -267,10 +267,15 @@ test('generateToken forwards ai-vision gate', function () use ($secret) {
     assertEqual(true, ($p->allow_ai_vision ?? false), 'ai-vision gate forwarded');
 });
 
-// Share + Intake are NOT forwarded at all: the plugin is proxy-only and the REST API
-// exposes none of the six operator endpoints (nor the public landing routes), so the
-// gate claims would render a button that 404s and their config would be dead. Same
-// reasoning as the SSH terminal.
+// SSH terminal now has a proxy route too (/api/fm/terminal, see FluxFilesApi's
+// handleTerminal()), so the gate forwards unconditionally — it used to be a
+// comment-only "intentionally NOT forwarded" note with no code at all.
+test('generateToken forwards terminal gate', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(59, ['allow_terminal' => true]);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(true, ($p->allow_terminal ?? false), 'terminal gate forwarded');
+});
+
 test('generateToken forwards the share/intake gates and their config', function () use ($secret) {
     // This test used to assert the OPPOSITE: the claims were stripped because the REST
     // API exposed none of the endpoints, so a forwarded claim meant a button that 404s.
@@ -851,17 +856,15 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   JSON-returning REST handlers don't do raw streaming responses, so it's a
     //   core-standalone / Docker feature like stream/img. (Extract, by contrast,
     //   returns JSON and IS proxied.)
-    // - terminal: opens a shell over SSH on an SFTP disk — core-standalone /
-    //   Docker feature, the proxy doesn't expose SFTP.
     // - SSO bridge (sso/login, sso/callback, sso/exchange): pre-auth routes for
     //   the standalone /public UI's own login screen. A WordPress site already
     //   authenticates via the plugin's own token minting, so there's nothing to
     //   proxy here.
-    // AI Vision/OCR/Backup Bridge/C2PA are now fully proxied too — see
-    // FluxFilesApi's handleAiVision()/handleOcr()/handleBackup()/handleC2pa()/
-    // handleC2paSign(), same release as optimize/webhooks/versioning/audit-export.
+    // AI Vision/OCR/Backup Bridge/C2PA and the SSH terminal are now fully proxied
+    // too — see FluxFilesApi's handleAiVision()/handleOcr()/handleBackup()/
+    // handleC2pa()/handleC2paSign()/handleTerminal().
     $intentionallyUnproxied = [
-        'stream', 'img', 'chmod', 'zip', 'terminal',
+        'stream', 'img', 'chmod', 'zip',
         'sso/login', 'sso/callback', 'sso/exchange',
     ];
 

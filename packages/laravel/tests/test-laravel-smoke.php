@@ -345,14 +345,11 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   the JSON encoder); the JSON-returning proxy controllers don't do streaming
     //   responses, so it's a core-standalone / Docker feature like stream/img.
     //   (Extract, by contrast, returns JSON and IS proxied.)
-    // - terminal: opens a shell over SSH on an SFTP disk (phpseclib exec). It needs
-    //   the live SFTP connection + the allow_terminal claim and is a core-standalone /
-    //   Docker feature; the adapter proxies don't expose a shell.
-    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal',
+    $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip',
         // Share + Intake (operator create/list/revoke/analytics AND the public
         // info/unlock/file/upload landing routes), file Versioning (list/restore),
-        // Audit export/purge, and AI Vision/OCR/Backup Bridge/C2PA are now fully
-        // proxied — see routes/fluxfiles.php + FluxFilesServiceProvider::registerRoutes().
+        // Audit export/purge, AI Vision/OCR/Backup Bridge/C2PA, and the SSH terminal
+        // are now fully proxied — see routes/fluxfiles.php + FluxFilesServiceProvider::registerRoutes().
         // SSO bridge: pre-auth routes for the standalone /public UI's own login
         // screen. They exist to gate deployments with NO host app minting tokens —
         // Laravel apps already authenticate via fluxfiles_token(), so there is
@@ -395,26 +392,13 @@ test('token-refresh recovery wiring is present (controller + route + blade)', fu
     assertTrue(strpos($bladeSrc, '$tokenUrl') !== false, 'blade fetches the token-refresh URL');
 });
 
-test('allow_terminal (SSH terminal) forwarded only in standalone mode', function () use ($secret) {
+test('allow_terminal (SSH terminal) forwards in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
-    // Assert on the RAW JWT payload, not Claims::$allowTerminal — the adapter only
-    // sets a claim string (it doesn't call any new core API), so this test must
-    // stay decoupled from the core version (the floor guard runs it against the
-    // declared core floor, which predates the allow_terminal property).
-
-    // Proxy mode (default): /api/fm/terminal isn't proxied → claim dropped.
+    // SSH terminal now has a route in both modes (proxy: terminal(); standalone:
+    // index.php), so the gate forwards unconditionally — proxy mode (default)
+    // included. This used to be the last standalone-only holdout.
     $p = \FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_terminal' => true]), $secret);
-    assertEqual(false, isset($p->allow_terminal), 'terminal claim dropped in proxy mode');
-
-    // Standalone mode: token targets a real core that serves /terminal → forward.
-    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
-    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
-    try {
-        $sp = \FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_terminal' => true]), $secret);
-        assertEqual(true, ($sp->allow_terminal ?? false), 'terminal claim forwarded in standalone mode');
-    } finally {
-        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
-    }
+    assertEqual(true, ($p->allow_terminal ?? false), 'terminal claim forwarded in proxy mode');
 });
 
 test('allow_versioning (+ its tuning claims) forwards in proxy mode', function () use ($secret) {
