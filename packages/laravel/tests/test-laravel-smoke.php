@@ -186,11 +186,8 @@ test('token() forwards usage-dashboard claims', function () use ($secret) {
 // it POST nowhere. Gate + config must travel together.
 test('token() forwards versioning + webhook config claims, not just the gate', function () use ($secret) {
     $mgr = new FluxFilesManager();
-    // Versioning is core-standalone-only (see the dedicated mode test further down),
-    // so mint in standalone mode here to exercise the gate+config pairing together
-    // with webhooks, which forwards in any mode.
-    $prevMode = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
-    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
+    // Both versioning and webhooks now have proxy routes, so both forward in any
+    // mode (the default proxy mode here included) — no mode toggling needed.
     $token = $mgr->token(52, [
         'allow_versioning'  => true,
         'versioning_max'    => 5,
@@ -200,7 +197,6 @@ test('token() forwards versioning + webhook config claims, not just the gate', f
         'webhook_events'    => ['upload', 'delete'],
         'webhook_secret'    => 'whsec_abc123',
     ]);
-    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prevMode;
     // Assert on the raw JWT payload, not Claims::fromJwtPayload — forwarding a claim
     // needs no core API, so this must keep passing against the declared core floor
     // (a core too old to know these keys simply ignores them). Validation belongs to
@@ -359,12 +355,11 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   Docker feature; the adapter proxies don't expose a shell.
     $intentionallyUnproxied = ['stream', 'img', 'chmod', 'zip', 'terminal', 'ai-vision', 'ocr', 'backup', 'c2pa', 'c2pa/sign',
         // Share + Intake (operator create/list/revoke/analytics AND the public
-        // info/unlock/file/upload landing routes) are now fully proxied — see
-        // routes/fluxfiles.php + FluxFilesServiceProvider::registerRoutes().
-        // File versioning: paid + core-standalone (adapters may proxy later).
-        'versions', 'versions/restore',
-        // Audit export/purge: paid + core-standalone, same posture as versioning
-        // (export streams a raw file download rather than the JSON envelope, and
+        // info/unlock/file/upload landing routes) and file Versioning (list/restore)
+        // are now fully proxied — see routes/fluxfiles.php +
+        // FluxFilesServiceProvider::registerRoutes().
+        // Audit export/purge: paid + core-standalone, same posture Versioning used to
+        // have (export streams a raw file download rather than the JSON envelope, and
         // purge is admin-only tooling — neither has a matching proxy route yet).
         'audit/export', 'audit/purge',
         // SSO bridge: pre-auth routes for the standalone /public UI's own login
@@ -431,7 +426,7 @@ test('allow_terminal (SSH terminal) forwarded only in standalone mode', function
     }
 });
 
-test('allow_versioning (+ its tuning claims) forwarded only in standalone mode', function () use ($secret) {
+test('allow_versioning (+ its tuning claims) forwards in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $overrides = [
         'allow_versioning'  => true,
@@ -439,23 +434,13 @@ test('allow_versioning (+ its tuning claims) forwarded only in standalone mode',
         'versioning_max_mb' => 50,
     ];
 
-    // Proxy mode (default): /api/fm/versions* isn't proxied → claim + config dropped.
+    // Versioning now has routes in both modes (proxy: versions()/versionsRestore()
+    // + the version-keeper hook wired in fileManager()), so the gate + its tuning
+    // claims forward unconditionally — proxy mode (default) included.
     $p = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
-    assertEqual(false, isset($p->allow_versioning), 'versioning gate dropped in proxy mode');
-    assertEqual(false, isset($p->versioning_max), 'versioning_max dropped in proxy mode');
-    assertEqual(false, isset($p->versioning_max_mb), 'versioning_max_mb dropped in proxy mode');
-
-    // Standalone mode: token targets a real core that serves /versions* → forward.
-    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
-    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
-    try {
-        $sp = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
-        assertEqual(true, ($sp->allow_versioning ?? false), 'versioning gate forwarded in standalone mode');
-        assertEqual(5, $sp->versioning_max ?? 0, 'versioning_max forwarded in standalone mode');
-        assertEqual(50, $sp->versioning_max_mb ?? 0, 'versioning_max_mb forwarded in standalone mode');
-    } finally {
-        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
-    }
+    assertEqual(true, ($p->allow_versioning ?? false), 'versioning gate forwarded in proxy mode');
+    assertEqual(5, $p->versioning_max ?? 0, 'versioning_max forwarded in proxy mode');
+    assertEqual(50, $p->versioning_max_mb ?? 0, 'versioning_max_mb forwarded in proxy mode');
 });
 
 test('allow_audit_export (+ audit_retention_days) forwarded only in standalone mode', function () use ($secret) {

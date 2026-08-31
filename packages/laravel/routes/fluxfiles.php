@@ -77,6 +77,10 @@ Route::get('audit', [FluxFilesController::class, 'audit']);
 // Webhooks (paid module) — send a test ping to the configured endpoint
 Route::post('webhooks/test', [FluxFilesController::class, 'webhooksTest']);
 
+// File versioning (paid module) — list prior versions of a file / restore one
+Route::get('versions', [FluxFilesController::class, 'versions']);
+Route::post('versions/restore', [FluxFilesController::class, 'versionsRestore']);
+
 // Share + Intake (paid module) — operator side: create/list/revoke/analytics.
 // The public recipient routes (share/info, share/unlock, share/file, intake/info,
 // intake/upload) and the recipient landing pages are registered separately in

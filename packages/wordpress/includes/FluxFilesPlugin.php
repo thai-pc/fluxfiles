@@ -415,10 +415,19 @@ class FluxFilesPlugin
         if (array_key_exists('intake_analytics', $overrides)) {
             $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
         }
-        // NOTE: versioning is intentionally NOT forwarded — neither `allow_versioning`
-        // nor `versioning_max`/`versioning_max_mb`. The plugin is proxy-only and the
-        // REST API never exposes /api/fm/versions*, so the History panel would have no
-        // endpoint to talk to. Core-standalone only, same rule as the SSH terminal above.
+        // File versioning. This used to be stripped here, because the REST API exposed
+        // no /api/fm/versions* endpoint and a forwarded claim would have rendered a
+        // History panel that 404s. It now proxies list + restore (see FluxFilesApi's
+        // handleVersions()/handleVersionsRestore()), so the gate + its tuning claims
+        // forward like any other, same as allow_share/allow_intake above.
+        if (array_key_exists('allow_versioning', $overrides)) {
+            $payload['allow_versioning'] = (bool) $overrides['allow_versioning'];
+        }
+        foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
+            if (!empty($overrides[$verClaim])) {
+                $payload[$verClaim] = (int) $overrides[$verClaim];
+            }
+        }
         // NOTE: audit export/purge is intentionally NOT forwarded either — neither
         // `allow_audit_export` nor `audit_retention_days`. Same reasoning: the REST
         // API never exposes /api/fm/audit/export or /api/fm/audit/purge, so a button
@@ -426,7 +435,7 @@ class FluxFilesPlugin
         // NOTE: AI Vision is intentionally NOT forwarded either — `allow_ai_vision` now
         // gates a UI button (detail panel + context menu + action sheet), but the REST
         // API never exposes /api/fm/ai-vision, so that button would have no endpoint to
-        // talk to. Core-standalone only, same reasoning as versioning/audit-export above.
+        // talk to. Core-standalone only, same reasoning as audit-export above.
         // NOTE: SSO (FLUXFILES_SSO_*) is NOT a claim-forwarding concern at all — those
         // are pure server env vars configuring the standalone /public UI's own login
         // endpoint. They never travel inside a JWT, so there is nothing to forward

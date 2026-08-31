@@ -223,6 +223,14 @@ class FluxFilesApi
             'callback' => [$api, 'handleWebhooksTest'],
         ]));
 
+        // File versioning (paid module) — list prior versions of a file / restore one
+        register_rest_route($ns, $p . '/versions', array_merge($readArgs, [
+            'callback' => [$api, 'handleVersions'],
+        ]));
+        register_rest_route($ns, $p . '/versions/restore', array_merge($writeArgs, [
+            'callback' => [$api, 'handleVersionsRestore'],
+        ]));
+
         // ── Share + Intake ──────────────────────────────────────────────────
         // Operator side: create/list/revoke, behind the normal JWT + the paid-module
         // gate. The public recipient routes are registered separately below and are
@@ -483,6 +491,25 @@ class FluxFilesApi
                     get_option('fluxfiles_ai_base_url', '') ?: null
                 ));
             }
+        }
+
+        // File versioning (paid module). Wire the version keeper ONLY when the token
+        // asks (`allow_versioning`) AND the module is installed + licensed — so the
+        // free core keeps no versions. FileManager calls it before overwriting an
+        // existing file. Mirrors index.php's wiring.
+        if (($claims->allowVersioning ?? false)
+            && \FluxFiles\ModuleRegistry::installed('versioning')
+            && FluxFilesPlugin::license()->licensed('versioning')) {
+            $versioning = new \FluxFiles\Versioning\VersioningModule();
+            $diskManager = $this->diskManager;
+            $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager) {
+                $versioning->keep($fs, $key, $claims, $diskManager, $d);
+            });
+            // Erase version history on permanent delete, so `/delete` can't be undone
+            // via a restore of a version saved before it — see VersioningModule::purge().
+            $fm->setVersionPurger(static function (string $d, string $key, $fs) use ($versioning, $diskManager) {
+                $versioning->purge($fs, $key, $diskManager, $d);
+            });
         }
 
         // Virus scan (paid module) — this REST proxy handles /upload itself, so without
@@ -1596,6 +1623,58 @@ class FluxFilesApi
 
             $module = \FluxFiles\ModuleRegistry::require('webhooks', FluxFilesPlugin::license(), $claims);
             $result = $module->test($claims, (string) get_option('fluxfiles_secret', ''));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * File versioning (paid module) — list prior versions of a file / restore one.
+     * Same 3-layer gate as ModuleRegistry::require(). The version-keeping/purging
+     * hooks that make listVersions()/restore() meaningful are wired in
+     * fileManager() above, not here.
+     */
+    public function handleVersions(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+
+            $module = \FluxFiles\ModuleRegistry::require('versioning', FluxFilesPlugin::license(), $claims);
+            $fm = $this->fileManager($claims);
+            $result = $module->listVersions(
+                $fm,
+                $this->diskManager,
+                $claims,
+                (string) ($request->get_param('disk') ?: 'local'),
+                (string) ($request->get_param('path') ?: '')
+            );
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function handleVersionsRestore(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+
+            $module = \FluxFiles\ModuleRegistry::require('versioning', FluxFilesPlugin::license(), $claims);
+            $body = $this->body($request);
+            $fm = $this->fileManager($claims);
+            $result = $module->restore(
+                $fm,
+                $this->diskManager,
+                $claims,
+                (string) ($body['disk'] ?? 'local'),
+                (string) ($body['path'] ?? ''),
+                (string) ($body['version_id'] ?? '')
+            );
 
             return $this->ok($result);
         } catch (ApiException $e) {

@@ -88,6 +88,25 @@ class FluxFilesController
             }
         }
 
+        // File versioning (paid module). Wire the version keeper ONLY when the token
+        // asks (`allow_versioning`) AND the module is installed + licensed — so the
+        // free core keeps no versions. FileManager calls it before overwriting an
+        // existing file. Mirrors index.php's wiring.
+        if (($claims->allowVersioning ?? false)
+            && \FluxFiles\ModuleRegistry::installed('versioning')
+            && \FluxFiles\LicenseManager::fromEnv()->licensed('versioning')) {
+            $versioning = new \FluxFiles\Versioning\VersioningModule();
+            $diskManager = $this->diskManager;
+            $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager) {
+                $versioning->keep($fs, $key, $claims, $diskManager, $d);
+            });
+            // Erase version history on permanent delete, so `/delete` can't be undone
+            // via a restore of a version saved before it — see VersioningModule::purge().
+            $fm->setVersionPurger(static function (string $d, string $key, $fs) use ($versioning, $diskManager) {
+                $versioning->purge($fs, $key, $diskManager, $d);
+            });
+        }
+
         // Virus scan (paid module) — the proxy handles /upload itself, so without this
         // a tenant with `allow_virus_scan` would have files stored unscanned here while
         // the same token is scanned in standalone. The module gate resolves INSIDE the
@@ -1175,6 +1194,57 @@ class FluxFilesController
 
             $module = \FluxFiles\ModuleRegistry::require('webhooks', \FluxFiles\LicenseManager::fromEnv(), $claims);
             $result = $module->test($claims, (string) config('fluxfiles.secret'));
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * File versioning (paid module) — list prior versions of a file / restore one.
+     * Same 3-layer gate as ModuleRegistry::require(). The version-keeping/purging
+     * hooks that make listVersions()/restore() meaningful are wired in
+     * fileManager() above, not here.
+     */
+    public function versions(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+
+            $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $fm = $this->fileManager($claims);
+            $result = $module->listVersions(
+                $fm,
+                $this->diskManager,
+                $claims,
+                (string) $request->query('disk', 'local'),
+                (string) $request->query('path', '')
+            );
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function versionsRestore(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+
+            $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $fm = $this->fileManager($claims);
+            $result = $module->restore(
+                $fm,
+                $this->diskManager,
+                $claims,
+                (string) $request->input('disk', 'local'),
+                (string) $request->input('path', ''),
+                (string) $request->input('version_id', '')
+            );
 
             return $this->ok($result);
         } catch (ApiException $e) {

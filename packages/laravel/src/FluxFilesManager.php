@@ -172,24 +172,25 @@ class FluxFilesManager
                 $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
             }
         }
-        // Versioning is core-standalone — /api/fm/versions* isn't proxied. Forward the
-        // gate claim only in 'standalone' mode (token → a real core that serves it); in
-        // proxy mode it's dropped so the button can't appear for an endpoint that would
-        // 404. Same rule as allow_terminal above.
-        if (!empty($overrides['allow_versioning']) && config('fluxfiles.mode') === 'standalone') {
-            $payload['allow_versioning'] = true;
-            // Versioning tuning claims (the core clamps these on decode; 0 = its default).
-            foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
-                if (!empty($overrides[$verClaim])) {
-                    $payload[$verClaim] = (int) $overrides[$verClaim];
-                }
+        // Versioning now has routes in both modes (proxy: FluxFilesController's
+        // versions()/versionsRestore() + the version-keeper hook wired in
+        // fileManager(); standalone: index.php), so the gate claim — and its tuning
+        // claims — forward unconditionally, matching allow_share/allow_intake above.
+        if (array_key_exists('allow_versioning', $overrides)) {
+            $payload['allow_versioning'] = (bool) $overrides['allow_versioning'];
+        }
+        // Versioning tuning claims (the core clamps these on decode; 0 = its default).
+        foreach (['versioning_max', 'versioning_max_mb'] as $verClaim) {
+            if (!empty($overrides[$verClaim])) {
+                $payload[$verClaim] = (int) $overrides[$verClaim];
             }
         }
         // Audit export/purge is core-standalone — /api/fm/audit/export and
         // /api/fm/audit/purge aren't proxied. Forward the gate claim only in
         // 'standalone' mode (token → a real core that serves them); in proxy mode
         // it's dropped so the UI can't render a button for an endpoint that would
-        // 404. Same rule as allow_terminal/allow_versioning above.
+        // 404. Same rule as allow_terminal above (allow_versioning is no longer
+        // standalone-only — see above).
         if (!empty($overrides['allow_audit_export']) && config('fluxfiles.mode') === 'standalone') {
             $payload['allow_audit_export'] = true;
             if (!empty($overrides['audit_retention_days'])) {
@@ -200,7 +201,8 @@ class FluxFilesManager
         // a UI button (detail panel + context menu + action sheet), so forward the
         // gate claim only in 'standalone' mode; in proxy mode it's dropped so the
         // button can't appear for an endpoint that would 404. Same rule as
-        // allow_terminal/allow_versioning/allow_audit_export above.
+        // allow_terminal/allow_audit_export above (allow_versioning is no longer
+        // standalone-only — see above).
         if (!empty($overrides['allow_ai_vision']) && config('fluxfiles.mode') === 'standalone') {
             $payload['allow_ai_vision'] = true;
         }
