@@ -514,6 +514,14 @@ class FluxFilesApi
         // img_base/gatedLocal URLs even though stream/img are now routed.
         $fm->setStreamSecret((string) get_option('fluxfiles_secret', ''));
 
+        // WordPress's REST API only ever resolves under /wp-json/{namespace}/… — never
+        // at a bare root path the way standalone's/Laravel's /api/fm/* really is at the
+        // iframe's own origin. Without this, list() would mint bare `/api/fm/stream`
+        // URLs that 404 in the browser (they'd need the wp-json/fluxfiles/v1 prefix
+        // handleStream()/handleImg() are actually registered under — see registerRoutes()'s
+        // $ns/$p literals, which this must match).
+        $fm->setApiBasePath(rest_url('fluxfiles/v1') . '/api/fm');
+
         // On-upload auto-optimize (FREE/core). Wire the optimizer hook when the token
         // asks for it (`auto_optimize`) — mirrors index.php's wiring. The module does
         // the work; FileManager records the savings + renames to .webp.

@@ -286,6 +286,21 @@ test('gated media stream/img is wired (setStreamSecret + local disk private key)
     assertTrue(array_key_exists('private', $disks['local']), "local disk config has a 'private' key");
 });
 
+test('gated media stream/img URLs are prefixed with the REST namespace, not a bare root path', function () {
+    // FileManager::gatedLocalUrl()/imgBaseUrl() default to a bare `/api/fm/...` path,
+    // which is only reachable at the iframe's own origin for standalone/Laravel. WP's
+    // REST API never resolves at a bare root — only under /wp-json/{namespace}/... —
+    // so without setApiBasePath() every <img>/<video> pointed at gated media 404s in
+    // a real browser (found via the real-adapter e2e: the emitted src was literally
+    // "/api/fm/stream?token=..." with no wp-json/fluxfiles/v1 prefix at all).
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($apiSrc, 'setApiBasePath(') !== false, 'fileManager() wires setApiBasePath()');
+    assertTrue(
+        (bool) preg_match("/setApiBasePath\(\s*rest_url\(\s*'fluxfiles\/v1'\s*\)\s*\.\s*'\/api\/fm'\s*\)/", $apiSrc),
+        'setApiBasePath() is given the REST-namespaced base (rest_url(\'fluxfiles/v1\') . \'/api/fm\'), matching registerRoutes()\'s $ns/$p'
+    );
+});
+
 test('generateToken forwards the share/intake gates and their config', function () use ($secret) {
     // This test used to assert the OPPOSITE: the claims were stripped because the REST
     // API exposed none of the endpoints, so a forwarded claim meant a button that 404s.

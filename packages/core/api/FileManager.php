@@ -36,6 +36,13 @@ class FileManager
     /** @var string Secret for minting per-file stream tokens (gated local media). '' = feature off. */
     private $streamSecret = '';
 
+    /** @var string Base path prepended to minted stream/img URLs. Default matches standalone's
+     *            and Laravel's real route mount (`/api/fm`, root-relative to the iframe's own
+     *            origin). WordPress overrides this to its REST-namespaced absolute URL
+     *            (`rest_url('fluxfiles/v1') . '/api/fm'`) via setApiBasePath(), since its
+     *            REST API is never reachable at a bare root path. */
+    private $apiBasePath = '/api/fm';
+
     /** @var callable|null Snapshot the current bytes of a file about to be overwritten,
      *            for the paid Versioning module. `fn(string $disk, string $scopedKey, $fs): void`.
      *            Set ONLY when the module is installed + licensed, so the free core keeps
@@ -182,6 +189,18 @@ class FileManager
     public function setStreamSecret(string $secret): void
     {
         $this->streamSecret = $secret;
+    }
+
+    /**
+     * Override the base path minted stream/img URLs are prefixed with. Only WordPress
+     * needs this — its REST API only ever resolves under `/wp-json/{namespace}/…`,
+     * never at a bare root path, unlike standalone/Laravel where `/api/fm/*` really
+     * is the API's mount point at the iframe's own origin. Pass an absolute URL
+     * (e.g. `rest_url('fluxfiles/v1') . '/api/fm'`), no trailing slash.
+     */
+    public function setApiBasePath(string $base): void
+    {
+        $this->apiBasePath = rtrim($base, '/');
     }
 
     public function list(string $disk, string $path, int $limit = 0, string $cursor = ''): array
@@ -2295,7 +2314,7 @@ class FileManager
     {
         $ttl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
         $token = StreamToken::mint($disk, $path, $this->claims->userId, $ttl, $this->streamSecret);
-        return '/api/fm/stream?token=' . rawurlencode($token);
+        return $this->apiBasePath . '/stream?token=' . rawurlencode($token);
     }
 
     /**
@@ -2321,7 +2340,7 @@ class FileManager
             $this->claims->webpDefaultQuality,
             $this->claims->watermark
         );
-        return '/api/fm/img?token=' . rawurlencode($token);
+        return $this->apiBasePath . '/img?token=' . rawurlencode($token);
     }
 
     /**
