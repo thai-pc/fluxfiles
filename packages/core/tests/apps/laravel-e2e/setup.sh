@@ -68,6 +68,10 @@ FLUXFILES_BASE_PATH=$APP/ff-base
 FLUXFILES_LOCAL_ROOT=$LOCALROOT
 FLUXFILES_RATE_LIMIT_READ=10000
 FLUXFILES_RATE_LIMIT_WRITE=10000
+# LOCALROOT above isn't under storage/app/public, so the disk's static 'url' was
+# never actually servable anyway — gate it properly so list() emits real
+# /api/fm/stream + /api/fm/img URLs (what laravel.spec.ts's stream/img test hits).
+FLUXFILES_LOCAL_PRIVATE=true
 EOF
 fi
 

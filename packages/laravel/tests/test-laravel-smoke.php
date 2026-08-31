@@ -456,6 +456,35 @@ test('gated media stream/img is wired (setStreamSecret + local disk private key)
     assertTrue(array_key_exists('private', $cfg['disks']['local']), "local disk config has a 'private' key");
 });
 
+test('stream/img raw-byte responses exit instead of returning (no Laravel default Response)', function () {
+    // A controller action with a void/null return lets Laravel's kernel build and
+    // send its OWN default Response, and Symfony's Response::sendHeaders() always
+    // re-asserts Content-Type with $replace=true — silently clobbering any raw
+    // header('Content-Type: ...') this code already sent (e.g. back to
+    // text/html), which breaks every <img>/<video> hitting these endpoints
+    // (a real bug found + fixed once — see FluxFilesController::publicLink()'s
+    // pre-existing `exit;` for the established correct pattern this must match).
+    $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+
+    $extractMethod = function (string $src, string $name): string {
+        $start = strpos($src, "function {$name}(");
+        assertTrue($start !== false, "method {$name}() exists");
+        $end = strpos($src, "\n    public function ", $start + 1);
+        if ($end === false) {
+            $end = strpos($src, "\n    private function ", $start + 1);
+        }
+        return $end !== false ? substr($src, $start, $end - $start) : substr($src, $start);
+    };
+
+    $streamBody = $extractMethod($ctrlSrc, 'stream');
+    $imgBody = $extractMethod($ctrlSrc, 'img');
+    $serveBytesBody = $extractMethod($ctrlSrc, 'serveBytes');
+
+    assertTrue(strpos($serveBytesBody, 'exit;') !== false, 'serveBytes() exits after emitting raw bytes');
+    assertTrue(!preg_match('/\breturn;/', $streamBody), 'stream() has no bare return; (must exit)');
+    assertTrue(!preg_match('/\breturn;/', $imgBody), 'img() has no bare return; (must exit)');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

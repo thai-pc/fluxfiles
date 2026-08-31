@@ -1553,6 +1553,9 @@ class FluxFilesController
             : 'Cache-Control: private, no-store');
         header('Content-Length: ' . strlen($data));
         echo $data;
+        // Laravel's kernel would otherwise wrap this action's (void) return in its
+        // own default Response and clobber Content-Type on send — see stream().
+        exit;
     }
 
     /**
@@ -1567,7 +1570,7 @@ class FluxFilesController
             http_response_code(500);
             header('Content-Type: text/plain; charset=utf-8');
             echo 'FLUXFILES_SECRET is not configured';
-            return;
+            exit;
         }
         try {
             $scope = \FluxFiles\StreamToken::verify($this->qStrParam($request, 'token'), $secret);
@@ -1575,7 +1578,7 @@ class FluxFilesController
             http_response_code($e->getHttpCode());
             header('Content-Type: text/plain; charset=utf-8');
             echo $e->getMessage();
-            return;
+            exit;
         }
 
         $disk = $scope['disk'];
@@ -1586,7 +1589,7 @@ class FluxFilesController
             http_response_code(403);
             header('Content-Type: text/plain; charset=utf-8');
             echo 'Invalid path';
-            return;
+            exit;
         }
 
         $config = $this->diskManager->config($disk);
@@ -1597,7 +1600,7 @@ class FluxFilesController
             http_response_code(403);
             header('Content-Type: text/plain; charset=utf-8');
             echo 'Streaming not available for this disk';
-            return;
+            exit;
         }
 
         $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
@@ -1615,7 +1618,7 @@ class FluxFilesController
                 http_response_code(404);
                 header('Content-Type: text/plain; charset=utf-8');
                 echo 'Not found';
-                return;
+                exit;
             }
             // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
             $xaccel = (string) env('FLUXFILES_XACCEL', '');
@@ -1623,10 +1626,10 @@ class FluxFilesController
                 header('Content-Type: ' . $mime);
                 header('X-Accel-Buffering: no');
                 header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
-                return;
+                exit;
             }
             \FluxFiles\RangeStreamer::stream($abs, $mime, $request->server('HTTP_RANGE'));
-            return;
+            exit;
         }
 
         // SFTP: read through Flysystem and stream the bytes — no byte-range support
@@ -1637,7 +1640,7 @@ class FluxFilesController
                 http_response_code(404);
                 header('Content-Type: text/plain; charset=utf-8');
                 echo 'Not found';
-                return;
+                exit;
             }
             header('Content-Type: ' . $mime);
             $stream = $fs->readStream($path);
@@ -1651,6 +1654,12 @@ class FluxFilesController
             header('Content-Type: text/plain; charset=utf-8');
             echo 'Stream failed';
         }
+        // Laravel's kernel wraps this action's (void) return in its own default
+        // Response and sends it — which would clobber every header already
+        // emitted above (Symfony's Response::sendHeaders() always re-asserts
+        // Content-Type). exit stops that from ever running, same as index.php's
+        // dispatcher doing `handleMediaStream(); exit;` in the standalone app.
+        exit;
     }
 
     /**
@@ -1664,7 +1673,7 @@ class FluxFilesController
             http_response_code(500);
             header('Content-Type: text/plain; charset=utf-8');
             echo 'FLUXFILES_SECRET is not configured';
-            return;
+            exit;
         }
         try {
             $scope = \FluxFiles\ImageToken::verify($this->qStrParam($request, 'token'), $secret);
@@ -1672,7 +1681,7 @@ class FluxFilesController
             http_response_code($e->getHttpCode());
             header('Content-Type: text/plain; charset=utf-8');
             echo $e->getMessage();
-            return;
+            exit;
         }
 
         $disk = $scope['disk'];
@@ -1682,7 +1691,7 @@ class FluxFilesController
             http_response_code(403);
             header('Content-Type: text/plain; charset=utf-8');
             echo 'Invalid path';
-            return;
+            exit;
         }
 
         $optimizer = new \FluxFiles\ImageOptimizer();
@@ -1690,7 +1699,7 @@ class FluxFilesController
             http_response_code(403);
             header('Content-Type: text/plain; charset=utf-8');
             echo 'Not an image';
-            return;
+            exit;
         }
 
         $dpr = (float) $request->query('dpr', 1);
@@ -1726,14 +1735,14 @@ class FluxFilesController
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
             echo 'Disk not available';
-            return;
+            exit;
         }
 
         if (!$fs->fileExists($path)) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
             echo 'Not found';
-            return;
+            exit;
         }
 
         $origMime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
@@ -1742,7 +1751,6 @@ class FluxFilesController
         // No watermark scope ever reaches this adapter — see the class-note above.
         if ($format === '') {
             $this->serveBytes((string) $fs->read($path), $origMime);
-            return;
         }
 
         $ver = (string) (@$fs->lastModified($path) ?: '0');
@@ -1757,18 +1765,16 @@ class FluxFilesController
                     header('Cache-Control: private, max-age=600');
                     header('Vary: Accept');
                     header('Location: ' . $redirect, true, 302);
-                    return;
+                    exit;
                 }
             }
             $this->serveBytes((string) $fs->read($cacheKey), $outMime, true);
-            return;
         }
 
         $out = $optimizer->transform((string) $fs->read($path), $width, $quality, null, $format, $height, $fit);
         if ($out === null) {
             // Animated GIF / SVG / non-raster / bomb — serve the original untouched.
             $this->serveBytes((string) $fs->read($path), $origMime);
-            return;
         }
 
         // Honor the format transform() actually produced (falls back to WebP if an
