@@ -15,6 +15,7 @@ use FluxFiles\Claims;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
+use FluxFiles\MetadataRepositoryInterface;
 use FluxFiles\QuotaManager;
 use FluxFiles\RateLimiterFileStorage;
 use FluxFiles\StorageMetadataHandler;
@@ -489,7 +490,7 @@ function routeRequest(
     string $method,
     string $uri,
     FileManager $fm,
-    StorageMetadataHandler $metaRepo,
+    MetadataRepositoryInterface $metaRepo,
     DiskManager $diskManager,
     \FluxFiles\Claims $claims,
     AuditLogStorage $auditLog,
@@ -1126,7 +1127,7 @@ function jsonBody(string ...$keys): array
     return $result;
 }
 
-function handleGetMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $claims, FileManager $fm): ?array
+function handleGetMetadata(MetadataRepositoryInterface $metaRepo, \FluxFiles\Claims $claims, FileManager $fm): ?array
 {
     $disk = $_GET['disk'] ?? null;
     $key  = $_GET['key'] ?? null;
@@ -1149,7 +1150,7 @@ function handleGetMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $
     return $metaRepo->get($disk, $key);
 }
 
-function handleSaveMetadata(StorageMetadataHandler $metaRepo, DiskManager $diskManager, \FluxFiles\Claims $claims, FileManager $fm): array
+function handleSaveMetadata(MetadataRepositoryInterface $metaRepo, DiskManager $diskManager, \FluxFiles\Claims $claims, FileManager $fm): array
 {
     $raw = file_get_contents('php://input');
     $body = json_decode($raw, true);
@@ -1190,7 +1191,7 @@ function handleSaveMetadata(StorageMetadataHandler $metaRepo, DiskManager $diskM
     return ['saved' => true];
 }
 
-function handleDeleteMetadata(StorageMetadataHandler $metaRepo, \FluxFiles\Claims $claims, FileManager $fm): array
+function handleDeleteMetadata(MetadataRepositoryInterface $metaRepo, \FluxFiles\Claims $claims, FileManager $fm): array
 {
     [$disk, $key] = jsonBody('disk', 'key');
     if (!$claims->hasDisk($disk)) {
@@ -1857,7 +1858,7 @@ function handleChunkComplete(
     \FluxFiles\ChunkUploader $chunker,
     \FluxFiles\Claims $claims,
     FileManager $fm,
-    StorageMetadataHandler $metaRepo,
+    MetadataRepositoryInterface $metaRepo,
     DiskManager $diskManager
 ): array
 {

@@ -16,8 +16,7 @@ class FileManager
     /** @var Claims */
     private $claims;
 
-    /** @var MetadataRepositoryInterface */
-    private $meta;
+    private MetadataRepositoryInterface $meta;
 
     /** @var ImageOptimizer */
     private $imageOptimizer;
@@ -325,9 +324,7 @@ class FileManager
         }
         $metaMap = !empty($fileKeys) ? $this->meta->getBulk($disk, $fileKeys) : [];
         // Folder created timestamps live in our own dirs index (works on S3/R2 too).
-        $dirsCreated = ($this->meta instanceof StorageMetadataHandler)
-            ? $this->meta->dirsCreated($disk)
-            : [];
+        $dirsCreated = $this->meta->dirsCreated($disk);
         foreach ($items as &$item) {
             if (($item['type'] ?? '') === 'dir') {
                 $c = $dirsCreated[$item['key']] ?? null;
@@ -498,9 +495,7 @@ class FileManager
         }
 
         // Track parent directories for global folder search (best-effort)
-        if ($this->meta instanceof StorageMetadataHandler) {
-            $this->meta->trackParents($disk, $scoped);
-        }
+        $this->meta->trackParents($disk, $scoped);
 
         // Overwriting an existing file (collision=overwrite or force_upload) →
         // honour owner_only like delete/rename/move/crop/watermark/putContent do
@@ -652,9 +647,7 @@ class FileManager
                 $this->deleteVariantsDir($disk, $scoped);
                 $fs->deleteDirectory($scoped);
                 $this->meta->deleteChildren($disk, $scoped);
-                if ($this->meta instanceof StorageMetadataHandler) {
-                    $this->meta->deleteDirPrefix($disk, $scoped);
-                }
+                $this->meta->deleteDirPrefix($disk, $scoped);
             } else {
                 $this->deleteVariants($disk, $scoped);
                 $this->purgeVersions($disk, $scoped, $fs);
@@ -681,10 +674,6 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
         $this->assertOwner($disk, $scoped);
-
-        if (!($this->meta instanceof StorageMetadataHandler)) {
-            throw new ApiException('Trash is not available for this storage', 400, 'trash_unavailable');
-        }
 
         $fs = $this->disks->disk($disk);
         $isDir = false;
@@ -811,9 +800,6 @@ class FileManager
         $this->assertDisk($disk);
         $this->assertPerm('delete');
         $this->assertSafeTrashId($id);
-        if (!($this->meta instanceof StorageMetadataHandler)) {
-            throw new ApiException('Trash is not available for this storage', 400, 'trash_unavailable');
-        }
 
         $entry = $this->meta->getTrash($disk, $id);
         if ($entry === null) {
@@ -930,9 +916,6 @@ class FileManager
     {
         $this->assertDisk($disk);
         $this->assertPerm('delete');
-        if (!($this->meta instanceof StorageMetadataHandler)) {
-            return [];
-        }
         $out = [];
         foreach ($this->meta->allTrash($disk) as $id => $e) {
             if (!$this->trashVisible($e)) {
@@ -958,9 +941,6 @@ class FileManager
         $this->assertDisk($disk);
         $this->assertPerm('delete');
         $this->assertSafeTrashId($id);
-        if (!($this->meta instanceof StorageMetadataHandler)) {
-            throw new ApiException('Trash is not available for this storage', 400, 'trash_unavailable');
-        }
         $entry = $this->meta->getTrash($disk, $id);
         if ($entry === null) {
             throw new ApiException('Trash item not found', 404, 'not_found');
@@ -979,9 +959,6 @@ class FileManager
     {
         $this->assertDisk($disk);
         $this->assertPerm('delete');
-        if (!($this->meta instanceof StorageMetadataHandler)) {
-            return ['purged' => 0];
-        }
         $fs = $this->disks->disk($disk);
         $n = 0;
         foreach ($this->meta->allTrash($disk) as $id => $e) {
@@ -1104,9 +1081,7 @@ class FileManager
             $this->moveDirectoryTree($disk, $fs, $scoped, $newPath);
             // Move metadata for children
             $this->meta->renameChildren($disk, $scoped, $newPath);
-            if ($this->meta instanceof StorageMetadataHandler) {
-                $this->meta->renameDirPrefix($disk, $scoped, $newPath);
-            }
+            $this->meta->renameDirPrefix($disk, $scoped, $newPath);
         } else {
             $fs->move($scoped, $newPath);
             // Move metadata
@@ -1114,9 +1089,7 @@ class FileManager
             // Move image variants
             $this->moveVariants($disk, $scoped, $disk, $newPath);
 
-            if ($this->meta instanceof StorageMetadataHandler) {
-                $this->meta->trackParents($disk, $newPath);
-            }
+            $this->meta->trackParents($disk, $newPath);
         }
 
         return [
@@ -1156,15 +1129,11 @@ class FileManager
         // Keep metadata + folder index best-effort in sync
         if ($isDir) {
             $this->meta->renameChildren($disk, $scopedFrom, $scopedTo);
-            if ($this->meta instanceof StorageMetadataHandler) {
-                $this->meta->renameDirPrefix($disk, $scopedFrom, $scopedTo);
-            }
+            $this->meta->renameDirPrefix($disk, $scopedFrom, $scopedTo);
         } else {
             $this->moveMetadata($disk, $scopedFrom, $disk, $scopedTo);
             $this->moveVariants($disk, $scopedFrom, $disk, $scopedTo);
-            if ($this->meta instanceof StorageMetadataHandler) {
-                $this->meta->trackParents($disk, $scopedTo);
-            }
+            $this->meta->trackParents($disk, $scopedTo);
         }
 
         return ['key' => $this->outKey($scopedTo)];
@@ -1224,9 +1193,7 @@ class FileManager
 
         $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo);
         $this->copyVariants($disk, $scopedFrom, $disk, $scopedTo);
-        if ($this->meta instanceof StorageMetadataHandler) {
-            $this->meta->trackParents($disk, $scopedTo);
-        }
+        $this->meta->trackParents($disk, $scopedTo);
 
         return ['key' => $this->outKey($scopedTo)];
     }
@@ -1283,9 +1250,7 @@ class FileManager
 
         $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $this->copyVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
-        if ($this->meta instanceof StorageMetadataHandler) {
-            $this->meta->trackParents($dstDisk, $scopedDst);
-        }
+        $this->meta->trackParents($dstDisk, $scopedDst);
 
         return [
             'key'      => $this->outKey($scopedDst),
@@ -1350,9 +1315,7 @@ class FileManager
         $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $srcFs->delete($scopedSrc);
 
-        if ($this->meta instanceof StorageMetadataHandler) {
-            $this->meta->trackParents($dstDisk, $scopedDst);
-        }
+        $this->meta->trackParents($dstDisk, $scopedDst);
 
         return [
             'key'      => $this->outKey($scopedDst),
@@ -1578,10 +1541,8 @@ class FileManager
 
         $fs->createDirectory($scoped);
 
-        if ($this->meta instanceof StorageMetadataHandler) {
-            $this->meta->trackDir($disk, $scoped);
-            $this->meta->trackParents($disk, $scoped);
-        }
+        $this->meta->trackDir($disk, $scoped);
+        $this->meta->trackParents($disk, $scoped);
 
         return ['created' => true];
     }
@@ -1638,9 +1599,7 @@ class FileManager
             // "Save as copy" creates a new file — carry over metadata (title/tags/
             // uploaded_by) and register it in the search + folder index, same as copy().
             $this->copyMetadata($disk, $scopedSrc, $disk, $scopedDst);
-            if ($this->meta instanceof StorageMetadataHandler) {
-                $this->meta->trackParents($disk, $scopedDst);
-            }
+            $this->meta->trackParents($disk, $scopedDst);
         }
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'ffcrop_');
@@ -1746,9 +1705,7 @@ class FileManager
             // "Save as copy" creates a new file — carry over metadata (title/tags/
             // uploaded_by) and register it in the search + folder index, same as copy().
             $this->copyMetadata($disk, $scopedSrc, $disk, $scopedDst);
-            if ($this->meta instanceof StorageMetadataHandler) {
-                $this->meta->trackParents($disk, $scopedDst);
-            }
+            $this->meta->trackParents($disk, $scopedDst);
         }
 
         // Regenerate variants for the new bytes (best-effort), like cropImage.
@@ -2699,9 +2656,7 @@ class FileManager
      */
     private function registerExtractedFile(string $disk, $fs, string $key, string $localPath): void
     {
-        if ($this->meta instanceof StorageMetadataHandler) {
-            $this->meta->trackParents($disk, $key); // folder search index
-        }
+        $this->meta->trackParents($disk, $key); // folder search index
         $name = basename($key);
         $attrs = [
             'uploaded_by' => $this->claims->userId,

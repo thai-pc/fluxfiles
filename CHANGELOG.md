@@ -3,6 +3,36 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.00] — 2026-09-01
+
+> Not yet released — no tags cut for this entry.
+
+### Changed — `MetadataRepositoryInterface` widened (BC-break for direct implementers)
+
+Phase 1 of the DB-storage-migration design (`docs/DB-STORAGE-MIGRATION-DESIGN.md`
+§2): `MetadataRepositoryInterface` grew from 11 to 26 methods — folder-index
+(`trackDir`/`trackParents`/`dirsCreated`/`renameDirPrefix`/`deleteDirPrefix`/
+`searchFolders`), audit (`readAudit`/`audit`/`readAuditArchive`/
+`purgeAuditBefore`), trash (`allTrash`/`getTrash`/`addTrash`/`removeTrash`),
+and `indexFile` — plus a signature fix: `search()` was missing the
+`bool $includeHidden = false` parameter it actually needed (production code
+was already calling it with 5 args against the concrete class; the interface
+had drifted out of sync). **If you implement `MetadataRepositoryInterface`
+directly** (rather than using the built-in `StorageMetadataHandler`), you
+must now implement these 15 additional methods and the corrected `search()`
+signature, or your class will trigger a PHP fatal error.
+
+`FileManager.php`'s 19 `instanceof StorageMetadataHandler` guards (4 of which
+threw `trash_unavailable` when the check failed) are removed — the interface
+now always guarantees these methods, so trash/audit/folder-indexing are no
+longer conditional on the concrete class. No behavior change for anyone using
+`StorageMetadataHandler` (the only implementer today); this is the seam a
+future DB-backed handler plugs into. `index.php` and the Laravel/WordPress
+adapters now type-hint the interface instead of the concrete class at their
+metadata-repo consumption points; construction is unchanged. Added
+`tests/unit/test-metadata-repository-interface.php`, a reflection-based
+conformance guard between the interface and `StorageMetadataHandler`.
+
 ## [0.2.99] — 2026-08-31
 
 > Released: `ckeditor4-v0.3.3`, `tinymce-v0.3.3`, `summernote-v0.1.3`,

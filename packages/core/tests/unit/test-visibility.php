@@ -72,11 +72,26 @@ class NullMetaRepo implements MetadataRepositoryInterface
     public function deleteChildren(string $disk, string $prefix): int { return 0; }
     public function renameChildren(string $disk, string $oldPrefix, string $newPrefix): int { return 0; }
     public function getBulk(string $disk, array $keys): array { return []; }
-    public function search(string $disk, string $query, int $limit = 50, string $pathPrefix = ''): array { return []; }
+    public function search(string $disk, string $query, int $limit = 50, string $pathPrefix = '', bool $includeHidden = false): array { return []; }
     public function saveHash(string $disk, string $key, string $hash): void {}
     public function findByHash(string $disk, string $hash, string $pathPrefix = '', ?string $ownerUserId = null): ?array { return null; }
     public function syncToS3Tags(string $disk, string $key, array $data, DiskManager $diskManager): void {}
     public function countChildren(string $disk, string $prefix): int { return 0; }
+    public function indexFile(string $disk, string $key, array $data, bool $overwrite = false): bool { return true; }
+    public function trackDir(string $disk, string $dirKey): void {}
+    public function trackParents(string $disk, string $key): void {}
+    public function dirsCreated(string $disk): array { return []; }
+    public function renameDirPrefix(string $disk, string $oldPrefix, string $newPrefix): int { return 0; }
+    public function deleteDirPrefix(string $disk, string $prefix): int { return 0; }
+    public function searchFolders(string $disk, string $query, int $limit = 50, string $pathPrefix = '', bool $includeHidden = false): array { return []; }
+    public function readAudit(string $disk, ?string $userId = null): array { return []; }
+    public function audit(string $disk, string $action, array $context = []): void {}
+    public function readAuditArchive(string $disk): array { return []; }
+    public function purgeAuditBefore(string $disk, int $beforeTs): array { return []; }
+    public function allTrash(string $disk): array { return []; }
+    public function getTrash(string $disk, string $id): ?array { return null; }
+    public function addTrash(string $disk, string $id, array $entry): void {}
+    public function removeTrash(string $disk, string $id): void {}
 }
 
 /** Build a FileManager over the given disk configs. */

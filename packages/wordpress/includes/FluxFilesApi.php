@@ -9,6 +9,7 @@ use FluxFiles\ChunkUploader;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
+use FluxFiles\MetadataRepositoryInterface;
 use FluxFiles\QuotaManager;
 use FluxFiles\RateLimiterFileStorage;
 use FluxFiles\StorageMetadataHandler;
@@ -20,7 +21,7 @@ use FluxFiles\UrlImporter;
 class FluxFilesApi
 {
     private DiskManager $diskManager;
-    private StorageMetadataHandler $metaRepo;
+    private MetadataRepositoryInterface $metaRepo;
 
     public function __construct()
     {
