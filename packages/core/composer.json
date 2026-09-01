@@ -31,6 +31,12 @@
         "league/flysystem-sftp-v3": "^3.0",
         "maennchen/zipstream-php": "^3.1"
     },
+    "suggest": {
+        "ext-pdo": "Required when FLUXFILES_STORAGE_BACKEND=db (any driver)",
+        "ext-pdo_sqlite": "Required when FLUXFILES_STORAGE_BACKEND=db with a sqlite: DSN",
+        "ext-pdo_mysql": "Required when FLUXFILES_STORAGE_BACKEND=db with a mysql: DSN",
+        "ext-pdo_pgsql": "Required when FLUXFILES_STORAGE_BACKEND=db with a pgsql: DSN"
+    },
     "autoload": {
         "psr-4": {
             "FluxFiles\\": "api/"

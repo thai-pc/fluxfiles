@@ -7,7 +7,7 @@ namespace FluxFiles;
 /**
  * Rate limiter backed by a JSON file — no SQLite needed.
  */
-class RateLimiterFileStorage
+class RateLimiterFileStorage implements RateLimiterStorageInterface
 {
     private string $filePath;
     private int $readLimit;

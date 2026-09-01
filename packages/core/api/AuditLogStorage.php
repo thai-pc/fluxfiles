@@ -12,10 +12,10 @@ class AuditLogStorage
     private const MAX_LIST = 500;
     private const MAX_EXPORT = 200000; // Hard ceiling to bound memory on export
 
-    private StorageMetadataHandler $storage;
+    private MetadataRepositoryInterface $storage;
     private array $claimsDisks;
 
-    public function __construct(StorageMetadataHandler $storage, array $claimsDisks)
+    public function __construct(MetadataRepositoryInterface $storage, array $claimsDisks)
     {
         $this->storage = $storage;
         $this->claimsDisks = $claimsDisks;

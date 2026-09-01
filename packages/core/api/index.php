@@ -17,7 +17,6 @@ use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
 use FluxFiles\MetadataRepositoryInterface;
 use FluxFiles\QuotaManager;
-use FluxFiles\RateLimiterFileStorage;
 use FluxFiles\StorageMetadataHandler;
 
 // Load .env
@@ -280,7 +279,17 @@ try {
     // Runtime-state dir (rate-limit counter). Overridable so read-only/immutable
     // deployments can point it at a writable volume; defaults to packages/core/storage.
     $storagePath = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
-    $metaRepo = new StorageMetadataHandler($diskManager);
+    $storageBackend = $_ENV['FLUXFILES_STORAGE_BACKEND'] ?? 'json';
+    $dbConn = null;
+    if ($storageBackend === 'db') {
+        $dbConn = \FluxFiles\Db\Connection::fromEnv();
+        if (($_ENV['FLUXFILES_DB_AUTO_MIGRATE'] ?? 'false') === 'true') {
+            (new \FluxFiles\Db\MigrationRunner($dbConn))->migrate(__DIR__ . '/../db/migrations');
+        }
+        $metaRepo = new \FluxFiles\Db\DbMetadataHandler($dbConn, $diskManager);
+    } else {
+        $metaRepo = new StorageMetadataHandler($diskManager);
+    }
     $fm = new FileManager($diskManager, $claims, $metaRepo);
     $fm->setQuotaManager(new QuotaManager($diskManager));
     // Enables gated-local media: file URLs on a `private => true` local disk become
@@ -357,11 +366,11 @@ try {
 
     // Rate limiting (JSON file). Per-tenant `rate_read`/`rate_write` claims override
     // the server defaults when set (> 0); otherwise inherit the env limits.
-    $rateLimiter = new RateLimiterFileStorage(
-        $storagePath . '/rate_limit.json',
+    $rateLimiter = \FluxFiles\RateLimiterFactory::make(
         $claims->rateRead > 0 ? $claims->rateRead : (int) ($_ENV['FLUXFILES_RATE_LIMIT_READ'] ?? 60),
         $claims->rateWrite > 0 ? $claims->rateWrite : (int) ($_ENV['FLUXFILES_RATE_LIMIT_WRITE'] ?? 10),
-        60
+        60,
+        $dbConn
     );
     $isWriteAction = in_array($method, ['POST', 'PUT', 'DELETE'], true);
     $rateLimiter->check($claims->userId, $isWriteAction ? 'write' : 'read');
@@ -372,14 +381,14 @@ try {
         $importLimit = $claims->importRateLimit > 0
             ? $claims->importRateLimit
             : (int) ($_ENV['FLUXFILES_IMPORT_RATE_LIMIT'] ?? 10);
-        (new RateLimiterFileStorage($storagePath . '/rate_limit.json', $importLimit, $importLimit, 60))
+        \FluxFiles\RateLimiterFactory::make($importLimit, $importLimit, 60, $dbConn)
             ->check($claims->userId, 'import');
     }
 
     // A forced usage recompute lists the whole prefix — give it its own tight
     // bucket (2/min) so it can't be abused to hammer the storage with ListObjects.
     if ($uri === '/api/fm/usage' && ($_GET['refresh'] ?? '') === 'true') {
-        (new RateLimiterFileStorage($storagePath . '/rate_limit.json', 2, 2, 60))
+        \FluxFiles\RateLimiterFactory::make(2, 2, 60, $dbConn)
             ->check($claims->userId, 'usage_refresh');
     }
 

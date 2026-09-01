@@ -62,7 +62,7 @@ foreach ($wanted as $fn) {
 }
 eval(
     'namespace ShareRoutes;' .
-    'use FluxFiles\ApiException; use FluxFiles\DiskManager; use FluxFiles\RateLimiterFileStorage;' .
+    'use FluxFiles\ApiException; use FluxFiles\DiskManager; use FluxFiles\RateLimiterFileStorage; use FluxFiles\RateLimiterFactory; use FluxFiles\RateLimiterStorageInterface;' .
     // Header sink: shadows the builtin for the extracted code only (namespace fallback).
     'function header(string $h, bool $replace = true, int $code = 0): void { $GLOBALS["ff_headers"][] = [$h, $code]; }' .
     $code

@@ -27,7 +27,8 @@ declare(strict_types=1);
 use FluxFiles\ApiException;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
-use FluxFiles\RateLimiterFileStorage;
+use FluxFiles\RateLimiterFactory;
+use FluxFiles\RateLimiterStorageInterface;
 use FluxFiles\StorageMetadataHandler;
 
 /**
@@ -459,10 +460,9 @@ function ff_content_disposition(string $name, bool $inline): string
  */
 function ff_share_rate_limit(string $token, string $kind): void
 {
-    $storagePath = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
     $jti = ff_share_token_jti($token);
-    $limiter = static function (int $limit) use ($storagePath): RateLimiterFileStorage {
-        return new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit, 60);
+    $limiter = static function (int $limit): RateLimiterStorageInterface {
+        return RateLimiterFactory::make($limit, $limit, 60);
     };
 
     if ($kind === 'unlock') {
@@ -496,10 +496,9 @@ function ff_share_rate_limit(string $token, string $kind): void
  */
 function ff_intake_rate_limit(string $token, string $kind): void
 {
-    $storagePath = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
     $jti = ff_share_token_jti($token);
-    $limiter = static function (int $limit) use ($storagePath): RateLimiterFileStorage {
-        return new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit, 60);
+    $limiter = static function (int $limit): RateLimiterStorageInterface {
+        return RateLimiterFactory::make($limit, $limit, 60);
     };
 
     if ($kind === 'upload') {
@@ -525,10 +524,9 @@ function ff_intake_rate_limit(string $token, string $kind): void
  */
 function ff_sso_rate_limit(string $kind): void
 {
-    $storagePath = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
     $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
-    $limiter = static function (int $limit) use ($storagePath): RateLimiterFileStorage {
-        return new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit, 60);
+    $limiter = static function (int $limit): RateLimiterStorageInterface {
+        return RateLimiterFactory::make($limit, $limit, 60);
     };
 
     $limits = [

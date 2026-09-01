@@ -3,11 +3,11 @@
 /**
  * Interface-conformance guard for MetadataRepositoryInterface.
  *
- * Reflects over the interface and asserts StorageMetadataHandler implements every
+ * Reflects over the interface and asserts every implementer (StorageMetadataHandler,
+ * the JSON/file backend; DbMetadataHandler, the SQL backend) implements every
  * declared method with a matching signature (param types + count + return type).
- * Cheap regression guard against the interface and its only implementer drifting
- * apart — see docs/DB-STORAGE-MIGRATION-DESIGN.md §2/§12 (contract-test seed for a
- * future second implementer).
+ * Cheap regression guard against the interface and its implementers drifting
+ * apart — see docs/DB-STORAGE-MIGRATION-DESIGN.md §2/§12.
  *
  * Usage: php packages/core/tests/unit/test-metadata-repository-interface.php
  */
@@ -58,42 +58,51 @@ function returnSignature(\ReflectionMethod $m): string
     return ($type->allowsNull() ? '?' : '') . $type->getName();
 }
 
-echo "\n{$cyan}══ MetadataRepositoryInterface ↔ StorageMetadataHandler conformance ══{$reset}\n\n";
+echo "\n{$cyan}══ MetadataRepositoryInterface ↔ implementers conformance ══{$reset}\n\n";
 
 $iface = new \ReflectionClass(\FluxFiles\MetadataRepositoryInterface::class);
-$impl  = new \ReflectionClass(\FluxFiles\StorageMetadataHandler::class);
-
-test('StorageMetadataHandler implements MetadataRepositoryInterface', function () use ($impl) {
-    if (!$impl->implementsInterface(\FluxFiles\MetadataRepositoryInterface::class)) {
-        throw new \RuntimeException('StorageMetadataHandler does not implement MetadataRepositoryInterface');
-    }
-});
 
 $ifaceMethods = $iface->getMethods();
 if (count($ifaceMethods) === 0) {
     throw new \RuntimeException('MetadataRepositoryInterface declares no methods — something is very wrong');
 }
 
-foreach ($ifaceMethods as $ifaceMethod) {
-    $name = $ifaceMethod->getName();
-    test("signature matches for {$name}()", function () use ($impl, $ifaceMethod, $name) {
-        if (!$impl->hasMethod($name)) {
-            throw new \RuntimeException("StorageMetadataHandler is missing method {$name}()");
-        }
-        $implMethod = $impl->getMethod($name);
+$implClasses = [
+    \FluxFiles\StorageMetadataHandler::class,
+    \FluxFiles\Db\DbMetadataHandler::class,
+];
 
-        $ifaceParams = paramSignature($ifaceMethod);
-        $implParams  = paramSignature($implMethod);
-        if ($ifaceParams !== $implParams) {
-            throw new \RuntimeException("param mismatch: interface({$ifaceParams}) vs impl({$implParams})");
-        }
+foreach ($implClasses as $implClass) {
+    echo "  {$cyan}-- {$implClass} --{$reset}\n";
+    $impl = new \ReflectionClass($implClass);
 
-        $ifaceReturn = returnSignature($ifaceMethod);
-        $implReturn  = returnSignature($implMethod);
-        if ($ifaceReturn !== $implReturn) {
-            throw new \RuntimeException("return type mismatch: interface({$ifaceReturn}) vs impl({$implReturn})");
+    test("{$implClass} implements MetadataRepositoryInterface", function () use ($impl) {
+        if (!$impl->implementsInterface(\FluxFiles\MetadataRepositoryInterface::class)) {
+            throw new \RuntimeException("{$impl->getName()} does not implement MetadataRepositoryInterface");
         }
     });
+
+    foreach ($ifaceMethods as $ifaceMethod) {
+        $name = $ifaceMethod->getName();
+        test("signature matches for {$name}()", function () use ($impl, $ifaceMethod, $name) {
+            if (!$impl->hasMethod($name)) {
+                throw new \RuntimeException("{$impl->getName()} is missing method {$name}()");
+            }
+            $implMethod = $impl->getMethod($name);
+
+            $ifaceParams = paramSignature($ifaceMethod);
+            $implParams  = paramSignature($implMethod);
+            if ($ifaceParams !== $implParams) {
+                throw new \RuntimeException("param mismatch: interface({$ifaceParams}) vs impl({$implParams})");
+            }
+
+            $ifaceReturn = returnSignature($ifaceMethod);
+            $implReturn  = returnSignature($implMethod);
+            if ($ifaceReturn !== $implReturn) {
+                throw new \RuntimeException("return type mismatch: interface({$ifaceReturn}) vs impl({$implReturn})");
+            }
+        });
+    }
 }
 
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";

@@ -216,6 +216,10 @@ All four accept the same `claims` map.
 |---|---|---|
 | `FLUXFILES_SECRET` | — | **Required.** HS256 signing secret (**≥ 32 bytes**) — also used for stream/img per-file tokens. |
 | `FLUXFILES_STORAGE_PATH` | — | Local disk root. |
+| `FLUXFILES_STORAGE_BACKEND` | `json` | `json` (unchanged default — metadata/search/folder-index/audit/trash/rate-limits live in `_fluxfiles/*.json` incl. `rate_limit.json`) or `db` (the same data lives in the configured database instead — one switch drives both `MetadataRepositoryInterface` and `RateLimiterStorageInterface`). Quota **enforcement** always uses a live storage scan regardless of this setting. |
+| `FLUXFILES_DB_DSN` | — | PDO DSN for the `db` backend, e.g. `sqlite:/var/www/fluxfiles/storage/fluxfiles.sqlite3`, `mysql:host=127.0.0.1;dbname=fluxfiles;charset=utf8mb4`, `pgsql:host=127.0.0.1;dbname=fluxfiles`. Required when `FLUXFILES_STORAGE_BACKEND=db`. |
+| `FLUXFILES_DB_USER` / `FLUXFILES_DB_PASSWORD` | — | Credentials for `FLUXFILES_DB_DSN` (ignored for SQLite). |
+| `FLUXFILES_DB_AUTO_MIGRATE` | `false` | `true` runs pending core migrations automatically on boot (dev convenience). Production should run `php scripts/fluxfiles-migrate.php` explicitly during deploy. |
 | `FLUXFILES_ALLOWED_ORIGINS` | — | CORS allow-list for the embed. |
 | `FLUXFILES_LOCALE` | `en` | Default UI locale. |
 | `FLUXFILES_RATE_LIMIT_READ` / `_WRITE` | 60 / 10 | Per-user req/min defaults (claims override). |

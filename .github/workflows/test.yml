@@ -32,7 +32,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_sqlite
           coverage: none
 
       # Write a real .env so dotenv loads the secret into $_ENV regardless of the
@@ -314,6 +314,98 @@ jobs:
       - name: MinIO log on failure
         if: failure()
         run: docker logs minio || true
+
+  db-mysql:
+    name: DB backend (MySQL)
+    runs-on: ubuntu-latest
+    # Unlike atmoz/sftp and minio/minio, mysql:8's default CMD already starts the
+    # server correctly, so a native `services:` container (with a health check
+    # GitHub Actions waits on before running steps) is the better fit here — no
+    # manual `docker run` + polling loop needed.
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: fluxfiles_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_mysql
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - name: Run DB metadata suite against MySQL
+        working-directory: packages/core
+        env:
+          FXTEST_DB_MYSQL_DSN: 'mysql:host=127.0.0.1;port=3306;dbname=fluxfiles_test;charset=utf8mb4'
+          FXTEST_DB_MYSQL_USER: root
+          FXTEST_DB_MYSQL_PASSWORD: root
+        run: php tests/unit/test-db-metadata-mysql.php
+
+      - name: MySQL container log on failure
+        if: failure()
+        run: docker logs $(docker ps -q --filter ancestor=mysql:8) 2>&1 | tail -50 || true
+
+  db-postgres:
+    name: DB backend (PostgreSQL)
+    runs-on: ubuntu-latest
+    # Same rationale as db-mysql: postgres:16's default CMD already starts the
+    # server correctly, so `services:` fits without a manual docker run.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fluxfiles_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_pgsql
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - name: Run DB metadata suite against PostgreSQL
+        working-directory: packages/core
+        env:
+          FXTEST_DB_PGSQL_DSN: 'pgsql:host=127.0.0.1;port=5432;dbname=fluxfiles_test'
+          FXTEST_DB_PGSQL_USER: postgres
+          FXTEST_DB_PGSQL_PASSWORD: postgres
+        run: php tests/unit/test-db-metadata-pgsql.php
+
+      - name: PostgreSQL container log on failure
+        if: failure()
+        run: docker logs $(docker ps -q --filter ancestor=postgres:16) 2>&1 | tail -50 || true
 
   wrappers:
     name: Wrapper (${{ matrix.pkg }})
