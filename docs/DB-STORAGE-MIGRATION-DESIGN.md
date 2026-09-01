@@ -566,6 +566,16 @@ stateless request model).
 
 ## 5. Laravel integration
 
+> **Implemented** (config/migration/handler/controller-wiring/composer floor
+> + tests). The `fluxfiles:migrate-json-to-db` command below is **deferred**
+> until §9's `\FluxFiles\Db\JsonToDbMigrator` actually exists — everything
+> else in this section shipped as described. `LaravelDbMetadataHandler`'s
+> constructor takes `DiskManager` as its first argument
+> (`__construct(DiskManager $diskManager, ?string $connection = null)`), not
+> shown in the §5 code snippet below, because `countChildren()` walks live
+> Flysystem storage rather than querying the DB (same as core's handler) and
+> needs a disk to walk.
+
 - `packages/laravel/config/fluxfiles.php` gains:
   ```php
   'storage_backend'  => env('FLUXFILES_STORAGE_BACKEND', 'json'),
@@ -1193,7 +1203,12 @@ Everything the task's decisions already settled is treated as settled above
 
 ## Status
 
-**Proposed — not yet implemented.** This document is the design; §2's
-interface-widening refactor is the correct first implementation PR (it has
-value — and is testable — independent of any DB backend existing yet), with
-§4/§5/§6's handlers following once it lands.
+**§2 (interface widening), §3/§3.7 (schema, incl. the DB-backed rate
+limiter), §4 (core standalone DB abstraction layer), and §5 (Laravel
+integration) are implemented** — §2-§4 in commits `707db11`/`cafcc84`,
+tagged `core-v0.2.79`; §5 as the Laravel adapter's `db` storage-backend
+option (`LaravelDbMetadataHandler`, native Schema Builder migration,
+`packages/laravel/tests/test-laravel-db-metadata.php`). §6 (WordPress),
+§7/§8 (export/import + S3 breadcrumb), and §9 (`JsonToDbMigrator` +
+`migrate-json-to-db` commands, which both §5's and core's own CLI migration
+command wrap) remain **proposed — not yet implemented**.

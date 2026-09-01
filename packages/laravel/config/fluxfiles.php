@@ -27,6 +27,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Storage Backend
+    |--------------------------------------------------------------------------
+    |
+    | "json" — metadata/search/folder-index/trash/audit live in the storage
+    |          disk's own `_fluxfiles/*.json` sidecars (default, matches core
+    |          standalone's default).
+    | "db"   — the same data lives in your Laravel app's database, via
+    |          LaravelDbMetadataHandler + the fluxfiles_* tables published by
+    |          `php artisan vendor:publish --tag=fluxfiles-migrations`.
+    | `db_connection` lets FluxFiles' tables live on a different named
+    | connection (config/database.php) than your app's default; null = the
+    | app's default connection.
+    |
+    */
+    'storage_backend' => env('FLUXFILES_STORAGE_BACKEND', 'json'),
+    'db_connection'   => env('FLUXFILES_DB_CONNECTION', null),
+
+    /*
+    |--------------------------------------------------------------------------
     | Mode
     |--------------------------------------------------------------------------
     |

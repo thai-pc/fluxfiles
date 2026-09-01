@@ -41,6 +41,11 @@ class FluxFilesServiceProvider extends ServiceProvider
             __DIR__ . '/Views' => resource_path('views/vendor/fluxfiles'),
         ], 'fluxfiles-views');
 
+        // Publish the DB storage-backend migration (FLUXFILES_STORAGE_BACKEND=db).
+        $this->publishes([
+            __DIR__ . '/../database/migrations' => database_path('migrations'),
+        ], 'fluxfiles-migrations');
+
         // Register Blade component
         Blade::component('fluxfiles', \FluxFiles\Laravel\Views\Components\FluxFiles::class);
 

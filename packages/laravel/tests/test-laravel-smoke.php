@@ -485,6 +485,23 @@ test('stream/img raw-byte responses exit instead of returning (no Laravel defaul
     assertTrue(!preg_match('/\breturn;/', $imgBody), 'img() has no bare return; (must exit)');
 });
 
+test('controller branches metadata backend on fluxfiles.storage_backend', function () {
+    // db mode = 4-table SQL backend (fluxfiles_*), added alongside core's own
+    // DB storage backend (core-v0.2.79) — see LaravelDbMetadataHandler.
+    $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(strpos($ctrlSrc, "config('fluxfiles.storage_backend') === 'db'") !== false, 'constructor checks storage_backend');
+    assertTrue(strpos($ctrlSrc, 'LaravelDbMetadataHandler(') !== false, 'constructor can build LaravelDbMetadataHandler');
+    assertTrue(strpos($ctrlSrc, "use FluxFiles\\Laravel\\LaravelDbMetadataHandler;") !== false, 'imports LaravelDbMetadataHandler');
+
+    $cfg = require __DIR__ . '/../config/fluxfiles.php';
+    assertTrue(array_key_exists('storage_backend', $cfg), "config has 'storage_backend'");
+    assertTrue(array_key_exists('db_connection', $cfg), "config has 'db_connection'");
+    assertEqual('json', $cfg['storage_backend'], 'storage_backend defaults to json');
+
+    $provSrc = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    assertTrue(strpos($provSrc, "'fluxfiles-migrations'") !== false, 'ServiceProvider publishes the migrations tag');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

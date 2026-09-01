@@ -11,6 +11,7 @@ use FluxFiles\ChunkUploader;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
+use FluxFiles\Laravel\LaravelDbMetadataHandler;
 use FluxFiles\MetadataRepositoryInterface;
 use FluxFiles\QuotaManager;
 use FluxFiles\RateLimiterFileStorage;
@@ -34,7 +35,9 @@ class FluxFilesController
 
         $diskConfigs = config('fluxfiles.disks');
         $this->diskManager = new DiskManager($diskConfigs);
-        $this->metaRepo = new StorageMetadataHandler($this->diskManager);
+        $this->metaRepo = config('fluxfiles.storage_backend') === 'db'
+            ? new LaravelDbMetadataHandler($this->diskManager, config('fluxfiles.db_connection'))
+            : new StorageMetadataHandler($this->diskManager);
     }
 
     /**
