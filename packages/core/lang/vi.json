@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "Không thể kết nối tới nhà cung cấp danh tính. Vui lòng thử lại sau.",
     "sso_misconfigured": "Đăng nhập một lần (SSO) chưa được cấu hình đúng trên máy chủ này.",
     "sso_no_mapping": "Tài khoản của bạn chưa được gán vào nhóm nào có quyền truy cập. Vui lòng liên hệ quản trị viên.",
-    "sso_state_token_invalid": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+    "sso_state_token_invalid": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+    "metadata_export_unavailable": "Xuất siêu dữ liệu yêu cầu backend lưu trữ cơ sở dữ liệu.",
+    "metadata_import_unavailable": "Nhập siêu dữ liệu yêu cầu backend lưu trữ cơ sở dữ liệu.",
+    "metadata_import_rejected": "Nhập bị từ chối — một hoặc nhiều dòng nằm ngoài phạm vi cho phép."
   },
   "presign": {
     "title": "URL có thời hạn",

@@ -1263,5 +1263,29 @@ write volume on re-runs, never correctness.
 > the dependency through Composer's real vendor tree rather than the
 > monorepo's local core.
 
-§7/§8 (export/import + S3 breadcrumb) remain **proposed — not yet
-implemented**.
+**§7 (export/import tooling) is implemented** — `\FluxFiles\Db\MetadataExporter`
+(generator-based `rows()` + format-agnostic `streamTo()`, never buffers a full
+disk) and `\FluxFiles\Db\MetadataImporter` (two-pass: validates every entry's
+`path` against the caller's scope *before* writing any row, then writes the
+whole batch inside one `Connection::beginExclusive()`/`commit()` transaction —
+true all-or-nothing), both in `packages/core/api/Db/`, working directly
+against the SQL table rather than through `MetadataRepositoryInterface` since
+the export row shape (incl. `object_uuid`) is DB-specific. Exposed as
+`GET /api/fm/metadata/export?disk=&prefix=&format=ndjson|csv` (read perm,
+respects the caller's own `pathPrefix`/`owner_only` — per-tenant, not
+admin-only) and `POST /api/fm/metadata/import {disk, entries[]}` (write perm,
+`422 metadata_import_rejected` with a per-row error list on any out-of-scope
+entry), gated `501` when `FLUXFILES_STORAGE_BACKEND` isn't `db`. CLI mirrors
+`scripts/export-metadata.php` / `scripts/import-metadata.php` are thin
+wrappers over the same two classes — one implementation, two entry points,
+matching §9's migrator. Covered by
+`packages/core/tests/unit/test-metadata-export-import.php` (9 tests,
+including an export→import round trip and a regression test proving an
+earlier in-scope row is *not* written when a later row in the same batch
+fails validation). New error codes (`metadata_export_unavailable`,
+`metadata_import_unavailable`, `metadata_import_rejected`) are translated in
+all 16 `lang/*.json` locales. Core-standalone only — not ported into the
+Laravel/WordPress proxy controllers, since the DB storage backend they'd
+operate on is a core-only mode for those adapters at present.
+
+§8 (S3/R2 breadcrumb) remains **proposed — not yet implemented**.

@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "No se pudo conectar con el proveedor de identidad. Inténtelo de nuevo en breve.",
     "sso_misconfigured": "El inicio de sesión único (SSO) no está configurado correctamente en este servidor.",
     "sso_no_mapping": "Su cuenta no está asignada a ningún grupo con acceso. Contacte a su administrador.",
-    "sso_state_token_invalid": "Su sesión de inicio de sesión ha caducado. Vuelva a iniciar sesión."
+    "sso_state_token_invalid": "Su sesión de inicio de sesión ha caducado. Vuelva a iniciar sesión.",
+    "metadata_export_unavailable": "La exportación de metadatos requiere el backend de almacenamiento en base de datos.",
+    "metadata_import_unavailable": "La importación de metadatos requiere el backend de almacenamiento en base de datos.",
+    "metadata_import_rejected": "Importación rechazada: una o más filas están fuera del ámbito permitido."
   },
   "presign": {
     "title": "URL prefirmada",

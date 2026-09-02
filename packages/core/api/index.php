@@ -664,6 +664,67 @@ function routeRequest(
         return handleDeleteMetadata($metaRepo, $claims, $fm);
     }
 
+    // Metadata export/import (FREE/core, DB backend only) — bulk backup/restore
+    // for FLUXFILES_STORAGE_BACKEND=db (docs/DB-STORAGE-MIGRATION-DESIGN.md §7).
+    // Per-tenant, not admin-only: a scoped token exports/imports only its own
+    // pathPrefix/owner, the same trust model as every other disk-scoped route —
+    // unlike /audit/purge, this data belongs to the tenant, not the whole disk.
+    if ($method === 'GET' && $uri === '/api/fm/metadata/export') {
+        if (!$claims->hasPerm('read')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        if ($dbConn === null) {
+            throw new ApiException('Metadata export requires FLUXFILES_STORAGE_BACKEND=db', 501, 'metadata_export_unavailable');
+        }
+        $disk = (string) ($_GET['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        $requestedPrefix = trim((string) ($_GET['prefix'] ?? ''), '/');
+        $tenantPrefix = trim($claims->pathPrefix, '/');
+        if ($requestedPrefix !== '' && !$claims->isPathInScope($requestedPrefix)) {
+            throw new ApiException('Prefix out of scope', 403, 'forbidden');
+        }
+        // A scoped token's tenantPrefix always wins — an unscoped token may
+        // additionally narrow itself via ?prefix=, but a scoped one cannot widen.
+        $effectivePrefix = $tenantPrefix !== '' ? $tenantPrefix : $requestedPrefix;
+        $ownerFilter = $claims->ownerOnly ? $claims->userId : null;
+        $format = ((string) ($_GET['format'] ?? 'ndjson')) === 'csv' ? 'csv' : 'ndjson';
+
+        $exporter = new \FluxFiles\Db\MetadataExporter($dbConn);
+        $filename = 'metadata-export-' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $disk) . '.' . $format;
+        header('Content-Type: ' . ($format === 'csv' ? 'text/csv' : 'application/x-ndjson') . '; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $out = fopen('php://output', 'w');
+        $exporter->streamTo($out, $disk, $format, $effectivePrefix, $ownerFilter);
+        fclose($out);
+        exit;
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/metadata/import') {
+        if (!$claims->hasPerm('write')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        if ($dbConn === null) {
+            throw new ApiException('Metadata import requires FLUXFILES_STORAGE_BACKEND=db', 501, 'metadata_import_unavailable');
+        }
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $disk = (string) ($body['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        $entries = is_array($body['entries'] ?? null) ? $body['entries'] : [];
+        if ($entries === []) {
+            throw new ApiException('entries must be a non-empty array', 400, 'missing_param');
+        }
+        $importer = new \FluxFiles\Db\MetadataImporter($dbConn);
+        $result = $importer->import($disk, $entries, fn(string $path) => $claims->isPathInScope($path));
+        if ($result['errors'] !== []) {
+            throw new ApiException('Import rejected — one or more rows are out of scope', 422, 'metadata_import_rejected', ['errors' => $result['errors']]);
+        }
+        return $result;
+    }
+
     // License — the server's commercial edition/status (non-sensitive summary),
     // so a dashboard can show edition + expiry. Free core → {edition:'free'}.
     if ($method === 'GET' && $uri === '/api/fm/license') {

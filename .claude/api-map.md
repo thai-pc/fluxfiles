@@ -108,6 +108,9 @@ supported; folders move the whole subtree incl. variants. All gated by the
 
 - `DELETE /api/fm/metadata`
   - JSON body: `disk`, `key`.
+
+- `GET /api/fm/metadata/export?disk=&prefix=&format=ndjson|csv` / `POST /api/fm/metadata/import {disk, entries[]}`
+  - Bulk backup/restore of `file_metadata` rows for the DB storage backend (`FLUXFILES_STORAGE_BACKEND=db`, `docs/DB-STORAGE-MIGRATION-DESIGN.md` §7). **Free/core, not a paid module** — unlike the neighboring `audit/export`/`audit/purge` entries below. `501` when the backend isn't `db`. Per-tenant, not admin-only: export respects the caller's own `pathPrefix`/`owner_only` scope (read perm; a scoped token cannot widen itself via `?prefix=`); import validates every entry's `path` against `Claims::isPathInScope()` **before writing any row** — one out-of-scope row rejects the whole batch (write perm, `422 metadata_import_rejected` with a per-row `error_params.errors` list). CLI mirrors: `scripts/export-metadata.php` / `scripts/import-metadata.php` (direct DB access, no JWT scope). Core-standalone only — not ported into the Laravel/WordPress proxy controllers (DB backend is a core-only storage mode).
 - `GET /api/fm/chmod?disk=&path=` / `POST /api/fm/chmod {disk, path, mode}`
   - SFTP file permissions (cPanel-style). GET reads the 3-digit octal mode (read perm); POST sets it (write perm + `allow_chmod` claim, default true; octal `0?[0-7]{3}`, not recursive). SFTP-only (non-SFTP disk → 400). Core-standalone (the Laravel/WP proxies don't expose SFTP as a disk driver at all, unrelated to why `/stream`/`/img` were once unproxied).
 - `POST /api/fm/zip {disk, paths[], name?}`

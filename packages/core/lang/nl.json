@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "Kan geen verbinding maken met de identiteitsprovider. Probeer het straks opnieuw.",
     "sso_misconfigured": "Single sign-on is niet correct geconfigureerd op deze server.",
     "sso_no_mapping": "Uw account is niet toegewezen aan een groep met toegang. Neem contact op met uw beheerder.",
-    "sso_state_token_invalid": "Uw aanmeldsessie is verlopen. Meld u opnieuw aan."
+    "sso_state_token_invalid": "Uw aanmeldsessie is verlopen. Meld u opnieuw aan.",
+    "metadata_export_unavailable": "Metadata-export vereist de database-opslag-backend.",
+    "metadata_import_unavailable": "Metadata-import vereist de database-opslag-backend.",
+    "metadata_import_rejected": "Import geweigerd — een of meer rijen vallen buiten het toegestane bereik."
   },
   "presign": {
     "title": "Voorondertekende URL",

@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "Kimlik sağlayıcısına ulaşılamadı. Lütfen kısa süre sonra tekrar deneyin.",
     "sso_misconfigured": "Bu sunucuda tek oturum açma (SSO) doğru şekilde yapılandırılmamış.",
     "sso_no_mapping": "Hesabınız erişimi olan hiçbir gruba atanmamış. Lütfen yöneticinizle iletişime geçin.",
-    "sso_state_token_invalid": "Oturum açma oturumunuzun süresi doldu. Lütfen tekrar oturum açın."
+    "sso_state_token_invalid": "Oturum açma oturumunuzun süresi doldu. Lütfen tekrar oturum açın.",
+    "metadata_export_unavailable": "Meta veri dışa aktarma, veritabanı depolama arka ucunu gerektirir.",
+    "metadata_import_unavailable": "Meta veri içe aktarma, veritabanı depolama arka ucunu gerektirir.",
+    "metadata_import_rejected": "İçe aktarma reddedildi — bir veya daha fazla satır izin verilen kapsamın dışında."
   },
   "presign": {
     "title": "Ön imzalı URL",

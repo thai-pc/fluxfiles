@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "IDプロバイダーに接続できませんでした。しばらくしてから再試行してください。",
     "sso_misconfigured": "このサーバーではシングルサインオンが正しく設定されていません。",
     "sso_no_mapping": "あなたのアカウントはアクセス権を持つどのグループにも割り当てられていません。管理者にお問い合わせください。",
-    "sso_state_token_invalid": "サインインセッションの有効期限が切れました。再度サインインしてください。"
+    "sso_state_token_invalid": "サインインセッションの有効期限が切れました。再度サインインしてください。",
+    "metadata_export_unavailable": "メタデータのエクスポートにはデータベースストレージバックエンドが必要です。",
+    "metadata_import_unavailable": "メタデータのインポートにはデータベースストレージバックエンドが必要です。",
+    "metadata_import_rejected": "インポートが拒否されました — 1行以上が許可範囲外です。"
   },
   "presign": {
     "title": "署名付きURL",

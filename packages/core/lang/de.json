@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "Der Identitätsanbieter konnte nicht erreicht werden. Bitte versuchen Sie es in Kürze erneut.",
     "sso_misconfigured": "Single Sign-on ist auf diesem Server nicht korrekt konfiguriert.",
     "sso_no_mapping": "Ihrem Konto ist keine Gruppe mit Zugriff zugewiesen. Wenden Sie sich an Ihren Administrator.",
-    "sso_state_token_invalid": "Ihre Anmeldesitzung ist abgelaufen. Bitte melden Sie sich erneut an."
+    "sso_state_token_invalid": "Ihre Anmeldesitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
+    "metadata_export_unavailable": "Der Metadaten-Export erfordert das Datenbank-Speicher-Backend.",
+    "metadata_import_unavailable": "Der Metadaten-Import erfordert das Datenbank-Speicher-Backend.",
+    "metadata_import_rejected": "Import abgelehnt — eine oder mehrere Zeilen liegen außerhalb des Geltungsbereichs."
   },
   "presign": {
     "title": "Vorsignierte URL",

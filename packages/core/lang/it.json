@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "Impossibile contattare il provider di identità. Riprova a breve.",
     "sso_misconfigured": "Il Single Sign-On non è configurato correttamente su questo server.",
     "sso_no_mapping": "Il tuo account non è assegnato a nessun gruppo con accesso. Contatta il tuo amministratore.",
-    "sso_state_token_invalid": "La sessione di accesso è scaduta. Effettua nuovamente l'accesso."
+    "sso_state_token_invalid": "La sessione di accesso è scaduta. Effettua nuovamente l'accesso.",
+    "metadata_export_unavailable": "L'esportazione dei metadati richiede il backend di archiviazione su database.",
+    "metadata_import_unavailable": "L'importazione dei metadati richiede il backend di archiviazione su database.",
+    "metadata_import_rejected": "Importazione rifiutata — una o più righe sono fuori dall'ambito consentito."
   },
   "presign": {
     "title": "URL prefirmato",

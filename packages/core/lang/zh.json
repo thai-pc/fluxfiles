@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "无法连接到身份提供商，请稍后重试。",
     "sso_misconfigured": "此服务器上的单点登录（SSO）配置不正确。",
     "sso_no_mapping": "您的账户未分配到任何有访问权限的组，请联系管理员。",
-    "sso_state_token_invalid": "您的登录会话已过期，请重新登录。"
+    "sso_state_token_invalid": "您的登录会话已过期，请重新登录。",
+    "metadata_export_unavailable": "元数据导出需要数据库存储后端。",
+    "metadata_import_unavailable": "元数据导入需要数据库存储后端。",
+    "metadata_import_rejected": "导入被拒绝——一行或多行超出了允许的范围。"
   },
   "presign": {
     "title": "预签名链接",

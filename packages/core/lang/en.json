@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "Could not reach the identity provider. Please try again shortly.",
     "sso_misconfigured": "Single sign-on is not configured correctly on this server.",
     "sso_no_mapping": "Your account isn't assigned to any group with access. Contact your administrator.",
-    "sso_state_token_invalid": "Your sign-in session has expired. Please sign in again."
+    "sso_state_token_invalid": "Your sign-in session has expired. Please sign in again.",
+    "metadata_export_unavailable": "Metadata export requires the database storage backend.",
+    "metadata_import_unavailable": "Metadata import requires the database storage backend.",
+    "metadata_import_rejected": "Import rejected — one or more rows are out of scope."
   },
   "presign": {
     "title": "Presigned URL",

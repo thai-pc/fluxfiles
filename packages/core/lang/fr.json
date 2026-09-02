@@ -349,7 +349,10 @@
     "sso_idp_unreachable": "Impossible de joindre le fournisseur d'identité. Veuillez réessayer sous peu.",
     "sso_misconfigured": "L'authentification unique (SSO) n'est pas configurée correctement sur ce serveur.",
     "sso_no_mapping": "Votre compte n'est assigné à aucun groupe disposant d'un accès. Contactez votre administrateur.",
-    "sso_state_token_invalid": "Votre session de connexion a expiré. Veuillez vous reconnecter."
+    "sso_state_token_invalid": "Votre session de connexion a expiré. Veuillez vous reconnecter.",
+    "metadata_export_unavailable": "L'exportation des métadonnées nécessite le backend de stockage en base de données.",
+    "metadata_import_unavailable": "L'importation des métadonnées nécessite le backend de stockage en base de données.",
+    "metadata_import_rejected": "Importation refusée — une ou plusieurs lignes sont hors de portée."
   },
   "presign": {
     "title": "URL présignée",
