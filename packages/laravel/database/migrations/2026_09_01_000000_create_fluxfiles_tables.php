@@ -29,6 +29,23 @@ return new class extends Migration
         $conn->statement("CREATE INDEX {$indexName} ON {$table} (disk, {$col})");
     }
 
+    /**
+     * MySQL's default collation (utf8mb4_general_ci/utf8mb4_unicode_ci) is
+     * case-insensitive, which would make path equality/LIKE lookups
+     * case-insensitive too — diverging from core's schema, where `path` is
+     * explicitly COLLATE utf8mb4_bin because path_hash is a SHA-256 of the
+     * exact byte string and path comparisons must be exact-match.
+     * SQLite/Postgres columns are already case-sensitive by default.
+     */
+    private function forceBinaryPathCollation(?string $connection, string $table): void
+    {
+        $conn = DB::connection($connection);
+        if ($conn->getDriverName() !== 'mysql') {
+            return;
+        }
+        $conn->statement("ALTER TABLE {$table} MODIFY path TEXT COLLATE utf8mb4_bin");
+    }
+
     public function up(): void
     {
         $connection = config('fluxfiles.db_connection');
@@ -59,6 +76,7 @@ return new class extends Migration
             $table->index(['disk', 'file_hash'], 'idx_file_metadata_disk_file_hash');
         });
         $this->createPathIndex($connection, 'fluxfiles_file_metadata');
+        $this->forceBinaryPathCollation($connection, 'fluxfiles_file_metadata');
 
         Schema::connection($connection)->create('fluxfiles_directories', function (Blueprint $table) {
             $table->id();
@@ -70,6 +88,7 @@ return new class extends Migration
             $table->unique(['disk', 'path_hash'], 'idx_directories_disk_path_hash');
         });
         $this->createPathIndex($connection, 'fluxfiles_directories');
+        $this->forceBinaryPathCollation($connection, 'fluxfiles_directories');
 
         Schema::connection($connection)->create('fluxfiles_trash', function (Blueprint $table) {
             $table->string('disk', 64);
