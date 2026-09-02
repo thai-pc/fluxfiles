@@ -32,7 +32,9 @@ class FluxFilesApi
         }
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
-        $this->metaRepo = new StorageMetadataHandler($this->diskManager);
+        $this->metaRepo = get_option('fluxfiles_storage_backend', 'json') === 'db'
+            ? new WpDbMetadataHandler($this->diskManager)
+            : new StorageMetadataHandler($this->diskManager);
     }
 
     // -------------------------------------------------------------------------

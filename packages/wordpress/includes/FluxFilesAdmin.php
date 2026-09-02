@@ -71,6 +71,29 @@ class FluxFilesAdmin
             'sanitize_callback' => 'absint',
         ]);
 
+        // Storage backend section
+        add_settings_section(
+            'fluxfiles_storage',
+            'Storage Backend',
+            function () {
+                echo '<p>Where file metadata (titles, tags, folder index, trash, audit log) is stored.</p>';
+            },
+            'fluxfiles'
+        );
+
+        register_setting('fluxfiles', 'fluxfiles_storage_backend', [
+            'type' => 'string',
+            'sanitize_callback' => static fn ($v) => $v === 'db' ? 'db' : 'json',
+            'default' => 'json',
+        ]);
+        add_settings_field(
+            'fluxfiles_storage_backend',
+            'Storage backend',
+            [$this, 'renderStorageBackendField'],
+            'fluxfiles',
+            'fluxfiles_storage'
+        );
+
         // ── Licence ─────────────────────────────────────────────────────────
         // Without this a WordPress customer has no way to activate what they bought:
         // the core reads the key from the environment, which shared hosting does not
@@ -371,6 +394,23 @@ class FluxFilesAdmin
             $on ? 'checked' : '',
             esc_html__('Register picked files as Media Library attachments served from your storage', 'fluxfiles'),
             esc_html__('One plugin instead of three: files picked from FluxFiles become real WP attachments (offloaded to S3/R2/SFTP, URLs rewritten) — folders + cloud + offload in one.', 'fluxfiles')
+        );
+    }
+
+    public function renderStorageBackendField(): void
+    {
+        $current = get_option('fluxfiles_storage_backend', 'json');
+        printf(
+            '<select name="fluxfiles_storage_backend">'
+            . '<option value="json" %s>%s</option>'
+            . '<option value="db" %s>%s</option>'
+            . '</select>'
+            . '<p class="description">%s</p>',
+            selected($current, 'json', false),
+            esc_html__('JSON files (default)', 'fluxfiles'),
+            selected($current, 'db', false),
+            esc_html__('Database', 'fluxfiles'),
+            esc_html__('Database mode stores metadata/search/trash/audit in your WordPress database (wp_fluxfiles_* tables) — created automatically on activation and kept up to date after plugin updates.', 'fluxfiles')
         );
     }
 

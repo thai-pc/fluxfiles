@@ -358,6 +358,14 @@ jobs:
           FXTEST_DB_MYSQL_PASSWORD: root
         run: php tests/unit/test-db-metadata-mysql.php
 
+      - name: Run WordPress DB metadata suite against MySQL (stubbed wpdb, uses core autoload)
+        working-directory: packages/wordpress
+        env:
+          FXTEST_DB_MYSQL_DSN: 'mysql:host=127.0.0.1;port=3306;dbname=fluxfiles_test;charset=utf8mb4'
+          FXTEST_DB_MYSQL_USER: root
+          FXTEST_DB_MYSQL_PASSWORD: root
+        run: php tests/test-wp-db-metadata-mysql.php
+
       - name: MySQL container log on failure
         if: failure()
         run: docker logs $(docker ps -q --filter ancestor=mysql:8) 2>&1 | tail -50 || true

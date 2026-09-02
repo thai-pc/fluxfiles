@@ -75,6 +75,7 @@ if (!function_exists('add_query_arg')) {
     function add_query_arg($args, $url) { return $url . '?' . http_build_query($args); }
 }
 if (!defined('HOUR_IN_SECONDS')) { define('HOUR_IN_SECONDS', 3600); }
+if (!defined('ARRAY_A')) { define('ARRAY_A', 'ARRAY_A'); }
 if (!defined('FLUXFILES_PLUGIN_FILE')) { define('FLUXFILES_PLUGIN_FILE', __DIR__ . '/../fluxfiles.php'); }
 if (!defined('FLUXFILES_VERSION')) { define('FLUXFILES_VERSION', '0.2.41'); }
 if (!function_exists('plugins_url')) {
@@ -844,6 +845,177 @@ test('error(): ApiException params reach the REST response body (folder_exists �
     assertEqual(409, $second->get_status(), 'conflict status forwarded');
     assertEqual('folder_exists', $data['error_code'] ?? null, 'error_code present');
     assertEqual($dirName, $data['error_params']['name'] ?? null, 'error_params carried through');
+});
+
+// ── DB storage backend (WpDbMetadataHandler) ─────────────────────────────────
+// Fast/no-DB coverage of the SQL WpDbMetadataHandler builds, using a spy
+// `wpdb` that records every query() string and lets a test seed canned
+// get_row()/get_results()/get_var() responses. Mirrors the shape of
+// test-laravel-smoke.php's config-branch wiring check below, plus the SQL
+// generation itself since WordPress has no equivalent ORM-query-log fixture.
+require_once __DIR__ . '/../includes/WpDbMetadataHandler.php';
+
+class WpdbSpy
+{
+    public string $prefix = 'wp_';
+    public array $queries = [];
+    /** @var array<int, array|null> queue of canned get_row() results, consumed in order */
+    public array $rowQueue = [];
+    /** @var array<int, array> queue of canned get_results() results, consumed in order */
+    public array $resultsQueue = [];
+    /** @var array<int, mixed> queue of canned get_var() results, consumed in order */
+    public array $varQueue = [];
+
+    public function prepare(string $sql, $args)
+    {
+        $args = is_array($args) ? $args : array_slice(func_get_args(), 1);
+        $i = 0;
+        return preg_replace_callback('/%[sd]/', function () use (&$i, $args) {
+            $v = $args[$i++] ?? null;
+            return is_int($v) ? (string) $v : "'" . addslashes((string) $v) . "'";
+        }, $sql);
+    }
+
+    public function query(string $sql)
+    {
+        $this->queries[] = $sql;
+        return 1;
+    }
+
+    public function get_row(string $sql, $output = ARRAY_A)
+    {
+        $this->queries[] = $sql;
+        return array_shift($this->rowQueue);
+    }
+
+    public function get_results(string $sql, $output = ARRAY_A)
+    {
+        $this->queries[] = $sql;
+        return array_shift($this->resultsQueue) ?? [];
+    }
+
+    public function get_var(string $sql)
+    {
+        $this->queries[] = $sql;
+        return array_shift($this->varQueue);
+    }
+
+    public function get_charset_collate(): string
+    {
+        return 'DEFAULT CHARSET=utf8mb4';
+    }
+}
+
+function makeWpDbHandler(WpdbSpy $spy): WpDbMetadataHandler
+{
+    global $wpdb;
+    $wpdb = $spy;
+    return new WpDbMetadataHandler(new \FluxFiles\DiskManager([]));
+}
+
+test('WpDbMetadataHandler::save() upserts with ON DUPLICATE KEY UPDATE against the file_metadata table', function () {
+    $spy = new WpdbSpy();
+    $handler = makeWpDbHandler($spy);
+    $handler->save('local', 'a.txt', ['title' => 'A', 'uploaded_by' => 'u']);
+
+    $sql = implode(' ', $spy->queries);
+    assertTrue(str_contains($sql, 'ON DUPLICATE KEY UPDATE'), 'save() uses an upsert');
+    assertTrue(str_contains($sql, $spy->prefix . 'fluxfiles_file_metadata'), 'save() targets the prefixed file_metadata table');
+});
+
+test('WpDbMetadataHandler::save() keeps created_at sticky from the existing row, not the new call', function () {
+    $spy = new WpdbSpy();
+    $spy->rowQueue[] = ['id' => 1, 'title' => 'A', 'alt_text' => null, 'caption' => null, 'tags' => null,
+        'owner' => 'u', 'mime' => null, 'size' => null, 'width' => null, 'height' => null,
+        'created_at' => 1000, 'modified_at' => null, 'file_hash' => null];
+    $handler = makeWpDbHandler($spy);
+
+    $handler->save('local', 'a.txt', ['title' => 'A', 'uploaded_by' => 'u', 'created' => 2000]);
+
+    $sql = implode(' ', $spy->queries);
+    assertTrue(str_contains($sql, '1000'), 'sticky created_at (1000) reaches the SQL');
+    assertTrue(!str_contains($sql, '2000'), 'the new call\'s created (2000) must NOT override an existing created_at');
+});
+
+test('WpDbMetadataHandler::renameChildren() deletes the destination slot, then updates the source row', function () {
+    $spy = new WpdbSpy();
+    $spy->resultsQueue[] = [['id' => 5, 'path' => 'old/a.txt']];
+    $handler = makeWpDbHandler($spy);
+
+    $moved = $handler->renameChildren('local', 'old', 'new');
+
+    assertEqual(1, $moved);
+    $deleteIdx = null; $updateIdx = null;
+    foreach ($spy->queries as $i => $q) {
+        if ($deleteIdx === null && str_starts_with($q, 'DELETE FROM ' . $spy->prefix . 'fluxfiles_file_metadata WHERE disk')) {
+            $deleteIdx = $i;
+        }
+        if ($updateIdx === null && str_starts_with($q, 'UPDATE ' . $spy->prefix . 'fluxfiles_file_metadata SET path')) {
+            $updateIdx = $i;
+        }
+    }
+    assertTrue($deleteIdx !== null && $updateIdx !== null, 'both a DELETE (destination clear) and UPDATE (move) query ran');
+    assertTrue($deleteIdx < $updateIdx, 'DELETE (clear destination) must run before UPDATE (move source in) — source wins on collision');
+    assertTrue(in_array('START TRANSACTION', $spy->queries, true) && in_array('COMMIT', $spy->queries, true), 'wraps the move in a transaction');
+});
+
+test('WpDbMetadataHandler::renameDirPrefix() deletes the source unconditionally, then checks before inserting at the destination', function () {
+    $spy = new WpdbSpy();
+    $spy->resultsQueue[] = [['path' => 'old', 'path_hash' => hash('sha256', 'old')]];
+    $spy->varQueue[] = null; // destination does not already exist -> INSERT should run
+    $handler = makeWpDbHandler($spy);
+
+    $moved = $handler->renameDirPrefix('local', 'old', 'new');
+
+    assertEqual(1, $moved);
+    $deleteIdx = null; $selectIdx = null; $insertIdx = null;
+    foreach ($spy->queries as $i => $q) {
+        if ($deleteIdx === null && str_starts_with($q, 'DELETE FROM ' . $spy->prefix . 'fluxfiles_directories')) {
+            $deleteIdx = $i;
+        }
+        if ($selectIdx === null && str_starts_with($q, 'SELECT 1 FROM ' . $spy->prefix . 'fluxfiles_directories')) {
+            $selectIdx = $i;
+        }
+        if ($insertIdx === null && str_starts_with($q, 'INSERT INTO ' . $spy->prefix . 'fluxfiles_directories')) {
+            $insertIdx = $i;
+        }
+    }
+    assertTrue($deleteIdx !== null && $selectIdx !== null && $insertIdx !== null, 'DELETE, destination SELECT, and INSERT all ran');
+    assertTrue($deleteIdx < $selectIdx && $selectIdx < $insertIdx, 'sequence is DELETE source -> SELECT destination -> INSERT (destination wins on collision)');
+});
+
+test('WpDbMetadataHandler trash round-trip decodes JSON columns and casts is_dir/size/deleted_at', function () {
+    $spy = new WpdbSpy();
+    $spy->rowQueue[] = [
+        'original_key' => 'a/b', 'disk' => 'local', 'basename' => 'b', 'is_dir' => '1',
+        'size' => '42', 'deleted_at' => '1700000000', 'owner' => 'u',
+        'variants' => '{"thumb":"x"}', 'meta' => '{"title":"t"}', 'files' => '[]', 'dirs' => '[]',
+    ];
+    $handler = makeWpDbHandler($spy);
+
+    $entry = $handler->getTrash('local', 'trash-id-1');
+
+    assertTrue($entry !== null, 'getTrash() found the row');
+    assertTrue($entry['is_dir'] === true, 'is_dir cast to bool');
+    assertTrue($entry['size'] === 42, 'size cast to int');
+    assertTrue($entry['deleted_at'] === 1700000000, 'deleted_at cast to int');
+    assertEqual(['thumb' => 'x'], $entry['variants'], 'variants JSON decoded');
+    assertEqual(['title' => 't'], $entry['meta'], 'meta JSON decoded');
+});
+
+test('storage backend option branches metadata repo between StorageMetadataHandler and WpDbMetadataHandler', function () {
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(
+        strpos($apiSrc, "get_option('fluxfiles_storage_backend', 'json') === 'db'") !== false,
+        'constructor checks the fluxfiles_storage_backend option'
+    );
+    assertTrue(strpos($apiSrc, 'new WpDbMetadataHandler(') !== false, 'constructor can build WpDbMetadataHandler');
+
+    $bootSrc = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
+    assertTrue(
+        strpos($bootSrc, "includes/WpDbMetadataHandler.php") !== false,
+        'fluxfiles.php requires WpDbMetadataHandler.php'
+    );
 });
 
 // ── Route parity vs core (Phase 0 item 5) ────────────────────────────────────

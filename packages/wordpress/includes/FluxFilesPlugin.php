@@ -21,6 +21,7 @@ class FluxFilesPlugin
     {
         register_activation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'activate']);
         register_deactivation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'deactivate']);
+        add_action('admin_init', [FluxFilesDbSchema::class, 'maybeUpgrade']);
 
         // Admin
         if (is_admin()) {
@@ -77,6 +78,8 @@ class FluxFilesPlugin
         if (get_option('fluxfiles_ttl') === false) {
             update_option('fluxfiles_ttl', 3600);
         }
+
+        FluxFilesDbSchema::install();
 
         flush_rewrite_rules();
     }

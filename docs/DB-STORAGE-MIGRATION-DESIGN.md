@@ -630,6 +630,15 @@ stateless request model).
 
 ## 6. WordPress integration
 
+> **Implemented** (schema/admin-setting/handler/API-wiring + tests). The
+> `wp fluxfiles migrate-json-to-db` command below is **deferred** until §9's
+> `\FluxFiles\Db\JsonToDbMigrator` actually exists — everything else in this
+> section shipped as described. `WpDbMetadataHandler`'s constructor takes only
+> `DiskManager` (`__construct(DiskManager $diskManager)`, no connection-name
+> parameter, unlike Laravel's `LaravelDbMetadataHandler`) since WordPress
+> always reuses the single `$wpdb` connection — there is no per-tenant
+> connection override to thread through.
+
 - `FluxFilesPlugin::activate()` (already hooked via
   `register_activation_hook`) gains a call to a new
   `FluxFilesDbSchema::install(\wpdb $wpdb)` that runs `dbDelta()` against
@@ -1204,11 +1213,16 @@ Everything the task's decisions already settled is treated as settled above
 ## Status
 
 **§2 (interface widening), §3/§3.7 (schema, incl. the DB-backed rate
-limiter), §4 (core standalone DB abstraction layer), and §5 (Laravel
-integration) are implemented** — §2-§4 in commits `707db11`/`cafcc84`,
-tagged `core-v0.2.79`; §5 as the Laravel adapter's `db` storage-backend
-option (`LaravelDbMetadataHandler`, native Schema Builder migration,
-`packages/laravel/tests/test-laravel-db-metadata.php`). §6 (WordPress),
-§7/§8 (export/import + S3 breadcrumb), and §9 (`JsonToDbMigrator` +
-`migrate-json-to-db` commands, which both §5's and core's own CLI migration
-command wrap) remain **proposed — not yet implemented**.
+limiter), §4 (core standalone DB abstraction layer), §5 (Laravel
+integration), and §6 (WordPress integration) are implemented** — §2-§4 in
+commits `707db11`/`cafcc84`, tagged `core-v0.2.79`; §5 as the Laravel
+adapter's `db` storage-backend option (`LaravelDbMetadataHandler`, native
+Schema Builder migration, `packages/laravel/tests/test-laravel-db-metadata.php`);
+§6 as the WordPress plugin's `db` storage-backend option
+(`FluxFilesDbSchema` + `dbDelta()`, the "Storage backend" admin setting,
+`WpDbMetadataHandler`, `packages/wordpress/tests/test-wp-smoke.php`'s
+spy-based unit coverage, and `packages/wordpress/tests/test-wp-db-metadata-mysql.php`'s
+real-MySQL round-trip suite). §7/§8 (export/import + S3 breadcrumb) and §9
+(`JsonToDbMigrator` + `migrate-json-to-db` commands, which both §5's, §6's,
+and core's own CLI migration command wrap) remain **proposed — not yet
+implemented**.
