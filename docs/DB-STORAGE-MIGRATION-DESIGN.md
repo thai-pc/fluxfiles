@@ -1222,7 +1222,46 @@ Schema Builder migration, `packages/laravel/tests/test-laravel-db-metadata.php`)
 (`FluxFilesDbSchema` + `dbDelta()`, the "Storage backend" admin setting,
 `WpDbMetadataHandler`, `packages/wordpress/tests/test-wp-smoke.php`'s
 spy-based unit coverage, and `packages/wordpress/tests/test-wp-db-metadata-mysql.php`'s
-real-MySQL round-trip suite). §7/§8 (export/import + S3 breadcrumb) and §9
-(`JsonToDbMigrator` + `migrate-json-to-db` commands, which both §5's, §6's,
-and core's own CLI migration command wrap) remain **proposed — not yet
+real-MySQL round-trip suite).
+
+**§9 (`JsonToDbMigrator` + `migrate-json-to-db` commands) is implemented** —
+`\FluxFiles\Db\JsonToDbMigrator` (core), plus the narrow
+`\FluxFiles\Db\MigrationImportInterface` (`insertAuditEntries`,
+`existingAuditContentHashes`, `insertDirectoriesPreservingTimestamp`)
+implemented by all three DB handlers, backed by a new nullable
+`content_hash CHAR(64)` + `UNIQUE(disk, content_hash)` column on the audit
+table in all three packages (core migration `0006`, Laravel migration
+`2026_09_02_000000_add_audit_log_content_hash`, WordPress
+`FluxFilesDbSchema::VERSION` `1.1.0`). Exposed as `php
+packages/core/scripts/migrate-json-to-db.php`, Laravel's
+`php artisan fluxfiles:migrate-json-to-db`, and WordPress's
+`wp fluxfiles migrate-json-to-db` — all three support `--disk`, `--prefix`
+(file/folder/trash only — the audit log always migrates whole-disk),
+`--dry-run`, `--verify`, and `--yes`. Covered by
+`packages/core/tests/unit/test-migrate-json-to-db.php` plus wiring
+assertions in the Laravel/WordPress smoke suites. Manually smoke-tested end
+to end (dry-run → real → verify → re-run → abort path → missing-schema path)
+against a real, large dev-local disk (693 files, 434 dirs, 48 trash entries)
+with source-file byte-hashes confirmed unchanged throughout — this surfaced
+and fixed a real idempotency gap: `migrateFileMetadata()`'s change detection
+treated any source row with no `modified` field as changed on *every* run
+(perpetual `update`, never `skip`), because the comparison required both a
+source and destination timestamp to declare a match. Fixed to skip once
+already migrated when the source has no `modified` to compare — `verify()`'s
+full field-by-field diff (not timestamp-based) remains the actual drift
+safety net either way, so this only affects `migrate()`'s bucket counts and
+write volume on re-runs, never correctness.
+
+> **Adapter↔core floor note:** `LaravelDbMetadataHandler` and
+> `WpDbMetadataHandler` now implement the core-defined
+> `MigrationImportInterface`. Per `scripts/check-adapter-core-floor.sh`'s
+> manual-check convention, both adapters' `composer.json` core-version floors
+> must be bumped to the first core release that ships this interface once
+> that core version is tagged — `packages/laravel/tests/test-laravel-db-metadata.php`
+> will fail against an older installed `fluxfiles/fluxfiles` (e.g. the
+> currently-released `core-v0.2.79`) until that happens, since it resolves
+> the dependency through Composer's real vendor tree rather than the
+> monorepo's local core.
+
+§7/§8 (export/import + S3 breadcrumb) remain **proposed — not yet
 implemented**.

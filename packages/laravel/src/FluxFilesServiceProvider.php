@@ -26,6 +26,7 @@ class FluxFilesServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 Console\SeedMetadataCommand::class,
+                Console\MigrateJsonToDbCommand::class,
             ]);
         }
 

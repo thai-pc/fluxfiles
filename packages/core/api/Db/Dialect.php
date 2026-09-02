@@ -27,6 +27,14 @@ interface Dialect
      */
     public function upsert(string $table, array $insertCols, array $conflictCols, array $updateCols): string;
 
+    /**
+     * An insert-or-skip statement: insert $insertCols, and on a conflict over
+     * $conflictCols, do nothing (row stays as-is, no error). Unlike upsert(),
+     * carries no update columns — used for migration imports that must not
+     * clobber timestamps set at insert time.
+     */
+    public function insertIgnore(string $table, array $insertCols, array $conflictCols): string;
+
     /** MySQL needs an explicit key-length prefix to index a long path column; others don't. */
     public function pathIndexColumnExpr(string $col): string;
 

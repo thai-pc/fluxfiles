@@ -39,6 +39,13 @@ class MysqlDialect implements Dialect
         return "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders}) ON DUPLICATE KEY UPDATE {$sets}";
     }
 
+    public function insertIgnore(string $table, array $insertCols, array $conflictCols): string
+    {
+        $cols = implode(', ', $insertCols);
+        $placeholders = implode(', ', array_fill(0, count($insertCols), '?'));
+        return "INSERT IGNORE INTO {$table} ({$cols}) VALUES ({$placeholders})";
+    }
+
     public function pathIndexColumnExpr(string $col): string
     {
         return "{$col}(191)";

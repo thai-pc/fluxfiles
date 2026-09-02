@@ -502,6 +502,17 @@ test('controller branches metadata backend on fluxfiles.storage_backend', functi
     assertTrue(strpos($provSrc, "'fluxfiles-migrations'") !== false, 'ServiceProvider publishes the migrations tag');
 });
 
+test('MigrateJsonToDbCommand is registered and exposes the expected signature', function () {
+    $provSrc = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    assertTrue(strpos($provSrc, 'Console\MigrateJsonToDbCommand::class') !== false, 'ServiceProvider registers MigrateJsonToDbCommand');
+
+    $cmdSrc = (string) file_get_contents(__DIR__ . '/../src/Console/MigrateJsonToDbCommand.php');
+    assertTrue(strpos($cmdSrc, "'fluxfiles:migrate-json-to-db") !== false, 'command signature is fluxfiles:migrate-json-to-db');
+    assertTrue(strpos($cmdSrc, '--dry-run') !== false, 'command has --dry-run');
+    assertTrue(strpos($cmdSrc, '--verify') !== false, 'command has --verify');
+    assertTrue(strpos($cmdSrc, 'LaravelDbMetadataHandler(') !== false, 'command targets LaravelDbMetadataHandler');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

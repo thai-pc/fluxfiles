@@ -15,7 +15,7 @@ use FluxFiles\MetadataRepositoryInterface;
  * semantic port of StorageMetadataHandler; that class is the reference
  * implementation for exact field names and edge-case behavior.
  */
-class DbMetadataHandler implements MetadataRepositoryInterface
+class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
 {
     private Connection $db;
     private DiskManager $diskManager;
@@ -426,6 +426,23 @@ class DbMetadataHandler implements MetadataRepositoryInterface
         return $out;
     }
 
+    public function insertDirectoriesPreservingTimestamp(string $disk, array $dirs): int
+    {
+        $pdo = $this->db->pdo();
+        $sql = $this->db->dialect()->insertIgnore('directories', ['disk', 'path', 'path_hash', 'created_at'], ['disk', 'path_hash']);
+        $stmt = $pdo->prepare($sql);
+        $inserted = 0;
+        foreach ($dirs as $path => $createdAt) {
+            $path = trim((string) $path, '/');
+            if ($path === '' || $path === '.' || $this->isReservedPath($path)) {
+                continue;
+            }
+            $stmt->execute([$disk, $path, $this->pathHash($path), $createdAt]);
+            $inserted += $stmt->rowCount();
+        }
+        return $inserted;
+    }
+
     public function renameDirPrefix(string $disk, string $oldPrefix, string $newPrefix): int
     {
         $oldPrefix = trim($oldPrefix, '/');
@@ -596,6 +613,49 @@ class DbMetadataHandler implements MetadataRepositoryInterface
         $stmt = $this->db->pdo()->prepare('DELETE FROM audit_log WHERE disk = ? AND created_at < ?');
         $stmt->execute([$disk, $beforeTs]);
         return ['archives_deleted' => 0, 'live_lines_removed' => $stmt->rowCount()];
+    }
+
+    public function insertAuditEntries(string $disk, array $entries): int
+    {
+        $sql = $this->db->dialect()->insertIgnore(
+            'audit_log',
+            ['disk', 'owner', 'action', 'file_key', 'ip', 'user_agent', 'detail', 'created_at', 'content_hash'],
+            ['disk', 'content_hash']
+        );
+        $stmt = $this->db->pdo()->prepare($sql);
+        $inserted = 0;
+        foreach ($entries as $entry) {
+            $detail = $entry['detail'] ?? null;
+            if ($detail !== null && !is_scalar($detail)) {
+                $detail = json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            $stmt->execute([
+                $disk,
+                $entry['user_id'] ?? null,
+                $entry['action'],
+                $entry['file_key'] ?? null,
+                $entry['ip'] ?? null,
+                $entry['user_agent'] ?? null,
+                $detail,
+                $entry['created_at'],
+                $entry['content_hash'],
+            ]);
+            $inserted += $stmt->rowCount();
+        }
+        return $inserted;
+    }
+
+    public function existingAuditContentHashes(string $disk, array $contentHashes): array
+    {
+        if ($contentHashes === []) {
+            return [];
+        }
+        $placeholders = implode(', ', array_fill(0, count($contentHashes), '?'));
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT content_hash FROM audit_log WHERE disk = ? AND content_hash IN ({$placeholders})"
+        );
+        $stmt->execute([$disk, ...$contentHashes]);
+        return array_column($stmt->fetchAll(), 'content_hash');
     }
 
     // ---------------------------------------------------------------------

@@ -40,6 +40,14 @@ class PgsqlDialect implements Dialect
         return "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders}) ON CONFLICT({$conflict}) DO UPDATE SET {$sets}";
     }
 
+    public function insertIgnore(string $table, array $insertCols, array $conflictCols): string
+    {
+        $cols = implode(', ', $insertCols);
+        $placeholders = implode(', ', array_fill(0, count($insertCols), '?'));
+        $conflict = implode(', ', $conflictCols);
+        return "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders}) ON CONFLICT({$conflict}) DO NOTHING";
+    }
+
     public function pathIndexColumnExpr(string $col): string
     {
         return $col;

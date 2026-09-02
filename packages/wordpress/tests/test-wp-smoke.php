@@ -1018,6 +1018,14 @@ test('storage backend option branches metadata repo between StorageMetadataHandl
     );
 });
 
+test('WP-CLI: migrate_json_to_db is wired as `wp fluxfiles migrate-json-to-db`', function () {
+    $cliSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesCli.php');
+    assertTrue(strpos($cliSrc, 'function migrate_json_to_db') !== false, 'FluxFilesCli defines migrate_json_to_db()');
+    assertTrue(strpos($cliSrc, 'wp fluxfiles migrate-json-to-db') !== false, 'docblock documents the migrate-json-to-db example');
+    assertTrue(strpos($cliSrc, 'WpDbMetadataHandler(') !== false, 'command targets WpDbMetadataHandler');
+    assertTrue(strpos($cliSrc, 'JsonToDbMigrator(') !== false, 'command builds a JsonToDbMigrator');
+});
+
 // ── Route parity vs core (Phase 0 item 5) ────────────────────────────────────
 // Mirrors packages/laravel/tests/test-laravel-smoke.php's "proxy route surface
 // covers every core /api/fm route" test. WordPress registers routes via

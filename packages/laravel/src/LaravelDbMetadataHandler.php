@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles\Laravel;
 
 use FluxFiles\DiskManager;
+use FluxFiles\Db\MigrationImportInterface;
 use FluxFiles\MetadataRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  * level further back, StorageMetadataHandler) is the reference
  * implementation for exact field names and edge-case behavior.
  */
-class LaravelDbMetadataHandler implements MetadataRepositoryInterface
+class LaravelDbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
 {
     private DiskManager $diskManager;
     private ?string $connection;
@@ -447,6 +448,22 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface
         return $out;
     }
 
+    public function insertDirectoriesPreservingTimestamp(string $disk, array $dirs): int
+    {
+        $rows = [];
+        foreach ($dirs as $path => $createdAt) {
+            $path = trim((string) $path, '/');
+            if ($path === '' || $path === '.' || $this->isReservedPath($path)) {
+                continue;
+            }
+            $rows[] = ['disk' => $disk, 'path' => $path, 'path_hash' => $this->pathHash($path), 'created_at' => $createdAt];
+        }
+        if ($rows === []) {
+            return 0;
+        }
+        return $this->table('fluxfiles_directories')->insertOrIgnore($rows);
+    }
+
     public function renameDirPrefix(string $disk, string $oldPrefix, string $newPrefix): int
     {
         $oldPrefix = trim($oldPrefix, '/');
@@ -605,6 +622,44 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface
         $removed = $this->table('fluxfiles_audit_log')
             ->where('disk', $disk)->where('created_at', '<', $beforeTs)->delete();
         return ['archives_deleted' => 0, 'live_lines_removed' => $removed];
+    }
+
+    public function insertAuditEntries(string $disk, array $entries): int
+    {
+        $rows = [];
+        foreach ($entries as $entry) {
+            $detail = $entry['detail'] ?? null;
+            if ($detail !== null && !is_scalar($detail)) {
+                $detail = json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            $rows[] = [
+                'disk'         => $disk,
+                'owner'        => $entry['user_id'] ?? null,
+                'action'       => $entry['action'],
+                'file_key'     => $entry['file_key'] ?? null,
+                'ip'           => $entry['ip'] ?? null,
+                'user_agent'   => $entry['user_agent'] ?? null,
+                'detail'       => $detail,
+                'created_at'   => $entry['created_at'],
+                'content_hash' => $entry['content_hash'],
+            ];
+        }
+        if ($rows === []) {
+            return 0;
+        }
+        return $this->table('fluxfiles_audit_log')->insertOrIgnore($rows);
+    }
+
+    public function existingAuditContentHashes(string $disk, array $contentHashes): array
+    {
+        if ($contentHashes === []) {
+            return [];
+        }
+        return $this->table('fluxfiles_audit_log')
+            ->where('disk', $disk)
+            ->whereIn('content_hash', $contentHashes)
+            ->pluck('content_hash')
+            ->all();
     }
 
     // ---------------------------------------------------------------------

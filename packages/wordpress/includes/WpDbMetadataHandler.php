@@ -2,6 +2,7 @@
 
 defined('ABSPATH') || exit;
 
+use FluxFiles\Db\MigrationImportInterface;
 use FluxFiles\DiskManager;
 use FluxFiles\MetadataRepositoryInterface;
 
@@ -19,7 +20,7 @@ use FluxFiles\MetadataRepositoryInterface;
  * WP 6.2+. buildValueClause() below works around this by emitting the
  * literal NULL token for null columns instead of relying on prepare().
  */
-class WpDbMetadataHandler implements MetadataRepositoryInterface
+class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
 {
     private $wpdb;
     private DiskManager $diskManager;
@@ -516,6 +517,23 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface
         return $out;
     }
 
+    public function insertDirectoriesPreservingTimestamp(string $disk, array $dirs): int
+    {
+        $inserted = 0;
+        foreach ($dirs as $path => $createdAt) {
+            $path = trim((string) $path, '/');
+            if ($path === '' || $path === '.' || $this->isReservedPath($path)) {
+                continue;
+            }
+            $affected = (int) $this->query(
+                "INSERT IGNORE INTO {$this->tDirs} (disk, path, path_hash, created_at) VALUES (%s, %s, %s, %d)",
+                [$disk, $path, $this->pathHash($path), $createdAt]
+            );
+            $inserted += $affected;
+        }
+        return $inserted;
+    }
+
     public function renameDirPrefix(string $disk, string $oldPrefix, string $newPrefix): int
     {
         $oldPrefix = trim($oldPrefix, '/');
@@ -688,6 +706,44 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface
             [$disk, $beforeTs]
         );
         return ['archives_deleted' => 0, 'live_lines_removed' => $affected];
+    }
+
+    public function insertAuditEntries(string $disk, array $entries): int
+    {
+        $inserted = 0;
+        foreach ($entries as $entry) {
+            $detail = $entry['detail'] ?? null;
+            if ($detail !== null && !is_scalar($detail)) {
+                $detail = json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            [$colSql, $valSql, $bind] = $this->buildValueClause([
+                'disk' => $disk,
+                'owner' => $entry['user_id'] ?? null,
+                'action' => $entry['action'],
+                'file_key' => $entry['file_key'] ?? null,
+                'ip' => $entry['ip'] ?? null,
+                'user_agent' => $entry['user_agent'] ?? null,
+                'detail' => $detail,
+                'created_at' => $entry['created_at'],
+                'content_hash' => $entry['content_hash'],
+            ]);
+            $affected = (int) $this->query("INSERT IGNORE INTO {$this->tAudit} ({$colSql}) VALUES ({$valSql})", $bind);
+            $inserted += $affected;
+        }
+        return $inserted;
+    }
+
+    public function existingAuditContentHashes(string $disk, array $contentHashes): array
+    {
+        if ($contentHashes === []) {
+            return [];
+        }
+        $placeholders = implode(', ', array_fill(0, count($contentHashes), '%s'));
+        $rows = $this->getResults(
+            "SELECT content_hash FROM {$this->tAudit} WHERE disk = %s AND content_hash IN ({$placeholders})",
+            [$disk, ...$contentHashes]
+        );
+        return array_column($rows, 'content_hash');
     }
 
     // ---------------------------------------------------------------------
