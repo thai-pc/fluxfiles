@@ -31,6 +31,60 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         return hash('sha256', $key);
     }
 
+    private function generateUuidV4(): string
+    {
+        $data = random_bytes(16);
+        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
+        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+    }
+
+    /**
+     * S3/R2 breadcrumb (docs/DB-STORAGE-MIGRATION-DESIGN.md §8): the first time
+     * a file is saved under the DB backend, stamp a UUID onto the raw S3
+     * object as `x-amz-meta-fluxfiles-id` via CopyObject — the one small
+     * write that lets `scripts/repair-s3-metadata.php` reunite an
+     * externally-moved object with its `file_metadata` row without the DB.
+     * Best-effort and idempotent: a row that already has a UUID is left
+     * alone, a non-S3 disk or a disabled flag is a no-op, and any S3 failure
+     * is swallowed so a breadcrumb write can never block a metadata save.
+     */
+    private function maybeWriteS3Breadcrumb(string $disk, string $key, ?string $existingUuid): ?string
+    {
+        if ($existingUuid !== null) {
+            return $existingUuid;
+        }
+        if (($_ENV['FLUXFILES_DB_S3_BREADCRUMB'] ?? 'true') === 'false') {
+            return null;
+        }
+        $config = $this->diskManager->config($disk);
+        if (($config['driver'] ?? '') !== 's3') {
+            return null;
+        }
+        try {
+            $client = $this->diskManager->s3Client($disk);
+            $bucket = $config['bucket'] ?? '';
+            $existing = $client->headObject(['Bucket' => $bucket, 'Key' => $key]);
+            $uuid = $this->generateUuidV4();
+            $metadata = $existing['Metadata'] ?? [];
+            $metadata['fluxfiles-id'] = $uuid;
+            $params = [
+                'Bucket' => $bucket,
+                'Key' => $key,
+                'CopySource' => $bucket . '/' . $key,
+                'Metadata' => $metadata,
+                'MetadataDirective' => 'REPLACE',
+            ];
+            if (isset($existing['ContentType'])) {
+                $params['ContentType'] = $existing['ContentType'];
+            }
+            $client->copyObject($params);
+            return $uuid;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     /** Escape LIKE metacharacters in a bound value — never in the SQL string itself. */
     private function escapeLike(string $value): string
     {
@@ -110,12 +164,13 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         $height   = $data['height'] ?? ($ex['height'] ?? null);
         $modified = $data['modified'] ?? ($ex['modified_at'] ?? null);
         $created  = ($ex['created_at'] ?? null) ?? ($data['created'] ?? null);
+        $objectUuid = $this->maybeWriteS3Breadcrumb($disk, $key, $ex['object_uuid'] ?? null);
 
         $insertCols = [
             'disk' => $disk, 'owner' => $owner, 'path' => $key, 'path_hash' => $this->pathHash($key),
             'title' => $title, 'alt_text' => $altText, 'caption' => $caption, 'tags' => $tags,
             'mime' => $mime, 'size' => $size, 'width' => $width, 'height' => $height,
-            'created_at' => $created, 'modified_at' => $modified,
+            'created_at' => $created, 'modified_at' => $modified, 'object_uuid' => $objectUuid,
         ];
         $updateCols = $insertCols;
         unset($updateCols['disk'], $updateCols['path'], $updateCols['path_hash']);
@@ -145,12 +200,14 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         $modified = $data['modified'] ?? ($ex['modified_at'] ?? null);
         $created  = ($ex['created_at'] ?? null) ?? ($data['created'] ?? null);
         $fileHash = isset($data['file_hash']) ? $data['file_hash'] : ($ex['file_hash'] ?? null);
+        $objectUuid = $this->maybeWriteS3Breadcrumb($disk, $key, $ex['object_uuid'] ?? null);
 
         $insertCols = [
             'disk' => $disk, 'owner' => $owner, 'path' => $key, 'path_hash' => $this->pathHash($key),
             'title' => $title, 'alt_text' => $altText, 'caption' => $caption, 'tags' => $tags,
             'mime' => $mime, 'size' => $size, 'width' => $width, 'height' => $height,
             'created_at' => $created, 'modified_at' => $modified, 'file_hash' => $fileHash,
+            'object_uuid' => $objectUuid,
         ];
         $updateCols = $insertCols;
         unset($updateCols['disk'], $updateCols['path'], $updateCols['path_hash']);

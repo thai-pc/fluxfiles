@@ -385,6 +385,52 @@ test('deleteChildren() removes a whole subtree', function () use ($repo, $disk) 
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► S3/R2 breadcrumb (docs/DB-STORAGE-MIGRATION-DESIGN.md §8){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('save() on a non-S3 (local) disk never stamps object_uuid', function () use ($repo, $conn, $disk) {
+    $repo->save($disk, 'local-file.txt', ['title' => 'Local', 'uploaded_by' => 'u']);
+    $stmt = $conn->pdo()->prepare('SELECT object_uuid FROM file_metadata WHERE disk = ? AND path_hash = ?');
+    $stmt->execute([$disk, hash('sha256', 'local-file.txt')]);
+    assertEqual(null, $stmt->fetch()['object_uuid']);
+});
+
+test('indexFile() on a non-S3 (local) disk never stamps object_uuid', function () use ($repo, $conn, $disk) {
+    $repo->indexFile($disk, 'local-indexed.txt', ['uploaded_by' => 'u', 'size' => 1, 'modified' => 1, 'created' => 1], true);
+    $stmt = $conn->pdo()->prepare('SELECT object_uuid FROM file_metadata WHERE disk = ? AND path_hash = ?');
+    $stmt->execute([$disk, hash('sha256', 'local-indexed.txt')]);
+    assertEqual(null, $stmt->fetch()['object_uuid']);
+});
+
+test('save() never overwrites an already-stamped object_uuid — the breadcrumb is immutable once set', function () use ($repo, $conn, $disk) {
+    $repo->save($disk, 'stamped.txt', ['title' => 'V1', 'uploaded_by' => 'u']);
+    $conn->pdo()->prepare('UPDATE file_metadata SET object_uuid = ? WHERE disk = ? AND path_hash = ?')
+        ->execute(['preset-uuid', $disk, hash('sha256', 'stamped.txt')]);
+
+    $repo->save($disk, 'stamped.txt', ['title' => 'V2', 'uploaded_by' => 'u']);
+
+    $stmt = $conn->pdo()->prepare('SELECT title, object_uuid FROM file_metadata WHERE disk = ? AND path_hash = ?');
+    $stmt->execute([$disk, hash('sha256', 'stamped.txt')]);
+    $row = $stmt->fetch();
+    assertEqual('V2', $row['title'], 'the rest of the row must still update normally');
+    assertEqual('preset-uuid', $row['object_uuid'], 'an existing breadcrumb must never be replaced');
+});
+
+test('indexFile() never overwrites an already-stamped object_uuid', function () use ($repo, $conn, $disk) {
+    $repo->indexFile($disk, 'stamped-indexed.txt', ['uploaded_by' => 'u', 'size' => 1, 'modified' => 1, 'created' => 1], true);
+    $conn->pdo()->prepare('UPDATE file_metadata SET object_uuid = ? WHERE disk = ? AND path_hash = ?')
+        ->execute(['preset-uuid-2', $disk, hash('sha256', 'stamped-indexed.txt')]);
+
+    $repo->indexFile($disk, 'stamped-indexed.txt', ['uploaded_by' => 'u', 'size' => 2, 'modified' => 2, 'created' => 1], true);
+
+    $stmt = $conn->pdo()->prepare('SELECT size, object_uuid FROM file_metadata WHERE disk = ? AND path_hash = ?');
+    $stmt->execute([$disk, hash('sha256', 'stamped-indexed.txt')]);
+    $row = $stmt->fetch();
+    assertEqual(2, (int) $row['size'], 'the rest of the row must still update normally');
+    assertEqual('preset-uuid-2', $row['object_uuid'], 'an existing breadcrumb must never be replaced');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
 

@@ -1288,4 +1288,45 @@ all 16 `lang/*.json` locales. Core-standalone only — not ported into the
 Laravel/WordPress proxy controllers, since the DB storage backend they'd
 operate on is a core-only mode for those adapters at present.
 
-§8 (S3/R2 breadcrumb) remains **proposed — not yet implemented**.
+**§8 (S3/R2 breadcrumb) is implemented** —
+`DbMetadataHandler::maybeWriteS3Breadcrumb()` (`packages/core/api/Db/DbMetadataHandler.php`)
+stamps a fresh UUIDv4 onto the raw S3/R2 object as `x-amz-meta-fluxfiles-id`
+the first time a file is saved via `save()` or `indexFile()`, reusing the same
+`CopyObject` mechanism the JSON backend's `saveToS3()` already uses for
+metadata edits, refined to read-merge-write (`HeadObject` first, preserving
+the object's existing `Metadata` and `ContentType`) so the breadcrumb write
+can never silently wipe other object metadata. The UUID is persisted to
+`file_metadata.object_uuid` (the column already existed from `0001`) and is
+immutable thereafter — a row that already has a UUID short-circuits before
+any S3 call, so the cost is one `CopyObject` per file's *lifetime*, strictly
+less than the JSON backend's one-per-edit. Detects S3/R2 via the same
+`driver === 's3'` check used everywhere else in the codebase; a non-S3 disk
+(local/SFTP) is a no-op. The whole path is best-effort: any S3 failure
+(network, permissions, missing object) is caught and swallowed, returning
+`null`, so a breadcrumb write can never block or fail a metadata save.
+Gated by `FLUXFILES_DB_S3_BREADCRUMB` (default `true`, documented in
+`docs/CONFIG.md`'s server env vars table).
+
+The repair side is `\FluxFiles\Db\S3MetadataRepairer`
+(`packages/core/api/Db/S3MetadataRepairer.php`), split along a deliberate
+testability seam: `dbRows()` (SQL-only, uuid⇒path from `file_metadata`),
+`scanBucket()` (raw `ListObjectsV2` + `HeadObject`, no DB dependency — usable
+even with the DB lost or stale), `reconcile()` (a pure function, zero I/O,
+diffing the two maps into `moved`/`orphaned_objects`/`orphaned_rows`), and
+`apply()` (re-points `path`/`path_hash` for every `moved` entry inside one
+transaction, deleting any row already occupying the destination
+`(disk, path_hash)` first — mirroring `renameChildren()`'s
+delete-conflicting-destination-row convention, since `path_hash` carries a
+`UNIQUE(disk, path_hash)` index). Exposed as
+`php scripts/repair-s3-metadata.php --disk=<name> [--apply] [--yes]` — a
+read-only report by default, `--apply` re-points only exact UUID matches,
+never guessing. No equivalent tool exists (or is needed) for Local/SFTP,
+since `rsync`/`cp` preserve paths 1:1. Covered by
+`packages/core/tests/unit/test-s3-metadata-repairer.php` (9 tests: full
+`reconcile()` coverage including the moved/orphaned-object/orphaned-row mix,
+`dbRows()` scoped-by-disk filtering, and `apply()` including the
+destination-collision regression case) plus four tests added to
+`test-db-metadata-sqlite.php` proving the breadcrumb is a no-op on a
+non-S3 disk and is never overwritten once set. `scanBucket()` itself needs a
+live bucket and is intentionally left uncovered here, consistent with the
+project's existing separately-gated `tests/e2e/test-s3-live.php` pattern.
