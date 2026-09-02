@@ -103,12 +103,22 @@ class Connection
         }
     }
 
+    /**
+     * On MySQL, a DDL statement (CREATE TABLE, ...) executed mid-transaction
+     * triggers an implicit commit server-side, and PDO_MySQL's inTransaction()
+     * reflects that real server state — so a migration that runs DDL inside
+     * beginExclusive()/commit() finds the transaction already gone by the time
+     * commit() is called. Guard like rollback() already does below: only call
+     * the real commit() if PDO still believes a transaction is open. This is a
+     * no-op for pure-DML callers (DbMetadataHandler, RateLimiterDbStorage),
+     * where the transaction genuinely stays open until this call.
+     */
     public function commit(): void
     {
         $pdo = $this->pdo();
         if ($this->driver() === 'sqlite') {
             $pdo->exec('COMMIT');
-        } else {
+        } elseif ($pdo->inTransaction()) {
             $pdo->commit();
         }
     }

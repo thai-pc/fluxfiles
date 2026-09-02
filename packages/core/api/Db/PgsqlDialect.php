@@ -54,4 +54,16 @@ class PgsqlDialect implements Dialect
     {
         return ' FOR UPDATE';
     }
+
+    public function likeEscapeClause(): string
+    {
+        // Not a plain '\' literal: PDO_PGSQL's own client-side SQL scanner
+        // (used to translate ? into positional $n params) treats a backslash
+        // before a closing quote as escaping it, MySQL-style — so a second
+        // ESCAPE '\' elsewhere in the same query desyncs its placeholder
+        // count and PDO throws "Invalid parameter number". Postgres's E''
+        // escape-string form has no bare backslash-quote for that scanner to
+        // misparse; E'\\' still decodes server-side to one literal backslash.
+        return "ESCAPE E'\\\\'";
+    }
 }

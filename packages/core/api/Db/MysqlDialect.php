@@ -53,4 +53,9 @@ class MysqlDialect implements Dialect
     {
         return ' FOR UPDATE';
     }
+
+    public function likeEscapeClause(): string
+    {
+        return "ESCAPE '\\\\'";
+    }
 }

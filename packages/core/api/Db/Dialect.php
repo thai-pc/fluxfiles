@@ -35,4 +35,23 @@ interface Dialect
 
     /** Row-locking suffix for a SELECT used inside a transaction. */
     public function forUpdateSuffix(): string;
+
+    /**
+     * The `ESCAPE '...'` clause to pair with a `LIKE ?` bound to a value built
+     * by escapeLike() (which escapes literal `\`/`%`/`_` with a backslash).
+     * MySQL's string-literal parser itself decodes backslash sequences, so a
+     * literal single backslash needs TWO backslash characters in the SQL text
+     * sent to the server (`ESCAPE '\\'`) — one backslash there is a MySQL
+     * syntax error (it starts an escaped-quote that never closes). SQLite and
+     * Postgres (default standard_conforming_strings) take backslash literally
+     * inside a single-quoted string, so one backslash character is already a
+     * valid 1-char string (`ESCAPE '\'`) — two there is a SQLite "ESCAPE
+     * expression must be a single character" error. Never share this literal
+     * across dialects. Postgres additionally can't use that plain `'\'`
+     * form once a query has more than one such clause: PDO_PGSQL's own
+     * client-side placeholder scanner mis-tracks quote boundaries around a
+     * bare backslash-before-quote and desyncs `?` → `$n` numbering, so
+     * PgsqlDialect uses the `E'\\'` escape-string form instead.
+     */
+    public function likeEscapeClause(): string;
 }

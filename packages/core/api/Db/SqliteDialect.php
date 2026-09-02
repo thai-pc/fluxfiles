@@ -54,4 +54,9 @@ class SqliteDialect implements Dialect
     {
         return '';
     }
+
+    public function likeEscapeClause(): string
+    {
+        return "ESCAPE '\\'";
+    }
 }

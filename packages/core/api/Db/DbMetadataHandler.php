@@ -170,8 +170,9 @@ class DbMetadataHandler implements MetadataRepositoryInterface
     public function deleteChildren(string $disk, string $prefix): int
     {
         $like = $this->escapeLike($prefix) . '/%';
+        $esc = $this->db->dialect()->likeEscapeClause();
         $stmt = $this->db->pdo()->prepare(
-            "DELETE FROM file_metadata WHERE disk = ? AND (path = ? OR path LIKE ? ESCAPE '\\')"
+            "DELETE FROM file_metadata WHERE disk = ? AND (path = ? OR path LIKE ? {$esc})"
         );
         $stmt->execute([$disk, $prefix, $like]);
         return $stmt->rowCount();
@@ -181,7 +182,8 @@ class DbMetadataHandler implements MetadataRepositoryInterface
     {
         $pdo = $this->db->pdo();
         $like = $this->escapeLike($oldPrefix) . '/%';
-        $sel = $pdo->prepare("SELECT id, path FROM file_metadata WHERE disk = ? AND (path = ? OR path LIKE ? ESCAPE '\\')");
+        $esc = $this->db->dialect()->likeEscapeClause();
+        $sel = $pdo->prepare("SELECT id, path FROM file_metadata WHERE disk = ? AND (path = ? OR path LIKE ? {$esc})");
         $sel->execute([$disk, $oldPrefix, $like]);
         $candidates = $sel->fetchAll();
 
@@ -247,16 +249,17 @@ class DbMetadataHandler implements MetadataRepositoryInterface
         $cap = max($limit * 20, 500);
         $likeQ = '%' . $this->escapeLike($query) . '%';
 
+        $esc = $this->db->dialect()->likeEscapeClause();
         $sql = "SELECT * FROM file_metadata WHERE disk = ?";
         $params = [$disk];
         if ($prefix !== '') {
-            $sql .= " AND (path = ? OR path LIKE ? ESCAPE '\\')";
+            $sql .= " AND (path = ? OR path LIKE ? {$esc})";
             $params[] = $prefix;
             $params[] = $this->escapeLike($prefix) . '/%';
         }
-        $sql .= " AND (LOWER(path) LIKE LOWER(?) ESCAPE '\\' OR LOWER(title) LIKE LOWER(?) ESCAPE '\\'"
-              . " OR LOWER(alt_text) LIKE LOWER(?) ESCAPE '\\' OR LOWER(caption) LIKE LOWER(?) ESCAPE '\\'"
-              . " OR LOWER(tags) LIKE LOWER(?) ESCAPE '\\')";
+        $sql .= " AND (LOWER(path) LIKE LOWER(?) {$esc} OR LOWER(title) LIKE LOWER(?) {$esc}"
+              . " OR LOWER(alt_text) LIKE LOWER(?) {$esc} OR LOWER(caption) LIKE LOWER(?) {$esc}"
+              . " OR LOWER(tags) LIKE LOWER(?) {$esc})";
         array_push($params, $likeQ, $likeQ, $likeQ, $likeQ, $likeQ);
         $sql .= " ORDER BY id ASC LIMIT " . (int) $cap;
 
@@ -433,7 +436,8 @@ class DbMetadataHandler implements MetadataRepositoryInterface
 
         $pdo = $this->db->pdo();
         $like = $this->escapeLike($oldPrefix) . '/%';
-        $sel = $pdo->prepare("SELECT path, path_hash FROM directories WHERE disk = ? AND (path = ? OR path LIKE ? ESCAPE '\\')");
+        $esc = $this->db->dialect()->likeEscapeClause();
+        $sel = $pdo->prepare("SELECT path, path_hash FROM directories WHERE disk = ? AND (path = ? OR path LIKE ? {$esc})");
         $sel->execute([$disk, $oldPrefix, $like]);
         $candidates = $sel->fetchAll();
 
@@ -480,7 +484,8 @@ class DbMetadataHandler implements MetadataRepositoryInterface
             return 0;
         }
         $like = $this->escapeLike($prefix) . '/%';
-        $stmt = $this->db->pdo()->prepare("DELETE FROM directories WHERE disk = ? AND (path = ? OR path LIKE ? ESCAPE '\\')");
+        $esc = $this->db->dialect()->likeEscapeClause();
+        $stmt = $this->db->pdo()->prepare("DELETE FROM directories WHERE disk = ? AND (path = ? OR path LIKE ? {$esc})");
         $stmt->execute([$disk, $prefix, $like]);
         return $stmt->rowCount();
     }
@@ -490,15 +495,16 @@ class DbMetadataHandler implements MetadataRepositoryInterface
         $prefix = trim($pathPrefix, '/');
         $cap = max($limit * 20, 500);
         $likeQ = '%' . $this->escapeLike($query) . '%';
+        $esc = $this->db->dialect()->likeEscapeClause();
 
         $sql = 'SELECT path, created_at FROM directories WHERE disk = ?';
         $params = [$disk];
         if ($prefix !== '') {
-            $sql .= " AND (path = ? OR path LIKE ? ESCAPE '\\')";
+            $sql .= " AND (path = ? OR path LIKE ? {$esc})";
             $params[] = $prefix;
             $params[] = $this->escapeLike($prefix) . '/%';
         }
-        $sql .= " AND LOWER(path) LIKE LOWER(?) ESCAPE '\\'";
+        $sql .= " AND LOWER(path) LIKE LOWER(?) {$esc}";
         $params[] = $likeQ;
         $sql .= ' ORDER BY path ASC LIMIT ' . (int) $cap;
 
