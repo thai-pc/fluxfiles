@@ -91,17 +91,32 @@ test('viewer: read-only, owner-scoped', function () use ($secret) {
     $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'viewer']), $secret);
     assertEqual(['read'], (array) $payload->perms);
     assertEqual(true, $payload->owner_only);
-    assertEqual(false, isset($payload->allow_extract));
-    assertEqual(false, isset($payload->allow_chmod));
     assertEqual(false, isset($payload->allow_code_edit));
     assertEqual(false, isset($payload->show_hidden));
+    // Regression guard (B1): allow_extract/allow_chmod default to TRUE when
+    // absent from the JWT (Claims::fromJwtPayload), unlike allow_code_edit/
+    // show_hidden which default false — so viewer/editor must set them
+    // EXPLICITLY false, never rely on omission. Assert against the decoded,
+    // effective Claims value (not just raw JWT presence), since that's the
+    // gap that let this bug through undetected before.
+    assertEqual(false, $payload->allow_extract);
+    assertEqual(false, $payload->allow_chmod);
+    $claims = \FluxFiles\Claims::fromJwtPayload($payload, $secret);
+    assertEqual(false, $claims->allowExtract);
+    assertEqual(false, $claims->allowChmod);
 });
 
 test('editor: read+write, owner-scoped', function () use ($secret) {
     $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'editor']), $secret);
     assertEqual(['read', 'write'], (array) $payload->perms);
     assertEqual(true, $payload->owner_only);
-    assertEqual(false, isset($payload->allow_extract));
+    // editor gets allow_extract (power-user affordance for a contributor) but
+    // never allow_chmod (matches the ACL-ROLE-PRESETS-DESIGN.md claim matrix).
+    assertEqual(true, $payload->allow_extract);
+    assertEqual(false, $payload->allow_chmod);
+    $claims = \FluxFiles\Claims::fromJwtPayload($payload, $secret);
+    assertEqual(true, $claims->allowExtract);
+    assertEqual(false, $claims->allowChmod);
 });
 
 test('admin: full perms, not owner-scoped, power-user toggles on', function () use ($secret) {

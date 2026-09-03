@@ -588,6 +588,32 @@ the Node `applyTenantOverrides()` role block, and both PHP adapters'
 earlier via the same early-resolution expression, so the guard never needs to
 touch them.
 
+**Second precedence bug found and fixed after initial ship (B1):** the
+viewer/editor presets originally omitted `allow_extract`/`allow_chmod`
+entirely, following this doc's own §4.1 table literally under an
+"absent = false" assumption. That assumption is wrong for these two specific
+claims — `Claims::fromJwtPayload` (`packages/core/api/Claims.php`) defaults
+`allowExtract`/`allowChmod` to **`true`** when absent (unlike
+`allow_code_edit`/`show_hidden`, which correctly default `false`), because
+their independent default (outside any role) is permissive. The result: an
+`editor` role token — meant to be a contributor with no chmod capability —
+actually resolved `allowChmod = true`, and since `editor` also gets `write`
+perm, `POST /api/fm/chmod` (`FileManager.php`, requires write + `allowChmod`)
+was silently reachable on SFTP disks. `viewer`'s matching gap wasn't
+independently reachable (extract/chmod also require write perm, which
+viewer lacks by default) but became live the moment `role: 'viewer'` was
+combined with an explicit `perms` override — which this spec explicitly
+permits (see "explicit overrides win" above). Fixed by setting
+`allow_extract`/`allow_chmod` **explicitly** (`viewer`: both `false`;
+`editor`: `allow_extract: true`, `allow_chmod: false`, matching the §4.1
+table's own intent) in all four token builders, so the fix never depends on
+Claims.php's own default again. The regression test in every suite
+(`test-role-preset.php`, `token.test.ts`, both PHP adapter smokes) was
+strengthened to assert against the **decoded, effective** claim value
+(`Claims::fromJwtPayload(...)->allowExtract`, not just raw-JWT `isset()`),
+since asserting only `isset()` is exactly what let B1 through undetected —
+an absent key still resolves to `true` after decode.
+
 **BYOB scope**: `role` is excluded from BYOB tokens in core
 (`fluxfiles_byob_token()`/`fluxfiles_mixed_token()` are untouched, matching
 `edition`'s existing exclusion there) and in Node (`createByobToken()` is

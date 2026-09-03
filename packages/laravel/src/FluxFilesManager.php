@@ -92,8 +92,10 @@ class FluxFilesManager
     private static function rolePreset(?string $role): array
     {
         $presets = [
-            'viewer'     => ['perms' => ['read'], 'owner_only' => true],
-            'editor'     => ['perms' => ['read', 'write'], 'owner_only' => true],
+            'viewer'     => ['perms' => ['read'], 'owner_only' => true,
+                              'allow_extract' => false, 'allow_chmod' => false],
+            'editor'     => ['perms' => ['read', 'write'], 'owner_only' => true,
+                              'allow_extract' => true, 'allow_chmod' => false],
             'admin'      => ['perms' => ['read', 'write', 'delete', 'audit'], 'owner_only' => false,
                               'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
             'superadmin' => ['perms' => ['read', 'write', 'delete', 'audit'], 'owner_only' => false,

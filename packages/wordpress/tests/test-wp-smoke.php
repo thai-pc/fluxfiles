@@ -346,11 +346,19 @@ test('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim bundle'
     $viewer = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(61, ['role' => 'viewer']), $secret);
     assertEqual(['read'], (array) $viewer->perms, 'viewer perms');
     assertEqual(true, $viewer->owner_only ?? false, 'viewer is owner-scoped');
+    // Regression (B1): allow_extract/allow_chmod default TRUE when absent from
+    // the JWT (Claims::fromJwtPayload) — viewer/editor must set them explicitly
+    // false, not rely on omission, or a proxy-minted "editor" token silently
+    // gets chmod on SFTP disks.
+    assertEqual(false, $viewer->allow_extract ?? null, 'viewer allow_extract');
+    assertEqual(false, $viewer->allow_chmod ?? null, 'viewer allow_chmod');
 
     // Regression: perms is resolved BEFORE the base payload array (which already
     // has an unconditional default) — a plain post-hoc guard would never fire.
     $editor = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(62, ['role' => 'editor']), $secret);
     assertEqual(['read', 'write'], (array) $editor->perms, 'editor perms-early-resolution');
+    assertEqual(true, $editor->allow_extract ?? null, 'editor allow_extract');
+    assertEqual(false, $editor->allow_chmod ?? null, 'editor allow_chmod');
 
     // Explicit overrides win over the role default.
     $overridden = \FluxFiles\JwtCompat::decode(
