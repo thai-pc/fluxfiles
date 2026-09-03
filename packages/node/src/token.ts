@@ -112,8 +112,8 @@ const EDITION_PRESETS: Record<string, Record<string, boolean>> = {
  * capability level; explicit opts always win. `role` never itself becomes a JWT
  * claim — it only ever expands into ordinary claims decoded server-side already. */
 const ROLE_PRESETS: Record<string, Record<string, unknown>> = {
-  viewer: { perms: ['read'], owner_only: true },
-  editor: { perms: ['read', 'write'], owner_only: true },
+  viewer: { perms: ['read'], owner_only: true, allow_extract: false, allow_chmod: false },
+  editor: { perms: ['read', 'write'], owner_only: true, allow_extract: true, allow_chmod: false },
   admin: {
     perms: ['read', 'write', 'delete', 'audit'], owner_only: false,
     allow_extract: true, allow_chmod: true, allow_code_edit: true, show_hidden: true,

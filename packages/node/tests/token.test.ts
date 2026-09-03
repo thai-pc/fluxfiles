@@ -171,17 +171,20 @@ describe('createToken', () => {
         shareUrlTtl: 120,
         shareBaseUrl: 'https://files.acme.com/public/share.html',
         sharePreview: false,
+        shareAnalytics: true,
       }),
     ) as Record<string, unknown>;
     expect(c.allow_share).toBe(true);
     expect(c.share_url_ttl).toBe(120);
     expect(c.share_base_url).toBe('https://files.acme.com/public/share.html');
     expect(c.share_preview).toBe(false);
-    // Absent = inherit the core defaults (60s / request origin / preview on).
+    expect(c.share_analytics).toBe(true);
+    // Absent = inherit the core defaults (60s / request origin / preview on / analytics off).
     const off = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
     expect(off.share_url_ttl).toBeUndefined();
     expect(off.share_base_url).toBeUndefined();
     expect(off.share_preview).toBeUndefined();
+    expect(off.share_analytics).toBeUndefined();
   });
 
   it('forwards intakeBaseUrl (PHP parity), and the raw claim escape hatch', () => {
@@ -305,7 +308,17 @@ describe('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md)', () => {
     const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'viewer' })) as Record<string, unknown>;
     expect(c.perms).toEqual(['read']);
     expect(c.owner_only).toBe(true);
-    expect(c.allow_extract).toBeUndefined();
+    // Regression (B1): allow_extract/allow_chmod default TRUE on the PHP decode
+    // side (Claims::fromJwtPayload) when absent — viewer/editor must set them
+    // explicitly false in the JWT, not rely on omission.
+    expect(c.allow_extract).toBe(false);
+    expect(c.allow_chmod).toBe(false);
+  });
+
+  it('editor: gets allow_extract but never allow_chmod', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'editor' })) as Record<string, unknown>;
+    expect(c.allow_extract).toBe(true);
+    expect(c.allow_chmod).toBe(false);
   });
 
   it('admin: full perms, not owner-scoped, power-user toggles on', () => {
