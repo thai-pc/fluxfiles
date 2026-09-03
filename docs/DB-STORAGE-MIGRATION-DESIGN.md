@@ -1252,16 +1252,14 @@ full field-by-field diff (not timestamp-based) remains the actual drift
 safety net either way, so this only affects `migrate()`'s bucket counts and
 write volume on re-runs, never correctness.
 
-> **Adapter↔core floor note:** `LaravelDbMetadataHandler` and
-> `WpDbMetadataHandler` now implement the core-defined
-> `MigrationImportInterface`. Per `scripts/check-adapter-core-floor.sh`'s
-> manual-check convention, both adapters' `composer.json` core-version floors
-> must be bumped to the first core release that ships this interface once
-> that core version is tagged — `packages/laravel/tests/test-laravel-db-metadata.php`
-> will fail against an older installed `fluxfiles/fluxfiles` (e.g. the
-> currently-released `core-v0.2.79`) until that happens, since it resolves
-> the dependency through Composer's real vendor tree rather than the
-> monorepo's local core.
+> **Adapter↔core floor note — resolved.** `LaravelDbMetadataHandler` and
+> `WpDbMetadataHandler` implement the core-defined `MigrationImportInterface`,
+> which `core-v0.2.79` predates. `scripts/check-adapter-core-floor.sh` caught
+> the stale `^0.2.79` floor in CI (a fatal "Interface not found" building
+> core at that tag). Fixed by cutting `core-v0.2.80` at the commit that
+> includes §3-§9 of this doc plus the ACL role-preset fix, and bumping both
+> `packages/laravel/composer.json` and `packages/wordpress/composer.json` to
+> `^0.2.80`.
 
 **§7 (export/import tooling) is implemented** — `\FluxFiles\Db\MetadataExporter`
 (generator-based `rows()` + format-agnostic `streamTo()`, never buffers a full
