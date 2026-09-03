@@ -110,6 +110,7 @@ New env vars (`docs/CONFIG.md` §3):
 |---|---|---|
 | `FLUXFILES_SHARE_RATE_LIMIT` | `60` | Requests/min per `jti` across `share/info` + `share/file`. |
 | `FLUXFILES_SHARE_UNLOCK_LIMIT` | `5` | Password attempts/min per `jti` + client IP. |
+| `FLUXFILES_SHARE_UNLOCK_TOTAL` | `30` | Password attempts/min per `jti`, no IP component — closes the gap an attacker rotating `REMOTE_ADDR` would otherwise walk through the per-IP bucket above. See §6. |
 
 ## 4. Endpoints
 
@@ -167,6 +168,29 @@ self-contained; it yields a bounded transform, never the original bytes, and **n
 touches the download counter. The token is minted **only after** password verification (i.e.
 in the unlock response for protected shares) — otherwise a protected image previews without
 the password.
+
+**Client-side download mechanism (`share.html`, not a route — documented here because it's
+the least obvious piece of the landing page).** The bytes route is stateful (every hit
+increments `downloads`, and on S3/R2 that hit's response body IS a cross-origin `302`), so it
+can only ever be triggered **once per click**: a separate "check" request would burn a second
+download for one click, and a plain `fetch()` that follows the redirect would need S3 to
+allow the FluxFiles origin in its CORS policy, which isn't guaranteed. The click handler
+therefore navigates a **hidden `<iframe>`** to the bytes URL instead of using `fetch`:
+
+- Our own error responses are same-origin JSON with no attachment header, so they land in the
+  iframe's `contentDocument`, readable by the parent page — those get parsed and shown inline
+  (`#dlerr`), with two codes special-cased: `share_grant_invalid` re-locks the card (the
+  recipient re-enters the password) and `share_exhausted` permanently disables/relabels the
+  Download button, since neither can succeed on retry.
+- A real download — local/SFTP bytes, or the followed S3/R2 redirect landing on a different
+  origin — either doesn't render into the frame or throws on `contentDocument` access; both
+  are treated as **success** (the browser's own download UI has taken over; there's nothing
+  left to report).
+- A 6-second timeout also counts as success if nothing readable showed up by then. This means
+  a genuinely slow-but-eventually-successful redirect can get silently treated as done before
+  it actually resolves — the real download still proceeds via the browser, this only affects
+  whether the button re-enables promptly; accepted trade-off, not a bug to "fix" with a longer
+  timeout (which would just make network errors sit unreported for longer instead).
 
 ### Operator (main JWT, 3-layer gate incl. `allow_share`)
 
@@ -330,7 +354,9 @@ the `claims` escape hatch; add them to the explicit forwarding lists only where
   `POST unlock` → `GET file` → 200 + `Content-Disposition` → over-cap → 410 → `revoke` → 404.
 - **Browser** — `tests/browser/share-landing.spec.ts`: card renders from a live info
   response; wrong password shows the error and doesn't reveal the name; download click;
-  expired/revoked terminal states; dark-mode boot doesn't flash. Skips without the module.
+  expired/revoked terminal states; dark-mode boot doesn't flash. Also asserts the
+  module-absent path directly (no mock): the real `501 module_not_installed` renders as a
+  terminal state, with exactly one unauthenticated request to `share/info`.
 - **Guards** — add `'share/info','share/unlock','share/file','share/list','share/revoke'` to
   `$intentionallyUnproxied` in `packages/laravel/tests/test-laravel-smoke.php:298` (paid
   modules are core-standalone by current policy). **WordPress has no route-parity guard**, so
@@ -379,6 +405,7 @@ the `claims` escape hatch; add them to the explicit forwarding lists only where
 |---|---|---|
 | `FLUXFILES_SHARE_RATE_LIMIT` | `60` | Public share requests/min per share id (`share/info` + `share/file`). |
 | `FLUXFILES_SHARE_UNLOCK_LIMIT` | `5` | Password attempts/min per share id + client IP. |
+| `FLUXFILES_SHARE_UNLOCK_TOTAL` | `30` | Password attempts/min per share id, no IP component. |
 
 Sources: [WeTransfer pricing 2026](https://goodsign.io/blog/wetransfer-pricing) ·
 [WeTransfer password-protected transfers](https://wetransfer.com/resources/password-protected-file-transfer) ·

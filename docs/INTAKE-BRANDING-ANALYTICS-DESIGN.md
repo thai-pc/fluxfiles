@@ -219,6 +219,75 @@ verbatim from `share.html` (lines 40-43 CSS, lines 109-151 JS):
   brand, full brand, logo+name without a link, and a `javascript:` logo URL
   being dropped before it reaches `img.src`).
 
+### A.10 Public route reference (rate limits + error codes)
+
+**Gap note (added in this pass):** Share's public routes have their own
+narrative doc (`docs/SHARE-PUBLIC-LANDING.md`) covering rate limits and error
+codes end to end; Intake's equivalent routes had no narrative coverage
+anywhere — only the bare claim rows in `docs/CONFIG.md`. This subsection
+closes that gap. Everything below is implemented today in
+`packages/core/api/PublicLinks.php`'s `handleIntakePublic()` /
+`ff_intake_rate_limit()`; it does not depend on Parts A/B above.
+
+**Routes** (no main JWT — the portal token itself is the per-request auth,
+exactly like Share):
+
+- `GET  /api/fm/intake/info?token=…` → the landing page's data (label, brand,
+  `has_password`, `allowed_ext`, `max_mb`, `remaining`). Rate-limited under the
+  `info` bucket below.
+- `POST /api/fm/intake/upload {token, password?} + file` → anonymous file
+  drop, built from the portal token's own write-scoped `Claims` (the fail-closed
+  virus-scan wiring runs here too — see the code comment at
+  `PublicLinks.php:112-124` — so `allow_virus_scan` still applies to an
+  anonymous intake upload even though there's no operator-authenticated request
+  behind it). Rate-limited under the tighter `upload` bucket.
+
+**Rate limits** (`ff_intake_rate_limit()`, same JSON-file limiter as Share, 60s
+window, bucketed by the portal's unverified `jti` — tampering it invalidates
+the token's signature anyway, so it can't be used to dodge the bucket with a
+still-working token):
+
+| Env var | Default | Bucket key | Notes |
+|---|---|---|---|
+| `FLUXFILES_INTAKE_RATE_LIMIT` | `60` | `intake:<jti>` | `info` — the landing page poll. Single roomy bucket, no IP component. |
+| `FLUXFILES_INTAKE_UPLOAD_LIMIT` | `10` | `intake_upload:<jti>:<ip>` | `upload`, per portal **+ client IP**. |
+| `FLUXFILES_INTAKE_UPLOAD_TOTAL` | `60` | `intake_upload_all:<jti>` | `upload`, per portal, **no IP component** — the ceiling `REMOTE_ADDR` rotation (proxy pool, IPv6 /64) can't escape. |
+
+`upload` needs both buckets for the same reason Share's `unlock` does (see
+`docs/SHARE-PUBLIC-LANDING.md` §6): it is simultaneously the portal's password
+brute-force surface (when one is set) and its anonymous-upload flood surface,
+and an IP-only limit is never safe on its own. Keep `..._TOTAL` above the
+number of legitimate concurrent contributors a busy portal expects — a shared
+office NAT means every sender behind one IP shares the `..._LIMIT` bucket, so
+a handful of people uploading around the same time must not lock out the
+whole portal. Both buckets throw `rate_limited` (429).
+
+**Error codes** the two routes can return (`error_code` field in the JSON
+envelope):
+
+| Code | HTTP | Origin | Meaning |
+|---|---|---|---|
+| `module_not_installed` | 501 | core | The `intake` module isn't installed on this server. |
+| `license_required` | 402 | core | `intake` is installed but unlicensed. |
+| `rate_limited` | 429 | core | One of the buckets above tripped. |
+| `intake_invalid` | 403 | core | The portal token failed JWT verification (expired, wrong secret, malformed) — thrown before the paid module ever sees the request. |
+| `no_file` | 400 | core | `POST /upload` with no `file` part, or a non-`UPLOAD_ERR_OK` PHP upload error. |
+| `not_found` | 404 | core | Neither route matched (wrong method/path). |
+| `server_error` | 500 | core | `FLUXFILES_SECRET` unconfigured, or an uncaught exception. |
+| *(module-specific)* | varies | `IntakeModule` (paid, gitignored) | Wrong password, upload cap exhausted, disallowed extension, oversized file, virus hit, and any other portal-record-level rejection. These originate inside the private package and aren't enumerable from core alone — treat any `error_code` not in the table above as coming from there. |
+
+Note the split: everything a portal-less attacker can trigger (bad token,
+missing file, rate limit, module absence) is a **core** error code with a
+fixed meaning; everything that depends on the portal's own configuration
+(password, cap, allow-list) is minted by the paid module and can vary by
+release. `intake.html` renders `error`/`error_code` generically (see §A.6) —
+it doesn't special-case module-specific codes the way `share.html`'s
+`startDownload()` special-cases `share_grant_invalid`/`share_exhausted` (§6 of
+the Share doc), since none of Intake's module-specific failures need
+different client-side handling — they all just show the message and leave the
+form usable (or disabled, for the cap — see the `remaining === 0` guard added
+in this pass, mirroring `share.html`'s disabled-download-button guard).
+
 ---
 
 ## Part B — Intake Per-Event Analytics

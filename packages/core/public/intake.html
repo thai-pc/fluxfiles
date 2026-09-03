@@ -22,7 +22,7 @@
            min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
     .card { background:var(--card); border:1px solid var(--border); border-radius:14px; width:100%; max-width:520px; padding:28px;
             box-shadow:0 10px 40px rgba(0,0,0,.10); }
-    h1 { font-size:20px; margin:0 0 4px; }
+    h1 { font-size:20px; margin:0 0 4px; overflow-wrap:anywhere; }
     .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
     .drop { border:2px dashed var(--border); border-radius:12px; padding:34px 16px; text-align:center; cursor:pointer; transition:.15s;
             color:var(--muted); }
@@ -76,6 +76,7 @@
       var API = String(window.__FM_API_BASE__ || '/api/fm').replace(/\/+$/, '');
       var $ = function (id) { return document.getElementById(id); };
       var gate = $('gate'), form = $('form');
+      var uploadsDisabled = false;
 
       function fail(text) { gate.textContent = text; gate.classList.remove('hidden'); }
 
@@ -151,16 +152,27 @@
         if (info.max_mb) { bits.push('Max ' + info.max_mb + ' MB per file'); }
         if (info.remaining !== null && info.remaining !== undefined) { bits.push(info.remaining + ' upload(s) remaining'); }
         $('constraints').textContent = bits.join(' · ');
+
+        // The cap can already be at 0 on load (someone else used the last slot
+        // between this page loading for them and for you) — don't let visitors
+        // queue uploads that are guaranteed to fail. Mirrors share.html's
+        // disabled-download guard for the same reason.
+        uploadsDisabled = info.remaining === 0;
+        drop.classList.toggle('over', false);
+        drop.style.opacity = uploadsDisabled ? '.5' : '';
+        drop.style.cursor = uploadsDisabled ? 'default' : 'pointer';
+        fileInput.disabled = uploadsDisabled;
       }
 
       var drop = $('drop'), fileInput = $('file'), list = $('list');
-      drop.addEventListener('click', function () { fileInput.click(); });
+      drop.addEventListener('click', function () { if (!uploadsDisabled) { fileInput.click(); } });
       fileInput.addEventListener('change', function () { handle(fileInput.files); fileInput.value = ''; });
-      ['dragenter', 'dragover'].forEach(function (e) { drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.add('over'); }); });
+      ['dragenter', 'dragover'].forEach(function (e) { drop.addEventListener(e, function (ev) { ev.preventDefault(); if (!uploadsDisabled) { drop.classList.add('over'); } }); });
       ['dragleave', 'drop'].forEach(function (e) { drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.remove('over'); }); });
       drop.addEventListener('drop', function (ev) { handle(ev.dataTransfer.files); });
 
       function handle(files) {
+        if (uploadsDisabled) { return; }
         for (var i = 0; i < files.length; i++) { upload(files[i]); }
       }
 
@@ -186,6 +198,11 @@
             fill.style.width = '100%'; st.textContent = '✓'; st.className = 'st-ok';
             if (j.data.remaining !== null && j.data.remaining !== undefined) {
               var c = $('constraints'); c.textContent = c.textContent.replace(/\d+ upload\(s\) remaining/, j.data.remaining + ' upload(s) remaining');
+              if (j.data.remaining === 0) {
+                uploadsDisabled = true;
+                drop.style.opacity = '.5'; drop.style.cursor = 'default';
+                fileInput.disabled = true;
+              }
             }
           } else {
             st.textContent = (j && j.error) ? '✕ ' + j.error : '✕'; st.className = 'st-err';

@@ -5,6 +5,10 @@ declare(strict_types=1);
 /**
  * The PUBLIC half of Share and Intake — the routes a recipient hits, with no main JWT.
  *
+ * Also home to ff_sso_rate_limit() (below): not a Share/Intake route, but the SSO
+ * bridge's pre-auth routes are the one other place with no main JWT to rate-limit
+ * against, so it rides the same JSON-file limiter here rather than duplicating it.
+ *
  * These live in their own file rather than in index.php for one reason: the WordPress
  * plugin has to serve the same routes, and including index.php would run its auth and
  * routing as a side effect. A file with nothing but function definitions can be pulled
@@ -144,6 +148,9 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
                     && \FluxFiles\LicenseManager::fromEnv()->licensed('webhooks')) {
                     $jti = (string) ($payload->jti ?? '');
                     $store = (string) ($payload->store ?? '');
+                    // A portal token is minted for exactly one disk (see
+                    // IntakeModule::createPortal()), so [0] is safe here — this is
+                    // NOT the general multi-disk case a main-app token can carry.
                     $whDisk = $portalClaims->allowedDisks[0] ?? '';
                     $wh = $module->webhookConfigFor($dm, $whDisk, $store, $jti);
                     if ($wh !== null) {

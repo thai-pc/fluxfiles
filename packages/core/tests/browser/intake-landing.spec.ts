@@ -89,3 +89,52 @@ test('brand: a javascript: logo_url is dropped, never reaches img.src', async ({
   await expect(page.locator('#brand img')).toHaveCount(0);
   await expect(page.locator('#brand')).toContainText(brand.name);
 });
+
+test('brand: hostile logo_url/link_url schemes never reach img.src/a.href', async ({ page }) => {
+  for (const hostile of ['javascript:window.__pwned=1', 'data:text/html,<script>window.__pwned=1</script>', 'vbscript:msgbox(1)']) {
+    await page.unroute('**/api/fm/intake/info*').catch(() => {});
+    const brand = { name: 'Acme Corp', logo_url: hostile, color: '', link_url: hostile };
+    await page.route('**/api/fm/intake/info*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: info({ brand }), error: null }) })
+    );
+    await page.goto(`/public/intake.html?token=${encodeURIComponent(TOKEN)}`);
+    await expect(page.locator('#form')).toBeVisible();
+    // Only the name is left — no logo, no link wrapper, since both were refused.
+    await expect(page.locator('#brand img')).toHaveCount(0);
+    await expect(page.locator('#brand a')).toHaveCount(0);
+    await expect(page.locator('#brand')).toContainText(brand.name);
+    expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__pwned)).toBeUndefined();
+  }
+});
+
+test('brand: an invalid color is ignored, leaving --accent at its default', async ({ page }) => {
+  for (const bad of ['not-a-color', 'red', '#12345', 'javascript:alert(1)']) {
+    await page.unroute('**/api/fm/intake/info*').catch(() => {});
+    const brand = { name: 'Acme Corp', logo_url: '', color: bad, link_url: '' };
+    await page.route('**/api/fm/intake/info*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: info({ brand }), error: null }) })
+    );
+    await page.goto(`/public/intake.html?token=${encodeURIComponent(TOKEN)}`);
+    // Default --accent is #7c3aed per the inline :root style — never overwritten by a bad value.
+    const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+    expect(accent.toLowerCase()).toBe('#7c3aed');
+  }
+});
+
+test('the drop zone and file input are disabled when remaining uploads is 0', async ({ page }) => {
+  await page.route('**/api/fm/intake/info*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: info({ remaining: 0 }), error: null }) })
+  );
+  await page.goto(`/public/intake.html?token=${encodeURIComponent(TOKEN)}`);
+  await expect(page.locator('#form')).toBeVisible();
+  await expect(page.locator('#file')).toBeDisabled();
+  await expect(page.locator('#constraints')).toContainText('0 upload(s) remaining');
+
+  // Clicking the drop zone must not open the file picker while disabled — since a
+  // real file chooser can't be asserted directly, assert no chooser event fires.
+  let chooserFired = false;
+  page.once('filechooser', () => { chooserFired = true; });
+  await page.locator('#drop').click();
+  await page.waitForTimeout(100);
+  expect(chooserFired).toBe(false);
+});
