@@ -1,5 +1,12 @@
 # Intake Branding + Per-Event Analytics — Design
 
+Status: **Implemented and shipped.** Branding (`intake_brand_*` claims,
+`Claims::sanitizeIntakeBrand()`, rendered in `packages/core/public/intake.html`)
+and per-event analytics (`intake_analytics` claim, `GET /api/fm/intake/analytics`,
+`IntakeModule::analytics()`) both live in `packages/intake/src/IntakeModule.php`.
+See the CHANGELOG "Intake branding + per-event analytics" entry (`intake`'s
+composer floor bumped to `^0.2.76`).
+
 > Scope note: this spec covers **two additions** to the Intake module
 > (`packages/intake/src/IntakeModule.php`, gitignored private package, gated by
 > `ModuleRegistry` — installed + licensed + `allow_intake`):

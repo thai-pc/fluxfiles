@@ -1,5 +1,13 @@
 # Intake notify-on-receipt (→ Webhooks)
 
+Status: **Implemented and shipped** (`b37e1fa feat(intake): fire webhooks
+intake_received event on portal upload`). Webhook config is baked into the
+intake record at create time and read via `IntakeModule::webhookConfigFor()`;
+dispatch is post-response in `packages/core/api/PublicLinks.php`, firing
+`WebhooksModule::dispatch(..., 'intake_received', ...)` when both `intake`
+and `webhooks` are installed+licensed. Failures are `error_log`-only,
+matching Webhooks' at-most-once design elsewhere in the codebase.
+
 > **Scope note.** This is the one open item left from `docs/ROADMAP.md` §6c's
 > Intake+ wishlist — everything else there (operator UI, branding, analytics,
 > virus-scan-on-receipt) already shipped, per `docs/INTAKE-BRANDING-ANALYTICS-DESIGN.md`.

@@ -1,5 +1,11 @@
 # Share Analytics — Per-Event Log for the Share Module
 
+Status: **Implemented and shipped.** `share_analytics` claim, per-event JSONL
+log (`_fluxfiles/share-events/<jti>.jsonl`), and `GET /api/fm/share/analytics`
+all live in `packages/share/src/ShareModule.php` and `Claims::$shareAnalytics`.
+See the CHANGELOG "Share per-event analytics" entry (`share`'s composer floor
+bumped to `^0.2.75`).
+
 > Scope note: this spec is about **analytics only**. A separate, already-implemented
 > feature ("Branded Share" — `share_brand_*` claims, `Claims::sanitizeShareBrand()`,
 > `$rec['brand']` in `ShareModule.php`) touches the exact same three methods this spec
