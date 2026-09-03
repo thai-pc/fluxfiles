@@ -1,7 +1,13 @@
 # Design: Sharing a specific folder with a specific teammate
 
-Status: Proposed — not yet implemented (documentation/pattern only; no
-FluxFiles code changes required to use it today).
+Status: **Final — pattern documented, nothing to implement.** This spec is
+documentation/pattern only by design (see §1 non-goals): it introduces no new
+claims, storage, or endpoints, so there is no FluxFiles code change to make
+and no automated test to add (§7). The cross-reference from
+`ACL-ROLE-PRESETS-DESIGN.md`'s §1 non-goal 1 back to this document (§8) is
+already in place. Verification is the operator's own grant-lookup/mint code
+and, for §4b, a manual `updateToken()` + `setDisk()` walkthrough — both
+outside this repo's scope.
 
 ## 0. What this is and why it's a separate spec
 
