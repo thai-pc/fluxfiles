@@ -382,7 +382,16 @@ test('proxy route surface covers every core /api/fm route', function () {
         // Laravel apps already authenticate via fluxfiles_token(), so there is
         // nothing for the proxy to forward here at all (see the NOTE in
         // FluxFilesManager::applyOverrides about SSO not being a claim concern).
-        'sso/login', 'sso/callback', 'sso/exchange'];
+        // - metadata/export, metadata/import (docs/DB-STORAGE-MIGRATION-DESIGN.md §7):
+        //   \FluxFiles\Db\MetadataExporter/MetadataImporter work directly against
+        //   core's own \FluxFiles\Db\Connection/dialect SQL layer (raw table access,
+        //   not MetadataRepositoryInterface). Laravel's `db` backend option (§5)
+        //   uses LaravelDbMetadataHandler on Laravel's own Eloquent connection
+        //   instead, so these two classes have nothing to bind to in proxy mode —
+        //   porting export/import would mean a second, Eloquent-flavored
+        //   implementation, not a passthrough. No such port exists yet.
+        'sso/login', 'sso/callback', 'sso/exchange',
+        'metadata/export', 'metadata/import'];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));

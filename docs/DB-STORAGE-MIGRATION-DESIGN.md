@@ -1284,9 +1284,17 @@ including an export→import round trip and a regression test proving an
 earlier in-scope row is *not* written when a later row in the same batch
 fails validation). New error codes (`metadata_export_unavailable`,
 `metadata_import_unavailable`, `metadata_import_rejected`) are translated in
-all 16 `lang/*.json` locales. Core-standalone only — not ported into the
-Laravel/WordPress proxy controllers, since the DB storage backend they'd
-operate on is a core-only mode for those adapters at present.
+all 16 `lang/*.json` locales. Not ported into the Laravel/WordPress proxy
+controllers: `MetadataExporter`/`MetadataImporter` work directly against
+core's own `\FluxFiles\Db\Connection` SQL layer (raw table access, not
+`MetadataRepositoryInterface`), but Laravel's and WordPress's own `db` backend
+options (§5/§6) run on `LaravelDbMetadataHandler`/`WpDbMetadataHandler` over
+each framework's own connection (Eloquent / `$wpdb`) instead of
+`\FluxFiles\Db\Connection`. A proxy port would be a second,
+framework-flavored export/import implementation, not a passthrough — no such
+port exists yet. Both proxy smoke suites list `metadata/export`/
+`metadata/import` under their intentionally-unproxied allowlist with this
+same rationale.
 
 **§8 (S3/R2 breadcrumb) is implemented** —
 `DbMetadataHandler::maybeWriteS3Breadcrumb()` (`packages/core/api/Db/DbMetadataHandler.php`)

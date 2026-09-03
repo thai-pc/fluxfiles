@@ -1106,9 +1106,16 @@ test('proxy route surface covers every core /api/fm route', function () {
     // stream/img are now fully proxied too — see FluxFilesApi's
     // handleAiVision()/handleOcr()/handleBackup()/handleC2pa()/handleC2paSign()/
     // handleTerminal()/handleStream()/handleImg().
+    // - metadata/export, metadata/import (docs/DB-STORAGE-MIGRATION-DESIGN.md §7):
+    //   MetadataExporter/MetadataImporter work directly against core's own
+    //   \FluxFiles\Db\Connection SQL layer. WordPress's `db` backend option (§6)
+    //   uses WpDbMetadataHandler on WordPress's own $wpdb connection instead, so
+    //   these two classes have nothing to bind to in proxy mode. No such port
+    //   exists yet.
     $intentionallyUnproxied = [
         'chmod', 'zip',
         'sso/login', 'sso/callback', 'sso/exchange',
+        'metadata/export', 'metadata/import',
     ];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
