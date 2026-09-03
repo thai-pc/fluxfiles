@@ -1503,6 +1503,60 @@ class FluxFilesController
         }
     }
 
+    /**
+     * One-click Git deploy — SFTP disks only. Free/core, not a ModuleRegistry
+     * module. Mirrors index.php's /api/fm/git-deploy gate order exactly: server
+     * kill-switch, allow_git_deploy claim, write perm, disk ACL, driver check,
+     * unconfigured-path check, then run. Target path/branch/hooks come from
+     * claims only — the request body carries at most `disk` — per
+     * docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1. No dedicated rate-limit bucket
+     * here (this adapter has no per-action bucket precedent — see terminal()/
+     * importUrl() — so it reuses the generic write bucket like everything else).
+     */
+    public function gitDeploy(Request $request): JsonResponse
+    {
+        try {
+            if (($_ENV['FLUXFILES_GIT_DEPLOY_DISABLED'] ?? '') === 'true') {
+                throw new ApiException('Git deploy is disabled on this server', 403, 'git_deploy_disabled');
+            }
+            $claims = $this->claims($request);
+            if (!$claims->allowGitDeploy) {
+                throw new ApiException('Git deploy is not allowed', 403, 'git_deploy_forbidden');
+            }
+            $this->rateLimit($claims, true);
+            if (!$claims->hasPerm('write')) {
+                throw new ApiException('Permission denied: write', 403, 'permission_denied');
+            }
+            $disk = (string) $request->input('disk', '');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+            }
+            if (($this->diskManager->config($disk)['driver'] ?? '') !== 'sftp') {
+                throw new ApiException('Git deploy only works on an SFTP disk', 400, 'terminal_unsupported');
+            }
+            if ($claims->gitDeployPath === '') {
+                throw new ApiException('git_deploy_path claim is not configured for this token', 400, 'git_deploy_unconfigured');
+            }
+            [$conn, $root] = $this->diskManager->sftpConnection($disk);
+            $path = \FluxFiles\SshTerminal::resolveCwd($claims->gitDeployPath, $root);
+            $timeout = (int) ($_ENV['FLUXFILES_GIT_DEPLOY_TIMEOUT'] ?? 120);
+            $result = \FluxFiles\GitDeploy::run($conn, $path, $claims->gitDeployBranch, $claims->gitDeployHooks, $timeout);
+            if (empty($result['shell_ok'])) {
+                throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
+            }
+            if (!empty($result['locked'])) {
+                throw new ApiException('A deploy is already in progress for this repo', 409, 'git_deploy_in_progress');
+            }
+            $detail = $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '');
+            $this->logAudit($claims, 'git_deploy', $disk, '', $detail);
+            $this->dispatchWebhook($claims, 'git_deploy', ['disk' => $disk, 'path' => '', 'name' => '']);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     // ── Gated media stream / on-demand image transform (free/core) ────────────
     //
     // Both are ported from index.php's handleMediaStream()/handleImageTransform()

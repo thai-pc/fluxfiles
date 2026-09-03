@@ -95,6 +95,10 @@ Route::post('c2pa/sign', [FluxFilesController::class, 'c2paSign']);
 // SSH terminal (command-runner, SFTP disks only; free/core, not a paid module)
 Route::post('terminal', [FluxFilesController::class, 'terminal']);
 
+// One-click Git deploy (SFTP disks only; free/core, not a paid module) — target
+// path/branch/hooks come from claims, never the request body (docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1)
+Route::post('git-deploy', [FluxFilesController::class, 'gitDeploy']);
+
 // Share + Intake (paid module) — operator side: create/list/revoke/analytics.
 // The public recipient routes (share/info, share/unlock, share/file, intake/info,
 // intake/upload) and the recipient landing pages are registered separately in

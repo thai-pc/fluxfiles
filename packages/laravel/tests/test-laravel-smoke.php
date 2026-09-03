@@ -446,6 +446,25 @@ test('allow_terminal (SSH terminal) forwards in proxy mode', function () use ($s
     assertEqual(true, ($p->allow_terminal ?? false), 'terminal claim forwarded in proxy mode');
 });
 
+test('allow_git_deploy (+ path/branch/hooks) forwards in proxy mode', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $overrides = [
+        'allow_git_deploy'  => true,
+        'git_deploy_path'   => '/var/www/site',
+        'git_deploy_branch' => 'main',
+        'git_deploy_hooks'  => true,
+    ];
+
+    // Git deploy now has a route in both modes (proxy: gitDeploy(); standalone:
+    // index.php), so the gate + its target claims forward unconditionally —
+    // proxy mode (default) included, matching allow_terminal above.
+    $p = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
+    assertEqual(true, ($p->allow_git_deploy ?? false), 'git-deploy gate forwarded in proxy mode');
+    assertEqual('/var/www/site', $p->git_deploy_path ?? '', 'git_deploy_path forwarded in proxy mode');
+    assertEqual('main', $p->git_deploy_branch ?? '', 'git_deploy_branch forwarded in proxy mode');
+    assertEqual(true, ($p->git_deploy_hooks ?? false), 'git_deploy_hooks forwarded in proxy mode');
+});
+
 test('allow_versioning (+ its tuning claims) forwards in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $overrides = [

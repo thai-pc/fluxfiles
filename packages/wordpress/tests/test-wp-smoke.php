@@ -277,6 +277,23 @@ test('generateToken forwards terminal gate', function () use ($secret) {
     assertEqual(true, ($p->allow_terminal ?? false), 'terminal gate forwarded');
 });
 
+// Git deploy now has a proxy route too (/api/fm/git-deploy, see FluxFilesApi's
+// handleGitDeploy()), so the gate + its target claims forward unconditionally,
+// matching allow_terminal above.
+test('generateToken forwards git-deploy gate + path/branch/hooks', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(60, [
+        'allow_git_deploy'  => true,
+        'git_deploy_path'   => '/var/www/site',
+        'git_deploy_branch' => 'main',
+        'git_deploy_hooks'  => true,
+    ]);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(true, ($p->allow_git_deploy ?? false), 'git-deploy gate forwarded');
+    assertEqual('/var/www/site', $p->git_deploy_path ?? '', 'git_deploy_path forwarded');
+    assertEqual('main', $p->git_deploy_branch ?? '', 'git_deploy_branch forwarded');
+    assertEqual(true, ($p->git_deploy_hooks ?? false), 'git_deploy_hooks forwarded');
+});
+
 test('gated media stream/img is wired (setStreamSecret + local disk private key)', function () {
     $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(strpos($apiSrc, 'setStreamSecret(') !== false, 'fileManager() wires setStreamSecret()');

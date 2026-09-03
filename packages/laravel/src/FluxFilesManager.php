@@ -229,6 +229,23 @@ class FluxFilesManager
         if (!empty($overrides['terminal_pty_url'])) {
             $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
         }
+        // Git deploy (SFTP disks) now has a proxy route too
+        // (FluxFilesController::gitDeploy(), see routes/fluxfiles.php), so the gate
+        // claim forwards unconditionally, matching allow_terminal above. The
+        // target path/branch/hooks are operator-set here — never accepted from a
+        // request body on either side — per docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1.
+        if (array_key_exists('allow_git_deploy', $overrides)) {
+            $payload['allow_git_deploy'] = (bool) $overrides['allow_git_deploy'];
+        }
+        if (!empty($overrides['git_deploy_path'])) {
+            $payload['git_deploy_path'] = (string) $overrides['git_deploy_path'];
+        }
+        if (!empty($overrides['git_deploy_branch'])) {
+            $payload['git_deploy_branch'] = (string) $overrides['git_deploy_branch'];
+        }
+        if (array_key_exists('git_deploy_hooks', $overrides)) {
+            $payload['git_deploy_hooks'] = (bool) $overrides['git_deploy_hooks'];
+        }
         // Versioning now has routes in both modes (proxy: FluxFilesController's
         // versions()/versionsRestore() + the version-keeper hook wired in
         // fileManager(); standalone: index.php), so the gate claim — and its tuning

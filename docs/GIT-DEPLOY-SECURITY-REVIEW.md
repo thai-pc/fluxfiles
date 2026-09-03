@@ -239,5 +239,17 @@ Implemented per §4, free/core (not a paid module — same tier as
   regex rejection). `docs/CONFIG.md` §2.2/§3 updated (required for
   `tests/unit/test-config-doc.php`); all 16 `lang/*.json` got the 4 new
   `error.git_deploy_*` keys (required for `tests/unit/test-i18n.php`).
-- **Not done**: Laravel/WordPress proxy adapter parity (unlike `/terminal`,
-  which both proxies already forward). Follow-up if operators need it there.
+- **Laravel/WordPress proxy adapter parity — DONE (2026-09-03).** Both proxies
+  now port `GitDeploy::run()` directly (`FluxFilesController::gitDeploy()` /
+  `FluxFilesApi::handleGitDeploy()`), mirroring `terminal()`'s exact gate order
+  (kill-switch → `allow_git_deploy` → write perm → disk ACL → SFTP-only →
+  unconfigured-path check → run), with the same claim-only targeting (§4.1) —
+  the request body carries at most `disk`. `FluxFilesManager`/`FluxFilesPlugin`
+  forward `allow_git_deploy`/`git_deploy_path`/`git_deploy_branch`/
+  `git_deploy_hooks` from token overrides unconditionally, matching
+  `allow_terminal`. Neither proxy has a dedicated per-action rate-limit
+  bucket for anything (not even `import-url`), so git-deploy reuses the
+  generic write bucket there instead of core's dedicated
+  `FLUXFILES_GIT_DEPLOY_RATE_LIMIT` — a deliberate adapter-level gap, not an
+  oversight. Requires core ≥ 0.2.81 (`composer.json` floor bumped in both
+  packages since `GitDeploy` didn't exist at 0.2.80).

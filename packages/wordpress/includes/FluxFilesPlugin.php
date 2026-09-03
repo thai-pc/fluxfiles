@@ -439,6 +439,22 @@ class FluxFilesPlugin
         if (!empty($overrides['terminal_pty_url'])) {
             $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
         }
+        // Git deploy now proxies too (see FluxFilesApi's handleGitDeploy()), so the
+        // gate forwards like any other, same as allow_terminal above. The target
+        // path/branch/hooks are operator-set here — never accepted from a request
+        // body on either side — per docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1.
+        if (array_key_exists('allow_git_deploy', $overrides)) {
+            $payload['allow_git_deploy'] = (bool) $overrides['allow_git_deploy'];
+        }
+        if (!empty($overrides['git_deploy_path'])) {
+            $payload['git_deploy_path'] = (string) $overrides['git_deploy_path'];
+        }
+        if (!empty($overrides['git_deploy_branch'])) {
+            $payload['git_deploy_branch'] = (string) $overrides['git_deploy_branch'];
+        }
+        if (array_key_exists('git_deploy_hooks', $overrides)) {
+            $payload['git_deploy_hooks'] = (bool) $overrides['git_deploy_hooks'];
+        }
         // PDF-tools + office embeds are pure UI (no core endpoint) → work in any mode.
         if (!empty($overrides['pdf_tools_url'])) {
             $payload['pdf_tools_url'] = (string) $overrides['pdf_tools_url'];
