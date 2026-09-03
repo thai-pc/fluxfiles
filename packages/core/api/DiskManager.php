@@ -232,18 +232,84 @@ class DiskManager
             $hostFingerprint = count($list) === 1 ? $list[0] : $list;
         }
 
+        // Fail-closed host verification: an operator who wants to guarantee no
+        // connection ever trusts an unpinned key opts in here — without it, a
+        // missing host_fingerprint silently falls back to trust-any-key above
+        // (kept as the default for backward compatibility with existing disks).
+        if (!empty($cfg['require_host_key']) && $hostFingerprint === null) {
+            throw new ApiException(
+                "SFTP disk requires host_fingerprint to be set (require_host_key is on)",
+                400,
+                'sftp_host_key_required'
+            );
+        }
+
         return \League\Flysystem\PhpseclibV3\SftpConnectionProvider::fromArray([
-            'host'            => $host,
-            'username'        => (string) ($cfg['username'] ?? ''),
-            'password'        => ($cfg['password'] ?? '') !== '' ? (string) $cfg['password'] : null,
-            'privateKey'      => ($cfg['private_key'] ?? '') !== '' ? (string) $cfg['private_key'] : null,
-            'passphrase'      => ($cfg['private_key_passphrase'] ?? '') !== '' ? (string) $cfg['private_key_passphrase'] : null,
-            'port'            => (int) ($cfg['port'] ?? 22),
-            'useAgent'        => false, // never reach for a local ssh-agent on the server
-            'hostFingerprint' => $hostFingerprint,
-            'timeout'         => (int) ($cfg['timeout'] ?? 20),
-            'maxTries'        => 2,
+            'host'                => $host,
+            'username'            => (string) ($cfg['username'] ?? ''),
+            'password'            => ($cfg['password'] ?? '') !== '' ? (string) $cfg['password'] : null,
+            'privateKey'          => ($cfg['private_key'] ?? '') !== '' ? (string) $cfg['private_key'] : null,
+            'passphrase'          => ($cfg['private_key_passphrase'] ?? '') !== '' ? (string) $cfg['private_key_passphrase'] : null,
+            'port'                => (int) ($cfg['port'] ?? 22),
+            'useAgent'            => false, // never reach for a local ssh-agent on the server
+            'hostFingerprint'     => $hostFingerprint,
+            'timeout'             => (int) ($cfg['timeout'] ?? 20),
+            'maxTries'            => 2,
+            'preferredAlgorithms' => !empty($cfg['strict_algorithms']) ? self::modernSshAlgorithms() : [],
         ]);
+    }
+
+    /**
+     * KEX/cipher/MAC/host-key allowlist for `strict_algorithms` — modern-only,
+     * excludes everything phpseclib still offers for legacy-server compat: SHA-1
+     * KEX (incl. group1/group14-sha1), RC4 (arcfour), 3DES, Blowfish/Twofish,
+     * CBC-mode ciphers, ssh-dss, SHA-1-only ssh-rsa, and MD5/SHA-1 MACs. Opt-in
+     * (default off) since some old/embedded SFTP servers only speak the legacy
+     * set — turning this on for such a host will fail the handshake outright
+     * rather than silently downgrading.
+     *
+     * @return array{kex:string[],hostkey:string[],client_to_server:array,server_to_client:array}
+     */
+    private static function modernSshAlgorithms(): array
+    {
+        $ciphers = [
+            'aes256-gcm@openssh.com',
+            'chacha20-poly1305@openssh.com',
+            'aes128-gcm@openssh.com',
+            'aes256-ctr',
+            'aes192-ctr',
+            'aes128-ctr',
+        ];
+        $macs = [
+            'hmac-sha2-256-etm@openssh.com',
+            'hmac-sha2-512-etm@openssh.com',
+            'hmac-sha2-256',
+            'hmac-sha2-512',
+        ];
+
+        return [
+            'kex' => [
+                'curve25519-sha256',
+                'curve25519-sha256@libssh.org',
+                'ecdh-sha2-nistp256',
+                'ecdh-sha2-nistp384',
+                'ecdh-sha2-nistp521',
+                'diffie-hellman-group-exchange-sha256',
+                'diffie-hellman-group16-sha512',
+                'diffie-hellman-group18-sha512',
+                'diffie-hellman-group14-sha256',
+            ],
+            'hostkey' => [
+                'ssh-ed25519',
+                'ecdsa-sha2-nistp256',
+                'ecdsa-sha2-nistp384',
+                'ecdsa-sha2-nistp521',
+                'rsa-sha2-512',
+                'rsa-sha2-256',
+            ],
+            'client_to_server' => ['crypt' => $ciphers, 'mac' => $macs],
+            'server_to_client' => ['crypt' => $ciphers, 'mac' => $macs],
+        ];
     }
 
     /**

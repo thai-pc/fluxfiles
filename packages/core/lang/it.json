@@ -295,6 +295,7 @@
     "not_text": "Questo file non è un file di testo.",
     "restore_failed": "Impossibile ripristinare l'elemento.",
     "sftp_config": "SFTP non è configurato correttamente.",
+    "sftp_host_key_required": "Questo disco SFTP richiede che host_fingerprint sia configurato.",
     "stream_token_invalid": "Link multimediale non valido o scaduto.",
     "trash_failed": "Impossibile spostare nel cestino.",
     "trash_unavailable": "Il cestino non è disponibile.",

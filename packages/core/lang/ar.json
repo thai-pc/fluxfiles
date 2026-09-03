@@ -295,6 +295,7 @@
     "not_text": "هذا الملف ليس ملفًا نصيًا.",
     "restore_failed": "تعذّر استعادة العنصر.",
     "sftp_config": "لم يتم إعداد SFTP بشكل صحيح.",
+    "sftp_host_key_required": "يتطلب قرص SFTP هذا تكوين host_fingerprint.",
     "stream_token_invalid": "رابط الوسائط غير صالح أو منتهي الصلاحية.",
     "trash_failed": "تعذّر النقل إلى المهملات.",
     "trash_unavailable": "المهملات غير متاحة.",

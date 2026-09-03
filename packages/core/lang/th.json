@@ -295,6 +295,7 @@
     "not_text": "ไฟล์นี้ไม่ใช่ไฟล์ข้อความ",
     "restore_failed": "ไม่สามารถกู้คืนรายการได้",
     "sftp_config": "ยังตั้งค่า SFTP ไม่ถูกต้อง",
+    "sftp_host_key_required": "ดิสก์ SFTP นี้ต้องกำหนดค่า host_fingerprint",
     "stream_token_invalid": "ลิงก์สื่อไม่ถูกต้องหรือหมดอายุ",
     "trash_failed": "ไม่สามารถย้ายไปถังขยะได้",
     "trash_unavailable": "ถังขยะไม่พร้อมใช้งาน",

@@ -295,6 +295,7 @@
     "not_text": "Este arquivo não é um arquivo de texto.",
     "restore_failed": "Não foi possível restaurar o item.",
     "sftp_config": "O SFTP não está configurado corretamente.",
+    "sftp_host_key_required": "Este disco SFTP requer que host_fingerprint esteja configurado.",
     "stream_token_invalid": "Link de mídia inválido ou expirado.",
     "trash_failed": "Não foi possível mover para a lixeira.",
     "trash_unavailable": "A lixeira não está disponível.",

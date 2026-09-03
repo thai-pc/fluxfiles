@@ -295,6 +295,7 @@
     "not_text": "Dit bestand is geen tekstbestand.",
     "restore_failed": "Kan item niet herstellen.",
     "sftp_config": "SFTP is niet juist geconfigureerd.",
+    "sftp_host_key_required": "Deze SFTP-schijf vereist dat host_fingerprint is geconfigureerd.",
     "stream_token_invalid": "Ongeldige of verlopen medialink.",
     "trash_failed": "Kan niet naar prullenbak verplaatsen.",
     "trash_unavailable": "Prullenbak is niet beschikbaar.",

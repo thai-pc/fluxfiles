@@ -174,6 +174,84 @@ test('env SFTP_HOST_FINGERPRINT maps to the disk config', function () use ($HOST
     }
 });
 
+// ── require_host_key (fail-closed host verification) ──────────────────────
+
+test('require_host_key + no fingerprint → rejected before any connection', function () use ($HOST) {
+    try {
+        buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw', 'require_host_key' => true]);
+        throw new \RuntimeException('should reject: require_host_key on with no fingerprint');
+    } catch (\FluxFiles\ApiException $e) {
+        assertEqual('sftp_host_key_required', $e->getErrorCode());
+    }
+});
+
+test('require_host_key + fingerprint set → builds fine', function () use ($HOST, $FP) {
+    $p = buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw', 'require_host_key' => true, 'host_fingerprint' => $FP]);
+    assertEqual($FP, prop($p, 'hostFingerprint'));
+});
+
+test('require_host_key off (default) + no fingerprint → still builds (backward-compatible)', function () use ($HOST) {
+    $p = buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw']);
+    assertEqual(null, prop($p, 'hostFingerprint'));
+});
+
+test('env SFTP_REQUIRE_HOST_KEY maps to the disk config', function () use ($HOST) {
+    $saved = [$_ENV['SFTP_HOST'] ?? null, $_ENV['SFTP_REQUIRE_HOST_KEY'] ?? null];
+    $_ENV['SFTP_HOST'] = $HOST; $_ENV['SFTP_REQUIRE_HOST_KEY'] = 'true';
+    try {
+        $disks = require __DIR__ . '/../../config/disks.php';
+        assertEqual(true, $disks['sftp']['require_host_key'] ?? null);
+    } finally {
+        [$_ENV['SFTP_HOST'], $_ENV['SFTP_REQUIRE_HOST_KEY']] = $saved;
+        foreach (['SFTP_HOST', 'SFTP_REQUIRE_HOST_KEY'] as $i => $k) {
+            if ($saved[$i] === null) { unset($_ENV[$k]); }
+        }
+    }
+});
+
+// ── strict_algorithms (modern KEX/cipher/MAC allowlist) ────────────────────
+
+test('strict_algorithms off (default) → no algorithm restriction (backward-compatible)', function () use ($HOST) {
+    $p = buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw']);
+    assertEqual([], prop($p, 'preferredAlgorithms'));
+});
+
+test('strict_algorithms on → excludes legacy KEX/cipher/MAC/hostkey algorithms', function () use ($HOST) {
+    $p = buildProvider(['driver' => 'sftp', 'host' => $HOST, 'username' => 'u', 'password' => 'pw', 'strict_algorithms' => true]);
+    $algos = prop($p, 'preferredAlgorithms');
+
+    assertTrue(!empty($algos['kex']), 'kex list is non-empty');
+    assertTrue(!in_array('diffie-hellman-group1-sha1', $algos['kex'], true), 'SHA-1 group1 KEX excluded');
+    assertTrue(!in_array('diffie-hellman-group14-sha1', $algos['kex'], true), 'SHA-1 group14 KEX excluded');
+
+    assertTrue(!in_array('ssh-dss', $algos['hostkey'], true), 'ssh-dss excluded');
+    assertTrue(!in_array('ssh-rsa', $algos['hostkey'], true), 'SHA-1-only ssh-rsa excluded');
+    assertTrue(in_array('ssh-ed25519', $algos['hostkey'], true), 'ssh-ed25519 included');
+
+    foreach (['client_to_server', 'server_to_client'] as $dir) {
+        assertTrue(!in_array('arcfour256', $algos[$dir]['crypt'], true), "{$dir}: arcfour/RC4 excluded");
+        assertTrue(!in_array('3des-cbc', $algos[$dir]['crypt'], true), "{$dir}: 3des excluded");
+        assertTrue(!in_array('aes128-cbc', $algos[$dir]['crypt'], true), "{$dir}: CBC-mode cipher excluded");
+        assertTrue(in_array('aes256-gcm@openssh.com', $algos[$dir]['crypt'], true), "{$dir}: AES-GCM included");
+        assertTrue(!in_array('hmac-md5', $algos[$dir]['mac'], true), "{$dir}: MD5 MAC excluded");
+        assertTrue(!in_array('hmac-sha1', $algos[$dir]['mac'], true), "{$dir}: SHA-1 MAC excluded");
+    }
+});
+
+test('env SFTP_STRICT_ALGORITHMS maps to the disk config', function () use ($HOST) {
+    $saved = [$_ENV['SFTP_HOST'] ?? null, $_ENV['SFTP_STRICT_ALGORITHMS'] ?? null];
+    $_ENV['SFTP_HOST'] = $HOST; $_ENV['SFTP_STRICT_ALGORITHMS'] = 'true';
+    try {
+        $disks = require __DIR__ . '/../../config/disks.php';
+        assertEqual(true, $disks['sftp']['strict_algorithms'] ?? null);
+    } finally {
+        [$_ENV['SFTP_HOST'], $_ENV['SFTP_STRICT_ALGORITHMS']] = $saved;
+        foreach (['SFTP_HOST', 'SFTP_STRICT_ALGORITHMS'] as $i => $k) {
+            if ($saved[$i] === null) { unset($_ENV[$k]); }
+        }
+    }
+});
+
 // ── Bucket Doctor: SFTP gets an SFTP-shaped report (not the local-FS one) ──
 // A failing SFTP disk must report driver 'sftp' with a reachability/auth check
 // and SFTP-specific remediation — NOT the misleading "Local storage is not

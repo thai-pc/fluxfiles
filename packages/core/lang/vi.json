@@ -295,6 +295,7 @@
     "not_text": "Tệp này không phải là tệp văn bản.",
     "restore_failed": "Không thể khôi phục mục.",
     "sftp_config": "SFTP chưa được cấu hình đúng.",
+    "sftp_host_key_required": "Ổ đĩa SFTP này yêu cầu phải cấu hình host_fingerprint.",
     "stream_token_invalid": "Liên kết media không hợp lệ hoặc đã hết hạn.",
     "trash_failed": "Không thể chuyển vào thùng rác.",
     "trash_unavailable": "Thùng rác không khả dụng.",

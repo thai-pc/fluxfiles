@@ -295,6 +295,7 @@
     "not_text": "Diese Datei ist keine Textdatei.",
     "restore_failed": "Element konnte nicht wiederhergestellt werden.",
     "sftp_config": "SFTP ist nicht korrekt konfiguriert.",
+    "sftp_host_key_required": "Dieses SFTP-Laufwerk erfordert die Konfiguration von host_fingerprint.",
     "stream_token_invalid": "Ungültiger oder abgelaufener Medienlink.",
     "trash_failed": "Verschieben in den Papierkorb fehlgeschlagen.",
     "trash_unavailable": "Papierkorb ist nicht verfügbar.",

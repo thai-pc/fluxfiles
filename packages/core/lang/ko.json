@@ -295,6 +295,7 @@
     "not_text": "이 파일은 텍스트 파일이 아닙니다.",
     "restore_failed": "항목을 복원할 수 없습니다.",
     "sftp_config": "SFTP가 올바르게 구성되지 않았습니다.",
+    "sftp_host_key_required": "이 SFTP 디스크는 host_fingerprint 설정이 필요합니다.",
     "stream_token_invalid": "미디어 링크가 잘못되었거나 만료되었습니다.",
     "trash_failed": "휴지통으로 이동할 수 없습니다.",
     "trash_unavailable": "휴지통을 사용할 수 없습니다.",

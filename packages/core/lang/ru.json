@@ -295,6 +295,7 @@
     "not_text": "Это не текстовый файл.",
     "restore_failed": "Не удалось восстановить элемент.",
     "sftp_config": "SFTP настроен неправильно.",
+    "sftp_host_key_required": "Для этого диска SFTP необходимо настроить host_fingerprint.",
     "stream_token_invalid": "Недействительная или просроченная ссылка на медиа.",
     "trash_failed": "Не удалось переместить в корзину.",
     "trash_unavailable": "Корзина недоступна.",

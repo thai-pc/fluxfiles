@@ -295,6 +295,7 @@
     "not_text": "यह फ़ाइल टेक्स्ट फ़ाइल नहीं है।",
     "restore_failed": "आइटम पुनर्स्थापित नहीं किया जा सका।",
     "sftp_config": "SFTP सही ढंग से कॉन्फ़िगर नहीं है।",
+    "sftp_host_key_required": "इस SFTP डिस्क के लिए host_fingerprint कॉन्फ़िगर करना आवश्यक है।",
     "stream_token_invalid": "मीडिया लिंक अमान्य या समाप्त।",
     "trash_failed": "ट्रैश में नहीं ले जाया जा सका।",
     "trash_unavailable": "ट्रैश उपलब्ध नहीं है।",

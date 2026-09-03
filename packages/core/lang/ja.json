@@ -295,6 +295,7 @@
     "not_text": "このファイルはテキストファイルではありません。",
     "restore_failed": "項目を復元できませんでした。",
     "sftp_config": "SFTP が正しく設定されていません。",
+    "sftp_host_key_required": "この SFTP ディスクには host_fingerprint の設定が必要です。",
     "stream_token_invalid": "メディアリンクが無効または期限切れです。",
     "trash_failed": "ゴミ箱に移動できませんでした。",
     "trash_unavailable": "ゴミ箱は利用できません。",

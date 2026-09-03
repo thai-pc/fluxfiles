@@ -295,6 +295,7 @@
     "not_text": "Bu dosya bir metin dosyası değil.",
     "restore_failed": "Öğe geri yüklenemedi.",
     "sftp_config": "SFTP doğru yapılandırılmamış.",
+    "sftp_host_key_required": "Bu SFTP diski için host_fingerprint yapılandırılmış olmalıdır.",
     "stream_token_invalid": "Geçersiz veya süresi dolmuş medya bağlantısı.",
     "trash_failed": "Çöpe taşınamadı.",
     "trash_unavailable": "Çöp kutusu kullanılamıyor.",

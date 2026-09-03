@@ -295,6 +295,7 @@
     "not_text": "此文件不是文本文件。",
     "restore_failed": "无法恢复该项目。",
     "sftp_config": "SFTP 配置不正确。",
+    "sftp_host_key_required": "此 SFTP 磁盘要求配置 host_fingerprint。",
     "stream_token_invalid": "媒体链接无效或已过期。",
     "trash_failed": "无法移入回收站。",
     "trash_unavailable": "回收站不可用。",

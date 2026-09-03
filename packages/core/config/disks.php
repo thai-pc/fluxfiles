@@ -64,6 +64,14 @@ if (($_ENV['SFTP_HOST'] ?? '') !== '') {
         // risk). Colon-hex form (e.g. `aa:bb:..`); md5 for an RSA host key,
         // sha512 otherwise. Comma-separate to allow several (key rotation).
         'host_fingerprint'       => $_ENV['SFTP_HOST_FINGERPRINT'] ?? '',
+        // Fail closed if host_fingerprint above isn't set, instead of silently
+        // trusting any host key. Off by default (backward-compatible).
+        'require_host_key'       => ($_ENV['SFTP_REQUIRE_HOST_KEY'] ?? '') === 'true',
+        // Restrict the SSH handshake to modern KEX/cipher/MAC/host-key algorithms
+        // only (no SHA-1 KEX, RC4, 3DES, CBC ciphers, ssh-dss, MD5/SHA-1 MACs).
+        // Off by default — some old/embedded SFTP servers only speak the legacy
+        // set and would fail to connect at all with this on.
+        'strict_algorithms'      => ($_ENV['SFTP_STRICT_ALGORITHMS'] ?? '') === 'true',
     ];
 }
 

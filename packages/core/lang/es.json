@@ -295,6 +295,7 @@
     "not_text": "Este archivo no es un archivo de texto.",
     "restore_failed": "No se pudo restaurar el elemento.",
     "sftp_config": "SFTP no está configurado correctamente.",
+    "sftp_host_key_required": "Este disco SFTP requiere que host_fingerprint esté configurado.",
     "stream_token_invalid": "Enlace multimedia no válido o caducado.",
     "trash_failed": "No se pudo mover a la papelera.",
     "trash_unavailable": "La papelera no está disponible.",
