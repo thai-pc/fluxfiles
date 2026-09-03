@@ -4,7 +4,11 @@ Status: **Implemented and shipped.** `share_analytics` claim, per-event JSONL
 log (`_fluxfiles/share-events/<jti>.jsonl`), and `GET /api/fm/share/analytics`
 all live in `packages/share/src/ShareModule.php` and `Claims::$shareAnalytics`.
 See the CHANGELOG "Share per-event analytics" entry (`share`'s composer floor
-bumped to `^0.2.75`).
+bumped to `^0.2.75`). All four token builders now give it named forwarding —
+`packages/core/embed.php`, `packages/node/src/token.ts` (+ `types.ts`'s
+`shareAnalytics` option), `FluxFilesManager.php`, and `FluxFilesPlugin.php` —
+closing a gap where embed.php/Node initially shipped with only the generic
+raw-claims escape hatch while Laravel/WordPress got explicit plumbing.
 
 > Scope note: this spec is about **analytics only**. A separate, already-implemented
 > feature ("Branded Share" — `share_brand_*` claims, `Claims::sanitizeShareBrand()`,

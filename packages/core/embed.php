@@ -446,6 +446,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('share_preview', $webp)) {
         $payload['share_preview'] = (bool) $webp['share_preview'];
     }
+    if (array_key_exists('share_analytics', $webp)) {
+        $payload['share_analytics'] = (bool) $webp['share_analytics'];
+    }
     // Intake portal link base (same shape as share_base_url; non-http(s) dropped on decode).
     if (!empty($webp['intake_base_url'])) {
         $payload['intake_base_url'] = (string) $webp['intake_base_url'];

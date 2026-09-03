@@ -167,6 +167,10 @@ export interface BaseTokenOptions {
   /** Allow the share landing to render an inline preview (images via /api/fm/img;
    *  PDFs only on uncapped shares). Default true; false = download-only. */
   sharePreview?: boolean;
+  /** Opt-in per-event analytics on a share link (visitor IP/user-agent persisted
+   *  to `_fluxfiles/share-events/<jti>.jsonl`) — kept separate from `allowShare`
+   *  since it's a real privacy footprint. Default false. */
+  shareAnalytics?: boolean;
   allowIntake?: boolean;
   /** Public base the intake create response builds the portal link from
    *  (e.g. `https://files.acme.com/public/intake.html`). http(s) only; empty = the

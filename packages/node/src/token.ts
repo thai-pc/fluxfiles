@@ -187,6 +187,7 @@ function applyTenantOverrides(
   if (opts.shareUrlTtl && opts.shareUrlTtl > 0) payload.share_url_ttl = Math.trunc(opts.shareUrlTtl);
   if (opts.shareBaseUrl) payload.share_base_url = String(opts.shareBaseUrl);
   if (opts.sharePreview !== undefined) payload.share_preview = !!opts.sharePreview;
+  if (opts.shareAnalytics !== undefined) payload.share_analytics = !!opts.shareAnalytics;
   if (opts.allowIntake !== undefined) payload.allow_intake = !!opts.allowIntake;
   // Intake portal link base — same shape as shareBaseUrl (the core drops a
   // non-http(s) value on decode).

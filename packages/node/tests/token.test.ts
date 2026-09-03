@@ -162,7 +162,7 @@ describe('createToken', () => {
     expect(off.allow_terminal).toBeUndefined();
   });
 
-  it('forwards the three Share landing claims (PHP parity), omits them otherwise', () => {
+  it('forwards the four Share landing claims (PHP parity), omits them otherwise', () => {
     const c = decodeToken(
       createToken({
         secret: SECRET,
