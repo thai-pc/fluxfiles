@@ -392,6 +392,15 @@ try {
             ->check($claims->userId, 'usage_refresh');
     }
 
+    // Git deploy runs `fetch`/`reset --hard` against a live webroot — its own
+    // tight bucket (default 5/min), tighter than the general write limit, since
+    // repeatedly resetting a live site is never legitimate traffic.
+    if ($uri === '/api/fm/git-deploy') {
+        $deployLimit = (int) ($_ENV['FLUXFILES_GIT_DEPLOY_RATE_LIMIT'] ?? 5);
+        \FluxFiles\RateLimiterFactory::make($deployLimit, $deployLimit, 60, $dbConn)
+            ->check($claims->userId, 'git_deploy');
+    }
+
     // Audit log (lưu trong user storage)
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
@@ -427,7 +436,13 @@ try {
         $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
         // Terminal has no path/key — the command itself IS the security-relevant
         // fact, so it goes in as free-form detail instead of leaving the entry blank.
-        $auditDetail = $auditAction === 'terminal' ? (string) ($body['cmd'] ?? '') : null;
+        // Git deploy has no request-body path/key either (path/branch are claims,
+        // not request fields) — log what was actually deployed instead.
+        $auditDetail = $auditAction === 'terminal'
+            ? (string) ($body['cmd'] ?? '')
+            : ($auditAction === 'git_deploy'
+                ? $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '')
+                : null);
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey, null, null, $auditDetail);
 
         // Capture the webhook event; it's DISPATCHED AFTER the response is flushed
@@ -955,6 +970,43 @@ function routeRequest(
         return $result;
     }
 
+    // One-click Git deploy — a fixed-command-shape subset of the terminal above.
+    // The repo path/branch are OPERATOR claims (minted into the JWT), never read
+    // from the request body — see docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.
+    if ($method === 'POST' && $uri === '/api/fm/git-deploy') {
+        if (($_ENV['FLUXFILES_GIT_DEPLOY_DISABLED'] ?? '') === 'true') {
+            throw new ApiException('Git deploy is disabled on this server', 403, 'git_deploy_disabled');
+        }
+        if (!$claims->allowGitDeploy) {
+            throw new ApiException('Git deploy is not allowed', 403, 'git_deploy_forbidden');
+        }
+        if (!$claims->hasPerm('write')) {
+            throw new ApiException('Permission denied: write', 403, 'permission_denied');
+        }
+        $body = jsonBodyAll();
+        $disk = (string) ($body['disk'] ?? '');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+        }
+        if (($diskManager->config($disk)['driver'] ?? '') !== 'sftp') {
+            throw new ApiException('Git deploy only works on an SFTP disk', 400, 'terminal_unsupported');
+        }
+        if ($claims->gitDeployPath === '') {
+            throw new ApiException('git_deploy_path claim is not configured for this token', 400, 'git_deploy_unconfigured');
+        }
+        [$conn, $root] = $diskManager->sftpConnection($disk);
+        $path = \FluxFiles\SshTerminal::resolveCwd($claims->gitDeployPath, $root);
+        $timeout = (int) ($_ENV['FLUXFILES_GIT_DEPLOY_TIMEOUT'] ?? 120);
+        $result = \FluxFiles\GitDeploy::run($conn, $path, $claims->gitDeployBranch, $claims->gitDeployHooks, $timeout);
+        if (empty($result['shell_ok'])) {
+            throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
+        }
+        if (!empty($result['locked'])) {
+            throw new ApiException('A deploy is already in progress for this repo', 409, 'git_deploy_in_progress');
+        }
+        return $result;
+    }
+
     // Search
     if ($method === 'GET' && $uri === '/api/fm/search') {
         $q = $_GET['q'] ?? null;
@@ -1156,6 +1208,7 @@ function resolveAuditAction(string $uri): string
         '/chmod'      => 'chmod',
         '/content'    => 'content_update',
         '/terminal'   => 'terminal',
+        '/git-deploy' => 'git_deploy',
     ];
 
     foreach ($map as $needle => $action) {

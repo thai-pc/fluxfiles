@@ -82,6 +82,10 @@ All four accept the same `claims` map.
 | `zip_max_files` | int | `10000` | Max file count for a zip/extract. |
 | `allow_terminal` | bool | `false` | SSH command-runner on SFTP disks; needs `write`. Grants shell as the SSH user — opt-in. Gates `POST /api/fm/terminal`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.46). |
 | `terminal_pty_url` | string (http/s) | `""` | Embed a self-hosted PTY server (ttyd/gotty/wetty) for an interactive terminal; empty → command-runner. Free. |
+| `allow_git_deploy` | bool | `false` | One-click Git deploy on SFTP disks; needs `write`. Deliberately narrower than `allow_terminal` — no free-form command, fixed shell-safe shape only. Independent claim, never implied by `allow_sftp`/`allow_terminal`. Gates `POST /api/fm/git-deploy`. See `docs/GIT-DEPLOY-SECURITY-REVIEW.md`. |
+| `git_deploy_path` | string | `""` | Repo path on the SFTP disk that a deploy syncs — operator-set at mint time, never accepted from the request body. Required (empty → 400) when `allow_git_deploy` is true. |
+| `git_deploy_branch` | string | `""` | Branch to force-sync via `fetch --prune` + `reset --hard origin/<branch>` (destructive, deterministic). Empty → `pull --ff-only` on whatever branch is checked out instead (refuses on divergence). Restricted to `[A-Za-z0-9._/-]+`; anything else is dropped to empty. |
+| `git_deploy_hooks` | bool | `false` | Let the deployed repo's Git hooks (`post-merge`, etc.) run. Default off — hooks run with `core.hooksPath=/dev/null` since a hostile hook is otherwise arbitrary code execution on the VPS. |
 | `pdf_tools_url` | string (http/s) | `""` | Embed a self-hosted PDF toolkit (Stirling-PDF) — shows a "PDF tools" button. Empty → no button. Free BYO-embed. |
 | `office_url` | string (http/s) | `""` | Embed a self-hosted office suite (Collabora/OnlyOffice) for .docx/.xlsx/.pptx…; may carry a `{url}` placeholder substituted with the selected file's URL. Empty → no action. Free BYO-embed. |
 | `esign_url` | string (http/s) | `""` | Embed a self-hosted e-signature tool (DocuSeal) for signing PDFs/docs; may carry a `{url}` placeholder substituted with the selected file's URL. Empty → no action. Free BYO-embed. |
@@ -236,6 +240,9 @@ All four accept the same `claims` map.
 | `FLUXFILES_TERMINAL_DISABLED` | `false` | Server kill-switch for the SSH terminal. |
 | `FLUXFILES_TERMINAL_CONFIRM` | `true` | `false` disables the dangerous-command double-confirm. |
 | `FLUXFILES_TERMINAL_TIMEOUT` | `30` | Per-command timeout (seconds). |
+| `FLUXFILES_GIT_DEPLOY_DISABLED` | `false` | Server kill-switch for Git deploy. |
+| `FLUXFILES_GIT_DEPLOY_TIMEOUT` | `120` | Per-deploy timeout (seconds) — longer than the terminal's, since a cold `fetch` (LFS/submodules) can take longer than an interactive command. |
+| `FLUXFILES_GIT_DEPLOY_RATE_LIMIT` | `5` | Deploy requests/min per user — tighter than the general write bucket, since resetting a live webroot repeatedly is never legitimate traffic. |
 | `FLUXFILES_AI_PROVIDER` | — | AI vision/tagging provider (server-side; BYO key). `claude`/`anthropic`, `gemini`/`google`, `openai`, `openrouter`, `groq`, `mistral`, `xai`/`grok`, `ollama`, or `compatible` for any other OpenAI-compatible endpoint. Empty = disabled. |
 | `FLUXFILES_AI_API_KEY` | — | Key for that provider. Empty is fine for a keyless local endpoint (Ollama). |
 | `FLUXFILES_AI_MODEL` | provider default | Vision model override. Required with `compatible`. |

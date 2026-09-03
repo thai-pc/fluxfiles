@@ -155,6 +155,30 @@ class Claims
      *            .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
     public bool $allowCodeEdit = false;
 
+    // ── One-click Git deploy (SSH exec) ───────────────────────────────────
+    // See docs/GIT-DEPLOY-SECURITY-REVIEW.md. Deliberately narrower than
+    // allow_terminal: the repo path/branch are OPERATOR claims baked in at mint
+    // time, never accepted from the request body — a client can trigger a deploy,
+    // never redirect it. Never bundle this with allow_sftp/allow_terminal.
+    /** @var bool May this token trigger a Git deploy on an SFTP disk
+     *            (`POST /api/fm/git-deploy`)? Default FALSE — separate claim,
+     *            never implied by allow_sftp or allow_terminal. */
+    public bool $allowGitDeploy = false;
+    /** @var string Repo path on the SFTP disk (relative to the disk root, or
+     *            absolute) that a deploy syncs. Required when allow_git_deploy is
+     *            true — an empty path 400s the route rather than guessing. */
+    public string $gitDeployPath = '';
+    /** @var string Branch to force-sync to via `fetch --prune` + `reset --hard
+     *            origin/<branch>` (destructive but deterministic). Empty (default)
+     *            → `git pull --ff-only` on whatever branch is checked out instead
+     *            (safe: refuses on divergence, never rewrites history). */
+    public string $gitDeployBranch = '';
+    /** @var bool Let the deployed repo's Git hooks (post-merge, etc.) run.
+     *            Default FALSE: hooks are neutered (`core.hooksPath=/dev/null`)
+     *            because a hostile hook in the repo is otherwise arbitrary code
+     *            execution on the VPS, independent of any FluxFiles bug. */
+    public bool $gitDeployHooks = false;
+
     /** @var bool May this token use the (paid) Optimization module (/api/fm/optimize)?
      *            Default FALSE — opt-in. Even when true, the module's code must be
      *            installed and the license must cover it (the 3-layer gate). */
@@ -566,6 +590,14 @@ class Claims
         $esignUrl = trim((string) ($payload->esign_url ?? ''));
         $c->esignUrl = preg_match('#^https?://#i', $esignUrl) ? $esignUrl : '';
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
+        $c->allowGitDeploy = (bool) ($payload->allow_git_deploy ?? false);
+        $c->gitDeployPath = str_replace(["\0", "\x00"], '', trim((string) ($payload->git_deploy_path ?? '')));
+        // Only safe git-ref characters. escapeshellarg() already makes this shell-safe
+        // regardless, but rejecting a malformed "branch" before it ever reaches git
+        // is cheap defense in depth against a mis-minted claim.
+        $gdBranch = trim((string) ($payload->git_deploy_branch ?? ''));
+        $c->gitDeployBranch = preg_match('/^[A-Za-z0-9._\/-]+$/', $gdBranch) === 1 ? $gdBranch : '';
+        $c->gitDeployHooks = (bool) ($payload->git_deploy_hooks ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->allowShare = (bool) ($payload->allow_share ?? false);
         // Share landing claims. The TTL clamps to [10, 300] (0/absent → 60); the base
@@ -695,6 +727,7 @@ class Claims
             case 'allow_extract':    return $this->allowExtract;
             case 'allow_chmod':      return $this->allowChmod;
             case 'allow_terminal':   return $this->allowTerminal;
+            case 'allow_git_deploy': return $this->allowGitDeploy;
             case 'allow_download':   return $this->allowDownload;
             // Paid-module claims — without these the ModuleRegistry 3-layer gate
             // (layer 3) would 403 every paid module regardless of the token.
