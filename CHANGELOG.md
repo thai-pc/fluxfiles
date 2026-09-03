@@ -5,7 +5,11 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.3.00] — 2026-09-01
 
-> Not yet released — no tags cut for this entry.
+> Released: `core-v0.2.80`. Laravel/WordPress adapter floors bumped to
+> `^0.2.80` — `WpDbMetadataHandler`/`LaravelDbMetadataHandler` implement
+> `MigrationImportInterface`, which core only gained at this tag; the
+> `Adapter ↔ core floor guard` CI job caught the stale `^0.2.79` floor
+> (fatal "Interface not found" against the old worktree).
 
 ### Changed — `MetadataRepositoryInterface` widened (BC-break for direct implementers)
 
