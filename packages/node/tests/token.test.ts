@@ -295,6 +295,74 @@ describe('createByobToken', () => {
   });
 });
 
+describe('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md)', () => {
+  it('resolves perms early: role with no explicit perms decodes to the role default', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'editor' })) as Record<string, unknown>;
+    expect(c.perms).toEqual(['read', 'write']);
+  });
+
+  it('viewer: read-only, owner-scoped', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'viewer' })) as Record<string, unknown>;
+    expect(c.perms).toEqual(['read']);
+    expect(c.owner_only).toBe(true);
+    expect(c.allow_extract).toBeUndefined();
+  });
+
+  it('admin: full perms, not owner-scoped, power-user toggles on', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'admin' })) as Record<string, unknown>;
+    expect(c.perms).toEqual(['read', 'write', 'delete', 'audit']);
+    expect(c.owner_only).toBeUndefined(); // false is the global default too, so the key is omitted
+    expect(c.allow_extract).toBe(true);
+    expect(c.allow_chmod).toBe(true);
+    expect(c.allow_code_edit).toBe(true);
+    expect(c.show_hidden).toBe(true);
+  });
+
+  it('superadmin: identical raw claim bundle to admin', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'superadmin' })) as Record<string, unknown>;
+    expect(c.perms).toEqual(['read', 'write', 'delete', 'audit']);
+    expect(c.owner_only).toBeUndefined();
+  });
+
+  it('explicit perms/ownerOnly always win over the role default', () => {
+    const c = decodeToken(
+      createToken({ secret: SECRET, userId: 'u', role: 'viewer', perms: ['read', 'write', 'delete'], ownerOnly: false }),
+    ) as Record<string, unknown>;
+    expect(c.perms).toEqual(['read', 'write', 'delete']);
+    expect(c.owner_only).toBeUndefined();
+  });
+
+  it('explicit owner_only=true overrides an admin role default of false', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'admin', ownerOnly: true })) as Record<string, unknown>;
+    expect(c.owner_only).toBe(true);
+  });
+
+  it('edition and role compose without clobbering each other', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', edition: 'pro', role: 'admin' })) as Record<string, unknown>;
+    expect(c.allow_optimize).toBe(true);
+    expect(c.allow_share).toBe(true);
+    expect(c.perms).toEqual(['read', 'write', 'delete', 'audit']);
+    expect(c.allow_chmod).toBe(true);
+  });
+
+  it('role never touches prefix/disks/max_upload/max_storage/max_files', () => {
+    const c = decodeToken(
+      createToken({ secret: SECRET, userId: 'u', role: 'admin', disks: ['local'], prefix: 'users/1', maxUploadMb: 5, maxStorageMb: 100, maxFiles: 10 }),
+    );
+    expect(c.disks).toEqual(['local']);
+    expect(c.prefix).toBe('users/1');
+    expect(c.max_upload).toBe(5);
+    expect(c.max_storage).toBe(100);
+    expect(c.max_files).toBe(10);
+  });
+
+  it('superadmin with empty prefix mints an unscoped token', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'superadmin', prefix: '' })) as Record<string, unknown>;
+    expect(c.prefix).toBe('');
+    expect(c.owner_only).toBeUndefined();
+  });
+});
+
 describe('verifyToken', () => {
   it('round-trips and rejects tampering / expiry', () => {
     const token = createToken({ secret: SECRET, userId: 'u' });

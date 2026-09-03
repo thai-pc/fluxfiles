@@ -44,12 +44,13 @@ function fluxfiles_token(
     ?array $webp = null,
     ?array $usage = null,
     ?string $edition = null,
+    ?string $role = null,
     ?array $extra = null
 ): string {
     // Recommended form: ONE options array (every claim in one place). Pass an array
     // as the first arg, e.g.
     //   fluxfiles_token(['user' => 'u', 'perms' => ['read','write'], 'disks' => ['sftp'],
-    //                    'edition' => 'pro', 'webp' => [...], 'media' => [...],
+    //                    'edition' => 'pro', 'role' => 'editor', 'webp' => [...], 'media' => [...],
     //                    'claims' => ['allow_terminal' => true, 'terminal_pty_url' => '…',
     //                                 'allow_optimize' => true, 'upload_collision' => 'overwrite']]);
     // The `claims` map takes ANY of the JWT claims (snake_case) — the single escape
@@ -65,7 +66,7 @@ function fluxfiles_token(
         'ownerOnly' => $ownerOnly, 'maxStorageMb' => $maxStorageMb, 'maxFiles' => $maxFiles,
         'aiAutoTag' => $aiAutoTag, 'rateRead' => $rateRead, 'rateWrite' => $rateWrite,
         'variants' => $variants, 'import' => $import, 'media' => $media, 'webp' => $webp,
-        'usage' => $usage, 'edition' => $edition, 'claims' => $extra,
+        'usage' => $usage, 'edition' => $edition, 'role' => $role, 'claims' => $extra,
     ]);
 }
 
@@ -89,12 +90,16 @@ function _fluxfiles_build_token(array $o): string
     };
 
     $ttl = (int) $pick(['ttl'], 3600);
+    // Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
+    // payload array, because `perms` already has an unconditional default baked into
+    // that array below — a plain "set if not present" guard would never fire for it.
+    $roleDefaults = fluxfiles_role_preset($pick(['role'], null));
     $payload = [
         'sub'         => (string) $pick(['user', 'userId', 'sub'], ''),
         'iat'         => $now,
         'exp'         => $now + $ttl,
         'jti'         => bin2hex(random_bytes(12)),
-        'perms'       => $pick(['perms'], ['read']),
+        'perms'       => $pick(['perms'], $roleDefaults['perms'] ?? ['read']),
         'disks'       => $pick(['disks'], ['local']),
         'prefix'      => (string) $pick(['prefix'], ''),
         'max_upload'  => (int) $pick(['maxUploadMb', 'max_upload'], 10),
@@ -103,11 +108,15 @@ function _fluxfiles_build_token(array $o): string
         'max_files'   => (int) $pick(['maxFiles', 'max_files'], 0),
     ];
 
-    if ($pick(['ownerOnly', 'owner_only'], false)) {
+    if ($pick(['ownerOnly', 'owner_only'], $roleDefaults['owner_only'] ?? false)) {
         $payload['owner_only'] = true;
     }
     // Edition preset (DX sugar): turns on a tier's claims; explicit claims still win.
     fluxfiles_apply_edition_preset($payload, $pick(['edition'], null));
+    // Role preset: sets owner_only (already resolved above) + the behavioral allow_*
+    // claims below, not already present. `perms`/`owner_only` are deliberately excluded
+    // from this function's claim map — see fluxfiles_apply_role_preset()'s doc comment.
+    fluxfiles_apply_role_preset($payload, $roleDefaults);
 
     $aiAutoTag = $pick(['aiAutoTag', 'ai_auto_tag'], null);
     if ($aiAutoTag !== null) {
@@ -163,6 +172,46 @@ function fluxfiles_apply_edition_preset(array &$payload, ?string $edition): void
     $claims = $presets[strtolower((string) $edition)] ?? [];
     foreach ($claims as $k => $v) {
         if (!array_key_exists($k, $payload)) {
+            $payload[$k] = $v;
+        }
+    }
+}
+
+/**
+ * Look up a role preset's raw claim map (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md).
+ * `role` never itself becomes a JWT claim — it only ever expands, at mint time, into
+ * ordinary claims Claims::fromJwtPayload already decodes. Zero decode-side changes.
+ *
+ * @return array<string,mixed>
+ */
+function fluxfiles_role_preset(?string $role): array
+{
+    $presets = [
+        'viewer'     => ['perms' => ['read'], 'owner_only' => true],
+        'editor'     => ['perms' => ['read', 'write'], 'owner_only' => true],
+        'admin'      => ['perms' => ['read', 'write', 'delete', 'audit'], 'owner_only' => false,
+                          'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
+        'superadmin' => ['perms' => ['read', 'write', 'delete', 'audit'], 'owner_only' => false,
+                          'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
+    ];
+
+    return $presets[strtolower((string) $role)] ?? [];
+}
+
+/**
+ * Apply a role preset's default claims onto $payload. Only sets a claim when it's not
+ * already present, so explicit overrides win. Deliberately excludes `perms` and
+ * `owner_only` — both are already resolved earlier, in the base $payload array itself
+ * (see _fluxfiles_build_token()), because unlike these claims they already have an
+ * unconditional default baked into that array and this guard would never fire for them.
+ *
+ * @param array<string,mixed> $payload
+ * @param array<string,mixed> $roleDefaults
+ */
+function fluxfiles_apply_role_preset(array &$payload, array $roleDefaults): void
+{
+    foreach ($roleDefaults as $k => $v) {
+        if ($k !== 'perms' && $k !== 'owner_only' && !array_key_exists($k, $payload)) {
             $payload[$k] = $v;
         }
     }

@@ -558,4 +558,64 @@ No `tests/unit/test-config-doc.php` changes needed — it only checks
 
 ## Status
 
-**Proposed — not yet implemented.**
+**Implemented** in all four token builders: `packages/core/embed.php`
+(`fluxfiles_role_preset()` + `fluxfiles_apply_role_preset()`),
+`packages/node/src/token.ts` (`ROLE_PRESETS` + the `applyTenantOverrides()`
+role block, with the `role` option added to `BaseTokenOptions` in
+`packages/node/src/types.ts`), `packages/laravel/src/FluxFilesManager.php`
+(`rolePreset()` + `applyRolePreset()`, wired into both `token()` and
+`tokenWithByob()`), and `packages/wordpress/includes/FluxFilesPlugin.php`
+(`rolePreset()` + `applyRolePreset()`, wired into both `generateToken()` and
+`generateByobToken()`). §3's `perms`-early-resolution fix is implemented
+exactly as specified in all four files: the role's `perms` default is
+resolved *before* the base payload array/object is built, and threaded into
+the same expression that already supplies the global `['read']` fallback.
+
+**One precedence bug beyond the spec's own literal §4.1 snippet was found
+and fixed during implementation:** the "explicit value and absent-key are
+indistinguishable" problem the spec calls out for `perms` turns out to apply
+to `owner_only` too, not just `perms`. `owner_only` is only ever written into
+the payload by a truthy-only block (`if (owner_only) { payload.owner_only =
+true }`), so if a caller explicitly passes `ownerOnly: false` to override an
+`editor`/`viewer` role's `owner_only: true` default, the key stays absent —
+and a guard that only excludes `perms` (as the spec's §4.1 snippet literally
+shows) would then have the role-preset apply step incorrectly fill in
+`owner_only: true` from the role default, silently breaking the "explicit
+claims always win" guarantee. Fixed by excluding `owner_only` from the
+post-hoc guard loop in every implementation (`fluxfiles_apply_role_preset()`,
+the Node `applyTenantOverrides()` role block, and both PHP adapters'
+`applyRolePreset()`), alongside `perms` — both are already correctly resolved
+earlier via the same early-resolution expression, so the guard never needs to
+touch them.
+
+**BYOB scope**: `role` is excluded from BYOB tokens in core
+(`fluxfiles_byob_token()`/`fluxfiles_mixed_token()` are untouched, matching
+`edition`'s existing exclusion there) and in Node (`createByobToken()` is
+untouched). In Laravel and WordPress, `role` **does** reach BYOB tokens
+(`tokenWithByob()` / `generateByobToken()`) — a deliberate choice, documented
+in-code at each call site, made for consistency with those two files' existing
+behavior: their `applyTenantOverrides()` is already shared between the regular
+and BYOB token paths, so `edition` already reaches BYOB there too. This is a
+per-adapter divergence from core, not an oversight.
+
+**Tests**: `packages/core/tests/unit/test-role-preset.php` (15 cases — the
+perms-early-resolution regression, one per-role claim bundle, explicit-override
+precedence for both `perms` and `owner_only`, edition+role composition, role
+never touching `prefix`/`disks`/`sub`/`max_upload`/`max_storage`/`max_files`,
+and a `superadmin` + empty-prefix unscoped-token case); nine new cases added to
+`packages/node/tests/token.test.ts` (30 total in that file, all passing);
+one smoke test each in `packages/laravel/tests/test-laravel-smoke.php` and
+`packages/wordpress/tests/test-wp-smoke.php` (the latter also covers the
+BYOB-inclusion decision above). The full core unit + integration suite,
+`npm run typecheck`, and `npm run build` in `packages/node/` all pass with no
+regressions.
+
+**Docs**: `docs/CONFIG.md` §1's PHP example now shows `'role' => 'editor'`
+alongside `'edition' => 'pro'`, with a short explanatory paragraph — `role`
+is not itself a claim, so no `docs/CONFIG.md` claim-table entry or
+`test-config-doc.php` change was needed.
+
+The §7 open questions (scaling `allow_terminal` with role, whether
+`admin`==`superadmin` is the right call, and the `role` naming-collision risk
+against app-specific "role" concepts) remain deliberately unresolved, as the
+spec allows.

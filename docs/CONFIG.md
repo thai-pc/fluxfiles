@@ -26,7 +26,8 @@ $token = fluxfiles_token([
     'disks'  => ['sftp'],
     'prefix' => 'sites/acme/',
     'ttl'    => 1800,
-    'edition'=> 'pro',                 // optional tier preset
+    'edition'=> 'pro',                 // optional tier preset (which *paid features* a tier gets)
+    'role'   => 'editor',              // optional capability preset (perms/owner-scoping/free power-user toggles)
     'webp'   => ['webp_max_width' => 1500],
     'media'  => ['preview_url_ttl' => 7200],
     'claims' => [                       // ← any claim by its raw name
@@ -37,6 +38,12 @@ $token = fluxfiles_token([
     ],
 ]);
 ```
+`role` (`viewer`/`editor`/`admin`/`superadmin`) is a mint-time-only preset, orthogonal
+to `edition`: it defaults `perms`/`owner_only` and a few free power-user toggles
+(`allow_extract`/`allow_chmod`/`allow_code_edit`/`show_hidden`), never a paid-module
+claim, and never itself becomes a JWT claim — explicit claims always win. See
+`docs/ACL-ROLE-PRESETS-DESIGN.md` for the exact per-role table.
+
 The **legacy positional form** still works (backward compatible), with an optional
 final `$extra` array as the same escape hatch:
 `fluxfiles_token('u', ['read'], ['local'], '', 10, null, 3600, …, $extra)`.

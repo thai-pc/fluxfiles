@@ -34,12 +34,16 @@ function newJti(): string {
 export function createToken(opts: CreateTokenOptions): string {
   const secret = resolveSecret(opts.secret);
   const now = Math.floor(Date.now() / 1000);
+  // Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
+  // payload object, because `perms` already has an unconditional default baked into
+  // that object below — a plain "set if absent" guard would never fire for it.
+  const rolePreset = opts.role ? ROLE_PRESETS[String(opts.role).toLowerCase()] : undefined;
   const payload: Record<string, unknown> = {
     sub: opts.userId,
     iat: now,
     exp: now + (opts.ttl ?? 3600),
     jti: newJti(),
-    perms: opts.perms ?? ['read'],
+    perms: opts.perms ?? (rolePreset?.perms as string[] | undefined) ?? ['read'],
     disks: opts.disks ?? ['local'],
     prefix: opts.prefix ?? '',
     max_upload: opts.maxUploadMb ?? 10,
@@ -47,8 +51,8 @@ export function createToken(opts: CreateTokenOptions): string {
     max_storage: opts.maxStorageMb ?? 0,
     max_files: opts.maxFiles ?? 0,
   };
-  if (opts.ownerOnly) payload.owner_only = true;
-  applyTenantOverrides(payload, opts);
+  if (opts.ownerOnly ?? (rolePreset?.owner_only as boolean | undefined)) payload.owner_only = true;
+  applyTenantOverrides(payload, opts, rolePreset);
   return sign(payload, secret);
 }
 
@@ -104,10 +108,37 @@ const EDITION_PRESETS: Record<string, Record<string, boolean>> = {
   enterprise: { allow_optimize: true, allow_share: true, allow_intake: true, allow_virus_scan: true, allow_c2pa: true },
 };
 
+/** Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): default a person's
+ * capability level; explicit opts always win. `role` never itself becomes a JWT
+ * claim — it only ever expands into ordinary claims decoded server-side already. */
+const ROLE_PRESETS: Record<string, Record<string, unknown>> = {
+  viewer: { perms: ['read'], owner_only: true },
+  editor: { perms: ['read', 'write'], owner_only: true },
+  admin: {
+    perms: ['read', 'write', 'delete', 'audit'], owner_only: false,
+    allow_extract: true, allow_chmod: true, allow_code_edit: true, show_hidden: true,
+  },
+  superadmin: {
+    perms: ['read', 'write', 'delete', 'audit'], owner_only: false,
+    allow_extract: true, allow_chmod: true, allow_code_edit: true, show_hidden: true,
+  },
+};
+
 /** Copy the optional per-tenant override claims into a payload when set. */
-function applyTenantOverrides(payload: Record<string, unknown>, opts: BaseTokenOptions): void {
+function applyTenantOverrides(
+  payload: Record<string, unknown>,
+  opts: BaseTokenOptions,
+  rolePreset?: Record<string, unknown>,
+): void {
   const preset = opts.edition ? EDITION_PRESETS[String(opts.edition).toLowerCase()] : undefined;
   if (preset) for (const [k, v] of Object.entries(preset)) if (!(k in payload)) payload[k] = v;
+  // Role preset: the rest of the bundle, excluding `perms`/`owner_only` — both are
+  // already resolved above (in createToken()), before this function ever runs.
+  if (rolePreset) {
+    for (const [k, v] of Object.entries(rolePreset)) {
+      if (k !== 'perms' && k !== 'owner_only' && !(k in payload)) payload[k] = v;
+    }
+  }
   if (opts.aiAutoTag !== undefined) payload.ai_auto_tag = !!opts.aiAutoTag;
   if (opts.rateRead && opts.rateRead > 0) payload.rate_read = Math.trunc(opts.rateRead);
   if (opts.rateWrite && opts.rateWrite > 0) payload.rate_write = Math.trunc(opts.rateWrite);

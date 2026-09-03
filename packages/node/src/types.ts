@@ -147,6 +147,12 @@ export interface BaseTokenOptions {
   /** Edition preset that defaults a tier's claims (`pro`/`agency`/`enterprise`).
    *  DX sugar — explicit claim options still win, and the license gates the code. */
   edition?: 'free' | 'pro' | 'agency' | 'enterprise';
+  /** Role preset that defaults a person's capability level (perms, owner-scoping,
+   *  and free power-user toggles) — orthogonal to `edition`, which defaults which
+   *  *paid features* a tier gets. DX sugar — explicit claim options still win, and
+   *  `role` never itself becomes a JWT claim. See docs/ACL-ROLE-PRESETS-DESIGN.md.
+   *  Not supported on BYOB tokens (matches `edition`'s existing BYOB exclusion). */
+  role?: 'viewer' | 'editor' | 'admin' | 'superadmin';
   /** Paid-module claims (3-layer gate: code installed + licensed + this claim).
    *  All default off; inert unless the module is installed & licensed on the server. */
   allowShare?: boolean;

@@ -333,6 +333,47 @@ test('generateToken forwards the share/intake gates and their config', function 
     assertEqual(true, $pro->allow_intake ?? null, 'edition preset enables intake');
     assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected');
 });
+
+test('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim bundle', function () use ($secret) {
+    $admin = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(60, ['role' => 'admin']), $secret);
+    assertEqual(['read', 'write', 'delete', 'audit'], (array) $admin->perms, 'admin perms');
+    assertEqual(false, $admin->owner_only ?? false, 'admin is not owner-scoped');
+    assertEqual(true, $admin->allow_extract ?? null, 'admin allow_extract');
+    assertEqual(true, $admin->allow_chmod ?? null, 'admin allow_chmod');
+    assertEqual(true, $admin->allow_code_edit ?? null, 'admin allow_code_edit');
+    assertEqual(true, $admin->show_hidden ?? null, 'admin show_hidden');
+
+    $viewer = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(61, ['role' => 'viewer']), $secret);
+    assertEqual(['read'], (array) $viewer->perms, 'viewer perms');
+    assertEqual(true, $viewer->owner_only ?? false, 'viewer is owner-scoped');
+
+    // Regression: perms is resolved BEFORE the base payload array (which already
+    // has an unconditional default) — a plain post-hoc guard would never fire.
+    $editor = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(62, ['role' => 'editor']), $secret);
+    assertEqual(['read', 'write'], (array) $editor->perms, 'editor perms-early-resolution');
+
+    // Explicit overrides win over the role default.
+    $overridden = \FluxFiles\JwtCompat::decode(
+        FluxFilesPlugin::generateToken(63, ['role' => 'viewer', 'perms' => ['read', 'write', 'delete'], 'owner_only' => false]),
+        $secret
+    );
+    assertEqual(['read', 'write', 'delete'], (array) $overridden->perms, 'explicit perms overrides role');
+    assertEqual(false, $overridden->owner_only ?? false, 'explicit owner_only=false overrides role default of true');
+
+    // edition + role compose without clobbering each other.
+    $both = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(64, ['edition' => 'pro', 'role' => 'admin']), $secret);
+    assertEqual(true, $both->allow_share ?? null, 'edition claim present alongside role');
+    assertEqual(['read', 'write', 'delete', 'audit'], (array) $both->perms, 'role claim present alongside edition');
+
+    // role reaches BYOB tokens too in this file (edition already does; a deliberate
+    // consistency choice — see FluxFilesPlugin::applyTenantOverrides()'s comment).
+    $byob = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateByobToken(65, [
+        'my-s3' => ['driver' => 's3', 'bucket' => 'b', 'key' => 'k', 'secret' => 's'],
+    ], ['role' => 'admin']), $secret);
+    assertEqual(['read', 'write', 'delete', 'audit'], (array) $byob->perms, 'role reaches BYOB perms');
+    assertEqual(true, $byob->allow_chmod ?? null, 'role reaches BYOB power-user toggles');
+});
+
 test('generateToken without a secret → throws', function () {
     $prev = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
     $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';

@@ -264,12 +264,17 @@ class FluxFilesPlugin
 
         $now = time();
 
+        // Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the
+        // base payload array, because `perms` already has an unconditional default baked
+        // into that array below — a plain "set if absent" guard would never fire for it.
+        $roleDefaults = self::rolePreset(isset($overrides['role']) ? (string) $overrides['role'] : null);
+
         $payload = [
             'sub'         => (string) $userId,
             'iat'         => $now,
             'exp'         => $now + ($overrides['ttl'] ?? $ttl),
             'jti'         => bin2hex(random_bytes(12)),
-            'perms'       => $overrides['perms'] ?? $defaultPerms,
+            'perms'       => $overrides['perms'] ?? ($roleDefaults['perms'] ?? $defaultPerms),
             'disks'       => $overrides['disks'] ?? $defaultDisks,
             'prefix'      => $overrides['prefix'] ?? '',
             'max_upload'  => $overrides['max_upload'] ?? $maxUpload,
@@ -278,10 +283,10 @@ class FluxFilesPlugin
             'max_files'   => $overrides['max_files'] ?? $maxFiles,
         ];
 
-        if (!empty($overrides['owner_only'])) {
+        if (array_key_exists('owner_only', $overrides) ? (bool) $overrides['owner_only'] : ($roleDefaults['owner_only'] ?? false)) {
             $payload['owner_only'] = true;
         }
-        self::applyTenantOverrides($payload, $overrides);
+        self::applyTenantOverrides($payload, $overrides, $roleDefaults);
 
         return \FluxFiles\JwtCompat::encode($payload, $secret);
     }
@@ -309,10 +314,57 @@ class FluxFilesPlugin
         }
     }
 
-    private static function applyTenantOverrides(array &$payload, array $overrides): void
+    /**
+     * Look up a role preset's raw claim map (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md).
+     * `role` never itself becomes a JWT claim — it only ever expands, at mint time, into
+     * ordinary claims the core already decodes. Mirrors packages/core/embed.php's
+     * fluxfiles_role_preset() / packages/laravel/src/FluxFilesManager.php's rolePreset().
+     *
+     * @return array<string,mixed>
+     */
+    private static function rolePreset(?string $role): array
+    {
+        $presets = [
+            'viewer'     => ['perms' => ['read'], 'owner_only' => true],
+            'editor'     => ['perms' => ['read', 'write'], 'owner_only' => true],
+            'admin'      => ['perms' => ['read', 'write', 'delete', 'audit'], 'owner_only' => false,
+                              'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
+            'superadmin' => ['perms' => ['read', 'write', 'delete', 'audit'], 'owner_only' => false,
+                              'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
+        ];
+
+        return $presets[strtolower((string) $role)] ?? [];
+    }
+
+    /**
+     * Apply a role preset's default claims onto $payload. Only sets a claim when it's not
+     * already present, so explicit overrides win. Deliberately excludes `perms` and
+     * `owner_only` — both are already resolved earlier (in generateToken()/generateByobToken(),
+     * before this function ever runs), because unlike these claims they already have an
+     * unconditional default baked into the base payload array and this guard would never
+     * fire for them.
+     *
+     * @param array<string,mixed> $payload
+     * @param array<string,mixed> $roleDefaults
+     */
+    private static function applyRolePreset(array &$payload, array $roleDefaults): void
+    {
+        foreach ($roleDefaults as $k => $v) {
+            if ($k !== 'perms' && $k !== 'owner_only' && !array_key_exists($k, $payload)) {
+                $payload[$k] = $v;
+            }
+        }
+    }
+
+    private static function applyTenantOverrides(array &$payload, array $overrides, array $roleDefaults = []): void
     {
         // Edition preset (DX sugar): default a tier's claims before explicit overrides.
         self::applyEditionPreset($payload, isset($overrides['edition']) ? (string) $overrides['edition'] : null);
+        // Role preset: the rest of the bundle (perms/owner_only already resolved by the
+        // caller before applyTenantOverrides() ever runs). Reaches BYOB tokens too, since
+        // this method is already shared by generateToken()/generateByobToken() here and
+        // edition already reaches both — a deliberate consistency choice, not an oversight.
+        self::applyRolePreset($payload, $roleDefaults);
         if (isset($overrides['ai_auto_tag'])) {
             $payload['ai_auto_tag'] = (bool) $overrides['ai_auto_tag'];
         }
@@ -587,12 +639,15 @@ class FluxFilesPlugin
         $serverDisks = $overrides['disks'] ?? $defaultDisks;
         $allDisks = array_merge($serverDisks, array_keys($byobDisks));
 
+        // Role preset — see the identical early-resolution note in generateToken() above.
+        $roleDefaults = self::rolePreset(isset($overrides['role']) ? (string) $overrides['role'] : null);
+
         $payload = [
             'sub'         => (string) $userId,
             'iat'         => $now,
             'exp'         => $now + min($overrides['ttl'] ?? $ttl, 1800), // cap at 1800s for BYOB
             'jti'         => bin2hex(random_bytes(12)),
-            'perms'       => $overrides['perms'] ?? $defaultPerms,
+            'perms'       => $overrides['perms'] ?? ($roleDefaults['perms'] ?? $defaultPerms),
             'disks'       => $allDisks,
             'prefix'      => $overrides['prefix'] ?? '',
             'max_upload'  => $overrides['max_upload'] ?? $maxUpload,
@@ -601,10 +656,10 @@ class FluxFilesPlugin
             'byob_disks'  => $encryptedDisks,
         ];
 
-        if (!empty($overrides['owner_only'])) {
+        if (array_key_exists('owner_only', $overrides) ? (bool) $overrides['owner_only'] : ($roleDefaults['owner_only'] ?? false)) {
             $payload['owner_only'] = true;
         }
-        self::applyTenantOverrides($payload, $overrides);
+        self::applyTenantOverrides($payload, $overrides, $roleDefaults);
 
         return \FluxFiles\JwtCompat::encode($payload, $secret);
     }
