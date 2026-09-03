@@ -203,11 +203,21 @@ verbatim from `share.html` (lines 40-43 CSS, lines 109-151 JS):
   brand claims set asserts `brand: null`.
 - `packages/core/tests/unit/test-config-doc.php` — passes once the four new
   claims are documented (no code change to the test itself).
-- No Playwright/browser test proposed — `share.html`'s brand rendering has none
-  either (per `docs/SHARE-ANALYTICS-DESIGN.md` §11's "not needed" note for the
-  sibling feature); this is a `fetch`-and-render path already covered at the
-  API layer by the module test above. Add one if the team's bar for public
-  landing pages changes.
+- **Correction (post-ship review)**: this originally said no Playwright test
+  was needed because "`share.html`'s brand rendering has none either," citing
+  `docs/SHARE-ANALYTICS-DESIGN.md` §11's "not needed" note. That was a
+  misquote — §11's note is about the **Share Analytics** feature (which
+  genuinely leaves `share.html` untouched, hence no browser test), not about
+  Share's brand rendering. Share's brand rendering on `share.html` *does* have
+  DOM-level Playwright coverage (`share-landing.spec.ts:330-369`: null-brand
+  hides the element, full brand renders name/logo/link with the right
+  attributes, brand also renders on the password-lock screen). `intake.html`
+  ports the identical `renderBrand()`/`safeHttpUrl()` functions verbatim from
+  `share.html` (see the code comment there), so it should carry the same
+  coverage — it did not. Fixed: `packages/core/tests/browser/intake-landing.spec.ts`
+  now mirrors `share-landing.spec.ts`'s brand tests for the intake portal (null
+  brand, full brand, logo+name without a link, and a `javascript:` logo URL
+  being dropped before it reaches `img.src`).
 
 ---
 
