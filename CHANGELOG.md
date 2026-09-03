@@ -33,6 +33,31 @@ metadata-repo consumption points; construction is unchanged. Added
 `tests/unit/test-metadata-repository-interface.php`, a reflection-based
 conformance guard between the interface and `StorageMetadataHandler`.
 
+### Fixed — ACL role presets: `viewer`/`editor` could chmod on SFTP disks
+
+`docs/ACL-ROLE-PRESETS-DESIGN.md`'s `viewer`/`editor` presets omitted
+`allow_extract`/`allow_chmod` on the assumption that an absent claim decodes
+false — but `Claims::fromJwtPayload` actually defaults those two specifically
+to **true** when absent (unlike `allow_code_edit`/`show_hidden`, which do
+default false). A minted `viewer`/`editor` token therefore carried an
+unintended `allow_chmod=true`, letting a read-only/contributor role change
+file permissions on an SFTP disk. Fixed by setting `allow_extract`/
+`allow_chmod` explicitly in all four role-preset builders (`embed.php`,
+`packages/node/src/token.ts`, `FluxFilesManager.php`, `FluxFilesPlugin.php`).
+Also fixed the test gap that let this ship: `test-role-preset.php` and the
+Laravel/WordPress/Node smoke suites only asserted `isset()` on the raw JWT
+payload, which can't distinguish "claim absent" from "claim explicitly
+false" — they now assert the actual decoded `Claims::fromJwtPayload(...)`
+value.
+
+### Fixed — Share Analytics: `embed.php`/Node lacked named claim forwarding
+
+`share_analytics` had named forwarding in the Laravel/WordPress token
+builders but only the generic raw-claims escape hatch in `embed.php` and
+`@fluxfiles/node` — functionally reachable but inconsistent with the other
+three Share landing claims. Added `shareAnalytics` to both, matching
+`sharePreview`'s pattern.
+
 ## [0.2.99] — 2026-08-31
 
 > Released: `ckeditor4-v0.3.3`, `tinymce-v0.3.3`, `summernote-v0.1.3`,
@@ -170,6 +195,23 @@ for the standalone UI.
   cache-poisoning path when `FLUXFILES_STORAGE_PATH` is unset).
 - New claims + env vars documented in `docs/CONFIG.md`; new routes in
   `docs/API.md` and `.claude/api-map.md`.
+
+## [0.2.94b] — 2026-08-28
+
+> Released: `core-v0.2.77` — same core tag as `0.2.94`/`0.2.95` above.
+
+### Added — Intake: notify-on-receipt webhook
+
+`PublicLinks.php` now fires a `intake_received` event through the existing
+Webhooks module whenever a visitor uploads through an intake portal link, so
+an operator with `allow_webhooks` configured hears about a submission without
+polling the intake list. Config is baked into the intake record at create
+time (not the portal JWT, which is visitor-facing), matching the pattern
+`docs/INTAKE-NOTIFY-ON-RECEIPT-DESIGN.md` lays out; dispatch is
+post-response, same at-most-once semantics as every other webhook event. New
+self-booting e2e coverage in `tests/e2e/test-intake-notify-http.php`. No new
+claims — reuses `allow_webhooks`/`webhook_url`/`webhook_events`/
+`webhook_secret`.
 
 ## [0.2.94] — 2026-08-28
 
