@@ -100,34 +100,35 @@ class SshTerminal
     }
 
     /**
-     * Run $cmd in $cwd. Combines stdout+stderr, recovers the resulting cwd so
-     * `cd` persists across calls, and caps the output.
-     *
-     * @return array{output:string,cwd:string,exit:int,truncated:bool,shell_ok:bool}
-     *         `shell_ok` is false when the host produced no shell (forced command /
-     *         SFTP-only) — the caller then reports `terminal_no_shell`.
+     * Builds the wrapped shell string: cd into $cwd, run the user's command
+     * (merging stderr), then print the resulting directory behind a marker so
+     * the client can track `cd` across calls. The command itself is
+     * intentionally NOT escaped (arbitrary shell is the point); only $cwd is
+     * escaped to stop path-based injection. Pure — no I/O, extracted out of
+     * run() so SshMultiplexer::run() can build the identical argv for a local
+     * `ssh` invocation without depending on an SSH2 object at all.
      */
-    public static function run(SSH2 $ssh, string $cmd, string $cwd, int $timeout): array
+    public static function buildWrappedCommand(string $cmd, string $cwd): string
     {
         $cwd = $cwd !== '' ? $cwd : '.';
-        // cd into cwd, run the user's command (merging stderr), then print the
-        // current directory behind a marker so the client can track `cd`. The
-        // command itself is intentionally NOT escaped (arbitrary shell is the
-        // point); only $cwd is escaped to stop path-based injection.
-        $wrapped = 'cd ' . escapeshellarg($cwd) . ' && { ' . $cmd . '; } 2>&1; '
-                 . '__ff_rc=$?; printf "\n' . self::CWD_MARK . '%s\n" "$(pwd)"; exit $__ff_rc';
+        return 'cd ' . escapeshellarg($cwd) . ' && { ' . $cmd . '; } 2>&1; '
+             . '__ff_rc=$?; printf "\n' . self::CWD_MARK . '%s\n" "$(pwd)"; exit $__ff_rc';
+    }
 
-        $ssh->setTimeout(max(1, $timeout));
-        $raw = $ssh->exec($wrapped);
-        if (!is_string($raw)) {
-            $raw = '';
-        }
-        $exit = $ssh->getExitStatus();
-
-        // Recover the resulting cwd from the marker, then strip the marker line.
-        // The marker is printed unconditionally by our wrapper on any real shell,
-        // so its PRESENCE doubles as a "a shell actually ran this" signal — a host
-        // that forces a command / allows only SFTP never produces it.
+    /**
+     * Parses raw combined stdout+stderr + an exit code into the
+     * {output,cwd,exit,truncated,shell_ok} shape. Pure — no I/O. Extracted out
+     * of run() for the same reason as buildWrappedCommand() above: the marker
+     * is printed unconditionally by our wrapper on any real shell, so its
+     * PRESENCE doubles as a "a shell actually ran this" signal regardless of
+     * which SSH client produced $raw (phpseclib's exec() or a local `ssh`
+     * subprocess) — a host that forces a command / allows only SFTP never
+     * produces it.
+     *
+     * @return array{output:string,cwd:string,exit:int,truncated:bool,shell_ok:bool}
+     */
+    public static function parseOutput(string $raw, ?int $exit, string $cwd): array
+    {
         $newCwd = $cwd === '.' ? '' : $cwd;
         $mark = preg_quote(self::CWD_MARK, '~');
         $shellOk = preg_match('~' . $mark . '(.*?)\s*$~s', $raw, $m) === 1;
@@ -145,9 +146,34 @@ class SshTerminal
         return [
             'output'    => $raw,
             'cwd'       => $newCwd,
-            'exit'      => is_int($exit) ? $exit : 0,
+            'exit'      => $exit ?? 0,
             'truncated' => $truncated,
             'shell_ok'  => $shellOk,
         ];
+    }
+
+    /**
+     * Run $cmd in $cwd over an existing phpseclib connection. Combines
+     * stdout+stderr, recovers the resulting cwd so `cd` persists across calls,
+     * and caps the output. Thin wrapper over buildWrappedCommand()/parseOutput()
+     * (behavior-preserving refactor — signature/return shape unchanged).
+     *
+     * @return array{output:string,cwd:string,exit:int,truncated:bool,shell_ok:bool}
+     *         `shell_ok` is false when the host produced no shell (forced command /
+     *         SFTP-only) — the caller then reports `terminal_no_shell`.
+     */
+    public static function run(SSH2 $ssh, string $cmd, string $cwd, int $timeout): array
+    {
+        $cwd = $cwd !== '' ? $cwd : '.';
+        $wrapped = self::buildWrappedCommand($cmd, $cwd);
+
+        $ssh->setTimeout(max(1, $timeout));
+        $raw = $ssh->exec($wrapped);
+        if (!is_string($raw)) {
+            $raw = '';
+        }
+        $exit = $ssh->getExitStatus();
+
+        return self::parseOutput($raw, is_int($exit) ? $exit : 0, $cwd);
     }
 }

@@ -219,6 +219,19 @@ All four accept the same `claims` map.
 > The `edition` preset (`pro`/`agency`/`enterprise`) defaults some of these on; an
 > explicit claim always wins. The **license** still gates the actual code.
 
+### 2.14 Static SFTP disk config keys (`config/disks.php` / BYOB `byob_disks`)
+
+Not JWT claims — set per disk, either in the static `config/disks.php` SFTP
+block (env-var-driven) or inside an encrypted BYOB `byob_disks` entry (same
+fields, `CredentialEncryptor` doesn't allowlist config keys).
+
+| Key | Type | Default | Notes |
+|---|---|---|---|
+| `host_fingerprint` | string | `""` | Colon-hex fingerprint(s) (comma-separated) pinning the expected host key. Empty = trust any host key. |
+| `require_host_key` | bool | `false` | Fail closed (`sftp_host_key_required`) if `host_fingerprint` isn't also set. |
+| `strict_algorithms` | bool | `false` | Modern-only KEX/cipher/MAC/host-key allowlist (`DiskManager::modernSshAlgorithmLists()`). |
+| `ssh_multiplex` | bool | `false` | Reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands. Key-based auth only, no passphrase. See `docs/SFTP-CONTROLMASTER-SPEC.md`. |
+
 ---
 
 ## 3. Server env vars (server-wide)
@@ -243,6 +256,11 @@ All four accept the same `claims` map.
 | `FLUXFILES_GIT_DEPLOY_DISABLED` | `false` | Server kill-switch for Git deploy. |
 | `FLUXFILES_GIT_DEPLOY_TIMEOUT` | `120` | Per-deploy timeout (seconds) — longer than the terminal's, since a cold `fetch` (LFS/submodules) can take longer than an interactive command. |
 | `FLUXFILES_GIT_DEPLOY_RATE_LIMIT` | `5` | Deploy requests/min per user — tighter than the general write bucket, since resetting a live webroot repeatedly is never legitimate traffic. |
+| `SFTP_MULTIPLEX` | `false` | Static-disk `ssh_multiplex` toggle — reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands instead of reconnecting per command. Key-based auth only (no passphrase); a password-only or passphrase-protected-key disk silently falls back to the existing per-request path. See `docs/SFTP-CONTROLMASTER-SPEC.md`. |
+| `FLUXFILES_SSH_MULTIPLEX_DISABLED` | `false` | Server kill-switch — forces every disk back to the phpseclib-only path regardless of `ssh_multiplex`. |
+| `FLUXFILES_SSH_MULTIPLEX_PERSIST` | `60` | `ControlPersist` seconds. Clamped `[10, 120]`. |
+| `FLUXFILES_SSH_MULTIPLEX_MAX_SOCKETS` | `20` | Server-wide LRU cap on concurrently-open multiplexed sockets. |
+| `FLUXFILES_SSH_MULTIPLEX_CONNECT_TIMEOUT` | `10` | Seconds a cold `ssh -M` connect gets before it's killed and the request falls back to phpseclib. |
 | `FLUXFILES_AI_PROVIDER` | — | AI vision/tagging provider (server-side; BYO key). `claude`/`anthropic`, `gemini`/`google`, `openai`, `openrouter`, `groq`, `mistral`, `xai`/`grok`, `ollama`, or `compatible` for any other OpenAI-compatible endpoint. Empty = disabled. |
 | `FLUXFILES_AI_API_KEY` | — | Key for that provider. Empty is fine for a keyless local endpoint (Ollama). |
 | `FLUXFILES_AI_MODEL` | provider default | Vision model override. Required with `compatible`. |

@@ -954,13 +954,27 @@ function routeRequest(
         if (!$confirmOff && empty($body['confirm']) && \FluxFiles\SshTerminal::isDangerous($cmd)) {
             throw new ApiException('This command looks dangerous — confirm to run it', 409, 'terminal_confirm_required');
         }
-        [$conn, $root] = $diskManager->sftpConnection($disk);
-        // Resolve cwd against the SFTP ROOT (not the SSH login home) — a relative
-        // path from the client ("html") must be anchored to $root, or `cd html`
-        // runs from /root and every command 404s.
-        $cwd = \FluxFiles\SshTerminal::resolveCwd((string) ($body['cwd'] ?? ''), $root);
         $timeout = (int) ($_ENV['FLUXFILES_TERMINAL_TIMEOUT'] ?? 30);
-        $result = \FluxFiles\SshTerminal::run($conn, $cmd, $cwd, $timeout);
+        // ControlMaster connection reuse (SshTerminal path only — see
+        // docs/SFTP-CONTROLMASTER-SPEC.md). multiplexHandle() returns null for any
+        // ineligible disk (not SFTP, ssh_multiplex off, password-only, or a
+        // passphrase-protected key), in which case this falls back to the existing
+        // per-request phpseclib connection below, unchanged.
+        $mux = (($_ENV['FLUXFILES_SSH_MULTIPLEX_DISABLED'] ?? '') === 'true')
+            ? null
+            : $diskManager->multiplexHandle($disk);
+        if ($mux !== null) {
+            [$handle, $root] = $mux;
+            // Resolve cwd against the SFTP ROOT (not the SSH login home) — a relative
+            // path from the client ("html") must be anchored to $root, or `cd html`
+            // runs from /root and every command 404s.
+            $cwd = \FluxFiles\SshTerminal::resolveCwd((string) ($body['cwd'] ?? ''), $root);
+            $result = $handle->run($cmd, $cwd, $timeout);
+        } else {
+            [$conn, $root] = $diskManager->sftpConnection($disk);
+            $cwd = \FluxFiles\SshTerminal::resolveCwd((string) ($body['cwd'] ?? ''), $root);
+            $result = \FluxFiles\SshTerminal::run($conn, $cmd, $cwd, $timeout);
+        }
         // No separate shell probe (it doubled the SSH round-trips per command):
         // run() prints a cwd marker on any real shell, so its absence means the
         // host forces a command / allows SFTP only.

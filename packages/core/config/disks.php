@@ -72,6 +72,12 @@ if (($_ENV['SFTP_HOST'] ?? '') !== '') {
         // Off by default — some old/embedded SFTP servers only speak the legacy
         // set and would fail to connect at all with this on.
         'strict_algorithms'      => ($_ENV['SFTP_STRICT_ALGORITHMS'] ?? '') === 'true',
+        // Reuse an OpenSSH ControlMaster session across terminal commands on this
+        // disk instead of reconnecting per command. Off by default. Key-based auth
+        // only — a password-only (or passphrase-protected-key) config silently
+        // falls back to the existing per-request phpseclib path. See
+        // docs/SFTP-CONTROLMASTER-SPEC.md.
+        'ssh_multiplex'          => ($_ENV['SFTP_MULTIPLEX'] ?? '') === 'true',
     ];
 }
 
