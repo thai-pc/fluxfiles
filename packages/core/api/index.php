@@ -1578,12 +1578,33 @@ function ff_snap_quality($raw): int
 }
 
 
-/** This request's own origin (scheme + host), honouring a TLS-terminating proxy. */
+/**
+ * This request's own origin (scheme + host), honouring a TLS-terminating proxy.
+ *
+ * `Host` (and `X-Forwarded-Proto`) are client-influenced — behind a misconfigured
+ * or cache-poisoning-prone proxy a forged `Host` would otherwise make
+ * ff_public_link_url() hand an operator back a recipient link on an attacker's
+ * domain. When the operator has declared trusted origins via
+ * `FLUXFILES_ALLOWED_ORIGINS` (the same allowlist the CORS/CSRF check above
+ * reuses for "origins this deployment trusts"), an origin outside that list is
+ * refused in favour of the first declared one instead of trusted blindly. An
+ * empty allowlist (the default) keeps prior behaviour unchanged — operators who
+ * haven't set it get no new restriction, only those who opt in via CORS config.
+ */
 function ff_request_origin(): string
 {
     $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
         || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-    return ($isHttps ? 'https' : 'http') . '://' . (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $origin = ($isHttps ? 'https' : 'http') . '://' . (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+
+    $allowedOrigins = array_values(array_filter(
+        array_map('trim', explode(',', $_ENV['FLUXFILES_ALLOWED_ORIGINS'] ?? ''))
+    ));
+    if ($allowedOrigins !== [] && !in_array($origin, $allowedOrigins, true)) {
+        return $allowedOrigins[0];
+    }
+
+    return $origin;
 }
 
 /**

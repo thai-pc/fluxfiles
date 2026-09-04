@@ -93,6 +93,41 @@ test('a base64url token passes through unchanged', function () {
     assertEqual('http://h/public/intake.html?token=' . $jwt, \LinkUrl\ff_public_link_url('intake.html', $jwt));
 });
 
+test('no FLUXFILES_ALLOWED_ORIGINS set — a forged Host is still trusted (unchanged default)', function () {
+    unset($_ENV['FLUXFILES_ALLOWED_ORIGINS']);
+    $_SERVER['HTTP_HOST'] = 'evil.example';
+    unset($_SERVER['HTTPS'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
+    assertEqual('http://evil.example/public/share.html?token=t', \LinkUrl\ff_public_link_url('share.html', 't'));
+});
+
+test('FLUXFILES_ALLOWED_ORIGINS set — a Host outside the allowlist is refused, falls back to the first allowed origin', function () {
+    $_ENV['FLUXFILES_ALLOWED_ORIGINS'] = 'https://files.acme.com,https://app.acme.com';
+    $_SERVER['HTTP_HOST'] = 'evil.example';
+    unset($_SERVER['HTTPS'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
+    try {
+        assertEqual(
+            'https://files.acme.com/public/share.html?token=t',
+            \LinkUrl\ff_public_link_url('share.html', 't')
+        );
+    } finally {
+        unset($_ENV['FLUXFILES_ALLOWED_ORIGINS']);
+    }
+});
+
+test('FLUXFILES_ALLOWED_ORIGINS set — a Host matching the allowlist is used as-is', function () {
+    $_ENV['FLUXFILES_ALLOWED_ORIGINS'] = 'https://files.acme.com,https://app.acme.com';
+    $_SERVER['HTTP_HOST'] = 'app.acme.com';
+    $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
+    try {
+        assertEqual(
+            'https://app.acme.com/public/intake.html?token=t',
+            \LinkUrl\ff_public_link_url('intake.html', 't')
+        );
+    } finally {
+        unset($_ENV['FLUXFILES_ALLOWED_ORIGINS'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
+    }
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
