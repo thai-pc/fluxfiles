@@ -26,8 +26,18 @@ use phpseclib3\Net\SSH2;
  *    repo itself (atomic at the filesystem level, and visible to every FluxFiles
  *    app instance since it lives on the SFTP disk, not local PHP state) rather
  *    than a local file lock, matching the "metadata travels with user storage"
- *    rule. A lock older than LOCK_STALE_MINUTES is treated as abandoned (the
- *    prior deploy's process died without its EXIT trap running) and reclaimed.
+ *    rule. Staleness is liveness-checked, not just time-checked: the lock
+ *    owner writes its own PID into `$L/pid` right after acquiring the lock,
+ *    and a new invocation that finds the lock held asks `kill -0` whether
+ *    that PID is still alive on the remote host BEFORE ever treating the
+ *    lock as abandoned — a live owner is refused outright, no matter how old
+ *    the lock looks (`FLUXFILES_GIT_DEPLOY_TIMEOUT` is routinely raised past
+ *    LOCK_STALE_MINUTES for slow LFS/submodule fetches, so age alone let a
+ *    second trigger steal the lock from a deploy that was still running).
+ *    Only when the PID is confirmed dead (or missing/unreadable, the shape
+ *    of a lock from a pre-liveness-check version) does the `-mmin` age check
+ *    run, now as a secondary sanity check rather than the sole signal,
+ *    before the lock is reclaimed.
  *  - Gating (allow_git_deploy claim, SFTP-only, kill-switch, write perm, rate
  *    limit) lives in the route, mirroring SshTerminal.
  */
@@ -79,13 +89,25 @@ class GitDeploy
         // `find -mmin` (not `stat`, whose flag differs between GNU and BSD/macOS)
         // is the portable way to check a directory's age across the SSH hosts
         // this might run on.
+        //
+        // Lock-held branch: liveness first (kill -0 on the PID recorded in
+        // $L/pid), age check only as a fallback for a dead/pid-less lock —
+        // never the other way around, or a still-running deploy past
+        // LOCK_STALE_MINUTES gets its lock stolen by a concurrent trigger.
         return 'L=' . $lockDir . '; '
-            . 'if [ -d "$L" ] && [ -z "$(find "$L" -maxdepth 0 -mmin +' . self::LOCK_STALE_MINUTES . ' 2>/dev/null)" ]; then '
+            . 'if [ -d "$L" ]; then '
+            . 'P="$(cat "$L/pid" 2>/dev/null)"; '
+            . 'if [ -n "$P" ] && kill -0 "$P" 2>/dev/null; then '
+            . 'echo ' . escapeshellarg(self::LOCKED_MARK) . '; exit 99; '
+            . 'fi; '
+            . 'if [ -z "$(find "$L" -maxdepth 0 -mmin +' . self::LOCK_STALE_MINUTES . ' 2>/dev/null)" ]; then '
             . 'echo ' . escapeshellarg(self::LOCKED_MARK) . '; exit 99; '
             . 'fi; '
             . 'rm -rf "$L" 2>/dev/null; '
+            . 'fi; '
             . 'mkdir "$L" 2>/dev/null || { echo ' . escapeshellarg(self::LOCKED_MARK) . '; exit 99; }; '
-            . 'trap \'rmdir "$L" 2>/dev/null\' EXIT; '
+            . 'echo "$$" > "$L/pid" 2>/dev/null; '
+            . 'trap \'if [ "$(cat "$L/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$L" 2>/dev/null; fi\' EXIT; '
             . $sync . ' 2>&1';
     }
 

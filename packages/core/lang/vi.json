@@ -282,6 +282,7 @@
     "edit_forbidden": "Không được phép chỉnh sửa.",
     "edit_too_large": "Tệp quá lớn để chỉnh sửa.",
     "endpoint_blocked": "Endpoint này bị chặn.",
+    "endpoint_unresolved": "Không thể phân giải endpoint này.",
     "extract_forbidden": "Không được phép giải nén.",
     "image_too_large": "Hình ảnh này quá lớn để xử lý.",
     "image_undecodable": "Tệp này không phải là hình ảnh hợp lệ.",

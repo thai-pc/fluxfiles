@@ -580,6 +580,51 @@ test('MigrateJsonToDbCommand is registered and exposes the expected signature', 
     assertTrue(strpos($cmdSrc, 'LaravelDbMetadataHandler(') !== false, 'command targets LaravelDbMetadataHandler');
 });
 
+test('optimize() gates on the allow_optimize claim directly, not ModuleRegistry (FREE/core, not a paid module)', function () {
+    // 'optimize' was removed from ModuleRegistry::$map when Optimize moved to
+    // free/core (core index.php's /api/fm/optimize route does a direct claim
+    // check, not ModuleRegistry::require()). This adapter's manual-trigger route
+    // regressed to the stale gate once — assert it mirrors the on-upload hook
+    // in the same file (setUploadOptimizer's `if ($claims->autoOptimize ?? false)`
+    // block) instead of the paid-module 3-layer gate.
+    $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+
+    $start = strpos($ctrlSrc, 'function optimize(');
+    assertTrue($start !== false, 'optimize() method exists');
+    $end = strpos($ctrlSrc, "\n    public function ", $start + 1);
+    $body = $end !== false ? substr($ctrlSrc, $start, $end - $start) : substr($ctrlSrc, $start);
+
+    assertTrue(strpos($body, "ModuleRegistry::require('optimize'") === false, 'optimize() no longer calls ModuleRegistry::require for optimize');
+    assertTrue(strpos($body, 'allowOptimize') !== false, 'optimize() checks the allowOptimize claim directly');
+    assertTrue(strpos($body, "'optimize_forbidden'") !== false, 'optimize() throws optimize_forbidden when the claim is absent');
+    assertTrue(strpos($body, 'new \\FluxFiles\\OptimizeModule()') !== false, 'optimize() instantiates OptimizeModule directly');
+});
+
+test('chunkComplete() re-validates the REAL assembled size (S3 multipart size/quota bypass fix)', function () {
+    // /chunk/init only ever checks a CLIENT-DECLARED size before any bytes move —
+    // parts are then PUT straight to S3 on presigned URLs with no size condition,
+    // so a client could declare 1 byte and upload gigabytes. Mirror core's fix
+    // (index.php's handleChunkComplete): re-run max_upload_mb/quota against the
+    // REAL size complete() now reports (via HeadObject), and delete the object
+    // on violation instead of leaving it sitting in storage.
+    $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+
+    $start = strpos($ctrlSrc, 'function chunkComplete(');
+    assertTrue($start !== false, 'chunkComplete() method exists');
+    $end = strpos($ctrlSrc, "\n    public function ", $start + 1);
+    $body = $end !== false ? substr($ctrlSrc, $start, $end - $start) : substr($ctrlSrc, $start);
+
+    assertTrue(strpos($body, "\$result['size']") !== false, 'reads the real size back from complete()\'s result');
+    assertTrue(strpos($body, 'validateUploadName(') !== false, 'chunkComplete() re-checks max_upload_mb via validateUploadName');
+    assertTrue(strpos($body, 'assertQuota(') !== false, 'chunkComplete() re-checks quota via assertQuota');
+    // The 0-delta detail is load-bearing: usage scans already see the just-completed
+    // object on disk, so passing the real size again would double-count it.
+    assertTrue((bool) preg_match('/assertQuota\(\s*\$disk,\s*\$claims->pathPrefix,\s*0,/s', $body), 'assertQuota is called with a 0 delta, not the real size (avoids double-counting)');
+    assertTrue(strpos($body, 'deleteObject(') !== false, 'chunkComplete() deletes the oversized/over-quota object on violation');
+    // The delete + rethrow must happen BEFORE metadata is saved for the object.
+    assertTrue(strpos($body, 'deleteObject(') < strpos($body, 'metaRepo->save('), 'violation cleanup runs before metadata is saved');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

@@ -79,9 +79,21 @@ class ChunkUploader
             'MultipartUpload' => ['Parts' => $multipartUpload],
         ]);
 
+        // CompleteMultipartUploadOutput carries no ContentLength — the client
+        // declares a size at /chunk/init, but that's never checked against what
+        // actually lands here (parts are PUT directly to S3 on presigned URLs
+        // with no size condition). A HeadObject is the only way to learn the
+        // REAL assembled size so the caller can re-validate it against
+        // max_upload_mb/quota post-hoc, instead of trusting the client's claim.
+        $head = $client->headObject([
+            'Bucket' => $bucket,
+            'Key'    => $key,
+        ]);
+
         return [
             'key'      => $key,
             'location' => $result['Location'] ?? '',
+            'size'     => (int) ($head['ContentLength'] ?? 0),
         ];
     }
 
@@ -98,5 +110,26 @@ class ChunkUploader
         ]);
 
         return ['aborted' => true];
+    }
+
+    /**
+     * Delete a completed multipart object outright (NOT an abort — the upload
+     * is already assembled). Used by handleChunkComplete's post-hoc
+     * size/quota re-check: if the REAL assembled size violates the tenant's
+     * limits, the object must not be left sitting in storage while the API
+     * returns an error.
+     */
+    public function deleteObject(string $disk, string $key): array
+    {
+        $client = $this->diskManager->s3Client($disk);
+        $config = $this->diskManager->config($disk);
+        $bucket = $config['bucket'] ?? '';
+
+        $client->deleteObject([
+            'Bucket' => $bucket,
+            'Key'    => $key,
+        ]);
+
+        return ['deleted' => true];
     }
 }

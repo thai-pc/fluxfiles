@@ -932,9 +932,12 @@ class FluxFilesController
     }
 
     /**
-     * Optimization (paid module). The 3-layer gate lives in ModuleRegistry: module
-     * installed (501) + licensed (402) + allow_optimize claim (403). Free hosts
-     * without the module package → 501.
+     * Optimization (FREE/core) — mirrors index.php's /api/fm/optimize route. Opt-in
+     * per token via `allow_optimize` (it replaces/deletes originals, so it's a
+     * deliberate capability, not on by default); the module itself enforces write.
+     * NOT a ModuleRegistry-gated paid module (that map entry was removed when
+     * Optimize moved to free/core) — a direct claim check, same as the on-upload
+     * auto-optimize hook above.
      */
     public function optimize(Request $request): JsonResponse
     {
@@ -943,7 +946,10 @@ class FluxFilesController
             $this->rateLimit($claims, true);
             $fm = $this->fileManager($claims);
 
-            $module = \FluxFiles\ModuleRegistry::require('optimize', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            if (!$claims->allowOptimize) {
+                throw new ApiException('This token may not use optimization', 403, 'optimize_forbidden');
+            }
+            $module = new \FluxFiles\OptimizeModule();
             $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $request->all());
             $this->logAudit($claims, 'optimize', (string) $request->input('disk', 'local'), (string) $request->input('path', ''));
             $this->dispatchWebhook($claims, 'optimize', [
@@ -2147,6 +2153,31 @@ class FluxFilesController
             $chunker = new ChunkUploader($this->diskManager);
 
             $result = $chunker->complete($disk, $key, $uploadId, $parts);
+
+            // /chunk/init only ever checked a CLIENT-DECLARED size, before any bytes
+            // moved — parts are then PUT straight to S3 on presigned URLs with no size
+            // condition, so a client can declare 1 byte and upload gigabytes. Now that
+            // the object is assembled, complete() has reported its REAL size via
+            // HeadObject: re-run the same limits against the truth. On violation the
+            // object must not linger — delete it and skip saving metadata for it.
+            $realSizeBytes = (int) ($result['size'] ?? 0);
+            try {
+                $fm->validateUploadName(basename($key), $realSizeBytes);
+                if ($claims->maxStorageMb > 0) {
+                    // Usage scans already see the just-completed object on disk, so
+                    // pass 0 as the additional delta rather than double-counting it.
+                    (new QuotaManager($this->diskManager))->assertQuota(
+                        $disk,
+                        $claims->pathPrefix,
+                        0,
+                        $claims->maxStorageMb
+                    );
+                }
+            } catch (ApiException $e) {
+                $chunker->deleteObject($disk, $key);
+                throw $e;
+            }
+
             $this->metaRepo->save($disk, $key, [
                 'uploaded_by' => $claims->userId,
             ]);

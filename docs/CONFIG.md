@@ -180,7 +180,7 @@ All four accept the same `claims` map.
 ### 2.12 BYOB (Bring Your Own Bucket)
 | Claim | Type | Notes |
 |---|---|---|
-| `byob_disks` | object | AES-256-GCM-encrypted per-disk S3/SFTP credentials; decrypted only at runtime. Use `fluxfiles_byob_token()`. |
+| `byob_disks` | object | AES-256-GCM-encrypted per-disk S3/SFTP credentials; decrypted only at runtime. Use `fluxfiles_byob_token()`. An `s3` disk's custom `endpoint` is SSRF-checked on **every** decode (`CredentialEncryptor::validate()`), and the resulting IP is pinned to the actual S3 connection (`CURLOPT_RESOLVE`) to close a DNS-rebinding TOCTOU window. This is **fail-closed**: an endpoint host that fails to resolve at all is rejected (`403 endpoint_unresolved`) rather than let through unpinned — an attacker can't bypass the pin by making DNS resolution fail on purpose. |
 
 ### 2.13 Paid-module gates (inert unless the module is installed + licensed)
 | Claim | Type | Default | Module |

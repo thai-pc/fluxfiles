@@ -2,9 +2,12 @@
 
 /**
  * Sidecar namespace — local metadata sidecars live under the protected
- * `_fluxfiles/meta/` namespace, NOT in the user file namespace, so a user-uploaded
- * `*.meta.json` can't be hidden or overwrite a sidecar. Legacy `{file}.meta.json`
- * sidecars are migrated on read.
+ * `_fluxfiles/meta/` namespace, NOT in the user file namespace. `*.meta.json` is a
+ * reserved filename shape (FileManager::assertNotSystem()) so a user can no longer
+ * create/rename/move/copy a file into that shape at all — closing the ownership-
+ * hijack hole where a forged legacy sidecar used to be trusted on read for a target
+ * with no modern sidecar yet. A genuinely pre-existing legacy `{file}.meta.json`
+ * sidecar (predating the guard) is still migrated on read, for backward compat.
  *
  * Usage:
  *   php tests/integration/test-sidecar-namespace.php
@@ -14,6 +17,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
+use FluxFiles\ApiException;
 use FluxFiles\Claims;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
@@ -62,19 +66,29 @@ test('sidecar is stored under _fluxfiles/meta/, not next to the file', function 
     assertEqual('T', $meta->get('local', 'photo.png')['title'] ?? '', 'metadata readable');
 });
 
-test('user-uploaded *.meta.json is VISIBLE and not treated as a sidecar', function () {
+test('user-uploaded *.meta.json is REJECTED as a reserved filename', function () {
     [$fm, , $fs] = makeEnv();
-    $r = up($fm, 'report.meta.json', '{"mine":true}');
-    assertTrue(in_array('report.meta.json', names($fm->list('local', '')), true), 'user .meta.json is listed');
-    assertEqual('{"mine":true}', $fs->read('report.meta.json'), 'content untouched (not a sidecar)');
+    try {
+        up($fm, 'report.meta.json', '{"mine":true}');
+        throw new \RuntimeException('expected 403 system_path');
+    } catch (ApiException $e) {
+        assertEqual('system_path', $e->getErrorCode(), 'reserved filename rejected');
+    }
+    assertTrue(!$fs->fileExists('report.meta.json'), 'nothing was written');
 });
 
-test('uploading {file}.meta.json does NOT overwrite that file\'s sidecar', function () {
+test('uploading {file}.meta.json (even with force_upload) can\'t forge that file\'s sidecar', function () {
     [$fm, $meta, $fs] = makeEnv();
     up($fm, 'a.txt', 'real');
     $meta->save('local', 'a.txt', ['title' => 'Real Title', 'uploaded_by' => 'owner']);
-    // Attacker uploads a.txt.meta.json as a normal user file
-    up($fm, 'a.txt.meta.json', '{"uploaded_by":"attacker"}');
+    // Attacker tries to upload a.txt.meta.json (force_upload=true, as `up()` always does)
+    // to forge ownership of a.txt — blocked outright as a reserved filename.
+    try {
+        up($fm, 'a.txt.meta.json', '{"uploaded_by":"attacker"}');
+        throw new \RuntimeException('expected 403 system_path');
+    } catch (ApiException $e) {
+        assertEqual('system_path', $e->getErrorCode());
+    }
     // The real sidecar is untouched
     assertEqual('Real Title', $meta->get('local', 'a.txt')['title'] ?? '', 'sidecar title intact');
     assertEqual('owner', $meta->get('local', 'a.txt')['uploaded_by'] ?? '', 'owner not spoofed');

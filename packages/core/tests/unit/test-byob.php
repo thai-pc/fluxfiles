@@ -214,8 +214,9 @@ test('valid S3 config passes validation', function () {
 // ── SSRF guard on custom endpoints ──
 $byobBase = ['driver' => 's3', 'bucket' => 'b', 'key' => 'k', 'secret' => 's'];
 
-test('endpoint to a public host passes', function () use ($byobBase) {
-    FluxFiles\CredentialEncryptor::validate('r2', $byobBase + ['endpoint' => 'https://acc.r2.cloudflarestorage.com']);
+test('endpoint to a public host passes and returns a pinned IP', function () use ($byobBase) {
+    $pinnedIp = FluxFiles\CredentialEncryptor::validate('r2', $byobBase + ['endpoint' => 'https://acc.r2.cloudflarestorage.com']);
+    assertEqual(true, is_string($pinnedIp) && $pinnedIp !== '', 'expected a non-empty pinned IP for a resolvable public endpoint');
 });
 
 $blockedEndpoints = [
@@ -236,6 +237,20 @@ foreach ($blockedEndpoints as $label => $ep) {
         }
     });
 }
+
+// ── Fail-closed: an endpoint host that doesn't resolve at all must be REJECTED,
+// not silently let through unpinned (the SSRF TOCTOU this method exists to close —
+// see CredentialEncryptor::assertSafeEndpoint()). `.invalid` is reserved by RFC 2606
+// to never resolve, so this is deterministic without touching real network state.
+test('SSRF: unresolvable endpoint host is rejected fail-closed', function () use ($byobBase) {
+    try {
+        FluxFiles\CredentialEncryptor::validate('evil-dns', $byobBase + ['endpoint' => 'https://this-host-does-not-exist.invalid']);
+        throw new \RuntimeException('should have thrown');
+    } catch (FluxFiles\ApiException $e) {
+        assertEqual('endpoint_unresolved', $e->getErrorCode(), 'expected endpoint_unresolved error code');
+        assertEqual(403, $e->getHttpCode(), 'expected 403');
+    }
+});
 
 // ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► Claims with BYOB{$reset}\n";

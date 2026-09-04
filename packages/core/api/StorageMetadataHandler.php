@@ -129,6 +129,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $index = $this->loadIndex($disk);
         $count = 0;
         foreach (array_keys($index) as $k) {
+            // loadIndex() can hand back an int key for a decimal-integer-looking
+            // file name (PHP array-key coercion, see loadIndex()'s docblock).
+            $k = (string) $k;
             if ($k === $prefix || strpos($k, $prefix . '/') === 0) {
                 $this->delete($disk, $k);
                 $count++;
@@ -145,6 +148,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $count = 0;
             $updated = [];
             foreach ($index as $k => $meta) {
+                // loadIndex() can hand back an int key for a decimal-integer-looking
+                // file name (PHP array-key coercion, see loadIndex()'s docblock).
+                $k = (string) $k;
                 if ($k === $oldPrefix || strpos($k, $oldPrefix . '/') === 0) {
                     $newKey = $newPrefix . substr($k, strlen($oldPrefix));
                     $updated[$newKey] = $meta;
@@ -209,6 +215,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $results = [];
 
         foreach ($index as $fileKey => $meta) {
+            // loadIndex() can hand back an int key for a decimal-integer-looking
+            // file name (PHP array-key coercion, see loadIndex()'s docblock).
+            $fileKey = (string) $fileKey;
             // Never surface metadata sidecars or image variants as search hits.
             if ($this->isReservedPath($fileKey)) {
                 continue;
@@ -477,6 +486,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $index = $this->loadIndex($disk);
         $prefix = trim($pathPrefix, '/');
         foreach ($index as $fileKey => $meta) {
+            // loadIndex() can hand back an int key for a decimal-integer-looking
+            // file name (PHP array-key coercion, see loadIndex()'s docblock).
+            $fileKey = (string) $fileKey;
             if (($meta['file_hash'] ?? '') !== $hash) {
                 continue;
             }
@@ -804,15 +816,23 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     /**
      * Where a local file's metadata sidecar lives. Sidecars are stored inside the
-     * protected `_fluxfiles/` namespace (never in the user's file namespace) so a
-     * user-uploaded `*.meta.json` can't be confused with — or overwrite — a sidecar.
+     * protected `_fluxfiles/` namespace, not the user's file namespace. A
+     * `*.meta.json` filename is now a reserved name — FileManager::assertNotSystem()
+     * rejects it on every write path (upload/rename/move/copy/extract), so a new
+     * one can never be created there again. getFromLocal() below still reads (and
+     * migrates) any legacy sidecar that predates that guard, for backward compat.
      */
     private function sidecarPath(string $key): string
     {
         return '_fluxfiles/meta/' . $key . '.json';
     }
 
-    /** Legacy sidecar location ({key}.meta.json next to the file) — read-only fallback. */
+    /**
+     * Legacy sidecar location ({key}.meta.json next to the file) — read-only
+     * fallback for files onboarded before `*.meta.json` became a reserved,
+     * write-blocked filename shape. Only ever read + migrated, never written
+     * fresh (see saveToLocal(), which only cleans one up after migration).
+     */
     private function legacySidecarPath(string $key): string
     {
         return $key . '.meta.json';
@@ -1000,6 +1020,17 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         try {
             $json = $fs->read(self::INDEX_KEY);
             $data = json_decode($json, true);
+            // Note: json_decode() coerces decimal-integer-looking string keys
+            // (e.g. "5", "0", "-3") into real PHP int array keys — this is a
+            // fundamental PHP array behaviour (any canonical-decimal string key
+            // is normalized to int), not something re-keying here can undo; a
+            // rebuilt array with `(string) $k` keys still collapses "5" back to
+            // int(5). Every caller that iterates this index and forwards the key
+            // into a string-typed parameter (isReservedPath()/isHiddenPath() in
+            // search(), strpos() in deleteChildren()/renameChildren(),
+            // str_starts_with() in findByHash()) must therefore cast the loop key
+            // with `(string)` before using it, to avoid a TypeError under
+            // strict_types without silently dropping the entry.
             return is_array($data) ? $data : [];
         } catch (\Throwable $e) {
             return [];

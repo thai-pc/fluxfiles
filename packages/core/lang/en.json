@@ -282,6 +282,7 @@
     "edit_forbidden": "Editing isn't allowed.",
     "edit_too_large": "This file is too large to edit.",
     "endpoint_blocked": "This endpoint is blocked.",
+    "endpoint_unresolved": "This endpoint could not be resolved.",
     "extract_forbidden": "Extracting archives isn't allowed.",
     "image_too_large": "This image is too large to process.",
     "image_undecodable": "This file isn't a valid image.",

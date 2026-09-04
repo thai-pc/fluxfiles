@@ -85,11 +85,23 @@ class BucketDoctor
             try {
                 $cmd = $s3->getCommand('GetObject', ['Bucket' => $bucket, 'Key' => $probeKey]);
                 $url = (string) $s3->createPresignedRequest($cmd, '+5 minutes')->getUri();
-                [$code, $resp] = $this->httpGet($url);
+                // Reuse the same SSRF-validated IP the S3Client above is pinned to for
+                // this disk (see DiskManager::build()'s CURLOPT_RESOLVE) instead of
+                // letting curl re-resolve the endpoint host fresh — otherwise a BYOB
+                // tenant who re-points their endpoint's DNS at an internal address
+                // between disk registration and this call could turn this presign
+                // fetch into a blind SSRF probe.
+                [$code, $resp] = $this->httpGet($url, $config['_pinned_ip'] ?? null);
                 $checks[] = ($code === 200 && $resp === $body)
                     ? $this->ok('presign', 'Presigned GET URL serves the object.')
                     : $this->warn('presign', "Presigned GET returned HTTP {$code}.",
                         'Private disks serve files via presigned URLs — make sure the endpoint/region is reachable from clients.');
+            } catch (ApiException $e) {
+                // SsrfGuard blocked the fetch (e.g. the endpoint's DNS changed to a
+                // private/internal address between disk registration and this call).
+                // Report it as a normal failed check — never let it bubble into a 500.
+                $checks[] = $this->fail('presign', 'Presign check blocked: ' . $e->getMessage(),
+                    'The bucket endpoint resolved to a private/internal address — verify its DNS is not pointing at an internal host.');
             } catch (\Throwable $e) {
                 $checks[] = $this->warn('presign', $this->awsMsg($e, 'Could not presign a GET URL.'), null);
             }
@@ -292,19 +304,49 @@ class BucketDoctor
         ];
     }
 
-    /** @return array{0:int,1:string} [httpCode, body] */
-    private function httpGet(string $url): array
+    /**
+     * $pinnedIp is the disk's already-SSRF-validated endpoint IP (the same
+     * $config['_pinned_ip'] DiskManager::build() pins the S3Client's own curl
+     * handle to for this disk — see its CURLOPT_RESOLVE comment). Passing it
+     * here pins THIS fetch to that same IP instead of letting curl re-resolve
+     * the URL's host fresh, closing the DNS-rebinding TOCTOU window between
+     * disk registration and this call. Null for non-BYOB disks (operator-
+     * configured, no pin was ever computed) — unchanged, unpinned behavior.
+     *
+     * @return array{0:int,1:string} [httpCode, body]
+     */
+    private function httpGet(string $url, ?string $pinnedIp = null): array
     {
         $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 15,
-            CURLOPT_FOLLOWLOCATION => false,
-        ]);
-        $body = curl_exec($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return [$code, is_string($body) ? $body : ''];
+        try {
+            $opts = [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 15,
+                CURLOPT_FOLLOWLOCATION => false,
+            ];
+            if ($pinnedIp !== null && $pinnedIp !== '') {
+                $host = strtolower(trim((string) (parse_url($url, PHP_URL_HOST) ?? ''), '[]'));
+                $port = parse_url($url, PHP_URL_PORT)
+                    ?? (strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? '')) === 'http' ? 80 : 443);
+                if ($host !== '') {
+                    $opts[CURLOPT_RESOLVE] = ["{$host}:{$port}:{$pinnedIp}"];
+                }
+            }
+            curl_setopt_array($ch, $opts);
+            $body = curl_exec($ch);
+            // Post-connect backstop: even pinned via CURLOPT_RESOLVE, re-confirm the
+            // IP curl actually connected to is still safe (defends a pin that
+            // silently didn't take, e.g. a protocol/family curl couldn't route the
+            // resolve entry for). Only meaningful when we had a pin to check against
+            // — an unpinned (non-BYOB) fetch has no SSRF threat model to enforce.
+            if ($pinnedIp !== null && $pinnedIp !== '') {
+                SsrfGuard::assertConnectedIpSafe($ch);
+            }
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            return [$code, is_string($body) ? $body : ''];
+        } finally {
+            curl_close($ch);
+        }
     }
 
     private function awsMsg(\Throwable $e, string $fallback): string

@@ -282,6 +282,7 @@
     "edit_forbidden": "Bewerken is niet toegestaan.",
     "edit_too_large": "Dit bestand is te groot om te bewerken.",
     "endpoint_blocked": "Dit eindpunt is geblokkeerd.",
+    "endpoint_unresolved": "Dit eindpunt kon niet worden omgezet.",
     "extract_forbidden": "Uitpakken is niet toegestaan.",
     "image_too_large": "Deze afbeelding is te groot om te verwerken.",
     "image_undecodable": "Dit bestand is geen geldige afbeelding.",

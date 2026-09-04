@@ -282,6 +282,7 @@
     "edit_forbidden": "Düzenlemeye izin verilmiyor.",
     "edit_too_large": "Bu dosya düzenlemek için çok büyük.",
     "endpoint_blocked": "Bu uç nokta engellendi.",
+    "endpoint_unresolved": "Bu uç nokta çözümlenemedi.",
     "extract_forbidden": "Ayıklamaya izin verilmiyor.",
     "image_too_large": "Bu görsel işlemek için çok büyük.",
     "image_undecodable": "Bu dosya geçerli bir görsel değil.",

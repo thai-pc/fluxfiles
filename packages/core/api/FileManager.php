@@ -1040,6 +1040,7 @@ class FileManager
 
         $dir = dirname($scoped);
         $newPath = ($dir !== '.' && $dir !== '') ? $dir . '/' . $newName : $newName;
+        $this->assertNotSystem($newPath);
 
         if ($scoped === $newPath) {
             throw new ApiException('New name is the same as current name', 400, 'name_same');
@@ -2345,7 +2346,7 @@ class FileManager
     {
         return str_starts_with($key, '_fluxfiles/') || str_starts_with($key, '_variants/')
             || str_contains($key, '/_fluxfiles/') || str_contains($key, '/_variants/')
-            || substr($key, -10) === '.meta.json';
+            || strcasecmp(substr($key, -10), '.meta.json') === 0;
     }
 
     /**
@@ -2885,7 +2886,13 @@ class FileManager
     }
 
     /**
-     * Block access to internal system paths (_fluxfiles/, _variants/).
+     * Block access to internal system paths (_fluxfiles/, _variants/) and to the
+     * reserved "{name}.meta.json" filename shape. The latter is a normal, writable
+     * path in the user's own namespace, but StorageMetadataHandler treats any
+     * legacy sidecar found there as authoritative (including `uploaded_by`) — so
+     * without this guard a plain `write`-permission upload/rename/move/copy could
+     * forge one and hijack ownership of the real target file. Reading pre-existing
+     * legacy sidecars still works (backward compat); this only closes new writes.
      */
     private function assertNotSystem(string $scopedPath): void
     {
@@ -2898,6 +2905,10 @@ class FileManager
         // Also block exact match (e.g. "_fluxfiles" without trailing slash)
         $base = basename($scopedPath);
         if ($base === '_fluxfiles' || $base === '_variants') {
+            throw new ApiException('Access denied: system path', 403, 'system_path');
+        }
+        // Reserved legacy-sidecar filename shape — see doc-comment above.
+        if (strcasecmp(substr($scopedPath, -10), '.meta.json') === 0) {
             throw new ApiException('Access denied: system path', 403, 'system_path');
         }
     }

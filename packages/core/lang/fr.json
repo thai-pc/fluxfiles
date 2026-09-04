@@ -282,6 +282,7 @@
     "edit_forbidden": "La modification n'est pas autorisée.",
     "edit_too_large": "Ce fichier est trop volumineux pour être modifié.",
     "endpoint_blocked": "Ce point d'accès est bloqué.",
+    "endpoint_unresolved": "Impossible de résoudre ce point d'accès.",
     "extract_forbidden": "L'extraction n'est pas autorisée.",
     "image_too_large": "Cette image est trop grande pour être traitée.",
     "image_undecodable": "Ce fichier n'est pas une image valide.",

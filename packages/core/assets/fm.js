@@ -293,6 +293,13 @@ function fluxFilesApp() {
             });
 
             window.addEventListener('message', (e) => {
+                // Validate sender identity FIRST: only the real parent window can ever
+                // reach this handler, from the very first message (including the initial
+                // FM_CONFIG handshake). Without this, any same-page sibling frame/script
+                // that merely knows the iframe's DOM id could win the FM_CONFIG race and
+                // get _parentOrigin locked to an attacker origin (origin strings alone
+                // don't prove the message came from the window we think it did).
+                if (e.source !== window.parent) return;
                 // Validate origin: trust first FM_CONFIG sender, then lock to that origin
                 if (this._parentOrigin && e.origin !== this._parentOrigin) return;
 
@@ -659,6 +666,9 @@ function fluxFilesApp() {
                 }, 10000); // 10s timeout
 
                 const handler = (e) => {
+                    // Same identity gate as the main listener: only the real parent
+                    // window may deliver FM_TOKEN_UPDATED/FM_TOKEN_FAILED here.
+                    if (e.source !== window.parent) return;
                     if (this._parentOrigin && e.origin !== this._parentOrigin) return;
                     const msg = e.data;
                     if (!msg || msg.source !== 'fluxfiles') return;

@@ -98,10 +98,13 @@ class CredentialEncryptor
      *
      * @param string $diskName Name of the BYOB disk
      * @param array  $config   Decrypted config array
-     * @throws ApiException If validation fails
-     * @return string|null For an s3 disk with a custom endpoint that resolved, the
-     *         first validated public IP — so the caller can pin the connection to
-     *         it (see Claims::fromJwtPayload / DiskManager::build). Null otherwise.
+     * @throws ApiException If validation fails, including an s3 disk whose custom
+     *         endpoint host cannot be resolved at all (fail-closed — see
+     *         assertSafeEndpoint()).
+     * @return string|null For an s3 disk with a custom endpoint, the first
+     *         validated public IP — so the caller can pin the connection to it
+     *         (see Claims::fromJwtPayload / DiskManager::build). Null otherwise
+     *         (no endpoint, or a non-s3 driver).
      */
     public static function validate(string $diskName, array $config): ?string
     {
@@ -167,12 +170,13 @@ class CredentialEncryptor
 
     /**
      * Reject endpoints whose host resolves to a loopback, link-local, private or
-     * otherwise-reserved address — the classic SSRF targets. Runs on every request
+     * otherwise-reserved address — the classic SSRF targets — or that fail to
+     * resolve at all (fail-closed; see below). Runs on every request
      * (Claims::fromJwtPayload calls validate() per-decode, not just at token-mint
      * time) so a malicious BYOB config never reaches the S3 client. Returns the
      * first validated public IP for the caller to pin the connection to.
      */
-    private static function assertSafeEndpoint(string $diskName, string $endpoint): ?string
+    private static function assertSafeEndpoint(string $diskName, string $endpoint): string
     {
         $parts = parse_url($endpoint);
         if ($parts === false || empty($parts['host']) || empty($parts['scheme'])) {
@@ -192,10 +196,29 @@ class CredentialEncryptor
         // Resolve every form (literal / numeric / A+AAAA) and reject if any maps
         // to a non-public address. Shared with the URL-import SSRF guard so the
         // denylist (incl. CGNAT, IPv6 ULA, IPv4-mapped IPv6) stays in one place.
-        // An empty result (host didn't resolve here, e.g. offline test env) is
-        // intentionally NOT treated as a violation — same as before this method
-        // started returning a value — it just means there's nothing to pin to.
         $ips = SsrfGuard::resolveHostIps($host);
+
+        // FAIL CLOSED on an empty result. validate() runs fresh on every request
+        // (Claims::fromJwtPayload decrypts + validates on every JWT decode), and
+        // DiskManager::build() only pins the S3 client's connection (CURLOPT_RESOLVE)
+        // when this method returns an IP — with no pin, curl does its own DNS
+        // resolution at actual-connect time with zero post-connect IP check (unlike
+        // UrlImporter, which re-verifies via assertConnectedIpSafe()). A tenant who
+        // controls the endpoint host's authoritative DNS could otherwise make THIS
+        // lookup fail/timeout on purpose while answering normally with an internal
+        // address (e.g. 169.254.169.254) moments later when curl connects — a
+        // DNS-rebinding TOCTOU that would silently strip all SSRF protection for
+        // every operation on the disk. Refusing the config here (instead of letting
+        // it through unpinned) closes that window: an attacker forcing decode-time
+        // resolution failure just gets the request rejected outright.
+        if ($ips === []) {
+            throw new ApiException(
+                "BYOB disk '{$diskName}' endpoint host could not be resolved",
+                403,
+                'endpoint_unresolved'
+            );
+        }
+
         foreach ($ips as $ip) {
             if (!SsrfGuard::isPublicIp($ip)) {
                 throw new ApiException(
@@ -205,7 +228,7 @@ class CredentialEncryptor
                 );
             }
         }
-        return $ips[0] ?? null;
+        return $ips[0];
     }
 
     /**

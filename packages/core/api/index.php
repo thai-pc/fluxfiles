@@ -1171,7 +1171,7 @@ function routeRequest(
         return handleChunkPresign($chunker, $claims, $fm);
     }
     if ($method === 'POST' && $uri === '/api/fm/chunk/complete') {
-        return handleChunkComplete($chunker, $claims, $fm, $metaRepo, $diskManager);
+        return handleChunkComplete($chunker, $claims, $fm, $metaRepo, $diskManager, $quotaManager);
     }
     if ($method === 'POST' && $uri === '/api/fm/chunk/abort') {
         return handleChunkAbort($chunker, $claims, $fm);
@@ -1982,7 +1982,8 @@ function handleChunkComplete(
     \FluxFiles\Claims $claims,
     FileManager $fm,
     MetadataRepositoryInterface $metaRepo,
-    DiskManager $diskManager
+    DiskManager $diskManager,
+    \FluxFiles\QuotaManager $quotaManager
 ): array
 {
     if (!$claims->hasPerm('write')) {
@@ -2004,6 +2005,26 @@ function handleChunkComplete(
         $fm->assertCanModifyScopedPath($disk, $key);
     }
     $result = $chunker->complete($disk, $key, $uploadId, $parts);
+
+    // /chunk/init only ever checked a CLIENT-DECLARED size, before any bytes
+    // moved — parts are then PUT straight to S3 on presigned URLs with no size
+    // condition, so a client can declare 1 byte and upload gigabytes. Now that
+    // the object is assembled, complete() has reported its REAL size via
+    // HeadObject: re-run the same limits against the truth. On violation the
+    // object must not linger — delete it and skip saving metadata for it.
+    $realSizeBytes = (int) ($result['size'] ?? 0);
+    try {
+        $fm->validateUploadName(basename($key), $realSizeBytes);
+        if ($claims->maxStorageMb > 0) {
+            // Usage scans already see the just-completed object on disk, so
+            // pass 0 as the additional delta rather than double-counting it.
+            $quotaManager->assertQuota($disk, $claims->pathPrefix, 0, $claims->maxStorageMb);
+        }
+    } catch (ApiException $e) {
+        $chunker->deleteObject($disk, $key);
+        throw $e;
+    }
+
     $metaRepo->save($disk, $key, [
         'uploaded_by' => $claims->userId,
     ]);

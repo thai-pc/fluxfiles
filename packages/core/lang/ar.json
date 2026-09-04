@@ -282,6 +282,7 @@
     "edit_forbidden": "التعديل غير مسموح.",
     "edit_too_large": "هذا الملف كبير جدًا للتعديل.",
     "endpoint_blocked": "نقطة النهاية هذه محظورة.",
+    "endpoint_unresolved": "تعذّر تحليل نقطة النهاية هذه.",
     "extract_forbidden": "الاستخراج غير مسموح.",
     "image_too_large": "هذه الصورة كبيرة جدًا لمعالجتها.",
     "image_undecodable": "هذا الملف ليس صورة صالحة.",

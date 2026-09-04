@@ -282,6 +282,7 @@
     "edit_forbidden": "編集は許可されていません。",
     "edit_too_large": "ファイルが大きすぎて編集できません。",
     "endpoint_blocked": "このエンドポイントはブロックされています。",
+    "endpoint_unresolved": "このエンドポイントを解決できませんでした。",
     "extract_forbidden": "展開は許可されていません。",
     "image_too_large": "この画像は処理するには大きすぎます。",
     "image_undecodable": "このファイルは有効な画像ではありません。",

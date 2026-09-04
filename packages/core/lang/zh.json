@@ -282,6 +282,7 @@
     "edit_forbidden": "不允许编辑。",
     "edit_too_large": "文件太大，无法编辑。",
     "endpoint_blocked": "此端点已被阻止。",
+    "endpoint_unresolved": "无法解析此端点。",
     "extract_forbidden": "不允许解压。",
     "image_too_large": "此图片过大，无法处理。",
     "image_undecodable": "此文件不是有效的图片。",
