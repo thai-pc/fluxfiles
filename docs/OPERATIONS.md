@@ -36,12 +36,18 @@ environment, so a sandbox token cannot accidentally reach production.
 
 ## 1. Host the module artifacts
 
-The nine paid modules are tagged `v1.0.0` and pushed, but a tag is a version, not a
-download. Build the artifacts:
+The paid modules are tagged and pushed, but a tag is a version, not a download.
+`ModuleRegistry::$map` (`packages/core/api/ModuleRegistry.php`) is the source of
+truth for how many there are — **eleven** as of this writing (`share`, `intake`,
+`versioning`, `webhooks`, `ai`, `ocr`, `virus`, `backup`, `c2pa`, `audit-export`,
+`sso`; recount from that file rather than trusting this number, since it has
+drifted before — it was nine before `audit-export`/`sso` shipped 2026-08-29).
+
+Build the artifacts:
 
 ```bash
 php scripts/pack-modules.php
-# → build/modules/<module>-1.0.0.zip  ×9
+# → build/modules/<module>-<version>.zip  ×11 (one zip per ModuleRegistry id)
 # → build/modules/catalogue.json
 ```
 
@@ -49,10 +55,11 @@ It builds each zip from that module's **git tag** (never the working tree), refu
 build it cannot reproduce, and rejects a layout `UpdateClient::install()` would
 mis-extract.
 
-Upload the zips somewhere they can be fetched over HTTPS. All nine total **72 KB**, so
-this needs no CDN — a private GitHub release, an R2/S3 bucket, or the same box as the
-update server is fine. Integrity is anchored by a signed sha256, so the host does not
-have to be trusted, only reachable.
+Upload the zips somewhere they can be fetched over HTTPS. Each module is small,
+source-only PHP, so the total download is tiny — this needs no CDN — a private
+GitHub release, an R2/S3 bucket, or the same box as the update server is fine.
+Integrity is anchored by a signed sha256, so the host does not have to be trusted,
+only reachable.
 
 > Serve **exactly** the bytes `pack-modules.php` hashed. `UpdateClient` re-hashes the
 > download and refuses a mismatch, so a rebuilt-but-not-rehashed zip breaks every
@@ -169,7 +176,9 @@ paste into step 3.
 > **Prices live in two places** and both must agree: the `CATALOGUE` table in
 > `polar-setup.php`, and the landing's `Pricing.astro`. A static marketing page cannot
 > ask the API what something costs. They have already been out of step once — the page
-> advertised Studio at $299/yr while the product was created at $249.
+> advertised Studio at $299/yr while the product was created at $249. `docs/
+> LICENSING-PLAN.md` §C is the canonical source for what the prices *should* be —
+> check new figures against it before changing either `CATALOGUE` or `Pricing.astro`.
 
 `enterprise` and `lifetime` are deliberately not created: Enterprise is a custom
 conversation an instant-buy button would undercut, and lifetime is worth offering only
@@ -227,6 +236,18 @@ buyer cannot see.
   `subscription.canceled` handler.
 - **Module floors are checked by hand.** A module's `composer.json` must require the
   first core release that actually *calls* it. This cannot be CI-guarded — the packages
-  are gitignored, so CI cannot see them. Seven of nine were wrong once.
+  are gitignored, so CI cannot see them. Seven of nine were wrong once (back when there
+  were only nine modules, before `audit-export`/`sso` shipped 2026-08-29 brought the
+  total to eleven).
 - **WordPress cannot run the CLI installer.** Shared hosting has no shell; those
   customers unpack the module zip by hand — see `ACTIVATE.md`.
+
+---
+
+## Env vars used elsewhere in this doc
+
+This runbook is the canonical home for the *selling* env vars (Polar, licence server,
+update server) shown above. Self-hosting **FluxFiles itself** (web server config,
+directory permissions, upload-size limits — `client_max_body_size`,
+`upload_max_filesize`/`post_max_size`, etc.) is a different job with no overlap
+today; see [`DEPLOYMENT.md`](DEPLOYMENT.md) for that instead of duplicating it here.

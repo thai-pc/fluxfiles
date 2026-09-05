@@ -162,6 +162,41 @@ watermarked images and hide download.
 > burning a second mark into a file you can't download would just double-watermark
 > it. Burn in with a normal, downloadable token instead.
 
+## Usage dashboard
+
+`GET /api/fm/usage` (see the root README's *Usage dashboard* section for the
+response shape) computes a per-prefix storage breakdown — quota status,
+size/count by type, and the largest folders — with **no database and no
+history**: it's a snapshot recomputed from the current tree, not a trend line.
+
+- **One pass, reused work.** The breakdown rides the same recursive listing the
+  quota check already performs (bucketed by extension, no per-file MIME
+  sniffing); `_fluxfiles/` and `_variants/` are excluded so caches/sidecars never
+  inflate the numbers.
+- **Cached per prefix, inside the tenant's own tree.** The result is written to
+  `_fluxfiles/usage.json` under the caller's `pathPrefix` (not a shared/global
+  cache file), so concurrent tenants on the same disk never contend on the same
+  file. TTL is the `usage_cache_ttl` claim (default `900`s; `0` disables caching
+  and recomputes every request).
+- **`?refresh=true`** bypasses the cache but is rate-limited upstream (2/min); the
+  UI's own Refresh button self-debounces to 60s on top of that, so a user mashing
+  it can't force a full recursive listing on every click.
+- **Thresholds are per-tenant claims, not hardcoded.** `usage_warning_threshold`
+  (default `70`%) and `usage_critical_threshold` (default `90`%) drive the
+  `ok`/`warning`/`critical` `status` field the UI colors its quota meter with.
+  `usage_top_folders_count` and `usage_folder_depth` control how many/how deep
+  the top-folders list goes. See `docs/CONFIG.md` §2.11 for the full claim table.
+- **Free/core** — no module gate, no `allow_*` claim; the only knobs are the
+  `usage_*` claims above.
+- **Optimize savings ride along for free.** If the (also free/core) Optimize
+  feature has been recompressing files, `OptimizeStats::read()` is read fresh on
+  every request (cheap, and it changes on every optimize, so it's deliberately
+  **not** part of the cached breakdown) and folded into the response as an
+  `optimize` key — one endpoint shows both "how full" and "how much you've saved."
+- **Quota is still a JWT claim.** `quota_limit`/`max_storage` live in the token,
+  so changing a tenant's quota takes effect on their *next* minted token, exactly
+  like every other claim — the dashboard visualizes that model, it doesn't change it.
+
 ## SSH terminal — security model
 
 When the disk is SFTP, FluxFiles can open a built-in **terminal** (see the root

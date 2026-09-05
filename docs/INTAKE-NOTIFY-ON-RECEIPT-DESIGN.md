@@ -15,6 +15,16 @@ matching Webhooks' at-most-once design elsewhere in the codebase.
 > gets a signed HTTP POST the instant a client drops a file into their portal,
 > instead of having to poll `GET /api/fm/intake/analytics` or the file list.
 
+> **Verification note.** `packages/intake/` is gitignored **from git**, not absent from the
+> filesystem — it and `packages/share/` have now been re-read directly. Every
+> `IntakeModule.php:<line>` citation below (§2, §4, §5.1, §5.2, §5.4) has been checked against
+> the current source and corrected where it had drifted (several had — see the inline fixes
+> in each section). The `packages/core/` (`index.php`, `PublicLinks.php`, `Claims.php`) and
+> `docs/CONFIG.md` citations were already re-checked against the current repo in an earlier
+> pass and stand unchanged; the code samples throughout this doc were compared line-for-line
+> against the shipped `IntakeModule.php` and match verbatim, confirming the feature landed
+> exactly as designed here.
+
 ## 1. Problem & who pays
 
 Today, the only way an operator learns a file landed in a portal is polling.
@@ -37,19 +47,21 @@ safely carry — that's exactly the fork point this feature sits on, and it's
 already been decided once for Intake:
 
 - **`allow_virus_scan`** (boolean, no secret) is forwarded straight into the
-  portal JWT (`IntakeModule::createPortal()`, `packages/intake/src/IntakeModule.php:106-108`)
+  portal JWT (`IntakeModule::createPortal()`, `packages/intake/src/IntakeModule.php:105-109`
+  — the reasoning comment is `:105-108`, the field assignment itself is `:109`)
   so `PublicLinks.php` can wire the fail-closed scanner per-request. Safe,
   because there's nothing to steal in a boolean.
 - **`brand` / `analytics`** (an object + a boolean, still no secret, but
   intentionally operator-only rather than sender-facing) are instead **baked
   into the stored `_fluxfiles/intakes.json` record** at create time
-  (`IntakeModule.php:127-128`) and read back per-request via `getRecord()`.
+  (`IntakeModule.php:130-131`) and read back per-request via `getRecord()`.
 
 Webhook config is neither: `webhook_secret` is a live HMAC signing key. JWTs
 are base64url — signed, not encrypted — so anything in the payload is
 plaintext to whoever holds the token. The portal token is handed to
 **every anonymous sender** as a literal `?token=` query param
-(`createPortal()` return `url`, `IntakeModule.php:143-146`). Forwarding
+(`createPortal()` builds `$url` from `intake_base_url` at `IntakeModule.php:152-157`
+and returns it as the `url` field at `:168`). Forwarding
 `webhook_secret` into it the way `allow_virus_scan` is forwarded would leak
 the operator's signing secret to every visitor of the public upload page —
 the exact class of mistake CLAUDE.md already calls out for BYOB credentials
@@ -64,7 +76,7 @@ never the portal JWT.**
 
 No new JWT claim is introduced. The bake-in reads the operator's own
 already-documented `allow_webhooks` / `webhook_url` / `webhook_events` /
-`webhook_secret` claims (`docs/CONFIG.md:196-199`) at the moment they mint a
+`webhook_secret` claims (`docs/CONFIG.md:207-210`) at the moment they mint a
 portal — same "config = the claims on the token doing the minting, snapshotted
 at creation" trade-off `max_mb`/`allowed_ext`/`brand` already accept. An
 operator who changes their webhook URL only affects portals minted after the
@@ -99,8 +111,9 @@ so old records behave exactly as `null` (see §8, Backward compatibility).
 
 ## 4. Write path — `IntakeModule::createPortal()`
 
-`packages/intake/src/IntakeModule.php:112-131` (the `$record` array) gains one
-line, built the same way `brand`/`analytics` already are two lines above it:
+`packages/intake/src/IntakeModule.php:112-144` (the `$record` array) gains one
+line, built the same way `brand`/`analytics` already are two lines above it
+(`:130-131`):
 
 ```php
 $record = [
@@ -129,7 +142,7 @@ but dispatch no-ops instead of firing.
 `IntakeModule::receiveUpload()` already has a natural-looking hook: right
 after a successful upload, if `$reserved['analytics']` is set, it appends a
 `received` event in the same function
-(`packages/intake/src/IntakeModule.php:274-280`). It would be tempting to
+(`packages/intake/src/IntakeModule.php:327-332`). It would be tempting to
 fire the webhook from the same spot using `$reserved['webhook']`.
 
 **Rejected**, for one concrete reason: that call happens *before*
@@ -137,7 +150,7 @@ fire the webhook from the same spot using `$reserved['webhook']`.
 `WebhooksModule::dispatch()` makes a real HTTP POST with a multi-second
 timeout; blocking the sender's own upload response on a third-party
 endpoint's response time is exactly the latency FluxFiles' *own* main-flow
-webhook wiring already avoids — `packages/core/api/index.php:401-405` calls
+webhook wiring already avoids — `packages/core/api/index.php:462-469` calls
 `fastcgi_finish_request()` and flushes the response **before** invoking
 `$webhookDispatcher(...)`. An anonymous portal visitor has even less reason
 to eat that latency than an authenticated caller does. Dispatch must happen
@@ -152,7 +165,7 @@ module needing another module's capability is core-mediated injection, not a
 direct call — `PublicLinks.php` builds the virus scanner closure and hands it
 to `$portalFm->setVirusScanner()`; `IntakeModule` never touches
 `\FluxFiles\Virus\VirusScanModule` directly
-(`packages/core/api/PublicLinks.php:111-123`). Webhook dispatch follows the
+(`packages/core/api/PublicLinks.php:122-128`). Webhook dispatch follows the
 same seam: core owns cross-module orchestration.
 
 ### 5.2 New read-only method — `IntakeModule::webhookConfigFor()`
@@ -190,7 +203,10 @@ public function webhookConfigFor(DiskManager $disks, string $disk, string $store
 }
 ```
 
-`getRecord()` (`IntakeModule.php:579`) is already `private`; this method is
+This matches `IntakeModule.php:198-231` verbatim (docblock included) in the
+current shipped source.
+
+`getRecord()` (`IntakeModule.php:624-628`) is already `private`; this method is
 the one narrow `public` seam onto it, deliberately shaped so it can never leak
 `password_hash` or any other record field — only what a webhook dispatch
 needs. It does **not** use `resolveToken()` (that throws on revoked/expired,
@@ -199,13 +215,13 @@ notify failure must never surface as an error after the response is gone).
 
 ### 5.3 `PublicLinks.php` — the dispatch call
 
-Exact insertion point, `packages/core/api/PublicLinks.php:104-127` (the
+Exact insertion point, `packages/core/api/PublicLinks.php:91-129` (the
 `POST /api/fm/intake/upload` branch):
 
 ```php
-$payload = \FluxFiles\JwtCompat::decode($token, $secret);           // already there, line 104
+$payload = \FluxFiles\JwtCompat::decode($token, $secret);           // already there, line 109
 // …
-$portalClaims = \FluxFiles\Claims::fromJwtPayload($payload);        // already there, line 108
+$portalClaims = \FluxFiles\Claims::fromJwtPayload($payload);        // already there, line 113
 $portalFm = new FileManager($dm, $portalClaims, new StorageMetadataHandler($dm));
 $portalFm->setStreamSecret($secret);
 if ($portalClaims->allowVirusScan) { /* …unchanged… */ }
@@ -214,7 +230,7 @@ $res = $module->receiveUpload($portalFm, $dm, $secret, $token, $file, $password)
 echo json_encode(['data' => $res, 'error' => null]);
 
 // Notify-on-receipt: fired AFTER the response is on the wire, same ordering
-// as the main flow's webhook dispatch (index.php:401-405). Best-effort —
+// as the main flow's webhook dispatch (index.php:462-469). Best-effort —
 // WebhooksModule::dispatch() never throws, but this is wrapped anyway since
 // nothing downstream of this point can change the response that was just sent.
 if (function_exists('fastcgi_finish_request')) {
@@ -256,7 +272,7 @@ the upload). It is wrong here: by the time this code runs, the response has
 already been echoed and (when available) flushed. A thrown `ApiException`
 at this point cannot become an HTTP error response anymore — it would just
 be swallowed or logged strangely. Matches the existing precedent at
-`packages/core/api/index.php:321-324`, which gates the *main-flow* webhook
+`packages/core/api/index.php:358-360`, which gates the *main-flow* webhook
 dispatcher the same manual way for the same reason (it's also best-effort,
 also post-response).
 
@@ -274,14 +290,14 @@ than a live JWT; nothing in `Claims` or `WebhooksModule` needs to change.
 ### 5.4 Event name & payload
 
 New event name: **`intake_received`** — not `upload`. `index.php`'s
-`resolveAuditAction()` (`index.php:973-1009`) maps authenticated-route URIs to
-an existing vocabulary (`upload, rename, delete, ai_tag, …`); none of those
-represent "an anonymous stranger sent me a file through a public portal," and
-conflating it with `upload` would make an operator's `webhook_events` filter
-unable to tell their own uploads from portal receipts. `intake_received`
-matches the vocabulary `IntakeModule` already uses internally for its own
-analytics events (`type: 'received'`, `IntakeModule.php:280`) and the
-ROADMAP's own wording ("notify-on-receipt").
+`resolveAuditAction()` (`index.php:1197-1235`) maps authenticated-route URIs
+to an existing vocabulary (`upload, rename, delete, ai_tag, …`); none of
+those represent "an anonymous stranger sent me a file through a public
+portal," and conflating it with `upload` would make an operator's
+`webhook_events` filter unable to tell their own uploads from portal
+receipts. `intake_received` matches the vocabulary `IntakeModule` already
+uses internally for its own analytics events (`type: 'received'`,
+`IntakeModule.php:330`) and the ROADMAP's own wording ("notify-on-receipt").
 
 It still respects `webhook_events` filtering exactly like every other event —
 `WebhooksModule::dispatch()`'s existing filter check (`webhookEvents !== []`)
@@ -352,7 +368,7 @@ An operator can hold either without the other:
 | Intake only | Portals work exactly as before; `webhook` bakes as `null` (their token has no `allow_webhooks`); no dispatch attempted. |
 | Intake + Webhooks, but `webhook_url` unset | Same as above — `webhook` bakes `null`. |
 | Intake + Webhooks, both configured | Bakes in; dispatch fires on receipt. |
-| Intake + Webhooks configured, license lapses later | Old portals keep their baked `webhook` config, but `webhookConfigFor()`'s caller re-checks `installed()`/`licensed()` on every receipt — a lapsed license silently stops notifying, same as it silently stops the main-flow dispatcher (`index.php:321-324` re-checks per-request too, nothing cached). |
+| Intake + Webhooks configured, license lapses later | Old portals keep their baked `webhook` config, but `webhookConfigFor()`'s caller re-checks `installed()`/`licensed()` on every receipt — a lapsed license silently stops notifying, same as it silently stops the main-flow dispatcher (`index.php:358-360` re-checks per-request too, nothing cached). |
 | Webhooks only (no Intake) | Irrelevant — Intake's own module gate (`allow_intake`) already blocks portal creation entirely; this feature is unreachable. |
 
 ## 8. Backward compatibility
@@ -429,7 +445,7 @@ anonymous sender.
 ## 11. Part C — `docs/CONFIG.md` additions
 
 **None.** This feature introduces zero new JWT claim names. It reads the
-four already-documented webhook claims (`docs/CONFIG.md:196-199`) at a new
+four already-documented webhook claims (`docs/CONFIG.md:207-210`) at a new
 *point in time* — `IntakeModule::createPortal()`, in addition to their
 existing per-request read in `index.php`'s main flow — not with any new
 name or new semantics. Stated explicitly here (rather than silently

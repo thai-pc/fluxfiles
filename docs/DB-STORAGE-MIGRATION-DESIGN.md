@@ -1,28 +1,41 @@
-# DB-Backed Storage State — Reversing the JSON-Only Design
+# DB-Backed Storage State — An Opt-In Alternative to the JSON-Only Design
 
-> **This reverses `docs/METADATA-STORAGE-DESIGN.md`.** That doc's headline was
-> "No more SQLite — everything travels with the user's storage." This doc
-> keeps the *files themselves* (bytes) fully storage-resident and BYOB-neutral
-> — that part is **not** reversed — but moves the *bookkeeping* (per-file
-> metadata, search index, folder index, audit log, trash manifest, quota
-> tracking) into the operator's own self-hosted relational DB. The reversal
-> was decided in conversation with the user; this doc designs **how**, not
-> **whether**. One line of justification (expanded in §1): `index.json` is a
-> linear-scan-on-every-search flat file, S3 object metadata is capped at 2KB
-> and costs a `CopyObject` per edit, and audit/trash/quota all want filtered,
-> ordered, aggregated queries that a JSON blob structurally cannot give you
-> without loading the whole thing into memory every time. None of that was
-> wrong to avoid when the file count was small; it stops being free once
-> tenants have tens of thousands of files.
+> **Not a replacement for `docs/METADATA-STORAGE-DESIGN.md` — an opt-in second
+> backend alongside it.** This doc's original title called itself "Reversing
+> `docs/METADATA-STORAGE-DESIGN.md`"; that phrasing overstated the
+> relationship and is corrected here. What actually shipped (see the
+> **Status** section at the bottom for commits/tags) is a **second storage
+> backend**, selected by the server-wide `FLUXFILES_STORAGE_BACKEND` env var
+> (default `json`). Every existing self-hosted install keeps the exact
+> JSON-sidecar/`index.json`/`dirs.json`/`audit.jsonl` behavior
+> `docs/METADATA-STORAGE-DESIGN.md` describes, completely unchanged, unless an
+> operator explicitly sets `FLUXFILES_STORAGE_BACKEND=db`.
+> `docs/METADATA-STORAGE-DESIGN.md` remains accurate as the description of the
+> default configuration; this doc is its companion for the `db` mode, not its
+> supersession — that other doc should carry a short pointer note to this
+> effect near its "No more SQLite" line (not yet added there; this doc cannot
+> edit it — see the handoff note that accompanies this design). This doc keeps
+> the *files themselves* (bytes) fully storage-resident and BYOB-neutral in
+> **both** modes — that part was never in question — but, only when opted in,
+> moves the *bookkeeping* (per-file metadata, search index, folder index,
+> audit log, trash manifest, quota tracking) into the operator's own
+> self-hosted relational DB. One line of justification (expanded in §1):
+> `index.json` is a linear-scan-on-every-search flat file, S3 object metadata
+> is capped at 2KB and costs a `CopyObject` per edit, and audit/trash/quota
+> all want filtered, ordered, aggregated queries that a JSON blob structurally
+> cannot give you without loading the whole thing into memory every time. None
+> of that was wrong to avoid when the file count was small; it stops being
+> free once tenants have tens of thousands of files.
 
 ## 0. Executive summary
 
-**Moving to DB:** per-file metadata (title/alt/caption/tags/hash/dims),
-search index, folder index, audit log, trash manifest, quota tracking,
-**and the rate limiter** (`rate_limits`, §3.7 — reversed from this doc's
-original draft, which had proposed keeping it file-based; the user's
-requirement is zero JSON files left, full stop, so it moves too. See §3.7 for
-why ".env" doesn't work for this one and what the DB design actually is.).
+**Moving to DB (only when `FLUXFILES_STORAGE_BACKEND=db` is set):** per-file
+metadata (title/alt/caption/tags/hash/dims), search index, folder index,
+audit log, trash manifest, quota tracking, **and the rate limiter**
+(`rate_limits`, §3.7 — reversed from this doc's original draft, which had
+proposed keeping it file-based; the user's requirement is zero JSON files
+left, full stop, so it moves too. See §3.7 for why ".env" doesn't work for
+this one and what the DB design actually is.).
 
 **Not moving — explicit exclusions:**
 - **React, Vue, SDK (`@fluxfiles/sdk`), Node (`@fluxfiles/node`), CKEditor4,
@@ -61,6 +74,21 @@ Postgres/MySQL/SQLite, not a FluxFiles SaaS backend) is exactly as
 "operator-owned" as their own S3 bucket — this was clarified in conversation
 and is **not** a privacy/compliance regression by itself.
 
+**This is the exception `.claude/CLAUDE.md`'s stateless rule anticipates, not
+a violation of it.** That file's Working Rules state: "Do not add new
+stateful server dependencies unless the task explicitly changes the
+stateless/BYOB direction." That clause is conditional, not absolute — it
+already contemplates a task that deliberately changes direction, and this is
+exactly that task: the reversal was decided in conversation with the user
+(see the reframed opening note above), it is scoped as an explicit, opt-in,
+server-wide config choice rather than a new default, and it does not make
+FluxFiles-the-project responsible for hosting or operating the database — the
+operator runs their own DB exactly as they already run their own S3 bucket or
+SFTP server today. It also does not touch `Claims`/JWT authorization at all
+(§14.6) — the one piece of "state" CLAUDE.md's rule is most protective of.
+Read this design as that clause working as intended, not as a rule being
+bent or quietly worked around.
+
 What *does* change, and is the one real new risk (see §11): today, S3 object
 metadata is scoped by the object key itself — you can only read metadata for
 an object you can already `HeadObject`/`GetObject`, so access control was a
@@ -92,6 +120,13 @@ old design structurally couldn't have. §11 gives concrete guidance.
 ---
 
 ## 2. Precursor refactor — widening `MetadataRepositoryInterface`
+
+> **Implemented** — shipped in commits `707db11`/`cafcc84` (tag
+> `core-v0.2.79`). All 19 `instanceof StorageMetadataHandler` guards in
+> `FileManager.php`, plus `index.php`'s metadata/audit route handlers and both
+> the Laravel and WordPress adapters' `$metaRepo` type-hints, now reference
+> `MetadataRepositoryInterface` instead of the concrete class. Full detail is
+> in the bottom **Status** section.
 
 This has to happen before (or as part of) the DB backend lands, because
 without it a DB-backed handler cannot actually be swapped in.
@@ -174,6 +209,14 @@ implementer, which is pointless churn).
 ---
 
 ## 3. Schema design
+
+> **Implemented** — all four tables (`file_metadata`, `directories`, `trash`,
+> `audit_log`) plus `rate_limits` (§3.7) shipped in commits
+> `707db11`/`cafcc84` (tag `core-v0.2.79`), with the `content_hash` column
+> added to `audit_log` afterward by migration `0006` (§9). The tables below
+> match the real migration files in `packages/core/db/migrations/`
+> (verified directly against `0001`–`0006`); §3.6 carries an explicit
+> correction against an earlier, inaccurate draft of the `audit_log` table.
 
 Four tables. No `search_index`/`dirs` tables **as JSON-shaped mirrors** —
 per the guiding decision, folder listing/search become SQL queries against
@@ -316,23 +359,30 @@ branching on this one column:
 
 ### 3.6 `audit_log`
 
+**Corrected against the real migration files** (`packages/core/db/migrations/
+0004_create_audit_log.sql` + `0006_add_audit_log_content_hash.sql`) — an
+earlier draft of this table had three wrong column types and was missing the
+`content_hash` column entirely. The table below is the as-shipped schema.
+
 | Column | Type | Notes |
 |---|---|---|
 | `id` | bigint PK, autoincrement | Row order is a reasonable tiebreaker for same-second entries (JSON's append order served this role before). |
 | `disk` | varchar(64) | Audit is per-disk today (`audit.jsonl` lives on one disk), unchanged. |
 | `owner` | varchar(191), nullable | `context.user_id` — who performed the action. |
-| `action` | varchar(64) | e.g. `upload`, `rename`, `delete`, `ai_tag`. |
-| `file_key` | varchar(1024), nullable | `context.file_key`. |
-| `ip` | varchar(45), nullable | IPv4/IPv6. |
+| `action` | varchar(191) | e.g. `upload`, `rename`, `delete`, `ai_tag`. |
+| `file_key` | text, nullable | `context.file_key`. Unbounded `TEXT`, not a capped `varchar`. |
+| `ip` | varchar(64), nullable | IPv4/IPv6. |
 | `user_agent` | text, nullable | |
-| `detail` | JSON / text, nullable | `context.detail` — arbitrary extra context, same tolerance as `extra` on `file_metadata`. |
+| `detail` | text, nullable | `context.detail` — arbitrary extra context, same tolerance as `extra` on `file_metadata`. Stored as plain `TEXT`, not a JSON-typed column. |
 | `created_at` | bigint (unix seconds) | |
+| `content_hash` | char(64), nullable | Added by migration `0006` (§9): `sha256(ts . action . json_encode(context))`, the idempotency key the JSON→DB migrator (§9) uses to dedupe audit lines on re-run. Null for rows inserted directly (not via the migrator). |
 
 `INDEX (disk, owner, created_at)`, `INDEX (disk, created_at)`,
-`INDEX (disk, action, created_at)` — the export route
+`INDEX (disk, action, created_at)`, and `UNIQUE (disk, content_hash)` (added
+by migration `0006`) — the export route
 (`GET /api/fm/audit/export?action=&from=&to=&path=&actor=&disk=`) filters on
-exactly these dimensions; a DB backend turns that route from a full-log
-linear scan into an indexed range query.
+exactly the first three dimensions; a DB backend turns that route from a
+full-log linear scan into an indexed range query.
 
 **A DB backend eliminates the rotation/archive mechanism entirely** —
 `_fluxfiles/audit/archive/audit-<ts>-<hex>.jsonl` was purely a mitigation for
@@ -506,28 +556,53 @@ doesn't otherwise need, so it's scoped out of v1 behind the same
 
 ## 4. DB abstraction layer — core standalone
 
+> **Implemented** — the `Db/` subsystem, migration runner, and CLI script
+> shipped in commits `707db11`/`cafcc84` (tag `core-v0.2.79`); the file tree
+> below reflects the current directory contents (re-verified via `Glob`
+> against `packages/core/api/`, `packages/core/api/Db/`,
+> `packages/core/db/migrations/`, and `packages/core/scripts/`), including
+> files that landed in later commits — `MetadataImporter.php`,
+> `S3MetadataRepairer.php`, `MigrationImportInterface.php` (§9), migrations
+> `0005`/`0006`, and the standalone CLI scripts under `packages/core/scripts/`
+> — none of which were in the original v1 proposal below.
+
 **No ORM.** Core's only hard runtime dependency today is `firebase/php-jwt`;
 pulling in Doctrine/Eloquent-standalone for a package whose whole pitch is
 "drop in, zero-build, minimal backend" would be a heavier addition than the
 feature justifies. Plain **PDO** with a thin internal layer:
 
 ```
+packages/core/api/MetadataRepositoryInterface.php  — interface (§2), widened to cover directory/trash/audit methods
+packages/core/api/RateLimiterStorageInterface.php  — interface (§3.7)
+packages/core/api/RateLimiterFileStorage.php       — existing JSON/file-based implementation (unchanged)
+packages/core/api/RateLimiterFactory.php           — picks RateLimiterFileStorage vs RateLimiterDbStorage from FLUXFILES_STORAGE_BACKEND
 packages/core/api/Db/
-  Connection.php          — lazy-connect PDO wrapper (DSN + user + pass from env)
-  Dialect.php             — interface: upsert(), autoIncrementDdl(), jsonType(), boolLiteral(), quoteIdent()
+  Connection.php               — lazy-connect PDO wrapper (DSN + user + pass from env)
+  Dialect.php                  — interface: upsert(), autoIncrementDdl(), jsonType(), boolLiteral(), quoteIdent()
   SqliteDialect.php
   MysqlDialect.php
   PgsqlDialect.php
-  DbMetadataHandler.php   — implements MetadataRepositoryInterface (§2), built on Connection + Dialect
+  DbMetadataHandler.php        — implements MetadataRepositoryInterface (§2), built on Connection + Dialect
+  RateLimiterDbStorage.php     — implements RateLimiterStorageInterface (§3.7)
   MigrationRunner.php
-  JsonToDbMigrator.php    — adapter-agnostic (§9), used by core CLI + Laravel artisan + WP-CLI
-  MetadataExporter.php    — §7
-  MetadataImporter.php    — §7
+  MigrationImportInterface.php — insertAuditEntries/existingAuditContentHashes/insertDirectoriesPreservingTimestamp, implemented by every DB handler (§9)
+  JsonToDbMigrator.php         — adapter-agnostic (§9), used by core CLI + Laravel artisan + WP-CLI
+  MetadataExporter.php         — §7
+  MetadataImporter.php         — §7
+  S3MetadataRepairer.php       — §8
 packages/core/db/migrations/
   0001_create_file_metadata.sql
   0002_create_directories.sql
   0003_create_trash.sql
   0004_create_audit_log.sql
+  0005_create_rate_limits.sql
+  0006_add_audit_log_content_hash.sql
+packages/core/scripts/
+  fluxfiles-migrate.php     — runs pending core migrations (MigrationRunner) explicitly at deploy time
+  migrate-json-to-db.php    — CLI wrapper over JsonToDbMigrator (§9)
+  export-metadata.php       — CLI wrapper over MetadataExporter (§7)
+  import-metadata.php       — CLI wrapper over MetadataImporter (§7)
+  repair-s3-metadata.php    — CLI wrapper over S3MetadataRepairer (§8)
 ```
 
 **Why a `Dialect` strategy, not per-engine branching inside

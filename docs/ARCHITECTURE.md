@@ -22,9 +22,16 @@ belongs in the core instead.
 
 Two hard constraints shape every decision:
 
-- **No server database.** All state is *storage-resident* (metadata sidecars,
-  `_fluxfiles/*.json`, locked JSON for the rate limiter/audit/trash). State travels
-  with the user's bucket, not a central DB.
+- **Storage-resident by default, no FluxFiles-hosted database.** State is
+  *storage-resident* (metadata sidecars, `_fluxfiles/*.json`, locked JSON for the
+  rate limiter/audit/trash) and travels with the user's bucket, not a
+  vendor-hosted central DB. **Opt-in exception:** `FLUXFILES_STORAGE_BACKEND=db`
+  moves the same bookkeeping (metadata/search/folder-index/audit/trash/rate-limits)
+  into the *operator's own* self-hosted SQLite/MySQL/Postgres instead of JSON
+  files — an infrastructure choice gated by a server env var, not a JWT claim or
+  a paid module. File *bytes* stay fully storage-resident either way, and the
+  default (`json`) is unchanged for every existing install. See
+  `docs/DB-STORAGE-MIGRATION-DESIGN.md`.
 - **Stateless auth.** A JWT *is* the per-tenant configuration — permissions, disk
   scope, quotas, and the paid-feature gates are all claims. The operator mints them.
 
@@ -46,7 +53,7 @@ FluxFiles/
 ├── .github/workflows/  test.yml · split.yml · npm-publish.yml · docker-publish.yml
 ├── scripts/            build-wordpress.sh · check-adapter-core-floor.sh · pack-smoke.sh · ci-retry.sh
 ├── docker/             Dockerfile · Dockerfile.prod · nginx.conf · entrypoint.sh
-├── docs/               ARCHITECTURE.md (this) · METADATA-STORAGE-DESIGN.md · (planning docs, gitignored)
+├── docs/               ARCHITECTURE.md (this) + 21 other git-tracked design/ops docs (CONFIG.md, API.md, FEATURES.md, DEPLOYMENT.md, DB-STORAGE-MIGRATION-DESIGN.md, …) — everything under docs/ is tracked except the local, gitignored ROADMAP.md
 ├── .claude/            CLAUDE.md · architecture.md · api-map.md · development.md   (AI-agent context)
 └── README · CHANGELOG · AGENTS.md · Makefile · docker-compose.yml
 ```
@@ -55,12 +62,13 @@ FluxFiles/
 
 ```
 core/
-├── api/                26 PHP classes — the whole engine (~8.5k LOC)
+├── api/                56 PHP files (43 top-level + 13 under `Db/` for the opt-in
+│                       DB storage backend) — the whole engine
 │   ├── index.php         HTTP entrypoint: CORS, locale routes, auth, DI wiring, route dispatch
 │   ├── FileManager.php   central file-operation service + most security checks
 │   ├── DiskManager.php   Flysystem factory (local / S3 / R2 / SFTP) + BYOB disks
 │   ├── Claims.php        decoded-JWT value object + path scoping
-│   ├── StorageMetadataHandler.php   metadata sidecars + search/folder index + audit (NO DB)
+│   ├── StorageMetadataHandler.php   metadata sidecars + search/folder index + audit (JSON backend by default; `Db/` is the opt-in exception — see §1)
 │   ├── LicenseManager.php           offline verifier for the paid editions
 │   └── … AiTagger, ImageOptimizer, ImageToken, StreamToken, RangeStreamer,
 │         QuotaManager, RateLimiterFileStorage, SsrfGuard, CredentialEncryptor,
@@ -102,9 +110,14 @@ The host's existing auth maps to a FluxFiles JWT.
   `"fluxfiles/fluxfiles": "^X.Y.Z"`. When an adapter starts calling a core symbol
   newer than its floor, the **adapter↔core floor guard** (CI) fails until the floor
   is bumped — so the constraint never lies. See `scripts/check-adapter-core-floor.sh`.
-- A few **byte-streaming** endpoints (`/stream`, `/img`, SFTP `/zip`, `chmod`) are
-  *intentionally unproxied* by the adapters (they're core-standalone / Docker
-  features); the route-parity test whitelists them.
+- Two **byte-streaming** endpoints remain core-standalone-only: `/zip` (multi-disk
+  streaming with no proxy port yet) and SFTP-only `/chmod` (the proxies don't
+  expose SFTP as a disk driver at all). `/stream` and `/img` are **no longer** in
+  that bucket — both were ported directly into each proxy controller (mirroring
+  the SSH-terminal port, since core's `handleMediaStream()`/`handleImageTransform()`
+  are inline functions in `index.php`, not a reusable file), so both routes **are**
+  proxied by Laravel and WordPress today. The route-parity test whitelists only
+  the endpoints still unproxied.
 
 ### (B) Browser embed — `sdk`, `react`, `vue`, `ckeditor4`, `tinymce`, `summernote`
 Put a core server somewhere, then embed it as an `<iframe>` and talk over a
@@ -168,15 +181,16 @@ Notes:
 
 ---
 
-## 6. CI map (`.github/workflows/test.yml`, 12 jobs)
+## 6. CI map (`.github/workflows/test.yml`, 14 jobs)
 
 `core-php` (unit+integration, multi-PHP) · **`adapter-core-floor`** (PHP floors are
 honest) · `iframe-allow` · `api-e2e` · `selfboot-e2e` (every `tests/e2e/*-http.php`
 + `test-sftp-live.php`, boots its own `php -S` + an `atmoz/sftp` container) ·
-`s3-minio` (live S3 via MinIO) · `wrappers` (react/vue/sdk/editors vitest) ·
-`node-sdk` · `browser-e2e` (Playwright) · `editor-e2e` · `pack-smoke` (published
-dist/types) · `docker-build`. Publishing is separate (`split` / `npm-publish` /
-`docker-publish`).
+`s3-minio` (live S3 via MinIO) · `db-mysql` / `db-postgres` (the
+`FLUXFILES_STORAGE_BACKEND=db` suite run against real MySQL/Postgres services) ·
+`wrappers` (react/vue/sdk/editors vitest) · `node-sdk` · `browser-e2e` (Playwright)
+· `editor-e2e` · `pack-smoke` (published dist/types) · `docker-build`. Publishing
+is separate (`split` / `npm-publish` / `docker-publish`).
 
 ---
 

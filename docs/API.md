@@ -66,6 +66,8 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/metadata?disk=&key=` | — | SEO metadata: title, alt_text, caption, tags |
 | `PUT` | `/metadata` | `{disk, key, title, alt_text, caption, tags}` | Save metadata |
 | `DELETE` | `/metadata` | `{disk, key}` | Delete metadata |
+| `GET` | `/metadata/export?disk=&prefix=&format=ndjson\|csv` | — | Bulk export of DB-backend metadata rows (**free/core**; requires `FLUXFILES_STORAGE_BACKEND=db`, else `501`). Tenant-scoped to the caller's own prefix/owner (read perm) |
+| `POST` | `/metadata/import` | `{disk, entries[]}` | Bulk import of DB-backend metadata rows (**free/core**, DB backend only; `501` otherwise). Every entry's path must be in the caller's scope or the whole batch is rejected (write perm) |
 
 ## Search, Quota, Audit
 
@@ -88,9 +90,11 @@ Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` cl
 | `POST` | `/share` | `{disk, path, ttl?, label?, password?, max_downloads?}` | `share` | Create a public share link. Token is returned once, never stored |
 | `GET` | `/share/list?disk=` | — | `share` | List the caller's own share records |
 | `POST` | `/share/revoke` | `{disk, jti}` | `share` | Revoke a share |
+| `GET` | `/share/analytics?disk=&jti=&limit=&offset=&event=` | — | `share` | Per-event share log (view/download/unlock_fail), opt-in via `share_analytics` |
 | `POST` | `/intake` | `{disk, path, ttl?, label?, password?, max_files?, max_mb?, allowed_ext?}` | `intake` | Create a write-only upload portal for a folder |
 | `GET` | `/intake/list?disk=` | — | `intake` | List the caller's own intake portals |
 | `POST` | `/intake/revoke` | `{disk, jti}` | `intake` | Revoke an upload portal |
+| `GET` | `/intake/analytics?disk=&jti=&limit=&offset=&event=` | — | `intake` | Per-event portal log (received/rejected), opt-in via `intake_analytics` |
 | `GET` | `/versions?disk=&path=` | — | `versioning` | List prior versions of a file |
 | `POST` | `/versions/restore` | `{disk, path, version_id}` | `versioning` | Restore a prior version (snapshots current bytes first) |
 | `POST` | `/webhooks/test` | — | `webhooks` | Send a one-off ping to the token's configured `webhook_url` |

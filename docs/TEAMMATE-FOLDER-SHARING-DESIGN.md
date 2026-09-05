@@ -4,10 +4,13 @@ Status: **Final — pattern documented, nothing to implement.** This spec is
 documentation/pattern only by design (see §1 non-goals): it introduces no new
 claims, storage, or endpoints, so there is no FluxFiles code change to make
 and no automated test to add (§7). The cross-reference from
-`ACL-ROLE-PRESETS-DESIGN.md`'s §1 non-goal 1 back to this document (§8) is
-already in place. Verification is the operator's own grant-lookup/mint code
-and, for §4b, a manual `updateToken()` + `setDisk()` walkthrough — both
-outside this repo's scope.
+`ACL-ROLE-PRESETS-DESIGN.md`'s §1 non-goal 1 back to this document is
+already in place (see §8). The `role` preset this spec builds on (§3) has
+**since shipped** — see `ACL-ROLE-PRESETS-DESIGN.md`'s own Status section —
+so every reference to it below describes current, not future, behavior.
+Verification is the operator's own grant-lookup/mint code and, for §4b, a
+manual `updateToken()` + `setDisk()` walkthrough — both outside this repo's
+scope.
 
 ## 0. What this is and why it's a separate spec
 
@@ -34,9 +37,9 @@ but it belongs entirely in **the operator's own application**, not in
 FluxFiles. FluxFiles' job stays exactly what it already does — decode a JWT,
 enforce `pathPrefix`/`perms`/`disks` — and needs **zero new claims, zero new
 storage, and zero new endpoints** to support this. The feature is a *pattern*
-for combining things that already ship: `prefix`-scoped tokens, the `role`
-preset from the ACL spec (once implemented), and the already-shipped
-`updateToken()` live-token-swap bridge.
+for combining things that already ship: `prefix`-scoped tokens, the shipped
+`role` preset from the ACL spec, and the already-shipped `updateToken()`
+live-token-swap bridge.
 
 This is why it's a separate spec rather than an extension of the ACL spec:
 the ACL spec is about *what a token can do*; this spec is about *who decides
@@ -109,8 +112,10 @@ own users/permissions system, which every real host app already has.
 ## 3. Minting: a second, separately-scoped token per grant
 
 When teammate B needs to see folder F that A shared with them, the operator
-mints a **new JWT scoped to F**, using `pathPrefix = F` and (once the ACL
-spec ships) `role` = the grant's stored role to set the capability bundle:
+mints a **new JWT scoped to F**, using `pathPrefix = F` and `role` = the
+grant's stored role to set the capability bundle (the ACL spec's `role`
+preset has shipped in all four token builders — see its Status section —
+so this is ordinary, available-today behavior, not a future dependency):
 
 ```php
 // Laravel-flavored example; same shape via fluxfiles_token() in embed.php,
@@ -162,10 +167,10 @@ folder-switcher dropdown in the host chrome), the already-shipped
 with an explicit reset, which is not automatic.
 
 `updateToken(token)` exists in the SDK (`packages/sdk/fluxfiles.js:279`),
-React (`useFluxFiles.ts:161`), and Vue (`useFluxFiles.ts:143`); all three
-just `postMessage` an `FM_TOKEN_UPDATED` payload into the iframe. Inside
-`fm.js`, the handler for that message
-(`packages/core/assets/fm.js:338-349`) does:
+React (`packages/react/src/useFluxFiles.ts:161`), and Vue
+(`packages/vue/src/useFluxFiles.ts:143`); all three just `postMessage` an
+`FM_TOKEN_UPDATED` payload into the iframe. Inside `fm.js`, the handler for
+that message (`packages/core/assets/fm.js:345-356`) does:
 
 ```js
 if (msg.type === 'FM_TOKEN_UPDATED' && msg.payload?.token) {
@@ -183,20 +188,21 @@ if (msg.type === 'FM_TOKEN_UPDATED' && msg.payload?.token) {
 ```
 
 That handler was built for one purpose: recovering from an expired/invalid
-token (`FM_TOKEN_REFRESH` flow, `fm.js:621-670`). It only reloads the
-listing when `this.loadError` was already set. On a healthy session with no
-load error — the normal case when switching from "my files" into "shared
-folder F" — swapping the token silently changes `this.token` **and nothing
-else**: `currentPath`, `currentDisk`, and the currently-rendered file list
-all keep showing the *old* scope, while every subsequent API call
-(uploads, deletes, presigns) starts hitting the *new* scope. That mismatch
-is a real correctness hazard for this pattern specifically, not a bug in
-`fm.js` — the handler is doing exactly what it was designed for
-(error-recovery), and this spec is asking it to do something else
-(workspace switch) that happens to reuse the same message type.
+token (the `FM_TOKEN_REFRESH` flow, `_handleTokenExpired()` in
+`fm.js:635-702`). It only reloads the listing when `this.loadError` was
+already set. On a healthy session with no load error — the normal case when
+switching from "my files" into "shared folder F" — swapping the token
+silently changes `this.token` **and nothing else**: `currentPath`,
+`currentDisk`, and the currently-rendered file list all keep showing the
+*old* scope, while every subsequent API call (uploads, deletes, presigns)
+starts hitting the *new* scope. That mismatch is a real correctness hazard
+for this pattern specifically, not a bug in `fm.js` — the handler is doing
+exactly what it was designed for (error-recovery), and this spec is asking
+it to do something else (workspace switch) that happens to reuse the same
+message type.
 
 **The fix requires no `fm.js` change** — just pairing `updateToken()` with
-an existing `FM_COMMAND`. `switchDisk()` (`fm.js:1079-1086`) already does
+an existing `FM_COMMAND`. `switchDisk()` (`fm.js:1089-1096`) already does
 precisely the reset this pattern needs:
 
 ```js
@@ -223,7 +229,7 @@ sdk.setDisk(sharedFolderToken_disk);          // FM_COMMAND → switchDisk():
 Call `setDisk()` with the shared grant's disk **even if it's the same disk
 name as the teammate's home disk** — `switchDisk()`'s reset (path → `''`,
 reload listing + quota) is what's actually needed here, not the disk change
-itself. `navigate('')` (`fm.js:911-916`) alone would also reset the path and
+itself. `navigate('')` (`fm.js:921-926`) alone would also reset the path and
 reload the listing, but skips the quota reload that `switchDisk()` includes,
 so `setDisk()` is the more complete reset command. Switching back to "my
 files" is the same two calls in reverse (home token + home disk).
@@ -292,6 +298,7 @@ purely of the pattern's correctness in the operator's own app:
 
 ## 8. Cross-reference
 
-Add a pointer from `ACL-ROLE-PRESETS-DESIGN.md`'s §1 non-goal 1 to this
-document once both are reviewed, so a future reader following that non-goal
-lands here instead of re-deriving the same design.
+**Done.** `ACL-ROLE-PRESETS-DESIGN.md`'s §1 non-goal 1 already points here
+("Not designed here — see `TEAMMATE-FOLDER-SHARING-DESIGN.md` for that
+spec."), so a reader following that non-goal lands at this document instead
+of re-deriving the same design.

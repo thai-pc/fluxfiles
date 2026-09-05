@@ -75,7 +75,8 @@ Two new claims. Both are parsed in `packages/core/api/Claims.php` and documented
 
 ### `intake_base_url`
 - **Type** string (http/s), **default** `''`.
-- **Parse** (mirror of `share_base_url`, `Claims.php:461-462`):
+- **Parse** (mirror of `share_base_url`'s own block immediately above it, `Claims.php:608-609`;
+  this snippet itself is `Claims.php:615-616`):
   ```php
   $intakeBase = trim((string) ($payload->intake_base_url ?? ''));
   $c->intakeBaseUrl = preg_match('#^https?://#i', $intakeBase) ? $intakeBase : '';
@@ -85,8 +86,8 @@ Two new claims. Both are parsed in `packages/core/api/Claims.php` and documented
 - **Meaning** public base the intake create response builds the recipient link from
   (e.g. `https://files.acme.com/public/intake.html`). Empty → the request origin +
   `/public/intake.html` (fallback in `index.php`, §4.2).
-- **Forwarded by** node (`intakeBaseUrl` option + raw `claims` passthrough), Laravel
-  (**standalone mode only**, §6.3), WordPress (**not at all**, §6.3).
+- **Forwarded by** node (`intakeBaseUrl` option + raw `claims` passthrough), and — as of the
+  §6.3 fix — Laravel and WordPress **unconditionally, in every mode** (§6.3).
 
 ### `pro_hints`
 - **Type** bool, **default** `true`.
@@ -131,17 +132,23 @@ Public (token-authed, pre-JWT) routes are untouched: `/api/fm/share/{info,unlock
 
 ### 4.2 The one core change — a recipient URL for Intake (prerequisite 1)
 
-Today `POST /api/fm/share` gets a `url` two ways (module from `share_base_url`, else the
-fallback at `index.php:600`); `POST /api/fm/intake` gets neither, so a UI that says "here is
-your portal link" has nothing to show.
+Before this fix, `POST /api/fm/share` got a `url` two ways (module from `share_base_url`, else
+a fallback inline in `index.php`); `POST /api/fm/intake` got neither, so a UI that said "here is
+your portal link" had nothing to show. Both branches now call the shared helper below (share at
+`index.php:772`, intake at `index.php:812-813`).
 
 Fix, mirroring Share exactly:
 
 1. **Module** (`packages/intake/src/IntakeModule.php::createPortal`) returns
    `'url' => $claims->intakeBaseUrl !== '' ? $base . (str_contains($base,'?') ? '&' : '?') . 'token=' . rawurlencode($token) : ''`
-   — a literal mirror of `ShareModule.php:122-127`.
-2. **Core** (`packages/core/api/index.php`, the `POST /api/fm/intake` branch at :618) falls back
-   to the request origin + the core landing page, with the same comment as :596-599.
+   — a literal mirror of `ShareModule.php:139-144`. Verified against the current source of
+   both private packages (re-read directly from disk — they are gitignored **from git**, not
+   absent from the filesystem; see §6.2's updated note): `IntakeModule.php` builds `$url` from
+   `intakeBaseUrl` at `:152-157` and returns it as the `url` field at `:168`, matching this
+   description exactly.
+2. **Core** (`packages/core/api/index.php`, the `POST /api/fm/intake` branch starting at :804,
+   fallback call at :812-813) falls back to the request origin + the core landing page, with the
+   same comment as the share branch's, at :767-770.
 
 **Extract the duplicated line into a helper** so the fallback is unit-testable in free core
 (today it is inline and only reachable with a paid module installed, i.e. untestable in CI):
@@ -190,8 +197,9 @@ Resolution order (short-circuits so the common paths cost **zero extra requests*
 1. `this.tokenAllows(claim, false)` → `'on'`. *(licensed tenants never fetch the license)*
 2. `window.parent !== window` → `'hidden'`. *(every embedded/adapter path exits here)*
 3. `this.tokenAllows('pro_hints', true) === false` → `'hidden'`. *(hard off switch)*
-4. `this.licenseInfo === null` → fire `loadLicense()` once (already memoized at `fm.js:2920`)
-   and return `'hidden'` for this tick; Alpine re-renders when it resolves.
+4. `this.licenseInfo === null` → fire `loadLicense()` once (memoized via the
+   `_licenseFetched`/`_licenseInFlight` fields inside `loadLicense()`, `fm.js:3159`) and return
+   `'hidden'` for this tick; Alpine re-renders when it resolves.
 5. `(Array.isArray(this.licenseInfo.modules) ? this.licenseInfo.modules : []).includes(moduleId)`
    → `'hidden'`; else → `'locked'`.
 
@@ -211,12 +219,14 @@ Share needs `read` and a **file**; Intake needs `write` and a **folder**.
   `canChmod` at :965-972):
   - `x-show="shareGate === 'on' && detailFile?.type !== 'dir'"` → **Share link**.
   - `x-show="intakeGate === 'on' && detailFile?.type === 'dir'"` → **Upload portal**.
-- **Toolbar icon** in the `ff-theme-toggle-sm` cluster next to Activity/Usage/Trash
-  (`index.html:185-194`) → opens the **Links panel**, shown when either gate is `'on'`.
+- **Toolbar icon** in the `ff-theme-toggle-sm` cluster next to Activity/Usage/Trash — the
+  `x-show="linksToolbarState === 'on'"` button, currently `index.html:213` — opens the **Links
+  panel**, shown when either gate is `'on'`.
 - **Locked affordance**: when either gate is `'locked'`, the same toolbar icon renders with a
-  lock glyph and a `Pro` pill; clicking opens a small modal (title, one sentence per feature,
-  a docs link, Close). It issues **no API calls**. Nothing appears in the detail panel in this
-  state — one affordance per app, not one per file.
+  lock glyph and a `Pro` pill instead (`x-show="linksToolbarState === 'locked'"`,
+  `index.html:216`); clicking opens a small modal (title, one sentence per feature, a docs
+  link, Close). It issues **no API calls**. Nothing appears in the detail panel in this state —
+  one affordance per app, not one per file.
 
 ### 5.3 Create modal — shared shell, disjoint body
 
@@ -249,15 +259,15 @@ Field shapes:
 
 ### 5.4 One-shot link presentation (prerequisite 4)
 
-The token is returned once and never stored (`index.php:598`). Design *around* that; do not
-weaken it.
+The token is returned once and never stored (`index.php:769` for share, mirrored for intake at
+`:810-811`). Design *around* that; do not weaken it.
 
 On success the modal swaps to a reveal state:
 
 - The URL in a **read-only `<input>`**, auto-selected, plus a **Copy** button.
-  Reuse the clipboard/`execCommand` fallback by extracting `copyText(str)` out of
-  `copyUrl(file)` (`fm.js:1826`) — `copyUrl` then calls `copyText`. `navigator.clipboard`
-  needs a secure context; the fallback keeps `http://localhost` dev working.
+  Reuse the clipboard/`execCommand` fallback via `copyText(str)`, already extracted out of
+  `copyUrl(file)` (`copyText` at `fm.js:1919`, `copyUrl` at `fm.js:1940` calling it at `:1947`).
+  `navigator.clipboard` needs a secure context; the fallback keeps `http://localhost` dev working.
 - A prominent, non-dismissible line: `links.once_warning` — *"This link is shown once. Copy it
   now — it can't be recovered later, only revoked."*
 - Closing before a successful copy → `links.close_confirm` *("You haven't copied the link yet.
@@ -271,7 +281,7 @@ On success the modal swaps to a reveal state:
 
 ### 5.5 Links panel — what a non-displayable link shows
 
-A tabbed modal in the trash/activity style (`index.html:1654`, `.ff-trash-modal` shape),
+A tabbed modal in the trash/activity style (`index.html:1932`, `.ff-trash-modal` shape),
 `z-index:60`, `x-cloak`, escape-closable. Tabs **Shared links** / **Upload portals**, each shown
 only if its own gate is `'on'`; if exactly one is, it opens on that tab and the tab bar is
 hidden. Loads on open (`GET .../list?disk=<currentDisk>`), scoped to the current disk — with a
@@ -299,13 +309,21 @@ Columns:
 ### 5.6 Error handling for the gate
 
 `this.api()` already maps `error_code` → `t('error.' + code)` and falls back to the raw message
-(`fm.js:541-553`), and sets `err.code`. So:
+(`fm.js:594-619`), and sets `err.code`/`err.params`. So:
 
-- `module_not_installed` (501) and `license_required` (402) already have en.json entries
-  (`:287`, `:313`) → they surface localized. **`license_expired` does not exist and must be
-  added** (today it falls through to the raw English server string).
-- Add `allow_share_forbidden` / `allow_intake_forbidden` (403 from
-  `ModuleRegistry.php:99` = `<claim>_forbidden`).
+- `module_not_installed` (501), `license_required` (402) and `license_expired` (402) already
+  have `en.json` entries (`:292`, `:323`, `:324`) → they surface localized without any new key.
+- **What actually shipped is not two new per-module keys.** `ModuleRegistry::require()`
+  (`ModuleRegistry.php:101`) raises the refusal as `$claim . '_forbidden'` — a code built at
+  runtime from whatever claim name was passed in (`allow_share_forbidden`,
+  `allow_intake_forbidden`, and every other module's `allow_<x>_forbidden` alike) — so there is
+  no fixed literal a translation file could key on ahead of time, and a dedicated key per
+  module would need re-adding for every future module. `fm.js`'s `api()` instead falls back,
+  when `error_code` matches `/^allow_[a-z0-9_]+_forbidden$/` and no exact key exists, to one
+  generic `error.module_forbidden` key with a `{module}` param (`fm.js:608-613`; the key text
+  itself, *"This access token is not allowed to use {module}."*, is `en.json:325`). Neither
+  `allow_share_forbidden` nor `allow_intake_forbidden` exists, or is needed, as a literal key —
+  do not add them.
 - The create modal renders these **inline in the modal body as a terminal state** (like the
   URL-import error state), not as a transient toast, and hides the submit button — a 501 is not
   a retryable failure. The list panel does the same in its body.
@@ -323,31 +341,42 @@ Columns:
 
 ### 6.1 Intake recipient URL — see §4.2 (prerequisite 1)
 
-### 6.2 `owner` on the intake record + `owner_only` (prerequisite 2)
+### 6.2 `owner` on the intake record + `owner_only` (prerequisite 2) — confirmed already shipped
 
-`IntakeModule::createPortal` writes no `owner` (`:98-111`) and `listPortals` (`:203-211`) does
-no owner filtering, unlike `ShareModule` (`:107`, `:299`, `:273`). Unreachable today; a real
-cross-user leak the moment the UI calls `list`.
+> **Updated after re-reading the private source.** This subsection previously described a gap
+> in `packages/intake/` that this doc could not verify (the package is gitignored **from
+> git**, but that does not mean absent from the filesystem — it and `packages/share/` have now
+> been re-read directly). **The gap does not exist in the current source.** `owner`,
+> `owner_only` filtering in both `listPortals` and `revokePortal`, and tombstone-based
+> revocation are all already present, matching in substance what this section originally
+> proposed as a fix. Kept below in the same numbered form, corrected to describe what shipped
+> (not what remains to do), with accurate current line numbers.
 
-1. **Record**: add `'owner' => $claims->userId` to the record in `createPortal` (mirror
-   `ShareModule.php:107`).
-2. **`listPortals`**: skip tombstones, then
-   `if ($claims->ownerOnly && ($rec['owner'] ?? null) !== $claims->userId) { continue; }`
-   (mirror `ShareModule.php:296-301`).
-3. **`revokePortal`**: 403 `perm_denied` when `$claims->ownerOnly` and the owner differs
-   (mirror `ShareModule.php:273-275`).
-4. **Recommended, same function — write a tombstone, not `unset`.** `revokePortal` currently
-   `unset`s the entry, but `receiveUpload` rewrites the *whole* tenant map on every upload
-   (`:181-182`). A revoke that interleaves with an in-flight upload writes the pre-revoke map
-   back and **resurrects the portal**. Share solved exactly this with a tombstone
-   (`ShareModule.php:256-285`); Intake has the same race and the UI's Revoke button is what
-   makes it reachable. Tombstone shape: `{jti, revoked:true, expires}`; `resolveToken` must
-   treat `!empty($rec['revoked'])` as `404 intake_revoked`; `save()` prunes tombstones past
-   `expires`. Flagged rather than assumed — it is one line beyond the plan's wording.
+`IntakeModule::createPortal` writes `'owner' => $claims->userId` in the record
+(`IntakeModule.php:117`, inside the `$record` array spanning `:112-144`), and `listPortals`
+(`:390-407`) filters on it (`:397-399`) — matching `ShareModule`'s own `owner` write
+(`ShareModule.php:114`), tombstone-skip-then-owner-filter in `listShares` (`:342-347`), and the
+`revokeShare` owner check (`:317-319`).
 
-**Migration — portals created before `owner` existed.** Fail **closed**, exactly like Share:
-`($rec['owner'] ?? null) !== $claims->userId` is true for a missing owner, so under
-`owner_only` a legacy portal becomes invisible and un-revokable in the UI.
+1. **Record**: `owner` is present in `createPortal`'s `$record` (`IntakeModule.php:117`),
+   mirroring `ShareModule.php:114`.
+2. **`listPortals`**: skips tombstones (`IntakeModule.php:394-396`) then filters on
+   `owner_only` (`:397-399`), mirroring `ShareModule.php:342-347`.
+3. **`revokePortal`**: throws `403 perm_denied` when `$claims->ownerOnly` and the owner differs
+   (`IntakeModule.php:360-362`), mirroring `ShareModule.php:317-319`.
+4. **Tombstone, not `unset`.** `revokePortal` (`IntakeModule.php:354-375`) writes
+   `{jti, revoked:true, expires, owner}` (`:366-371`) instead of unsetting the entry — the same
+   fix `ShareModule::revokeShare` already carries (`ShareModule.php:299-332`, tombstone write at
+   `:320-329`) for the identical reason: `receiveUpload` rewrites the whole tenant map on every
+   upload (`IntakeModule.php:272-295`, counter bump at `:291-293`), so a revoke interleaved with
+   an in-flight upload under a plain `unset` would resurrect the portal. The shape matches what
+   this section originally specified: `resolveToken` (`:414-439`) treats
+   `!empty($rec['revoked'])` as `404 intake_revoked` (`:433-436`), and `save()` (`:606-623`)
+   prunes tombstones past `expires` (`:611-621`).
+
+**Migration — portals created before `owner` existed.** Still fails **closed**, exactly like
+Share, and unaffected by this update: `($rec['owner'] ?? null) !== $claims->userId` is true for
+a missing owner, so under `owner_only` a legacy portal is invisible and un-revokable in the UI.
 
 - Tenants **without** `owner_only` (the majority) are unaffected — the filter is a no-op and
   every legacy portal keeps listing normally.
@@ -356,31 +385,66 @@ cross-user leak the moment the UI calls `list`.
 - Remedy, in order: (a) list/revoke with an operator token that does **not** set `owner_only`
   — this is the documented escape hatch and needs no code; (b) edit
   `<prefix>/_fluxfiles/intakes.json` by hand.
-- **Do not backfill `owner` to the caller on read.** That hands ownership of another user's
-  portal to whoever lists first — the exact leak being closed. Do not backfill on revoke either.
-- Ship a CHANGELOG note under the module's entry.
+- **`owner` is not backfilled on read or on revoke** — confirmed in current source: neither
+  `listPortals` nor `revokePortal` writes `owner` onto a record that lacks it. Backfilling on
+  read would hand ownership of another user's portal to whoever lists first, the exact leak
+  this behavior avoids.
 
-### 6.3 Adapters must not advertise unproxied endpoints (prerequisite 3)
+### 6.3 Adapters proxy Share/Intake in full — this prerequisite shipped differently than planned
 
-Both adapters forward `allow_share`/`allow_intake` unconditionally while all six endpoints are
-on the intentionally-unproxied list (`packages/laravel/tests/test-laravel-smoke.php:314-321`),
-so proxy mode would render a button that 404s. The correct pattern is nine lines above the bug:
-
-- **Laravel** (`packages/laravel/src/FluxFilesManager.php:175`): pull `allow_share` and
-  `allow_intake` out of the 9-claim loop and forward them — together with `share_url_ttl`,
-  `share_base_url`, `share_preview`, `intake_base_url` (:180-191) — **only when**
-  `config('fluxfiles.mode') === 'standalone'`, with the comment shape of :163-167. The other
-  seven module claims keep their current behaviour.
-- **WordPress** (`packages/wordpress/includes/FluxFilesPlugin.php:334`): remove `allow_share`
-  and `allow_intake` from the list and drop the `share_*` forwarding at :339-350 entirely — the
-  plugin is proxy-only, so these are dead config. Comment mirroring :319-323.
-- **Out of scope, noted once:** `allow_ai_vision` / `allow_ocr` / `allow_backup` /
-  `allow_c2pa` are on the same unproxied list and have the same latent problem. They have no UI
-  button, so leave them; do not quietly widen the change.
-- **No core floor bump needed** — the adapters only write payload array keys; they call no new
-  core `Claims` API. (`scripts/check-adapter-core-floor.sh` will confirm.)
-- **Node** (`packages/node/src/token.ts:157`): add an `intakeBaseUrl` option next to
-  `shareBaseUrl`. Node mints tokens for a real core, so no mode condition applies.
+> **Status check, since what shipped is broader than the plan below.** The original plan
+> (forward `allow_share`/`allow_intake` only when Laravel is in `standalone` mode; strip them
+> from WordPress entirely, "the plugin is proxy-only") assumed Share and Intake had **no**
+> proxied routes, so forwarding the claims anywhere but standalone Laravel would render a
+> button that 404s. That assumption is no longer true. Verified against the current adapter
+> source (both are free/MIT and readable):
+>
+> - Both adapters now proxy **all eleven** Share/Intake routes — the six operator ones
+>   (create/list/revoke × 2) plus analytics, plus the public recipient landing routes
+>   (`info`/`unlock`/`file` for Share, `info`/`upload` for Intake) — via
+>   `FluxFilesController::shareIntake()`/`publicLink()` in
+>   `packages/laravel/src/Http/Controllers/FluxFilesController.php` and
+>   `FluxFilesApi::shareIntake()`/`publicLink()` in
+>   `packages/wordpress/includes/FluxFilesApi.php`. There is no 404 risk left to guard against.
+> - **Laravel** (`packages/laravel/src/FluxFilesManager.php:294-298`) forwards `allow_share`/
+>   `allow_intake` **unconditionally, in every mode** — not gated by
+>   `config('fluxfiles.mode')` — together with `share_url_ttl`/`share_base_url`/
+>   `share_preview`/`share_analytics`/`intake_base_url`/`intake_analytics` (:299-320). The code
+>   comment at :290-293 states the reasoning directly: *"Share + Intake now have routes in both
+>   modes (proxy: FluxFilesController's shareIntake()/publicLink() dispatchers; standalone:
+>   index.php), so the gate claims — and the config that travels with them — forward
+>   unconditionally, matching WordPress's FluxFilesPlugin."*
+> - **WordPress** (`packages/wordpress/includes/FluxFilesPlugin.php:468-500`) mirrors this: the
+>   same claims forward unconditionally, with its own comment noting the REST API "now proxies
+>   all eleven ... so the claims are forwarded like any other" (:468-471).
+> - Route-parity guard tests confirm neither adapter's unproxied allowlist contains any
+>   Share/Intake route: Laravel's `$intentionallyUnproxied` in
+>   `packages/laravel/tests/test-laravel-smoke.php` (~:383-405: `chmod`, `zip`, `sso/*`,
+>   `metadata/export`, `metadata/import` only), and WordPress's equivalent test —
+>   `'proxy route surface covers every core /api/fm route'`
+>   (`packages/wordpress/tests/test-wp-smoke.php:1102`, allowlist ~:1140-1144) — which is the
+>   **same guard `docs/SHARE-PUBLIC-LANDING.md` §8 previously said WordPress lacked**; that
+>   claim there is also being corrected as part of this pass.
+> - Claim forwarding itself is asserted directly too: Laravel's smoke test around :222-253, and
+>   WordPress's around :328-345 (plus a dedicated `share_base_url` override test ~:791-806).
+>
+> `allow_ai_vision`/`allow_ocr`/`allow_backup`/`allow_c2pa`, called out below as "out of scope"
+> when this section was first written, are now proxied too, for the identical reason (each
+> claim's own forwarding-site comment says so). That happened separately and is not
+> re-litigated here.
+>
+> The bullets immediately below are the **original, superseded plan**, kept only so a reader
+> can see what was intended vs. what shipped — they are **not** current instructions:
+>
+> - ~~Laravel: forward `allow_share`/`allow_intake` + landing config only when
+>   `config('fluxfiles.mode') === 'standalone'`.~~ Shipped unconditional instead, once the
+>   proxy routes existed.
+> - ~~WordPress: strip `allow_share`/`allow_intake`/`share_*` entirely ("dead config" on a
+>   proxy-only plugin).~~ Shipped forwarded instead, for the same reason.
+> - **No core floor bump needed** — the adapters only write payload array keys; they call no new
+>   core `Claims` API. (`scripts/check-adapter-core-floor.sh` will confirm.)
+> - **Node** (`packages/node/src/token.ts`): add an `intakeBaseUrl` option next to
+>   `shareBaseUrl`. Node mints tokens for a real core, so no mode condition ever applied here.
 
 ---
 
@@ -398,8 +462,8 @@ read-modify-write, storage-resident):
 { "jti":"…","revoked":true,"expires":1754 }                     // tombstone
 ```
 
-`<prefix>/_fluxfiles/intakes.json` — same shape; **gains `owner`** (§6.2) and, with the
-recommended fix, the same tombstone form.
+`<prefix>/_fluxfiles/intakes.json` — same shape; **already includes `owner` and
+tombstone-based revocation in the current source** (§6.2 — verified, not a pending fix).
 
 ```jsonc
 { "jti":"…","disk":"local","path":"clients/acme/in","store":"…","owner":"u42",
@@ -420,8 +484,9 @@ recommended fix, the same tombstone form.
 - **The `url` from a create response is rendered as text, never executed.** It goes into a
   read-only `<input value>` and the clipboard. If it is ever made a clickable `<a href>`, the
   UI must re-check `/^https?:\/\//i` first — the same lesson `share.html` already carries a
-  regression test for (`share-landing.spec.ts:201`, hostile `preview_url` never reaching
-  `iframe.src`). It is never assigned to `iframe.src` and never rendered with `x-html`.
+  regression test for (the "hostile `preview_url` never reaches `iframe.src`" case in
+  `share-landing.spec.ts`, currently around :307-326). It is never assigned to `iframe.src` and
+  never rendered with `x-html`.
 - **Token hygiene.** The one-shot token exists only in a component variable for one modal.
   Never in `localStorage`, never in `postMessage`, never in a toast, never logged, never in the
   audit view. `FM_EVENT` carries `{jti, expires, has_password}` only.
@@ -437,9 +502,11 @@ recommended fix, the same tombstone form.
   carry `t=share` / `t=intake`, which `JwtMiddleware` refuses as access tokens.
 - **The locked affordance never renders when framed**, so an operator's end users can never see
   an ad inside a resold product; `pro_hints:false` disables it everywhere.
-- **Error codes needing i18n ×16** — existing: `module_not_installed`, `license_required`,
-  `perm_denied`, `disk_denied`, `bad_request`, `not_found`. **New: `license_expired`,
-  `allow_share_forbidden`, `allow_intake_forbidden`.**
+- **Error codes needing i18n ×16** — all pre-existing, none new for this feature:
+  `module_not_installed`, `license_required`, `license_expired`, `perm_denied`, `disk_denied`,
+  `bad_request`, `not_found`, plus the generic `module_forbidden` (`{module}` param) that
+  already covers every `allow_<x>_forbidden` code at runtime, Share/Intake included — see §5.6.
+  No per-module forbidden key exists, or is needed.
 
 ---
 
@@ -455,15 +522,16 @@ recommended fix, the same tombstone form.
 | `packages/core/api/Claims.php` | `intakeBaseUrl`, `proHints` + parsing |
 | `packages/core/api/index.php` | `ff_public_link_url()` helper; intake `url` fallback |
 | `packages/core/lang/*.json` (16) | ~50 keys (§10) |
-| `docs/CONFIG.md` | 2 claim rows (§10) |
+| `docs/CONFIG.md` | 2 claim rows (§12) |
 | `CHANGELOG.md` | entry |
 | `.claude/api-map.md` | note the intake `url` field |
 
-**Private / gitignored (never staged):**
+**Private / gitignored (never staged; re-read directly from disk for this pass — see §6.2's
+updated note):**
 
 | File | Change |
 |---|---|
-| `packages/intake/src/IntakeModule.php` | `url` from `intake_base_url`; `owner` on the record; `owner_only` in `listPortals`/`revokePortal`; tombstone revoke (recommended) |
+| `packages/intake/src/IntakeModule.php` | `url` from `intake_base_url`; `owner` on the record; `owner_only` in `listPortals`/`revokePortal`; tombstone revoke — all confirmed already present in current source (§6.2), not outstanding work |
 | `packages/intake/tests/*` | the tests in §11 |
 
 **Adapters (staged):** `packages/laravel/src/FluxFilesManager.php`,
@@ -495,10 +563,14 @@ Split so that no noun-bearing string is reused between the two features.
 `allowed_ext`, `allowed_ext_ph`, `created`, `empty`, `col_received`, `revoke_confirm`,
 `pro_teaser`.
 
-**`error.*` — new (3):** `license_expired`, `allow_share_forbidden`, `allow_intake_forbidden`.
+**`error.*` — new (0):** none. What shipped instead is a single pre-existing generic fallback,
+`error.module_forbidden` (`{module}` param), that already covers every module's
+`allow_<x>_forbidden` runtime error code, Share/Intake included — see §5.6. `license_expired`
+was also already present before this feature. Neither `allow_share_forbidden` nor
+`allow_intake_forbidden` exists as a literal key, and none should be added.
 
 Reused as-is: `common.{cancel,close,confirm,loading,delete,retry}`, `copy.copied`,
-`error.{module_not_installed,license_required,perm_denied,not_found,bad_request}`.
+`error.{module_not_installed,license_required,license_expired,module_forbidden,perm_denied,not_found,bad_request}`.
 
 `tests/unit/test-i18n.php` fails CI on any locale missing a key **or carrying an extra one** —
 add to all 16 in the same commit.
@@ -521,7 +593,8 @@ add to all 16 in the same commit.
 `501` without the paid packages. Keep the existing `501` assertions; add the intake trio if not
 already present, in the shape of `tests/e2e/test-share-http.php:172`.
 
-**Module tests (private, `packages/intake/tests/`)**
+**Module tests (private, `packages/intake/tests/`)** — these describe regression coverage for
+behavior confirmed already shipped in §6.2, not new-feature tests:
 - `createPortal` writes `owner`; response `url` from `intake_base_url`, `''` without it.
 - `listPortals`: under `owner_only`, another user's portal is absent; own portal present;
   a **legacy record without `owner`** is absent (fail-closed) — the migration contract.
@@ -530,10 +603,14 @@ already present, in the shape of `tests/e2e/test-share-http.php:172`.
   resurrect the portal; `resolveToken` returns `404 intake_revoked` after revoke.
 
 **Adapters**
-- Laravel smoke: rewrite `test-laravel-smoke.php:221` — share/intake gate + `share_*` +
-  `intake_base_url` **dropped in proxy mode**, **forwarded in standalone**, mirroring the
-  existing `allow_terminal` test at :359. Route-parity list unchanged.
-- WordPress smoke: `allow_share`/`allow_intake`/`share_*` never present in a minted token.
+- Laravel smoke (`packages/laravel/tests/test-laravel-smoke.php`, ~:222-253): asserts
+  `allow_share`/`allow_intake` + `share_base_url`/`share_analytics`/`intake_base_url`/
+  `intake_analytics` are forwarded **unconditionally, in every mode** — not dropped in proxy
+  mode as this doc originally planned in §6.3. Route-parity list unchanged (Share/Intake were
+  never on `$intentionallyUnproxied`).
+- WordPress smoke (`packages/wordpress/tests/test-wp-smoke.php`, ~:328-345, plus the dedicated
+  `share_base_url` override test ~:791-806): the same claims are present in a minted token in
+  every mode.
 - `scripts/check-adapter-core-floor.sh` must stay green (no new core API used).
 - Node vitest: `intakeBaseUrl` option + raw `claims: {intake_base_url}` passthrough.
 
@@ -559,8 +636,8 @@ mock only what needs a licensed server). **The three gating states are the point
    after dismissal (with `share/list` mocked to the tokenless record) **no `token=` string
    exists anywhere in the DOM**.
 7. *hostile url* — mocked create returning `javascript:window.__pwned=1` → rendered as text
-   only, no `href`/`src` assignment, `window.__pwned` undefined (mirrors
-   `share-landing.spec.ts:201`).
+   only, no `href`/`src` assignment, `window.__pwned` undefined (mirrors the same-named case in
+   `share-landing.spec.ts`, currently around :307-326).
 8. *list* — mocked `share/list` + `intake/list`: columns render, the link column shows
    "not shown", Revoke confirms then calls `revoke` with the right `jti` and re-fetches.
 
@@ -577,7 +654,7 @@ Append to **§2.13 Paid-module gates**, immediately after the `allow_intake` row
 | `intake_base_url` | string (http/s) | — | Public base the intake create response builds the portal link from (e.g. `https://files.acme.com/public/intake.html`). Non-http(s) dropped. Empty = the request origin + `/public/intake.html` — i.e. derived from the `Host` header, so **set this explicitly behind a proxy/CDN**. Mirrors `share_base_url`. |
 ```
 
-Add to **§2.1 Access / UI** (free claims):
+Add to **§2.2 Access & permissions** (free claims):
 
 ```markdown
 | `pro_hints` | bool | `true` | Show the locked "Pro" affordance for paid modules the token isn't allowed to use. Only ever renders when the server is **unlicensed** *and* the app is **not framed** (top-level `/public/`); on a licensed server the feature is hidden entirely instead. `false` = never show it — for operators shipping free core in production. UI-only; no endpoint behaviour changes. |
@@ -593,9 +670,10 @@ Add to **§2.1 Access / UI** (free claims):
 2. **Intake `url` built by the module vs by core.** Spec'd as module-then-core-fallback purely
    to mirror Share. Core alone could do both (it holds the claim and the origin), which would
    avoid a private-package change — at the cost of the two features diverging for a later reader.
-3. **The intake tombstone (§6.2.4)** is one line beyond the plan's wording. It is a real race
-   the Revoke button makes reachable, but it is the reviewer's call whether it lands in this
-   change or its own.
+3. **The intake tombstone (§6.2.4)** was originally flagged as one line beyond the plan's
+   wording, pending the reviewer's call on whether it belonged in this change or its own.
+   Re-reading the shipped `packages/intake/src/IntakeModule.php` confirms it landed
+   (`revokePortal` at `:354-375` writes a tombstone, not an `unset`) — resolved, not open.
 4. **Panel scope is the current disk only.** `list` takes one `disk`. A tenant with three disks
    sees three lists. Aggregating means N calls; deferred, with the per-disk note in the UI.
 5. **No "created by" column** even though Share records carry `owner`. Under `owner_only` every

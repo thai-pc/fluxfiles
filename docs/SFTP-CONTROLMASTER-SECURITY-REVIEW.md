@@ -1,16 +1,50 @@
 # SSH ControlMaster (connection reuse) — Security + Performance Review
 
-Status: **Pre-implementation review.** No code has been written for this
-feature. `docs/ROADMAP.md` line 240 currently documents the SFTP driver as
-"connect per request, no pool" — a deliberate choice, restated as a
-principle in `docs/GIT-DEPLOY-SECURITY-REVIEW.md` F8 ("Do not add connection
-pooling ... it would be new persistent state this codebase has deliberately
-avoided everywhere"). This doc is the dedicated review that principle
-implies must exist before that line is crossed. It does not replace a design
-spec — if the recommendation below is accepted, a follow-up spec (exact
-claim/config names, socket path layout, the OpenSSH flag set) is still
-needed before coding, per this repo's usual spec-writer → coder → tester
-flow.
+Status: **Implemented and shipped, scoped exactly as recommended below.**
+This doc began as the pre-implementation review `docs/ROADMAP.md` line 240's
+"connect per request, no pool" principle implied must exist before that line
+was crossed (a principle also stated in `docs/GIT-DEPLOY-SECURITY-REVIEW.md`
+F8, "Do not add connection pooling ... it would be new persistent state this
+codebase has deliberately avoided everywhere"). §1–§6 below are that
+original review, kept intact as the record of the analysis that shaped the
+design; `docs/SFTP-CONTROLMASTER-SPEC.md` is the follow-up design spec that
+turned §4's constraints into exact names/paths/flags, and both were built
+essentially as designed — `packages/core/api/SshMultiplexer.php` and
+`DiskManager::multiplexEligible()`/`multiplexHandle()`/
+`modernSshAlgorithmLists()` are shipped, with test coverage in
+`packages/core/tests/unit/test-ssh-multiplex.php` and
+`packages/core/tests/integration/test-ssh-multiplex-live.php`.
+
+**Scope actually shipped — read this before assuming multiplexing applies
+anywhere else:** this wires into **`SshTerminal`'s `/api/fm/terminal` path
+ONLY**, exactly as §4.7/§6 recommended and as `SshMultiplexer.php`'s own
+class docblock states. Two adjacent surfaces were evaluated afterward and
+are a deliberate **NO-GO**, not an oversight or a "not yet done":
+
+- **`GitDeploy`** — evaluated per §6's own suggestion ("`GitDeploy` should
+  be evaluated separately once real usage data shows whether its
+  mostly-single-exec pattern benefits enough"). Verdict: no. It's a single
+  `exec` per deploy trigger with nothing to batch, so ControlMaster's win
+  (amortizing the handshake over the *2nd+* command in a `ControlPersist`
+  window) never materializes — with a pinned `host_fingerprint` the
+  known-hosts-bootstrap cost (§9 of the spec) would make it strictly
+  *slower* than the plain phpseclib path it replaced, on every single
+  trigger. `GitDeploy.php` and its route are untouched.
+- **The Flysystem SFTP adapter** (browsing/upload/download/copy/move/chmod,
+  `DiskManager::buildSftpAdapter()`) — evaluated and rejected. It already
+  gets free per-request connection reuse via `SftpConnectionProvider` +
+  `DiskManager`'s own memoization, each call is a single round trip rather
+  than a multi-command session, and it's the highest-request-volume SFTP
+  path in the app — exactly where a wrong cache key (F1) would have the
+  largest blast radius across the most tenants for the least benefit. A
+  stateful SFTP protocol adapter layered over a ControlMaster socket would
+  be a from-scratch reimplementation of that adapter for no real gain.
+- **The Laravel/WordPress proxy adapters' own SSH terminal endpoints**
+  (`FluxFilesController::terminal()` / `FluxFilesApi::handleTerminal()`) —
+  these use plain phpseclib directly, not core's `SshTerminal`/
+  `DiskManager::multiplexHandle()` machinery, so ControlMaster does not
+  apply to proxied terminal calls either. Only calls that reach core's own
+  `/api/fm/terminal` route get multiplexed.
 
 **Recommendation up front: conditional go, narrowly scoped.** ControlMaster
 is a real fix for a real problem (SSH terminal / Git deploy currently pay a
@@ -203,3 +237,49 @@ the socket-path layout, the precise OpenSSH flag set per §4.5, the LRU
 eviction policy) via the normal spec-writer flow, using §4 as its constraint
 list — matching how `docs/GIT-DEPLOY-SECURITY-REVIEW.md` was used for Git
 deploy.
+
+---
+
+## 7. Implementation status — DONE
+
+Shipped essentially as designed, exactly to the scope §4/§6 above set:
+
+- `packages/core/api/SshMultiplexer.php` (new file, ~700 lines) — cache key
+  derivation (§4.1, closes F1), socket dir/filename (§4.2, closes F2),
+  `ControlPersist` + LRU teardown (§4.3/§4.6, bounds F3/closes F6),
+  key-based-auth-only eligibility gate including the passphrase-protected-key
+  extension found during design (closes F4), known-hosts materialization
+  piggybacked on phpseclib's own fingerprint-verified connection, and the
+  `proc_open` invocation shapes for cold-connect/reuse/liveness-check/
+  teardown — all shelling out to the real `ssh` binary, array-argv only, no
+  shell string.
+- `packages/core/api/DiskManager.php` — `modernSshAlgorithmLists()` (private,
+  the one canonical source), `modernSshOpensshFlags()` (public, OpenSSH `-o`
+  flag translation of that same source), `multiplexEligible()` (private),
+  `multiplexHandle()` (public, the only call site, wired into
+  `/api/fm/terminal` only) — closes F5 by construction (one source list
+  feeds both phpseclib's `preferredAlgorithms` shape and OpenSSH's flags).
+- **Scope, exactly as recommended (§4.7/§6) and re-stated at the top of this
+  doc**: wired into `SshTerminal`'s `/api/fm/terminal` route only.
+  `GitDeploy` and the Flysystem SFTP adapter were evaluated afterward and
+  are a confirmed **NO-GO** — see the banner above and
+  `docs/SFTP-CONTROLMASTER-SPEC.md` §19 for the reasoning specific to each.
+  The Laravel/WordPress proxy adapters' terminal endpoints use plain
+  phpseclib directly and never call into `SshMultiplexer`/
+  `DiskManager::multiplexHandle()`, so proxied terminal calls are also
+  out of scope, not merely undocumented.
+- Tests: `packages/core/tests/unit/test-ssh-multiplex.php` (cache-key
+  collision/collapse per F1, socket permission/filename/path-length guards
+  per F2, the eligibility gate per F4, algorithm-list set-equality sync per
+  F5, LRU eviction ordering per F6, known-hosts line format, env round-trip)
+  and `packages/core/tests/integration/test-ssh-multiplex-live.php`
+  (env-gated live-SSH coverage of `ControlPersist` expiry per F3, cold-vs-
+  reuse timing, and password-disk end-to-end fallback — skips cleanly with
+  no live SSH host configured). See `docs/SFTP-CONTROLMASTER-SPEC.md` §18
+  for the full test-plan mapping to each finding.
+- `docs/CONFIG.md` §2.14 documents the four static SFTP disk config keys
+  (`host_fingerprint`, `require_host_key`, `strict_algorithms`,
+  `ssh_multiplex`) and §3 documents the five new
+  `FLUXFILES_SSH_MULTIPLEX_*` env vars, per `docs/SFTP-CONTROLMASTER-SPEC.md`
+  §14.
+</content>

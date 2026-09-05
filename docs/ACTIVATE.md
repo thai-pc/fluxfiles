@@ -29,8 +29,8 @@ zip's checksum, and unpacks into `vendor/fluxfiles/share/`. A failed signature o
 mismatched checksum aborts without writing anything.
 
 Module ids: `share`, `intake`, `versioning`, `webhooks`, `ai`, `ocr`, `virus`,
-`backup`, `c2pa`. Install only the ones your edition includes — the rest will refuse
-with `402`.
+`backup`, `c2pa`, `audit-export`, `sso`. Install only the ones your edition includes —
+the rest will refuse with `402`.
 
 You do **not** need `composer dump-autoload`: FluxFiles loads installed modules itself
 (`packages/core/autoload.php`), precisely because Composer cannot see a directory that

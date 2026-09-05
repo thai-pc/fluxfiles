@@ -64,9 +64,13 @@ that already exists in the operator's storage, and a page that reads one and wri
 | Presigned-URL lifetime, preview policy, link base | baked into the record at create time from **operator claims** |
 
 **Defect 1 fix — the token becomes self-contained.** `createShare` adds
-`'store' => $claims->pathPrefix` to the JWT payload (identical to
-`IntakeModule.php:84`), and `resolveShare` **drops its `string $prefix` parameter** and
-reads `store` from the signed payload. A public request has no main JWT, so a caller-supplied
+`'store' => $claims->pathPrefix` to the JWT payload (`ShareModule.php:102`) — the identical
+pattern `IntakeModule.php:104` already uses for its own portal token (`'store' => $claims->
+pathPrefix, // where intakes.json lives`). Both files are gitignored **from git**, not
+absent from the filesystem, and were re-read directly to confirm these two line numbers.
+`resolveShare` **drops its `string $prefix` parameter** and reads `store` from the signed
+payload — confirmed against the current `ShareModule::resolveShare()` signature (`:240-247`),
+which no longer takes `$prefix`. A public request has no main JWT, so a caller-supplied
 prefix is unsatisfiable by construction; removing the parameter removes the bug class. Shares
 minted before this change stop resolving — acceptable, nothing consumes them today.
 
@@ -115,9 +119,10 @@ New env vars (`docs/CONFIG.md` §3):
 ## 4. Endpoints
 
 Envelope everywhere: `{data, error, error_code?, error_params?}`. Public routes are
-registered **before the auth block**, next to Intake's (`index.php:211`), and gated on
-installed + licensed only — **no claim check**, because a public request carries no main JWT.
-Module absent → `501 module_not_installed`; unlicensed → `402 license_required` /
+registered **before the auth block**, next to Intake's — Intake's own pair at
+`index.php:223-224`, Share's three-route block immediately after at `:232-233` — and gated
+on installed + licensed only — **no claim check**, because a public request carries no main
+JWT. Module absent → `501 module_not_installed`; unlicensed → `402 license_required` /
 `license_expired`.
 
 ### Public (token-authed, pre-auth)
@@ -143,9 +148,9 @@ When `has_password` is true the response is only
 **`POST /api/fm/share/unlock` `{token, password}`**
 Verifies the password through the module (no counter change, so brute force can't inflate
 `views`). Returns the full info payload **plus** `{"grant":"<jwt>","grant_expires":…}`.
-Same-origin `Origin` CSRF check applies (it runs at `index.php:67`, before this block) —
-share.html is served from the FluxFiles origin, so it passes; a custom `share_base_url`
-host must be listed in `FLUXFILES_ALLOWED_ORIGINS`.
+Same-origin `Origin` CSRF check applies (the block runs at `index.php:65-83`, before this
+route dispatch) — share.html is served from the FluxFiles origin, so it passes; a custom
+`share_base_url` host must be listed in `FLUXFILES_ALLOWED_ORIGINS`.
 
 **`GET /api/fm/share/file?token=<share-jwt>[&g=<grant>][&dl=1]`**
 Order is fixed: gate → rate limit → module `resolveShare(..., isDownload: true, grant: $g)`
@@ -325,11 +330,13 @@ under the existing root, exactly like `intake.html`. Claims reach the adapters f
 the `claims` escape hatch; add them to the explicit forwarding lists only where
 `terminal_pty_url` already is.
 
-**Private paid module** (`packages/share/`, gitignored)
+**Private paid module** (`packages/share/`, gitignored **from git** but re-read directly from
+disk for this pass — the file/line specifics below are verified against the current source,
+not as-planned)
 
 | File | Change |
 |---|---|
-| `src/ShareModule.php` | `store` in the token payload + record; **`shareInfo()`** (new, mirrors `portalInfo`); `resolveShare()` signature → `(DiskManager, string $secret, string $token, ?string $password = null, bool $isDownload = false, ?string $grant = null)` — **`$prefix` removed**, returns `{disk,path,name,mime,size,jti,remaining,preview}`; `label`/`url_ttl`/`preview`/`owner` recorded; `share_expired` split out; owner filtering in `listShares`/`revokeShare` |
+| `src/ShareModule.php` | `store` in the token payload (`:102`) and the record (`:113`); **`shareInfo()`** (`:164-189`, mirrors `portalInfo`); `resolveShare()` confirmed as `(DiskManager, string $secret, string $token, ?string $password = null, bool $isDownload = false, ?string $grant = null)` (`:240-247`) — **`$prefix` removed**, returns `{disk,path,name,mime,size,jti,remaining,preview,url_ttl}` (`:286-296` — one field, `url_ttl`, beyond what this row originally listed); `label`/`url_ttl`/`preview`/`owner` recorded (`:113-129`); `share_expired` split out (`:424-425` for the JWT-expiry catch, `:452-454` for the record-expiry belt-and-braces check); owner filtering in `listShares`/`revokeShare` (`:342-347`, `:317-319`) |
 | `tests/test-share.php` | see §8 |
 
 ## 8. Test plan
@@ -357,11 +364,25 @@ the `claims` escape hatch; add them to the explicit forwarding lists only where
   expired/revoked terminal states; dark-mode boot doesn't flash. Also asserts the
   module-absent path directly (no mock): the real `501 module_not_installed` renders as a
   terminal state, with exactly one unauthenticated request to `share/info`.
-- **Guards** — add `'share/info','share/unlock','share/file','share/list','share/revoke'` to
-  `$intentionallyUnproxied` in `packages/laravel/tests/test-laravel-smoke.php:298` (paid
-  modules are core-standalone by current policy). **WordPress has no route-parity guard**, so
-  there is nothing to whitelist there; the only WP-side fact is that `allow_share` is already
-  forwarded (`FluxFilesPlugin.php:334`) and stays that way — no new WP work.
+- **Guards — corrected below; the original text here was stale on two points.** Both adapters
+  now proxy Share (and Intake) **in full** — every operator route plus the public landing
+  routes — so there is nothing left to add to either adapter's unproxied allowlist, and
+  WordPress is **not** without a route-parity guard:
+  - **Laravel**: `share/info`, `share/unlock`, `share/file`, `share/list`, `share/revoke`
+    (and Intake's equivalents) are proxied via `FluxFilesController::shareIntake()`/
+    `publicLink()`, so none of them belong in `$intentionallyUnproxied`
+    (`packages/laravel/tests/test-laravel-smoke.php`, ~:383-405 — currently `chmod`, `zip`,
+    `sso/*`, `metadata/export`, `metadata/import` only). `allow_share`/`allow_intake` forward
+    unconditionally (`packages/laravel/src/FluxFilesManager.php:294-298`), asserted by the
+    smoke test around :222-253.
+  - **WordPress has a route-parity guard**: `packages/wordpress/tests/test-wp-smoke.php`'s
+    `'proxy route surface covers every core /api/fm route'` test (currently line 1102,
+    allowlist ~:1140-1144, also `chmod`/`zip`/`sso/*`/`metadata/export`/`metadata/import`
+    only — no Share/Intake route on it either). `allow_share`/`allow_intake` are forwarded
+    unconditionally from `FluxFilesPlugin.php:472-476`, asserted by the WP smoke test around
+    :328-345 (plus a dedicated `share_base_url` override test ~:791-806).
+  - See `docs/OPERATOR-SHARE-INTAKE-UI.md` §6.3 for the fuller writeup of what shipped here
+    and why it's broader than either doc's original plan.
 - Existing `tests/unit/test-i18n.php` (16-locale key parity) and
   `tests/unit/test-config-doc.php` (claims ↔ `docs/CONFIG.md`) will fail until §3 and the
   error table are done. That's the intended forcing function.
@@ -385,7 +406,8 @@ the `claims` escape hatch; add them to the explicit forwarding lists only where
    bug this spec exists to fix. Recommend the break.
 6. **Not designed here, by instruction:** collections/multi-file shares (the `files` array is
    the forward-compatible seam), branding payload, watermarked previews, analytics UI, an
-   operator create-UI in `assets/fm.js`, adapter proxying.
+   operator create-UI in `assets/fm.js`, adapter proxying (now shipped in full — see the
+   Guards note in §8 — but the analytics/branding UI itself remains out of scope here).
 
 ---
 

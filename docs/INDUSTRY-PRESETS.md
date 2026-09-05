@@ -55,13 +55,21 @@ $token = fluxfiles_token([
     'prefix' => "galleries/{$jobId}/",
     'edition'=> 'pro',                           // -> allow_share + allow_intake + allow_optimize
     'claims' => [
-        'share_url_ttl'      => 60 * 60 * 24 * 14, // gallery link valid 14 days
         'share_brand_name'   => 'Acme Photography',
         'share_brand_color'  => '#111111',
         'watermark_enabled'  => true,               // preview-only browsing token; also forces allow_download off
     ],
 ]);
 ```
+
+The gallery link's own expiry (e.g. "valid 14 days") is set **per share**, in the
+`ttl` field of the `POST /api/fm/share {disk, path, ttl, label?, ...}` request body
+at creation time — it is not a JWT claim, so it doesn't belong in the token above.
+`share_url_ttl` is a different, narrower claim: how long the *presigned S3/R2
+download URL* a share redirects to stays fetchable once requested (clamped to
+10–300 seconds in `CONFIG.md`) — it does not control how long the share link itself
+remains valid, and setting it to something like "14 days" would simply be clamped
+down to 300 seconds. Don't confuse the two.
 
 Mint a *separate*, non-watermarked token (no `watermark_enabled`) when the client has
 paid and should get the clean-file share link — `POST /api/fm/share` bakes its own
@@ -121,6 +129,11 @@ $token = fluxfiles_token([
 ]);
 ```
 
+Note: there is no `'edition' => 'studio'` preset in code today (only `pro`, `agency`,
+`enterprise` are defined in `embed.php`) — this example sets the Studio-tier claims
+explicitly via the `claims` map for that reason, rather than relying on an
+`edition` shortcut. See `LICENSING-PLAN.md`'s "code gap, not yet fixed" note.
+
 ---
 
 ## 5. Hosting panel / VPS management agency
@@ -179,7 +192,9 @@ customer must use their own S3/R2 bucket rather than the operator's — see
 - **`edition` is DX sugar, not the license gate.** It just pre-fills the claims a
   tier usually wants (`fluxfiles_apply_edition_preset` in `embed.php`) — the real
   enforcement is still the operator's license key + the module being installed. A
-  claim from an unlicensed/uninstalled module is simply ignored server-side.
+  claim from an unlicensed/uninstalled module is simply ignored server-side. Today
+  that preset only exists for `pro` / `agency` / `enterprise` — there is no `studio`
+  preset, so Studio-tier tokens (preset #4 above) set their claims explicitly.
 - Every claim above is documented in full (defaults, clamping, sanitization) in
   [`CONFIG.md`](CONFIG.md) — these presets only combine existing claims, they don't
   introduce new ones.

@@ -93,7 +93,7 @@ decision is "log or don't."
 
 ### `Claims.php` changes (core, not gitignored)
 
-Next to `$sharePreview` (`packages/core/api/Claims.php:187`):
+Next to `$sharePreview` (`packages/core/api/Claims.php:217`):
 
 ```php
 /** @var bool Log a per-event view/download/unlock_fail record (timestamp + IP +
@@ -104,7 +104,7 @@ public bool $shareAnalytics = false;
 ```
 
 In `fromJwtPayload()`, right after the existing `$c->sharePreview = ...` line
-(`Claims.php:512`):
+(`Claims.php:610`):
 
 ```php
 $c->shareAnalytics = isset($payload->share_analytics) ? (bool) $payload->share_analytics : false;
@@ -152,7 +152,7 @@ One new **operator-authed** endpoint, nested under `/share` like the existing
 ### `index.php` wiring
 
 Directly after the existing `/api/fm/share/revoke` block
-(`packages/core/api/index.php:657-661`):
+(`packages/core/api/index.php:782-786`):
 
 ```php
 if ($method === 'GET' && $uri === '/api/fm/share/analytics') {
@@ -169,8 +169,15 @@ if ($method === 'GET' && $uri === '/api/fm/share/analytics') {
 }
 ```
 
-Core-standalone, like the rest of Share's management routes — not proxied by the
-Laravel/WordPress adapters (they don't proxy `/api/fm/share*` today either).
+Core-standalone, like the rest of Share's management routes. **Also proxied by
+both the Laravel and WordPress adapters**: `FluxFilesController::shareAnalytics()`
+(`packages/laravel/src/Http/Controllers/FluxFilesController.php`) and
+`FluxFilesApi::handleShareAnalytics()` (`packages/wordpress/includes/FluxFilesApi.php`)
+both route to the same private `shareIntake($request, 'share', 'analytics')`
+dispatcher used for create/list/revoke, so this endpoint gets adapter parity for
+free alongside the rest of Share's management routes — confirmed present in both
+files (registered as `GET .../share/analytics` in the WordPress REST routes and as
+a controller method + route in Laravel).
 
 ## 5. Storage layout
 
@@ -251,12 +258,15 @@ Add the event write **inside the same locked critical section**, gated on the
 record's own baked-in `analytics` flag — not a fresh lock, not a race with the
 counter write, because both happen in one critical section:
 
-1. **`shareInfo()`** (line ~167) — bumps `views` on every landing-page load
-   (including a still-password-gated one). Event type: `"view"`.
-2. **`unlockShare()`** (line ~201) — bumps `unlock_fails` on a wrong password.
-   Event type: `"unlock_fail"`.
-3. **`resolveShare()`** (line ~267) — bumps whichever of `downloads`/`views` the
-   `$isDownload` flag selects. Event type: `"download"` or `"view"` to match.
+1. **`shareInfo()`** (`ShareModule.php:175-178`, inside the method starting at
+   line 164) — bumps `views` on every landing-page load (including a still-
+   password-gated one). Event type: `"view"`.
+2. **`unlockShare()`** (`ShareModule.php:209-213`, inside the method starting
+   at line 201) — bumps `unlock_fails` on a wrong password. Event type:
+   `"unlock_fail"`.
+3. **`resolveShare()`** (`ShareModule.php:275-283`, inside the method starting
+   at line 240) — bumps whichever of `downloads`/`views` the `$isDownload` flag
+   selects. Event type: `"download"` or `"view"` to match.
 
 Implementation: extend `mutateRecord()`'s signature with an optional event type,
 and append inside the same closure that already holds the lock and just wrote
@@ -313,7 +323,8 @@ $rec = $this->mutateRecord($disks, $disk, $store, $jti, function (array $rec) us
 }, $isDownload ? 'download' : 'view');
 ```
 
-And `createShare()`'s record assembly (line ~119, alongside `url_ttl`/`preview`/`brand`):
+And `createShare()`'s record assembly (`ShareModule.php:109-131`, alongside
+`url_ttl`/`preview`/`brand`):
 
 ```php
 'analytics' => $claims->shareAnalytics,   // baked in at create time — see Claims::$shareAnalytics

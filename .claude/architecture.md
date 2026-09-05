@@ -8,7 +8,12 @@
 4. `packages/core/api/index.php` handles CORS, public locale/UI routes, JWT auth, disk setup, metadata repo setup, rate limiting, audit logging, and route dispatch.
 5. `FileManager` performs file operations through `DiskManager` and stores metadata through `StorageMetadataHandler`.
 
-## Core Backend Modules
+## Core Backend Components
+
+> Note: "component" here means a PHP class/file in `core/api/`, not a **paid
+> module** in the `ModuleRegistry`/licensing sense used elsewhere in this doc
+> (share/intake/versioning/webhooks/ai/ocr/virus/backup/c2pa/audit-export/sso) —
+> the two meanings of "module" collide, so this section avoids the word.
 
 - `api/index.php`
   - Public routes: `/public/index.html`, `/api/fm/lang`, `/api/fm/lang/{locale}`.
@@ -40,7 +45,12 @@
   - BYOB disks can be registered at runtime (s3 or sftp), but local BYOB disks are rejected.
 
 - `api/StorageMetadataHandler.php`
-  - Metadata is storage-backed, not database-backed.
+  - Metadata is storage-backed by default, not database-backed — **except** the
+    opt-in `FLUXFILES_STORAGE_BACKEND=db` mode, which moves this same bookkeeping
+    (metadata/search/folder-index/audit/trash/rate-limits) into the operator's own
+    self-hosted SQLite/MySQL/Postgres instead (`api/Db/*`, gated by a server env
+    var, not a JWT claim or a paid module — see `docs/DB-STORAGE-MIGRATION-DESIGN.md`).
+    The rest of this section describes the default `json` backend.
   - S3/R2: object metadata plus `_fluxfiles/index.json`.
   - Local: sidecar at `_fluxfiles/meta/{key}.json` (inside the protected namespace; legacy `{file}.meta.json` is migrated on read) plus `_fluxfiles/index.json`.
   - Folder search uses `_fluxfiles/dirs.json`.

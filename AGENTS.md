@@ -55,7 +55,12 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   in the **user's storage** under `_fluxfiles/` (sidecars + JSON index files,
   file-locked). There is **no SQLite** — metadata is `_fluxfiles/meta/{key}.json`
   (local) or object metadata (S3/R2); search uses `_fluxfiles/index.json`, folder
-  search `dirs.json`, audit `audit.jsonl`.
+  search `dirs.json`, audit `audit.jsonl`. **Exception:** the opt-in
+  `FLUXFILES_STORAGE_BACKEND=db` mode (env var, default `json`) moves that
+  bookkeeping — metadata, search/folder index, audit log, trash manifest, quota,
+  and the rate limiter — into the operator's own self-hosted MySQL/PostgreSQL/SQLite
+  instead of JSON files. File bytes stay fully storage-resident either way; it's
+  not a JWT claim and not a paid module. See `docs/DB-STORAGE-MIGRATION-DESIGN.md`.
 - **Authorization = signed JWT claims**; the host app owns identity/policy,
   FluxFiles only enforces. Keep enforcement centralized and consistent (disk,
   perms, path scope via `Claims::scopePath`/`isPathInScope`, owner-only, upload
@@ -131,11 +136,13 @@ php packages/wordpress/tests/test-wp-smoke.php
 php packages/laravel/tests/test-laravel-smoke.php
 ```
 
-CI is `.github/workflows/test.yml` (12 jobs: core-php, adapter-core-floor,
-iframe-allow, api-e2e, selfboot-e2e, s3-minio, wrappers, node-sdk, browser-e2e,
-editor-e2e, pack-smoke, docker-build). `selfboot-e2e` runs every
-`tests/e2e/*-http.php` (each boots its own `php -S`) plus `test-sftp-live.php`
-against an `atmoz/sftp` container.
+CI is `.github/workflows/test.yml` (14 jobs: core-php, adapter-core-floor,
+iframe-allow, api-e2e, selfboot-e2e, s3-minio, db-mysql, db-postgres, wrappers,
+node-sdk, browser-e2e, editor-e2e, pack-smoke, docker-build). `selfboot-e2e` runs
+every `tests/e2e/*-http.php` (each boots its own `php -S`) plus `test-sftp-live.php`
+against an `atmoz/sftp` container. `db-mysql`/`db-postgres` run the
+`FLUXFILES_STORAGE_BACKEND=db` suite against real MySQL/PostgreSQL service
+containers (see `docs/DB-STORAGE-MIGRATION-DESIGN.md`).
 
 ## Releases & versioning
 

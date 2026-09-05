@@ -1,12 +1,14 @@
 # One-Click Git Deploy (SSH exec) — Security + Performance Review
 
-Status: **Pre-implementation review.** No code has been written for this
-feature. This doc is the "dedicated security review" `docs/ROADMAP.md`'s
-`⏸️ LATER / conditional` section requires before anyone builds
-`allow_ssh_exec` / one-click Git deploy. It does not replace a design spec —
-if the recommendation below is accepted, a follow-up spec (API shape, JWT
-claims, storage layout) is still needed before coding, per this repo's usual
-spec-writer → coder → tester flow.
+Status: **Implemented and shipped (2026-09-03).** This doc began as the
+pre-implementation "dedicated security review" `docs/ROADMAP.md`'s
+`⏸️ LATER / conditional` section required before anyone built
+`allow_ssh_exec` / one-click Git deploy; §1–§6 below are that original
+review, kept intact as a record of the analysis that shaped the design. The
+feature has since been built exactly to §4's constraints and is live in
+core (free/core, not a paid module) with Laravel/WordPress proxy parity —
+see §7 for what actually shipped, including a hardening addition (a
+PID-liveness check on the deploy lock) made after initial ship.
 
 **Recommendation up front: conditional go**, but not as originally framed.
 The roadmap describes this as introducing "a big new attack surface." That
@@ -214,9 +216,7 @@ Implemented per §4, free/core (not a paid module — same tier as
 - `packages/core/api/GitDeploy.php` — `buildCommand()`/`run()`. Fixed command
   shape only, every variable piece `escapeshellarg()`'d (§4.2). Hooks
   neutered by default via `core.hooksPath=/dev/null` (§4.3). `mkdir`-based
-  lock directory inside the repo path on the SFTP disk itself, staleness
-  check via portable `find -mmin` (§4.6). 2 MB output cap, same pattern as
-  `SshTerminal::MAX_OUTPUT` (§4.7 output half).
+  lock directory inside the repo path on the SFTP disk itself, closes F6.
 - `packages/core/api/Claims.php` — 4 new claims: `allow_git_deploy` (bool,
   default false, dedicated — never bundled with `allow_sftp`/`allow_terminal`,
   §4.4), `git_deploy_path` (string, operator-set, never request-supplied,
@@ -232,13 +232,43 @@ Implemented per §4, free/core (not a paid module — same tier as
   FluxFiles at all — the sync always uses the repo's own pre-configured
   `origin` already set up on the VPS (closes F1/F4 structurally rather than
   mitigating them, per §6).
+- **Lock hardening — PID-liveness check added after initial ship (commit
+  87d217d), closing a gap in the original F6 fix.** The initial lock-acquire
+  logic was purely time-based (`find -mmin` staleness), which meant a second
+  trigger could `rm -rf` and steal a lock still held by a genuinely running
+  deploy whenever `FLUXFILES_GIT_DEPLOY_TIMEOUT` was raised past
+  `LOCK_STALE_MINUTES` (5) for a slow LFS/submodule fetch — the exact race F6
+  was meant to close. `GitDeploy::buildCommand()`'s generated lock guard now
+  writes the lock owner's own PID into `$L/pid` (`echo "$$" > "$L/pid"`)
+  immediately after `mkdir "$L"` acquires the lock directory, and sets an
+  `EXIT` trap that only removes the lock if the exiting process's PID still
+  matches the recorded owner (so a stale/reclaimed lock's cleanup can't
+  accidentally delete a different process's freshly-acquired lock). A
+  subsequent invocation that finds the lock directory held first asks
+  `kill -0 "$P"` on the remote host whether the recorded PID is still alive
+  — a live owner is refused outright (`LOCKED_MARK`, exit 99) **no matter how
+  old the lock directory looks**. Only when the PID is confirmed dead, or is
+  missing/unreadable (the shape of a lock left behind by a pre-liveness-check
+  version of this code), does the `find -mmin +5` age check run at all, now
+  as a secondary sanity check on an already-presumed-dead lock rather than
+  the sole signal, before `rm -rf`-ing it and retrying `mkdir`. `find -mmin`
+  (not `stat`, whose flags differ GNU vs. BSD/macOS) stays the portable way
+  to check the directory's age across whatever SSH host this runs on.
 - F5 (non-atomic deploy onto a live webroot) is documented, not solved, per
-  §4.8 — no symlink-swap release model in this v1.
+  §4.8 — no symlink-swap release model in this v1. Still accurate: nothing
+  in the shipped `GitDeploy.php` performs an atomic release swap.
 - Tests: `packages/core/tests/unit/test-git-deploy.php` (command shape,
-  escaping, hook neutralization, lock scoping, claim decode/defaults, branch
-  regex rejection). `docs/CONFIG.md` §2.2/§3 updated (required for
-  `tests/unit/test-config-doc.php`); all 16 `lang/*.json` got the 4 new
-  `error.git_deploy_*` keys (required for `tests/unit/test-i18n.php`).
+  escaping, hook neutralization, lock staleness, claim decode/defaults,
+  branch regex rejection) and `packages/core/tests/integration/test-git-deploy-lock.php`
+  (dedicated regression for the PID-liveness fix above — runs the generated
+  lock-guard shell script standalone against a throwaway temp directory,
+  covering: a lock held by a live PID is refused regardless of age; a lock
+  whose PID is dead is reclaimed even before the staleness window elapses;
+  a pre-liveness-check lock shape with no `pid` file falls back to the age
+  check; the `EXIT` trap only removes a lock it still owns). `docs/CONFIG.md`
+  §2.2/§3 updated (required for `tests/unit/test-config-doc.php`); all 16
+  `lang/*.json` got the 4 new `error.git_deploy_*` keys (required for
+  `tests/unit/test-i18n.php`).
 - **Laravel/WordPress proxy adapter parity — DONE (2026-09-03).** Both proxies
   now port `GitDeploy::run()` directly (`FluxFilesController::gitDeploy()` /
   `FluxFilesApi::handleGitDeploy()`), mirroring `terminal()`'s exact gate order
@@ -253,3 +283,4 @@ Implemented per §4, free/core (not a paid module — same tier as
   `FLUXFILES_GIT_DEPLOY_RATE_LIMIT` — a deliberate adapter-level gap, not an
   oversight. Requires core ≥ 0.2.81 (`composer.json` floor bumped in both
   packages since `GitDeploy` didn't exist at 0.2.80).
+</content>

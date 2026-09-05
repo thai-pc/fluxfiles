@@ -45,12 +45,63 @@ php packages/wordpress/tests/test-wp-smoke.php
 php packages/laravel/tests/test-laravel-smoke.php
 ```
 
-Self-booting HTTP e2e (start their own `php -S` + back up/restore `packages/core/.env`;
-need the `curl` extension) — for the pre-auth byte-serving routes:
+### Self-booting HTTP e2e (`tests/e2e/*-http.php`)
+
+Each of these boots its own `php -S`, backs up/restores `packages/core/.env`, and
+needs the `curl` extension — they run sequentially against distinct ports so they
+don't collide with each other or with a dev server you already have open. CI runs
+**every file matching this glob automatically** in the `selfboot-e2e` job
+(`for f in tests/e2e/*-http.php; do php "$f"; done`) — a new file matching
+`*-http.php` is picked up with no registration anywhere, just give it an unused
+port. Current files:
 
 ```bash
-php packages/core/tests/e2e/test-stream-http.php   # gated local media (/api/fm/stream), Range
-php packages/core/tests/e2e/test-img-http.php      # on-demand WebP (/api/fm/img), cache + negotiation
+php packages/core/tests/e2e/test-stream-http.php         # gated local media (/api/fm/stream), Range — port 8099
+php packages/core/tests/e2e/test-img-http.php             # on-demand WebP (/api/fm/img), cache + negotiation — port 8101
+php packages/core/tests/e2e/test-zip-http.php             # zip/extract streaming — port 8103
+php packages/core/tests/e2e/test-usage-http.php           # usage/quota dashboard endpoint — port 8104
+php packages/core/tests/e2e/test-sftp-http.php            # SFTP disk driver over HTTP routes — port 8105
+php packages/core/tests/e2e/test-audit-export-http.php    # audit-export module (NDJSON/CSV, purge) — ports 8106-8108
+php packages/core/tests/e2e/test-virus-http.php           # virus-scan fail-closed gate — port 8107
+php packages/core/tests/e2e/test-share-http.php           # share module (public link tokens) — ports 8110-8112
+php packages/core/tests/e2e/test-intake-http.php          # intake module (public upload portals) — ports 8113-8115
+php packages/core/tests/e2e/test-intake-notify-http.php   # intake notify-on-receipt webhook — ports 8116-8118 (+ receiver 8163)
+php packages/core/tests/e2e/test-sso-http.php             # SSO bridge (OIDC exchange) — ports 8130-8135
+```
+
+(`test-virus-http.php`'s 8107 and `test-audit-export-http.php`'s 8106-8108 overlap
+by one port; harmless since the suites run sequentially, never concurrently.)
+
+`test-sftp-live.php` is also self-booting and runs in the same `selfboot-e2e` CI
+job, but it's a separate step (not part of the `*-http.php` glob above) because it
+drives the live SFTP driver rather than an HTTP route:
+
+```bash
+php packages/core/tests/e2e/test-sftp-live.php   # live SFTP driver, needs FXTEST_SFTP_* (CI boots an atmoz/sftp container)
+```
+
+### DB-backend tests (`FLUXFILES_STORAGE_BACKEND=db`)
+
+See `docs/DB-STORAGE-MIGRATION-DESIGN.md` for the design. The SQLite variant is
+ungated and already runs as part of the regular unit-test glob above; MySQL and
+PostgreSQL are env-gated and get their own CI jobs against real service
+containers:
+
+```bash
+php packages/core/tests/unit/test-db-metadata-sqlite.php   # ungated, in-memory SQLite — part of the unit-test glob above, no setup needed
+
+# Env-gated (CI: db-mysql job, real mysql:8 service container)
+FXTEST_DB_MYSQL_DSN='mysql:host=127.0.0.1;port=3306;dbname=fluxfiles_test;charset=utf8mb4' \
+FXTEST_DB_MYSQL_USER=root FXTEST_DB_MYSQL_PASSWORD=root \
+php packages/core/tests/unit/test-db-metadata-mysql.php
+FXTEST_DB_MYSQL_DSN='mysql:host=127.0.0.1;port=3306;dbname=fluxfiles_test;charset=utf8mb4' \
+FXTEST_DB_MYSQL_USER=root FXTEST_DB_MYSQL_PASSWORD=root \
+php packages/wordpress/tests/test-wp-db-metadata-mysql.php
+
+# Env-gated (CI: db-postgres job, real postgres:16 service container)
+FXTEST_DB_PGSQL_DSN='pgsql:host=127.0.0.1;port=5432;dbname=fluxfiles_test' \
+FXTEST_DB_PGSQL_USER=postgres FXTEST_DB_PGSQL_PASSWORD=postgres \
+php packages/core/tests/unit/test-db-metadata-pgsql.php
 ```
 
 Browser (Playwright; boots `router.php` itself) lives in `packages/core/tests/browser/`
@@ -136,7 +187,7 @@ composer install -d packages/laravel
 
 - For backend file behavior, start with `packages/core/api/FileManager.php`, then check `StorageMetadataHandler.php`, `Claims.php`, and `api/index.php`.
 - For route shape changes, update `api/index.php`, docs/README snippets, SDK/framework callers, and tests together.
-- For storage changes, test at least local disk behavior. S3/R2 behavior can differ for metadata, URL signing, and directory placeholders.
+- For storage changes, test at least local disk behavior. S3/R2 behavior can differ for metadata, URL signing, and directory placeholders. If the operator has opted into `FLUXFILES_STORAGE_BACKEND=db`, also check the DB-backend suites above — bookkeeping (metadata/search/audit/etc.) reads/writes through a different code path there even though file bytes still go through the same disk.
 - For metadata changes, update both per-file metadata and `_fluxfiles/index.json` behavior.
 - For folder behavior, update `_fluxfiles/dirs.json` tracking.
 - For upload changes, verify duplicate detection, quota, extension blocking, dangerous filename rules, owner metadata, image variants, and audit logging.

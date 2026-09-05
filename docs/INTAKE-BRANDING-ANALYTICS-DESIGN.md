@@ -20,7 +20,14 @@ composer floor bumped to `^0.2.76`).
 >   Intake's actual shape — Intake has no `download` concept, and its failure
 >   modes (wrong password, cap exceeded, bad extension, oversized, virus
 >   hit) are much richer than Share's single `unlock_fail`, so this is not a
->   find-and-replace of the Share doc; see §B.1–B.3 for what's different and why.
+>   find-and-replace of the Share doc; see §B.1–B.5 for what's different and why.
+>   **§B.5 and §B.8 below now point to `docs/SHARE-ANALYTICS-DESIGN.md`'s §5/§9
+>   for the schema/rotation/security detail that's identical between the two
+>   modules, and only spell out Intake's own deltas** — the two docs used to
+>   duplicate that content nearly verbatim, which was a drift risk since a future
+>   change to one (e.g. the rotation thresholds) could silently stop matching the
+>   other. `docs/SHARE-ANALYTICS-DESIGN.md` remains the canonical copy of that
+>   shared design.
 >
 > Both features touch the same three methods (`createPortal()`, `portalInfo()`,
 > and the record-assembly literal), so they are designed together in one doc to
@@ -75,10 +82,12 @@ Assembled into one claim, `Claims::$intakeBrand` (`array{name,logo_url,color,lin
 
 ### A.4 `Claims.php` changes
 
-**Refactor, not duplicate**, the sanitizer: `sanitizeShareBrand()`
-(`packages/core/api/Claims.php:373-386`) and the new `sanitizeIntakeBrand()`
-would be byte-for-byte identical except for the four `share_brand_*` vs.
-`intake_brand_*` field names. Recommended shape:
+**Refactor, not duplicate**, the sanitizer: `sanitizeShareBrand()` and the new
+`sanitizeIntakeBrand()` are byte-for-byte identical except for the four
+`share_brand_*` vs. `intake_brand_*` field names. This refactor has already
+shipped, at (current line numbers): `sanitizeBrandFields()`
+(`packages/core/api/Claims.php:425-449`), `sanitizeShareBrand()`
+(`Claims.php:457-460`), `sanitizeIntakeBrand()` (`Claims.php:462-471`). Shape:
 
 - Extract the current body of `sanitizeShareBrand()` into a private
   `sanitizeBrandFields(object $payload, string $prefix): ?array` that reads
@@ -93,7 +102,7 @@ would be byte-for-byte identical except for the four `share_brand_*` vs.
 - `sanitizeIntakeBrand(object $payload): ?array` — `return
   self::sanitizeBrandFields($payload, 'intake_brand');`.
 
-New property, placed next to `$intakeBaseUrl` (`Claims.php:199-204`):
+New property, placed next to `$intakeBaseUrl` (`Claims.php:229-234`):
 
 ```
 /** @var array{name:string,logo_url:string,color:string,link_url:string}|null
@@ -104,7 +113,7 @@ public ?array $intakeBrand = null;
 ```
 
 Wired in `fromJwtPayload()` right after the existing `intake_base_url` block
-(`Claims.php:520-523`):
+(`Claims.php:614-617`):
 
 ```
 $c->intakeBrand = self::sanitizeIntakeBrand($payload);
@@ -116,15 +125,17 @@ claim.
 
 ### A.5 `IntakeModule.php` changes
 
-- `createPortal()` (`packages/intake/src/IntakeModule.php:105-119`, the
+- `createPortal()` (`packages/intake/src/IntakeModule.php:112-144`, the
   `$record = [...]` literal): add `'brand' => $claims->intakeBrand,` as a
   sibling of `label`/`max_files`/`max_mb`/`allowed_ext` — same "read at create
   time, baked in" comment Share's `createShare()` already carries.
-- `portalInfo()` (line ~154-170, the public response array): add `'brand' =>
-  $rec['brand'] ?? null,` as a sibling of `label`/`max_files`/`has_password`.
-- `revokePortal()` (line ~260-280): **no change needed for branding** — brand
-  is cosmetic display data with no ownership/audit dependency, unlike
-  analytics (§B.5 explains why the tombstone *does* need a change there).
+- `portalInfo()` (`IntakeModule.php:179-196`, the public response array): add
+  `'brand' => $rec['brand'] ?? null,` as a sibling of
+  `label`/`max_files`/`has_password`.
+- `revokePortal()` (`IntakeModule.php:354-375`): **no change needed for
+  branding** — brand is cosmetic display data with no ownership/audit
+  dependency, unlike analytics (§B.5 explains why the tombstone *does* need a
+  change there).
 - `listPortals()` / `createPortal()`'s return payload to the operator: no
   change required — brand is operator-supplied input, not something the
   operator needs echoed back beyond what `createPortal()`'s `$body` already
@@ -209,12 +220,14 @@ verbatim from `share.html` (lines 40-43 CSS, lines 109-151 JS):
   misquote — §11's note is about the **Share Analytics** feature (which
   genuinely leaves `share.html` untouched, hence no browser test), not about
   Share's brand rendering. Share's brand rendering on `share.html` *does* have
-  DOM-level Playwright coverage (`share-landing.spec.ts:330-369`: null-brand
+  DOM-level Playwright coverage (`share-landing.spec.ts:330-400`: null-brand
   hides the element, full brand renders name/logo/link with the right
-  attributes, brand also renders on the password-lock screen). `intake.html`
-  ports the identical `renderBrand()`/`safeHttpUrl()` functions verbatim from
-  `share.html` (see the code comment there), so it should carry the same
-  coverage — it did not. Fixed: `packages/core/tests/browser/intake-landing.spec.ts`
+  attributes, brand also renders on the password-lock screen, a hostile
+  `javascript:` scheme never reaches `img.src`/`a.href`, and an invalid color
+  leaves `--accent` at its default). `intake.html` ports the identical
+  `renderBrand()`/`safeHttpUrl()` functions verbatim from `share.html` (see the
+  code comment there), so it should carry the same coverage — it did not.
+  Fixed: `packages/core/tests/browser/intake-landing.spec.ts`
   now mirrors `share-landing.spec.ts`'s brand tests for the intake portal (null
   brand, full brand, logo+name without a link, and a `javascript:` logo URL
   being dropped before it reaches `img.src`).
@@ -238,7 +251,7 @@ exactly like Share):
 - `POST /api/fm/intake/upload {token, password?} + file` → anonymous file
   drop, built from the portal token's own write-scoped `Claims` (the fail-closed
   virus-scan wiring runs here too — see the code comment at
-  `PublicLinks.php:112-124` — so `allow_virus_scan` still applies to an
+  `PublicLinks.php:116-128` — so `allow_virus_scan` still applies to an
   anonymous intake upload even though there's no operator-authenticated request
   behind it). Rate-limited under the tighter `upload` bucket.
 
@@ -452,7 +465,7 @@ One new **operator-authed** endpoint, nested under `/intake` like the existing
   the owner).
 
 `index.php` wiring — directly after the existing `/api/fm/intake/revoke`
-block (`packages/core/api/index.php:696-700`):
+block (`packages/core/api/index.php:821-825`):
 
 ```
 if ($method === 'GET' && $uri === '/api/fm/intake/analytics') {
@@ -469,66 +482,73 @@ if ($method === 'GET' && $uri === '/api/fm/intake/analytics') {
 }
 ```
 
-Core-standalone, like the rest of Intake's management routes — not proxied by
-Laravel/WordPress (they don't proxy `/api/fm/intake*` today either).
+Core-standalone, like the rest of Intake's management routes. **Also proxied by
+both the Laravel and WordPress adapters**: `FluxFilesController::intakeAnalytics()`
+(`packages/laravel/src/Http/Controllers/FluxFilesController.php`) and
+`FluxFilesApi::handleIntakeAnalytics()` (`packages/wordpress/includes/FluxFilesApi.php`)
+both route to the same private `shareIntake($request, 'intake', 'analytics')`
+dispatcher used for create/list/revoke — confirmed present in both files
+(registered as `GET .../intake/analytics` in the WordPress REST routes and as a
+controller method + route in Laravel), same parity as Share's analytics route.
 
 ### B.5 Storage layout
 
-**One JSONL file per portal** (not per tenant):
+See `docs/SHARE-ANALYTICS-DESIGN.md` §5 for the full design rationale this
+section builds on: why a per-resource JSONL file (not one tenant-wide log like
+`audit.jsonl`) is the right shape, the `jti` format-validation-before-any-path-join
+pattern, and the read-modify-write-with-truncation rotation shape. Intake
+reuses all of that verbatim; only what's genuinely different is spelled out
+below.
+
+**Path** (per-portal, not per-tenant, mirroring `share-events/`):
 
 ```
 <prefix>/_fluxfiles/intake-events/<jti>.jsonl
 ```
 
-`<jti>` is the portal's own id (`bin2hex(random_bytes(12))`, 24 lowercase hex
-chars, filename-safe); validate with the same
-`preg_match('/^[A-Za-z0-9_-]{8,64}$/', $jti)` pattern Share's `analytics()`
-already uses, before it ever reaches a path.
+**Rotation constants** — identical values to Share's, only the directory name
+differs:
 
-**JSON-lines schema**, one line per event:
+```php
+private const EVENTS_DIR        = '_fluxfiles/intake-events';
+private const EVENTS_MAX_BYTES  = 1 * 1024 * 1024; // same 1MB threshold as Share
+private const EVENTS_KEEP_LINES = 2000;            // same keep-N-lines as Share
+private const ANALYTICS_MAX_LIST = 500;            // same per-request read cap as Share
+```
+
+The existing `FLUXFILES_INTAKE_UPLOAD_LIMIT` (10/min per portal+IP) and
+`FLUXFILES_INTAKE_UPLOAD_TOTAL` (60/min per portal) bound ordinary growth, the
+same way Share's own rate-limit buckets do for `share-events/`; the rotation
+cap exists for the pathological case (a portal hammered for its full 90-day
+`MAX_TTL`).
+
+**Intake-specific schema differences from Share's** (§5 of the Share doc has
+the base `ts`/`type`/`ip`/`ua` shape):
+
+- **Two extra fields per event**: `reason` (string|null — `null` for a
+  `received` event; for `rejected`, the triggering
+  `ApiException::getErrorCode()` or the literal `upload_failed` fallback,
+  never raw exception message text) and `name` (the originally submitted
+  filename for a `rejected` event, or the final stored filename for a
+  `received` event). Share's schema has no filename field because a share
+  token already scopes to exactly one object; a portal receives many
+  different files over its lifetime, so "who's sending what" is real value a
+  bare `type`/`ip`/`ua` tuple would lose.
+- **`type` vocabulary is `received`|`rejected`**, not Share's
+  `view`/`download`/`unlock_fail` — see §B.4 for why a single `rejected` type
+  plus a `reason` sub-field was chosen over one event type per failure mode
+  (Intake's failure surface — wrong password, cap exceeded, every
+  upload-pipeline rejection — is much larger and occasionally growing, unlike
+  Share's three fixed named actions).
+
+Example lines:
 
 ```json
 {"ts": 1755500300, "type": "received", "ip": "203.0.113.7", "ua": "Mozilla/5.0 (...)", "reason": null, "name": "invoice.pdf"}
 {"ts": 1755500400, "type": "rejected", "ip": "203.0.113.7", "ua": "Mozilla/5.0 (...)", "reason": "ext_not_allowed", "name": "invoice.exe"}
 ```
 
-- `ts` — int, unix seconds.
-- `type` — `"received"` | `"rejected"`.
-- `ip` — `filter_var($_SERVER['REMOTE_ADDR'] ?? '', FILTER_VALIDATE_IP) ?: ''`
-  — identical to Share, never a raw unvalidated value.
-- `ua` — control-stripped + capped at 200 chars via `cleanLabel($ua, 200)`.
-- `reason` — `null` for `received`; for `rejected`, the triggering
-  `ApiException::getErrorCode()` (or the literal string `upload_failed` for a
-  non-`ApiException` throwable), additionally passed through
-  `cleanLabel($reason, 60)` as defense-in-depth (these are all short internal
-  constants today, but a future code path must not be able to smuggle
-  arbitrary length/content into this field just by changing an exception
-  message).
-- `name` — the **originally submitted** filename (attacker-controlled,
-  untrusted) for a `rejected` event, or the **final stored** filename (already
-  collision-resolved, e.g. `invoice-1.pdf`) for a `received` event — either
-  way, run through `cleanLabel($name, 200)` before it's ever `json_encode()`d
-  (§B.8; this is the field most exposed to a hostile sender, since a filename
-  is 100% attacker-chosen and never validated for "reasonable content" the way
-  extension/size already are upstream).
-
-**Rotation** (identical constants/shape to Share, new dir name):
-
-```
-private const EVENTS_DIR        = '_fluxfiles/intake-events';
-private const EVENTS_MAX_BYTES  = 1 * 1024 * 1024; // 1MB per-portal rotation threshold
-private const EVENTS_KEEP_LINES = 2000;            // keep last N events after rotation
-private const ANALYTICS_MAX_LIST = 500;            // per-request read cap
-```
-
-On each append, if the current file exceeds `EVENTS_MAX_BYTES`, keep only the
-last `EVENTS_KEEP_LINES` lines before appending the new one. The existing
-`FLUXFILES_INTAKE_UPLOAD_LIMIT` (10/min per portal+IP) and
-`FLUXFILES_INTAKE_UPLOAD_TOTAL` (60/min per portal) rate limits already bound
-how fast this file can grow in the ordinary case; the rotation cap exists for
-the pathological one (a portal hammered for its full 90-day `MAX_TTL`).
-
-**Unconditional `rejected` aggregate counter** — new field on the
+**New unconditional `rejected` aggregate counter** — new field on the
 `intakes.json` record, alongside the existing `received`:
 
 ```json
@@ -550,36 +570,32 @@ failures carries no personal data on its own (same category of decision that
 already separates `views`/`downloads`/`unlock_fails` from `share_analytics`),
 so there's no privacy reason to gate it, and gating it would leave `received`
 looking artificially healthy for a portal that's mostly being probed/abused
-with the wrong extension or a guessed password. Surfaced in `listPortals()`
-(operator-only) next to `received`; **not** surfaced in the public
-`portalInfo()` response (a sender doesn't need to know how many other
-attempts failed, and `portalInfo()`'s response shape is otherwise unchanged
-except for `brand`, §A.5).
+with the wrong extension or a guessed password. Share has no equivalent
+decision to make here because its own analogous counter (`unlock_fails`)
+already existed before Share Analytics shipped; Intake has never tracked
+rejections at all, so this is a genuine (small, no-personal-data) scope
+addition beyond a literal port — see §B.12 for the alternative not chosen.
+Surfaced in `listPortals()` (operator-only) next to `received`; **not**
+surfaced in the public `portalInfo()` response (a sender doesn't need to know
+how many other attempts failed, and `portalInfo()`'s response shape is
+otherwise unchanged except for `brand`, §A.5).
 
-**Cleanup on revoke/expiry** — piggybacks on existing `save()`/`revokePortal()`
-work, no new trigger, mirroring Share exactly:
-
-- `revokePortal()` (`IntakeModule.php:260-280`) currently tombstones with
-  `['jti', 'revoked', 'expires']` only — **no `owner`**, unlike Share's
-  *current, already-shipped* tombstone (`ShareModule.php:322-328`, which
-  *does* retain `owner` — that fix already landed for Share). This spec
-  requires the identical fix for Intake: extend the tombstone to
-  `['jti', 'revoked', 'expires', 'owner']`. Without it, `analytics()`'s
-  `owner_only` check has nothing to check against once a portal is revoked,
-  since the full record (which carried `owner`) is gone — the endpoint would
-  have to fail closed (`404`) for every revoked portal under `owner_only`,
-  worse for the paying operator than a one-field tombstone change. Adding a
-  field to the tombstone changes no existing check — `resolveToken()` and
-  `putRecord()`'s tombstone guard only ever look at `revoked`/`expires`.
-- `save()` (`IntakeModule.php:385-396`) already prunes tombstones whose
-  `expires` has passed. Extend that loop to also delete
-  `_fluxfiles/intake-events/<jti>.jsonl` for each pruned jti (best-effort,
-  wrapped like every other write in this class) — identical to
-  `ShareModule::save()`'s extension.
-- Same accepted limitation as Share: a portal that is **never explicitly
-  revoked** (just left to expire naturally) keeps its events file forever,
-  exactly like its `intakes.json` record already does today. Not a regression
-  this feature introduces (§B.9).
+**Cleanup on revoke/expiry** — same mechanism as Share's (§5 of the Share
+doc): `save()` (`IntakeModule.php:606-623`) already prunes tombstones whose
+`expires` has passed; extend that loop to also delete
+`_fluxfiles/intake-events/<jti>.jsonl` for each pruned jti (best-effort,
+wrapped like every other write in this class), identical to
+`ShareModule::save()`'s extension. **One difference from Share worth
+flagging**: Share's `revokeShare()` already retains `owner` on its tombstone
+(that fix already shipped for Share); Intake's `revokePortal()`
+(`IntakeModule.php:354-375`) currently does **not** — it tombstones with
+`['jti', 'revoked', 'expires']` only. This spec requires the identical fix be
+applied here: extend to `['jti', 'revoked', 'expires', 'owner']`, otherwise
+`analytics()`'s `owner_only` check (§B.8) has nothing to check against once a
+portal is revoked — the endpoint would have to fail closed (`404`) for every
+revoked portal under `owner_only`, worse for the paying operator than a
+one-field tombstone change. Same accepted limitation as Share: a portal that
+is never explicitly revoked keeps its events file forever (§B.12).
 
 ### B.6 Write path (in `IntakeModule.php`)
 
@@ -606,13 +622,13 @@ just (in one case) an additional acquisition of the existing one.
    `FLUXFILES_INTAKE_UPLOAD_LIMIT`/`_TOTAL` rate limits already gating this
    route, so it introduces no new DoS surface.
 2. **Cap exceeded** (`receiveUpload()`'s reservation closure, already inside
-   `withLock()`, `IntakeModule.php:204-219` — currently throws `intake_full`
+   `withLock()`, `IntakeModule.php:272-295` — currently throws `intake_full`
    with `received` left untouched): extend the *same* locked closure to also
    bump `rejected` and, if `analytics` is on, append the `rejected` event
    (`reason: "intake_full"`, `name` = the submitted filename) **before**
    throwing — no new lock, this reuses the one already held.
 3. **Upload-pipeline failure** (the `try { $portalFm->upload(...) } catch
-   (\Throwable $e) { ...rollback... }` block, `IntakeModule.php:221-238` —
+   (\Throwable $e) { ...rollback... }` block, `IntakeModule.php:297-322` —
    currently only rolls back the `received` reservation): extend the existing
    rollback closure (already inside `withLock()`) to *also* bump `rejected`
    (net effect: the reservation's `received++` is undone and `rejected++`
@@ -630,7 +646,7 @@ just (in one case) an additional acquisition of the existing one.
    Gated on the record's `analytics` flag exactly like every other append —
    zero filesystem cost when off, same as Share's fast path.
 
-And `createPortal()`'s record-assembly literal (`IntakeModule.php:105-119`,
+And `createPortal()`'s record-assembly literal (`IntakeModule.php:112-144`,
 alongside `label`/`max_files`/`max_mb`/`allowed_ext`/`brand`, §A.5):
 
 ```
@@ -639,7 +655,7 @@ alongside `label`/`max_files`/`max_mb`/`allowed_ext`/`brand`, §A.5):
 'analytics' => $claims->intakeAnalytics,   // baked in at create time — see Claims::$intakeAnalytics
 ```
 
-`cleanLabel()` (`IntakeModule.php:362-367`) currently has **no `$max`
+`cleanLabel()` (`IntakeModule.php:457-462`) currently has **no `$max`
 parameter** (hardcoded 120) — add an optional `int $max = 120` parameter,
 identical one-line signature change to the one Share's `cleanLabel()` already
 got, so it can be reused at `200` for `ua`/`name` and `60` for `reason`
@@ -675,63 +691,45 @@ fields:
 
 ### B.8 Security considerations
 
-- **Log injection (JSONL corruption via a crafted filename or User-Agent)**:
-  `json_encode()` already escapes control characters (including `\n`/`\r`) as
-  part of PHP's JSON string-encoding rules, *as long as the entry is always
-  built as a PHP array and passed through one `json_encode()` call* — never
-  hand-concatenated. This spec still requires stripping control characters and
-  capping length **before** encoding, via `cleanLabel()`, for two reasons
-  beyond defense-in-depth: (a) the same belt-and-braces posture Share already
-  applies to `ua`/`label`, and (b) `name` here is the **least trustworthy**
-  field either module logs — a portal's `receiveUpload()` accepts an
+Most of this mirrors `docs/SHARE-ANALYTICS-DESIGN.md` §9 exactly: the same
+`json_encode()`-only construction (never hand-concatenated) that makes JSONL
+injection structurally impossible, the same
+`filter_var(..., FILTER_VALIDATE_IP)` IP handling (invalid → `""`, never a raw
+value), the same "JSON-only API response — HTML-escaping is a future
+dashboard's job, not the API's" XSS posture, the same "no outbound request,
+`SsrfGuard` doesn't apply" note, the same `owner_only` reuse of
+`revokePortal()`'s check (which is why the tombstone needs `owner`, per §B.5),
+and the same "no new error codes/i18n" decision. (`jti` format validation
+before any path join is covered by §B.5's pointer to the Share doc's §5.) See
+that section for the full reasoning on each. **Intake-specific differences:**
+
+- **`name` is the least-trustworthy field either module logs.** Unlike
+  Share's `ua`, a portal's `receiveUpload()` accepts an
   attacker-fully-controlled filename with only an extension check applied
-  upstream (no charset/length validation on the base name itself), so this is
-  the first place in either module's analytics where the logged string is
-  guaranteed hostile-input, not just "generally untrusted."
-- **IP validation**: identical to Share —
-  `filter_var($_SERVER['REMOTE_ADDR'] ?? '', FILTER_VALIDATE_IP)`, invalid →
-  stored as `""`, never a raw value.
-- **Length caps**: `ua` at 200 (`cleanLabel($ua, 200)`), `name` at 200
-  (`cleanLabel($name, 200)`), `reason` at 60 (`cleanLabel($reason, 60)`,
-  generous headroom over the longest existing error-code constant) — each
-  bounds both display clutter and per-event storage size independent of the
-  rotation cap.
+  upstream (no charset/length validation on the base name itself) — so this
+  is the first place in either module's analytics where the logged string is
+  guaranteed hostile input, not just "generally untrusted." Stripped/capped
+  via `cleanLabel()` before encoding, same mechanism as Share's `ua`.
+- **Length caps** for the two new fields: `name` at 200 chars
+  (`cleanLabel($name, 200)`), `reason` at 60 chars (`cleanLabel($reason, 60)`,
+  generous headroom over the longest existing error-code constant) — `ua`
+  keeps Share's existing 200-char cap.
 - **`reason` is a closed-ish vocabulary, not free text**: always the
-  triggering `ApiException::getErrorCode()` (a short internal constant) or the
-  literal `upload_failed` fallback — never `$e->getMessage()`, which can embed
-  interpolated values (e.g. `assertUploadSize()`'s message includes the actual
-  file size in MB). Logging the *code*, not the *message*, keeps `reason`
-  stable and free of any incidentally-interpolated user input.
-- **XSS on display**: `ua`/`name`/`reason` are returned as JSON only
-  (`Content-Type: application/json`); any HTML rendering in a future operator
-  dashboard is that UI's responsibility to escape, same posture the Share
-  Analytics doc already flagged for `ua`/`ip`.
-- **No SSRF surface** — this feature makes no outbound request; `SsrfGuard` is
-  not applicable.
-- **jti format validation on the attacker-reachable read path**: `analytics()`
-  validates `$jti` against `^[A-Za-z0-9_-]{8,64}$` **before** it ever reaches
-  a filesystem path — identical requirement and pattern to Share's
-  `analytics()`, called out explicitly here because Intake's portal token is
-  likewise public-facing (a hostile actor who has seen a valid portal link can
-  attempt to guess/mutate a `jti` against this endpoint) even though this
-  specific *endpoint* is operator-authed; defense-in-depth against a malformed
-  value ever reaching `getRecord()`/a path join.
-- **Ownership / `owner_only`**: `analytics()` reuses exactly `revokePortal()`'s
-  check (`$claims->ownerOnly && ($rec['owner'] ?? null) !== $claims->userId` →
-  `403 perm_denied`), which is why §B.5 extends the tombstone to retain
-  `owner` — identical reasoning to Share's tombstone fix.
-- **Error codes**: **no new error codes, no new i18n strings.** `analytics()`
-  reuses `404 intake_revoked` and `403 perm_denied`, both already translated
-  in all 16 `packages/core/lang/*.json` files (confirmed present:
-  `intake_invalid`, `intake_revoked`, `intake_password`, `intake_full` already
-  exist in `lang/en.json:324-327`; `perm_denied` is a core-wide code used
-  throughout). This was a deliberate design choice, mirroring Share
-  Analytics, to avoid new translation work for a feature that needs no new
-  user-facing message shape.
-- **Public-route unaffected**: `handleIntakePublic()` / `PublicLinks.php`'s
-  response shapes change only via `portalInfo()`'s new `brand` field (§A.5) —
-  `analytics` data is never returned to a sender, only to the operator via the
-  new authed endpoint.
+  triggering `ApiException::getErrorCode()` (a short internal constant) or
+  the literal `upload_failed` fallback — never `$e->getMessage()`, which can
+  embed interpolated values (e.g. `assertUploadSize()`'s message includes the
+  actual file size in MB). Logging the *code*, not the *message*, keeps
+  `reason` stable and free of any incidentally-interpolated user input.
+- **Reused error codes are Intake's own**: `analytics()` reuses
+  `404 intake_revoked` and `403 perm_denied` (not Share's `share_revoked`),
+  both already translated in all 16 `packages/core/lang/*.json` files
+  (confirmed present: `intake_invalid`, `intake_revoked`, `intake_password`,
+  `intake_full` all exist in `lang/en.json:326-329`; `perm_denied` is a
+  core-wide code used throughout).
+- **Public-route note**: `handleIntakePublic()` / `PublicLinks.php`'s response
+  shapes change only via `portalInfo()`'s new `brand` field (§A.5) —
+  `analytics` data itself is never returned to a sender, only to the operator
+  via the new authed endpoint.
 
 ### B.9 Backward compatibility
 
@@ -904,6 +902,12 @@ This also introduces one new aggregate field, `rejected`, on the
 `_fluxfiles/intakes.json` record shape — not a JWT claim, so it does not get
 its own CONFIG.md row (the file documents claims, not storage schema; the
 existing `intakes.json` shape isn't documented there either).
+
+**Verified against the current `docs/CONFIG.md`**: both `intake_analytics`
+(bool, default `false`) and the four `intake_brand_*` claims above are present
+in §2.13 with these exact names/types/defaults — no naming drift found. Same
+verification for Share: `share_analytics` (bool, default `false`) and
+`share_brand_*` match exactly.
 
 ---
 

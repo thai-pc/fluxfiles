@@ -1,5 +1,17 @@
 # ACL / Role Presets — Stateless "Role" Layer for JWT Minting
 
+> **Status: Implemented and shipped.** The `role` mint-time preset described
+> in this document is live across all four token builders — shipped in
+> commit `70f1cea` ("feat(acl): implement role mint-time preset across all
+> token builders", 2026-09-01), with a same-day fix for a viewer/editor
+> chmod-default bug (commits `d880b98`/`fb7c8a2`, documented in
+> `CHANGELOG.md`'s `[0.3.00]` entry). Most of the body below (§0–§6) is the
+> original design record, retained for context on the *why* and the claim
+> table; it is not a pending proposal. The authoritative, as-shipped
+> behavior — including two precedence bugs found and fixed after this design
+> was written — is in the **Status** section at the very bottom of this
+> file. Read that section first if you only have time for one.
+
 > This is the future spec `docs/DB-STORAGE-MIGRATION-DESIGN.md` §14 item 6
 > pointed at: *"a DB could later support a materially different, additional
 > model on top of the JWT — e.g. a `permissions`/`acl` table... that would be
@@ -612,7 +624,11 @@ Claims.php's own default again. The regression test in every suite
 strengthened to assert against the **decoded, effective** claim value
 (`Claims::fromJwtPayload(...)->allowExtract`, not just raw-JWT `isset()`),
 since asserting only `isset()` is exactly what let B1 through undetected —
-an absent key still resolves to `true` after decode.
+an absent key still resolves to `true` after decode. This B1 fix is what
+`CHANGELOG.md`'s `[0.3.00]` — 2026-09-01 entry ("Fixed — ACL role presets:
+`viewer`/`editor` could chmod on SFTP disks") documents; commits `d880b98`
+(core/Laravel/WordPress) and `fb7c8a2` (Node) landed it the same day as the
+initial `role` implementation (`70f1cea`).
 
 **BYOB scope**: `role` is excluded from BYOB tokens in core
 (`fluxfiles_byob_token()`/`fluxfiles_mixed_token()` are untouched, matching

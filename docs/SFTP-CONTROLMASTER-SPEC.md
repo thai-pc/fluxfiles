@@ -1,16 +1,26 @@
 # SSH ControlMaster — Design Spec
 
-Status: **Design spec, no code written.** Follow-up to
-`docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` (**conditional go, narrowly
-scoped**), which is the constraint source of truth — this doc turns its §4
-into exact names, file paths, function signatures, and flag strings. It does
-not re-litigate whether to build this; every design choice below traces back
-to a specific §4 constraint (or, in three places called out explicitly,
-closes a gap the review didn't fully resolve — see §7, §9, §11).
+Status: **Implemented and shipped, essentially as designed below.**
+Follow-up to `docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` (**conditional go,
+narrowly scoped**), which is the constraint source of truth — this doc
+turned its §4 into exact names, file paths, function signatures, and flag
+strings, and `packages/core/api/SshMultiplexer.php` +
+`DiskManager::multiplexEligible()`/`multiplexHandle()`/
+`modernSshAlgorithmLists()`/`modernSshOpensshFlags()` were built to match.
+Test coverage: `packages/core/tests/unit/test-ssh-multiplex.php` (§18's
+unit-level plan) and `packages/core/tests/integration/test-ssh-multiplex-live.php`
+(§18's env-gated live-SSH plan). See
+`docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7 for the implementation-status
+summary. Design choices below still trace back to a specific §4 constraint
+(or, in three places called out explicitly, close a gap the review didn't
+fully resolve — see §7, §9, §11).
 
 Scope, restated from the review's §4.7 and re-confirmed in §19 below: **this
-only ever wires into `SshTerminal`'s `/api/fm/terminal` path.** `GitDeploy`
-and the Flysystem SFTP adapter (browsing/upload/download) are untouched.
+only ever wires into `SshTerminal`'s `/api/fm/terminal` path.** `GitDeploy`,
+the Flysystem SFTP adapter (browsing/upload/download), and the
+Laravel/WordPress proxy adapters' own SSH terminal endpoints are all
+untouched — see §19 for why each of those three is a deliberate exclusion,
+not an oversight.
 
 ---
 
@@ -867,7 +877,8 @@ no live SSH host configured, so it never blocks CI by default):
   command in the same window to benefit; (b) it should be evaluated
   separately, with real usage data, per the review's recommendation — not
   bundled in "since the plumbing already exists." `GitDeploy.php` and its
-  route in `index.php` are untouched by this spec.
+  route in `index.php` are untouched by this spec. **Confirmed NO-GO**
+  after evaluation — see `docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7.
 - **The Flysystem SFTP adapter (`buildSftpAdapter()`, used by every
   browsing/list/upload/download/copy/move/chmod call) is not touched.**
   It's the highest-request-volume SFTP path in the app, each call is a
@@ -877,6 +888,27 @@ no live SSH host configured, so it never blocks CI by default):
   across the most tenants. `DiskManager::sftpConnection()` and
   `buildSftpAdapter()` keep their current signatures and behavior
   unchanged; `multiplexHandle()` is a wholly separate, additive method.
+  **Confirmed NO-GO** after evaluation: it already gets free per-request
+  connection reuse via `SftpConnectionProvider` + `DiskManager`'s own
+  memoization, so a stateful SFTP protocol adapter layered over a
+  ControlMaster socket would be a from-scratch reimplementation of that
+  adapter for no real gain — see
+  `docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7.
+- **The Laravel/WordPress proxy adapters' own SSH terminal endpoints are
+  explicitly NOT in scope either, and this is not the same statement as
+  the two exclusions above.** `FluxFilesController::terminal()` (Laravel)
+  and `FluxFilesApi::handleTerminal()` (WordPress) each build their own
+  `SSH2` connection via plain phpseclib directly — they do not call
+  `SshTerminal::run()`, `DiskManager::multiplexHandle()`, or
+  `SshMultiplexer` at all, unlike how both proxies *do* port
+  `GitDeploy::run()` and `/api/fm/stream`/`/api/fm/img` token minting
+  directly for parity. A future reader should not assume a proxied
+  `/wp-json/fluxfiles/v1/terminal` or Laravel `POST .../terminal` call gets
+  multiplexed just because core's own `/api/fm/terminal` does — it never
+  will, unless a future change explicitly ports `SshMultiplexer` into both
+  proxy controllers the same way `GitDeploy` was ported, which would be a
+  new decision requiring its own review update, not an assumed extension
+  of this spec.
 
 ---
 
@@ -908,3 +940,4 @@ no live SSH host configured, so it never blocks CI by default):
   several sequential SSH actions around one deploy trigger), this spec's
   §19 boundary should be revisited **through the review**, not silently
   extended.
+</content>

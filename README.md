@@ -28,7 +28,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Embedding in Your App](#embedding-in-your-app)
   - [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard) — internals: [`docs/FEATURES.md`](docs/FEATURES.md)
 - [Storage Disks](#storage-disks)
-  - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
+  - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Git deploy](#one-click-git-deploy-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
   - [Import from URL](#import-from-url)
 - [Multi-tenant](#multi-tenant)
@@ -66,7 +66,7 @@ to reach for each one.
 | | **Crop** (aspect presets) | Avatars, thumbnails, hero images |
 | | **Watermark** — burn-in editor (and an opt-in serve-time overlay for selling images) | Branding assets; or protecting previews of images you sell |
 | **Media** | Inline image/video/audio/PDF preview + gated private local streaming | Course platforms, private media, document portals |
-| **Admin / hosting** | Code/config editor (CodeMirror), **SFTP chmod**, **SSH terminal** (opt-in) | cPanel-style tooling: edit `.env`/`nginx.conf`, set permissions, run `git`/`composer` |
+| **Admin / hosting** | Code/config editor (CodeMirror), **SFTP chmod**, **SSH terminal** (opt-in), **one-click Git deploy** (opt-in) | cPanel-style tooling: edit `.env`/`nginx.conf`, set permissions, run `git`/`composer`, redeploy a repo |
 | **Metadata** | Title/alt/caption/tags + full-text file & folder search; **AI auto-tag** (BYO key) | Digital Asset Management, SEO, large media libraries |
 | **Insights** | Storage usage dashboard (quota + by type/folder) | Show tenants their consumption |
 | **Safety** | Dedup (SHA-256), rate limiting, audit log, quota, origin/CSRF, dangerous-ext block, SSRF + zip guards | Production hardening, baked in |
@@ -106,9 +106,13 @@ docker run -p 8080:80 \
   ghcr.io/thai-pc/fluxfiles:latest
 ```
 
-Images are tagged `latest`, the release version (`0.2.18`) and minor (`0.2`), for
-`linux/amd64` and `linux/arm64`. To build from the monorepo instead:
-`docker compose up` (app + MinIO) or `make up`.
+Every tagged core release publishes three Docker tags: `latest`, the exact
+release version (e.g. `0.2.81`), and its minor line (e.g. `0.2`), for
+`linux/amd64` and `linux/arm64` — pin to the minor or exact tag in production
+instead of `latest` if you want reproducible deploys; check
+[the package page](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
+for the current version. To build from the monorepo instead: `docker compose up`
+(app + MinIO) or `make up`.
 
 > A JS/non-PHP backend? Run this image as your file service and mint tokens with
 > [`@fluxfiles/node`](packages/node) — no PHP in your own codebase.
@@ -344,8 +348,10 @@ snapped to a bounded set of sizes so cache growth can't run away. Full mechanics
 > `img_base` carries a short-lived per-file token in the query string (an `<img>`
 > can't send an `Authorization` header) — the same tradeoff as the media stream
 > token: single-file scope + short TTL. It mints only when the disk config wires a
-> stream secret, so on-demand WebP is a **core-standalone / Docker** feature (the
-> Laravel/WordPress proxies don't expose `/api/fm/img`).
+> stream secret; the standalone/Docker app always does this, and **the Laravel and
+> WordPress proxy adapters now do too**, so `/api/fm/img` is fully proxied (Laravel
+> needs core ≥ 0.2.77, WordPress needs core ≥ 0.2.79 — see the `webp_enabled` entry
+> in [`docs/CONFIG.md`](docs/CONFIG.md)).
 
 #### Responsive `srcset`
 
@@ -634,9 +640,10 @@ How it differs from S3 (by design):
   'username' => …, 'password' => …]])`, or use `'private_key' => …` (RSA/ED25519)
   with an optional `'private_key_passphrase' => …`. Credentials are
   AES-256-GCM-encrypted into the JWT and SSRF-checked on decode, never stored.
-- Like gated media and on-demand WebP, SFTP **serving is a core-standalone /
-  Docker feature** (it streams bytes through the app); the Laravel/WordPress
-  proxies don't expose it.
+- SFTP serving goes through the same tokened `/api/fm/stream` route that gated
+  local media uses (it streams bytes through the app rather than a static/presigned
+  URL) — and, like `/api/fm/stream` generally, **it is proxied by both the Laravel
+  and WordPress adapters**, not just the core-standalone/Docker app.
 
 ### SSH terminal (SFTP disks)
 
@@ -702,12 +709,60 @@ core hosts nothing; that server owns its own auth. Only `http(s)` URLs are accep
 > dangerous-command list is deliberately small, and the shared-hosting/no-shell
 > fallback: [`docs/FEATURES.md#ssh-terminal--security-model`](docs/FEATURES.md#ssh-terminal--security-model).
 
-**Adapter support (terminal):** `/api/fm/terminal` is core-standalone, so the
-`allow_terminal` claim is forwarded only by token minters that target a real core
-— `embed.php`, `@fluxfiles/node`, and the **Laravel adapter in `standalone` mode**.
-The **WordPress** plugin and **Laravel proxy mode** don't forward it (the endpoint
-isn't proxied there, so the button would 404). React/Vue inherit whatever core
-their host points at. Runs against the standalone PHP server or the Docker image.
+**Adapter support (terminal):** `/api/fm/terminal` **is proxied by both the
+Laravel and WordPress adapters** (`FluxFilesController::terminal()` /
+`FluxFilesApi::handleTerminal()`, requiring core ≥ 0.2.46) as well as by
+`embed.php`, `@fluxfiles/node`, and the standalone Laravel mode — so the
+`allow_terminal` claim works the same way regardless of which adapter mints the
+token. React/Vue inherit whatever core their host points at. Runs against the
+standalone PHP server or the Docker image, and against either proxy adapter.
+
+### One-click Git Deploy (SFTP disks)
+
+A narrower, safer sibling of the SSH terminal above: instead of an arbitrary
+command, `POST /api/fm/git-deploy` runs a **fixed-shape** deploy against a repo
+you (the operator) configure ahead of time — never from the request body.
+
+```php
+// opt-in: lets this token redeploy one pre-configured repo on the SFTP box
+$token = fluxfiles_token([
+    'user'   => 'admin-7',
+    'perms'  => ['read', 'write'],
+    'disks'  => ['sftp'],
+    'prefix' => 'sites/acme/',
+    'ttl'    => 1800,
+    'claims' => [
+        'allow_git_deploy'   => true,
+        'git_deploy_path'    => '/var/www/acme',   // operator-set — never from the request
+        'git_deploy_branch'  => 'main',            // optional — omit to `pull --ff-only` the current branch
+        'git_deploy_hooks'   => false,              // default false — hooks run with core.hooksPath=/dev/null
+    ],
+]);
+```
+
+- **`POST /api/fm/git-deploy`** `{disk}` deploys `git_deploy_path` on the SFTP
+  box: with `git_deploy_branch` set it runs a **destructive**
+  `fetch --prune` + `reset --hard origin/<branch>` (matches the pinned branch
+  exactly, discarding local changes); without it, a safer
+  `pull --ff-only` that **refuses** on a diverged history instead of merging.
+- **Hooks are neutered by default** (`core.hooksPath=/dev/null`) — set
+  `git_deploy_hooks => true` only if you trust the repo's hook scripts to run on
+  your server.
+- Dedicated `allow_git_deploy` claim (default off) — **never bundled** with
+  `allow_sftp`/`allow_terminal`, so granting SFTP or the command-runner doesn't
+  silently grant deploy too. A `mkdir`-based lock on the repo serializes
+  concurrent deploys, and requests are rate-limited on their own bucket
+  (`FLUXFILES_GIT_DEPLOY_RATE_LIMIT`, default 5/min).
+
+> 🔒 Git deploy is deliberately a **subset** of the SSH terminal, not a second
+> arbitrary-shell door — the repo path/branch/hooks-enabled are all
+> operator-controlled claims. It still lands a non-atomic deploy onto a
+> (possibly live) webroot — see
+> [`docs/GIT-DEPLOY-SECURITY-REVIEW.md`](docs/GIT-DEPLOY-SECURITY-REVIEW.md) for
+> the full threat model, including what's documented-but-not-solved.
+
+**Adapter support:** proxied by both Laravel (`FluxFilesController::gitDeploy()`)
+and WordPress (`FluxFilesApi::handleGitDeploy()`), requiring core ≥ 0.2.81.
 
 ### Config / code editor
 
@@ -753,7 +808,8 @@ both synchronous (no queue/worker; that needs a DB, which FluxFiles doesn't have
   `allow_download`; a pre-flight rejects (`413`) anything over `zip_max_mb` /
   `zip_max_files` **before** a byte is streamed. It streams binary through the app,
   so — like media `stream`/`img` — it's a **core-standalone / Docker** endpoint
-  (the Laravel/WordPress proxies don't expose it).
+  (the Laravel/WordPress proxies genuinely don't expose it — there is no
+  zip-streaming route in either adapter's controller).
 - **`POST /api/fm/extract`** `{disk, path, dest?}` extracts a `.zip` in place
   (default dest: a folder named after the archive). Returns JSON, so it **is**
   proxied by Laravel/WordPress. Two-pass = atomic (validates every entry, then
@@ -890,7 +946,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 }
 ```
 
-The full claim list (all 81, with types/defaults/units) and every `fluxfiles_token()`
+The full claim list (all 100, with types/defaults/units) and every `fluxfiles_token()`
 parameter live in [`docs/CONFIG.md`](docs/CONFIG.md) — kept as the single copy so it
 can't drift from what the code actually reads. The handful used in every app:
 `sub`, `perms`, `disks`, `prefix`, `max_upload`, `allowed_ext`, `ttl` (a
@@ -1124,7 +1180,10 @@ bodies, and the upload/duplicate-detection JSON shapes:
 > **Tokened media endpoints** (query-string token, for `<img>`/`<video>`):
 > `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see
 > [On-demand WebP](#on-demand-webp--avif)) and `GET /stream?token=` (gated
-> private media). Both are core-standalone / Docker features.
+> private media, including SFTP-disk serving). Both mint only when a stream
+> secret is wired — true for core-standalone/Docker always, and now for **both
+> the Laravel and WordPress proxy adapters too**, so both routes are fully
+> proxied, not core-only.
 
 ---
 
@@ -1314,8 +1373,9 @@ bash scripts/pack-smoke.sh all                       # verifies the published di
 make test PHP=8.4   # one version  ·  make test-all  # 8.1–8.4  ·  make up  # app:8080 + MinIO:9000
 ```
 
-`.github/workflows/test.yml` runs all of this (12 jobs). For the CI map, the
-adapter↔core floor guard, and the tag→registry release flow, see
+`.github/workflows/test.yml` runs all of this (14 jobs, including dedicated
+`db-mysql`/`db-postgres` jobs for the opt-in `FLUXFILES_STORAGE_BACKEND=db` mode).
+For the CI map, the adapter↔core floor guard, and the tag→registry release flow, see
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
