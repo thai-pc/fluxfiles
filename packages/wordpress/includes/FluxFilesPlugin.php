@@ -305,7 +305,8 @@ class FluxFilesPlugin
         $presets = [
             'pro'        => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
             'agency'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
-            'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true],
+            'studio'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true],
+            'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true],
         ];
         foreach ($presets[strtolower((string) $edition)] ?? [] as $k => $v) {
             if (!array_key_exists($k, $payload)) {

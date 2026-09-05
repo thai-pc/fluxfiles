@@ -129,10 +129,11 @@ $token = fluxfiles_token([
 ]);
 ```
 
-Note: there is no `'edition' => 'studio'` preset in code today (only `pro`, `agency`,
-`enterprise` are defined in `embed.php`) — this example sets the Studio-tier claims
-explicitly via the `claims` map for that reason, rather than relying on an
-`edition` shortcut. See `LICENSING-PLAN.md`'s "code gap, not yet fixed" note.
+Note: `embed.php` now also defines a `'edition' => 'studio'` preset (`pro` +
+`allow_versioning`/`allow_webhooks`/`allow_ai_vision`/`allow_ocr`) — see
+`LICENSING-PLAN.md`. This example sets the Studio-tier claims explicitly via the
+`claims` map anyway, since it also narrows `webhook_events` and caps
+`versioning_max`, which the preset doesn't do for you.
 
 ---
 

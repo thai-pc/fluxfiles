@@ -105,7 +105,15 @@ function sanitizeVariants(v: BaseTokenOptions['variants']): Record<string, numbe
 const EDITION_PRESETS: Record<string, Record<string, boolean>> = {
   pro: { allow_optimize: true, allow_share: true, allow_intake: true },
   agency: { allow_optimize: true, allow_share: true, allow_intake: true },
-  enterprise: { allow_optimize: true, allow_share: true, allow_intake: true, allow_virus_scan: true, allow_c2pa: true },
+  studio: {
+    allow_optimize: true, allow_share: true, allow_intake: true,
+    allow_versioning: true, allow_webhooks: true, allow_ai_vision: true, allow_ocr: true,
+  },
+  enterprise: {
+    allow_optimize: true, allow_share: true, allow_intake: true,
+    allow_versioning: true, allow_webhooks: true, allow_ai_vision: true, allow_ocr: true,
+    allow_virus_scan: true, allow_c2pa: true, allow_backup: true, allow_audit_export: true,
+  },
 };
 
 /** Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): default a person's

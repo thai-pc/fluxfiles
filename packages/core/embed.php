@@ -158,7 +158,8 @@ function _fluxfiles_build_token(array $o): string
  * claim when it's not already present, so explicit overrides win. The license is
  * still the real gate — a preset just defaults the per-tenant claims for a tier.
  *
- * free → nothing · pro → optimize + share · agency → pro + (future) · enterprise → all.
+ * free → nothing · pro → optimize + share · agency → pro + (future) ·
+ * studio → pro + versioning/webhooks + AI/OCR BYO-key throw-ins · enterprise → all.
  *
  * @param array<string,mixed> $payload
  */
@@ -167,7 +168,8 @@ function fluxfiles_apply_edition_preset(array &$payload, ?string $edition): void
     $presets = [
         'pro'        => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
         'agency'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
-        'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true],
+        'studio'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true],
+        'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true],
     ];
     $claims = $presets[strtolower((string) $edition)] ?? [];
     foreach ($claims as $k => $v) {

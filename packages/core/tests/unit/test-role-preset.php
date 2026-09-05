@@ -179,6 +179,32 @@ test('edition and role compose without clobbering each other', function () use (
     assertEqual(false, $payload->owner_only ?? false);
 });
 
+test('studio edition preset grants Pro + versioning/webhooks + AI/OCR throw-ins, matching Plans.php\'s studio module list', function () use ($secret) {
+    $payload = decode(fluxfiles_token(['user' => 'u', 'edition' => 'studio']), $secret);
+    assertEqual(true, $payload->allow_optimize);
+    assertEqual(true, $payload->allow_share);
+    assertEqual(true, $payload->allow_intake);
+    assertEqual(true, $payload->allow_versioning);
+    assertEqual(true, $payload->allow_webhooks);
+    assertEqual(true, $payload->allow_ai_vision);
+    assertEqual(true, $payload->allow_ocr);
+    // Enterprise-only claims must NOT leak into studio.
+    assertEqual(false, isset($payload->allow_virus_scan));
+    assertEqual(false, isset($payload->allow_c2pa));
+    assertEqual(false, isset($payload->allow_backup));
+    assertEqual(false, isset($payload->allow_audit_export));
+});
+
+test('enterprise edition preset grants every module claim (matches the docstring\'s "enterprise -> all")', function () use ($secret) {
+    $payload = decode(fluxfiles_token(['user' => 'u', 'edition' => 'enterprise']), $secret);
+    foreach ([
+        'allow_optimize', 'allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks',
+        'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_c2pa', 'allow_backup', 'allow_audit_export',
+    ] as $claim) {
+        assertEqual(true, $payload->{$claim} ?? null, "enterprise preset missing {$claim}");
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► role never touches scoping/limit claims{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
