@@ -94,6 +94,13 @@ function fluxFilesApp() {
         activityFilter: { action: '', path: '', from: '', to: '' },
         auditExportBusy: false,
 
+        // Compliance Readiness Scorecard (docs/COMPLIANCE-SCORECARD-DESIGN.md) —
+        // free/core, read-only, gated by the same `audit` perm as the Activity log.
+        showComplianceScorecard: false,
+        complianceData: null,
+        complianceLoading: false,
+        complianceError: '',
+
         // Bucket Doctor panel
         showDoctor: false,
         doctorReport: null,
@@ -2537,6 +2544,51 @@ function fluxFilesApp() {
             this.showActivity = false;
         },
 
+        async openComplianceScorecard() {
+            this.showComplianceScorecard = true;
+            this.complianceError = '';
+            await this.loadComplianceScorecard();
+        },
+
+        async loadComplianceScorecard() {
+            this.complianceLoading = true;
+            this.complianceError = '';
+            try {
+                const data = await this.api('GET', '/api/fm/compliance/scorecard');
+                this.complianceData = data || null;
+            } catch (e) {
+                this.complianceError = e.message || this.t('error.generic');
+                this.complianceData = null;
+            } finally {
+                this.complianceLoading = false;
+            }
+        },
+
+        closeComplianceScorecard() {
+            this.showComplianceScorecard = false;
+        },
+
+        // Localised label for a compliance item id (virus_scan/c2pa/…). Falls
+        // back to the raw id so a new server-side row never shows blank.
+        complianceItemLabel(id) {
+            const k = 'compliance.item.' + id;
+            const v = this.t(k);
+            return v === k ? id : v;
+        },
+
+        // Localised reason string for an `off`/`locked` row's `why_not` code.
+        complianceReasonLabel(whyNot) {
+            if (!whyNot) return '';
+            const k = 'compliance.reason_' + whyNot;
+            const v = this.t(k);
+            return v === k ? whyNot : v;
+        },
+
+        async copyComplianceSnippet(snippet) {
+            if (!snippet) return;
+            await this._copyText(snippet);
+        },
+
         // Bucket Doctor — diagnose the current disk's backend (write perm gated
         // server-side; the button is shown when the token can write).
         get canDiagnose() {
@@ -2813,6 +2865,104 @@ function fluxFilesApp() {
         },
 
         get aiVisionErrorIsInstall() { return this._isInstallError(this.aiVisionErrorCode); },
+
+        // ── Legal hold (paid `legal-hold` module: place/release) ───────────────
+        // Enforcement (blocking delete/trash/rename/move on a held path) is
+        // free/core and already runs server-side without any of this UI; see
+        // FileManager::assertNoActiveHold(). This is only the admin-facing
+        // place/release surface, gated by canLegalHoldFile() (`audit` perm).
+        showLegalHold: false,
+        legalHoldTarget: null,   // the file/folder the panel was opened for
+        legalHoldMode: 'view',   // 'view' | 'place' | 'release'
+        legalHoldReason: '',
+        legalHoldBusy: false,
+        legalHoldError: '',
+        legalHoldErrorCode: '',
+
+        openLegalHold(item) {
+            if (!this.canLegalHoldFile(item)) return;
+            this.legalHoldTarget = item;
+            this.legalHoldMode = 'view';
+            this.legalHoldReason = '';
+            this.legalHoldError = '';
+            this.legalHoldErrorCode = '';
+            this.showLegalHold = true;
+        },
+
+        closeLegalHold() {
+            this.showLegalHold = false;
+        },
+
+        startPlaceLegalHold() {
+            this.legalHoldMode = 'place';
+            this.legalHoldReason = '';
+            this.legalHoldError = '';
+            this.legalHoldErrorCode = '';
+        },
+
+        startReleaseLegalHold() {
+            this.legalHoldMode = 'release';
+            this.legalHoldReason = '';
+            this.legalHoldError = '';
+            this.legalHoldErrorCode = '';
+        },
+
+        cancelLegalHoldForm() {
+            this.legalHoldMode = 'view';
+            this.legalHoldError = '';
+            this.legalHoldErrorCode = '';
+        },
+
+        async placeLegalHold() {
+            if (!this.legalHoldTarget || this.legalHoldBusy || !this.legalHoldReason.trim()) return;
+            this.legalHoldBusy = true;
+            this.legalHoldError = '';
+            this.legalHoldErrorCode = '';
+            try {
+                const data = await this.api('POST', '/api/fm/hold', {
+                    disk: this.currentDisk, path: this.legalHoldTarget.key, reason: this.legalHoldReason.trim(),
+                });
+                Object.assign(this.legalHoldTarget, {
+                    on_hold: true, hold_id: data.hold_id, hold_reason: data.reason,
+                    hold_placed_by: data.placed_by, hold_placed_at: data.placed_at,
+                });
+                this.legalHoldMode = 'view';
+                this.showToast(this.t('legal_hold.placed'), 'success');
+                this.postMessage('FM_EVENT', { event: 'legal_hold:placed', key: this.legalHoldTarget.key, hold_id: data.hold_id });
+                this.loadFiles();
+            } catch (e) {
+                this.legalHoldError = e.message || this.t('error.generic');
+                this.legalHoldErrorCode = e.code || '';
+            } finally {
+                this.legalHoldBusy = false;
+            }
+        },
+
+        async releaseLegalHold() {
+            if (!this.legalHoldTarget || !this.legalHoldTarget.hold_id || this.legalHoldBusy || !this.legalHoldReason.trim()) return;
+            this.legalHoldBusy = true;
+            this.legalHoldError = '';
+            this.legalHoldErrorCode = '';
+            try {
+                await this.api('POST', '/api/fm/hold/release', {
+                    disk: this.currentDisk, hold_id: this.legalHoldTarget.hold_id, reason: this.legalHoldReason.trim(),
+                });
+                Object.assign(this.legalHoldTarget, {
+                    on_hold: false, hold_id: null, hold_reason: null, hold_placed_by: null, hold_placed_at: null,
+                });
+                this.legalHoldMode = 'view';
+                this.showToast(this.t('legal_hold.released'), 'success');
+                this.postMessage('FM_EVENT', { event: 'legal_hold:released', key: this.legalHoldTarget.key });
+                this.loadFiles();
+            } catch (e) {
+                this.legalHoldError = e.message || this.t('error.generic');
+                this.legalHoldErrorCode = e.code || '';
+            } finally {
+                this.legalHoldBusy = false;
+            }
+        },
+
+        get legalHoldErrorIsInstall() { return this._isInstallError(this.legalHoldErrorCode); },
 
         formatSize(bytes) {
             if (!bytes) return '0 B';
@@ -3220,6 +3370,13 @@ function fluxFilesApp() {
         // Unlike Share/Intake this has no toolbar entry point of its own, so
         // 'locked' just renders the same Pro-teaser inline instead of a separate button.
         get auditExportGate() { return this.proGate('allow_audit_export', 'audit-export'); },
+        // Legal hold (paid module: legal-hold) — enforcement (blocking delete/
+        // trash/rename/move on a held path) is free/core and runs regardless of
+        // this gate; this only guards the PLACE/RELEASE UI. Visibility of the
+        // affordance itself is further limited to the `audit` perm below
+        // (canLegalHoldFile), same posture as Audit Export. See
+        // docs/RETENTION-LEGAL-HOLD-DESIGN.md §8.
+        get legalHoldGate() { return this.proGate('allow_legal_hold', 'legal-hold'); },
         // GET /api/fm/audit/export streams a raw NDJSON/CSV file, not the JSON
         // envelope — fetch + blob + a synthetic <a download>, same pattern as
         // downloadZip() (an <a href> navigation can't send the Bearer header, and
@@ -3285,6 +3442,37 @@ function fluxFilesApp() {
         get canVersionFile() {
             return this.versionGate === 'on'
                 && !!this.detailFile && this.detailFile.type !== 'dir';
+        },
+        // Legal hold: `audit` perm only (an admin/compliance action, not a
+        // general file operation) — files AND folders both, unlike AI Vision.
+        // Not gated by legalHoldGate itself: an admin can always SEE an
+        // existing hold's detail (free/core visibility, §2); only placing/
+        // releasing needs the paid gate, checked separately inside the modal.
+        canLegalHoldFile(file) {
+            return this._hasPerm('audit') && !!file;
+        },
+        // Non-sensitive tooltip for everyone; admins (audit perm) get the full
+        // reason/placed-by/placed-at detail already present on the item from
+        // the free/unconditional /list enrichment (on_hold/hold_id/hold_reason/
+        // hold_placed_by/hold_placed_at — docs/RETENTION-LEGAL-HOLD-DESIGN.md §4.2).
+        holdTooltip(file) {
+            if (!file || !file.on_hold) return '';
+            if (this._hasPerm('audit') && file.hold_placed_at) {
+                return this.t('legal_hold.badge_tooltip_admin', {
+                    date: this.formatDate(file.hold_placed_at),
+                    name: file.hold_placed_by || '',
+                });
+            }
+            return this.t('legal_hold.badge_tooltip_user');
+        },
+        // Delete/move-to-trash is blocked server-side on any held item regardless
+        // of this — this only disables the button up front so a plain collaborator
+        // gets the "why can't I" signal at the point of the attempted action
+        // instead of after a failed request (design §8). Bulk selection disables
+        // the whole action if ANY selected item is held, rather than silently
+        // dropping the held ones and deleting the rest.
+        get selectionHasHold() {
+            return this.selected.some(f => f && f.on_hold);
         },
 
         showLocked: false,          // the "Pro" teaser modal (issues no API calls)

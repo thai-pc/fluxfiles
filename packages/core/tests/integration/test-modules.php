@@ -97,6 +97,15 @@ test('layer 1: unknown / not-installed module → 501 module_not_installed', fun
     expectApi(fn () => ModuleRegistry::require('share', lic(['share'], $SEC, $KEYS, $NOW), claims(true)), 501, 'module_not_installed');
 });
 
+test('layer 1: legal-hold is mapped like every other paid module (installed only via the private package)', function () use ($SEC, $KEYS, $NOW) {
+    // Deliberately NOT registering a fake class for 'legal-hold' here — the whole
+    // point of docs/RETENTION-LEGAL-HOLD-DESIGN.md §2 is that enforcement
+    // (FileManager::assertNoActiveHold()) works even when this returns false; see
+    // tests/integration/test-legal-hold-enforcement.php for that proof.
+    assertEqual(false, ModuleRegistry::installed('legal-hold'), 'legal-hold not installed in this MIT checkout');
+    expectApi(fn () => ModuleRegistry::require('legal-hold', lic(['legal-hold'], $SEC, $KEYS, $NOW), claims(true)), 501, 'module_not_installed');
+});
+
 test('layer 2: installed but unlicensed → 402 license_required', function () use ($SEC, $KEYS, $NOW) {
     ModuleRegistry::register('demo', FakeModule::class);
     try {

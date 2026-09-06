@@ -198,6 +198,9 @@
                 <button class="ff-theme-toggle-sm" x-show="canAudit" @click="openActivity()" :title="t('audit.title')" :aria-label="t('audit.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                 </button>
+                <button class="ff-theme-toggle-sm" x-show="canAudit" @click="openComplianceScorecard()" :title="t('compliance.title')" :aria-label="t('compliance.title')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                </button>
                 <button class="ff-theme-toggle-sm" @click="openUsage()" :title="t('usage.title')" :aria-label="t('usage.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5"/><path d="M18 3v6h-6"/><path d="M21 3l-9 9"/></svg>
                 </button>
@@ -374,7 +377,7 @@
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 1.5l2 2-7 7H1.5V8.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.rename')"></span>
                 </button>
-                <button class="tb-btn danger" x-show="selected.length > 0" @click="confirmDelete()">
+                <button class="tb-btn danger" x-show="selected.length > 0" :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''" @click="confirmDelete()">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.delete')"></span>
                     <span x-show="selected.length > 1" x-text="'(' + selected.length + ')'"></span>
@@ -479,7 +482,7 @@
                         <span x-text="t('common.download')"></span>
                     </button>
                     <div class="ff-more-divider" x-show="selected.length > 0"></div>
-                    <button @click="open = false; confirmDelete()" x-show="selected.length > 0" class="ff-more-danger">
+                    <button @click="open = false; confirmDelete()" x-show="selected.length > 0" class="ff-more-danger" :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''">
                         <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span x-text="t('common.delete')"></span>
                     </button>
@@ -732,6 +735,9 @@
                                          @dblclick="navigate(folder.key)"
                                          @contextmenu.prevent="itemContextMenu(folder, $event)">
                                         <div class="check" x-show="config.multiple" @click.stop="toggleFolderSelect(folder, { ctrlKey: true })">✓</div>
+                                        <div x-show="folder.on_hold" class="ff-hold-badge" :title="holdTooltip(folder)">
+                                            <svg viewBox="0 0 12 12" fill="none"><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        </div>
                                         <div class="thumb thumb-folder ff-thumb-icon">
                                             <svg class="ff-thumb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                                         </div>
@@ -739,8 +745,9 @@
                                         <div class="fsize" x-text="t('file.folder')"></div>
                                         <div class="fdate" x-text="formatDate(folder.created || folder.modified)"></div>
                                         <button class="ff-folder-delete"
+                                                :disabled="folder.on_hold"
                                                 @click.stop="selected = [folder]; confirmDelete()"
-                                                :title="t('common.delete')">
+                                                :title="folder.on_hold ? holdTooltip(folder) : t('common.delete')">
                                             <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                         </button>
                                     </div>
@@ -769,6 +776,9 @@
                                          @contextmenu.prevent="itemContextMenu(file, $event)">
                                         <div class="check" x-show="config.multiple" @click.stop="toggleSelect(file, { ctrlKey: true })">✓</div>
                                         <div x-show="hasMetaBadge(file)" class="ff-meta-badge"></div>
+                                        <div x-show="file.on_hold" class="ff-hold-badge" :title="holdTooltip(file)">
+                                            <svg viewBox="0 0 12 12" fill="none"><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        </div>
 
                                         <!-- Preview-only (watermark overlay): the shown image is the
                                              watermarked img_base; the clean original isn't downloadable. -->
@@ -1004,6 +1014,10 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="2" width="9" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M2.5 8.5L4.5 5.5l1.7 2 1.6-2.3L9.5 8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="4.1" r="0.6" fill="currentColor"/></svg>
                     <span x-text="t('aivision.title')"></span>
                 </button>
+                <button class="detail-btn" x-show="canLegalHoldFile(detailFile)" @click="openLegalHold(detailFile)" :title="t('legal_hold.title')">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('legal_hold.title')"></span>
+                </button>
                 <button class="detail-btn" x-show="canOptimizeFile(detailFile)" :disabled="optimizeBusy" @click="optimizeFiles([detailFile.key])" :title="t('optimize.title')">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v2M6 8.5v2M1.5 6h2M8.5 6h2M3 3l1.2 1.2M7.8 7.8L9 9M9 3L7.8 4.2M4.2 7.8L3 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('optimize.title')"></span>
@@ -1032,7 +1046,7 @@
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10h8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('common.download')"></span>
                 </button>
-                <button class="detail-btn" style="color:var(--color-text-danger);" @click="selected = [detailFile]; confirmDelete()">
+                <button class="detail-btn" style="color:var(--color-text-danger);" :disabled="detailFile?.on_hold" :title="detailFile?.on_hold ? holdTooltip(detailFile) : t('common.delete')" @click="selected = [detailFile]; confirmDelete()">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.delete')"></span>
                 </button>
@@ -1396,6 +1410,57 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Compliance Readiness Scorecard (free/core) ═══
+         Read-only capability checklist, gated only by canAudit (the `audit` perm,
+         same as the Activity log). NOT a certification — see docs/COMPLIANCE-SCORECARD-DESIGN.md
+         §3. The disclaimer below is always rendered, never collapsed/hideable. -->
+    <div class="ff-modal-overlay" x-show="showComplianceScorecard" x-transition @click.self="closeComplianceScorecard()" style="z-index:60;" x-cloak>
+        <div class="ff-activity-modal ff-compliance-modal" role="dialog" aria-modal="true" :aria-label="t('compliance.title')" @keydown.escape.window="showComplianceScorecard && closeComplianceScorecard()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('compliance.title')"></h3>
+                <button class="ff-activity-close" @click="closeComplianceScorecard()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <template x-if="complianceData">
+                <div class="ff-compliance-summary">
+                    <p x-text="tp('compliance.summary_one', 'compliance.summary_other', complianceData.summary.enabled_count, { enabled: complianceData.summary.enabled_count, total: complianceData.summary.total_count })"></p>
+                    <!-- Liability guardrail (§3): the disclaimer is always visible, never a
+                         tooltip/collapsed detail — do not hide this behind a toggle. -->
+                    <p class="ff-compliance-disclaimer" x-text="t('compliance.disclaimer')"></p>
+                </div>
+            </template>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="complianceError" x-text="complianceError"></p>
+                <div x-show="complianceLoading" class="ff-activity-state" x-text="t('common.loading')"></div>
+                <ul class="ff-compliance-list" x-show="!complianceLoading && complianceData">
+                    <template x-for="item in (complianceData ? complianceData.items : [])" :key="item.id">
+                        <li class="ff-compliance-row" :class="'ff-compliance-row-' + item.status">
+                            <div class="ff-compliance-row-main">
+                                <span class="ff-compliance-status" :class="'ff-compliance-status-' + item.status" x-text="t('compliance.status_' + item.status)"></span>
+                                <span class="ff-compliance-label" x-text="complianceItemLabel(item.id)"></span>
+                            </div>
+                            <!-- off: available but not opted-in for this token — copy-paste claim snippet -->
+                            <template x-if="item.status === 'off'">
+                                <div class="ff-compliance-row-detail">
+                                    <span x-text="complianceReasonLabel(item.why_not)"></span>
+                                    <code class="ff-compliance-snippet" x-text="item.claim_snippet"></code>
+                                    <button class="ff-btn" @click="copyComplianceSnippet(item.claim_snippet)" x-text="t('compliance.copy_snippet')"></button>
+                                </div>
+                            </template>
+                            <!-- locked: not installed/licensed — same generic Pro teaser as auditExportGate,
+                                 suppressed when pro_hints=false (same restraint proGate() applies). -->
+                            <template x-if="item.status === 'locked'">
+                                <div class="ff-compliance-row-detail">
+                                    <span x-text="complianceReasonLabel(item.why_not)"></span>
+                                    <button class="ff-btn ff-pro-locked-audit" x-show="tokenAllows('pro_hints', true)" @click="openLocked()" :title="t('links.pro_title')" x-text="t('compliance.upgrade_cta')"></button>
+                                </div>
+                            </template>
+                        </li>
+                    </template>
+                </ul>
             </div>
         </div>
     </div>
@@ -2043,6 +2108,89 @@
         </div>
     </div>
 
+    <!-- ═══ Legal hold panel (paid `legal-hold` module: place/release) ═══
+         Enforcement (blocking delete/trash/rename/move on a held path) is
+         free/core and already runs server-side without any of this UI; see
+         FileManager::assertNoActiveHold(). This is only the admin-facing
+         place/release surface — visible only to `audit` perm holders
+         (canLegalHoldFile). -->
+    <div class="ff-modal-overlay" x-show="showLegalHold" x-transition @click.self="closeLegalHold()" style="z-index:60;" x-cloak>
+        <div class="ff-aivision-modal" role="dialog" aria-modal="true" :aria-label="t('legal_hold.title')" @keydown.escape.window="showLegalHold && closeLegalHold()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('legal_hold.title')"></h3>
+                <button class="ff-activity-close" @click="closeLegalHold()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <p class="ff-activity-note" x-text="t('legal_hold.note')"></p>
+            <div class="ff-activity-body">
+                <p class="ff-new-folder-error" x-show="legalHoldError" x-text="legalHoldError"></p>
+                <p x-show="legalHoldError && legalHoldErrorIsInstall">
+                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                </p>
+
+                <!-- State 1: no active hold on this item -->
+                <template x-if="legalHoldMode === 'view' && !legalHoldTarget?.on_hold">
+                    <div>
+                        <button class="ff-btn ff-btn-primary" x-show="legalHoldGate === 'on'" @click="startPlaceLegalHold()" x-text="t('legal_hold.place')"></button>
+                        <button class="ff-btn ff-pro-locked-audit" x-show="legalHoldGate === 'locked'" @click="openLocked()" :title="t('links.pro_title')" x-text="t('legal_hold.pro_teaser')"></button>
+                    </div>
+                </template>
+
+                <!-- State 2: held by X since Y (visible regardless of legalHoldGate —
+                     an admin can always see an existing hold's detail; only the
+                     release action below needs the gate). -->
+                <template x-if="legalHoldMode === 'view' && legalHoldTarget?.on_hold">
+                    <div>
+                        <p class="ff-activity-state" x-text="t('legal_hold.since', { date: formatDate(legalHoldTarget.hold_placed_at) })"></p>
+                        <p x-text="t('legal_hold.placed_by', { name: legalHoldTarget.hold_placed_by || '' })"></p>
+                        <p x-show="legalHoldTarget.hold_reason" x-text="legalHoldTarget.hold_reason"></p>
+                        <button class="ff-btn ff-btn-ghost" x-show="legalHoldGate === 'on'" @click="startReleaseLegalHold()" x-text="t('legal_hold.release')"></button>
+                    </div>
+                </template>
+
+                <!-- State: placing a new hold -->
+                <template x-if="legalHoldMode === 'place'">
+                    <div>
+                        <div class="ff-meta-field">
+                            <label x-text="t('legal_hold.reason_label')"></label>
+                            <textarea x-model="legalHoldReason" :placeholder="t('legal_hold.reason_placeholder')" rows="3" :disabled="legalHoldBusy"></textarea>
+                        </div>
+                        <div class="ff-new-folder-actions">
+                            <button class="ff-btn ff-btn-ghost" @click="cancelLegalHoldForm()" :disabled="legalHoldBusy" x-text="t('common.cancel')"></button>
+                            <button class="ff-btn ff-btn-primary" @click="placeLegalHold()" :disabled="legalHoldBusy || !legalHoldReason.trim()">
+                                <span x-show="!legalHoldBusy" x-text="t('legal_hold.place')"></span>
+                                <span x-show="legalHoldBusy" style="display:inline-flex;align-items:center;gap:6px;">
+                                    <span class="ff-new-folder-spinner"></span>
+                                    <span x-text="t('legal_hold.busy')"></span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- State: releasing the active hold -->
+                <template x-if="legalHoldMode === 'release'">
+                    <div>
+                        <p x-text="t('legal_hold.confirm_release')"></p>
+                        <div class="ff-meta-field">
+                            <label x-text="t('legal_hold.reason_label')"></label>
+                            <textarea x-model="legalHoldReason" :placeholder="t('legal_hold.reason_placeholder')" rows="3" :disabled="legalHoldBusy"></textarea>
+                        </div>
+                        <div class="ff-new-folder-actions">
+                            <button class="ff-btn ff-btn-ghost" @click="cancelLegalHoldForm()" :disabled="legalHoldBusy" x-text="t('common.cancel')"></button>
+                            <button class="ff-btn ff-btn-primary" @click="releaseLegalHold()" :disabled="legalHoldBusy || !legalHoldReason.trim()">
+                                <span x-show="!legalHoldBusy" x-text="t('legal_hold.release')"></span>
+                                <span x-show="legalHoldBusy" style="display:inline-flex;align-items:center;gap:6px;">
+                                    <span class="ff-new-folder-spinner"></span>
+                                    <span x-text="t('legal_hold.busy')"></span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ Import from URL modal ═══ -->
     <div class="ff-modal-overlay" x-show="showUrlImport" x-transition @click.self="closeUrlImport()" style="z-index:60;" x-cloak>
         <div class="ff-import-modal" role="dialog" aria-modal="true" :aria-label="t('import.title')" @keydown.escape.window="showUrlImport && closeUrlImport()">
@@ -2091,7 +2239,7 @@
     <div class="ff-bottom-bar" x-show="selected.length > 0" x-transition.opacity.duration.200ms>
         <span class="ff-bottom-bar-count" x-text="selected.length + ' ' + t('common.selected')"></span>
         <div class="ff-bottom-bar-actions">
-            <button @click="confirmDelete()">
+            <button :disabled="selectionHasHold" :title="selectionHasHold ? t('legal_hold.badge_tooltip_user') : ''" @click="confirmDelete()">
                 <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span x-text="t('common.delete')"></span>
             </button>
@@ -2138,6 +2286,10 @@
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="2" width="9" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M2.5 8.5L4.5 5.5l1.7 2 1.6-2.3L9.5 8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="4.1" r="0.6" fill="currentColor"/></svg>
                     <span x-text="t('aivision.title')"></span>
                 </button>
+                <button x-show="canLegalHoldFile(mobileActionSheet)" @click="closeActionSheet(); openLegalHold(mobileActionSheet)">
+                    <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('legal_hold.context_menu')"></span>
+                </button>
                 <button x-show="mobileActionSheet?.type !== 'dir' && mobileActionSheet?.url" @click="closeActionSheet(); copyUrl(mobileActionSheet)">
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
@@ -2151,7 +2303,7 @@
                     <span x-text="t('common.move')"></span>
                 </button>
                 <div class="ff-sheet-divider"></div>
-                <button class="ff-sheet-danger" @click="closeActionSheet(); selected = [mobileActionSheet]; confirmDelete()">
+                <button class="ff-sheet-danger" :disabled="mobileActionSheet?.on_hold" :title="mobileActionSheet?.on_hold ? holdTooltip(mobileActionSheet) : ''" @click="closeActionSheet(); selected = [mobileActionSheet]; confirmDelete()">
                     <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.delete')"></span>
                 </button>
@@ -2183,6 +2335,10 @@
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="2" width="9" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M2.5 8.5L4.5 5.5l1.7 2 1.6-2.3L9.5 8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="4.1" r="0.6" fill="currentColor"/></svg>
                     <span x-text="t('aivision.title')"></span>
                 </button>
+                <button x-show="canLegalHoldFile(desktopContextMenu.item)" @click="openLegalHold(desktopContextMenu.item); closeDesktopContextMenu()">
+                    <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="5" width="7" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span x-text="t('legal_hold.context_menu')"></span>
+                </button>
                 <button x-show="desktopContextMenu.item?.type !== 'dir' && desktopContextMenu.item?.url" @click="copyUrl(desktopContextMenu.item); closeDesktopContextMenu()">
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M7.5 4.5a2.1 2.1 0 010 3l-1.5 1.5a2.1 2.1 0 01-3-3l.75-.75M4.5 7.5a2.1 2.1 0 010-3L6 3a2.1 2.1 0 013 3l-.75.75" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
                     <span x-text="t('toolbar.copy_url')"></span>
@@ -2196,7 +2352,7 @@
                     <span x-text="t('common.move')"></span>
                 </button>
                 <div class="ff-more-divider"></div>
-                <button class="ff-more-danger" @click="selected = [desktopContextMenu.item]; confirmDelete(); closeDesktopContextMenu()">
+                <button class="ff-more-danger" :disabled="desktopContextMenu.item?.on_hold" :title="desktopContextMenu.item?.on_hold ? holdTooltip(desktopContextMenu.item) : ''" @click="selected = [desktopContextMenu.item]; confirmDelete(); closeDesktopContextMenu()">
                     <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 3v6.5h3V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span x-text="t('common.delete')"></span>
                 </button>

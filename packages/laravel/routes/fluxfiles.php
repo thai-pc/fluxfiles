@@ -74,9 +74,20 @@ Route::post('extract', [FluxFilesController::class, 'extract']);
 // Audit
 Route::get('audit', [FluxFilesController::class, 'audit']);
 
+// Compliance Readiness Scorecard (free/core) — read-only capability checklist,
+// gated by the 'audit' perm, not a module/license check on the route itself.
+Route::get('compliance/scorecard', [FluxFilesController::class, 'complianceScorecard']);
+
 // Audit export/purge (paid module)
 Route::get('audit/export', [FluxFilesController::class, 'auditExport']);
 Route::post('audit/purge', [FluxFilesController::class, 'auditPurge']);
+
+// Legal hold (paid module) — place/release/list are gated; status is free/core
+// visibility. Enforcement itself lives inside FileManager, inherited from core.
+Route::get('hold/status', [FluxFilesController::class, 'holdStatus']);
+Route::post('hold', [FluxFilesController::class, 'hold']);
+Route::post('hold/release', [FluxFilesController::class, 'holdRelease']);
+Route::get('hold/list', [FluxFilesController::class, 'holdList']);
 
 // Webhooks (paid module) — send a test ping to the configured endpoint
 Route::post('webhooks/test', [FluxFilesController::class, 'webhooksTest']);

@@ -28,6 +28,7 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
     private string $tDirs;
     private string $tTrash;
     private string $tAudit;
+    private string $tHolds;
 
     public function __construct(DiskManager $diskManager)
     {
@@ -38,6 +39,7 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
         $this->tDirs = $wpdb->prefix . 'fluxfiles_directories';
         $this->tTrash = $wpdb->prefix . 'fluxfiles_trash';
         $this->tAudit = $wpdb->prefix . 'fluxfiles_audit_log';
+        $this->tHolds = $wpdb->prefix . 'fluxfiles_legal_holds';
     }
 
     private function pathHash(string $key): string
@@ -816,5 +818,123 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
             "DELETE FROM {$this->tTrash} WHERE disk = %s AND id = %s",
             [$disk, $id]
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // Legal hold (retention) — direct port of FluxFiles\Db\DbMetadataHandler's
+    // legal_holds table, same field shape. Free/core storage primitives;
+    // enforcement lives in FileManager::assertNoActiveHold(), not here.
+    // ---------------------------------------------------------------------
+
+    private function rowToHoldEntry(array $row): array
+    {
+        return [
+            'path'           => $row['path'],
+            'is_dir'         => (bool) $row['is_dir'],
+            'disk'           => $row['disk'],
+            'reason'         => $row['reason'],
+            'placed_by'      => $row['placed_by'],
+            'placed_at'      => $row['placed_at'] !== null ? (int) $row['placed_at'] : null,
+            'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
+            'released_by'    => $row['released_by'],
+            'release_reason' => $row['release_reason'],
+        ];
+    }
+
+    public function allHolds(string $disk): array
+    {
+        $rows = $this->getResults("SELECT * FROM {$this->tHolds} WHERE disk = %s", [$disk]);
+        $out = [];
+        foreach ($rows as $row) {
+            $out[$row['id']] = $this->rowToHoldEntry($row);
+        }
+        return $out;
+    }
+
+    public function getHold(string $disk, string $id): ?array
+    {
+        $row = $this->getRow(
+            "SELECT * FROM {$this->tHolds} WHERE disk = %s AND id = %s",
+            [$disk, $id]
+        );
+        return $row === null ? null : $this->rowToHoldEntry($row);
+    }
+
+    public function addHold(string $disk, string $id, array $entry): void
+    {
+        $insertCols = [
+            'disk'           => $disk,
+            'id'             => $id,
+            'path'           => $entry['path'] ?? '',
+            'is_dir'         => !empty($entry['is_dir']) ? 1 : 0,
+            'reason'         => $entry['reason'] ?? null,
+            'placed_by'      => $entry['placed_by'] ?? null,
+            'placed_at'      => $entry['placed_at'] ?? null,
+            'released_at'    => $entry['released_at'] ?? null,
+            'released_by'    => $entry['released_by'] ?? null,
+            'release_reason' => $entry['release_reason'] ?? null,
+        ];
+        $updateCols = array_values(array_diff(array_keys($insertCols), ['disk', 'id']));
+
+        [$colSql, $valSql, $bind] = $this->buildValueClause($insertCols);
+        $updateSql = implode(', ', array_map(static fn ($c) => "{$c} = VALUES({$c})", $updateCols));
+        $sql = "INSERT INTO {$this->tHolds} ({$colSql}) VALUES ({$valSql}) ON DUPLICATE KEY UPDATE {$updateSql}";
+        $this->query($sql, $bind);
+    }
+
+    public function releaseHold(string $disk, string $id, array $releaseInfo): void
+    {
+        $existing = $this->getHold($disk, $id);
+        if ($existing === null) {
+            return; // caller already validated existence before calling
+        }
+        $this->addHold($disk, $id, array_merge($existing, $releaseInfo));
+    }
+
+    public function countActiveHolds(string $disk): int
+    {
+        return (int) $this->getVar(
+            "SELECT COUNT(*) FROM {$this->tHolds} WHERE disk = %s AND released_at IS NULL",
+            [$disk]
+        );
+    }
+
+    public function holdCovering(string $disk, string $scopedPath): ?array
+    {
+        return $this->findOverlappingHold($disk, $scopedPath, false);
+    }
+
+    public function holdBlocking(string $disk, string $scopedPath): ?array
+    {
+        return $this->findOverlappingHold($disk, $scopedPath, true);
+    }
+
+    /**
+     * Same prefix-overlap semantics as StorageMetadataHandler/Db\DbMetadataHandler's
+     * findOverlappingHold() — kept as a plain PHP scan (not SQL LIKE) so all
+     * backends can never silently diverge on this security-relevant comparison.
+     */
+    private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
+    {
+        $scopedPath = trim($scopedPath, '/');
+        if ($scopedPath === '') {
+            return null;
+        }
+        foreach ($this->allHolds($disk) as $id => $entry) {
+            if ($entry['released_at'] !== null) {
+                continue; // released holds never block/cover
+            }
+            $holdPath = trim((string) ($entry['path'] ?? ''), '/');
+            if ($holdPath === '') {
+                continue;
+            }
+            $overlaps = $holdPath === $scopedPath
+                || strpos($scopedPath, $holdPath . '/') === 0
+                || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
+            if ($overlaps) {
+                return ['hold_id' => $id] + $entry;
+            }
+        }
+        return null;
     }
 }

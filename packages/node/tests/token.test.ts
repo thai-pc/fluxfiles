@@ -44,6 +44,22 @@ describe('createToken', () => {
     expect(c.owner_only).toBe(true);
   });
 
+  it('enterprise edition preset grants every module claim, incl. allow_dlp_scan (Enterprise compliance bundle)', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', edition: 'enterprise' })) as Record<string, unknown>;
+    for (const claim of [
+      'allow_optimize', 'allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks',
+      'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_c2pa', 'allow_backup', 'allow_audit_export',
+      'allow_dlp_scan', 'allow_legal_hold',
+    ]) {
+      expect(c[claim]).toBe(true);
+    }
+  });
+
+  it('studio edition preset must NOT leak allow_dlp_scan (Enterprise-only, not Studio)', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', edition: 'studio' })) as Record<string, unknown>;
+    expect(c.allow_dlp_scan).toBeUndefined();
+  });
+
   it('claims escape hatch sets any raw snake_case claim; explicit wins', () => {
     const c = decodeToken(createToken({
       secret: SECRET, userId: 'u', edition: 'pro',

@@ -313,6 +313,9 @@
     "virus_unscannable": "分割アップロードはウイルススキャンできません。通常のアップロードをご利用ください。",
     "virus_unavailable": "このサーバーにはウイルススキャナーが設定されていません。",
     "virus_failed": "ウイルススキャンを完了できませんでした。",
+    "pii_detected": "このファイルは個人情報（{entities}）を含む可能性があるためブロックされました。",
+    "dlp_unscannable": "分割アップロードは個人情報スキャンできません。通常のアップロードをご利用ください。",
+    "dlp_failed": "個人情報スキャンを完了できませんでした。",
     "storage_not_writable": "ストレージに書き込めません。",
     "terminal_disabled": "このサーバーではターミナルが無効です。",
     "terminal_forbidden": "ターミナルの使用は許可されていません。",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "サインインセッションの有効期限が切れました。再度サインインしてください。",
     "metadata_export_unavailable": "メタデータのエクスポートにはデータベースストレージバックエンドが必要です。",
     "metadata_import_unavailable": "メタデータのインポートにはデータベースストレージバックエンドが必要です。",
-    "metadata_import_rejected": "インポートが拒否されました — 1行以上が許可範囲外です。"
+    "metadata_import_rejected": "インポートが拒否されました — 1行以上が許可範囲外です。",
+    "legal_hold_active": "この項目はリーガルホールド中のため変更できません。",
+    "legal_hold_not_found": "そのリーガルホールドが見つかりませんでした。",
+    "legal_hold_already_released": "このリーガルホールドはすでに解除されています。",
+    "legal_hold_already_active": "このパスにはすでに有効なリーガルホールドがあります。",
+    "legal_hold_reason_required": "理由（1～1000文字）を入力してください。",
+    "legal_hold_scope": "このリーガルホールドへのアクセスが拒否されました。",
+    "legal_hold_max_active": "有効なリーガルホールドの上限数に達しました。"
   },
   "presign": {
     "title": "署名付きURL",
@@ -414,7 +424,11 @@
       "unknown": "その他",
       "terminal": "ターミナルコマンド",
       "virus_blocked": "ウイルスブロック",
-      "watermark_remove": "透かしを削除"
+      "dlp_blocked": "個人情報ブロック",
+      "watermark_remove": "透かしを削除",
+      "legal_hold_place": "リーガルホールドを設定しました",
+      "legal_hold_release": "リーガルホールドを解除しました",
+      "legal_hold_blocked": "リーガルホールドによりブロックされました"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "このバージョンを復元しますか？現在のファイルは置き換えられます（先に現在のファイルのスナップショットが保存されるため、元に戻せます）。",
     "restored": "バージョンを復元しました",
     "pro_teaser": "ファイルのすべての過去バージョンを保持し、上書きをいつでも取り消せます。"
+  },
+  "legal_hold": {
+    "title": "リーガルホールド",
+    "note": "解除するまで、このファイルまたはフォルダーの削除・ゴミ箱への移動・名前変更・移動をブロックします — 訴訟対応やコンプライアンス保持のために使用します。",
+    "place": "リーガルホールドを設定…",
+    "release": "ホールドを解除…",
+    "reason_label": "理由",
+    "reason_placeholder": "この項目を保持する理由は？（必須）",
+    "placed_by": "{name} が設定",
+    "since": "{date} からリーガルホールド中",
+    "confirm_release": "このリーガルホールドを解除しますか？解除すると削除・移動が再び可能になります。",
+    "badge_tooltip_admin": "{date} からリーガルホールド中 — {name} が設定",
+    "badge_tooltip_user": "この項目は保護されており、削除や移動はできません。",
+    "context_menu": "リーガルホールド…",
+    "busy": "処理中…",
+    "placed": "リーガルホールドを設定しました",
+    "released": "リーガルホールドを解除しました",
+    "pro_teaser": "訴訟対応やコンプライアンス保持のために、ファイルまたはフォルダーの削除・変更をブロックするリーガルホールドを設定します。"
   },
   "aivision": {
     "title": "AI Vision",
@@ -646,5 +678,35 @@
     "col_received": "受信数",
     "revoke_confirm": "このアップロードポータルを失効しますか？誰もファイルを送れなくなります。",
     "pro_teaser": "アカウントなしで相手からファイルを受け取れます。自分のストレージに直接届きます。"
+  },
+  "compliance": {
+    "title": "コンプライアンス",
+    "disclaimer": "このトークンで有効になっている FluxFiles の機能を示すものです。法的または規制上のコンプライアンス認証ではありません。",
+    "summary_one": "利用可能な {total} 件中 {enabled} 件の機能が有効",
+    "summary_other": "利用可能な {total} 件中 {enabled} 件の機能が有効",
+    "status_on": "有効",
+    "status_off": "無効",
+    "status_locked": "ロック中",
+    "reason_claim_off": "利用可能ですが、このトークンでは有効になっていません",
+    "reason_not_licensed": "インストール済みですが、ライセンスがありません",
+    "reason_not_installed": "未インストール",
+    "copy_snippet": "claim をコピー",
+    "upgrade_cta": "詳しく見る",
+    "item": {
+      "virus_scan": "アップロード時のウイルス／マルウェアスキャン",
+      "c2pa": "コンテンツの来歴（C2PA）",
+      "audit_export": "監査ログのエクスポートと保持期間のパージ",
+      "sso": "SSO ログインブリッジ（OIDC）",
+      "dlp_scan": "DLP／個人情報のマスキング",
+      "legal_hold": "リーガルホールド"
+    },
+    "category": {
+      "content_security": "コンテンツセキュリティ",
+      "content_provenance": "コンテンツの来歴",
+      "audit_retention": "監査と保持",
+      "identity_access": "ID とアクセス",
+      "data_protection": "データ保護",
+      "legal_ediscovery": "法務・eディスカバリー"
+    }
   }
 }

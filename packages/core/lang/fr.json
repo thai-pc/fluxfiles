@@ -313,6 +313,9 @@
     "virus_unscannable": "L'envoi par blocs ne peut pas être analysé. Utilisez l'envoi standard.",
     "virus_unavailable": "Aucun antivirus n'est configuré sur ce serveur.",
     "virus_failed": "L'analyse antivirus n'a pas pu être effectuée.",
+    "pii_detected": "Ce fichier a été bloqué car il semble contenir des données personnelles ({entities}).",
+    "dlp_unscannable": "L'envoi par blocs ne peut pas être analysé pour des données personnelles. Utilisez l'envoi standard.",
+    "dlp_failed": "L'analyse des données personnelles n'a pas pu être effectuée.",
     "storage_not_writable": "Le stockage n'est pas accessible en écriture.",
     "terminal_disabled": "Le terminal est désactivé sur ce serveur.",
     "terminal_forbidden": "L'accès au terminal n'est pas autorisé.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "Votre session de connexion a expiré. Veuillez vous reconnecter.",
     "metadata_export_unavailable": "L'exportation des métadonnées nécessite le backend de stockage en base de données.",
     "metadata_import_unavailable": "L'importation des métadonnées nécessite le backend de stockage en base de données.",
-    "metadata_import_rejected": "Importation refusée — une ou plusieurs lignes sont hors de portée."
+    "metadata_import_rejected": "Importation refusée — une ou plusieurs lignes sont hors de portée.",
+    "legal_hold_active": "Cet élément fait l'objet d'une conservation légale et ne peut pas être modifié.",
+    "legal_hold_not_found": "Cette conservation légale est introuvable.",
+    "legal_hold_already_released": "Cette conservation légale a déjà été levée.",
+    "legal_hold_already_active": "Ce chemin fait déjà l'objet d'une conservation légale active.",
+    "legal_hold_reason_required": "Un motif (1 à 1000 caractères) est requis.",
+    "legal_hold_scope": "Accès refusé à cette conservation légale.",
+    "legal_hold_max_active": "Le nombre maximal de conservations légales actives a été atteint."
   },
   "presign": {
     "title": "URL présignée",
@@ -414,7 +424,11 @@
       "unknown": "Autre",
       "terminal": "Commande terminal",
       "virus_blocked": "Bloqué par l'antivirus",
-      "watermark_remove": "Supprimer le filigrane"
+      "dlp_blocked": "Bloqué pour données personnelles",
+      "watermark_remove": "Supprimer le filigrane",
+      "legal_hold_place": "Conservation légale appliquée",
+      "legal_hold_release": "Conservation légale levée",
+      "legal_hold_blocked": "Bloqué par une conservation légale"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "Restaurer cette version ? Le fichier actuel sera remplacé (une copie est d'abord conservée, donc c'est réversible).",
     "restored": "Version restaurée",
     "pro_teaser": "Conservez chaque version précédente d'un fichier et annulez n'importe quel remplacement."
+  },
+  "legal_hold": {
+    "title": "Conservation légale",
+    "note": "Bloque la suppression, la mise à la corbeille, le renommage et le déplacement de ce fichier ou dossier jusqu'à la levée — pour un litige ou une obligation de conformité.",
+    "place": "Appliquer une conservation légale…",
+    "release": "Lever la conservation…",
+    "reason_label": "Motif",
+    "reason_placeholder": "Pourquoi cet élément est-il conservé ? (obligatoire)",
+    "placed_by": "Appliquée par {name}",
+    "since": "Sous conservation légale depuis {date}",
+    "confirm_release": "Lever cette conservation légale ? La suppression et le déplacement seront de nouveau autorisés une fois levée.",
+    "badge_tooltip_admin": "Sous conservation légale depuis {date} — appliquée par {name}",
+    "badge_tooltip_user": "Cet élément est protégé et ne peut pas être supprimé ni déplacé.",
+    "context_menu": "Conservation légale…",
+    "busy": "Traitement en cours…",
+    "placed": "Conservation légale appliquée",
+    "released": "Conservation légale levée",
+    "pro_teaser": "Appliquez une conservation légale pour bloquer la suppression ou la modification d'un fichier ou dossier, pour un litige ou une obligation de conformité."
   },
   "aivision": {
     "title": "Vision IA",
@@ -646,5 +678,35 @@
     "col_received": "Reçus",
     "revoke_confirm": "Révoquer ce portail de dépôt ? Plus personne ne pourra y envoyer de fichiers.",
     "pro_teaser": "Laissez vos contacts vous envoyer des fichiers sans compte — directement dans votre stockage."
+  },
+  "compliance": {
+    "title": "Conformité",
+    "disclaimer": "Indique les fonctionnalités FluxFiles activées pour ce jeton. Ce n'est pas une certification de conformité légale ou réglementaire.",
+    "summary_one": "{enabled} fonctionnalité disponible activée sur {total}",
+    "summary_other": "{enabled} fonctionnalités disponibles activées sur {total}",
+    "status_on": "Activé",
+    "status_off": "Désactivé",
+    "status_locked": "Verrouillé",
+    "reason_claim_off": "Disponible, mais non activé pour ce jeton",
+    "reason_not_licensed": "Installé, mais non sous licence",
+    "reason_not_installed": "Non installé",
+    "copy_snippet": "Copier le claim",
+    "upgrade_cta": "En savoir plus",
+    "item": {
+      "virus_scan": "Analyse antivirus / anti-malware à l'envoi",
+      "c2pa": "Provenance du contenu (C2PA)",
+      "audit_export": "Export du journal d'audit et purge de rétention",
+      "sso": "Pont de connexion SSO (OIDC)",
+      "dlp_scan": "DLP / rédaction des données personnelles",
+      "legal_hold": "Conservation légale (legal hold)"
+    },
+    "category": {
+      "content_security": "Sécurité du contenu",
+      "content_provenance": "Provenance du contenu",
+      "audit_retention": "Audit et rétention",
+      "identity_access": "Identité et accès",
+      "data_protection": "Protection des données",
+      "legal_ediscovery": "Juridique et eDiscovery"
+    }
   }
 }

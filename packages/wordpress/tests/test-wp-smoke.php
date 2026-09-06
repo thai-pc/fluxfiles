@@ -294,6 +294,76 @@ test('generateToken forwards git-deploy gate + path/branch/hooks', function () u
     assertEqual(true, ($p->git_deploy_hooks ?? false), 'git_deploy_hooks forwarded');
 });
 
+// DLP/PII redaction (docs/DLP-PII-REDACTION-DESIGN.md): the gate + its 4 tuning
+// claims forward the same way as versioning/audit-export above (unconditional
+// gate, !empty() tuning claims) — this was a genuine gap (no assertion existed
+// for either virus OR dlp forwarding on this adapter before now).
+test('allow_dlp_scan (+ its 4 tuning claims) forwards in proxy mode', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(61, [
+        'allow_dlp_scan'      => true,
+        'dlp_entity_types'    => ['US_SSN', 'EMAIL_ADDRESS'],
+        'dlp_scan_extensions' => ['txt', 'csv'],
+        'dlp_max_scan_kb'     => 4096,
+        'dlp_min_score'       => 0.8,
+    ]);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(true, ($p->allow_dlp_scan ?? false), 'dlp gate forwarded');
+    assertEqual(['US_SSN', 'EMAIL_ADDRESS'], (array) ($p->dlp_entity_types ?? []), 'dlp_entity_types forwarded');
+    assertEqual(['txt', 'csv'], (array) ($p->dlp_scan_extensions ?? []), 'dlp_scan_extensions forwarded');
+    assertEqual(4096, $p->dlp_max_scan_kb ?? 0, 'dlp_max_scan_kb forwarded');
+    assertEqual(0.8, $p->dlp_min_score ?? 0, 'dlp_min_score forwarded');
+});
+
+// The inert-claims regression (see webhooks/auto_optimize/ai_auto_tag precedent in
+// CLAUDE.md): a claim can decode fine in the JWT while fileManager() never actually
+// wires the hook. Assert the REAL wiring, not just that the claim round-trips.
+test('fileManager() actually WIRES setDlpScanner() (not just a decodable claim) — the inert-claims regression', function () {
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($apiSrc, 'setDlpScanner(') !== false, 'fileManager() wires setDlpScanner()');
+    assertTrue(strpos($apiSrc, "ModuleRegistry::require('dlp'") !== false, 'the callback resolves the dlp module gate lazily, like virus');
+    $count = substr_count($apiSrc, "'dlp_unscannable'");
+    assertEqual(4, $count, 'all 4 chunk handlers (init/presign/complete/abort) check dlp_unscannable independently');
+});
+
+// Legal hold (docs/RETENTION-LEGAL-HOLD-DESIGN.md): the gate forwards like any
+// other paid-module claim. Enforcement itself needs no claim at all — it's
+// wired inside core's FileManager and inherited automatically since this
+// proxy builds the same class, unlike every other hook on this list.
+test('allow_legal_hold forwards in proxy mode', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(62, ['allow_legal_hold' => true]);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(true, ($p->allow_legal_hold ?? false), 'legal-hold gate forwarded');
+});
+
+test('the 4 legal-hold routes exist and only place/release/list are module-gated (status is free/core)', function () {
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($apiSrc, "ModuleRegistry::require('legal-hold'") !== false, 'handleHold()/handleHoldRelease()/handleHoldList() resolve the legal-hold module gate');
+    assertTrue(strpos($apiSrc, 'function handleHoldStatus(') !== false, 'handleHoldStatus() exists');
+    assertTrue(strpos($apiSrc, 'function handleHold(') !== false, 'handleHold() exists');
+    assertTrue(strpos($apiSrc, 'function handleHoldRelease(') !== false, 'handleHoldRelease() exists');
+    assertTrue(strpos($apiSrc, 'function handleHoldList(') !== false, 'handleHoldList() exists');
+    assertTrue(strpos($apiSrc, "/hold/status'") !== false, 'GET hold/status route registered');
+    assertTrue(strpos($apiSrc, "/hold'") !== false, 'POST hold route registered');
+    assertTrue(strpos($apiSrc, "/hold/release'") !== false, 'POST hold/release route registered');
+    assertTrue(strpos($apiSrc, "/hold/list'") !== false, 'GET hold/list route registered');
+});
+
+test('compliance/scorecard route exists, maps to handleComplianceScorecard(), and is gated by audit perm only (free/core, no module/license gate)', function () {
+    // The scorecard is intentionally the OPPOSITE gating shape from every paid
+    // module above (handleHold*/handleAuditExport all call ModuleRegistry::require())
+    // — it's free/core, so a copy-paste of that pattern onto this route would be
+    // a real regression (locking a free dashboard behind a license check it was
+    // explicitly designed not to need).
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($apiSrc, 'function handleComplianceScorecard(') !== false, 'handleComplianceScorecard() exists');
+    $body = substr($apiSrc, strpos($apiSrc, 'function handleComplianceScorecard('));
+    $body = substr($body, 0, strpos($body, "\n    }\n") ?: strlen($body));
+    assertTrue(strpos($body, "hasPerm('audit')") !== false, 'handleComplianceScorecard() gates on the audit perm');
+    assertTrue(strpos($body, 'ComplianceScorecard::build(') !== false, 'handleComplianceScorecard() calls the shared ComplianceScorecard::build()');
+    assertTrue(strpos($body, 'ModuleRegistry::require(') === false, 'handleComplianceScorecard() must NOT have a module/license gate — it is free/core');
+    assertTrue(strpos($apiSrc, "/compliance/scorecard'") !== false, 'GET compliance/scorecard route registered');
+});
+
 test('gated media stream/img is wired (setStreamSecret + local disk private key)', function () {
     $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(strpos($apiSrc, 'setStreamSecret(') !== false, 'fileManager() wires setStreamSecret()');

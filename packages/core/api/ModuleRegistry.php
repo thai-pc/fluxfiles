@@ -41,6 +41,8 @@ final class ModuleRegistry
         'c2pa'     => '\\FluxFiles\\C2pa\\C2paModule',
         'audit-export' => '\\FluxFiles\\AuditExport\\AuditExportModule',
         'sso'          => '\\FluxFiles\\Sso\\SsoModule',
+        'dlp'          => '\\FluxFiles\\Dlp\\DlpModule',
+        'legal-hold'   => '\\FluxFiles\\LegalHold\\LegalHoldModule',
     ];
 
     /** Snapshot of the built-in map, for reset() in tests. @var array<string,string> */

@@ -313,6 +313,9 @@
     "virus_unscannable": "Chunk-upload kan niet op virussen worden gescand. Gebruik de standaardupload.",
     "virus_unavailable": "Er is geen virusscanner geconfigureerd op deze server.",
     "virus_failed": "De virusscan kon niet worden voltooid.",
+    "pii_detected": "Dit bestand is geblokkeerd omdat het persoonsgegevens ({entities}) lijkt te bevatten.",
+    "dlp_unscannable": "Chunk-upload kan niet worden gescand op persoonsgegevens. Gebruik de standaardupload.",
+    "dlp_failed": "De controle op persoonsgegevens kon niet worden voltooid.",
     "storage_not_writable": "Opslag is niet beschrijfbaar.",
     "terminal_disabled": "De terminal is uitgeschakeld op deze server.",
     "terminal_forbidden": "Terminaltoegang is niet toegestaan.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "Uw aanmeldsessie is verlopen. Meld u opnieuw aan.",
     "metadata_export_unavailable": "Metadata-export vereist de database-opslag-backend.",
     "metadata_import_unavailable": "Metadata-import vereist de database-opslag-backend.",
-    "metadata_import_rejected": "Import geweigerd — een of meer rijen vallen buiten het toegestane bereik."
+    "metadata_import_rejected": "Import geweigerd — een of meer rijen vallen buiten het toegestane bereik.",
+    "legal_hold_active": "Dit item staat onder legal hold en kan niet worden gewijzigd.",
+    "legal_hold_not_found": "Die legal hold is niet gevonden.",
+    "legal_hold_already_released": "Deze legal hold is al opgeheven.",
+    "legal_hold_already_active": "Dit pad heeft al een actieve legal hold.",
+    "legal_hold_reason_required": "Een reden (1–1000 tekens) is vereist.",
+    "legal_hold_scope": "Toegang tot deze legal hold geweigerd.",
+    "legal_hold_max_active": "Het maximale aantal actieve legal holds is bereikt."
   },
   "presign": {
     "title": "Voorondertekende URL",
@@ -414,7 +424,11 @@
       "unknown": "Overig",
       "terminal": "Terminalopdracht",
       "virus_blocked": "Geblokkeerd door virusscanner",
-      "watermark_remove": "Watermerk verwijderen"
+      "dlp_blocked": "Geblokkeerd wegens persoonsgegevens",
+      "watermark_remove": "Watermerk verwijderen",
+      "legal_hold_place": "Legal hold toegepast",
+      "legal_hold_release": "Legal hold opgeheven",
+      "legal_hold_blocked": "Geblokkeerd door legal hold"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "Deze versie herstellen? Het huidige bestand wordt vervangen (er wordt eerst een momentopname van bewaard, dus dit kan ongedaan worden gemaakt).",
     "restored": "Versie hersteld",
     "pro_teaser": "Bewaar elke eerdere versie van een bestand en maak elke overschrijving ongedaan."
+  },
+  "legal_hold": {
+    "title": "Legal hold",
+    "note": "Blokkeert verwijderen, naar prullenbak verplaatsen, hernoemen en verplaatsen van dit bestand of deze map totdat de hold wordt opgeheven — voor rechtszaken of compliance-bewaring.",
+    "place": "Legal hold toepassen…",
+    "release": "Hold opheffen…",
+    "reason_label": "Reden",
+    "reason_placeholder": "Waarom wordt dit item vastgehouden? (verplicht)",
+    "placed_by": "Toegepast door {name}",
+    "since": "Onder legal hold sinds {date}",
+    "confirm_release": "Deze legal hold opheffen? Verwijderen en verplaatsen zijn daarna weer toegestaan.",
+    "badge_tooltip_admin": "Onder legal hold sinds {date} — toegepast door {name}",
+    "badge_tooltip_user": "Dit item is beschermd en kan niet worden verwijderd of verplaatst.",
+    "context_menu": "Legal hold…",
+    "busy": "Bezig…",
+    "placed": "Legal hold toegepast",
+    "released": "Legal hold opgeheven",
+    "pro_teaser": "Pas een legal hold toe om verwijdering of wijziging van een bestand of map te blokkeren voor rechtszaken of compliance-bewaring."
   },
   "aivision": {
     "title": "AI Vision",
@@ -646,5 +678,35 @@
     "col_received": "Ontvangen",
     "revoke_confirm": "Dit uploadportaal intrekken? Niemand kan er dan nog bestanden naartoe sturen.",
     "pro_teaser": "Laat anderen jou bestanden sturen zonder account — rechtstreeks in je opslag."
+  },
+  "compliance": {
+    "title": "Compliance",
+    "disclaimer": "Geeft aan welke FluxFiles-functies zijn ingeschakeld voor dit token. Dit is geen juridische of wettelijke compliance-certificering.",
+    "summary_one": "{enabled} van {total} beschikbare functie ingeschakeld",
+    "summary_other": "{enabled} van {total} beschikbare functies ingeschakeld",
+    "status_on": "Aan",
+    "status_off": "Uit",
+    "status_locked": "Vergrendeld",
+    "reason_claim_off": "Beschikbaar, maar niet ingeschakeld voor dit token",
+    "reason_not_licensed": "Geïnstalleerd, maar niet gelicentieerd",
+    "reason_not_installed": "Niet geïnstalleerd",
+    "copy_snippet": "Claim kopiëren",
+    "upgrade_cta": "Meer informatie",
+    "item": {
+      "virus_scan": "Virus-/malwarescan bij upload",
+      "c2pa": "Contentherkomst (C2PA)",
+      "audit_export": "Exporteren van auditlog en opschonen van bewaartermijn",
+      "sso": "SSO-inlogbrug (OIDC)",
+      "dlp_scan": "DLP / redigeren van persoonsgegevens (PII)",
+      "legal_hold": "Legal hold"
+    },
+    "category": {
+      "content_security": "Contentbeveiliging",
+      "content_provenance": "Contentherkomst",
+      "audit_retention": "Audit en bewaring",
+      "identity_access": "Identiteit en toegang",
+      "data_protection": "Gegevensbescherming",
+      "legal_ediscovery": "Juridisch en eDiscovery"
+    }
   }
 }

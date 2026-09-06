@@ -313,6 +313,9 @@
     "virus_unscannable": "Chunked upload can't be virus-scanned. Use the standard upload.",
     "virus_unavailable": "No virus scanner is configured on this server.",
     "virus_failed": "The virus scan could not be completed.",
+    "pii_detected": "This file was blocked because it appears to contain personal data ({entities}).",
+    "dlp_unscannable": "Chunked upload can't be scanned for personal data. Use the standard upload.",
+    "dlp_failed": "The personal-data scan could not be completed.",
     "storage_not_writable": "Storage is not writable.",
     "terminal_disabled": "The terminal is disabled on this server.",
     "terminal_forbidden": "Terminal access isn't allowed.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "Your sign-in session has expired. Please sign in again.",
     "metadata_export_unavailable": "Metadata export requires the database storage backend.",
     "metadata_import_unavailable": "Metadata import requires the database storage backend.",
-    "metadata_import_rejected": "Import rejected — one or more rows are out of scope."
+    "metadata_import_rejected": "Import rejected — one or more rows are out of scope.",
+    "legal_hold_active": "This item is under legal hold and cannot be modified.",
+    "legal_hold_not_found": "That legal hold was not found.",
+    "legal_hold_already_released": "This legal hold has already been released.",
+    "legal_hold_already_active": "This path already has an active legal hold.",
+    "legal_hold_reason_required": "A reason (1–1000 characters) is required.",
+    "legal_hold_scope": "Access denied to this legal hold.",
+    "legal_hold_max_active": "The maximum number of active legal holds has been reached."
   },
   "presign": {
     "title": "Presigned URL",
@@ -414,7 +424,11 @@
       "unknown": "Other",
       "terminal": "Terminal command",
       "virus_blocked": "Virus blocked",
-      "watermark_remove": "Remove watermark"
+      "dlp_blocked": "PII blocked",
+      "watermark_remove": "Remove watermark",
+      "legal_hold_place": "Legal hold placed",
+      "legal_hold_release": "Legal hold released",
+      "legal_hold_blocked": "Legal hold blocked"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "Restore this version? The current file will be replaced (a snapshot of it is kept first, so this can be undone).",
     "restored": "Version restored",
     "pro_teaser": "Keep every prior version of a file and roll back any overwrite."
+  },
+  "legal_hold": {
+    "title": "Legal Hold",
+    "note": "Blocks delete, trash, rename, and move on this file or folder until the hold is released — for litigation or compliance retention.",
+    "place": "Place legal hold…",
+    "release": "Release hold…",
+    "reason_label": "Reason",
+    "reason_placeholder": "Why is this item being held? (required)",
+    "placed_by": "Placed by {name}",
+    "since": "On legal hold since {date}",
+    "confirm_release": "Release this legal hold? Delete and move will be allowed again once released.",
+    "badge_tooltip_admin": "On legal hold since {date} — placed by {name}",
+    "badge_tooltip_user": "This item is protected and cannot be deleted or moved.",
+    "context_menu": "Legal hold…",
+    "busy": "Working…",
+    "placed": "Legal hold placed",
+    "released": "Legal hold released",
+    "pro_teaser": "Place a legal hold to block deletion or modification of a file or folder for litigation or compliance retention."
   },
   "aivision": {
     "title": "AI Vision",
@@ -646,5 +678,35 @@
     "col_received": "Received",
     "revoke_confirm": "Revoke this upload portal? Nobody will be able to send files to it.",
     "pro_teaser": "Let people send you files without an account — straight into your storage."
+  },
+  "compliance": {
+    "title": "Compliance",
+    "disclaimer": "Reflects which FluxFiles features are enabled for this token. Not a legal or regulatory compliance certification.",
+    "summary_one": "{enabled} of {total} available feature enabled",
+    "summary_other": "{enabled} of {total} available features enabled",
+    "status_on": "On",
+    "status_off": "Off",
+    "status_locked": "Locked",
+    "reason_claim_off": "Available, but not enabled for this token",
+    "reason_not_licensed": "Installed, but not licensed",
+    "reason_not_installed": "Not installed",
+    "copy_snippet": "Copy claim",
+    "upgrade_cta": "Learn more",
+    "item": {
+      "virus_scan": "Virus / malware scanning on upload",
+      "c2pa": "Content provenance (C2PA)",
+      "audit_export": "Audit log export & retention purge",
+      "sso": "SSO login bridge (OIDC)",
+      "dlp_scan": "DLP / PII redaction",
+      "legal_hold": "Legal hold"
+    },
+    "category": {
+      "content_security": "Content security",
+      "content_provenance": "Content provenance",
+      "audit_retention": "Audit & retention",
+      "identity_access": "Identity & access",
+      "data_protection": "Data protection",
+      "legal_ediscovery": "Legal & eDiscovery"
+    }
   }
 }

@@ -248,6 +248,10 @@ $declaredDynamic = [
                               //       fm.js falls back to this generic key, so one
                               //       translation covers all nine and any future one.
     ],
+    'FileManager.php' => [
+        'virus_failed',   // shared staging step feeds both the virus and DLP
+        'dlp_failed',     // scanners — the code picks whichever scanner is active.
+    ],
 ];
 foreach ($declaredDynamic as $codes) {
     foreach ($codes as $code) {

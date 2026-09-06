@@ -313,6 +313,9 @@
     "virus_unscannable": "Chunk-Upload kann nicht auf Viren geprüft werden. Bitte den normalen Upload verwenden.",
     "virus_unavailable": "Auf diesem Server ist kein Virenscanner konfiguriert.",
     "virus_failed": "Der Virenscan konnte nicht abgeschlossen werden.",
+    "pii_detected": "Diese Datei wurde blockiert, da sie personenbezogene Daten ({entities}) zu enthalten scheint.",
+    "dlp_unscannable": "Chunk-Upload kann nicht auf personenbezogene Daten geprüft werden. Bitte den normalen Upload verwenden.",
+    "dlp_failed": "Die Prüfung auf personenbezogene Daten konnte nicht abgeschlossen werden.",
     "storage_not_writable": "Der Speicher ist nicht beschreibbar.",
     "terminal_disabled": "Das Terminal ist auf diesem Server deaktiviert.",
     "terminal_forbidden": "Terminalzugriff ist nicht erlaubt.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "Ihre Anmeldesitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
     "metadata_export_unavailable": "Der Metadaten-Export erfordert das Datenbank-Speicher-Backend.",
     "metadata_import_unavailable": "Der Metadaten-Import erfordert das Datenbank-Speicher-Backend.",
-    "metadata_import_rejected": "Import abgelehnt — eine oder mehrere Zeilen liegen außerhalb des Geltungsbereichs."
+    "metadata_import_rejected": "Import abgelehnt — eine oder mehrere Zeilen liegen außerhalb des Geltungsbereichs.",
+    "legal_hold_active": "Dieses Element unterliegt einer Rechtssperre (Legal Hold) und kann nicht geändert werden.",
+    "legal_hold_not_found": "Diese Rechtssperre wurde nicht gefunden.",
+    "legal_hold_already_released": "Diese Rechtssperre wurde bereits aufgehoben.",
+    "legal_hold_already_active": "Für diesen Pfad besteht bereits eine aktive Rechtssperre.",
+    "legal_hold_reason_required": "Ein Grund (1–1000 Zeichen) ist erforderlich.",
+    "legal_hold_scope": "Zugriff auf diese Rechtssperre verweigert.",
+    "legal_hold_max_active": "Die maximale Anzahl aktiver Rechtssperren wurde erreicht."
   },
   "presign": {
     "title": "Vorsignierte URL",
@@ -414,7 +424,11 @@
       "unknown": "Sonstiges",
       "terminal": "Terminal-Befehl",
       "virus_blocked": "Vom Virenscanner blockiert",
-      "watermark_remove": "Wasserzeichen entfernen"
+      "dlp_blocked": "Wegen personenbezogener Daten blockiert",
+      "watermark_remove": "Wasserzeichen entfernen",
+      "legal_hold_place": "Rechtssperre gesetzt",
+      "legal_hold_release": "Rechtssperre aufgehoben",
+      "legal_hold_blocked": "Durch Rechtssperre blockiert"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "Diese Version wiederherstellen? Die aktuelle Datei wird ersetzt (zuvor wird ein Snapshot davon gespeichert, das kann also rückgängig gemacht werden).",
     "restored": "Version wiederhergestellt",
     "pro_teaser": "Jede frühere Version einer Datei behalten und jedes Überschreiben rückgängig machen."
+  },
+  "legal_hold": {
+    "title": "Rechtssperre (Legal Hold)",
+    "note": "Blockiert Löschen, Papierkorb, Umbenennen und Verschieben dieser Datei bzw. dieses Ordners bis zur Aufhebung — für Rechtsstreitigkeiten oder Compliance-Aufbewahrung.",
+    "place": "Rechtssperre setzen…",
+    "release": "Sperre aufheben…",
+    "reason_label": "Grund",
+    "reason_placeholder": "Warum wird dieses Element gesperrt? (erforderlich)",
+    "placed_by": "Gesetzt von {name}",
+    "since": "Rechtssperre seit {date}",
+    "confirm_release": "Diese Rechtssperre aufheben? Löschen und Verschieben sind danach wieder erlaubt.",
+    "badge_tooltip_admin": "Rechtssperre seit {date} — gesetzt von {name}",
+    "badge_tooltip_user": "Dieses Element ist geschützt und kann nicht gelöscht oder verschoben werden.",
+    "context_menu": "Rechtssperre…",
+    "busy": "Wird bearbeitet…",
+    "placed": "Rechtssperre gesetzt",
+    "released": "Rechtssperre aufgehoben",
+    "pro_teaser": "Setzen Sie eine Rechtssperre, um das Löschen oder Ändern einer Datei bzw. eines Ordners für Rechtsstreitigkeiten oder Compliance-Aufbewahrung zu blockieren."
   },
   "aivision": {
     "title": "KI-Bildbearbeitung",
@@ -646,5 +678,35 @@
     "col_received": "Empfangen",
     "revoke_confirm": "Dieses Upload-Portal widerrufen? Niemand kann dann noch Dateien senden.",
     "pro_teaser": "Lassen Sie andere Ihnen Dateien ohne Konto senden — direkt in Ihren Speicher."
+  },
+  "compliance": {
+    "title": "Compliance",
+    "disclaimer": "Zeigt, welche FluxFiles-Funktionen für dieses Token aktiviert sind. Keine rechtliche oder regulatorische Compliance-Zertifizierung.",
+    "summary_one": "{enabled} von {total} verfügbaren Funktionen aktiviert",
+    "summary_other": "{enabled} von {total} verfügbaren Funktionen aktiviert",
+    "status_on": "An",
+    "status_off": "Aus",
+    "status_locked": "Gesperrt",
+    "reason_claim_off": "Verfügbar, aber für dieses Token nicht aktiviert",
+    "reason_not_licensed": "Installiert, aber nicht lizenziert",
+    "reason_not_installed": "Nicht installiert",
+    "copy_snippet": "Claim kopieren",
+    "upgrade_cta": "Mehr erfahren",
+    "item": {
+      "virus_scan": "Viren-/Malware-Scan beim Upload",
+      "c2pa": "Inhaltsherkunft (C2PA)",
+      "audit_export": "Audit-Log-Export & Aufbewahrungsbereinigung",
+      "sso": "SSO-Login-Brücke (OIDC)",
+      "dlp_scan": "DLP / PII-Schwärzung",
+      "legal_hold": "Legal Hold"
+    },
+    "category": {
+      "content_security": "Inhaltssicherheit",
+      "content_provenance": "Inhaltsherkunft",
+      "audit_retention": "Audit & Aufbewahrung",
+      "identity_access": "Identität & Zugriff",
+      "data_protection": "Datenschutz",
+      "legal_ediscovery": "Recht & eDiscovery"
+    }
   }
 }

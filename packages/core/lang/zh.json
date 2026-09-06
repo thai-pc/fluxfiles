@@ -313,6 +313,9 @@
     "virus_unscannable": "分块上传无法进行病毒扫描。请使用标准上传。",
     "virus_unavailable": "此服务器未配置病毒扫描程序。",
     "virus_failed": "病毒扫描未能完成。",
+    "pii_detected": "该文件已被拦截，因为其中似乎包含个人信息（{entities}）。",
+    "dlp_unscannable": "分块上传无法进行个人信息扫描。请使用标准上传。",
+    "dlp_failed": "个人信息扫描未能完成。",
     "storage_not_writable": "存储不可写。",
     "terminal_disabled": "此服务器已禁用终端。",
     "terminal_forbidden": "不允许使用终端。",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "您的登录会话已过期，请重新登录。",
     "metadata_export_unavailable": "元数据导出需要数据库存储后端。",
     "metadata_import_unavailable": "元数据导入需要数据库存储后端。",
-    "metadata_import_rejected": "导入被拒绝——一行或多行超出了允许的范围。"
+    "metadata_import_rejected": "导入被拒绝——一行或多行超出了允许的范围。",
+    "legal_hold_active": "该项目处于法律保留状态，无法修改。",
+    "legal_hold_not_found": "未找到该法律保留。",
+    "legal_hold_already_released": "该法律保留已被解除。",
+    "legal_hold_already_active": "此路径已存在有效的法律保留。",
+    "legal_hold_reason_required": "需要提供理由（1–1000 个字符）。",
+    "legal_hold_scope": "无权访问此法律保留。",
+    "legal_hold_max_active": "已达到有效法律保留数量上限。"
   },
   "presign": {
     "title": "预签名链接",
@@ -414,7 +424,11 @@
       "unknown": "其他",
       "terminal": "终端命令",
       "virus_blocked": "病毒拦截",
-      "watermark_remove": "移除水印"
+      "dlp_blocked": "个人信息拦截",
+      "watermark_remove": "移除水印",
+      "legal_hold_place": "已设置法律保留",
+      "legal_hold_release": "已解除法律保留",
+      "legal_hold_blocked": "法律保留已阻止操作"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "恢复此版本？当前文件将被替换（会先保存当前文件的快照，因此可以撤销）。",
     "restored": "版本已恢复",
     "pro_teaser": "保留文件的每个历史版本，并可撤销任何覆盖操作。"
+  },
+  "legal_hold": {
+    "title": "法律保留",
+    "note": "在解除之前，阻止对此文件或文件夹执行删除、移入回收站、重命名和移动操作——用于诉讼或合规留存。",
+    "place": "设置法律保留…",
+    "release": "解除保留…",
+    "reason_label": "理由",
+    "reason_placeholder": "为何要保留此项目？（必填）",
+    "placed_by": "由 {name} 设置",
+    "since": "自 {date} 起处于法律保留状态",
+    "confirm_release": "解除此法律保留？解除后将重新允许删除和移动。",
+    "badge_tooltip_admin": "自 {date} 起处于法律保留状态 — 由 {name} 设置",
+    "badge_tooltip_user": "此项目受保护，无法删除或移动。",
+    "context_menu": "法律保留…",
+    "busy": "处理中…",
+    "placed": "已设置法律保留",
+    "released": "已解除法律保留",
+    "pro_teaser": "设置法律保留，可为诉讼或合规留存阻止文件或文件夹的删除或修改。"
   },
   "aivision": {
     "title": "AI 视觉",
@@ -646,5 +678,35 @@
     "col_received": "已接收",
     "revoke_confirm": "撤销此上传门户？将无人能再向其发送文件。",
     "pro_teaser": "让别人无需账号即可向你发送文件——直接进入你的存储。"
+  },
+  "compliance": {
+    "title": "合规性",
+    "disclaimer": "反映此令牌已启用的 FluxFiles 功能。这不是法律或监管合规认证。",
+    "summary_one": "{total} 项可用功能中已启用 {enabled} 项",
+    "summary_other": "{total} 项可用功能中已启用 {enabled} 项",
+    "status_on": "已启用",
+    "status_off": "未启用",
+    "status_locked": "已锁定",
+    "reason_claim_off": "可用，但此令牌未启用",
+    "reason_not_licensed": "已安装，但未获得许可",
+    "reason_not_installed": "未安装",
+    "copy_snippet": "复制声明",
+    "upgrade_cta": "了解更多",
+    "item": {
+      "virus_scan": "上传时的病毒/恶意软件扫描",
+      "c2pa": "内容溯源（C2PA）",
+      "audit_export": "审计日志导出与留存清理",
+      "sso": "SSO 单点登录桥接（OIDC）",
+      "dlp_scan": "DLP / 个人隐私信息脱敏",
+      "legal_hold": "法律保留（Legal Hold）"
+    },
+    "category": {
+      "content_security": "内容安全",
+      "content_provenance": "内容溯源",
+      "audit_retention": "审计与留存",
+      "identity_access": "身份与访问",
+      "data_protection": "数据保护",
+      "legal_ediscovery": "法律与电子取证"
+    }
   }
 }

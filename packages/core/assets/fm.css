@@ -750,6 +750,8 @@ body {
 }
 
 .tb-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.tb-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.tb-btn:disabled:hover { background: transparent; color: var(--color-text-secondary); border-color: var(--color-border-secondary); }
 
 /* Search box */
 .ff-search-box {
@@ -1148,6 +1150,16 @@ body {
     background: #fef2f2;
 }
 
+.ff-folder-delete:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.ff-folder-delete:disabled:hover {
+    color: var(--color-text-tertiary);
+    background: var(--color-background-primary);
+}
+
 .dark .ff-folder-delete:hover {
     background: rgba(248, 113, 113, 0.1);
     color: #fca5a5;
@@ -1282,6 +1294,29 @@ body {
     color: #fff;
     background: var(--color-accent, #7c3aed);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* Legal hold lock badge — visible to everyone (row-level, non-sensitive by
+   default; tooltip text is expanded for `audit` perm holders in JS). Placed
+   opposite the preview-only badge so the two never overlap. */
+.ff-hold-badge {
+    position: absolute;
+    bottom: 8px;
+    inset-inline-start: 8px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.ff-hold-badge svg {
+    width: 10px;
+    height: 10px;
 }
 
 /* ══════════════════════════ List view ══════════════════════════ */
@@ -1703,6 +1738,8 @@ body {
 
 .detail-btn:hover { background: var(--ff-bg-hover); color: var(--color-text-primary); }
 .detail-btn svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.6; }
+.detail-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.detail-btn:disabled:hover { background: transparent; color: var(--color-text-secondary); }
 
 /* ══════════════════════════ Bulk actions bar ══════════════════════════ */
 .ff-bulk-bar {
@@ -2082,7 +2119,8 @@ body {
 .ff-links-panel,
 .ff-chmod-modal,
 .ff-versions-modal,
-.ff-aivision-modal {
+.ff-aivision-modal,
+.ff-compliance-modal {
     background: var(--ff-bg);
     border-radius: 12px;
     width: min(900px, 94vw);
@@ -2257,6 +2295,49 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Compliance Readiness Scorecard (free/core, docs/COMPLIANCE-SCORECARD-DESIGN.md) */
+.ff-compliance-summary { padding: 10px 20px; border-bottom: 1px solid var(--ff-border); }
+.ff-compliance-summary p { margin: 0 0 4px; font-size: 13px; color: var(--color-text-secondary); }
+/* Liability guardrail (§3): always visible, never a tooltip/collapsed detail. */
+.ff-compliance-disclaimer { margin: 0 !important; font-size: 12px; color: var(--color-text-tertiary); }
+.ff-compliance-list { list-style: none; margin: 0; padding: 0; }
+.ff-compliance-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--ff-border);
+}
+.ff-compliance-row-main { display: flex; align-items: center; gap: 10px; }
+.ff-compliance-label { font-size: 14px; color: var(--color-text-primary); }
+.ff-compliance-status {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.ff-compliance-status-on { background: color-mix(in srgb, #16a34a 16%, transparent); color: #16a34a; }
+.ff-compliance-status-off { background: color-mix(in srgb, #d97706 18%, transparent); color: #b45309; }
+.ff-compliance-status-locked { background: color-mix(in srgb, var(--color-text-tertiary) 18%, transparent); color: var(--color-text-tertiary); }
+.ff-compliance-row-detail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-inline-start: 4px;
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+}
+.ff-compliance-snippet {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
 }
 
 /* Bucket Doctor panel */
@@ -3050,6 +3131,8 @@ body {
 .ff-context-menu .ff-more-divider { height: 0.5px; background: var(--color-border-tertiary); margin: 4px 0; }
 .ff-context-menu .ff-more-danger { color: var(--color-text-danger) !important; }
 .ff-context-menu .ff-more-danger svg { color: var(--color-text-danger) !important; }
+.ff-context-menu button:disabled { opacity: 0.5; cursor: not-allowed; }
+.ff-context-menu button:disabled:hover { background: transparent; }
 
 /* ══════════════════════════ Responsive Mobile ══════════════════════════ */
 @media (max-width: 768px) {
@@ -3323,6 +3406,8 @@ body {
 
     .ff-more-menu button:active { background: var(--color-background-secondary); }
     .ff-more-menu button svg { flex-shrink: 0; color: var(--color-text-tertiary); }
+    .ff-more-menu button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ff-more-menu button:disabled:active { background: transparent; }
 
     .ff-more-divider {
         height: 0.5px;
@@ -3510,6 +3595,15 @@ body {
         background: var(--color-background-secondary);
     }
 
+    .ff-bottom-bar-actions button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .ff-bottom-bar-actions button:disabled:active {
+        background: transparent;
+    }
+
     .ff-bottom-bar-actions button:first-child {
         color: var(--color-text-danger);
     }
@@ -3583,6 +3677,8 @@ body {
 
     .ff-sheet-actions button:active { background: var(--color-background-secondary); }
     .ff-sheet-actions button svg { flex-shrink: 0; color: var(--color-text-secondary); }
+    .ff-sheet-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ff-sheet-actions button:disabled:active { background: transparent; }
 
     .ff-sheet-divider {
         height: 0.5px;
@@ -3639,7 +3735,8 @@ body {
     .ff-links-panel,
     .ff-chmod-modal,
     .ff-versions-modal,
-    .ff-aivision-modal {
+    .ff-aivision-modal,
+    .ff-compliance-modal {
         width: 96vw;
         max-height: 90vh;
     }

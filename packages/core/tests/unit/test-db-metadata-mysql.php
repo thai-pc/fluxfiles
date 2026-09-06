@@ -402,10 +402,58 @@ test('deleteChildren() removes a whole subtree', function () use ($repo, $disk) 
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► legal hold storage primitives{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('addHold()/getHold() roundtrip', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'h1', [
+        'path' => 'docs/contract.pdf', 'is_dir' => false, 'reason' => 'litigation',
+        'placed_by' => 'admin', 'placed_at' => 1000,
+    ]);
+    $hold = $repo->getHold($disk, 'h1');
+    assertEqual('docs/contract.pdf', $hold['path']);
+    assertEqual('litigation', $hold['reason']);
+    assertEqual(null, $hold['released_at']);
+});
+
+test('countActiveHolds() counts only non-released holds', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'h2', ['path' => 'a.txt', 'placed_at' => 1000]);
+    $repo->addHold($disk, 'h3', ['path' => 'b.txt', 'placed_at' => 1000]);
+    $repo->releaseHold($disk, 'h3', ['released_at' => 2000, 'released_by' => 'admin', 'release_reason' => 'done']);
+    $active = $repo->countActiveHolds($disk);
+    assertTrue($active >= 2, "expected at least 2 active holds, got {$active}");
+    $released = $repo->getHold($disk, 'h3');
+    assertEqual(2000, $released['released_at']);
+});
+
+test('holdCovering() matches the exact path and an ancestor folder, not a released hold', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'h4', ['path' => 'projects/alpha', 'is_dir' => true, 'placed_at' => 1000]);
+    assertTrue($repo->holdCovering($disk, 'projects/alpha') !== null, 'exact path should be covered');
+    assertTrue($repo->holdCovering($disk, 'projects/alpha/file.txt') !== null, 'descendant of held folder should be covered');
+    assertEqual(null, $repo->holdCovering($disk, 'projects/beta'), 'unrelated path should not be covered');
+});
+
+test('holdCovering() is NOT bidirectional (a hold on a child does not cover its parent)', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'h5', ['path' => 'projects/gamma/child.txt', 'placed_at' => 1000]);
+    assertEqual(null, $repo->holdCovering($disk, 'projects/gamma'));
+});
+
+test('holdBlocking() IS bidirectional (a hold on a child blocks its parent folder)', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'h6', ['path' => 'projects/delta/child.txt', 'placed_at' => 1000]);
+    assertTrue($repo->holdBlocking($disk, 'projects/delta') !== null, 'ancestor of a held descendant should be blocked');
+});
+
+test('allHolds() returns every hold on the disk, keyed by id', function () use ($repo, $disk) {
+    $all = $repo->allHolds($disk);
+    assertTrue(isset($all['h1']), 'h1 should be present');
+    assertTrue(isset($all['h4']), 'h4 should be present');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
 
-foreach (['file_metadata', 'directories', 'trash', 'audit_log', 'rate_limits'] as $table) {
+foreach (['file_metadata', 'directories', 'trash', 'audit_log', 'rate_limits', 'legal_holds'] as $table) {
     $conn->pdo()->exec("DELETE FROM {$table}");
 }
 exec('rm -rf ' . escapeshellarg($storageRoot));

@@ -127,6 +127,16 @@ class FluxFilesController
                 return $virus->scanPath($localPath);
             });
         }
+
+        // DLP / PII scan (paid module) — same "proxy handles /upload itself" reasoning
+        // and the same lazy-gate-inside-the-callback contract as the virus scanner above.
+        if (($claims->allowDlpScan ?? false)) {
+            $fm->setDlpScanner(static function (string $localPath, string $name) use ($claims): array {
+                /** @var \FluxFiles\Dlp\DlpModule $dlp */
+                $dlp = \FluxFiles\ModuleRegistry::require('dlp', \FluxFiles\LicenseManager::fromEnv(), $claims);
+                return $dlp->scanPath($localPath, $claims->dlpEntityTypes, $claims->dlpMinScore);
+            });
+        }
         return $fm;
     }
 
@@ -1198,6 +1208,28 @@ class FluxFilesController
     }
 
     /**
+     * Compliance Readiness Scorecard (FREE/core, docs/COMPLIANCE-SCORECARD-DESIGN.md)
+     * — a read-only capability checklist (virus scan / C2PA / audit export / SSO /
+     * DLP / legal hold). Gated by the same `audit` perm as the activity log, not a
+     * module/license check — every paid row simply reads `available: false` on an
+     * unlicensed server. Mirrors index.php's `/api/fm/compliance/scorecard` route.
+     */
+    public function complianceScorecard(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
+            return $this->ok(\FluxFiles\ComplianceScorecard::build($claims, \FluxFiles\LicenseManager::fromEnv()));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
      * Audit export (paid module) — a full, unpaginated download of the tenant's
      * audit history (live + archived), as NDJSON or CSV. Bypasses the ok()/error()
      * JSON envelope: the module streams its own headers + body directly, same
@@ -1267,6 +1299,136 @@ class FluxFilesController
             $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
 
             return $this->ok($module->purge($this->metaRepo, $claims, $disk, $before));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Legal hold — STATUS is free/core (visibility, no license/claim check), same
+     * posture as index.php's GET /api/fm/hold/status. Ported directly since it's
+     * not reusable app code — same pattern as /stream and /img.
+     */
+    public function holdStatus(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
+            $disk = (string) $request->query('disk', 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            $path = (string) $request->query('path', '');
+            $hold = $this->metaRepo->holdCovering($disk, $claims->scopePath($path));
+            if ($hold === null) {
+                return $this->ok(['on_hold' => false]);
+            }
+            $out = ['on_hold' => true, 'hold_id' => $hold['hold_id'] ?? null];
+            if ($claims->hasPerm('audit')) {
+                $out['reason'] = $hold['reason'] ?? null;
+                $out['placed_by'] = $hold['placed_by'] ?? null;
+                $out['placed_at'] = $hold['placed_at'] ?? null;
+            }
+            return $this->ok($out);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Legal hold — PLACE/RELEASE/LIST are the paid-gated management half (see
+     * docs/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself is free/core
+     * and license-independent, wired unconditionally into
+     * FileManager::assertNoActiveHold() (inherited from core, no proxy change needed).
+     */
+    public function hold(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
+            $disk = (string) $request->input('disk', 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            if (!$request->filled('path')) {
+                throw new ApiException('Missing required field: path', 400, 'missing_param');
+            }
+
+            /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
+            $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+
+            return $this->ok($module->place(
+                $this->metaRepo,
+                $this->diskManager,
+                $claims,
+                $disk,
+                (string) $request->input('path'),
+                (string) $request->input('reason', '')
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function holdRelease(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
+            $disk = (string) $request->input('disk', 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            if (!$request->filled('hold_id')) {
+                throw new ApiException('Missing required field: hold_id', 400, 'missing_param');
+            }
+
+            /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
+            $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+
+            return $this->ok($module->release(
+                $this->metaRepo,
+                $claims,
+                $disk,
+                (string) $request->input('hold_id'),
+                (string) $request->input('reason', '')
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    public function holdList(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
+            $disk = (string) $request->query('disk', 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            $includeReleased = filter_var($request->query('include_released', false), FILTER_VALIDATE_BOOLEAN);
+
+            /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
+            $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+
+            return $this->ok($module->list($this->metaRepo, $claims, $disk, $includeReleased));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -2024,6 +2186,13 @@ class FluxFilesController
                     'virus_unscannable'
                 );
             }
+            if ($claims->allowDlpScan) {
+                throw new ApiException(
+                    'Chunked upload cannot be scanned for PII — use the standard upload, or turn off allow_dlp_scan',
+                    409,
+                    'dlp_unscannable'
+                );
+            }
 
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
@@ -2079,6 +2248,13 @@ class FluxFilesController
                     'virus_unscannable'
                 );
             }
+            if ($claims->allowDlpScan) {
+                throw new ApiException(
+                    'Chunked upload cannot be scanned for PII — use the standard upload, or turn off allow_dlp_scan',
+                    409,
+                    'dlp_unscannable'
+                );
+            }
 
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
@@ -2120,6 +2296,13 @@ class FluxFilesController
                     'Chunked upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
                     409,
                     'virus_unscannable'
+                );
+            }
+            if ($claims->allowDlpScan) {
+                throw new ApiException(
+                    'Chunked upload cannot be scanned for PII — use the standard upload, or turn off allow_dlp_scan',
+                    409,
+                    'dlp_unscannable'
                 );
             }
 
@@ -2200,6 +2383,13 @@ class FluxFilesController
                     'Chunked upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
                     409,
                     'virus_unscannable'
+                );
+            }
+            if ($claims->allowDlpScan) {
+                throw new ApiException(
+                    'Chunked upload cannot be scanned for PII — use the standard upload, or turn off allow_dlp_scan',
+                    409,
+                    'dlp_unscannable'
                 );
             }
 

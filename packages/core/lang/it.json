@@ -313,6 +313,9 @@
     "virus_unscannable": "Il caricamento a blocchi non può essere analizzato. Usa il caricamento standard.",
     "virus_unavailable": "Nessun antivirus è configurato su questo server.",
     "virus_failed": "Non è stato possibile completare la scansione antivirus.",
+    "pii_detected": "Questo file è stato bloccato perché sembra contenere dati personali ({entities}).",
+    "dlp_unscannable": "Il caricamento a blocchi non può essere analizzato per dati personali. Usa il caricamento standard.",
+    "dlp_failed": "Non è stato possibile completare la scansione dei dati personali.",
     "storage_not_writable": "Lo spazio di archiviazione non è scrivibile.",
     "terminal_disabled": "Il terminale è disabilitato su questo server.",
     "terminal_forbidden": "L'accesso al terminale non è consentito.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "La sessione di accesso è scaduta. Effettua nuovamente l'accesso.",
     "metadata_export_unavailable": "L'esportazione dei metadati richiede il backend di archiviazione su database.",
     "metadata_import_unavailable": "L'importazione dei metadati richiede il backend di archiviazione su database.",
-    "metadata_import_rejected": "Importazione rifiutata — una o più righe sono fuori dall'ambito consentito."
+    "metadata_import_rejected": "Importazione rifiutata — una o più righe sono fuori dall'ambito consentito.",
+    "legal_hold_active": "Questo elemento è soggetto a blocco legale e non può essere modificato.",
+    "legal_hold_not_found": "Blocco legale non trovato.",
+    "legal_hold_already_released": "Questo blocco legale è già stato rilasciato.",
+    "legal_hold_already_active": "Questo percorso ha già un blocco legale attivo.",
+    "legal_hold_reason_required": "È richiesto un motivo (1–1000 caratteri).",
+    "legal_hold_scope": "Accesso negato a questo blocco legale.",
+    "legal_hold_max_active": "È stato raggiunto il numero massimo di blocchi legali attivi."
   },
   "presign": {
     "title": "URL prefirmato",
@@ -414,7 +424,11 @@
       "unknown": "Altro",
       "terminal": "Comando terminale",
       "virus_blocked": "Bloccato dall'antivirus",
-      "watermark_remove": "Rimuovi filigrana"
+      "dlp_blocked": "Bloccato per dati personali",
+      "watermark_remove": "Rimuovi filigrana",
+      "legal_hold_place": "Blocco legale applicato",
+      "legal_hold_release": "Blocco legale rilasciato",
+      "legal_hold_blocked": "Bloccato da un blocco legale"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "Ripristinare questa versione? Il file attuale verrà sostituito (prima viene salvata una copia, quindi è reversibile).",
     "restored": "Versione ripristinata",
     "pro_teaser": "Conserva ogni versione precedente di un file e annulla qualsiasi sovrascrittura."
+  },
+  "legal_hold": {
+    "title": "Blocco legale",
+    "note": "Blocca eliminazione, cestino, rinomina e spostamento di questo file o cartella fino al rilascio — per contenziosi o conservazione a fini di conformità.",
+    "place": "Applica blocco legale…",
+    "release": "Rilascia blocco…",
+    "reason_label": "Motivo",
+    "reason_placeholder": "Perché questo elemento viene bloccato? (obbligatorio)",
+    "placed_by": "Applicato da {name}",
+    "since": "In blocco legale dal {date}",
+    "confirm_release": "Rilasciare questo blocco legale? Eliminazione e spostamento saranno di nuovo consentiti dopo il rilascio.",
+    "badge_tooltip_admin": "In blocco legale dal {date} — applicato da {name}",
+    "badge_tooltip_user": "Questo elemento è protetto e non può essere eliminato o spostato.",
+    "context_menu": "Blocco legale…",
+    "busy": "Elaborazione…",
+    "placed": "Blocco legale applicato",
+    "released": "Blocco legale rilasciato",
+    "pro_teaser": "Applica un blocco legale per impedire l'eliminazione o la modifica di un file o di una cartella per contenziosi o conformità."
   },
   "aivision": {
     "title": "AI Vision",
@@ -646,5 +678,35 @@
     "col_received": "Ricevuti",
     "revoke_confirm": "Revocare questo portale? Nessuno potrà più inviarti file.",
     "pro_teaser": "Fatti inviare file senza che serva un account — direttamente nel tuo archivio."
+  },
+  "compliance": {
+    "title": "Conformità",
+    "disclaimer": "Indica quali funzionalità di FluxFiles sono abilitate per questo token. Non è una certificazione di conformità legale o normativa.",
+    "summary_one": "{enabled} di {total} funzionalità disponibile abilitata",
+    "summary_other": "{enabled} di {total} funzionalità disponibili abilitate",
+    "status_on": "Attivo",
+    "status_off": "Disattivo",
+    "status_locked": "Bloccato",
+    "reason_claim_off": "Disponibile, ma non abilitata per questo token",
+    "reason_not_licensed": "Installata, ma non concessa in licenza",
+    "reason_not_installed": "Non installata",
+    "copy_snippet": "Copia claim",
+    "upgrade_cta": "Scopri di più",
+    "item": {
+      "virus_scan": "Scansione antivirus/malware al caricamento",
+      "c2pa": "Provenienza del contenuto (C2PA)",
+      "audit_export": "Esportazione del log di controllo e pulizia della conservazione",
+      "sso": "Ponte di accesso SSO (OIDC)",
+      "dlp_scan": "DLP / oscuramento dei dati personali (PII)",
+      "legal_hold": "Conservazione legale (legal hold)"
+    },
+    "category": {
+      "content_security": "Sicurezza dei contenuti",
+      "content_provenance": "Provenienza dei contenuti",
+      "audit_retention": "Controllo e conservazione",
+      "identity_access": "Identità e accesso",
+      "data_protection": "Protezione dei dati",
+      "legal_ediscovery": "Legale ed eDiscovery"
+    }
   }
 }

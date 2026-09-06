@@ -132,8 +132,9 @@ $tFileMeta = $prefix . 'fluxfiles_file_metadata';
 $tDirs = $prefix . 'fluxfiles_directories';
 $tTrash = $prefix . 'fluxfiles_trash';
 $tAudit = $prefix . 'fluxfiles_audit_log';
+$tHolds = $prefix . 'fluxfiles_legal_holds';
 
-foreach ([$tFileMeta, $tDirs, $tTrash, $tAudit] as $t) {
+foreach ([$tFileMeta, $tDirs, $tTrash, $tAudit, $tHolds] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS {$t}");
 }
 
@@ -207,6 +208,21 @@ $pdo->exec("CREATE TABLE {$tAudit} (
   KEY disk_owner_created_at (disk,owner,created_at),
   KEY disk_created_at (disk,created_at),
   KEY disk_action_created_at (disk,action,created_at)
+) DEFAULT CHARSET=utf8mb4");
+
+$pdo->exec("CREATE TABLE {$tHolds} (
+  disk varchar(64) NOT NULL,
+  id varchar(64) NOT NULL,
+  path TEXT COLLATE utf8mb4_bin NOT NULL,
+  is_dir smallint(6) DEFAULT 0,
+  reason text NULL,
+  placed_by varchar(191) NULL,
+  placed_at bigint(20) NULL,
+  released_at bigint(20) NULL,
+  released_by varchar(191) NULL,
+  release_reason text NULL,
+  PRIMARY KEY (disk,id),
+  KEY disk_released_at (disk,released_at)
 ) DEFAULT CHARSET=utf8mb4");
 
 global $wpdb;
@@ -522,11 +538,72 @@ test('deleteChildren() removes a whole subtree', function () use ($repo, $disk) 
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► legal hold storage primitives{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('addHold()/getHold() roundtrip', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'hold-1', [
+        'path' => 'legal/case-a', 'is_dir' => true, 'reason' => 'litigation',
+        'placed_by' => 'user-1', 'placed_at' => 1000,
+    ]);
+    $hold = $repo->getHold($disk, 'hold-1');
+    assertTrue($hold !== null);
+    assertEqual('legal/case-a', $hold['path']);
+    assertEqual(true, $hold['is_dir']);
+    assertEqual('litigation', $hold['reason']);
+    assertEqual('user-1', $hold['placed_by']);
+    assertEqual(null, $hold['released_at']);
+});
+
+test('countActiveHolds() counts only non-released holds', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'hold-active', ['path' => 'active-path', 'placed_at' => 1]);
+    $repo->addHold($disk, 'hold-released', ['path' => 'released-path', 'placed_at' => 1]);
+    $repo->releaseHold($disk, 'hold-released', ['released_at' => 2, 'released_by' => 'u', 'release_reason' => 'done']);
+    $before = $repo->countActiveHolds($disk);
+    assertTrue($before >= 1, 'at least the active hold should count');
+    $hold = $repo->getHold($disk, 'hold-released');
+    assertTrue($hold['released_at'] !== null, 'released hold has released_at set');
+});
+
+test('holdCovering() matches the exact path and an ancestor folder, not a released hold', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'hold-cover', ['path' => 'covered/folder', 'is_dir' => true, 'placed_at' => 1]);
+    $exact = $repo->holdCovering($disk, 'covered/folder');
+    assertTrue($exact !== null, 'exact path match');
+    $nested = $repo->holdCovering($disk, 'covered/folder/child.txt');
+    assertTrue($nested !== null, 'descendant of held folder is covered');
+
+    $repo->addHold($disk, 'hold-released-2', ['path' => 'released-cover', 'placed_at' => 1]);
+    $repo->releaseHold($disk, 'hold-released-2', ['released_at' => 2]);
+    $releasedCheck = $repo->holdCovering($disk, 'released-cover');
+    assertEqual(null, $releasedCheck, 'a released hold no longer covers');
+});
+
+test('holdCovering() is NOT bidirectional', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'hold-child', ['path' => 'parent-x/child-y', 'placed_at' => 1]);
+    $result = $repo->holdCovering($disk, 'parent-x');
+    assertEqual(null, $result, 'holdCovering() must not see a hold on a descendant as covering an ancestor path');
+});
+
+test('holdBlocking() IS bidirectional', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'hold-child-2', ['path' => 'parent-a/child-b', 'placed_at' => 1]);
+    $result = $repo->holdBlocking($disk, 'parent-a');
+    assertTrue($result !== null, 'holdBlocking() must see a hold on a descendant as blocking an ancestor operation');
+});
+
+test('allHolds() returns every hold on the disk, keyed by id', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'hold-all-1', ['path' => 'all-1', 'placed_at' => 1]);
+    $repo->addHold($disk, 'hold-all-2', ['path' => 'all-2', 'placed_at' => 1]);
+    $all = $repo->allHolds($disk);
+    assertTrue(array_key_exists('hold-all-1', $all));
+    assertTrue(array_key_exists('hold-all-2', $all));
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
 
 exec('rm -rf ' . escapeshellarg($storageRoot));
-foreach ([$tFileMeta, $tDirs, $tTrash, $tAudit] as $t) {
+foreach ([$tFileMeta, $tDirs, $tTrash, $tAudit, $tHolds] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS {$t}");
 }
 

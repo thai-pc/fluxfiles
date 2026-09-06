@@ -200,9 +200,18 @@ test('enterprise edition preset grants every module claim (matches the docstring
     foreach ([
         'allow_optimize', 'allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks',
         'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_c2pa', 'allow_backup', 'allow_audit_export',
+        // DLP/PII (Enterprise compliance bundle, docs/DLP-PII-REDACTION-DESIGN.md) and
+        // Legal Hold (docs/RETENTION-LEGAL-HOLD-DESIGN.md) — this list predates both
+        // modules and must stay exhaustive as new bundle members ship.
+        'allow_dlp_scan', 'allow_legal_hold',
     ] as $claim) {
         assertEqual(true, $payload->{$claim} ?? null, "enterprise preset missing {$claim}");
     }
+});
+
+test('studio edition preset must NOT leak allow_dlp_scan (Enterprise-only, not Studio)', function () use ($secret) {
+    $payload = decode(fluxfiles_token(['user' => 'u', 'edition' => 'studio']), $secret);
+    assertEqual(false, isset($payload->allow_dlp_scan), 'allow_dlp_scan must not appear in the studio preset');
 });
 
 // ═══════════════════════════════════════════════════════════════

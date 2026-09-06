@@ -313,6 +313,9 @@
     "virus_unscannable": "Tải lên theo khối không thể quét virus. Hãy dùng cách tải lên thường.",
     "virus_unavailable": "Máy chủ này chưa cấu hình trình quét virus.",
     "virus_failed": "Không thể hoàn tất việc quét virus.",
+    "pii_detected": "Tệp này đã bị chặn vì có vẻ chứa dữ liệu cá nhân ({entities}).",
+    "dlp_unscannable": "Tải lên theo khối không thể quét dữ liệu cá nhân. Hãy dùng cách tải lên thường.",
+    "dlp_failed": "Không thể hoàn tất việc quét dữ liệu cá nhân.",
     "storage_not_writable": "Bộ nhớ không thể ghi.",
     "terminal_disabled": "Terminal đã bị tắt trên máy chủ này.",
     "terminal_forbidden": "Không được phép dùng terminal.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
     "metadata_export_unavailable": "Xuất siêu dữ liệu yêu cầu backend lưu trữ cơ sở dữ liệu.",
     "metadata_import_unavailable": "Nhập siêu dữ liệu yêu cầu backend lưu trữ cơ sở dữ liệu.",
-    "metadata_import_rejected": "Nhập bị từ chối — một hoặc nhiều dòng nằm ngoài phạm vi cho phép."
+    "metadata_import_rejected": "Nhập bị từ chối — một hoặc nhiều dòng nằm ngoài phạm vi cho phép.",
+    "legal_hold_active": "Mục này đang bị giữ lại theo yêu cầu pháp lý và không thể chỉnh sửa.",
+    "legal_hold_not_found": "Không tìm thấy lệnh giữ pháp lý đó.",
+    "legal_hold_already_released": "Lệnh giữ pháp lý này đã được gỡ bỏ.",
+    "legal_hold_already_active": "Đường dẫn này đã có một lệnh giữ pháp lý đang hoạt động.",
+    "legal_hold_reason_required": "Cần có lý do (1–1000 ký tự).",
+    "legal_hold_scope": "Không có quyền truy cập lệnh giữ pháp lý này.",
+    "legal_hold_max_active": "Đã đạt số lượng tối đa lệnh giữ pháp lý đang hoạt động."
   },
   "presign": {
     "title": "URL có thời hạn",
@@ -414,7 +424,11 @@
       "unknown": "Khác",
       "terminal": "Lệnh terminal",
       "virus_blocked": "Chặn do virus",
-      "watermark_remove": "Gỡ watermark"
+      "dlp_blocked": "Chặn do dữ liệu cá nhân",
+      "watermark_remove": "Gỡ watermark",
+      "legal_hold_place": "Đã đặt lệnh giữ pháp lý",
+      "legal_hold_release": "Đã gỡ lệnh giữ pháp lý",
+      "legal_hold_blocked": "Lệnh giữ pháp lý đã chặn"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "Khôi phục phiên bản này? Tệp hiện tại sẽ bị thay thế (một bản sao của tệp hiện tại được lưu trước, nên bạn có thể hoàn tác).",
     "restored": "Đã khôi phục phiên bản",
     "pro_teaser": "Giữ lại mọi phiên bản trước của tệp và hoàn tác bất kỳ lần ghi đè nào."
+  },
+  "legal_hold": {
+    "title": "Giữ pháp lý",
+    "note": "Chặn xóa, chuyển vào thùng rác, đổi tên và di chuyển tệp hoặc thư mục này cho đến khi lệnh giữ được gỡ bỏ — dùng cho mục đích tố tụng hoặc tuân thủ.",
+    "place": "Đặt lệnh giữ pháp lý…",
+    "release": "Gỡ lệnh giữ…",
+    "reason_label": "Lý do",
+    "reason_placeholder": "Vì sao mục này bị giữ lại? (bắt buộc)",
+    "placed_by": "Được đặt bởi {name}",
+    "since": "Đang bị giữ pháp lý từ {date}",
+    "confirm_release": "Gỡ lệnh giữ pháp lý này? Xóa và di chuyển sẽ được phép trở lại sau khi gỡ.",
+    "badge_tooltip_admin": "Đang bị giữ pháp lý từ {date} — được đặt bởi {name}",
+    "badge_tooltip_user": "Mục này được bảo vệ và không thể xóa hoặc di chuyển.",
+    "context_menu": "Giữ pháp lý…",
+    "busy": "Đang xử lý…",
+    "placed": "Đã đặt lệnh giữ pháp lý",
+    "released": "Đã gỡ lệnh giữ pháp lý",
+    "pro_teaser": "Đặt lệnh giữ pháp lý để chặn việc xóa hoặc chỉnh sửa tệp/thư mục cho mục đích tố tụng hoặc tuân thủ."
   },
   "aivision": {
     "title": "AI Vision",
@@ -646,5 +678,35 @@
     "col_received": "Đã nhận",
     "revoke_confirm": "Thu hồi cổng nhận tệp này? Sẽ không ai gửi tệp vào đây được nữa.",
     "pro_teaser": "Cho phép người khác gửi tệp cho bạn mà không cần tài khoản — vào thẳng kho lưu trữ của bạn."
+  },
+  "compliance": {
+    "title": "Tuân thủ",
+    "disclaimer": "Phản ánh các tính năng FluxFiles đang được bật cho token này. Đây không phải là chứng nhận tuân thủ pháp lý hoặc quy định.",
+    "summary_one": "{enabled}/{total} tính năng khả dụng đã được bật",
+    "summary_other": "{enabled}/{total} tính năng khả dụng đã được bật",
+    "status_on": "Bật",
+    "status_off": "Tắt",
+    "status_locked": "Bị khóa",
+    "reason_claim_off": "Khả dụng, nhưng chưa bật cho token này",
+    "reason_not_licensed": "Đã cài đặt, nhưng chưa có giấy phép",
+    "reason_not_installed": "Chưa được cài đặt",
+    "copy_snippet": "Sao chép claim",
+    "upgrade_cta": "Tìm hiểu thêm",
+    "item": {
+      "virus_scan": "Quét virus / phần mềm độc hại khi tải lên",
+      "c2pa": "Nguồn gốc nội dung (C2PA)",
+      "audit_export": "Xuất nhật ký hoạt động & xóa theo thời hạn lưu trữ",
+      "sso": "Cầu nối đăng nhập SSO (OIDC)",
+      "dlp_scan": "DLP / Ẩn danh thông tin cá nhân (PII)",
+      "legal_hold": "Giữ dữ liệu theo yêu cầu pháp lý (Legal hold)"
+    },
+    "category": {
+      "content_security": "Bảo mật nội dung",
+      "content_provenance": "Nguồn gốc nội dung",
+      "audit_retention": "Nhật ký & lưu trữ",
+      "identity_access": "Danh tính & quyền truy cập",
+      "data_protection": "Bảo vệ dữ liệu",
+      "legal_ediscovery": "Pháp lý & eDiscovery"
+    }
   }
 }

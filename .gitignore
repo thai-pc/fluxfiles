@@ -89,6 +89,8 @@ packages/backup/
 packages/c2pa/
 packages/audit-export/
 packages/sso/
+packages/dlp/
+packages/legal-hold/
 
 # License server runtime DB (customer records — never commit)
 services/license-server/data/

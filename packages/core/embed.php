@@ -169,7 +169,7 @@ function fluxfiles_apply_edition_preset(array &$payload, ?string $edition): void
         'pro'        => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
         'agency'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
         'studio'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true],
-        'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true],
+        'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true, 'allow_dlp_scan' => true, 'allow_legal_hold' => true],
     ];
     $claims = $presets[strtolower((string) $edition)] ?? [];
     foreach ($claims as $k => $v) {
@@ -432,7 +432,7 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
         $payload['srcset_sizes'] = (string) $webp['srcset_sizes'];
     }
     // Paid-module claims (3-layer gate; inert unless the module is installed+licensed).
-    foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa'] as $mc) {
+    foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa', 'allow_dlp_scan'] as $mc) {
         if (array_key_exists($mc, $webp)) {
             $payload[$mc] = (bool) $webp[$mc];
         }

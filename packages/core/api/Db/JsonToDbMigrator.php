@@ -60,6 +60,7 @@ class JsonToDbMigrator
             'file_metadata' => $this->migrateFileMetadata($disk, $prefix, $dryRun, $onItem),
             'directories'   => $this->migrateDirectories($disk, $prefix, $dryRun, $onItem),
             'trash'         => $this->migrateTrash($disk, $prefix, $dryRun, $onItem),
+            'legal_holds'   => $this->migrateHolds($disk, $prefix, $dryRun, $onItem),
             'audit'         => $this->migrateAudit($disk, $dryRun, $onItem),
             'sidecar_fallback' => $this->migrateLocalSidecarFallback($disk, $prefix, $dryRun, $onItem),
         ];
@@ -189,6 +190,42 @@ class JsonToDbMigrator
             $counts[$action]++;
             if ($onItem !== null) {
                 $onItem('trash', (string) $id, $action);
+            }
+        }
+        return $counts;
+    }
+
+    // -------------------------------------------------------------------
+    // 3b. Legal holds (_fluxfiles/holds.json) — docs/RETENTION-LEGAL-HOLD-DESIGN.md §5
+    // -------------------------------------------------------------------
+
+    private function migrateHolds(string $disk, string $prefix, bool $dryRun, ?callable $onItem): array
+    {
+        $counts = ['insert' => 0, 'update' => 0, 'skip' => 0];
+        $srcHolds = $this->source->allHolds($disk);
+        foreach ($srcHolds as $id => $entry) {
+            $path = (string) ($entry['path'] ?? '');
+            if (!$this->inPrefix($path, $prefix)) {
+                continue;
+            }
+
+            $existingEntry = $this->destination->getHold($disk, (string) $id);
+            if ($existingEntry === null) {
+                $action = 'insert';
+            } else {
+                // released_at is the one field release() mutates after placement,
+                // so it's the cheapest reliable "did anything change" signal.
+                $srcReleasedAt = $entry['released_at'] ?? null;
+                $dstReleasedAt = $existingEntry['released_at'] ?? null;
+                $action = $srcReleasedAt === $dstReleasedAt ? 'skip' : 'update';
+            }
+
+            if (!$dryRun && $action !== 'skip') {
+                $this->destination->addHold($disk, (string) $id, $entry);
+            }
+            $counts[$action]++;
+            if ($onItem !== null) {
+                $onItem('legal_holds', (string) $id, $action);
             }
         }
         return $counts;

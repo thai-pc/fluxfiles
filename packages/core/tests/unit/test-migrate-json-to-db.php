@@ -278,6 +278,50 @@ test('a newly appended live audit row is detected as missing by verify() before 
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► legal holds (_fluxfiles/holds.json){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+$source->addHold($disk, 'hold-1', ['path' => 'docs/report.pdf', 'is_dir' => false, 'reason' => 'litigation', 'placed_by' => 'admin', 'placed_at' => 1000]);
+$source->addHold($disk, 'hold-2', ['path' => 'other/outside.txt', 'is_dir' => false, 'reason' => 'audit', 'placed_by' => 'admin', 'placed_at' => 1000]);
+
+test('a real run inserts legal holds into the destination', function () use ($migrator, $destination, $disk) {
+    $result = $migrator->migrate($disk, '', false);
+    assertEqual(2, $result['legal_holds']['insert']);
+    $hold = $destination->getHold($disk, 'hold-1');
+    assertTrue($hold !== null);
+    assertEqual('litigation', $hold['reason']);
+});
+
+test('re-running the hold migration is idempotent via released_at comparison', function () use ($migrator, $disk) {
+    $result = $migrator->migrate($disk, '', false);
+    assertEqual(0, $result['legal_holds']['insert']);
+    assertEqual(2, $result['legal_holds']['skip']);
+});
+
+test('releasing a hold in the source is detected as an update on the next migrate() run', function () use ($migrator, $source, $destination, $disk) {
+    $source->releaseHold($disk, 'hold-1', ['released_at' => 2000, 'released_by' => 'admin', 'release_reason' => 'done']);
+    $result = $migrator->migrate($disk, '', false);
+    assertEqual(1, $result['legal_holds']['update']);
+    $hold = $destination->getHold($disk, 'hold-1');
+    assertEqual(2000, $hold['released_at']);
+});
+
+test('--prefix scoping excludes an out-of-scope hold', function () use ($diskManager, $source, $disk) {
+    $freshDb = '/tmp/ff_test_migrate_holds_prefix_' . getmypid() . '.sqlite3';
+    @unlink($freshDb);
+    $conn3 = new Connection('sqlite:' . $freshDb);
+    (new MigrationRunner($conn3))->migrate(__DIR__ . '/../../db/migrations');
+    $destination3 = new DbMetadataHandler($conn3, $diskManager);
+    $migrator3 = new JsonToDbMigrator($diskManager, $source, $destination3);
+
+    $result = $migrator3->migrate($disk, 'docs', false);
+    assertEqual(1, $result['legal_holds']['insert'], 'only hold-1 (docs/report.pdf) is in-scope');
+    assertEqual(null, $destination3->getHold($disk, 'hold-2'), 'out-of-prefix hold must not be migrated');
+
+    @unlink($freshDb);
+});
+
+// ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► orphaned local sidecar fallback{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 

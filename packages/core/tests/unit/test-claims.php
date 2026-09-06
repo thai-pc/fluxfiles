@@ -563,6 +563,56 @@ test('pro_hints defaults ON and is an opt-OUT switch', function () {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// DLP / PII detection-on-write claims (docs/DLP-PII-REDACTION-DESIGN.md §3)
+// ═══════════════════════════════════════════════════════════════
+
+test('allow_dlp_scan defaults false; isAllowed() maps it', function () {
+    assertEqual(false, claimsWith([])->allowDlpScan, 'default off');
+    assertEqual(true, claimsWith(['allow_dlp_scan' => true])->allowDlpScan);
+    assertEqual(true, claimsWith(['allow_dlp_scan' => true])->isAllowed('allow_dlp_scan'));
+    assertEqual(false, claimsWith([])->isAllowed('allow_dlp_scan'), 'default → denied');
+});
+
+test('dlp_entity_types: valid ^[A-Z_]+$ entries kept (uppercased/trimmed), garbage dropped, null/absent stays null', function () {
+    assertEqual(null, claimsWith([])->dlpEntityTypes, 'absent → null (engine full default set)');
+    assertEqual(null, claimsWith(['dlp_entity_types' => null])->dlpEntityTypes, 'explicit null stays null');
+    assertEqual(['US_SSN', 'CREDIT_CARD'], claimsWith(['dlp_entity_types' => ['us_ssn', ' Credit_Card ']])->dlpEntityTypes,
+        'lowercase/whitespace normalized to uppercase/trimmed');
+    // All-garbage input must fall back to null (broadest), NOT an empty allowlist
+    // (an empty array would block nothing — the opposite of "unset").
+    assertEqual(null, claimsWith(['dlp_entity_types' => ['123', 'has space', '', 'lower-case-dash']])->dlpEntityTypes,
+        'all-garbage → null, not []');
+    // Mixed valid + invalid: invalid entries dropped, valid ones kept.
+    assertEqual(['US_SSN'], claimsWith(['dlp_entity_types' => ['US_SSN', '123', 'bad entry!']])->dlpEntityTypes);
+});
+
+test('dlp_scan_extensions: lowercased/no-dot/alnum-only; default built-in list when absent/empty', function () {
+    assertEqual(FluxFiles\Claims::DLP_DEFAULT_SCAN_EXTENSIONS, claimsWith([])->dlpScanExtensions, 'absent → built-in default list');
+    assertEqual(FluxFiles\Claims::DLP_DEFAULT_SCAN_EXTENSIONS, claimsWith(['dlp_scan_extensions' => []])->dlpScanExtensions, 'empty array → default');
+    assertEqual(['txt', 'csv'], claimsWith(['dlp_scan_extensions' => ['.TXT', ' Csv ']])->dlpScanExtensions,
+        'dot stripped, lowercased, trimmed');
+    assertEqual(FluxFiles\Claims::DLP_DEFAULT_SCAN_EXTENSIONS, claimsWith(['dlp_scan_extensions' => ['has space', 'semi;colon']])->dlpScanExtensions,
+        'all-garbage → falls back to default, not []');
+});
+
+test('dlp_max_scan_kb clamped [16, 51200]; 0/absent = default 2048', function () {
+    assertEqual(2048, claimsWith([])->dlpMaxScanKb, 'default 2048');
+    assertEqual(2048, claimsWith(['dlp_max_scan_kb' => 0])->dlpMaxScanKb, '0 = default');
+    assertEqual(500, claimsWith(['dlp_max_scan_kb' => 500])->dlpMaxScanKb, 'in-range carried');
+    assertEqual(16, claimsWith(['dlp_max_scan_kb' => 1])->dlpMaxScanKb, 'floor 16');
+    assertEqual(51200, claimsWith(['dlp_max_scan_kb' => 999999])->dlpMaxScanKb, 'ceiling 51200');
+    assertEqual(2048, claimsWith(['dlp_max_scan_kb' => -5])->dlpMaxScanKb, 'negative = default');
+});
+
+test('dlp_min_score clamped [0, 1]; 0/absent = default 0.6', function () {
+    assertEqual(0.6, claimsWith([])->dlpMinScore, 'default 0.6');
+    assertEqual(0.6, claimsWith(['dlp_min_score' => 0])->dlpMinScore, '0 = default');
+    assertEqual(0.9, claimsWith(['dlp_min_score' => 0.9])->dlpMinScore, 'in-range carried');
+    assertEqual(1.0, claimsWith(['dlp_min_score' => 5])->dlpMinScore, 'ceiling 1.0');
+    assertEqual(0.6, claimsWith(['dlp_min_score' => -1])->dlpMinScore, 'negative = default (not clamped to 0)');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════
 

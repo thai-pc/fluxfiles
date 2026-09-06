@@ -63,6 +63,16 @@ class FileManager
      *            unscanned files. Never set → no scan, no cost. */
     private $virusScanner = null;
 
+    /** @var callable|null PII scan of a locally-staged file, for the paid DLP module:
+     *            `fn(string $localPath, string $name): array{clean:bool, entities:string[]}`.
+     *            Set ONLY when the `allow_dlp_scan` claim is on — same "resolve the
+     *            module/licence gate INSIDE the callback" contract as $virusScanner,
+     *            so a tenant who asked for scanning but has no working engine gets an
+     *            error on write rather than silently unscanned files. Extension/size
+     *            eligibility (§2.1 of docs/DLP-PII-REDACTION-DESIGN.md) is checked in
+     *            assertNoPii() BEFORE this is ever invoked. Never set → no scan, no cost. */
+    private $dlpScanner = null;
+
     public function __construct(
         DiskManager $disks,
         Claims $claims,
@@ -127,6 +137,67 @@ class FileManager
     public function setVirusScanner(callable $fn): void
     {
         $this->virusScanner = $fn;
+    }
+
+    /**
+     * Wire the PII scanner (paid DLP module). The callback scans a file staged on
+     * local disk: `fn(string $localPath, string $name): array{clean:bool, entities:string[]}`.
+     * Set only when the token carries `allow_dlp_scan`; the module/licence gate is
+     * resolved inside the callback so its 501/402/403 surfaces on the write that
+     * needed it. See docs/DLP-PII-REDACTION-DESIGN.md.
+     */
+    public function setDlpScanner(callable $fn): void
+    {
+        $this->dlpScanner = $fn;
+    }
+
+    /**
+     * Reject $localPath if it looks like it contains PII per the tenant's configured
+     * entity types/threshold. No scanner wired → no-op.
+     *
+     * The v1 scan-eligibility filter (§2.1/§9.3 of the design doc) runs FIRST, in
+     * core, before the (possibly-down) engine is ever called: a file whose extension
+     * isn't on `dlp_scan_extensions`, or whose size exceeds `dlp_max_scan_kb`, is
+     * SKIPPED — not blocked, and not logged as scanned. This is the one structural
+     * difference from assertNoVirus (which scans every file, format-agnostic).
+     *
+     * **Fail-closed on purpose** for anything that *is* eligible: anything the
+     * scanner throws (no engine configured, licence expired, Presidio down)
+     * propagates and the write is refused. A malformed verdict counts as detected,
+     * same as assertNoVirus's "malformed verdict counts as infected."
+     */
+    private function assertNoPii(string $localPath, string $name): void
+    {
+        if ($this->dlpScanner === null) {
+            return;
+        }
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        if (!in_array($ext, $this->claims->dlpScanExtensions, true)) {
+            return; // not a text-bearing extension — skip, not block (§2.1)
+        }
+        $maxBytes = $this->claims->dlpMaxScanKb * 1024;
+        $size = @filesize($localPath);
+        if ($size === false) {
+            // Couldn't stat the file at all — this is not a confirmed-oversized skip,
+            // it's an unknown state, so fail closed rather than silently letting an
+            // unscannable write through.
+            throw new ApiException('Could not determine file size for DLP scanning', 500, 'dlp_failed', ['name' => $name]);
+        }
+        if ($size > $maxBytes) {
+            return; // confirmed oversized — skip, not block (§9.3)
+        }
+        $verdict = ($this->dlpScanner)($localPath, $name);
+        if (!is_array($verdict) || ($verdict['clean'] ?? false) !== true) {
+            $entities = (is_array($verdict) && is_array($verdict['entities'] ?? null))
+                ? array_values(array_map('strval', $verdict['entities']))
+                : [];
+            throw new ApiException(
+                'This file appears to contain personal data (PII) the token is not allowed to store',
+                422,
+                'pii_detected',
+                ['name' => $name, 'entities' => $entities]
+            );
+        }
     }
 
     /**
@@ -325,7 +396,25 @@ class FileManager
         $metaMap = !empty($fileKeys) ? $this->meta->getBulk($disk, $fileKeys) : [];
         // Folder created timestamps live in our own dirs index (works on S3/R2 too).
         $dirsCreated = $this->meta->dirsCreated($disk);
+
+        // Legal hold enrichment — free/core, unconditional (docs/RETENTION-LEGAL-HOLD-
+        // DESIGN.md §4.2). Performance guard: skip the whole per-item holdCovering()
+        // loop when the disk has zero active holds — the overwhelmingly common case
+        // for any tenant not using this feature, so non-Enterprise operators pay
+        // nothing for it.
+        $hasActiveHolds = $this->meta->countActiveHolds($disk) > 0;
+        $canSeeHoldDetail = $this->claims->hasPerm('audit');
+
         foreach ($items as &$item) {
+            $hold = $hasActiveHolds ? $this->meta->holdCovering($disk, $item['key']) : null;
+            $item['on_hold'] = $hold !== null;
+            if ($hold !== null && $canSeeHoldDetail) {
+                $item['hold_id']        = $hold['hold_id'] ?? null;
+                $item['hold_reason']    = $hold['reason'] ?? null;
+                $item['hold_placed_by'] = $hold['placed_by'] ?? null;
+                $item['hold_placed_at'] = $hold['placed_at'] ?? null;
+            }
+
             if (($item['type'] ?? '') === 'dir') {
                 $c = $dirsCreated[$item['key']] ?? null;
                 if ($c !== null) {
@@ -414,6 +503,10 @@ class FileManager
         // infected byte ever reaches storage. Scans the ORIGINAL upload: optimize
         // below derives from it, so scanning the original covers both.
         $this->assertNoVirus($file['tmp_name'], $name);
+
+        // PII scan (paid DLP module), same "before anything reads or rewrites the
+        // bytes" placement as the virus scan above. Scans the ORIGINAL upload.
+        $this->assertNoPii($file['tmp_name'], $name);
 
         // Auto-optimize on upload (paid Optimize module). Recompress the image in
         // the temp file BEFORE anything downstream (hash, dims, write, variants) so
@@ -621,6 +714,7 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
         $this->assertOwner($disk, $scoped);
+        $this->assertNoActiveHold($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
         $isDir = false;
@@ -674,6 +768,9 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
         $this->assertOwner($disk, $scoped);
+        // Covers both the file and directory branches below (trashDirectory() is a
+        // private helper only ever reached through here).
+        $this->assertNoActiveHold($disk, $scoped);
 
         $fs = $this->disks->disk($disk);
         $isDir = false;
@@ -946,6 +1043,10 @@ class FileManager
             throw new ApiException('Trash item not found', 404, 'not_found');
         }
         $this->assertTrashScope($entry);
+        // A hold binds to the tenant-visible path, so it must still apply after
+        // the file has been soft-deleted — check the trash entry's ORIGINAL key,
+        // not the internal _fluxfiles/trash/<id>/… path it currently lives at.
+        $this->assertNoActiveHold($disk, (string) ($entry['original_key'] ?? ''));
 
         $fs = $this->disks->disk($disk);
         try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $e) { /* best effort */ }
@@ -954,22 +1055,32 @@ class FileManager
         return ['purged' => true];
     }
 
-    /** Permanently delete every trash item the caller may see. */
+    /**
+     * Permanently delete every trash item the caller may see. Held entries are
+     * SKIPPED, not aborted wholesale — a deliberate, visible trade-off (the
+     * caller sees `held` in the response) rather than a silent partial success
+     * or an all-or-nothing failure on one held item blocking the rest.
+     */
     public function emptyTrash(string $disk): array
     {
         $this->assertDisk($disk);
         $this->assertPerm('delete');
         $fs = $this->disks->disk($disk);
         $n = 0;
+        $held = 0;
         foreach ($this->meta->allTrash($disk) as $id => $e) {
             if (!$this->trashVisible($e)) {
+                continue;
+            }
+            if ($this->meta->holdBlocking($disk, (string) ($e['original_key'] ?? '')) !== null) {
+                $held++;
                 continue;
             }
             try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $ex) { /* best effort */ }
             $this->meta->removeTrash($disk, $id);
             $n++;
         }
-        return ['purged' => $n];
+        return ['purged' => $n, 'held' => $held];
     }
 
     /**
@@ -1025,6 +1136,10 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
         $this->assertOwner($disk, $scoped);
+        // Renaming a held path would let it evade holdBlocking()'s path-string
+        // match (§6 of the design doc) — blocked as a security requirement, not
+        // just a nicety.
+        $this->assertNoActiveHold($disk, $scoped);
 
         $newName = trim($newName);
         if ($newName === '') {
@@ -1108,6 +1223,9 @@ class FileManager
         $scopedFrom = $this->scopedPath($from);
         $this->assertNotSystem($scopedFrom);
         $this->assertOwner($disk, $scopedFrom);
+        // Source-side only — moving a file INTO an existing hold's subtree is
+        // fine (§6 of the design doc); only relocating a held path is blocked.
+        $this->assertNoActiveHold($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
         $this->assertNotSystem($scopedTo);
         $fs = $this->disks->disk($disk);
@@ -1275,6 +1393,8 @@ class FileManager
         $scopedSrc = $this->scopedPath($srcPath);
         $this->assertNotSystem($scopedSrc);
         $this->assertOwner($srcDisk, $scopedSrc);
+        // Source-side only, same as move() above.
+        $this->assertNoActiveHold($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
         $this->assertNotSystem($scopedDst);
         $this->assertRelocationExt($scopedSrc, $scopedDst);
@@ -1952,14 +2072,22 @@ class FileManager
         // to an existing path — a webshell pasted into a .php is exactly what ClamAV
         // catches — so this path is scanned like an upload. The content is already
         // capped at MAX_EDIT_BYTES, so staging it to a temp is bounded.
-        if ($this->virusScanner !== null) {
+        if ($this->virusScanner !== null || $this->dlpScanner !== null) {
             $editTmp = tempnam(sys_get_temp_dir(), 'ffedit');
             if ($editTmp === false || @file_put_contents($editTmp, $content) === false) {
                 if (is_string($editTmp)) { @unlink($editTmp); }
-                throw new ApiException('Could not stage content for scanning', 500, 'virus_failed');
+                // Same staging step feeds both scanners — attribute the failure code to
+                // whichever is actually active (virus takes precedence when both are on,
+                // matching its historical error code at this call site).
+                $code = $this->virusScanner !== null ? 'virus_failed' : 'dlp_failed';
+                throw new ApiException('Could not stage content for scanning', 500, $code);
             }
             try {
                 $this->assertNoVirus($editTmp, basename($scoped));
+                // PII scan (paid DLP module) — the editor writes attacker-influenced
+                // text content, exactly the shape DLP is built to catch (e.g. pasting
+                // a customer export into a .csv/.txt config file).
+                $this->assertNoPii($editTmp, basename($scoped));
             } finally {
                 @unlink($editTmp);
             }
@@ -2626,6 +2754,22 @@ class FileManager
                             );
                         }
                     }
+                    // PII scan (paid DLP module) per entry, BEFORE it is written — same
+                    // two-pass-atomic, no-rollback contract as the virus scan above (one
+                    // PII-bearing entry aborts the rest of the archive; entries already
+                    // written stay written).
+                    if ($this->dlpScanner !== null) {
+                        try {
+                            $this->assertNoPii($entryTmp, basename($e['target']));
+                        } catch (ApiException $ex) {
+                            throw new ApiException(
+                                $ex->getMessage(),
+                                $ex->getHttpCode(),
+                                $ex->getErrorCode(),
+                                $ex->getErrorParams() + ['entry' => $e['orig'], 'extracted' => $written]
+                            );
+                        }
+                    }
                     $in = fopen($entryTmp, 'rb');
                     $fs->writeStream($e['target'], $in);
                     if (is_resource($in)) {
@@ -2886,6 +3030,30 @@ class FileManager
     }
 
     /**
+     * Legal hold enforcement — free/core and license-independent (see
+     * docs/RETENTION-LEGAL-HOLD-DESIGN.md §2/§5). Unlike every other paid-module
+     * hook on this class (virusScanner/dlpScanner/versionKeeper/…), this check
+     * has NO installed/licensed/claim gate at all: once a hold exists in
+     * holds.json, it blocks delete/trash/rename/move/cross-move/purge
+     * unconditionally, so a lapsed license or an uninstalled module can never
+     * silently stop enforcing an already-placed hold. Only PLACING/RELEASING a
+     * hold (the `legal-hold` module's own routes) is paid-gated.
+     */
+    private function assertNoActiveHold(string $disk, string $scopedPath): void
+    {
+        $hold = $this->meta->holdBlocking($disk, $scopedPath);
+        if ($hold !== null) {
+            $params = ['hold_id' => $hold['hold_id'] ?? null, 'path' => $scopedPath];
+            if ($this->claims->hasPerm('audit')) {
+                $params['reason'] = $hold['reason'] ?? null;
+                $params['placed_by'] = $hold['placed_by'] ?? null;
+                $params['placed_at'] = $hold['placed_at'] ?? null;
+            }
+            throw new ApiException('This item is under legal hold and cannot be modified', 403, 'legal_hold_active', $params);
+        }
+    }
+
+    /**
      * Block access to internal system paths (_fluxfiles/, _variants/) and to the
      * reserved "{name}.meta.json" filename shape. The latter is a normal, writable
      * path in the user's own namespace, but StorageMetadataHandler treats any
@@ -3075,14 +3243,19 @@ class FileManager
         $this->assertSafeFilename(basename($scopedPath));
 
         $fs = $this->disks->disk($disk);
-        if ($this->virusScanner !== null) {
+        if ($this->virusScanner !== null || $this->dlpScanner !== null) {
             $tmp = tempnam(sys_get_temp_dir(), 'ffwsf');
             if ($tmp === false || @file_put_contents($tmp, $content) === false) {
                 if (is_string($tmp)) { @unlink($tmp); }
-                throw new ApiException('Could not stage content for scanning', 500, 'virus_failed');
+                $code = $this->virusScanner !== null ? 'virus_failed' : 'dlp_failed';
+                throw new ApiException('Could not stage content for scanning', 500, $code);
             }
             try {
                 $this->assertNoVirus($tmp, basename($scopedPath));
+                // PII scan (paid DLP module) — module-generated bytes (AI Vision output,
+                // C2PA-signed output, …) go through this same shared write path, so DLP
+                // coverage is free for any future module that writes through it too.
+                $this->assertNoPii($tmp, basename($scopedPath));
             } finally {
                 @unlink($tmp);
             }
@@ -3116,6 +3289,9 @@ class FileManager
             fclose($out);
             if ($this->virusScanner !== null) {
                 $this->assertNoVirus($tmp, basename($scopedPath));
+            }
+            if ($this->dlpScanner !== null) {
+                $this->assertNoPii($tmp, basename($scopedPath));
             }
             $in = fopen($tmp, 'rb');
             if ($in === false) {

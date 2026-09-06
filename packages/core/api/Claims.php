@@ -196,6 +196,40 @@ class Claims
     public bool $allowBackup = false;      // Backup Bridge: SFTP↔S3 sync (fluxfiles/backup)
     public bool $allowC2pa = false;        // C2PA content provenance (fluxfiles/c2pa)
     public bool $allowAuditExport = false; // Audit log export/purge (fluxfiles/audit-export)
+    public bool $allowDlpScan = false;     // DLP/PII detection on write (fluxfiles/dlp)
+    public bool $allowLegalHold = false;   // Legal hold / retention — place/release only (fluxfiles/legal-hold)
+
+    // ── DLP / PII detection-on-write (Enterprise bundle) ──────────────────
+    // See docs/DLP-PII-REDACTION-DESIGN.md. Mirrors allow_virus_scan's shape: a
+    // 3-layer-gated module + a fail-closed FileManager hook. The eligibility
+    // pre-filter (extension + size cap) below is checked in CORE, before the
+    // module is ever invoked, so an engine outage never blocks a non-text upload.
+    /** @var string[]|null Allowlist of Presidio entity-type names that trigger a
+     *            block (e.g. ["US_SSN","CREDIT_CARD"]). null = the engine's full
+     *            default detection set (unfiltered) — matches the existing
+     *            `allowed_ext: null = broadest` precedent rather than a hidden
+     *            curated default. Sanitized: uppercased/trimmed, must match
+     *            `^[A-Z_]+$`, else dropped. */
+    public ?array $dlpEntityTypes = null;
+    /** @var string[] v1 scan-eligibility allowlist — extensions outside this list
+     *            are skipped, not blocked, even with allow_dlp_scan on. Lowercase,
+     *            no dot, alnum only. Defaults to a built-in text-bearing list when
+     *            the claim is absent/empty. */
+    public array $dlpScanExtensions = [];
+    /** @var int Per-file cap (KB) on bytes read and sent to the engine. A file over
+     *            this cap is skipped, not blocked. Clamped [16, 51200]. 0/absent
+     *            → default 2048 (2 MB). */
+    public int $dlpMaxScanKb = 2048;
+    /** @var float Minimum Presidio confidence score (0–1) an entity match must
+     *            reach to count as "detected". Clamped [0, 1]. 0/absent → default
+     *            0.6 (same "0 means unset, use default" convention as versioningMax). */
+    public float $dlpMinScore = 0.6;
+
+    /** Built-in text-bearing extension allowlist used when `dlp_scan_extensions`
+     *  is absent/empty (§3 of the design doc). */
+    public const DLP_DEFAULT_SCAN_EXTENSIONS = [
+        'txt', 'csv', 'tsv', 'json', 'ndjson', 'log', 'md', 'yaml', 'yml', 'xml', 'html', 'htm', 'sql',
+    ];
 
     /** @var int Days of audit history a purge call should keep, resolved server-side
      *           by the /api/fm/audit/purge route when the request body omits `before`.
@@ -505,6 +539,51 @@ class Claims
     }
 
     /**
+     * Sanitize `dlp_entity_types`: uppercase/trim each entry, keep only ones matching
+     * Presidio's entity-type naming convention (`^[A-Z_]+$`), drop the rest. Returns
+     * null when nothing usable remains — null means "engine's full default set" (§3
+     * of docs/DLP-PII-REDACTION-DESIGN.md), so an all-garbage input is NOT the same
+     * as an empty allowlist (which would block nothing).
+     *
+     * @return string[]|null
+     */
+    public static function sanitizeDlpEntityTypes($raw): ?array
+    {
+        if (!is_array($raw)) {
+            return null;
+        }
+        $out = [];
+        foreach ($raw as $v) {
+            $t = strtoupper(trim((string) $v));
+            if ($t !== '' && preg_match('/^[A-Z_]+$/', $t)) {
+                $out[$t] = true;
+            }
+        }
+        return $out === [] ? null : array_keys($out);
+    }
+
+    /**
+     * Sanitize `dlp_scan_extensions`: lowercase, strip a leading dot, alnum only —
+     * same normalization as `allowed_ext`. Falls back to the built-in text-bearing
+     * default list when the claim is absent or nothing usable remains.
+     *
+     * @return string[]
+     */
+    public static function sanitizeDlpScanExtensions($raw): array
+    {
+        $out = [];
+        if (is_array($raw)) {
+            foreach ($raw as $v) {
+                $e = strtolower(ltrim(trim((string) $v), '.'));
+                if ($e !== '' && ctype_alnum($e)) {
+                    $out[$e] = true;
+                }
+            }
+        }
+        return $out === [] ? self::DLP_DEFAULT_SCAN_EXTENSIONS : array_keys($out);
+    }
+
+    /**
      * @param object $payload JWT payload
      * @param string $secret  FLUXFILES_SECRET (needed to decrypt BYOB credentials)
      */
@@ -641,6 +720,17 @@ class Claims
         $c->allowC2pa = (bool) ($payload->allow_c2pa ?? false);
         $c->allowAuditExport = (bool) ($payload->allow_audit_export ?? false);
         $c->auditRetentionDays = max(0, (int) ($payload->audit_retention_days ?? 0));
+        $c->allowDlpScan = (bool) ($payload->allow_dlp_scan ?? false);
+        $c->dlpEntityTypes = isset($payload->dlp_entity_types) ? self::sanitizeDlpEntityTypes($payload->dlp_entity_types) : null;
+        $c->dlpScanExtensions = self::sanitizeDlpScanExtensions($payload->dlp_scan_extensions ?? null);
+        $dlpMaxScanKb = (int) ($payload->dlp_max_scan_kb ?? 0);
+        $c->dlpMaxScanKb = $dlpMaxScanKb > 0 ? max(16, min(51200, $dlpMaxScanKb)) : 2048;
+        $dlpMinScore = (float) ($payload->dlp_min_score ?? 0);
+        $c->dlpMinScore = $dlpMinScore > 0 ? max(0.0, min(1.0, $dlpMinScore)) : 0.6;
+        // Legal hold: gates PLACING/RELEASING a hold only (module management routes).
+        // Enforcement of an already-placed hold (blocking delete/trash/rename/move/
+        // purge) is free/core and NEVER checks this claim — see docs/RETENTION-LEGAL-HOLD-DESIGN.md §2.
+        $c->allowLegalHold = (bool) ($payload->allow_legal_hold ?? false);
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));
         $c->optimizeKeepOriginal = (bool) ($payload->optimize_keep_original ?? false);
@@ -741,6 +831,8 @@ class Claims
             case 'allow_backup':     return $this->allowBackup;
             case 'allow_c2pa':       return $this->allowC2pa;
             case 'allow_audit_export': return $this->allowAuditExport;
+            case 'allow_dlp_scan':    return $this->allowDlpScan;
+            case 'allow_legal_hold': return $this->allowLegalHold;
             default:                 return false;
         }
     }

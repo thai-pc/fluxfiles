@@ -349,6 +349,19 @@ try {
         });
     }
 
+    // DLP / PII scan (paid module, Enterprise bundle). Same lazy-gate-inside-callback
+    // contract as virus scanning above: wired only when the token asks for it
+    // (`allow_dlp_scan`), and ModuleRegistry::require() resolves install/license/claim
+    // on the first eligible write rather than here, so a plain read never pays the
+    // gate cost. See docs/DLP-PII-REDACTION-DESIGN.md.
+    if ($claims->allowDlpScan) {
+        $fm->setDlpScanner(static function (string $localPath, string $name) use ($claims): array {
+            /** @var \FluxFiles\Dlp\DlpModule $dlp */
+            $dlp = \FluxFiles\ModuleRegistry::require('dlp', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            return $dlp->scanPath($localPath, $claims->dlpEntityTypes, $claims->dlpMinScore);
+        });
+    }
+
     // Webhooks (paid module). Fire a signed HTTP POST on file events. Wired only when
     // the token carries a `webhook_url` + `allow_webhooks` AND the module is installed
     // + licensed. Event-driven = stateless: it fires on the request that caused the
@@ -442,7 +455,9 @@ try {
             ? (string) ($body['cmd'] ?? '')
             : ($auditAction === 'git_deploy'
                 ? $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '')
-                : null);
+                : (in_array($auditAction, ['legal_hold_place', 'legal_hold_release'], true)
+                    ? (string) ($body['reason'] ?? '')
+                    : null));
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey, null, null, $auditDetail);
 
         // Capture the webhook event; it's DISPATCHED AFTER the response is flushed
@@ -486,6 +501,57 @@ try {
             );
         } catch (\Throwable $ignored) {
             // Auditing must never turn a clean 422 into a 500.
+        }
+    }
+    // A blocked PII write is the same kind of security event virus_detected is —
+    // it must leave a trace even though the write itself failed. `detail` carries
+    // ONLY the matched entity-TYPE names (never matched text/offsets/counts — see
+    // §6.2 of docs/DLP-PII-REDACTION-DESIGN.md), matching the plain-string shape
+    // every other audit `detail` already uses.
+    if ($e->getErrorCode() === 'pii_detected' && isset($auditLog, $claims)) {
+        $p = $e->getErrorParams();
+        try {
+            $dBody = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+            $auditLog->log(
+                $claims->userId,
+                'dlp_blocked',
+                (string) ($_POST['disk'] ?? $dBody['disk'] ?? 'local'),
+                (string) ($p['name'] ?? $p['entry'] ?? ''),
+                null,
+                null,
+                implode(',', array_map('strval', (array) ($p['entities'] ?? [])))
+            );
+        } catch (\Throwable $ignored) {
+            // Auditing must never turn a clean 422 into a 500.
+        }
+    }
+    // A refused delete/trash/rename/move on a held path is itself a security-relevant
+    // event (someone tried to destroy/modify evidence) — leave a trace even though
+    // the write itself failed, same as virus_blocked/dlp_blocked above. Enforcement
+    // runs unconditionally inside FileManager (free/core, no module/claim check), so
+    // this fires regardless of whether the legal-hold module is installed/licensed.
+    if ($e->getErrorCode() === 'legal_hold_active' && isset($auditLog, $claims)) {
+        $p = $e->getErrorParams();
+        try {
+            $hBody = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+            $hRawKey = (string) ($hBody['path'] ?? $hBody['from'] ?? $hBody['src_path'] ?? '');
+            // /trash/purge's body is {disk, trash_id} only — no path in the request —
+            // so fall back to the scoped path FileManager::assertNoActiveHold() already
+            // put in the exception params (resolved from the trash entry's
+            // original_key). Unlike $hRawKey, that one is already an internal scoped
+            // storage key, so it must NOT be passed through scopePath() again.
+            $hKey = $hRawKey !== '' ? $claims->scopePath($hRawKey) : (string) ($p['path'] ?? '');
+            $auditLog->log(
+                $claims->userId,
+                'legal_hold_blocked',
+                (string) ($hBody['disk'] ?? $hBody['src_disk'] ?? $_POST['disk'] ?? 'local'),
+                $hKey,
+                null,
+                null,
+                (string) ($p['hold_id'] ?? '')
+            );
+        } catch (\Throwable $ignored) {
+            // Auditing must never turn a clean 403 into a 500.
         }
     }
     http_response_code($e->getHttpCode());
@@ -1103,6 +1169,19 @@ function routeRequest(
         );
     }
 
+    // Compliance Readiness Scorecard (free/core, docs/COMPLIANCE-SCORECARD-DESIGN.md) —
+    // a read-only capability checklist (virus scan / C2PA / audit export / SSO / DLP /
+    // legal hold), gated by the same 'audit' perm as the activity log (introspection
+    // over the tenant's own configuration, not a new capability). No module/license
+    // gate on the VIEW itself — every paid row simply reads `available: false` on an
+    // unlicensed server so free-core operators still see the full checklist.
+    if ($method === 'GET' && $uri === '/api/fm/compliance/scorecard') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        return \FluxFiles\ComplianceScorecard::build($claims, \FluxFiles\LicenseManager::fromEnv());
+    }
+
     // Audit export (paid module) — a full, unpaginated download of the tenant's
     // audit history (live + archived), as NDJSON or CSV. Bypasses the JSON encoder
     // like /api/fm/zip: the module streams its own headers + body, then we exit.
@@ -1151,6 +1230,85 @@ function routeRequest(
         return $module->purge($metaRepo, $claims, $disk, $before);
     }
 
+    // Legal hold — STATUS is free/core (visibility, no license/claim check):
+    // reads the same 'audit' bucket used elsewhere in this file only to decide
+    // whether to include the (potentially sensitive) reason/placed_by/placed_at
+    // detail, not to gate access to the endpoint itself.
+    if ($method === 'GET' && $uri === '/api/fm/hold/status') {
+        if (!$claims->hasPerm('read')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        $disk = (string) ($_GET['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        $path = (string) ($_GET['path'] ?? '');
+        $hold = $metaRepo->holdCovering($disk, $claims->scopePath($path));
+        if ($hold === null) {
+            return ['on_hold' => false];
+        }
+        $out = ['on_hold' => true, 'hold_id' => $hold['hold_id'] ?? null];
+        if ($claims->hasPerm('audit')) {
+            $out['reason'] = $hold['reason'] ?? null;
+            $out['placed_by'] = $hold['placed_by'] ?? null;
+            $out['placed_at'] = $hold['placed_at'] ?? null;
+        }
+        return $out;
+    }
+
+    // Legal hold — PLACE/RELEASE/LIST are the paid-gated management half (see
+    // docs/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself — actually
+    // blocking delete/trash/rename/move on a held path — is free/core and
+    // license-independent, wired unconditionally into FileManager::assertNoActiveHold();
+    // it keeps working even if this module is uninstalled or the license lapses.
+    if ($method === 'POST' && $uri === '/api/fm/hold') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        $b = jsonBodyAll();
+        $disk = (string) ($b['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        if (!isset($b['path'])) {
+            throw new ApiException('Missing required field: path', 400, 'missing_param');
+        }
+        /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
+        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->place($metaRepo, $diskManager, $claims, $disk, (string) $b['path'], (string) ($b['reason'] ?? ''));
+    }
+
+    if ($method === 'POST' && $uri === '/api/fm/hold/release') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        $b = jsonBodyAll();
+        $disk = (string) ($b['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        if (!isset($b['hold_id'])) {
+            throw new ApiException('Missing required field: hold_id', 400, 'missing_param');
+        }
+        /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
+        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->release($metaRepo, $claims, $disk, (string) $b['hold_id'], (string) ($b['reason'] ?? ''));
+    }
+
+    if ($method === 'GET' && $uri === '/api/fm/hold/list') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        $disk = (string) ($_GET['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        $includeReleased = filter_var($_GET['include_released'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
+        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return $module->list($metaRepo, $claims, $disk, $includeReleased);
+    }
+
     // Bucket Doctor — diagnose a disk's storage backend (creds, permissions,
     // CORS, presign). Requires write (it writes/deletes a probe object) on a
     // disk the token may access; the host can run it on an ephemeral BYOB token
@@ -1178,6 +1336,17 @@ function routeRequest(
             'virus_unscannable'
         );
     }
+    // Same unscannable-side-door problem, same resolution, for DLP: S3-multipart
+    // bytes go browser→S3 and never reach this server, so a PII scan can never run
+    // on them. Independent `if` — allow_virus_scan and allow_dlp_scan are orthogonal
+    // claims, either (or both) can be on, and each must 409 on its own.
+    if ($claims->allowDlpScan && str_starts_with($uri, '/api/fm/chunk/')) {
+        throw new ApiException(
+            'Chunked upload cannot be scanned for PII — use the standard upload, or turn off allow_dlp_scan',
+            409,
+            'dlp_unscannable'
+        );
+    }
     if ($method === 'POST' && $uri === '/api/fm/chunk/init') {
         return handleChunkInit($chunker, $claims, $fm, $quotaManager);
     }
@@ -1198,6 +1367,8 @@ function resolveAuditAction(string $uri): string
 {
     $map = [
         '/audit/purge' => 'audit_purge',
+        '/hold/release' => 'legal_hold_release',
+        '/hold'       => 'legal_hold_place',
         '/trash/restore' => 'restore',
         '/trash/purge'   => 'purge',
         '/trash/empty'   => 'empty_trash',

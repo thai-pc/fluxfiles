@@ -18,7 +18,7 @@ defined('ABSPATH') || exit;
 class FluxFilesDbSchema
 {
     /** Bump whenever the SQL below changes; drives the admin_init upgrade check. */
-    public const VERSION = '1.1.0';
+    public const VERSION = '1.2.0';
 
     public static function install(): void
     {
@@ -31,6 +31,7 @@ class FluxFilesDbSchema
         $tDirs = $wpdb->prefix . 'fluxfiles_directories';
         $tTrash = $wpdb->prefix . 'fluxfiles_trash';
         $tAudit = $wpdb->prefix . 'fluxfiles_audit_log';
+        $tHolds = $wpdb->prefix . 'fluxfiles_legal_holds';
 
         $sql = "CREATE TABLE {$tFileMeta} (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -104,6 +105,21 @@ CREATE TABLE {$tAudit} (
   KEY disk_created_at (disk,created_at),
   KEY disk_action_created_at (disk,action,created_at),
   UNIQUE KEY disk_content_hash (disk,content_hash)
+) {$charsetCollate};
+
+CREATE TABLE {$tHolds} (
+  disk varchar(64) NOT NULL,
+  id varchar(64) NOT NULL,
+  path TEXT COLLATE utf8mb4_bin NOT NULL,
+  is_dir smallint(6) DEFAULT 0,
+  reason text NULL,
+  placed_by varchar(191) NULL,
+  placed_at bigint(20) NULL,
+  released_at bigint(20) NULL,
+  released_by varchar(191) NULL,
+  release_reason text NULL,
+  PRIMARY KEY  (disk,id),
+  KEY disk_released_at (disk,released_at)
 ) {$charsetCollate};";
 
         dbDelta($sql);

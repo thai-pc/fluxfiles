@@ -313,6 +313,9 @@
     "virus_unscannable": "청크 업로드는 바이러스 검사를 할 수 없습니다. 일반 업로드를 사용하세요.",
     "virus_unavailable": "이 서버에 바이러스 검사기가 구성되어 있지 않습니다.",
     "virus_failed": "바이러스 검사를 완료하지 못했습니다.",
+    "pii_detected": "이 파일은 개인정보({entities})가 포함된 것으로 보여 차단되었습니다.",
+    "dlp_unscannable": "청크 업로드는 개인정보 검사를 할 수 없습니다. 일반 업로드를 사용하세요.",
+    "dlp_failed": "개인정보 검사를 완료하지 못했습니다.",
     "storage_not_writable": "저장소에 쓸 수 없습니다.",
     "terminal_disabled": "이 서버에서는 터미널이 비활성화되어 있습니다.",
     "terminal_forbidden": "터미널 사용이 허용되지 않습니다.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.",
     "metadata_export_unavailable": "메타데이터 내보내기는 데이터베이스 스토리지 백엔드가 필요합니다.",
     "metadata_import_unavailable": "메타데이터 가져오기는 데이터베이스 스토리지 백엔드가 필요합니다.",
-    "metadata_import_rejected": "가져오기가 거부되었습니다 — 하나 이상의 행이 허용 범위를 벗어났습니다."
+    "metadata_import_rejected": "가져오기가 거부되었습니다 — 하나 이상의 행이 허용 범위를 벗어났습니다.",
+    "legal_hold_active": "이 항목은 법적 보존 중이라 수정할 수 없습니다.",
+    "legal_hold_not_found": "해당 법적 보존을 찾을 수 없습니다.",
+    "legal_hold_already_released": "이 법적 보존은 이미 해제되었습니다.",
+    "legal_hold_already_active": "이 경로에는 이미 활성화된 법적 보존이 있습니다.",
+    "legal_hold_reason_required": "사유(1~1000자)를 입력해야 합니다.",
+    "legal_hold_scope": "이 법적 보존에 대한 접근이 거부되었습니다.",
+    "legal_hold_max_active": "활성화된 법적 보존의 최대 개수에 도달했습니다."
   },
   "presign": {
     "title": "서명된 URL",
@@ -414,7 +424,11 @@
       "unknown": "기타",
       "terminal": "터미널 명령",
       "virus_blocked": "바이러스 차단",
-      "watermark_remove": "워터마크 제거"
+      "dlp_blocked": "개인정보 차단",
+      "watermark_remove": "워터마크 제거",
+      "legal_hold_place": "법적 보존이 설정됨",
+      "legal_hold_release": "법적 보존이 해제됨",
+      "legal_hold_blocked": "법적 보존으로 차단됨"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "이 버전을 복원하시겠습니까? 현재 파일이 교체됩니다(먼저 현재 파일의 스냅샷이 저장되므로 되돌릴 수 있습니다).",
     "restored": "버전이 복원되었습니다",
     "pro_teaser": "파일의 모든 이전 버전을 보관하고 덮어쓰기를 언제든 되돌리세요."
+  },
+  "legal_hold": {
+    "title": "법적 보존",
+    "note": "해제될 때까지 이 파일 또는 폴더의 삭제, 휴지통 이동, 이름 변경, 이동을 차단합니다 — 소송 또는 규정 준수 보존 목적입니다.",
+    "place": "법적 보존 설정…",
+    "release": "보존 해제…",
+    "reason_label": "사유",
+    "reason_placeholder": "이 항목을 보존하는 이유는 무엇인가요? (필수)",
+    "placed_by": "{name}이(가) 설정함",
+    "since": "{date}부터 법적 보존 중",
+    "confirm_release": "이 법적 보존을 해제하시겠습니까? 해제하면 삭제 및 이동이 다시 허용됩니다.",
+    "badge_tooltip_admin": "{date}부터 법적 보존 중 — {name}이(가) 설정함",
+    "badge_tooltip_user": "이 항목은 보호되어 있어 삭제하거나 이동할 수 없습니다.",
+    "context_menu": "법적 보존…",
+    "busy": "처리 중…",
+    "placed": "법적 보존이 설정됨",
+    "released": "법적 보존이 해제됨",
+    "pro_teaser": "소송 또는 규정 준수 보존을 위해 파일이나 폴더의 삭제·수정을 차단하는 법적 보존을 설정합니다."
   },
   "aivision": {
     "title": "AI 비전",
@@ -646,5 +678,35 @@
     "col_received": "받은 수",
     "revoke_confirm": "이 업로드 포털을 해지할까요? 아무도 파일을 보낼 수 없게 됩니다.",
     "pro_teaser": "계정 없이도 상대방이 파일을 보낼 수 있습니다 — 내 저장소로 바로 들어옵니다."
+  },
+  "compliance": {
+    "title": "컴플라이언스",
+    "disclaimer": "이 토큰에서 활성화된 FluxFiles 기능을 보여줍니다. 법적 또는 규제 준수 인증이 아닙니다.",
+    "summary_one": "사용 가능한 {total}개 기능 중 {enabled}개 활성화됨",
+    "summary_other": "사용 가능한 {total}개 기능 중 {enabled}개 활성화됨",
+    "status_on": "켜짐",
+    "status_off": "꺼짐",
+    "status_locked": "잠김",
+    "reason_claim_off": "사용 가능하지만 이 토큰에서는 비활성화됨",
+    "reason_not_licensed": "설치되었지만 라이선스가 없음",
+    "reason_not_installed": "설치되지 않음",
+    "copy_snippet": "claim 복사",
+    "upgrade_cta": "더 알아보기",
+    "item": {
+      "virus_scan": "업로드 시 바이러스/악성코드 검사",
+      "c2pa": "콘텐츠 출처 증명(C2PA)",
+      "audit_export": "감사 로그 내보내기 및 보존 기간 삭제",
+      "sso": "SSO 로그인 브리지(OIDC)",
+      "dlp_scan": "DLP / 개인정보(PII) 마스킹",
+      "legal_hold": "법적 보존(Legal Hold)"
+    },
+    "category": {
+      "content_security": "콘텐츠 보안",
+      "content_provenance": "콘텐츠 출처",
+      "audit_retention": "감사 및 보존",
+      "identity_access": "ID 및 접근",
+      "data_protection": "데이터 보호",
+      "legal_ediscovery": "법무 및 전자증거개시"
+    }
   }
 }

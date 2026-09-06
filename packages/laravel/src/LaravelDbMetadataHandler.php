@@ -727,4 +727,117 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
     {
         $this->table('fluxfiles_trash')->where('disk', $disk)->where('id', $id)->delete();
     }
+
+    // ---------------------------------------------------------------------
+    // Legal hold (retention) — direct port of FluxFiles\Db\DbMetadataHandler's
+    // legal_holds table, same field shape. Free/core storage primitives;
+    // enforcement lives in FileManager::assertNoActiveHold(), not here.
+    // ---------------------------------------------------------------------
+
+    private function rowToHoldEntry(array $row): array
+    {
+        return [
+            'path'           => $row['path'],
+            'is_dir'         => (bool) $row['is_dir'],
+            'disk'           => $row['disk'],
+            'reason'         => $row['reason'],
+            'placed_by'      => $row['placed_by'],
+            'placed_at'      => $row['placed_at'] !== null ? (int) $row['placed_at'] : null,
+            'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
+            'released_by'    => $row['released_by'],
+            'release_reason' => $row['release_reason'],
+        ];
+    }
+
+    public function allHolds(string $disk): array
+    {
+        $rows = $this->table('fluxfiles_legal_holds')->where('disk', $disk)->get();
+        $out = [];
+        foreach ($rows as $row) {
+            $row = (array) $row;
+            $out[$row['id']] = $this->rowToHoldEntry($row);
+        }
+        return $out;
+    }
+
+    public function getHold(string $disk, string $id): ?array
+    {
+        $row = $this->table('fluxfiles_legal_holds')->where('disk', $disk)->where('id', $id)->first();
+        return $row === null ? null : $this->rowToHoldEntry((array) $row);
+    }
+
+    public function addHold(string $disk, string $id, array $entry): void
+    {
+        $row = [
+            'disk'           => $disk,
+            'id'             => $id,
+            'path'           => $entry['path'] ?? '',
+            'is_dir'         => !empty($entry['is_dir']) ? 1 : 0,
+            'reason'         => $entry['reason'] ?? null,
+            'placed_by'      => $entry['placed_by'] ?? null,
+            'placed_at'      => $entry['placed_at'] ?? null,
+            'released_at'    => $entry['released_at'] ?? null,
+            'released_by'    => $entry['released_by'] ?? null,
+            'release_reason' => $entry['release_reason'] ?? null,
+        ];
+
+        $this->table('fluxfiles_legal_holds')->updateOrInsert(
+            ['disk' => $disk, 'id' => $id],
+            $row
+        );
+    }
+
+    public function releaseHold(string $disk, string $id, array $releaseInfo): void
+    {
+        $existing = $this->getHold($disk, $id);
+        if ($existing === null) {
+            return; // caller already validated existence before calling
+        }
+        $this->addHold($disk, $id, array_merge($existing, $releaseInfo));
+    }
+
+    public function countActiveHolds(string $disk): int
+    {
+        return $this->table('fluxfiles_legal_holds')
+            ->where('disk', $disk)->whereNull('released_at')->count();
+    }
+
+    public function holdCovering(string $disk, string $scopedPath): ?array
+    {
+        return $this->findOverlappingHold($disk, $scopedPath, false);
+    }
+
+    public function holdBlocking(string $disk, string $scopedPath): ?array
+    {
+        return $this->findOverlappingHold($disk, $scopedPath, true);
+    }
+
+    /**
+     * Same prefix-overlap semantics as StorageMetadataHandler/Db\DbMetadataHandler's
+     * findOverlappingHold() — kept as a plain PHP scan (not SQL LIKE) so all three
+     * backends can never silently diverge on this security-relevant comparison.
+     */
+    private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
+    {
+        $scopedPath = trim($scopedPath, '/');
+        if ($scopedPath === '') {
+            return null;
+        }
+        foreach ($this->allHolds($disk) as $id => $entry) {
+            if ($entry['released_at'] !== null) {
+                continue; // released holds never block/cover
+            }
+            $holdPath = trim((string) ($entry['path'] ?? ''), '/');
+            if ($holdPath === '') {
+                continue;
+            }
+            $overlaps = $holdPath === $scopedPath
+                || strpos($scopedPath, $holdPath . '/') === 0
+                || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
+            if ($overlaps) {
+                return ['hold_id' => $id] + $entry;
+            }
+        }
+        return null;
+    }
 }

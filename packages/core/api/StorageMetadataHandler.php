@@ -16,6 +16,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private const INDEX_KEY = '_fluxfiles/index.json';
     private const DIRS_KEY  = '_fluxfiles/dirs.json';
     private const TRASH_KEY = '_fluxfiles/trash.json';
+    private const HOLDS_KEY = '_fluxfiles/holds.json';
     private const AUDIT_KEY = '_fluxfiles/audit.jsonl';
     private const AUDIT_ARCHIVE_DIR = '_fluxfiles/audit/archive/';
     private const MAX_AUDIT_BYTES = 5 * 1024 * 1024; // 5MB rotation threshold
@@ -1009,6 +1010,128 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $fs->createDirectory($dir);
         }
         $fs->write(self::TRASH_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    // ---------------------------------------------------------------------
+    // Legal hold index (docs/RETENTION-LEGAL-HOLD-DESIGN.md §5) — id => manifest,
+    // one JSON object per disk, file-locked under the SAME index lock as the
+    // metadata index and trash (a hold is infrequent, so a fourth lock file
+    // isn't warranted — unlike audit's own dedicated higher-volume lock).
+    // ---------------------------------------------------------------------
+
+    /** @return array<string,array> */
+    public function allHolds(string $disk): array
+    {
+        $fs = $this->diskManager->disk($disk);
+        if (!$fs->fileExists(self::HOLDS_KEY)) {
+            return [];
+        }
+        try {
+            $data = json_decode($fs->read(self::HOLDS_KEY), true);
+            return is_array($data) ? $data : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    public function getHold(string $disk, string $id): ?array
+    {
+        $all = $this->allHolds($disk);
+        return $all[$id] ?? null;
+    }
+
+    public function addHold(string $disk, string $id, array $entry): void
+    {
+        $this->acquireIndexLock($disk);
+        try {
+            $all = $this->allHolds($disk);
+            $all[$id] = $entry;
+            $this->saveHolds($disk, $all);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    /**
+     * Marks a hold released — the entry is NEVER removed (a "was this file ever
+     * held, and when was it lifted" question must still be answerable long after
+     * release, mirroring Intake's revoke-writes-a-tombstone pattern).
+     */
+    public function releaseHold(string $disk, string $id, array $releaseInfo): void
+    {
+        $this->acquireIndexLock($disk);
+        try {
+            $all = $this->allHolds($disk);
+            if (!isset($all[$id])) {
+                return; // caller already validated existence before calling
+            }
+            $all[$id] = array_merge($all[$id], $releaseInfo);
+            $this->saveHolds($disk, $all);
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    public function countActiveHolds(string $disk): int
+    {
+        $n = 0;
+        foreach ($this->allHolds($disk) as $entry) {
+            if (($entry['released_at'] ?? null) === null) {
+                $n++;
+            }
+        }
+        return $n;
+    }
+
+    public function holdCovering(string $disk, string $scopedPath): ?array
+    {
+        return $this->findOverlappingHold($disk, $scopedPath, false);
+    }
+
+    public function holdBlocking(string $disk, string $scopedPath): ?array
+    {
+        return $this->findOverlappingHold($disk, $scopedPath, true);
+    }
+
+    /**
+     * Shared path-prefix overlap check for holdCovering()/holdBlocking(). Hold
+     * `H` and target `P` overlap when `H.path === P`, or `H.path` is a prefix of
+     * `P` (ancestor-or-self — covers both flavors), or — bidirectional only —
+     * `P` is a prefix of `H.path` (the target is an ancestor of the held path).
+     * Only ACTIVE (released_at === null) entries are considered.
+     */
+    private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
+    {
+        $scopedPath = trim($scopedPath, '/');
+        if ($scopedPath === '') {
+            return null;
+        }
+        foreach ($this->allHolds($disk) as $id => $entry) {
+            if (($entry['released_at'] ?? null) !== null) {
+                continue; // released holds never block/cover
+            }
+            $holdPath = trim((string) ($entry['path'] ?? ''), '/');
+            if ($holdPath === '') {
+                continue;
+            }
+            $overlaps = $holdPath === $scopedPath
+                || strpos($scopedPath, $holdPath . '/') === 0
+                || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
+            if ($overlaps) {
+                return ['hold_id' => $id] + $entry;
+            }
+        }
+        return null;
+    }
+
+    private function saveHolds(string $disk, array $all): void
+    {
+        $fs = $this->diskManager->disk($disk);
+        $dir = dirname(self::HOLDS_KEY);
+        if ($dir !== '.' && !$fs->directoryExists($dir)) {
+            $fs->createDirectory($dir);
+        }
+        $fs->write(self::HOLDS_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
     private function loadIndex(string $disk): array

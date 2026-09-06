@@ -306,7 +306,7 @@ class FluxFilesPlugin
             'pro'        => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
             'agency'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
             'studio'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true],
-            'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true],
+            'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true, 'allow_dlp_scan' => true, 'allow_legal_hold' => true],
         ];
         foreach ($presets[strtolower((string) $edition)] ?? [] as $k => $v) {
             if (!array_key_exists($k, $payload)) {
@@ -525,6 +525,32 @@ class FluxFilesPlugin
         // forwards like any other, same as allow_versioning/allow_audit_export above.
         if (array_key_exists('allow_ai_vision', $overrides)) {
             $payload['allow_ai_vision'] = (bool) $overrides['allow_ai_vision'];
+        }
+        // DLP / PII scan now proxies too (see FluxFilesApi's fileManager() setDlpScanner()
+        // wiring + the chunk-route 409 checks), so the gate + its tuning claims forward
+        // like any other, same as allow_versioning/allow_audit_export above.
+        if (array_key_exists('allow_dlp_scan', $overrides)) {
+            $payload['allow_dlp_scan'] = (bool) $overrides['allow_dlp_scan'];
+        }
+        if (!empty($overrides['dlp_entity_types'])) {
+            $payload['dlp_entity_types'] = (array) $overrides['dlp_entity_types'];
+        }
+        if (!empty($overrides['dlp_scan_extensions'])) {
+            $payload['dlp_scan_extensions'] = (array) $overrides['dlp_scan_extensions'];
+        }
+        if (!empty($overrides['dlp_max_scan_kb'])) {
+            $payload['dlp_max_scan_kb'] = (int) $overrides['dlp_max_scan_kb'];
+        }
+        if (!empty($overrides['dlp_min_score'])) {
+            $payload['dlp_min_score'] = (float) $overrides['dlp_min_score'];
+        }
+        // Legal hold now proxies too (see FluxFilesApi's
+        // handleHold()/handleHoldRelease()/handleHoldList()/handleHoldStatus()), so
+        // the gate forwards like any other, same as allow_versioning/allow_audit_export/
+        // allow_dlp_scan above. Enforcement itself needs no claim — it's wired inside
+        // FileManager.
+        if (array_key_exists('allow_legal_hold', $overrides)) {
+            $payload['allow_legal_hold'] = (bool) $overrides['allow_legal_hold'];
         }
         // NOTE: SSO (FLUXFILES_SSO_*) is NOT a claim-forwarding concern at all — those
         // are pure server env vars configuring the standalone /public UI's own login

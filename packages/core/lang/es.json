@@ -313,6 +313,9 @@
     "virus_unscannable": "La subida por bloques no se puede analizar. Usa la subida estándar.",
     "virus_unavailable": "No hay ningún antivirus configurado en este servidor.",
     "virus_failed": "No se pudo completar el análisis antivirus.",
+    "pii_detected": "Este archivo fue bloqueado porque parece contener datos personales ({entities}).",
+    "dlp_unscannable": "La subida por bloques no se puede analizar en busca de datos personales. Usa la subida estándar.",
+    "dlp_failed": "No se pudo completar el análisis de datos personales.",
     "storage_not_writable": "El almacenamiento no admite escritura.",
     "terminal_disabled": "La terminal está deshabilitada en este servidor.",
     "terminal_forbidden": "No se permite el acceso a la terminal.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "Su sesión de inicio de sesión ha caducado. Vuelva a iniciar sesión.",
     "metadata_export_unavailable": "La exportación de metadatos requiere el backend de almacenamiento en base de datos.",
     "metadata_import_unavailable": "La importación de metadatos requiere el backend de almacenamiento en base de datos.",
-    "metadata_import_rejected": "Importación rechazada: una o más filas están fuera del ámbito permitido."
+    "metadata_import_rejected": "Importación rechazada: una o más filas están fuera del ámbito permitido.",
+    "legal_hold_active": "Este elemento está bajo retención legal y no se puede modificar.",
+    "legal_hold_not_found": "No se encontró esa retención legal.",
+    "legal_hold_already_released": "Esta retención legal ya ha sido liberada.",
+    "legal_hold_already_active": "Esta ruta ya tiene una retención legal activa.",
+    "legal_hold_reason_required": "Se requiere un motivo (1–1000 caracteres).",
+    "legal_hold_scope": "Acceso denegado a esta retención legal.",
+    "legal_hold_max_active": "Se alcanzó el número máximo de retenciones legales activas."
   },
   "presign": {
     "title": "URL prefirmada",
@@ -414,7 +424,11 @@
       "unknown": "Otro",
       "terminal": "Comando de terminal",
       "virus_blocked": "Bloqueado por antivirus",
-      "watermark_remove": "Quitar marca de agua"
+      "dlp_blocked": "Bloqueado por datos personales",
+      "watermark_remove": "Quitar marca de agua",
+      "legal_hold_place": "Retención legal aplicada",
+      "legal_hold_release": "Retención legal liberada",
+      "legal_hold_blocked": "Bloqueado por retención legal"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "¿Restaurar esta versión? El archivo actual será reemplazado (se guarda antes una copia, así que esto se puede deshacer).",
     "restored": "Versión restaurada",
     "pro_teaser": "Conserva cada versión anterior de un archivo y revierte cualquier sobrescritura."
+  },
+  "legal_hold": {
+    "title": "Retención legal",
+    "note": "Bloquea eliminar, enviar a la papelera, renombrar y mover este archivo o carpeta hasta que se libere — para litigios o retención de cumplimiento.",
+    "place": "Aplicar retención legal…",
+    "release": "Liberar retención…",
+    "reason_label": "Motivo",
+    "reason_placeholder": "¿Por qué se retiene este elemento? (obligatorio)",
+    "placed_by": "Aplicada por {name}",
+    "since": "En retención legal desde {date}",
+    "confirm_release": "¿Liberar esta retención legal? Se volverá a permitir eliminar y mover una vez liberada.",
+    "badge_tooltip_admin": "En retención legal desde {date} — aplicada por {name}",
+    "badge_tooltip_user": "Este elemento está protegido y no se puede eliminar ni mover.",
+    "context_menu": "Retención legal…",
+    "busy": "Procesando…",
+    "placed": "Retención legal aplicada",
+    "released": "Retención legal liberada",
+    "pro_teaser": "Aplica una retención legal para bloquear la eliminación o modificación de un archivo o carpeta por litigios o cumplimiento normativo."
   },
   "aivision": {
     "title": "Visión IA",
@@ -646,5 +678,35 @@
     "col_received": "Recibidos",
     "revoke_confirm": "¿Revocar este portal de subida? Nadie podrá enviarte archivos por él.",
     "pro_teaser": "Deja que te envíen archivos sin necesidad de cuenta, directamente a tu almacenamiento."
+  },
+  "compliance": {
+    "title": "Cumplimiento",
+    "disclaimer": "Refleja qué funciones de FluxFiles están habilitadas para este token. No es una certificación de cumplimiento legal o normativo.",
+    "summary_one": "{enabled} de {total} función disponible habilitada",
+    "summary_other": "{enabled} de {total} funciones disponibles habilitadas",
+    "status_on": "Activado",
+    "status_off": "Desactivado",
+    "status_locked": "Bloqueado",
+    "reason_claim_off": "Disponible, pero no habilitado para este token",
+    "reason_not_licensed": "Instalado, pero sin licencia",
+    "reason_not_installed": "No instalado",
+    "copy_snippet": "Copiar claim",
+    "upgrade_cta": "Más información",
+    "item": {
+      "virus_scan": "Análisis de virus/malware al subir archivos",
+      "c2pa": "Procedencia del contenido (C2PA)",
+      "audit_export": "Exportación del registro de auditoría y purga de retención",
+      "sso": "Puente de inicio de sesión SSO (OIDC)",
+      "dlp_scan": "DLP / redacción de datos personales (PII)",
+      "legal_hold": "Retención legal (legal hold)"
+    },
+    "category": {
+      "content_security": "Seguridad del contenido",
+      "content_provenance": "Procedencia del contenido",
+      "audit_retention": "Auditoría y retención",
+      "identity_access": "Identidad y acceso",
+      "data_protection": "Protección de datos",
+      "legal_ediscovery": "Legal y eDiscovery"
+    }
   }
 }

@@ -784,4 +784,122 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         $stmt = $this->db->pdo()->prepare('DELETE FROM trash WHERE disk = ? AND id = ?');
         $stmt->execute([$disk, $id]);
     }
+
+    // ---------------------------------------------------------------------
+    // Legal hold (retention) — docs/RETENTION-LEGAL-HOLD-DESIGN.md §5/§7. Same
+    // "one row per disk+id" shape as trash above; StorageMetadataHandler's
+    // _fluxfiles/holds.json is the reference implementation for field names.
+    // ---------------------------------------------------------------------
+
+    private function rowToHoldEntry(array $row): array
+    {
+        return [
+            'path'           => $row['path'],
+            'is_dir'         => (bool) $row['is_dir'],
+            'disk'           => $row['disk'],
+            'reason'         => $row['reason'],
+            'placed_by'      => $row['placed_by'],
+            'placed_at'      => $row['placed_at'] !== null ? (int) $row['placed_at'] : null,
+            'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
+            'released_by'    => $row['released_by'],
+            'release_reason' => $row['release_reason'],
+        ];
+    }
+
+    public function allHolds(string $disk): array
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT * FROM legal_holds WHERE disk = ?');
+        $stmt->execute([$disk]);
+        $out = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $out[$row['id']] = $this->rowToHoldEntry($row);
+        }
+        return $out;
+    }
+
+    public function getHold(string $disk, string $id): ?array
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT * FROM legal_holds WHERE disk = ? AND id = ?');
+        $stmt->execute([$disk, $id]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $this->rowToHoldEntry($row);
+    }
+
+    public function addHold(string $disk, string $id, array $entry): void
+    {
+        $insertCols = [
+            'disk'           => $disk,
+            'id'             => $id,
+            'path'           => $entry['path'] ?? '',
+            'is_dir'         => !empty($entry['is_dir']) ? 1 : 0,
+            'reason'         => $entry['reason'] ?? null,
+            'placed_by'      => $entry['placed_by'] ?? null,
+            'placed_at'      => $entry['placed_at'] ?? null,
+            'released_at'    => $entry['released_at'] ?? null,
+            'released_by'    => $entry['released_by'] ?? null,
+            'release_reason' => $entry['release_reason'] ?? null,
+        ];
+        $updateCols = $insertCols;
+        unset($updateCols['disk'], $updateCols['id']);
+
+        $sql = $this->db->dialect()->upsert('legal_holds', array_keys($insertCols), ['disk', 'id'], array_keys($updateCols));
+        $stmt = $this->db->pdo()->prepare($sql);
+        $stmt->execute(array_values($insertCols));
+    }
+
+    public function releaseHold(string $disk, string $id, array $releaseInfo): void
+    {
+        $existing = $this->getHold($disk, $id);
+        if ($existing === null) {
+            return; // caller already validated existence before calling
+        }
+        $this->addHold($disk, $id, array_merge($existing, $releaseInfo));
+    }
+
+    public function countActiveHolds(string $disk): int
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT COUNT(*) AS n FROM legal_holds WHERE disk = ? AND released_at IS NULL');
+        $stmt->execute([$disk]);
+        $row = $stmt->fetch();
+        return $row === false ? 0 : (int) $row['n'];
+    }
+
+    public function holdCovering(string $disk, string $scopedPath): ?array
+    {
+        return $this->findOverlappingHold($disk, $scopedPath, false);
+    }
+
+    public function holdBlocking(string $disk, string $scopedPath): ?array
+    {
+        return $this->findOverlappingHold($disk, $scopedPath, true);
+    }
+
+    /**
+     * Same prefix-overlap semantics as StorageMetadataHandler::findOverlappingHold()
+     * — kept as a plain PHP scan (not SQL LIKE) so the two backends can never
+     * silently diverge on this security-relevant comparison.
+     */
+    private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
+    {
+        $scopedPath = trim($scopedPath, '/');
+        if ($scopedPath === '') {
+            return null;
+        }
+        foreach ($this->allHolds($disk) as $id => $entry) {
+            if ($entry['released_at'] !== null) {
+                continue; // released holds never block/cover
+            }
+            $holdPath = trim((string) ($entry['path'] ?? ''), '/');
+            if ($holdPath === '') {
+                continue;
+            }
+            $overlaps = $holdPath === $scopedPath
+                || strpos($scopedPath, $holdPath . '/') === 0
+                || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
+            if ($overlaps) {
+                return ['hold_id' => $id] + $entry;
+            }
+        }
+        return null;
+    }
 }

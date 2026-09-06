@@ -40,7 +40,7 @@ final class Plans
         // Enterprise = everything incl. the compliance bundle.
         'enterprise' => [
             'edition' => 'enterprise',
-            'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr', 'virus', 'backup', 'c2pa', 'audit-export', 'sso'],
+            'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr', 'virus', 'backup', 'c2pa', 'audit-export', 'sso', 'dlp', 'legal-hold'],
             'sites' => 0, 'ttlDays' => 365, 'enforcement' => 'perpetual',
         ],
         'lifetime' => [

@@ -92,6 +92,13 @@ class NullMetaRepo implements MetadataRepositoryInterface
     public function getTrash(string $disk, string $id): ?array { return null; }
     public function addTrash(string $disk, string $id, array $entry): void {}
     public function removeTrash(string $disk, string $id): void {}
+    public function allHolds(string $disk): array { return []; }
+    public function getHold(string $disk, string $id): ?array { return null; }
+    public function addHold(string $disk, string $id, array $entry): void {}
+    public function releaseHold(string $disk, string $id, array $releaseInfo): void {}
+    public function countActiveHolds(string $disk): int { return 0; }
+    public function holdCovering(string $disk, string $scopedPath): ?array { return null; }
+    public function holdBlocking(string $disk, string $scopedPath): ?array { return null; }
 }
 
 /** Build a FileManager over the given disk configs. */

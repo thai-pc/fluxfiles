@@ -313,6 +313,9 @@
     "virus_unscannable": "Parçalı yükleme virüs taramasından geçirilemez. Standart yüklemeyi kullanın.",
     "virus_unavailable": "Bu sunucuda yapılandırılmış bir virüs tarayıcı yok.",
     "virus_failed": "Virüs taraması tamamlanamadı.",
+    "pii_detected": "Bu dosya kişisel veri ({entities}) içeriyor gibi göründüğü için engellendi.",
+    "dlp_unscannable": "Parçalı yükleme kişisel veri taramasından geçirilemez. Standart yüklemeyi kullanın.",
+    "dlp_failed": "Kişisel veri taraması tamamlanamadı.",
     "storage_not_writable": "Depolama yazılabilir değil.",
     "terminal_disabled": "Bu sunucuda terminal devre dışı.",
     "terminal_forbidden": "Terminal erişimine izin verilmiyor.",
@@ -358,7 +361,14 @@
     "sso_state_token_invalid": "Oturum açma oturumunuzun süresi doldu. Lütfen tekrar oturum açın.",
     "metadata_export_unavailable": "Meta veri dışa aktarma, veritabanı depolama arka ucunu gerektirir.",
     "metadata_import_unavailable": "Meta veri içe aktarma, veritabanı depolama arka ucunu gerektirir.",
-    "metadata_import_rejected": "İçe aktarma reddedildi — bir veya daha fazla satır izin verilen kapsamın dışında."
+    "metadata_import_rejected": "İçe aktarma reddedildi — bir veya daha fazla satır izin verilen kapsamın dışında.",
+    "legal_hold_active": "Bu öğe yasal tutma altında ve değiştirilemez.",
+    "legal_hold_not_found": "Bu yasal tutma bulunamadı.",
+    "legal_hold_already_released": "Bu yasal tutma zaten kaldırıldı.",
+    "legal_hold_already_active": "Bu yolda zaten etkin bir yasal tutma var.",
+    "legal_hold_reason_required": "Bir gerekçe (1–1000 karakter) gereklidir.",
+    "legal_hold_scope": "Bu yasal tutmaya erişim reddedildi.",
+    "legal_hold_max_active": "Etkin yasal tutmaların maksimum sayısına ulaşıldı."
   },
   "presign": {
     "title": "Ön imzalı URL",
@@ -414,7 +424,11 @@
       "unknown": "Diğer",
       "terminal": "Terminal komutu",
       "virus_blocked": "Virüs nedeniyle engellendi",
-      "watermark_remove": "Filigranı kaldır"
+      "dlp_blocked": "Kişisel veri nedeniyle engellendi",
+      "watermark_remove": "Filigranı kaldır",
+      "legal_hold_place": "Yasal tutma uygulandı",
+      "legal_hold_release": "Yasal tutma kaldırıldı",
+      "legal_hold_blocked": "Yasal tutma tarafından engellendi"
     }
   },
   "bulk": {
@@ -509,6 +523,24 @@
     "restore_confirm": "Bu sürüm geri yüklensin mi? Mevcut dosyanın yerini alacak (önce mevcut dosyanın bir anlık görüntüsü kaydedilir, bu yüzden bu işlem geri alınabilir).",
     "restored": "Sürüm geri yüklendi",
     "pro_teaser": "Bir dosyanın her önceki sürümünü saklayın ve herhangi bir üzerine yazmayı geri alın."
+  },
+  "legal_hold": {
+    "title": "Yasal Tutma",
+    "note": "Kaldırılana kadar bu dosya veya klasörün silinmesini, çöpe taşınmasını, yeniden adlandırılmasını ve taşınmasını engeller — dava veya uyumluluk saklama amaçlıdır.",
+    "place": "Yasal tutma uygula…",
+    "release": "Tutmayı kaldır…",
+    "reason_label": "Gerekçe",
+    "reason_placeholder": "Bu öğe neden tutuluyor? (zorunlu)",
+    "placed_by": "{name} tarafından uygulandı",
+    "since": "{date} tarihinden beri yasal tutma altında",
+    "confirm_release": "Bu yasal tutma kaldırılsın mı? Kaldırıldıktan sonra silme ve taşıma yeniden izin verilecek.",
+    "badge_tooltip_admin": "{date} tarihinden beri yasal tutma altında — {name} tarafından uygulandı",
+    "badge_tooltip_user": "Bu öğe korunuyor ve silinemez veya taşınamaz.",
+    "context_menu": "Yasal Tutma…",
+    "busy": "İşleniyor…",
+    "placed": "Yasal tutma uygulandı",
+    "released": "Yasal tutma kaldırıldı",
+    "pro_teaser": "Dava veya uyumluluk saklama amacıyla bir dosya veya klasörün silinmesini ya da değiştirilmesini engellemek için yasal tutma uygulayın."
   },
   "aivision": {
     "title": "AI Vision",
@@ -646,5 +678,35 @@
     "col_received": "Alınan",
     "revoke_confirm": "Bu yükleme portalı iptal edilsin mi? Kimse buraya dosya gönderemez.",
     "pro_teaser": "Hesap açmadan size dosya göndermelerini sağlayın — doğrudan depolama alanınıza."
+  },
+  "compliance": {
+    "title": "Uyumluluk",
+    "disclaimer": "Bu token için hangi FluxFiles özelliklerinin etkin olduğunu gösterir. Yasal veya düzenleyici bir uyumluluk sertifikası değildir.",
+    "summary_one": "{total} kullanılabilir özellikten {enabled} tanesi etkin",
+    "summary_other": "{total} kullanılabilir özellikten {enabled} tanesi etkin",
+    "status_on": "Açık",
+    "status_off": "Kapalı",
+    "status_locked": "Kilitli",
+    "reason_claim_off": "Kullanılabilir, ancak bu token için etkin değil",
+    "reason_not_licensed": "Yüklü, ancak lisanslı değil",
+    "reason_not_installed": "Yüklü değil",
+    "copy_snippet": "Claim'i kopyala",
+    "upgrade_cta": "Daha fazla bilgi",
+    "item": {
+      "virus_scan": "Yüklemede virüs/kötü amaçlı yazılım taraması",
+      "c2pa": "İçerik kaynağı (C2PA)",
+      "audit_export": "Denetim günlüğü dışa aktarma ve saklama süresi temizliği",
+      "sso": "SSO oturum açma köprüsü (OIDC)",
+      "dlp_scan": "DLP / kişisel veri (PII) maskeleme",
+      "legal_hold": "Yasal tutma (legal hold)"
+    },
+    "category": {
+      "content_security": "İçerik güvenliği",
+      "content_provenance": "İçerik kaynağı",
+      "audit_retention": "Denetim ve saklama",
+      "identity_access": "Kimlik ve erişim",
+      "data_protection": "Veri koruma",
+      "legal_ediscovery": "Hukuk ve eDiscovery"
+    }
   }
 }
