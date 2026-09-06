@@ -1419,7 +1419,7 @@
          same as the Activity log). NOT a certification — see docs/COMPLIANCE-SCORECARD-DESIGN.md
          §3. The disclaimer below is always rendered, never collapsed/hideable. -->
     <div class="ff-modal-overlay" x-show="showComplianceScorecard" x-transition @click.self="closeComplianceScorecard()" style="z-index:60;" x-cloak>
-        <div class="ff-activity-modal ff-compliance-modal" role="dialog" aria-modal="true" :aria-label="t('compliance.title')" @keydown.escape.window="showComplianceScorecard && closeComplianceScorecard()">
+        <div class="ff-compliance-modal" role="dialog" aria-modal="true" :aria-label="t('compliance.title')" @keydown.escape.window="showComplianceScorecard && closeComplianceScorecard()">
             <div class="ff-activity-head">
                 <h3 x-text="t('compliance.title')"></h3>
                 <button class="ff-activity-close" @click="closeComplianceScorecard()" :aria-label="t('common.close')">&times;</button>
