@@ -3,6 +3,146 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.06] — 2026-09-06
+
+> Released: `core-v0.2.82`, `laravel-v0.2.39`, `wordpress-v0.2.46`,
+> `node-v0.1.27`. This core tag also carries the five entries below
+> (`0.3.01`–`0.3.05`), none of which shipped their own separate tag —
+> nothing was released between `core-v0.2.81` and this tag. The adapter
+> tags also carry their portions of `0.3.03` (five-gaps fix) and `0.3.05`
+> (studio/enterprise preset).
+
+### Added — DLP/PII redaction, Legal Hold, and a free Compliance Readiness Scorecard
+
+Three features from the same design pass (`docs/DLP-PII-REDACTION-DESIGN.md`,
+`docs/RETENTION-LEGAL-HOLD-DESIGN.md`, `docs/COMPLIANCE-SCORECARD-DESIGN.md`):
+
+- **DLP/PII redaction** — new paid module `dlp` (`allow_dlp_scan`), engine-only
+  like OCR/Virus/Backup/C2PA (no client UI). Scans upload/putContent/
+  extractZip content for PII patterns before the bytes are written, same
+  fail-closed wiring shape as virus scanning. Tunable via `dlp_entity_types`/
+  `dlp_scan_extensions`/`dlp_max_scan_kb`/`dlp_min_score`; forwarded
+  unconditionally by both the Laravel and WordPress proxies.
+- **Legal Hold** — new paid module `legal-hold` (`allow_legal_hold`),
+  `POST/GET /api/fm/hold`, `/hold/release`, `/hold/list`, `/hold/status`.
+  Enforcement itself (`FileManager::assertNoActiveHold()`) needs no
+  claim/license check and is unconditional on delete/trash/rename/move/
+  crossMove — only the management endpoints are module-gated, the same
+  PTY-vs-command-runner split already used for the SSH terminal.
+  `holdCovering()` (exact+descendant match) is used for the status/list
+  read path; `holdBlocking()` is bidirectional — a hold on a descendant
+  also blocks mutating its ancestor folder — and is what enforcement
+  actually calls. `MetadataRepositoryInterface` gained the 7 hold methods,
+  implemented by `StorageMetadataHandler` and every DB-backend handler
+  (core, Laravel, WordPress).
+- **Compliance Readiness Scorecard** — `GET /api/fm/compliance/scorecard`,
+  free/core, gated only by the existing `audit` permission, **zero new
+  claims**. Reports on/off/locked status for six compliance-adjacent
+  capabilities (virus scan, C2PA, audit export, SSO, DLP, legal hold) so
+  every operator — including free-tier — sees exactly what they're
+  missing; this is the in-product surface that markets the paid bundle,
+  not part of the bundle itself. Deliberately never uses "compliant"/
+  "score"/"certified" in a certifying sense anywhere in the API, UI, or
+  any of the 16 locales — FluxFiles has no actual GDPR/SOC2/HIPAA audit
+  behind it, so the response reports plain fractions
+  (`enabled_count`/`available_count`/`total_count`) plus an always-visible,
+  non-collapsible `disclaimer` string instead.
+
+## [0.3.05] — 2026-09-05
+
+> Released: `core-v0.2.82` — same core tag as `0.3.06` above.
+
+### Added — Studio edition preset, enterprise bundle completed
+
+Adds a `studio` mint-time preset (pro + versioning/webhooks/ai_vision/ocr) to
+all four token builders (`embed.php`, node `token.ts`, Laravel, WordPress) so
+Studio-tier operators no longer hand-set those claims one by one. The
+`enterprise` preset is filled out to match `Plans.php`'s full module list
+(adds versioning/webhooks/ai/ocr/backup/audit-export).
+`docs/INDUSTRY-PRESETS.md` updated to reflect the shipped preset instead of
+flagging it as a gap.
+
+## [0.3.04] — 2026-09-04
+
+> Released: `core-v0.2.82` — same core tag as `0.3.06` above.
+
+### Fixed — Origin spoofing could hand out a Share/Intake link on an attacker's domain
+
+`ff_request_origin()` now validates against `FLUXFILES_ALLOWED_ORIGINS` when
+that env var is set: a forged `Host`/`X-Forwarded-Proto` behind a
+misconfigured proxy or cache could otherwise make the Share/Intake create
+route mint a recipient link on an origin the operator never configured. An
+origin outside the allowlist now falls back to the first declared origin; an
+empty allowlist (the default) is unchanged. (N5 from the Share public-landing
+security review.)
+
+## [0.3.03] — 2026-09-04
+
+> Released: `core-v0.2.82` — same core tag as `0.3.06` above. Laravel and
+> WordPress also carry their portion of this fix (chunk-complete and
+> optimize-claim parity).
+
+### Fixed — Five security/correctness gaps found in review
+
+- **BYOB SSRF**: an S3 disk endpoint host that failed to resolve at decode
+  time used to be let through unpinned (a DNS-rebinding TOCTOU window);
+  it now fails closed, and `BucketDoctor`'s presign check is pinned to the
+  same validated IP with a post-connect re-check.
+- **Chunk upload**: the real assembled size is now re-validated (via
+  HeadObject) against `max_upload`/quota after an S3 multipart complete,
+  since parts are PUT straight to S3 with no size condition; a violation
+  now deletes the object instead of leaving it stored. Laravel/WordPress
+  proxy controllers mirror this.
+- **Git deploy**: lock staleness is now liveness-checked (`kill -0` on the
+  recorded PID) before falling back to the mtime heuristic, so a
+  still-running slow deploy can't have its lock stolen by a concurrent
+  trigger.
+- **Metadata sidecar**: `*.meta.json` is now a reserved, write-blocked
+  filename shape (`FileManager::assertNotSystem`), closing an
+  ownership-hijack path where a forged legacy sidecar was trusted on read.
+  Numeric-looking file names (`"5"`, `"0"`) no longer break index
+  iteration after PHP's array-key coercion to int.
+- **fm.js**: `postMessage` sender identity (`e.source === window.parent`) is
+  now validated before the origin-lock check, so a same-page sibling can't
+  win the `FM_CONFIG` handshake race.
+
+## [0.3.02] — 2026-09-04
+
+> Released: `core-v0.2.82` — same core tag as `0.3.06` above.
+
+### Added — SSH ControlMaster connection reuse for the terminal
+
+`/api/fm/terminal` reuses an OpenSSH ControlMaster session across commands on
+eligible SFTP disks instead of reconnecting via phpseclib per command, per
+`docs/SFTP-CONTROLMASTER-SPEC.md` (the mitigation plan for the 7 findings in
+`docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md`). `SshMultiplexer` shells to the
+real `ssh` binary via `proc_open` (array argv, no shell) for cold-connect and
+reuse, with a credential-hash cache key, a `0700` hash-named socket dir, a
+clamped `ControlPersist` + LRU-capped socket count, and `known_hosts`
+materialized via TOFU or piggybacked off an already-verified phpseclib
+host-key check. Eligibility is key-based-auth only — password/passphrase
+disks always fall back to phpseclib — and scoped to `SshTerminal` only, never
+`GitDeploy` or the Flysystem SFTP adapter used for browsing/upload/download.
+`FLUXFILES_SSH_MULTIPLEX_DISABLED` is a server kill-switch. Unit-tested pure
+logic (cache-key collisions, socket hygiene, LRU eviction, algorithm-list
+sync); the live-SSH integration test is env-gated and skips cleanly in CI.
+
+## [0.3.01] — 2026-09-03
+
+> Released: `core-v0.2.82` — same core tag as `0.3.06` above.
+
+### Added — Opt-in SFTP host-key fail-closed + modern-cipher hardening
+
+`require_host_key` rejects an SFTP disk with no `host_fingerprint` pinned
+instead of silently trusting any host key; `strict_algorithms` restricts the
+handshake to a modern KEX/cipher/MAC/host-key allowlist (excluding SHA-1 KEX,
+RC4, 3DES, CBC ciphers, `ssh-dss`, and MD5/SHA-1 MACs). Both default off, so
+existing disks keep working unchanged; BYOB SFTP configs get both for free
+since `CredentialEncryptor` doesn't allowlist config fields. (Docs follow-up:
+the `ssh-keygen -E sha512` fingerprint instructions for non-RSA host keys were
+previously wrong — `-E sha512` prints base64, not colon-hex like `-E md5`
+does — and have been corrected to a verified one-liner.)
+
 ## [0.3.00] — 2026-09-01
 
 > Released: `core-v0.2.80`. Laravel/WordPress adapter floors bumped to
