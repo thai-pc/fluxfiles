@@ -26,6 +26,15 @@ packages/vue/dist/
 packages/node/dist/
 build/
 
+# Python (packages/python)
+packages/python/.venv/
+packages/python/dist/
+packages/python/*.egg-info/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
 # Test playground scaffolds (source committed, deps not)
 packages/core/tests/apps/**/node_modules/
 packages/core/tests/apps/node_modules/

@@ -151,7 +151,8 @@ export interface BaseTokenOptions {
    *  and free power-user toggles) — orthogonal to `edition`, which defaults which
    *  *paid features* a tier gets. DX sugar — explicit claim options still win, and
    *  `role` never itself becomes a JWT claim. See docs/ACL-ROLE-PRESETS-DESIGN.md.
-   *  Not supported on BYOB tokens (matches `edition`'s existing BYOB exclusion). */
+   *  Supported on `createByobToken()` too, same as `edition` — both apply alongside
+   *  the encrypted `byobDisks` claim (matches Laravel/WordPress's existing behavior). */
   role?: 'viewer' | 'editor' | 'admin' | 'superadmin';
   /** Paid-module claims (3-layer gate: code installed + licensed + this claim).
    *  All default off; inert unless the module is installed & licensed on the server. */

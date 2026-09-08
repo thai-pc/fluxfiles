@@ -1,64 +1,95 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createToken, createByobToken, verifyToken, decodeToken } from '../src';
 import { encryptByob, decryptByob } from '../src/crypto';
 
 const SECRET = 'test-secret-key-that-is-at-least-32-bytes-long';
 
-describe('createToken', () => {
-  it('emits the exact PHP claim shape', () => {
-    const token = createToken({
+// Shared cross-language fixture (docs/testdata/token-vectors.json,
+// docs/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — role/edition presets and the generic
+// `claims` escape-hatch precedence, loaded here and by PHP's test-role-preset.php
+// (and, eventually, the Python SDK's own suite) so all three mint the exact same
+// vectors instead of hand-copying them per language.
+interface TokenVector {
+  name: string;
+  input: { user_id: string; role?: string; edition?: string; ttl_seconds?: number; claims?: Record<string, unknown> };
+  expect?: Record<string, unknown>;
+  expect_true?: string[];
+  expect_absent?: string[];
+}
+
+// BYOB + role/edition vectors (docs/PYTHON-TOKEN-SDK-DESIGN.md §5.1/§6.1) — a BYOB
+// token minted with `role`/`edition` must carry both the preset's claim bundle and the
+// encrypted `byob_disks` claim, per the 8-step merge order createByobToken() now follows.
+interface ByobRoleVector {
+  name: string;
+  input: { user_id: string; role?: string; edition?: string; byob_disks: Record<string, Record<string, unknown>> };
+  expect?: Record<string, unknown>;
+  expect_true?: string[];
+  expect_byob_disks_present?: boolean;
+}
+
+const VECTORS_PATH = resolve(process.cwd(), '../../docs/testdata/token-vectors.json');
+const VECTORS = JSON.parse(readFileSync(VECTORS_PATH, 'utf8')) as {
+  plain_tokens: TokenVector[];
+  role_presets: TokenVector[];
+  edition_presets: TokenVector[];
+  byob_role_presets: ByobRoleVector[];
+};
+
+/**
+ * Mint a vector's `input` via createToken() and assert its expect/expect_true/
+ * expect_absent fields against the decoded claims. `<claim>_present` asserts
+ * effective presence (=== true), not literal key presence — matches the PHP
+ * harness, since "absent" and "present-but-false" both mean "not enabled" for
+ * every boolean claim these fixtures cover.
+ */
+function assertVector(v: TokenVector): void {
+  const c = decodeToken(
+    createToken({
       secret: SECRET,
-      userId: 'user-1',
-      perms: ['read', 'write'],
-      disks: ['local', 's3'],
-      prefix: 'users/1',
-      maxUploadMb: 25,
-      allowedExt: ['png', 'jpg'],
-      ttl: 600,
-      maxStorageMb: 100,
-      maxFiles: 50,
-    });
-    const c = decodeToken(token);
-    expect(c.sub).toBe('user-1');
-    expect(c.perms).toEqual(['read', 'write']);
-    expect(c.disks).toEqual(['local', 's3']);
-    expect(c.prefix).toBe('users/1');
-    expect(c.max_upload).toBe(25);
-    expect(c.allowed_ext).toEqual(['png', 'jpg']);
-    expect(c.max_storage).toBe(100);
-    expect(c.max_files).toBe(50);
-    expect(c.exp - c.iat).toBe(600);
-    expect(c.jti).toMatch(/^[0-9a-f]{24}$/);
-  });
+      userId: v.input.user_id,
+      role: v.input.role as any,
+      edition: v.input.edition as any,
+      ttl: v.input.ttl_seconds,
+      claims: v.input.claims,
+    }),
+  ) as Record<string, unknown>;
 
-  it('defaults allowed_ext to null and omits owner_only when false', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u' }));
-    expect(c.allowed_ext).toBeNull();
-    expect(c.owner_only).toBeUndefined();
-    expect(c.perms).toEqual(['read']);
-    expect(c.disks).toEqual(['local']);
-  });
-
-  it('sets owner_only only when requested', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', ownerOnly: true }));
-    expect(c.owner_only).toBe(true);
-  });
-
-  it('enterprise edition preset grants every module claim, incl. allow_dlp_scan (Enterprise compliance bundle)', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', edition: 'enterprise' })) as Record<string, unknown>;
-    for (const claim of [
-      'allow_optimize', 'allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks',
-      'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_c2pa', 'allow_backup', 'allow_audit_export',
-      'allow_dlp_scan', 'allow_legal_hold',
-    ]) {
-      expect(c[claim]).toBe(true);
+  for (const [key, expected] of Object.entries(v.expect ?? {})) {
+    if (key.endsWith('_present')) {
+      const claim = key.slice(0, -'_present'.length);
+      expect(c[claim] === true).toBe(expected);
+      continue;
     }
-  });
+    if (key === 'ttl_seconds') {
+      expect((c.exp as number) - (c.iat as number)).toBe(expected);
+      continue;
+    }
+    // Raw comparison — a genuinely absent claim is `undefined`, NOT coerced to
+    // `false`. Coercing here would make an omitted key indistinguishable from
+    // an explicit `false`, which is exactly the historical B1 bug
+    // (allow_extract/allow_chmod default to TRUE when absent) — mirrors
+    // assertByobRoleVector below, which never coerced.
+    expect(c[key]).toEqual(expected);
+  }
+  for (const claim of v.expect_true ?? []) {
+    expect(c[claim]).toBe(true);
+  }
+  for (const claim of v.expect_absent ?? []) {
+    expect(c[claim]).toBeUndefined();
+  }
+}
 
-  it('studio edition preset must NOT leak allow_dlp_scan (Enterprise-only, not Studio)', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', edition: 'studio' })) as Record<string, unknown>;
-    expect(c.allow_dlp_scan).toBeUndefined();
-  });
+describe('createToken', () => {
+  for (const v of VECTORS.plain_tokens) {
+    it(`plain token vector: ${v.name}`, () => assertVector(v));
+  }
+
+  for (const v of VECTORS.edition_presets) {
+    it(`edition preset vector: ${v.name}`, () => assertVector(v));
+  }
 
   it('claims escape hatch sets any raw snake_case claim; explicit wins', () => {
     const c = decodeToken(createToken({
@@ -315,80 +346,60 @@ describe('createByobToken', () => {
 });
 
 describe('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md)', () => {
-  it('resolves perms early: role with no explicit perms decodes to the role default', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'editor' })) as Record<string, unknown>;
-    expect(c.perms).toEqual(['read', 'write']);
-  });
+  for (const v of VECTORS.role_presets) {
+    it(v.name, () => assertVector(v));
+  }
+});
 
-  it('viewer: read-only, owner-scoped', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'viewer' })) as Record<string, unknown>;
-    expect(c.perms).toEqual(['read']);
-    expect(c.owner_only).toBe(true);
-    // Regression (B1): allow_extract/allow_chmod default TRUE on the PHP decode
-    // side (Claims::fromJwtPayload) when absent — viewer/editor must set them
-    // explicitly false in the JWT, not rely on omission.
-    expect(c.allow_extract).toBe(false);
-    expect(c.allow_chmod).toBe(false);
+/**
+ * Mint a `byob_role_presets` vector via createByobToken() and assert its expect/
+ * expect_true fields plus `byob_disks` presence/round-trip. Shared with PHP's
+ * test-byob.php so both languages exercise the exact same vectors.
+ */
+function assertByobRoleVector(v: ByobRoleVector): void {
+  const token = createByobToken({
+    secret: SECRET,
+    userId: v.input.user_id,
+    byobDisks: v.input.byob_disks as any,
+    role: v.input.role as any,
+    edition: v.input.edition as any,
   });
+  const c = decodeToken(token) as Record<string, unknown>;
 
-  it('editor: gets allow_extract but never allow_chmod', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'editor' })) as Record<string, unknown>;
-    expect(c.allow_extract).toBe(true);
-    expect(c.allow_chmod).toBe(false);
-  });
+  for (const [key, expected] of Object.entries(v.expect ?? {})) {
+    expect(c[key]).toEqual(expected);
+  }
+  for (const claim of v.expect_true ?? []) {
+    expect(c[claim]).toBe(true);
+  }
+  if (v.expect_byob_disks_present) {
+    const byobDisks = (c.byob_disks ?? {}) as Record<string, string>;
+    expect(Object.keys(byobDisks).length).toBeGreaterThan(0);
+    // Round-trip: each disk's blob must decrypt back to its original config.
+    for (const [name, blob] of Object.entries(byobDisks)) {
+      expect(decryptByob(blob, SECRET)).toEqual(v.input.byob_disks[name]);
+    }
+  }
+}
 
-  it('admin: full perms, not owner-scoped, power-user toggles on', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'admin' })) as Record<string, unknown>;
-    expect(c.perms).toEqual(['read', 'write', 'delete', 'audit']);
-    expect(c.owner_only).toBeUndefined(); // false is the global default too, so the key is omitted
-    expect(c.allow_extract).toBe(true);
-    expect(c.allow_chmod).toBe(true);
-    expect(c.allow_code_edit).toBe(true);
-    expect(c.show_hidden).toBe(true);
-  });
+describe('BYOB + role/edition presets (docs/PYTHON-TOKEN-SDK-DESIGN.md §5.1)', () => {
+  for (const v of VECTORS.byob_role_presets) {
+    it(v.name, () => assertByobRoleVector(v));
+  }
 
-  it('superadmin: identical raw claim bundle to admin', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'superadmin' })) as Record<string, unknown>;
-    expect(c.perms).toEqual(['read', 'write', 'delete', 'audit']);
-    expect(c.owner_only).toBeUndefined();
-  });
-
-  it('explicit perms/ownerOnly always win over the role default', () => {
+  // Kept inline (not in the shared fixture, per §6.2's scoping note): this asserts
+  // Node's own explicit-kwarg-overrides-preset merge order, not a cross-language value.
+  it('an explicit perms kwarg overrides role="viewer" on a BYOB token', () => {
     const c = decodeToken(
-      createToken({ secret: SECRET, userId: 'u', role: 'viewer', perms: ['read', 'write', 'delete'], ownerOnly: false }),
+      createByobToken({
+        secret: SECRET,
+        userId: 'u',
+        role: 'viewer',
+        perms: ['read', 'write', 'delete'],
+        byobDisks: { 'my-s3': { driver: 's3', key: 'AK', secret: 'SK', bucket: 'b', region: 'us-east-1' } },
+      }),
     ) as Record<string, unknown>;
     expect(c.perms).toEqual(['read', 'write', 'delete']);
-    expect(c.owner_only).toBeUndefined();
-  });
-
-  it('explicit owner_only=true overrides an admin role default of false', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'admin', ownerOnly: true })) as Record<string, unknown>;
-    expect(c.owner_only).toBe(true);
-  });
-
-  it('edition and role compose without clobbering each other', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', edition: 'pro', role: 'admin' })) as Record<string, unknown>;
-    expect(c.allow_optimize).toBe(true);
-    expect(c.allow_share).toBe(true);
-    expect(c.perms).toEqual(['read', 'write', 'delete', 'audit']);
-    expect(c.allow_chmod).toBe(true);
-  });
-
-  it('role never touches prefix/disks/max_upload/max_storage/max_files', () => {
-    const c = decodeToken(
-      createToken({ secret: SECRET, userId: 'u', role: 'admin', disks: ['local'], prefix: 'users/1', maxUploadMb: 5, maxStorageMb: 100, maxFiles: 10 }),
-    );
-    expect(c.disks).toEqual(['local']);
-    expect(c.prefix).toBe('users/1');
-    expect(c.max_upload).toBe(5);
-    expect(c.max_storage).toBe(100);
-    expect(c.max_files).toBe(10);
-  });
-
-  it('superadmin with empty prefix mints an unscoped token', () => {
-    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'superadmin', prefix: '' })) as Record<string, unknown>;
-    expect(c.prefix).toBe('');
-    expect(c.owner_only).toBeUndefined();
   });
 });
 

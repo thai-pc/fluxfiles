@@ -1,0 +1,202 @@
+{
+  "secret": "shared-fixture-secret-key-32-bytes-min!!",
+  "plain_tokens": [
+    {
+      "name": "exact_claim_shape",
+      "input": {
+        "user_id": "user-1",
+        "ttl_seconds": 600,
+        "claims": {
+          "perms": ["read", "write"],
+          "disks": ["local", "s3"],
+          "prefix": "users/1",
+          "max_upload": 25,
+          "allowed_ext": ["png", "jpg"],
+          "max_storage": 100,
+          "max_files": 50
+        }
+      },
+      "expect": {
+        "sub": "user-1",
+        "perms": ["read", "write"],
+        "disks": ["local", "s3"],
+        "prefix": "users/1",
+        "max_upload": 25,
+        "allowed_ext": ["png", "jpg"],
+        "max_storage": 100,
+        "max_files": 50,
+        "ttl_seconds": 600
+      }
+    },
+    {
+      "name": "defaults_when_bare",
+      "input": { "user_id": "u" },
+      "expect": {
+        "perms": ["read"], "disks": ["local"], "prefix": "",
+        "allowed_ext": null, "owner_only_present": false
+      }
+    }
+  ],
+  "role_presets": [
+    {
+      "name": "viewer_perms_early_resolution",
+      "input": { "user_id": "u", "role": "viewer" },
+      "expect": {
+        "perms": ["read"], "owner_only": true,
+        "allow_extract": false, "allow_chmod": false
+      }
+    },
+    {
+      "name": "editor_perms_early_resolution",
+      "input": { "user_id": "u", "role": "editor" },
+      "expect": {
+        "perms": ["read", "write"], "owner_only": true,
+        "allow_extract": true, "allow_chmod": false
+      }
+    },
+    {
+      "name": "admin_full_bundle",
+      "input": { "user_id": "u", "role": "admin" },
+      "expect": {
+        "perms": ["read", "write", "delete", "audit"], "owner_only_present": false,
+        "allow_extract": true, "allow_chmod": true,
+        "allow_code_edit": true, "show_hidden": true
+      }
+    },
+    {
+      "name": "superadmin_identical_to_admin",
+      "input": { "user_id": "u", "role": "superadmin" },
+      "expect": {
+        "perms": ["read", "write", "delete", "audit"], "owner_only_present": false,
+        "allow_extract": true, "allow_chmod": true,
+        "allow_code_edit": true, "show_hidden": true
+      }
+    },
+    {
+      "name": "explicit_perms_overrides_role",
+      "input": { "user_id": "u", "role": "viewer", "claims": { "perms": ["read", "write", "delete"] } },
+      "expect": { "perms": ["read", "write", "delete"] }
+    },
+    {
+      "name": "explicit_owner_only_false_overrides_editor",
+      "input": { "user_id": "u", "role": "editor", "claims": { "owner_only": false } },
+      "expect": { "owner_only_present": false }
+    },
+    {
+      "name": "explicit_owner_only_true_overrides_admin",
+      "input": { "user_id": "u", "role": "admin", "claims": { "owner_only": true } },
+      "expect": { "owner_only_present": true }
+    },
+    {
+      "name": "explicit_claims_escape_hatch_overrides_admin_chmod",
+      "input": { "user_id": "u", "role": "admin", "claims": { "allow_chmod": false } },
+      "expect": { "allow_chmod": false }
+    },
+    {
+      "name": "role_never_touches_scoping_claims",
+      "input": {
+        "user_id": "scoped-user", "role": "admin",
+        "claims": { "disks": ["local"], "prefix": "users/42", "max_upload": 5, "max_storage": 100, "max_files": 10 }
+      },
+      "expect": {
+        "sub": "scoped-user", "disks": ["local"], "prefix": "users/42",
+        "max_upload": 5, "max_storage": 100, "max_files": 10
+      }
+    },
+    {
+      "name": "superadmin_empty_prefix_is_unscoped",
+      "input": { "user_id": "root", "role": "superadmin", "claims": { "prefix": "" } },
+      "expect": {
+        "prefix": "", "owner_only_present": false,
+        "perms": ["read", "write", "delete", "audit"]
+      }
+    },
+    {
+      "name": "unknown_role_is_silently_ignored",
+      "input": { "user_id": "u", "role": "not-a-real-role" },
+      "expect": { "perms": ["read"], "owner_only_present": false }
+    }
+  ],
+  "edition_presets": [
+    {
+      "name": "enterprise_grants_every_module_claim",
+      "input": { "user_id": "u", "edition": "enterprise" },
+      "expect_true": [
+        "allow_optimize", "allow_share", "allow_intake", "allow_versioning",
+        "allow_webhooks", "allow_ai_vision", "allow_ocr", "allow_virus_scan",
+        "allow_c2pa", "allow_backup", "allow_audit_export",
+        "allow_dlp_scan", "allow_legal_hold"
+      ]
+    },
+    {
+      "name": "studio_excludes_enterprise_only_claims",
+      "input": { "user_id": "u", "edition": "studio" },
+      "expect_true": [
+        "allow_optimize", "allow_share", "allow_intake",
+        "allow_versioning", "allow_webhooks", "allow_ai_vision", "allow_ocr"
+      ],
+      "expect_absent": [
+        "allow_virus_scan", "allow_c2pa", "allow_backup",
+        "allow_audit_export", "allow_dlp_scan", "allow_legal_hold"
+      ]
+    },
+    {
+      "name": "edition_and_role_compose",
+      "input": { "user_id": "u", "edition": "pro", "role": "admin" },
+      "expect_true": ["allow_optimize", "allow_share", "allow_intake"],
+      "expect": {
+        "perms": ["read", "write", "delete", "audit"],
+        "allow_chmod": true, "owner_only_present": false
+      }
+    }
+  ],
+  "byob_role_presets": [
+    {
+      "name": "editor_role_with_byob_disk",
+      "input": {
+        "user_id": "u",
+        "role": "editor",
+        "byob_disks": {
+          "my-s3": { "driver": "s3", "key": "AK", "secret": "SK", "bucket": "user-bucket", "region": "us-east-1" }
+        }
+      },
+      "expect": {
+        "perms": ["read", "write"], "owner_only": true,
+        "allow_extract": true, "allow_chmod": false
+      },
+      "expect_byob_disks_present": true
+    },
+    {
+      "name": "enterprise_edition_with_byob_disk",
+      "input": {
+        "user_id": "u",
+        "edition": "enterprise",
+        "byob_disks": {
+          "my-s3": { "driver": "s3", "key": "AK", "secret": "SK", "bucket": "user-bucket", "region": "us-east-1" }
+        }
+      },
+      "expect_true": [
+        "allow_optimize", "allow_share", "allow_intake", "allow_versioning",
+        "allow_webhooks", "allow_ai_vision", "allow_ocr", "allow_virus_scan",
+        "allow_c2pa", "allow_backup", "allow_audit_export",
+        "allow_dlp_scan", "allow_legal_hold"
+      ],
+      "expect_byob_disks_present": true
+    },
+    {
+      "name": "viewer_role_byob_default_perms_not_leaked",
+      "input": {
+        "user_id": "u",
+        "role": "viewer",
+        "byob_disks": {
+          "my-s3": { "driver": "s3", "key": "AK", "secret": "SK", "bucket": "user-bucket", "region": "us-east-1" }
+        }
+      },
+      "expect": {
+        "perms": ["read"], "owner_only": true,
+        "allow_extract": false, "allow_chmod": false
+      },
+      "expect_byob_disks_present": true
+    }
+  ]
+}

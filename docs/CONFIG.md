@@ -51,8 +51,9 @@ final `$extra` array as the same escape hatch:
 **Node (`@fluxfiles/node`):** `createToken({ userId, perms, …, claims: { … } })`
 **Laravel:** `FluxFiles::token($user, ['perms' => …, 'claims' => […]])`
 **WordPress:** `FluxFilesPlugin::token($userId, ['claims' => […]])`
+**Python (`fluxfiles-token`):** `create_token(secret=..., user_id=..., claims={...})`
 
-All four accept the same `claims` map.
+All five accept the same `claims` map.
 
 ---
 

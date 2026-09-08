@@ -61,6 +61,35 @@ function assertContains($needle, array $haystack, string $msg = ''): void
     }
 }
 
+// Shared cross-language fixture (docs/testdata/byob-vectors.json,
+// docs/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — HKDF/AES-GCM known-answer vectors,
+// generated once from this very PHP implementation and pinned forever after.
+$byobVectorsPath = __DIR__ . '/../../../../docs/testdata/byob-vectors.json';
+$byobVectors = json_decode(file_get_contents($byobVectorsPath), true);
+
+function byobVector(string $name): array
+{
+    global $byobVectors;
+    foreach ($byobVectors['decrypt_vectors'] as $v) {
+        if ($v['name'] === $name) {
+            return $v;
+        }
+    }
+    throw new \RuntimeException("no byob-vectors.json decrypt_vectors entry named {$name}");
+}
+
+/**
+ * `CredentialEncryptor::deriveKey()` is private — call it via reflection, the
+ * same pattern already used for other private-method tests in this suite
+ * (e.g. test-owner-only.php's `assertOwner`, test-visibility.php's `fileUrl`).
+ */
+function deriveByobKey(string $secret): string
+{
+    $ref = new ReflectionMethod(FluxFiles\CredentialEncryptor::class, 'deriveKey');
+    $ref->setAccessible(true);
+    return $ref->invoke(null, $secret);
+}
+
 $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
 if ($secret === '') {
     echo "{$red}ERROR: FLUXFILES_SECRET not set in .env{$reset}\n";
@@ -95,6 +124,28 @@ test('decrypt returns original config', function () use ($secret) {
     $blob = FluxFiles\CredentialEncryptor::encrypt($config, $secret);
     $decrypted = FluxFiles\CredentialEncryptor::decrypt($blob, $secret);
     assertEqual($config, $decrypted);
+});
+
+// This config is also the source the shared cross-language fixture's
+// `s3_with_endpoint` decrypt vector was generated from (docs/testdata/
+// byob-vectors.json, docs/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — assert PHP's own
+// decrypt against the pinned blob too, alongside the fresh-encrypt round-trip
+// above (which the fixture can't exercise, since it tests nonce-uniqueness).
+test('decrypt matches the pinned s3_with_endpoint fixture vector', function () {
+    $vector = byobVector('s3_with_endpoint');
+    $decrypted = FluxFiles\CredentialEncryptor::decrypt($vector['blob_base64'], $vector['secret']);
+    assertEqual($vector['expected_config'], $decrypted);
+});
+
+// ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► HKDF known-answer (docs/testdata/byob-vectors.json){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('deriveKey matches the pinned HKDF known-answer vector', function () use ($byobVectors) {
+    foreach ($byobVectors['hkdf_key_vectors'] as $vector) {
+        $key = deriveByobKey($vector['secret']);
+        assertEqual($vector['expected_key_hex'], bin2hex($key), "HKDF vector '{$vector['name']}'");
+    }
 });
 
 test('each encryption produces unique ciphertext', function () use ($secret) {
@@ -394,6 +445,56 @@ test('fluxfiles_byob_token rejects local driver in byobDisks', function () {
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► BYOB + role/edition presets (docs/testdata/token-vectors.json){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+// Shared cross-language fixture (docs/PYTHON-TOKEN-SDK-DESIGN.md §5.1/§6.1) — a BYOB
+// token minted with `role`/`edition` must carry BOTH the preset's claim bundle AND the
+// encrypted `byob_disks` claim, per the 8-step merge order fluxfiles_byob_token() now
+// follows (same as Laravel/WordPress already did). Loaded here and by Node's
+// token.test.ts (and, eventually, the Python SDK's own suite).
+
+$tokenVectorsPath = __DIR__ . '/../../../../docs/testdata/token-vectors.json';
+$tokenVectors = json_decode(file_get_contents($tokenVectorsPath), true);
+if (!is_array($tokenVectors)) {
+    echo "{$red}ERROR: could not load {$tokenVectorsPath}{$reset}\n";
+    exit(1);
+}
+
+foreach ($tokenVectors['byob_role_presets'] ?? [] as $vector) {
+    test($vector['name'], function () use ($vector, $secret) {
+        $input = $vector['input'];
+        $token = fluxfiles_byob_token(
+            userId: $input['user_id'],
+            byobDisks: $input['byob_disks'],
+            role: $input['role'] ?? null,
+            edition: $input['edition'] ?? null,
+        );
+        $payload = \FluxFiles\JwtCompat::decode($token, $secret);
+
+        foreach ($vector['expect'] ?? [] as $key => $expected) {
+            $actual = $payload->{$key} ?? null;
+            if (is_array($expected)) {
+                $actual = (array) $actual;
+            }
+            assertEqual($expected, $actual, "{$vector['name']}: {$key} expected " . json_encode($expected) . " got " . json_encode($actual));
+        }
+        foreach ($vector['expect_true'] ?? [] as $claim) {
+            assertEqual(true, $payload->{$claim} ?? null, "{$vector['name']}: expected {$claim} to be true");
+        }
+        if (!empty($vector['expect_byob_disks_present'])) {
+            $byobDisks = isset($payload->byob_disks) ? (array) $payload->byob_disks : [];
+            assertEqual(true, count($byobDisks) > 0, "{$vector['name']}: expected byob_disks to be present and non-empty");
+            // Round-trip: each disk's blob must decrypt back to its original config —
+            // proves the ciphertext isn't just present but actually correct.
+            foreach ($byobDisks as $name => $blob) {
+                $decrypted = FluxFiles\CredentialEncryptor::decrypt($blob, $secret);
+                assertEqual($input['byob_disks'][$name], $decrypted, "{$vector['name']}: {$name} round-trips to the original config");
+            }
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► Full JWT roundtrip (token → decode → Claims → DiskManager){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
@@ -486,6 +587,14 @@ test('BYOB SFTP: encrypt → decrypt round-trips the SFTP config', function () u
     $cfg = ['driver' => 'sftp', 'host' => 'sftp.example.org', 'username' => 'deploy', 'password' => 'sekret', 'root' => '/var/www'];
     $blob = FluxFiles\CredentialEncryptor::encrypt($cfg, $secret);
     assertEqual($cfg, FluxFiles\CredentialEncryptor::decrypt($blob, $secret), 'creds survive encryption');
+});
+
+// This config is also the source the shared fixture's `sftp_basic` decrypt
+// vector was generated from — same treatment as the S3 vector above.
+test('BYOB SFTP: decrypt matches the pinned sftp_basic fixture vector', function () {
+    $vector = byobVector('sftp_basic');
+    $decrypted = FluxFiles\CredentialEncryptor::decrypt($vector['blob_base64'], $vector['secret']);
+    assertEqual($vector['expected_config'], $decrypted);
 });
 
 echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";

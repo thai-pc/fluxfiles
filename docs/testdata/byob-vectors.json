@@ -1,0 +1,33 @@
+{
+  "hkdf_key_vectors": [
+    {
+      "name": "basic_secret",
+      "secret": "hkdf-known-answer-secret-32-bytes!!",
+      "expected_key_hex": "e21d1d09c0027450d933e2540adecdefb61cae3d0695a30342073f3fdc2b8e98"
+    }
+  ],
+  "decrypt_vectors": [
+    {
+      "name": "s3_with_endpoint",
+      "secret": "byob-decrypt-vector-secret-32-bytes!!",
+      "blob_base64": "EJvA2Hj8xXGayJpZ3ZAf1DlY4lYdX+TcsSunEIsnpHVvUdntmjwe+4VnEO5Gl5O+3fpb3ZdEy8JUfK4w/djAhhNO+2alLhAFP1+XoCesjVIy9FzL3U3StTwYkWbXpD0U58Vt16oDiYgQnbb9Gc8oWasNsHqym6/AAJecNzqE6pZYNJLY2cAt7GmmbqvPesvm0VKrH4OXcQZZnBUnyBGes+JjKvjmftrrySQWk98XyVmsVYFFWOc7BSSYYahVdvuVV+R2fX34zCO9h5IwC+bh4ohrZA4N1A==",
+      "expected_config": {
+        "driver": "s3",
+        "region": "eu-west-1",
+        "bucket": "my-bucket-123",
+        "key": "AKIAIOSFODNN7EXAMPLE",
+        "secret": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "endpoint": "https://s3.custom.endpoint.com"
+      }
+    },
+    {
+      "name": "sftp_basic",
+      "secret": "byob-decrypt-vector-secret-32-bytes!!",
+      "blob_base64": "AGdEleHEoZQgnSWsI+W7sBOE7LpYsmXD80h/b93erGg5PzFRQvjG5U7HhGkYYek+QBe9S0Hg75XF0Yd8hbxpMFUf3KpVToZ4f1y0/2l27RC6+pWTlP2oXqrFGVZwmTVxl8CguS+f8ylVQHNjzEMCdDjTHO3/h9uVtUWw2wlaBo47",
+      "expected_config": {
+        "driver": "sftp", "host": "sftp.example.org",
+        "username": "deploy", "password": "sekret", "root": "/var/www"
+      }
+    }
+  ]
+}

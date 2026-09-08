@@ -231,26 +231,36 @@ function fluxfiles_apply_role_preset(array &$payload, array $roleDefaults): void
  * @param string $userId
  * @param array  $byobDisks Map of disk name => config array.
  *                          Each config: ['driver'=>'s3', 'key'=>..., 'secret'=>..., 'bucket'=>..., 'region'=>..., 'endpoint'=>...]
- * @param array  $perms     Permissions (read, write, delete)
+ * @param array|null $perms Permissions (read, write, delete). null = not provided —
+ *                          falls back to the role preset's perms, then BYOB's own
+ *                          ['read','write'] default (see the early-resolution note below).
  * @param string $prefix    Path prefix scope
  * @param int    $maxUploadMb
  * @param array|null $allowedExt
  * @param int    $ttl       Token TTL (default 1800s — shorter for security)
+ * @param bool|null $ownerOnly null = not provided — falls back to the role preset,
+ *                             then false. Same early-resolution reasoning as $perms.
+ * @param ?string $edition   Edition preset (DX sugar) — same as fluxfiles_token()'s.
+ * @param ?string $role      Role preset (DX sugar) — same as fluxfiles_token()'s.
+ *                           Included on BYOB tokens too (docs/ACL-ROLE-PRESETS-DESIGN.md's
+ *                           "BYOB scope" note, matching Laravel/WordPress's existing behavior).
  * @return string JWT token
  */
 function fluxfiles_byob_token(
     string $userId,
     array $byobDisks,
-    array $perms = ['read', 'write'],
+    ?array $perms = null,
     string $prefix = '',
     int $maxUploadMb = 10,
     ?array $allowedExt = null,
     int $ttl = 1800,
-    bool $ownerOnly = false,
+    ?bool $ownerOnly = null,
     ?array $import = null,
     ?array $media = null,
     ?array $webp = null,
-    ?array $usage = null
+    ?array $usage = null,
+    ?string $edition = null,
+    ?string $role = null
 ): string {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
     $now = time();
@@ -265,12 +275,19 @@ function fluxfiles_byob_token(
         $diskNames[] = $name;
     }
 
+    // Role preset (docs/ACL-ROLE-PRESETS-DESIGN.md, docs/PYTHON-TOKEN-SDK-DESIGN.md §5.1):
+    // resolved BEFORE `perms`/`owner_only` below, for the same early-resolution reason as
+    // the plain-token path in _fluxfiles_build_token() — both already have an unconditional
+    // default baked in (BYOB's own ['read','write'], not plain tokens' ['read']), so a
+    // post-hoc "set if absent" guard could never fire for them.
+    $roleDefaults = fluxfiles_role_preset($role);
+
     $payload = [
         'sub'         => $userId,
         'iat'         => $now,
         'exp'         => $now + $ttl,
         'jti'         => bin2hex(random_bytes(12)),
-        'perms'       => $perms,
+        'perms'       => $perms ?? ($roleDefaults['perms'] ?? ['read', 'write']),
         'disks'       => $diskNames,
         'prefix'      => $prefix,
         'max_upload'  => $maxUploadMb,
@@ -278,9 +295,14 @@ function fluxfiles_byob_token(
         'byob_disks'  => $encryptedDisks,
     ];
 
-    if ($ownerOnly) {
+    if ($ownerOnly ?? ($roleDefaults['owner_only'] ?? false)) {
         $payload['owner_only'] = true;
     }
+    // Edition preset, then role preset (excluding perms/owner_only, already resolved
+    // above) — identical merge order and helpers as the plain-token path.
+    fluxfiles_apply_edition_preset($payload, $edition);
+    fluxfiles_apply_role_preset($payload, $roleDefaults);
+
     fluxfiles_apply_import_claims($payload, $import ?? []);
     fluxfiles_apply_media_claims($payload, $media ?? []);
     fluxfiles_apply_webp_claims($payload, $webp ?? []);

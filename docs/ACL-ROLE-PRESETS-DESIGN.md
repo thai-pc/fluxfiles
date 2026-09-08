@@ -630,27 +630,59 @@ an absent key still resolves to `true` after decode. This B1 fix is what
 (core/Laravel/WordPress) and `fb7c8a2` (Node) landed it the same day as the
 initial `role` implementation (`70f1cea`).
 
-**BYOB scope**: `role` is excluded from BYOB tokens in core
-(`fluxfiles_byob_token()`/`fluxfiles_mixed_token()` are untouched, matching
-`edition`'s existing exclusion there) and in Node (`createByobToken()` is
-untouched). In Laravel and WordPress, `role` **does** reach BYOB tokens
-(`tokenWithByob()` / `generateByobToken()`) — a deliberate choice, documented
-in-code at each call site, made for consistency with those two files' existing
-behavior: their `applyTenantOverrides()` is already shared between the regular
-and BYOB token paths, so `edition` already reaches BYOB there too. This is a
-per-adapter divergence from core, not an oversight.
+**BYOB scope — updated 2026-09-08 (`docs/PYTHON-TOKEN-SDK-DESIGN.md` §5.1 /
+§9 decision #6):** `role`/`edition` now reach BYOB tokens in **all four**
+token builders, closing what was originally a core/Node-only exclusion of
+`role` specifically (`edition` already worked on core/Node BYOB tokens before
+this change — only `role` was the gap).
+`fluxfiles_byob_token()` (core) and `createByobToken()` (Node) both resolve
+`perms`/`owner_only` early (same tri-state rule as their plain-token
+siblings, but against BYOB's own `['read','write']` base default instead of
+plain tokens' `['read']`), then apply the edition preset, then the role
+preset (excluding `perms`/`owner_only`), then the byob-disks + remaining
+per-tenant claims — reusing the exact same `fluxfiles_apply_edition_preset()`
+/ `fluxfiles_apply_role_preset()` helpers (core) and `applyTenantOverrides()`
+(Node) the plain-token path already calls. `fluxfiles_mixed_token()` is
+**not** in scope for this change (only `fluxfiles_byob_token()` was) and
+still excludes `role`/`edition`. Laravel/WordPress needed no change here —
+their `tokenWithByob()` / `generateByobToken()` already applied both since
+their `applyTenantOverrides()` was already shared between the regular and
+BYOB token paths (the original reason core/Node were the odd ones out).
+Cross-language test vectors for this now live in `docs/testdata/
+token-vectors.json`'s `byob_role_presets` group, consumed by
+`packages/core/tests/unit/test-byob.php` and
+`packages/node/tests/token.test.ts`.
 
-**Tests**: `packages/core/tests/unit/test-role-preset.php` (15 cases — the
+**Tests**: `packages/core/tests/unit/test-role-preset.php` loads its cases from
+the shared cross-language fixture `docs/testdata/token-vectors.json` (also
+consumed by `packages/node/tests/token.test.ts` and
+`packages/python/tests/test_token.py`) — 16 fixture-driven vectors (2
+`plain_tokens` + 11 `role_presets` + 3 `edition_presets`: the
 perms-early-resolution regression, one per-role claim bundle, explicit-override
-precedence for both `perms` and `owner_only`, edition+role composition, role
-never touching `prefix`/`disks`/`sub`/`max_upload`/`max_storage`/`max_files`,
-and a `superadmin` + empty-prefix unscoped-token case); nine new cases added to
-`packages/node/tests/token.test.ts` (30 total in that file, all passing);
-one smoke test each in `packages/laravel/tests/test-laravel-smoke.php` and
+precedence for `perms`, `owner_only` in **both** directions and the `claims`
+escape hatch overriding a role power-user toggle, edition+role composition,
+role never touching `prefix`/`disks`/`sub`/`max_upload`/`max_storage`/
+`max_files`, a `superadmin` + empty-prefix unscoped-token case, and an
+unknown-role-string-is-a-no-op case) plus 2 PHP-only inline cases that assert
+the **decoded, effective** `Claims::fromJwtPayload(...)->allowExtract`/
+`allowChmod` for `viewer`/`editor` (not just the raw JWT payload the
+fixture-driven vectors check) — 18 cases total, matching the file's original
+pre-fixture-migration count. The vector-assertion helper in all three
+languages compares each expected claim against the raw decoded value with no
+missing-key-to-`false` coercion (a `<claim>_present` key in `expect` is the
+one exception, used only for claims whose decode-side default is `false` when
+absent, e.g. `owner_only`) — this is what makes the suite actually catch a
+`viewer`/`editor` preset silently dropping `allow_extract`/`allow_chmod`
+again, the exact regression class this file exists to guard (verified live:
+reintroducing that historical bug turns the suite red). A separate
+`byob_role_presets` fixture group (3 vectors) covers BYOB + role/edition
+composition, consumed by `packages/core/tests/unit/test-byob.php` and
+`packages/node/tests/token.test.ts`. One smoke test each in
+`packages/laravel/tests/test-laravel-smoke.php` and
 `packages/wordpress/tests/test-wp-smoke.php` (the latter also covers the
 BYOB-inclusion decision above). The full core unit + integration suite,
-`npm run typecheck`, and `npm run build` in `packages/node/` all pass with no
-regressions.
+`npm run typecheck`/`npm run build`/`npm test` in `packages/node/`, and
+`pytest`/`mypy`/`ruff` in `packages/python/` all pass with no regressions.
 
 **Docs**: `docs/CONFIG.md` §1's PHP example now shows `'role' => 'editor'`
 alongside `'edition' => 'pro'`, with a short explanatory paragraph — `role`

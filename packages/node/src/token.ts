@@ -73,20 +73,25 @@ export function createByobToken(opts: CreateByobTokenOptions): string {
     names.push(name);
   }
 
+  // Role preset (docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base payload
+  // object, same early-resolution reason as createToken() above — `perms`/`ownerOnly`
+  // already have an unconditional default baked in (BYOB's own ['read','write'], not
+  // plain tokens' ['read']), so a post-hoc "set if absent" guard could never fire.
+  const rolePreset = opts.role ? ROLE_PRESETS[String(opts.role).toLowerCase()] : undefined;
   const payload: Record<string, unknown> = {
     sub: opts.userId,
     iat: now,
     exp: now + (opts.ttl ?? 1800),
     jti: newJti(),
-    perms: opts.perms ?? ['read', 'write'],
+    perms: opts.perms ?? (rolePreset?.perms as string[] | undefined) ?? ['read', 'write'],
     disks: names,
     prefix: opts.prefix ?? '',
     max_upload: opts.maxUploadMb ?? 10,
     allowed_ext: opts.allowedExt ?? null,
     byob_disks: encrypted,
   };
-  if (opts.ownerOnly) payload.owner_only = true;
-  applyTenantOverrides(payload, opts);
+  if (opts.ownerOnly ?? (rolePreset?.owner_only as boolean | undefined)) payload.owner_only = true;
+  applyTenantOverrides(payload, opts, rolePreset);
   return sign(payload, secret);
 }
 

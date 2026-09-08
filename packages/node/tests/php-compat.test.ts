@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createToken, createByobToken, decodeToken } from '../src';
 import { decryptByob } from '../src/crypto';
@@ -11,6 +11,18 @@ import { decryptByob } from '../src/crypto';
 // vendor autoloader isn't available (e.g. a JS-only CI lane).
 const AUTOLOAD = resolve(process.cwd(), '../core/vendor/autoload.php');
 const SECRET = 'php-compat-secret-key-at-least-32-bytes!!';
+
+// Shared cross-language fixtures (docs/testdata/, docs/PYTHON-TOKEN-SDK-DESIGN.md
+// §6.1) — the same vectors PHP's test-role-preset.php/test-byob.php and this
+// package's token.test.ts load, so the exact input/expected-claim pair every
+// language's own suite already checks is also proven to decode in *live* PHP here.
+const TOKEN_VECTORS = JSON.parse(
+  readFileSync(resolve(process.cwd(), '../../docs/testdata/token-vectors.json'), 'utf8'),
+) as { plain_tokens: Array<{ name: string; input: Record<string, unknown>; expect: Record<string, unknown> }> };
+const BYOB_VECTORS = JSON.parse(
+  readFileSync(resolve(process.cwd(), '../../docs/testdata/byob-vectors.json'), 'utf8'),
+) as { decrypt_vectors: Array<{ name: string; expected_config: Record<string, unknown> }> };
+const S3_VECTOR_CONFIG = BYOB_VECTORS.decrypt_vectors.find((v) => v.name === 's3_with_endpoint')!.expected_config;
 
 function phpAvailable(): boolean {
   try {
@@ -38,49 +50,36 @@ describe.skipIf(!ENABLED)('PHP ↔ Node compatibility', () => {
   });
 
   it('a Node-minted token decodes natively in the PHP core', () => {
-    const token = createToken({
-      secret: SECRET,
-      userId: 'php-user',
-      perms: ['read', 'write', 'delete'],
-      disks: ['local', 's3'],
-      prefix: 'team/9',
-      maxUploadMb: 42,
-      allowedExt: ['png', 'webp'],
-      maxStorageMb: 200,
-      maxFiles: 7,
-      ownerOnly: true,
-    });
+    const vector = TOKEN_VECTORS.plain_tokens.find((v) => v.name === 'exact_claim_shape')!;
+    const input = vector.input as { user_id: string; ttl_seconds: number; claims: Record<string, unknown> };
+    const token = createToken({ secret: SECRET, userId: input.user_id, ttl: input.ttl_seconds, claims: input.claims });
     const out = php(`echo json_encode(\\FluxFiles\\JwtCompat::decode(getenv('FF_TOKEN'), getenv('FF_SECRET')));`, {
       FF_TOKEN: token,
     });
     const c = JSON.parse(out);
-    expect(c.sub).toBe('php-user');
-    expect(c.perms).toEqual(['read', 'write', 'delete']);
-    expect(c.disks).toEqual(['local', 's3']);
-    expect(c.prefix).toBe('team/9');
-    expect(c.max_upload).toBe(42);
-    expect(c.allowed_ext).toEqual(['png', 'webp']);
-    expect(c.max_storage).toBe(200);
-    expect(c.max_files).toBe(7);
-    expect(c.owner_only).toBe(true);
+    for (const [key, expected] of Object.entries(vector.expect)) {
+      if (key === 'ttl_seconds') {
+        expect(c.exp - c.iat).toBe(expected);
+        continue;
+      }
+      expect(c[key]).toEqual(expected);
+    }
   });
 
   it('a Node-encrypted BYOB blob decrypts in PHP CredentialEncryptor', () => {
-    const cfg = { driver: 's3', key: 'AKIA-NODE', secret: 'node-secret', bucket: 'node-bucket', region: 'us-east-2' };
-    const token = createByobToken({ secret: SECRET, userId: 'u', byobDisks: { 'my-s3': cfg } });
+    const token = createByobToken({ secret: SECRET, userId: 'u', byobDisks: { 'my-s3': S3_VECTOR_CONFIG as never } });
     const blob = decodeToken(token).byob_disks!['my-s3'];
     const out = php(`echo json_encode(\\FluxFiles\\CredentialEncryptor::decrypt(getenv('FF_BLOB'), getenv('FF_SECRET')));`, {
       FF_BLOB: blob,
     });
-    expect(JSON.parse(out)).toEqual(cfg);
+    expect(JSON.parse(out)).toEqual(S3_VECTOR_CONFIG);
   });
 
   it('a PHP-encrypted BYOB blob decrypts in Node (HKDF salt parity, both directions)', () => {
-    const cfg = { driver: 's3', key: 'AKIA-PHP', secret: 'php-secret', bucket: 'php-bucket', region: 'ap-south-1' };
     const blob = php(
       `echo \\FluxFiles\\CredentialEncryptor::encrypt(json_decode(getenv('FF_CONFIG'), true), getenv('FF_SECRET'));`,
-      { FF_CONFIG: JSON.stringify(cfg) },
+      { FF_CONFIG: JSON.stringify(S3_VECTOR_CONFIG) },
     );
-    expect(decryptByob(blob, SECRET)).toEqual(cfg);
+    expect(decryptByob(blob, SECRET)).toEqual(S3_VECTOR_CONFIG);
   });
 });

@@ -470,6 +470,39 @@ jobs:
           npm run build
           npm test
 
+  python-token:
+    name: Python token SDK (PHP↔Python parity)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # PHP + core vendor so the cross-language parity test actually runs
+      # (Python-minted tokens decode in the PHP core; BYOB blobs round-trip
+      # both ways) instead of skipping.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          coverage: none
+
+      - name: Install core dependencies
+        run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install + typecheck + lint + test fluxfiles-token
+        working-directory: packages/python
+        run: |
+          pip install -e ".[dev]"
+          mypy src
+          ruff check .
+          pytest tests -v
+
   browser-e2e:
     name: Browser e2e (Playwright)
     runs-on: ubuntu-latest

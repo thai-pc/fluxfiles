@@ -3,6 +3,11 @@
 /**
  * Test script for the `role` mint-time preset (docs/ACL-ROLE-PRESETS-DESIGN.md).
  *
+ * Vectors are loaded from the shared cross-language fixture
+ * `docs/testdata/token-vectors.json` (docs/PYTHON-TOKEN-SDK-DESIGN.md §6.1) so the
+ * same role/edition/claims-escape-hatch cases are exercised identically by this
+ * file, packages/node/tests/token.test.ts, and the future Python SDK's own suite.
+ *
  * Usage:
  *   php tests/unit/test-role-preset.php
  */
@@ -67,197 +72,111 @@ function decode(string $token, string $secret)
     return \FluxFiles\JwtCompat::decode($token, $secret);
 }
 
-// ═══════════════════════════════════════════════════════════════
-echo "{$yellow}► perms early-resolution regression{$reset}\n";
-// ═══════════════════════════════════════════════════════════════
+$vectorsPath = __DIR__ . '/../../../../docs/testdata/token-vectors.json';
+$vectors = json_decode(file_get_contents($vectorsPath), true);
+if (!is_array($vectors)) {
+    echo "{$red}ERROR: could not load {$vectorsPath}{$reset}\n";
+    exit(1);
+}
 
-test('role with no explicit perms decodes to the role default, not the global default', function () use ($secret) {
-    $token = fluxfiles_token(['user' => 'u1', 'claims' => [], 'role' => 'editor']);
-    $payload = decode($token, $secret);
-    assertEqual(['read', 'write'], (array) $payload->perms);
-});
+/**
+ * Mint a vector's `input` via the one-options-array API, decode, and assert its
+ * `expect`/`expect_true`/`expect_absent` fields against the decoded JWT payload.
+ *
+ * `<claim>_present` in `expect` asserts effective presence (isset AND === true),
+ * not literal key presence — this is what actually distinguishes "enabled" from
+ * "not enabled" for a boolean claim, whether an SDK represents "off" by omitting
+ * the key or by setting it explicitly false (both decode to the same non-owner-
+ * scoped/non-role-granted behavior server-side).
+ */
+function assertVector(array $vector, string $secret): void
+{
+    $input = $vector['input'];
+    $opts = ['user' => $input['user_id']];
+    if (isset($input['role'])) {
+        $opts['role'] = $input['role'];
+    }
+    if (isset($input['edition'])) {
+        $opts['edition'] = $input['edition'];
+    }
+    if (isset($input['ttl_seconds'])) {
+        $opts['ttl'] = $input['ttl_seconds'];
+    }
+    if (isset($input['claims'])) {
+        $opts['claims'] = $input['claims'];
+    }
 
-test('viewer role with no explicit perms is read-only', function () use ($secret) {
-    $token = fluxfiles_token(['user' => 'u1', 'role' => 'viewer']);
-    $payload = decode($token, $secret);
-    assertEqual(['read'], (array) $payload->perms);
-});
+    $payload = decode(fluxfiles_token($opts), $secret);
+
+    foreach ($vector['expect'] ?? [] as $key => $expected) {
+        if (str_ends_with($key, '_present')) {
+            $claim = substr($key, 0, -strlen('_present'));
+            $actual = property_exists($payload, $claim) && $payload->{$claim} === true;
+            assertEqual($expected, $actual, "{$vector['name']}: {$claim} presence");
+            continue;
+        }
+        if ($key === 'ttl_seconds') {
+            assertEqual($expected, $payload->exp - $payload->iat, "{$vector['name']}: ttl_seconds");
+            continue;
+        }
+        // Raw comparison — a genuinely absent claim is `null`, NOT coerced to
+        // `false`. Coercing here would make an omitted key indistinguishable
+        // from an explicit `false`, which is exactly the historical B1 bug
+        // (allow_extract/allow_chmod default to TRUE when absent — see
+        // Claims::fromJwtPayload) — mirrors byob_role_presets' loop below and
+        // in test-byob.php, which never coerced.
+        $actual = $payload->{$key} ?? null;
+        if (is_array($expected)) {
+            $actual = (array) $actual;
+        }
+        assertEqual($expected, $actual, "{$vector['name']}: {$key} expected " . json_encode($expected) . " got " . json_encode($actual));
+    }
+
+    foreach ($vector['expect_true'] ?? [] as $claim) {
+        assertEqual(true, $payload->{$claim} ?? null, "{$vector['name']}: expected {$claim} to be true");
+    }
+
+    foreach ($vector['expect_absent'] ?? [] as $claim) {
+        assertEqual(false, isset($payload->{$claim}), "{$vector['name']}: expected {$claim} to be absent");
+    }
+}
+
+foreach (['plain_tokens', 'role_presets', 'edition_presets'] as $group) {
+    echo "{$yellow}► {$group}{$reset}\n";
+    foreach ($vectors[$group] ?? [] as $vector) {
+        test($vector['name'], function () use ($vector, $secret) {
+            assertVector($vector, $secret);
+        });
+    }
+    echo "\n";
+}
 
 // ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► per-role claim bundle{$reset}\n";
+echo "{$yellow}► decode-level effective claims (B1 regression, ACL-ROLE-PRESETS-DESIGN.md:625-627){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
+// Assert against Claims::fromJwtPayload()'s DECODED, effective value — not just
+// the raw JWT payload the fixture-driven loop above checks — since asserting
+// only isset()/raw-equality is exactly what let the historical B1 bug through
+// undetected: an absent allow_extract/allow_chmod key still resolves to `true`
+// after decode (unlike most other allow_* claims, which default `false`).
 
-test('viewer: read-only, owner-scoped', function () use ($secret) {
+test('viewer role: effective Claims::fromJwtPayload()->allowExtract/allowChmod are false', function () use ($secret) {
     $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'viewer']), $secret);
-    assertEqual(['read'], (array) $payload->perms);
-    assertEqual(true, $payload->owner_only);
-    assertEqual(false, isset($payload->allow_code_edit));
-    assertEqual(false, isset($payload->show_hidden));
-    // Regression guard (B1): allow_extract/allow_chmod default to TRUE when
-    // absent from the JWT (Claims::fromJwtPayload), unlike allow_code_edit/
-    // show_hidden which default false — so viewer/editor must set them
-    // EXPLICITLY false, never rely on omission. Assert against the decoded,
-    // effective Claims value (not just raw JWT presence), since that's the
-    // gap that let this bug through undetected before.
-    assertEqual(false, $payload->allow_extract);
-    assertEqual(false, $payload->allow_chmod);
     $claims = \FluxFiles\Claims::fromJwtPayload($payload, $secret);
     assertEqual(false, $claims->allowExtract);
     assertEqual(false, $claims->allowChmod);
 });
 
-test('editor: read+write, owner-scoped', function () use ($secret) {
+test('editor role: effective Claims::fromJwtPayload()->allowExtract is true, allowChmod is false', function () use ($secret) {
     $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'editor']), $secret);
-    assertEqual(['read', 'write'], (array) $payload->perms);
-    assertEqual(true, $payload->owner_only);
-    // editor gets allow_extract (power-user affordance for a contributor) but
-    // never allow_chmod (matches the ACL-ROLE-PRESETS-DESIGN.md claim matrix).
-    assertEqual(true, $payload->allow_extract);
-    assertEqual(false, $payload->allow_chmod);
     $claims = \FluxFiles\Claims::fromJwtPayload($payload, $secret);
     assertEqual(true, $claims->allowExtract);
     assertEqual(false, $claims->allowChmod);
 });
 
-test('admin: full perms, not owner-scoped, power-user toggles on', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'admin']), $secret);
-    assertEqual(['read', 'write', 'delete', 'audit'], (array) $payload->perms);
-    assertEqual(false, $payload->owner_only ?? false);
-    assertEqual(true, $payload->allow_extract);
-    assertEqual(true, $payload->allow_chmod);
-    assertEqual(true, $payload->allow_code_edit);
-    assertEqual(true, $payload->show_hidden);
-});
+echo "\n";
 
-test('superadmin: identical raw claim bundle to admin', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'superadmin']), $secret);
-    assertEqual(['read', 'write', 'delete', 'audit'], (array) $payload->perms);
-    assertEqual(false, $payload->owner_only ?? false);
-    assertEqual(true, $payload->allow_extract);
-    assertEqual(true, $payload->allow_chmod);
-    assertEqual(true, $payload->allow_code_edit);
-    assertEqual(true, $payload->show_hidden);
-});
-
-// ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► explicit overrides win{$reset}\n";
-// ═══════════════════════════════════════════════════════════════
-
-test('explicit perms overrides the role default', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'viewer', 'perms' => ['read', 'write', 'delete']]), $secret);
-    assertEqual(['read', 'write', 'delete'], (array) $payload->perms);
-});
-
-test('explicit ownerOnly=false overrides an editor role default of true', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'editor', 'ownerOnly' => false]), $secret);
-    assertEqual(false, $payload->owner_only ?? false);
-});
-
-test('explicit owner_only=true overrides an admin role default of false', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'admin', 'owner_only' => true]), $secret);
-    assertEqual(true, $payload->owner_only);
-});
-
-test('explicit claims escape hatch overrides a role power-user toggle', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'admin', 'claims' => ['allow_chmod' => false]]), $secret);
-    assertEqual(false, $payload->allow_chmod);
-});
-
-// ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► edition + role composition{$reset}\n";
-// ═══════════════════════════════════════════════════════════════
-
-test('edition and role compose without clobbering each other', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'edition' => 'pro', 'role' => 'admin']), $secret);
-    // edition claims present
-    assertEqual(true, $payload->allow_optimize);
-    assertEqual(true, $payload->allow_share);
-    assertEqual(true, $payload->allow_intake);
-    // role claims present
-    assertEqual(['read', 'write', 'delete', 'audit'], (array) $payload->perms);
-    assertEqual(true, $payload->allow_chmod);
-    assertEqual(false, $payload->owner_only ?? false);
-});
-
-test('studio edition preset grants Pro + versioning/webhooks + AI/OCR throw-ins, matching Plans.php\'s studio module list', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'edition' => 'studio']), $secret);
-    assertEqual(true, $payload->allow_optimize);
-    assertEqual(true, $payload->allow_share);
-    assertEqual(true, $payload->allow_intake);
-    assertEqual(true, $payload->allow_versioning);
-    assertEqual(true, $payload->allow_webhooks);
-    assertEqual(true, $payload->allow_ai_vision);
-    assertEqual(true, $payload->allow_ocr);
-    // Enterprise-only claims must NOT leak into studio.
-    assertEqual(false, isset($payload->allow_virus_scan));
-    assertEqual(false, isset($payload->allow_c2pa));
-    assertEqual(false, isset($payload->allow_backup));
-    assertEqual(false, isset($payload->allow_audit_export));
-});
-
-test('enterprise edition preset grants every module claim (matches the docstring\'s "enterprise -> all")', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'edition' => 'enterprise']), $secret);
-    foreach ([
-        'allow_optimize', 'allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks',
-        'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_c2pa', 'allow_backup', 'allow_audit_export',
-        // DLP/PII (Enterprise compliance bundle, docs/DLP-PII-REDACTION-DESIGN.md) and
-        // Legal Hold (docs/RETENTION-LEGAL-HOLD-DESIGN.md) — this list predates both
-        // modules and must stay exhaustive as new bundle members ship.
-        'allow_dlp_scan', 'allow_legal_hold',
-    ] as $claim) {
-        assertEqual(true, $payload->{$claim} ?? null, "enterprise preset missing {$claim}");
-    }
-});
-
-test('studio edition preset must NOT leak allow_dlp_scan (Enterprise-only, not Studio)', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'edition' => 'studio']), $secret);
-    assertEqual(false, isset($payload->allow_dlp_scan), 'allow_dlp_scan must not appear in the studio preset');
-});
-
-// ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► role never touches scoping/limit claims{$reset}\n";
-// ═══════════════════════════════════════════════════════════════
-
-test('role does not set prefix/disks/sub/max_upload/max_storage/max_files', function () use ($secret) {
-    $payload = decode(fluxfiles_token([
-        'user' => 'scoped-user',
-        'role' => 'admin',
-        'disks' => ['local'],
-        'prefix' => 'users/42',
-        'maxUploadMb' => 5,
-        'maxStorageMb' => 100,
-        'maxFiles' => 10,
-    ]), $secret);
-    assertEqual('scoped-user', $payload->sub);
-    assertEqual(['local'], (array) $payload->disks);
-    assertEqual('users/42', $payload->prefix);
-    assertEqual(5, $payload->max_upload);
-    assertEqual(100, $payload->max_storage);
-    assertEqual(10, $payload->max_files);
-});
-
-test('superadmin with empty prefix mints an unscoped token', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'root', 'role' => 'superadmin', 'prefix' => '']), $secret);
-    assertEqual('', $payload->prefix);
-    assertEqual(false, $payload->owner_only ?? false);
-});
-
-// ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► unknown/absent role is a no-op{$reset}\n";
-// ═══════════════════════════════════════════════════════════════
-
-test('no role set falls back to the global perms default', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u']), $secret);
-    assertEqual(['read'], (array) $payload->perms);
-    assertEqual(false, isset($payload->owner_only) && $payload->owner_only === true);
-});
-
-test('unknown role string is silently ignored (empty preset)', function () use ($secret) {
-    $payload = decode(fluxfiles_token(['user' => 'u', 'role' => 'not-a-real-role']), $secret);
-    assertEqual(['read'], (array) $payload->perms);
-});
-
-echo "\n{$cyan}══════════════════════════════════════════════════{$reset}\n";
+echo "{$cyan}══════════════════════════════════════════════════{$reset}\n";
 echo "{$cyan}  Results: {$green}{$passed} passed{$reset}";
 if ($failed > 0) {
     echo ", {$red}{$failed} failed{$reset}";

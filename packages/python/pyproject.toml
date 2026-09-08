@@ -1,0 +1,41 @@
+[project]
+name = "fluxfiles-token"
+version = "0.1.0"
+description = "Server-side Python SDK for minting FluxFiles JWTs (plain + BYOB), byte-compatible with the PHP core and @fluxfiles/node"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "thai-pc" }]
+keywords = ["fluxfiles", "jwt", "token", "file-manager", "s3", "r2", "byob", "server"]
+dependencies = ["PyJWT>=2.8,<3", "cryptography>=42"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "mypy>=1.10", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/thai-pc/fluxfiles#python-server-side-token-sdk"
+Repository = "https://github.com/thai-pc/fluxfiles"
+Issues = "https://github.com/thai-pc/fluxfiles/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fluxfiles_token"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 110
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
