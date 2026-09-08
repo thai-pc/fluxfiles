@@ -119,6 +119,36 @@ test('a traversal-shaped class name is refused, not resolved', function () use (
     assertEqual('no', $out, 'a dotted module segment must be rejected by the name guard');
 });
 
+// Two real module ids are multi-word and kebab-cased on disk ("audit-export",
+// "legal-hold") while their PHP namespace is PascalCase with no separator
+// ("AuditExport", "LegalHold"). A plain strtolower() of the namespace segment
+// collapses to "auditexport"/"legalhold", which never matches the real
+// `vendor/fluxfiles/audit-export/` install dir — those two modules could never
+// autoload for a real customer. Regression-test with a fake two-word module.
+$vendorMulti = $coreDir . '/vendor/fluxfiles/multi-word';
+$plantMulti = static function () use ($vendorMulti): void {
+    @mkdir($vendorMulti . '/src', 0777, true);
+    file_put_contents(
+        $vendorMulti . '/src/Probe.php',
+        "<?php\nnamespace FluxFiles\\MultiWord;\nclass Probe {}\n"
+    );
+};
+$unplantMulti = static function () use ($vendorMulti): void {
+    @unlink($vendorMulti . '/src/Probe.php');
+    @rmdir($vendorMulti . '/src');
+    @rmdir($vendorMulti);
+};
+$unplantMulti();
+$plantMulti();
+test('a kebab-cased module dir resolves from its PascalCase namespace', function () use ($run, $coreDir) {
+    $out = $run(
+        "require " . var_export($coreDir . '/vendor/autoload.php', true) . ";\n" .
+        "echo class_exists('\\\\FluxFiles\\\\MultiWord\\\\Probe') ? 'yes' : 'no';"
+    );
+    assertEqual('yes', $out, 'PascalCase namespace segment "MultiWord" must resolve to dir "multi-word"');
+});
+$unplantMulti();
+
 // The WordPress plugin bundle is assembled by a script, not by Composer. It copies
 // core file by file, so a new root-level runtime file is easy to miss — and missing
 // this one puts the plugin back to answering 501 for everything paid.

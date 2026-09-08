@@ -51,11 +51,23 @@ declare(strict_types=1);
             return;   // FluxFiles\Foo is core's own namespace, already mapped
         }
         // FluxFiles\Share\ShareModule → module dir "share", relative path ShareModule
-        $module = strtolower(substr($rest, 0, $slash));
-        if (!preg_match('/^[a-z0-9]+$/', $module)) {
+        $segment = substr($rest, 0, $slash);
+        if (!preg_match('/^[A-Za-z0-9]+$/', $segment)) {
             return;   // never let a crafted class name walk the filesystem
         }
         $relative = str_replace('\\', '/', substr($rest, $slash + 1)) . '.php';
+
+        // Module dirs are kebab-case ("audit-export", "legal-hold") but their PHP
+        // namespace segment is PascalCase with no separator ("AuditExport",
+        // "LegalHold") — plain strtolower() collapses to "auditexport"/"legalhold",
+        // which never matches the real install dir, so those two modules could never
+        // autoload from a real `vendor/fluxfiles/<module>/` install. Try both: the
+        // plain lowercase (covers "Share" -> "share", "Ocr" -> "ocr", "C2pa" -> "c2pa")
+        // and a kebab-cased form (hyphen before each interior capital) for multi-word
+        // namespaces.
+        $plain = strtolower($segment);
+        $kebab = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $segment));
+        $modules = $plain === $kebab ? [$plain] : [$plain, $kebab];
 
         // Only the layouts a real install produces. A monorepo sibling
         // (packages/share next to packages/core) is deliberately NOT searched: it
@@ -64,14 +76,16 @@ declare(strict_types=1);
         // every "module absent → 501" test would see the module. The suites that DO
         // want a module loaded require its source explicitly, which is the honest way
         // to say "this run has it".
-        foreach ([
-            __DIR__ . '/vendor/fluxfiles/' . $module . '/src/',   // standalone / monorepo / WP plugin bundle
-            __DIR__ . '/../../fluxfiles/' . $module . '/src/',    // installed as a dependency → host vendor/
-        ] as $base) {
-            $file = $base . $relative;
-            if (is_file($file)) {
-                require_once $file;
-                return;
+        foreach ($modules as $module) {
+            foreach ([
+                __DIR__ . '/vendor/fluxfiles/' . $module . '/src/',   // standalone / monorepo / WP plugin bundle
+                __DIR__ . '/../../fluxfiles/' . $module . '/src/',    // installed as a dependency → host vendor/
+            ] as $base) {
+                $file = $base . $relative;
+                if (is_file($file)) {
+                    require_once $file;
+                    return;
+                }
             }
         }
     });
