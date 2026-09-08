@@ -5,19 +5,16 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.3.07] — 2026-09-08
 
-> Released: `core-v0.2.83`. This tag also carries the role/edition-on-BYOB
-> extension to `packages/node/src/token.ts`, and the new `packages/python/`
-> package — neither has its own npm/PyPI tag yet (`node-v*`/`python-v*` not
-> cut in this batch).
+> Released: `core-v0.2.83`, `node-v0.1.28`, `python-v0.1.0` (first
+> `fluxfiles-token` PyPI release).
 
 ### Added — `fluxfiles-token` Python SDK; role/edition presets on BYOB tokens (core + Node)
 
 - **New Python 3.10+ SDK** (`packages/python/`, `fluxfiles-token`) — mint-only
   JWT builder mirroring `@fluxfiles/node`'s API in snake_case, byte-compatible
   with core PHP and Node for both plain and BYOB tokens (HKDF-SHA256 +
-  AES-256-GCM credential encryption, `PyJWT` + `cryptography`). Not yet
-  published to PyPI — publish workflow (`pypi-publish.yml`, OIDC Trusted
-  Publishing) is wired and waits on a `python-v*` tag.
+  AES-256-GCM credential encryption, `PyJWT` + `cryptography`). Published to
+  PyPI via `pypi-publish.yml` (OIDC Trusted Publishing, no long-lived token).
 - **BYOB role/edition presets, closing the last gap** — `fluxfiles_byob_token()`
   (core `embed.php`) and `createByobToken()` (`@fluxfiles/node`) now accept
   `role`/`edition` the same way `fluxfiles_token()`/`createToken()` and the
