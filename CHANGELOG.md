@@ -3,6 +3,37 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.07] — 2026-09-08
+
+> Released: `core-v0.2.83`. This tag also carries the role/edition-on-BYOB
+> extension to `packages/node/src/token.ts`, and the new `packages/python/`
+> package — neither has its own npm/PyPI tag yet (`node-v*`/`python-v*` not
+> cut in this batch).
+
+### Added — `fluxfiles-token` Python SDK; role/edition presets on BYOB tokens (core + Node)
+
+- **New Python 3.10+ SDK** (`packages/python/`, `fluxfiles-token`) — mint-only
+  JWT builder mirroring `@fluxfiles/node`'s API in snake_case, byte-compatible
+  with core PHP and Node for both plain and BYOB tokens (HKDF-SHA256 +
+  AES-256-GCM credential encryption, `PyJWT` + `cryptography`). Not yet
+  published to PyPI — publish workflow (`pypi-publish.yml`, OIDC Trusted
+  Publishing) is wired and waits on a `python-v*` tag.
+- **BYOB role/edition presets, closing the last gap** — `fluxfiles_byob_token()`
+  (core `embed.php`) and `createByobToken()` (`@fluxfiles/node`) now accept
+  `role`/`edition` the same way `fluxfiles_token()`/`createToken()` and the
+  Laravel/WordPress builders already did, using the same 8-step merge order
+  (BYOB's own `['read','write']`/`false` perms defaults → edition preset →
+  role preset → explicit kwargs → `claims` escape hatch). `disks`-merging
+  stays BYOB-only (unaffected).
+- **Shared cross-language test fixtures** — `docs/testdata/token-vectors.json`
+  and `docs/testdata/byob-vectors.json`, consumed identically by the PHP,
+  Node, and Python test suites for role/edition-preset and BYOB vectors,
+  replacing per-language hardcoded cases where they should agree. Includes
+  decode-level (`Claims::fromJwtPayload`) assertions for the
+  `allow_extract`/`allow_chmod` absent-defaults-to-`true` behavior, so a
+  regression there fails the suite rather than being silently coerced away.
+- `docs/CONFIG.md` documents the Python SDK as a fifth minting surface.
+
 ## [0.3.06] — 2026-09-06
 
 > Released: `core-v0.2.82`, `laravel-v0.2.39`, `wordpress-v0.2.46`,
