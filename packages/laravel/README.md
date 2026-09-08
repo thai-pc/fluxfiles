@@ -77,12 +77,12 @@ FLUXFILES_ENDPOINT=https://your-fluxfiles-server.com
 
 ## SFTP disk & SSH terminal
 
-Managing a **remote VPS / shared host** (SFTP disk, `chmod`, the SSH terminal) is a
-**standalone-mode** feature. Those serve files *through* the app and the terminal
-holds a live SSH connection, so they aren't proxied through Laravel routes.
+Managing a **remote VPS / shared host** over SFTP is supported in both modes, with
+one gap: `chmod` (cPanel-style permission editing) has no `proxy`-mode route yet,
+so it's a **standalone-mode** feature.
 
-- **`standalone` mode (recommended for SFTP/terminal):** run the FluxFiles server
-  (or the Docker image), give it the `SFTP_*` env vars (see the
+- **`standalone` mode (recommended for SFTP):** run the FluxFiles server (or the
+  Docker image), give it the `SFTP_*` env vars (see the
   [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)
   and [SSH terminal](https://github.com/thai-pc/fluxfiles#ssh-terminal-sftp-disks)),
   and point Laravel at it with `FLUXFILES_ENDPOINT`. Then mint tokens with the
@@ -96,9 +96,13 @@ holds a live SSH connection, so they aren't proxied through Laravel routes.
   ]);
   ```
 
-- **`proxy` mode:** local / S3 / R2 only. SFTP serving and the terminal aren't
-  available here (the endpoints aren't proxied), so those claims are dropped — use
-  standalone mode for them. **Burn-in watermark** works in both modes.
+- **`proxy` mode:** the SSH terminal (`POST /terminal`) and one-click Git deploy
+  (`POST /git-deploy`) **are** proxied through Laravel routes — add an `sftp`
+  entry to `config('fluxfiles.disks')` (same shape as the core standalone config,
+  e.g. `driver`/`host`/`port`/`username`/`private_key` or `password`) and mint
+  tokens with `disks => ['sftp']` and, opt-in, `allow_terminal`/`allow_git_deploy`.
+  `chmod` is the one SFTP feature still unavailable here (core-standalone only).
+  **Burn-in watermark** works in both modes.
 
 ## Usage
 

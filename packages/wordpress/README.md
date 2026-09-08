@@ -162,10 +162,13 @@ metadata automatically.
 
 ## SFTP disk & SSH terminal
 
-The WordPress plugin runs FluxFiles **through the WP REST API (proxy mode)**, which
-serves **Local / S3 / R2** storage. Managing a **remote VPS** over SFTP — the SFTP
-disk, `chmod`, and the SSH **terminal** — streams files through the app and holds a
-live SSH connection, so it's **not available through the WordPress plugin**.
+The WordPress plugin runs FluxFiles **through the WP REST API (proxy mode)**, whose
+admin settings page only exposes **Local / S3 / R2** storage — there's no settings
+field (or filter) to register an SFTP disk, even though the underlying `/terminal`
+and `/git-deploy` REST routes are proxied and would work against one if it existed.
+Managing a **remote VPS** over SFTP — the SFTP disk, `chmod`, and the SSH
+**terminal** — is therefore **not available through the WordPress plugin** in
+practice.
 
 For those, run the **standalone FluxFiles server** (or the Docker image) — see the
 [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)

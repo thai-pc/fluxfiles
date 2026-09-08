@@ -173,6 +173,15 @@ supported; folders move the whole subtree incl. variants. All gated by the
 - `GET /api/fm/audit?limit=100&offset=0`
   - Lists current user's audit entries.
 
+- `GET /api/fm/compliance/scorecard` — **FREE / core** (`ComplianceScorecard::build`, `docs/COMPLIANCE-SCORECARD-DESIGN.md`)
+  - Read-only capability checklist across virus scan / C2PA / audit export / SSO / DLP / legal hold. Gated only by the `audit` permission (same bucket as the activity log — introspection over the tenant's own config, not a new capability), **not** by module install/license: every paid row simply reports `available: false` on an unlicensed server, so free-core operators still see the full checklist.
+
+- `GET /api/fm/hold/status?disk=&path=` — **FREE / core**
+  - Whether a path is currently on legal hold. Requires `read`; `reason`/`placed_by`/`placed_at` are included only with the `audit` permission. Visibility is free/core even though placing/releasing a hold is paid — see below.
+
+- `POST /api/fm/hold {disk, path, reason?}` · `POST /api/fm/hold/release {disk, hold_id, reason?}` · `GET /api/fm/hold/list?disk=&include_released=` — **paid** (`legal-hold`, 3-layer gate; `docs/RETENTION-LEGAL-HOLD-DESIGN.md` §2)
+  - Management half of Legal Hold, gated by the `audit` permission. `place` records `{hold_id, reason, placed_by, placed_at}`; `release` needs the existing `hold_id`. **Enforcement is free/core and license-independent**: `FileManager::assertNoActiveHold()` blocks delete/trash/rename/move on a held path unconditionally, and keeps blocking even if the `legal-hold` module is later uninstalled or its license lapses — only the place/release/list *management* API is paid-gated.
+
 - `GET /api/fm/audit/export?format=ndjson|csv&action=&from=&to=&path=&actor=&disk=` — paid module `audit-export`, requires the `audit` permission
   - Streams the **full, unpaginated** audit log as a file download (NDJSON default or CSV), same tenant scoping/filters as `/audit`, merging live `_fluxfiles/audit.jsonl` + rotated `_fluxfiles/audit/archive/*.jsonl` (capped at `MAX_EXPORT` rows). Bypasses the `{data,error}` envelope — it's a `Content-Disposition: attachment` response, downloaded via fetch+blob (never a raw `<a href>`, so the `Authorization` header can be sent and the JWT never rides the URL). Core-standalone (not proxied by Laravel/WordPress).
 

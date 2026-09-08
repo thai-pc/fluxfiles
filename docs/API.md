@@ -55,6 +55,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/watermark` | `{disk, path, type, text?, logo_data?, x, y, scale, opacity, color?, dest?}` | Burn-in watermark editor (logo/text), permanent (**free/core**). Non-destructive: snapshots the original on first burn so it can be undone |
 | `POST` | `/watermark/remove` | `{disk, path}` | Restore the pre-watermark original (404 if none) |
 | `POST` | `/terminal` | `{disk, cmd, cwd?, confirm?}` | Stateless SSH command-runner, **SFTP disks only** (**free/core**). Opt-in via `allow_terminal` (default off) + `write`. Dangerous commands need `confirm` |
+| `POST` | `/git-deploy` | `{disk}` | One-click Git deploy, **SFTP disks only** (**free/core**). Fixed-shape subset of `/terminal` — repo path/branch/hooks come from operator claims (`git_deploy_path`/`git_deploy_branch`/`git_deploy_hooks`), never the request body. Opt-in via `allow_git_deploy` (default off) + `write` |
 
 > **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media). Proxied by core-standalone, Laravel, and WordPress alike.
 
@@ -80,6 +81,8 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/audit?limit=&offset=&action=&from=&to=&path=&actor=` | `limit` default 100 | Activity log, **scoped to the token's prefix**. Requires the `audit` permission (403 otherwise). |
 | `GET` | `/disk/doctor?disk=&origin=` | — | **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write`. |
 | `GET` | `/license` | — | Server's commercial edition/status: `{edition, status, modules, limits, expires, days_left}`. Free MIT core → `{edition:'free'}` |
+| `GET` | `/compliance/scorecard` | — | **Compliance Readiness Scorecard** (**free/core**) — read-only checklist across virus scan / C2PA / audit export / SSO / DLP / legal hold; every paid row reports `available: false` on an unlicensed server instead of erroring. Requires the `audit` permission |
+| `GET` | `/hold/status?disk=&path=` | — | **Legal hold status** (**free/core**) — whether a path is currently on hold. Requires `read`; `reason`/`placed_by`/`placed_at` are only included with the `audit` permission |
 
 ## Paid Modules
 
@@ -105,8 +108,11 @@ Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` cl
 | `POST` | `/c2pa/sign` | `{disk, path, dest?}` | `c2pa` | Sign a file with Content Credentials |
 | `GET` | `/audit/export?format=ndjson\|csv&action=&from=&to=&path=&actor=&disk=` | — | `audit-export` | Stream the full (unpaginated) audit log as a file download — NDJSON (default) or CSV, tenant-scoped like `/audit`. Requires the `audit` permission + `allow_audit_export` |
 | `POST` | `/audit/purge` | `{disk?, before?}` | `audit-export` | Delete audit entries (live log + rotated archives) older than `before` (unix ts; falls back to the token's `audit_retention_days`, else `400 audit_purge_no_cutoff`). **Admin-only**: requires an unscoped token (empty `pathPrefix`) — `audit.jsonl` is per-disk, not per-tenant |
+| `POST` | `/hold` | `{disk, path, reason?}` | `legal-hold` | Place a legal hold on a file/folder, blocking delete/trash/rename/move on it (enforcement itself is free/core and stays active even if the module is uninstalled/unlicensed). Requires the `audit` permission |
+| `POST` | `/hold/release` | `{disk, hold_id, reason?}` | `legal-hold` | Release a hold. Requires the `audit` permission |
+| `GET` | `/hold/list?disk=&include_released=` | — | `legal-hold` | List holds on the token's scope. Requires the `audit` permission |
 
-> Virus scanning (`virus` module) has no dedicated endpoint — when `allow_virus_scan` is on, `/upload`, `/import-url`, `/content` (PUT), and `/extract` scan bytes before they're written.
+> Virus scanning (`virus` module) has no dedicated endpoint — when `allow_virus_scan` is on, `/upload`, `/import-url`, `/content` (PUT), and `/extract` scan bytes before they're written. DLP/PII scanning (`dlp` module) works the same way via `allow_dlp_scan` — no endpoint of its own, `/api/fm/chunk/*` refuses it outright the way it refuses virus scanning.
 
 ### SSO Bridge (paid module `sso`, pre-auth)
 
