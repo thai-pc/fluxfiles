@@ -47,13 +47,14 @@ FluxFiles/
 │   ├── wordpress/      PHP adapter   (bundles core into a plugin ZIP) → ZIP download
 │   ├── sdk/            browser SDK   (the postMessage bridge)         → npm  `fluxfiles`
 │   ├── node/           server-side JWT minter (TypeScript)           → npm  @fluxfiles/node
+│   ├── python/         server-side JWT minter (Python 3.10+)         → PyPI fluxfiles-token
 │   ├── react/  vue/    framework wrappers (TypeScript)               → npm  @fluxfiles/{react,vue}
 │   └── ckeditor4/  tinymce/  summernote/   rich-text-editor plugins  → npm  @fluxfiles/*
 │
-├── .github/workflows/  test.yml · split.yml · npm-publish.yml · docker-publish.yml
+├── .github/workflows/  test.yml · split.yml · npm-publish.yml · pypi-publish.yml · docker-publish.yml
 ├── scripts/            build-wordpress.sh · check-adapter-core-floor.sh · pack-smoke.sh · ci-retry.sh
 ├── docker/             Dockerfile · Dockerfile.prod · nginx.conf · entrypoint.sh
-├── docs/               ARCHITECTURE.md (this) + 21 other git-tracked design/ops docs (CONFIG.md, API.md, FEATURES.md, DEPLOYMENT.md, DB-STORAGE-MIGRATION-DESIGN.md, …) — everything under docs/ is tracked except the local, gitignored ROADMAP.md
+├── docs/               ARCHITECTURE.md (this) + 23 other git-tracked design/ops docs (CONFIG.md, API.md, FEATURES.md, DEPLOYMENT.md, DB-STORAGE-MIGRATION-DESIGN.md, …) — everything under docs/ is tracked except the local, gitignored ROADMAP.md
 ├── .claude/            CLAUDE.md · architecture.md · api-map.md · development.md   (AI-agent context)
 └── README · CHANGELOG · AGENTS.md · Makefile · docker-compose.yml
 ```
@@ -96,10 +97,10 @@ PHP adapter declares.
                           │   fluxfiles/fluxfiles         │
                           └──────────────────────────────┘
         (A) composer require   │   (B) iframe + postMessage   │   (C) token contract
-       ┌───────────┴─────────┐ │ ┌──────────┴───────────┐     │ ┌──────┴──────┐
-   laravel              wordpress │  sdk → react / vue          │     node
-  (proxy the API,    (bundle core │      → ckeditor4 / tinymce  │  (mint JWTs in
-   serve the UI)     into a ZIP)  │        / summernote         │   JS, no PHP)
+       ┌───────────┴─────────┐ │ ┌──────────┴───────────┐     │ ┌──────┴──────────┐
+   laravel              wordpress │  sdk → react / vue          │   node / python
+  (proxy the API,    (bundle core │      → ckeditor4 / tinymce  │  (mint JWTs, no
+   serve the UI)     into a ZIP)  │        / summernote         │   PHP dependency)
 ```
 
 ### (A) PHP host — `laravel`, `wordpress`
@@ -133,14 +134,18 @@ No code dependency on core — the contract is the message protocol over HTTP.
 - All iframe surfaces grant the same `allow="clipboard-write; fullscreen"` +
   `allowfullscreen` — **keep these in sync across all four when you touch one.**
 
-### (C) Token minting — `node`
-`@fluxfiles/node` mints FluxFiles JWTs (plain + BYOB) **server-side in TypeScript**,
-with **no dependency on the PHP core**. It is a **byte-for-byte contract** with
-`Claims.php` + `CredentialEncryptor.php` (HS256 JWT, HKDF salt, AES-256-GCM BYOB).
-- The contract is guarded by a real cross-language test:
-  `packages/node/tests/php-compat.test.ts` mints in Node and **decodes in the actual
-  PHP core**, round-tripping BYOB both ways. Touch a claim or the crypto on either
-  side → keep both in sync, or this test fails.
+### (C) Token minting — `node`, `python`
+`@fluxfiles/node` and `fluxfiles-token` (Python) mint FluxFiles JWTs (plain + BYOB)
+**server-side**, with **no dependency on the PHP core**. Both are a **byte-for-byte
+contract** with `Claims.php` + `CredentialEncryptor.php` (HS256 JWT, HKDF salt,
+AES-256-GCM BYOB) — same claim names, same role/edition presets, same wire format.
+- The contract is guarded by real cross-language tests:
+  `packages/node/tests/php-compat.test.ts` and `packages/python/tests/test_php_compat.py`
+  each mint in their own language and **decode in the actual PHP core**,
+  round-tripping BYOB both ways. Touch a claim or the crypto on any side → keep
+  all three in sync, or these tests fail. Shared fixtures for the claim/BYOB
+  vectors live in `docs/testdata/{token,byob}-vectors.json`, consumed by all
+  three languages.
 
 ---
 
@@ -152,6 +157,7 @@ with **no dependency on the PHP core**. It is a **byte-for-byte contract** with
 | react, vue, editors | core | runtime (HTTP/iframe), no build dep | route-parity + browser e2e |
 | sdk | core | served by core; protocol contract | sdk + browser e2e |
 | node | core | **language contract** (no code dep) | `php-compat.test.ts` |
+| python | core | **language contract** (no code dep) | `test_php_compat.py` |
 
 - **Per-package versioning.** Each package has its own version and a **prefixed Git
   tag**: `core-vX.Y.Z`, `laravel-vX.Y.Z`, `sdk-vX.Y.Z`, … A release is "tag the
@@ -168,10 +174,17 @@ with **no dependency on the PHP core**. It is a **byte-for-byte contract** with
 |---|---|---|---|
 | **Packagist** (subtree-split to read-only mirror repos) | core, laravel | `split.yml` | `core-v*`, `laravel-v*` |
 | **npm** | sdk, node, react, vue, ckeditor4, tinymce, summernote | `npm-publish.yml` | `sdk-v*`, `node-v*`, `react-v*`, … |
+| **PyPI** (Trusted Publishing / OIDC, no stored token) | python | `pypi-publish.yml` | `python-v*` |
 | **ZIP download** (bundles core + sdk) | wordpress | `scripts/build-wordpress.sh` | `wordpress-v*` (release marker) |
 | **GHCR Docker** (standalone app image) | core | `docker-publish.yml` | `core-v*` |
 
 Notes:
+- **PyPI trusted publishing needs a one-time manual step on PyPI's side.** A brand-new
+  PyPI project has no OIDC "pending publisher" registered yet, so its very first
+  `python-v*` tag fails the exchange until a human adds one at
+  pypi.org/manage/account/publishing/ (exact-match project name / owner / repo /
+  workflow filename `pypi-publish.yml` / environment `pypi`). Every release after
+  that first one works automatically — this is a one-time cost, not a per-release step.
 - **WordPress is not on Packagist** (it's `type: wordpress-plugin`, shipped as a ZIP
   that bundles core+sdk so users just unzip into `wp-content/plugins/`). That's why
   it's absent from `split.yml`.
@@ -181,16 +194,17 @@ Notes:
 
 ---
 
-## 6. CI map (`.github/workflows/test.yml`, 14 jobs)
+## 6. CI map (`.github/workflows/test.yml`, 15 jobs)
 
 `core-php` (unit+integration, multi-PHP) · **`adapter-core-floor`** (PHP floors are
 honest) · `iframe-allow` · `api-e2e` · `selfboot-e2e` (every `tests/e2e/*-http.php`
 + `test-sftp-live.php`, boots its own `php -S` + an `atmoz/sftp` container) ·
 `s3-minio` (live S3 via MinIO) · `db-mysql` / `db-postgres` (the
 `FLUXFILES_STORAGE_BACKEND=db` suite run against real MySQL/Postgres services) ·
-`wrappers` (react/vue/sdk/editors vitest) · `node-sdk` · `browser-e2e` (Playwright)
+`wrappers` (react/vue/sdk/editors vitest) · `node-sdk` · `python-token` (PHP↔Python
+parity — decode + BYOB round-trip, shared fixtures) · `browser-e2e` (Playwright)
 · `editor-e2e` · `pack-smoke` (published dist/types) · `docker-build`. Publishing
-is separate (`split` / `npm-publish` / `docker-publish`).
+is separate (`split` / `npm-publish` / `pypi-publish` / `docker-publish`).
 
 ---
 
@@ -220,10 +234,10 @@ issuing the API calls itself; the iframe makes the authenticated calls internall
 | You want to… | Touch | Don't forget |
 |---|---|---|
 | add/modify a **file operation or rule** | `core/api/FileManager.php` (+ a test) | it's automatically available to every adapter |
-| add a **token claim** | `core/api/Claims.php` (parse) + `embed.php` (mint) | forward it in laravel/wp/node mints + bump the node TS types + the floor if an adapter reads it |
+| add a **token claim** | `core/api/Claims.php` (parse) + `embed.php` (mint) | forward it in laravel/wp/node/python mints + bump the node TS types + the python type hints + `docs/CONFIG.md` + the floor if an adapter reads it |
 | add a **core API route** | `core/api/index.php` | proxy it in laravel + wordpress (or whitelist it in the route-parity test if it's byte-streaming) |
 | change the **postMessage protocol** | `sdk/fluxfiles.js` | mirror it in react/vue (`useFluxFiles.ts`) and the editor plugins |
-| change **JWT/BYOB crypto** | `core/api/{Claims,CredentialEncryptor}.php` | mirror in `node/src/*` — `php-compat.test.ts` is the guard |
+| change **JWT/BYOB crypto** | `core/api/{Claims,CredentialEncryptor}.php` | mirror in `node/src/*` and `python/src/fluxfiles_token/*` — `php-compat.test.ts` / `test_php_compat.py` are the guards |
 | add a **paid module** | a new proprietary package + a `class_exists` gate in core + a `LicenseManager` module id + a claim | the 3-layer gate is capability (code installed) + license (`LicenseManager`) + claim (JWT) |
 | add UI strings | `core/lang/*.json` (all 16) | the i18n parity test enforces equal key counts |
 
