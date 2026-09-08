@@ -45,6 +45,7 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   `lang/`, `tests/`.
 - `packages/sdk/` — vanilla browser SDK (`FluxFiles` global).
 - `packages/node/` — server-side token SDK (`@fluxfiles/node`), mints JWTs in JS.
+- `packages/python/` — server-side token SDK (`fluxfiles-token` on PyPI), mints JWTs in Python.
 - `packages/{react,vue,ckeditor4,tinymce,summernote}/` — JS/TS wrappers (tsup/esbuild + vitest).
 - `packages/{laravel,wordpress}/` — PHP adapters (each bundles/uses the core).
 - `docs/`, `.github/workflows/test.yml`, `docker/`, `scripts/`.
@@ -90,9 +91,9 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   a free config toggle, don't build a competitor. All four shipped: terminal →
   `terminal_pty_url` (ttyd), PDF → `pdf_tools_url` (Stirling), office → `office_url`
   (Collabora/OnlyOffice), e-sign → `esign_url` (DocuSeal).
-- **Optimization is FREE/core** (was paid). Paid modules are **11**: share/intake/
-  versioning/webhooks/ai/ocr/virus/backup/c2pa/audit-export/sso (gitignored,
-  `ModuleRegistry` 3-layer gate). `ModuleRegistry::$map` is the source of truth —
+- **Optimization is FREE/core** (was paid). Paid modules are **13**: share/intake/
+  versioning/webhooks/ai/ocr/virus/backup/c2pa/audit-export/sso/dlp/legal-hold
+  (gitignored, `ModuleRegistry` 3-layer gate). `ModuleRegistry::$map` is the source of truth —
   check it, don't trust a count. Of these, only Share/Intake/Versioning/AI Vision/
   Audit-export have operator UI so far — OCR/Virus/Backup/C2PA/Webhooks/SSO are
   engine-only (API/config, no UI).

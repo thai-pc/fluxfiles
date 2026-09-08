@@ -119,13 +119,25 @@ for the current version. To build from the monorepo instead: `docker compose up`
 > [`@fluxfiles/node`](packages/node) (JS/TS) or [`fluxfiles-token`](packages/python)
 > (Python) — no PHP in your own codebase.
 
-### 1. Install (from source)
+### 1. Install
+
+Into an existing PHP project (recommended):
+
+```bash
+composer require fluxfiles/fluxfiles
+```
+
+Or clone the monorepo (for contributing / running the full dev environment):
 
 ```bash
 git clone https://github.com/thai-pc/fluxfiles.git
 cd fluxfiles
 composer install -d packages/core
 ```
+
+Both give you the same code — only the folder layout and run command differ. See
+[`packages/core/README.md`](packages/core/README.md#where-the-files-land--git-clone-vs-composer-require)
+for the full breakdown.
 
 ### 2. Configure
 
@@ -143,8 +155,11 @@ FLUXFILES_ALLOWED_ORIGINS=http://localhost:3000,https://yourapp.com
 ### 3. Run
 
 ```bash
-cd packages/core
-php -S localhost:8080 router.php
+# composer require fluxfiles/fluxfiles
+php vendor/bin/fluxfiles serve --port=8080
+
+# git clone (monorepo)
+cd packages/core && php -S localhost:8080 router.php
 ```
 
 Open in browser:
@@ -1423,6 +1438,8 @@ FluxFiles/
 │   ├── ckeditor4/                    # CKEditor 4 plugin
 │   ├── tinymce/                      # TinyMCE 4/5 plugin
 │   ├── summernote/                   # Summernote plugin
+│   ├── node/                         # npm: @fluxfiles/node (JWT minting from Node)
+│   ├── python/                       # PyPI: fluxfiles-token (JWT minting from Python)
 │   └── sdk/                          # npm: fluxfiles (SDK)
 ├── .env.example                      # Environment template
 ├── CHANGELOG.md
