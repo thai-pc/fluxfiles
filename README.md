@@ -9,6 +9,7 @@
 [![npm](https://img.shields.io/npm/v/@fluxfiles/tinymce?label=tinymce&color=2dc26b)](https://www.npmjs.com/package/@fluxfiles/tinymce)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/summernote?label=summernote&color=73a839)](https://www.npmjs.com/package/@fluxfiles/summernote)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/node?label=node&color=339933)](https://www.npmjs.com/package/@fluxfiles/node)
+[![PyPI](https://img.shields.io/pypi/v/fluxfiles-token?label=python&color=3776ab)](https://pypi.org/project/fluxfiles-token/)
 [![Docker image](https://img.shields.io/badge/ghcr.io-fluxfiles-2496ed?logo=docker&logoColor=white)](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
@@ -114,8 +115,9 @@ instead of `latest` if you want reproducible deploys; check
 for the current version. To build from the monorepo instead: `docker compose up`
 (app + MinIO) or `make up`.
 
-> A JS/non-PHP backend? Run this image as your file service and mint tokens with
-> [`@fluxfiles/node`](packages/node) — no PHP in your own codebase.
+> A non-PHP backend? Run this image as your file service and mint tokens with
+> [`@fluxfiles/node`](packages/node) (JS/TS) or [`fluxfiles-token`](packages/python)
+> (Python) — no PHP in your own codebase.
 
 ### 1. Install (from source)
 
@@ -989,7 +991,8 @@ const token = createToken({
 ```
 
 > Same claims in the adapters — see the **Enable Import from URL** section in each
-> ([Laravel](packages/laravel/README.md) · [WordPress](packages/wordpress/README.md) · [Node](packages/node/README.md)).
+> ([Laravel](packages/laravel/README.md) · [WordPress](packages/wordpress/README.md) ·
+> [Node](packages/node/README.md) · [Python](packages/python/README.md)).
 
 Once the token allows it, call the route (the React/Vue/iframe SDKs proxy it for you):
 
@@ -1196,6 +1199,7 @@ install + the gist; follow the package link for details.
 | Adapter | Install | What it does | Docs |
 |---|---|---|---|
 | **Node** (token SDK) | `npm i @fluxfiles/node` | Mint JWTs (+ encrypted BYOB) from any Node backend — byte-compatible with the PHP core, zero deps | [`packages/node`](packages/node) |
+| **Python** (token SDK) | `pip install fluxfiles-token` | Mint JWTs (+ encrypted BYOB) from any Python backend (Django, FastAPI, Flask) — byte-compatible with the PHP core | [`packages/python`](packages/python) |
 | **Laravel** | `composer require fluxfiles/laravel` | `<x-fluxfiles>` Blade component + `FluxFiles::token()` facade + publishable config + route proxy | [`packages/laravel`](packages/laravel) |
 | **WordPress** | release ZIP (bundles `vendor/`) | Plugin: Settings page, `[fluxfiles]` shortcode, Classic-editor media button, REST API at `/wp-json/fluxfiles/v1/` | [`packages/wordpress`](packages/wordpress) |
 | **React** | `npm i @fluxfiles/react` | `<FluxFiles>` / `<FluxFilesModal>` + `useFluxFiles()` hook (TypeScript) | [`packages/react`](packages/react) |
@@ -1204,7 +1208,7 @@ install + the gist; follow the package link for details.
 | **TinyMCE 4/5** | `npm i @fluxfiles/tinymce` | Toolbar button + native image-dialog file picker | [`packages/tinymce`](packages/tinymce) |
 | **Summernote** | `npm i @fluxfiles/summernote` | Toolbar button (inserts `<img>`/`<a>` at the cursor) | [`packages/summernote`](packages/summernote) |
 
-The **token-minting** adapters (Node, Laravel, WordPress) emit the **same JWT** as
+The **token-minting** adapters (Node, Python, Laravel, WordPress) emit the **same JWT** as
 the PHP `fluxfiles_token()` helper — identical claims + BYOB encryption. The
 **browser** adapters (React, Vue, the editor plugins) embed the core UI over the
 same iframe + `postMessage` SDK, so anything the standalone UI does, they do too.
