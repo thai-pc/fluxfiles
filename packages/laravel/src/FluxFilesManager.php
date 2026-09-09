@@ -558,6 +558,26 @@ class FluxFilesManager
     }
 
     /**
+     * License status/edition/enforcement summary, for use outside a request
+     * context (e.g. a scheduled Artisan command or a host app's own admin
+     * panel) where `FluxFilesController::license()`'s `GET /api/fm/license`
+     * route can't be called — that route requires a `Claims` object built
+     * from an authenticated HTTP request, which doesn't exist here.
+     *
+     * This is a direct in-process call, not an HTTP proxy of that route.
+     * Core is a regular Composer dependency of this package in BOTH
+     * `proxy` and `standalone` `config('fluxfiles.mode')`, so
+     * `\FluxFiles\LicenseManager` is always available class-side — unlike
+     * endpoint()/iframeSrc() above, this method needs no mode branching.
+     *
+     * @return array{edition:string,status:string,enforcement:string,modules:array<int,string>,limits:array<string,mixed>,expires:?int,days_left:?int,updates_allowed:bool}
+     */
+    public function licenseInfo(): array
+    {
+        return \FluxFiles\LicenseManager::fromEnv()->info();
+    }
+
+    /**
      * The public URL of a bundled recipient page (share.html / intake.html), with
      * the one-shot token attached. Served from this app's own site root by
      * FluxFilesController::publicPage() (registered outside the FluxFilesAuth

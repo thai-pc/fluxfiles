@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static string endpoint()
  * @method static string iframeSrc()
  * @method static string sdkUrl()
+ * @method static array licenseInfo()
  *
  * @see \FluxFiles\Laravel\FluxFilesManager
  */

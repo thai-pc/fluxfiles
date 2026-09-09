@@ -235,6 +235,43 @@ FluxFiles::tokenForUser($overrides);   // Token for auth user
 FluxFiles::endpoint();                  // Get FluxFiles URL
 FluxFiles::iframeSrc();                 // Get iframe source URL
 FluxFiles::sdkUrl();                    // Get SDK script URL
+FluxFiles::licenseInfo();               // License status summary (no HTTP call)
+```
+
+### License Status
+
+`FluxFiles::licenseInfo()` returns the same shape as `GET /api/fm/license`
+(`edition`/`status`/`enforcement`/`modules`/`limits`/`expires`/`days_left`/
+`updates_allowed`), but as a **direct in-process call** — it reads
+`\FluxFiles\LicenseManager::fromEnv()->info()` straight from core, so it
+works from a non-request context (a scheduled command, a queued job, `php
+artisan tinker`) where there's no authenticated `Claims` object to satisfy
+the HTTP route.
+
+This package does **not** ship a bundled admin-notice UI for license expiry
+the way the WordPress plugin does. WordPress plugins all post into one
+shared `wp-admin` screen, so a FluxFiles-authored notice fits an existing
+convention there. A Laravel app owns its own admin surface — Nova, Filament,
+a hand-rolled panel, or none — and FluxFiles has no standard place to inject
+UI into, so this is deliberately left to the host app. Two suggested
+patterns:
+
+```php
+// app/Console/Kernel.php — scheduled check, alert however this app already does
+$schedule->call(function () {
+    $info = FluxFiles::licenseInfo();
+    if ($info['days_left'] !== null && $info['days_left'] <= 14) {
+        Log::warning("FluxFiles license expiring in {$info['days_left']} days", $info);
+        // …or notify a Slack channel, send an email, etc. — whatever this
+        // app already uses for ops alerts.
+    }
+})->daily();
+```
+
+```php
+// Surface it inside whatever admin panel this app already has
+// (Nova resource, Filament page, a hand-rolled dashboard widget):
+$licenseInfo = FluxFiles::licenseInfo();
 ```
 
 ## Configuration

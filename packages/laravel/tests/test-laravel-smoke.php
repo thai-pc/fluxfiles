@@ -721,6 +721,35 @@ test('chunkComplete() re-validates the REAL assembled size (S3 multipart size/qu
     assertTrue(strpos($body, 'deleteObject(') < strpos($body, 'metaRepo->save('), 'violation cleanup runs before metadata is saved');
 });
 
+// ── licenseInfo() (LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md §5/§C) ────────────
+// No HTTP route backs this method — FluxFilesController::license() requires a
+// Claims object built from an authenticated request, which a scheduled Artisan
+// command or a host app's own admin panel doesn't have. licenseInfo() is a direct
+// in-process call instead, so the regression to guard is "does it actually return
+// what calling the core LicenseManager directly would", not an HTTP contract.
+
+test('licenseInfo() returns exactly what a direct \\FluxFiles\\LicenseManager::fromEnv()->info() call would', function () {
+    $mgr = new FluxFilesManager();
+    $expected = \FluxFiles\LicenseManager::fromEnv()->info();
+    $actual = $mgr->licenseInfo();
+    assertEqual($expected, $actual, 'licenseInfo() must mirror the direct core call, not reimplement or wrap it differently');
+    assertEqual('free', $actual['edition'] ?? null, 'no FLUXFILES_LICENSE_KEY in this env -> free edition');
+    foreach (['status', 'enforcement', 'modules', 'limits', 'expires', 'days_left', 'updates_allowed'] as $key) {
+        assertTrue(array_key_exists($key, $actual), "info() shape includes '{$key}'");
+    }
+});
+
+test('licenseInfo() picks up FLUXFILES_LICENSE_KEY from the environment, still matching a direct call', function () {
+    $prev = $_ENV['FLUXFILES_LICENSE_KEY'] ?? null;
+    $_ENV['FLUXFILES_LICENSE_KEY'] = 'not-a-real-license-key';
+    try {
+        $mgr = new FluxFilesManager();
+        assertEqual(\FluxFiles\LicenseManager::fromEnv()->info(), $mgr->licenseInfo(), 'still mirrors fromEnv()->info() once an env key is present');
+    } finally {
+        if ($prev === null) { unset($_ENV['FLUXFILES_LICENSE_KEY']); } else { $_ENV['FLUXFILES_LICENSE_KEY'] = $prev; }
+    }
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
