@@ -505,7 +505,14 @@ function fluxFilesApp() {
                     if (this.token) {
                         this.loadFiles();
                         this.loadQuota();
-                        this.loadLicense();
+                        // Standalone-only (the toolbar badge never renders framed, see
+                        // licenseBadgeVisible) and honours the pro_hints hard-off switch —
+                        // same two conditions openUsage()/proGate() apply — so an operator
+                        // who disabled hints never pays this request either, and an embedded
+                        // end-customer's browser never fetches the operator's license status.
+                        if (window.parent === window && this.tokenAllows('pro_hints', true) !== false) {
+                            this.loadLicense();
+                        }
                     } else {
                         this.authState = 'missing';
                         this.authRequired = true;
