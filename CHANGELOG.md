@@ -3,6 +3,37 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.08] — 2026-09-09
+
+> Released: `core-v0.2.84`, `laravel-v0.2.40`, `wordpress-v0.2.47`.
+
+### Added — Proactive license-expiry notifications (core UI, WordPress, Laravel, license-server)
+
+Four independent surfaces from `docs/LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md`,
+closing the gap where an expiring/expired licence was silent until a paid
+feature actually broke:
+
+- **Core standalone UI** — eager license fetch on boot plus a toolbar badge
+  when the licence is expiring soon or already past expiry/grace
+  (`packages/core/assets/fm.js`/`fm.css`, `packages/core/public/index.html`).
+  Reads the existing `GET /api/fm/license` route; no new endpoint or claim.
+- **WordPress** — dismissible site-wide admin notice under Settings when the
+  licence is expiring or expired (`packages/wordpress/includes/
+  FluxFilesAdmin.php`), with its own test coverage
+  (`packages/wordpress/tests/test-wp-license-notice.php`).
+- **Laravel** — `FluxFiles::licenseInfo()` facade method exposing the same
+  `LicenseManager::fromEnv()->info()` data for apps that want to build their
+  own notice instead of a bundled UI (`packages/laravel/src/
+  FluxFilesFacade.php`, `FluxFilesManager.php`); no bundled UI by design.
+  Calls a pre-existing core method, so no `composer.json` floor bump.
+- **license-server** — new `send-renewal-reminders.php` cron script sends
+  renewal-approaching and past-expiry/grace emails per licence, worded by
+  `enforcement` (`perpetual` vs `subscription`) since the consequence of
+  lapsing differs; delivery is best-effort and never blocks issuance
+  (`LicenseIssuer.php`, `LicenseMailer.php`, `LicenseStore.php`).
+
+No new JWT claims — `docs/CONFIG.md` is unaffected.
+
 ## [0.3.07] — 2026-09-08
 
 > Released: `core-v0.2.83`, `node-v0.1.28`, `python-v0.1.0` (first
