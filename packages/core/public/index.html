@@ -201,8 +201,9 @@
                 <button class="ff-theme-toggle-sm" x-show="canAudit" @click="openComplianceScorecard()" :title="t('compliance.title')" :aria-label="t('compliance.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                 </button>
-                <button class="ff-theme-toggle-sm" @click="openUsage()" :title="t('usage.title')" :aria-label="t('usage.title')">
+                <button class="ff-theme-toggle-sm ff-usage-btn" @click="openUsage()" :title="t('usage.title')" :aria-label="t('usage.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5"/><path d="M18 3v6h-6"/><path d="M21 3l-9 9"/></svg>
+                    <span class="ff-license-badge-dot" x-show="licenseBadgeVisible"></span>
                 </button>
                 <button class="ff-theme-toggle-sm" x-show="canDiagnose" @click="openDoctor()" :title="t('doctor.title')" :aria-label="t('doctor.title')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h4"/></svg>

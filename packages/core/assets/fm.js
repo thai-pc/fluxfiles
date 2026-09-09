@@ -505,6 +505,7 @@ function fluxFilesApp() {
                     if (this.token) {
                         this.loadFiles();
                         this.loadQuota();
+                        this.loadLicense();
                     } else {
                         this.authState = 'missing';
                         this.authRequired = true;
@@ -3325,6 +3326,15 @@ function fluxFilesApp() {
         get licenseNeedsAttention() {
             const s = this.licenseInfo && this.licenseInfo.status;
             return s === 'grace' || s === 'expired' || s === 'perpetual';
+        },
+        // Same conditions as the usage modal's banner (licenseNeedsAttention + the
+        // inline active/renew-soon check), surfaced as a toolbar dot. Standalone-only
+        // by construction: licenseInfo is only ever populated in the non-framed init
+        // path (loadLicense() is otherwise lazy/proGate-driven and stays hidden while framed).
+        get licenseBadgeVisible() {
+            return this.licenseNeedsAttention
+                || (this.licenseInfo && this.licenseInfo.status === 'active'
+                    && this.licenseInfo.days_left != null && this.licenseInfo.days_left <= 30);
         },
         closeUsage() { this.showUsage = false; },
 

@@ -3942,6 +3942,22 @@ body {
     pointer-events: none;
 }
 
+/* Standalone-only license-expiry nudge (see fm.js licenseBadgeVisible) — a plain
+   dot, no text, on the Usage toolbar button. Same corner-badge positioning as
+   .ff-pro-pill above, sized closer to .ff-doctor-dot's attention-getting color. */
+.ff-usage-btn { position: relative; }
+.ff-license-badge-dot {
+    position: absolute;
+    top: 2px;
+    inset-inline-end: 2px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #d97706;
+    pointer-events: none;
+}
+.dark .ff-license-badge-dot { background: #f0c674; }
+
 /* The one-shot warning is the only new block with its own colour, so it needs the
    dark pairing explicitly — the amber-on-cream default is unreadable on a dark modal. */
 .dark .ff-links-warn {
