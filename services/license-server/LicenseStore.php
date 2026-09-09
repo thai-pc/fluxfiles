@@ -66,6 +66,20 @@ final class LicenseStore
             $this->db->exec('ALTER TABLE licenses ADD COLUMN checkout_id TEXT');
             $this->db->exec('CREATE INDEX IF NOT EXISTS idx_checkout ON licenses(checkout_id)');
         }
+        // The smallest/worst threshold-bucket already notified by the renewal-reminder
+        // cron (one of the configured day thresholds as a string, or "grace"/"expired"
+        // for the two non-day touch points). NULL means never reminded. This is the
+        // idempotency key for needingReminder() — see LICENSE-EXPIRY-NOTIFICATIONS-
+        // DESIGN.md §6.
+        if (!in_array('reminder_stage', $cols, true)) {
+            $this->db->exec('ALTER TABLE licenses ADD COLUMN reminder_stage TEXT');
+        }
+        // Mirrors LicenseSigner::mint()'s graceDays option (default 14), persisted at
+        // issuance so the reminder job can compute the grace-window boundary exactly
+        // instead of hardcoding it and silently drifting from a future custom plan.
+        if (!in_array('grace_days', $cols, true)) {
+            $this->db->exec('ALTER TABLE licenses ADD COLUMN grace_days INTEGER DEFAULT 14');
+        }
     }
 
     /** Mark the licence as delivered. Returns false when the row is gone. */
@@ -92,8 +106,8 @@ final class LicenseStore
             }
         }
         $stmt = $this->db->prepare('INSERT INTO licenses
-            (jti,email,customer,plan,edition,modules,sites,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at)
-            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:sites,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at)');
+            (jti,email,customer,plan,edition,modules,sites,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days)
+            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:sites,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days)');
         $row = [
             'jti'         => (string) $rec['jti'],
             'email'       => (string) $rec['email'],
@@ -111,6 +125,10 @@ final class LicenseStore
             'checkout_id' => (string) ($rec['checkout_id'] ?? ''),
             'status'      => (string) ($rec['status'] ?? 'active'),
             'created_at'  => time(),
+            // Mirrors LicenseSigner::mint()'s own graceDays default (14) — see the
+            // migrate() comment above for why this is persisted separately from the
+            // signed key payload.
+            'grace_days'  => (int) ($rec['grace_days'] ?? 14),
         ];
         $stmt->execute($row);
         return $this->findByJti($row['jti']) ?? $row;
@@ -185,6 +203,89 @@ final class LicenseStore
     {
         $s = $this->db->prepare('UPDATE licenses SET status = ? WHERE jti = ?');
         $s->execute([$status, $jti]);
+        return $s->rowCount() > 0;
+    }
+
+    /**
+     * Licences due for a renewal-approaching or expiry/grace reminder — the
+     * cron-driven counterpart to undelivered() above. Only `active` rows (never
+     * re-solicit revoked/refunded, same exclusion undelivered() applies) with an
+     * actual expiry (`expires IS NOT NULL` — a lifetime licence has nothing to
+     * remind about, structurally excluded here rather than as a special case
+     * below).
+     *
+     * The SQL only narrows to that filterable subset; the threshold/idempotency
+     * bucketing is plain PHP on top — simpler to read and to get right than folding
+     * the day-math into SQLite for a service this small.
+     *
+     * Each returned row carries an extra '_reminder_bucket' key: the single most
+     * urgent (smallest) bucket that has newly fired for that row — one of
+     * $thresholdDays (as a string, e.g. "7") while still before `expires`, or
+     * "grace"/"expired" once past it. A row is included at most once per call, even
+     * if it is late enough that several thresholds are technically crossed at once.
+     *
+     * @param array<int,int> $thresholdDays day-out thresholds, e.g. [30,14,7,1]
+     * @return array<int,array<string,mixed>>
+     */
+    public function needingReminder(array $thresholdDays, int $now): array
+    {
+        $s = $this->db->query(
+            'SELECT * FROM licenses WHERE status = "active" AND expires IS NOT NULL ORDER BY created_at ASC'
+        );
+        $rows = $s->fetchAll();
+
+        $due = [];
+        foreach ($rows as $row) {
+            $expires = (int) $row['expires'];
+            $graceDays = ($row['grace_days'] ?? null) !== null ? (int) $row['grace_days'] : 14;
+            $stage = $row['reminder_stage'] ?? null;
+
+            if ($now <= $expires) {
+                // Still before expiry: find the most urgent configured threshold the
+                // remaining days have crossed, and only report it if that's more
+                // urgent than whatever was last reminded (or nothing yet).
+                $daysLeft = (int) floor(($expires - $now) / 86400);
+                $crossed = [];
+                foreach ($thresholdDays as $t) {
+                    $t = (int) $t;
+                    if ($daysLeft <= $t) {
+                        $crossed[] = $t;
+                    }
+                }
+                if (empty($crossed)) {
+                    continue;
+                }
+                $bucket = min($crossed);
+                $stageInt = ($stage !== null && $stage !== '' && is_numeric($stage)) ? (int) $stage : null;
+                if ($stageInt === null || $bucket < $stageInt) {
+                    $row['_reminder_bucket'] = (string) $bucket;
+                    $due[] = $row;
+                }
+                continue;
+            }
+
+            // Past expiry: the two non-day touch points, each fired at most once.
+            $graceEnd = $expires + $graceDays * 86400;
+            if ($now <= $graceEnd) {
+                if ($stage !== 'grace' && $stage !== 'expired') {
+                    $row['_reminder_bucket'] = 'grace';
+                    $due[] = $row;
+                }
+            } elseif ($stage !== 'expired') {
+                $row['_reminder_bucket'] = 'expired';
+                $due[] = $row;
+            }
+        }
+
+        return $due;
+    }
+
+    /** Record that a reminder for $bucket was sent, so a later run in the same or a
+     *  better bucket doesn't re-fire it. Returns false when the row is gone. */
+    public function markReminderSent(string $jti, string $bucket): bool
+    {
+        $s = $this->db->prepare('UPDATE licenses SET reminder_stage = ? WHERE jti = ?');
+        $s->execute([$bucket, $jti]);
         return $s->rowCount() > 0;
     }
 }

@@ -54,6 +54,15 @@ final class LicenseIssuer
         ]);
         $p = $minted['payload'];
 
+        // LicenseSigner::mint() bakes the grace window (seconds) into the signed
+        // payload as 'grace' when there's an expiry at all; read the days back out of
+        // it so the store persists the ACTUAL value used (currently always the
+        // signer's own default of 14, since no Plans::DEFAULT entry overrides it and
+        // mint() isn't given a per-plan override either), instead of the reminder job
+        // hardcoding 14 and silently drifting the day a per-plan grace override is
+        // wired into the mint() call above.
+        $graceDays = isset($p['grace']) ? (int) round($p['grace'] / 86400) : 14;
+
         $record = $this->store->record([
             'jti'         => $p['jti'],
             'email'       => $email,
@@ -70,6 +79,7 @@ final class LicenseIssuer
             'order_id'    => (string) ($order['order_id'] ?? ''),
             'checkout_id' => (string) ($order['checkout_id'] ?? ''),
             'status'      => 'active',
+            'grace_days'  => $graceDays,
         ]);
 
         return ['key' => $minted['key'], 'record' => $record, 'reused' => false];

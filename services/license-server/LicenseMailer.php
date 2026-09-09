@@ -136,6 +136,159 @@ final class LicenseMailer
         TXT;
     }
 
+    /**
+     * Send a renewal/expiry reminder for a licence already on file — the proactive
+     * counterpart to sendLicense() above, invoked by
+     * `send-renewal-reminders.php` for a row LicenseStore::needingReminder()
+     * returned.
+     *
+     * Same never-throws posture as sendLicense(): a mail outage here must not crash
+     * the cron run for every other row still due. `$bucket` is one of the
+     * configured day thresholds (e.g. "7"), or "grace"/"expired" — see
+     * LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md §6.
+     *
+     * @param array<string,mixed> $record a row as returned by LicenseStore::record()/needingReminder()
+     */
+    public function sendReminder(array $record, string $bucket): bool
+    {
+        $to = (string) ($record['email'] ?? '');
+        if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            error_log('license reminder mail: no valid recipient for jti ' . (string) ($record['jti'] ?? '?'));
+            return false;
+        }
+
+        $isSupportOnly = trim((string) ($record['modules'] ?? '')) === '';
+        $isExpiryTouchpoint = $bucket === 'grace' || $bucket === 'expired';
+
+        if ($isExpiryTouchpoint) {
+            $subject = $isSupportOnly
+                ? 'Your FluxFiles Priority Support subscription has expired'
+                : 'Your FluxFiles licence has expired';
+            $body = $isSupportOnly
+                ? $this->renderExpirySupportBody($record, $bucket)
+                : $this->renderExpiryBody($record, $bucket);
+        } else {
+            $subject = $isSupportOnly
+                ? 'Your FluxFiles Priority Support subscription renews soon'
+                : 'Your FluxFiles licence renews soon';
+            $body = $isSupportOnly
+                ? $this->renderRenewalSupportBody($record, $bucket)
+                : $this->renderRenewalBody($record, $bucket);
+        }
+
+        try {
+            return match ($this->transport) {
+                'resend' => $this->sendResend($to, $subject, $body),
+                'smtp' => $this->sendSmtp($to, $subject, $body),
+                'sendmail' => $this->sendMail($to, $subject, $body),
+                default => $this->sendLog($to, $subject, $body),
+            };
+        } catch (\Throwable $e) {
+            // Same recovery story as sendLicense(): the row stays at its previous
+            // reminder_stage, so the next scheduled run retries it.
+            error_log('license reminder mail failed for ' . $to . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * "Renewal approaching" body for a module licence. Plain text for the same
+     * reason renderBody() is: this is exactly the kind of message that gets
+     * forwarded into a support ticket.
+     *
+     * @param array<string,mixed> $record
+     */
+    private function renderRenewalBody(array $record, string $bucket): string
+    {
+        $edition = ucfirst((string) ($record['edition'] ?? 'pro'));
+        $expires = (int) ($record['expires'] ?? 0);
+        $date = gmdate('Y-m-d', $expires);
+        // The actual remaining days, not the threshold bucket that triggered this
+        // email (e.g. a cron outage can cross several thresholds at once, so
+        // "bucket=30" could mean 22 days actually left) — this must agree with $date.
+        $daysLeft = max(0, (int) floor(($expires - time()) / 86400));
+
+        return <<<TXT
+        Your FluxFiles {$edition} licence renews/expires on {$date} ({$daysLeft} day(s) left).
+
+        If you already renewed, you can ignore this — the update to your record can lag
+        a day or two behind payment. Otherwise, renew before the date above to keep your
+        update channel open (see the Notes below for what happens if it lapses).
+
+        — FluxFiles
+        TXT;
+    }
+
+    /** @param array<string,mixed> $record */
+    private function renderRenewalSupportBody(array $record, string $bucket): string
+    {
+        $expires = (int) ($record['expires'] ?? 0);
+        $date = gmdate('Y-m-d', $expires);
+        $daysLeft = max(0, (int) floor(($expires - time()) / 86400));
+
+        return <<<TXT
+        Your FluxFiles Priority Support subscription renews on {$date} ({$daysLeft} day(s) left).
+
+        This purchase doesn't unlock any module — it's your priority-response support
+        subscription. Renew before the date above to keep priority handling on your
+        tickets.
+
+        — FluxFiles
+        TXT;
+    }
+
+    /**
+     * "Past expiry" body for a module licence, worded per `enforcement` — this is
+     * the one place the copy must differ, not just the subject. `perpetual`
+     * (annual/lifetime self-host) keeps running past expiry, only the update
+     * channel stops; `subscription` (hosted/monthly) genuinely stops working past
+     * the grace window. Getting these two swapped would tell a still-working
+     * customer their software is broken, or a broken customer that it's fine.
+     *
+     * @param array<string,mixed> $record
+     */
+    private function renderExpiryBody(array $record, string $bucket): string
+    {
+        $edition = ucfirst((string) ($record['edition'] ?? 'pro'));
+        $expires = (int) ($record['expires'] ?? 0);
+        $date = gmdate('Y-m-d', $expires);
+        $enforcement = (string) ($record['enforcement'] ?? 'perpetual');
+
+        if ($enforcement === 'subscription') {
+            $consequence = $bucket === 'grace'
+                ? "Your subscription lapsed on {$date}. You're currently in a short grace period — after it ends, your paid features (Share/Intake/…) will stop working for your users until you renew."
+                : "Your subscription lapsed on {$date} and the grace period has now ended — your paid features (Share/Intake/…) have stopped working for your users. Renew to restore them immediately; no reinstall needed.";
+        } else {
+            $consequence = "Your update access ended on {$date}; the software keeps working exactly as before — you just won't receive new releases or security patches until you renew.";
+        }
+
+        return <<<TXT
+        Your FluxFiles {$edition} licence has passed its expiry date.
+
+        {$consequence}
+
+        — FluxFiles
+        TXT;
+    }
+
+    /** @param array<string,mixed> $record */
+    private function renderExpirySupportBody(array $record, string $bucket): string
+    {
+        $expires = (int) ($record['expires'] ?? 0);
+        $date = gmdate('Y-m-d', $expires);
+        $consequence = $bucket === 'grace'
+            ? "You're in a short grace period before priority handling on your tickets ends."
+            : 'Priority handling on your tickets has now ended — you can still reach us through normal support channels.';
+
+        return <<<TXT
+        Your FluxFiles Priority Support subscription lapsed on {$date}.
+
+        {$consequence} Renew any time to restore priority handling.
+
+        — FluxFiles
+        TXT;
+    }
+
     private function headers(): array
     {
         return [

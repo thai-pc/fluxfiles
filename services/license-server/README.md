@@ -87,6 +87,55 @@ annual), `pro-monthly` (subscription), `studio`, `enterprise`, `lifetime` (no ex
   warning + the update-channel gate; add an online activation counter only if you must
   (breaks the air-gap promise → make it per-license opt-in).
 
+## Renewal reminders (cron)
+
+Delivering the key once at purchase isn't enough — nothing else here proactively
+tells a customer their licence is coming up on expiry. `send-renewal-reminders.php`
+is a second, equally simple invocation style for this service: a script that runs
+once and exits, invoked by cron rather than `php -S`.
+
+```bash
+export FLUXFILES_LICENSE_REMINDER_DAYS=30,14,7,1   # day-out thresholds, descending (default shown)
+
+# crontab -e
+0 6 * * *  cd /path/to/services/license-server && php send-renewal-reminders.php >> /var/log/fluxfiles-license-reminders.log 2>&1
+```
+
+It reuses every env var already documented above (`FLUXFILES_LICENSE_DB`,
+`FLUXFILES_MAIL_TRANSPORT`/`_FROM`/`_FROM_NAME`/etc.) — no separate mail
+configuration.
+
+Two columns back this, added transparently to existing databases the same way
+`mailed_at`/`checkout_id` were:
+
+- **`reminder_stage`** — the smallest/worst bucket already notified for a row: one
+  of the configured day thresholds (as a string, e.g. `"7"`), or `"grace"` /
+  `"expired"` for the two touch points past the expiry date. `NULL` means never
+  reminded. This is the idempotency key, the same way `(gateway, order_id)` is for
+  issuance and `mailed_at` is for the first key-delivery mail: `needingReminder()`
+  only returns a row when the *current* bucket (computed from `days_left` right
+  now) is more urgent than whatever is stored here, so re-running the script
+  daily never double-emails for the same bucket — it only fires again once the
+  licence has moved into a worse one.
+- **`grace_days`** — the grace window in days, persisted at issuance from the
+  actual value `LicenseSigner::mint()` used (default 14), so the reminder job
+  computes the grace-window boundary exactly rather than hardcoding 14 and
+  silently drifting if a future plan ever sets a custom value.
+
+Only `status = "active"` rows with `expires IS NOT NULL` are ever considered —
+revoked/refunded rows are never re-solicited (same exclusion `undelivered()`
+applies), and a lifetime licence (`expires` is `NULL`) has nothing to remind
+about. At most one email per row per run, and `reminder_stage` only advances
+*after* `LicenseMailer::sendReminder()` reports success — a failed send (mail
+outage) leaves the row due again on the very next run instead of silently losing
+the reminder, the same at-least-once posture the webhook's `mailed_at` tracking
+already has.
+
+The `enforcement` on the record changes the wording of the past-expiry email, not
+whether it fires: a `perpetual` licence keeps running past expiry (only the
+update channel stops), while a `subscription` licence's paid features actually
+stop working once the grace window ends — see `LicenseMailer::renderExpiryBody()`.
+
 ## Test
 
 ```bash

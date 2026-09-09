@@ -229,6 +229,175 @@ test('mail: a Support-only record gets no activation line', function () use ($se
     assertTrue(str_contains($out, 'sup@acme.com'), 'addressed to the buyer');
 });
 
+// ── Renewal/expiry reminders (LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md §6) ─────
+// needingReminder()/markReminderSent() are the idempotency core of the cron job:
+// get these wrong and an operator either never hears about a lapsing licence, or
+// gets the same email every single day forever.
+
+test('needingReminder(): each configured threshold gets its own bucket, and just above the largest is excluded', function () {
+    $store = new LicenseStore(':memory:');
+    $now = 1_700_000_000;
+    $mk = function (string $jti, int $daysLeft) use ($store, $now) {
+        $store->record([
+            'jti' => $jti, 'email' => "{$jti}@x.com", 'license_key' => 'k',
+            'expires' => $now + $daysLeft * 86400,
+        ]);
+    };
+    $mk('r30', 30); $mk('r14', 14); $mk('r7', 7); $mk('r1', 1); $mk('r31', 31);
+
+    $due = $store->needingReminder([30, 14, 7, 1], $now);
+    $byJti = [];
+    foreach ($due as $row) { $byJti[$row['jti']] = $row['_reminder_bucket']; }
+
+    assertEqual('30', $byJti['r30'] ?? null, 'exactly at the 30-day threshold -> bucket 30');
+    assertEqual('14', $byJti['r14'] ?? null, 'exactly at the 14-day threshold -> bucket 14');
+    assertEqual('7', $byJti['r7'] ?? null, 'exactly at the 7-day threshold -> bucket 7');
+    assertEqual('1', $byJti['r1'] ?? null, 'exactly at the 1-day threshold -> bucket 1');
+    assertTrue(!isset($byJti['r31']), '31 days left (just above the largest configured threshold) is excluded');
+});
+
+test('needingReminder(): is idempotent — marking a bucket sent removes the row from the next call at the same now', function () {
+    $store = new LicenseStore(':memory:');
+    $now = 1_700_000_000;
+    $store->record(['jti' => 'idem1', 'email' => 'a@x.com', 'license_key' => 'k', 'expires' => $now + 30 * 86400]);
+
+    $due1 = $store->needingReminder([30, 14, 7, 1], $now);
+    assertEqual(1, count($due1), 'due before marking');
+    assertTrue($store->markReminderSent('idem1', $due1[0]['_reminder_bucket']));
+
+    $due2 = $store->needingReminder([30, 14, 7, 1], $now);
+    assertEqual(0, count($due2), 'no longer due at the same now once marked (would otherwise re-email every run)');
+});
+
+test('needingReminder(): NOT marking leaves the row eligible again on the next call (retry-safety contract)', function () {
+    // This is the property that makes send-renewal-reminders.php safe to rerun after a
+    // failed send: needingReminder() itself must have no side effect.
+    $store = new LicenseStore(':memory:');
+    $now = 1_700_000_000;
+    $store->record(['jti' => 'retry1', 'email' => 'a@x.com', 'license_key' => 'k', 'expires' => $now + 7 * 86400]);
+
+    $due1 = $store->needingReminder([30, 14, 7, 1], $now);
+    assertEqual(1, count($due1));
+    // Simulate a failed mail send: markReminderSent() is deliberately never called.
+    $due2 = $store->needingReminder([30, 14, 7, 1], $now);
+    assertEqual(1, count($due2), 'needingReminder() alone does not consume the row');
+    assertEqual('7', $due2[0]['_reminder_bucket']);
+});
+
+test('needingReminder(): escalation — a worse (smaller) bucket un-suppresses a row already reminded at a better one', function () {
+    $store = new LicenseStore(':memory:');
+    $now = 1_700_000_000;
+    $expires = $now + 30 * 86400;
+    $store->record(['jti' => 'esc1', 'email' => 'a@x.com', 'license_key' => 'k', 'expires' => $expires]);
+
+    $due1 = $store->needingReminder([30, 14, 7, 1], $now);
+    assertEqual('30', $due1[0]['_reminder_bucket']);
+    $store->markReminderSent('esc1', '30');
+    assertEqual(0, count($store->needingReminder([30, 14, 7, 1], $now)), 'still suppressed at the same bucket');
+
+    // 16 days later: 14 days left now, crossing the 14 threshold — worse than the
+    // stored '30', so the row must un-suppress despite already having a reminder_stage.
+    $later = $now + 16 * 86400;
+    $due2 = $store->needingReminder([30, 14, 7, 1], $later);
+    assertEqual(1, count($due2), 'escalated (worse) bucket is returned again');
+    assertEqual('esc1', $due2[0]['jti']);
+    assertEqual('14', $due2[0]['_reminder_bucket']);
+});
+
+test('needingReminder(): expires IS NULL (lifetime) rows are never returned, regardless of reminder_stage', function () {
+    $store = new LicenseStore(':memory:');
+    $now = 1_700_000_000;
+    $store->record(['jti' => 'life1', 'email' => 'a@x.com', 'license_key' => 'k', 'expires' => null]);
+    assertEqual(0, count($store->needingReminder([30, 14, 7, 1], $now)), 'lifetime licence has nothing to renew');
+    assertEqual(0, count($store->needingReminder([30, 14, 7, 1], $now + 10 * 365 * 86400)), 'still nothing, no matter how far "now" moves');
+});
+
+test('needingReminder(): a non-active (e.g. revoked) row is never returned even past a threshold', function () {
+    $store = new LicenseStore(':memory:');
+    $now = 1_700_000_000;
+    $store->record(['jti' => 'rev1', 'email' => 'a@x.com', 'license_key' => 'k', 'expires' => $now + 5 * 86400, 'status' => 'revoked']);
+    assertEqual(0, count($store->needingReminder([30, 14, 7, 1], $now)), 'never re-solicit a revoked/refunded order');
+});
+
+test('needingReminder(): grace and expired touch points each fire exactly once', function () {
+    $store = new LicenseStore(':memory:');
+    $now = 1_700_000_000;
+    $expires = $now - 1 * 86400; // expired yesterday
+    $store->record(['jti' => 'grace1', 'email' => 'a@x.com', 'license_key' => 'k', 'expires' => $expires, 'grace_days' => 14]);
+
+    $due1 = $store->needingReminder([30, 14, 7, 1], $now); // still within the 14-day grace window
+    assertEqual(1, count($due1));
+    assertEqual('grace', $due1[0]['_reminder_bucket']);
+    $store->markReminderSent('grace1', 'grace');
+    assertEqual(0, count($store->needingReminder([30, 14, 7, 1], $now)), 'grace touch point does not re-fire');
+
+    $pastGrace = $expires + 14 * 86400 + 3600; // just past the grace window
+    $due2 = $store->needingReminder([30, 14, 7, 1], $pastGrace);
+    assertEqual(1, count($due2));
+    assertEqual('expired', $due2[0]['_reminder_bucket']);
+    $store->markReminderSent('grace1', 'expired');
+    assertEqual(0, count($store->needingReminder([30, 14, 7, 1], $pastGrace)), 'expired touch point does not re-fire either');
+});
+
+test('issue(): stored grace_days matches what LicenseSigner::mint() actually embedded in the signed key', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email' => 'g@x.com', 'plan' => 'pro', 'gateway' => 'manual', 'order_id' => 'GRACE-1'])['record'];
+    [, $p64] = explode('.', (string) $rec['license_key']);
+    $payload = json_decode((string) base64_decode(strtr($p64, '-_', '+/'), true), true);
+    assertTrue(isset($payload['grace']), 'the signed payload carries a grace window (seconds)');
+    $expectedGraceDays = (int) round($payload['grace'] / 86400);
+    assertEqual($expectedGraceDays, (int) $rec['grace_days'], 'the store persists exactly what the signer embedded, not a hardcoded 14');
+    assertEqual(14, (int) $rec['grace_days'], 'current default is 14 — no Plans entry overrides graceDays yet');
+});
+
+test('mail: sendReminder() subscription vs perpetual expiry copy genuinely differs, not just the subject', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    $subRec = $iss->issue(['email' => 'sub@x.com', 'plan' => 'pro-monthly', 'gateway' => 'manual', 'order_id' => 'ENF-1'])['record'];
+    $perpRec = $iss->issue(['email' => 'perp@x.com', 'plan' => 'pro', 'gateway' => 'manual', 'order_id' => 'ENF-2'])['record'];
+    assertEqual('subscription', $subRec['enforcement']);
+    assertEqual('perpetual', $perpRec['enforcement']);
+
+    $outSub = captureMail(fn () => (new LicenseMailer('log'))->sendReminder($subRec, 'expired'));
+    $outPerp = captureMail(fn () => (new LicenseMailer('log'))->sendReminder($perpRec, 'expired'));
+
+    assertTrue(str_contains($outSub, 'have stopped working for your users'), 'subscription: conveys the harder "features stopped" consequence');
+    assertTrue(!str_contains($outSub, 'the software keeps working'), 'subscription copy must not reassure it still works');
+    assertTrue(str_contains($outPerp, 'the software keeps working'), 'perpetual: conveys the softer "updates only" consequence');
+    assertTrue(!str_contains($outPerp, 'have stopped working for your users'), 'perpetual copy must not claim features stopped');
+});
+
+test('mail: sendReminder() branches subject/body by support-only vs module licence', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    $supRec = $iss->issue(['email' => 'sup2@x.com', 'plan' => 'support', 'gateway' => 'manual', 'order_id' => 'REM-SUP'])['record'];
+    $proRec = $iss->issue(['email' => 'pro2@x.com', 'plan' => 'pro', 'gateway' => 'manual', 'order_id' => 'REM-PRO'])['record'];
+
+    $outSup = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendReminder($supRec, '7'), 'support reminder sends'));
+    assertTrue(str_contains($outSup, 'Priority Support subscription renews soon'), 'support-only subject used');
+    assertTrue(!str_contains($outSup, 'FLUXFILES_LICENSE_KEY='), 'no activation line for a support-only reminder');
+
+    $outPro = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendReminder($proRec, '7'), 'module reminder sends'));
+    assertTrue(str_contains($outPro, 'Your FluxFiles licence renews soon'), 'module-licence subject used');
+    assertTrue(str_contains($outPro, 'renews/expires on'), 'renewal body used for a module licence');
+});
+
+test('mail: sendReminder() with a bad recipient fails soft, never throws', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email' => 'ok2@acme.com', 'plan' => 'pro', 'gateway' => 'manual', 'order_id' => 'REM-BAD'])['record'];
+    $rec['email'] = 'not-an-email';
+    $sent = true;
+    $out = captureMail(function () use ($rec, &$sent) { $sent = (new LicenseMailer('log'))->sendReminder($rec, '7'); });
+    assertEqual(false, $sent, 'reports failure rather than throwing');
+    assertTrue(str_contains($out, 'no valid recipient'), 'and says why, for the operator');
+});
+
+test('mail: the renewal body states the ACTUAL days remaining, not the raw bucket that triggered it', function () use ($secretB64) {
+    $now = time();
+    $expires = $now + 25 * 86400 + 43200; // ~25.5 days out; wide buffer against test-runtime drift
+    $rec = issuer($secretB64)->issue(['email' => 'drift@x.com', 'plan' => 'pro', 'gateway' => 'manual', 'order_id' => 'REM-DRIFT'])['record'];
+    $rec['expires'] = $expires; // simulate a cron catch-up: bucket '30' fired late, real days-left is 25
+    $out = captureMail(fn () => (new LicenseMailer('log'))->sendReminder($rec, '30'));
+    assertTrue(str_contains($out, '(25 day(s) left)'), 'body reflects the real days-left, not the stale "30" bucket that fired it');
+    assertTrue(!str_contains($out, '(30 day(s) left)'), 'must not just echo the bucket string as if it were the day count');
+});
+
 // ── Polar webhook (Standard Webhooks) ────────────────────────────────────────
 // The signature scheme is the piece most likely to fail silently: wrong in one
 // direction drops every purchase, wrong in the other mints licences for anyone.
