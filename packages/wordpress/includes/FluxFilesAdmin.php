@@ -12,6 +12,8 @@ class FluxFilesAdmin
         add_action('admin_menu', [$this, 'addMenuPage']);
         add_action('admin_init', [$this, 'registerSettings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
+        add_action('admin_notices', [$this, 'renderLicenseExpiryNotice']);
+        add_action('wp_ajax_fluxfiles_dismiss_license_notice', [$this, 'handleDismissLicenseNotice']);
     }
 
     public function addMenuPage(): void
@@ -305,6 +307,113 @@ class FluxFilesAdmin
             $modules ? ' Unlocked: ' . esc_html(implode(', ', $modules)) . '.' : '',
             $expires ? ' Valid until ' . esc_html(gmdate('Y-m-d', (int) $expires)) . '.' : ''
         );
+    }
+
+    /**
+     * Site-wide warning for an expiring/expired/perpetual licence — renderLicenseStatus()
+     * above only shows on Settings → FluxFiles, so an operator who never opens that page
+     * would otherwise find out the paid modules stopped working the hard way (a 402).
+     */
+    public function renderLicenseExpiryNotice(): void
+    {
+        if (!current_user_can('manage_options') || !class_exists('\\FluxFiles\\LicenseManager')) {
+            return;
+        }
+        if (FluxFilesPlugin::licenseKey() === '') {
+            return; // a pure free install has nothing to renew
+        }
+
+        $info = FluxFilesPlugin::license()->info();
+        $status = (string) ($info['status'] ?? 'free');
+        $daysLeft = $info['days_left'] ?? null;
+
+        if (in_array($status, ['grace', 'expired', 'perpetual'], true)) {
+            $bucket = $status;
+        } elseif ($status === 'active' && $daysLeft !== null) {
+            // The smallest configured threshold days_left has crossed, so the bucket
+            // agrees with the vendor license-server's own reminder-bucket scheme
+            // (e.g. days_left=25 -> active:30, days_left=6 -> active:7).
+            $bucket = null;
+            foreach ([30, 14, 7, 1] as $threshold) {
+                if ($daysLeft <= $threshold) {
+                    $bucket = 'active:' . $threshold;
+                }
+            }
+            if ($bucket === null) {
+                return; // more than 30 days left — nothing to warn about yet
+            }
+        } else {
+            return; // 'free' (key did not verify) — renderLicenseStatus() already covers that
+        }
+
+        // Dismissal is keyed by bucket, not a boolean: dismissing "renews in 25 days"
+        // must not silently swallow "expired" three weeks later.
+        $dismissed = get_user_meta(get_current_user_id(), 'fluxfiles_license_notice_dismissed', true);
+        if ($dismissed === $bucket) {
+            return;
+        }
+
+        $edition = (string) ($info['edition'] ?? 'free');
+        printf(
+            '<div class="notice notice-warning is-dismissible fluxfiles-license-notice" data-bucket="%s" data-nonce="%s"><p>%s <a href="%s">%s</a></p></div>',
+            esc_attr($bucket),
+            esc_attr(wp_create_nonce('fluxfiles_dismiss_license_notice')),
+            esc_html(sprintf(
+                /* translators: 1: edition name, 2: licence status (active/grace/expired/perpetual) */
+                __('Your FluxFiles %1$s licence is %2$s.', 'fluxfiles'),
+                ucfirst($edition),
+                $status
+            )),
+            esc_url(admin_url('options-general.php?page=fluxfiles')),
+            esc_html__('View details', 'fluxfiles')
+        );
+
+        $this->enqueueDismissScript();
+    }
+
+    /**
+     * WordPress's built-in `is-dismissible` handler (wp-admin/js/common.js) only fades
+     * the notice out client-side — it never tells the server, so a worse status would
+     * stay silently suppressed forever without this. A virtual (no-src) script handle
+     * keeps the fix inline instead of shipping a whole new asset file for a few lines
+     * of JS that only ever run when this specific notice is on screen.
+     */
+    private function enqueueDismissScript(): void
+    {
+        if (wp_script_is('fluxfiles-license-notice', 'enqueued')) {
+            return;
+        }
+        wp_register_script('fluxfiles-license-notice', '', [], FLUXFILES_VERSION, true);
+        wp_enqueue_script('fluxfiles-license-notice');
+        wp_add_inline_script('fluxfiles-license-notice', <<<'JS'
+document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.fluxfiles-license-notice .notice-dismiss');
+    if (!btn) {
+        return;
+    }
+    var notice = btn.closest('.fluxfiles-license-notice');
+    var body = new FormData();
+    body.append('action', 'fluxfiles_dismiss_license_notice');
+    body.append('bucket', notice.getAttribute('data-bucket') || '');
+    body.append('nonce', notice.getAttribute('data-nonce') || '');
+    fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: body });
+});
+JS);
+    }
+
+    /** AJAX target for the inline dismiss script above — persists the dismissed bucket. */
+    public function handleDismissLicenseNotice(): void
+    {
+        check_ajax_referer('fluxfiles_dismiss_license_notice', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('forbidden', 403);
+        }
+        $bucket = sanitize_text_field((string) ($_POST['bucket'] ?? ''));
+        if (preg_match('/^(active:(?:30|14|7|1)|grace|expired|perpetual)$/', $bucket) !== 1) {
+            wp_send_json_error('invalid_bucket', 400);
+        }
+        update_user_meta(get_current_user_id(), 'fluxfiles_license_notice_dismissed', $bucket);
+        wp_send_json_success();
     }
 
     /**

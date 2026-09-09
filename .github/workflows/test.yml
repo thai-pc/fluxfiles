@@ -67,6 +67,9 @@ jobs:
       - name: WordPress plugin smoke (stubbed WP, uses core autoload)
         run: php packages/wordpress/tests/test-wp-smoke.php
 
+      - name: WordPress license-expiry notice (stubbed WP, separate process)
+        run: php packages/wordpress/tests/test-wp-license-notice.php
+
       - name: Laravel adapter smoke (stubbed Laravel, uses core autoload)
         run: php packages/laravel/tests/test-laravel-smoke.php
 
