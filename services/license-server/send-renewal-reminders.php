@@ -28,6 +28,18 @@ require_once __DIR__ . '/LicenseMailer.php';
 use FluxFiles\LicenseServer\LicenseMailer;
 use FluxFiles\LicenseServer\LicenseStore;
 
+// Guard against two overlapping cron invocations (e.g. a slow run still going when
+// the next day's fires) double-sending reminders — same flock() convention as
+// RateLimiterFileStorage/StorageMetadataHandler elsewhere in the codebase, but
+// non-blocking here: a second invocation should exit early, not queue up behind it.
+$lockPath = (string) (getenv('FLUXFILES_LICENSE_DB') ?: __DIR__ . '/data/licenses.sqlite') . '.reminders.lock';
+@mkdir(dirname($lockPath), 0700, true);
+$lockFp = @fopen($lockPath, 'c');
+if ($lockFp === false || !flock($lockFp, LOCK_EX | LOCK_NB)) {
+    echo "[reminder] another run holds the lock, exiting\n";
+    exit(0);
+}
+
 $store = new LicenseStore();
 $mailer = new LicenseMailer();
 
@@ -55,3 +67,6 @@ foreach ($due as $record) {
 }
 
 echo '[reminder] done: ' . count($due) . " row(s) processed\n";
+
+flock($lockFp, LOCK_UN);
+fclose($lockFp);

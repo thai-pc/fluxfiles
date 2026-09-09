@@ -288,4 +288,69 @@ final class LicenseStore
         $s->execute([$bucket, $jti]);
         return $s->rowCount() > 0;
     }
+
+    /**
+     * A recurring (Polar) subscription fires a NEW webhook with a NEW order_id on
+     * every renewal, so `record()`'s (gateway, order_id) idempotency mints a fresh
+     * row each cycle instead of updating one — by design, since the idempotency key
+     * has to stay order-scoped for a repeat webhook of the SAME order to be a no-op.
+     * The side effect: the previous row for that customer+plan is left `active`
+     * forever, with its own now-stale `expires`, so it keeps surfacing in
+     * needingReminder() (an "expired" nag) right alongside the brand new row (a
+     * "renews soon" nag) — a self-contradicting pair every billing cycle.
+     *
+     * Call this right after storing the new row: it retires every OTHER `active` row
+     * for the same (customer, plan) so only the newest stays eligible for reminders
+     * (and stops the admin/licenses list from showing stale duplicate "active" rows
+     * for the same customer). No-op when customer or plan is blank, since either
+     * would otherwise match too broadly across unrelated purchases.
+     *
+     * @return int number of rows superseded
+     */
+    public function supersedeActiveForCustomerPlan(string $customer, string $plan, string $exceptJti): int
+    {
+        if ($customer === '' || $plan === '') {
+            return 0;
+        }
+        $s = $this->db->prepare(
+            'UPDATE licenses SET status = "superseded"
+             WHERE customer = ? AND plan = ? AND status = "active" AND jti != ?'
+        );
+        $s->execute([$customer, $plan, $exceptJti]);
+        return $s->rowCount();
+    }
+
+    /**
+     * (customer, plan) pairs that currently have MORE THAN ONE `active` row — the
+     * backlog supersedeActiveForCustomerPlan() prevents going forward but can't
+     * retroactively clean up, since it only runs on the NEXT issue() for a pair.
+     * Used by the one-off backfill-supersede-duplicates.php script.
+     *
+     * @return array<int,array{customer:string,plan:string,cnt:int}>
+     */
+    public function duplicateActiveCustomerPlans(): array
+    {
+        $s = $this->db->query(
+            'SELECT customer, plan, COUNT(*) AS cnt FROM licenses
+             WHERE status = "active" AND customer != "" AND plan != ""
+             GROUP BY customer, plan HAVING COUNT(*) > 1'
+        );
+        return $s->fetchAll();
+    }
+
+    /**
+     * `active` rows for one (customer, plan) pair, newest-issued first — so callers
+     * can keep rows[0] and supersede the rest.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function activeRowsForCustomerPlan(string $customer, string $plan): array
+    {
+        $s = $this->db->prepare(
+            'SELECT * FROM licenses WHERE customer = ? AND plan = ? AND status = "active"
+             ORDER BY issued DESC, created_at DESC'
+        );
+        $s->execute([$customer, $plan]);
+        return $s->fetchAll();
+    }
 }

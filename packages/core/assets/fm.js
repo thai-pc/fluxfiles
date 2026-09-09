@@ -3290,7 +3290,12 @@ function fluxFilesApp() {
 
         async openUsage() {
             this.showUsage = true;
-            await Promise.all([this.loadUsage(), this.loadLicense()]);
+            // License status is standalone-admin-only (see licenseBadgeVisible below) —
+            // an embedded end-customer must never trigger the license fetch just by
+            // opening the usage dashboard, or the badge would leak into their session.
+            const tasks = [this.loadUsage()];
+            if (window.parent === window) tasks.push(this.loadLicense());
+            await Promise.all(tasks);
         },
 
         _licenseFetched: false,   // a DEFINITIVE answer arrived (not the error fallback)
@@ -3328,10 +3333,12 @@ function fluxFilesApp() {
             return s === 'grace' || s === 'expired' || s === 'perpetual';
         },
         // Same conditions as the usage modal's banner (licenseNeedsAttention + the
-        // inline active/renew-soon check), surfaced as a toolbar dot. Standalone-only
-        // by construction: licenseInfo is only ever populated in the non-framed init
-        // path (loadLicense() is otherwise lazy/proGate-driven and stays hidden while framed).
+        // inline active/renew-soon check), surfaced as a toolbar dot. Standalone-only:
+        // explicitly re-checked here (not just relied on via callers never populating
+        // licenseInfo while framed) so the operator's license/subscription status can
+        // never leak to an embedded end-customer, regardless of how licenseInfo got set.
         get licenseBadgeVisible() {
+            if (window.parent !== window) return false;
             return this.licenseNeedsAttention
                 || (this.licenseInfo && this.licenseInfo.status === 'active'
                     && this.licenseInfo.days_left != null && this.licenseInfo.days_left <= 30);

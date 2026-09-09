@@ -3,6 +3,42 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.09] — 2026-09-09
+
+> Released: `core-v0.2.85`.
+
+### Fixed — Three gaps in the license-expiry-notifications feature (0.3.08 / `core-v0.2.84`)
+
+- **Core UI — license badge could leak into an embedded iframe**: the
+  standalone UI already gated the boot-time license fetch and `proGate()` on
+  `window.parent === window`, but `openUsage()` (the "Storage usage" button)
+  did not — clicking it inside an embedded instance could fetch and render
+  license info regardless of framing, making the badge appear persistently
+  for that session. `openUsage()` now only fetches license info at the top
+  level, and the `licenseBadgeVisible` getter now independently re-checks the
+  same guard itself rather than relying on callers never populating
+  `licenseInfo` while framed (`packages/core/assets/fm.js`). Covered by a new
+  `packages/core/tests/browser/license-badge-iframe.spec.ts`.
+- **license-server — duplicate/contradictory renewal reminders**: a
+  recurring subscription renewal (`pro-monthly`/`studio-monthly`/
+  `support-monthly`) fires a new Polar order per billing cycle, which used to
+  mint a brand new `active` row without retiring the previous one — so
+  `needingReminder()` could return both a stale "expired" row and the fresh
+  "renews soon" row for the same customer in the same cron run, a
+  self-contradicting pair repeating every cycle. `LicenseIssuer::issue()` now
+  calls a new `LicenseStore::supersedeActiveForCustomerPlan()` right after
+  storing each fresh issuance, retiring any other `active` row for the same
+  `(customer, plan)`. Since this only self-heals on a pair's *next* renewal,
+  a new one-off `backfill-supersede-duplicates.php` script (dry-run by
+  default, `--apply` to write) cleans up rows already duplicated before this
+  fix shipped — see `services/license-server/README.md`.
+- **license-server — cron overlap**: `send-renewal-reminders.php` now takes
+  a non-blocking `flock()` around its run, so a second overlapping cron
+  invocation exits immediately instead of racing the one already in
+  progress.
+
+No new JWT claims — `docs/CONFIG.md` is unaffected.
+
 ## [0.3.08] — 2026-09-09
 
 > Released: `core-v0.2.84`, `laravel-v0.2.40`, `wordpress-v0.2.47`.

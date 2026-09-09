@@ -82,6 +82,16 @@ final class LicenseIssuer
             'grace_days'  => $graceDays,
         ]);
 
+        // A recurring subscription renewal is a NEW order (fresh order_id) but the
+        // SAME customer+plan — retire any other still-`active` row for that pair so
+        // only this newest one stays eligible for reminders (see the store method's
+        // docblock for why the duplicate-row is otherwise unavoidable here).
+        $this->store->supersedeActiveForCustomerPlan(
+            (string) $record['customer'],
+            (string) $record['plan'],
+            (string) $record['jti']
+        );
+
         return ['key' => $minted['key'], 'record' => $record, 'reused' => false];
     }
 }

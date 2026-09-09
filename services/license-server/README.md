@@ -136,6 +136,25 @@ whether it fires: a `perpetual` licence keeps running past expiry (only the
 update channel stops), while a `subscription` licence's paid features actually
 stop working once the grace window ends — see `LicenseMailer::renderExpiryBody()`.
 
+### Recurring subscriptions and duplicate rows
+
+Every renewal of a recurring plan (`pro-monthly`, `studio-monthly`,
+`support-monthly`) is a new Polar order with a new `order_id`, so `record()`'s
+`(gateway, order_id)` idempotency mints a fresh row each cycle rather than
+updating one in place. `LicenseIssuer::issue()` calls
+`LicenseStore::supersedeActiveForCustomerPlan()` right after storing that new
+row, which retires any other still-`active` row for the same `(customer,
+plan)` — so only the newest one stays eligible for `needingReminder()`. Without
+this, a customer who just renewed could get an "expired" nag (from the stale
+row) in the same run as a "renews soon" nag (from the new one).
+
+This only self-heals on a pair's *next* renewal — rows that were already
+duplicated before this fix shipped stay duplicated until then. Run
+`php backfill-supersede-duplicates.php` once (dry run by default; pass
+`--apply` to actually write) to clean up any pre-existing duplicates
+immediately instead of waiting for the next billing cycle. Safe to re-run
+(no-op once there's nothing left to supersede).
+
 ## Test
 
 ```bash

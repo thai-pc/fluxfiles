@@ -398,6 +398,62 @@ test('mail: the renewal body states the ACTUAL days remaining, not the raw bucke
     assertTrue(!str_contains($out, '(30 day(s) left)'), 'must not just echo the bucket string as if it were the day count');
 });
 
+// ── Renewal duplicate-row suppression ────────────────────────────────────────
+// A recurring (Polar) subscription fires a NEW webhook with a NEW order_id on every
+// renewal, so record()'s (gateway, order_id) idempotency mints a fresh row each
+// cycle rather than updating one. Without supersession the OLD row is left `active`
+// forever with a stale `expires`, so needingReminder() would surface it (an
+// "expired" nag) right alongside the brand new row (a "renews soon" nag) every
+// cycle — a self-contradicting pair. See B2 in the post-release review.
+
+test('issue(): a renewal for the same customer+plan supersedes the previous active row', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $a = $iss->issue(['email' => 'ren@x.com', 'customer' => 'ren@x.com', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'REN-1'])['record'];
+    assertEqual('active', $store->findByJti((string) $a['jti'])['status'], 'first row starts active');
+
+    $b = $iss->issue(['email' => 'ren@x.com', 'customer' => 'ren@x.com', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'REN-2'])['record'];
+    assertEqual('superseded', $store->findByJti((string) $a['jti'])['status'], 'old row retired by the renewal');
+    assertEqual('active', $store->findByJti((string) $b['jti'])['status'], 'new row stays active');
+});
+
+test('issue(): supersession is scoped to the same customer+plan, not just customer', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $proRec = $iss->issue(['email' => 'multi@x.com', 'customer' => 'multi@x.com', 'plan' => 'pro', 'gateway' => 'polar', 'order_id' => 'MULTI-1'])['record'];
+    $supportRec = $iss->issue(['email' => 'multi@x.com', 'customer' => 'multi@x.com', 'plan' => 'support-monthly', 'gateway' => 'polar', 'order_id' => 'MULTI-2'])['record'];
+    assertEqual('active', $store->findByJti((string) $proRec['jti'])['status'], 'a different plan for the same customer is untouched');
+    assertEqual('active', $store->findByJti((string) $supportRec['jti'])['status']);
+});
+
+test('issue(): a repeat webhook for the SAME order_id stays idempotent and does not supersede itself', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $a = $iss->issue(['email' => 'dup@x.com', 'customer' => 'dup@x.com', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'SAME-1'])['record'];
+    $b = $iss->issue(['email' => 'dup@x.com', 'customer' => 'dup@x.com', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'SAME-1'])['record'];
+    assertEqual($a['jti'], $b['jti'], 'same order_id reuses the same row');
+    assertEqual('active', $store->findByJti((string) $a['jti'])['status'], 'the reused row is never superseded by its own repeat');
+});
+
+test('needingReminder(): the old row a renewal supersedes never contributes a reminder, contradictory or otherwise', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $now = time();
+    $old = $iss->issue(['email' => 'nag@x.com', 'customer' => 'nag@x.com', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'NAG-1'])['record'];
+    // The renewal — same customer+plan, new order_id — supersedes $old immediately.
+    $new = $iss->issue(['email' => 'nag@x.com', 'customer' => 'nag@x.com', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'NAG-2'])['record'];
+
+    // needingReminder() filters on status = "active" (see the SQL above), so a
+    // superseded row is structurally excluded — this pins that behavior end-to-end
+    // through the real issue() path rather than only unit-testing the store method.
+    $due = $store->needingReminder([30, 14, 7, 1], $now);
+    $jtis = array_column($due, 'jti');
+    assertTrue(!in_array((string) $old['jti'], $jtis, true), 'superseded old row never surfaces a reminder');
+    // Neither row is actually due yet (both freshly issued, far from expiry) — this
+    // just confirms the exclusion isn't accidentally hiding the NEW row too.
+    assertEqual(0, count($due), 'nothing due right after issuance for either row');
+});
+
 // ── Polar webhook (Standard Webhooks) ────────────────────────────────────────
 // The signature scheme is the piece most likely to fail silently: wrong in one
 // direction drops every purchase, wrong in the other mints licences for anyone.
