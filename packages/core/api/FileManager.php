@@ -398,15 +398,16 @@ class FileManager
         $dirsCreated = $this->meta->dirsCreated($disk);
 
         // Legal hold enrichment — free/core, unconditional (docs/RETENTION-LEGAL-HOLD-
-        // DESIGN.md §4.2). Performance guard: skip the whole per-item holdCovering()
-        // loop when the disk has zero active holds — the overwhelmingly common case
-        // for any tenant not using this feature, so non-Enterprise operators pay
-        // nothing for it.
-        $hasActiveHolds = $this->meta->countActiveHolds($disk) > 0;
+        // DESIGN.md §4.2). holdsCoveringMany() loads the holds manifest/table ONCE
+        // for the whole page and returns a path => hold map, so a page of N items
+        // costs a single manifest read + N in-memory lookups — not N separate
+        // holdCovering() calls, each of which used to re-read+re-parse the entire
+        // manifest (O(N) redundant reads for an N-item page).
+        $holdMap = $this->meta->holdsCoveringMany($disk, array_column($items, 'key'));
         $canSeeHoldDetail = $this->claims->hasPerm('audit');
 
         foreach ($items as &$item) {
-            $hold = $hasActiveHolds ? $this->meta->holdCovering($disk, $item['key']) : null;
+            $hold = $holdMap[$item['key']] ?? null;
             $item['on_hold'] = $hold !== null;
             if ($hold !== null && $canSeeHoldDetail) {
                 $item['hold_id']        = $hold['hold_id'] ?? null;
@@ -3064,21 +3065,35 @@ class FileManager
      */
     private function assertNotSystem(string $scopedPath): void
     {
+        if ($this->isReservedSystemPath($scopedPath)) {
+            throw new ApiException('Access denied: system path', 403, 'system_path');
+        }
+    }
+
+    /**
+     * Non-throwing counterpart to assertNotSystem() for callers (e.g. Backup) that
+     * need to SKIP reserved paths while walking a tree, rather than reject a single
+     * write. Keep this in sync with assertNotSystem() — same reserved-path rules
+     * (it's the sole implementation; assertNotSystem() just wraps it in a throw).
+     */
+    public function isReservedSystemPath(string $scopedPath): bool
+    {
         $normalized = trim($scopedPath, '/') . '/';
         foreach (self::SYSTEM_PREFIXES as $prefix) {
             if (strpos($normalized, $prefix) === 0 || strpos($normalized, '/' . $prefix) !== false) {
-                throw new ApiException('Access denied: system path', 403, 'system_path');
+                return true;
             }
         }
         // Also block exact match (e.g. "_fluxfiles" without trailing slash)
         $base = basename($scopedPath);
         if ($base === '_fluxfiles' || $base === '_variants') {
-            throw new ApiException('Access denied: system path', 403, 'system_path');
+            return true;
         }
         // Reserved legacy-sidecar filename shape — see doc-comment above.
         if (strcasecmp(substr($scopedPath, -10), '.meta.json') === 0) {
-            throw new ApiException('Access denied: system path', 403, 'system_path');
+            return true;
         }
+        return false;
     }
 
     private function assertDisk(string $disk): void
@@ -3204,16 +3219,35 @@ class FileManager
         return $scoped;
     }
 
+    /**
+     * Despite the name, callers historically passed an already-prefixed key
+     * that was NEVER routed through scopedPath()/Claims::normalizeKey() first
+     * (the metadata and chunk-upload endpoints in index.php) — so a raw
+     * "user_1/../user_2/x" traversal reached assertNotSystem() untouched and
+     * then the caller's own downstream path-building untouched too. Normalize
+     * here as the defense-in-depth safety net the name implies, and RETURN
+     * the safe value — callers must use it (not their original variable) for
+     * anything built from this path afterwards. Idempotent on an already
+     * scoped/normalized path.
+     */
     public function validateScopedPath(string $scopedPath): string
     {
+        $scopedPath = $this->claims->normalizeKey($scopedPath);
         $this->assertNotSystem($scopedPath);
         return $scopedPath;
     }
 
-    public function assertCanModifyScopedPath(string $disk, string $scopedPath): void
+    /**
+     * Same defense-in-depth normalization as validateScopedPath() above, plus
+     * the owner_only check. Returns the safe path — see validateScopedPath()'s
+     * doc-comment for why callers must use the return value.
+     */
+    public function assertCanModifyScopedPath(string $disk, string $scopedPath): string
     {
+        $scopedPath = $this->claims->normalizeKey($scopedPath);
         $this->assertNotSystem($scopedPath);
         $this->assertOwner($disk, $scopedPath);
+        return $scopedPath;
     }
 
     /**
@@ -3264,11 +3298,38 @@ class FileManager
     }
 
     /**
+     * Attach a module-generated "derived" file's ownership metadata (copied from
+     * its source) and register it in the search/folder index — the same
+     * bookkeeping cropImage()/applyWatermark() do internally for their own "save
+     * as" output via copyMetadata()+trackParents(), exposed here so a module
+     * writing through writeScopedFile()/writeScopedStream() can do the same.
+     * Without this, the new file has no `uploaded_by` and assertOwner() treats a
+     * missing owner as "legacy; allow" — an ownerless orphan any co-tenant can
+     * modify/delete even under owner_only. No-op when src === dst (in-place write,
+     * nothing "derived"). $srcScopedPath/$dstScopedPath must already be scoped
+     * (validateUserPath()/assertCanModifyScopedPath() output).
+     */
+    public function attachDerivedFile(string $disk, string $srcScopedPath, string $dstScopedPath): void
+    {
+        if ($srcScopedPath === $dstScopedPath) {
+            return;
+        }
+        $this->copyMetadata($disk, $srcScopedPath, $disk, $dstScopedPath);
+        $this->meta->trackParents($disk, $dstScopedPath);
+    }
+
+    /**
      * Stream-based counterpart to writeScopedFile() for module writes too large to
      * buffer as a string (Backup's cross-disk sync). Same ext/filename/virus-scan
      * checks; stages $stream to a local temp file so the scanner (which needs a
      * local path) can see it regardless of either disk's driver, then streams that
      * temp file to the destination — never holds the whole file in PHP memory.
+     *
+     * Also enforces the destination's quota (same as crossCopy()/crossMove()) and
+     * snapshots an existing target via the Versioning hook before overwriting it
+     * (same as upload()) — Backup's sync writes through here specifically to share
+     * these checks with every other write path, so they can't be skipped by going
+     * around FileManager.
      */
     public function writeScopedStream(string $disk, string $scopedPath, $stream): void
     {
@@ -3287,6 +3348,20 @@ class FileManager
             }
             stream_copy_to_stream($stream, $out);
             fclose($out);
+
+            // Quota check on destination — crossCopy()/crossMove() already do this;
+            // checked before the scanners below so a rejection short-circuits
+            // without spending time scanning bytes that won't be written anyway.
+            if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
+                $fileSize = (int) filesize($tmp);
+                $this->quotaManager->assertQuota(
+                    $disk,
+                    $this->claims->pathPrefix,
+                    $fileSize,
+                    $this->claims->maxStorageMb
+                );
+            }
+
             if ($this->virusScanner !== null) {
                 $this->assertNoVirus($tmp, basename($scopedPath));
             }
@@ -3296,6 +3371,13 @@ class FileManager
             $in = fopen($tmp, 'rb');
             if ($in === false) {
                 throw new ApiException('Could not stage content for write', 500, 'virus_failed');
+            }
+            // Snapshot the pre-existing target before it's overwritten (Versioning
+            // module) — same as upload()'s overwrite path. Backup's caller already
+            // enforces owner_only (assertCanModifyScopedPath()) before calling here,
+            // per this method's contract of not calling assertOwner() itself.
+            if ($fs->fileExists($scopedPath)) {
+                $this->keepVersion($disk, $scopedPath, $fs);
             }
             $fs->writeStream($scopedPath, $in);
             if (is_resource($in)) { fclose($in); }

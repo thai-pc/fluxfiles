@@ -910,17 +910,47 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
     }
 
     /**
+     * Batch counterpart to holdCovering() — runs the holds query ONCE for the
+     * whole page instead of once per item (mirrors
+     * StorageMetadataHandler::holdsCoveringMany() in core; see its doc-comment
+     * for why).
+     *
+     * @param array<int,string> $scopedPaths
+     * @return array<string, array<string,mixed>|null> keyed by the given scoped path
+     */
+    public function holdsCoveringMany(string $disk, array $scopedPaths): array
+    {
+        $holds = $this->allHolds($disk);
+        $out = [];
+        foreach ($scopedPaths as $scopedPath) {
+            $out[$scopedPath] = self::matchOverlappingHold($holds, $scopedPath, false);
+        }
+        return $out;
+    }
+
+    /**
      * Same prefix-overlap semantics as StorageMetadataHandler/Db\DbMetadataHandler's
      * findOverlappingHold() — kept as a plain PHP scan (not SQL LIKE) so all
      * backends can never silently diverge on this security-relevant comparison.
      */
     private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
     {
+        return self::matchOverlappingHold($this->allHolds($disk), $scopedPath, $bidirectional);
+    }
+
+    /**
+     * Pure matcher shared by findOverlappingHold() (single lookup) and
+     * holdsCoveringMany() (batch lookup against an already-loaded result set).
+     *
+     * @param array<string,array> $holds id => entry, as returned by allHolds()
+     */
+    private static function matchOverlappingHold(array $holds, string $scopedPath, bool $bidirectional): ?array
+    {
         $scopedPath = trim($scopedPath, '/');
         if ($scopedPath === '') {
             return null;
         }
-        foreach ($this->allHolds($disk) as $id => $entry) {
+        foreach ($holds as $id => $entry) {
             if ($entry['released_at'] !== null) {
                 continue; // released holds never block/cover
             }

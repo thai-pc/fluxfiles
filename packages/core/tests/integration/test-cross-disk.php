@@ -17,6 +17,7 @@ use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\StorageMetadataHandler;
 use FluxFiles\ApiException;
+use FluxFiles\QuotaManager;
 
 $green = "\033[32m"; $red = "\033[31m"; $cyan = "\033[36m"; $reset = "\033[0m";
 $passed = 0; $failed = 0;
@@ -42,9 +43,11 @@ function makeCD(array $opts = []): array {
         'b' => ['driver' => 'local', 'root' => $rb, 'url' => '/b'],
     ]);
     $meta = new StorageMetadataHandler($dm);
-    $claims = new Claims($opts['user'] ?? 'u', ['read', 'write', 'delete'], ['a', 'b'], '', 50, null, 0);
+    $claims = new Claims($opts['user'] ?? 'u', ['read', 'write', 'delete'], ['a', 'b'], '', 50, null, $opts['maxStorageMb'] ?? 0);
     if ($opts['ownerOnly'] ?? false) { $claims->ownerOnly = true; }
     $fm = new FileManager($dm, $claims, $meta);
+    if ($opts['withQuota'] ?? false) { $fm->setQuotaManager(new QuotaManager($dm)); }
+    if (isset($opts['versionKeeper'])) { $fm->setVersionKeeper($opts['versionKeeper']); }
     return [$fm, $ra, $rb, $meta];
 }
 
@@ -118,6 +121,98 @@ test('extension immutability across disks: dst ext must match src', function () 
     [$fm, $ra] = makeCD();
     file_put_contents($ra . '/photo.png', 'x');
     expectApi(fn () => $fm->crossCopy('a', 'photo.png', 'b', 'photo.jpg'), 'ext_changed');
+});
+
+// ── writeScopedStream() — the module write seam Backup's sync goes through ────
+// Three LOW-severity gaps found in a security audit: quota was never checked,
+// an overwrite never snapshotted via Versioning, and Backup's own ad-hoc
+// system-path filter drifted from the canonical assertNotSystem() rules.
+
+test('writeScopedStream: destination quota is enforced — over-limit write throws and nothing lands', function () {
+    [$fm, , $rb] = makeCD(['maxStorageMb' => 1, 'withQuota' => true]); // 1MB cap on disk b
+    $scoped = $fm->validateUserPath('big.bin');
+    $stream = fopen('php://temp', 'r+');
+    fwrite($stream, str_repeat('x', 2 * 1024 * 1024)); // 2MB > 1MB cap
+    rewind($stream);
+    expectApi(fn () => $fm->writeScopedStream('b', $scoped, $stream), 'quota_exceeded');
+    assertTrue(!is_file($rb . '/big.bin'), 'over-quota write must NOT land on disk');
+});
+
+test('writeScopedStream: under-quota write succeeds', function () {
+    [$fm, , $rb] = makeCD(['maxStorageMb' => 1, 'withQuota' => true]);
+    $scoped = $fm->validateUserPath('small.bin');
+    $stream = fopen('php://temp', 'r+');
+    fwrite($stream, str_repeat('x', 100 * 1024)); // 100KB < 1MB cap
+    rewind($stream);
+    $fm->writeScopedStream('b', $scoped, $stream);
+    assertTrue(is_file($rb . '/small.bin'), 'under-quota write lands on disk');
+});
+
+test('writeScopedStream: no QuotaManager wired → unbounded (free core pays nothing)', function () {
+    [$fm, , $rb] = makeCD(['maxStorageMb' => 1]); // withQuota omitted → no QuotaManager
+    $scoped = $fm->validateUserPath('big.bin');
+    $stream = fopen('php://temp', 'r+');
+    fwrite($stream, str_repeat('x', 2 * 1024 * 1024));
+    rewind($stream);
+    $fm->writeScopedStream('b', $scoped, $stream);
+    assertTrue(is_file($rb . '/big.bin'), 'no QuotaManager → write proceeds regardless of maxStorageMb');
+});
+
+test('writeScopedStream: overwriting an existing file invokes the version keeper', function () {
+    $calls = [];
+    $keeper = function (string $d, string $key, $fs) use (&$calls): void { $calls[] = [$d, $key]; };
+    [$fm, , $rb] = makeCD(['versionKeeper' => $keeper]);
+    file_put_contents($rb . '/app.env', 'v1');
+    $scoped = $fm->validateUserPath('app.env');
+    $stream = fopen('php://temp', 'r+');
+    fwrite($stream, 'v2');
+    rewind($stream);
+    $fm->writeScopedStream('b', $scoped, $stream);
+    assertEqual('v2', file_get_contents($rb . '/app.env'), 'overwrite lands');
+    assertEqual(1, count($calls), 'version keeper called exactly once');
+    assertEqual('b', $calls[0][0], 'keeper receives the destination disk');
+    assertEqual('app.env', $calls[0][1], 'keeper receives the scoped key');
+});
+
+test('writeScopedStream: NEW file (no prior existence) does NOT invoke the version keeper', function () {
+    $calls = [];
+    $keeper = function (string $d, string $key, $fs) use (&$calls): void { $calls[] = [$d, $key]; };
+    [$fm] = makeCD(['versionKeeper' => $keeper]);
+    $scoped = $fm->validateUserPath('fresh.txt');
+    $stream = fopen('php://temp', 'r+');
+    fwrite($stream, 'first-write');
+    rewind($stream);
+    $fm->writeScopedStream('b', $scoped, $stream);
+    assertEqual(0, count($calls), 'no snapshot for a brand-new file');
+});
+
+// ── isReservedSystemPath() — non-throwing counterpart to assertNotSystem() ────
+test('isReservedSystemPath: true for _fluxfiles/ and _variants/ subtree paths', function () {
+    [$fm] = makeCD();
+    assertTrue($fm->isReservedSystemPath('_fluxfiles/index.json'), '_fluxfiles/ prefix');
+    assertTrue($fm->isReservedSystemPath('_variants/pic.png_thumb.webp'), '_variants/ prefix');
+    assertTrue($fm->isReservedSystemPath('user/_fluxfiles/meta/x.json'), 'nested _fluxfiles/');
+    assertTrue($fm->isReservedSystemPath('user/_variants/x.webp'), 'nested _variants/');
+});
+
+test('isReservedSystemPath: true for exact _fluxfiles/_variants basename', function () {
+    [$fm] = makeCD();
+    assertTrue($fm->isReservedSystemPath('_fluxfiles'), 'exact _fluxfiles basename');
+    assertTrue($fm->isReservedSystemPath('_variants'), 'exact _variants basename');
+});
+
+test('isReservedSystemPath: true for the legacy "{name}.meta.json" sidecar shape', function () {
+    [$fm] = makeCD();
+    assertTrue($fm->isReservedSystemPath('doc.meta.json'), 'legacy sidecar');
+    assertTrue($fm->isReservedSystemPath('folder/doc.meta.json'), 'nested legacy sidecar');
+    assertTrue($fm->isReservedSystemPath('folder/DOC.META.JSON'), 'case-insensitive suffix match');
+});
+
+test('isReservedSystemPath: false for a normal user file path', function () {
+    [$fm] = makeCD();
+    assertTrue(!$fm->isReservedSystemPath('photo.jpg'), 'plain file');
+    assertTrue(!$fm->isReservedSystemPath('folder/report.pdf'), 'nested plain file');
+    assertTrue(!$fm->isReservedSystemPath('folder/meta.json'), 'a plain "meta.json" (not "{name}.meta.json") is fine');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

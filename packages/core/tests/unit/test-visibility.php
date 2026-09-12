@@ -99,6 +99,7 @@ class NullMetaRepo implements MetadataRepositoryInterface
     public function countActiveHolds(string $disk): int { return 0; }
     public function holdCovering(string $disk, string $scopedPath): ?array { return null; }
     public function holdBlocking(string $disk, string $scopedPath): ?array { return null; }
+    public function holdsCoveringMany(string $disk, array $scopedPaths): array { return array_fill_keys($scopedPaths, null); }
 }
 
 /** Build a FileManager over the given disk configs. */

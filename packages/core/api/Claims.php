@@ -838,22 +838,13 @@ class Claims
     }
 
     /**
-     * Check if a path is within the user's allowed scope (pathPrefix).
+     * Strip null bytes and `..`/`.` traversal segments from a path WITHOUT
+     * applying/removing the tenant prefix — the shared primitive behind
+     * scopePath() and isPathInScope(). A literal dot inside a filename
+     * component (e.g. "report.v2.pdf") is untouched; only whole "." / ".."
+     * path segments are dropped.
      */
-    public function isPathInScope(string $path): bool
-    {
-        $prefix = trim($this->pathPrefix, '/');
-        if ($prefix === '') {
-            return true;
-        }
-        $path = trim(str_replace(["\0", "\x00"], '', $path), '/');
-        return $path === $prefix || strpos($path, $prefix . '/') === 0;
-    }
-
-    /**
-     * Apply path prefix and normalize (remove .. and .).
-     */
-    public function scopePath(string $path): string
+    private static function stripDotSegments(string $path): string
     {
         $path = str_replace(["\0", "\x00"], '', $path);
         $parts = explode('/', $path);
@@ -866,7 +857,58 @@ class Claims
                 $safe[] = $part;
             }
         }
-        $relative = implode('/', $safe);
+        return implode('/', $safe);
+    }
+
+    /**
+     * Canonicalize a storage key: strip traversal segments, no prefix logic.
+     * Callers that already hold a full (already-prefixed) key — e.g. the
+     * metadata and chunk-upload endpoints in index.php — MUST run it through
+     * this before building any filesystem/metadata path from it, and use the
+     * RETURNED value downstream (not the original). Idempotent and safe on
+     * keys that never had a traversal segment to begin with.
+     */
+    public function normalizeKey(string $path): string
+    {
+        return trim(self::stripDotSegments($path), '/');
+    }
+
+    /**
+     * Check if a path is within the user's allowed scope (pathPrefix).
+     *
+     * Unlike scopePath() (which silently strips "."/".." for a fresh
+     * client-relative path about to be re-prefixed), this method REJECTS
+     * outright the moment any raw "."/".." segment is present — this is the
+     * gate callers use to decide whether an already-absolute/already-scoped
+     * key is safe to build a filesystem/metadata path from. A raw-string
+     * prefix match alone is not enough: "user_1/../user_2/x" literally
+     * starts with "user_1/" without ever resolving to user_2, but a
+     * downstream normalizer (Flysystem's own path resolver, e.g.) DOES pop
+     * segments on ".." and can land outside the prefix entirely. Failing
+     * closed here — rather than normalizing and re-checking whether the
+     * stripped form still looks in-scope — avoids that whole class of
+     * "looks safe after my normalization, but a different downstream
+     * resolver disagrees" mismatch.
+     */
+    public function isPathInScope(string $path): bool
+    {
+        $path = trim(str_replace(["\0", "\x00"], '', $path), '/');
+        if ($path !== self::stripDotSegments($path)) {
+            return false;
+        }
+        $prefix = trim($this->pathPrefix, '/');
+        if ($prefix === '') {
+            return true;
+        }
+        return $path === $prefix || strpos($path, $prefix . '/') === 0;
+    }
+
+    /**
+     * Apply path prefix and normalize (remove .. and .).
+     */
+    public function scopePath(string $path): string
+    {
+        $relative = self::stripDotSegments($path);
         $prefix = trim($this->pathPrefix, '/');
         if ($prefix !== '') {
             // Idempotent prefixing — see FileManager::scopedPath(). A path already

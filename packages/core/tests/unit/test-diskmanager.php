@@ -201,26 +201,59 @@ test('registerByobDisk() rejects local driver with 403', function () {
     }
 });
 
-test('registerByobDisk() clears cached instances', function () use (&$tempDirs) {
-    $root = '/tmp/ff_test_dm_' . uniqid();
-    $tempDirs[] = $root;
-    mkdir($root, 0755, true);
-
-    // Start with a local disk config, build it to cache
+test('registerByobDisk() cannot shadow a statically configured disk name', function () {
     $dm = new FluxFiles\DiskManager([
-        'swap' => ['driver' => 'local', 'root' => $root],
+        's3' => ['driver' => 's3', 'bucket' => 'operator-bucket', 'key' => 'op-key', 'secret' => 'op-secret', 'region' => 'us-east-1'],
+    ]);
+    $before = $dm->config('s3');
+
+    try {
+        $dm->registerByobDisk('s3', [
+            'driver' => 's3', 'bucket' => 'attacker-bucket', 'key' => 'evil-key', 'secret' => 'evil-secret', 'region' => 'us-east-1',
+        ]);
+        throw new \RuntimeException('Should have thrown');
+    } catch (FluxFiles\ApiException $e) {
+        assertEqual(403, $e->getCode());
+        assertEqual('byob_disk_collision', $e->getErrorCode());
+    }
+
+    // The static config must be provably untouched even on the throw path.
+    assertEqual($before, $dm->config('s3'), 'Static disk config must not mutate when the collision is rejected');
+});
+
+test('registerByobDisk() still allows a brand-new BYOB name alongside static disks', function () {
+    $dm = new FluxFiles\DiskManager([
+        's3' => ['driver' => 's3', 'bucket' => 'operator-bucket', 'key' => 'op-key', 'secret' => 'op-secret', 'region' => 'us-east-1'],
+    ]);
+
+    $dm->registerByobDisk('tenant-42', [
+        'driver' => 's3', 'bucket' => 'tenant-bucket', 'key' => 'k', 'secret' => 's', 'region' => 'us-east-1',
+    ]);
+
+    assertEqual('tenant-bucket', $dm->config('tenant-42')['bucket']);
+    assertEqual('operator-bucket', $dm->config('s3')['bucket'], 'Registering an unrelated BYOB name must not touch the static disk');
+});
+
+test('registerByobDisk() clears cached instances', function () {
+    // 'swap' is not part of the static config set, so re-registering it under a
+    // fresh BYOB config on a later request is the allowed case (only a name from
+    // the ORIGINAL static config is protected — see the collision test above).
+    $dm = new FluxFiles\DiskManager([]);
+    $dm->registerByobDisk('swap', [
+        'driver' => 's3', 'bucket' => 'b1', 'key' => 'k', 'secret' => 's', 'region' => 'us-east-1',
     ]);
     $fs1 = $dm->disk('swap');
 
-    // Now register as S3 — this should clear the cached instance
+    // Now register a different S3 config under the same BYOB name — this should
+    // clear the cached instance.
     $dm->registerByobDisk('swap', [
-        'driver' => 's3', 'bucket' => 'b', 'key' => 'k', 'secret' => 's', 'region' => 'us-east-1',
+        'driver' => 's3', 'bucket' => 'b2', 'key' => 'k', 'secret' => 's', 'region' => 'us-east-1',
     ]);
 
     // Config should reflect the new S3 config
-    assertEqual('s3', $dm->config('swap')['driver']);
+    assertEqual('b2', $dm->config('swap')['bucket']);
 
-    // Fetching the disk again should build a new instance (not return the old local one)
+    // Fetching the disk again should build a new instance (not return the old one)
     $fs2 = $dm->disk('swap');
     assertEqual(false, $fs1 === $fs2, 'Expected a different instance after registerByobDisk');
 });

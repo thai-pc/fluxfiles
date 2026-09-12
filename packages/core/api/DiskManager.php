@@ -16,10 +16,15 @@ class DiskManager
     private array $disks = [];
     private array $s3Clients = [];
     private array $configs;
+    private array $staticDiskNames;
 
     public function __construct(array $configs)
     {
         $this->configs = $configs;
+        // Names present at construction time (the operator's config/disks.php set).
+        // A BYOB claim is never allowed to shadow one of these later — see
+        // registerByobDisk() below.
+        $this->staticDiskNames = array_keys($configs);
     }
 
     public function disk(string $name): Filesystem
@@ -83,6 +88,10 @@ class DiskManager
      */
     public function registerByobDisk(string $name, array $config): void
     {
+        if (in_array($name, $this->staticDiskNames, true)) {
+            throw new ApiException("BYOB disk '{$name}' collides with a statically configured disk", 403, 'byob_disk_collision');
+        }
+
         if (($config['driver'] ?? '') === 'local') {
             throw new ApiException("BYOB disk '{$name}' cannot use local driver", 403);
         }

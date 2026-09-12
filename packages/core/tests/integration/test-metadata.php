@@ -277,6 +277,58 @@ test('deleteChildren() removes children from index', function () use ($handler, 
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► cross-tenant path-traversal regression (metadata endpoints){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+//
+// Empirical exploit this guards against: a token scoped to prefix "user_1"
+// sends key "user_1/../user_2/photo.jpg" to GET|PUT|DELETE /api/fm/metadata.
+// The raw string literally starts with "user_1/" (a naive prefix check
+// would call it in scope), but sidecarPath() builds
+// "_fluxfiles/meta/user_1/../user_2/photo.jpg.json" from it — which
+// Flysystem's own path normalizer resolves by POPPING the previous segment,
+// landing on and overwriting the REAL "_fluxfiles/meta/user_2/photo.jpg.json"
+// sidecar. index.php's metadata handlers now (1) reject via
+// Claims::isPathInScope() before ever reaching the repo, and (2) as
+// defense-in-depth, FileManager::validateScopedPath()/
+// assertCanModifyScopedPath() normalize the key and the caller MUST use the
+// returned value. This test proves both layers against a REAL local disk.
+
+test('isPathInScope() rejects the cross-tenant traversal key outright', function () {
+    $claims = new FluxFiles\Claims('victim-of-nothing', ['read', 'write'], ['test-local'], 'user_1', 10, null, 0);
+    assertEqual(false, $claims->isPathInScope('user_1/../user_2/photo.jpg'));
+});
+
+test('assertCanModifyScopedPath() normalizes so a bypassed check still cannot reach user_2\'s sidecar', function () use ($dm, $handler, $diskName, $fs) {
+    // user_2's real file + real sidecar, pre-existing (this is what the
+    // exploit targets).
+    $fs->write('user_2/photo.jpg', 'user-2-real-bytes');
+    $handler->save($diskName, 'user_2/photo.jpg', [
+        'title' => 'User 2 Original Title', 'alt_text' => '', 'caption' => '', 'tags' => '',
+    ]);
+
+    $claims = new FluxFiles\Claims('user-1-id', ['read', 'write'], [$diskName], 'user_1', 10, null, 0);
+    $fm = new FluxFiles\FileManager($dm, $claims, $handler);
+
+    $maliciousKey = 'user_1/../user_2/photo.jpg';
+
+    // Even calling assertCanModifyScopedPath() directly on the raw attacker
+    // string (i.e. simulating a caller that forgot the isPathInScope() gate)
+    // must not hand back a key that resolves onto user_2's file: it comes
+    // back normalized, safely contained under user_1's own prefix.
+    $safeKey = $fm->assertCanModifyScopedPath($diskName, $maliciousKey);
+    assertEqual('user_1/user_2/photo.jpg', $safeKey);
+
+    // Using the SAFE key (as every fixed call site now must) cannot touch
+    // user_2's real sidecar.
+    $handler->save($diskName, $safeKey, [
+        'title' => 'Attacker Payload', 'alt_text' => '', 'caption' => '', 'tags' => '',
+    ]);
+
+    $victimMeta = $handler->get($diskName, 'user_2/photo.jpg');
+    assertEqual('User 2 Original Title', $victimMeta['title'], 'user_2 sidecar must be untouched by the user_1-scoped write');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
 

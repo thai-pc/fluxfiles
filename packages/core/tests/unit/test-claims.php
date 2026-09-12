@@ -157,11 +157,50 @@ test('isPathInScope: prefix mismatch', function () {
     assertEqual(false, $claims->isPathInScope('other'));
 });
 
-test('isPathInScope: path traversal attempt with .. (raw path checked as-is)', function () {
+test('isPathInScope: path traversal attempt with .. is rejected', function () {
     $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
-    // The raw string still starts with "uploads/user1/" so isPathInScope sees it as in scope.
-    // Security relies on scopePath() stripping ".." before filesystem access.
-    assertEqual(true, $claims->isPathInScope('uploads/user1/../../etc/passwd'));
+    // A raw-string prefix match alone is NOT enough here: the string still
+    // starts with "uploads/user1/", but a downstream filesystem resolver
+    // (e.g. Flysystem's WhitespacePathNormalizer) pops segments on ".." and
+    // can land outside the prefix entirely — isPathInScope() fails closed
+    // the moment any "."/".." segment is present, rather than normalizing
+    // and re-checking whether the stripped form still looks in-scope.
+    assertEqual(false, $claims->isPathInScope('uploads/user1/../../etc/passwd'));
+});
+
+test('isPathInScope: sibling-under-prefix traversal (the CVE shape) is rejected', function () {
+    // Empirical exploit shape: a token scoped to "user_1" sends a key like
+    // "user_1/../user_2/photo.jpg". The raw string literally starts with
+    // "user_1/" so a naive prefix check treats it as in scope, but Flysystem
+    // resolves the real filesystem/metadata path to user_2's file — a
+    // cross-tenant read/write/delete. Must be rejected outright.
+    $claims = new FluxFiles\Claims('u1', ['read', 'write'], ['local'], 'user_1', 10, null, 0);
+    assertEqual(false, $claims->isPathInScope('user_1/../user_2/photo.jpg'));
+});
+
+test('isPathInScope: literal dot inside a filename is NOT treated as traversal', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], 'uploads/user1', 10, null, 0);
+    assertEqual(true, $claims->isPathInScope('uploads/user1/report.v2.pdf'));
+    assertEqual(true, $claims->isPathInScope('uploads/user1/.hidden'));
+});
+
+// ═══════════════════════════════════════════════════════════════
+echo "{$yellow}► normalizeKey{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('normalizeKey: strips .. segments without resolving', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
+    assertEqual('user_1/user_2/photo.jpg', $claims->normalizeKey('user_1/../user_2/photo.jpg'));
+});
+
+test('normalizeKey: leaves a clean key unchanged', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
+    assertEqual('uploads/user1/photo.jpg', $claims->normalizeKey('uploads/user1/photo.jpg'));
+});
+
+test('normalizeKey: leaves a literal dot inside a filename untouched', function () {
+    $claims = new FluxFiles\Claims('u1', ['read'], ['local'], '', 10, null, 0, false);
+    assertEqual('report.v2.pdf', $claims->normalizeKey('report.v2.pdf'));
 });
 
 // ═══════════════════════════════════════════════════════════════

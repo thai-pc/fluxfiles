@@ -163,6 +163,11 @@ final class OptimizeModule
             $destScoped = $fm->validateUserPath($destUser);
             $fm->assertCanModifyScopedPath($disk, $destScoped);
             $fm->writeScopedFile($disk, $destScoped, $optimized);
+            // Explicit `dest` can point at a genuinely new path — carry the source
+            // file's ownership + search/folder index entry over, same as crop/
+            // watermark/AI-vision "save as" (attachDerivedFile() is a no-op when
+            // destScoped === scoped, i.e. the default in-place overwrite).
+            $fm->attachDerivedFile($disk, $scoped, $destScoped);
 
             $saved = $originalBytes - $optimizedBytes;
             return [
@@ -205,6 +210,12 @@ final class OptimizeModule
         $fm->assertCanModifyScopedPath($disk, $destScoped);
 
         $fm->writeScopedFile($disk, $destScoped, $result['data']);
+        // Derived output gets the source file's ownership + search/folder index
+        // entry, same as crop/watermark/AI-vision "save as" — otherwise a kept
+        // original (keep_original / no `delete` perm) leaves the new .webp an
+        // ownerless orphan that bypasses owner_only (assertOwner() treats a
+        // missing `uploaded_by` as legacy/allow).
+        $fm->attachDerivedFile($disk, $scoped, $destScoped);
 
         // Replace the source unless asked to keep it — via FileManager::delete so
         // metadata sidecars + image variants are cleaned up properly. Removing the

@@ -84,6 +84,23 @@ function placeHold(StorageMetadataHandler $meta, string $disk, string $path, boo
     return $id;
 }
 
+/**
+ * Counts allHolds() calls (the one place that actually reads+parses
+ * holds.json off storage) so the listing-enrichment perf test below can
+ * assert FileManager::attachMetadata() loads the manifest a BOUNDED number
+ * of times per list() call — not once per listed item.
+ */
+class CountingHoldsMetadataHandler extends StorageMetadataHandler
+{
+    public int $allHoldsCalls = 0;
+
+    public function allHolds(string $disk): array
+    {
+        $this->allHoldsCalls++;
+        return parent::allHolds($disk);
+    }
+}
+
 echo "\n{$cyan}══ FluxFiles Legal Hold — free/core enforcement ══{$reset}\n\n";
 
 // ═══════════════════════════════════════════════════════════════
@@ -241,6 +258,64 @@ test('a hold left over in holds.json blocks even though \\FluxFiles\\LegalHold\\
     upload($fm, '', 'orphaned-hold.txt');
     placeHold($meta, 'local', 'orphaned-hold.txt');
     expectHold(fn () => $fm->delete('local', 'orphaned-hold.txt'));
+});
+
+// ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► list() on_hold enrichment — correctness + bounded manifest reads{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('list() marks only held items on_hold=true, others on_hold=false (mixed page)', function () {
+    [$fm, , , $meta] = makeFM();
+    upload($fm, '', 'held-a.txt');
+    upload($fm, '', 'plain-b.txt');
+    upload($fm, '', 'held-c.txt');
+    upload($fm, '', 'plain-d.txt');
+    $heldId = placeHold($meta, 'local', 'held-a.txt');
+    placeHold($meta, 'local', 'held-c.txt');
+
+    $byName = [];
+    foreach ($fm->list('local', '') as $item) {
+        $byName[$item['name']] = $item;
+    }
+
+    assertTrue($byName['held-a.txt']['on_hold'] === true, 'held-a.txt is on_hold');
+    assertTrue($byName['held-c.txt']['on_hold'] === true, 'held-c.txt is on_hold');
+    assertTrue($byName['plain-b.txt']['on_hold'] === false, 'plain-b.txt is not on_hold');
+    assertTrue($byName['plain-d.txt']['on_hold'] === false, 'plain-d.txt is not on_hold');
+    // The caller in makeFM() carries the `audit` perm, so hold detail is attached too.
+    assertEqual($heldId, $byName['held-a.txt']['hold_id']);
+    assertEqual('test hold', $byName['held-a.txt']['hold_reason']);
+    assertTrue(!array_key_exists('hold_id', $byName['plain-b.txt']), 'no hold_id on an unheld item');
+});
+
+test('list() over an N-item page reads the holds manifest a BOUNDED number of times, not once per item', function () {
+    $root = sys_get_temp_dir() . '/fluxfiles-legal-hold-enforce-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage']]);
+    $meta = new CountingHoldsMetadataHandler($dm);
+    $claims = new Claims('tester', ['read', 'write', 'delete', 'audit'], ['local'], '', 50, null, 0, false);
+    $fm = new FileManager($dm, $claims, $meta);
+
+    $n = 25;
+    for ($i = 0; $i < $n; $i++) {
+        upload($fm, '', "file-{$i}.txt");
+    }
+    // A handful of active holds scattered across the page.
+    placeHold($meta, 'local', 'file-2.txt');
+    placeHold($meta, 'local', 'file-9.txt');
+    placeHold($meta, 'local', 'file-20.txt');
+    $meta->allHoldsCalls = 0; // reset after the addHold() calls above, which also read the manifest
+
+    $items = $fm->list('local', '');
+    assertEqual($n, count($items), 'sanity: got all N items back');
+
+    assertTrue(
+        $meta->allHoldsCalls <= 2,
+        "allHolds() called {$meta->allHoldsCalls} times for a {$n}-item page — expected a small constant, not O(N)"
+    );
+
+    $onHold = array_filter($items, static fn (array $it): bool => $it['on_hold'] === true);
+    assertEqual(3, count($onHold), 'exactly the 3 held items are flagged, despite the batched lookup');
 });
 
 // ═══════════════════════════════════════════════════════════════

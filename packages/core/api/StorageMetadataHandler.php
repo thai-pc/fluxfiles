@@ -1094,6 +1094,27 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     }
 
     /**
+     * Batch counterpart to holdCovering() — loads the holds manifest ONCE for
+     * the whole page instead of once per item. FileManager::attachMetadata()'s
+     * listing enrichment used to call holdCovering() per listed item, which
+     * meant one full holds.json read+decode per item (O(N) manifest reads for
+     * an N-item page instead of O(1)). Same overlap semantics as
+     * holdCovering() (ancestor-or-self, non-bidirectional).
+     *
+     * @param array<int,string> $scopedPaths
+     * @return array<string, array<string,mixed>|null> keyed by the given scoped path
+     */
+    public function holdsCoveringMany(string $disk, array $scopedPaths): array
+    {
+        $holds = $this->allHolds($disk);
+        $out = [];
+        foreach ($scopedPaths as $scopedPath) {
+            $out[$scopedPath] = self::matchOverlappingHold($holds, $scopedPath, false);
+        }
+        return $out;
+    }
+
+    /**
      * Shared path-prefix overlap check for holdCovering()/holdBlocking(). Hold
      * `H` and target `P` overlap when `H.path === P`, or `H.path` is a prefix of
      * `P` (ancestor-or-self — covers both flavors), or — bidirectional only —
@@ -1102,11 +1123,24 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      */
     private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
     {
+        return self::matchOverlappingHold($this->allHolds($disk), $scopedPath, $bidirectional);
+    }
+
+    /**
+     * Pure matcher shared by findOverlappingHold() (single lookup) and
+     * holdsCoveringMany() (batch lookup against an already-loaded manifest) —
+     * keeps the manifest load and the overlap logic decoupled so callers can
+     * choose how many times they pay for the former.
+     *
+     * @param array<string,array> $holds id => entry, as returned by allHolds()
+     */
+    private static function matchOverlappingHold(array $holds, string $scopedPath, bool $bidirectional): ?array
+    {
         $scopedPath = trim($scopedPath, '/');
         if ($scopedPath === '') {
             return null;
         }
-        foreach ($this->allHolds($disk) as $id => $entry) {
+        foreach ($holds as $id => $entry) {
             if (($entry['released_at'] ?? null) !== null) {
                 continue; // released holds never block/cover
             }

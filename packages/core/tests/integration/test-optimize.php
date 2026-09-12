@@ -305,6 +305,43 @@ test('PDF: image-heavy PDF actually shrinks in place (when gs available)', funct
     assertTrue(strncmp($b, '%PDF-', 5) === 0, 'valid PDF on disk');
 });
 
+test('derived .webp inherits source ownership; owner_only blocks a different user', function () {
+    $root = sys_get_temp_dir() . '/ff-opt-own-' . uniqid();
+    @mkdir($root, 0777, true);
+    // Staged source bytes live OUTSIDE the disk root, so upload() below writes the
+    // actual disk copy at src.jpg without hitting its own name-collision rename
+    // policy (same setup as packages/ai/tests/test-ai.php's ownership test).
+    $staged = sys_get_temp_dir() . '/ff-opt-own-src-' . uniqid() . '.jpg';
+    makeJpeg($staged);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+
+    // User A owns the source file (owner_only ON, uploaded through FileManager so
+    // `uploaded_by` metadata gets attached like any real upload).
+    $claimsA = new Claims('userA', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, true);
+    $claimsA->allowOptimize = true;
+    $fmA = new FileManager($dm, $claimsA, new StorageMetadataHandler($dm));
+    $fmA->upload('local', '', ['name' => 'src.jpg', 'tmp_name' => $staged, 'size' => filesize($staged), 'type' => 'image/jpeg']);
+
+    // Optimize as the owner (A) with keep_original — the original stays, so the
+    // .webp is a genuinely new path alongside it.
+    $mod = new OptimizeModule();
+    $r = $mod->run($fmA, $dm, new ImageOptimizer(), $claimsA, ['disk' => 'local', 'path' => 'src.jpg', 'keep_original' => true]);
+    assertEqual(false, $r['replaced'], 'original kept');
+    $destPath = $r['path'];
+
+    // The derived .webp must carry A's ownership — not an orphan.
+    $meta = (new StorageMetadataHandler($dm))->get('local', $destPath);
+    assertEqual('userA', $meta['uploaded_by'] ?? null, 'derived .webp should inherit source uploaded_by');
+
+    // A different user (B), same disk/prefix, owner_only ON, no special permission
+    // over A's files — must be rejected modifying/deleting the optimized output.
+    // Before the fix this silently succeeded (the .webp had no `uploaded_by`,
+    // treated as "legacy; allow").
+    $claimsB = new Claims('userB', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, true);
+    $fmB = new FileManager($dm, $claimsB, new StorageMetadataHandler($dm));
+    expectApi(fn () => $fmB->delete('local', $destPath), 'owner_only');
+});
+
 test('PdfOptimizer: isPdf magic + unavailable-safe optimize()', function () {
     assertTrue(\FluxFiles\PdfOptimizer::isPdf("%PDF-1.7\n..."), 'detects %PDF-');
     assertEqual(false, \FluxFiles\PdfOptimizer::isPdf('not a pdf'), 'rejects non-pdf');

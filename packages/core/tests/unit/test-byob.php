@@ -365,14 +365,37 @@ test('registerByobDisk rejects local driver', function () {
     }
 });
 
-test('registerByobDisk overrides existing disk', function () {
+test('registerByobDisk cannot override a statically configured disk (disk-hijack guard)', function () {
+    // A BYOB claim (a JWT object key, plaintext-controlled by whoever mints the
+    // token) must never be able to shadow a disk name the operator's own
+    // config/disks.php already defined — that would silently redirect any code
+    // calling $diskManager->disk('my-s3') to attacker/tenant-supplied credentials
+    // for the rest of the request.
     $dm = new FluxFiles\DiskManager([
         'my-s3' => ['driver' => 's3', 'bucket' => 'old', 'key' => 'old', 'secret' => 'old'],
     ]);
-    $dm->registerByobDisk('my-s3', [
+    try {
+        $dm->registerByobDisk('my-s3', [
+            'driver' => 's3', 'bucket' => 'new', 'key' => 'new', 'secret' => 'new',
+        ]);
+        throw new \RuntimeException('Should have thrown');
+    } catch (FluxFiles\ApiException $e) {
+        assertEqual(403, $e->getCode());
+        assertEqual('byob_disk_collision', $e->getErrorCode());
+    }
+    // Static config must be untouched even on the throw path.
+    assertEqual('old', $dm->config('my-s3')['bucket']);
+});
+
+test('registerByobDisk overrides a previously-BYOB-registered disk (not a static one)', function () {
+    $dm = new FluxFiles\DiskManager([]);
+    $dm->registerByobDisk('tenant-disk', [
+        'driver' => 's3', 'bucket' => 'old', 'key' => 'old', 'secret' => 'old',
+    ]);
+    $dm->registerByobDisk('tenant-disk', [
         'driver' => 's3', 'bucket' => 'new', 'key' => 'new', 'secret' => 'new',
     ]);
-    assertEqual('new', $dm->config('my-s3')['bucket']);
+    assertEqual('new', $dm->config('tenant-disk')['bucket']);
 });
 
 // ═══════════════════════════════════════════════════════════════

@@ -84,6 +84,18 @@ interface MetadataRepositoryInterface
     public function holdCovering(string $disk, string $scopedPath): ?array;
 
     /**
+     * Batch counterpart to holdCovering() for a whole listing page — loads the
+     * holds manifest/table ONCE regardless of how many paths are checked,
+     * instead of once per path. Used by FileManager::attachMetadata()'s
+     * on_hold listing enrichment so an N-item page costs O(1) manifest reads,
+     * not O(N).
+     *
+     * @param array<int,string> $scopedPaths
+     * @return array<string, array<string,mixed>|null> keyed by the given scoped path
+     */
+    public function holdsCoveringMany(string $disk, array $scopedPaths): array;
+
+    /**
      * Full bidirectional overlap: ancestor-or-self OR descendant. "Would an
      * operation on $scopedPath touch anything under an active hold?" Used by
      * FileManager's mutating-operation guard.

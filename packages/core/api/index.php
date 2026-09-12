@@ -414,6 +414,16 @@ try {
             ->check($claims->userId, 'git_deploy');
     }
 
+    // The terminal execs a real command on the remote SFTP server per request —
+    // its own bucket (default 30/min), looser than git-deploy (interactive
+    // command-runner calls are more frequent than a deploy) but still tighter
+    // than the general write limit, since it can run arbitrary commands.
+    if ($uri === '/api/fm/terminal') {
+        $terminalLimit = (int) ($_ENV['FLUXFILES_TERMINAL_RATE_LIMIT'] ?? 30);
+        \FluxFiles\RateLimiterFactory::make($terminalLimit, $terminalLimit, 60, $dbConn)
+            ->check($claims->userId, 'terminal');
+    }
+
     // Audit log (lưu trong user storage)
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
@@ -798,6 +808,18 @@ function routeRequest(
         if ($entries === []) {
             throw new ApiException('entries must be a non-empty array', 400, 'missing_param');
         }
+        // Canonicalize each row's path before it's scope-checked/hashed/stored —
+        // isPathInScope() only validates, it doesn't sanitize (see Claims::
+        // normalizeKey()'s doc-comment), so an un-normalized "a/../b" would
+        // both pass a naive check and land in file_metadata under a path_hash
+        // that no normal GET /metadata lookup (which now normalizes too) could
+        // ever reach again.
+        foreach ($entries as &$entry) {
+            if (is_array($entry) && isset($entry['path'])) {
+                $entry['path'] = $claims->normalizeKey((string) $entry['path']);
+            }
+        }
+        unset($entry);
         $importer = new \FluxFiles\Db\MetadataImporter($dbConn);
         $result = $importer->import($disk, $entries, fn(string $path) => $claims->isPathInScope($path));
         if ($result['errors'] !== []) {
@@ -1454,7 +1476,9 @@ function handleGetMetadata(MetadataRepositoryInterface $metaRepo, \FluxFiles\Cla
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
-    $fm->validateScopedPath($key);
+    // Normalize BEFORE building any downstream path — isPathInScope() only
+    // validates, it doesn't sanitize. See validateScopedPath()'s doc-comment.
+    $key = $fm->validateScopedPath($key);
     return $metaRepo->get($disk, $key);
 }
 
@@ -1484,7 +1508,8 @@ function handleSaveMetadata(MetadataRepositoryInterface $metaRepo, DiskManager $
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
-    $fm->assertCanModifyScopedPath($disk, $key);
+    // Normalize BEFORE building any downstream path — see validateScopedPath().
+    $key = $fm->assertCanModifyScopedPath($disk, $key);
 
     $data = [
         'title'    => $body['title'] ?? null,
@@ -1511,7 +1536,8 @@ function handleDeleteMetadata(MetadataRepositoryInterface $metaRepo, \FluxFiles\
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
-    $fm->assertCanModifyScopedPath($disk, $key);
+    // Normalize BEFORE building any downstream path — see validateScopedPath().
+    $key = $fm->assertCanModifyScopedPath($disk, $key);
     $metaRepo->delete($disk, $key);
     return ['deleted' => true];
 }
@@ -2179,7 +2205,8 @@ function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
-    $fm->validateScopedPath($key);
+    // Normalize BEFORE building any downstream path — see validateScopedPath().
+    $key = $fm->validateScopedPath($key);
     return $chunker->presignPart($disk, $key, $uploadId, (int) $partNumber);
 }
 
@@ -2202,13 +2229,14 @@ function handleChunkComplete(
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
-    $fm->validateScopedPath($key);
+    // Normalize BEFORE building any downstream path — see validateScopedPath().
+    $key = $fm->validateScopedPath($key);
     // Unlike the direct upload() path, S3 multipart has no collision policy at
     // all — completing against an existing key overwrites it unconditionally.
     // Honour owner_only the same way upload()/rename()/move() do before letting
     // the multipart complete replace bytes that already exist at this key.
     if ($diskManager->disk($disk)->fileExists($key)) {
-        $fm->assertCanModifyScopedPath($disk, $key);
+        $key = $fm->assertCanModifyScopedPath($disk, $key);
     }
     $result = $chunker->complete($disk, $key, $uploadId, $parts);
 
@@ -2249,7 +2277,8 @@ function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
-    $fm->validateScopedPath($key);
+    // Normalize BEFORE building any downstream path — see validateScopedPath().
+    $key = $fm->validateScopedPath($key);
     return $chunker->abort($disk, $key, $uploadId);
 }
 
