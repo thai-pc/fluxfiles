@@ -23,7 +23,9 @@ services:
       - minio
 
   minio:
-    image: minio/minio
+    # Docker Hub's `minio/minio` now denies anonymous pulls — use MinIO's
+    # maintained quay.io mirror instead (see .github/workflows/test.yml).
+    image: quay.io/minio/minio
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"

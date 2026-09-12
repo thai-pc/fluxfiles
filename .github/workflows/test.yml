@@ -269,13 +269,16 @@ jobs:
 
       # Run MinIO via `docker run` (not a service container) so we can pass the
       # required `server /data` command — GitHub service containers can't override it,
-      # and bitnami/minio's free Docker Hub tags were removed in 2025.
+      # and bitnami/minio's free Docker Hub tags were removed in 2025. As of Sep 2026
+      # `minio/minio` on Docker Hub itself now 403s anonymous pulls ("pull access
+      # denied") — MinIO's own docs point at quay.io as the maintained public mirror,
+      # so pull from there instead of Docker Hub.
       - name: Start MinIO
         run: |
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin123 \
-            minio/minio server /data
+            quay.io/minio/minio server /data
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null && break
             sleep 1
