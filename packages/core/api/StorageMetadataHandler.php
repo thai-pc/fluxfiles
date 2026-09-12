@@ -1152,7 +1152,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 || strpos($scopedPath, $holdPath . '/') === 0
                 || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
             if ($overlaps) {
-                return ['hold_id' => $id] + $entry;
+                // $id comes from a PHP array key (json_decode(..., true) on
+                // holds.json casts any all-digit key to int) — cast back to
+                // string or a numeric-looking hold id silently changes type.
+                return ['hold_id' => (string) $id] + $entry;
             }
         }
         return null;

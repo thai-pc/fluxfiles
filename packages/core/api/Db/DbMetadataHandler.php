@@ -928,7 +928,9 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
                 || strpos($scopedPath, $holdPath . '/') === 0
                 || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
             if ($overlaps) {
-                return ['hold_id' => $id] + $entry;
+                // $id is a PHP array key — an all-digit hold id string gets
+                // silently cast to int as an array key; cast back to string.
+                return ['hold_id' => (string) $id] + $entry;
             }
         }
         return null;
