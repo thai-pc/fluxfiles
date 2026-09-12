@@ -3,6 +3,61 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.10] — 2026-09-12
+
+> Released: `core-v0.2.86`, `laravel-v0.2.41`, `wordpress-v0.2.48`, `node-v0.1.29`.
+
+### Added — Mint-time compliance claim support in embed helpers + Node SDK
+
+- `fluxfiles_apply_webp_claims()` (`packages/core/embed.php`) and
+  `applyTenantOverrides()` (`@fluxfiles/node`) were missing mint-time support
+  for `allow_audit_export`, `audit_retention_days`, `allow_dlp_scan` (+ its
+  entity/extension/size/score tuning claims), and `allow_legal_hold` — core
+  already enforced all of these, but PHP and Node callers had no way to set
+  them without dropping to the raw `claims` escape hatch. Both now expose
+  them directly.
+
+### Fixed — Proxy adapters, legal-hold ID type, CI
+
+- **Laravel/WordPress proxy controllers now log audit + dispatch webhook on
+  every mutating route.** Unlike core's `index.php`, which has one
+  centralized post-response audit/webhook hook, both proxy controllers call
+  `logAudit()`/`dispatchWebhook()` individually per route. A review found
+  six routes silently skipped both (metadata delete, audit purge,
+  legal-hold place/release, version restore, OCR) plus chunk-upload
+  complete/abort — version-restore's second call site was also missing it.
+  Locked down with a regression test that inspects controller source per
+  method so a future edit can't silently drop it again.
+- **`hold_id` no longer silently casts to int for all-digit hold IDs.**
+  `matchOverlappingHold()` returned `hold_id` straight from the holds-array
+  key; PHP silently casts an all-digit string array key to int (both via
+  `json_decode(..., true)` on `holds.json` and via a plain array assignment
+  on the DB-backed handlers' row id), so a randomly generated hold ID that
+  happened to be all digits came back as an int instead of a string. Cast
+  back to string in all four `MetadataRepositoryInterface` implementations
+  (JSON, generic DB, Laravel DB, WordPress DB). This is what flaked
+  `test-legal-hold-enforcement.php`'s mixed-page `list()` test in CI
+  (`core-v0.2.82`+).
+- **CI — MinIO pulled from quay.io instead of Docker Hub.** Docker Hub now
+  denies anonymous pulls of `minio/minio`, which broke the Live S3 (MinIO)
+  CI job and local `make up`. Switched both the workflow and
+  `docker-compose.yml` to MinIO's maintained public mirror,
+  `quay.io/minio/minio`.
+
+### Docs
+
+- Repo-wide accuracy pass across API/architecture/compliance/retention/SDK/
+  ops docs: corrected drifted file/module counts (module count 9→11→13
+  after DLP/legal-hold shipped 2026-09-06; `api/` file count), labeled
+  unproxied core-standalone-only routes, and tightened wording in the
+  compliance scorecard, DLP/PII redaction, industry presets, license
+  expiry, and Python token SDK design docs to match current behavior.
+
+No new JWT claims beyond `allow_audit_export`/`audit_retention_days`/
+`allow_dlp_scan`(+tuning)/`allow_legal_hold` — all were already documented
+in `docs/CONFIG.md`; this release only wires mint-time helper support for
+claims core already enforced.
+
 ## [0.3.09] — 2026-09-09
 
 > Released: `core-v0.2.85`.
