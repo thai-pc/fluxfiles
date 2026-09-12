@@ -67,8 +67,8 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/metadata?disk=&key=` | — | SEO metadata: title, alt_text, caption, tags |
 | `PUT` | `/metadata` | `{disk, key, title, alt_text, caption, tags}` | Save metadata |
 | `DELETE` | `/metadata` | `{disk, key}` | Delete metadata |
-| `GET` | `/metadata/export?disk=&prefix=&format=ndjson\|csv` | — | Bulk export of DB-backend metadata rows (**free/core**; requires `FLUXFILES_STORAGE_BACKEND=db`, else `501`). Tenant-scoped to the caller's own prefix/owner (read perm) |
-| `POST` | `/metadata/import` | `{disk, entries[]}` | Bulk import of DB-backend metadata rows (**free/core**, DB backend only; `501` otherwise). Every entry's path must be in the caller's scope or the whole batch is rejected (write perm) |
+| `GET` | `/metadata/export?disk=&prefix=&format=ndjson\|csv` | — | Bulk export of DB-backend metadata rows (**free/core**; requires `FLUXFILES_STORAGE_BACKEND=db`, else `501`). Tenant-scoped to the caller's own prefix/owner (read perm). Core-standalone (unproxied) |
+| `POST` | `/metadata/import` | `{disk, entries[]}` | Bulk import of DB-backend metadata rows (**free/core**, DB backend only; `501` otherwise). Every entry's path must be in the caller's scope or the whole batch is rejected (write perm). Core-standalone (unproxied) |
 
 ## Search, Quota, Audit
 

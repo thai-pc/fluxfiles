@@ -1,10 +1,14 @@
 # Legal Hold — Design Spec
 
-Status: **Design only, not yet implemented.** Paid capability, Enterprise-only
-add-on (never a standalone SKU). Written using `docs/GIT-DEPLOY-SECURITY-REVIEW.md`
-as the style/depth reference (explicit "solved" vs "documented, not solved"
-framing) and `_fluxfiles/trash.json` / `_fluxfiles/audit.jsonl` as the storage
-precedent (`packages/core/api/StorageMetadataHandler.php`).
+Status: **Implemented and shipped.** Paid capability, Enterprise-only
+add-on (never a standalone SKU). Module id `legal-hold`, class
+`\FluxFiles\LegalHold\LegalHoldModule` (gitignored private package
+`packages/legal-hold/`, registered in `ModuleRegistry::$map`), claim
+`allow_legal_hold` (parsed in `Claims.php`). Written using
+`docs/GIT-DEPLOY-SECURITY-REVIEW.md` as the style/depth reference (explicit
+"solved" vs "documented, not solved" framing) and `_fluxfiles/trash.json` /
+`_fluxfiles/audit.jsonl` as the storage precedent
+(`packages/core/api/StorageMetadataHandler.php`).
 
 ---
 

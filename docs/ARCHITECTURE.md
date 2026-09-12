@@ -54,7 +54,7 @@ FluxFiles/
 ├── .github/workflows/  test.yml · split.yml · npm-publish.yml · pypi-publish.yml · docker-publish.yml
 ├── scripts/            build-wordpress.sh · check-adapter-core-floor.sh · pack-smoke.sh · ci-retry.sh
 ├── docker/             Dockerfile · Dockerfile.prod · nginx.conf · entrypoint.sh
-├── docs/               ARCHITECTURE.md (this) + 23 other git-tracked design/ops docs (CONFIG.md, API.md, FEATURES.md, DEPLOYMENT.md, DB-STORAGE-MIGRATION-DESIGN.md, …) — everything under docs/ is tracked except the local, gitignored ROADMAP.md
+├── docs/               ARCHITECTURE.md (this) + 24 other git-tracked design/ops docs (CONFIG.md, API.md, FEATURES.md, DEPLOYMENT.md, DB-STORAGE-MIGRATION-DESIGN.md, …) — three docs under docs/ are local/gitignored instead: ROADMAP.md, COMMERCIAL-STRATEGY.md, LICENSING-PLAN.md
 ├── .claude/            CLAUDE.md · architecture.md · api-map.md · development.md   (AI-agent context)
 └── README · CHANGELOG · AGENTS.md · Makefile · docker-compose.yml
 ```
@@ -63,7 +63,7 @@ FluxFiles/
 
 ```
 core/
-├── api/                56 PHP files (43 top-level + 13 under `Db/` for the opt-in
+├── api/                57 PHP files (44 top-level + 13 under `Db/` for the opt-in
 │                       DB storage backend) — the whole engine
 │   ├── index.php         HTTP entrypoint: CORS, locale routes, auth, DI wiring, route dispatch
 │   ├── FileManager.php   central file-operation service + most security checks

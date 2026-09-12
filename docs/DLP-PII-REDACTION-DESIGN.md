@@ -1,6 +1,8 @@
 # DLP / PII Detection-on-Upload — Design Spec
 
-Status: **Design only — not implemented.** Companion to `docs/GIT-DEPLOY-SECURITY-REVIEW.md`
+Status: **Implemented and shipped.** Module id `dlp`, class `\FluxFiles\Dlp\DlpModule`
+(gitignored private package `packages/dlp/`, registered in `ModuleRegistry::$map`),
+claim `allow_dlp_scan` (parsed in `Claims.php`). Companion to `docs/GIT-DEPLOY-SECURITY-REVIEW.md`
 (style/depth reference) and the shipped Virus module (closest analog — gitignored code,
 but its shape is fully visible from `ModuleRegistry.php`/`Claims.php`/`FileManager.php`/
 `index.php` and is what this spec mirrors throughout).

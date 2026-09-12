@@ -1,6 +1,14 @@
 # Proactive License-Expiry Notifications — Design
 
-Status: **Design only, not implemented.** No code in this doc.
+Status: **Implemented and shipped.** All four surfaces below exist: §A's
+eager `loadLicense()` fetch + `licenseBadgeVisible` toolbar badge
+(`packages/core/assets/fm.js`), §B's WordPress `admin_notices` dismissible
+notice (`FluxFilesAdmin.php`'s `renderLicenseExpiryNotice()` +
+`fluxfiles_dismiss_license_notice` AJAX handler), §C's Laravel
+`FluxFiles::licenseInfo()` facade helper (`FluxFilesManager.php`), and §D's
+cron-invoked `services/license-server/send-renewal-reminders.php` with the
+`reminder_stage`/`grace_days` `LicenseStore` columns and `needingReminder()`/
+`markReminderSent()` methods.
 
 ## 0. One-line summary
 

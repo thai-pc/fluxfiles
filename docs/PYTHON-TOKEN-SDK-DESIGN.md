@@ -1,13 +1,18 @@
 # FluxFiles — Python Server-Side Token SDK Design (`fluxfiles-token`)
 
-> **Status: design only, not implemented.** This is the third token-minting SDK
-> (after the PHP core's `embed.php` and `@fluxfiles/node`), so it needs no new
-> business decision — it's the same "free MIT tooling" category as Node's
-> package (§1 of `docs/CONFIG.md`'s minting API is already documented as
-> "PHP / Node / Laravel / WordPress"; Python is a fourth mint-side surface,
-> not a fifth paid module). No plan doc exists for this because none is
-> needed: the scope is fixed by definition — byte-compatible parity with the
-> two existing implementations, nothing more.
+> **Status: Implemented and shipped** (`python-v0.1.0`, `CHANGELOG.md`
+> `[0.3.0x]`, released alongside `core-v0.2.83`/`node-v0.1.28`). This is the
+> third token-minting SDK (after the PHP core's `embed.php` and
+> `@fluxfiles/node`), so it needed no new business decision — it's the same
+> "free MIT tooling" category as Node's package (§1 of `docs/CONFIG.md`'s
+> minting API is already documented as "PHP / Node / Laravel / WordPress";
+> Python is a fourth mint-side surface, not a fifth paid module). No plan doc
+> exists for this because none was needed: the scope is fixed by
+> definition — byte-compatible parity with the two existing implementations,
+> nothing more. `packages/python/` ships `fluxfiles-token` (PyPI) with the
+> full typed API surface, shared `docs/testdata/token-vectors.json` /
+> `byob-vectors.json` fixtures, and the `pypi-publish.yml` CI workflow
+> described below.
 >
 > **§§1, 2, 3, 5 below reflect final decisions made 2026-09-08** on package
 > name, Python floor, API surface, and role/edition-on-BYOB scope. **§6 was
@@ -1075,9 +1080,11 @@ CLAUDE.md's release rules. Starts fresh at `0.1.0` (not synced to Node's
 current `0.1.27` — these are independent per-package counters, exactly like
 `react`/`vue`/`node` today).
 
-**New CI workflow required — `.github/workflows/pypi-publish.yml`** (there is
-currently **zero** Python CI in this repo; `.github/workflows/test.yml`'s 14
-jobs are all PHP/JS). Two new pieces needed:
+**CI workflow, now shipped — `.github/workflows/pypi-publish.yml`** (at design
+time there was **zero** Python CI in this repo; `.github/workflows/test.yml`'s
+14 jobs were all PHP/JS — this section is kept as the original build plan,
+both pieces below now exist as designed: `test.yml`'s `python-token` job and
+`pypi-publish.yml`):
 
 1. A **test job** (either a new job in `test.yml` or its own workflow) that
    runs on every push/PR touching `packages/python/**`: `pip install -e

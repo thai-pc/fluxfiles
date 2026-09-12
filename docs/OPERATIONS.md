@@ -38,10 +38,11 @@ environment, so a sandbox token cannot accidentally reach production.
 
 The paid modules are tagged and pushed, but a tag is a version, not a download.
 `ModuleRegistry::$map` (`packages/core/api/ModuleRegistry.php`) is the source of
-truth for how many there are — **eleven** as of this writing (`share`, `intake`,
+truth for how many there are — **thirteen** as of this writing (`share`, `intake`,
 `versioning`, `webhooks`, `ai`, `ocr`, `virus`, `backup`, `c2pa`, `audit-export`,
-`sso`; recount from that file rather than trusting this number, since it has
-drifted before — it was nine before `audit-export`/`sso` shipped 2026-08-29).
+`sso`, `dlp`, `legal-hold`; recount from that file rather than trusting this
+number, since it has drifted before — it was nine before `audit-export`/`sso`
+shipped 2026-08-29, then eleven before `dlp`/`legal-hold` shipped 2026-09-06).
 
 Build the artifacts:
 
@@ -238,7 +239,7 @@ buyer cannot see.
   first core release that actually *calls* it. This cannot be CI-guarded — the packages
   are gitignored, so CI cannot see them. Seven of nine were wrong once (back when there
   were only nine modules, before `audit-export`/`sso` shipped 2026-08-29 brought the
-  total to eleven).
+  total to eleven, and `dlp`/`legal-hold` shipped 2026-09-06 brought it to thirteen).
 - **WordPress cannot run the CLI installer.** Shared hosting has no shell; those
   customers unpack the module zip by hand — see `ACTIVATE.md`.
 

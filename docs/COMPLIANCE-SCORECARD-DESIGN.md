@@ -1,13 +1,12 @@
 # Compliance Readiness Scorecard — Design Spec
 
-> **Status: proposed, not implemented.** This spec grounds a new read-only
-> dashboard screen in the existing `/api/fm/usage` + `/api/fm/license`
-> pattern. It designs against `allow_dlp_scan` (module id `dlp`, capability
-> "DLP / PII redaction") and `allow_legal_hold` (module id `legal-hold`,
-> capability "Legal Hold") as **assumed, not-yet-final** names for two
-> modules other agents are spec'ing in parallel. Neither exists in
-> `Claims.php` or `ModuleRegistry::$map` today — see §9 for the exact
-> follow-up this spec needs once those land.
+> **Status: Implemented and shipped.** The scorecard ships free/core at
+> `GET /api/fm/compliance/scorecard` (`packages/core/api/ComplianceScorecard.php`,
+> routed in `index.php`, proxied by Laravel's `FluxFilesController::complianceScorecard()`).
+> `allow_dlp_scan` (module id `dlp`) and `allow_legal_hold` (module id `legal-hold`)
+> — assumed names when this spec was written — are now final: both are registered
+> in `ModuleRegistry::$map`, parsed in `Claims.php`, and the scorecard rows below
+> reflect their real install/license/claim status.
 
 ## 0. Scoping correction (read first)
 

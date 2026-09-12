@@ -91,7 +91,10 @@ $token = fluxfiles_token([
     'disks'     => ['s3'],
     'prefix'    => "clients/{$clientId}/intake/",
     'ownerOnly' => true,                          // staff can't touch each other's client folders
-    'edition'   => 'enterprise',                  // -> allow_optimize + allow_share + allow_intake + allow_virus_scan + allow_c2pa
+    'edition'   => 'enterprise',                  // -> allow_optimize + allow_share + allow_intake +
+                                                   //    allow_versioning + allow_webhooks + allow_ai_vision + allow_ocr +
+                                                   //    allow_virus_scan + allow_c2pa + allow_backup + allow_audit_export +
+                                                   //    allow_dlp_scan + allow_legal_hold (full bundle, embed.php)
     'claims'    => [
         'intake_brand_name'  => 'Acme & Co.',
         'intake_brand_color' => '#0a3d62',
@@ -174,7 +177,10 @@ $token = fluxfiles_token([
     'disks'     => ['s3'],                        // typically the customer's own bucket (BYOB)
     'prefix'    => "records/{$caseId}/",
     'ownerOnly' => true,
-    'edition'   => 'enterprise',                  // -> allow_optimize + allow_share + allow_intake + allow_virus_scan + allow_c2pa
+    'edition'   => 'enterprise',                  // -> allow_optimize + allow_share + allow_intake +
+                                                   //    allow_versioning + allow_webhooks + allow_ai_vision + allow_ocr +
+                                                   //    allow_virus_scan + allow_c2pa + allow_backup + allow_audit_export +
+                                                   //    allow_dlp_scan + allow_legal_hold (full bundle, embed.php)
     'claims'    => [
         'allowed_ext' => ['pdf', 'tiff', 'docx'],
         'dedupe_uploads' => true,
@@ -194,8 +200,10 @@ customer must use their own S3/R2 bucket rather than the operator's — see
   tier usually wants (`fluxfiles_apply_edition_preset` in `embed.php`) — the real
   enforcement is still the operator's license key + the module being installed. A
   claim from an unlicensed/uninstalled module is simply ignored server-side. Today
-  that preset only exists for `pro` / `agency` / `enterprise` — there is no `studio`
-  preset, so Studio-tier tokens (preset #4 above) set their claims explicitly.
+  the preset exists for `pro` / `agency` / `studio` / `enterprise` (see note under
+  preset #4 above); Studio-tier tokens (preset #4) still set their claims explicitly
+  anyway since it also narrows `webhook_events` and caps `versioning_max`, which the
+  preset doesn't do for you.
 - Every claim above is documented in full (defaults, clamping, sanitization) in
   [`CONFIG.md`](CONFIG.md) — these presets only combine existing claims, they don't
   introduce new ones.
