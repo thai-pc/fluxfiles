@@ -218,6 +218,19 @@ function applyTenantOverrides(
   if (opts.allowVirusScan !== undefined) payload.allow_virus_scan = !!opts.allowVirusScan;
   if (opts.allowBackup !== undefined) payload.allow_backup = !!opts.allowBackup;
   if (opts.allowC2pa !== undefined) payload.allow_c2pa = !!opts.allowC2pa;
+  if (opts.allowAuditExport !== undefined) payload.allow_audit_export = !!opts.allowAuditExport;
+  if (opts.auditRetentionDays && opts.auditRetentionDays > 0) payload.audit_retention_days = Math.trunc(opts.auditRetentionDays);
+  // DLP tuning claims travel with allowDlpScan; the server sanitizes/clamps these on decode.
+  if (opts.allowDlpScan !== undefined) payload.allow_dlp_scan = !!opts.allowDlpScan;
+  if (Array.isArray(opts.dlpEntityTypes) && opts.dlpEntityTypes.length) {
+    payload.dlp_entity_types = opts.dlpEntityTypes.map((t) => String(t));
+  }
+  if (Array.isArray(opts.dlpScanExtensions) && opts.dlpScanExtensions.length) {
+    payload.dlp_scan_extensions = opts.dlpScanExtensions.map((e) => String(e));
+  }
+  if (opts.dlpMaxScanKb && opts.dlpMaxScanKb > 0) payload.dlp_max_scan_kb = Math.trunc(opts.dlpMaxScanKb);
+  if (opts.dlpMinScore !== undefined) payload.dlp_min_score = opts.dlpMinScore;
+  if (opts.allowLegalHold !== undefined) payload.allow_legal_hold = !!opts.allowLegalHold;
   if (opts.autoOptimize !== undefined) payload.auto_optimize = !!opts.autoOptimize;
   if (opts.optimizeQuality && opts.optimizeQuality > 0) payload.optimize_quality = Math.trunc(opts.optimizeQuality);
   if (opts.optimizeKeepOriginal !== undefined) payload.optimize_keep_original = !!opts.optimizeKeepOriginal;

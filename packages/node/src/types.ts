@@ -183,6 +183,26 @@ export interface BaseTokenOptions {
   allowVirusScan?: boolean;
   allowBackup?: boolean;
   allowC2pa?: boolean;
+  /** Audit Export (Enterprise): gates `GET /api/fm/audit/export` and `POST /api/fm/audit/purge`. */
+  allowAuditExport?: boolean;
+  /** Default cutoff (days) for `/api/fm/audit/purge` when the request omits `before`.
+   *  `0`/omitted = no default — purge then requires an explicit `before`. */
+  auditRetentionDays?: number;
+  /** DLP / PII detection on write (Enterprise) — scans upload, code-editor save, and
+   *  each zip-extract entry before the bytes are written. Default false. */
+  allowDlpScan?: boolean;
+  /** Allowlist of Presidio entity types (e.g. `US_SSN`, `CREDIT_CARD`) that trigger a
+   *  block. Omit/empty = the engine's own full default set. */
+  dlpEntityTypes?: string[];
+  /** Extensions eligible for DLP scanning. Omit = the server default set. */
+  dlpScanExtensions?: string[];
+  /** Files larger than this (KB) are skipped, not blocked. `0`/omitted = inherit (2048). */
+  dlpMaxScanKb?: number;
+  /** Minimum Presidio confidence score (0–1) for a match to count. `0`/omitted = inherit (0.6). */
+  dlpMinScore?: number;
+  /** Legal hold / retention (Enterprise) — gates placing/releasing a hold
+   *  (`POST /api/fm/hold`, `/hold/release`). Enforcement itself is free/core. */
+  allowLegalHold?: boolean;
   /** Prior versions kept per file (Versioning module). `0`/omitted = default (10, cap 100). */
   versioningMax?: number;
   /** Skip versioning files bigger than this many MB. `0`/omitted = default (25). */

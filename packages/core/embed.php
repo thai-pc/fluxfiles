@@ -454,10 +454,29 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
         $payload['srcset_sizes'] = (string) $webp['srcset_sizes'];
     }
     // Paid-module claims (3-layer gate; inert unless the module is installed+licensed).
-    foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa', 'allow_dlp_scan'] as $mc) {
+    foreach (['allow_share', 'allow_intake', 'allow_versioning', 'allow_webhooks', 'allow_ai_vision', 'allow_ocr', 'allow_virus_scan', 'allow_backup', 'allow_c2pa', 'allow_dlp_scan', 'allow_audit_export', 'allow_legal_hold'] as $mc) {
         if (array_key_exists($mc, $webp)) {
             $payload[$mc] = (bool) $webp[$mc];
         }
+    }
+    // Audit Export tuning: default cutoff for /api/fm/audit/purge when the request
+    // body omits `before` (the core clamps this on decode; travels with allow_audit_export).
+    if (!empty($webp['audit_retention_days'])) {
+        $payload['audit_retention_days'] = (int) $webp['audit_retention_days'];
+    }
+    // DLP tuning claims (travel with allow_dlp_scan; the core sanitizes/clamps these
+    // on decode — entity/extension allowlists, size cap, and confidence threshold).
+    if (!empty($webp['dlp_entity_types']) && is_array($webp['dlp_entity_types'])) {
+        $payload['dlp_entity_types'] = array_values($webp['dlp_entity_types']);
+    }
+    if (!empty($webp['dlp_scan_extensions']) && is_array($webp['dlp_scan_extensions'])) {
+        $payload['dlp_scan_extensions'] = array_values($webp['dlp_scan_extensions']);
+    }
+    if (!empty($webp['dlp_max_scan_kb'])) {
+        $payload['dlp_max_scan_kb'] = (int) $webp['dlp_max_scan_kb'];
+    }
+    if (!empty($webp['dlp_min_score'])) {
+        $payload['dlp_min_score'] = (float) $webp['dlp_min_score'];
     }
     // Share landing config (read at create time and baked into the share record;
     // the core clamps the TTL and drops a non-http(s) base URL on decode).
