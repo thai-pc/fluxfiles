@@ -1274,6 +1274,49 @@ test('handleChunkComplete() re-validates the REAL assembled size (S3 multipart s
     assertTrue(strpos($body, 'deleteObject(') < strpos($body, 'metaRepo->save('), 'violation cleanup runs before metadata is saved');
 });
 
+test('every mutating route logs audit + dispatches webhook (regression: legal-hold/audit-purge/version-restore/metadata-delete/ocr/chunk-lifecycle silently skipped both, twice for version-restore)', function () {
+    // Unlike core's index.php (one centralized post-response hook), this proxy has
+    // NO central hook — every write route must call logAudit()/dispatchWebhook()
+    // itself. A security audit found 6 routes that silently didn't. Guard each one
+    // by name so a 3rd recurrence (this is version_restore's SECOND time) fails CI
+    // instead of shipping silently again.
+    $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+
+    $extractMethod = function (string $src, string $name): string {
+        $start = strpos($src, "function {$name}(");
+        assertTrue($start !== false, "method {$name}() exists");
+        $end = strpos($src, "\n    public function ", $start + 1);
+        if ($end === false) {
+            $end = strpos($src, "\n    private function ", $start + 1);
+        }
+        return $end !== false ? substr($src, $start, $end - $start) : substr($src, $start);
+    };
+
+    $mustLog = [
+        'handleHold'            => 'legal_hold_place',
+        'handleHoldRelease'     => 'legal_hold_release',
+        'handleAuditPurge'      => 'audit_purge',
+        'handleVersionsRestore' => 'version_restore', // 2nd recurrence of this exact bug — see docs above
+        'handleDeleteMetadata'  => 'metadata_update',
+        'handleOcr'             => 'ocr',
+        'handleChunkComplete'   => 'chunk_upload',
+        'handleChunkAbort'      => 'chunk_upload',
+    ];
+    foreach ($mustLog as $method => $action) {
+        $body = $extractMethod($apiSrc, $method);
+        assertTrue(strpos($body, 'logAudit(') !== false, "{$method}() calls logAudit()");
+        assertTrue(strpos($body, "'{$action}'") !== false, "{$method}() logs the '{$action}' action");
+        assertTrue(strpos($body, 'dispatchWebhook(') !== false, "{$method}() calls dispatchWebhook()");
+    }
+
+    // handleChunkInit() logging at INIT (before any bytes exist) is intentional here —
+    // it mirrors core's own behavior (index.php's central hook fires on every
+    // successful POST /api/fm/chunk/* substep, not only completion). Assert it's
+    // still present so a future edit doesn't silently remove it while "fixing" this test.
+    $chunkInitBody = $extractMethod($apiSrc, 'handleChunkInit');
+    assertTrue(strpos($chunkInitBody, 'logAudit(') !== false, 'handleChunkInit() still logs too, matching core');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

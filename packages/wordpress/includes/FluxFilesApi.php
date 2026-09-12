@@ -1242,6 +1242,8 @@ class FluxFilesApi
             }
 
             $this->metaRepo->delete($disk, $key);
+            $this->logAudit($claims, 'metadata_update', $disk, $key);
+            $this->dispatchWebhook($claims, 'metadata_update', ['disk' => $disk, 'path' => $key, 'name' => basename($key)]);
 
             return $this->ok(['deleted' => true]);
         } catch (ApiException $e) {
@@ -1770,14 +1772,12 @@ class FluxFilesApi
             $module = \FluxFiles\ModuleRegistry::require('versioning', FluxFilesPlugin::license(), $claims);
             $body = $this->body($request);
             $fm = $this->fileManager($claims);
-            $result = $module->restore(
-                $fm,
-                $this->diskManager,
-                $claims,
-                (string) ($body['disk'] ?? 'local'),
-                (string) ($body['path'] ?? ''),
-                (string) ($body['version_id'] ?? '')
-            );
+            $disk = (string) ($body['disk'] ?? 'local');
+            $path = (string) ($body['path'] ?? '');
+            $versionId = (string) ($body['version_id'] ?? '');
+            $result = $module->restore($fm, $this->diskManager, $claims, $disk, $path, $versionId);
+            $this->logAudit($claims, 'version_restore', $disk, $path, $versionId);
+            $this->dispatchWebhook($claims, 'version_restore', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -1823,7 +1823,14 @@ class FluxFilesApi
             $fm = $this->fileManager($claims);
 
             $module = \FluxFiles\ModuleRegistry::require('ocr', FluxFilesPlugin::license(), $claims);
-            $result = $module->run($fm, $this->diskManager, $claims, $this->body($request));
+            $body = $this->body($request);
+            $result = $module->run($fm, $this->diskManager, $claims, $body);
+            $this->logAudit($claims, 'ocr', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->dispatchWebhook($claims, 'ocr', [
+                'disk' => (string) ($body['disk'] ?? 'local'),
+                'path' => (string) ($body['path'] ?? ''),
+                'name' => basename((string) ($body['path'] ?? '')),
+            ]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -2421,7 +2428,11 @@ class FluxFilesApi
 
             $module = \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
 
-            return $this->ok($module->purge($this->metaRepo, $claims, $disk, $before));
+            $result = $module->purge($this->metaRepo, $claims, $disk, $before);
+            $this->logAudit($claims, 'audit_purge', $disk, '', "before={$before}");
+            $this->dispatchWebhook($claims, 'audit_purge', ['disk' => $disk, 'path' => '', 'name' => '']);
+
+            return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -2491,14 +2502,13 @@ class FluxFilesApi
             /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
             $module = \FluxFiles\ModuleRegistry::require('legal-hold', FluxFilesPlugin::license(), $claims);
 
-            return $this->ok($module->place(
-                $this->metaRepo,
-                $this->diskManager,
-                $claims,
-                $disk,
-                (string) $body['path'],
-                (string) ($body['reason'] ?? '')
-            ));
+            $path = (string) $body['path'];
+            $reason = (string) ($body['reason'] ?? '');
+            $result = $module->place($this->metaRepo, $this->diskManager, $claims, $disk, $path, $reason);
+            $this->logAudit($claims, 'legal_hold_place', $disk, $path, $reason);
+            $this->dispatchWebhook($claims, 'legal_hold_place', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
+
+            return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -2525,13 +2535,13 @@ class FluxFilesApi
             /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
             $module = \FluxFiles\ModuleRegistry::require('legal-hold', FluxFilesPlugin::license(), $claims);
 
-            return $this->ok($module->release(
-                $this->metaRepo,
-                $claims,
-                $disk,
-                (string) $body['hold_id'],
-                (string) ($body['reason'] ?? '')
-            ));
+            $holdId = (string) $body['hold_id'];
+            $reason = (string) ($body['reason'] ?? '');
+            $result = $module->release($this->metaRepo, $claims, $disk, $holdId, $reason);
+            $this->logAudit($claims, 'legal_hold_release', $disk, $holdId, $reason);
+            $this->dispatchWebhook($claims, 'legal_hold_release', ['disk' => $disk, 'path' => $holdId, 'name' => $holdId]);
+
+            return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -2745,6 +2755,13 @@ class FluxFilesApi
             $this->metaRepo->save($disk, $key, [
                 'uploaded_by' => $claims->userId,
             ]);
+            // Core's central hook (index.php) audits/webhooks EVERY successful POST
+            // /api/fm/chunk/* substep (init/complete/abort all match `$isWriteAction &&
+            // $data !== null`), not only completion — mirror that here rather than
+            // inventing an adapter-specific "only log completion" policy. This is the
+            // point where the object actually lands, so it's the most meaningful entry.
+            $this->logAudit($claims, 'chunk_upload', $disk, $key);
+            $this->dispatchWebhook($claims, 'chunk_upload', ['disk' => $disk, 'path' => $key, 'name' => basename($key)]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -2794,7 +2811,12 @@ class FluxFilesApi
 
             $chunker = new ChunkUploader($this->diskManager);
 
-            return $this->ok($chunker->abort($disk, $key, $uploadId));
+            $result = $chunker->abort($disk, $key, $uploadId);
+            // Matches core's behavior — see the comment on handleChunkComplete() above.
+            $this->logAudit($claims, 'chunk_upload', $disk, $key);
+            $this->dispatchWebhook($claims, 'chunk_upload', ['disk' => $disk, 'path' => $key, 'name' => basename($key)]);
+
+            return $this->ok($result);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }

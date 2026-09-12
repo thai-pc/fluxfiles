@@ -750,6 +750,49 @@ test('licenseInfo() picks up FLUXFILES_LICENSE_KEY from the environment, still m
     }
 });
 
+test('every mutating route logs audit + dispatches webhook (regression: legal-hold/audit-purge/version-restore/metadata-delete/ocr/chunk-lifecycle silently skipped both, twice for version-restore)', function () {
+    // Unlike core's index.php (one centralized post-response hook), this proxy has
+    // NO central hook — every write route must call logAudit()/dispatchWebhook()
+    // itself. A security audit found 6 routes that silently didn't. Guard each one
+    // by name so a 3rd recurrence (this is version_restore's SECOND time) fails CI
+    // instead of shipping silently again.
+    $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+
+    $extractMethod = function (string $src, string $name): string {
+        $start = strpos($src, "function {$name}(");
+        assertTrue($start !== false, "method {$name}() exists");
+        $end = strpos($src, "\n    public function ", $start + 1);
+        if ($end === false) {
+            $end = strpos($src, "\n    private function ", $start + 1);
+        }
+        return $end !== false ? substr($src, $start, $end - $start) : substr($src, $start);
+    };
+
+    $mustLog = [
+        'hold'             => 'legal_hold_place',
+        'holdRelease'      => 'legal_hold_release',
+        'auditPurge'       => 'audit_purge',
+        'versionsRestore'  => 'version_restore', // 2nd recurrence of this exact bug — see docs above
+        'deleteMetadata'   => 'metadata_update',
+        'ocr'              => 'ocr',
+        'chunkComplete'    => 'chunk_upload',
+        'chunkAbort'       => 'chunk_upload',
+    ];
+    foreach ($mustLog as $method => $action) {
+        $body = $extractMethod($ctrlSrc, $method);
+        assertTrue(strpos($body, 'logAudit(') !== false, "{$method}() calls logAudit()");
+        assertTrue(strpos($body, "'{$action}'") !== false, "{$method}() logs the '{$action}' action");
+        assertTrue(strpos($body, 'dispatchWebhook(') !== false, "{$method}() calls dispatchWebhook()");
+    }
+
+    // chunkInit() logging at INIT (before any bytes exist) is intentional here — it
+    // mirrors core's own behavior (index.php's central hook fires on every successful
+    // POST /api/fm/chunk/* substep, not only completion). Assert it's still present so
+    // a future edit doesn't silently remove it while "fixing" this test.
+    $chunkInitBody = $extractMethod($ctrlSrc, 'chunkInit');
+    assertTrue(strpos($chunkInitBody, 'logAudit(') !== false, 'chunkInit() still logs too, matching core');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
