@@ -2229,6 +2229,38 @@ function fluxFilesApp() {
             }
         },
 
+        // Headless crop for the FM_COMMAND('crop', {x,y,width,height,save_path}) remote
+        // API (React/Vue useFluxFiles().crop()) — crops the currently open detail file
+        // without requiring the interactive crop tab UI to be open.
+        async remoteCrop(payload) {
+            if (!this.detailFile) return;
+            const x = Math.round(Number(payload.x)) || 0;
+            const y = Math.round(Number(payload.y)) || 0;
+            const width = Math.round(Number(payload.width)) || 0;
+            const height = Math.round(Number(payload.height)) || 0;
+            if (width <= 0 || height <= 0) return;
+
+            try {
+                const body = { disk: this.currentDisk, path: this.detailFile.key, x, y, width, height };
+                if (payload.save_path) {
+                    body.save_path = payload.save_path;
+                }
+                const result = await this.api('POST', '/api/fm/crop', body);
+
+                this.postMessage('FM_EVENT', {
+                    event: 'crop:done',
+                    key: result.key,
+                    width: result.width,
+                    height: result.height
+                });
+
+                this.loadFiles();
+            } catch (err) {
+                console.error('FluxFiles: Remote crop failed', err);
+                this.showToast(this.t('crop.failed', { message: err.message }) || ('Crop failed: ' + err.message), 'error', 4000);
+            }
+        },
+
         // ── Watermark editor (drag-and-drop, free) ──────────────────────────
         initWatermark() {
             // Keep the chosen logo/text across re-opens; just reset position sanely
@@ -2376,6 +2408,9 @@ function fluxFilesApp() {
                     if (this.detailFile) {
                         this.aiTag();
                     }
+                    break;
+                case 'crop':
+                    this.remoteCrop(payload);
                     break;
                 case 'close':
                     this.closeManager();

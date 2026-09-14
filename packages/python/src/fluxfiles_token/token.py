@@ -327,6 +327,30 @@ def _apply_tenant_overrides(
     if extras.get("allow_c2pa") is not None:
         payload["allow_c2pa"] = bool(extras["allow_c2pa"])
 
+    # Audit export / DLP scan / legal hold (Enterprise). Mirrors Node's
+    # token.ts 1:1 (allowAuditExport -> allow_audit_export, etc).
+    if extras.get("allow_audit_export") is not None:
+        payload["allow_audit_export"] = bool(extras["allow_audit_export"])
+    audit_retention_days = extras.get("audit_retention_days")
+    if audit_retention_days and audit_retention_days > 0:
+        payload["audit_retention_days"] = int(audit_retention_days)
+    if extras.get("allow_dlp_scan") is not None:
+        payload["allow_dlp_scan"] = bool(extras["allow_dlp_scan"])
+    dlp_entity_types = extras.get("dlp_entity_types")
+    if dlp_entity_types:
+        payload["dlp_entity_types"] = [str(t) for t in dlp_entity_types]
+    dlp_scan_extensions = extras.get("dlp_scan_extensions")
+    if dlp_scan_extensions:
+        payload["dlp_scan_extensions"] = [str(e) for e in dlp_scan_extensions]
+    dlp_max_scan_kb = extras.get("dlp_max_scan_kb")
+    if dlp_max_scan_kb and dlp_max_scan_kb > 0:
+        payload["dlp_max_scan_kb"] = int(dlp_max_scan_kb)
+    dlp_min_score = extras.get("dlp_min_score")
+    if dlp_min_score is not None:
+        payload["dlp_min_score"] = float(dlp_min_score)
+    if extras.get("allow_legal_hold") is not None:
+        payload["allow_legal_hold"] = bool(extras["allow_legal_hold"])
+
     # Watermark overlay (preview-time; source file is never modified).
     if extras.get("watermark_enabled"):
         payload["watermark_enabled"] = True
@@ -482,6 +506,15 @@ def create_token(
     allow_virus_scan: bool | None = None,
     allow_backup: bool | None = None,
     allow_c2pa: bool | None = None,
+    # --- audit export / DLP scan / legal hold (Enterprise) ---
+    allow_audit_export: bool | None = None,
+    audit_retention_days: int | None = None,
+    allow_dlp_scan: bool | None = None,
+    dlp_entity_types: list[str] | None = None,
+    dlp_scan_extensions: list[str] | None = None,
+    dlp_max_scan_kb: int | None = None,
+    dlp_min_score: float | None = None,
+    allow_legal_hold: bool | None = None,
     # --- watermark overlay ---
     watermark_enabled: bool | None = None,
     watermark_type: str | None = None,  # "text" | "logo"
@@ -597,6 +630,14 @@ def create_token(
         allow_virus_scan=allow_virus_scan,
         allow_backup=allow_backup,
         allow_c2pa=allow_c2pa,
+        allow_audit_export=allow_audit_export,
+        audit_retention_days=audit_retention_days,
+        allow_dlp_scan=allow_dlp_scan,
+        dlp_entity_types=dlp_entity_types,
+        dlp_scan_extensions=dlp_scan_extensions,
+        dlp_max_scan_kb=dlp_max_scan_kb,
+        dlp_min_score=dlp_min_score,
+        allow_legal_hold=allow_legal_hold,
         watermark_enabled=watermark_enabled,
         watermark_type=watermark_type,
         watermark_text=watermark_text,
@@ -688,6 +729,15 @@ def create_byob_token(
     allow_virus_scan: bool | None = None,
     allow_backup: bool | None = None,
     allow_c2pa: bool | None = None,
+    # --- audit export / DLP scan / legal hold (Enterprise), identical to create_token() ---
+    allow_audit_export: bool | None = None,
+    audit_retention_days: int | None = None,
+    allow_dlp_scan: bool | None = None,
+    dlp_entity_types: list[str] | None = None,
+    dlp_scan_extensions: list[str] | None = None,
+    dlp_max_scan_kb: int | None = None,
+    dlp_min_score: float | None = None,
+    allow_legal_hold: bool | None = None,
     watermark_enabled: bool | None = None,
     watermark_type: str | None = None,
     watermark_text: str | None = None,
@@ -824,6 +874,14 @@ def create_byob_token(
         allow_virus_scan=allow_virus_scan,
         allow_backup=allow_backup,
         allow_c2pa=allow_c2pa,
+        allow_audit_export=allow_audit_export,
+        audit_retention_days=audit_retention_days,
+        allow_dlp_scan=allow_dlp_scan,
+        dlp_entity_types=dlp_entity_types,
+        dlp_scan_extensions=dlp_scan_extensions,
+        dlp_max_scan_kb=dlp_max_scan_kb,
+        dlp_min_score=dlp_min_score,
+        allow_legal_hold=allow_legal_hold,
         watermark_enabled=watermark_enabled,
         watermark_type=watermark_type,
         watermark_text=watermark_text,

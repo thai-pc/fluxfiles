@@ -210,6 +210,16 @@ def create_token(
     allow_backup: bool | None = None,
     allow_c2pa: bool | None = None,
 
+    # --- audit export / DLP scan / legal hold (Enterprise) ---
+    allow_audit_export: bool | None = None,
+    audit_retention_days: int | None = None,
+    allow_dlp_scan: bool | None = None,
+    dlp_entity_types: list[str] | None = None,
+    dlp_scan_extensions: list[str] | None = None,
+    dlp_max_scan_kb: int | None = None,
+    dlp_min_score: float | None = None,
+    allow_legal_hold: bool | None = None,
+
     # --- watermark overlay ---
     watermark_enabled: bool | None = None,
     watermark_type: str | None = None,            # "text" | "logo"

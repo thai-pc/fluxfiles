@@ -18,7 +18,7 @@ function makeJQuery() {
   return $;
 }
 
-function loadPlugin({ withSummernote = true } = {}) {
+function loadPlugin({ withSummernote = true, fluxfilesConfig } = {}) {
   globalThis.FluxFiles = { open: vi.fn() };
   const $ = withSummernote ? makeJQuery() : (() => { const j = function () {}; j.extend = Object.assign; return j; })();
   globalThis.window = { jQuery: $ };
@@ -33,7 +33,7 @@ function loadPlugin({ withSummernote = true } = {}) {
   const memos = {};
   const editorInvoke = vi.fn();
   const context = {
-    options: { fluxfiles: { endpoint: 'http://localhost', token: 'JWT' } },
+    options: { fluxfiles: { endpoint: 'http://localhost', token: 'JWT', ...fluxfilesConfig } },
     memo: (name, fn) => { memos[name] = fn; },
     invoke: editorInvoke,
   };
@@ -67,6 +67,14 @@ describe('Summernote FluxFiles plugin', () => {
     expect(cfg.endpoint).toBe('http://localhost');
     expect(cfg.token).toBe('JWT');
     expect(cfg.mode).toBe('picker');
+  });
+
+  it('forwards allowedTypes/path from options.fluxfiles to FluxFiles.open', () => {
+    const { buttonEl, open } = loadPlugin({ fluxfilesConfig: { allowedTypes: ['jpg', 'png'], path: 'uploads/2026' } });
+    buttonEl.__button.click();
+    const cfg = open.mock.calls[0][0];
+    expect(cfg.allowedTypes).toEqual(['jpg', 'png']);
+    expect(cfg.path).toBe('uploads/2026');
   });
 
   it('saves the editing range on open and restores it (+focus) before inserting', () => {

@@ -85,6 +85,8 @@ interface FluxFilesSDK {
     aiTag(): void;
     /** Switch locale/language at runtime. */
     setLocale(locale: string): void;
+    /** Crops the currently open detail file. savePath omitted/'' = overwrite in place, otherwise saves as a new file (must keep the same extension). */
+    crop(x: number, y: number, width: number, height: number, savePath?: string): void;
     /** Build an on-demand WebP URL for a selected image from its `img_base`. Returns '' if unavailable. */
     imgUrl(file: FluxFile, opts?: { width?: number; quality?: number; format?: 'webp' | 'auto' }): string;
     /** Push a new token (e.g. after background refresh). */

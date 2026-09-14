@@ -1,6 +1,6 @@
 [project]
 name = "fluxfiles-token"
-version = "0.1.0"
+version = "0.1.1"
 description = "Server-side Python SDK for minting FluxFiles JWTs (plain + BYOB), byte-compatible with the PHP core and @fluxfiles/node"
 readme = "README.md"
 license = { text = "MIT" }

@@ -64,6 +64,7 @@
             mode: 'picker', multiple: !!multiple,
             maxUploadMb: cfg.maxUploadMb || null, maxFiles: cfg.maxFiles || null, locale: cfg.locale || null,
             theme: cfg.theme || null, disks: cfg.disks || null,
+            allowedTypes: cfg.allowedTypes || null, path: cfg.path || '',
             onSelect: onSelect
         });
     }

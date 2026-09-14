@@ -7,7 +7,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pluginCode = readFileSync(join(here, '..', 'plugin.js'), 'utf8');
 
 /** Load the plugin against mocked CKEDITOR + FluxFiles globals; return the captured editor wiring. */
-function loadPlugin() {
+function loadPlugin(fluxfilesConfig) {
   const commands = {};
   const buttons = {};
   globalThis.FluxFiles = { open: vi.fn() };
@@ -27,7 +27,7 @@ function loadPlugin() {
   // eslint-disable-next-line no-eval
   (0, eval)(pluginCode);
   const editor = {
-    config: { fluxfiles: { endpoint: 'http://localhost', token: 'JWT' } },
+    config: { fluxfiles: { endpoint: 'http://localhost', token: 'JWT', ...fluxfilesConfig } },
     addCommand: (name, def) => { commands[name] = def; },
     ui: { addButton: (name, def) => { buttons[name] = def; } },
     insertHtml: vi.fn(),
@@ -63,6 +63,14 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     expect(cfg.endpoint).toBe('http://localhost');
     expect(cfg.token).toBe('JWT');
     expect(typeof cfg.onSelect).toBe('function');
+  });
+
+  it('forwards allowedTypes/path from config.fluxfiles to FluxFiles.open', () => {
+    const { editor, open } = loadPlugin({ allowedTypes: ['jpg', 'png'], path: 'uploads/2026' });
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    expect(cfg.allowedTypes).toEqual(['jpg', 'png']);
+    expect(cfg.path).toBe('uploads/2026');
   });
 
   it('onSelect inserts an <img> with the selected URL', () => {

@@ -55,6 +55,16 @@ describe('TinyMCE FluxFiles plugin', () => {
     expect(cfg.token).toBe('JWT');
   });
 
+  it('forwards fluxfiles_allowed_types/fluxfiles_path to FluxFiles.open', () => {
+    const { settings, buttons, open } = loadPlugin();
+    settings.fluxfiles_allowed_types = ['jpg', 'png'];
+    settings.fluxfiles_path = 'uploads/2026';
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    expect(cfg.allowedTypes).toEqual(['jpg', 'png']);
+    expect(cfg.path).toBe('uploads/2026');
+  });
+
   it('onSelect inserts an <img> with the selected URL', () => {
     const { editor, buttons, open } = loadPlugin();
     buttons.fluxfiles.onAction();

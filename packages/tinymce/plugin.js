@@ -51,7 +51,9 @@
             disks: editor.getParam('fluxfiles_disks', null),
             multiple: editor.getParam('fluxfiles_multiple', false),
             maxUploadMb: editor.getParam('fluxfiles_max_upload_mb', null),
-            maxFiles: editor.getParam('fluxfiles_max_files', null)
+            maxFiles: editor.getParam('fluxfiles_max_files', null),
+            allowedTypes: editor.getParam('fluxfiles_allowed_types', null),
+            path: editor.getParam('fluxfiles_path', null)
         };
     }
 
@@ -99,6 +101,7 @@
             mode: 'picker', multiple: !!multiple,
             maxUploadMb: c.maxUploadMb, maxFiles: c.maxFiles, locale: c.locale,
             theme: c.theme, disks: c.disks,
+            allowedTypes: c.allowedTypes, path: c.path,
             onSelect: onSelect
         });
     }

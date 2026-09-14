@@ -261,6 +261,11 @@
         crossMove: function(dstDisk, dstPath) { this.command('crossMove', { dst_disk: dstDisk, dst_path: dstPath || '' }); },
         aiTag: function() { this.command('aiTag'); },
         setLocale: function(locale) { this.command('setLocale', { locale: locale }); },
+        // Crops the currently open detail file. savePath omitted/'' = overwrite in place,
+        // otherwise saves as a new file (must keep the same extension).
+        crop: function(x, y, width, height, savePath) {
+            this.command('crop', { x: x, y: y, width: width, height: height, save_path: savePath || '' });
+        },
 
         // Build an on-demand WebP URL for a selected image file, from its
         // `img_base` (present on image entries when the webp feature is enabled).

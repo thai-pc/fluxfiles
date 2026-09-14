@@ -3,6 +3,45 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.11] — 2026-09-14
+
+> Released: `core-v0.2.87`, `sdk-v0.2.8`, `python-v0.1.1`, `ckeditor4-v0.3.4`,
+> `tinymce-v0.3.4`, `summernote-v0.1.4`.
+
+### Fixed — Core/SDK: dead remote `crop` command
+
+- `fm.js`'s `handleCommand` had no case for the `crop` `FM_COMMAND` sent by
+  React's/Vue's `useFluxFiles().crop()` — the call was a silent no-op.
+  Added a stateless, one-shot remote crop handler (same pattern as the
+  existing `aiTag` remote command) that crops `detailFile` via
+  `POST /api/fm/crop`. The vanilla SDK (`fluxfiles.js`/`fluxfiles.d.ts`)
+  gained a matching `crop()` method/declaration; React and Vue already had
+  full plumbing down to the hook/component layer.
+
+### Added — Python SDK: audit export / DLP scan / legal hold typed kwargs
+
+- `fluxfiles-token`'s `create_token()`/`create_byob_token()` had no typed
+  kwargs for `allow_audit_export`, `audit_retention_days`,
+  `allow_dlp_scan`, `dlp_entity_types`, `dlp_scan_extensions`,
+  `dlp_max_scan_kb`, `dlp_min_score`, and `allow_legal_hold` — Node's SDK
+  has exposed these since `76d4f67`, but Python callers could only reach
+  them through the raw `claims={}` escape hatch. Both builders and the
+  shared `_apply_tenant_overrides()` helper now accept them directly,
+  mirroring `token.ts` 1:1. `docs/PYTHON-TOKEN-SDK-DESIGN.md`'s example
+  signature updated to match.
+
+### Added — Editor plugins: `allowedTypes`/`path` forwarding
+
+- CKEditor 4, TinyMCE, and Summernote plugins now forward an `allowedTypes`
+  file-extension filter and a `path`/prefix option to `FluxFiles.open()`
+  (TinyMCE via `fluxfiles_allowed_types`/`fluxfiles_path` params,
+  CKEditor4/Summernote via `config.fluxfiles.allowedTypes`/`path`) —
+  previously only the vanilla SDK, React, and Vue wrappers exposed these.
+
+No new JWT claims or `docs/CONFIG.md` changes — this release wires up
+already-existing capabilities (crop API, DLP/audit/legal-hold claims,
+picker filtering) that some SDKs/adapters weren't yet exposing.
+
 ## [0.3.10] — 2026-09-12
 
 > Released: `core-v0.2.86`, `laravel-v0.2.41`, `wordpress-v0.2.48`, `node-v0.1.29`.

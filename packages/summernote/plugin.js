@@ -118,6 +118,8 @@
             locale: opts.locale || null,
             theme: opts.theme || null,
             disks: opts.disks || null,
+            allowedTypes: opts.allowedTypes || null,
+            path: opts.path || '',
             onSelect: function (payload) {
                 var files = Array.isArray(payload) ? payload : [payload];
 
