@@ -591,7 +591,7 @@ test('fromJwtPayload wires intakeBrand + intakeAnalytics', function () {
 
 test('pro_hints defaults ON and is an opt-OUT switch', function () {
     // Default true is safe because the UI additionally requires an unlicensed AND
-    // unframed server before it renders anything — see docs/OPERATOR-SHARE-INTAKE-UI.md §5.1.
+    // unframed server before it renders anything — see docs/guides/OPERATOR-SHARE-INTAKE-UI.md §5.1.
     assertEqual(true, claimsWith([])->proHints, 'absent → on');
     assertEqual(false, claimsWith(['pro_hints' => false])->proHints, 'explicit off honoured');
     assertEqual(true, claimsWith(['pro_hints' => true])->proHints, 'explicit on');
@@ -602,7 +602,7 @@ test('pro_hints defaults ON and is an opt-OUT switch', function () {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// DLP / PII detection-on-write claims (docs/DLP-PII-REDACTION-DESIGN.md §3)
+// DLP / PII detection-on-write claims (docs/design/DLP-PII-REDACTION-DESIGN.md §3)
 // ═══════════════════════════════════════════════════════════════
 
 test('allow_dlp_scan defaults false; isAllowed() maps it', function () {

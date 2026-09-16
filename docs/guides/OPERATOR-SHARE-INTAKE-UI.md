@@ -71,7 +71,7 @@ behind the `ModuleRegistry` 3-layer gate.
 ## 3. JWT claims
 
 Two new claims. Both are parsed in `packages/core/api/Claims.php` and documented in
-`docs/CONFIG.md` §2.13 (see §10 for the exact rows).
+`docs/reference/CONFIG.md` §2.13 (see §10 for the exact rows).
 
 ### `intake_base_url`
 - **Type** string (http/s), **default** `''`.
@@ -188,7 +188,7 @@ reader must not "fix" it:
 // that is on purpose: those are capability toggles whose absence is meant to be
 // invisible; Share/Intake IS the SKU, and an unlicensed server has no paying
 // operator to embarrass. The departure is bounded to the unlicensed, unframed case.
-// Do not "simplify" this to tokenAllows() alone. See docs/OPERATOR-SHARE-INTAKE-UI.md §5.1.
+// Do not "simplify" this to tokenAllows() alone. See docs/guides/OPERATOR-SHARE-INTAKE-UI.md §5.1.
 proGate(claim, moduleId) { /* 'on' | 'hidden' | 'locked' */ }
 ```
 
@@ -423,7 +423,7 @@ a missing owner, so under `owner_only` a legacy portal is invisible and un-revok
 >   `metadata/export`, `metadata/import` only), and WordPress's equivalent test —
 >   `'proxy route surface covers every core /api/fm route'`
 >   (`packages/wordpress/tests/test-wp-smoke.php:1102`, allowlist ~:1140-1144) — which is the
->   **same guard `docs/SHARE-PUBLIC-LANDING.md` §8 previously said WordPress lacked**; that
+>   **same guard `docs/design/SHARE-PUBLIC-LANDING.md` §8 previously said WordPress lacked**; that
 >   claim there is also being corrected as part of this pass.
 > - Claim forwarding itself is asserted directly too: Laravel's smoke test around :222-253, and
 >   WordPress's around :328-345 (plus a dedicated `share_base_url` override test ~:791-806).
@@ -522,7 +522,7 @@ tombstone-based revocation in the current source** (§6.2 — verified, not a pe
 | `packages/core/api/Claims.php` | `intakeBaseUrl`, `proHints` + parsing |
 | `packages/core/api/index.php` | `ff_public_link_url()` helper; intake `url` fallback |
 | `packages/core/lang/*.json` (16) | ~50 keys (§10) |
-| `docs/CONFIG.md` | 2 claim rows (§12) |
+| `docs/reference/CONFIG.md` | 2 claim rows (§12) |
 | `CHANGELOG.md` | entry |
 | `.claude/api-map.md` | note the intake `url` field |
 
@@ -646,7 +646,7 @@ single-row/scroll invariant that spec guards.
 
 ---
 
-## 12. Claims to add to `docs/CONFIG.md`
+## 12. Claims to add to `docs/reference/CONFIG.md`
 
 Append to **§2.13 Paid-module gates**, immediately after the `allow_intake` row:
 

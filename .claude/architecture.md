@@ -49,7 +49,7 @@
     opt-in `FLUXFILES_STORAGE_BACKEND=db` mode, which moves this same bookkeeping
     (metadata/search/folder-index/audit/trash/rate-limits) into the operator's own
     self-hosted SQLite/MySQL/Postgres instead (`api/Db/*`, gated by a server env
-    var, not a JWT claim or a paid module — see `docs/DB-STORAGE-MIGRATION-DESIGN.md`).
+    var, not a JWT claim or a paid module — see `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`).
     The rest of this section describes the default `json` backend.
   - S3/R2: object metadata plus `_fluxfiles/index.json`.
   - Local: sidecar at `_fluxfiles/meta/{key}.json` (inside the protected namespace; legacy `{file}.meta.json` is migrated on read) plus `_fluxfiles/index.json`.

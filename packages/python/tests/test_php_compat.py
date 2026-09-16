@@ -2,7 +2,7 @@
 and BYOB blobs must round-trip both ways (this is the real guard for the HKDF
 salt / AES-GCM / JWT compatibility). Skips cleanly when PHP or the core vendor
 autoloader isn't available (e.g. a Python-only CI lane) — but release CI must
-run it for real; see docs/PYTHON-TOKEN-SDK-DESIGN.md §6.2/§6.4.
+run it for real; see docs/design/PYTHON-TOKEN-SDK-DESIGN.md §6.2/§6.4.
 """
 
 import json

@@ -12,7 +12,7 @@
 > was written — is in the **Status** section at the very bottom of this
 > file. Read that section first if you only have time for one.
 
-> This is the future spec `docs/DB-STORAGE-MIGRATION-DESIGN.md` §14 item 6
+> This is the future spec `docs/design/DB-STORAGE-MIGRATION-DESIGN.md` §14 item 6
 > pointed at: *"a DB could later support a materially different, additional
 > model on top of the JWT — e.g. a `permissions`/`acl` table... that would be
 > a capability-token → server-checked-ACL architecture change, not a
@@ -53,7 +53,7 @@ that can silently drift: the operator revokes/demotes a user in their own
 system and forgets a FluxFiles-side role record still grants access until a
 still-valid, unexpired token expires. This is the same "avoid a duplicate
 stateful ACL store" argument already litigated and resolved for the DB
-storage migration (`docs/DB-STORAGE-MIGRATION-DESIGN.md` §14 item 6) — cited,
+storage migration (`docs/design/DB-STORAGE-MIGRATION-DESIGN.md` §14 item 6) — cited,
 not re-derived here.
 
 **What this spec actually proposes.** A stateless **`role` preset**, mint-time
@@ -94,7 +94,7 @@ changes to the decode/enforcement side**.
 2. **Any operator-facing role-management UI/admin panel.** Out of scope —
    this spec is the claims/preset layer only, consumed by code the operator
    writes when minting tokens, not an end-user product surface.
-3. **Any change to `Claims.php`, `docs/CONFIG.md`'s claim table, or
+3. **Any change to `Claims.php`, `docs/reference/CONFIG.md`'s claim table, or
    `FileManager.php` authorization logic.** Zero changes to the decode or
    enforcement side. `role` is resolved and discarded entirely on the mint
    side, in `embed.php`/`token.ts`/`FluxFilesManager.php`/`FluxFilesPlugin.php`.
@@ -505,13 +505,13 @@ changed), no e2e/browser test changes (no new endpoint, no UI surface).
 
 ## 6. Docs impact
 
-**No `docs/CONFIG.md` claim-table changes** — same reasoning as `edition`
+**No `docs/reference/CONFIG.md` claim-table changes** — same reasoning as `edition`
 today: `role`, like `edition`, never appears in `Claims::fromJwtPayload` and
 is not itself a claim, so it needs no row in §2's claim tables. (Confirmed:
 `edition` does not appear anywhere in `Claims.php` today — verified by
 reading the full file for this spec.)
 
-**Add to `docs/CONFIG.md` §1** ("How to set claims — one options object"),
+**Add to `docs/reference/CONFIG.md` §1** ("How to set claims — one options object"),
 in the existing PHP example that already demonstrates `'edition' => 'pro'`,
 add a `role` line immediately below it:
 
@@ -526,9 +526,9 @@ add a `role` line immediately below it:
 > `edition` defaults which *paid features* a tier gets; `role` defaults how
 > much a *person* can do with the features already enabled (perms,
 > owner-scoping, and the free power-user toggles). See
-> `docs/ACL-ROLE-PRESETS-DESIGN.md` for the full claim table.
+> `docs/design/ACL-ROLE-PRESETS-DESIGN.md` for the full claim table.
 
-**`docs/INDUSTRY-PRESETS.md`** — optionally add one line to its "Notes"
+**`docs/guides/INDUSTRY-PRESETS.md`** — optionally add one line to its "Notes"
 section alongside the existing `edition` note, once implemented, since that
 doc already documents `edition` as "DX sugar, not the license gate" — `role`
 deserves the identical one-line caveat ("role is DX sugar for the
@@ -546,7 +546,7 @@ No `tests/unit/test-config-doc.php` changes needed — it only checks
    high-consequence enough to always be its own explicit opt-in, never
    implied by "this person is an admin of the file manager." An operator
    building an internal ops/hosting-panel tool (the SFTP/VPS persona in
-   `docs/INDUSTRY-PRESETS.md` §5) might reasonably want `superadmin` to
+   `docs/guides/INDUSTRY-PRESETS.md` §5) might reasonably want `superadmin` to
    include it. Left out for now; easy to add later without a breaking
    change (just add a key to the `superadmin` preset map) if real usage asks
    for it.
@@ -630,7 +630,7 @@ an absent key still resolves to `true` after decode. This B1 fix is what
 (core/Laravel/WordPress) and `fb7c8a2` (Node) landed it the same day as the
 initial `role` implementation (`70f1cea`).
 
-**BYOB scope — updated 2026-09-08 (`docs/PYTHON-TOKEN-SDK-DESIGN.md` §5.1 /
+**BYOB scope — updated 2026-09-08 (`docs/design/PYTHON-TOKEN-SDK-DESIGN.md` §5.1 /
 §9 decision #6):** `role`/`edition` now reach BYOB tokens in **all four**
 token builders, closing what was originally a core/Node-only exclusion of
 `role` specifically (`edition` already worked on core/Node BYOB tokens before
@@ -684,9 +684,9 @@ BYOB-inclusion decision above). The full core unit + integration suite,
 `npm run typecheck`/`npm run build`/`npm test` in `packages/node/`, and
 `pytest`/`mypy`/`ruff` in `packages/python/` all pass with no regressions.
 
-**Docs**: `docs/CONFIG.md` §1's PHP example now shows `'role' => 'editor'`
+**Docs**: `docs/reference/CONFIG.md` §1's PHP example now shows `'role' => 'editor'`
 alongside `'edition' => 'pro'`, with a short explanatory paragraph — `role`
-is not itself a claim, so no `docs/CONFIG.md` claim-table entry or
+is not itself a claim, so no `docs/reference/CONFIG.md` claim-table entry or
 `test-config-doc.php` change was needed.
 
 The §7 open questions (scaling `allow_terminal` with role, whether

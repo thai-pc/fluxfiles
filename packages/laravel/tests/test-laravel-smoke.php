@@ -254,7 +254,7 @@ test('share/intake gates + their config forward in proxy mode', function () use 
     assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected');
 });
 
-test('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim bundle', function () use ($secret) {
+test('role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim bundle', function () use ($secret) {
     $mgr = new FluxFilesManager();
 
     $admin = \FluxFiles\JwtCompat::decode($mgr->token(60, ['role' => 'admin']), $secret);
@@ -391,7 +391,7 @@ test('proxy route surface covers every core /api/fm route', function () {
         // Laravel apps already authenticate via fluxfiles_token(), so there is
         // nothing for the proxy to forward here at all (see the NOTE in
         // FluxFilesManager::applyOverrides about SSO not being a claim concern).
-        // - metadata/export, metadata/import (docs/DB-STORAGE-MIGRATION-DESIGN.md §7):
+        // - metadata/export, metadata/import (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7):
         //   \FluxFiles\Db\MetadataExporter/MetadataImporter work directly against
         //   core's own \FluxFiles\Db\Connection/dialect SQL layer (raw table access,
         //   not MetadataRepositoryInterface). Laravel's `db` backend option (§5)

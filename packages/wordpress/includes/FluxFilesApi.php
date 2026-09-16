@@ -287,7 +287,7 @@ class FluxFilesApi
 
         // One-click Git deploy (SFTP disks only; free/core, not a paid module) —
         // target path/branch/hooks come from claims, never the request body
-        // (docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1).
+        // (docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1).
         register_rest_route($ns, $p . '/git-deploy', array_merge($writeArgs, [
             'callback' => [$api, 'handleGitDeploy'],
         ]));
@@ -1967,7 +1967,7 @@ class FluxFilesApi
      * kill-switch, allow_git_deploy claim, write perm, disk ACL, driver check,
      * unconfigured-path check, then run. Target path/branch/hooks come from
      * claims only — the request body carries at most `disk` — per
-     * docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1. No dedicated rate-limit bucket
+     * docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1. No dedicated rate-limit bucket
      * here (this plugin has no per-action bucket precedent — see handleTerminal()/
      * handleImportUrl() — so it reuses the generic write bucket like everything else).
      */
@@ -2028,7 +2028,7 @@ class FluxFilesApi
     // Watermark-overlay resolution (ff_resolve_watermark() in index.php) is
     // intentionally NOT ported: ImageToken::mint() only embeds a `wm` scope when
     // `watermark_enabled` is truthy, and this plugin never forwards that claim
-    // (see docs/FEATURES.md — overlay preview stays a core-standalone/embed-only
+    // (see docs/guides/FEATURES.md — overlay preview stays a core-standalone/embed-only
     // feature), so a WordPress-minted ImageToken never carries one.
 
     private function strParam(\WP_REST_Request $request, string $key, string $default = ''): string
@@ -2340,7 +2340,7 @@ class FluxFilesApi
     }
 
     /**
-     * Compliance Readiness Scorecard (FREE/core, docs/COMPLIANCE-SCORECARD-DESIGN.md)
+     * Compliance Readiness Scorecard (FREE/core, docs/design/COMPLIANCE-SCORECARD-DESIGN.md)
      * — a read-only capability checklist (virus scan / C2PA / audit export / SSO /
      * DLP / legal hold). Gated by the same `audit` perm as the activity log, not a
      * module/license check — every paid row simply reads `available: false` on an
@@ -2477,7 +2477,7 @@ class FluxFilesApi
 
     /**
      * Legal hold — PLACE/RELEASE/LIST are the paid-gated management half (see
-     * docs/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself is free/core
+     * docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself is free/core
      * and license-independent, wired unconditionally into
      * FileManager::assertNoActiveHold() (inherited from core, no proxy change needed).
      */

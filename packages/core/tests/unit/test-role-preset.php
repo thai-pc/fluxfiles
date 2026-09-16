@@ -1,10 +1,10 @@
 <?php
 
 /**
- * Test script for the `role` mint-time preset (docs/ACL-ROLE-PRESETS-DESIGN.md).
+ * Test script for the `role` mint-time preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md).
  *
  * Vectors are loaded from the shared cross-language fixture
- * `docs/testdata/token-vectors.json` (docs/PYTHON-TOKEN-SDK-DESIGN.md §6.1) so the
+ * `docs/testdata/token-vectors.json` (docs/design/PYTHON-TOKEN-SDK-DESIGN.md §6.1) so the
  * same role/edition/claims-escape-hatch cases are exercised identically by this
  * file, packages/node/tests/token.test.ts, and the future Python SDK's own suite.
  *

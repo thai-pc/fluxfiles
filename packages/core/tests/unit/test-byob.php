@@ -62,7 +62,7 @@ function assertContains($needle, array $haystack, string $msg = ''): void
 }
 
 // Shared cross-language fixture (docs/testdata/byob-vectors.json,
-// docs/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — HKDF/AES-GCM known-answer vectors,
+// docs/design/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — HKDF/AES-GCM known-answer vectors,
 // generated once from this very PHP implementation and pinned forever after.
 $byobVectorsPath = __DIR__ . '/../../../../docs/testdata/byob-vectors.json';
 $byobVectors = json_decode(file_get_contents($byobVectorsPath), true);
@@ -128,7 +128,7 @@ test('decrypt returns original config', function () use ($secret) {
 
 // This config is also the source the shared cross-language fixture's
 // `s3_with_endpoint` decrypt vector was generated from (docs/testdata/
-// byob-vectors.json, docs/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — assert PHP's own
+// byob-vectors.json, docs/design/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — assert PHP's own
 // decrypt against the pinned blob too, alongside the fresh-encrypt round-trip
 // above (which the fixture can't exercise, since it tests nonce-uniqueness).
 test('decrypt matches the pinned s3_with_endpoint fixture vector', function () {
@@ -470,7 +470,7 @@ test('fluxfiles_byob_token rejects local driver in byobDisks', function () {
 // ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► BYOB + role/edition presets (docs/testdata/token-vectors.json){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
-// Shared cross-language fixture (docs/PYTHON-TOKEN-SDK-DESIGN.md §5.1/§6.1) — a BYOB
+// Shared cross-language fixture (docs/design/PYTHON-TOKEN-SDK-DESIGN.md §5.1/§6.1) — a BYOB
 // token minted with `role`/`edition` must carry BOTH the preset's claim bundle AND the
 // encrypted `byob_disks` claim, per the 8-step merge order fluxfiles_byob_token() now
 // follows (same as Laravel/WordPress already did). Loaded here and by Node's

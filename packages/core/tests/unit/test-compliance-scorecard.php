@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Compliance Readiness Scorecard (docs/COMPLIANCE-SCORECARD-DESIGN.md). Free/core,
+ * Compliance Readiness Scorecard (docs/design/COMPLIANCE-SCORECARD-DESIGN.md). Free/core,
  * stateless: no storage, no new JWT claim. This tests `ComplianceScorecard::build()`
  * directly — the route-level 403/envelope behavior is covered in
  * tests/integration/test-compliance-scorecard.php.

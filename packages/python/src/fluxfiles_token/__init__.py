@@ -2,7 +2,7 @@
 
 Byte-compatible with the PHP core (`packages/core/embed.php`,
 `CredentialEncryptor.php`) and a 1:1 port of `@fluxfiles/node`
-(camelCase -> snake_case). See docs/PYTHON-TOKEN-SDK-DESIGN.md.
+(camelCase -> snake_case). See docs/design/PYTHON-TOKEN-SDK-DESIGN.md.
 """
 
 from .crypto import decrypt_byob, encrypt_byob

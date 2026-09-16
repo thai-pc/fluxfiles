@@ -6,7 +6,7 @@ namespace FluxFiles\Db;
 
 /**
  * Streams file_metadata rows for backup/restore of the DB storage backend
- * (docs/DB-STORAGE-MIGRATION-DESIGN.md §7). Reads directly against the SQL
+ * (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7). Reads directly against the SQL
  * table rather than through MetadataRepositoryInterface: this tool's format
  * IS the DB row shape (incl. object_uuid), unlike the generic get()/getBulk()
  * API every other caller uses, and there is no JSON-backend equivalent.

@@ -9,7 +9,7 @@ around it and follows the repo's non-obvious conventions exactly. Reply in the u
 language; **code and comments in English**.
 
 ## Load context first
-Read `.claude/CLAUDE.md` (rules + gotchas), `.claude/api-map.md`, and `docs/CONFIG.md`.
+Read `.claude/CLAUDE.md` (rules + gotchas), `.claude/api-map.md`, and `docs/reference/CONFIG.md`.
 Match the surrounding file's style, comment density, and naming.
 
 ## Hard rules (these override defaults)
@@ -17,7 +17,7 @@ Match the surrounding file's style, comment density, and naming.
   sidecars). No new stateful server deps.
 - **Every user-facing error code needs i18n across all 16 langs** (`packages/core/lang/*.json`).
   The guard `tests/unit/test-i18n.php` fails CI otherwise. Add keys to all 16 files.
-- **New/renamed claim → document it in `docs/CONFIG.md`** or `tests/unit/test-config-doc.php`
+- **New/renamed claim → document it in `docs/reference/CONFIG.md`** or `tests/unit/test-config-doc.php`
   fails. Parse it in `Claims::fromJwtPayload` + add an `isAllowed` case for module claims
   (else the gate 403s the module). Forward it in `embed.php` + `packages/node/src/token.ts`
   (+ rebuild node dist) + laravel + wordpress.

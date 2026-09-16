@@ -1210,7 +1210,7 @@ class FluxFilesController
     }
 
     /**
-     * Compliance Readiness Scorecard (FREE/core, docs/COMPLIANCE-SCORECARD-DESIGN.md)
+     * Compliance Readiness Scorecard (FREE/core, docs/design/COMPLIANCE-SCORECARD-DESIGN.md)
      * — a read-only capability checklist (virus scan / C2PA / audit export / SSO /
      * DLP / legal hold). Gated by the same `audit` perm as the activity log, not a
      * module/license check — every paid row simply reads `available: false` on an
@@ -1347,7 +1347,7 @@ class FluxFilesController
 
     /**
      * Legal hold — PLACE/RELEASE/LIST are the paid-gated management half (see
-     * docs/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself is free/core
+     * docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself is free/core
      * and license-independent, wired unconditionally into
      * FileManager::assertNoActiveHold() (inherited from core, no proxy change needed).
      */
@@ -1686,7 +1686,7 @@ class FluxFilesController
      * kill-switch, allow_git_deploy claim, write perm, disk ACL, driver check,
      * unconfigured-path check, then run. Target path/branch/hooks come from
      * claims only — the request body carries at most `disk` — per
-     * docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1. No dedicated rate-limit bucket
+     * docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1. No dedicated rate-limit bucket
      * here (this adapter has no per-action bucket precedent — see terminal()/
      * importUrl() — so it reuses the generic write bucket like everything else).
      */
@@ -1746,7 +1746,7 @@ class FluxFilesController
     // Watermark-overlay resolution (ff_resolve_watermark() in index.php) is
     // intentionally NOT ported: ImageToken::mint() only embeds a `wm` scope when
     // `watermark_enabled` is truthy, and this adapter's FluxFilesManager never
-    // forwards that claim in proxy mode (see docs/FEATURES.md — overlay preview
+    // forwards that claim in proxy mode (see docs/guides/FEATURES.md — overlay preview
     // stays a core-standalone/embed-only feature), so a proxy-minted ImageToken
     // never carries one. If that ever changes, this needs the watermark branch.
 

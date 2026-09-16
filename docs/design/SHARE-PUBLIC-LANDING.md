@@ -97,7 +97,7 @@ dispatches on the *disk driver*, not on the file's `url`:
 ## 3. JWT claims (operator token, read at create time)
 
 All three are read in `createShare` and **baked into the record**, so a public request needs
-no claims. Add to `docs/CONFIG.md` §2.13.
+no claims. Add to `docs/reference/CONFIG.md` §2.13.
 
 | Claim | Type | Default | Validation |
 |---|---|---|---|
@@ -108,7 +108,7 @@ no claims. Add to `docs/CONFIG.md` §2.13.
 Not claims (deliberately): `label` and `max_downloads` are per-share **body** fields;
 brute-force limits are server-wide **env** vars (precedent: `FLUXFILES_RATE_LIMIT_*`).
 
-New env vars (`docs/CONFIG.md` §3):
+New env vars (`docs/reference/CONFIG.md` §3):
 
 | Env | Default | Notes |
 |---|---|---|
@@ -323,7 +323,7 @@ Reused, already translated: `module_not_installed` (501), `license_required` /
 | `api/Claims.php` | 3 new claims + http(s) validation for `share_base_url` |
 | `public/share.html` | **NEW** — single file, no build step, static English, dark-mode boot script + `<meta name="referrer" content="no-referrer">`, styled from `intake.html`. States: card, password prompt, expired, revoked, cap-reached, module-absent. **Renders only what `brand` supplies — nothing custom of its own.** |
 | `lang/*.json` ×16 | 8 `error.share_*` keys |
-| `docs/CONFIG.md`, `.claude/api-map.md`, `CHANGELOG.md` | 3 claims + 2 envs; 5 routes; entry |
+| `docs/reference/CONFIG.md`, `.claude/api-map.md`, `CHANGELOG.md` | 3 claims + 2 envs; 5 routes; entry |
 
 No `router.php` or `docker/nginx.conf` change needed — `/public/share.html` is a static file
 under the existing root, exactly like `intake.html`. Claims reach the adapters for free via
@@ -381,10 +381,10 @@ not as-planned)
     only — no Share/Intake route on it either). `allow_share`/`allow_intake` are forwarded
     unconditionally from `FluxFilesPlugin.php:472-476`, asserted by the WP smoke test around
     :328-345 (plus a dedicated `share_base_url` override test ~:791-806).
-  - See `docs/OPERATOR-SHARE-INTAKE-UI.md` §6.3 for the fuller writeup of what shipped here
+  - See `docs/guides/OPERATOR-SHARE-INTAKE-UI.md` §6.3 for the fuller writeup of what shipped here
     and why it's broader than either doc's original plan.
 - Existing `tests/unit/test-i18n.php` (16-locale key parity) and
-  `tests/unit/test-config-doc.php` (claims ↔ `docs/CONFIG.md`) will fail until §3 and the
+  `tests/unit/test-config-doc.php` (claims ↔ `docs/reference/CONFIG.md`) will fail until §3 and the
   error table are done. That's the intended forcing function.
 
 ## 9. Open questions / trade-offs
@@ -411,7 +411,7 @@ not as-planned)
 
 ---
 
-## Claims to add to `docs/CONFIG.md`
+## Claims to add to `docs/reference/CONFIG.md`
 
 **§2.13 Paid-module gates** (next to `allow_share`):
 

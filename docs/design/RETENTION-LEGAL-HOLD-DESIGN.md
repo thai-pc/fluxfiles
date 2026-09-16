@@ -5,7 +5,7 @@ add-on (never a standalone SKU). Module id `legal-hold`, class
 `\FluxFiles\LegalHold\LegalHoldModule` (gitignored private package
 `packages/legal-hold/`, registered in `ModuleRegistry::$map`), claim
 `allow_legal_hold` (parsed in `Claims.php`). Written using
-`docs/GIT-DEPLOY-SECURITY-REVIEW.md` as the style/depth reference (explicit
+`docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` as the style/depth reference (explicit
 "solved" vs "documented, not solved" framing) and `_fluxfiles/trash.json` /
 `_fluxfiles/audit.jsonl` as the storage precedent
 (`packages/core/api/StorageMetadataHandler.php`).
@@ -100,7 +100,7 @@ Laravel/WordPress proxy parity for **enforcement** is automatic and requires
 
 ## 3. JWT claims
 
-Add one claim to `docs/CONFIG.md` §2.13 (paid-module gates table):
+Add one claim to `docs/reference/CONFIG.md` §2.13 (paid-module gates table):
 
 | Claim | Type | Default | Module |
 |---|---|---|---|
@@ -111,7 +111,7 @@ claim — see §5, it's a system-integrity cap, not a per-tenant business knob,
 same reasoning as `versioning_max`'s hard cap of 100 vs. the per-tenant soft
 default.)
 
-New env var, `docs/CONFIG.md` §3:
+New env var, `docs/reference/CONFIG.md` §3:
 
 | Env var | Default | Notes |
 |---|---|---|
@@ -123,7 +123,7 @@ presets grant `['read','write','delete','audit']`; `/audit/export` and
 `/audit/purge` already gate on `hasPerm('audit')`). Inventing a dedicated
 perm (e.g. `legal_hold`) would mean touching all four ACL role-preset
 builders (`embed.php`, node, Laravel, WordPress — see
-`docs/ACL-ROLE-PRESETS-DESIGN.md`) for a capability that, in practice, is
+`docs/design/ACL-ROLE-PRESETS-DESIGN.md`) for a capability that, in practice, is
 always going to be granted to the same admin/compliance persona that already
 needs `audit` to review the trail a hold produces. **Trade-off accepted
 explicitly:** an operator cannot mint a token that can place legal holds but
@@ -371,7 +371,7 @@ same `isPathInScope()` machinery `listTrash()` already uses:
   (scoping is enforced well before hold-checking runs), so this isn't a real
   information-leak vector either way.
 - **Only a genuinely unscoped token** (empty `prefix`, e.g. an agency
-  `superadmin` — see `docs/ACL-ROLE-PRESETS-DESIGN.md`) sees and manages
+  `superadmin` — see `docs/design/ACL-ROLE-PRESETS-DESIGN.md`) sees and manages
   holds **across all tenants** sharing that disk via `/hold/list`.
 - **Enforcement**, by contrast, is deliberately **not** scope-filtered: a
   hold placed by tenant A's own (narrowly-scoped) admin still blocks a delete
@@ -463,7 +463,7 @@ silently implied away:**
 - `api/StorageMetadataHandler.php` — implements them against `_fluxfiles/holds.json`
   (same `acquireIndexLock`/`releaseIndexLock` discipline as trash).
 - `api/Db/DbMetadataHandler.php` — implements the same 7 methods against a new
-  `legal_holds` table, following `docs/DB-STORAGE-MIGRATION-DESIGN.md`'s
+  `legal_holds` table, following `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`'s
   established pattern (mirrors how trash/audit already got DB-backend
   counterparts). **This must ship day one, not be deferred** — the Enterprise
   buyer this feature targets is exactly the kind of operator likely to also
@@ -489,7 +489,7 @@ silently implied away:**
   (`legal_hold.title`/`.place`/`.release`/`.reason_placeholder`/
   `.placed_by`/`.since`/`.confirm_release`/`.badge_tooltip_admin`/
   `.badge_tooltip_user`, etc.).
-- `docs/CONFIG.md` — `allow_legal_hold` claim (§2.13) + `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`
+- `docs/reference/CONFIG.md` — `allow_legal_hold` claim (§2.13) + `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`
   env var (§3). Required for `tests/unit/test-config-doc.php` to keep passing.
 
 **Paid module package (new, gitignored, `packages/legal-hold/`):**
@@ -611,7 +611,7 @@ both — unlike AI Vision, this isn't image-only).
 - `Claims::fromJwtPayload` — `allow_legal_hold` decode + default `false`.
 - Cap enforcement (`countActiveHolds` at/over `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`).
 - Duplicate-active-hold-at-same-path → the placement layer's `409` behavior.
-- `docs/CONFIG.md` sync — covered automatically by the existing
+- `docs/reference/CONFIG.md` sync — covered automatically by the existing
   `tests/unit/test-config-doc.php` guard once the claim is documented.
 - `lang/*.json` — the existing `tests/unit/test-i18n.php` guard, once the
   new error + UI keys are added to all 16 files.

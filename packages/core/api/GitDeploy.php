@@ -11,7 +11,7 @@ use phpseclib3\Net\SSH2;
  * SFTP disk. Deliberately NARROWER than SshTerminal: no free-form command, no
  * client-supplied path/remote/branch — those are OPERATOR claims baked into the
  * JWT at mint time (Claims::$gitDeployPath / $gitDeployBranch), never read from
- * the request body. See docs/GIT-DEPLOY-SECURITY-REVIEW.md for the threat model
+ * the request body. See docs/security/GIT-DEPLOY-SECURITY-REVIEW.md for the threat model
  * this design closes (F1 command/remote injection, F2 hostile hooks, F6 races).
  *
  * SECURITY:

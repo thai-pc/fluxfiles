@@ -353,7 +353,7 @@ try {
     // contract as virus scanning above: wired only when the token asks for it
     // (`allow_dlp_scan`), and ModuleRegistry::require() resolves install/license/claim
     // on the first eligible write rather than here, so a plain read never pays the
-    // gate cost. See docs/DLP-PII-REDACTION-DESIGN.md.
+    // gate cost. See docs/design/DLP-PII-REDACTION-DESIGN.md.
     if ($claims->allowDlpScan) {
         $fm->setDlpScanner(static function (string $localPath, string $name) use ($claims): array {
             /** @var \FluxFiles\Dlp\DlpModule $dlp */
@@ -516,7 +516,7 @@ try {
     // A blocked PII write is the same kind of security event virus_detected is —
     // it must leave a trace even though the write itself failed. `detail` carries
     // ONLY the matched entity-TYPE names (never matched text/offsets/counts — see
-    // §6.2 of docs/DLP-PII-REDACTION-DESIGN.md), matching the plain-string shape
+    // §6.2 of docs/design/DLP-PII-REDACTION-DESIGN.md), matching the plain-string shape
     // every other audit `detail` already uses.
     if ($e->getErrorCode() === 'pii_detected' && isset($auditLog, $claims)) {
         $p = $e->getErrorParams();
@@ -756,7 +756,7 @@ function routeRequest(
     }
 
     // Metadata export/import (FREE/core, DB backend only) — bulk backup/restore
-    // for FLUXFILES_STORAGE_BACKEND=db (docs/DB-STORAGE-MIGRATION-DESIGN.md §7).
+    // for FLUXFILES_STORAGE_BACKEND=db (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7).
     // Per-tenant, not admin-only: a scoped token exports/imports only its own
     // pathPrefix/owner, the same trust model as every other disk-scoped route —
     // unlike /audit/purge, this data belongs to the tenant, not the whole disk.
@@ -1044,7 +1044,7 @@ function routeRequest(
         }
         $timeout = (int) ($_ENV['FLUXFILES_TERMINAL_TIMEOUT'] ?? 30);
         // ControlMaster connection reuse (SshTerminal path only — see
-        // docs/SFTP-CONTROLMASTER-SPEC.md). multiplexHandle() returns null for any
+        // docs/security/SFTP-CONTROLMASTER-SPEC.md). multiplexHandle() returns null for any
         // ineligible disk (not SFTP, ssh_multiplex off, password-only, or a
         // passphrase-protected key), in which case this falls back to the existing
         // per-request phpseclib connection below, unchanged.
@@ -1074,7 +1074,7 @@ function routeRequest(
 
     // One-click Git deploy — a fixed-command-shape subset of the terminal above.
     // The repo path/branch are OPERATOR claims (minted into the JWT), never read
-    // from the request body — see docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.
+    // from the request body — see docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.
     if ($method === 'POST' && $uri === '/api/fm/git-deploy') {
         if (($_ENV['FLUXFILES_GIT_DEPLOY_DISABLED'] ?? '') === 'true') {
             throw new ApiException('Git deploy is disabled on this server', 403, 'git_deploy_disabled');
@@ -1191,7 +1191,7 @@ function routeRequest(
         );
     }
 
-    // Compliance Readiness Scorecard (free/core, docs/COMPLIANCE-SCORECARD-DESIGN.md) —
+    // Compliance Readiness Scorecard (free/core, docs/design/COMPLIANCE-SCORECARD-DESIGN.md) —
     // a read-only capability checklist (virus scan / C2PA / audit export / SSO / DLP /
     // legal hold), gated by the same 'audit' perm as the activity log (introspection
     // over the tenant's own configuration, not a new capability). No module/license
@@ -1279,7 +1279,7 @@ function routeRequest(
     }
 
     // Legal hold — PLACE/RELEASE/LIST are the paid-gated management half (see
-    // docs/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself — actually
+    // docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2). Enforcement itself — actually
     // blocking delete/trash/rename/move on a held path — is free/core and
     // license-independent, wired unconditionally into FileManager::assertNoActiveHold();
     // it keeps working even if this module is uninstalled or the license lapses.

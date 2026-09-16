@@ -1,16 +1,16 @@
 # DB-Backed Storage State — An Opt-In Alternative to the JSON-Only Design
 
-> **Not a replacement for `docs/METADATA-STORAGE-DESIGN.md` — an opt-in second
+> **Not a replacement for `docs/reference/METADATA-STORAGE-DESIGN.md` — an opt-in second
 > backend alongside it.** This doc's original title called itself "Reversing
-> `docs/METADATA-STORAGE-DESIGN.md`"; that phrasing overstated the
+> `docs/reference/METADATA-STORAGE-DESIGN.md`"; that phrasing overstated the
 > relationship and is corrected here. What actually shipped (see the
 > **Status** section at the bottom for commits/tags) is a **second storage
 > backend**, selected by the server-wide `FLUXFILES_STORAGE_BACKEND` env var
 > (default `json`). Every existing self-hosted install keeps the exact
 > JSON-sidecar/`index.json`/`dirs.json`/`audit.jsonl` behavior
-> `docs/METADATA-STORAGE-DESIGN.md` describes, completely unchanged, unless an
+> `docs/reference/METADATA-STORAGE-DESIGN.md` describes, completely unchanged, unless an
 > operator explicitly sets `FLUXFILES_STORAGE_BACKEND=db`.
-> `docs/METADATA-STORAGE-DESIGN.md` remains accurate as the description of the
+> `docs/reference/METADATA-STORAGE-DESIGN.md` remains accurate as the description of the
 > default configuration; this doc is its companion for the `db` mode, not its
 > supersession — that other doc should carry a short pointer note to this
 > effect near its "No more SQLite" line (not yet added there; this doc cannot
@@ -938,7 +938,7 @@ pre-production burn-in window, not as a general "undo" after real traffic.
 
 ---
 
-## 10. `docs/CONFIG.md` additions
+## 10. `docs/reference/CONFIG.md` additions
 
 **JWT claims: none.** Storage backend selection is server-wide, not
 per-tenant — same reasoning as `FLUXFILES_STORAGE_PATH` never being a claim.
@@ -1275,7 +1275,7 @@ Everything the task's decisions already settled is treated as settled above
 
 ---
 
-## Exact `docs/CONFIG.md` edits required
+## Exact `docs/reference/CONFIG.md` edits required
 
 - **§2 (JWT claims): no changes.** No new claim names.
 - **§3 (Server env vars): add** `FLUXFILES_STORAGE_BACKEND`,
@@ -1386,7 +1386,7 @@ less than the JSON backend's one-per-edit. Detects S3/R2 via the same
 (network, permissions, missing object) is caught and swallowed, returning
 `null`, so a breadcrumb write can never block or fail a metadata save.
 Gated by `FLUXFILES_DB_S3_BREADCRUMB` (default `true`, documented in
-`docs/CONFIG.md`'s server env vars table).
+`docs/reference/CONFIG.md`'s server env vars table).
 
 The repair side is `\FluxFiles\Db\S3MetadataRepairer`
 (`packages/core/api/Db/S3MetadataRepairer.php`), split along a deliberate

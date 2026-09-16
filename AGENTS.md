@@ -5,7 +5,7 @@ entry point; the deeper canonical notes live in `.claude/` —
 [`CLAUDE.md`](.claude/CLAUDE.md), [`architecture.md`](.claude/architecture.md),
 [`development.md`](.claude/development.md), [`api-map.md`](.claude/api-map.md).
 Read those for detail. For the human-facing monorepo map (engine ↔ adapters, the
-three integration patterns, the publish topology), see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+three integration patterns, the publish topology), see [`docs/reference/ARCHITECTURE.md`](docs/reference/ARCHITECTURE.md).
 
 ## What FluxFiles is
 
@@ -61,7 +61,7 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   bookkeeping — metadata, search/folder index, audit log, trash manifest, quota,
   and the rate limiter — into the operator's own self-hosted MySQL/PostgreSQL/SQLite
   instead of JSON files. File bytes stay fully storage-resident either way; it's
-  not a JWT claim and not a paid module. See `docs/DB-STORAGE-MIGRATION-DESIGN.md`.
+  not a JWT claim and not a paid module. See `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`.
 - **Authorization = signed JWT claims**; the host app owns identity/policy,
   FluxFiles only enforces. Keep enforcement centralized and consistent (disk,
   perms, path scope via `Claims::scopePath`/`isPathInScope`, owner-only, upload
@@ -79,7 +79,7 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   `AiTagger`; "share" = a narrow short-TTL token, not a stateful public endpoint.
 - Don't edit `dist/` or `vendor/` (build artifacts); edit source and rebuild.
   Don't read/print secrets from `.env`.
-- **`docs/CONFIG.md` is the single source of truth for every JWT claim + env var.**
+- **`docs/reference/CONFIG.md` is the single source of truth for every JWT claim + env var.**
   Document any new claim there (the `test-config-doc.php` guard enforces it). Mint
   tokens with the one-options-array API — `fluxfiles_token(['user'=>…, 'claims'=>[…]])`
   — where `claims` (mirrored in node/laravel/wordpress) sets any claim by raw name.
@@ -137,13 +137,13 @@ php packages/wordpress/tests/test-wp-smoke.php
 php packages/laravel/tests/test-laravel-smoke.php
 ```
 
-CI is `.github/workflows/test.yml` (14 jobs: core-php, adapter-core-floor,
+CI is `.github/workflows/test.yml` (15 jobs: core-php, adapter-core-floor,
 iframe-allow, api-e2e, selfboot-e2e, s3-minio, db-mysql, db-postgres, wrappers,
-node-sdk, browser-e2e, editor-e2e, pack-smoke, docker-build). `selfboot-e2e` runs
+node-sdk, python-token, browser-e2e, editor-e2e, pack-smoke, docker-build). `selfboot-e2e` runs
 every `tests/e2e/*-http.php` (each boots its own `php -S`) plus `test-sftp-live.php`
 against an `atmoz/sftp` container. `db-mysql`/`db-postgres` run the
 `FLUXFILES_STORAGE_BACKEND=db` suite against real MySQL/PostgreSQL service
-containers (see `docs/DB-STORAGE-MIGRATION-DESIGN.md`).
+containers (see `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`).
 
 ## Releases & versioning
 

@@ -6,7 +6,7 @@ namespace FluxFiles\Db;
 
 /**
  * Restores file_metadata rows previously produced by MetadataExporter
- * (docs/DB-STORAGE-MIGRATION-DESIGN.md §7). All-or-nothing: every entry's
+ * (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7). All-or-nothing: every entry's
  * path is validated against the caller's own scope before any row is
  * written, and the whole batch runs inside one transaction — a single bad
  * row aborts the entire import rather than leaving a partial write.

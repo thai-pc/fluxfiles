@@ -19,7 +19,7 @@ foreach ($envDirs as $dir) {
     }
 }
 
-// docs/DB-STORAGE-MIGRATION-DESIGN.md §8: reunite file_metadata rows with S3/R2
+// docs/design/DB-STORAGE-MIGRATION-DESIGN.md §8: reunite file_metadata rows with S3/R2
 // objects an external tool (raw sync, CRR, a bucket migration) moved outside
 // FluxFiles, by cross-referencing the x-amz-meta-fluxfiles-id breadcrumb each
 // object carries against file_metadata.object_uuid. Read-only by default —

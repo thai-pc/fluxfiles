@@ -27,7 +27,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
   has exposed these since `76d4f67`, but Python callers could only reach
   them through the raw `claims={}` escape hatch. Both builders and the
   shared `_apply_tenant_overrides()` helper now accept them directly,
-  mirroring `token.ts` 1:1. `docs/PYTHON-TOKEN-SDK-DESIGN.md`'s example
+  mirroring `token.ts` 1:1. `docs/design/PYTHON-TOKEN-SDK-DESIGN.md`'s example
   signature updated to match.
 
 ### Added — Editor plugins: `allowedTypes`/`path` forwarding
@@ -38,7 +38,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
   CKEditor4/Summernote via `config.fluxfiles.allowedTypes`/`path`) —
   previously only the vanilla SDK, React, and Vue wrappers exposed these.
 
-No new JWT claims or `docs/CONFIG.md` changes — this release wires up
+No new JWT claims or `docs/reference/CONFIG.md` changes — this release wires up
 already-existing capabilities (crop API, DLP/audit/legal-hold claims,
 picker filtering) that some SDKs/adapters weren't yet exposing.
 
@@ -94,7 +94,7 @@ picker filtering) that some SDKs/adapters weren't yet exposing.
 
 No new JWT claims beyond `allow_audit_export`/`audit_retention_days`/
 `allow_dlp_scan`(+tuning)/`allow_legal_hold` — all were already documented
-in `docs/CONFIG.md`; this release only wires mint-time helper support for
+in `docs/reference/CONFIG.md`; this release only wires mint-time helper support for
 claims core already enforced.
 
 ## [0.3.09] — 2026-09-09
@@ -131,7 +131,7 @@ claims core already enforced.
   invocation exits immediately instead of racing the one already in
   progress.
 
-No new JWT claims — `docs/CONFIG.md` is unaffected.
+No new JWT claims — `docs/reference/CONFIG.md` is unaffected.
 
 ## [0.3.08] — 2026-09-09
 
@@ -139,7 +139,7 @@ No new JWT claims — `docs/CONFIG.md` is unaffected.
 
 ### Added — Proactive license-expiry notifications (core UI, WordPress, Laravel, license-server)
 
-Four independent surfaces from `docs/LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md`,
+Four independent surfaces from `docs/design/LICENSE-EXPIRY-NOTIFICATIONS-DESIGN.md`,
 closing the gap where an expiring/expired licence was silent until a paid
 feature actually broke:
 
@@ -162,7 +162,7 @@ feature actually broke:
   lapsing differs; delivery is best-effort and never blocks issuance
   (`LicenseIssuer.php`, `LicenseMailer.php`, `LicenseStore.php`).
 
-No new JWT claims — `docs/CONFIG.md` is unaffected.
+No new JWT claims — `docs/reference/CONFIG.md` is unaffected.
 
 ## [0.3.07] — 2026-09-08
 
@@ -190,7 +190,7 @@ No new JWT claims — `docs/CONFIG.md` is unaffected.
   decode-level (`Claims::fromJwtPayload`) assertions for the
   `allow_extract`/`allow_chmod` absent-defaults-to-`true` behavior, so a
   regression there fails the suite rather than being silently coerced away.
-- `docs/CONFIG.md` documents the Python SDK as a fifth minting surface.
+- `docs/reference/CONFIG.md` documents the Python SDK as a fifth minting surface.
 
 ## [0.3.06] — 2026-09-06
 
@@ -203,8 +203,8 @@ No new JWT claims — `docs/CONFIG.md` is unaffected.
 
 ### Added — DLP/PII redaction, Legal Hold, and a free Compliance Readiness Scorecard
 
-Three features from the same design pass (`docs/DLP-PII-REDACTION-DESIGN.md`,
-`docs/RETENTION-LEGAL-HOLD-DESIGN.md`, `docs/COMPLIANCE-SCORECARD-DESIGN.md`):
+Three features from the same design pass (`docs/design/DLP-PII-REDACTION-DESIGN.md`,
+`docs/design/RETENTION-LEGAL-HOLD-DESIGN.md`, `docs/design/COMPLIANCE-SCORECARD-DESIGN.md`):
 
 - **DLP/PII redaction** — new paid module `dlp` (`allow_dlp_scan`), engine-only
   like OCR/Virus/Backup/C2PA (no client UI). Scans upload/putContent/
@@ -248,7 +248,7 @@ all four token builders (`embed.php`, node `token.ts`, Laravel, WordPress) so
 Studio-tier operators no longer hand-set those claims one by one. The
 `enterprise` preset is filled out to match `Plans.php`'s full module list
 (adds versioning/webhooks/ai/ocr/backup/audit-export).
-`docs/INDUSTRY-PRESETS.md` updated to reflect the shipped preset instead of
+`docs/guides/INDUSTRY-PRESETS.md` updated to reflect the shipped preset instead of
 flagging it as a gap.
 
 ## [0.3.04] — 2026-09-04
@@ -303,8 +303,8 @@ security review.)
 
 `/api/fm/terminal` reuses an OpenSSH ControlMaster session across commands on
 eligible SFTP disks instead of reconnecting via phpseclib per command, per
-`docs/SFTP-CONTROLMASTER-SPEC.md` (the mitigation plan for the 7 findings in
-`docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md`). `SshMultiplexer` shells to the
+`docs/security/SFTP-CONTROLMASTER-SPEC.md` (the mitigation plan for the 7 findings in
+`docs/security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md`). `SshMultiplexer` shells to the
 real `ssh` binary via `proc_open` (array argv, no shell) for cold-connect and
 reuse, with a credential-hash cache key, a `0700` hash-named socket dir, a
 clamped `ControlPersist` + LRU-capped socket count, and `known_hosts`
@@ -342,7 +342,7 @@ does — and have been corrected to a verified one-liner.)
 
 ### Changed — `MetadataRepositoryInterface` widened (BC-break for direct implementers)
 
-Phase 1 of the DB-storage-migration design (`docs/DB-STORAGE-MIGRATION-DESIGN.md`
+Phase 1 of the DB-storage-migration design (`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`
 §2): `MetadataRepositoryInterface` grew from 11 to 26 methods — folder-index
 (`trackDir`/`trackParents`/`dirsCreated`/`renameDirPrefix`/`deleteDirPrefix`/
 `searchFolders`), audit (`readAudit`/`audit`/`readAuditArchive`/
@@ -368,7 +368,7 @@ conformance guard between the interface and `StorageMetadataHandler`.
 
 ### Fixed — ACL role presets: `viewer`/`editor` could chmod on SFTP disks
 
-`docs/ACL-ROLE-PRESETS-DESIGN.md`'s `viewer`/`editor` presets omitted
+`docs/design/ACL-ROLE-PRESETS-DESIGN.md`'s `viewer`/`editor` presets omitted
 `allow_extract`/`allow_chmod` on the assumption that an absent claim decodes
 false — but `Claims::fromJwtPayload` actually defaults those two specifically
 to **true** when absent (unlike `allow_code_edit`/`show_hidden`, which do
@@ -526,8 +526,8 @@ for the standalone UI.
   a destructive admin-only operation, and locked the OIDC discovery/JWKS
   disk cache to directories the process actually owns (closes a local
   cache-poisoning path when `FLUXFILES_STORAGE_PATH` is unset).
-- New claims + env vars documented in `docs/CONFIG.md`; new routes in
-  `docs/API.md` and `.claude/api-map.md`.
+- New claims + env vars documented in `docs/reference/CONFIG.md`; new routes in
+  `docs/guides/API.md` and `.claude/api-map.md`.
 
 ## [0.2.94b] — 2026-08-28
 
@@ -540,7 +540,7 @@ Webhooks module whenever a visitor uploads through an intake portal link, so
 an operator with `allow_webhooks` configured hears about a submission without
 polling the intake list. Config is baked into the intake record at create
 time (not the portal JWT, which is visitor-facing), matching the pattern
-`docs/INTAKE-NOTIFY-ON-RECEIPT-DESIGN.md` lays out; dispatch is
+`docs/design/INTAKE-NOTIFY-ON-RECEIPT-DESIGN.md` lays out; dispatch is
 post-response, same at-most-once semantics as every other webhook event. New
 self-booting e2e coverage in `tests/e2e/test-intake-notify-http.php`. No new
 claims — reuses `allow_webhooks`/`webhook_url`/`webhook_events`/
@@ -601,7 +601,7 @@ what Share got in `0.2.92`, closing the gap between the two paid heroes:
 - New `packages/core/tests/e2e/test-intake-http.php` self-booting HTTP e2e suite
   (Intake previously had no e2e coverage at this level, unlike Share).
 
-New claims documented in `docs/CONFIG.md`. See `docs/INTAKE-BRANDING-ANALYTICS-DESIGN.md`
+New claims documented in `docs/reference/CONFIG.md`. See `docs/design/INTAKE-BRANDING-ANALYTICS-DESIGN.md`
 for the full design.
 
 ## [0.2.92] — 2026-08-26
@@ -621,7 +621,7 @@ record (`_fluxfiles/share-events/<jti>.jsonl`) for every `view`/`download`/
 retains `owner` so this still works on a revoked share. Rotates at 1MB / keeps the
 last 2000 lines per share; the per-share event file is deleted when its tombstone is
 pruned. Zero new i18n strings — reuses existing `share_revoked`/`perm_denied` error
-codes. See `docs/SHARE-ANALYTICS-DESIGN.md` for the full design.
+codes. See `docs/design/SHARE-ANALYTICS-DESIGN.md` for the full design.
 
 ## [0.2.91] — 2026-08-26
 
@@ -678,7 +678,7 @@ alone and leaving these unreleased:
   caller (it could echo back server file-layout paths) — logged server-side instead;
   signed output now writes through `writeScopedFile()`.
 
-No new claims and no `docs/CONFIG.md` changes — every fix uses claims/core APIs that
+No new claims and no `docs/reference/CONFIG.md` changes — every fix uses claims/core APIs that
 already existed as of `core-v0.2.74`.
 
 ## [0.2.90] — 2026-08-26
@@ -858,7 +858,7 @@ original job in the reveal modal.
 
 ### Added — a runbook for the steps that are infrastructure, not code
 
-`docs/OPERATIONS.md` is the seller-side counterpart to `ACTIVATE.md`: rotate leaked
+`docs/guides/OPERATIONS.md` is the seller-side counterpart to `ACTIVATE.md`: rotate leaked
 tokens, host the module artifacts, deploy the update and licence servers, point Polar's
 webhook at it, create the production products, switch the landing over. Order matters —
 each step depends on the one before — and the known limits are written down (the
@@ -899,7 +899,7 @@ the free-core path untestable on the one machine that has the private packages: 
 "module absent → 501" test would see the module. The suites that want a module loaded
 require its source explicitly, which is the honest way to say "this run has it".
 
-### Added — `docs/ACTIVATE.md`
+### Added — `docs/guides/ACTIVATE.md`
 
 What to do with a licence key, per platform. It leads with the wrong first step almost
 everyone takes — `composer require fluxfiles/share`, which fails because the package is
@@ -1679,7 +1679,7 @@ the index.
   now takes a single options object; the `claims` map sets ANY JWT claim by its raw
   name (the same passthrough added to node/laravel/wordpress) so nothing is unsettable.
   The legacy positional signature still works.
-- **`docs/CONFIG.md` — single configuration reference** for all 65 JWT claims + server
+- **`docs/reference/CONFIG.md` — single configuration reference** for all 65 JWT claims + server
   env vars, with a guard test (`test-config-doc.php`) that fails if a claim is
   undocumented.
 

@@ -1,7 +1,7 @@
 """AES-256-GCM / HKDF-SHA256 byte-layout tests for crypto.py.
 
 Loads the shared cross-language fixture (docs/testdata/byob-vectors.json), per
-docs/PYTHON-TOKEN-SDK-DESIGN.md §6.2 — these are the release-blocking
+docs/design/PYTHON-TOKEN-SDK-DESIGN.md §6.2 — these are the release-blocking
 known-answer checks: a wrong salt/info/byte-order fails immediately against
 PHP-derived ground truth, with no PHP install required at Python test time
 (unlike test_php_compat.py, which shells out live).

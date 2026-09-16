@@ -59,7 +59,7 @@ interface MetadataRepositoryInterface
     public function removeTrash(string $disk, string $id): void;
 
     // ---------------------------------------------------------------------
-    // Legal hold (retention) — docs/RETENTION-LEGAL-HOLD-DESIGN.md §5. Free/core
+    // Legal hold (retention) — docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §5. Free/core
     // storage primitives; enforcement (FileManager::assertNoActiveHold()) is
     // unconditional and license-independent — see the design doc for why.
     // ---------------------------------------------------------------------

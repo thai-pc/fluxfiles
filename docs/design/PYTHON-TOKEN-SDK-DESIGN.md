@@ -4,7 +4,7 @@
 > `[0.3.0x]`, released alongside `core-v0.2.83`/`node-v0.1.28`). This is the
 > third token-minting SDK (after the PHP core's `embed.php` and
 > `@fluxfiles/node`), so it needed no new business decision — it's the same
-> "free MIT tooling" category as Node's package (§1 of `docs/CONFIG.md`'s
+> "free MIT tooling" category as Node's package (§1 of `docs/reference/CONFIG.md`'s
 > minting API is already documented as "PHP / Node / Laravel / WordPress";
 > Python is a fourth mint-side surface, not a fifth paid module). No plan doc
 > exists for this because none was needed: the scope is fixed by
@@ -103,7 +103,7 @@ surface an earlier draft of this doc proposed. `create_token()` and
 snake_case (`maxUploadMb` → `max_upload_mb`, `ownerOnly` → `owner_only`,
 `webpMaxWidth` → `webp_max_width`, …). The `claims: dict[str, Any] | None`
 escape hatch stays, scoped down to its real purpose now: **claims not yet
-ported to a typed kwarg** (i.e. a brand-new claim added to `docs/CONFIG.md`
+ported to a typed kwarg** (i.e. a brand-new claim added to `docs/reference/CONFIG.md`
 after this SDK's last release), not a substitute for typing the existing
 ~80.
 
@@ -339,7 +339,7 @@ PyJWT's exception hierarchy.
 ## 3. Claims parity
 
 **No new claims. No renamed claims.** Every claim this SDK can set is one of
-the ~100 rows already in `docs/CONFIG.md` §2, using the exact snake_case name
+the ~100 rows already in `docs/reference/CONFIG.md` §2, using the exact snake_case name
 the PHP core's `Claims::fromJwtPayload` decodes. With the full-typed-parity
 decision in §2, there are now two ways a claim reaches the payload, and both
 use the identical name:
@@ -496,7 +496,7 @@ zero re-slicing beyond splitting off the 12-byte nonce prefix.
 ## 5. Role & edition presets
 
 Both are ported, verbatim, from the **already-fixed** state documented in
-`docs/ACL-ROLE-PRESETS-DESIGN.md`'s "Status" section — not from that
+`docs/design/ACL-ROLE-PRESETS-DESIGN.md`'s "Status" section — not from that
 document's original (buggy) draft tables. Two historical bugs must not be
 reintroduced:
 
@@ -644,7 +644,7 @@ operator minted the equivalent BYOB+role token today.
 `prefix`/`disks`/`user_id`/quota claims, and — critically — no role preset
 ever sets any paid-module `allow_<x>` claim or `allow_terminal` (those come
 only from `edition` or explicit kwargs/`claims`), per
-`docs/ACL-ROLE-PRESETS-DESIGN.md` §2's closing notes. This is unchanged by
+`docs/design/ACL-ROLE-PRESETS-DESIGN.md` §2's closing notes. This is unchanged by
 including role/edition on BYOB — the presets' *content* doesn't change
 depending on which builder calls them, only whether BYOB *reaches* them at
 all (now: yes).
@@ -979,7 +979,7 @@ addition. Concretely:
   - The `'enterprise edition preset grants every module claim...'` and
     `'studio edition preset must NOT leak allow_dlp_scan...'` tests
     (47–61) — migrate to `edition_presets` vectors.
-  - The entire `describe('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md)', ...)`
+  - The entire `describe('role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md)', ...)`
     block (lines 317–393: perms-early-resolution, viewer/editor/admin/
     superadmin bundles, explicit-override-wins, edition+role composition,
     role-never-touches-scoping, superadmin-empty-prefix) — migrate to
@@ -1178,10 +1178,10 @@ mis-scoped later:
   ends at producing the JWT string that iframe/SDK is given.
 - **No `postMessage` bridge, no `FM_COMMAND`/`FM_EVENT` handling.** Those are
   iframe↔host-window browser concepts with no Python-side equivalent or need.
-- **No new JWT claims, no `docs/CONFIG.md` changes.** This SDK is a pure
+- **No new JWT claims, no `docs/reference/CONFIG.md` changes.** This SDK is a pure
   consumer of the existing claim table — see §3's "no new claims" statement.
   If a future FluxFiles feature needs a new claim, that claim gets added
-  once to `docs/CONFIG.md`/`Claims.php`, and this SDK's `claims` escape
+  once to `docs/reference/CONFIG.md`/`Claims.php`, and this SDK's `claims` escape
   hatch picks it up immediately with zero code changes, until a later SDK
   release promotes it to a typed kwarg for parity with Node.
 
@@ -1240,7 +1240,7 @@ and are now final:
    config store) — that stays as-is, only the role/edition preset mechanics
    are unified.
 
-## Claims to add to `docs/CONFIG.md`
+## Claims to add to `docs/reference/CONFIG.md`
 
 **None.** This SDK introduces zero new claims, zero new claim defaults, and
 zero new env vars — it is a pure client of the existing table (§2's "How to

@@ -2,7 +2,7 @@
 (`create_byob_token`). Mirrors `packages/node/src/token.ts` 1:1 (camelCase ->
 snake_case) and PHP's `embed.php` (`_fluxfiles_build_token()` /
 `fluxfiles_byob_token()`), including the role/edition preset mechanics from
-docs/ACL-ROLE-PRESETS-DESIGN.md.
+docs/design/ACL-ROLE-PRESETS-DESIGN.md.
 """
 
 import os
@@ -19,7 +19,7 @@ from .types import ByobDiskConfig
 
 _MIN_SECRET_BYTES = 32
 
-# Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): defaults a person's
+# Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): defaults a person's
 # capability level; explicit kwargs always win. `role` never itself becomes a
 # JWT claim — it only ever expands into ordinary claims decoded server-side
 # already. `viewer`/`editor` set `allow_extract`/`allow_chmod` explicitly
@@ -392,7 +392,7 @@ def _apply_tenant_overrides(
 
     # Generic escape hatch: ANY claim by its raw (snake_case) name. Merged last
     # so an explicit claim wins over a preset/group default. The server
-    # sanitizes on decode. See docs/CONFIG.md for the full claim list.
+    # sanitizes on decode. See docs/reference/CONFIG.md for the full claim list.
     if claims:
         for k, v in claims.items():
             if v is not None:
@@ -538,7 +538,7 @@ def create_token(
     resolved_secret = _resolve_secret(secret)
     now = int(time.time())
 
-    # Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE
+    # Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE
     # the base payload dict, because `perms`/`owner_only` already have an
     # unconditional default baked into that dict below — a plain "set if
     # absent" guard would never fire for them.

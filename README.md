@@ -25,15 +25,15 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
-- [Production Deployment](#production-deployment) — full nginx/Apache configs: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- [Production Deployment](#production-deployment) — full nginx/Apache configs: [`docs/guides/DEPLOYMENT.md`](docs/guides/DEPLOYMENT.md)
 - [Embedding in Your App](#embedding-in-your-app)
-  - [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard) — internals: [`docs/FEATURES.md`](docs/FEATURES.md)
+  - [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard) — internals: [`docs/guides/FEATURES.md`](docs/guides/FEATURES.md)
 - [Storage Disks](#storage-disks)
   - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Git deploy](#one-click-git-deploy-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
   - [Import from URL](#import-from-url)
 - [Multi-tenant](#multi-tenant)
-- [API Reference](#api-reference) — full route tables: [`docs/API.md`](docs/API.md)
+- [API Reference](#api-reference) — full route tables: [`docs/guides/API.md`](docs/guides/API.md)
 - [Framework Adapters](#framework-adapters)
 - [Internationalization](#internationalization)
 - [Security](#security)
@@ -42,6 +42,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Project Structure](#project-structure)
 - [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson)
 - [Customization](#customization)
+- [Troubleshooting / FAQ](#troubleshooting--faq)
 - [Attribution](#attribution)
 - [License](#license)
 
@@ -49,30 +50,41 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 
 ## Features
 
-Everything here is in the open-source core. The **Best for** column tells you when
-to reach for each one.
+Everything here is in the open-source (MIT) core unless marked **🔒 Paid**. The
+**Best for** column tells you when to reach for each one. Paid features are
+separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md).
 
 | Area | Feature | Best for |
 |---|---|---|
 | **Storage** | Local · AWS S3 · Cloudflare R2 · any S3-compatible · **SFTP** | Local for one VPS/demo; S3/R2 for SaaS + CDN (R2 = no egress fee); SFTP to manage a VPS/host like cPanel |
 | | **BYOB** — each tenant's own bucket, creds encrypted in the JWT | Multi-tenant SaaS where the user pays for their own storage |
 | | **Cross-disk copy/move** (streamed) | Backups, storage migration, "process locally → push to cloud" |
+| | 🔒 Paid: **Backup** (scheduled/on-demand snapshots) | Disaster recovery for storage-resident data |
 | **Auth** | JWT HS256 + granular claims (perms, disk, path prefix, quota, ext allowlist, owner-only) | Any multi-tenant app — stateless, no session DB; your backend mints the token |
+| | `role` claim preset (`viewer`/`editor`/`admin`/`superadmin`) — see [`docs/design/ACL-ROLE-PRESETS-DESIGN.md`](docs/design/ACL-ROLE-PRESETS-DESIGN.md) | Quick permission bundles without hand-picking claims |
+| | 🔒 Paid: **SSO bridge** (OIDC) | Enterprise login instead of per-tenant token minting |
 | **Files** | Upload / download / move / copy / rename / delete / mkdir / bulk multi-select | Every app that manages files |
 | | **Chunk upload** (S3 multipart) | Reliable large files (video, design, >10 MB on S3/R2) |
 | | **Import from URL** (SSRF-guarded, opt-in) | CMS "import by link", stock imagery |
 | | **Zip download + Extract** (slip/bomb-guarded) | Deploys, backups, "send me all these files" |
 | | **Trash** — soft-delete files + folders, restore | Undo accidental deletes (Drive-style) |
-| **Images** | Auto WebP variants + **on-demand WebP** at any size + responsive `srcset` | Fast, lightweight, SEO images for CMS/blog/e-commerce |
+| | 🔒 Paid: **Versioning** | File history / rollback |
+| | 🔒 Paid: **Share links**, **Intake** (upload portals) | Client delivery, "send us your files" forms |
+| **Images** | Auto WebP variants + **on-demand WebP/AVIF** at any size + responsive `srcset` | Fast, lightweight, SEO images for CMS/blog/e-commerce |
 | | **Crop** (aspect presets) | Avatars, thumbnails, hero images |
 | | **Watermark** — burn-in editor (and an opt-in serve-time overlay for selling images) | Branding assets; or protecting previews of images you sell |
+| | **Optimize** — recompress to WebP at rest + PDF compression (free/core) | Shrink storage/bandwidth without a paid module |
 | **Media** | Inline image/video/audio/PDF preview + gated private local streaming | Course platforms, private media, document portals |
 | **Admin / hosting** | Code/config editor (CodeMirror), **SFTP chmod**, **SSH terminal** (opt-in), **one-click Git deploy** (opt-in) | cPanel-style tooling: edit `.env`/`nginx.conf`, set permissions, run `git`/`composer`, redeploy a repo |
-| **Metadata** | Title/alt/caption/tags + full-text file & folder search; **AI auto-tag** (BYO key) | Digital Asset Management, SEO, large media libraries |
+| **Metadata** | Title/alt/caption/tags + full-text file & folder search | Digital Asset Management, SEO, large media libraries |
+| | 🔒 Paid: **AI auto-tag / AI vision** (BYO key), **OCR** | Auto-tagging, background removal/upscale/smart-crop, text extraction |
 | **Insights** | Storage usage dashboard (quota + by type/folder) | Show tenants their consumption |
 | **Safety** | Dedup (SHA-256), rate limiting, audit log, quota, origin/CSRF, dangerous-ext block, SSRF + zip guards | Production hardening, baked in |
+| | 🔒 Paid: **Audit export/purge**, **DLP**, **Legal hold**, **Virus scan**, **C2PA** | Compliance and content-authenticity requirements |
+| **Storage backend** | Bookkeeping (metadata/index/audit/trash/quota/rate-limit) in JSON files (default) or your own MySQL/PostgreSQL/SQLite | See [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](docs/design/DB-STORAGE-MIGRATION-DESIGN.md) |
 | **UI** | Dark mode (auto/manual), 16 languages + RTL, responsive | Global, white-label, mobile |
 | **Adapters** | Laravel · WordPress · React · Vue/Nuxt · CKEditor 4 · TinyMCE · Summernote · `@fluxfiles/node` | Drop into your stack, skip the plumbing |
+| | 🔒 Paid: **Webhooks** | Event-driven integrations (at-most-once delivery) |
 
 ## Requirements
 
@@ -95,9 +107,10 @@ docker run -p 8080:80 \
   ghcr.io/thai-pc/fluxfiles:latest
 ```
 
-Open **http://localhost:8080/public/index.html**. The container reads every
-`FLUXFILES_*`, `AWS_*` and `R2_*` env var (see [Environment Variables](#environment-variables)).
-Persist uploads + runtime state with a volume, and add cloud creds as needed:
+Open **http://localhost:8080/public/index.html**. On its first boot the container
+materializes `FLUXFILES_*`, `AWS_*`, `R2_*`, and `SFTP_*` variables into
+`/app/packages/core/.env`; that file remains authoritative on later boots. Persist
+uploads + runtime state with a volume, and add cloud creds as needed:
 
 ```bash
 docker run -p 8080:80 \
@@ -106,6 +119,14 @@ docker run -p 8080:80 \
   -v fluxfiles-data:/app/packages/core/storage \
   ghcr.io/thai-pc/fluxfiles:latest
 ```
+
+When that volume is retained, changing `docker run -e …` does **not** rotate an
+existing setting: update the persisted `.env` deliberately (or replace it from
+your secret manager), then restart the container. Back up the entire `storage`
+volume, including hidden `_fluxfiles/` bookkeeping. The production image includes
+the extensions needed by the JSON and SQLite/MySQL/PostgreSQL DB backends; use
+[`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](docs/design/DB-STORAGE-MIGRATION-DESIGN.md) for
+the migration procedure.
 
 Every tagged core release publishes three Docker tags: `latest`, the exact
 release version (e.g. `0.2.81`), and its minor line (e.g. `0.2`), for
@@ -216,7 +237,8 @@ $token = fluxfiles_token(
 
 > **Units at a glance:** `maxUploadMb` and `maxStorageMb` are **megabytes (MB)**,
 > `ttl` is **seconds**, `allowedExt` is a list of **extensions** (lowercase, no
-> leading dot). See the [parameter reference](#token-parameters--units) below.
+> leading dot). See the [configuration reference](docs/reference/CONFIG.md) for
+> parameter types and units.
 
 Or generate via CLI for testing:
 
@@ -234,7 +256,7 @@ blocking a handful of sensitive paths (`.env`, `_fluxfiles/`, `rate_limit.json`)
 and neutralizing uploaded HTML/SVG so they can't run as same-origin XSS.
 
 **Full nginx server block, Apache `.htaccess`, and directory-permissions
-commands: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).**
+commands: [`docs/guides/DEPLOYMENT.md`](docs/guides/DEPLOYMENT.md).**
 
 ### Upload size limits (three layers)
 
@@ -360,7 +382,7 @@ AVIF/WebP are content-negotiated for free via `Accept` (`format=auto`, default),
 converted + cached on first request into `_variants/`, and width/quality are
 snapped to a bounded set of sizes so cache growth can't run away. Full mechanics
 — negotiation, caching, box sizing (`fit`/`dpr`), SVG/GIF exclusions:
-[`docs/FEATURES.md#on-demand-webp--avif`](docs/FEATURES.md#on-demand-webp--avif).
+[`docs/guides/FEATURES.md#on-demand-webp--avif`](docs/guides/FEATURES.md#on-demand-webp--avif).
 
 > `img_base` carries a short-lived per-file token in the query string (an `<img>`
 > can't send an `Authorization` header) — the same tradeoff as the media stream
@@ -368,7 +390,7 @@ snapped to a bounded set of sizes so cache growth can't run away. Full mechanics
 > stream secret; the standalone/Docker app always does this, and **the Laravel and
 > WordPress proxy adapters now do too**, so `/api/fm/img` is fully proxied (Laravel
 > needs core ≥ 0.2.77, WordPress needs core ≥ 0.2.79 — see the `webp_enabled` entry
-> in [`docs/CONFIG.md`](docs/CONFIG.md)).
+> in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md)).
 
 #### Responsive `srcset`
 
@@ -381,14 +403,14 @@ string, so the host can drop a responsive image straight from `list()`:
 ```
 
 Candidate widths come from the token's `srcset_widths` ladder, capped at the
-image's natural width. Details: [`docs/FEATURES.md#responsive-srcset`](docs/FEATURES.md#responsive-srcset).
+image's natural width. Details: [`docs/guides/FEATURES.md#responsive-srcset`](docs/guides/FEATURES.md#responsive-srcset).
 
 ### Watermark
 
 FluxFiles watermarks images the way the rest of the industry does — two modes for
 two jobs. **For almost everyone it's the first one (burn-in).** The second is an
 advanced mode only for selling images. Full walkthrough of both, including the
-overlay claims and adapter support matrix: [`docs/FEATURES.md#watermark`](docs/FEATURES.md#watermark).
+overlay claims and adapter support matrix: [`docs/guides/FEATURES.md#watermark`](docs/guides/FEATURES.md#watermark).
 
 #### Watermark editor (burn-in) — the normal way
 
@@ -430,7 +452,7 @@ $token = fluxfiles_token([
 | Best for | Branding, putting marked images in content | A stock-photo / photo-seller store |
 
 > The two are **mutually exclusive per token** — see
-> [`docs/FEATURES.md#watermark`](docs/FEATURES.md#watermark) for why, plus the
+> [`docs/guides/FEATURES.md#watermark`](docs/guides/FEATURES.md#watermark) for why, plus the
 > adapter support matrix and how to render live previews on a gallery page.
 
 ### Usage dashboard
@@ -724,7 +746,7 @@ core hosts nothing; that server owns its own auth. Only `http(s)` URLs are accep
 > (`FLUXFILES_TERMINAL_DISABLED`), and an *accident* guard (not a security
 > boundary) against catastrophic commands. Full threat model, why the
 > dangerous-command list is deliberately small, and the shared-hosting/no-shell
-> fallback: [`docs/FEATURES.md#ssh-terminal--security-model`](docs/FEATURES.md#ssh-terminal--security-model).
+> fallback: [`docs/guides/FEATURES.md#ssh-terminal--security-model`](docs/guides/FEATURES.md#ssh-terminal--security-model).
 
 **Adapter support (terminal):** `/api/fm/terminal` **is proxied by both the
 Laravel and WordPress adapters** (`FluxFilesController::terminal()` /
@@ -775,7 +797,7 @@ $token = fluxfiles_token([
 > arbitrary-shell door — the repo path/branch/hooks-enabled are all
 > operator-controlled claims. It still lands a non-atomic deploy onto a
 > (possibly live) webroot — see
-> [`docs/GIT-DEPLOY-SECURITY-REVIEW.md`](docs/GIT-DEPLOY-SECURITY-REVIEW.md) for
+> [`docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`](docs/security/GIT-DEPLOY-SECURITY-REVIEW.md) for
 > the full threat model, including what's documented-but-not-solved.
 
 **Adapter support:** proxied by both Laravel (`FluxFilesController::gitDeploy()`)
@@ -932,20 +954,23 @@ Metadata and image variants are transferred together. Quota is checked on the de
 
 ## JWT Token Structure
 
-> 📖 **Full config reference:** [`docs/CONFIG.md`](docs/CONFIG.md) is the single source
+> 📖 **Full config reference:** [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) is the single source
 > of truth for **all** JWT claims (with types/defaults) **and** server env vars.
-> Bought a paid edition? [`docs/ACTIVATE.md`](docs/ACTIVATE.md) covers installing the
+> Bought a paid edition? [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md) covers installing the
 > module, where the licence key goes on each platform, and which of the three gates a
 > given error is telling you about. Self-hosting? See
-> [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for web-server config. Selling FluxFiles
-> rather than using it? [`docs/OPERATIONS.md`](docs/OPERATIONS.md) is the "going live"
+> [`docs/guides/DEPLOYMENT.md`](docs/guides/DEPLOYMENT.md) for web-server config. Selling FluxFiles
+> rather than using it? [`docs/guides/OPERATIONS.md`](docs/guides/OPERATIONS.md) is the "going live"
 > runbook (Polar, licence server, module hosting). The
 > tables below cover the common ones; mint everything in one options object —
 > `fluxfiles_token(['user' => …, 'claims' => […]])` — where `claims` is the escape
 > hatch for any claim by its raw name. Want a ready-made config for a specific
 > vertical (agency client sites, photo studio delivery, SaaS multi-tenant, ...)
 > instead of assembling claims from scratch? See
-> [`docs/INDUSTRY-PRESETS.md`](docs/INDUSTRY-PRESETS.md).
+> [`docs/guides/INDUSTRY-PRESETS.md`](docs/guides/INDUSTRY-PRESETS.md). Want a quick permission bundle
+> instead of picking claims one by one? The mint-time `role` claim
+> (`viewer`/`editor`/`admin`/`superadmin`) expands to a preset set of claims — see
+> [`docs/design/ACL-ROLE-PRESETS-DESIGN.md`](docs/design/ACL-ROLE-PRESETS-DESIGN.md).
 
 ```json
 {
@@ -964,7 +989,7 @@ Metadata and image variants are transferred together. Quota is checked on the de
 ```
 
 The full claim list (all 100, with types/defaults/units) and every `fluxfiles_token()`
-parameter live in [`docs/CONFIG.md`](docs/CONFIG.md) — kept as the single copy so it
+parameter live in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) — kept as the single copy so it
 can't drift from what the code actually reads. The handful used in every app:
 `sub`, `perms`, `disks`, `prefix`, `max_upload`, `allowed_ext`, `ttl` (a
 `fluxfiles_token()` parameter, not a claim — it sets `exp = iat + ttl`, in seconds).
@@ -1193,7 +1218,7 @@ or `{ "data": null, "error": "..." }` on error with the matching HTTP status.
 **Full reference** — every route (trash, zip/extract, code editor, chmod,
 metadata, search, quota, audit, Bucket Doctor, chunk upload), request/response
 bodies, and the upload/duplicate-detection JSON shapes:
-[`docs/API.md`](docs/API.md).
+[`docs/guides/API.md`](docs/guides/API.md).
 
 > **Tokened media endpoints** (query-string token, for `<img>`/`<video>`):
 > `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see
@@ -1232,10 +1257,11 @@ same iframe + `postMessage` SDK, so anything the standalone UI does, they do too
 
 ```php
 // Laravel controller
-$token = FluxFiles\Laravel\FluxFilesFacade::token(
-    userId: (string) auth()->id(), perms: ['read', 'write'],
-    disks: ['local', 's3'], prefix: 'users/'.auth()->id().'/'
-);
+$token = FluxFiles\Laravel\FluxFilesFacade::token((string) auth()->id(), [
+    'perms'  => ['read', 'write'],
+    'disks'  => ['local', 's3'],
+    'prefix' => 'users/' . auth()->id() . '/',
+]);
 ```
 ```blade
 <x-fluxfiles disk="s3" mode="browser" height="600px" />   {{-- Blade --}}
@@ -1392,10 +1418,10 @@ bash scripts/pack-smoke.sh all                       # verifies the published di
 make test PHP=8.4   # one version  ·  make test-all  # 8.1–8.4  ·  make up  # app:8080 + MinIO:9000
 ```
 
-`.github/workflows/test.yml` runs all of this (14 jobs, including dedicated
+`.github/workflows/test.yml` runs all of this (15 jobs, including dedicated
 `db-mysql`/`db-postgres` jobs for the opt-in `FLUXFILES_STORAGE_BACKEND=db` mode).
 For the CI map, the adapter↔core floor guard, and the tag→registry release flow, see
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+[`docs/reference/ARCHITECTURE.md`](docs/reference/ARCHITECTURE.md).
 
 ---
 
@@ -1411,13 +1437,13 @@ Only two are required — everything else has a working default:
 Storage-disk credentials (`AWS_*`, `R2_*`, `SFTP_*`) are covered in
 [Storage Disks](#storage-disks) above, next to the config that reads them. Everything
 else — rate limits, local-media privacy, URL import, terminal, AI tagging, and more —
-is documented with its default in [`docs/CONFIG.md`](docs/CONFIG.md).
+is documented with its default in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md).
 
 ---
 
 ## Project Structure
 
-> **Contributing?** See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the
+> **Contributing?** See [`docs/reference/ARCHITECTURE.md`](docs/reference/ARCHITECTURE.md) for how the
 > engine and adapters relate, the three integration patterns, and the publish flow.
 
 ```
@@ -1471,6 +1497,13 @@ Local file-backed counter used by the rate limiter (per-user read/write quotas c
 - Safe to delete during development (it will be recreated), but it may reset rate-limit counters.
 - In production, **do not expose this file publicly** (deny access at your web server).
 
+> Everything above describes the **default `FLUXFILES_STORAGE_BACKEND=json`** mode. Set
+> `FLUXFILES_STORAGE_BACKEND=db` to move metadata, search/folder index, audit log, trash
+> manifest, quota, and the rate limiter into your own self-hosted MySQL/PostgreSQL/SQLite
+> instead — none of the `_fluxfiles/*.json` files or `rate_limit.json` above are created
+> or used in that mode. File bytes always stay on your configured disk either way. See
+> [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](docs/design/DB-STORAGE-MIGRATION-DESIGN.md).
+
 ---
 
 ## Customization
@@ -1490,6 +1523,24 @@ Local file-backed counter used by the rate limiter (per-user read/write quotas c
 | **Translations** | `packages/core/lang/*.json` | Edit existing or add new locale |
 | **Dangerous extensions** | `packages/core/api/FileManager.php` | `DANGEROUS_EXTENSIONS` constant |
 | **Packages** | `packages/*/` | Core, adapters, SDK |
+
+---
+
+## Troubleshooting / FAQ
+
+| Problem | Likely cause / fix |
+|---|---|
+| `403` on an otherwise-valid request | A JWT claim is scoping you out — check `perms`, `disk`, `prefix`, `owner_only`, or an `allow_*` feature claim. See [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md). |
+| `501` calling a feature endpoint (share, versioning, webhooks, AI vision, OCR, virus scan, backup, SSO, audit export, DLP, legal hold, C2PA) | That's a **paid module** and isn't installed — see [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md). Everything in the [Features](#features) table above is free/core; these are separate add-ons. |
+| `402` on a paid-module endpoint | Module is installed but the license didn't validate — check [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md) and your license server config. |
+| Uploaded/renamed files "disappear" or don't show up where expected | Check `prefix`/`disks` claims scoping the token, and whether you're looking at the composer-install vs monorepo storage root — see [`packages/core/README.md`](packages/core/README.md#where-the-files-land--git-clone-vs-composer-require). |
+| Search or folder search returns stale/missing results after manually touching files on disk | You edited storage outside the API. Delete `_fluxfiles/index.json` / `dirs.json` to force a rebuild — see [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson). |
+| Rate-limit errors under normal use | Tune `FLUXFILES_RATE_LIMIT_READ` / `FLUXFILES_RATE_LIMIT_WRITE` in `.env`, or switch to `FLUXFILES_STORAGE_BACKEND=db` for DB-backed limits at scale. |
+| Token works standalone but not embedded via iframe/SDK | Never pass the JWT in a URL query string — adapters send it over `postMessage`; check `FLUXFILES_ALLOWED_ORIGINS` and browser console for `postMessage` origin mismatches. See [Security](#security). |
+| SFTP disk connection fails after enabling hardening | `require_host_key`/`strict_algorithms` fail closed on legacy servers — see the [SFTP disk](#sftp-disk-vps--shared-hosting) section. |
+| PDF optimize returns `501 pdf_unavailable` | Server is missing Ghostscript (`gs`) — install it or skip PDF optimization. |
+
+Still stuck? Check [`docs/reference/ARCHITECTURE.md`](docs/reference/ARCHITECTURE.md) for the runtime flow, [`docs/guides/API.md`](docs/guides/API.md) for route details, or open an issue.
 
 ---
 

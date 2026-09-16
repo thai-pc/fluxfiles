@@ -10,10 +10,10 @@ RUN composer update -d packages/core --no-dev --prefer-dist --no-interaction --n
 
 # --- runtime ---
 FROM php:8.3-fpm-alpine
-RUN apk add --no-cache nginx libpng libjpeg-turbo freetype libwebp libzip \
-    && apk add --no-cache --virtual .build $PHPIZE_DEPS libpng-dev libjpeg-turbo-dev freetype-dev libwebp-dev libzip-dev \
+RUN apk add --no-cache nginx libpng libjpeg-turbo freetype libwebp libzip libcurl oniguruma sqlite-libs libpq mariadb-connector-c \
+    && apk add --no-cache --virtual .build $PHPIZE_DEPS libpng-dev libjpeg-turbo-dev freetype-dev libwebp-dev libzip-dev curl-dev oniguruma-dev sqlite-dev postgresql-dev mariadb-connector-c-dev \
     && docker-php-ext-configure gd --with-jpeg --with-freetype --with-webp \
-    && docker-php-ext-install -j"$(nproc)" gd zip \
+    && docker-php-ext-install -j"$(nproc)" curl gd mbstring pdo_mysql pdo_pgsql pdo_sqlite zip \
     && apk del .build
 
 WORKDIR /app

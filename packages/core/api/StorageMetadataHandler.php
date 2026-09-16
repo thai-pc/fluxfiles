@@ -1013,7 +1013,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     }
 
     // ---------------------------------------------------------------------
-    // Legal hold index (docs/RETENTION-LEGAL-HOLD-DESIGN.md §5) — id => manifest,
+    // Legal hold index (docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §5) — id => manifest,
     // one JSON object per disk, file-locked under the SAME index lock as the
     // metadata index and trash (a hold is infrequent, so a fourth lock file
     // isn't warranted — unlike audit's own dedicated higher-volume lock).

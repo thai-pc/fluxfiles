@@ -16,17 +16,17 @@ composer floor bumped to `^0.2.76`).
 >   `$rec['brand']` in `ShareModule.php`) onto Intake's landing page
 >   (`packages/core/public/intake.html`).
 > - **Part B — Intake per-event analytics**: a port of the already-shipped
->   "Share Analytics" feature (`docs/SHARE-ANALYTICS-DESIGN.md`), reworked for
+>   "Share Analytics" feature (`docs/design/SHARE-ANALYTICS-DESIGN.md`), reworked for
 >   Intake's actual shape — Intake has no `download` concept, and its failure
 >   modes (wrong password, cap exceeded, bad extension, oversized, virus
 >   hit) are much richer than Share's single `unlock_fail`, so this is not a
 >   find-and-replace of the Share doc; see §B.1–B.5 for what's different and why.
->   **§B.5 and §B.8 below now point to `docs/SHARE-ANALYTICS-DESIGN.md`'s §5/§9
+>   **§B.5 and §B.8 below now point to `docs/design/SHARE-ANALYTICS-DESIGN.md`'s §5/§9
 >   for the schema/rotation/security detail that's identical between the two
 >   modules, and only spell out Intake's own deltas** — the two docs used to
 >   duplicate that content nearly verbatim, which was a drift risk since a future
 >   change to one (e.g. the rotation thresholds) could silently stop matching the
->   other. `docs/SHARE-ANALYTICS-DESIGN.md` remains the canonical copy of that
+>   other. `docs/design/SHARE-ANALYTICS-DESIGN.md` remains the canonical copy of that
 >   shared design.
 >
 > Both features touch the same three methods (`createPortal()`, `portalInfo()`,
@@ -193,7 +193,7 @@ verbatim from `share.html` (lines 40-43 CSS, lines 109-151 JS):
   `$intakeBrand` property + one `fromJwtPayload()` line.
 - `packages/core/public/intake.html` — CSS + markup + `renderBrand()`/`safeHttpUrl()`
   JS ported from `share.html`; `render()` gains one call.
-- `docs/CONFIG.md` — four new claim rows (§C below).
+- `docs/reference/CONFIG.md` — four new claim rows (§C below).
 
 **Private module files touched** (`packages/intake/`, gitignored):
 - `packages/intake/src/IntakeModule.php` — `createPortal()` + `portalInfo()`,
@@ -216,7 +216,7 @@ verbatim from `share.html` (lines 40-43 CSS, lines 109-151 JS):
   claims are documented (no code change to the test itself).
 - **Correction (post-ship review)**: this originally said no Playwright test
   was needed because "`share.html`'s brand rendering has none either," citing
-  `docs/SHARE-ANALYTICS-DESIGN.md` §11's "not needed" note. That was a
+  `docs/design/SHARE-ANALYTICS-DESIGN.md` §11's "not needed" note. That was a
   misquote — §11's note is about the **Share Analytics** feature (which
   genuinely leaves `share.html` untouched, hence no browser test), not about
   Share's brand rendering. Share's brand rendering on `share.html` *does* have
@@ -235,9 +235,9 @@ verbatim from `share.html` (lines 40-43 CSS, lines 109-151 JS):
 ### A.10 Public route reference (rate limits + error codes)
 
 **Gap note (added in this pass):** Share's public routes have their own
-narrative doc (`docs/SHARE-PUBLIC-LANDING.md`) covering rate limits and error
+narrative doc (`docs/design/SHARE-PUBLIC-LANDING.md`) covering rate limits and error
 codes end to end; Intake's equivalent routes had no narrative coverage
-anywhere — only the bare claim rows in `docs/CONFIG.md`. This subsection
+anywhere — only the bare claim rows in `docs/reference/CONFIG.md`. This subsection
 closes that gap. Everything below is implemented today in
 `packages/core/api/PublicLinks.php`'s `handleIntakePublic()` /
 `ff_intake_rate_limit()`; it does not depend on Parts A/B above.
@@ -267,7 +267,7 @@ still-working token):
 | `FLUXFILES_INTAKE_UPLOAD_TOTAL` | `60` | `intake_upload_all:<jti>` | `upload`, per portal, **no IP component** — the ceiling `REMOTE_ADDR` rotation (proxy pool, IPv6 /64) can't escape. |
 
 `upload` needs both buckets for the same reason Share's `unlock` does (see
-`docs/SHARE-PUBLIC-LANDING.md` §6): it is simultaneously the portal's password
+`docs/design/SHARE-PUBLIC-LANDING.md` §6): it is simultaneously the portal's password
 brute-force surface (when one is set) and its anonymous-upload flood surface,
 and an IP-only limit is never safe on its own. Keep `..._TOTAL` above the
 number of legitimate concurrent contributors a busy portal expects — a shared
@@ -493,7 +493,7 @@ controller method + route in Laravel), same parity as Share's analytics route.
 
 ### B.5 Storage layout
 
-See `docs/SHARE-ANALYTICS-DESIGN.md` §5 for the full design rationale this
+See `docs/design/SHARE-ANALYTICS-DESIGN.md` §5 for the full design rationale this
 section builds on: why a per-resource JSONL file (not one tenant-wide log like
 `audit.jsonl`) is the right shape, the `jti` format-validation-before-any-path-join
 pattern, and the read-modify-write-with-truncation rotation shape. Intake
@@ -691,7 +691,7 @@ fields:
 
 ### B.8 Security considerations
 
-Most of this mirrors `docs/SHARE-ANALYTICS-DESIGN.md` §9 exactly: the same
+Most of this mirrors `docs/design/SHARE-ANALYTICS-DESIGN.md` §9 exactly: the same
 `json_encode()`-only construction (never hand-concatenated) that makes JSONL
 injection structurally impossible, the same
 `filter_var(..., FILTER_VALIDATE_IP)` IP handling (invalid → `""`, never a raw
@@ -756,7 +756,7 @@ that section for the full reasoning on each. **Intake-specific differences:**
   `fromJwtPayload()` line (§B.3).
 - `packages/core/api/index.php` — new `GET /api/fm/intake/analytics` route
   (§B.4).
-- `docs/CONFIG.md` — new `intake_analytics` row (§C).
+- `docs/reference/CONFIG.md` — new `intake_analytics` row (§C).
 
 **Private module files touched** (`packages/intake/`, gitignored):
 - `packages/intake/src/IntakeModule.php`:
@@ -885,7 +885,7 @@ in §A.9); this is an operator API addition.
 
 ---
 
-## Part C — `docs/CONFIG.md` additions
+## Part C — `docs/reference/CONFIG.md` additions
 
 Insert into **§2.13 "Paid-module gates"**, directly **after** the existing
 `intake_base_url` row (line 187) and **before** `allow_versioning` (line 188):
@@ -903,7 +903,7 @@ This also introduces one new aggregate field, `rejected`, on the
 its own CONFIG.md row (the file documents claims, not storage schema; the
 existing `intakes.json` shape isn't documented there either).
 
-**Verified against the current `docs/CONFIG.md`**: both `intake_analytics`
+**Verified against the current `docs/reference/CONFIG.md`**: both `intake_analytics`
 (bool, default `false`) and the four `intake_brand_*` claims above are present
 in §2.13 with these exact names/types/defaults — no naming drift found. Same
 verification for Share: `share_analytics` (bool, default `false`) and
@@ -927,7 +927,7 @@ at release time for the real next version — never derive it from
 
 ---
 
-## Summary: exact claims to add to `docs/CONFIG.md`
+## Summary: exact claims to add to `docs/reference/CONFIG.md`
 
 | Claim | Type | Default |
 |---|---|---|

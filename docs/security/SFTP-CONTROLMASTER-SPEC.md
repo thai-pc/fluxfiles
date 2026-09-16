@@ -1,7 +1,7 @@
 # SSH ControlMaster — Design Spec
 
 Status: **Implemented and shipped, essentially as designed below.**
-Follow-up to `docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` (**conditional go,
+Follow-up to `docs/security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` (**conditional go,
 narrowly scoped**), which is the constraint source of truth — this doc
 turned its §4 into exact names, file paths, function signatures, and flag
 strings, and `packages/core/api/SshMultiplexer.php` +
@@ -10,7 +10,7 @@ strings, and `packages/core/api/SshMultiplexer.php` +
 Test coverage: `packages/core/tests/unit/test-ssh-multiplex.php` (§18's
 unit-level plan) and `packages/core/tests/integration/test-ssh-multiplex-live.php`
 (§18's env-gated live-SSH plan). See
-`docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7 for the implementation-status
+`docs/security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7 for the implementation-status
 summary. Design choices below still trace back to a specific §4 constraint
 (or, in three places called out explicitly, close a gap the review didn't
 fully resolve — see §7, §9, §11).
@@ -80,7 +80,7 @@ whether to turn on connection reuse.
 // disk instead of reconnecting per command. Off by default. Key-based auth
 // only — a password-only (or passphrase-protected-key) config silently
 // falls back to the existing per-request phpseclib path. See
-// docs/SFTP-CONTROLMASTER-SPEC.md.
+// docs/security/SFTP-CONTROLMASTER-SPEC.md.
 'ssh_multiplex' => ($_ENV['SFTP_MULTIPLEX'] ?? '') === 'true',
 ```
 
@@ -106,7 +106,7 @@ whether to turn on connection reuse.
 | `packages/core/api/index.php` | `/api/fm/terminal` route gains a 4-line branch (§13). `/api/fm/git-deploy` **untouched**. |
 | `config/disks.php` | +1 line (§2.1). |
 | `.env.example` | +5 lines (§15). |
-| `docs/CONFIG.md` | +1 new small section (§14). |
+| `docs/reference/CONFIG.md` | +1 new small section (§14). |
 
 ---
 
@@ -701,7 +701,7 @@ reach this point, only how the already-authorized connection is built.
 
 ---
 
-## 14. `docs/CONFIG.md` additions
+## 14. `docs/reference/CONFIG.md` additions
 
 `ssh_multiplex` is **not** a JWT claim, so it does not go in §2 (and
 `tests/unit/test-config-doc.php` — which only scans `$payload->X` reads in
@@ -710,7 +710,7 @@ reach this point, only how the already-authorized connection is built.
 **New §3 env var rows** (server env vars table):
 
 ```
-| `SFTP_MULTIPLEX` | `false` | Static-disk `ssh_multiplex` toggle — reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands instead of reconnecting per command. Key-based auth only (no passphrase); a password-only or passphrase-protected-key disk silently falls back to the existing per-request path. See `docs/SFTP-CONTROLMASTER-SPEC.md`. |
+| `SFTP_MULTIPLEX` | `false` | Static-disk `ssh_multiplex` toggle — reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands instead of reconnecting per command. Key-based auth only (no passphrase); a password-only or passphrase-protected-key disk silently falls back to the existing per-request path. See `docs/security/SFTP-CONTROLMASTER-SPEC.md`. |
 | `FLUXFILES_SSH_MULTIPLEX_DISABLED` | `false` | Server kill-switch — forces every disk back to the phpseclib-only path regardless of `ssh_multiplex`. |
 | `FLUXFILES_SSH_MULTIPLEX_PERSIST` | `60` | `ControlPersist` seconds. Clamped `[10, 120]`. |
 | `FLUXFILES_SSH_MULTIPLEX_MAX_SOCKETS` | `20` | Server-wide LRU cap on concurrently-open multiplexed sockets. |
@@ -737,7 +737,7 @@ fields, `CredentialEncryptor` doesn't allowlist config keys).
 | `host_fingerprint` | string | `""` | Colon-hex fingerprint(s) (comma-separated) pinning the expected host key. Empty = trust any host key. |
 | `require_host_key` | bool | `false` | Fail closed (`sftp_host_key_required`) if `host_fingerprint` isn't also set. |
 | `strict_algorithms` | bool | `false` | Modern-only KEX/cipher/MAC/host-key allowlist (`DiskManager::modernSshAlgorithmLists()`). |
-| `ssh_multiplex` | bool | `false` | Reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands. Key-based auth only, no passphrase. See `docs/SFTP-CONTROLMASTER-SPEC.md`. |
+| `ssh_multiplex` | bool | `false` | Reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands. Key-based auth only, no passphrase. See `docs/security/SFTP-CONTROLMASTER-SPEC.md`. |
 ```
 
 ---
@@ -752,7 +752,7 @@ In the existing SFTP section, right after the `SFTP_STRICT_ALGORITHMS` line:
 # terminal sessions). Off by default. Key-based auth ONLY — a password-only
 # disk, or a private key protected by a passphrase, silently falls back to
 # the existing per-request phpseclib path (no plaintext secret ever reaches
-# a subprocess's argv/env). See docs/SFTP-CONTROLMASTER-SPEC.md.
+# a subprocess's argv/env). See docs/security/SFTP-CONTROLMASTER-SPEC.md.
 # SFTP_MULTIPLEX=false
 ```
 
@@ -878,7 +878,7 @@ no live SSH host configured, so it never blocks CI by default):
   separately, with real usage data, per the review's recommendation — not
   bundled in "since the plumbing already exists." `GitDeploy.php` and its
   route in `index.php` are untouched by this spec. **Confirmed NO-GO**
-  after evaluation — see `docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7.
+  after evaluation — see `docs/security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7.
 - **The Flysystem SFTP adapter (`buildSftpAdapter()`, used by every
   browsing/list/upload/download/copy/move/chmod call) is not touched.**
   It's the highest-request-volume SFTP path in the app, each call is a
@@ -893,7 +893,7 @@ no live SSH host configured, so it never blocks CI by default):
   memoization, so a stateful SFTP protocol adapter layered over a
   ControlMaster socket would be a from-scratch reimplementation of that
   adapter for no real gain — see
-  `docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7.
+  `docs/security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` §7.
 - **The Laravel/WordPress proxy adapters' own SSH terminal endpoints are
   explicitly NOT in scope either, and this is not the same statement as
   the two exclusions above.** `FluxFilesController::terminal()` (Laravel)

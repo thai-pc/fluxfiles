@@ -7,7 +7,7 @@
  *
  * This feature needs a REAL interactive-capable shell account (not an
  * SFTP-chroot-only server like the `atmoz/sftp` container CI already boots for
- * test-sftp-live.php — see docs/SFTP-CONTROLMASTER-SPEC.md §19, this is
+ * test-sftp-live.php — see docs/security/SFTP-CONTROLMASTER-SPEC.md §19, this is
  * SshTerminal-only), so this test is NOT expected to run in CI by default —
  * only when a developer points it at a real box with the `ssh` binary and a
  * PASSPHRASE-LESS private key (multiplexing is key-auth-only, §7).

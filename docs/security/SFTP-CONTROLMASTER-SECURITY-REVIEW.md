@@ -3,11 +3,11 @@
 Status: **Implemented and shipped, scoped exactly as recommended below.**
 This doc began as the pre-implementation review `docs/ROADMAP.md` line 240's
 "connect per request, no pool" principle implied must exist before that line
-was crossed (a principle also stated in `docs/GIT-DEPLOY-SECURITY-REVIEW.md`
+was crossed (a principle also stated in `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`
 F8, "Do not add connection pooling ... it would be new persistent state this
 codebase has deliberately avoided everywhere"). §1–§6 below are that
 original review, kept intact as the record of the analysis that shaped the
-design; `docs/SFTP-CONTROLMASTER-SPEC.md` is the follow-up design spec that
+design; `docs/security/SFTP-CONTROLMASTER-SPEC.md` is the follow-up design spec that
 turned §4's constraints into exact names/paths/flags, and both were built
 essentially as designed — `packages/core/api/SshMultiplexer.php` and
 `DiskManager::multiplexEligible()`/`multiplexHandle()`/
@@ -124,7 +124,7 @@ credential," never merely "the same host."
 | F4 | **Medium** | Password-based SFTP auth has no interactive terminal to type into under `proc_open`, so shelling out to real `ssh`/`sftp` with a password requires either a PTY-emulation wrapper or a helper like `sshpass -p<password>` — which places the **plaintext password directly in that process's argv**, visible to any local user via `ps aux` / `/proc/<pid>/cmdline` for the process's lifetime. phpseclib's current password handling never touches argv or a separate OS process at all — this is a strictly worse exposure than what exists today. | A shared-hosting box runs FluxFiles alongside other tenants' processes; any of them can run `ps aux` and read a live SFTP password out of the `sshpass` invocation. |
 | F5 | **Medium** | `require_host_key`/`strict_algorithms` (817ad56) are implemented entirely against phpseclib's `SftpConnectionProvider` — a `hostFingerprint` check and a `preferredAlgorithms` allowlist that only that code path consults. A ControlMaster path shells to the **system** `ssh` binary, which has its own, entirely separate trust store (`~/.ssh/known_hosts` or an explicit `-o UserKnownHostsFile=`) and its own algorithm negotiation (`-o KexAlgorithms=/Ciphers=/MACs=` or `ssh_config`). Nothing connects the two: a disk configured with `require_host_key: true, strict_algorithms: true` gets neither guarantee on the ControlMaster path unless each is independently re-implemented for OpenSSH's flag syntax and kept in sync by hand going forward. | An operator enables `strict_algorithms` expecting the legacy-cipher exclusion documented in `.env.example`; the ControlMaster path (if it doesn't independently enforce the same allowlist) negotiates whatever the system `ssh`'s own defaults allow, silently reintroducing the exact legacy algorithms 817ad56 was written to exclude. |
 | F6 | **Medium** | A control socket is a live OS process (`ssh -M`) plus an open file descriptor, held for `ControlPersist`'s duration, per distinct cached credential (per F1's fix). An installation serving many BYOB tenants — or a single malicious/compromised token able to mint or trigger connections against many distinct configured hosts within its rate limit — causes unbounded growth of lingering processes and socket files on the app server, a resource-exhaustion path that today's per-request phpseclib connections structurally cannot have (they terminate the moment the request finishes, nothing lingers). | Many distinct BYOB SFTP configs (one per end-customer) are each used once; each opens and persists its own control socket for the full `ControlPersist` window, and the app server's process table / open-fd count climbs with tenant count rather than with concurrent request count. |
-| F7 | **Low (architecture)** | This is precisely the new persistent, process-lifetime server state `docs/GIT-DEPLOY-SECURITY-REVIEW.md` F8 flagged as a line not to cross, and the repo's own Working Rules restate directly ("Do not add new stateful server dependencies unless the task explicitly changes the stateless/BYOB direction"). ControlMaster doesn't avoid that by being "OS-managed instead of PHP-managed" — it's still a cache with a lifetime that outlives the request, held by the app server, keyed on tenant-supplied credentials. Every finding above is a direct consequence of introducing that cache; none of them exist in the current connect-per-request model. | N/A — an architectural note: any implementation that treats this as "just a performance tweak" rather than "a new, first stateful credential cache" will under-scope the review of F1–F6. |
+| F7 | **Low (architecture)** | This is precisely the new persistent, process-lifetime server state `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` F8 flagged as a line not to cross, and the repo's own Working Rules restate directly ("Do not add new stateful server dependencies unless the task explicitly changes the stateless/BYOB direction"). ControlMaster doesn't avoid that by being "OS-managed instead of PHP-managed" — it's still a cache with a lifetime that outlives the request, held by the app server, keyed on tenant-supplied credentials. Every finding above is a direct consequence of introducing that cache; none of them exist in the current connect-per-request model. | N/A — an architectural note: any implementation that treats this as "just a performance tweak" rather than "a new, first stateful credential cache" will under-scope the review of F1–F6. |
 
 ## 4. Required design constraints (if built)
 
@@ -235,7 +235,7 @@ findings above and should come back through this review before shipping.
 **Before coding**: write the actual design spec (exact config/claim names,
 the socket-path layout, the precise OpenSSH flag set per §4.5, the LRU
 eviction policy) via the normal spec-writer flow, using §4 as its constraint
-list — matching how `docs/GIT-DEPLOY-SECURITY-REVIEW.md` was used for Git
+list — matching how `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` was used for Git
 deploy.
 
 ---
@@ -263,7 +263,7 @@ Shipped essentially as designed, exactly to the scope §4/§6 above set:
   doc**: wired into `SshTerminal`'s `/api/fm/terminal` route only.
   `GitDeploy` and the Flysystem SFTP adapter were evaluated afterward and
   are a confirmed **NO-GO** — see the banner above and
-  `docs/SFTP-CONTROLMASTER-SPEC.md` §19 for the reasoning specific to each.
+  `docs/security/SFTP-CONTROLMASTER-SPEC.md` §19 for the reasoning specific to each.
   The Laravel/WordPress proxy adapters' terminal endpoints use plain
   phpseclib directly and never call into `SshMultiplexer`/
   `DiskManager::multiplexHandle()`, so proxied terminal calls are also
@@ -275,11 +275,11 @@ Shipped essentially as designed, exactly to the scope §4/§6 above set:
   and `packages/core/tests/integration/test-ssh-multiplex-live.php`
   (env-gated live-SSH coverage of `ControlPersist` expiry per F3, cold-vs-
   reuse timing, and password-disk end-to-end fallback — skips cleanly with
-  no live SSH host configured). See `docs/SFTP-CONTROLMASTER-SPEC.md` §18
+  no live SSH host configured). See `docs/security/SFTP-CONTROLMASTER-SPEC.md` §18
   for the full test-plan mapping to each finding.
-- `docs/CONFIG.md` §2.14 documents the four static SFTP disk config keys
+- `docs/reference/CONFIG.md` §2.14 documents the four static SFTP disk config keys
   (`host_fingerprint`, `require_host_key`, `strict_algorithms`,
   `ssh_multiplex`) and §3 documents the five new
-  `FLUXFILES_SSH_MULTIPLEX_*` env vars, per `docs/SFTP-CONTROLMASTER-SPEC.md`
+  `FLUXFILES_SSH_MULTIPLEX_*` env vars, per `docs/security/SFTP-CONTROLMASTER-SPEC.md`
   §14.
 </content>

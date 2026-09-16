@@ -9,4 +9,4 @@ claims; paid feature = a gitignored module on the 3-layer gate; embed great free
 rather than build a competitor). Produce the spec with the sections in
 `.claude/agents/spec-writer.md` (problem & who-pays, architecture fit, JWT claims,
 endpoints, storage layout, security, package layout, test plan, open questions), and
-end by listing the exact claims to add to `docs/CONFIG.md`. Do not implement.
+end by listing the exact claims to add to `docs/reference/CONFIG.md`. Do not implement.

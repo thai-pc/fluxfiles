@@ -25,7 +25,7 @@ explicitly deferred this:
 > tokens** (mint teammate B a token scoped to the specific subtree they're
 > being given access to) rather than inventing a generic permissions table.
 
-`docs/DB-STORAGE-MIGRATION-DESIGN.md` §14 item 6 flagged the same boundary
+`docs/design/DB-STORAGE-MIGRATION-DESIGN.md` §14 item 6 flagged the same boundary
 from the other direction: turning FluxFiles' capability tokens into a
 server-checked ACL system is "a capability-token → server-checked-ACL
 architecture change, not a storage-backend swap" and was deliberately kept

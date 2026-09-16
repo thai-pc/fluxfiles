@@ -5,7 +5,7 @@
  * needs a live SSH host (covered by manual/e2e); here we lock in the pure,
  * security-relevant bits: escaping/shape of the assembled command, hook
  * neutralization, lock staleness, and that the 4 new claims default OFF/empty
- * and decode correctly (see docs/GIT-DEPLOY-SECURITY-REVIEW.md §4).
+ * and decode correctly (see docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4).
  *
  * Usage: php tests/unit/test-git-deploy.php
  */

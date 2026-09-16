@@ -5,7 +5,7 @@
  * purely time-based staleness check let a second trigger `rm -rf` + steal a
  * lock that was still held by a genuinely running deploy, because
  * FLUXFILES_GIT_DEPLOY_TIMEOUT is routinely raised past LOCK_STALE_MINUTES
- * for slow LFS/submodule fetches). See docs/GIT-DEPLOY-SECURITY-REVIEW.md §F6
+ * for slow LFS/submodule fetches). See docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §F6
  * and GitDeploy::buildCommand()'s docblock for the fix.
  *
  * GitDeploy::buildCommand() returns a plain POSIX shell script (SSH2::exec()

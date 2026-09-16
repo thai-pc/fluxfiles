@@ -265,7 +265,7 @@ Implemented per §4, free/core (not a paid module — same tier as
   covering: a lock held by a live PID is refused regardless of age; a lock
   whose PID is dead is reclaimed even before the staleness window elapses;
   a pre-liveness-check lock shape with no `pid` file falls back to the age
-  check; the `EXIT` trap only removes a lock it still owns). `docs/CONFIG.md`
+  check; the `EXIT` trap only removes a lock it still owns). `docs/reference/CONFIG.md`
   §2.2/§3 updated (required for `tests/unit/test-config-doc.php`); all 16
   `lang/*.json` got the 4 new `error.git_deploy_*` keys (required for
   `tests/unit/test-i18n.php`).

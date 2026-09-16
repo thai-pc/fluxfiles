@@ -10,7 +10,7 @@ matching Webhooks' at-most-once design elsewhere in the codebase.
 
 > **Scope note.** This is the one open item left from `docs/ROADMAP.md` §6c's
 > Intake+ wishlist — everything else there (operator UI, branding, analytics,
-> virus-scan-on-receipt) already shipped, per `docs/INTAKE-BRANDING-ANALYTICS-DESIGN.md`.
+> virus-scan-on-receipt) already shipped, per `docs/design/INTAKE-BRANDING-ANALYTICS-DESIGN.md`.
 > The feature: an operator who already has both `intake` and `webhooks` licensed
 > gets a signed HTTP POST the instant a client drops a file into their portal,
 > instead of having to poll `GET /api/fm/intake/analytics` or the file list.
@@ -20,7 +20,7 @@ matching Webhooks' at-most-once design elsewhere in the codebase.
 > `IntakeModule.php:<line>` citation below (§2, §4, §5.1, §5.2, §5.4) has been checked against
 > the current source and corrected where it had drifted (several had — see the inline fixes
 > in each section). The `packages/core/` (`index.php`, `PublicLinks.php`, `Claims.php`) and
-> `docs/CONFIG.md` citations were already re-checked against the current repo in an earlier
+> `docs/reference/CONFIG.md` citations were already re-checked against the current repo in an earlier
 > pass and stand unchanged; the code samples throughout this doc were compared line-for-line
 > against the shipped `IntakeModule.php` and match verbatim, confirming the feature landed
 > exactly as designed here.
@@ -76,11 +76,11 @@ never the portal JWT.**
 
 No new JWT claim is introduced. The bake-in reads the operator's own
 already-documented `allow_webhooks` / `webhook_url` / `webhook_events` /
-`webhook_secret` claims (`docs/CONFIG.md:207-210`) at the moment they mint a
+`webhook_secret` claims (`docs/reference/CONFIG.md:207-210`) at the moment they mint a
 portal — same "config = the claims on the token doing the minting, snapshotted
 at creation" trade-off `max_mb`/`allowed_ext`/`brand` already accept. An
 operator who changes their webhook URL only affects portals minted after the
-change. No new `docs/CONFIG.md` rows are needed (Part C below is a no-op,
+change. No new `docs/reference/CONFIG.md` rows are needed (Part C below is a no-op,
 stated explicitly rather than silently skipped).
 
 ## 3. Storage layout
@@ -378,7 +378,7 @@ record at all. `$rec['webhook'] ?? null` in `webhookConfigFor()` treats a
 missing key exactly like an explicit `null` — no dispatch, no error, no
 migration needed. This is the same posture `brand`/`analytics` already
 established for portals that predate *that* feature
-(`docs/INTAKE-BRANDING-ANALYTICS-DESIGN.md` §8).
+(`docs/design/INTAKE-BRANDING-ANALYTICS-DESIGN.md` §8).
 
 No wire format changes to `portalInfo()`'s public response (§2's `brand`-only
 precedent holds: webhook config is operator-only, never sender-facing) and no
@@ -442,10 +442,10 @@ anonymous sender.
   §11 below confirms no new claims are added, so nothing new needs
   documenting there.
 
-## 11. Part C — `docs/CONFIG.md` additions
+## 11. Part C — `docs/reference/CONFIG.md` additions
 
 **None.** This feature introduces zero new JWT claim names. It reads the
-four already-documented webhook claims (`docs/CONFIG.md:207-210`) at a new
+four already-documented webhook claims (`docs/reference/CONFIG.md:207-210`) at a new
 *point in time* — `IntakeModule::createPortal()`, in addition to their
 existing per-request read in `index.php`'s main flow — not with any new
 name or new semantics. Stated explicitly here (rather than silently
@@ -484,5 +484,5 @@ package's code depends on anything new in that core release.
 | `webhook_secret` | existing, unchanged | same |
 | `allow_intake` | existing, unchanged | unaffected — still gates portal creation entirely, independent of the above |
 
-No claim is added, renamed, or changed in meaning. `docs/CONFIG.md` needs no
+No claim is added, renamed, or changed in meaning. `docs/reference/CONFIG.md` needs no
 edits for this feature.

@@ -27,7 +27,7 @@ not lost revenue (see `pro_hints` claim, `proGate()`'s `'locked'` state).
 **Persona:** the Enterprise/Compliance buyer (a CISO, IT security lead, or
 compliance officer evaluating FluxFiles for a regulated deployment —
 healthcare, finance, legal, gov contractor). This persona doesn't read
-`docs/CONFIG.md`; they want a dashboard screen they can screenshot for an
+`docs/reference/CONFIG.md`; they want a dashboard screen they can screenshot for an
 internal review or show a prospect's security questionnaire reviewer.
 
 **Free or paid?** The scorecard **itself is free/core** — no new claim, no
@@ -301,7 +301,7 @@ their specs, not this one). Explicitly confirming the reasoning asked for:
   scorecard's `locked` rows should respect `pro_hints` the same way
   `proGate()` does (§6), so no new claim is needed there either.
 
-**Nothing to add to `docs/CONFIG.md` for this spec.** (When the DLP/legal-hold
+**Nothing to add to `docs/reference/CONFIG.md` for this spec.** (When the DLP/legal-hold
 specs land their own `allow_dlp_scan`/`allow_legal_hold` claims, those are
 documented by *those* specs, not duplicated here.)
 
@@ -420,7 +420,7 @@ Compliance tab a standalone-core user sees. Concretely:
   static assertion (`assertArrayNotHasKeyRecursive` style) that keeps the
   §3 guardrail from silently regressing if someone "helpfully" adds a
   percentage field later.
-- `docs/CONFIG.md` sync: **no claim added by this spec**, so
+- `docs/reference/CONFIG.md` sync: **no claim added by this spec**, so
   `tests/unit/test-config-doc.php` needs no update — call this out in the
   PR description so a reviewer isn't surprised `CONFIG.md` is untouched.
 
@@ -460,7 +460,7 @@ gated the same way (`audit` perm) — same pattern as the existing
    is the static capability table in `ComplianceScorecard.php` (one line
    per renamed id) — nothing else in this design depends on the exact
    string. Flagging so whoever implements this checks the final names
-   against those two specs' `docs/CONFIG.md` entries before shipping, not
+   against those two specs' `docs/reference/CONFIG.md` entries before shipping, not
    after.
 2. **Should the scorecard eventually include free/hygiene settings**, not
    just the six paid-adjacent modules — e.g. `owner_only`,
@@ -497,10 +497,10 @@ gated the same way (`audit` perm) — same pattern as the existing
 
 ---
 
-## Summary of claims to add to `docs/CONFIG.md`
+## Summary of claims to add to `docs/reference/CONFIG.md`
 
 **None.** This spec introduces zero new JWT claims (§5). The only
-`docs/CONFIG.md`-relevant follow-up is indirect: whichever specs ship
+`docs/reference/CONFIG.md`-relevant follow-up is indirect: whichever specs ship
 `allow_dlp_scan` and `allow_legal_hold` should cross-check their final claim
 names against §9 item 1 above so this spec's capability table can be
 updated to match before `ComplianceScorecard.php` is implemented.

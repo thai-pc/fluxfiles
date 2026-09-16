@@ -402,7 +402,7 @@ access, or any request-authenticated surface.
   `lang/*.json` locale files (this is vendor back-office tooling, not
   end-user-facing UI copy).
 
-## 8. `docs/CONFIG.md` — no changes required
+## 8. `docs/reference/CONFIG.md` — no changes required
 
 **Zero new JWT claims.** None of §A-§D introduce a per-tenant claim: §A's
 badge visibility is derived entirely from existing `licenseInfo` state (no
@@ -412,7 +412,7 @@ and a back-office cron script respectively). `tests/unit/test-config-doc.php`
 needs no changes — it only checks `Claims.php`'s `$payload->` reads, and none
 are added.
 
-**`FLUXFILES_LICENSE_REMINDER_DAYS` is *not* a `docs/CONFIG.md` entry.**
+**`FLUXFILES_LICENSE_REMINDER_DAYS` is *not* a `docs/reference/CONFIG.md` entry.**
 CONFIG.md's §3 (server env vars) documents **core**'s env vars (the
 embeddable product) — it already lists `FLUXFILES_LICENSE_KEY` because core
 itself reads that to *verify* a license. `FLUXFILES_LICENSE_REMINDER_DAYS`

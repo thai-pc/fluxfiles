@@ -2,7 +2,7 @@
 
 /**
  * Legal hold enforcement — free/core and license-independent
- * (docs/RETENTION-LEGAL-HOLD-DESIGN.md §2/§6/§9).
+ * (docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2/§6/§9).
  *
  * Every hold in this file is placed via StorageMetadataHandler::addHold()
  * directly — NEVER through \FluxFiles\LegalHold\LegalHoldModule, which is a

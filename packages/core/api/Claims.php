@@ -156,7 +156,7 @@ class Claims
     public bool $allowCodeEdit = false;
 
     // ── One-click Git deploy (SSH exec) ───────────────────────────────────
-    // See docs/GIT-DEPLOY-SECURITY-REVIEW.md. Deliberately narrower than
+    // See docs/security/GIT-DEPLOY-SECURITY-REVIEW.md. Deliberately narrower than
     // allow_terminal: the repo path/branch are OPERATOR claims baked in at mint
     // time, never accepted from the request body — a client can trigger a deploy,
     // never redirect it. Never bundle this with allow_sftp/allow_terminal.
@@ -200,7 +200,7 @@ class Claims
     public bool $allowLegalHold = false;   // Legal hold / retention — place/release only (fluxfiles/legal-hold)
 
     // ── DLP / PII detection-on-write (Enterprise bundle) ──────────────────
-    // See docs/DLP-PII-REDACTION-DESIGN.md. Mirrors allow_virus_scan's shape: a
+    // See docs/design/DLP-PII-REDACTION-DESIGN.md. Mirrors allow_virus_scan's shape: a
     // 3-layer-gated module + a fail-closed FileManager hook. The eligibility
     // pre-filter (extension + size cap) below is checked in CORE, before the
     // module is ever invoked, so an engine outage never blocks a non-text upload.
@@ -542,7 +542,7 @@ class Claims
      * Sanitize `dlp_entity_types`: uppercase/trim each entry, keep only ones matching
      * Presidio's entity-type naming convention (`^[A-Z_]+$`), drop the rest. Returns
      * null when nothing usable remains — null means "engine's full default set" (§3
-     * of docs/DLP-PII-REDACTION-DESIGN.md), so an all-garbage input is NOT the same
+     * of docs/design/DLP-PII-REDACTION-DESIGN.md), so an all-garbage input is NOT the same
      * as an empty allowlist (which would block nothing).
      *
      * @return string[]|null
@@ -729,7 +729,7 @@ class Claims
         $c->dlpMinScore = $dlpMinScore > 0 ? max(0.0, min(1.0, $dlpMinScore)) : 0.6;
         // Legal hold: gates PLACING/RELEASING a hold only (module management routes).
         // Enforcement of an already-placed hold (blocking delete/trash/rename/move/
-        // purge) is free/core and NEVER checks this claim — see docs/RETENTION-LEGAL-HOLD-DESIGN.md §2.
+        // purge) is free/core and NEVER checks this claim — see docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §2.
         $c->allowLegalHold = (bool) ($payload->allow_legal_hold ?? false);
         $c->autoOptimize = (bool) ($payload->auto_optimize ?? false);
         $c->optimizeQuality = max(0, min(95, (int) ($payload->optimize_quality ?? 0)));

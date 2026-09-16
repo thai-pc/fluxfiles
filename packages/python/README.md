@@ -181,7 +181,7 @@ def fluxfiles_token(user=Depends(get_current_user)):
 default): `ai_auto_tag=None` (bool), `rate_read=None` / `rate_write=None`
 (req/min), `variants=None` (`{"thumb": .., "medium": .., "large": ..}` px),
 and every other `allow_*`/module claim documented in
-[`docs/CONFIG.md`](https://github.com/thai-pc/fluxfiles/blob/master/docs/CONFIG.md) —
+[`docs/reference/CONFIG.md`](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md) —
 plus a `claims: dict` escape hatch for any claim by its raw snake_case name.
 `create_byob_token` replaces `disks` with `byob_disks` (a map of name →
 S3-compatible/SFTP config) and does not take `max_storage_mb`/`max_files`

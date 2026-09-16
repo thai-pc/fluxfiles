@@ -52,7 +52,7 @@ review against, and the fix pass needs the reviewer's findings. Working artifact
 - Automatically: Claude Code may delegate based on each agent's `description`.
 
 Each subagent starts fresh (no shared memory) and loads context by reading
-`.claude/CLAUDE.md`, `.claude/api-map.md`, and `docs/CONFIG.md` — keep those current.
+`.claude/CLAUDE.md`, `.claude/api-map.md`, and `docs/reference/CONFIG.md` — keep those current.
 
 > Note: these agents deliberately **do not commit, tag, or push**. Release stays a
 > human-triggered step in the main session (per-package tags, ≤3 tags per push).

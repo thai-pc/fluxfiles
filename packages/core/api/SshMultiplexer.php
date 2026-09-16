@@ -6,8 +6,8 @@ namespace FluxFiles;
 
 /**
  * SSH ControlMaster (OpenSSH connection reuse) for `SshTerminal`'s
- * `/api/fm/terminal` path ONLY — see docs/SFTP-CONTROLMASTER-SPEC.md (follow-up
- * to docs/SFTP-CONTROLMASTER-SECURITY-REVIEW.md). Never wired into `GitDeploy`
+ * `/api/fm/terminal` path ONLY — see docs/security/SFTP-CONTROLMASTER-SPEC.md (follow-up
+ * to docs/security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md). Never wired into `GitDeploy`
  * or the Flysystem SFTP adapter (browsing/upload/download) — see the spec's §19.
  *
  * phpseclib3 has no concept of ControlMaster, so this shells out to the real
@@ -269,7 +269,7 @@ final class SshMultiplexer
         if (strlen($socketPath) > 100) {
             error_log(
                 'FluxFiles: SSH multiplex socket path too long (' . strlen($socketPath)
-                . ' bytes) — set FLUXFILES_STORAGE_PATH shorter. See docs/SFTP-CONTROLMASTER-SPEC.md'
+                . ' bytes) — set FLUXFILES_STORAGE_PATH shorter. See docs/security/SFTP-CONTROLMASTER-SPEC.md'
             );
             return null;
         }

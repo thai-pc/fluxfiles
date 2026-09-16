@@ -82,7 +82,7 @@ php packages/core/tests/e2e/test-sftp-live.php   # live SFTP driver, needs FXTES
 
 ### DB-backend tests (`FLUXFILES_STORAGE_BACKEND=db`)
 
-See `docs/DB-STORAGE-MIGRATION-DESIGN.md` for the design. The SQLite variant is
+See `docs/design/DB-STORAGE-MIGRATION-DESIGN.md` for the design. The SQLite variant is
 ungated and already runs as part of the regular unit-test glob above; MySQL and
 PostgreSQL are env-gated and get their own CI jobs against real service
 containers:

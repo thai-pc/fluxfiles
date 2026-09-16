@@ -185,7 +185,7 @@ history**: it's a snapshot recomputed from the current tree, not a trend line.
   (default `70`%) and `usage_critical_threshold` (default `90`%) drive the
   `ok`/`warning`/`critical` `status` field the UI colors its quota meter with.
   `usage_top_folders_count` and `usage_folder_depth` control how many/how deep
-  the top-folders list goes. See `docs/CONFIG.md` §2.11 for the full claim table.
+  the top-folders list goes. See `docs/reference/CONFIG.md` §2.11 for the full claim table.
 - **Free/core** — no module gate, no `allow_*` claim; the only knobs are the
   `usage_*` claims above.
 - **Optimize savings ride along for free.** If the (also free/core) Optimize

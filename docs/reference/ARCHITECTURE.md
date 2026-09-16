@@ -4,8 +4,8 @@ How the monorepo fits together: the engine, the adapters, how they relate, and h
 everything is built, tested, and published. Read this once before touching more than
 one package.
 
-> Sibling docs: [`README.md`](../README.md) (usage), [`.claude/architecture.md`](../.claude/architecture.md)
-> (runtime flow + module responsibilities), [`.claude/api-map.md`](../.claude/api-map.md)
+> Sibling docs: [`README.md`](../../README.md) (usage), [`.claude/architecture.md`](../../.claude/architecture.md)
+> (runtime flow + module responsibilities), [`.claude/api-map.md`](../../.claude/api-map.md)
 > (routes). Release mechanics are automated — see §5 (Publish topology) below and
 > the workflows in `.github/workflows/`.
 
@@ -31,7 +31,7 @@ Two hard constraints shape every decision:
   files — an infrastructure choice gated by a server env var, not a JWT claim or
   a paid module. File *bytes* stay fully storage-resident either way, and the
   default (`json`) is unchanged for every existing install. See
-  `docs/DB-STORAGE-MIGRATION-DESIGN.md`.
+  `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`.
 - **Stateless auth.** A JWT *is* the per-tenant configuration — permissions, disk
   scope, quotas, and the paid-feature gates are all claims. The operator mints them.
 
@@ -234,7 +234,7 @@ issuing the API calls itself; the iframe makes the authenticated calls internall
 | You want to… | Touch | Don't forget |
 |---|---|---|
 | add/modify a **file operation or rule** | `core/api/FileManager.php` (+ a test) | it's automatically available to every adapter |
-| add a **token claim** | `core/api/Claims.php` (parse) + `embed.php` (mint) | forward it in laravel/wp/node/python mints + bump the node TS types + the python type hints + `docs/CONFIG.md` + the floor if an adapter reads it |
+| add a **token claim** | `core/api/Claims.php` (parse) + `embed.php` (mint) | forward it in laravel/wp/node/python mints + bump the node TS types + the python type hints + `docs/reference/CONFIG.md` + the floor if an adapter reads it |
 | add a **core API route** | `core/api/index.php` | proxy it in laravel + wordpress (or whitelist it in the route-parity test if it's byte-streaming) |
 | change the **postMessage protocol** | `sdk/fluxfiles.js` | mirror it in react/vue (`useFluxFiles.ts`) and the editor plugins |
 | change **JWT/BYOB crypto** | `core/api/{Claims,CredentialEncryptor}.php` | mirror in `node/src/*` and `python/src/fluxfiles_token/*` — `php-compat.test.ts` / `test_php_compat.py` are the guards |

@@ -127,4 +127,4 @@ rotation above.
 
 - **Applied:** metadata, trash, audit (incl. archive), and search all live in the user's storage (S3 object metadata / sidecar / index.json / audit.jsonl / audit archive) — for **every** disk type FluxFiles supports, including SFTP.
 - **No more SQLite** — everything travels with the user's storage, by default
-- **Except when opted in:** an operator can set `FLUXFILES_STORAGE_BACKEND=db` to move bookkeeping (metadata/search/audit/trash/rate-limits) into their own relational DB instead — see `docs/DB-STORAGE-MIGRATION-DESIGN.md`. Default remains JSON/storage-resident; nothing here changes unless that env var is set.
+- **Except when opted in:** an operator can set `FLUXFILES_STORAGE_BACKEND=db` to move bookkeeping (metadata/search/audit/trash/rate-limits) into their own relational DB instead — see `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`. Default remains JSON/storage-resident; nothing here changes unless that env var is set.

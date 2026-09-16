@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 // degradation path for real; the brand-rendering contract (renderBrand/
 // safeHttpUrl, ported verbatim from share.html) is driven with a mocked
 // `/api/fm/intake/info`. This closes the DOM-level coverage gap noted in
-// docs/INTAKE-BRANDING-ANALYTICS-DESIGN.md §A.9 — share.html's brand
+// docs/design/INTAKE-BRANDING-ANALYTICS-DESIGN.md §A.9 — share.html's brand
 // rendering already has this coverage (share-landing.spec.ts), intake.html's
 // twin function did not.
 

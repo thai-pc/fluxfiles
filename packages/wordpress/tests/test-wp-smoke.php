@@ -294,7 +294,7 @@ test('generateToken forwards git-deploy gate + path/branch/hooks', function () u
     assertEqual(true, ($p->git_deploy_hooks ?? false), 'git_deploy_hooks forwarded');
 });
 
-// DLP/PII redaction (docs/DLP-PII-REDACTION-DESIGN.md): the gate + its 4 tuning
+// DLP/PII redaction (docs/design/DLP-PII-REDACTION-DESIGN.md): the gate + its 4 tuning
 // claims forward the same way as versioning/audit-export above (unconditional
 // gate, !empty() tuning claims) — this was a genuine gap (no assertion existed
 // for either virus OR dlp forwarding on this adapter before now).
@@ -325,7 +325,7 @@ test('fileManager() actually WIRES setDlpScanner() (not just a decodable claim) 
     assertEqual(4, $count, 'all 4 chunk handlers (init/presign/complete/abort) check dlp_unscannable independently');
 });
 
-// Legal hold (docs/RETENTION-LEGAL-HOLD-DESIGN.md): the gate forwards like any
+// Legal hold (docs/design/RETENTION-LEGAL-HOLD-DESIGN.md): the gate forwards like any
 // other paid-module claim. Enforcement itself needs no claim at all — it's
 // wired inside core's FileManager and inherited automatically since this
 // proxy builds the same class, unlike every other hook on this list.
@@ -421,7 +421,7 @@ test('generateToken forwards the share/intake gates and their config', function 
     assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected');
 });
 
-test('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim bundle', function () use ($secret) {
+test('role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim bundle', function () use ($secret) {
     $admin = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(60, ['role' => 'admin']), $secret);
     assertEqual(['read', 'write', 'delete', 'audit'], (array) $admin->perms, 'admin perms');
     assertEqual(false, $admin->owner_only ?? false, 'admin is not owner-scoped');
@@ -1201,7 +1201,7 @@ test('proxy route surface covers every core /api/fm route', function () {
     // stream/img are now fully proxied too — see FluxFilesApi's
     // handleAiVision()/handleOcr()/handleBackup()/handleC2pa()/handleC2paSign()/
     // handleTerminal()/handleStream()/handleImg().
-    // - metadata/export, metadata/import (docs/DB-STORAGE-MIGRATION-DESIGN.md §7):
+    // - metadata/export, metadata/import (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7):
     //   MetadataExporter/MetadataImporter work directly against core's own
     //   \FluxFiles\Db\Connection SQL layer. WordPress's `db` backend option (§6)
     //   uses WpDbMetadataHandler on WordPress's own $wpdb connection instead, so

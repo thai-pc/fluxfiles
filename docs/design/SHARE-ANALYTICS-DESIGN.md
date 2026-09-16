@@ -78,7 +78,7 @@ choice. Turning `share_analytics` on/off going forward only affects **shares
 created after the change** (identical, already-accepted trade-off to `url_ttl` /
 `preview` / `brand`, all baked in at create time).
 
-Add to `docs/CONFIG.md` §2.13 ("Paid-module gates"), as a new row directly **after**
+Add to `docs/reference/CONFIG.md` §2.13 ("Paid-module gates"), as a new row directly **after**
 the existing `share_preview` row and **before** `share_brand_name`:
 
 ```
@@ -441,7 +441,7 @@ change, no behavior change at existing call sites.)
 - `packages/core/api/Claims.php` — new `public bool $shareAnalytics = false;`
   property + one line in `fromJwtPayload()` (§3).
 - `packages/core/api/index.php` — new `GET /api/fm/share/analytics` route (§4).
-- `docs/CONFIG.md` — new `share_analytics` row in §2.13 (§3); required or
+- `docs/reference/CONFIG.md` — new `share_analytics` row in §2.13 (§3); required or
   `tests/unit/test-config-doc.php` fails CI.
 
 **Private module files touched** (`packages/share/`, gitignored, present locally):
@@ -510,8 +510,8 @@ in the file — module-absent / installed-unlicensed / licensed):
   created without the claim.
 
 **`packages/core/tests/unit/test-config-doc.php`**: passes once `share_analytics`
-is documented in `docs/CONFIG.md` (no code change to this test needed — it's a
-generic guard that reads `Claims.php` against `docs/CONFIG.md`).
+is documented in `docs/reference/CONFIG.md` (no code change to this test needed — it's a
+generic guard that reads `Claims.php` against `docs/reference/CONFIG.md`).
 
 **Not needed**: no browser/Playwright test — this feature has no public-facing
 UI surface (`share.html` is untouched); it's an operator API + (eventually) an

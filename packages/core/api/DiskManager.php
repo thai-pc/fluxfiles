@@ -328,7 +328,7 @@ class DiskManager
 
     /**
      * OpenSSH -o flag pairs for the SAME allowlist, consumed by SshMultiplexer's
-     * proc_open argv (see docs/SFTP-CONTROLMASTER-SPEC.md §8/§11). Both this and
+     * proc_open argv (see docs/security/SFTP-CONTROLMASTER-SPEC.md §8/§11). Both this and
      * modernSshAlgorithms() are pure reshapes of modernSshAlgorithmLists(), so
      * there's structurally nothing to forget to update when the allowlist changes.
      *
@@ -374,7 +374,7 @@ class DiskManager
      * buildSftpProvider()'s useAgent comment), so shelling out to `ssh` would
      * need SSH_ASKPASS/sshpass tricks that put the secret in argv/env — the
      * exact exposure this gate exists to avoid. See
-     * docs/SFTP-CONTROLMASTER-SPEC.md §7 (extends the security review's F4).
+     * docs/security/SFTP-CONTROLMASTER-SPEC.md §7 (extends the security review's F4).
      */
     private static function multiplexEligible(array $cfg): bool
     {
@@ -392,7 +392,7 @@ class DiskManager
 
     /**
      * SSH ControlMaster connection-reuse handle for `SshTerminal`'s
-     * `/api/fm/terminal` ONLY — see docs/SFTP-CONTROLMASTER-SPEC.md. Never call
+     * `/api/fm/terminal` ONLY — see docs/security/SFTP-CONTROLMASTER-SPEC.md. Never call
      * this from GitDeploy or the Flysystem SFTP adapter (out of scope, spec §19).
      *
      * @return array{0:SshMultiplexer,1:string}|null [handle, root], or null →

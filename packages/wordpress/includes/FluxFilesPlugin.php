@@ -264,7 +264,7 @@ class FluxFilesPlugin
 
         $now = time();
 
-        // Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the
+        // Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the
         // base payload array, because `perms` already has an unconditional default baked
         // into that array below — a plain "set if absent" guard would never fire for it.
         $roleDefaults = self::rolePreset(isset($overrides['role']) ? (string) $overrides['role'] : null);
@@ -316,7 +316,7 @@ class FluxFilesPlugin
     }
 
     /**
-     * Look up a role preset's raw claim map (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md).
+     * Look up a role preset's raw claim map (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md).
      * `role` never itself becomes a JWT claim — it only ever expands, at mint time, into
      * ordinary claims the core already decodes. Mirrors packages/core/embed.php's
      * fluxfiles_role_preset() / packages/laravel/src/FluxFilesManager.php's rolePreset().
@@ -443,7 +443,7 @@ class FluxFilesPlugin
         // Git deploy now proxies too (see FluxFilesApi's handleGitDeploy()), so the
         // gate forwards like any other, same as allow_terminal above. The target
         // path/branch/hooks are operator-set here — never accepted from a request
-        // body on either side — per docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1.
+        // body on either side — per docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1.
         if (array_key_exists('allow_git_deploy', $overrides)) {
             $payload['allow_git_deploy'] = (bool) $overrides['allow_git_deploy'];
         }
@@ -638,7 +638,7 @@ class FluxFilesPlugin
 
         // Generic escape hatch: any JWT claim by its raw snake_case name, e.g.
         // ['claims' => ['allow_optimize' => true, 'upload_collision' => 'overwrite']].
-        // Merged last so explicit claims win; the core sanitizes on decode. See docs/CONFIG.md.
+        // Merged last so explicit claims win; the core sanitizes on decode. See docs/reference/CONFIG.md.
         if (!empty($overrides['claims']) && is_array($overrides['claims'])) {
             foreach ($overrides['claims'] as $k => $v) {
                 if ($v !== null) {

@@ -34,7 +34,7 @@ function newJti(): string {
 export function createToken(opts: CreateTokenOptions): string {
   const secret = resolveSecret(opts.secret);
   const now = Math.floor(Date.now() / 1000);
-  // Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
+  // Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
   // payload object, because `perms` already has an unconditional default baked into
   // that object below — a plain "set if absent" guard would never fire for it.
   const rolePreset = opts.role ? ROLE_PRESETS[String(opts.role).toLowerCase()] : undefined;
@@ -73,7 +73,7 @@ export function createByobToken(opts: CreateByobTokenOptions): string {
     names.push(name);
   }
 
-  // Role preset (docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base payload
+  // Role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base payload
   // object, same early-resolution reason as createToken() above — `perms`/`ownerOnly`
   // already have an unconditional default baked in (BYOB's own ['read','write'], not
   // plain tokens' ['read']), so a post-hoc "set if absent" guard could never fire.
@@ -122,7 +122,7 @@ const EDITION_PRESETS: Record<string, Record<string, boolean>> = {
   },
 };
 
-/** Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): default a person's
+/** Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): default a person's
  * capability level; explicit opts always win. `role` never itself becomes a JWT
  * claim — it only ever expands into ordinary claims decoded server-side already. */
 const ROLE_PRESETS: Record<string, Record<string, unknown>> = {
@@ -266,7 +266,7 @@ function applyTenantOverrides(
 
   // Generic escape hatch: ANY claim by its raw (snake_case) name. Merged last so an
   // explicit claim wins over a preset/group default. The server sanitizes on decode.
-  // See docs/CONFIG.md for the full claim list.
+  // See docs/reference/CONFIG.md for the full claim list.
   if (opts.claims) for (const [k, v] of Object.entries(opts.claims)) if (v !== undefined && v !== null) payload[k] = v;
 }
 

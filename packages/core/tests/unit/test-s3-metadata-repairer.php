@@ -2,7 +2,7 @@
 
 /**
  * Behavioral test suite for FluxFiles\Db\S3MetadataRepairer — the S3/R2
- * breadcrumb repair flow described in docs/DB-STORAGE-MIGRATION-DESIGN.md §8.
+ * breadcrumb repair flow described in docs/design/DB-STORAGE-MIGRATION-DESIGN.md §8.
  *
  * scanBucket() needs a live S3/R2 bucket and is intentionally NOT covered
  * here (consistent with the rest of the suite keeping live-S3 checks in the

@@ -7,7 +7,7 @@ import { encryptByob, decryptByob } from '../src/crypto';
 const SECRET = 'test-secret-key-that-is-at-least-32-bytes-long';
 
 // Shared cross-language fixture (docs/testdata/token-vectors.json,
-// docs/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — role/edition presets and the generic
+// docs/design/PYTHON-TOKEN-SDK-DESIGN.md §6.1) — role/edition presets and the generic
 // `claims` escape-hatch precedence, loaded here and by PHP's test-role-preset.php
 // (and, eventually, the Python SDK's own suite) so all three mint the exact same
 // vectors instead of hand-copying them per language.
@@ -19,7 +19,7 @@ interface TokenVector {
   expect_absent?: string[];
 }
 
-// BYOB + role/edition vectors (docs/PYTHON-TOKEN-SDK-DESIGN.md §5.1/§6.1) — a BYOB
+// BYOB + role/edition vectors (docs/design/PYTHON-TOKEN-SDK-DESIGN.md §5.1/§6.1) — a BYOB
 // token minted with `role`/`edition` must carry both the preset's claim bundle and the
 // encrypted `byob_disks` claim, per the 8-step merge order createByobToken() now follows.
 interface ByobRoleVector {
@@ -345,7 +345,7 @@ describe('createByobToken', () => {
   });
 });
 
-describe('role preset (docs/ACL-ROLE-PRESETS-DESIGN.md)', () => {
+describe('role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md)', () => {
   for (const v of VECTORS.role_presets) {
     it(v.name, () => assertVector(v));
   }
@@ -382,7 +382,7 @@ function assertByobRoleVector(v: ByobRoleVector): void {
   }
 }
 
-describe('BYOB + role/edition presets (docs/PYTHON-TOKEN-SDK-DESIGN.md §5.1)', () => {
+describe('BYOB + role/edition presets (docs/design/PYTHON-TOKEN-SDK-DESIGN.md §5.1)', () => {
   for (const v of VECTORS.byob_role_presets) {
     it(v.name, () => assertByobRoleVector(v));
   }

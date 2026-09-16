@@ -1,7 +1,7 @@
 <?php
 
 /**
- * DLP / PII scan wiring (paid DLP module, docs/DLP-PII-REDACTION-DESIGN.md). Mirrors
+ * DLP / PII scan wiring (paid DLP module, docs/design/DLP-PII-REDACTION-DESIGN.md). Mirrors
  * tests/integration/test-virus-scan.php's shape exactly — the seam is
  * FileManager::setDlpScanner()/assertNoPii(). index.php sets it whenever the
  * `allow_dlp_scan` claim is on, and resolves the module gate INSIDE the callback so a

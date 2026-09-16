@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
 
 /**
  * Data migration for the json -> db storage-backend cutover (see
- * docs/DB-STORAGE-MIGRATION-DESIGN.md §9). Deliberately does not gate on
+ * docs/design/DB-STORAGE-MIGRATION-DESIGN.md §9). Deliberately does not gate on
  * fluxfiles.storage_backend — this must run and be verified BEFORE the
  * config flips to 'db', so it always targets the db_connection tables
  * regardless of the currently-active backend.

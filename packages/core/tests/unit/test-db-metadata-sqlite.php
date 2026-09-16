@@ -385,7 +385,7 @@ test('deleteChildren() removes a whole subtree', function () use ($repo, $disk) 
 });
 
 // ═══════════════════════════════════════════════════════════════
-echo "\n{$yellow}► S3/R2 breadcrumb (docs/DB-STORAGE-MIGRATION-DESIGN.md §8){$reset}\n";
+echo "\n{$yellow}► S3/R2 breadcrumb (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §8){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('save() on a non-S3 (local) disk never stamps object_uuid', function () use ($repo, $conn, $disk) {

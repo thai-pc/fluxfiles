@@ -29,7 +29,7 @@ zip's checksum, and unpacks into `vendor/fluxfiles/share/`. A failed signature o
 mismatched checksum aborts without writing anything.
 
 Module ids: `share`, `intake`, `versioning`, `webhooks`, `ai`, `ocr`, `virus`,
-`backup`, `c2pa`, `audit-export`, `sso`. Install only the ones your edition includes —
+`backup`, `c2pa`, `audit-export`, `sso`, `dlp`, `legal-hold`. Install only the ones your edition includes —
 the rest will refuse with `402`.
 
 You do **not** need `composer dump-autoload`: FluxFiles loads installed modules itself
@@ -104,7 +104,38 @@ $token = fluxfiles_token(['user' => 'user-42', 'edition' => 'pro']);
 WordPress mints tokens for you; set the edition under **Settings → FluxFiles**, or
 filter `fluxfiles_token_overrides`.
 
-The claim names are in [`CONFIG.md`](CONFIG.md) — one row per claim, with defaults.
+The claim names are in [`CONFIG.md`](../reference/CONFIG.md) — one row per claim, with defaults.
+
+---
+
+## SSO Bridge setup (standalone UI)
+
+`sso` is different from the other modules: it runs **before** an access JWT exists,
+so there is no `allow_sso` claim to mint. It puts an OIDC login screen in front of
+the standalone `/public/` UI. It is useful when FluxFiles is the login-facing app;
+an embed hosted by your own application should normally keep minting tokens there.
+
+1. Install the `sso` module and set `FLUXFILES_LICENSE_KEY` as above.
+2. Register `https://files.example.com/api/fm/sso/callback` as the exact redirect
+   URI with your OIDC provider.
+3. Configure the server and restart PHP-FPM/container:
+
+```dotenv
+FLUXFILES_SSO_ENABLED=true
+FLUXFILES_SSO_OIDC_ISSUER=https://id.example.com/realms/acme
+FLUXFILES_SSO_OIDC_CLIENT_ID=fluxfiles
+FLUXFILES_SSO_OIDC_CLIENT_SECRET=server-side-secret
+FLUXFILES_SSO_OIDC_REDIRECT_URI=https://files.example.com/api/fm/sso/callback
+FLUXFILES_SSO_CLAIMS_MAP='{"editors":{"perms":["read","write"],"disks":["local"],"prefix":"users/{sub}/"}}'
+```
+
+`FLUXFILES_SSO_CLAIMS_MAP` maps an IdP group/role to the normal
+`fluxfiles_token()` options object; the first matching group wins. Set
+`FLUXFILES_SSO_GROUPS_CLAIM` when the IdP uses a different group path, or provide
+`FLUXFILES_SSO_DEFAULT_CLAIMS` only when a deliberate fallback is appropriate.
+An empty map/default fails closed with `403 sso_no_mapping`. OIDC is the only
+protocol in v1; SAML is not supported. The complete variable reference, including
+rate limits and token TTL, is in [`CONFIG.md`](../reference/CONFIG.md#4-server-env-vars-server-wide).
 
 ---
 

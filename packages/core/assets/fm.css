@@ -2297,7 +2297,7 @@ body {
     white-space: nowrap;
 }
 
-/* Compliance Readiness Scorecard (free/core, docs/COMPLIANCE-SCORECARD-DESIGN.md) */
+/* Compliance Readiness Scorecard (free/core, docs/design/COMPLIANCE-SCORECARD-DESIGN.md) */
 .ff-compliance-summary { padding: 10px 20px; border-bottom: 1px solid var(--ff-border); }
 .ff-compliance-summary p { margin: 0 0 4px; font-size: 13px; color: var(--color-text-secondary); }
 /* Liability guardrail (§3): always visible, never a tooltip/collapsed detail. */

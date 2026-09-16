@@ -107,7 +107,7 @@ Route::post('c2pa/sign', [FluxFilesController::class, 'c2paSign']);
 Route::post('terminal', [FluxFilesController::class, 'terminal']);
 
 // One-click Git deploy (SFTP disks only; free/core, not a paid module) — target
-// path/branch/hooks come from claims, never the request body (docs/GIT-DEPLOY-SECURITY-REVIEW.md §4.1)
+// path/branch/hooks come from claims, never the request body (docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1)
 Route::post('git-deploy', [FluxFilesController::class, 'gitDeploy']);
 
 // Share + Intake (paid module) — operator side: create/list/revoke/analytics.

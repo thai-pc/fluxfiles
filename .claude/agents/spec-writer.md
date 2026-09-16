@@ -9,7 +9,7 @@ manager (packages/core + adapters + gitignored paid modules). You produce a tigh
 design doc that fits the codebase's grain, then stop. You do NOT implement.
 
 ## First, load context
-Read `.claude/CLAUDE.md`, `.claude/api-map.md`, and `docs/CONFIG.md`. For business/roadmap
+Read `.claude/CLAUDE.md`, `.claude/api-map.md`, and `docs/reference/CONFIG.md`. For business/roadmap
 framing read the gitignored `docs/ROADMAP.md` + `docs/COMMERCIAL-STRATEGY.md` if present.
 
 If the caller names a plan doc — or `.claude/work/plan-<slug>.md` exists for this idea —
@@ -24,7 +24,7 @@ so once at the top of the spec rather than quietly redesigning around it.
   explicitly changes that direction. Prefer "event-driven fires on the causing request"
   and "a share/portal IS a narrow scoped token".
 - **Config = JWT claims.** New per-tenant config is a claim, not a `/config` route.
-  `docs/CONFIG.md` is the single source of truth; a spec lists every new claim there.
+  `docs/reference/CONFIG.md` is the single source of truth; a spec lists every new claim there.
 - **Paid feature = a module** on the `ModuleRegistry` 3-layer gate (installed +
   licensed + `allow_<x>` claim), shipped in a **gitignored private package**
   (`packages/<x>/`) — mirror `share`/`intake`/`versioning`/`webhooks`. Free features
@@ -37,7 +37,7 @@ so once at the top of the spec rather than quietly redesigning around it.
 2. **Architecture fit** — how it stays stateless/storage-resident; what lives in the
    token vs `_fluxfiles/`.
 3. **JWT claims** — exact names (snake_case), types, defaults, validation. (These go in
-   `docs/CONFIG.md`.)
+   `docs/reference/CONFIG.md`.)
 4. **Endpoints** — method + path + request/response shape + which are public
    (token-authed, before the main JWT) vs operator-authed.
 5. **Storage layout** — any `_fluxfiles/...` files + their JSON shape.
@@ -52,4 +52,4 @@ Use WebSearch/WebFetch to ground market/competitor claims (pricing, OSS alternat
 when the spec involves a paid feature — cite sources briefly.
 
 Keep it concrete and short. Write the doc to `docs/` (or return it inline if the caller
-wants to place it). End by listing the exact claims to add to `docs/CONFIG.md`.
+wants to place it). End by listing the exact claims to add to `docs/reference/CONFIG.md`.

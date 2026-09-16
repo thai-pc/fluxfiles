@@ -41,7 +41,7 @@ Go through the diff (`git diff`, `git status`) and check each that applies:
 **Completeness guards**
 - Every thrown `error_code` has an `error.<code>` key in all 16 `lang/*.json`
   (run `php packages/core/tests/unit/test-i18n.php`).
-- Every new claim is in `docs/CONFIG.md` (run `php packages/core/tests/unit/test-config-doc.php`).
+- Every new claim is in `docs/reference/CONFIG.md` (run `php packages/core/tests/unit/test-config-doc.php`).
 - New claim forwarded in embed/node(+dist)/laravel/wordpress; a new core route is either
   proxied by Laravel or whitelisted in `test-laravel-smoke.php` `$intentionallyUnproxied`.
 

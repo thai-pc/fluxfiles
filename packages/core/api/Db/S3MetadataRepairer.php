@@ -7,7 +7,7 @@ namespace FluxFiles\Db;
 use FluxFiles\DiskManager;
 
 /**
- * Repair flow for docs/DB-STORAGE-MIGRATION-DESIGN.md §8, part B: reunites a
+ * Repair flow for docs/design/DB-STORAGE-MIGRATION-DESIGN.md §8, part B: reunites a
  * `file_metadata` row with its S3/R2 object after an external tool (raw
  * `aws s3 sync`, cross-region replication, a bucket migration) has moved or
  * renamed the object outside FluxFiles. Cross-references the

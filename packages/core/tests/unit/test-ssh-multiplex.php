@@ -4,7 +4,7 @@
  * SSH ControlMaster (`SshMultiplexer` + `DiskManager`'s multiplex helpers) —
  * pure-PHP, no live SSH. Mirrors `test-terminal.php`'s style and
  * `test-sftp-passphrase.php`'s reflection-on-private-statics convention. Locks
- * in the security-relevant pure logic from docs/SFTP-CONTROLMASTER-SPEC.md §18:
+ * in the security-relevant pure logic from docs/security/SFTP-CONTROLMASTER-SPEC.md §18:
  *
  *   F1 — cache-key derivation can't collide across different credentials.
  *   F2 — socket dir/filename hygiene (0700, no host/user leakage, sun_path guard).

@@ -42,7 +42,7 @@ $token = fluxfiles_token([
 to `edition`: it defaults `perms`/`owner_only` and a few free power-user toggles
 (`allow_extract`/`allow_chmod`/`allow_code_edit`/`show_hidden`), never a paid-module
 claim, and never itself becomes a JWT claim — explicit claims always win. See
-`docs/ACL-ROLE-PRESETS-DESIGN.md` for the exact per-role table.
+`docs/design/ACL-ROLE-PRESETS-DESIGN.md` for the exact per-role table.
 
 The **legacy positional form** still works (backward compatible), with an optional
 final `$extra` array as the same escape hatch:
@@ -83,7 +83,7 @@ All five accept the same `claims` map.
 | `zip_max_files` | int | `10000` | Max file count for a zip/extract. |
 | `allow_terminal` | bool | `false` | SSH command-runner on SFTP disks; needs `write`. Grants shell as the SSH user — opt-in. Gates `POST /api/fm/terminal`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.46). |
 | `terminal_pty_url` | string (http/s) | `""` | Embed a self-hosted PTY server (ttyd/gotty/wetty) for an interactive terminal; empty → command-runner. Free. |
-| `allow_git_deploy` | bool | `false` | One-click Git deploy on SFTP disks; needs `write`. Deliberately narrower than `allow_terminal` — no free-form command, fixed shell-safe shape only. Independent claim, never implied by `allow_sftp`/`allow_terminal`. Gates `POST /api/fm/git-deploy`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.81). See `docs/GIT-DEPLOY-SECURITY-REVIEW.md`. |
+| `allow_git_deploy` | bool | `false` | One-click Git deploy on SFTP disks; needs `write`. Deliberately narrower than `allow_terminal` — no free-form command, fixed shell-safe shape only. Independent claim, never implied by `allow_sftp`/`allow_terminal`. Gates `POST /api/fm/git-deploy`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.81). See `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`. |
 | `git_deploy_path` | string | `""` | Repo path on the SFTP disk that a deploy syncs — operator-set at mint time, never accepted from the request body. Required (empty → 400) when `allow_git_deploy` is true. |
 | `git_deploy_branch` | string | `""` | Branch to force-sync via `fetch --prune` + `reset --hard origin/<branch>` (destructive, deterministic). Empty → `pull --ff-only` on whatever branch is checked out instead (refuses on divergence). Restricted to `[A-Za-z0-9._/-]+`; anything else is dropped to empty. |
 | `git_deploy_hooks` | bool | `false` | Let the deployed repo's Git hooks (`post-merge`, etc.) run. Default off — hooks run with `core.hooksPath=/dev/null` since a hostile hook is otherwise arbitrary code execution on the VPS. |
@@ -237,11 +237,30 @@ fields, `CredentialEncryptor` doesn't allowlist config keys).
 | `host_fingerprint` | string | `""` | Colon-hex fingerprint(s) (comma-separated) pinning the expected host key. Empty = trust any host key. |
 | `require_host_key` | bool | `false` | Fail closed (`sftp_host_key_required`) if `host_fingerprint` isn't also set. |
 | `strict_algorithms` | bool | `false` | Modern-only KEX/cipher/MAC/host-key allowlist (`DiskManager::modernSshAlgorithmLists()`). |
-| `ssh_multiplex` | bool | `false` | Reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands. Key-based auth only, no passphrase. See `docs/SFTP-CONTROLMASTER-SPEC.md`. |
+| `ssh_multiplex` | bool | `false` | Reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands. Key-based auth only, no passphrase. See `docs/security/SFTP-CONTROLMASTER-SPEC.md`. |
 
 ---
 
-## 3. Server env vars (server-wide)
+## 3. Static disk environment
+
+These server-side values define the built-in `local`, `s3`, `r2`, and optional
+`sftp` disks in `packages/core/config/disks.php`; they are not JWT claims. Treat
+credentials and private keys as secrets. A token still needs to grant the disk
+name through `disks` before a user can access it.
+
+| Disk | Environment variables | Defaults / notes |
+|---|---|---|
+| Local | `FLUXFILES_LOCAL_PRIVATE` | `false`. The local root is `storage/uploads`; private mode requires that root not be static-served. |
+| S3 / S3-compatible | `AWS_DEFAULT_REGION`, `AWS_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT`, `AWS_VISIBILITY`, `AWS_PUBLIC_URL`, `AWS_URL_TTL` | Region defaults to `ap-southeast-1`; visibility defaults to `private`; URL TTL defaults to 3600 seconds. Set `AWS_ENDPOINT` for MinIO/Spaces-compatible storage. |
+| Cloudflare R2 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_VISIBILITY`, `R2_PUBLIC_URL`, `R2_URL_TTL` | Uses R2's S3-compatible endpoint; visibility defaults to `private`; URL TTL defaults to 3600 seconds. |
+| SFTP | `SFTP_HOST`, `SFTP_PORT`, `SFTP_USERNAME`, `SFTP_PASSWORD`, `SFTP_PRIVATE_KEY`, `SFTP_PRIVATE_KEY_PASSPHRASE`, `SFTP_ROOT`, `SFTP_HOST_FINGERPRINT`, `SFTP_REQUIRE_HOST_KEY`, `SFTP_STRICT_ALGORITHMS`, `SFTP_MULTIPLEX` | The disk exists only when `SFTP_HOST` is set. Prefer a pinned host fingerprint and enable `SFTP_REQUIRE_HOST_KEY` once configured. Key auth wins if both key and password are supplied. |
+
+See [`DEPLOYMENT.md`](../guides/DEPLOYMENT.md) for web-server rules, especially the
+private-local-media requirement.
+
+---
+
+## 4. Server env vars (server-wide)
 
 | Env var | Default | Notes |
 |---|---|---|
@@ -264,7 +283,7 @@ fields, `CredentialEncryptor` doesn't allowlist config keys).
 | `FLUXFILES_GIT_DEPLOY_TIMEOUT` | `120` | Per-deploy timeout (seconds) — longer than the terminal's, since a cold `fetch` (LFS/submodules) can take longer than an interactive command. |
 | `FLUXFILES_GIT_DEPLOY_RATE_LIMIT` | `5` | Deploy requests/min per user — tighter than the general write bucket, since resetting a live webroot repeatedly is never legitimate traffic. |
 | `FLUXFILES_TERMINAL_RATE_LIMIT` | `30` | Terminal requests/min per user — its own bucket, looser than git-deploy (interactive command-runner calls are more frequent than a deploy) but tighter than the general write bucket, since each call execs a real command on the remote server. |
-| `SFTP_MULTIPLEX` | `false` | Static-disk `ssh_multiplex` toggle — reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands instead of reconnecting per command. Key-based auth only (no passphrase); a password-only or passphrase-protected-key disk silently falls back to the existing per-request path. See `docs/SFTP-CONTROLMASTER-SPEC.md`. |
+| `SFTP_MULTIPLEX` | `false` | Static-disk `ssh_multiplex` toggle — reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands instead of reconnecting per command. Key-based auth only (no passphrase); a password-only or passphrase-protected-key disk silently falls back to the existing per-request path. See `docs/security/SFTP-CONTROLMASTER-SPEC.md`. |
 | `FLUXFILES_SSH_MULTIPLEX_DISABLED` | `false` | Server kill-switch — forces every disk back to the phpseclib-only path regardless of `ssh_multiplex`. |
 | `FLUXFILES_SSH_MULTIPLEX_PERSIST` | `60` | `ControlPersist` seconds. Clamped `[10, 120]`. |
 | `FLUXFILES_SSH_MULTIPLEX_MAX_SOCKETS` | `20` | Server-wide LRU cap on concurrently-open multiplexed sockets. |
@@ -278,6 +297,7 @@ fields, `CredentialEncryptor` doesn't allowlist config keys).
 | `FLUXFILES_AIVISION_KEY` | — | API key for the AI Vision provider (BYO key). |
 | `FLUXFILES_AIVISION_ENDPOINT` | — | Endpoint URL, required when `FLUXFILES_AIVISION_PROVIDER=http`. Operator-trusted (server env, not user input) — no SSRF guard. |
 | `FLUXFILES_AIVISION_TIMEOUT` | `60` | AI Vision provider request timeout (seconds). |
+| `FLUXFILES_DLP_ENDPOINT` | — | DLP/PII scanner endpoint for the paid DLP module. Required when DLP scanning is enabled for a token. |
 | `FLUXFILES_C2PA_MANIFEST` | — | Path to the C2PA (paid) signing manifest JSON (claim_generator + cert/key). Empty → `501 c2pa_unconfigured`. |
 | `FLUXFILES_VIRUSTOTAL_KEY` | — | VirusTotal API key — cloud fallback for the Virus module (paid) when local ClamAV isn't installed. SHA-256 lookup only; bytes never leave the server. |
 | `FLUXFILES_VIRUSTOTAL_TIMEOUT` | `20` | VirusTotal request timeout (seconds). |

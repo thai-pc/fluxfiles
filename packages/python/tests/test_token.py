@@ -2,7 +2,7 @@
 
 Loads the shared cross-language fixtures (docs/testdata/token-vectors.json) for
 plain_tokens/role_presets/edition_presets/byob_role_presets, per
-docs/PYTHON-TOKEN-SDK-DESIGN.md §6.2 — the same vectors Node's token.test.ts and
+docs/design/PYTHON-TOKEN-SDK-DESIGN.md §6.2 — the same vectors Node's token.test.ts and
 PHP's test-role-preset.php/test-byob.php load, so all three mint the exact same
 cases instead of hand-copying them per language.
 """

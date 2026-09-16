@@ -3,7 +3,7 @@
 /**
  * Behavioral test suite for FluxFiles\Db\MetadataExporter / MetadataImporter —
  * the DB-backend backup/restore tooling described in
- * docs/DB-STORAGE-MIGRATION-DESIGN.md §7.
+ * docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7.
  *
  * Usage:
  *   php tests/unit/test-metadata-export-import.php

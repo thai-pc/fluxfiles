@@ -76,7 +76,7 @@ if (($_ENV['SFTP_HOST'] ?? '') !== '') {
         // disk instead of reconnecting per command. Off by default. Key-based auth
         // only — a password-only (or passphrase-protected-key) config silently
         // falls back to the existing per-request phpseclib path. See
-        // docs/SFTP-CONTROLMASTER-SPEC.md.
+        // docs/security/SFTP-CONTROLMASTER-SPEC.md.
         'ssh_multiplex'          => ($_ENV['SFTP_MULTIPLEX'] ?? '') === 'true',
     ];
 }

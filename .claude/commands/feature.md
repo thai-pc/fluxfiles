@@ -14,7 +14,7 @@ Run the subagents in sequence, each building on the previous output:
    security, test plan) that fits the stateless/module grain. Pause and show me the spec;
    if it raises a big open question, ask me before proceeding.
 3. **coder** — implement the spec (free/core + gitignored private module if paid +
-   adapters + i18n ×16 + `docs/CONFIG.md`). Keep the diff tight; lint + run relevant tests.
+   adapters + i18n ×16 + `docs/reference/CONFIG.md`). Keep the diff tight; lint + run relevant tests.
 4. **tester** — write + run tests until the whole core suite + guards are green.
 5. **reviewer** — read-only pass over the change (owner_only, SSRF, the module gate,
    private-module non-leakage, i18n/config-doc guards). Writes numbered findings to

@@ -40,7 +40,7 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
     }
 
     /**
-     * S3/R2 breadcrumb (docs/DB-STORAGE-MIGRATION-DESIGN.md §8): the first time
+     * S3/R2 breadcrumb (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §8): the first time
      * a file is saved under the DB backend, stamp a UUID onto the raw S3
      * object as `x-amz-meta-fluxfiles-id` via CopyObject — the one small
      * write that lets `scripts/repair-s3-metadata.php` reunite an
@@ -786,7 +786,7 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
     }
 
     // ---------------------------------------------------------------------
-    // Legal hold (retention) — docs/RETENTION-LEGAL-HOLD-DESIGN.md §5/§7. Same
+    // Legal hold (retention) — docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §5/§7. Same
     // "one row per disk+id" shape as trash above; StorageMetadataHandler's
     // _fluxfiles/holds.json is the reference implementation for field names.
     // ---------------------------------------------------------------------

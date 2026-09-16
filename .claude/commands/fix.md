@@ -9,7 +9,7 @@ If $ARGUMENTS is empty, use the most recent `.claude/work/review-*.md`.
 Fix **every Blocking finding** (`B1`, `B2`, …). Judge each Non-blocking note on its
 merits — apply the cheap correct ones, skip the rest; don't refactor beyond the
 findings. Keep the diff tight and follow `.claude/agents/coder.md` (stateless/no-DB;
-error_code → i18n ×16; new claim → `docs/CONFIG.md` + `Claims` + forwarded; never stage
+error_code → i18n ×16; new claim → `docs/reference/CONFIG.md` + `Claims` + forwarded; never stage
 private-module files).
 
 Then `php -l` the edited files and re-run the guards + the tests covering the change

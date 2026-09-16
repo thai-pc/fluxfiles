@@ -8,7 +8,7 @@ namespace FluxFiles;
  * Compliance Readiness Scorecard — a read-only, stateless capability checklist
  * over features a compliance program commonly cares about (virus scanning,
  * content provenance, audit retention, SSO, DLP, legal hold). See
- * docs/COMPLIANCE-SCORECARD-DESIGN.md for the full design.
+ * docs/design/COMPLIANCE-SCORECARD-DESIGN.md for the full design.
  *
  * IMPORTANT (§3 of the design doc): this is a feature-toggle report, NOT a
  * compliance/legal certification. Never add a `score`/`percent`/`compliant`
@@ -113,7 +113,7 @@ final class ComplianceScorecard
             // claim can be true on an unlicensed/uninstalled server (the operator
             // flipped the claim but never bought/installed the module), and that
             // case must render as `locked`, not `on` — the feature literally
-            // cannot run. See docs/COMPLIANCE-SCORECARD-DESIGN.md §8's worked
+            // cannot run. See docs/design/COMPLIANCE-SCORECARD-DESIGN.md §8's worked
             // example: enabled:true + available:false => status:locked.
             if (!$available) {
                 $status = 'locked';

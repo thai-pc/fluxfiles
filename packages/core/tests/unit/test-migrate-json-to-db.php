@@ -2,7 +2,7 @@
 
 /**
  * Behavioral test suite for FluxFiles\Db\JsonToDbMigrator — the json -> db
- * cutover engine described in docs/DB-STORAGE-MIGRATION-DESIGN.md §9.
+ * cutover engine described in docs/design/DB-STORAGE-MIGRATION-DESIGN.md §9.
  *
  * Usage:
  *   php tests/unit/test-migrate-json-to-db.php

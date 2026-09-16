@@ -13,7 +13,7 @@ use FluxFiles\StorageMetadataHandler;
  * dirs.json, trash.json, audit.jsonl + archive, and — for local disks —
  * orphaned _fluxfiles/meta/*.json sidecars) into a DB-backed
  * MetadataRepositoryInterface destination, for the json -> db cutover
- * described in docs/DB-STORAGE-MIGRATION-DESIGN.md §9.
+ * described in docs/design/DB-STORAGE-MIGRATION-DESIGN.md §9.
  *
  * Never writes to any _fluxfiles/*.json* file, in either dry-run or real-run
  * mode — reads only from $source, writes only to $destination.
@@ -196,7 +196,7 @@ class JsonToDbMigrator
     }
 
     // -------------------------------------------------------------------
-    // 3b. Legal holds (_fluxfiles/holds.json) — docs/RETENTION-LEGAL-HOLD-DESIGN.md §5
+    // 3b. Legal holds (_fluxfiles/holds.json) — docs/design/RETENTION-LEGAL-HOLD-DESIGN.md §5
     // -------------------------------------------------------------------
 
     private function migrateHolds(string $disk, string $prefix, bool $dryRun, ?callable $onItem): array

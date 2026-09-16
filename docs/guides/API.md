@@ -2,7 +2,7 @@
 
 Full HTTP route reference for the core standalone server. For adapter-specific
 route proxying (which of these each framework wrapper exposes), see the
-relevant package README; the [`.claude/api-map.md`](../.claude/api-map.md)
+relevant package README; the [`.claude/api-map.md`](../../.claude/api-map.md)
 file carries the same information at implementation depth for anyone working
 on the core itself.
 
@@ -86,7 +86,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 
 ## Paid Modules
 
-Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` claim) — absent/unlicensed/not-allowed answers `501`/`402`/`403` respectively. All of these are proxied by the Laravel/WordPress adapters too (see [`docs/CONFIG.md`](CONFIG.md) for each claim's minimum core version). See [`.claude/api-map.md`](../.claude/api-map.md) for full behavior.
+Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` claim) — absent/unlicensed/not-allowed answers `501`/`402`/`403` respectively. All of these are proxied by the Laravel/WordPress adapters too (see [`CONFIG.md`](../reference/CONFIG.md) for each claim's minimum core version). See [`.claude/api-map.md`](../../.claude/api-map.md) for full behavior.
 
 | Method | Path | Body / Params | Module | Description |
 |--------|------|---------------|--------|-------------|
@@ -116,7 +116,7 @@ Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` cl
 
 ### SSO Bridge (paid module `sso`, pre-auth)
 
-Not gated by a per-token claim (there's no token yet) — a server kill-switch (`FLUXFILES_SSO_ENABLED=true`) plus the module installed + licensed. Exists to put a login screen in front of the **standalone `/public` UI** when there's no host app minting tokens via `fluxfiles_token()`. OIDC only in v1 (no SAML). See [`packages/sso/README.md`](../packages/sso/README.md) for the full flow and env vars.
+Not gated by a per-token claim (there's no token yet) — a server kill-switch (`FLUXFILES_SSO_ENABLED=true`) plus the module installed + licensed. Exists to put a login screen in front of the **standalone `/public` UI** when there's no host app minting tokens via `fluxfiles_token()`. OIDC only in v1 (no SAML). See the public [SSO Bridge setup](ACTIVATE.md#sso-bridge-setup-standalone-ui) for the flow and configuration.
 
 | Method | Path | Params / Body | Description |
 |--------|------|----------------|-------------|

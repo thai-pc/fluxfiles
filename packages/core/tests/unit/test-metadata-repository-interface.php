@@ -7,7 +7,7 @@
  * the JSON/file backend; DbMetadataHandler, the SQL backend) implements every
  * declared method with a matching signature (param types + count + return type).
  * Cheap regression guard against the interface and its implementers drifting
- * apart — see docs/DB-STORAGE-MIGRATION-DESIGN.md §2/§12.
+ * apart — see docs/design/DB-STORAGE-MIGRATION-DESIGN.md §2/§12.
  *
  * Usage: php packages/core/tests/unit/test-metadata-repository-interface.php
  */

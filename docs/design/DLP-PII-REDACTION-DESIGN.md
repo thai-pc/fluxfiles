@@ -2,7 +2,7 @@
 
 Status: **Implemented and shipped.** Module id `dlp`, class `\FluxFiles\Dlp\DlpModule`
 (gitignored private package `packages/dlp/`, registered in `ModuleRegistry::$map`),
-claim `allow_dlp_scan` (parsed in `Claims.php`). Companion to `docs/GIT-DEPLOY-SECURITY-REVIEW.md`
+claim `allow_dlp_scan` (parsed in `Claims.php`). Companion to `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`
 (style/depth reference) and the shipped Virus module (closest analog — gitignored code,
 but its shape is fully visible from `ModuleRegistry.php`/`Claims.php`/`FileManager.php`/
 `index.php` and is what this spec mirrors throughout).
@@ -68,7 +68,7 @@ different kind of "infection."
 
 **Config = JWT claims** (§3): a new `allow_dlp_scan` gate claim plus four tuning claims,
 all decoded/sanitized/clamped in `Claims::fromJwtPayload` like every other claim, all
-documented in `docs/CONFIG.md`.
+documented in `docs/reference/CONFIG.md`.
 
 ### 2.1 Why Presidio, and where the analogy to Virus *breaks*
 
@@ -90,7 +90,7 @@ the binary garbage happens to contain no string that looks like an SSN, which is
 sense of security, not a working scanner.
 
 **Resolution (mirrors this project's existing pattern of narrowing v1 scope — see §2.2
-of `docs/GIT-DEPLOY-SECURITY-REVIEW.md`'s "one fixed command shape" and the URL-import
+of `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`'s "one fixed command shape" and the URL-import
 "v1 is sync, no queue — by design" precedent in `.claude/CLAUDE.md`):** v1 only submits
 files whose **extension** is on a text-bearing allowlist (`dlp_scan_extensions`, §3) to
 the engine at all. Everything else (images, video, PDF, Office binary formats, archives)
@@ -112,10 +112,10 @@ Per the task brief, `packages/core/api/` was checked for a reusable scanner-HTTP
 abstraction. **None exists.** `VirusScanModule`/`AiVisionModule`/the SSO OIDC client are
 all gitignored private packages — their HTTP calls aren't visible here, but the *env var*
 shape they expose (`FLUXFILES_VIRUSTOTAL_TIMEOUT`, `FLUXFILES_AIVISION_TIMEOUT`, no
-"circuit breaker" env anywhere in `docs/CONFIG.md` §3) confirms the established pattern
+"circuit breaker" env anywhere in `docs/reference/CONFIG.md` §3) confirms the established pattern
 is a **plain bounded-timeout cURL call per request, no persistent failure-tracking
 state**. This project deliberately avoids new server-lifetime state (see
-`docs/GIT-DEPLOY-SECURITY-REVIEW.md` F8: "flagged only so nobody 'fixes' it by adding a
+`docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` F8: "flagged only so nobody 'fixes' it by adding a
 persistent connection pool"). A circuit breaker that remembers "the engine has been down
 for N requests, stop trying" is exactly that kind of new in-memory/stateful mechanism —
 **deliberately not built**. `packages/dlp/`'s `PresidioClient` follows the established
@@ -125,7 +125,7 @@ fails closed on every eligible write until the operator notices and fixes it (lo
 
 ---
 
-## 3. JWT claims (to add to `docs/CONFIG.md` §2.13)
+## 3. JWT claims (to add to `docs/reference/CONFIG.md` §2.13)
 
 | Claim | Type | Default | Notes |
 |---|---|---|---|
@@ -137,7 +137,7 @@ fails closed on every eligible write until the operator notices and fixes it (lo
 
 All five follow the existing `Claims::fromJwtPayload` sanitize-on-decode contract — a
 malformed value never breaks the server, it falls back to the default, per
-`docs/CONFIG.md` §0's blanket guarantee. `Claims::isAllowed()` gets one new case:
+`docs/reference/CONFIG.md` §0's blanket guarantee. `Claims::isAllowed()` gets one new case:
 `case 'allow_dlp_scan': return $this->allowDlpScan;`.
 
 **Deliberately NOT added:** a `dlp_base_url`/engine-URL claim. The engine endpoint is
@@ -247,7 +247,7 @@ therefore can never accidentally echo, matched text.
 
 **None needed.** `FLUXFILES_DLP_ENDPOINT` is operator-set server `.env` config, not user
 input — same posture as `FLUXFILES_AIVISION_ENDPOINT` and the SSO OIDC issuer URL
-(`docs/CONFIG.md` §3 notes both explicitly as "operator-trusted... no SSRF guard
+(`docs/reference/CONFIG.md` §3 notes both explicitly as "operator-trusted... no SSRF guard
 needed"). No claim carries a URL for this feature, so there is no attacker-reachable
 input that could redirect the outbound call.
 
@@ -343,7 +343,7 @@ feature.
     $auditLog->log($claims->userId, 'dlp_blocked', $disk, $name); }` — logging only
     `name` (the `entities` list could also be appended to `detail` per §5's shape, e.g.
     `implode(',', $p['entities'] ?? [])`).
-- `docs/CONFIG.md` — §2.13 gets the 5 claims (table in §3 above) + a new bundle-module
+- `docs/reference/CONFIG.md` — §2.13 gets the 5 claims (table in §3 above) + a new bundle-module
   row.
 - `packages/core/lang/*.json` (**all 16** — `en, vi, zh, ja, ko, fr, de, es, ar, pt, it,
   ru, th, hi, tr, nl**) — 3 new `error.*` keys (`pii_detected`, `dlp_unscannable`,
@@ -364,7 +364,7 @@ precedent for getting it wrong: `webhooks`/`auto_optimize`/`ai_auto_tag` were on
 **inert** in the Laravel/WordPress proxies — the claim decoded fine, but neither proxy's
 `fileManager()` builder actually wired the corresponding hook, so a token with the claim
 set behaved differently depending on which adapter served it (see
-`docs/CONFIG.md`/`.claude/CLAUDE.md`'s "Laravel/WP proxy inert claims gap" history). DLP
+`docs/reference/CONFIG.md`/`.claude/CLAUDE.md`'s "Laravel/WP proxy inert claims gap" history). DLP
 must not repeat this. Both proxy controllers build their **own** `FileManager` instance
 (they don't reuse `index.php`) and therefore must independently call `setDlpScanner()`:
 
@@ -454,7 +454,7 @@ router) to play the role of Presidio, and exercises over real HTTP:
 
 **CI guards that will fail until this is done right** (call out explicitly, both are
 existing repo mechanisms, not new ones to build):
-- `tests/unit/test-config-doc.php` — fails until the 5 claims are in `docs/CONFIG.md`.
+- `tests/unit/test-config-doc.php` — fails until the 5 claims are in `docs/reference/CONFIG.md`.
 - `tests/unit/test-i18n.php` — fails until the 3 new `error.*` keys + 1
   `audit.actions.dlp_blocked` key exist in **all 16** `lang/*.json` files.
 

@@ -4,7 +4,7 @@ Ready-made `fluxfiles_token()` configs for common client verticals. Every FluxFi
 token *is* the config — the server is stateless, so "configuring FluxFiles for a
 photography studio" just means minting a token with the right claims. These presets
 turn that into a copy-paste starting point instead of reading all the claims in
-[`CONFIG.md`](CONFIG.md) from scratch.
+[`CONFIG.md`](../reference/CONFIG.md) from scratch.
 
 Each preset lists: who it's for, what it turns on, and whether it needs a paid
 module (see [fluxfiles.io/pricing](https://fluxfiles.io/pricing) — the free core
@@ -205,7 +205,7 @@ customer must use their own S3/R2 bucket rather than the operator's — see
   anyway since it also narrows `webhook_events` and caps `versioning_max`, which the
   preset doesn't do for you.
 - Every claim above is documented in full (defaults, clamping, sanitization) in
-  [`CONFIG.md`](CONFIG.md) — these presets only combine existing claims, they don't
+  [`CONFIG.md`](../reference/CONFIG.md) — these presets only combine existing claims, they don't
   introduce new ones.
 - These are starting points, not fixed packages — mix and match freely (e.g. add
   `allow_webhooks` to the photography preset if the studio wants a Zapier

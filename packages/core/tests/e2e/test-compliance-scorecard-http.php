@@ -2,7 +2,7 @@
 
 /**
  * End-to-end HTTP test for the free/core Compliance Readiness Scorecard
- * (docs/COMPLIANCE-SCORECARD-DESIGN.md): `GET /api/fm/compliance/scorecard`.
+ * (docs/design/COMPLIANCE-SCORECARD-DESIGN.md): `GET /api/fm/compliance/scorecard`.
  * Boots the real router (own `php -S`, backs up/restores packages/core/.env,
  * needs curl) and drives the route over the wire — no module/license gate on
  * the route itself, just the `audit` perm, so this is a single-phase test

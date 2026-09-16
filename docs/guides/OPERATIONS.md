@@ -48,7 +48,7 @@ Build the artifacts:
 
 ```bash
 php scripts/pack-modules.php
-# → build/modules/<module>-<version>.zip  ×11 (one zip per ModuleRegistry id)
+# → build/modules/<module>-<version>.zip  ×13 (one zip per ModuleRegistry id)
 # → build/modules/catalogue.json
 ```
 

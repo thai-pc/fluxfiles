@@ -46,6 +46,10 @@ server {
         add_header Cache-Control "public";
     }
 
+    # Storage-resident bookkeeping (metadata, audit log, trash) must never be
+    # public, even when ordinary local uploads are public.
+    location ^~ /storage/uploads/_fluxfiles/ { deny all; }
+
     # Uploaded files (local disk only).
     # Security: stop MIME-sniffing and neutralize active content (e.g. <script>
     # inside an uploaded SVG/HTML) so user files can't run as same-origin XSS.
@@ -79,6 +83,14 @@ server {
 }
 ```
 
+> **Private local media:** when `FLUXFILES_LOCAL_PRIVATE=true`, do not serve
+> `/storage/uploads/` publicly at all — otherwise its static URL bypasses the
+> token-gated `/api/fm/stream` route. Remove the uploads `location` above and,
+> for nginx's efficient Range handling, add the internal `/_ff_media/` location
+> from [`docker/nginx.conf`](../../docker/nginx.conf), then set
+> `FLUXFILES_XACCEL=/_ff_media`. The stock Docker nginx config serves public
+> local uploads; derive it before enabling private-local mode.
+
 ## Apache (.htaccess)
 
 ```apache
@@ -89,6 +101,9 @@ RewriteRule ^api/(.*)$ api/index.php [QSA,L]
 
 # Public HTML through PHP for locale injection
 RewriteRule ^public/(index\.html)?$ api/index.php [QSA,L]
+
+# Never expose storage-resident bookkeeping through the public uploads path.
+RewriteRule ^storage/uploads/_fluxfiles/ - [F,L]
 
 # Block sensitive files
 <FilesMatch "^\.env|composer\.(json|lock)">

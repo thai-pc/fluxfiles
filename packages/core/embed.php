@@ -54,7 +54,7 @@ function fluxfiles_token(
     //                    'claims' => ['allow_terminal' => true, 'terminal_pty_url' => '…',
     //                                 'allow_optimize' => true, 'upload_collision' => 'overwrite']]);
     // The `claims` map takes ANY of the JWT claims (snake_case) — the single escape
-    // hatch so nothing is unsettable. See docs/CONFIG.md for the full claim list.
+    // hatch so nothing is unsettable. See docs/reference/CONFIG.md for the full claim list.
     if (is_array($userId)) {
         return _fluxfiles_build_token($userId);
     }
@@ -90,7 +90,7 @@ function _fluxfiles_build_token(array $o): string
     };
 
     $ttl = (int) $pick(['ttl'], 3600);
-    // Role preset (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
+    // Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
     // payload array, because `perms` already has an unconditional default baked into
     // that array below — a plain "set if not present" guard would never fire for it.
     $roleDefaults = fluxfiles_role_preset($pick(['role'], null));
@@ -180,7 +180,7 @@ function fluxfiles_apply_edition_preset(array &$payload, ?string $edition): void
 }
 
 /**
- * Look up a role preset's raw claim map (DX sugar, docs/ACL-ROLE-PRESETS-DESIGN.md).
+ * Look up a role preset's raw claim map (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md).
  * `role` never itself becomes a JWT claim — it only ever expands, at mint time, into
  * ordinary claims Claims::fromJwtPayload already decodes. Zero decode-side changes.
  *
@@ -242,7 +242,7 @@ function fluxfiles_apply_role_preset(array &$payload, array $roleDefaults): void
  *                             then false. Same early-resolution reasoning as $perms.
  * @param ?string $edition   Edition preset (DX sugar) — same as fluxfiles_token()'s.
  * @param ?string $role      Role preset (DX sugar) — same as fluxfiles_token()'s.
- *                           Included on BYOB tokens too (docs/ACL-ROLE-PRESETS-DESIGN.md's
+ *                           Included on BYOB tokens too (docs/design/ACL-ROLE-PRESETS-DESIGN.md's
  *                           "BYOB scope" note, matching Laravel/WordPress's existing behavior).
  * @return string JWT token
  */
@@ -275,7 +275,7 @@ function fluxfiles_byob_token(
         $diskNames[] = $name;
     }
 
-    // Role preset (docs/ACL-ROLE-PRESETS-DESIGN.md, docs/PYTHON-TOKEN-SDK-DESIGN.md §5.1):
+    // Role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md, docs/design/PYTHON-TOKEN-SDK-DESIGN.md §5.1):
     // resolved BEFORE `perms`/`owner_only` below, for the same early-resolution reason as
     // the plain-token path in _fluxfiles_build_token() — both already have an unconditional
     // default baked in (BYOB's own ['read','write'], not plain tokens' ['read']), so a

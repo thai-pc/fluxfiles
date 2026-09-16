@@ -150,7 +150,7 @@ export interface BaseTokenOptions {
   /** Role preset that defaults a person's capability level (perms, owner-scoping,
    *  and free power-user toggles) — orthogonal to `edition`, which defaults which
    *  *paid features* a tier gets. DX sugar — explicit claim options still win, and
-   *  `role` never itself becomes a JWT claim. See docs/ACL-ROLE-PRESETS-DESIGN.md.
+   *  `role` never itself becomes a JWT claim. See docs/design/ACL-ROLE-PRESETS-DESIGN.md.
    *  Supported on `createByobToken()` too, same as `edition` — both apply alongside
    *  the encrypted `byobDisks` claim (matches Laravel/WordPress's existing behavior). */
   role?: 'viewer' | 'editor' | 'admin' | 'superadmin';
@@ -250,7 +250,7 @@ export interface BaseTokenOptions {
   /** Generic escape hatch: any JWT claim by its raw snake_case name (e.g.
    *  `{ allow_terminal: true, terminal_pty_url: '…', upload_collision: 'overwrite' }`).
    *  Merged last so explicit claims win; the server sanitizes on decode. The single
-   *  place to set claims that don't have a typed option here. See docs/CONFIG.md. */
+   *  place to set claims that don't have a typed option here. See docs/reference/CONFIG.md. */
   claims?: Record<string, unknown>;
 }
 

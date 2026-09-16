@@ -12,7 +12,7 @@ import { decryptByob } from '../src/crypto';
 const AUTOLOAD = resolve(process.cwd(), '../core/vendor/autoload.php');
 const SECRET = 'php-compat-secret-key-at-least-32-bytes!!';
 
-// Shared cross-language fixtures (docs/testdata/, docs/PYTHON-TOKEN-SDK-DESIGN.md
+// Shared cross-language fixtures (docs/testdata/, docs/design/PYTHON-TOKEN-SDK-DESIGN.md
 // §6.1) — the same vectors PHP's test-role-preset.php/test-byob.php and this
 // package's token.test.ts load, so the exact input/expected-claim pair every
 // language's own suite already checks is also proven to decode in *live* PHP here.
