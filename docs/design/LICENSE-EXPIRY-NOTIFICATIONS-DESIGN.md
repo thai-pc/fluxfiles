@@ -262,7 +262,7 @@ a service this small):
 | Column | Type | Purpose |
 |---|---|---|
 | `reminder_stage` | `TEXT NULL` | The smallest threshold-bucket already notified for this row — one of the configured day thresholds (as a string, e.g. `"7"`), or `"grace"` / `"expired"` for the two non-day touch points below. `NULL` = never reminded. Idempotency key: a row is only re-emailed when the *current* bucket is smaller/worse than the stored one, mirroring §B's dismissal-bucket logic so both surfaces treat "worse state supersedes a dismissed/already-sent better state" the same way. |
-| `grace_days` | `INTEGER DEFAULT 14` | Mirrors `LicenseSigner::mint()`'s `graceDays` option (`LicenseSigner.php:73`, defaults to 14, and no current `Plans::DEFAULT` entry overrides it — verified). Persisted at issuance time (`LicenseIssuer::issue()` passes it through) so the reminder job can compute grace-window boundaries **exactly**, without hardcoding 14 and silently drifting if a future plan ever sets a custom `graceDays`. Cheap insurance for a column that costs nothing today. |
+| `grace_days` | `INTEGER DEFAULT 14` | Mirrors the signed `LicenseSigner::mint()` `graceDays` value. Current plans explicitly issue zero days for perpetual update terms and seven days for subscriptions; 14 remains only the backward-compatible fallback for a custom/legacy plan that omits it. Persisting it lets the reminder job compute the boundary **exactly**, without duplicating policy. |
 
 ### 6.3 Query
 
@@ -274,8 +274,8 @@ public function needingReminder(array $thresholdDays, int $now): array
 
 Selects `status = 'active'` rows (matching `undelivered()`'s own exclusion of
 revoked/refunded — never re-solicit someone whose order was reversed) where
-`expires IS NOT NULL` (lifetime licenses, `expires=NULL`, never need a
-renewal reminder — see §6.5) and either:
+`expires IS NOT NULL` (legacy lifetime-update licences, `expires=NULL`, never
+need a renewal reminder — see §6.6) and either:
 - `days_left := floor((expires - now) / 86400)` has crossed a threshold in
   `$thresholdDays` not yet reflected in `reminder_stage` (i.e. `reminder_stage`
   is `NULL` or a larger number than the threshold just crossed), or
@@ -314,23 +314,25 @@ Both `perpetual` and `subscription` licenses get reminded on the same
 threshold schedule — the difference is entirely in the **copy**, matching
 `LicenseManager::status()`'s own split (`LicenseManager.php:223-236`):
 
-- **`perpetual`** (annual/lifetime self-host): past `expires`, the install
+- **`perpetual`** (annual/lifetime-use self-host): past `expires`, the install
   keeps running (`status()` returns `perpetual`, not `expired`) — only the
   update channel (`updatesAllowed()`) stops. Copy: "…your update access ends
   on {date}; the software keeps working, you just won't get new
   releases/security patches until you renew."
-- **`subscription`** (monthly/hosted): past grace, the module genuinely
+- **`subscription`** (monthly/hosted): past its seven-day payment-recovery grace, the module genuinely
   stops working (`status()` returns `expired`, and `ModuleRegistry::require()`
   will 402 every gated call). Copy must convey the harder consequence:
   "…on {date} your paid features (Share/Intake/…) will stop working for your
   users."
 
-### 6.6 Lifetime licenses (`expires = NULL`) — excluded, not a bug
+### 6.6 Lifetime-use licences — a renewable update term
 
-`Plans::DEFAULT['lifetime']` sets `ttlDays: null`, which `LicenseSigner::mint()`
-skips setting `expires`/`grace` entirely (`LicenseSigner.php:71`) — there is
-nothing to remind about. `needingReminder()`'s `expires IS NOT NULL` filter
-handles this structurally rather than as a special case in the query logic.
+The legacy `lifetime` checkout id now issues a perpetual-use licence with
+`ttlDays: 365`: installed modules keep running forever, while the update/support
+term ends after one year. It is therefore included in renewal reminders just like
+other perpetual terms. Existing legacy keys with `expires = NULL` retain their
+promised lifetime-update entitlement and remain structurally excluded by
+`needingReminder()`'s `expires IS NOT NULL` filter.
 
 ### 6.7 Delivery semantics
 

@@ -77,8 +77,9 @@ final class LicenseMailer
         $edition = ucfirst((string) ($record['edition'] ?? 'pro'));
         $expires = $record['expires'] ?? null;
         $expiryLine = $expires
-            ? 'Valid until: ' . gmdate('Y-m-d', (int) $expires)
-            : 'This licence does not expire.';
+            ? 'Updates and priority support are included until: ' . gmdate('Y-m-d', (int) $expires) . ".\n\n"
+                . 'Your installed paid modules keep running after that date; renewal only restores new releases and support.'
+            : 'This licence includes lifetime use and lifetime updates.';
 
         // Plain text on purpose: a licence key is a long opaque string, and HTML mail
         // clients are the reason keys arrive with smart quotes or a soft line break in
@@ -240,7 +241,7 @@ final class LicenseMailer
     /**
      * "Past expiry" body for a module licence, worded per `enforcement` — this is
      * the one place the copy must differ, not just the subject. `perpetual`
-     * (annual/lifetime self-host) keeps running past expiry, only the update
+     * (annual/lifetime-use self-host) keeps running past expiry, only the update
      * channel stops; `subscription` (hosted/monthly) genuinely stops working past
      * the grace window. Getting these two swapped would tell a still-working
      * customer their software is broken, or a broken customer that it's fine.

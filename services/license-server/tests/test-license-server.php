@@ -58,7 +58,7 @@ test('issue Pro → verifies against the real LicenseManager', function () use (
     assertTrue($lm->daysLeft() > 360 && $lm->daysLeft() <= 365, 'annual expiry');
 });
 
-test('Studio + Enterprise + lifetime map correctly', function () use ($secretB64,$keys) {
+test('Studio + Enterprise + lifetime-use map correctly', function () use ($secretB64,$keys) {
     $iss = issuer($secretB64);
     $st = new LicenseManager($iss->issue(['email'=>'a@b.co','plan'=>'studio','order_id'=>'s1'])['key'], $keys);
     assertEqual('studio', $st->edition()); assertEqual(true, $st->licensed('webhooks'));
@@ -67,8 +67,9 @@ test('Studio + Enterprise + lifetime map correctly', function () use ($secretB64
     assertEqual(true, $en->licensed('audit-export'), 'enterprise has audit-export');
     assertEqual(true, $en->licensed('sso'), 'enterprise has sso');
     $lf = new LicenseManager($iss->issue(['email'=>'a@b.co','plan'=>'lifetime','order_id'=>'l1'])['key'], $keys);
-    assertEqual(null, $lf->expiresAt(), 'lifetime = no expiry');
+    assertTrue($lf->expiresAt() !== null, 'lifetime-use has a one-year update term');
     assertEqual('active', $lf->status());
+    assertEqual('perpetual', $lf->enforcement(), 'lifetime-use modules never hard-stop');
 });
 
 test('Support plan unlocks no module (modules=[] gates nothing)', function () use ($secretB64,$keys) {
@@ -107,8 +108,10 @@ test('revoke sets status (record of truth for the update channel)', function () 
     $store = new LicenseStore(':memory:');
     $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
     $r = $iss->issue(['email'=>'r@x.com','plan'=>'pro','order_id'=>'r1']);
+    assertTrue($store->isUpdateEligible((string) $r['record']['jti']), 'fresh key may use the update channel');
     assertEqual(true, $store->setStatus($r['record']['jti'], 'refunded'));
     assertEqual('refunded', $store->findByJti($r['record']['jti'])['status']);
+    assertTrue(!$store->isUpdateEligible((string) $r['record']['jti']), 'refund closes the update channel');
 });
 
 test('bad email / unknown plan → rejected', function () use ($secretB64) {
@@ -346,7 +349,15 @@ test('issue(): stored grace_days matches what LicenseSigner::mint() actually emb
     assertTrue(isset($payload['grace']), 'the signed payload carries a grace window (seconds)');
     $expectedGraceDays = (int) round($payload['grace'] / 86400);
     assertEqual($expectedGraceDays, (int) $rec['grace_days'], 'the store persists exactly what the signer embedded, not a hardcoded 14');
-    assertEqual(14, (int) $rec['grace_days'], 'current default is 14 — no Plans entry overrides graceDays yet');
+    assertEqual(0, (int) $rec['grace_days'], 'perpetual update terms have no runtime grace');
+});
+
+test('issue(): monthly plans embed a seven-day payment-recovery grace', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email' => 'monthly@x.com', 'plan' => 'pro-monthly', 'gateway' => 'manual', 'order_id' => 'GRACE-MONTHLY'])['record'];
+    [, $p64] = explode('.', (string) $rec['license_key']);
+    $payload = json_decode((string) base64_decode(strtr($p64, '-_', '+/'), true), true);
+    assertEqual(7 * 86400, $payload['grace'] ?? null, 'signed monthly grace is exactly seven days');
+    assertEqual(7, (int) $rec['grace_days'], 'store mirrors the signed monthly policy');
 });
 
 test('mail: sendReminder() subscription vs perpetual expiry copy genuinely differs, not just the subject', function () use ($secretB64) {
@@ -415,6 +426,8 @@ test('issue(): a renewal for the same customer+plan supersedes the previous acti
     $b = $iss->issue(['email' => 'ren@x.com', 'customer' => 'ren@x.com', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'REN-2'])['record'];
     assertEqual('superseded', $store->findByJti((string) $a['jti'])['status'], 'old row retired by the renewal');
     assertEqual('active', $store->findByJti((string) $b['jti'])['status'], 'new row stays active');
+    assertTrue($store->isUpdateEligible((string) $a['jti']), 'superseding stops reminders, not the old key update term');
+    assertTrue($store->isUpdateEligible((string) $b['jti']), 'new key is update eligible');
 });
 
 test('issue(): supersession is scoped to the same customer+plan, not just customer', function () use ($secretB64) {

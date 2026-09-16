@@ -79,13 +79,35 @@ if ($command === 'update') {
     // Where the module lives: vendor/fluxfiles/<module> relative to the host's
     // autoloader (two levels up when installed as a dependency), else a sibling of
     // packages/core in a monorepo checkout.
+    $vendorBase = realpath(__DIR__ . '/../../..');
+    $dest = (is_string($vendorBase) && is_dir($vendorBase . '/fluxfiles'))
+        ? $vendorBase . '/fluxfiles/' . $module
+        : dirname(__DIR__, 2) . '/' . $module;
+
+    // New installs record this after a verified activation. Composer's version is
+    // a compatibility fallback for modules installed by an older client.
     $current = '0.0.0';
-    $installed = \FluxFiles\ModuleRegistry::installed($module);
+    $installed = is_dir($dest);
+    $versionFile = $dest . '/.fluxfiles-version';
+    if (is_file($versionFile)) {
+        $candidate = trim((string) @file_get_contents($versionFile));
+        if ($candidate !== '') { $current = $candidate; }
+    } elseif (is_file($dest . '/composer.json')) {
+        $package = json_decode((string) @file_get_contents($dest . '/composer.json'), true);
+        if (is_array($package) && is_string($package['version'] ?? null) && $package['version'] !== '') {
+            $current = $package['version'];
+        }
+    }
 
     $url = $updateBase . '/update/' . rawurlencode($module)
-        . '?license=' . rawurlencode($license) . '&current=' . rawurlencode($current);
+        . '?current=' . rawurlencode($current);
     $ch = curl_init($url);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => false]);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $license],
+    ]);
     $body = curl_exec($ch);
     $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -95,13 +117,17 @@ if ($command === 'update') {
     }
 
     $client = new \FluxFiles\UpdateClient();
-    $manifest = $client->verifyManifest((string) $body);
+    $manifest = $client->verifyManifest((string) $body, null, $module);
     if ($manifest === null) {
         fwrite(STDERR, "Update manifest failed signature verification — refusing.\n");
         exit(1);
     }
     $version = (string) ($manifest['version'] ?? '');
     fwrite(STDOUT, "Latest {$module}: {$version}" . ($installed ? '' : ' (not currently installed)') . "\n");
+    if ($installed && !\FluxFiles\UpdateClient::isNewer($version, $current)) {
+        fwrite(STDOUT, "Already current ({$current}).\n");
+        exit(0);
+    }
     if ($checkOnly) {
         exit(0);
     }
@@ -117,16 +143,14 @@ if ($command === 'update') {
         exit(1);
     }
 
-    // vendor/fluxfiles/<module> next to the host autoloader.
-    $vendorBase = realpath(__DIR__ . '/../../..'); // .../vendor/fluxfiles -> up to vendor/.. ? resolve below
-    $dest = (is_string($vendorBase) && is_dir($vendorBase . '/fluxfiles'))
-        ? $vendorBase . '/fluxfiles/' . $module
-        : dirname(__DIR__, 2) . '/' . $module; // monorepo: packages/<module>
     try {
         $client->install((string) $zip, $dest);
     } catch (\FluxFiles\ApiException $e) {
         fwrite(STDERR, 'Install failed: ' . $e->getMessage() . "\n");
         exit(1);
+    }
+    if (@file_put_contents($versionFile, $version . "\n", LOCK_EX) === false) {
+        fwrite(STDERR, "Installed module but could not record its version; future checks may re-download it.\n");
     }
     fwrite(STDOUT, "Installed {$module} {$version} → {$dest}\nRun `composer dump-autoload` if needed.\n");
     exit(0);

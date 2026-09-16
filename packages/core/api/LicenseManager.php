@@ -141,6 +141,16 @@ class LicenseManager
         return array_values(array_map('strval', $this->claims['modules']));
     }
 
+    /** Opaque licence id for the vendor's update-status check; never expose it in UI. */
+    public function id(): ?string
+    {
+        if (!$this->verified) {
+            return null;
+        }
+        $id = $this->claims['jti'] ?? null;
+        return is_string($id) && preg_match('/^[a-f0-9]{24}$/', $id) ? $id : null;
+    }
+
     /**
      * Enforcement model: 'perpetual' (annual/lifetime self-host — runtime keeps
      * working after expiry, only UPDATES stop) or 'subscription' (monthly/hosted —

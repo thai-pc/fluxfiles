@@ -70,14 +70,17 @@ only reachable.
 
 ## 2. Deploy the update server
 
-`docs/update-server.example.php` is a reference implementation — one file, no database.
-It verifies a licence offline and returns a **signed** manifest pointing at the zip.
+`docs/update-server.example.php` is a reference implementation. It verifies the
+licence signature, asks the licence server whether the key is still active (so a
+refund/revoke blocks updates), then returns a **signed** manifest pointing at the zip.
 
 ```bash
 FLUXFILES_RELEASE_PRIVATE_KEY=…      # base64 Ed25519 secret; the public half is
                                      # embedded in UpdateClient as kid 'r1'
 FLUXFILES_CDN_BASE=https://cdn.example.com/modules
 FLUXFILES_CATALOGUE=/path/to/catalogue.json
+FLUXFILES_LICENSE_STATUS_URL=https://licenses.example.com
+FLUXFILES_UPDATE_STATUS_TOKEN=<distinct machine-to-machine secret>
 ```
 
 Keep the release signing key **offline and separate from the licence signing key**. They
@@ -89,7 +92,7 @@ Point `FLUXFILES_UPDATE_URL` at it (default `https://updates.fluxfiles.dev`).
 Verify without a licence:
 
 ```bash
-curl "https://updates.example.com/update/share?license=&current=0.0.0"
+curl -H 'Authorization: Bearer invalid' "https://updates.example.com/update/share?current=0.0.0"
 # → 402. A 200 here would mean the licence check is not running.
 ```
 

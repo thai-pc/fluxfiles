@@ -56,7 +56,7 @@ test('no key → free edition (core must run unlicensed)', function () use ($KEY
 
 test('valid Pro license → edition + modules + active status', function () use ($SEC, $KEYS, $NOW) {
     $key = mintLicense($SEC, [
-        'customer' => 'acme', 'edition' => 'pro', 'modules' => ['optimize', 'share'],
+        'customer' => 'acme', 'jti' => str_repeat('a', 24), 'edition' => 'pro', 'modules' => ['optimize', 'share'],
         'limits' => ['sites' => 5], 'issued' => $NOW - 86400, 'expires' => $NOW + 30 * 86400,
     ]);
     $l = new LicenseManager($key, $KEYS, $NOW);
@@ -66,6 +66,7 @@ test('valid Pro license → edition + modules + active status', function () use 
     assertTrue($l->licensed('share'), 'share licensed');
     assertFalse($l->licensed('ai'), 'ai not in modules');
     assertEqual(['sites' => 5], $l->limits());
+    assertEqual(str_repeat('a', 24), $l->id(), 'opaque licence id');
     assertEqual(30, $l->daysLeft());
 });
 
@@ -124,6 +125,15 @@ test('SUBSCRIPTION expired beyond grace → hard expired, module disabled', func
     assertFalse($l->updatesAllowed(), 'no updates once expired');
 });
 
+test('seven-day subscription grace has an exact boundary', function () use ($SEC, $KEYS, $NOW) {
+    $payload = ['edition' => 'pro', 'modules' => ['x'], 'enforcement' => 'subscription', 'expires' => $NOW - 7 * 86400, 'grace' => 7 * 86400];
+    $atBoundary = new LicenseManager(mintLicense($SEC, $payload), $KEYS, $NOW);
+    assertEqual('grace', $atBoundary->status(), 'the recovery window includes its final second');
+    $payload['expires']--;
+    $afterBoundary = new LicenseManager(mintLicense($SEC, $payload), $KEYS, $NOW);
+    assertEqual('expired', $afterBoundary->status(), 'the next second disables subscription endpoints');
+});
+
 test('PERPETUAL expired beyond grace → still runs, only updates stop', function () use ($SEC, $KEYS, $NOW) {
     // No enforcement field → defaults to perpetual (annual/lifetime self-host).
     $key = mintLicense($SEC, [
@@ -135,6 +145,17 @@ test('PERPETUAL expired beyond grace → still runs, only updates stop', functio
     assertEqual('perpetual', $l->status(), 'status reflects still-running');
     assertTrue($l->licensed('optimize'), 'module keeps working after expiry');
     assertFalse($l->updatesAllowed(), 'but cannot pull new builds until renewal');
+});
+
+test('PERPETUAL zero grace becomes update-expired immediately but never disables modules', function () use ($SEC, $KEYS, $NOW) {
+    $key = mintLicense($SEC, [
+        'edition' => 'pro', 'modules' => ['optimize'], 'enforcement' => 'perpetual',
+        'expires' => $NOW - 1, 'grace' => 0,
+    ]);
+    $l = new LicenseManager($key, $KEYS, $NOW);
+    assertEqual('perpetual', $l->status(), 'no misleading billing-recovery state for perpetual use');
+    assertTrue($l->licensed('optimize'), 'the installed module remains usable forever');
+    assertFalse($l->updatesAllowed(), 'only updates/support require renewal');
 });
 
 test('default grace (14d) applies when grace is omitted (subscription)', function () use ($SEC, $KEYS, $NOW) {

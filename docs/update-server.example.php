@@ -5,14 +5,14 @@
  *
  * The whole "license → auto-download/update" channel without any third-party
  * platform fee. Pair it with:
- *   - WordPress: yahnis-elsts/plugin-update-checker (append the license key to the
- *     request) → updates show up in wp-admin with a one-click "Update now".
+ *   - WordPress: yahnis-elsts/plugin-update-checker (send the license in an
+ *     Authorization header) → updates show up in wp-admin with a one-click "Update now".
  *   - Laravel / standalone: `php vendor/bin/fluxfiles update <module>` (UpdateClient).
  *
  * Flow:
- *   GET /update/{module}?license=KEY&current=X.Y.Z
- *     → verify the license with the SAME Ed25519 LicenseManager the core ships
- *       (offline, no DB), check it entitles {module} and updates are still allowed
+ *   GET /update/{module}?current=X.Y.Z + Authorization: Bearer <license>
+ *     → verify the license with the SAME Ed25519 LicenseManager the core ships,
+ *       then ask the licence server whether it remains active (refund/revoke check)
  *     → return a SIGNED manifest token {module,version,url,sha256,expires} signed
  *       with the RELEASE private key (whose public key is embedded in UpdateClient)
  *
@@ -35,6 +35,8 @@ use FluxFiles\LicenseManager;
 $RELEASE_PRIVATE_KEY = base64_decode((string) getenv('FLUXFILES_RELEASE_PRIVATE_KEY'), true); // 64 bytes
 $RELEASE_KID         = 'r1';
 $CDN_BASE            = rtrim((string) (getenv('FLUXFILES_CDN_BASE') ?: 'https://cdn.example.com/modules'), '/');
+$LICENSE_STATUS_URL  = rtrim((string) getenv('FLUXFILES_LICENSE_STATUS_URL'), '/');
+$LICENSE_STATUS_TOKEN = (string) getenv('FLUXFILES_UPDATE_STATUS_TOKEN');
 
 // Your release catalogue: latest version + checksum per module, in the shape
 //   ['<module>' => ['version' => '1.0.0', 'zip' => 'share-1.0.0.zip', 'sha256' => '…']]
@@ -50,7 +52,8 @@ $CATALOGUE = is_file($CATALOGUE_FILE)
 
 // ── request ─────────────────────────────────────────────────────────────────
 $module  = preg_replace('/[^a-z0-9-]/', '', (string) ($_GET['module'] ?? basename($_SERVER['PATH_INFO'] ?? '')));
-$license = (string) ($_GET['license'] ?? '');
+$auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+$license = preg_match('/^Bearer\s+(.+)$/i', $auth, $m) ? trim($m[1]) : '';
 
 header('Content-Type: text/plain; charset=utf-8');
 
@@ -70,6 +73,30 @@ if (!$lm->licensed($module)) {
 if (!$lm->updatesAllowed()) {
     http_response_code(402);
     exit('update window expired — renew to pull new builds');
+}
+// Revocation is intentionally checked only here, never at runtime: installed
+// self-hosted modules remain usable offline, but a refunded/revoked key cannot
+// fetch another build. The licence server authenticates this private endpoint
+// with a distinct machine credential, not the broad admin token.
+if ($LICENSE_STATUS_URL === '' || $LICENSE_STATUS_TOKEN === '' || $lm->id() === null) {
+    http_response_code(503);
+    exit('license status service is not configured');
+}
+$statusRequest = curl_init($LICENSE_STATUS_URL . '/update-status');
+curl_setopt_array($statusRequest, [
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => json_encode(['jti' => $lm->id()]),
+    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $LICENSE_STATUS_TOKEN, 'Content-Type: application/json'],
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT => 10,
+]);
+$statusBody = curl_exec($statusRequest);
+$statusCode = (int) curl_getinfo($statusRequest, CURLINFO_HTTP_CODE);
+curl_close($statusRequest);
+$status = is_string($statusBody) ? json_decode($statusBody, true) : null;
+if ($statusCode !== 200 || !is_array($status) || ($status['active'] ?? false) !== true) {
+    http_response_code($statusCode === 200 ? 402 : 503);
+    exit($statusCode === 200 ? 'license revoked or inactive' : 'license status service unavailable');
 }
 
 // 3. Build + sign the manifest.

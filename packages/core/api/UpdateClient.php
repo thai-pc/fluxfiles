@@ -52,7 +52,7 @@ final class UpdateClient
      *
      * @return array<string,mixed>|null
      */
-    public function verifyManifest(string $token, ?int $now = null): ?array
+    public function verifyManifest(string $token, ?int $now = null, ?string $expectedModule = null): ?array
     {
         if ($token === '' || !function_exists('sodium_crypto_sign_verify_detached')) {
             return null;
@@ -84,8 +84,14 @@ final class UpdateClient
             return null;
         }
         $payload = json_decode($payloadJson, true);
-        if (!is_array($payload) || ($payload['url'] ?? '') === '' || ($payload['sha256'] ?? '') === '') {
+        if (!is_array($payload)
+            || !is_string($payload['module'] ?? null) || $payload['module'] === ''
+            || !is_string($payload['version'] ?? null) || $payload['version'] === ''
+            || ($payload['url'] ?? '') === '' || ($payload['sha256'] ?? '') === '') {
             return null;
+        }
+        if ($expectedModule !== null && !hash_equals($expectedModule, $payload['module'])) {
+            return null; // a signed manifest must still answer the requested module
         }
         // Optional freshness bound so an old manifest can't be replayed forever.
         if (isset($payload['expires']) && is_numeric($payload['expires']) && ($now ?? time()) > (int) $payload['expires']) {
@@ -114,8 +120,9 @@ final class UpdateClient
     /**
      * Extract a verified module zip into $destDir (replacing its contents). Guards
      * against path traversal (Zip Slip) — every entry must resolve inside $destDir.
-     * Writes to a temp dir first, then swaps, so a half-extracted zip never replaces
-     * a working install. Throws ApiException on any failure.
+     * The stage and backup live beside $destDir, not in the system temp directory:
+     * both renames therefore stay on one filesystem and a failed activation restores
+     * the previous module. Throws ApiException on any failure.
      */
     public function install(string $zipBytes, string $destDir): void
     {
@@ -123,7 +130,11 @@ final class UpdateClient
             throw new ApiException('ext-zip is required to install updates', 500, 'zip_unavailable');
         }
         $tmpZip = tempnam(sys_get_temp_dir(), 'ffupd_');
-        $stage = $tmpZip . '_x';
+        $parent = dirname($destDir);
+        $nonce = bin2hex(random_bytes(8));
+        $stage = $parent . '/.fluxfiles-update-' . $nonce;
+        $backup = $parent . '/.fluxfiles-backup-' . $nonce;
+        $activated = false;
         try {
             if ($tmpZip === false || @file_put_contents($tmpZip, $zipBytes) === false) {
                 throw new ApiException('Cannot stage update', 500, 'update_failed');
@@ -132,7 +143,10 @@ final class UpdateClient
             if ($zip->open($tmpZip) !== true) {
                 throw new ApiException('Downloaded update is not a valid zip', 422, 'update_corrupt');
             }
-            @mkdir($stage, 0755, true);
+            @mkdir($parent, 0755, true);
+            if (!@mkdir($stage, 0755, true) && !is_dir($stage)) {
+                throw new ApiException('Cannot create update stage', 500, 'update_failed');
+            }
             $stageReal = realpath($stage) ?: $stage;
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 $name = (string) $zip->getNameIndex($i);
@@ -152,13 +166,22 @@ final class UpdateClient
                     throw new ApiException('Unsafe path in update zip', 422, 'update_unsafe');
                 }
             }
-            // Swap: remove old dest, move stage into place.
+            // Swap on one filesystem. Keep the prior installation until the new
+            // directory has become active, then delete the backup.
             if (is_dir($destDir)) {
-                self::rrmdir($destDir);
+                if (!@rename($destDir, $backup)) {
+                    throw new ApiException('Failed to prepare existing module for update', 500, 'update_failed');
+                }
             }
-            @mkdir(dirname($destDir), 0755, true);
             if (!@rename($stage, $destDir)) {
+                if (is_dir($backup)) {
+                    @rename($backup, $destDir);
+                }
                 throw new ApiException('Failed to activate update', 500, 'update_failed');
+            }
+            $activated = true;
+            if (is_dir($backup)) {
+                self::rrmdir($backup);
             }
         } finally {
             if (is_string($tmpZip)) {
@@ -166,6 +189,9 @@ final class UpdateClient
             }
             if (is_dir($stage)) {
                 self::rrmdir($stage);
+            }
+            if (!$activated && is_dir($backup) && !is_dir($destDir)) {
+                @rename($backup, $destDir);
             }
         }
     }

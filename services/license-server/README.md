@@ -21,6 +21,7 @@ purchase → gateway webhook → this service:
 export FLUXFILES_LICENSE_PRIVATE_KEY_FILE=/secure/path/license-signing-key.key
 export FLUXFILES_LICENSE_DB=/var/lib/fluxfiles/licenses.sqlite   # customer DB
 export FLUXFILES_LICENSE_ADMIN_TOKEN=$(openssl rand -hex 24)     # /issue, /licenses, /revoke
+export FLUXFILES_UPDATE_STATUS_TOKEN=$(openssl rand -hex 24)     # update server only; not an admin token
 
 # 2. Polar (the store)
 export FLUXFILES_POLAR_WEBHOOK_SECRET=whsec_...              # Polar → Settings → Webhooks
@@ -68,21 +69,25 @@ returns the same key rather than minting a second one.
 | POST | `/issue` | Bearer admin | Manual issue `{email, plan, sites?, domains?}` |
 | GET | `/licenses[?email=]` | Bearer admin | List / lookup |
 | POST | `/revoke` | Bearer admin | `{jti, status}` mark revoked/refunded |
+| POST | `/update-status` | Bearer update-status token | `{jti}` → `{active: bool}` for the update server |
 | GET | `/health` | — | Liveness |
 
 ## Plans
 
-`Plans.php` maps a plan id → `{edition, modules, sites, ttlDays, enforcement}`.
+`Plans.php` maps a plan id → `{edition, modules, sites, ttlDays, graceDays, enforcement}`.
 Override with a JSON file at `FLUXFILES_LICENSE_PLANS`. Defaults: `pro` (share+intake,
-annual), `pro-monthly` (subscription), `studio`, `enterprise`, `lifetime` (no expiry).
+annual perpetual use plus one year of updates/support), `pro-monthly` (subscription,
+seven-day payment-recovery grace), `studio`, `enterprise`, and `lifetime` (the legacy
+checkout id for lifetime **use** plus one year of updates/support). Existing no-expiry
+keys remain valid for lifetime updates; this policy applies only to newly issued keys.
 
 ## Notes
 
 - **Idempotent** on `(gateway, order_id)` — a re-delivered webhook returns the existing
   key, never a duplicate.
-- **Revoke** sets a DB status. Offline verify can't retroactively kill a key already in
-  the wild — but it's your source of truth and it gates the **update channel**
-  (`updatesAllowed()`), so a revoked/lapsed license can't pull new builds.
+- **Revoke** sets a DB status. Offline runtime verification cannot retroactively kill
+  a key already in the wild, but the update server calls `/update-status` with its
+  separate machine credential, so a revoked/refunded key cannot pull new builds.
 - **Device limits**: offline can't hard-cap installs. Use the `sites`/`domains` soft
   warning + the update-channel gate; add an online activation counter only if you must
   (breaks the air-gap promise → make it per-license opt-in).
@@ -118,7 +123,8 @@ Two columns back this, added transparently to existing databases the same way
   daily never double-emails for the same bucket — it only fires again once the
   licence has moved into a worse one.
 - **`grace_days`** — the grace window in days, persisted at issuance from the
-  actual value `LicenseSigner::mint()` used (default 14), so the reminder job
+  actual value `LicenseSigner::mint()` used (seven days for recurring plans;
+  zero for perpetual update terms), so the reminder job
   computes the grace-window boundary exactly rather than hardcoding 14 and
   silently drifting if a future plan ever sets a custom value.
 
@@ -133,8 +139,9 @@ already has.
 
 The `enforcement` on the record changes the wording of the past-expiry email, not
 whether it fires: a `perpetual` licence keeps running past expiry (only the
-update channel stops), while a `subscription` licence's paid features actually
-stop working once the grace window ends — see `LicenseMailer::renderExpiryBody()`.
+update channel stops, with no runtime grace or shut-off), while a `subscription`
+licence's paid features stop after its seven-day payment-recovery grace. Neither
+path deletes customer files or module records — see `LicenseMailer::renderExpiryBody()`.
 
 ### Recurring subscriptions and duplicate rows
 

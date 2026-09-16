@@ -50,17 +50,13 @@ final class LicenseIssuer
             'enforcement' => (string) $plan['enforcement'],
             'sites'       => (int) ($order['sites'] ?? $plan['sites']),
             'ttlDays'     => $plan['ttlDays'],
+            'graceDays'   => (int) ($plan['graceDays'] ?? 14),
             'domains'     => $order['domains'] ?? [],
         ]);
         $p = $minted['payload'];
 
-        // LicenseSigner::mint() bakes the grace window (seconds) into the signed
-        // payload as 'grace' when there's an expiry at all; read the days back out of
-        // it so the store persists the ACTUAL value used (currently always the
-        // signer's own default of 14, since no Plans::DEFAULT entry overrides it and
-        // mint() isn't given a per-plan override either), instead of the reminder job
-        // hardcoding 14 and silently drifting the day a per-plan grace override is
-        // wired into the mint() call above.
+        // Read the signed grace window back from the payload so the reminder store
+        // records the actual per-plan policy rather than duplicating it.
         $graceDays = isset($p['grace']) ? (int) round($p['grace'] / 86400) : 14;
 
         $record = $this->store->record([

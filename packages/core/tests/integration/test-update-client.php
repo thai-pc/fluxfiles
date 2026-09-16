@@ -51,6 +51,13 @@ test('valid signed manifest → payload returned', function () use ($mintManifes
     assertEqual('https://cdn/x.zip', $p['url']);
 });
 
+test('manifest is bound to the requested module', function () use ($mintManifest, $KEYS) {
+    $c = new UpdateClient($KEYS);
+    $m = $mintManifest(['module' => 'share', 'version' => '1.1.0', 'url' => 'https://cdn/share.zip', 'sha256' => 'abc']);
+    assertEqual(null, $c->verifyManifest($m, null, 'intake'), 'signed manifest for another module is refused');
+    assertTrue(is_array($c->verifyManifest($m, null, 'share')), 'matching module is accepted');
+});
+
 test('tampered payload → null', function () use ($mintManifest, $KEYS) {
     $c = new UpdateClient($KEYS);
     $m = $mintManifest(['module' => 'optimize', 'version' => '1.1.0', 'url' => 'https://cdn/x.zip', 'sha256' => 'abc']);

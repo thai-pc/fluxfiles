@@ -70,7 +70,9 @@ final class LicenseSigner
         ];
         if ($ttlDays !== null) {
             $payload['expires'] = $now + ((int) $ttlDays) * 86400;
-            $payload['grace']   = ((int) ($opts['graceDays'] ?? 14)) * 86400;
+            // Zero is meaningful for perpetual plans: no billing-recovery state is
+            // needed when expiry only ends updates/support.
+            $payload['grace']   = max(0, (int) ($opts['graceDays'] ?? 14)) * 86400;
         }
         if (!empty($opts['domains'])) {
             $payload['domains'] = array_values(array_map('strval', $opts['domains']));

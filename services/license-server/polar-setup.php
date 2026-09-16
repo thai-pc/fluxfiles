@@ -43,31 +43,32 @@ $green = "\033[32m"; $red = "\033[31m"; $yellow = "\033[33m"; $cyan = "\033[36m"
  * Plans deliberately absent:
  *   enterprise — sold custom with an SLA, not self-serve. A checkout button for it
  *                would undercut the conversation that tier exists to have.
- *   lifetime   — a one-time price, worth offering only once recurring revenue is
- *                proven. Add `'lifetime' => [...]` with recurring => null to sell it.
+ *   lifetime   — a one-time perpetual-use price, worth offering only once recurring
+ *                revenue is proven. Its checkout copy must say "12 months updates
+ *                and support", matching Plans.php; add it with recurring => null.
  */
 const CATALOGUE = [
     'pro' => [
         'name' => 'FluxFiles Pro',
-        'description' => 'Branded share links and client upload portals, for unlimited sites. Includes priority support and one year of updates.',
+        'description' => 'Perpetual use of branded share links and client upload portals for unlimited sites, plus one year of updates and priority support.',
         'amount' => 7900,           // $79 / year
         'recurring' => 'year',
     ],
     'pro-monthly' => [
         'name' => 'FluxFiles Pro (monthly)',
-        'description' => 'Branded share links and client upload portals, for unlimited sites. Billed monthly.',
+        'description' => 'Branded share links and client upload portals, for unlimited sites. Billed monthly; a seven-day payment-recovery grace applies.',
         'amount' => 900,            // $9 / month
         'recurring' => 'month',
     ],
     'studio' => [
         'name' => 'FluxFiles Studio',
-        'description' => 'Everything in Pro plus file versioning, webhooks and the AI/OCR modules (bring your own API key). For teams embedding FluxFiles in their own product.',
+        'description' => 'Perpetual use of everything in Pro plus file versioning, webhooks and AI/OCR modules (bring your own API key), with one year of updates and priority support.',
         'amount' => 29900,          // $299 / year — matches the landing's Pricing.astro
         'recurring' => 'year',
     ],
     'studio-monthly' => [
         'name' => 'FluxFiles Studio (monthly)',
-        'description' => 'Everything in Pro plus file versioning, webhooks and the AI/OCR modules (bring your own API key). Billed monthly.',
+        'description' => 'Everything in Pro plus file versioning, webhooks and AI/OCR modules (bring your own API key). Billed monthly; a seven-day payment-recovery grace applies.',
         'amount' => 2900,           // $29 / month — matches the landing
         'recurring' => 'month',
     ],

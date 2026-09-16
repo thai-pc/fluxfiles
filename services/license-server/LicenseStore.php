@@ -207,6 +207,18 @@ final class LicenseStore
     }
 
     /**
+     * Update-channel eligibility. `superseded` only retires a row from renewal
+     * reminders; it must not revoke a still-in-term perpetual key when a customer
+     * renews early and has not yet installed their replacement key.
+     */
+    public function isUpdateEligible(string $jti): bool
+    {
+        $s = $this->db->prepare('SELECT 1 FROM licenses WHERE jti = ? AND status IN ("active", "superseded") LIMIT 1');
+        $s->execute([$jti]);
+        return $s->fetchColumn() !== false;
+    }
+
+    /**
      * Licences due for a renewal-approaching or expiry/grace reminder — the
      * cron-driven counterpart to undelivered() above. Only `active` rows (never
      * re-solicit revoked/refunded, same exclusion undelivered() applies) with an

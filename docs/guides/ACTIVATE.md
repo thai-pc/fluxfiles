@@ -147,7 +147,7 @@ The three checks are separate on purpose, so a failure tells you which one to fi
 |---|---|---|
 | `501 module_not_installed` | the code is not there | step 1 |
 | `402 license_required` | installed, but no valid key | step 2 |
-| `402 license_expired` | the key is past its term | renew; existing installs keep working, you only lose updates |
+| `402 license_expired` | a subscription key is past its payment-recovery grace | renew to re-enable paid-module endpoints; files and module records are retained |
 | `403 allow_<x>_forbidden` | installed and licensed, but this token does not allow it | step 3 |
 
 ---
@@ -163,8 +163,11 @@ WordPress checks for plugin updates itself and offers them in **Dashboard → Up
 like any other plugin.
 
 Updates are gated by the support window on your key, not by whether the software runs.
-When a term ends, everything you have keeps working — you simply cannot pull newer
-builds until you renew.
+Annual/perpetual terms keep every installed module running indefinitely when the term
+ends — renewal only restores new builds and support. Monthly subscriptions have a
+seven-day payment-recovery grace; after it ends paid-module endpoints are disabled until
+renewal, but FluxFiles never deletes files, module records, versions, audit data, or
+shares.
 
 ---
 

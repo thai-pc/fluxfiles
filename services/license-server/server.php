@@ -10,12 +10,14 @@ declare(strict_types=1);
  *   POST /issue                 — admin-authed manual issue {email, plan}
  *   GET  /licenses[?email=]     — admin: list / lookup
  *   POST /revoke                — admin: {jti, status} mark revoked/refunded
+ *   POST /update-status          — update-server auth: {jti} → active/revoked
  *   GET  /health                — liveness
  *
  * Env:
  *   FLUXFILES_LICENSE_PRIVATE_KEY_FILE  path to the 64-byte Ed25519 secret (base64)
  *   FLUXFILES_LICENSE_DB                sqlite path (default ./data/licenses.sqlite)
  *   FLUXFILES_LICENSE_ADMIN_TOKEN       bearer token for /issue,/licenses,/revoke
+ *   FLUXFILES_UPDATE_STATUS_TOKEN        bearer token for /update-status (separate from admin)
  *   FLUXFILES_POLAR_WEBHOOK_SECRET      Polar webhook signing secret (whsec_…)
  *   FLUXFILES_POLAR_PLAN_MAP            JSON {"<product_id>":"pro", ...}
  *
@@ -57,6 +59,12 @@ function adminOk(): bool
     if ($token === '') { return false; }
     $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
     return hash_equals('Bearer ' . $token, $hdr);
+}
+function updateStatusOk(): bool
+{
+    $token = env('FLUXFILES_UPDATE_STATUS_TOKEN');
+    if ($token === '') { return false; }
+    return hash_equals('Bearer ' . $token, (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
 }
 
 try {
@@ -188,6 +196,17 @@ try {
             'edition' => (string) $rec['edition'],
             'expires' => $rec['expires'] ?? null,
         ]);
+    }
+
+    // ── Internal: update server asks whether a signed licence is still active ─
+    // Runtime remains offline; this is solely the online update channel's revocation
+    // check. Keep its credential narrower than the licence-server admin token.
+    if ($method === 'POST' && $uri === '/update-status') {
+        if (!updateStatusOk()) { respond(401, ['error' => 'unauthorized']); }
+        $b = json_decode($raw, true) ?: [];
+        $jti = (string) ($b['jti'] ?? '');
+        if (!preg_match('/^[a-f0-9]{24}$/', $jti)) { respond(400, ['error' => 'invalid jti']); }
+        respond(200, ['active' => (new LicenseStore())->isUpdateEligible($jti)]);
     }
 
     // ── Admin: manual issue ──────────────────────────────────────────────────
