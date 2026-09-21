@@ -1358,6 +1358,10 @@ class FileManager
             );
         }
 
+        if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
+            $this->quotaManager->assertFileCount($dstDisk, $this->claims->pathPrefix, 1, $this->claims->maxFiles);
+        }
+
         // Stream the file across disks
         $stream = $srcFs->readStream($scopedSrc);
         try {
@@ -1422,6 +1426,10 @@ class FileManager
                 $fileSize,
                 $this->claims->maxStorageMb
             );
+        }
+
+        if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
+            $this->quotaManager->assertFileCount($dstDisk, $this->claims->pathPrefix, 1, $this->claims->maxFiles);
         }
 
         $stream = $srcFs->readStream($scopedSrc);
@@ -2018,6 +2026,9 @@ class FileManager
     {
         $this->assertDisk($disk);
         $this->assertPerm('read');
+        if (!$this->claims->allowDownload) {
+            throw new ApiException('Downloading the original is not allowed', 403, 'download_forbidden');
+        }
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
 
@@ -2069,6 +2080,14 @@ class FileManager
         if (!$fs->fileExists($scoped)) {
             throw new ApiException('File not found (the editor edits existing files only)', 404, 'not_found');
         }
+        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
+            $this->quotaManager->assertQuota(
+                $disk,
+                $this->claims->pathPrefix,
+                strlen($content) - (int) $fs->fileSize($scoped),
+                $this->claims->maxStorageMb
+            );
+        }
         // Virus scan (paid Virus module). The editor writes attacker-influenced bytes
         // to an existing path — a webshell pasted into a .php is exactly what ClamAV
         // catches — so this path is scanned like an upload. The content is already
@@ -2098,6 +2117,8 @@ class FileManager
         // the editor's repeated saves are the prime "give me the old one back" case.
         $this->keepVersion($disk, $scoped, $fs);
         $fs->write($scoped, $content);
+        $this->meta->save($disk, $scoped, ['size' => strlen($content), 'modified' => time()]);
+        $this->meta->saveHash($disk, $scoped, hash('sha256', $content));
         return ['path' => $path, 'size' => strlen($content)];
     }
 
@@ -2601,7 +2622,8 @@ class FileManager
      * Extract a `.zip` in place into a destination folder (default: a folder named
      * after the archive, beside it). Two passes: pass 1 validates **every** entry
      * (zip-slip, dangerous-ext, allowed_ext, system-path, the bomb caps, quota) so
-     * a single bad entry aborts the whole extract before any write; pass 2 writes.
+     * a structural violation aborts before any write. Pass 2 scans and writes each
+     * entry; a scan/storage failure leaves earlier successful entries in place.
      *
      * @return array{extracted:int, dest:string, bytes:int}
      */
@@ -2718,6 +2740,15 @@ class FileManager
             if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
                 $this->quotaManager->assertQuota($disk, $this->claims->pathPrefix, $total, $this->claims->maxStorageMb);
             }
+            if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
+                $newTargets = [];
+                foreach ($plan as $entry) {
+                    if (!$fs->fileExists($entry['target'])) {
+                        $newTargets[$entry['target']] = true;
+                    }
+                }
+                $this->quotaManager->assertFileCount($disk, $this->claims->pathPrefix, count($newTargets), $this->claims->maxFiles);
+            }
 
             // ── Pass 2: write each entry + register it in the same pipeline as an
             // upload (metadata + folder index + hash + image variants), so extracted
@@ -2756,7 +2787,7 @@ class FileManager
                         }
                     }
                     // PII scan (paid DLP module) per entry, BEFORE it is written — same
-                    // two-pass-atomic, no-rollback contract as the virus scan above (one
+                    // per-entry, no-rollback contract as the virus scan above (one
                     // PII-bearing entry aborts the rest of the archive; entries already
                     // written stay written).
                     if ($this->dlpScanner !== null) {
@@ -3248,6 +3279,37 @@ class FileManager
         $this->assertNotSystem($scopedPath);
         $this->assertOwner($disk, $scopedPath);
         return $scopedPath;
+    }
+
+    /** Validate multipart writes before S3 completes them; init may choose a free name. */
+    public function validateChunkUpload(string $disk, string $key, int $size, bool $resolveCollision = false): string
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
+        $key = $this->validateScopedPath($key);
+        $this->validateUploadName(basename($key), $size);
+        $fs = $this->disks->disk($disk);
+        if ($fs->fileExists($key) && $this->claims->uploadCollision !== 'overwrite') {
+            if (!$resolveCollision || $this->claims->uploadCollision === 'reject') {
+                throw new ApiException('A file with this name already exists', 409, 'name_conflict');
+            }
+            $dir = dirname($key);
+            $dir = $dir === '.' ? '' : $dir;
+            $key = ($dir === '' ? '' : $dir . '/') . $this->uniqueName($fs, $dir, basename($key));
+        }
+        $exists = $fs->fileExists($key);
+        if ($exists) {
+            $this->assertOwner($disk, $key);
+        }
+        if ($fs->directoryExists($key)) {
+            throw new ApiException('A folder with this name already exists', 409, 'name_conflict');
+        }
+        if ($this->quotaManager !== null) {
+            $delta = $size - ($exists ? (int) $fs->fileSize($key) : 0);
+            $this->quotaManager->assertQuota($disk, $this->claims->pathPrefix, $delta, $this->claims->maxStorageMb);
+            $this->quotaManager->assertFileCount($disk, $this->claims->pathPrefix, $exists ? 0 : 1, $this->claims->maxFiles);
+        }
+        return $key;
     }
 
     /**

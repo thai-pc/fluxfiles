@@ -1249,29 +1249,16 @@ test('handleOptimize() gates on the allow_optimize claim directly, not ModuleReg
     assertTrue(strpos($body, 'new \\FluxFiles\\OptimizeModule()') !== false, 'handleOptimize() instantiates OptimizeModule directly');
 });
 
-test('handleChunkComplete() re-validates the REAL assembled size (S3 multipart size/quota bypass fix)', function () {
-    // /chunk/init only ever checks a CLIENT-DECLARED size before any bytes move —
-    // parts are then PUT straight to S3 on presigned URLs with no size condition,
-    // so a client could declare 1 byte and upload gigabytes. Mirror core's fix
-    // (index.php's handleChunkComplete): re-run max_upload_mb/quota against the
-    // REAL size complete() now reports (via HeadObject), and delete the object
-    // on violation instead of leaving it sitting in storage.
+test('handleChunkComplete() wires preflight validation without deleting an existing object', function () {
+    // Behavior is exercised by core's test-chunk-preflight and write-policy-parity.
     $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-
     $start = strpos($apiSrc, 'function handleChunkComplete(');
     assertTrue($start !== false, 'handleChunkComplete() method exists');
     $end = strpos($apiSrc, "\n    public function ", $start + 1);
     $body = $end !== false ? substr($apiSrc, $start, $end - $start) : substr($apiSrc, $start);
-
-    assertTrue(strpos($body, "\$result['size']") !== false, 'reads the real size back from complete()\'s result');
-    assertTrue(strpos($body, 'validateUploadName(') !== false, 'handleChunkComplete() re-checks max_upload_mb via validateUploadName');
-    assertTrue(strpos($body, 'assertQuota(') !== false, 'handleChunkComplete() re-checks quota via assertQuota');
-    // The 0-delta detail is load-bearing: usage scans already see the just-completed
-    // object on disk, so passing the real size again would double-count it.
-    assertTrue((bool) preg_match('/assertQuota\(\s*\$disk,\s*\$claims->pathPrefix,\s*0,/s', $body), 'assertQuota is called with a 0 delta, not the real size (avoids double-counting)');
-    assertTrue(strpos($body, 'deleteObject(') !== false, 'handleChunkComplete() deletes the oversized/over-quota object on violation');
-    // The delete + rethrow must happen BEFORE metadata is saved for the object.
-    assertTrue(strpos($body, 'deleteObject(') < strpos($body, 'metaRepo->save('), 'violation cleanup runs before metadata is saved');
+    assertTrue(strpos($body, 'fn(int $size) => $fm->validateChunkUpload($disk, $key, $size)') !== false, 'validates the measured parts before completion');
+    assertTrue(strpos($body, 'deleteObject(') === false, 'must not delete a live key after a rejected upload');
+    assertTrue(strpos($body, "\$claims->uploadCollision === 'overwrite'") !== false, 'passes the collision policy to conditional completion');
 });
 
 test('every mutating route logs audit + dispatches webhook (regression: legal-hold/audit-purge/version-restore/metadata-delete/ocr/chunk-lifecycle silently skipped both, twice for version-restore)', function () {

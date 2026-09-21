@@ -1,14 +1,17 @@
-import { describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { mount, enableAutoUnmount } from '@vue/test-utils';
 import FluxFiles from '../src/FluxFiles.vue';
 import FluxFilesModal from '../src/FluxFilesModal.vue';
 
 const ORIGIN = 'http://localhost';
+enableAutoUnmount(afterEach);
+afterEach(() => { document.body.innerHTML = ''; });
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 function fromIframe(type: string, payload: any = {}) {
   window.dispatchEvent(new MessageEvent('message', {
     origin: ORIGIN,
+    source: document.querySelector('iframe')?.contentWindow,
     data: { source: 'fluxfiles', type, v: 1, id: 'x', payload },
   }));
 }
@@ -61,6 +64,17 @@ describe('<FluxFiles> Vue wrapper', () => {
       data: { source: 'fluxfiles', type: 'FM_SELECT', payload: { url: 'x' } },
     }));
     expect(wrapper.emitted('select')).toBeFalsy();
+  });
+
+  it('isolates two managers on the same origin', () => {
+    const a = setup();
+    const b = setup();
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: ORIGIN, source: a.iframe.contentWindow,
+      data: { source: 'fluxfiles', type: 'FM_SELECT', payload: { key: 'a.txt' } },
+    }));
+    expect(a.wrapper.emitted('select')).toHaveLength(1);
+    expect(b.wrapper.emitted('select')).toBeFalsy();
   });
 
   it('a prop change after FM_READY resends FM_CONFIG with the updated value (reactivity regression)', async () => {

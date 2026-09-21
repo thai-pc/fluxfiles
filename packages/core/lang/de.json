@@ -226,6 +226,7 @@
     "selected": "{size} ausgewählt"
   },
   "error": {
+    "invalid_parts": "Upload-Teile fehlen oder wurden geändert. Bitte starten Sie den Upload neu.",
     "forbidden": "Sie haben keine Berechtigung für diese Aktion",
     "not_found": "Nicht gefunden",
     "quota_exceeded": "Speicherplatz überschritten ({used} / {max})",

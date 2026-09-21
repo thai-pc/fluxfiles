@@ -136,7 +136,7 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
     public function get(string $disk, string $key): ?array
     {
         $row = $this->fetchRow($disk, $key);
-        if ($row === null || $row['title'] === null) {
+        if ($row === null || ($row['title'] === null && $row['owner'] === null)) {
             return null;
         }
         return [

@@ -2613,7 +2613,13 @@ class FluxFilesApi
                 throw new ApiException("Access denied to disk: {$disk}", 403);
             }
 
-            $scopedPath = $claims->scopePath($path);
+            $fm = $this->fileManager($claims);
+            $sizeBytes = (int) ($body['size'] ?? $body['size_bytes'] ?? 0);
+            if ($sizeBytes <= 0) {
+                throw new ApiException('Missing required field: size', 400, 'missing_param');
+            }
+            $scopedPath = $fm->validateUserPath($path);
+            $scopedPath = $fm->validateChunkUpload($disk, $scopedPath, $sizeBytes, true);
             $chunker = new ChunkUploader($this->diskManager);
             $result = $chunker->initiate($disk, $scopedPath);
             $this->logAudit($claims, 'chunk_upload', $disk, $scopedPath);
@@ -2668,6 +2674,7 @@ class FluxFilesApi
 
             $chunker = new ChunkUploader($this->diskManager);
 
+            $key = $this->fileManager($claims)->validateScopedPath($key);
             return $this->ok($chunker->presignPart($disk, $key, $uploadId, (int) $partNumber));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
@@ -2715,46 +2722,22 @@ class FluxFilesApi
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
-            $fm->validateScopedPath($key);
-            // Unlike the direct upload() path, S3 multipart has no collision policy at
-            // all — completing against an existing key overwrites it unconditionally.
-            // Honour owner_only the same way upload()/rename()/move() do before letting
-            // the multipart complete replace bytes that already exist at this key.
-            if ($this->diskManager->disk($disk)->fileExists($key)) {
-                $fm->assertCanModifyScopedPath($disk, $key);
-            }
+            $key = $fm->validateScopedPath($key);
 
             $chunker = new ChunkUploader($this->diskManager);
 
-            $result = $chunker->complete($disk, $key, $uploadId, $parts);
-
-            // /chunk/init only ever checked a CLIENT-DECLARED size, before any bytes
-            // moved — parts are then PUT straight to S3 on presigned URLs with no size
-            // condition, so a client can declare 1 byte and upload gigabytes. Now that
-            // the object is assembled, complete() has reported its REAL size via
-            // HeadObject: re-run the same limits against the truth. On violation the
-            // object must not linger — delete it and skip saving metadata for it.
-            $realSizeBytes = (int) ($result['size'] ?? 0);
-            try {
-                $fm->validateUploadName(basename($key), $realSizeBytes);
-                if ($claims->maxStorageMb > 0) {
-                    // Usage scans already see the just-completed object on disk, so
-                    // pass 0 as the additional delta rather than double-counting it.
-                    (new QuotaManager($this->diskManager))->assertQuota(
-                        $disk,
-                        $claims->pathPrefix,
-                        0,
-                        $claims->maxStorageMb
-                    );
-                }
-            } catch (ApiException $e) {
-                $chunker->deleteObject($disk, $key);
-                throw $e;
-            }
+            $result = $chunker->complete(
+                $disk, $key, $uploadId, $parts,
+                fn(int $size) => $fm->validateChunkUpload($disk, $key, $size),
+                $claims->uploadCollision === 'overwrite'
+            );
 
             $this->metaRepo->save($disk, $key, [
                 'uploaded_by' => $claims->userId,
+                'size' => $result['size'],
+                'modified' => time(),
             ]);
+            $this->metaRepo->saveHash($disk, $key, '');
             // Core's central hook (index.php) audits/webhooks EVERY successful POST
             // /api/fm/chunk/* substep (init/complete/abort all match `$isWriteAction &&
             // $data !== null`), not only completion — mirror that here rather than
@@ -2811,6 +2794,7 @@ class FluxFilesApi
 
             $chunker = new ChunkUploader($this->diskManager);
 
+            $key = $this->fileManager($claims)->validateScopedPath($key);
             $result = $chunker->abort($disk, $key, $uploadId);
             // Matches core's behavior — see the comment on handleChunkComplete() above.
             $this->logAudit($claims, 'chunk_upload', $disk, $key);

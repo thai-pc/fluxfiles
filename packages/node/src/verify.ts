@@ -34,8 +34,21 @@ export function verifyToken(token: string, secret?: string): FluxClaims {
   if (!safeEqual(sig, expected)) throw new Error('FluxFiles: invalid token signature');
 
   const claims = decodeSegment<FluxClaims>(body);
-  if (typeof claims.exp === 'number' && claims.exp < Math.floor(Date.now() / 1000)) {
+  if (!claims || typeof claims !== 'object' || Array.isArray(claims)) {
+    throw new Error('FluxFiles: malformed token claims');
+  }
+  const now = Math.floor(Date.now() / 1000);
+  for (const name of ['exp', 'nbf', 'iat'] as const) {
+    if (claims[name] !== undefined && (typeof claims[name] !== 'number' || !Number.isFinite(claims[name]))) {
+      throw new Error(`FluxFiles: invalid ${name} claim`);
+    }
+  }
+  if (typeof claims.exp === 'number' && claims.exp <= now) {
     throw new Error('FluxFiles: token has expired');
+  }
+  if ((typeof claims.nbf === 'number' && claims.nbf > now)
+    || (claims.nbf === undefined && typeof claims.iat === 'number' && claims.iat > now)) {
+    throw new Error('FluxFiles: token is not yet valid');
   }
   return claims;
 }

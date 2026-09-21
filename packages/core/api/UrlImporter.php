@@ -92,7 +92,7 @@ final class UrlImporter
         $disposition = '';
 
         for ($hop = 0; ; $hop++) {
-            SsrfGuard::assertSafeUrl($current, $allowlist);   // every hop, before connecting
+            $safeIps = SsrfGuard::assertSafeUrl($current, $allowlist);   // every hop, before connecting
 
             $fh = fopen($tmpPath, 'w');
             if ($fh === false) {
@@ -100,6 +100,7 @@ final class UrlImporter
             }
             $disposition = '';
             $ch = curl_init($current);
+            curl_setopt_array($ch, SsrfGuard::curlOptionsForIps($current, $safeIps));
             curl_setopt_array($ch, [
                 CURLOPT_FOLLOWLOCATION  => false,             // we follow manually to re-validate
                 CURLOPT_FILE            => $fh,

@@ -55,6 +55,18 @@ final `$extra` array as the same escape hatch:
 
 All five accept the same `claims` map.
 
+### S3 multipart permissions and compatibility
+
+Multipart completion validates the actual selected part sizes and ETags before
+publishing the object. In addition to upload/abort permissions, the bucket policy
+must allow `s3:ListMultipartUploadParts`. Non-overwrite collision policies use
+`If-None-Match: *` on completion; S3-compatible providers must support conditional
+multipart completion. A policy rejection leaves the previous object intact and
+the multipart upload uncompleted; clients should abort it, and operators should
+configure an incomplete-multipart lifecycle rule as a cleanup fallback.
+See AWS [ListParts](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html)
+and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html).
+
 ---
 
 ## 2. JWT claims
@@ -74,7 +86,7 @@ All five accept the same `claims` map.
 | Claim | Type | Default | Notes |
 |---|---|---|---|
 | `owner_only` | bool | `false` | Restrict delete/rename/move to the uploader. |
-| `allow_download` | bool | `true` | `false` = preview-only (withholds `url`/`variants`, presign → 403). |
+| `allow_download` | bool | `true` | `false` = preview-only (withholds `url`/`variants`; original presign, ZIP download and `GET /content` → 403). |
 | `allow_chmod` | bool | `true` | Allow `POST /api/fm/chmod` on SFTP disks. |
 | `allow_code_edit` | bool | `false` | Allow editing file text via `/api/fm/content` (config/code editor). |
 | `allow_zip` | bool | `true` | Allow `POST /api/fm/zip`; also needs `allow_download`. |

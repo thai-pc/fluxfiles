@@ -707,7 +707,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
-            $fm->validateScopedPath($key);
+            $key = $fm->validateScopedPath($key);
 
             return $this->ok($this->metaRepo->get($disk, $key));
         } catch (ApiException $e) {
@@ -737,7 +737,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
-            $fm->assertCanModifyScopedPath($disk, $key);
+            $key = $fm->assertCanModifyScopedPath($disk, $key);
 
             $data = [
                 'title'    => $request->input('title'),
@@ -779,7 +779,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
-            $fm->assertCanModifyScopedPath($disk, $key);
+            $key = $fm->assertCanModifyScopedPath($disk, $key);
 
             $this->metaRepo->delete($disk, $key);
             $this->logAudit($claims, 'metadata_update', $disk, $key);
@@ -2222,15 +2222,7 @@ class FluxFilesController
                 throw new ApiException('Missing required field: size', 400);
             }
             $scopedPath = $fm->validateUserPath($path);
-            $fm->validateUploadName(basename($scopedPath), $sizeBytes);
-            if ($claims->maxStorageMb > 0 && $sizeBytes > 0) {
-                (new QuotaManager($this->diskManager))->assertQuota(
-                    $disk,
-                    $claims->pathPrefix,
-                    $sizeBytes,
-                    $claims->maxStorageMb
-                );
-            }
+            $scopedPath = $fm->validateChunkUpload($disk, $scopedPath, $sizeBytes, true);
 
             $chunker = new ChunkUploader($this->diskManager);
             $result = $chunker->initiate($disk, $scopedPath);
@@ -2283,7 +2275,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
-            $fm->validateScopedPath($key);
+            $key = $fm->validateScopedPath($key);
 
             $chunker = new ChunkUploader($this->diskManager);
 
@@ -2333,46 +2325,22 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
-            $fm->validateScopedPath($key);
-            // Unlike the direct upload() path, S3 multipart has no collision policy at
-            // all — completing against an existing key overwrites it unconditionally.
-            // Honour owner_only the same way upload()/rename()/move() do before letting
-            // the multipart complete replace bytes that already exist at this key.
-            if ($this->diskManager->disk($disk)->fileExists($key)) {
-                $fm->assertCanModifyScopedPath($disk, $key);
-            }
+            $key = $fm->validateScopedPath($key);
 
             $chunker = new ChunkUploader($this->diskManager);
 
-            $result = $chunker->complete($disk, $key, $uploadId, $parts);
-
-            // /chunk/init only ever checked a CLIENT-DECLARED size, before any bytes
-            // moved — parts are then PUT straight to S3 on presigned URLs with no size
-            // condition, so a client can declare 1 byte and upload gigabytes. Now that
-            // the object is assembled, complete() has reported its REAL size via
-            // HeadObject: re-run the same limits against the truth. On violation the
-            // object must not linger — delete it and skip saving metadata for it.
-            $realSizeBytes = (int) ($result['size'] ?? 0);
-            try {
-                $fm->validateUploadName(basename($key), $realSizeBytes);
-                if ($claims->maxStorageMb > 0) {
-                    // Usage scans already see the just-completed object on disk, so
-                    // pass 0 as the additional delta rather than double-counting it.
-                    (new QuotaManager($this->diskManager))->assertQuota(
-                        $disk,
-                        $claims->pathPrefix,
-                        0,
-                        $claims->maxStorageMb
-                    );
-                }
-            } catch (ApiException $e) {
-                $chunker->deleteObject($disk, $key);
-                throw $e;
-            }
+            $result = $chunker->complete(
+                $disk, $key, $uploadId, $parts,
+                fn(int $size) => $fm->validateChunkUpload($disk, $key, $size),
+                $claims->uploadCollision === 'overwrite'
+            );
 
             $this->metaRepo->save($disk, $key, [
                 'uploaded_by' => $claims->userId,
+                'size' => $result['size'],
+                'modified' => time(),
             ]);
+            $this->metaRepo->saveHash($disk, $key, '');
             // Core's central hook (index.php) audits/webhooks EVERY successful POST
             // /api/fm/chunk/* substep (init/complete/abort all match `$isWriteAction &&
             // $data !== null`), not only completion — mirror that here rather than
@@ -2426,7 +2394,7 @@ class FluxFilesController
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403);
             }
-            $fm->validateScopedPath($key);
+            $key = $fm->validateScopedPath($key);
 
             $chunker = new ChunkUploader($this->diskManager);
 

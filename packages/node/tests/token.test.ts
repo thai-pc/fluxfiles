@@ -404,6 +404,15 @@ describe('BYOB + role/edition presets (docs/design/PYTHON-TOKEN-SDK-DESIGN.md §
 });
 
 describe('verifyToken', () => {
+  it('rejects expiry at the current second, future activation and malformed dates', () => {
+    const now = Math.floor(Date.now() / 1000);
+    for (const claims of [{ exp: now }, { nbf: now + 3600 }, { iat: now + 3600 }, { exp: 'tomorrow' }]) {
+      const token = createToken({ secret: SECRET, userId: 'u', claims });
+      expect(() => verifyToken(token, SECRET)).toThrow();
+    }
+    const active = createToken({ secret: SECRET, userId: 'u', claims: { nbf: now - 1, exp: now + 3600 } });
+    expect(verifyToken(active, SECRET).sub).toBe('u');
+  });
   it('round-trips and rejects tampering / expiry', () => {
     const token = createToken({ secret: SECRET, userId: 'u' });
     expect(verifyToken(token, SECRET).sub).toBe('u');

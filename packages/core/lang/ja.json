@@ -226,6 +226,7 @@
     "selected": "{size}を選択しました"
   },
   "error": {
+    "invalid_parts": "アップロードの一部が不足しているか変更されています。再度アップロードしてください。",
     "forbidden": "この操作を行う権限がありません",
     "not_found": "見つかりません",
     "quota_exceeded": "ストレージ容量を超えました（{used} / {max}）",

@@ -272,6 +272,8 @@ export interface FluxClaims {
   sub: string;
   iat: number;
   exp: number;
+  /** Optional activation time (Unix seconds), validated by verifyToken. */
+  nbf?: number;
   jti: string;
   perms: string[];
   disks: string[];

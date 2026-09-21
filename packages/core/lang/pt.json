@@ -226,6 +226,7 @@
     "selected": "{size} selecionado"
   },
   "error": {
+    "invalid_parts": "Partes do upload estão ausentes ou foram alteradas. Reinicie o upload.",
     "forbidden": "Você não tem permissão para realizar esta ação",
     "not_found": "Não encontrado",
     "quota_exceeded": "Cota de armazenamento excedida ({used} / {max})",

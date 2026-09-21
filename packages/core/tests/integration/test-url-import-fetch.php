@@ -82,6 +82,17 @@ function importer(int $maxMb = 0): UrlImporter
 
 echo "{$yellow}► fetch mechanism (local fixture, real curl){$reset}\n";
 
+test('curl uses the validated IP without resolving the original hostname again', function () use ($port) {
+    $url = "http://rebind-fixture.invalid:{$port}/png";
+    $ch = curl_init($url);
+    curl_setopt_array($ch, SsrfGuard::curlOptionsForIps($url, ['127.0.0.1']));
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 3]);
+    $body = curl_exec($ch);
+    assertEqual(200, curl_getinfo($ch, CURLINFO_RESPONSE_CODE));
+    assertTrue(is_string($body) && str_starts_with($body, "\x89PNG"));
+    curl_close($ch);
+});
+
 test('happy path: fetches /png → upload pipeline, filename from Content-Disposition', function () use ($base, $root) {
     $res = importer()->import('local', "{$base}/png", ['path' => 'in']);
     assertEqual('in/sunset.png', (string) $res['key'], 'Content-Disposition filename used');

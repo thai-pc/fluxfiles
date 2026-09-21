@@ -29,6 +29,7 @@
     }
 
     function handleMessage(e) {
+        if (!iframe || !iframe.contentWindow || e.source !== iframe.contentWindow) return;
         if (iframeOrigin && e.origin !== iframeOrigin) return;
         var msg = e.data;
         if (!msg || msg.source !== SOURCE) return;

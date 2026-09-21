@@ -226,6 +226,7 @@
     "selected": "Đã chọn {size}"
   },
   "error": {
+    "invalid_parts": "Các phần tải lên bị thiếu hoặc đã thay đổi. Vui lòng tải lên lại.",
     "forbidden": "Bạn không có quyền thực hiện hành động này",
     "not_found": "Không tìm thấy",
     "quota_exceeded": "Đã vượt quá dung lượng ({used} / {max})",

@@ -226,6 +226,7 @@
     "selected": "Selected {size}"
   },
   "error": {
+    "invalid_parts": "Upload parts are missing or changed. Please restart the upload.",
     "forbidden": "You do not have permission to do this",
     "not_found": "Not found",
     "quota_exceeded": "Storage quota exceeded ({used} / {max})",

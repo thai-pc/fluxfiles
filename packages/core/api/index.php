@@ -430,7 +430,7 @@ try {
     $quotaManager = new QuotaManager($diskManager);
 
     // Routing
-    $data = routeRequest($method, $uri, $fm, $metaRepo, $diskManager, $claims, $auditLog, $chunker, $quotaManager);
+    $data = routeRequest($method, $uri, $fm, $metaRepo, $diskManager, $claims, $auditLog, $chunker, $quotaManager, $dbConn);
 
     // Log write actions
     if ($isWriteAction && $data !== null) {
@@ -595,7 +595,8 @@ function routeRequest(
     \FluxFiles\Claims $claims,
     AuditLogStorage $auditLog,
     \FluxFiles\ChunkUploader $chunker,
-    \FluxFiles\QuotaManager $quotaManager
+    \FluxFiles\QuotaManager $quotaManager,
+    ?\FluxFiles\Db\Connection $dbConn = null
 ) {
     // File operations
     if ($method === 'GET' && $uri === '/api/fm/list') {
@@ -821,7 +822,17 @@ function routeRequest(
         }
         unset($entry);
         $importer = new \FluxFiles\Db\MetadataImporter($dbConn);
-        $result = $importer->import($disk, $entries, fn(string $path) => $claims->isPathInScope($path));
+        $result = $importer->import($disk, $entries, function (string $path) use ($claims, $fm, $disk): bool {
+            if (!$claims->isPathInScope($path)) {
+                return false;
+            }
+            try {
+                $fm->assertCanModifyScopedPath($disk, $path);
+                return true;
+            } catch (ApiException $e) {
+                return false;
+            }
+        }, $claims->ownerOnly ? $claims->userId : null);
         if ($result['errors'] !== []) {
             throw new ApiException('Import rejected — one or more rows are out of scope', 422, 'metadata_import_rejected', ['errors' => $result['errors']]);
         }
@@ -2180,15 +2191,7 @@ function handleChunkInit(
         throw new ApiException('Missing required field: size', 400, 'missing_param');
     }
     $scopedPath = $fm->validateUserPath((string) $path);
-    $fm->validateUploadName(basename($scopedPath), $sizeBytes);
-
-    if ($claims->maxStorageMb > 0 && $sizeBytes > 0) {
-        $quotaManager->assertQuota($disk, $claims->pathPrefix, $sizeBytes, $claims->maxStorageMb);
-    }
-
-    if ($claims->maxFiles > 0) {
-        $quotaManager->assertFileCount($disk, $claims->pathPrefix, 1, $claims->maxFiles);
-    }
+    $scopedPath = $fm->validateChunkUpload($disk, $scopedPath, $sizeBytes, true);
 
     return $chunker->initiate($disk, $scopedPath);
 }
@@ -2231,37 +2234,18 @@ function handleChunkComplete(
     }
     // Normalize BEFORE building any downstream path — see validateScopedPath().
     $key = $fm->validateScopedPath($key);
-    // Unlike the direct upload() path, S3 multipart has no collision policy at
-    // all — completing against an existing key overwrites it unconditionally.
-    // Honour owner_only the same way upload()/rename()/move() do before letting
-    // the multipart complete replace bytes that already exist at this key.
-    if ($diskManager->disk($disk)->fileExists($key)) {
-        $key = $fm->assertCanModifyScopedPath($disk, $key);
-    }
-    $result = $chunker->complete($disk, $key, $uploadId, $parts);
-
-    // /chunk/init only ever checked a CLIENT-DECLARED size, before any bytes
-    // moved — parts are then PUT straight to S3 on presigned URLs with no size
-    // condition, so a client can declare 1 byte and upload gigabytes. Now that
-    // the object is assembled, complete() has reported its REAL size via
-    // HeadObject: re-run the same limits against the truth. On violation the
-    // object must not linger — delete it and skip saving metadata for it.
-    $realSizeBytes = (int) ($result['size'] ?? 0);
-    try {
-        $fm->validateUploadName(basename($key), $realSizeBytes);
-        if ($claims->maxStorageMb > 0) {
-            // Usage scans already see the just-completed object on disk, so
-            // pass 0 as the additional delta rather than double-counting it.
-            $quotaManager->assertQuota($disk, $claims->pathPrefix, 0, $claims->maxStorageMb);
-        }
-    } catch (ApiException $e) {
-        $chunker->deleteObject($disk, $key);
-        throw $e;
-    }
+    $result = $chunker->complete(
+        $disk, $key, $uploadId, $parts,
+        fn(int $size) => $fm->validateChunkUpload($disk, $key, $size),
+        $claims->uploadCollision === 'overwrite'
+    );
 
     $metaRepo->save($disk, $key, [
         'uploaded_by' => $claims->userId,
+        'size' => $result['size'],
+        'modified' => time(),
     ]);
+    $metaRepo->saveHash($disk, $key, '');
     return $result;
 }
 

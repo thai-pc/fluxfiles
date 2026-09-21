@@ -58,42 +58,88 @@ class ChunkUploader
         ];
     }
 
-    public function complete(string $disk, string $key, string $uploadId, array $parts): array
+    public function complete(string $disk, string $key, string $uploadId, array $parts, ?callable $validate = null, bool $overwrite = true): array
     {
         $client = $this->diskManager->s3Client($disk);
         $config = $this->diskManager->config($disk);
         $bucket = $config['bucket'] ?? '';
 
         $multipartUpload = [];
+        $previous = 0;
         foreach ($parts as $part) {
+            if (!is_array($part) || !isset($part['PartNumber'], $part['ETag'])
+                || filter_var($part['PartNumber'], FILTER_VALIDATE_INT) === false
+                || (int) $part['PartNumber'] <= $previous || (int) $part['PartNumber'] > 10000
+                || !is_string($part['ETag']) || $part['ETag'] === '') {
+                throw new ApiException('Invalid multipart parts', 400, 'invalid_parts');
+            }
+            $previous = (int) $part['PartNumber'];
             $multipartUpload[] = [
                 'PartNumber' => (int) $part['PartNumber'],
                 'ETag'       => $part['ETag'],
             ];
         }
+        if ($multipartUpload === []) {
+            throw new ApiException('Multipart parts are required', 400, 'invalid_parts');
+        }
 
-        $result = $client->completeMultipartUpload([
+        // Bind the real size to the exact part numbers AND ETags being completed.
+        // S3 rejects completion if a part changes after this check. Validate before
+        // replacing a live key: deleting a rejected object afterwards loses its old bytes.
+        $uploaded = [];
+        $marker = 0;
+        do {
+            $page = $client->listParts([
+                'Bucket' => $bucket, 'Key' => $key, 'UploadId' => $uploadId,
+                'PartNumberMarker' => $marker,
+            ]);
+            foreach ($page['Parts'] ?? [] as $part) {
+                $uploaded[(int) $part['PartNumber']] = $part;
+            }
+            $truncated = (bool) ($page['IsTruncated'] ?? false);
+            $next = (int) ($page['NextPartNumberMarker'] ?? 0);
+            if ($truncated && $next <= $marker) {
+                throw new ApiException('Invalid multipart listing', 502, 'invalid_parts');
+            }
+            $marker = $next;
+        } while ($truncated);
+
+        $size = 0;
+        foreach ($multipartUpload as $part) {
+            $stored = $uploaded[$part['PartNumber']] ?? null;
+            if ($stored === null || !isset($stored['Size'], $stored['ETag'])
+                || trim((string) $stored['ETag'], '"') !== trim($part['ETag'], '"')
+                || (int) $stored['Size'] < 0) {
+                throw new ApiException('Multipart part is missing or changed', 409, 'invalid_parts');
+            }
+            $size += (int) $stored['Size'];
+        }
+        if ($validate !== null) {
+            $validate($size);
+        }
+
+        $args = [
             'Bucket'          => $bucket,
             'Key'             => $key,
             'UploadId'        => $uploadId,
             'MultipartUpload' => ['Parts' => $multipartUpload],
-        ]);
-
-        // CompleteMultipartUploadOutput carries no ContentLength — the client
-        // declares a size at /chunk/init, but that's never checked against what
-        // actually lands here (parts are PUT directly to S3 on presigned URLs
-        // with no size condition). A HeadObject is the only way to learn the
-        // REAL assembled size so the caller can re-validate it against
-        // max_upload_mb/quota post-hoc, instead of trusting the client's claim.
-        $head = $client->headObject([
-            'Bucket' => $bucket,
-            'Key'    => $key,
-        ]);
+        ];
+        if (!$overwrite) {
+            $args['IfNoneMatch'] = '*';
+        }
+        try {
+            $result = $client->completeMultipartUpload($args);
+        } catch (\Aws\S3\Exception\S3Exception $e) {
+            if (in_array($e->getStatusCode(), [409, 412], true)) {
+                throw new ApiException('Destination changed during upload; retry the upload', 409, 'name_conflict');
+            }
+            throw $e;
+        }
 
         return [
             'key'      => $key,
             'location' => $result['Location'] ?? '',
-            'size'     => (int) ($head['ContentLength'] ?? 0),
+            'size'     => $size,
         ];
     }
 
@@ -113,11 +159,8 @@ class ChunkUploader
     }
 
     /**
-     * Delete a completed multipart object outright (NOT an abort — the upload
-     * is already assembled). Used by handleChunkComplete's post-hoc
-     * size/quota re-check: if the REAL assembled size violates the tenant's
-     * limits, the object must not be left sitting in storage while the API
-     * returns an error.
+     * Delete an object explicitly. Upload policy failures must NOT call this:
+     * validate them before completion so an existing destination remains intact.
      */
     public function deleteObject(string $disk, string $key): array
     {

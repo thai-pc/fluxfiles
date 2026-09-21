@@ -386,13 +386,13 @@ test('B2: owner_only — a different tenant cannot complete a multipart upload o
 // max_upload_mb/quota — /chunk/init only checks a CLIENT-DECLARED size before
 // any bytes move, and parts are PUT straight to S3 on presigned URLs with no
 // size condition, so a client could declare 1 byte and upload gigabytes.
-// complete() now reports the REAL size (via HeadObject); the tests below
-// mirror handleChunkComplete's post-hoc re-check (the function itself lives in
+// complete() checks the REAL size via ListParts BEFORE publishing; tests below
+// mirror handleChunkComplete's preflight (the function itself lives in
 // index.php, which this suite doesn't boot — same reasoning as the B2 test
 // above: mirror the exact guard rather than invoke the router).
 echo "\n{$yellow}► Chunk upload — real-size re-validation{$reset}\n";
 
-test('chunk complete: reports the REAL assembled size via HeadObject, not the client-declared one', function () use ($dm, $prefix) {
+test('chunk complete: reports the REAL selected-parts size, not the client-declared one', function () use ($dm, $prefix) {
     $chunker = new FluxFiles\ChunkUploader($dm);
     $key = $prefix . '/chunk/realsize.bin';
     $body = str_repeat('R', 300000); // ~293KB — the caller could have declared "size":1 at init
@@ -407,19 +407,21 @@ test('chunk complete: reports the REAL assembled size via HeadObject, not the cl
     $etag = trim($m[1] ?? '', '"');
 
     $result = $chunker->complete('s3test', $key, $init['upload_id'], [['PartNumber' => 1, 'ETag' => $etag]]);
-    assertEqual(strlen($body), $result['size'] ?? 0, 'complete() must report the real HeadObject size');
+    assertEqual(strlen($body), $result['size'] ?? 0, 'complete() must report the real selected-parts size');
 
     try { $chunker->deleteObject('s3test', $key); } catch (\Throwable $e) {}
 });
 
-test('B3: chunk complete rejects a real upload over max_upload_mb and deletes the completed object', function () use ($dm, $prefix, $meta) {
+test('B3: chunk complete rejects oversized parts before replacing the original', function () use ($dm, $prefix, $meta) {
     $chunker = new FluxFiles\ChunkUploader($dm);
     $key = $prefix . '/chunk/oversized.bin';
     $body = str_repeat('X', 2 * 1024 * 1024); // 2MB real bytes
     // Tenant's own token declared max_upload_mb=1 at /chunk/init — the client
     // could have (and in the exploit, would have) lied about "size" there.
     $claimsSize = new Claims('sizeuser', ['read', 'write', 'delete'], ['s3test'], $prefix, 1, null, 0, false);
+    $claimsSize->uploadCollision = 'overwrite';
     $fmSize = new FileManager($dm, $claimsSize, $meta);
+    $dm->disk('s3test')->write($key, 'original');
 
     $init = $chunker->initiate('s3test', $key);
     $ps = $chunker->presignPart('s3test', $key, $init['upload_id'], 1, 600);
@@ -431,25 +433,23 @@ test('B3: chunk complete rejects a real upload over max_upload_mb and deletes th
     preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
     $etag = trim($m[1] ?? '', '"');
 
-    $result = $chunker->complete('s3test', $key, $init['upload_id'], [['PartNumber' => 1, 'ETag' => $etag]]);
-    assertEqual(2 * 1024 * 1024, $result['size'] ?? 0, 'object really landed at 2MB');
-
-    // Mirror handleChunkComplete's post-hoc guard.
     $threw = false;
     try {
-        $fmSize->validateUploadName(basename($key), (int) ($result['size'] ?? 0));
+        $chunker->complete('s3test', $key, $init['upload_id'], [['PartNumber' => 1, 'ETag' => $etag]],
+            fn (int $size) => $fmSize->validateChunkUpload('s3test', $key, $size));
     } catch (\FluxFiles\ApiException $e) {
         $threw = true;
         assertEqual('upload_too_large', $e->getErrorCode());
         assertEqual(413, $e->getHttpCode());
-        $chunker->deleteObject('s3test', $key);
     }
     assertTrue($threw, 'expected 413 upload_too_large from the real-size re-check');
-    assertTrue(!$dm->disk('s3test')->fileExists($key), 'oversized object must not linger in storage');
+    assertEqual('original', $dm->disk('s3test')->read($key), 'rejection must preserve original bytes');
     assertTrue($meta->get('s3test', $key) === null, 'no metadata saved for the rejected object');
+    $chunker->abort('s3test', $key, $init['upload_id']);
+    $chunker->deleteObject('s3test', $key);
 });
 
-test('B3: chunk complete rejects a real upload over the storage quota and deletes the completed object', function () use ($dm, $prefix, $meta) {
+test('B3: chunk complete rejects over-quota parts before publishing', function () use ($dm, $prefix, $meta) {
     $chunker = new FluxFiles\ChunkUploader($dm);
     $quotaManager = new QuotaManager($dm);
     $quotaPrefix = $prefix . '/quota-test'; // isolated subtree so other tests' bytes don't affect the sum
@@ -468,22 +468,19 @@ test('B3: chunk complete rejects a real upload over the storage quota and delete
     preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
     $etag = trim($m[1] ?? '', '"');
 
-    $result = $chunker->complete('s3test', $key, $init['upload_id'], [['PartNumber' => 1, 'ETag' => $etag]]);
-
-    // Mirror handleChunkComplete's post-hoc guard. Usage already reflects the
-    // completed object (it now exists on disk), so the delta passed is 0.
     $threw = false;
     try {
-        $quotaManager->assertQuota('s3test', $claimsQ->pathPrefix, 0, $claimsQ->maxStorageMb);
+        $chunker->complete('s3test', $key, $init['upload_id'], [['PartNumber' => 1, 'ETag' => $etag]],
+            fn (int $size) => $quotaManager->assertQuota('s3test', $claimsQ->pathPrefix, $size, $claimsQ->maxStorageMb));
     } catch (\FluxFiles\ApiException $e) {
         $threw = true;
         assertEqual('quota_exceeded', $e->getErrorCode());
         assertEqual(413, $e->getHttpCode());
-        $chunker->deleteObject('s3test', $key);
     }
     assertTrue($threw, 'expected 413 quota_exceeded from the real-size re-check');
     assertTrue(!$dm->disk('s3test')->fileExists($key), 'over-quota object must not linger in storage');
     assertTrue($meta->get('s3test', $key) === null, 'no metadata saved for the rejected object');
+    $chunker->abort('s3test', $key, $init['upload_id']);
 });
 
 test('regression: a chunked upload whose real size is within limits still completes normally', function () use ($dm, $fm, $prefix, $meta) {

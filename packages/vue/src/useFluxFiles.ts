@@ -65,6 +65,7 @@ export function useFluxFiles(options: UseFluxFilesOptions | Ref<UseFluxFilesOpti
   }
 
   function onMessage(e: MessageEvent) {
+    if (!iframeRef.value?.contentWindow || e.source !== iframeRef.value.contentWindow) return;
     if (expectedOrigin.value && e.origin !== expectedOrigin.value) return;
     const msg = e.data as FluxMessage;
     if (!msg || msg.source !== SOURCE) return;

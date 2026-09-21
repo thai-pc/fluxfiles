@@ -231,6 +231,26 @@ final class SsrfGuard
         return $ips;
     }
 
+    /** Pin curl to the addresses already checked, preserving the URL host for TLS. */
+    public static function curlOptionsForIps(string $url, array $ips): array
+    {
+        $parts = parse_url($url);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $port = $parts['port'] ?? (strtolower($parts['scheme'] ?? '') === 'https' ? 443 : 80);
+        $addresses = [];
+        foreach ($ips as $ip) {
+            if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+                throw new ApiException('Could not pin the URL host', 422, 'fetch_failed');
+            }
+            $addresses[] = str_contains($ip, ':') ? '[' . $ip . ']' : $ip;
+        }
+        if ($host === '' || $addresses === []) {
+            throw new ApiException('Could not pin the URL host', 422, 'fetch_failed');
+        }
+        // A proxy can resolve the original hostname itself, bypassing the pin.
+        return [CURLOPT_PROXY => '', CURLOPT_RESOLVE => [$host . ':' . $port . ':' . implode(',', $addresses)]];
+    }
+
     /**
      * Assert a bare host (no scheme) resolves only to public addresses — the
      * SFTP-disk equivalent of assertSafeUrl, so an SFTP disk can't be aimed at a

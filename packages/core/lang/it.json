@@ -226,6 +226,7 @@
     "selected": "{size} selezionato"
   },
   "error": {
+    "invalid_parts": "Alcune parti del caricamento mancano o sono cambiate. Riavvia il caricamento.",
     "forbidden": "Non hai i permessi per questa azione",
     "not_found": "Non trovato",
     "quota_exceeded": "Quota di archiviazione superata ({used} / {max})",

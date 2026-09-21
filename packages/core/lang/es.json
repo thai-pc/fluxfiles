@@ -226,6 +226,7 @@
     "selected": "{size} seleccionado"
   },
   "error": {
+    "invalid_parts": "Faltan partes de la carga o han cambiado. Reinicia la carga.",
     "forbidden": "No tienes permiso para realizar esta acción",
     "not_found": "No encontrado",
     "quota_exceeded": "Cuota de almacenamiento excedida ({used} / {max})",

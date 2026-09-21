@@ -226,6 +226,7 @@
     "selected": "{size} sélectionné"
   },
   "error": {
+    "invalid_parts": "Des parties du fichier sont manquantes ou ont changé. Relancez l’envoi.",
     "forbidden": "Vous n'avez pas la permission d'effectuer cette action",
     "not_found": "Non trouvé",
     "quota_exceeded": "Quota de stockage dépassé ({used} / {max})",

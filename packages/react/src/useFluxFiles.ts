@@ -81,6 +81,7 @@ export function useFluxFiles(options: UseFluxFilesOptions): FluxFilesHandle & {
   // Listen for messages from iframe
   useEffect(() => {
     function onMessage(e: MessageEvent) {
+      if (!iframeElRef.current?.contentWindow || e.source !== iframeElRef.current.contentWindow) return;
       if (expectedOrigin.current && e.origin !== expectedOrigin.current) return;
       const msg = e.data as FluxMessage;
       if (!msg || msg.source !== SOURCE) return;

@@ -9,6 +9,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 function fromIframe(type: string, payload: any = {}) {
   window.dispatchEvent(new MessageEvent('message', {
     origin: ORIGIN,
+    source: document.querySelector('iframe')?.contentWindow,
     data: { source: 'fluxfiles', type, v: 1, id: 'x', payload },
   }));
 }
@@ -72,6 +73,19 @@ describe('<FluxFiles> React wrapper', () => {
       data: { source: 'fluxfiles', type: 'FM_SELECT', payload: { url: 'x' } },
     }));
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('isolates two managers on the same origin', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const a = setup({ onSelect: first });
+    setup({ onSelect: second });
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: ORIGIN, source: a.iframe.contentWindow,
+      data: { source: 'fluxfiles', type: 'FM_SELECT', payload: { key: 'a.txt' } },
+    }));
+    expect(first).toHaveBeenCalledOnce();
+    expect(second).not.toHaveBeenCalled();
   });
 });
 

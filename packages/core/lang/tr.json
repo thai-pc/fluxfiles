@@ -226,6 +226,7 @@
     "selected": "{size} seçildi"
   },
   "error": {
+    "invalid_parts": "Yükleme parçaları eksik veya değişmiş. Lütfen yüklemeyi yeniden başlatın.",
     "forbidden": "Bu işlem için yetkiniz yok",
     "not_found": "Bulunamadı",
     "quota_exceeded": "Depolama kotası aşıldı ({used} / {max})",

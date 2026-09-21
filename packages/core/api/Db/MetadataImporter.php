@@ -30,10 +30,14 @@ class MetadataImporter
      * @param callable $isPathAllowed function(string $path): bool — the caller's Claims::isPathInScope
      * @return array{imported:int, errors: array<int, array{row:int, error:string}>}
      */
-    public function import(string $disk, array $entries, callable $isPathAllowed): array
+    public function import(string $disk, array $entries, callable $isPathAllowed, ?string $ownerId = null): array
     {
         $errors = [];
         foreach ($entries as $i => $entry) {
+            if (!is_array($entry)) {
+                $errors[] = ['row' => $i, 'error' => 'invalid_entry'];
+                continue;
+            }
             $path = (string) ($entry['path'] ?? '');
             if ($path === '') {
                 $errors[] = ['row' => $i, 'error' => 'missing_path'];
@@ -62,7 +66,7 @@ class MetadataImporter
                 $path = (string) $entry['path'];
                 $stmt->execute([
                     $disk,
-                    $entry['owner'] ?? null,
+                    $ownerId ?? ($entry['owner'] ?? null),
                     $path,
                     $this->pathHash($path),
                     $entry['title'] ?? null,

@@ -7,6 +7,7 @@ const ORIGIN = 'http://localhost';
 function fromIframe(type, payload = {}) {
   window.dispatchEvent(new MessageEvent('message', {
     origin: ORIGIN,
+    source: document.getElementById('fluxfiles-iframe')?.contentWindow,
     data: { source: 'fluxfiles', type, v: 1, id: 'x', payload },
   }));
 }
@@ -26,6 +27,21 @@ describe('FluxFiles SDK postMessage protocol', () => {
   beforeEach(() => {
     FluxFiles.close();
     document.body.innerHTML = '';
+  });
+
+  it('ignores a sibling frame on the same origin', () => {
+    const onSelect = vi.fn();
+    FluxFiles.open({ endpoint: ORIGIN, token: 't', onSelect });
+    const sibling = document.createElement('iframe');
+    document.body.appendChild(sibling);
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: ORIGIN, source: sibling.contentWindow,
+      data: { source: 'fluxfiles', type: 'FM_SELECT', payload: { key: 'wrong.txt' } },
+    }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(document.getElementById('fluxfiles-iframe')).not.toBeNull();
+    fromIframe('FM_SELECT', { key: 'right.txt' });
+    expect(onSelect).toHaveBeenCalledWith({ key: 'right.txt' });
   });
 
   it('FM_READY → replies with FM_CONFIG carrying the token + disk', () => {
