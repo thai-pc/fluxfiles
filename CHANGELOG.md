@@ -5,6 +5,41 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.3.13] — 2026-09-26
+
+> Released: `sdk-v0.2.9`, `node-v0.1.30`, `react-v0.2.10`, `vue-v0.2.10`.
+
+JS-package-only release. It carries the browser-SDK and Node-token fixes that
+shipped as source in the 0.3.12 core release (`9893fb2`) but were never tagged
+or published to npm, so no installed adapter actually had them.
+
+### Fixed — SDK/React/Vue: `postMessage` listeners accepted frames they do not own
+
+- The `message` handlers in `packages/sdk/fluxfiles.js`,
+  `packages/react/src/useFluxFiles.ts` and `packages/vue/src/useFluxFiles.ts`
+  checked `e.origin` but never `e.source`. A same-origin frame the host page
+  also embeds — an ad slot, a widget, any other iframe served from the
+  FluxFiles origin — could therefore post a well-formed `FM_EVENT` and have the
+  host treat it as a real pick or event from the file manager. Each listener
+  now requires `e.source === <the FluxFiles iframe>.contentWindow` before the
+  origin check, so only the frame the adapter itself created can talk to it.
+
+### Fixed — Node: `verifyToken()` ignored `nbf` and trusted claim types
+
+- `verifyToken()` only looked at `exp`, and only when it happened to be a
+  number. A token whose `nbf` (not-before) is still in the future was accepted
+  as valid, and a token carrying `exp` as a string or an array of claims got
+  past the checks entirely. It now rejects non-object claim payloads, requires
+  `exp`/`nbf`/`iat` to be finite numbers when present, treats `exp === now` as
+  expired rather than valid, and refuses a token that is not yet active
+  (`nbf > now`, or `iat > now` when `nbf` is absent). `FluxClaims` gained the
+  matching optional `nbf` field.
+
+### Changed — Node: doc links point at the moved design/reference paths
+
+- The `docs/ACL-ROLE-PRESETS-DESIGN.md` and `docs/CONFIG.md` references in
+  `token.ts`/`types.ts` now read `docs/design/…` and `docs/reference/…`.
+
 ## [0.3.12] — 2026-09-26
 
 > Released: `core-v0.2.88`, `laravel-v0.2.42`, `wordpress-v0.2.49`.
