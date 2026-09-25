@@ -371,13 +371,14 @@ not as-planned)
   - **Laravel**: `share/info`, `share/unlock`, `share/file`, `share/list`, `share/revoke`
     (and Intake's equivalents) are proxied via `FluxFilesController::shareIntake()`/
     `publicLink()`, so none of them belong in `$intentionallyUnproxied`
-    (`packages/laravel/tests/test-laravel-smoke.php`, ~:383-405 — currently `chmod`, `zip`,
-    `sso/*`, `metadata/export`, `metadata/import` only). `allow_share`/`allow_intake` forward
+    (`packages/laravel/tests/test-laravel-smoke.php`, ~:383-405 — currently `sso/*`,
+    `metadata/export`, `metadata/import` only; `chmod`/`zip` came off the allowlist once
+    both were proxied, 2026-09-26). `allow_share`/`allow_intake` forward
     unconditionally (`packages/laravel/src/FluxFilesManager.php:294-298`), asserted by the
     smoke test around :222-253.
   - **WordPress has a route-parity guard**: `packages/wordpress/tests/test-wp-smoke.php`'s
     `'proxy route surface covers every core /api/fm route'` test (currently line 1102,
-    allowlist ~:1140-1144, also `chmod`/`zip`/`sso/*`/`metadata/export`/`metadata/import`
+    allowlist ~:1140-1144, also `sso/*`/`metadata/export`/`metadata/import`
     only — no Share/Intake route on it either). `allow_share`/`allow_intake` are forwarded
     unconditionally from `FluxFilesPlugin.php:472-476`, asserted by the WP smoke test around
     :328-345 (plus a dedicated `share_base_url` override test ~:791-806).

@@ -1187,12 +1187,13 @@ test('proxy route surface covers every core /api/fm route', function () {
     // Core routes that are intentionally NOT proxied (keep in sync with Laravel's
     // allowlist minus share/intake, which WordPress already proxies in full —
     // CRUD, the public landing routes, AND analytics.
-    // - chmod: only operates on an SFTP disk, a core-standalone driver the proxy
-    //   doesn't expose.
-    // - zip: streams a binary zip to the client (ZipStream → php://output); the
-    //   JSON-returning REST handlers don't do raw streaming responses, so it's a
-    //   core-standalone / Docker feature. (Extract, by contrast, returns JSON and
-    //   IS proxied.)
+    // chmod and zip USED to be listed here. Both rationales had gone stale:
+    // chmod's ("the proxy doesn't expose SFTP") is contradicted by /terminal and
+    // /git-deploy, which are proxied and are themselves SFTP-only, plus a BYOB
+    // sftp disk in the token reaches proxy mode via fileManager(); zip's ("REST
+    // handlers don't do raw streaming") is contradicted by handleStream()/
+    // handleImg()/handleAuditExport(). allow_zip defaults TRUE, so the UI's
+    // "Download ZIP" button rendered in proxy mode and 404'd. Both are proxied now.
     // - SSO bridge (sso/login, sso/callback, sso/exchange): pre-auth routes for
     //   the standalone /public UI's own login screen. A WordPress site already
     //   authenticates via the plugin's own token minting, so there's nothing to
@@ -1208,7 +1209,6 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   these two classes have nothing to bind to in proxy mode. No such port
     //   exists yet.
     $intentionallyUnproxied = [
-        'chmod', 'zip',
         'sso/login', 'sso/callback', 'sso/exchange',
         'metadata/export', 'metadata/import',
     ];
@@ -1288,6 +1288,7 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
         'handleOcr'             => 'ocr',
         'handleChunkComplete'   => 'chunk_upload',
         'handleChunkAbort'      => 'chunk_upload',
+        'handleSetChmod'        => 'chmod',
     ];
     foreach ($mustLog as $method => $action) {
         $body = $extractMethod($apiSrc, $method);

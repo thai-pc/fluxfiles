@@ -372,15 +372,15 @@ test('proxy route surface covers every core /api/fm route', function () {
     $proxyRoutes = array_map(fn ($r) => preg_replace('#/\{[^}]+\}#', '', $r), $rm[1]);
 
     // Core routes that are intentionally NOT proxied (keep empty unless justified).
-    // - chmod: only operates on an SFTP disk, which is a core-standalone driver
-    //   (the proxy doesn't expose SFTP), so chmod has nothing to act on in proxy
-    //   mode. Belongs with the SFTP/core-standalone group.
-    // - zip: streams a binary zip to the client (ZipStream → php://output, bypassing
-    //   the JSON encoder); the JSON-returning proxy controllers don't do streaming
-    //   responses, so it stays a core-standalone / Docker feature (byte streaming
-    //   like stream/img, but zip specifically was never ported).
-    //   (Extract, by contrast, returns JSON and IS proxied.)
-    $intentionallyUnproxied = ['chmod', 'zip',
+    // chmod and zip USED to be listed here. Both rationales had gone stale:
+    // chmod's ("the proxy doesn't expose SFTP") is contradicted by terminal() and
+    // gitDeploy(), which are proxied and are themselves SFTP-only, plus a BYOB
+    // sftp disk in the token reaches proxy mode via fileManager(); zip's ("the
+    // JSON-returning controllers don't do streaming") is contradicted by
+    // auditExport()'s response()->stream() and stream(). allow_zip defaults TRUE,
+    // so the UI's "Download ZIP" button rendered in proxy mode and 404'd. Both
+    // are proxied now.
+    $intentionallyUnproxied = [
         // Share + Intake (operator create/list/revoke/analytics AND the public
         // info/unlock/file/upload landing routes), file Versioning (list/restore),
         // Audit export/purge, AI Vision/OCR/Backup Bridge/C2PA, the SSH terminal,
@@ -764,6 +764,7 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
         'ocr'              => 'ocr',
         'chunkComplete'    => 'chunk_upload',
         'chunkAbort'       => 'chunk_upload',
+        'setChmod'         => 'chmod',
     ];
     foreach ($mustLog as $method => $action) {
         $body = $extractMethod($ctrlSrc, $method);

@@ -24,6 +24,15 @@ npx --yes @wordpress/env start
 
 run() { npx --yes @wordpress/env run cli wp "$@"; }
 
+# Docker Desktop's osxfs/virtiofs cache keys on inode, and build-wordpress.sh
+# rewrites build/fluxfiles wholesale — so on a RE-run the container keeps serving
+# the previous build's files (same paths, new inodes) even across a full wp-env
+# restart, and a freshly added REST route silently 404s. A write from inside the
+# container is what invalidates those entries; `touch` is the cheapest one.
+echo "==> Refreshing the plugin bind mount (busts Docker's stale file cache)"
+npx --yes @wordpress/env run cli \
+  sh -c 'find /var/www/html/wp-content/plugins/fluxfiles -type f -exec touch {} +' >/dev/null
+
 echo "==> Activating plugin + configuring site"
 run plugin activate fluxfiles >/dev/null 2>&1 || true
 run option update fluxfiles_secret "$SECRET" >/dev/null

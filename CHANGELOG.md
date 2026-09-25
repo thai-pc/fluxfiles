@@ -5,6 +5,49 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed — Laravel/WordPress proxies: `/api/fm/zip` and `/api/fm/chmod` were never proxied
+
+- `POST /api/fm/zip` had no route in either proxy adapter, and `allow_zip`
+  defaults to **true** in `Claims`. The UI's `canZip` gate was therefore on in
+  proxy mode, so the toolbar rendered its "Download ZIP" button and every click
+  404'd — a visibly dead control in both Laravel and WordPress embeds. Verified
+  live against the real WordPress plugin before fixing.
+- `GET`/`POST /api/fm/chmod` had the same gap, latent until an SFTP disk is in
+  play. Both proxies already register BYOB disks (which may be `sftp`) and
+  already proxy `/terminal` and `/git-deploy`, which are themselves SFTP-only —
+  chmod is the same class of route and was simply never ported.
+- Both are now proxied: `FluxFilesApi::handleZip()`/`handleGetChmod()`/
+  `handleSetChmod()` (WordPress) and `FluxFilesController::zip()`/`getChmod()`/
+  `setChmod()` plus three routes in `routes/fluxfiles.php` (Laravel). The zip
+  handlers call `zipManifest()` first so a rejected request is still a clean
+  JSON error, then stream via `streamZip()` — no buffering, matching the
+  existing `handleStream()`/`handleImg()` precedent. `/zip` is deliberately
+  **not** audited, matching core (`index.php`'s handler exits before the audit
+  block and `/zip` is absent from `resolveAuditAction()`); `setChmod` audits and
+  dispatches a webhook like every other proxied write.
+- Both smoke suites had these on their `$intentionallyUnproxied` allowlist with
+  rationales that had gone stale: chmod's ("the proxy doesn't expose SFTP") is
+  contradicted by the proxied SFTP-only `/terminal` + `/git-deploy`, and zip's
+  ("REST handlers don't do raw streaming") by `handleStream()`/`handleImg()`/
+  `handleAuditExport()`. Both entries are removed, so the existing route-parity
+  guard now enforces the fix. `sso/*` and `metadata/export|import` stay
+  allowlisted — those rationales are still correct.
+- New Playwright coverage drives `/api/fm/zip` through both real proxies and
+  asserts real zip bytes (`PK\x03\x04`), locking the dead-button regression:
+  `wordpress-e2e/wp.spec.ts` against the WP REST proxy, `e2e/laravel.spec.ts`
+  against the Laravel app — the latter also pins `Content-Type` and
+  `Content-Disposition` on the wire, since ZipStream sets those from inside the
+  `response()->stream()` callback.
+
+### Fixed — WordPress e2e: rebuilt plugin was served stale
+
+- `wordpress-e2e/setup.sh` now touches the plugin's files from inside the
+  container before configuring the site. `build-wordpress.sh` rewrites
+  `build/fluxfiles` wholesale, and Docker Desktop's file-sharing cache keys on
+  inode — so on a re-run the container kept serving the previous build (same
+  paths, new inodes) even across a full `wp-env` restart, making a freshly added
+  REST route 404 against an artifact that already contained it.
+
 ### Fixed — CI/dev: S3 backend moved from MinIO to LocalStack
 
 - The `Live S3 (MinIO)` job (and `docker-compose.yml` / `make s3-minio`) could

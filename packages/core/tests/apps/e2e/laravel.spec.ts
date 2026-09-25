@@ -56,3 +56,46 @@ test('laravel proxy: gated media stream + on-demand img are served through the p
   expect(imgRes.ok()).toBeTruthy();
   expect(imgRes.headers()['content-type'] || '').toContain('image/');
 });
+
+// Regression lock for the dead "Download ZIP" button: allow_zip defaults TRUE in
+// Claims, so the toolbar renders the button in proxy mode, but /api/fm/zip had no
+// Laravel route and every click 404'd. Also pins the header path — Symfony's
+// Response::send() flushes headers before the stream callback runs, so ZipStream
+// must not send its own (see FluxFilesController::zip()); asserting Content-Type
+// and Content-Disposition here is what catches a regression back to text/html.
+test('laravel proxy: /api/fm/zip streams a zip with the right headers', async ({ page }) => {
+  const fm = await openHost(page, 'laravel');
+  const name = `laravel-zip-${Date.now()}.png`;
+  await uploadFile(fm, pngFile(name));
+  await expect(cardByName(fm, name)).toBeVisible({ timeout: 15_000 });
+
+  const frame = page.frames().find((f) => f.url().includes('/public/'));
+  if (!frame) throw new Error('FluxFiles iframe not found');
+
+  const result = await frame.evaluate(async (fileName) => {
+    const app = (document.querySelector('.ff-app') as any)?._x_dataStack?.[0];
+    if (!app) return { error: 'Alpine state unavailable' };
+    const res = await fetch(app.joinUrl('/api/fm/zip'), {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + app.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disk: app.currentDisk, paths: [fileName], name: 'e2e' }),
+    });
+    const buf = res.ok ? new Uint8Array(await res.arrayBuffer()) : new Uint8Array();
+    return {
+      canZip: app.canZip,
+      status: res.status,
+      type: res.headers.get('content-type') || '',
+      disposition: res.headers.get('content-disposition') || '',
+      // Local ZIP file header — proves real zip bytes, not an HTML error page.
+      magic: Array.from(buf.slice(0, 4)).join(','),
+      bytes: buf.length,
+    };
+  }, name);
+
+  expect(result.canZip).toBe(true);   // the button renders → the route must exist
+  expect(result.status).toBe(200);
+  expect(result.type).toContain('zip');
+  expect(result.disposition).toContain('e2e.zip');
+  expect(result.magic).toBe('80,75,3,4'); // "PK\x03\x04"
+  expect(result.bytes).toBeGreaterThan(0);
+});

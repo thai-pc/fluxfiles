@@ -71,6 +71,16 @@ Route::put('content', [FluxFilesController::class, 'putContent']);
 // Extract a zip in place (works on any disk; returns JSON)
 Route::post('extract', [FluxFilesController::class, 'extract']);
 
+// Download a selection as a streamed zip. The UI's `canZip` gate defaults to ON
+// (allow_zip defaults true in Claims), so the toolbar's "Download ZIP" button
+// renders in proxy mode too — it 404'd here until this route existed.
+Route::post('zip', [FluxFilesController::class, 'zip']);
+
+// SFTP file permissions. SFTP reaches proxy mode via a BYOB sftp disk in the
+// token, the same reason terminal/git-deploy below are proxied.
+Route::get('chmod', [FluxFilesController::class, 'getChmod']);
+Route::post('chmod', [FluxFilesController::class, 'setChmod']);
+
 // Audit
 Route::get('audit', [FluxFilesController::class, 'audit']);
 

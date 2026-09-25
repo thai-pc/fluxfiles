@@ -1055,6 +1055,99 @@ class FluxFilesController
         }
     }
 
+    /**
+     * Stream a multi-file/folder selection as a zip. Every gate (allow_zip,
+     * allow_download, read perm, disk scope, the file-count/byte caps, owner_only)
+     * lives in FileManager::zipManifest(), so this is a passthrough like the rest.
+     *
+     * The manifest is resolved BEFORE the stream callback runs, so a rejection is
+     * still a clean JSON error — once response()->stream() starts flushing, the
+     * status code is already sent and there is no way back.
+     *
+     * ZipStream sends its own headers from inside the callback, exactly as it does
+     * in core's index.php. Symfony's Response::send() runs sendHeaders() first, but
+     * that only stages them with header() — PHP does not flush until the first byte
+     * of body, which is emitted by sendContent() afterwards. So ZipStream's own
+     * Content-Type/Content-Disposition still replace Symfony's defaults. The
+     * laravel.spec.ts zip test asserts both headers on the wire to keep it that way.
+     *
+     * Not audited, matching core: index.php's /zip handler exits before the audit
+     * block and '/zip' isn't in resolveAuditAction()'s map.
+     */
+    public function zip(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $disk  = (string) $request->input('disk', 'local');
+            $paths = $request->input('paths');
+            $paths = is_array($paths) ? $paths : [];
+            $name  = $request->input('name') !== null ? (string) $request->input('name') : null;
+
+            $fm->zipManifest($disk, $paths);
+
+            return response()->stream(function () use ($fm, $disk, $paths, $name) {
+                $fm->streamZip($disk, $paths, $name);
+            });
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Read the Unix mode of one file on an SFTP disk. SFTP is reachable in proxy
+     * mode via a BYOB sftp disk in the token (registered in fileManager()), which
+     * is the same reason terminal() and gitDeploy() are proxied.
+     */
+    public function getChmod(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+
+            return $this->ok($fm->getMode(
+                (string) $request->query('disk', ''),
+                (string) $request->query('path', '')
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Set the Unix mode of one file on an SFTP disk. The allow_chmod claim is
+     * checked here to match core's index.php (FileManager::setMode() enforces the
+     * write perm, path scope and owner_only, but not this claim).
+     */
+    public function setChmod(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            if (!$claims->allowChmod) {
+                throw new ApiException('Changing permissions is not allowed', 403, 'chmod_forbidden');
+            }
+            $fm = $this->fileManager($claims);
+
+            $disk = (string) $request->input('disk', '');
+            $path = (string) $request->input('path', '');
+            $result = $fm->setMode($disk, $path, (string) $request->input('mode', ''));
+            $this->logAudit($claims, 'chmod', $disk, $path, 'mode=' . $result['mode']);
+            $this->dispatchWebhook($claims, 'chmod', [
+                'disk' => $disk,
+                'path' => $path,
+                'name' => basename($path),
+            ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
 
     public function trash(Request $request): JsonResponse

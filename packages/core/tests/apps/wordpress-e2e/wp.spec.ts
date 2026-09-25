@@ -130,3 +130,49 @@ test('wordpress native picker: "From FluxFiles" button is injected into wp.media
   await page.evaluate(() => (window as any).wp.media({ title: 'e2e', multiple: false }).open());
   await expect(page.locator('.media-modal .fluxfiles-from-btn')).toBeVisible({ timeout: 15_000 });
 });
+
+// Regression lock for the dead "Download ZIP" button: allow_zip defaults TRUE in
+// Claims, so the toolbar renders the button in proxy mode, but /api/fm/zip had no
+// WP REST route and every click 404'd. Driven through the iframe's own Alpine state
+// (token + endpoint) rather than the toolbar, because downloadZip() is a fetch with
+// an Authorization header — exactly what this asserts — and clicking would only add
+// selection-UI flakiness on top.
+test('wordpress proxy: /api/fm/zip streams a zip through the REST API', async ({ page }) => {
+  await loginAdmin(page);
+  await page.goto(`${BASE}/files/`);
+
+  const fm = page.frameLocator('iframe');
+  await expect(fm.locator('.ff-app')).toBeVisible({ timeout: 25_000 });
+
+  const name = `wp-zip-${Date.now()}.png`;
+  await uploadFile(fm, pngFile(name));
+  await expect(cardByName(fm, name)).toBeVisible({ timeout: 15_000 });
+
+  const frame = page.frames().find((f) => f.url().includes('/public/'));
+  if (!frame) throw new Error('FluxFiles iframe not found');
+
+  const result = await frame.evaluate(async (fileName) => {
+    const app = (document.querySelector('.ff-app') as any)?._x_dataStack?.[0];
+    if (!app) return { error: 'Alpine state unavailable' };
+    const res = await fetch(app.joinUrl('/api/fm/zip'), {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + app.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disk: app.currentDisk, paths: [fileName], name: 'e2e' }),
+    });
+    const buf = res.ok ? new Uint8Array(await res.arrayBuffer()) : new Uint8Array();
+    return {
+      canZip: app.canZip,
+      status: res.status,
+      type: res.headers.get('content-type') || '',
+      // Local ZIP file header — proves real zip bytes, not a JSON error body.
+      magic: Array.from(buf.slice(0, 4)).join(','),
+      bytes: buf.length,
+    };
+  }, name);
+
+  expect(result.canZip).toBe(true);   // the button renders → the route must exist
+  expect(result.status).toBe(200);
+  expect(result.type).toContain('zip');
+  expect(result.magic).toBe('80,75,3,4'); // "PK\x03\x04"
+  expect(result.bytes).toBeGreaterThan(0);
+});

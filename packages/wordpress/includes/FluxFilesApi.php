@@ -175,6 +175,32 @@ class FluxFilesApi
             'callback' => [$api, 'handleExtract'],
         ]));
 
+        // Download a selection as a streamed zip. The UI's `canZip` gate defaults to
+        // ON (allow_zip defaults true in Claims), so the toolbar's "Download ZIP"
+        // button renders in proxy mode too — it 404'd here until this route existed.
+        // Streams bytes straight to the client like handleStream()/handleImg(), so
+        // it never returns a WP_REST_Response.
+        register_rest_route($ns, $p . '/zip', array_merge($writeArgs, [
+            'callback' => [$api, 'handleZip'],
+        ]));
+
+        // SFTP file permissions. SFTP reaches proxy mode two ways: a BYOB sftp disk
+        // in the token (registered in fileManager()) and an operator-configured one,
+        // which is also why /terminal + /git-deploy are proxied — chmod is the same
+        // class of SFTP-only route and was simply never ported.
+        register_rest_route($ns, $p . '/chmod', [
+            [
+                'methods'             => 'GET',
+                'permission_callback' => [self::class, 'checkAuth'],
+                'callback'            => [$api, 'handleGetChmod'],
+            ],
+            [
+                'methods'             => 'POST',
+                'permission_callback' => [self::class, 'checkAuth'],
+                'callback'            => [$api, 'handleSetChmod'],
+            ],
+        ]);
+
         // Trash (soft-delete) — gated by the 'delete' permission inside FileManager
         register_rest_route($ns, $p . '/trash', array_merge($writeArgs, [
             'callback' => [$api, 'handleTrash'],
@@ -1383,6 +1409,101 @@ class FluxFilesApi
                 'disk' => (string) ($body['disk'] ?? 'local'),
                 'path' => (string) ($body['path'] ?? ''),
                 'name' => basename((string) ($body['path'] ?? '')),
+            ]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Stream a multi-file/folder selection as a zip. Every gate (allow_zip,
+     * allow_download, read perm, disk scope, the file-count/byte caps, owner_only)
+     * lives in FileManager::zipManifest(), so this is a passthrough like the rest.
+     *
+     * Declared `void`: ZipStream writes its own headers and body to php://output,
+     * so there is no WP_REST_Response to return. The error path has to emit JSON
+     * by hand for the same reason — once bytes are flushed we can't fall back, so
+     * the manifest (which is what actually throws) is built BEFORE any output.
+     */
+    public function handleZip(\WP_REST_Request $request): void
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+
+            $body  = $this->body($request);
+            $disk  = (string) ($body['disk'] ?? 'local');
+            $paths = is_array($body['paths'] ?? null) ? $body['paths'] : [];
+            $name  = isset($body['name']) ? (string) $body['name'] : null;
+
+            // Resolve + validate first so a rejection is still a clean JSON error.
+            // Not audited, matching core: index.php's /zip handler exits before the
+            // audit block and '/zip' isn't in resolveAuditAction()'s map. Keeping the
+            // proxy a faithful passthrough beats quietly auditing more than core does.
+            $fm->zipManifest($disk, $paths);
+
+            // WP has already sent no body of its own, but it buffers — drop that so
+            // ZipStream's own Content-Type/Disposition headers are the ones sent.
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            $fm->streamZip($disk, $paths, $name);
+            exit;
+        } catch (ApiException $e) {
+            status_header($e->getHttpCode());
+            wp_send_json(['data' => null, 'error' => $e->getMessage(),
+                'error_code' => $e->getErrorCode(), 'error_params' => $e->getErrorParams()], $e->getHttpCode());
+        }
+    }
+
+    /**
+     * Read the Unix mode of one file on an SFTP disk. SFTP is reachable in proxy
+     * mode via a BYOB sftp disk in the token (see fileManager()), which is the same
+     * reason /terminal and /git-deploy are proxied.
+     */
+    public function handleGetChmod(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+
+            return $this->ok($fm->getMode(
+                $this->strParam($request, 'disk'),
+                $this->strParam($request, 'path')
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /**
+     * Set the Unix mode of one file on an SFTP disk. The allow_chmod claim is
+     * checked here to match core's index.php (FileManager::setMode() enforces the
+     * write perm, path scope and owner_only, but not this claim).
+     */
+    public function handleSetChmod(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            if (!$claims->allowChmod) {
+                throw new ApiException('Changing permissions is not allowed', 403, 'chmod_forbidden');
+            }
+            $fm = $this->fileManager($claims);
+
+            $body = $this->body($request);
+            $disk = (string) ($body['disk'] ?? '');
+            $path = (string) ($body['path'] ?? '');
+            $result = $fm->setMode($disk, $path, (string) ($body['mode'] ?? ''));
+            $this->logAudit($claims, 'chmod', $disk, $path, 'mode=' . $result['mode']);
+            $this->dispatchWebhook($claims, 'chmod', [
+                'disk' => $disk,
+                'path' => $path,
+                'name' => basename($path),
             ]);
 
             return $this->ok($result);
