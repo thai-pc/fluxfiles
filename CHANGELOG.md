@@ -5,6 +5,53 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.3.12] — 2026-09-26
+
+> Released: `core-v0.2.88`, `laravel-v0.2.42`, `wordpress-v0.2.49`.
+
+### Fixed — Core: storage-policy, metadata-ownership and SDK boundary hardening
+
+- **S3 multipart completion is validated before it publishes.** `ChunkUploader::
+  complete()` now rejects malformed part lists (non-integer or non-ascending
+  `PartNumber`, empty `ETag`, an empty list), then calls `listParts` and binds
+  the real byte size to the exact part numbers **and** ETags being completed —
+  a part that is missing or changed since upload fails with `409 invalid_parts`.
+  The size is checked against the token's quota/upload limits (via the new
+  `FileManager::validateChunkUpload()` preflight) **before** completion, because
+  deleting a rejected object afterwards would lose the previous bytes at that key.
+- **Write quotas and download restrictions are enforced on more paths**: the
+  `max_files` file-count cap now applies to cross-disk copy/move and to ZIP
+  extraction (counting only entries that create a new target), and
+  `putContent()` honours `allow_download` plus the storage quota (charging only
+  the size delta) and refreshes the size/mtime/hash metadata it used to leave stale.
+- **Metadata import can no longer claim another user's files**:
+  `MetadataImporter::import()` takes an explicit `$ownerId` that overrides any
+  `owner` field in the imported rows, and non-array rows are reported per-row
+  instead of aborting the batch.
+- **URL import pins DNS.** `SsrfGuard::curlOptionsForIps()` pins curl to the
+  addresses the guard already checked (`CURLOPT_RESOLVE`, preserving the URL host
+  for TLS) and clears `CURLOPT_PROXY`, closing the TOCTOU window where a hostname
+  could re-resolve to an internal address between the check and the connect, or
+  where a proxy would resolve the original hostname itself and bypass the pin.
+- **The SDK ignores postMessage from any window but its own iframe**
+  (`e.source !== iframe.contentWindow`), so another frame on the host page cannot
+  forge FluxFiles events. The React and Vue wrappers carry the same check.
+- Regression coverage added: `tests/unit/test-chunk-preflight.php`,
+  `tests/integration/test-write-policy-parity.php`,
+  `tests/integration/test-url-import-fetch.php` and the self-booting
+  `tests/e2e/test-write-policy-http.php`.
+
+### Fixed — Licensing: perpetual-renewal terms clarified
+
+- `LicenseManager` and `UpdateClient` state the perpetual-fallback behaviour
+  explicitly: a lapsed subscription keeps the last licensed version working and
+  only stops serving *newer* builds.
+
+### Changed — Docs: deployment guidance reorganized
+
+- Deployment docs reorganized and hardened; the accompanying code change is
+  comment/docblock-only across `api/` plus a one-line asset touch-up.
+
 ### Fixed — Laravel/WordPress proxies: `/api/fm/zip` and `/api/fm/chmod` were never proxied
 
 - `POST /api/fm/zip` had no route in either proxy adapter, and `allow_zip`
