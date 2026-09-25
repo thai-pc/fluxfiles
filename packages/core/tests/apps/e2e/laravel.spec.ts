@@ -59,10 +59,11 @@ test('laravel proxy: gated media stream + on-demand img are served through the p
 
 // Regression lock for the dead "Download ZIP" button: allow_zip defaults TRUE in
 // Claims, so the toolbar renders the button in proxy mode, but /api/fm/zip had no
-// Laravel route and every click 404'd. Also pins the header path — Symfony's
-// Response::send() flushes headers before the stream callback runs, so ZipStream
-// must not send its own (see FluxFilesController::zip()); asserting Content-Type
-// and Content-Disposition here is what catches a regression back to text/html.
+// Laravel route and every click 404'd. Also pins the header path — ZipStream sends
+// its own headers from inside the stream callback, which still wins because
+// Symfony's sendHeaders() only stages them with header() and PHP does not flush
+// until sendContent() emits the first body byte (see FluxFilesController::zip()).
+// Asserting Content-Type and Content-Disposition here is what keeps that true.
 test('laravel proxy: /api/fm/zip streams a zip with the right headers', async ({ page }) => {
   const fm = await openHost(page, 'laravel');
   const name = `laravel-zip-${Date.now()}.png`;
