@@ -107,13 +107,14 @@ php packages/core/tests/unit/test-db-metadata-pgsql.php
 Browser (Playwright; boots `router.php` itself) lives in `packages/core/tests/browser/`
 — includes `media-preview.spec.ts` (presigned-URL auto-refresh, claim gating).
 
-Live S3/R2 test (env-gated; skips if no bucket). Works against MinIO, AWS S3, or R2:
+Live S3/R2 test (env-gated; skips if no bucket). Works against LocalStack, AWS S3, or R2:
 
 ```bash
-FXTEST_S3_LABEL=MinIO FXTEST_S3_ENDPOINT=http://127.0.0.1:9000 \
+FXTEST_S3_LABEL=LocalStack FXTEST_S3_ENDPOINT=http://127.0.0.1:4566 \
 FXTEST_S3_REGION=us-east-1 FXTEST_S3_BUCKET=fluxfiles-test \
-FXTEST_S3_KEY=minioadmin FXTEST_S3_SECRET=minioadmin123 \
+FXTEST_S3_KEY=test FXTEST_S3_SECRET=test \
 FXTEST_S3_VISIBILITY=private FXTEST_S3_CREATE_BUCKET=1 \
+FXTEST_S3_ANON_NOT_ENFORCED=1 \
 php packages/core/tests/e2e/test-s3-live.php
 ```
 
@@ -162,7 +163,7 @@ Docker (dev/test + production):
 # Run the core suite in a clean container on a given PHP version
 make test PHP=8.4         # or: make test-all  (8.1–8.4)
 
-# Dev stack: standalone app (:8080) + MinIO (:9000, console :9001)
+# Dev stack: standalone app (:8080) + LocalStack S3 (:4566)
 make up                   # docker compose up --build
 make down
 

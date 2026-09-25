@@ -230,7 +230,7 @@ jobs:
           exit $fail
 
       # The live SFTP driver suite (not a *-http.php file, so not in the loop above).
-      # It is the counterpart to the s3-minio job: same idea, the other driver.
+      # It is the counterpart to the s3-localstack job: same idea, the other driver.
       - name: Live SFTP driver suite
         working-directory: packages/core
         run: php tests/e2e/test-sftp-live.php
@@ -249,8 +249,8 @@ jobs:
         if: always()
         run: docker rm -f ff-sftp || true
 
-  s3-minio:
-    name: Live S3 (MinIO)
+  s3-localstack:
+    name: Live S3 (LocalStack)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -267,34 +267,43 @@ jobs:
       - name: Install core dependencies
         run: composer update -d packages/core --prefer-dist --no-interaction --no-progress
 
-      # Run MinIO via `docker run` (not a service container) so we can pass the
-      # required `server /data` command — GitHub service containers can't override it,
-      # and bitnami/minio's free Docker Hub tags were removed in 2025. As of Sep 2026
-      # `minio/minio` on Docker Hub itself now 403s anonymous pulls ("pull access
-      # denied") — MinIO's own docs point at quay.io as the maintained public mirror,
-      # so pull from there instead of Docker Hub.
-      - name: Start MinIO
+      # The S3-compatible backend behind this job has moved twice because MinIO kept
+      # closing its public image: `bitnami/minio`'s free Docker Hub tags went in 2025,
+      # then `minio/minio` started 403ing anonymous pulls (Sep 2026), and now the
+      # quay.io mirror MinIO's own docs pointed at 401s too — there is no anonymous
+      # MinIO image left. LocalStack's S3 is the replacement: it pulls anonymously,
+      # and it implements the parts this suite actually exercises (multipart upload
+      # with presigned part URLs, presigned GET/PUT, per-object ACL/visibility).
+      # Kept as `docker run` + a polling loop rather than a `services:` container for
+      # the same reason as before: we wait on the readiness endpoint ourselves.
+      - name: Start LocalStack (S3)
         run: |
-          docker run -d --name minio -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin123 \
-            quay.io/minio/minio server /data
-          for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null && break
-            sleep 1
+          docker run -d --name localstack -p 4566:4566 \
+            -e SERVICES=s3 \
+            -e DEBUG=0 \
+            localstack/localstack:4
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:4566/_localstack/health | grep -q '"s3": *"\(available\|running\)"' && break
+            sleep 2
           done
+          curl -sf http://127.0.0.1:4566/_localstack/health || { echo "LocalStack did not become ready"; docker logs localstack; exit 1; }
 
-      - name: Run live S3 test against MinIO
+      - name: Run live S3 test against LocalStack
         working-directory: packages/core
         env:
-          FXTEST_S3_LABEL: MinIO
-          FXTEST_S3_ENDPOINT: http://127.0.0.1:9000
+          FXTEST_S3_LABEL: LocalStack
+          FXTEST_S3_ENDPOINT: http://127.0.0.1:4566
           FXTEST_S3_REGION: us-east-1
           FXTEST_S3_BUCKET: fluxfiles-test
-          FXTEST_S3_KEY: minioadmin
-          FXTEST_S3_SECRET: minioadmin123
+          FXTEST_S3_KEY: test
+          FXTEST_S3_SECRET: test
           FXTEST_S3_VISIBILITY: private
           FXTEST_S3_CREATE_BUCKET: '1'
+          # LocalStack stores ACLs/public-access-block but never evaluates them for
+          # anonymous requests, so the "private bucket denies an unsigned GET" check
+          # cannot pass here. Waived for the emulator only — it still runs (and must
+          # pass) against real AWS/R2, which is where the guarantee actually matters.
+          FXTEST_S3_ANON_NOT_ENFORCED: '1'
           # The container is thrown away at the end of the job, so the prefix-wide
           # directory scenarios are safe to run here. Everywhere else they need this
           # opt-in deliberately — see the guards at the top of the script.
@@ -308,23 +317,23 @@ jobs:
       - name: Directory parity (local + S3)
         working-directory: packages/core
         env:
-          FXTEST_S3_LABEL: MinIO
-          FXTEST_S3_ENDPOINT: http://127.0.0.1:9000
+          FXTEST_S3_LABEL: LocalStack
+          FXTEST_S3_ENDPOINT: http://127.0.0.1:4566
           FXTEST_S3_REGION: us-east-1
           FXTEST_S3_BUCKET: fluxfiles-test
-          FXTEST_S3_KEY: minioadmin
-          FXTEST_S3_SECRET: minioadmin123
+          FXTEST_S3_KEY: test
+          FXTEST_S3_SECRET: test
           FXTEST_S3_VISIBILITY: private
         run: php tests/integration/test-dir-parity.php
 
-      - name: MinIO log on failure
+      - name: LocalStack log on failure
         if: failure()
-        run: docker logs minio || true
+        run: docker logs localstack || true
 
   db-mysql:
     name: DB backend (MySQL)
     runs-on: ubuntu-latest
-    # Unlike atmoz/sftp and minio/minio, mysql:8's default CMD already starts the
+    # Unlike atmoz/sftp and localstack, mysql:8's default CMD already starts the
     # server correctly, so a native `services:` container (with a health check
     # GitHub Actions waits on before running steps) is the better fit here — no
     # manual `docker run` + polling loop needed.

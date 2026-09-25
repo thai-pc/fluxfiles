@@ -27,14 +27,15 @@ php tests/unit/test-claims.php
 php -S localhost:8080 router.php &        # in another shell
 bash tests/e2e/test-api.sh
 
-# Live S3/R2 (skips cleanly if no bucket configured). Works with MinIO, AWS, R2:
-FXTEST_S3_LABEL=MinIO FXTEST_S3_ENDPOINT=http://127.0.0.1:9000 \
+# Live S3/R2 (skips cleanly if no bucket configured). Works with LocalStack, AWS, R2:
+FXTEST_S3_LABEL=LocalStack FXTEST_S3_ENDPOINT=http://127.0.0.1:4566 \
 FXTEST_S3_REGION=us-east-1 FXTEST_S3_BUCKET=fluxfiles-test \
-FXTEST_S3_KEY=minioadmin FXTEST_S3_SECRET=minioadmin123 \
+FXTEST_S3_KEY=test FXTEST_S3_SECRET=test \
 FXTEST_S3_VISIBILITY=private FXTEST_S3_CREATE_BUCKET=1 \
+FXTEST_S3_ANON_NOT_ENFORCED=1 \
 php tests/e2e/test-s3-live.php
 ```
 
 Tests load `FLUXFILES_SECRET` from `.env` (repo root or `packages/core/`). It must be ≥ 32 bytes — firebase/php-jwt v7 rejects shorter HS256 keys.
 
-CI (`.github/workflows/test.yml`) runs `unit/` + `integration/` on PHP 8.1–8.4, `e2e/test-api.sh` per version, and `e2e/test-s3-live.php` against a MinIO container.
+CI (`.github/workflows/test.yml`) runs `unit/` + `integration/` on PHP 8.1–8.4, `e2e/test-api.sh` per version, and `e2e/test-s3-live.php` against a LocalStack container.

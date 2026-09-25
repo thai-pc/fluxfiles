@@ -128,7 +128,7 @@ php packages/core/tests/unit/test-i18n.php
 cd packages/core/tests/browser && npx playwright test
 # HTTP e2e (needs a server on :8080) — not idempotent, clean storage/uploads/_api_test_dir between runs
 bash packages/core/tests/e2e/test-api.sh
-# Live S3 + Bucket Doctor (env-gated; CI runs it against MinIO)
+# Live S3 + Bucket Doctor (env-gated; CI runs it against LocalStack)
 FXTEST_S3_* ... php packages/core/tests/e2e/test-s3-live.php
 # Wrapper packages
 cd packages/<react|vue|sdk|ckeditor4|tinymce|summernote|node> && npm install && npm test
@@ -138,7 +138,7 @@ php packages/laravel/tests/test-laravel-smoke.php
 ```
 
 CI is `.github/workflows/test.yml` (15 jobs: core-php, adapter-core-floor,
-iframe-allow, api-e2e, selfboot-e2e, s3-minio, db-mysql, db-postgres, wrappers,
+iframe-allow, api-e2e, selfboot-e2e, s3-localstack, db-mysql, db-postgres, wrappers,
 node-sdk, python-token, browser-e2e, editor-e2e, pack-smoke, docker-build). `selfboot-e2e` runs
 every `tests/e2e/*-http.php` (each boots its own `php -S`) plus `test-sftp-live.php`
 against an `atmoz/sftp` container. `db-mysql`/`db-postgres` run the

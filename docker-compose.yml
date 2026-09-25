@@ -1,5 +1,5 @@
-# Local dev/test stack: the FluxFiles standalone app + a MinIO S3 backend.
-#   docker compose up        → app at http://localhost:8080, MinIO at :9000 (console :9001)
+# Local dev/test stack: the FluxFiles standalone app + a LocalStack S3 backend.
+#   docker compose up        → app at http://localhost:8080, S3 at :4566
 services:
   app:
     build:
@@ -20,21 +20,25 @@ services:
       FLUXFILES_RATE_LIMIT_READ: "100000"
       FLUXFILES_RATE_LIMIT_WRITE: "100000"
     depends_on:
-      - minio
+      - s3
 
-  minio:
-    # Docker Hub's `minio/minio` now denies anonymous pulls — use MinIO's
-    # maintained quay.io mirror instead (see .github/workflows/test.yml).
-    image: quay.io/minio/minio
-    command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+  s3:
+    # S3-compatible backend for local dev. This used to be MinIO, but MinIO closed
+    # its public images twice (bitnami/minio's free Docker Hub tags in 2025, then
+    # minio/minio itself 403ing anonymous pulls in Sep 2026) and the quay.io mirror
+    # its docs pointed at now 401s too — there is no anonymous MinIO image left.
+    # LocalStack pulls anonymously and implements what this repo exercises
+    # (multipart + presigned URLs + per-object visibility). Same swap as CI's
+    # `s3-localstack` job — see .github/workflows/test.yml.
+    #   credentials: test / test    endpoint: http://localhost:4566
+    image: localstack/localstack:4
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      SERVICES: s3
+      DEBUG: "0"
+    ports:
+      - "4566:4566"
     volumes:
-      - minio-data:/data
+      - s3-data:/var/lib/localstack
 
 volumes:
-  minio-data:
+  s3-data:

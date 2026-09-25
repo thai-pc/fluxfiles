@@ -6,7 +6,7 @@
  * The folder-rename data loss was not a one-off, it was an instance of a class: an
  * operation that touches a directory behaves differently on a driver with real
  * directories (local, sftp) than on one where a directory is only a key prefix
- * (s3, r2, MinIO, BYOB) — and nothing forced the two to agree. That class has already
+ * (s3, r2, LocalStack, BYOB) — and nothing forced the two to agree. That class has already
  * produced two mirror-image failures in ONE operation (rename destroyed empty folders
  * on local; move threw a raw 500 on object stores), which is the signal for a matrix
  * rather than one more per-bug regression test.
@@ -18,7 +18,7 @@
  *
  * Drivers:
  *   local          always.
- *   s3             when FXTEST_S3_* is set. MinIO in CI (job `s3-minio`), the real S3
+ *   s3             when FXTEST_S3_* is set. LocalStack in CI (job `s3-localstack`), the real S3
  *                  API through the same AwsS3V3Adapter.
  *   sftp           when FXTEST_SFTP_* is set. atmoz/sftp in CI (job `selfboot-e2e`).
  *
@@ -27,7 +27,7 @@
  * routes metadata to real S3 object metadata whenever the driver is `s3`, so every
  * scenario that uploads a file needs a live client. A stand-in that cannot upload would
  * cover only the pure-directory cases while reading, in a green run, as though it covered
- * everything. MinIO in CI is the real API through the same adapter, so it is both cheaper
+ * everything. LocalStack in CI is the real S3 API surface through the same adapter, so it is both cheaper
  * and honest to require it.
  *
  * Usage:
@@ -80,7 +80,7 @@ $DRIVERS[] = ['label' => 'local', 'make' => static function (): array {
     return mk($dm);
 }];
 
-// ── s3 (real; MinIO in CI) ───────────────────────────────────────────────────
+// ── s3 (real; LocalStack in CI) ──────────────────────────────────────────────
 if ((getenv('FXTEST_S3_BUCKET') ?: '') !== '') {
     $DRIVERS[] = ['label' => 's3:' . (getenv('FXTEST_S3_LABEL') ?: 'live'), 'make' => static function (): array {
         $cfg = [

@@ -3,18 +3,23 @@
 /**
  * Live S3/R2 test — runs the real upload/list/presign/visibility/delete flow
  * against any S3-compatible backend. Parametrised by env so the same script
- * covers MinIO (local Docker), AWS S3, and Cloudflare R2.
+ * covers LocalStack (local Docker), AWS S3, and Cloudflare R2.
  *
  * Required env (skips cleanly if bucket/key missing):
- *   FXTEST_S3_LABEL        display name (e.g. "MinIO", "AWS S3", "R2")
+ *   FXTEST_S3_LABEL        display name (e.g. "LocalStack", "AWS S3", "R2")
  *   FXTEST_S3_BUCKET       bucket name
  *   FXTEST_S3_KEY          access key
  *   FXTEST_S3_SECRET       secret key
  *   FXTEST_S3_REGION       region (default us-east-1 / auto)
- *   FXTEST_S3_ENDPOINT     custom endpoint (empty for AWS; set for MinIO/R2)
+ *   FXTEST_S3_ENDPOINT     custom endpoint (empty for AWS; set for LocalStack/R2)
  *   FXTEST_S3_VISIBILITY   private (default) | public
  *   FXTEST_S3_PUBLIC_URL   optional CDN/custom-domain base
- *   FXTEST_S3_CREATE_BUCKET 1 → create bucket if missing (MinIO)
+ *   FXTEST_S3_CREATE_BUCKET 1 → create bucket if missing (LocalStack)
+ *   FXTEST_S3_ANON_NOT_ENFORCED 1 → waive the "private bucket denies an unsigned
+ *                          GET" assertion, for an emulator that stores ACL /
+ *                          public-access-block but never evaluates them for
+ *                          anonymous reads (LocalStack). Never set this for
+ *                          AWS/R2 — there the assertion is the real guarantee.
  *
  * THIS SCRIPT DELETES OBJECTS. Everything it writes lives under a run-unique prefix
  * `fluxfiles-livetest/<utc>-<rand>/` and every delete is asserted to fall inside it,
@@ -26,7 +31,7 @@
  *                                        disposable" refusal
  *
  * Usage:
- *   FXTEST_S3_LABEL=MinIO FXTEST_S3_BUCKET=... php tests/test-s3-live.php
+ *   FXTEST_S3_LABEL=LocalStack FXTEST_S3_BUCKET=... php tests/test-s3-live.php
  */
 
 declare(strict_types=1);
@@ -63,7 +68,7 @@ if ($bucket === '' || $key === '' || $secret === '') {
 
 // ══ Destructive-run guards ═══════════════════════════════════════════════════
 //
-// This script WRITES AND DELETES. It is normally pointed at a throwaway MinIO, but
+// This script WRITES AND DELETES. It is normally pointed at a throwaway LocalStack, but
 // the same env names work against real AWS/R2, and a developer with working
 // credentials in their shell is one command away from running it at production. The
 // guards below are ordered cheapest-first and each closes a different way that goes
@@ -130,7 +135,7 @@ $diskCfg = [
 ];
 if ($endpoint !== '') { $diskCfg['endpoint'] = $endpoint; }
 
-// Optionally create the bucket (MinIO).
+// Optionally create the bucket (LocalStack).
 if ($createBucket) {
     $s3p = ['credentials' => ['key' => $key, 'secret' => $secret], 'region' => $region, 'version' => 'latest'];
     if ($endpoint !== '') { $s3p['endpoint'] = $endpoint; $s3p['use_path_style_endpoint'] = true; }
@@ -203,7 +208,19 @@ test('object URL loads over HTTP → 200', function () use (&$uploadedUrl) {
     assertTrue($code === 200, "expected 200, got {$code}");
 });
 
-if ($visibility === 'private') {
+// This is a real security assertion (a private bucket must not serve objects to
+// anonymous clients), so it stays on by default and is only waived for a backend
+// that provably cannot enforce it. LocalStack's S3 is one: it accepts and stores
+// ACLs and PublicAccessBlock, but does not evaluate them for anonymous requests —
+// an object with a private ACL under BlockPublicAcls/RestrictPublicBuckets still
+// answers an unsigned GET with 200. Waiving it against an emulator is not the same
+// as waiving it against AWS/R2, where it must keep passing.
+$anonUnenforced = getenv('FXTEST_S3_ANON_NOT_ENFORCED') === '1';
+
+if ($visibility === 'private' && $anonUnenforced) {
+    echo "  {$yellow}SKIP{$reset} raw (unsigned) URL denial — FXTEST_S3_ANON_NOT_ENFORCED=1\n";
+    echo "  (backend does not evaluate ACL/public-access-block for anonymous reads)\n";
+} elseif ($visibility === 'private') {
     test('raw (unsigned) URL on private bucket → 403/401/404 (not public)', function () use ($bucket, $endpoint, $region, &$uploadedKey) {
         $raw = $endpoint !== ''
             ? rtrim($endpoint, '/') . '/' . $bucket . '/' . $uploadedKey
@@ -444,7 +461,15 @@ test('B3: chunk complete rejects oversized parts before replacing the original',
     }
     assertTrue($threw, 'expected 413 upload_too_large from the real-size re-check');
     assertEqual('original', $dm->disk('s3test')->read($key), 'rejection must preserve original bytes');
-    assertTrue($meta->get('s3test', $key) === null, 'no metadata saved for the rejected object');
+    // The original object survives the rejection (asserted just above), so on S3/R2
+    // a HeadObject still succeeds and get() returns an all-null array rather than
+    // null — same emptiness-vs-absence distinction as the pre-existing-object test.
+    // What must hold is that the rejected upload saved no FluxFiles metadata.
+    $rejected = $meta->get('s3test', $key);
+    assertTrue(
+        $rejected === null || empty(array_filter($rejected, fn ($v) => $v !== null && $v !== '')),
+        'no metadata saved for the rejected object'
+    );
     $chunker->abort('s3test', $key, $init['upload_id']);
     $chunker->deleteObject('s3test', $key);
 });

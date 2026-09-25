@@ -134,7 +134,7 @@ release version (e.g. `0.2.81`), and its minor line (e.g. `0.2`), for
 instead of `latest` if you want reproducible deploys; check
 [the package page](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
 for the current version. To build from the monorepo instead: `docker compose up`
-(app + MinIO) or `make up`.
+(app + LocalStack S3) or `make up`.
 
 > A non-PHP backend? Run this image as your file service and mint tokens with
 > [`@fluxfiles/node`](packages/node) (JS/TS) or [`fluxfiles-token`](packages/python)
@@ -1402,7 +1402,7 @@ Mitigations regardless of delivery:
 # Core PHP — unit + integration suite
 for f in packages/core/tests/unit/*.php packages/core/tests/integration/*.php; do php "$f"; done
 
-# API e2e (boots a dev server) + env-gated live S3/R2 (MinIO/AWS/R2)
+# API e2e (boots a dev server) + env-gated live S3/R2 (LocalStack/AWS/R2)
 cd packages/core && php -S 127.0.0.1:8080 router.php &
 bash packages/core/tests/e2e/test-api.sh
 
@@ -1415,7 +1415,7 @@ php packages/laravel/tests/test-laravel-smoke.php   # (and wordpress)
 bash scripts/pack-smoke.sh all                       # verifies the published dist/types
 
 # Docker — clean-container runs across a PHP matrix
-make test PHP=8.4   # one version  ·  make test-all  # 8.1–8.4  ·  make up  # app:8080 + MinIO:9000
+make test PHP=8.4   # one version  ·  make test-all  # 8.1–8.4  ·  make up  # app:8080 + S3:4566
 ```
 
 `.github/workflows/test.yml` runs all of this (15 jobs, including dedicated

@@ -3,6 +3,37 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed — CI/dev: S3 backend moved from MinIO to LocalStack
+
+- The `Live S3 (MinIO)` job (and `docker-compose.yml` / `make s3-minio`) could
+  no longer pull an image. MinIO has closed its public distribution three times
+  now: `bitnami/minio`'s free Docker Hub tags went in 2025, `minio/minio`
+  started 403ing anonymous pulls in Sep 2026, and the `quay.io/minio/minio`
+  mirror MinIO's own docs point at now 401s for anonymous clients too — there
+  is no anonymous MinIO image left to pull.
+- Replaced with LocalStack's S3 (`localstack/localstack:4`, anonymous pull),
+  which implements what this suite actually exercises: multipart upload with
+  presigned part URLs, presigned GET/PUT, and per-object visibility. The CI job
+  is now `s3-localstack`, the compose service is `s3` on `:4566` (credentials
+  `test`/`test`), and the Makefile target is `make s3-local`. No application
+  code changed — only test/dev infrastructure and the docs that named MinIO.
+- Two assertions in `test-s3-live.php` needed adjusting for the new backend:
+  - The private-bucket "unsigned GET is denied" check is now waivable via
+    `FXTEST_S3_ANON_NOT_ENFORCED=1` (set for the LocalStack job only).
+    LocalStack stores ACLs and public-access-block settings but never evaluates
+    them for anonymous requests, so a private object still answers an unsigned
+    GET with 200. The assertion still runs, and must pass, against real AWS/R2.
+  - `B3: chunk complete rejects oversized parts` asserted
+    `$meta->get(...) === null` for the rejected key. That was always too strict
+    on S3: the test writes `original` to the key first and the assertion above
+    it requires those bytes to survive, so HeadObject still succeeds and
+    `getFromS3()` returns an all-null array rather than `null`. It now asserts
+    that no FluxFiles metadata was saved, matching the existing
+    pre-existing-object test's emptiness-vs-absence handling. MinIO happened to
+    mask this; the check is stricter and more accurate now.
+
 ## [0.3.11] — 2026-09-14
 
 > Released: `core-v0.2.87`, `sdk-v0.2.8`, `python-v0.1.1`, `ckeditor4-v0.3.4`,
