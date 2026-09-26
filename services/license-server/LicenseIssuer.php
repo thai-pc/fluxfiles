@@ -19,8 +19,7 @@ final class LicenseIssuer
     /**
      * Issue a license for a purchase. Idempotent on (gateway, order_id) via the store.
      *
-     * @param array{email:string,plan:string,customer?:string,gateway?:string,order_id?:string,
-     *              sites?:int,domains?:string[]} $order
+     * @param array{email:string,plan:string,customer?:string,gateway?:string,order_id?:string} $order
      * @return array{key:string, record:array<string,mixed>, reused:bool}
      */
     public function issue(array $order): array
@@ -48,10 +47,8 @@ final class LicenseIssuer
             'edition'     => (string) $plan['edition'],
             'modules'     => (array) $plan['modules'],
             'enforcement' => (string) $plan['enforcement'],
-            'sites'       => (int) ($order['sites'] ?? $plan['sites']),
             'ttlDays'     => $plan['ttlDays'],
             'graceDays'   => (int) ($plan['graceDays'] ?? 14),
-            'domains'     => $order['domains'] ?? [],
         ]);
         $p = $minted['payload'];
 
@@ -66,7 +63,6 @@ final class LicenseIssuer
             'plan'        => $planId,
             'edition'     => $p['edition'],
             'modules'     => $p['modules'],
-            'sites'       => $p['limits']['sites'],
             'enforcement' => $p['enforcement'],
             'issued'      => $p['issued'],
             'expires'     => $p['expires'] ?? null,

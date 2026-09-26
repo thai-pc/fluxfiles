@@ -80,7 +80,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/usage?disk=&refresh=` | — | **Usage dashboard** — quota + per-type and per-folder breakdown (file-cached; `refresh=true` recomputes, tight bucket) |
 | `GET` | `/audit?limit=&offset=&action=&from=&to=&path=&actor=` | `limit` default 100 | Activity log, **scoped to the token's prefix**. Requires the `audit` permission (403 otherwise). |
 | `GET` | `/disk/doctor?disk=&origin=` | — | **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write`. |
-| `GET` | `/license` | — | Server's commercial edition/status: `{edition, status, modules, limits, expires, days_left}`. Free MIT core → `{edition:'free'}` |
+| `GET` | `/license` | — | Server's commercial edition/status: `{edition, status, modules, expires, days_left}`. Free MIT core → `{edition:'free'}` |
 | `GET` | `/compliance/scorecard` | — | **Compliance Readiness Scorecard** (**free/core**) — read-only checklist across virus scan / C2PA / audit export / SSO / DLP / legal hold; every paid row reports `available: false` on an unlicensed server instead of erroring. Requires the `audit` permission |
 | `GET` | `/hold/status?disk=&path=` | — | **Legal hold status** (**free/core**) — whether a path is currently on hold. Requires `read`; `reason`/`placed_by`/`placed_at` are only included with the `audit` permission |
 

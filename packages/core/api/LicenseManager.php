@@ -17,7 +17,7 @@ namespace FluxFiles;
  *     base64url(headerJson) . base64url(payloadJson) . base64url(ed25519_sig)
  *
  *   header  = {"alg":"Ed25519","kid":"k1"}
- *   payload = {customer, edition, modules[], limits{}, domains[], issued, expires, grace}
+ *   payload = {customer, edition, modules[], issued, expires, grace, jti}
  *   sig     = Ed25519 over the ASCII "base64url(header).base64url(payload)"
  *
  * Absent / malformed / bad-signature / unknown-kid → treated as the free edition
@@ -252,19 +252,6 @@ class LicenseManager
         return $exp === null ? null : (int) floor(($exp - $this->now) / 86400);
     }
 
-    /** @return array<string,int> e.g. ['sites'=>5,'seats'=>0] */
-    public function limits(): array
-    {
-        if (!$this->verified || !isset($this->claims['limits']) || !is_array($this->claims['limits'])) {
-            return [];
-        }
-        $out = [];
-        foreach ($this->claims['limits'] as $k => $v) {
-            $out[(string) $k] = (int) $v;
-        }
-        return $out;
-    }
-
     /** A non-sensitive summary for the /api/fm/license endpoint + dashboards. */
     public function info(): array
     {
@@ -273,7 +260,6 @@ class LicenseManager
             'status'         => $this->status(),
             'enforcement'    => $this->enforcement(),
             'modules'        => $this->modules(),
-            'limits'         => $this->limits(),
             'expires'        => $this->expiresAt(),
             'days_left'      => $this->daysLeft(),
             'updates_allowed' => $this->updatesAllowed(),

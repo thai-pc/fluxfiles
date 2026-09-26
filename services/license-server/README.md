@@ -66,7 +66,7 @@ returns the same key rather than minting a second one.
 |---|---|---|---|
 | POST | `/webhook/polar` | Standard Webhooks sig | Issue on `order.paid`, then email the key |
 | GET | `/claim?order_id=` | none (see below) | Hand the key to the checkout success page |
-| POST | `/issue` | Bearer admin | Manual issue `{email, plan, sites?, domains?}` |
+| POST | `/issue` | Bearer admin | Manual issue `{email, plan, customer?, order_id?}` |
 | GET | `/licenses[?email=]` | Bearer admin | List / lookup |
 | POST | `/revoke` | Bearer admin | `{jti, status}` mark revoked/refunded |
 | POST | `/update-status` | Bearer update-status token | `{jti}` → `{active: bool}` for the update server |
@@ -88,9 +88,10 @@ keys remain valid for lifetime updates; this policy applies only to newly issued
 - **Revoke** sets a DB status. Offline runtime verification cannot retroactively kill
   a key already in the wild, but the update server calls `/update-status` with its
   separate machine credential, so a revoked/refunded key cannot pull new builds.
-- **Device limits**: offline can't hard-cap installs. Use the `sites`/`domains` soft
-  warning + the update-channel gate; add an online activation counter only if you must
-  (breaks the air-gap promise → make it per-license opt-in).
+- **Device limits**: offline can't hard-cap installs, and the key carries no
+  site/domain fields (removed 2026-09-26 — nothing read them, every plan is unlimited
+  sites). The update-channel gate is the lever; add an online activation counter only
+  if you must (breaks the air-gap promise → make it per-license opt-in).
 
 ## Renewal reminders (cron)
 

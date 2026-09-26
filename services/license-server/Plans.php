@@ -6,7 +6,7 @@ namespace FluxFiles\LicenseServer;
 
 /**
  * Maps a plan id (your product/variant slug) → the license payload shape
- * (edition, modules, sites, ttl, enforcement). This is the single place that
+ * (edition, modules, ttl, enforcement). This is the single place that
  * encodes what each tier unlocks — mirror it in your checkout products.
  *
  * Override/extend via a JSON file at FLUXFILES_LICENSE_PLANS (same shape).
@@ -22,7 +22,7 @@ final class Plans
         'pro' => [
             'edition' => 'pro',
             'modules' => ['share', 'intake'],
-            'sites' => 0, 'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
+            'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
         ],
         // A recurring convenience plan. Seven days is a payment-recovery window,
         // not a data-retention policy: expiry never deletes a customer's files or
@@ -30,24 +30,24 @@ final class Plans
         'pro-monthly' => [
             'edition' => 'pro',
             'modules' => ['share', 'intake'],
-            'sites' => 0, 'ttlDays' => 31, 'graceDays' => 7, 'enforcement' => 'subscription',
+            'ttlDays' => 31, 'graceDays' => 7, 'enforcement' => 'subscription',
         ],
         // Studio = Pro + versioning + webhooks + AI/OCR (BYO-key).
         'studio' => [
             'edition' => 'studio',
             'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'],
-            'sites' => 0, 'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
+            'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
         ],
         'studio-monthly' => [
             'edition' => 'studio',
             'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'],
-            'sites' => 0, 'ttlDays' => 31, 'graceDays' => 7, 'enforcement' => 'subscription',
+            'ttlDays' => 31, 'graceDays' => 7, 'enforcement' => 'subscription',
         ],
         // Enterprise = everything incl. the compliance bundle.
         'enterprise' => [
             'edition' => 'enterprise',
             'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr', 'virus', 'backup', 'c2pa', 'audit-export', 'sso', 'dlp', 'legal-hold'],
-            'sites' => 0, 'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
+            'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
         ],
         // Marketing name retained for checkout compatibility. It means lifetime
         // *use*, plus 12 months of updates/support — not lifetime updates. Existing
@@ -55,7 +55,7 @@ final class Plans
         'lifetime' => [
             'edition' => 'studio',
             'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'],
-            'sites' => 0, 'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
+            'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
         ],
         // Support = a pure service commitment (no code, no module) — see
         // docs/ROADMAP.md Phase 4 #10. modules=[] means LicenseManager::licensed()
@@ -65,12 +65,12 @@ final class Plans
         'support' => [
             'edition' => 'support',
             'modules' => [],
-            'sites' => 0, 'ttlDays' => 365, 'graceDays' => 7, 'enforcement' => 'subscription',
+            'ttlDays' => 365, 'graceDays' => 7, 'enforcement' => 'subscription',
         ],
         'support-monthly' => [
             'edition' => 'support',
             'modules' => [],
-            'sites' => 0, 'ttlDays' => 31, 'graceDays' => 7, 'enforcement' => 'subscription',
+            'ttlDays' => 31, 'graceDays' => 7, 'enforcement' => 'subscription',
         ],
     ];
 

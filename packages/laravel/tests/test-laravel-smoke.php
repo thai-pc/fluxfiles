@@ -721,7 +721,7 @@ test('licenseInfo() returns exactly what a direct \\FluxFiles\\LicenseManager::f
     $actual = $mgr->licenseInfo();
     assertEqual($expected, $actual, 'licenseInfo() must mirror the direct core call, not reimplement or wrap it differently');
     assertEqual('free', $actual['edition'] ?? null, 'no FLUXFILES_LICENSE_KEY in this env -> free edition');
-    foreach (['status', 'enforcement', 'modules', 'limits', 'expires', 'days_left', 'updates_allowed'] as $key) {
+    foreach (['status', 'enforcement', 'modules', 'expires', 'days_left', 'updates_allowed'] as $key) {
         assertTrue(array_key_exists($key, $actual), "info() shape includes '{$key}'");
     }
 });

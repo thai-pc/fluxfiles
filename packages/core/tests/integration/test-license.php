@@ -57,7 +57,7 @@ test('no key → free edition (core must run unlicensed)', function () use ($KEY
 test('valid Pro license → edition + modules + active status', function () use ($SEC, $KEYS, $NOW) {
     $key = mintLicense($SEC, [
         'customer' => 'acme', 'jti' => str_repeat('a', 24), 'edition' => 'pro', 'modules' => ['optimize', 'share'],
-        'limits' => ['sites' => 5], 'issued' => $NOW - 86400, 'expires' => $NOW + 30 * 86400,
+        'issued' => $NOW - 86400, 'expires' => $NOW + 30 * 86400,
     ]);
     $l = new LicenseManager($key, $KEYS, $NOW);
     assertEqual('pro', $l->edition());
@@ -65,7 +65,6 @@ test('valid Pro license → edition + modules + active status', function () use 
     assertTrue($l->licensed('optimize'), 'optimize licensed');
     assertTrue($l->licensed('share'), 'share licensed');
     assertFalse($l->licensed('ai'), 'ai not in modules');
-    assertEqual(['sites' => 5], $l->limits());
     assertEqual(str_repeat('a', 24), $l->id(), 'opaque licence id');
     assertEqual(30, $l->daysLeft());
 });
@@ -173,10 +172,23 @@ test('perpetual license (no expires) → active forever', function () use ($SEC,
     assertTrue($l->updatesAllowed(), 'no expiry → updates always allowed');
 });
 
+test('a key minted before limits/domains were dropped still verifies', function () use ($SEC, $KEYS, $NOW) {
+    // Keys already in customers' hands carry `limits` and `domains`. Nothing reads
+    // them any more, but an unknown payload field must never make a valid key fail.
+    $key = mintLicense($SEC, [
+        'edition' => 'pro', 'modules' => ['share'], 'expires' => $NOW + 86400,
+        'limits' => ['sites' => 5], 'domains' => ['acme.com'],
+    ]);
+    $l = new LicenseManager($key, $KEYS, $NOW);
+    assertEqual('pro', $l->edition(), 'legacy key still verifies');
+    assertTrue($l->licensed('share'), 'its modules still resolve');
+    assertTrue(!array_key_exists('limits', $l->info()), 'the dropped field is not resurrected in info()');
+});
+
 test('info() returns a non-sensitive summary', function () use ($SEC, $KEYS, $NOW) {
-    $l = new LicenseManager(mintLicense($SEC, ['customer' => 'acme', 'edition' => 'agency', 'modules' => ['optimize', 'share'], 'limits' => ['sites' => 10], 'expires' => $NOW + 5 * 86400]), $KEYS, $NOW);
+    $l = new LicenseManager(mintLicense($SEC, ['customer' => 'acme', 'edition' => 'agency', 'modules' => ['optimize', 'share'], 'expires' => $NOW + 5 * 86400]), $KEYS, $NOW);
     $i = $l->info();
-    assertEqual(['edition', 'status', 'enforcement', 'modules', 'limits', 'expires', 'days_left', 'updates_allowed'], array_keys($i));
+    assertEqual(['edition', 'status', 'enforcement', 'modules', 'expires', 'days_left', 'updates_allowed'], array_keys($i));
     assertEqual('agency', $i['edition']);
     assertEqual(5, $i['days_left']);
     assertTrue(!array_key_exists('customer', $i), 'customer name not leaked');

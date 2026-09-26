@@ -38,7 +38,6 @@ final class LicenseStore
             plan        TEXT,
             edition     TEXT,
             modules     TEXT,
-            sites       INTEGER DEFAULT 0,
             enforcement TEXT,
             issued      INTEGER,
             expires     INTEGER,
@@ -106,8 +105,8 @@ final class LicenseStore
             }
         }
         $stmt = $this->db->prepare('INSERT INTO licenses
-            (jti,email,customer,plan,edition,modules,sites,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days)
-            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:sites,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days)');
+            (jti,email,customer,plan,edition,modules,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days)
+            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days)');
         $row = [
             'jti'         => (string) $rec['jti'],
             'email'       => (string) $rec['email'],
@@ -115,7 +114,6 @@ final class LicenseStore
             'plan'        => (string) ($rec['plan'] ?? ''),
             'edition'     => (string) ($rec['edition'] ?? ''),
             'modules'     => implode(',', (array) ($rec['modules'] ?? [])),
-            'sites'       => (int) ($rec['sites'] ?? 0),
             'enforcement' => (string) ($rec['enforcement'] ?? 'perpetual'),
             'issued'      => (int) ($rec['issued'] ?? time()),
             'expires'     => isset($rec['expires']) ? (int) $rec['expires'] : null,

@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Removed — `limits.sites` and `domains` are gone from the licence payload
+
+- Both were minted by `license-gen` / `LicenseSigner`, persisted by
+  `LicenseStore`, and returned to the browser in `GET /api/fm/license` — and read
+  by nothing. Every plan in `Plans.php` sold `sites => 0` (unlimited), and no
+  code anywhere compared a request against either field, so they were signed
+  dead weight that implied an enforcement the product never performed.
+  `LicenseManager::limits()` and the `limits` key of `info()` are removed, along
+  with the `--sites` / `--domains` flags, the `/issue` body fields and the
+  `sites` column. Keys already in customers' hands still verify unchanged —
+  unknown payload fields were always ignored, and a regression test now pins
+  that. `docs/ROADMAP.md`'s planned "soft site/domain warning" anti-piracy
+  control is withdrawn with them: the update channel's `updatesAllowed()` plus
+  the licence server's per-`jti` revocation check is the lever that actually
+  works. An online activation server, if ever built, would mint a site-count
+  field back in deliberately.
+
 ## [0.3.15] — 2026-09-26
 
 > Released: `wordpress-v0.2.51`.

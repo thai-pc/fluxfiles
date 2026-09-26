@@ -217,7 +217,6 @@ try {
             'email' => (string) ($b['email'] ?? ''), 'plan' => (string) ($b['plan'] ?? ''),
             'customer' => (string) ($b['customer'] ?? ''), 'gateway' => 'manual',
             'order_id' => (string) ($b['order_id'] ?? ('manual-' . bin2hex(random_bytes(6)))),
-            'sites' => (int) ($b['sites'] ?? 0), 'domains' => (array) ($b['domains'] ?? []),
         ]);
         respond(200, ['license_key' => $res['key'], 'record' => $res['record']]);
     }

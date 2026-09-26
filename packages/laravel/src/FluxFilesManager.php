@@ -570,7 +570,7 @@ class FluxFilesManager
      * `\FluxFiles\LicenseManager` is always available class-side — unlike
      * endpoint()/iframeSrc() above, this method needs no mode branching.
      *
-     * @return array{edition:string,status:string,enforcement:string,modules:array<int,string>,limits:array<string,mixed>,expires:?int,days_left:?int,updates_allowed:bool}
+     * @return array{edition:string,status:string,enforcement:string,modules:array<int,string>,expires:?int,days_left:?int,updates_allowed:bool}
      */
     public function licenseInfo(): array
     {

@@ -18,7 +18,7 @@
  *   FLUXFILES_LICENSE_PRIVATE_KEY=<base64-secret> \
  *   php scripts/license-gen.php \
  *     --customer="Acme Co" --edition=pro --modules=optimize,share \
- *     --enforcement=perpetual --expires=+365d --sites=5 --kid=k1
+ *     --enforcement=perpetual --expires=+365d --kid=k1
  *   → prints the license token (the FLUXFILES_LICENSE_KEY you give the customer)
  *
  * Flags:
@@ -28,8 +28,6 @@
  *   --enforcement=perpetual|subscription   (default perpetual)
  *   --expires=+365d|+30d|none|<unixts>     (none = lifetime/no expiry; default +365d)
  *   --grace=14d            grace window after expiry (default 14d; subscription only)
- *   --sites=N              limits.sites (0 = unlimited)
- *   --domains=a.com,b.com  soft domain binding (advisory)
  *   --kid=k1               signing key id (must match LicenseManager + the secret)
  *   --jti=HEX24            pin the licence id (default: random) — record it, the
  *                          update server asks the licence server about this id
@@ -127,7 +125,6 @@ $payload = [
     'edition'     => $edition,
     'modules'     => $modules,
     'enforcement' => $enforcement,
-    'limits'      => ['sites' => (int) ($opts['sites'] ?? 0)],
     'issued'      => time(),
     // Unique licence id. NOT optional: the update server refuses to serve a build
     // for a key that carries none (it has nothing to ask the licence server about
@@ -140,10 +137,6 @@ if ($expires !== null) {
     $payload['expires'] = $expires;
     $payload['grace'] = $grace;
 }
-if (!empty($opts['domains']) && is_string($opts['domains'])) {
-    $payload['domains'] = array_values(array_filter(array_map('trim', explode(',', $opts['domains']))));
-}
-
 // ── sign ────────────────────────────────────────────────────────────────────
 $header = $b64url((string) json_encode(['alg' => 'Ed25519', 'kid' => $kid]));
 $body   = $b64url((string) json_encode($payload));

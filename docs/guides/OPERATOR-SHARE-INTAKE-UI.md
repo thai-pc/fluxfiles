@@ -123,7 +123,7 @@ line (§4.2). All are **operator-authed** (`Authorization: Bearer <main JWT>`) a
 | POST | `/api/fm/intake` | `{disk, path, ttl?, label?, password?, max_files?, max_mb?, allowed_ext?}` | `{token, jti, expires, label, max_files, max_mb, allowed_ext, has_password, url*}` |
 | GET | `/api/fm/intake/list?disk=` | — | `[{jti, disk, path, label, created, expires, max_files, max_mb, allowed_ext, received}]` |
 | POST | `/api/fm/intake/revoke` | `{disk, jti}` | `{revoked: bool}` |
-| GET | `/api/fm/license` | — | `{edition, status, modules[], limits, expires, days_left}` |
+| GET | `/api/fm/license` | — | `{edition, status, modules[], expires, days_left}` |
 
 `*` `url` on intake does not exist today — §4.2.
 

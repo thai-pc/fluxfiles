@@ -78,13 +78,12 @@ test('genkey produces a usable Ed25519 keypair', function () use ($PUB, $SEC) {
 });
 
 test('minted Pro license verifies + carries fields', function () use ($SEC, $KEYS) {
-    $token = gen(['--edition=pro', '--modules=optimize,share', '--enforcement=perpetual', '--expires=+365d', '--sites=5', '--customer=Acme'], $SEC);
+    $token = gen(['--edition=pro', '--modules=optimize,share', '--enforcement=perpetual', '--expires=+365d', '--customer=Acme'], $SEC);
     $l = new LicenseManager($token, $KEYS);
     assertEqual('pro', $l->edition());
     assertEqual(['optimize', 'share'], $l->modules());
     assertEqual('perpetual', $l->enforcement());
     assertTrue($l->licensed('optimize'), 'optimize licensed');
-    assertEqual(5, $l->limits()['sites'] ?? null, 'sites limit');
     assertTrue($l->expiresAt() !== null, 'has expiry');
     assertTrue(!array_key_exists('customer', $l->info()), 'customer not leaked in info()');
 });

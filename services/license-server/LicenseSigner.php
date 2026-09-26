@@ -10,7 +10,7 @@ namespace FluxFiles\LicenseServer;
  *
  *     base64url(header).base64url(payload).base64url(ed25519_sig)
  *     header  = {"alg":"Ed25519","kid":"k1"}
- *     payload = {customer,edition,modules[],enforcement,limits{},issued,[expires,grace],[domains],jti}
+ *     payload = {customer,edition,modules[],enforcement,issued,[expires,grace],jti}
  *
  * The private key is the 64-byte Ed25519 secret (base64), loaded from a file
  * (FLUXFILES_LICENSE_PRIVATE_KEY_FILE) or the raw env (FLUXFILES_LICENSE_PRIVATE_KEY).
@@ -50,7 +50,7 @@ final class LicenseSigner
      * Mint a license. Returns ['key' => <signed key>, 'payload' => <array>].
      *
      * @param array{customer?:string,edition?:string,modules?:string[],enforcement?:string,
-     *              sites?:int,ttlDays?:?int,graceDays?:int,domains?:string[]} $opts
+     *              ttlDays?:?int,graceDays?:int} $opts
      * @return array{key:string,payload:array<string,mixed>}
      */
     public function mint(array $opts): array
@@ -64,7 +64,6 @@ final class LicenseSigner
             'edition'     => (string) ($opts['edition'] ?? 'pro'),
             'modules'     => array_values(array_map('strval', $opts['modules'] ?? [])),
             'enforcement' => (($opts['enforcement'] ?? 'perpetual') === 'subscription') ? 'subscription' : 'perpetual',
-            'limits'      => ['sites' => (int) ($opts['sites'] ?? 0)],
             'issued'      => $now,
             'jti'         => bin2hex(random_bytes(12)), // unique id for tracking/revoke
         ];
@@ -74,10 +73,6 @@ final class LicenseSigner
             // needed when expiry only ends updates/support.
             $payload['grace']   = max(0, (int) ($opts['graceDays'] ?? 14)) * 86400;
         }
-        if (!empty($opts['domains'])) {
-            $payload['domains'] = array_values(array_map('strval', $opts['domains']));
-        }
-
         $h = self::b64url((string) json_encode(['alg' => 'Ed25519', 'kid' => $this->kid]));
         $p = self::b64url((string) json_encode($payload));
         $sig = self::b64url(sodium_crypto_sign_detached($h . '.' . $p, $this->secret));
