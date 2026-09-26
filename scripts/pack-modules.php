@@ -68,6 +68,16 @@ if ($ids === []) {
     $ids = array_keys($map->getValue());
 }
 
+// The WordPress plugin is also served by the update server, but it is NOT packaged
+// here and must never be added to ModuleRegistry::$map to make it so. Three reasons,
+// each sufficient: it is MIT core, not a gated module, so registering it would make
+// ModuleRegistry::require('wordpress') gate a free product; it has no `src/` and no
+// repo of its own, so every check below would fail it; and its artifact is a
+// self-contained ZIP (wrapper + bundled core + SDK + vendor/), not a `git archive` of
+// a tag. `.github/workflows/wordpress-release.yml` builds that ZIP from the
+// `wordpress-v*` tag and writes its own catalogue entry — see mergeExternal() below.
+const EXTERNALLY_BUILT = ['wordpress' => 'built by .github/workflows/wordpress-release.yml'];
+
 echo "\n{$cyan}══ Packaging module release artifacts ══{$reset}\n\n";
 
 @mkdir($outDir, 0755, true);
@@ -172,7 +182,23 @@ foreach ($ids as $id) {
 }
 
 // 5. The catalogue the example update server reads.
+//
+// Merge rather than overwrite: artifacts built elsewhere (the WordPress ZIP) already
+// have entries here, and a plain write would silently delete them — turning every
+// site's update check into `404 unknown module` with nothing to explain it.
 $cataloguePath = "{$outDir}/catalogue.json";
+$existing = is_file($cataloguePath)
+    ? (json_decode((string) file_get_contents($cataloguePath), true) ?: [])
+    : [];
+foreach (EXTERNALLY_BUILT as $extId => $extWhere) {
+    if (isset($existing[$extId])) {
+        $catalogue[$extId] = $existing[$extId];
+        echo "  {$cyan}KEEP{$reset} {$extId} {$existing[$extId]['version']} ({$extWhere})\n";
+    } else {
+        echo "  {$yellow}NOTE{$reset} no {$extId} entry yet — {$extWhere}\n";
+    }
+}
+ksort($catalogue);
 file_put_contents($cataloguePath, json_encode($catalogue, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 
 echo "\n";

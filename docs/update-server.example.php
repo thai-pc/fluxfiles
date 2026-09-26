@@ -50,6 +50,18 @@ $CATALOGUE = is_file($CATALOGUE_FILE)
     ? (json_decode((string) file_get_contents($CATALOGUE_FILE), true) ?: [])
     : [];
 
+// Modules served WITHOUT a licence check. The WordPress plugin is MIT and ships as
+// a ZIP rather than through wordpress.org, so this channel is its only way to learn
+// that a new version — including a security release — exists. Gating that behind a
+// paid key would withhold security fixes from a free product, and could not work
+// anyway: no plan in services/license-server/Plans.php grants 'wordpress', so
+// LicenseManager::licensed('wordpress') is false for every key that exists.
+//
+// Integrity is unaffected: the manifest below is still signed with the RELEASE key
+// and UpdateClient still re-hashes the download. What is skipped is *entitlement*,
+// not verification.
+$FREE_MODULES = ['wordpress'];
+
 // ── request ─────────────────────────────────────────────────────────────────
 $module  = preg_replace('/[^a-z0-9-]/', '', (string) ($_GET['module'] ?? basename($_SERVER['PATH_INFO'] ?? '')));
 // The licence arrives as a bearer credential in the header, never as a query
@@ -67,42 +79,46 @@ if ($module === '' || !isset($CATALOGUE[$module])) {
     exit('unknown module');
 }
 
-// 1. Verify the license (offline, reusing the core's verifier).
-$lm = new LicenseManager($license);
-if (!$lm->licensed($module)) {
-    http_response_code(402);
-    exit('license does not entitle this module');
-}
-// 2. Updates only while the support/update window is open (perpetual installs keep
-//    running their current build; they just can't pull new ones until they renew).
-if (!$lm->updatesAllowed()) {
-    http_response_code(402);
-    exit('update window expired — renew to pull new builds');
-}
-// Revocation is intentionally checked only here, never at runtime: installed
-// self-hosted modules remain usable offline, but a refunded/revoked key cannot
-// fetch another build. The licence server authenticates this private endpoint
-// with a distinct machine credential, not the broad admin token.
-if ($LICENSE_STATUS_URL === '' || $LICENSE_STATUS_TOKEN === '' || $lm->id() === null) {
-    http_response_code(503);
-    exit('license status service is not configured');
-}
-$statusRequest = curl_init($LICENSE_STATUS_URL . '/update-status');
-curl_setopt_array($statusRequest, [
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => json_encode(['jti' => $lm->id()]),
-    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $LICENSE_STATUS_TOKEN, 'Content-Type: application/json'],
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 10,
-]);
-$statusBody = curl_exec($statusRequest);
-$statusCode = (int) curl_getinfo($statusRequest, CURLINFO_HTTP_CODE);
-curl_close($statusRequest);
-$status = is_string($statusBody) ? json_decode($statusBody, true) : null;
-if ($statusCode !== 200 || !is_array($status) || ($status['active'] ?? false) !== true) {
-    http_response_code($statusCode === 200 ? 402 : 503);
-    exit($statusCode === 200 ? 'license revoked or inactive' : 'license status service unavailable');
-}
+// 1. Verify the license (offline, reusing the core's verifier) — unless the module
+//    is free, in which case there is nothing to entitle and we go straight to the
+//    signed manifest.
+if (!in_array($module, $FREE_MODULES, true)) {
+    $lm = new LicenseManager($license);
+    if (!$lm->licensed($module)) {
+        http_response_code(402);
+        exit('license does not entitle this module');
+    }
+    // 2. Updates only while the support/update window is open (perpetual installs keep
+    //    running their current build; they just can't pull new ones until they renew).
+    if (!$lm->updatesAllowed()) {
+        http_response_code(402);
+        exit('update window expired — renew to pull new builds');
+    }
+    // Revocation is intentionally checked only here, never at runtime: installed
+    // self-hosted modules remain usable offline, but a refunded/revoked key cannot
+    // fetch another build. The licence server authenticates this private endpoint
+    // with a distinct machine credential, not the broad admin token.
+    if ($LICENSE_STATUS_URL === '' || $LICENSE_STATUS_TOKEN === '' || $lm->id() === null) {
+        http_response_code(503);
+        exit('license status service is not configured');
+    }
+    $statusRequest = curl_init($LICENSE_STATUS_URL . '/update-status');
+    curl_setopt_array($statusRequest, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode(['jti' => $lm->id()]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $LICENSE_STATUS_TOKEN, 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    $statusBody = curl_exec($statusRequest);
+    $statusCode = (int) curl_getinfo($statusRequest, CURLINFO_HTTP_CODE);
+    curl_close($statusRequest);
+    $status = is_string($statusBody) ? json_decode($statusBody, true) : null;
+    if ($statusCode !== 200 || !is_array($status) || ($status['active'] ?? false) !== true) {
+        http_response_code($statusCode === 200 ? 402 : 503);
+        exit($statusCode === 200 ? 'license revoked or inactive' : 'license status service unavailable');
+    }
+}   // end paid-module gate
 
 // 3. Build + sign the manifest.
 $entry = $CATALOGUE[$module];

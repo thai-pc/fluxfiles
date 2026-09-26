@@ -114,3 +114,21 @@ jobs:
               --title "WordPress plugin v${VERSION}" --notes-file /tmp/notes.md
           fi
           echo "Released $MONOREPO_TAG (sha256 ${SHA})"
+
+          # The catalogue entry the update server serves. Without it the plugin's
+          # update check answers `404 unknown module` and no site ever learns a new
+          # version exists — including a security release. The sha256 must be of the
+          # exact bytes attached above: UpdateClient re-hashes the download.
+          mkdir -p build/modules
+          cat > build/modules/wordpress-catalogue.json <<EOF
+          {
+            "wordpress": {
+              "version": "${VERSION}",
+              "zip": "fluxfiles-${VERSION}.zip",
+              "sha256": "${SHA}"
+            }
+          }
+          EOF
+          gh release upload "$MONOREPO_TAG" build/modules/wordpress-catalogue.json --clobber
+          echo "Catalogue entry attached — merge it into build/modules/catalogue.json"
+          echo "on the update server (scripts/pack-modules.php preserves it)."

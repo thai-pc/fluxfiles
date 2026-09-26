@@ -5,6 +5,26 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed — the WordPress plugin had no catalogue entry, so no site could update
+
+- The update server answers `404 unknown module` for anything absent from
+  `build/modules/catalogue.json`, and nothing ever wrote a `wordpress` entry —
+  so the updater could never have worked, which is also why the query-string
+  licence bug below went unnoticed. `.github/workflows/wordpress-release.yml`
+  now emits `wordpress-catalogue.json` (version, ZIP name, sha256 of the exact
+  bytes it attached) alongside the release, and `scripts/pack-modules.php`
+  **merges** the catalogue instead of overwriting it, so a repack of the paid
+  modules no longer deletes that entry.
+- The plugin is deliberately NOT added to `ModuleRegistry::$map`: it is MIT
+  core, not a gated module, and registering it would put a free product behind
+  `ModuleRegistry::require()`. It also has no `src/` and no repo of its own, and
+  its artifact is a bundled ZIP rather than a `git archive` of a tag.
+- `docs/update-server.example.php` grew a `$FREE_MODULES` allowlist and serves
+  the plugin without a licence check. No plan in `Plans.php` grants
+  `wordpress`, so a licence gate there would withhold security updates from
+  every install forever. The manifest is still signed with the release key and
+  `UpdateClient` still re-hashes the download — only entitlement is skipped.
+
 ### Fixed — the WordPress updater sent its licence where the server never looks
 
 - `FluxFilesUpdater` put the licence key in the **query string**, while

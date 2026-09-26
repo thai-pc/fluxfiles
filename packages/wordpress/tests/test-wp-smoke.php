@@ -1509,6 +1509,50 @@ test('the release path can stamp a version into the built plugin', function () {
     assertTrue(strpos($yml, 'build-wordpress.sh') !== false, 'it builds the plugin ZIP');
 });
 
+// The updater is only as useful as the catalogue behind it: with no `wordpress`
+// entry the update server answers `404 unknown module` and a site never learns a
+// new version exists — including a security release.
+test('the release workflow writes the catalogue entry the update server needs', function () {
+    $yml = (string) file_get_contents(__DIR__ . '/../../../.github/workflows/wordpress-release.yml');
+    assertTrue(strpos($yml, 'wordpress-catalogue.json') !== false, 'a catalogue entry is produced');
+    // The checksum has to be of the bytes actually attached to the release, because
+    // UpdateClient re-hashes the download and refuses a mismatch.
+    assertTrue(strpos($yml, '"sha256": "${SHA}"') !== false, 'it carries the ZIP sha256');
+    assertTrue(strpos($yml, '"zip": "fluxfiles-${VERSION}.zip"') !== false,
+        'it names the ZIP actually attached');
+});
+
+test('pack-modules keeps the wordpress entry instead of overwriting it', function () {
+    // The plugin cannot be packaged by pack-modules (no src/, no repo of its own, and
+    // its artifact is a bundled ZIP rather than a git archive), so it must never be
+    // added to ModuleRegistry::$map to force it through — that would also gate a free
+    // MIT product behind ModuleRegistry::require(). It writes its own entry, which a
+    // plain catalogue rewrite would silently delete.
+    $pack = (string) file_get_contents(__DIR__ . '/../../../scripts/pack-modules.php');
+    assertTrue(strpos($pack, 'EXTERNALLY_BUILT') !== false, 'externally built artifacts are known');
+    assertTrue(strpos($pack, "'wordpress' =>") !== false, 'wordpress is one of them');
+    assertTrue(strpos($pack, '$existing[$extId]') !== false, 'an existing entry is preserved');
+
+    $reg = (string) file_get_contents(__DIR__ . '/../../../packages/core/api/ModuleRegistry.php');
+    assertTrue(strpos($reg, "'wordpress'") === false,
+        'the MIT plugin is NOT registered as a gated paid module');
+});
+
+test('the update server serves the MIT plugin without demanding a paid licence', function () {
+    // No plan in services/license-server/Plans.php grants 'wordpress', so
+    // LicenseManager::licensed('wordpress') is false for every key that exists — a
+    // licence gate here would withhold security updates from a free product forever.
+    // The manifest is still signed and the download still re-hashed; only entitlement
+    // is skipped.
+    $srv = (string) file_get_contents(__DIR__ . '/../../../docs/update-server.example.php');
+    assertTrue(strpos($srv, '$FREE_MODULES') !== false, 'free modules are recognised');
+    assertTrue(strpos($srv, "\$FREE_MODULES = ['wordpress']") !== false, 'the plugin is one');
+    assertTrue(strpos($srv, 'in_array($module, $FREE_MODULES, true)') !== false,
+        'the licence gate is skipped for them');
+    assertTrue(strpos($srv, 'sodium_crypto_sign_detached') !== false,
+        'the manifest is still signed either way');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";
