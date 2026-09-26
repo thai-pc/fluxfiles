@@ -589,6 +589,22 @@ if (!function_exists('wp_update_attachment_metadata')) {
     function wp_update_attachment_metadata($id, $meta) { $GLOBALS['WP_POSTS'][$id]['attmeta'] = $meta; return true; }
 }
 if (!function_exists('is_wp_error')) { function is_wp_error($x) { return $x instanceof \WP_Error; } }
+// HTTP stubs for FluxFilesUpdater. $GLOBALS['WP_HTTP_LAST'] records the request so a
+// test can assert WHERE the licence key was put, and the canned reply is a plain
+// failure so no test accidentally depends on a signed manifest.
+$GLOBALS['WP_HTTP_LAST'] = null;
+if (!function_exists('wp_remote_get')) {
+    function wp_remote_get($url, $args = []) {
+        $GLOBALS['WP_HTTP_LAST'] = ['url' => $url, 'args' => $args];
+        return ['response' => ['code' => 500], 'body' => ''];
+    }
+}
+if (!function_exists('wp_remote_retrieve_response_code')) {
+    function wp_remote_retrieve_response_code($r) { return $r['response']['code'] ?? 0; }
+}
+if (!function_exists('wp_remote_retrieve_body')) {
+    function wp_remote_retrieve_body($r) { return $r['body'] ?? ''; }
+}
 if (!class_exists('WP_Error')) { class WP_Error {} }
 if (!function_exists('wp_json_encode')) { function wp_json_encode($d, $o = 0, $depth = 512) { return json_encode($d, $o, $depth); } }
 if (!function_exists('sanitize_file_name')) { function sanitize_file_name($n) { return preg_replace('/[^A-Za-z0-9._-]/', '-', (string) $n); } }
@@ -845,6 +861,47 @@ test('updater: offers an update only when the manifest is genuinely newer', func
     $t = FluxFilesUpdater::inject((object) ['response' => []]);
     assertTrue(!isset($t->response[$slug]), 'a failed check offers nothing');
     delete_transient('fluxfiles_update_manifest');
+});
+
+test('updater: the licence key travels in the Authorization header, never the URL', function () {
+    // Two reasons, and both are load-bearing. It is a bearer credential, so a URL
+    // puts it in access logs, proxy logs and the Referer of the redirected download
+    // — the same rule the rest of FluxFiles applies to the main JWT. And it is where
+    // the server looks: docs/update-server.example.php parses `Authorization: Bearer`
+    // only, exactly as `bin/fluxfiles update` sends it, so a key in the query string
+    // reads as no key at all and every check answers 402.
+    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
+    delete_transient('fluxfiles_update_manifest');
+    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'test-licence-key-abc';
+    putenv('FLUXFILES_UPDATE_URL=https://updates.example/update');
+    $GLOBALS['WP_HTTP_LAST'] = null;
+
+    FluxFilesUpdater::inject((object) ['response' => []]);
+
+    $req = $GLOBALS['WP_HTTP_LAST'];
+    assertTrue(is_array($req), 'the updater actually made a request');
+    assertTrue(strpos($req['url'], 'test-licence-key-abc') === false,
+        'the key is NOT in the query string');
+    assertTrue(strpos($req['url'], 'license=') === false, 'no license query parameter at all');
+    assertEqual('Bearer test-licence-key-abc', $req['args']['headers']['Authorization'] ?? '');
+    // The non-secret parameters stay in the URL — the server routes on them.
+    assertTrue(strpos($req['url'], 'module=wordpress') !== false, 'module still identified');
+    assertTrue(strpos($req['url'], 'current=') !== false, 'current version still sent');
+
+    putenv('FLUXFILES_UPDATE_URL');
+    unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
+    delete_transient('fluxfiles_update_manifest');
+});
+
+test('the reference update server reads the licence from the header, both spellings', function () {
+    // Apache+CGI/FastCGI drops `Authorization` unless explicitly passed through, and
+    // re-exposes it as REDIRECT_HTTP_AUTHORIZATION. Reading only the plain spelling
+    // makes every client on such a host look unlicensed, with no error to explain it.
+    $src = (string) file_get_contents(__DIR__ . '/../../../docs/update-server.example.php');
+    assertTrue(strpos($src, "REDIRECT_HTTP_AUTHORIZATION") !== false,
+        'the CGI spelling is accepted too');
+    assertTrue(strpos($src, "\$_GET['license']") === false,
+        'the server never accepts the licence from the query string');
 });
 
 test('plugin declares Update URI so wordpress.org cannot hijack the slug', function () {

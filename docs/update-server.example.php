@@ -52,7 +52,12 @@ $CATALOGUE = is_file($CATALOGUE_FILE)
 
 // ── request ─────────────────────────────────────────────────────────────────
 $module  = preg_replace('/[^a-z0-9-]/', '', (string) ($_GET['module'] ?? basename($_SERVER['PATH_INFO'] ?? '')));
-$auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+// The licence arrives as a bearer credential in the header, never as a query
+// parameter — a URL ends up in access logs, proxy logs and the Referer of the next
+// hop. Apache+CGI/FastCGI strips `Authorization` unless it is passed through
+// (`SetEnvIf Authorization ... ` / `CGIPassAuth On`), and then re-exposes it under
+// REDIRECT_; accept that spelling too, or every client silently reads as unlicensed.
+$auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
 $license = preg_match('/^Bearer\s+(.+)$/i', $auth, $m) ? trim($m[1]) : '';
 
 header('Content-Type: text/plain; charset=utf-8');

@@ -71,11 +71,22 @@ class FluxFilesUpdater
         }
 
         $url = add_query_arg(
-            ['module' => self::MODULE, 'current' => FLUXFILES_VERSION,
-             'license' => FluxFilesPlugin::licenseKey()],
+            ['module' => self::MODULE, 'current' => FLUXFILES_VERSION],
             self::endpoint()
         );
-        $res = wp_remote_get($url, ['timeout' => 8, 'headers' => ['Accept' => 'text/plain']]);
+        // The licence key is a bearer credential, so it travels in the header and
+        // never in the query string — a URL is written to access logs, proxy logs and
+        // (for a redirected download) the Referer of the next hop, and this is the
+        // same rule the rest of FluxFiles follows for the main JWT. It is also where
+        // the server actually looks: docs/update-server.example.php reads
+        // `Authorization: Bearer` only, exactly as `bin/fluxfiles update` sends it.
+        $res = wp_remote_get($url, [
+            'timeout' => 8,
+            'headers' => [
+                'Accept' => 'text/plain',
+                'Authorization' => 'Bearer ' . FluxFilesPlugin::licenseKey(),
+            ],
+        ]);
 
         $manifest = null;
         if (!is_wp_error($res) && (int) wp_remote_retrieve_response_code($res) === 200) {

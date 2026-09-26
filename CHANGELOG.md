@@ -5,6 +5,19 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed — the WordPress updater sent its licence where the server never looks
+
+- `FluxFilesUpdater` put the licence key in the **query string**, while
+  `docs/update-server.example.php` reads `Authorization: Bearer` only — the
+  same header `bin/fluxfiles update` has always sent. Every check would have
+  read as unlicensed (402). It is also a bearer credential, so a URL leaks it
+  into access logs, proxy logs and the Referer of the redirected download; the
+  key now travels in the header, and only `module`/`current` stay in the URL.
+- The reference update server also accepts `REDIRECT_HTTP_AUTHORIZATION`:
+  Apache+CGI/FastCGI drops the plain header unless it is passed through and
+  re-exposes it under that name, which would otherwise make every client on
+  such a host look unlicensed with nothing in any log to explain it.
+
 ### Fixed — a licence minted by `license-gen` could never pull an update
 
 - `scripts/license-gen.php` minted no `jti`, so `LicenseManager::id()` returned
