@@ -121,8 +121,8 @@ Why reuse `audit` instead of a new perm bucket: `audit` is already this
 codebase's "admin/compliance action" bucket (`admin`/`superadmin` role
 presets grant `['read','write','delete','audit']`; `/audit/export` and
 `/audit/purge` already gate on `hasPerm('audit')`). Inventing a dedicated
-perm (e.g. `legal_hold`) would mean touching all four ACL role-preset
-builders (`embed.php`, node, Laravel, WordPress — see
+perm (e.g. `legal_hold`) would mean touching all five ACL role-preset
+builders (`embed.php`, node, Laravel, WordPress, Python — see
 `docs/design/ACL-ROLE-PRESETS-DESIGN.md`) for a capability that, in practice, is
 always going to be granted to the same admin/compliance persona that already
 needs `audit` to review the trail a hold produces. **Trade-off accepted

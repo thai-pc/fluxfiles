@@ -114,7 +114,7 @@ own users/permissions system, which every real host app already has.
 When teammate B needs to see folder F that A shared with them, the operator
 mints a **new JWT scoped to F**, using `pathPrefix = F` and `role` = the
 grant's stored role to set the capability bundle (the ACL spec's `role`
-preset has shipped in all four token builders — see its Status section —
+preset has shipped in all five token builders — see its Status section —
 so this is ordinary, available-today behavior, not a future dependency):
 
 ```php

@@ -1,7 +1,7 @@
 # ACL / Role Presets — Stateless "Role" Layer for JWT Minting
 
 > **Status: Implemented and shipped.** The `role` mint-time preset described
-> in this document is live across all four token builders — shipped in
+> in this document is live across all five token builders — shipped in
 > commit `70f1cea` ("feat(acl): implement role mint-time preset across all
 > token builders", 2026-09-01), with a same-day fix for a viewer/editor
 > chmod-default bug (commits `d880b98`/`fb7c8a2`, documented in
@@ -187,11 +187,12 @@ per-tenant business config, unrelated to "who is this person on the team"):
   decision an operator must make explicitly per token, never implied by
   "this person is an admin of the file manager." (Flagged in Open Questions
   below in case that call is wrong.)
-- **All eleven paid-module claims** — `allow_share`, `allow_intake`,
+- **All thirteen paid-module claims** — `allow_share`, `allow_intake`,
   `allow_versioning`, `allow_webhooks`, `allow_ai_vision`, `allow_ocr`,
   `allow_virus_scan`, `allow_backup`, `allow_c2pa`, `allow_audit_export`,
-  and (pre-auth, N/A to a JWT claim anyway) `sso`. These stay purely gated by
-  the `ModuleRegistry` 3-layer check (installed + licensed + claim) — a role
+  `allow_dlp_scan`, `allow_legal_hold`, and (pre-auth, N/A to a JWT claim
+  anyway) `sso`. These stay purely gated by the `ModuleRegistry` 3-layer
+  check (installed + licensed + claim) — a role
   preset turning one on is inert on an unlicensed/uninstalled server exactly
   like `edition` today, so there is no reason to fold them into `role`
   (`edition` already owns "which paid features does this tier get"; `role`
@@ -213,7 +214,7 @@ spec). **Merge order** (must match the existing internal order in
 always win last):
 
 1. **Base claims — `perms` needs early resolution; everything else doesn't.**
-   Verified directly against all four implementations
+   Verified directly against all five implementations
    (`embed.php:92-104`, `token.ts:36-46`, `FluxFilesManager.php:34-44`,
    `FluxFilesPlugin.php:264-275` and `587-598` for the BYOB variant): `perms`
    is written **unconditionally, with an already-resolved default value**,
@@ -570,7 +571,7 @@ No `tests/unit/test-config-doc.php` changes needed — it only checks
 
 ## Status
 
-**Implemented** in all four token builders: `packages/core/embed.php`
+**Implemented** in all five token builders: `packages/core/embed.php`
 (`fluxfiles_role_preset()` + `fluxfiles_apply_role_preset()`),
 `packages/node/src/token.ts` (`ROLE_PRESETS` + the `applyTenantOverrides()`
 role block, with the `role` option added to `BaseTokenOptions` in
@@ -579,7 +580,7 @@ role block, with the `role` option added to `BaseTokenOptions` in
 `tokenWithByob()`), and `packages/wordpress/includes/FluxFilesPlugin.php`
 (`rolePreset()` + `applyRolePreset()`, wired into both `generateToken()` and
 `generateByobToken()`). §3's `perms`-early-resolution fix is implemented
-exactly as specified in all four files: the role's `perms` default is
+exactly as specified in all five files: the role's `perms` default is
 resolved *before* the base payload array/object is built, and threaded into
 the same expression that already supplies the global `['read']` fallback.
 
@@ -618,7 +619,7 @@ combined with an explicit `perms` override — which this spec explicitly
 permits (see "explicit overrides win" above). Fixed by setting
 `allow_extract`/`allow_chmod` **explicitly** (`viewer`: both `false`;
 `editor`: `allow_extract: true`, `allow_chmod: false`, matching the §4.1
-table's own intent) in all four token builders, so the fix never depends on
+table's own intent) in all five token builders, so the fix never depends on
 Claims.php's own default again. The regression test in every suite
 (`test-role-preset.php`, `token.test.ts`, both PHP adapter smokes) was
 strengthened to assert against the **decoded, effective** claim value
@@ -631,7 +632,7 @@ an absent key still resolves to `true` after decode. This B1 fix is what
 initial `role` implementation (`70f1cea`).
 
 **BYOB scope — updated 2026-09-08 (`docs/design/PYTHON-TOKEN-SDK-DESIGN.md` §5.1 /
-§9 decision #6):** `role`/`edition` now reach BYOB tokens in **all four**
+§9 decision #6):** `role`/`edition` now reach BYOB tokens in **all five**
 token builders, closing what was originally a core/Node-only exclusion of
 `role` specifically (`edition` already worked on core/Node BYOB tokens before
 this change — only `role` was the gap).

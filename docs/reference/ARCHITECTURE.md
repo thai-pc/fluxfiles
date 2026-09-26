@@ -111,14 +111,13 @@ The host's existing auth maps to a FluxFiles JWT.
   `"fluxfiles/fluxfiles": "^X.Y.Z"`. When an adapter starts calling a core symbol
   newer than its floor, the **adapter↔core floor guard** (CI) fails until the floor
   is bumped — so the constraint never lies. See `scripts/check-adapter-core-floor.sh`.
-- Two **byte-streaming** endpoints remain core-standalone-only: `/zip` (multi-disk
-  streaming with no proxy port yet) and SFTP-only `/chmod` (the proxies don't
-  expose SFTP as a disk driver at all). `/stream` and `/img` are **no longer** in
-  that bucket — both were ported directly into each proxy controller (mirroring
-  the SSH-terminal port, since core's `handleMediaStream()`/`handleImageTransform()`
-  are inline functions in `index.php`, not a reusable file), so both routes **are**
-  proxied by Laravel and WordPress today. The route-parity test whitelists only
-  the endpoints still unproxied.
+- Only the DB-backend bulk-metadata pair (`/metadata/export`, `/metadata/import`)
+  remains core-standalone-only. `/zip` and SFTP-only `/chmod` left that bucket in
+  `c0fe4cc`, and `/stream` and `/img` before them — each was ported directly into
+  both proxy controllers (mirroring the SSH-terminal port, since core's
+  `handleMediaStream()`/`handleImageTransform()` are inline functions in
+  `index.php`, not a reusable file), so all four routes **are** proxied by Laravel
+  and WordPress today.
 
 ### (B) Browser embed — `sdk`, `react`, `vue`, `ckeditor4`, `tinymce`, `summernote`
 Put a core server somewhere, then embed it as an `<iframe>` and talk over a
