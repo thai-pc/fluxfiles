@@ -651,6 +651,30 @@ test('dlp_min_score clamped [0, 1]; 0/absent = default 0.6', function () {
     assertEqual(0.6, claimsWith(['dlp_min_score' => -1])->dlpMinScore, 'negative = default (not clamped to 0)');
 });
 
+// Regression lock: Flysystem's WhitespacePathNormalizer rewrites "\" to "/"
+// BEFORE it pops ".." segments, so a sanitizer that only splits on "/" reads
+// "a\..\..\b" as one opaque segment and hands Flysystem a path that resolves
+// out of the tenant prefix — and past isReservedSystemPath(), which matches a
+// literal "_fluxfiles/". scopePath()/isPathInScope() must split on "\" too.
+// Keep in sync with FileManager::scopedPath(), which carries the same fix.
+test('backslash segments are traversal, not filename characters', function () {
+    $c = claimsWith(['prefix' => 'user_1']);
+
+    assertEqual('user_1/a/etc/x', $c->scopePath('a\\..\\..\\etc\\x'), 'backslash .. cannot escape the prefix');
+    assertEqual('user_1/secret.txt', $c->scopePath('..\\..\\secret.txt'), 'leading backslash .. is stripped');
+    assertEqual('user_1/_fluxfiles/index.json', $c->scopePath('_fluxfiles\\index.json'), 'reserved dir surfaces as its own segment');
+    assertEqual('user_1/ok/file.txt', $c->scopePath('ok/file.txt'), 'ordinary paths are unchanged');
+
+    assertEqual(false, $c->isPathInScope('a\\..\\..\\b'), 'backslash traversal is rejected, not normalized');
+    assertEqual(true, $c->isPathInScope('user_1/ok.txt'), 'in-scope path still accepted');
+
+    // normalizeKey() feeds the metadata + chunk-upload endpoints, which hold an
+    // already-prefixed key — same primitive, so it must strip the same way.
+    // ".." is DROPPED, not resolved against the parent — so the result can only
+    // ever stay deeper in the tree, never climb out of it.
+    assertEqual('user_1/a/b', claimsWith([])->normalizeKey('user_1/a\\..\\b'), 'normalizeKey drops backslash ..');
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════

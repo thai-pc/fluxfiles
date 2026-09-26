@@ -847,6 +847,12 @@ class Claims
     private static function stripDotSegments(string $path): string
     {
         $path = str_replace(["\0", "\x00"], '', $path);
+        // Flysystem's WhitespacePathNormalizer turns "\" into "/" BEFORE it pops
+        // ".." segments, so a path must be split the same way here or the two
+        // disagree about what it means: "a\..\..\b" looks like one opaque segment
+        // to an explode('/') and sails through, then resolves to "b" one level up
+        // inside Flysystem. Normalize first so every segment is actually seen.
+        $path = str_replace('\\', '/', $path);
         $parts = explode('/', $path);
         $safe = [];
         foreach ($parts as $part) {

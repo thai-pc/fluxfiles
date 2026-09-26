@@ -2297,6 +2297,13 @@ class FileManager
     private function scopedPath(string $path): string
     {
         $path = str_replace(["\0", "\x00"], '', $path);
+        // Split on "\" as well as "/" — Flysystem's WhitespacePathNormalizer does
+        // str_replace('\\', '/') BEFORE popping ".." segments, so anything that
+        // only explodes on "/" sees "a\..\..\b" as one opaque segment, passes it
+        // through, and lets Flysystem resolve it back out of the tenant prefix
+        // (and past isReservedSystemPath(), which matches a literal "_fluxfiles/").
+        // Keep this in sync with Claims::stripDotSegments().
+        $path = str_replace('\\', '/', $path);
         $parts = explode('/', $path);
         $safe = [];
         foreach ($parts as $part) {
