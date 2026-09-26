@@ -5,6 +5,32 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed — the WordPress plugin version stopped tracking its tag
+
+- The plugin header said `0.2.43` while the tags had moved on to
+  `wordpress-v0.2.50` — eight releases of drift. WordPress decides whether an
+  update is available by comparing that header against whatever an update
+  channel advertises, so installing an update would never have advanced the
+  number and the same update would be offered forever. It has not bitten yet
+  only because `wordpress` is absent from `ModuleRegistry::$map`, so the
+  updater's catalogue request 404s and the updater is inert.
+- Header, `FLUXFILES_VERSION` and `readme.txt`'s `Stable tag:` are back in sync
+  at `0.2.50`, and a smoke test now asserts the three agree.
+
+### Added — a `wordpress-v*` tag finally produces an artifact
+
+- The plugin is not split to a Composer repo like core/laravel, so
+  `split.yml` bound nothing to its tags and the ZIP only ever existed on
+  whoever ran `build-wordpress.sh` by hand. `.github/workflows/wordpress-release.yml`
+  now builds it from the tag, verifies the archive really contains the bundled
+  core/SDK/vendor tree, and attaches `fluxfiles-X.Y.Z.zip` plus its sha256 to a
+  GitHub release. It first refuses to build if the tag and the committed
+  version disagree.
+- `build-wordpress.sh` takes an optional `X.Y.Z` and stamps it into the built
+  copy via `scripts/stamp-wp-version.py` — the version comes from the tag,
+  never from a number typed somewhere, the same principle as
+  `pack-modules.php`.
+
 ## [0.3.14] — 2026-09-26
 
 > Released: `core-v0.2.89`, `laravel-v0.2.43`, `wordpress-v0.2.50`.

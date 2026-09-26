@@ -1411,6 +1411,47 @@ test('M-1: CodeMirror is vendored, not pulled from a CDN into the JWT origin', f
     assertTrue(strpos($build, 'assets/vendor') !== false, 'the plugin build bundles assets/vendor');
 });
 
+// The plugin version lives in three places WordPress and wordpress.org read
+// independently, and they have to agree — including with the wordpress-vX.Y.Z
+// tag, which the release workflow checks. They drifted once: the header sat at
+// 0.2.43 through eight tagged releases, which would have made an update channel
+// offer the same "update" forever (WordPress compares the advertised version
+// against this header, so installing never advances it).
+test('plugin version agrees across header, constant and readme.txt', function () {
+    $main   = file_get_contents(__DIR__ . '/../fluxfiles.php');
+    $readme = file_get_contents(__DIR__ . '/../readme.txt');
+
+    preg_match('/^ \* Version: *(.+)$/m', $main, $h);
+    preg_match("/define\('FLUXFILES_VERSION', '([^']*)'\);/", $main, $c);
+    preg_match('/^Stable tag: *(.+)$/m', $readme, $r);
+
+    $header = trim($h[1] ?? '');
+    $const  = trim($c[1] ?? '');
+    $stable = trim($r[1] ?? '');
+
+    assertTrue($header !== '', 'plugin header carries a Version:');
+    assertTrue(preg_match('/^\d+\.\d+\.\d+$/', $header) === 1, "header version is X.Y.Z (got '{$header}')");
+    assertEqual($header, $const, 'FLUXFILES_VERSION matches the plugin header');
+    assertEqual($header, $stable, 'readme.txt Stable tag matches the plugin header');
+});
+
+// The ZIP is the only artifact a wordpress-v* tag produces (the plugin is not
+// split to a Composer repo like core/laravel), so the release path has to stay
+// wired: the build must accept the tag's version and stamp it into the built
+// copy, or a ZIP would ship whatever number the sources happened to carry.
+test('the release path can stamp a version into the built plugin', function () {
+    $build = file_get_contents(__DIR__ . '/../../../scripts/build-wordpress.sh');
+    assertTrue(strpos($build, 'PLUGIN_VERSION') !== false, 'build script takes a version argument');
+    assertTrue(strpos($build, 'stamp-wp-version.py') !== false, 'build script invokes the stamper');
+    assertTrue(is_file(__DIR__ . '/../../../scripts/stamp-wp-version.py'), 'the stamper exists');
+
+    $wf = __DIR__ . '/../../../.github/workflows/wordpress-release.yml';
+    assertTrue(is_file($wf), 'a wordpress-v* release workflow exists');
+    $yml = file_get_contents($wf);
+    assertTrue(strpos($yml, 'wordpress-v*') !== false, 'it triggers on wordpress-v* tags');
+    assertTrue(strpos($yml, 'build-wordpress.sh') !== false, 'it builds the plugin ZIP');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

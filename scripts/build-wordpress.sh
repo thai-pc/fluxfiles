@@ -7,14 +7,21 @@
 # unzip into wp-content/plugins/. That layout matches what FluxFilesPlugin and
 # FluxFilesApi look for at runtime (see `FluxFilesPlugin::corePath()`).
 #
-# Run from repo root:  bash scripts/build-wordpress.sh
+# Run from repo root:  bash scripts/build-wordpress.sh [X.Y.Z]
 #
+# With a version argument (the release workflow passes the one from the
+# wordpress-vX.Y.Z tag) the plugin header and readme.txt Stable tag in the BUILT
+# copy are rewritten to it. WordPress compares that header against whatever an
+# update channel advertises, so a zip whose header lags its tag makes a site
+# re-offer the same update forever. Same principle as pack-modules.php: the
+# version comes from the tag, never from a number typed somewhere.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$ROOT_DIR/build"
 PLUGIN_DIR="$BUILD_DIR/fluxfiles"
+PLUGIN_VERSION="${1:-}"
 
 CORE_DIR="$ROOT_DIR/packages/core"
 WP_DIR="$ROOT_DIR/packages/wordpress"
@@ -34,6 +41,15 @@ rsync -a \
     --exclude='.DS_Store' \
     --exclude='build/' \
     "$WP_DIR/" "$PLUGIN_DIR/"
+
+if [ -n "$PLUGIN_VERSION" ]; then
+    echo "==> Stamping version $PLUGIN_VERSION into the built plugin..."
+    case "$PLUGIN_VERSION" in
+        [0-9]*.[0-9]*.[0-9]*) ;;
+        *) echo "ERROR: expected X.Y.Z, got '$PLUGIN_VERSION'" >&2; exit 1 ;;
+    esac
+    python3 "$SCRIPT_DIR/stamp-wp-version.py" "$PLUGIN_DIR" "$PLUGIN_VERSION"
+fi
 
 echo "==> Bundling FluxFiles core (api/, public/, lang/) into plugin..."
 cp -r "$CORE_DIR/api"    "$PLUGIN_DIR/api"

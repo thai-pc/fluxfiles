@@ -1,0 +1,116 @@
+name: Release WordPress plugin
+
+# The WordPress plugin is not split to its own Composer repo like core/laravel —
+# it ships as a self-contained ZIP (wrapper + bundled core + SDK + vendor/), so a
+# `wordpress-v*` tag used to produce no artifact at all. This builds that ZIP from
+# the tag and attaches it to a GitHub release, with its sha256 so a download can
+# be verified.
+on:
+  push:
+    tags:
+      - "wordpress-v*"
+
+permissions:
+  contents: write        # needed to create the release
+
+jobs:
+  release:
+    name: Build and publish the plugin ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      # The committed sources and the tag must agree. The build stamps the tag's
+      # version into the ZIP either way, but a repo whose header says something
+      # else is a trap for anyone installing from a checkout — and it is exactly
+      # how the header sat at 0.2.43 through eight releases.
+      - name: Check tag matches the plugin header
+        env:
+          MONOREPO_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${MONOREPO_TAG#wordpress-v}"
+          case "$VERSION" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::Expected wordpress-vX.Y.Z, got ${MONOREPO_TAG}"; exit 1 ;;
+          esac
+
+          fail=0
+          check() {   # <label> <actual> <file>
+            if [ "$2" != "$VERSION" ]; then
+              echo "::error file=$3::$1 is '$2' but the tag says '$VERSION'"
+              fail=1
+            fi
+          }
+
+          HEADER=$(sed -n 's/^ \* Version: *//p' packages/wordpress/fluxfiles.php | head -1)
+          CONST=$(sed -n "s/^define('FLUXFILES_VERSION', '\([^']*\)');/\1/p" packages/wordpress/fluxfiles.php | head -1)
+          STABLE=$(sed -n 's/^Stable tag: *//p' packages/wordpress/readme.txt | head -1)
+
+          check "Plugin header Version:" "$HEADER" packages/wordpress/fluxfiles.php
+          check "FLUXFILES_VERSION"      "$CONST"  packages/wordpress/fluxfiles.php
+          check "readme.txt Stable tag:" "$STABLE" packages/wordpress/readme.txt
+          [ "$fail" = "0" ] || exit 1
+          echo "Version $VERSION agrees across header, constant and readme."
+
+      - name: Build the plugin ZIP
+        env:
+          MONOREPO_TAG: ${{ github.ref_name }}
+        run: bash scripts/build-wordpress.sh "${MONOREPO_TAG#wordpress-v}"
+
+      # Sanity-check the artifact rather than trusting the build: a ZIP missing
+      # the bundled core or vendor/ installs cleanly and then fatals at runtime.
+      - name: Verify the ZIP contents
+        run: |
+          cd build
+          for path in \
+            fluxfiles/fluxfiles.php \
+            fluxfiles/api/FileManager.php \
+            fluxfiles/public/index.html \
+            fluxfiles/assets/fm.js \
+            fluxfiles/assets/fluxfiles.js \
+            fluxfiles/assets/vendor/codemirror/codemirror.min.js \
+            fluxfiles/vendor/autoload.php \
+            fluxfiles/embed.php \
+            fluxfiles/modules-autoload.php ; do
+            unzip -l fluxfiles.zip "$path" > /dev/null \
+              || { echo "::error::missing from the ZIP: $path"; exit 1; }
+          done
+          echo "ZIP layout OK ($(du -h fluxfiles.zip | cut -f1))"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONOREPO_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${MONOREPO_TAG#wordpress-v}"
+          mv build/fluxfiles.zip "build/fluxfiles-${VERSION}.zip"
+          SHA=$(sha256sum "build/fluxfiles-${VERSION}.zip" | cut -d' ' -f1)
+
+          cat > /tmp/notes.md <<EOF
+          WordPress plugin v${VERSION} — self-contained ZIP (wrapper + FluxFiles core + browser SDK + vendor/).
+
+          **Install:** upload \`fluxfiles-${VERSION}.zip\` under Plugins → Add New → Upload Plugin, or unzip into \`wp-content/plugins/\`.
+
+          \`\`\`
+          sha256  ${SHA}
+          \`\`\`
+
+          See CHANGELOG.md for what shipped in this release.
+          EOF
+
+          # Idempotent: a re-run of the workflow updates the existing release
+          # instead of failing on "already exists".
+          if gh release view "$MONOREPO_TAG" >/dev/null 2>&1; then
+            gh release upload "$MONOREPO_TAG" "build/fluxfiles-${VERSION}.zip" --clobber
+            gh release edit "$MONOREPO_TAG" --notes-file /tmp/notes.md
+          else
+            gh release create "$MONOREPO_TAG" "build/fluxfiles-${VERSION}.zip" \
+              --title "WordPress plugin v${VERSION}" --notes-file /tmp/notes.md
+          fi
+          echo "Released $MONOREPO_TAG (sha256 ${SHA})"
