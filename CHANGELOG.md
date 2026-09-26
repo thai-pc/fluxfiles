@@ -3,7 +3,9 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.16] — 2026-09-26
+
+> Released: `core-v0.2.90`.
 
 ### Removed — `limits.sites` and `domains` are gone from the licence payload
 
