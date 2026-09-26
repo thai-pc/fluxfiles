@@ -334,5 +334,24 @@ test('ImageToken: wrong secret / expired → 403', function () use ($imgSecret) 
     catch (ApiException $e) { assertEqual('img_token_invalid', $e->getErrorCode()); }
 });
 
+test('ImageToken: allow_download round-trips, and an old token without it stays allowed', function () use ($imgSecret) {
+    // Default and explicit-true: nothing stamped, decodes as allowed.
+    assertEqual(true, ImageToken::verify(ImageToken::mint('local', 'a.jpg', 'u', 3600, $imgSecret, 1600), $imgSecret)['allowDownload'], 'default → allowed');
+    assertEqual(true, ImageToken::verify(ImageToken::mint('local', 'a.jpg', 'u', 3600, $imgSecret, 1600, 0, null, true), $imgSecret)['allowDownload'], 'explicit true → allowed');
+
+    // Preview-only stamps dl=0 and decodes as denied. This is what stops /img
+    // from falling through to the untransformed original for a token whose
+    // tenant has allow_download=false but NO watermark.
+    $deny = ImageToken::mint('local', 'a.jpg', 'u', 3600, $imgSecret, 1600, 0, null, false);
+    assertEqual(false, ImageToken::verify($deny, $imgSecret)['allowDownload'], 'false → denied');
+
+    // Backward compatibility: a token minted before `dl` existed.
+    $old = \FluxFiles\JwtCompat::encode(
+        ['t' => 'img', 'disk' => 'local', 'path' => 'a.jpg', 'mw' => 800, 'iat' => time(), 'exp' => time() + 600],
+        $imgSecret
+    );
+    assertEqual(true, ImageToken::verify($old, $imgSecret)['allowDownload'], 'absent dl → allowed');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

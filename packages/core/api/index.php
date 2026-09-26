@@ -1930,11 +1930,18 @@ function handleImageTransform(): void
     [$wmEnabled, $wmSigCfg, $logoVer, $wmLogoPath] = ff_resolve_watermark($fs, $scope['watermark'] ?? null, $scope['sub']);
     $wmSig = \FluxFiles\ImageOptimizer::watermarkSignature($wmSigCfg, $logoVer);
 
+    // A preview-only token (allow_download=false, with or without a watermark)
+    // must never reach a path that returns the untransformed source. Watermark
+    // implies this, but not the reverse — Claims only forces the implication one
+    // way — so check the token's own `dl` flag, not just $wmEnabled.
+    $noOriginal = $wmEnabled || !$scope['allowDownload'];
+
     // Content negotiation: a client that accepts neither AVIF nor WebP → serve
-    // the original unchanged (old browsers). NEVER for a watermarked token — that
-    // would hand back the clean image and defeat the watermark; force WebP there.
+    // the original unchanged (old browsers). NEVER when $noOriginal — that would
+    // hand back the clean image; force WebP there. A bare wildcard Accept (curl's
+    // default) lands here, so this is a one-request bypass if left open.
     if ($format === '') {
-        if (!$wmEnabled) {
+        if (!$noOriginal) {
             ff_serve_bytes((string) $fs->read($path), $origMime);
             return;
         }
@@ -1976,12 +1983,12 @@ function handleImageTransform(): void
 
     $out = $optimizer->transform((string) $fs->read($path), $width, $quality, $wmCfg, $format, $height, $fit);
     if ($out === null) {
-        // Animated GIF / SVG / non-raster / bomb. A watermarked token must not
+        // Animated GIF / SVG / non-raster / bomb. A preview-only token must not
         // leak the clean original, so refuse rather than serve it untouched.
-        if ($wmEnabled) {
+        if ($noOriginal) {
             http_response_code(415);
             header('Content-Type: text/plain; charset=utf-8');
-            echo 'Cannot watermark this image type';
+            echo $wmEnabled ? 'Cannot watermark this image type' : 'Cannot transform this image type';
             return;
         }
         ff_serve_bytes((string) $fs->read($path), $origMime);

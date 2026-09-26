@@ -299,7 +299,14 @@ function ff_share_payload(array $out, string $token, string $secret): array
             (string) ($prev['sub'] ?? 'share'),
             $ttl,
             $secret,
-            1600
+            1600,
+            0,
+            null,
+            // Preview only. The docblock above promises "a bounded transform,
+            // never the original bytes"; without this the endpoint's
+            // negotiation/undecodable fall-throughs would return the source and
+            // bypass the share's own download cap and counter.
+            false
         );
         $url = '/api/fm/img?token=' . rawurlencode($imgToken) . '&width=1200';
     } elseif ($kind === 'pdf') {

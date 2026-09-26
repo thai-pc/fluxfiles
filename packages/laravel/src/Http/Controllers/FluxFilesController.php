@@ -2077,8 +2077,16 @@ class FluxFilesController
             ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
 
         // No watermark scope ever reaches this adapter — see the class-note above.
+        // allow_download DOES: the token is minted by core's FileManager, which
+        // stamps `dl=0` for a preview-only tenant. Both of this handler's
+        // fall-throughs would otherwise return the untransformed source.
+        $noOriginal = !$scope['allowDownload'];
         if ($format === '') {
-            $this->serveBytes((string) $fs->read($path), $origMime);
+            if ($noOriginal) {
+                $format = 'webp';
+            } else {
+                $this->serveBytes((string) $fs->read($path), $origMime);
+            }
         }
 
         $ver = (string) (@$fs->lastModified($path) ?: '0');
@@ -2101,7 +2109,14 @@ class FluxFilesController
 
         $out = $optimizer->transform((string) $fs->read($path), $width, $quality, null, $format, $height, $fit);
         if ($out === null) {
-            // Animated GIF / SVG / non-raster / bomb — serve the original untouched.
+            // Animated GIF / SVG / non-raster / bomb — serve the original
+            // untouched, unless the token is preview-only.
+            if ($noOriginal) {
+                http_response_code(415);
+                header('Content-Type: text/plain; charset=utf-8');
+                echo 'Cannot transform this image type';
+                exit;
+            }
             $this->serveBytes((string) $fs->read($path), $origMime);
         }
 

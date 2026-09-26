@@ -350,5 +350,71 @@ test('unwritable index dir surfaces a clear storage_not_writable error (not a ra
     }
 });
 
+test('restore cannot change the file extension', function () {
+    [$fm] = makeFM();
+    upload($fm, '', 'shot.jpg', 'x');
+    $t = $fm->trash('local', 'shot.jpg');
+    // .svg, not .php — a dangerous extension is caught one step earlier by
+    // assertSafeFilename (covered by the next test); this pins the plain
+    // ext-immutability rule rename/move/copy already enforce.
+    try {
+        $fm->restore('local', $t['trash_id'], 'shot.svg');
+        throw new \RuntimeException('restore should refuse an extension change');
+    } catch (ApiException $e) {
+        assertEqual('ext_changed', $e->getErrorCode(), 'ext_changed on restore');
+    }
+    // The original spelling still restores fine.
+    $r = $fm->restore('local', $t['trash_id'], 'shot.jpg');
+    assertTrue(!empty($r['restored']), 'the unchanged extension still restores');
+});
+
+test('restore enforces the allowedExt policy and rejects a double extension', function () {
+    $root = sys_get_temp_dir() . '/fluxfiles-trash-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage']]);
+    $meta = new StorageMetadataHandler($dm);
+    // Upload under a permissive token, then restore under a jpg-only one: the
+    // trash manifest is attacker-writable on a BYOB disk, so restore must
+    // re-check the policy rather than trust original_key.
+    $open = new FileManager($dm, new Claims('tester', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, false), $meta);
+    upload($open, '', 'note.txt', 'x');
+    $t = $open->trash('local', 'note.txt');
+
+    $locked = new FileManager($dm, new Claims('tester', ['read', 'write', 'delete'], ['local'], '', 50, ['jpg'], 0, false), $meta);
+    try {
+        $locked->restore('local', $t['trash_id']);
+        throw new \RuntimeException('restore should refuse an extension outside allowedExt');
+    } catch (ApiException $e) {
+        assertEqual('ext_not_allowed', $e->getErrorCode(), 'ext_not_allowed on restore');
+    }
+
+    upload($open, '', 'ok.jpg', 'x');
+    $t2 = $open->trash('local', 'ok.jpg');
+    try {
+        $open->restore('local', $t2['trash_id'], 'shell.php.jpg');
+        throw new \RuntimeException('restore should refuse a dangerous double extension');
+    } catch (ApiException $e) {
+        assertEqual('ext_dangerous', $e->getErrorCode(), 'ext_dangerous on restore');
+    }
+});
+
+test('restore requires the write permission, not just delete', function () {
+    $root = sys_get_temp_dir() . '/fluxfiles-trash-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage']]);
+    $meta = new StorageMetadataHandler($dm);
+    $open = new FileManager($dm, new Claims('tester', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, false), $meta);
+    upload($open, '', 'doc.txt', 'x');
+    $t = $open->trash('local', 'doc.txt');
+
+    $noWrite = new FileManager($dm, new Claims('tester', ['read', 'delete'], ['local'], '', 50, null, 0, false), $meta);
+    try {
+        $noWrite->restore('local', $t['trash_id']);
+        throw new \RuntimeException('a delete-only token should not be able to restore');
+    } catch (ApiException $e) {
+        assertEqual('permission_denied', $e->getErrorCode(), 'permission_denied without write');
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

@@ -217,6 +217,50 @@ try {
         assertTrue(isWebp($body), 'logo watermarked webp');
     });
 
+    // ── allow_download=false (audit H-7) ────────────────────────────────────
+    // A preview-only token with NO watermark. Reachable because the
+    // watermark ⇒ allow_download=false implication in Claims is one-directional,
+    // and list() hands out img_base without ever consulting allowDownload.
+    test('preview-only token: a wildcard-Accept client is NOT given the clean original', function () use ($BASE, $SECRET) {
+        $t = ImageToken::mint('local', 'e2e_img/photo.jpg', 'e2e', 300, $SECRET, 2000, 0, null, false);
+        // curl's own default Accept — the one-request bypass this closes.
+        [$st, $h, $body] = httpGet("{$BASE}/api/fm/img?token=" . rawurlencode($t) . '&width=400', ['Accept: */*']);
+        assertEqual(200, $st);
+        assertEqual('image/webp', $h['content-type'] ?? '', 'forced to webp, not the clean jpeg');
+        assertTrue(isWebp($body), 'transformed webp, never the original bytes');
+    });
+
+    test('preview-only token: an untransformable source is refused, not served clean', function () use ($BASE, $SECRET, $uploadRoot) {
+        // An ANIMATED GIF passes the is-image gate but transform() declines it
+        // (converting would drop the animation), so it reaches the handler's
+        // other fall-through to $fs->read($path). SVG can't be used here — it
+        // is rejected one step earlier, by ImageOptimizer::isImage().
+        $gifPath = $uploadRoot . '/e2e_img/anim.gif';
+        $im = imagecreatetruecolor(8, 8);
+        imagefill($im, 0, 0, imagecolorallocate($im, 10, 20, 30));
+        ob_start(); imagegif($im); $frame = (string) ob_get_clean();
+        imagedestroy($im);
+        // ImageOptimizer::isAnimatedGif() counts Graphic Control Extension
+        // blocks, so splice two in ahead of the image descriptor (GD still
+        // decodes the file — an unknown-to-it extension block is skipped).
+        $gce = "\x21\xF9\x04\x00\x0a\x00\x00\x00";
+        $desc = strpos($frame, "\x2c");
+        file_put_contents($gifPath, substr($frame, 0, $desc) . $gce . $gce . substr($frame, $desc));
+        assertTrue(\FluxFiles\ImageOptimizer::isAnimatedGif((string) file_get_contents($gifPath)), 'fixture reads as animated');
+
+        $deny = ImageToken::mint('local', 'e2e_img/anim.gif', 'e2e', 300, $SECRET, 2000, 0, null, false);
+        [$st, , $body] = httpGet("{$BASE}/api/fm/img?token=" . rawurlencode($deny) . '&width=400&format=webp');
+        assertEqual(415, $st);
+        assertTrue(strncmp($body, 'GIF8', 4) !== 0, 'the GIF source is never echoed back');
+
+        // A normal token still gets it — this is a preview-only restriction, not
+        // a new blanket refusal.
+        $ok = ImageToken::mint('local', 'e2e_img/anim.gif', 'e2e', 300, $SECRET, 2000);
+        [$st2, , $b2] = httpGet("{$BASE}/api/fm/img?token=" . rawurlencode($ok) . '&width=400&format=webp');
+        assertEqual(200, $st2, 'a download-allowed token still gets the original');
+        assertTrue(strncmp($b2, 'GIF8', 4) === 0, 'and it is the untouched GIF');
+    });
+
 } finally {
     proc_terminate($proc); proc_close($proc);
     @array_map('unlink', glob($uploadRoot . '/e2e_img/_variants/*') ?: []);
@@ -224,6 +268,7 @@ try {
     @array_map('unlink', glob($uploadRoot . '/e2e_img/_config/*') ?: []);
     @rmdir($uploadRoot . '/e2e_img/_config');
     @unlink($uploadRoot . '/e2e_img/photo.jpg');
+    @unlink($uploadRoot . '/e2e_img/anim.gif');
     @rmdir($uploadRoot . '/e2e_img');
     if ($envBackup === null) { @unlink($envFile); } else { file_put_contents($envFile, $envBackup); }
 }

@@ -897,6 +897,9 @@ class FileManager
     {
         $this->assertDisk($disk);
         $this->assertPerm('delete');
+        // A restore puts bytes back on the disk, so it is a write as much as it
+        // is an undo — without this a delete-only token could land a file.
+        $this->assertPerm('write');
         $this->assertSafeTrashId($id);
 
         $entry = $this->meta->getTrash($disk, $id);
@@ -909,6 +912,18 @@ class FileManager
             ? $this->scopedPath($newPath)
             : (string) ($entry['original_key'] ?? '');
         $this->assertNotSystem($target);
+
+        // Restore is a relocation out of the trash, so it gets the same
+        // extension rules as rename/move/copy. Without them a caller could
+        // trash a.jpg and restore it as a.php: `path` is caller-supplied, and
+        // the manifest's original_key is attacker-writable on a BYOB disk.
+        // Directories have no extension (mirroring rename), but their name is
+        // still checked for a dangerous double extension.
+        if (!empty($entry['is_dir'])) {
+            $this->assertSafeFilename(basename($target));
+        } else {
+            $this->assertRelocationExt((string) ($entry['original_key'] ?? $target), $target);
+        }
 
         $fs = $this->disks->disk($disk);
         $this->assertTargetAvailable($fs, $target);
@@ -2453,7 +2468,10 @@ class FileManager
             $this->streamSecret,
             $maxWidth,
             $this->claims->webpDefaultQuality,
-            $this->claims->watermark
+            $this->claims->watermark,
+            // A preview-only token must not get the clean original out of /img's
+            // fall-through paths either — presign/getContent/zip all refuse it.
+            $this->claims->allowDownload
         );
         return $this->apiBasePath . '/img?token=' . rawurlencode($token);
     }

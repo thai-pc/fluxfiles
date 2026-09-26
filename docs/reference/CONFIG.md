@@ -86,7 +86,7 @@ and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/AP
 | Claim | Type | Default | Notes |
 |---|---|---|---|
 | `owner_only` | bool | `false` | Restrict delete/rename/move to the uploader. |
-| `allow_download` | bool | `true` | `false` = preview-only (withholds `url`/`variants`; original presign, ZIP download and `GET /content` → 403). |
+| `allow_download` | bool | `true` | `false` = preview-only (withholds `url`/`variants`; original presign, ZIP download and `GET /content` → 403). `/img` also refuses to fall through to the untransformed source: a client accepting neither AVIF nor WebP gets WebP anyway, and an untransformable image (SVG, animated GIF) → 415 instead of the original bytes. |
 | `allow_chmod` | bool | `true` | Allow `POST /api/fm/chmod` on SFTP disks. |
 | `allow_code_edit` | bool | `false` | Allow editing file text via `/api/fm/content` (config/code editor). |
 | `allow_zip` | bool | `true` | Allow `POST /api/fm/zip`; also needs `allow_download`. |

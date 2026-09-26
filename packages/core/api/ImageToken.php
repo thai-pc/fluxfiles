@@ -14,6 +14,15 @@ namespace FluxFiles;
  * distinct `t=img` type keeps it from being usable on the raw `/stream` endpoint
  * (and vice versa) — an img token only ever yields a transformed WebP, never the
  * raw original bytes of an arbitrary file.
+ *
+ * The token also carries `dl` (the tenant's allow_download claim), because the
+ * endpoint has two fall-through paths that would otherwise serve the clean
+ * original: a client whose `Accept` names neither AVIF nor WebP (a bare
+ * wildcard Accept, curl's default, does exactly that), and a source transform()
+ * declines (SVG, animated GIF, decode bomb). Both already refuse for a
+ * watermarked token; `dl=0` extends
+ * that to a preview-only token with no watermark, which is reachable because the
+ * watermark ⇒ allow_download=false implication in Claims is one-directional.
  */
 final class ImageToken
 {
@@ -26,6 +35,9 @@ final class ImageToken
      * @param array|null $watermark Per-tenant watermark config (embedded only when
      *        enabled): type, text, logo_path, position, opacity, font_size. The
      *        serve endpoint applies it; the source file is never modified.
+     * @param bool $allowDownload Mirror of the tenant's allow_download claim. False
+     *        means the endpoint must never fall through to the untransformed
+     *        original — see the `dl` note below.
      */
     public static function mint(
         string $disk,
@@ -35,7 +47,8 @@ final class ImageToken
         string $secret,
         int $maxWidth,
         int $defaultQuality = 0,
-        ?array $watermark = null
+        ?array $watermark = null,
+        bool $allowDownload = true
     ): string {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
@@ -49,6 +62,12 @@ final class ImageToken
             'iat'  => $now,
             'exp'  => $now + $ttl,
         ];
+        // Only stamped when the answer is "no": an older token without the claim
+        // decodes as allowed, which is the pre-existing behaviour, and the
+        // payload stays byte-identical for the common case.
+        if (!$allowDownload) {
+            $payload['dl'] = 0;
+        }
         if ($watermark !== null && !empty($watermark['enabled'])) {
             $payload['wm'] = $watermark;
         }
@@ -56,7 +75,7 @@ final class ImageToken
     }
 
     /**
-     * @return array{disk:string,path:string,maxWidth:int,defaultQuality:int,sub:string,watermark:array|null}
+     * @return array{disk:string,path:string,maxWidth:int,defaultQuality:int,sub:string,watermark:array|null,allowDownload:bool}
      */
     public static function verify(string $token, string $secret): array
     {
@@ -83,6 +102,7 @@ final class ImageToken
             'defaultQuality' => max(0, (int) ($p->dq ?? 0)),
             'sub'            => (string) ($p->sub ?? ''),
             'watermark'      => isset($p->wm) ? (array) json_decode(json_encode($p->wm), true) : null,
+            'allowDownload'  => !isset($p->dl) || (bool) $p->dl,
         ];
     }
 }

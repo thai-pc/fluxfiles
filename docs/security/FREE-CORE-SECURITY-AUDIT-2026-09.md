@@ -156,7 +156,7 @@ config-driven exec, so turning it on no longer re-opens this.
 that hook neutering alone did not close F2. `test-git-deploy.php` 10/10 (a new
 test loops both `git_deploy_hooks` states).
 
-### [ ] H-5 — `restore()` skips extension immutability
+### [x] H-5 — `restore()` skips extension immutability
 **Where:** `FileManager.php:896-948`
 
 Trash restore resolves its target and calls `assertNotSystem()`, but not
@@ -164,6 +164,16 @@ Trash restore resolves its target and calls `assertNotSystem()`, but not
 `rename()` (`:1179`), which has an explicit ext-change guard. Gated on the
 `delete` permission rather than `write`. A restore can therefore land a `.php`
 file on a local disk served by the web server.
+
+**Fixed** (commit pending, 2026-09-26): `restore()` now also asserts the
+`write` permission (putting bytes back on the disk is a write, not just an
+undo) and runs the same relocation guards as rename/move/copy —
+`assertRelocationExt()` for files (ext immutability + `allowedExt` +
+`assertSafeFilename`), and `assertSafeFilename()` on the folder name for
+directories, which have no extension. The source extension is taken from the
+manifest's `original_key`, and both it and the caller-supplied `path` are
+re-checked, so a tampered BYOB manifest cannot pick the extension either.
+Three regression tests in `tests/integration/test-trash.php` (23/23).
 
 ### [ ] H-6 — WordPress Subscribers receive full read+write+delete tokens
 **Where:** `packages/wordpress/includes/FluxFilesApi.php:475`,
@@ -177,7 +187,7 @@ the default role on an open-registration site — gets a full-disk token.
 **Fix:** gate on a capability (`upload_files` at minimum) and default the
 minted role to the `viewer` preset unless the operator opts up.
 
-### [ ] H-7 — `/api/fm/img` serves the clean original to a preview-only token
+### [x] H-7 — `/api/fm/img` serves the clean original to a preview-only token
 **Where:** `packages/core/api/index.php:1936` and `:1987`
 
 When `Accept` contains neither `image/avif` nor `image/webp` (`:1899-1905`),
@@ -195,8 +205,24 @@ So a preview-only token gets `img_base` from `list()`, and one curl returns the
 full-resolution original — bypassing the gate `presign` (`:2187`),
 `getContent` (`:2029`) and `streamZip` (`:2518`) all enforce.
 
-**Fix:** carry `allow_download` in the `ImageToken` and treat `!$allowDownload`
-exactly like `$wmEnabled` at both fall-through points.
+**Fixed** (commit pending, 2026-09-26): `ImageToken` carries the claim as
+`dl`, stamped only when it is false — an older token without it decodes as
+allowed, so nothing in flight changes. `FileManager::imgBaseUrl()` passes
+`$this->claims->allowDownload`; `PublicLinks`' share-preview token passes
+`false` outright, which its own docblock already promised ("a bounded
+transform, never the original bytes").
+
+Both fall-through points in `index.php` now test `$noOriginal = $wmEnabled ||
+!$scope['allowDownload']`: the negotiation path forces WebP, and an
+untransformable source returns 415 instead of the untouched bytes. The same
+two points existed in the Laravel and WordPress `/img` ports and are patched
+identically — they mint through core's `FileManager`, so they receive `dl=0`
+tokens whether or not the adapter forwards `watermark_enabled`.
+
+Tests: `test-image-transform.php` (mint/verify + backward compatibility) and
+two HTTP tests in `tests/e2e/test-img-http.php` (18/18) driving the real
+bypass — a bare wildcard `Accept`, and an animated GIF for the
+undecodable path.
 
 ---
 
