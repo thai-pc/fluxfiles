@@ -3,7 +3,17 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.15] — 2026-09-26
+
+> Released: `wordpress-v0.2.51`.
+
+The licence → update channel, end to end. Three defects that compounded: a key
+minted by `license-gen` carried no id and was permanently refused by the update
+server; the WordPress updater sent its licence where the server never looks; and
+the plugin had no catalogue entry, so the request 404'd before either was
+reachable — which is why none of it had been observed. Only the plugin ships a
+runtime change (`FluxFilesUpdater`); the rest is vendor tooling and the
+reference server, neither of which is distributed.
 
 ### Fixed — the WordPress plugin had no catalogue entry, so no site could update
 
