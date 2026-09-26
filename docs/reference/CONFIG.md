@@ -316,7 +316,7 @@ private-local-media requirement.
 | `FLUXFILES_CLAMSCAN_TIMEOUT` | `60` | Local ClamAV (`clamdscan`) subprocess timeout (seconds). An unresponsive engine is killed and the write refused (fail-closed) rather than hanging the request forever. |
 | `FLUXFILES_IMPORT_ALLOW_SVG` | `false` | Allow SVG via URL import. |
 | `FLUXFILES_IMPORT_MAX_MB` / `_RATE_LIMIT` / `_TIMEOUT` | — | URL-import server defaults. |
-| `FLUXFILES_SSRF_ALLOW_HOSTS` | — | SSRF allow-list (BYOB + import). |
+| `FLUXFILES_SSRF_ALLOW_HOSTS` | — | SSRF allow-list (BYOB + import), comma-separated `host` or `host:port`. Waives the **pre-connect** public-IP requirement for those hosts only — the legit case is an SFTP/S3 endpoint on the operator's own private network. The post-connect DNS-rebinding backstop stays on for every fetch and is scoped to the addresses the allowlisted host actually resolved to, so listing one private host does not disarm SSRF protection for other tenants or other URLs. |
 | `FLUXFILES_WEBHOOK_ALLOW_INTERNAL` | `false` | Opt out of the Webhooks (paid) SSRF policy — allows loopback/RFC1918/cloud-metadata targets, for a self-hosted receiver (e.g. n8n) on the same box. Also skips the post-connect DNS-rebinding re-check. |
 | `FLUXFILES_SHARE_RATE_LIMIT` | `60` | Public share requests/min per share id (`share/info` + `share/file`). |
 | `FLUXFILES_SHARE_UNLOCK_LIMIT` | `5` | Share password attempts/min per share id **+ client IP**. Stops one guesser; an attacker can rotate `REMOTE_ADDR`, so it is never the only limit. |

@@ -64,7 +64,7 @@ The hold check runs on the un-normalized path, so a held file is reachable
 under a backslash spelling. Fixing C-1 closes this; keep it listed so the
 regression test covers the hold path explicitly.
 
-### [ ] H-2 — SSRF guard bypassed by IPv6-mapped spellings
+### [x] H-2 — SSRF guard bypassed by IPv6-mapped spellings
 **Where:** `packages/core/api/SsrfGuard.php:66-72`
 
 Only the literal `::ffff:` prefix with a *dotted-quad* tail is unwrapped.
@@ -85,13 +85,19 @@ which does not reject mapped addresses. Verified by direct execution:
 Reaches BYOB S3 endpoints (where the pinned IP is trusted with **no**
 post-connect re-check, by design) and URL import.
 
-**Fix:** canonicalize with `inet_pton` at the top of `isPublicIp()` — if the
-16-byte form starts with `::ffff:`, re-judge the trailing 4 bytes as IPv4.
-Compare `::`/`::1` through `inet_pton` rather than string equality. Add
-`2002::/16` and `64:ff9b::/96` to the denylist. Extend `test-ssrf-guard.php`
-(it passes today *despite* this bug — it only covers the canonical spelling).
+**Fixed** (commit pending, 2026-09-26): the IPv6 branch of `isPublicIp()` now
+judges the packed 16-byte value from `inet_pton`, never the spelling. `::` and
+`::1` are compared as bytes; `::ffff:0:0/96` (mapped), `::a.b.c.d` (compat),
+`2002::/16` (6to4, v4 in bytes 2-5) and `64:ff9b::/96` (NAT64, v4 in the last
+4) all unwrap to their embedded IPv4 and recurse into the existing v4 rules.
+The `NO_PRIV_RANGE|NO_RES_RANGE` filter stays as the final catch-all for
+genuine v6.
 
-### [ ] H-3 — `FLUXFILES_SSRF_ALLOW_HOSTS` globally disables the rebinding backstop
+`test-ssrf-guard.php` grew from 44 to 59 assertions: all 13 spellings in the
+table above are now rejected, and a positive test proves public wrappers
+(`::ffff:8.8.8.8`, `2002:808:808::`, `64:ff9b::808:808`) still pass.
+
+### [x] H-3 — `FLUXFILES_SSRF_ALLOW_HOSTS` globally disables the rebinding backstop
 **Where:** `SsrfGuard.php:293-301`, wired at `packages/core/api/index.php:38-44`
 
 `assertConnectedIpSafe()` returns early whenever `$allowTestHosts` is non-empty
@@ -104,12 +110,26 @@ populated from the documented operator env var `FLUXFILES_SSRF_ALLOW_HOSTS`
 One allowlisted private SFTP host therefore switches off the post-connect check
 for every outbound fetch by every tenant, re-opening plain DNS rebinding.
 
-**Fix:** scope the bypass to the allowlisted host's resolved IPs
-(`assertConnectedIpSafe($ch, ?array $allowedIps = null)`), separate the
-production env allowlist from the test-fixture property, and correct the
-docblock.
+**Fixed** (commit pending, 2026-09-26): `assertConnectedIpSafe($ch, ?array
+$allowedIps = null)` now takes an **allowance, not a bypass** — the set the
+pre-connect layer already vetted (or waived) for *this* fetch. Any other
+address is still judged, so rebinding to a different private IP is caught even
+with an allowlist configured. `UrlImporter` passes the per-hop `$safeIps`;
+`BucketDoctor` passes its pinned IP only when the URL's host is genuinely
+allowlisted (new `SsrfGuard::isAllowlistedHost()`), so a private pinned IP on a
+non-allowlisted host is still rejected.
 
-### [ ] H-4 — git-deploy hook neutering bypassable via other config-driven exec hooks
+The env allowlist moved to its own `SsrfGuard::$allowHosts` property (populated
+from `FLUXFILES_SSRF_ALLOW_HOSTS` in `index.php`), leaving `$allowTestHosts`
+for in-process fixtures; both docblocks corrected. Comparison goes through
+`canonicalizeIp()` so `::ffff:127.0.0.1` and `127.0.0.1` match — curl reports
+whichever family the socket used. `docs/reference/CONFIG.md` now states that
+the allowlist waives only the pre-connect requirement.
+
+Tests: `test-ssrf-guard.php` 59/59, `test-url-import-fetch.php` 9/9,
+`test-bucket-doctor-ssrf.php` 4/4.
+
+### [x] H-4 — git-deploy hook neutering bypassable via other config-driven exec hooks
 **Where:** `packages/core/api/GitDeploy.php:76`
 
 Only `core.hooksPath` is neutered. `git pull`/`fetch` also execute commands
@@ -127,10 +147,14 @@ token over that path. Escalates file-write-in-repo to RCE as the SSH user —
 the outcome `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` §4.3 claims is closed
 by default.
 
-**Fix:** add `-c core.fsmonitor=false -c core.sshCommand=ssh
--c protocol.ext.allow=never -c protocol.file.allow=never`, and apply the
-fsmonitor/sshCommand/protocol parts **unconditionally** — the
-`git_deploy_hooks` claim documents "hooks", not arbitrary config-driven exec.
+**Fixed** (commit pending, 2026-09-26): `GitDeploy::buildCommand()` prefixes
+every git invocation with `-c core.fsmonitor=false -c core.sshCommand=ssh
+-c protocol.ext.allow=never -c protocol.file.allow=never`, **unconditionally**
+— the `git_deploy_hooks` claim opts into *hooks*, not into arbitrary
+config-driven exec, so turning it on no longer re-opens this.
+`docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` §4.3 carries an amendment noting
+that hook neutering alone did not close F2. `test-git-deploy.php` 10/10 (a new
+test loops both `git_deploy_hooks` states).
 
 ### [ ] H-5 — `restore()` skips extension immutability
 **Where:** `FileManager.php:896-948`
@@ -242,7 +266,7 @@ which predates the `height`/`fit`/`format` axes now folded into
 `:549` degrades to `'*'`. No `X-Frame-Options` or `frame-ancestors` anywhere in
 `api/`, `public/`, `router.php` or `docker/`.
 
-### [ ] M-6 — git-deploy lock permanently wedgeable
+### [x] M-6 — git-deploy lock permanently wedgeable
 **Where:** `GitDeploy.php:97-111`
 
 The PID is read from a file inside the repo (attacker-writable, same
@@ -252,8 +276,12 @@ so writing `-1` makes the lock read as held forever and short-circuits the
 `-mmin` staleness reclaim. Every later deploy returns `409
 git_deploy_in_progress` with no server-side recovery.
 
-**Fix:** validate the PID is digits-only before `kill -0`; fall through to the
-age-based reclaim otherwise.
+**Fixed** (commit pending, 2026-09-26): the lock script clears the PID unless
+it is digits-only (`case "$P" in (*[!0-9]*|"") P="";; esac`) before `kill -0`,
+so a hostile `-1` falls through to the existing `-mmin` staleness reclaim.
+Verified in a real shell (`-1`, `abc`, `12x`, empty → cleared; `1234` kept).
+`test-git-deploy.php` asserts the guard is present *and* ordered before
+`kill -0`; `test-git-deploy-lock.php` 6/6.
 
 ### [ ] M-7 — SSH multiplex runtime state lives under the document root
 **Where:** `packages/core/api/SshMultiplexer.php:124-128`, `:206-217`

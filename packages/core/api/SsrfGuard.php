@@ -24,14 +24,56 @@ namespace FluxFiles;
 final class SsrfGuard
 {
     /**
-     * Hosts ("host" or "host:port") allowed past the IP denylist — **TEST USE
-     * ONLY**. There is no env / config / request path that populates this; only
-     * in-process test code sets it (to reach a local fixture server). It is empty
-     * in production, so SSRF enforcement is unconditional there.
+     * Hosts ("host" or "host:port") allowed past the IP denylist, set by
+     * in-process test code to reach a local fixture server.
      *
      * @var string[]
      */
     public static array $allowTestHosts = [];
+
+    /**
+     * The same escape hatch, but for production: populated from the operator's
+     * FLUXFILES_SSRF_ALLOW_HOSTS env var (see index.php). Legit use is an SFTP
+     * server on the operator's own private network.
+     *
+     * Kept separate from $allowTestHosts so neither list's contents can be
+     * mistaken for the other's provenance, and so a test can clear its own
+     * entries without disturbing an operator allowlist.
+     *
+     * Either list only waives the *pre-connect* public-IP requirement for the
+     * named host. The post-connect backstop (assertConnectedIpSafe) stays on for
+     * every fetch: it is scoped to the addresses that host actually resolved to,
+     * never switched off globally.
+     *
+     * @var string[]
+     */
+    public static array $allowHosts = [];
+
+    /**
+     * Both allowlists as one lowercase list.
+     *
+     * @return string[]
+     */
+    private static function allowedHosts(): array
+    {
+        return array_merge(self::$allowTestHosts, self::$allowHosts);
+    }
+
+    /**
+     * Is this host (optionally host:port) one the operator or a test allowlisted?
+     * Callers that do their own resolution/pinning use this to decide whether to
+     * pass their pinned address to assertConnectedIpSafe() as an allowance.
+     */
+    public static function isAllowlistedHost(string $host, $port = null): bool
+    {
+        $host = strtolower(trim($host, '[]'));
+        if ($host === '') {
+            return false;
+        }
+        $allowed = self::allowedHosts();
+        return in_array($host, $allowed, true)
+            || ($port !== null && in_array($host . ':' . $port, $allowed, true));
+    }
 
     /**
      * True only for a genuinely public, routable address. Rejects loopback,
@@ -60,16 +102,38 @@ final class SsrfGuard
         }
 
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            if ($ip === '::1' || $ip === '::') {
+            // Judge the 16-byte value, never the spelling. "::ffff:7f00:1",
+            // "0:0:0:0:0:ffff:127.0.0.1" and "::ffff:127.0.0.1" are the same
+            // address; a string compare only catches the last one, and PHP's
+            // NO_PRIV_RANGE|NO_RES_RANGE filter does not reject mapped addresses
+            // at all — so every one of those spellings used to read as public.
+            $bin = @inet_pton($ip);
+            if ($bin === false || strlen($bin) !== 16) {
                 return false;
             }
-            // IPv4-mapped IPv6 (::ffff:127.0.0.1) — unwrap and judge the v4 address.
-            if (stripos($ip, '::ffff:') === 0) {
-                $v4 = substr($ip, 7);
-                if (filter_var($v4, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-                    return self::isPublicIp($v4);
-                }
+
+            // Loopback (::1) and the unspecified address (::).
+            if ($bin === str_repeat("\0", 15) . "\1" || $bin === str_repeat("\0", 16)) {
+                return false;
             }
+
+            // IPv4-mapped (::ffff:0:0/96) — unwrap and judge the v4 address.
+            if (strncmp($bin, str_repeat("\0", 10) . "\xff\xff", 12) === 0) {
+                return self::isPublicIp(inet_ntop(substr($bin, 12)));
+            }
+            // IPv4-compatible (::a.b.c.d, deprecated but still routed by some stacks).
+            if (strncmp($bin, str_repeat("\0", 12), 12) === 0) {
+                return self::isPublicIp(inet_ntop(substr($bin, 12)));
+            }
+            // 6to4 (2002::/16) embeds its v4 address in bytes 2-5.
+            if (strncmp($bin, "\x20\x02", 2) === 0) {
+                return self::isPublicIp(inet_ntop(substr($bin, 2, 4)));
+            }
+            // NAT64 well-known prefix (64:ff9b::/96) embeds its v4 in the last 4.
+            if (strncmp($bin, "\x00\x64\xff\x9b" . str_repeat("\0", 8), 12) === 0) {
+                return self::isPublicIp(inet_ntop(substr($bin, 12)));
+            }
+
             // Blocks ULA (fc00::/7), link-local (fe80::/10), and reserved ranges.
             if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                 return false;
@@ -211,11 +275,17 @@ final class SsrfGuard
             throw new ApiException('This URL host is not in the import allowlist', 422, 'host_not_allowed');
         }
 
-        // Test-only fixture bypass (see $allowTestHosts). Empty in production.
-        if (self::$allowTestHosts !== []) {
+        // Allowlisted host (operator env var, or a test fixture) — waives the
+        // public-IP requirement for THIS host only. The post-connect backstop
+        // still runs; see assertConnectedIpSafe().
+        $allowed = self::allowedHosts();
+        if ($allowed !== []) {
             $hostPort = $host . (isset($parts['port']) ? ':' . $parts['port'] : '');
-            if (in_array($host, self::$allowTestHosts, true) || in_array($hostPort, self::$allowTestHosts, true)) {
-                return [$host];
+            if (in_array($host, $allowed, true) || in_array($hostPort, $allowed, true)) {
+                // Resolve anyway so the caller can pin curl and so the
+                // post-connect check has the exact set of addresses to accept.
+                $resolved = self::resolveHostIps($host);
+                return $resolved !== [] ? $resolved : [$host];
             }
         }
 
@@ -272,9 +342,10 @@ final class SsrfGuard
         ) {
             throw new ApiException('This SFTP host is not allowed', 422, 'ssrf_blocked');
         }
-        // Test-only fixture bypass (shared with assertSafeUrl). Empty in production.
-        if (self::$allowTestHosts !== [] && in_array($host, self::$allowTestHosts, true)) {
-            return [$host];
+        // Allowlisted host (shared with assertSafeUrl) — see allowedHosts().
+        if (in_array($host, self::allowedHosts(), true)) {
+            $resolved = self::resolveHostIps($host);
+            return $resolved !== [] ? $resolved : [$host];
         }
         $ips = self::resolveHostIps($host);
         if ($ips === []) {
@@ -292,17 +363,61 @@ final class SsrfGuard
      * Post-connect re-check: the IP curl actually connected to must still be
      * public. Defends DNS rebinding and any redirect that slipped a private hop.
      *
+     * $allowedIps narrows, rather than disables, the check: it is the set
+     * assertSafeUrl()/assertHostSafe() already vetted (or waived) for THIS
+     * fetch, so an allowlisted private host stays reachable while every other
+     * address is still judged. Passing null keeps the plain public-IP rule.
+     *
+     * This used to return early whenever an allowlist was non-empty, which
+     * switched the rebinding backstop off globally — one allowlisted private
+     * SFTP host disarmed it for every tenant's outbound fetch.
+     *
      * @param \CurlHandle $ch
+     * @param string[]|null $allowedIps Addresses this fetch was pinned to.
      */
-    public static function assertConnectedIpSafe($ch): void
+    public static function assertConnectedIpSafe($ch, ?array $allowedIps = null): void
     {
-        if (self::$allowTestHosts !== []) {
-            return; // a test pinned a local fixture host
-        }
         $ip = (string) curl_getinfo($ch, CURLINFO_PRIMARY_IP);
-        if ($ip !== '' && !self::isPublicIp($ip)) {
+        if ($ip === '') {
+            return;
+        }
+        $ip = trim($ip, '[]');
+        if ($allowedIps !== null) {
+            foreach ($allowedIps as $allowed) {
+                if (self::sameIp($ip, (string) $allowed)) {
+                    return;
+                }
+            }
+        }
+        if (!self::isPublicIp($ip)) {
             throw new ApiException('Connection resolved to a private or reserved address', 422, 'ssrf_blocked');
         }
+    }
+
+    /**
+     * Compare two addresses by value, so spelling differences don't matter —
+     * including an IPv4-mapped wrapper, since curl reports the connected
+     * address in whichever family the socket used while the pin may hold the
+     * other spelling of the same host.
+     */
+    private static function sameIp(string $a, string $b): bool
+    {
+        $pa = self::canonicalizeIp($a);
+        $pb = self::canonicalizeIp($b);
+        return $pa !== null && $pb !== null && $pa === $pb;
+    }
+
+    /** Packed form of an address, with ::ffff:0:0/96 unwrapped to its 4 bytes. */
+    private static function canonicalizeIp(string $ip): ?string
+    {
+        $bin = @inet_pton(trim($ip, '[]'));
+        if ($bin === false) {
+            return null;
+        }
+        if (strlen($bin) === 16 && strncmp($bin, str_repeat("\0", 10) . "\xff\xff", 12) === 0) {
+            return substr($bin, 12);
+        }
+        return $bin;
     }
 
     private static function hasSuffix(string $haystack, string $suffix): bool

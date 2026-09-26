@@ -73,7 +73,21 @@ class GitDeploy
     {
         $p = escapeshellarg($path);
         $lockDir = escapeshellarg(rtrim($path, '/') . '/' . self::LOCK_NAME);
-        $hooksFlag = $hooksEnabled ? '' : '-c core.hooksPath=' . escapeshellarg('/dev/null') . ' ';
+
+        // Config-driven exec, neutered UNCONDITIONALLY — the git_deploy_hooks
+        // claim opts into *hooks*, not into arbitrary command execution, and
+        // every one of these is read from the repo's own .git/config, which is
+        // an ordinary extensionless file any write-scoped token can overwrite
+        // (assertExt/assertSafeFilename do not stop it). Without them, a
+        // file-write in the repo escalates to RCE as the SSH user even with
+        // hooks disabled: `git pull` runs core.fsmonitor and core.sshCommand,
+        // and the ext/file transports run whatever a remote URL names.
+        $safety = '-c core.fsmonitor=false '
+            . '-c core.sshCommand=ssh '
+            . '-c protocol.ext.allow=never '
+            . '-c protocol.file.allow=never ';
+
+        $hooksFlag = $safety . ($hooksEnabled ? '' : '-c core.hooksPath=' . escapeshellarg('/dev/null') . ' ');
 
         $sync = $branch !== ''
             ? sprintf(
@@ -96,7 +110,13 @@ class GitDeploy
         // LOCK_STALE_MINUTES gets its lock stolen by a concurrent trigger.
         return 'L=' . $lockDir . '; '
             . 'if [ -d "$L" ]; then '
+            // The PID comes from a file inside the repo, so it is
+            // attacker-writable: validate it is digits-only before kill -0.
+            // `kill -0 -1` returns 0 ("every process you may signal"), which
+            // would make the lock read as held forever and short-circuit the
+            // -mmin staleness reclaim below — wedging every later deploy.
             . 'P="$(cat "$L/pid" 2>/dev/null)"; '
+            . 'case "$P" in (*[!0-9]*|"") P="";; esac; '
             . 'if [ -n "$P" ] && kill -0 "$P" 2>/dev/null; then '
             . 'echo ' . escapeshellarg(self::LOCKED_MARK) . '; exit 99; '
             . 'fi; '

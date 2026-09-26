@@ -340,7 +340,14 @@ class BucketDoctor
             // resolve entry for). Only meaningful when we had a pin to check against
             // — an unpinned (non-BYOB) fetch has no SSRF threat model to enforce.
             if ($pinnedIp !== null && $pinnedIp !== '') {
-                SsrfGuard::assertConnectedIpSafe($ch);
+                // An allowlisted host (operator env var / test fixture) waives the
+                // public-IP rule for its own pinned address only — every other
+                // address curl might have landed on is still rejected.
+                $allowance = SsrfGuard::isAllowlistedHost(
+                    (string) (parse_url($url, PHP_URL_HOST) ?? ''),
+                    parse_url($url, PHP_URL_PORT)
+                ) ? [$pinnedIp] : null;
+                SsrfGuard::assertConnectedIpSafe($ch, $allowance);
             }
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             return [$code, is_string($body) ? $body : ''];

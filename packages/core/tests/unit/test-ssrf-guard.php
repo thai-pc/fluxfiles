@@ -116,6 +116,54 @@ test('assertSafeUrl: host not in allowlist is rejected before any DNS', function
     assertBlocked('http://evil.example/x', 'host_not_allowed', ['*.unsplash.com']);
 });
 
+echo "{$yellow}► isPublicIp — IPv6 spellings of a blocked address{$reset}\n";
+// These are all the SAME addresses as the dotted-quad forms above. A string
+// compare only catches the canonical "::ffff:127.0.0.1" spelling, and PHP's
+// NO_PRIV_RANGE|NO_RES_RANGE filter does not reject mapped addresses at all —
+// so every other spelling here used to be judged public.
+$v6Blocked = [
+    'mapped loopback, hex'      => '::ffff:7f00:1',
+    'mapped loopback, expanded' => '0:0:0:0:0:ffff:127.0.0.1',
+    'mapped loopback, dotted'   => '::ffff:127.0.0.1',
+    'mapped metadata'           => '::ffff:a9fe:a9fe',
+    'mapped RFC1918'            => '::ffff:c0a8:0101',
+    'mapped CGNAT'              => '::ffff:6440:1',
+    'compat loopback'           => '::127.0.0.1',
+    '6to4 loopback'             => '2002:7f00:1::',
+    '6to4 metadata'             => '2002:a9fe:a9fe::',
+    'NAT64 loopback'            => '64:ff9b::7f00:1',
+    'NAT64 metadata'            => '64:ff9b::a9fe:a9fe',
+    'loopback expanded'         => '0:0:0:0:0:0:0:1',
+    'unspecified expanded'      => '0:0:0:0:0:0:0:0',
+];
+foreach ($v6Blocked as $label => $ip) {
+    test("v6 blocked: {$label} ({$ip})", function () use ($ip) { assertFalse(SsrfGuard::isPublicIp($ip), $ip); });
+}
+test('a mapped/6to4 wrapper around a PUBLIC v4 is still public', function () {
+    assertTrue(SsrfGuard::isPublicIp('::ffff:8.8.8.8'), 'mapped 8.8.8.8');
+    assertTrue(SsrfGuard::isPublicIp('::ffff:808:808'), 'mapped 8.8.8.8, hex');
+    assertTrue(SsrfGuard::isPublicIp('2002:808:808::'), '6to4 of 8.8.8.8');
+    assertTrue(SsrfGuard::isPublicIp('64:ff9b::808:808'), 'NAT64 of 8.8.8.8');
+});
+
+echo "{$yellow}► assertConnectedIpSafe — allowlist narrows, never disables{$reset}\n";
+test('an allowlisted host does not switch the backstop off for other addresses', function () {
+    // The bug: any non-empty allowlist made assertConnectedIpSafe() return
+    // early for EVERY fetch, re-opening plain DNS rebinding tenant-wide.
+    SsrfGuard::$allowHosts = ['sftp.internal.example:22'];
+    try {
+        // A private address that is NOT the one this fetch was pinned to must
+        // still be rejected, even though an allowlist exists.
+        assertFalse(SsrfGuard::isPublicIp('10.0.0.5'), 'unrelated private IP is still not public');
+        $r = new ReflectionMethod(SsrfGuard::class, 'sameIp');
+        $r->setAccessible(true);
+        assertTrue($r->invoke(null, '::ffff:127.0.0.1', '127.0.0.1'), 'sameIp compares by value, not spelling');
+        assertFalse($r->invoke(null, '10.0.0.5', '10.0.0.6'), 'different addresses are not the same');
+    } finally {
+        SsrfGuard::$allowHosts = [];
+    }
+});
+
 echo "{$cyan}──────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

@@ -118,6 +118,20 @@ narrower action," addressing F1–F7 in order:
    the trade-off. Document the default and the opt-out prominently — this
    is the one item here that is genuinely specific to Git deploy and has no
    analogue elsewhere in the codebase. Closes F2 by default.
+
+   > **Amended 2026-09-26** (free/core security audit, finding H-4). Hooks
+   > are not git's only config-driven exec path, and `core.hooksPath` alone
+   > did **not** close F2. `git pull`/`fetch` also execute commands named by
+   > `core.fsmonitor` and `core.sshCommand`, both read from the repo's own
+   > `.git/config` — an ordinary extensionless file that `assertExt` and
+   > `assertSafeFilename` do not stop a `write`-scoped token from
+   > overwriting, so a file write in the deploy path escalated to RCE as the
+   > SSH user even with hooks disabled. `buildCommand()` now also passes
+   > `-c core.fsmonitor=false -c core.sshCommand=ssh
+   > -c protocol.ext.allow=never -c protocol.file.allow=never`, and applies
+   > those four **unconditionally** — the `git_deploy_hooks` claim opts into
+   > *hooks*, not into arbitrary command execution, so enabling it must not
+   > re-open this. Locked by `tests/unit/test-git-deploy.php`.
 4. **A dedicated claim, never bundled with `allow_sftp` or `allow_terminal`.**
    Matches the roadmap's own instinct. Concretely: `allow_git_deploy` (bool,
    default false) is independent — a token can have `allow_sftp` +

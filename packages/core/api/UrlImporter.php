@@ -129,7 +129,7 @@ final class UrlImporter
 
             // DNS-rebinding backstop: the IP curl actually connected to.
             try {
-                SsrfGuard::assertConnectedIpSafe($ch);
+                SsrfGuard::assertConnectedIpSafe($ch, $safeIps);
             } catch (ApiException $e) {
                 curl_close($ch); fclose($fh); throw $e;
             }

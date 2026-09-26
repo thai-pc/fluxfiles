@@ -32,15 +32,15 @@ echo "\n{$cyan}══ Git deploy: command shape + claim wiring ══{$reset}\n\
 // No branch → safe ff-only pull, never a forced reset.
 test('buildCommand: empty branch produces a ff-only pull, no reset --hard', function () {
     $cmd = GitDeploy::buildCommand('/var/www/site', '', true);
-    assertTrue(strpos($cmd, "git -C '/var/www/site' pull --ff-only") !== false, 'contains ff-only pull');
+    assertTrue((bool) preg_match("#git -C '/var/www/site' .*pull --ff-only#", $cmd), 'contains ff-only pull');
     assertTrue(strpos($cmd, 'reset --hard') === false, 'must NOT reset --hard when no branch is set');
 });
 
 // Branch set → the destructive but deterministic fetch+reset form.
 test('buildCommand: branch set produces fetch + reset --hard origin/<branch>', function () {
     $cmd = GitDeploy::buildCommand('/var/www/site', 'main', true);
-    assertTrue(strpos($cmd, "git -C '/var/www/site' fetch --prune origin") !== false, 'contains fetch --prune');
-    assertTrue(strpos($cmd, "git -C '/var/www/site' reset --hard 'origin/main'") !== false, 'contains reset --hard origin/main');
+    assertTrue((bool) preg_match("#git -C '/var/www/site' .*fetch --prune origin#", $cmd), 'contains fetch --prune');
+    assertTrue((bool) preg_match("#git -C '/var/www/site' .*reset --hard 'origin/main'#", $cmd), 'contains reset --hard origin/main');
 });
 
 // Hooks neutered by default; opt-in flag removes the hooksPath override.
@@ -107,6 +107,34 @@ test('git_deploy_branch rejects anything outside [A-Za-z0-9._/-]', function () {
         $c = Claims::fromJwtPayload((object) ['sub' => 'u', 'git_deploy_branch' => $ok]);
         assertTrue($c->gitDeployBranch === $ok, "kept as branch: {$ok}");
     }
+});
+
+// H-4: hooks are not the only config-driven exec path git offers. core.fsmonitor
+// and core.sshCommand are run by `git pull`/`fetch` and come from the repo's OWN
+// .git/config — an ordinary extensionless file a write-scoped token can overwrite.
+// These overrides are therefore unconditional, unlike core.hooksPath.
+test('buildCommand: config-driven exec is neutered even when hooks are enabled', function () {
+    foreach ([true, false] as $hooks) {
+        $cmd = GitDeploy::buildCommand('/var/www/site', '', $hooks);
+        $label = $hooks ? 'hooks on' : 'hooks off';
+        assertTrue(strpos($cmd, '-c core.fsmonitor=false') !== false, "fsmonitor disabled ({$label})");
+        assertTrue(strpos($cmd, '-c core.sshCommand=ssh') !== false, "sshCommand pinned ({$label})");
+        assertTrue(strpos($cmd, '-c protocol.ext.allow=never') !== false, "ext transport refused ({$label})");
+        assertTrue(strpos($cmd, '-c protocol.file.allow=never') !== false, "file transport refused ({$label})");
+    }
+});
+
+// M-6: `kill -0 -1` returns 0 ("every process you may signal"), so an attacker
+// writing "-1" into the lock's pid file would make the lock read as held forever
+// and skip the age-based reclaim, wedging every later deploy. The PID must be
+// digits-only before kill sees it.
+test('buildCommand: the lock PID is validated as digits before kill -0', function () {
+    $cmd = GitDeploy::buildCommand('/var/www/site', '', true);
+    $guard = 'case "$P" in (*[!0-9]*|"") P="";; esac;';
+    assertTrue(strpos($cmd, $guard) !== false,
+        'a non-numeric pid is discarded, falling through to the staleness reclaim');
+    assertTrue(strpos($cmd, $guard) < strpos($cmd, 'kill -0'),
+        'the validation runs before the kill -0 liveness check');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
