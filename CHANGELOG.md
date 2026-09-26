@@ -3,6 +3,47 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.17] — 2026-09-27
+
+> Released: `core-v0.2.91`, `node-v0.1.31`, `python-v0.1.2`,
+> `laravel-v0.2.44`, `wordpress-v0.2.52` (pushed in two batches — the
+> ≤3-tags-per-push rule).
+
+### Added — 14 shipped claims finally have a named option in every token builder
+
+- `share_brand_name` / `_logo_url` / `_color` / `_link_url`,
+  `intake_brand_*` (the same four), `intake_analytics`, `allow_git_deploy`,
+  `git_deploy_path` / `_branch` / `_hooks`, and `pro_hints` were all implemented,
+  enforced and documented in `docs/reference/CONFIG.md`, but none of the five
+  token builders named them — they were reachable only by typing the raw
+  snake_case key into the generic `claims` map. Every builder now exposes them
+  as a first-class option: `fluxfiles_token()`'s `webp` array, Node's
+  `createToken`/`createByobToken` (plus typed `ShareBrand*`/`GitDeploy*`
+  entries in `types.ts`), Python's `create_token`/`create_byob_token` kwargs,
+  and the Laravel/WordPress override maps. Nothing about what a token *can*
+  carry changes — the escape hatch already minted all fourteen — so no core,
+  adapter or module behaviour moves; this is the autocomplete and the type
+  error that were missing.
+- `pro_hints` is written only when explicitly set, in all five builders:
+  `Claims::fromJwtPayload` defaults it to **true** when absent, so embedding a
+  literal `false` for an unset option would have silently flipped that default.
+  This is the same trap that shipped once before in the `viewer`/`editor` role
+  presets with `allow_extract`/`allow_chmod`.
+
+### Added — `test-token-builder-parity.php`, so this cannot drift again
+
+- A new unit guard parses every `$payload->x` in `Claims.php` with the same
+  regex `test-config-doc.php` uses, then asserts each claim appears in all five
+  builders. Two allowlists keep it honest rather than noisy: `$intentionallyRaw`
+  (11 claims each builder sets from its own first-class arguments — `sub`,
+  `perms`, `disks`, `byob_disks`…) and `$builderExempt`, which currently holds
+  WordPress's seven `watermark_*` claims, whose non-forwarding is deliberate
+  (the proxy's `/img` port implements no overlay compositing, so a forwarded
+  claim would mint a token whose watermark is silently dropped). Every entry in
+  both carries its reason, because an unexplained exemption is how this kind of
+  drift returns. It runs in the existing `tests/unit/*.php` CI loop — no
+  workflow change needed.
+
 ## [0.3.16] — 2026-09-26
 
 > Released: `core-v0.2.90`.

@@ -255,6 +255,71 @@ describe('createToken', () => {
     expect(raw.intake_base_url).toBe('https://x/i');
   });
 
+  it('forwards the share/intake branding claims and intakeAnalytics, omits them otherwise', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        shareBrandName: 'Acme',
+        shareBrandLogoUrl: 'https://cdn.acme.com/logo.png',
+        shareBrandColor: '#0b5fff',
+        shareBrandLinkUrl: 'https://acme.com',
+        intakeAnalytics: true,
+        intakeBrandName: 'Acme Intake',
+        intakeBrandLogoUrl: 'https://cdn.acme.com/i.png',
+        intakeBrandColor: '#112233',
+        intakeBrandLinkUrl: 'https://acme.com/upload',
+      }),
+    ) as Record<string, unknown>;
+    expect(c.share_brand_name).toBe('Acme');
+    expect(c.share_brand_logo_url).toBe('https://cdn.acme.com/logo.png');
+    expect(c.share_brand_color).toBe('#0b5fff');
+    expect(c.share_brand_link_url).toBe('https://acme.com');
+    expect(c.intake_analytics).toBe(true);
+    expect(c.intake_brand_name).toBe('Acme Intake');
+    expect(c.intake_brand_logo_url).toBe('https://cdn.acme.com/i.png');
+    expect(c.intake_brand_color).toBe('#112233');
+    expect(c.intake_brand_link_url).toBe('https://acme.com/upload');
+    // Absent = unbranded landing / analytics off.
+    const off = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
+    expect(off.share_brand_name).toBeUndefined();
+    expect(off.intake_brand_name).toBeUndefined();
+    expect(off.intake_analytics).toBeUndefined();
+  });
+
+  it('forwards the Git-deploy claims independently of allowTerminal', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        allowGitDeploy: true,
+        gitDeployPath: '/srv/www/app',
+        gitDeployBranch: 'main',
+        gitDeployHooks: true,
+      }),
+    ) as Record<string, unknown>;
+    expect(c.allow_git_deploy).toBe(true);
+    expect(c.git_deploy_path).toBe('/srv/www/app');
+    expect(c.git_deploy_branch).toBe('main');
+    expect(c.git_deploy_hooks).toBe(true);
+    // Git deploy must NOT imply shell access, and allowTerminal must not imply deploy.
+    expect(c.allow_terminal).toBeUndefined();
+    const term = decodeToken(
+      createToken({ secret: SECRET, userId: 'u', allowTerminal: true }),
+    ) as Record<string, unknown>;
+    expect(term.allow_git_deploy).toBeUndefined();
+  });
+
+  it('embeds proHints only when explicitly set (it defaults to true on decode)', () => {
+    const off = decodeToken(createToken({ secret: SECRET, userId: 'u', proHints: false })) as Record<string, unknown>;
+    expect(off.pro_hints).toBe(false);
+    const on = decodeToken(createToken({ secret: SECRET, userId: 'u', proHints: true })) as Record<string, unknown>;
+    expect(on.pro_hints).toBe(true);
+    // Absent must stay absent — an embedded `false` would flip the core's default.
+    const unset = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
+    expect(unset.pro_hints).toBeUndefined();
+  });
+
   it('forwards on-demand WebP claims (PHP parity)', () => {
     const c = decodeToken(
       createToken({

@@ -434,7 +434,9 @@ function fluxfiles_apply_media_claims(array &$payload, array $media): void
  * @param array<string,mixed> $webp webp_enabled, webp_max_width, webp_default_quality,
  *        srcset_widths, srcset_sizes, allow_download, watermark_enabled,
  *        watermark_type, watermark_text, watermark_logo_path, watermark_position,
- *        watermark_opacity, watermark_font_size
+ *        watermark_opacity, watermark_font_size, share_brand_* / intake_brand_*
+ *        (name/logo_url/color/link_url), intake_analytics, pro_hints,
+ *        allow_git_deploy, git_deploy_path, git_deploy_branch, git_deploy_hooks
  */
 function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
 {
@@ -492,9 +494,26 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('share_analytics', $webp)) {
         $payload['share_analytics'] = (bool) $webp['share_analytics'];
     }
+    // Share landing branding — read at create time and baked into the share record,
+    // so a later token change never rewrites an already-published link. The core
+    // drops a non-http(s) logo/link URL and clamps the colour on decode.
+    foreach (['share_brand_name', 'share_brand_logo_url', 'share_brand_color', 'share_brand_link_url'] as $b) {
+        if (!empty($webp[$b])) {
+            $payload[$b] = (string) $webp[$b];
+        }
+    }
     // Intake portal link base (same shape as share_base_url; non-http(s) dropped on decode).
     if (!empty($webp['intake_base_url'])) {
         $payload['intake_base_url'] = (string) $webp['intake_base_url'];
+    }
+    if (array_key_exists('intake_analytics', $webp)) {
+        $payload['intake_analytics'] = (bool) $webp['intake_analytics'];
+    }
+    // Intake portal branding — mirrors share_brand_* above, same sanitizing on decode.
+    foreach (['intake_brand_name', 'intake_brand_logo_url', 'intake_brand_color', 'intake_brand_link_url'] as $b) {
+        if (!empty($webp[$b])) {
+            $payload[$b] = (string) $webp[$b];
+        }
     }
     // Access gates (download / chmod) + watermark.
     if (array_key_exists('allow_download', $webp)) {
@@ -517,6 +536,20 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     if (!empty($webp['esign_url'])) {
         $payload['esign_url'] = (string) $webp['esign_url'];
+    }
+    // One-click Git deploy (SFTP disks). Deliberately independent of allow_terminal:
+    // the repo path/branch/hooks flag are operator claims, never request-supplied.
+    if (array_key_exists('allow_git_deploy', $webp)) {
+        $payload['allow_git_deploy'] = (bool) $webp['allow_git_deploy'];
+    }
+    if (!empty($webp['git_deploy_path'])) {
+        $payload['git_deploy_path'] = (string) $webp['git_deploy_path'];
+    }
+    if (!empty($webp['git_deploy_branch'])) {
+        $payload['git_deploy_branch'] = (string) $webp['git_deploy_branch'];
+    }
+    if (array_key_exists('git_deploy_hooks', $webp)) {
+        $payload['git_deploy_hooks'] = (bool) $webp['git_deploy_hooks'];
     }
     if (array_key_exists('allow_code_edit', $webp)) {
         $payload['allow_code_edit'] = (bool) $webp['allow_code_edit'];
@@ -561,6 +594,11 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     if (array_key_exists('show_hidden', $webp)) {
         $payload['show_hidden'] = (bool) $webp['show_hidden'];
+    }
+    // pro_hints defaults to true on decode, so only embed it when explicitly set —
+    // an absent claim must keep inheriting that default.
+    if (array_key_exists('pro_hints', $webp)) {
+        $payload['pro_hints'] = (bool) $webp['pro_hints'];
     }
     if (array_key_exists('dedupe_uploads', $webp)) {
         $payload['dedupe_uploads'] = (bool) $webp['dedupe_uploads'];

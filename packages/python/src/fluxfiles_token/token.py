@@ -227,6 +227,19 @@ def _apply_tenant_overrides(
     terminal_pty_url = extras.get("terminal_pty_url")
     if terminal_pty_url:
         payload["terminal_pty_url"] = str(terminal_pty_url)
+    # One-click Git deploy (SFTP disks). Deliberately independent of
+    # allow_terminal: the repo path/branch/hooks flag are operator claims,
+    # never accepted from the request body.
+    if extras.get("allow_git_deploy") is not None:
+        payload["allow_git_deploy"] = bool(extras["allow_git_deploy"])
+    git_deploy_path = extras.get("git_deploy_path")
+    if git_deploy_path:
+        payload["git_deploy_path"] = str(git_deploy_path)
+    git_deploy_branch = extras.get("git_deploy_branch")
+    if git_deploy_branch:
+        payload["git_deploy_branch"] = str(git_deploy_branch)
+    if extras.get("git_deploy_hooks") is not None:
+        payload["git_deploy_hooks"] = bool(extras["git_deploy_hooks"])
     pdf_tools_url = extras.get("pdf_tools_url")
     if pdf_tools_url:
         payload["pdf_tools_url"] = str(pdf_tools_url)
@@ -290,6 +303,17 @@ def _apply_tenant_overrides(
         payload["share_preview"] = bool(extras["share_preview"])
     if extras.get("share_analytics") is not None:
         payload["share_analytics"] = bool(extras["share_analytics"])
+    # Share landing branding — baked into the share record at create time, so a
+    # later token change never rewrites an already-published link. The core drops
+    # a non-http(s) logo/link URL and clamps the colour on decode.
+    for _b in (
+        "share_brand_name",
+        "share_brand_logo_url",
+        "share_brand_color",
+        "share_brand_link_url",
+    ):
+        if extras.get(_b):
+            payload[_b] = str(extras[_b])
     if extras.get("allow_intake") is not None:
         payload["allow_intake"] = bool(extras["allow_intake"])
     # Intake portal link base — same shape as share_base_url (the core drops a
@@ -297,6 +321,18 @@ def _apply_tenant_overrides(
     intake_base_url = extras.get("intake_base_url")
     if intake_base_url:
         payload["intake_base_url"] = str(intake_base_url)
+    if extras.get("intake_analytics") is not None:
+        payload["intake_analytics"] = bool(extras["intake_analytics"])
+    # Intake portal branding — mirrors share_brand_* above, same decode-time
+    # sanitizing, applied to the upload portal instead.
+    for _b in (
+        "intake_brand_name",
+        "intake_brand_logo_url",
+        "intake_brand_color",
+        "intake_brand_link_url",
+    ):
+        if extras.get(_b):
+            payload[_b] = str(extras[_b])
     if extras.get("allow_versioning") is not None:
         payload["allow_versioning"] = bool(extras["allow_versioning"])
     versioning_max = extras.get("versioning_max")
@@ -390,6 +426,11 @@ def _apply_tenant_overrides(
     if usage_folder_depth and usage_folder_depth > 0:
         payload["usage_folder_depth"] = int(usage_folder_depth)
 
+    # pro_hints defaults to TRUE on decode, so only embed it when explicitly
+    # set — an absent claim must keep inheriting that default.
+    if extras.get("pro_hints") is not None:
+        payload["pro_hints"] = bool(extras["pro_hints"])
+
     # Generic escape hatch: ANY claim by its raw (snake_case) name. Merged last
     # so an explicit claim wins over a preset/group default. The server
     # sanitizes on decode. See docs/reference/CONFIG.md for the full claim list.
@@ -467,6 +508,11 @@ def create_token(
     allow_code_edit: bool | None = None,
     allow_terminal: bool | None = None,
     terminal_pty_url: str | None = None,
+    # --- one-click Git deploy (SFTP disks); independent of allow_terminal ---
+    allow_git_deploy: bool | None = None,
+    git_deploy_path: str | None = None,
+    git_deploy_branch: str | None = None,
+    git_deploy_hooks: bool | None = None,
     pdf_tools_url: str | None = None,
     office_url: str | None = None,
     esign_url: str | None = None,
@@ -492,8 +538,17 @@ def create_token(
     share_base_url: str | None = None,
     share_preview: bool | None = None,
     share_analytics: bool | None = None,
+    share_brand_name: str | None = None,
+    share_brand_logo_url: str | None = None,
+    share_brand_color: str | None = None,
+    share_brand_link_url: str | None = None,
     allow_intake: bool | None = None,
     intake_base_url: str | None = None,
+    intake_analytics: bool | None = None,
+    intake_brand_name: str | None = None,
+    intake_brand_logo_url: str | None = None,
+    intake_brand_color: str | None = None,
+    intake_brand_link_url: str | None = None,
     allow_versioning: bool | None = None,
     versioning_max: int | None = None,
     versioning_max_mb: int | None = None,
@@ -529,6 +584,8 @@ def create_token(
     usage_critical_threshold: int | None = None,
     usage_top_folders_count: int | None = None,
     usage_folder_depth: int | None = None,
+    # --- UI: paid-module upsell hints (defaults to True on decode) ---
+    pro_hints: bool | None = None,
     # --- escape hatch: anything not yet a typed kwarg above ---
     claims: dict[str, Any] | None = None,
 ) -> str:
@@ -595,6 +652,10 @@ def create_token(
         allow_code_edit=allow_code_edit,
         allow_terminal=allow_terminal,
         terminal_pty_url=terminal_pty_url,
+        allow_git_deploy=allow_git_deploy,
+        git_deploy_path=git_deploy_path,
+        git_deploy_branch=git_deploy_branch,
+        git_deploy_hooks=git_deploy_hooks,
         pdf_tools_url=pdf_tools_url,
         office_url=office_url,
         esign_url=esign_url,
@@ -616,8 +677,17 @@ def create_token(
         share_base_url=share_base_url,
         share_preview=share_preview,
         share_analytics=share_analytics,
+        share_brand_name=share_brand_name,
+        share_brand_logo_url=share_brand_logo_url,
+        share_brand_color=share_brand_color,
+        share_brand_link_url=share_brand_link_url,
         allow_intake=allow_intake,
         intake_base_url=intake_base_url,
+        intake_analytics=intake_analytics,
+        intake_brand_name=intake_brand_name,
+        intake_brand_logo_url=intake_brand_logo_url,
+        intake_brand_color=intake_brand_color,
+        intake_brand_link_url=intake_brand_link_url,
         allow_versioning=allow_versioning,
         versioning_max=versioning_max,
         versioning_max_mb=versioning_max_mb,
@@ -650,6 +720,7 @@ def create_token(
         usage_critical_threshold=usage_critical_threshold,
         usage_top_folders_count=usage_top_folders_count,
         usage_folder_depth=usage_folder_depth,
+        pro_hints=pro_hints,
     )
     _apply_tenant_overrides(payload, extras, edition, role_preset, claims)
     return _sign(payload, resolved_secret)
@@ -694,6 +765,11 @@ def create_byob_token(
     allow_code_edit: bool | None = None,
     allow_terminal: bool | None = None,
     terminal_pty_url: str | None = None,
+    # --- one-click Git deploy (SFTP disks); independent of allow_terminal ---
+    allow_git_deploy: bool | None = None,
+    git_deploy_path: str | None = None,
+    git_deploy_branch: str | None = None,
+    git_deploy_hooks: bool | None = None,
     pdf_tools_url: str | None = None,
     office_url: str | None = None,
     esign_url: str | None = None,
@@ -715,8 +791,17 @@ def create_byob_token(
     share_base_url: str | None = None,
     share_preview: bool | None = None,
     share_analytics: bool | None = None,
+    share_brand_name: str | None = None,
+    share_brand_logo_url: str | None = None,
+    share_brand_color: str | None = None,
+    share_brand_link_url: str | None = None,
     allow_intake: bool | None = None,
     intake_base_url: str | None = None,
+    intake_analytics: bool | None = None,
+    intake_brand_name: str | None = None,
+    intake_brand_logo_url: str | None = None,
+    intake_brand_color: str | None = None,
+    intake_brand_link_url: str | None = None,
     allow_versioning: bool | None = None,
     versioning_max: int | None = None,
     versioning_max_mb: int | None = None,
@@ -750,6 +835,8 @@ def create_byob_token(
     usage_critical_threshold: int | None = None,
     usage_top_folders_count: int | None = None,
     usage_folder_depth: int | None = None,
+    # --- UI: paid-module upsell hints (defaults to True on decode) ---
+    pro_hints: bool | None = None,
     claims: dict[str, Any] | None = None,
 ) -> str:
     """Mint a BYOB token. Each disk's S3-compatible/SFTP credentials are
@@ -839,6 +926,10 @@ def create_byob_token(
         allow_code_edit=allow_code_edit,
         allow_terminal=allow_terminal,
         terminal_pty_url=terminal_pty_url,
+        allow_git_deploy=allow_git_deploy,
+        git_deploy_path=git_deploy_path,
+        git_deploy_branch=git_deploy_branch,
+        git_deploy_hooks=git_deploy_hooks,
         pdf_tools_url=pdf_tools_url,
         office_url=office_url,
         esign_url=esign_url,
@@ -860,8 +951,17 @@ def create_byob_token(
         share_base_url=share_base_url,
         share_preview=share_preview,
         share_analytics=share_analytics,
+        share_brand_name=share_brand_name,
+        share_brand_logo_url=share_brand_logo_url,
+        share_brand_color=share_brand_color,
+        share_brand_link_url=share_brand_link_url,
         allow_intake=allow_intake,
         intake_base_url=intake_base_url,
+        intake_analytics=intake_analytics,
+        intake_brand_name=intake_brand_name,
+        intake_brand_logo_url=intake_brand_logo_url,
+        intake_brand_color=intake_brand_color,
+        intake_brand_link_url=intake_brand_link_url,
         allow_versioning=allow_versioning,
         versioning_max=versioning_max,
         versioning_max_mb=versioning_max_mb,
@@ -894,6 +994,7 @@ def create_byob_token(
         usage_critical_threshold=usage_critical_threshold,
         usage_top_folders_count=usage_top_folders_count,
         usage_folder_depth=usage_folder_depth,
+        pro_hints=pro_hints,
     )
     _apply_tenant_overrides(payload, extras, edition, role_preset, claims)
     return _sign(payload, resolved_secret)

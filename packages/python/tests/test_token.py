@@ -229,6 +229,20 @@ _TYPED_KWARG_CASES: list[tuple[dict[str, Any], dict[str, Any]]] = [
      {"allow_audit_export": True, "audit_retention_days": 90, "allow_dlp_scan": True,
       "dlp_entity_types": ["US_SSN", "CREDIT_CARD"], "dlp_scan_extensions": ["txt", "csv"],
       "dlp_max_scan_kb": 4096, "dlp_min_score": 0.75, "allow_legal_hold": True}),
+    ({"share_brand_name": "Acme", "share_brand_logo_url": "https://cdn.acme.com/logo.png",
+      "share_brand_color": "#0b5fff", "share_brand_link_url": "https://acme.com",
+      "intake_analytics": True, "intake_brand_name": "Acme Intake",
+      "intake_brand_logo_url": "https://cdn.acme.com/i.png", "intake_brand_color": "#112233",
+      "intake_brand_link_url": "https://acme.com/upload"},
+     {"share_brand_name": "Acme", "share_brand_logo_url": "https://cdn.acme.com/logo.png",
+      "share_brand_color": "#0b5fff", "share_brand_link_url": "https://acme.com",
+      "intake_analytics": True, "intake_brand_name": "Acme Intake",
+      "intake_brand_logo_url": "https://cdn.acme.com/i.png", "intake_brand_color": "#112233",
+      "intake_brand_link_url": "https://acme.com/upload"}),
+    ({"allow_git_deploy": True, "git_deploy_path": "/srv/www/app",
+      "git_deploy_branch": "main", "git_deploy_hooks": True},
+     {"allow_git_deploy": True, "git_deploy_path": "/srv/www/app",
+      "git_deploy_branch": "main", "git_deploy_hooks": True}),
     ({"terminal_pty_url": "https://ttyd.example.com/", "pdf_tools_url": "https://pdf.example.com/",
       "office_url": "https://office.example.com/?url={url}", "esign_url": "https://sign.example.com/?url={url}"},
      {"terminal_pty_url": "https://ttyd.example.com/", "pdf_tools_url": "https://pdf.example.com/",
@@ -244,6 +258,23 @@ def test_typed_kwargs_land_in_correspondingly_named_claims(
     for key, value in expected.items():
         assert c.get(key) == value
 
+
+def test_git_deploy_is_independent_of_allow_terminal() -> None:
+    """Git deploy is a fixed-command-shape subset, not a second shell door — neither
+    claim may imply the other, in either direction."""
+    deploy = decode_token(create_token(secret=SECRET, user_id="u", allow_git_deploy=True))
+    assert deploy["allow_git_deploy"] is True
+    assert "allow_terminal" not in deploy
+    term = decode_token(create_token(secret=SECRET, user_id="u", allow_terminal=True))
+    assert term["allow_terminal"] is True
+    assert "allow_git_deploy" not in term
+
+def test_pro_hints_is_embedded_only_when_explicitly_set() -> None:
+    """pro_hints defaults to True on decode, so an absent kwarg must leave the claim
+    absent — embedding a False would silently flip the core's default."""
+    assert decode_token(create_token(secret=SECRET, user_id="u", pro_hints=False))["pro_hints"] is False
+    assert decode_token(create_token(secret=SECRET, user_id="u", pro_hints=True))["pro_hints"] is True
+    assert "pro_hints" not in decode_token(create_token(secret=SECRET, user_id="u"))
 
 def test_rejects_secret_shorter_than_32_bytes() -> None:
     with pytest.raises(FluxFilesTokenError, match="at least 32 bytes"):

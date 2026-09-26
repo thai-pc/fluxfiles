@@ -338,12 +338,32 @@ class FluxFilesManager
         if (array_key_exists('share_analytics', $overrides)) {
             $payload['share_analytics'] = (bool) $overrides['share_analytics'];
         }
+        // Share landing branding — also baked into the share record at create time,
+        // so a later token change never rewrites an already-published link. The core
+        // drops a non-http(s) logo/link URL and clamps the colour on decode.
+        foreach ([
+            'share_brand_name', 'share_brand_logo_url',
+            'share_brand_color', 'share_brand_link_url',
+        ] as $brandClaim) {
+            if (!empty($overrides[$brandClaim])) {
+                $payload[$brandClaim] = (string) $overrides[$brandClaim];
+            }
+        }
         // Intake portal link base — the same role for `allow_intake`.
         if (!empty($overrides['intake_base_url'])) {
             $payload['intake_base_url'] = (string) $overrides['intake_base_url'];
         }
         if (array_key_exists('intake_analytics', $overrides)) {
             $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
+        }
+        // Intake portal branding — mirrors share_brand_* above, same sanitizing on decode.
+        foreach ([
+            'intake_brand_name', 'intake_brand_logo_url',
+            'intake_brand_color', 'intake_brand_link_url',
+        ] as $brandClaim) {
+            if (!empty($overrides[$brandClaim])) {
+                $payload[$brandClaim] = (string) $overrides[$brandClaim];
+            }
         }
         // Webhook config. Without a URL `allow_webhooks` is inert (the module has
         // nowhere to POST), so these travel with the gate claim. The core drops a
@@ -435,6 +455,12 @@ class FluxFilesManager
             if (isset($overrides[$usageClaim]) && $overrides[$usageClaim] !== '') {
                 $payload[$usageClaim] = (int) $overrides[$usageClaim];
             }
+        }
+
+        // UI upsell hints for paid modules. Defaults to TRUE on decode, so only embed
+        // it when explicitly set — an absent claim must keep inheriting that default.
+        if (array_key_exists('pro_hints', $overrides)) {
+            $payload['pro_hints'] = (bool) $overrides['pro_hints'];
         }
 
         // Generic escape hatch: any JWT claim by its raw snake_case name, e.g.

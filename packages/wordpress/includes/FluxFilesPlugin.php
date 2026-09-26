@@ -528,6 +528,20 @@ class FluxFilesPlugin
         if (array_key_exists('intake_analytics', $overrides)) {
             $payload['intake_analytics'] = (bool) $overrides['intake_analytics'];
         }
+        // Share/intake landing branding — like the config above, read at create time
+        // and baked into the record, so a later token change never rewrites an
+        // already-published link. The core drops a non-http(s) logo/link URL and
+        // clamps the colour on decode.
+        foreach ([
+            'share_brand_name', 'share_brand_logo_url',
+            'share_brand_color', 'share_brand_link_url',
+            'intake_brand_name', 'intake_brand_logo_url',
+            'intake_brand_color', 'intake_brand_link_url',
+        ] as $brandClaim) {
+            if (!empty($overrides[$brandClaim])) {
+                $payload[$brandClaim] = (string) $overrides[$brandClaim];
+            }
+        }
         // File versioning. This used to be stripped here, because the REST API exposed
         // no /api/fm/versions* endpoint and a forwarded claim would have rendered a
         // History panel that 404s. It now proxies list + restore (see FluxFilesApi's
@@ -663,6 +677,12 @@ class FluxFilesPlugin
             if (isset($overrides[$usageClaim]) && $overrides[$usageClaim] !== '') {
                 $payload[$usageClaim] = (int) $overrides[$usageClaim];
             }
+        }
+
+        // UI upsell hints for paid modules. Defaults to TRUE on decode, so only embed
+        // it when explicitly set — an absent claim must keep inheriting that default.
+        if (array_key_exists('pro_hints', $overrides)) {
+            $payload['pro_hints'] = (bool) $overrides['pro_hints'];
         }
 
         // Generic escape hatch: any JWT claim by its raw snake_case name, e.g.

@@ -190,6 +190,12 @@ function applyTenantOverrides(
   // (Node mints for one), not a proxy adapter that doesn't serve /api/fm/terminal.
   if (opts.allowTerminal !== undefined) payload.allow_terminal = !!opts.allowTerminal;
   if (opts.terminalPtyUrl) payload.terminal_pty_url = String(opts.terminalPtyUrl);
+  // One-click Git deploy (SFTP disks). Deliberately independent of allowTerminal:
+  // the repo path/branch/hooks flag are operator claims, never request-supplied.
+  if (opts.allowGitDeploy !== undefined) payload.allow_git_deploy = !!opts.allowGitDeploy;
+  if (opts.gitDeployPath) payload.git_deploy_path = String(opts.gitDeployPath);
+  if (opts.gitDeployBranch) payload.git_deploy_branch = String(opts.gitDeployBranch);
+  if (opts.gitDeployHooks !== undefined) payload.git_deploy_hooks = !!opts.gitDeployHooks;
   if (opts.pdfToolsUrl) payload.pdf_tools_url = String(opts.pdfToolsUrl);
   if (opts.officeUrl) payload.office_url = String(opts.officeUrl);
   if (opts.esignUrl) payload.esign_url = String(opts.esignUrl);
@@ -202,10 +208,23 @@ function applyTenantOverrides(
   if (opts.shareBaseUrl) payload.share_base_url = String(opts.shareBaseUrl);
   if (opts.sharePreview !== undefined) payload.share_preview = !!opts.sharePreview;
   if (opts.shareAnalytics !== undefined) payload.share_analytics = !!opts.shareAnalytics;
+  // Share landing branding — baked into the share record at create time, so a
+  // later token change never rewrites an already-published link. The core drops
+  // a non-http(s) logo/link URL and clamps the colour on decode.
+  if (opts.shareBrandName) payload.share_brand_name = String(opts.shareBrandName);
+  if (opts.shareBrandLogoUrl) payload.share_brand_logo_url = String(opts.shareBrandLogoUrl);
+  if (opts.shareBrandColor) payload.share_brand_color = String(opts.shareBrandColor);
+  if (opts.shareBrandLinkUrl) payload.share_brand_link_url = String(opts.shareBrandLinkUrl);
   if (opts.allowIntake !== undefined) payload.allow_intake = !!opts.allowIntake;
   // Intake portal link base — same shape as shareBaseUrl (the core drops a
   // non-http(s) value on decode).
   if (opts.intakeBaseUrl) payload.intake_base_url = String(opts.intakeBaseUrl);
+  if (opts.intakeAnalytics !== undefined) payload.intake_analytics = !!opts.intakeAnalytics;
+  // Intake portal branding — mirrors shareBrand* above, same sanitizing on decode.
+  if (opts.intakeBrandName) payload.intake_brand_name = String(opts.intakeBrandName);
+  if (opts.intakeBrandLogoUrl) payload.intake_brand_logo_url = String(opts.intakeBrandLogoUrl);
+  if (opts.intakeBrandColor) payload.intake_brand_color = String(opts.intakeBrandColor);
+  if (opts.intakeBrandLinkUrl) payload.intake_brand_link_url = String(opts.intakeBrandLinkUrl);
   if (opts.allowVersioning !== undefined) payload.allow_versioning = !!opts.allowVersioning;
   if (opts.versioningMax && opts.versioningMax > 0) payload.versioning_max = Math.trunc(opts.versioningMax);
   if (opts.versioningMaxMb && opts.versioningMaxMb > 0) payload.versioning_max_mb = Math.trunc(opts.versioningMaxMb);
@@ -263,6 +282,10 @@ function applyTenantOverrides(
   if (opts.usageCriticalThreshold && opts.usageCriticalThreshold > 0) payload.usage_critical_threshold = Math.trunc(opts.usageCriticalThreshold);
   if (opts.usageTopFoldersCount && opts.usageTopFoldersCount > 0) payload.usage_top_folders_count = Math.trunc(opts.usageTopFoldersCount);
   if (opts.usageFolderDepth && opts.usageFolderDepth > 0) payload.usage_folder_depth = Math.trunc(opts.usageFolderDepth);
+
+  // pro_hints defaults to TRUE on decode, so only embed it when explicitly set —
+  // an absent claim must keep inheriting that default.
+  if (opts.proHints !== undefined) payload.pro_hints = !!opts.proHints;
 
   // Generic escape hatch: ANY claim by its raw (snake_case) name. Merged last so an
   // explicit claim wins over a preset/group default. The server sanitizes on decode.

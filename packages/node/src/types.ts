@@ -109,6 +109,18 @@ export interface BaseTokenOptions {
    *  true interactive terminal instead of the built-in command-runner. Free; must be http(s).
    *  Core-standalone only (like `allowTerminal`). */
   terminalPtyUrl?: string;
+  /** Allow one-click Git deploy (POST /api/fm/git-deploy) on an SFTP disk. Default **false**.
+   *  Deliberately independent of `allowTerminal`: it's a fixed-command-shape subset, not a
+   *  second arbitrary-shell door. Core-standalone + the Laravel/WordPress proxies. */
+  allowGitDeploy?: boolean;
+  /** Repository path on the SFTP host to deploy. An operator claim — never accepted from the
+   *  request body, so the client can't point the deploy at another directory. */
+  gitDeployPath?: string;
+  /** Branch to deploy. Operator claim, like `gitDeployPath`. Empty = the repo's current branch. */
+  gitDeployBranch?: string;
+  /** Allow the repo's own git hooks to run during deploy. Default **false** — hooks are
+   *  neutered via `core.hooksPath=/dev/null`, since a hook is arbitrary code. */
+  gitDeployHooks?: boolean;
   /** Optional self-hosted PDF-tools URL (Stirling-PDF, or any web PDF toolkit). When set, the
    *  UI shows a "PDF tools" action that embeds it (merge/split/OCR/convert/…). Free; http(s). */
   pdfToolsUrl?: string;
@@ -172,11 +184,33 @@ export interface BaseTokenOptions {
    *  to `_fluxfiles/share-events/<jti>.jsonl`) — kept separate from `allowShare`
    *  since it's a real privacy footprint. Default false. */
   shareAnalytics?: boolean;
+  /** Share landing branding — organisation name shown on the public page. Read at
+   *  create time and baked into the share record, so changing the token later never
+   *  rewrites an already-published link. */
+  shareBrandName?: string;
+  /** Logo shown on the share landing. http(s) only; dropped on decode otherwise. */
+  shareBrandLogoUrl?: string;
+  /** Accent colour for the share landing (hex, e.g. `#0b5fff`). Clamped on decode. */
+  shareBrandColor?: string;
+  /** Where the share-landing logo/name links to. http(s) only. */
+  shareBrandLinkUrl?: string;
   allowIntake?: boolean;
   /** Public base the intake create response builds the portal link from
    *  (e.g. `https://files.acme.com/public/intake.html`). http(s) only; empty = the
    *  request origin + `/public/intake.html`. Mirrors `shareBaseUrl`. */
   intakeBaseUrl?: string;
+  /** Opt-in per-event analytics on an intake portal, mirroring `shareAnalytics`
+   *  (same privacy footprint, same separate opt-in). Default false. */
+  intakeAnalytics?: boolean;
+  /** Intake portal branding — same four fields and same decode-time sanitizing as
+   *  the `shareBrand*` options above, applied to the upload portal instead. */
+  intakeBrandName?: string;
+  /** Logo shown on the intake portal. http(s) only. */
+  intakeBrandLogoUrl?: string;
+  /** Accent colour for the intake portal (hex). Clamped on decode. */
+  intakeBrandColor?: string;
+  /** Where the intake-portal logo/name links to. http(s) only. */
+  intakeBrandLinkUrl?: string;
   allowVersioning?: boolean;
   allowAiVision?: boolean;
   allowOcr?: boolean;
@@ -247,6 +281,10 @@ export interface BaseTokenOptions {
   usageTopFoldersCount?: number;
   /** Folder grouping depth for the usage breakdown. `0`/omitted = inherit (1). */
   usageFolderDepth?: number;
+  /** Show the UI's upsell hints for paid modules that aren't installed/licensed.
+   *  Defaults to **true** on decode, so leave it unset to inherit; set `false` to
+   *  hide every "Pro" affordance from this tenant. */
+  proHints?: boolean;
   /** Generic escape hatch: any JWT claim by its raw snake_case name (e.g.
    *  `{ allow_terminal: true, terminal_pty_url: '…', upload_collision: 'overwrite' }`).
    *  Merged last so explicit claims win; the server sanitizes on decode. The single
