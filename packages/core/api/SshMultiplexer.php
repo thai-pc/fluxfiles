@@ -120,10 +120,20 @@ final class SshMultiplexer
     // §5 — socket dir / filename
     // ---------------------------------------------------------------------
 
-    /** Base runtime dir for all multiplex state — local-server-only, never `_fluxfiles/`. */
+    /**
+     * Base runtime dir for all multiplex state — local-server-only, never `_fluxfiles/`.
+     *
+     * The default is sys_get_temp_dir(), NOT `packages/core/storage`: this dir holds
+     * an index.json naming disks and SSH hosts, plus ephemeral BYOB private keys
+     * under keys/, and `packages/core/storage` sits inside the served document root
+     * in both shipped configs (docker/nginx.conf's `root /app/packages/core`, and
+     * router.php). Same choice SsoModule::cacheDir() already makes for its JWKS
+     * cache. An operator who sets FLUXFILES_STORAGE_PATH (which docker/nginx.conf
+     * and router.php now deny under /storage/ anyway) still wins.
+     */
     private static function runtimeDir(): string
     {
-        $base = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
+        $base = rtrim((string) ($_ENV['FLUXFILES_STORAGE_PATH'] ?? sys_get_temp_dir()), '/');
         return $base . '/ssh-sockets';
     }
 

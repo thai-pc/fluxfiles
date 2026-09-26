@@ -340,6 +340,35 @@ class FluxFilesPlugin
     }
 
     /**
+     * Map the CURRENT WordPress user's capabilities onto a role preset name,
+     * so the minted token can never exceed what they may do on the site.
+     *
+     *   manage_options  → admin  (read/write/delete/audit, cross-owner)
+     *   delete_posts    → admin  (an Editor already deletes other people's content)
+     *   upload_files    → editor (read/write, owner_only)
+     *   anything else   → viewer (read, owner_only)
+     *
+     * The presets are still intersected with the site-wide
+     * `fluxfiles_default_perms` ceiling by generateToken(): a role can only
+     * ever narrow, never widen, what the operator configured. Returns null when
+     * the capability functions are unavailable (non-WP context / unit stubs),
+     * which leaves the previous behaviour untouched.
+     */
+    private static function roleForCapabilities(): ?string
+    {
+        if (!function_exists('current_user_can')) {
+            return null;
+        }
+        if (current_user_can('manage_options') || current_user_can('delete_posts')) {
+            return 'admin';
+        }
+        if (current_user_can('upload_files')) {
+            return 'editor';
+        }
+        return 'viewer';
+    }
+
+    /**
      * Apply a role preset's default claims onto $payload. Only sets a claim when it's not
      * already present, so explicit overrides win. Deliberately excludes `perms` and
      * `owner_only` — both are already resolved earlier (in generateToken()/generateByobToken(),
@@ -729,6 +758,35 @@ class FluxFilesPlugin
 
         if ($userId === 0) {
             throw new \RuntimeException('No authenticated WordPress user.');
+        }
+
+        // Cap the minted token by what this WP user may actually do on this
+        // site. Without this, every logged-in user — including a Subscriber on
+        // an open-registration site — got the same read+write+delete token over
+        // an empty prefix, because `fluxfiles_default_perms` is one site-wide
+        // value applied to everybody.
+        //
+        // `role` (not `perms`) so it goes through the same claim bundle the
+        // other three token builders use: viewer is read + owner_only, editor
+        // adds write, admin adds delete. Then intersected with the site-wide
+        // option, so this path can only ever NARROW what the operator
+        // configured — a site set read-only stays read-only for an
+        // administrator too.
+        //
+        // Only this implicit, capability-derived path is capped. An explicit
+        // `role`/`perms` override is a deliberate operator decision and still
+        // means exactly what it means in the other three builders; so does the
+        // fluxfiles_token_overrides filter below, which runs after this.
+        if (!isset($overrides['role']) && !isset($overrides['perms'])) {
+            $role = self::roleForCapabilities();
+            if ($role !== null) {
+                $overrides['role']  = $role;
+                $bundle             = self::rolePreset($role);
+                $overrides['perms'] = array_values(array_intersect(
+                    $bundle['perms'] ?? [],
+                    (array) get_option('fluxfiles_default_perms', ['read', 'write', 'delete'])
+                ));
+            }
         }
 
         if (function_exists('apply_filters')) {

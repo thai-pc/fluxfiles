@@ -571,11 +571,30 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     public function audit(string $disk, string $action, array $context = []): void
     {
+        // JSON_INVALID_UTF8_SUBSTITUTE is load-bearing, not tidiness: $context
+        // carries request-controlled strings (User-Agent, IP, detail), and one
+        // invalid byte made json_encode() return false. `false . "\n"` is just
+        // "\n", so `User-Agent: A\xFFB` wrote a blank line and made any
+        // destructive action unloggable while it still succeeded.
         $entry = json_encode([
             'ts' => time(),
             'action' => $action,
             'context' => $context,
-        ]) . "\n";
+        ], JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($entry === false) {
+            // Nothing request-controlled can reach here any more (recursion and
+            // NAN/INF are the remaining causes), but an audit entry we cannot
+            // encode must still leave a trace rather than a blank line.
+            $entry = json_encode([
+                'ts' => time(),
+                'action' => $action,
+                'context' => ['encode_error' => json_last_error_msg()],
+            ], JSON_INVALID_UTF8_SUBSTITUTE);
+            if ($entry === false) {
+                $entry = '{"ts":' . time() . ',"action":"audit_encode_failed","context":{}}';
+            }
+        }
+        $entry .= "\n";
         $fs = $this->diskManager->disk($disk);
         // Unlocked read-modify-write here would drop entries under concurrent
         // writers (two requests both read the same content, each appends one line,
@@ -862,7 +881,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             'caption' => $data['caption'] ?? '',
             'tags' => $data['tags'] ?? '',
             'uploaded_by' => $data['uploaded_by'] ?? null,
-        ], JSON_UNESCAPED_UNICODE));
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
     }
 
     /**
@@ -1009,7 +1028,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         if ($dir !== '.' && !$fs->directoryExists($dir)) {
             $fs->createDirectory($dir);
         }
-        $fs->write(self::TRASH_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $fs->write(self::TRASH_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
     }
 
     // ---------------------------------------------------------------------
@@ -1168,7 +1187,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         if ($dir !== '.' && !$fs->directoryExists($dir)) {
             $fs->createDirectory($dir);
         }
-        $fs->write(self::HOLDS_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $fs->write(self::HOLDS_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
     }
 
     private function loadIndex(string $disk): array
@@ -1204,7 +1223,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         if ($dir !== '.' && !$fs->directoryExists($dir)) {
             $fs->createDirectory($dir);
         }
-        $fs->write(self::INDEX_KEY, json_encode($index, JSON_UNESCAPED_UNICODE));
+        $fs->write(self::INDEX_KEY, json_encode($index, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
     }
 
     private function updateIndex(string $disk, string $key, array $data): void
@@ -1293,7 +1312,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
         try {
             // Map shape `{dirKey: <created ts|null>}` so folder created dates persist.
-            $fs->write(self::DIRS_KEY, json_encode((object) $dirs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $fs->write(self::DIRS_KEY, json_encode((object) $dirs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
         } catch (\Throwable $e) {
             // Silent fail
         }

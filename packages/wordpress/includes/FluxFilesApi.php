@@ -432,7 +432,11 @@ class FluxFilesApi
         register_rest_route($ns, '/public/index.html', array_merge($publicArgs, [
             'callback' => [$api, 'serveUiHtml'],
         ]));
-        register_rest_route($ns, '/assets/(?P<file>fm\.(?:js|css))', array_merge($publicArgs, [
+        // fm.js/fm.css plus the vendored lazy-loaded libraries under
+        // assets/vendor/ (xterm, CodeMirror) — fm.js derives its base from its
+        // own <script src>, which is this route. No '..' can match, and
+        // serveUiAsset() re-checks containment with realpath().
+        register_rest_route($ns, '/assets/(?P<file>fm\.(?:js|css)|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
             'callback' => [$api, 'serveUiAsset'],
         ]));
         register_rest_route($ns, $p . '/lang', array_merge($publicArgs, [
@@ -444,11 +448,40 @@ class FluxFilesApi
     }
 
     /**
+     * The WordPress capability a cookie-session user must hold to reach the
+     * FluxFiles data routes at all.
+     *
+     * `is_user_logged_in()` alone is not a gate on an open-registration site:
+     * the default role there is Subscriber, and every one of them used to get a
+     * full read+write+delete token over the whole disk. `upload_files` is the
+     * lowest built-in capability that already means "this person may put files
+     * on this site" (Author and up by default), which is exactly the question
+     * these routes ask.
+     *
+     * Operators who genuinely want a lower bar can lower it — that is a
+     * deliberate, explicit act, not the default:
+     *
+     *   add_filter('fluxfiles_required_capability', fn () => 'read');
+     */
+    public static function requiredCapability(): string
+    {
+        $cap = 'upload_files';
+        if (function_exists('apply_filters')) {
+            $filtered = apply_filters('fluxfiles_required_capability', $cap);
+            if (is_string($filtered) && $filtered !== '') {
+                $cap = $filtered;
+            }
+        }
+        return $cap;
+    }
+
+    /**
      * Permission callback — accept either:
      *   1. A valid Bearer JWT (signed with FLUXFILES_SECRET), used by fm.js
      *      from inside the iframe.
      *   2. A logged-in WP user with a valid REST nonce (X-WP-Nonce header),
-     *      used when the wrapping page calls our routes through wp.apiFetch.
+     *      used when the wrapping page calls our routes through wp.apiFetch,
+     *      AND holding requiredCapability().
      */
     public static function checkAuth(\WP_REST_Request $request): bool
     {
@@ -472,17 +505,19 @@ class FluxFilesApi
                 return false;
             }
         }
-        return is_user_logged_in();
+        return is_user_logged_in() && current_user_can(self::requiredCapability());
     }
 
     /**
      * Permission callback for the token-refresh route: the logged-in WP session
      * only (cookie + REST nonce). Deliberately does NOT accept a Bearer JWT —
-     * the refresh route exists precisely because the JWT has expired.
+     * the refresh route exists precisely because the JWT has expired. Same
+     * capability bar as checkAuth(), since what it hands back is a token for
+     * those very routes.
      */
     public static function checkLoggedIn(): bool
     {
-        return is_user_logged_in();
+        return is_user_logged_in() && current_user_can(self::requiredCapability());
     }
 
     /** Attachment creation requires the WP media-upload capability. */
@@ -659,6 +694,42 @@ class FluxFilesApi
         $writeLimit = ($claims->rateWrite ?? 0) > 0 ? $claims->rateWrite : 10;
         $rateLimiter = new RateLimiterFileStorage($storagePath . '/rate_limit.json', $readLimit, $writeLimit);
         $rateLimiter->check($claims->userId, $isWrite ? 'write' : 'read');
+    }
+
+    /**
+     * Per-subject rate limit for the two token-authenticated media endpoints.
+     *
+     * `/img` and `/stream` authenticate on a per-file token, not the main JWT, so
+     * there is no Claims to run rateLimit() against — without this an unbounded
+     * loop over `/img`'s width/height/quality/format/dpr axes fills a tenant's
+     * `_variants/` with cache entries it can neither see nor purge. Own bucket,
+     * keyed on the token's `sub`, so it never eats the tenant's API read budget.
+     * Mirrors core's ff_media_rate_limit() in index.php.
+     *
+     * Returns false (429 already emitted) when the caller must stop.
+     */
+    private function mediaRateLimit(string $sub, string $bucket, int $default): bool
+    {
+        $limit = (int) apply_filters('fluxfiles_rate_limit_' . $bucket, $default);
+        if ($limit <= 0) {
+            return true; // explicitly disabled by the operator
+        }
+        try {
+            $storagePath = FluxFilesPlugin::storagePath();
+            (new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit))
+                ->check($sub !== '' ? $sub : 'anonymous', $bucket);
+            return true;
+        } catch (ApiException $e) {
+            // A limiter that cannot write its own state must not take the endpoint
+            // down with it — only a genuine 429 blocks the request.
+            if ($e->getHttpCode() !== 429) {
+                return true;
+            }
+            status_header(429);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Too many requests';
+            return false;
+        }
     }
 
     private function logAudit(\FluxFiles\Claims $claims, string $action, string $disk, string $key, ?string $detail = null): void
@@ -2215,6 +2286,10 @@ class FluxFilesApi
             exit;
         }
 
+        if (!$this->mediaRateLimit((string) ($scope['sub'] ?? ''), 'stream', 300)) {
+            exit;
+        }
+
         $disk = $scope['disk'];
         $path = $scope['path'];
 
@@ -2310,6 +2385,10 @@ class FluxFilesApi
             status_header($e->getHttpCode());
             header('Content-Type: text/plain; charset=utf-8');
             echo $e->getMessage();
+            exit;
+        }
+
+        if (!$this->mediaRateLimit((string) ($scope['sub'] ?? ''), 'img', 120)) {
             exit;
         }
 
@@ -2463,12 +2542,29 @@ class FluxFilesApi
             $claims = $this->claims();
             $this->rateLimit($claims, false);
 
+            // Same gate as core's /api/fm/audit: reading the activity log needs an
+            // explicit 'audit' permission (off by default), so an ordinary read
+            // token cannot see who did what.
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
             $audit = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
 
+            // $claims is what makes list() scope entries to the token's path
+            // prefix — audit.jsonl is per-disk, not per-tenant, so without it
+            // every tenant on a shared disk reads the whole log.
             return $this->ok($audit->list(
                 (int) ($request->get_param('limit') ?? 100),
                 (int) ($request->get_param('offset') ?? 0),
-                $claims->userId
+                ($request->get_param('actor') ?: null),
+                $claims,
+                [
+                    'action' => $request->get_param('action'),
+                    'from'   => $request->get_param('from'),
+                    'to'     => $request->get_param('to'),
+                    'path'   => $request->get_param('path'),
+                ]
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
@@ -2996,14 +3092,19 @@ class FluxFilesApi
     public function serveUiAsset(\WP_REST_Request $request)
     {
         $file = (string) $request->get_param('file');
-        // Regex on the route already restricts to fm.js / fm.css.
+        // Regex on the route already restricts to fm.js / fm.css / vendor/*.{js,css}.
         $assetsDir = FluxFilesPlugin::corePath('assets');
         if ($assetsDir === null) {
             return $this->error('Assets not bundled', 500);
         }
         $path = $assetsDir . '/' . $file;
         $real = realpath($path);
-        if ($real === false || strpos($real, realpath($assetsDir)) !== 0 || !is_file($real)) {
+        // Trailing separator on the base, so a sibling dir whose name merely
+        // starts with it (…/assets-x) cannot pass the prefix test.
+        $realBase = realpath($assetsDir);
+        if ($real === false || $realBase === false
+            || strncmp($real, $realBase . '/', strlen($realBase) + 1) !== 0
+            || !is_file($real)) {
             return $this->error('Asset not found', 404);
         }
         $mime = substr($file, -3) === '.js' ? 'application/javascript' : 'text/css';

@@ -5,6 +5,133 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.3.14] — 2026-09-26
+
+> Released: `core-v0.2.89`, `laravel-v0.2.43`, `wordpress-v0.2.50`.
+
+A security release. `docs/security/FREE-CORE-SECURITY-AUDIT-2026-09.md` is the
+full audit of the MIT free/core surface (core, both PHP proxy adapters, the
+browser SDK) behind it: six parallel review agents, every finding re-verified
+by hand against running code, all 16 now closed.
+
+### Fixed — path traversal escaped the tenant prefix (CRITICAL)
+
+- `FileManager::scopedPath()` and `Claims::stripDotSegments()` split on `/`
+  only, while Flysystem's normalizer rewrites `\` to `/` **before** it pops
+  `..` segments. The two therefore disagreed about what a path meant:
+  `a\..\..\b` passed core untouched as one opaque segment and was then
+  resolved out of the tenant prefix. The same mismatch walked past
+  `isReservedSystemPath()` into `_fluxfiles/` (metadata, search index, audit
+  log, trash manifest) and past the legal-hold check. Both sanitizers now
+  normalize backslashes before segmenting.
+
+### Fixed — SSRF guard bypasses
+
+- `isPublicIp()` only unwrapped the literal `::ffff:` prefix with a dotted-quad
+  tail, so `::ffff:7f00:1`, `::ffff:a9fe:a9fe` (cloud metadata),
+  `2002:7f00:1::` (6to4), `64:ff9b::7f00:1` (NAT64) and an expanded
+  `0:0:0:0:0:0:0:1` all judged public. The IPv6 branch now judges the packed
+  16-byte value from `inet_pton`, never the spelling.
+- `FLUXFILES_SSRF_ALLOW_HOSTS` disabled the post-connect rebinding check
+  **globally** — one allowlisted private SFTP host switched it off for every
+  outbound fetch by every tenant. `assertConnectedIpSafe()` now takes an
+  allowance (the addresses this fetch's pre-connect layer already vetted), not
+  a bypass.
+
+### Fixed — git deploy could still reach arbitrary exec, and could be wedged
+
+- Only `core.hooksPath` was neutered, but `git pull`/`fetch` also execute
+  commands from the repo's own `.git/config` via `core.fsmonitor` and
+  `core.sshCommand` — an extensionless file any `write`-scoped token could
+  write. Every git invocation is now prefixed with `-c core.fsmonitor=false -c
+  core.sshCommand=ssh -c protocol.ext.allow=never -c protocol.file.allow=never`,
+  unconditionally: the `git_deploy_hooks` claim opts into hooks, not into
+  arbitrary config-driven exec.
+- The deploy lock read its PID from an attacker-writable file and passed it
+  straight to `kill -0`, where `-1` means "every process you may signal" and so
+  read as held forever. The PID is cleared unless it is digits-only.
+
+### Fixed — two ways to read bytes a token was not entitled to
+
+- `restore()` from trash ran neither `assertRelocationExt()` nor
+  `assertSafeFilename()`, so a restore could land a `.php` file on a
+  web-served local disk. It now asserts `write` as well as `delete` and runs
+  the same relocation guards as rename/move/copy, taking the extension from the
+  manifest so a tampered BYOB manifest cannot pick it either.
+- `GET /api/fm/img` returned the untouched original whenever `Accept` named
+  neither AVIF nor WebP — which `curl`'s default `*/*` satisfies. Only the
+  watermark claim was checked, so a preview-only token (`allow_download=false`,
+  no watermark) still got `img_base` from `list()` and one request returned
+  full-resolution bytes. `ImageToken` now carries the download claim, and both
+  fall-through points force a transform or 415.
+
+### Fixed — WordPress gave every logged-in user a full-disk token
+
+- 16 REST routes gated on `is_user_logged_in()` alone, and the activation
+  default granted `read+write+delete` over an empty prefix — so any Subscriber
+  on an open-registration site had the whole disk. The routes now require a
+  capability (`upload_files` by default, lowerable via the
+  `fluxfiles_required_capability` filter), and `tokenForCurrentUser()` derives
+  the minted role from the user's own capabilities
+  (`manage_options`/`delete_posts` → admin, `upload_files` → editor, else
+  viewer), intersected with the site-wide perms option so it can only ever
+  narrow it. An explicit `role`/`perms` override is unaffected.
+
+### Fixed — audit log was evadable with one HTTP header
+
+- `audit()` called `json_encode()` without `JSON_INVALID_UTF8_SUBSTITUTE`, and
+  `false . "\n"` is just `"\n"` — so `User-Agent: A\xFFB` made any destructive
+  action unloggable while it still succeeded. The flag is now passed there and
+  in the five sibling writes with the same exposure, with a fallback entry so
+  the log always gains a row rather than a blank line.
+
+### Fixed — `/api/fm/audit` was ungated and unscoped in both proxies
+
+- Neither proxy checked `hasPerm('audit')` nor passed `$claims`, so in proxy
+  mode every tenant read the whole per-disk audit log. Both now do, and both
+  forward the `action`/`from`/`to`/`path` filters core supports.
+
+### Fixed — CodeMirror was loaded from a CDN with no SRI
+
+- ~25 `<script>` tags from cdnjs executed in the origin that holds the main
+  JWT. CodeMirror 5.65.16 is now vendored at `assets/vendor/codemirror/`, the
+  way xterm already was. fm.js derives its asset base from its own
+  `document.currentScript.src` rather than a page-relative `../assets`, both
+  proxy adapters' asset routes now reach `assets/vendor/**`, and the WordPress
+  plugin build bundles the directory — without which the terminal and code
+  editor silently fell back in every WordPress install.
+
+### Fixed — framing and `postMessage` targeting
+
+- `postMessage` fell back to `targetOrigin: '*'` whenever `_parentOrigin` was
+  unset, which the server-injected boot branch left that way. `'*'` is now
+  reachable only for `FM_READY` (the handshake, whose payload is non-sensitive);
+  every other message is dropped rather than broadcast. A boot payload can name
+  its host via `__FM_BOOT__.parentOrigin`.
+- `/public/` sends `Content-Security-Policy: frame-ancestors`, from the new
+  `FLUXFILES_FRAME_ANCESTORS` or else `'self'` plus
+  `FLUXFILES_ALLOWED_ORIGINS`.
+
+### Fixed — SSH multiplex state and media endpoints
+
+- `SshMultiplexer::runtimeDir()` defaulted to `packages/core/storage/ssh-sockets`,
+  inside the served root in both shipped configs — disclosing an `index.json`
+  of disks and SSH hosts, and briefly holding ephemeral BYOB private keys. It
+  now defaults to `sys_get_temp_dir()`, and `docker/nginx.conf` plus
+  `router.php` deny `/storage/` (leaving `/storage/uploads/` served).
+- `/img` and `/stream` dispatched before the rate limiter, with no ceiling on
+  cache writes into a `_variants/` the tenant cannot see or purge. Both now run
+  a per-`sub` bucket — `FLUXFILES_IMG_RATE_LIMIT` (120/min) and
+  `FLUXFILES_STREAM_RATE_LIMIT` (300/min), 0 to disable — in core and in both
+  proxies.
+
+### Fixed — `/img` variant cache collided between same-named files
+
+- `transformCacheKey()` used `PATHINFO_FILENAME` while the upload-time variant
+  path used `PATHINFO_BASENAME`, so `a.jpg` and `a.png` shared a cache entry
+  whenever they shared an mtime second — one image served as the other. It now
+  uses the full basename, as its own comment always said it must.
+
 ## [0.3.13] — 2026-09-26
 
 > Released: `sdk-v0.2.9`, `node-v0.1.30`, `react-v0.2.10`, `vue-v0.2.10`.

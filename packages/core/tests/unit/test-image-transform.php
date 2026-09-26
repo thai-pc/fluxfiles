@@ -133,15 +133,24 @@ test('isAnimatedGif: non-GIF → false', function () {
 // ── transformCacheKey ─────────────────────────────────────────────────────
 test('transformCacheKey: lives in _variants/, ver-stamped, sanitized', function () {
     $k = ImageOptimizer::transformCacheKey('users/42/photo.jpg', 800, 80, '1781900000');
-    assertEqual('users/42/_variants/photo_w800_q80_1781900000.webp', $k, 'key shape');
+    assertEqual('users/42/_variants/photo.jpg_w800_q80_1781900000.webp', $k, 'key shape');
 
     // Root-level file → top-level _variants.
-    assertEqual('_variants/pic_w400_q75_abc123.webp',
+    assertEqual('_variants/pic.png_w400_q75_abc123.webp',
         ImageOptimizer::transformCacheKey('pic.png', 400, 75, 'abc123'), 'root key');
 
     // ver is sanitized (no path-y chars) and truncated to 12.
     $safe = ImageOptimizer::transformCacheKey('a.jpg', 100, 60, '../../etc/passwd');
     assertTrue(strpos($safe, '..') === false && strpos($safe, '/etc') === false, 'ver cannot inject traversal');
+});
+
+test('transformCacheKey: same-named files with different extensions never collide', function () {
+    // The key embeds $ver = lastModified(), so a.jpg and a.png only ever shared
+    // a key when they also shared an mtime second — the extension is what
+    // separates them (matching process() / FileManager::variantKey()).
+    $jpg = ImageOptimizer::transformCacheKey('d/a.jpg', 800, 80, '111');
+    $png = ImageOptimizer::transformCacheKey('d/a.png', 800, 80, '111');
+    assertTrue($jpg !== $png, 'a.jpg and a.png must not share a cache entry');
 });
 
 /** A small PNG logo with an alpha channel (transparent corner) as binary. */
@@ -234,31 +243,31 @@ test('watermarkSignature: stable, distinguishes config + logo version', function
 test('transformCacheKey: watermark variant segment separates marked from clean', function () {
     $clean = \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111');
     $marked = \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', 'wmABCD1234');
-    assertEqual('_variants/p_w800_q80_111.webp', $clean, 'clean key unchanged (backward compat)');
-    assertEqual('_variants/p_w800_q80_111_wmABCD1234.webp', $marked, 'watermarked key has the wm segment');
+    assertEqual('_variants/p.jpg_w800_q80_111.webp', $clean, 'full filename, matching variantKey()');
+    assertEqual('_variants/p.jpg_w800_q80_111_wmABCD1234.webp', $marked, 'watermarked key has the wm segment');
 });
 
 // ── transformCacheKey: format + height/fit (AVIF delivery + box sizing) ─────
 test('transformCacheKey: avif and webp cache to distinct files', function () {
     $webp = \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111');
     $avif = \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'avif');
-    assertEqual('_variants/p_w800_q80_111.webp', $webp, 'default stays webp (backward compat)');
-    assertEqual('_variants/p_w800_q80_111.avif', $avif, 'avif gets its own .avif key');
+    assertEqual('_variants/p.jpg_w800_q80_111.webp', $webp, 'default stays webp');
+    assertEqual('_variants/p.jpg_w800_q80_111.avif', $avif, 'avif gets its own .avif key');
     assertTrue($webp !== $avif, 'formats never collide');
 });
 
 test('transformCacheKey: height + cover fit add key segments', function () {
     // Width-only key is unchanged (height 0 → no _h segment, no _cover).
-    assertEqual('_variants/p_w800_q80_111.webp',
+    assertEqual('_variants/p.jpg_w800_q80_111.webp',
         \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'webp', 0, 'contain'));
     // Height present → _h segment; contain is the default (no fit segment).
-    assertEqual('_variants/p_w800_h600_q80_111.webp',
+    assertEqual('_variants/p.jpg_w800_h600_q80_111.webp',
         \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'webp', 600, 'contain'));
     // cover (with a height) adds a _cover segment so a crop never matches a fit.
-    assertEqual('_variants/p_w800_h600_q80_cover_111.webp',
+    assertEqual('_variants/p.jpg_w800_h600_q80_cover_111.webp',
         \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'webp', 600, 'cover'));
     // cover without a height is meaningless → no _cover segment.
-    assertEqual('_variants/p_w800_q80_111.webp',
+    assertEqual('_variants/p.jpg_w800_q80_111.webp',
         \FluxFiles\ImageOptimizer::transformCacheKey('p.jpg', 800, 80, '111', '', 'webp', 0, 'cover'));
 });
 

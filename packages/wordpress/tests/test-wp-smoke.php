@@ -88,6 +88,17 @@ if (!function_exists('get_current_user_id')) {
     function get_current_user_id() { return (int) ($GLOBALS['WP_OPTIONS']['_test_user_id'] ?? 0); }
 }
 
+// Capability stub — $GLOBALS['WP_CAPS'] is the current user's capability set.
+// Defaults to a full-capability administrator so every pre-existing test keeps
+// the behaviour it was written against; the H-6 tests set it explicitly.
+$GLOBALS['WP_CAPS'] = ['manage_options' => true, 'delete_posts' => true, 'upload_files' => true, 'read' => true];
+if (!function_exists('current_user_can')) {
+    function current_user_can($cap) { return !empty($GLOBALS['WP_CAPS'][$cap]); }
+}
+if (!function_exists('is_user_logged_in')) {
+    function is_user_logged_in() { return (int) ($GLOBALS['WP_OPTIONS']['_test_user_id'] ?? 0) > 0; }
+}
+
 // See test-laravel-smoke.php: CI's floor check overrides FLUXFILES_CORE_AUTOLOAD
 // to run against core at this adapter's declared composer floor.
 $coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
@@ -1303,6 +1314,101 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
     // still present so a future edit doesn't silently remove it while "fixing" this test.
     $chunkInitBody = $extractMethod($apiSrc, 'handleChunkInit');
     assertTrue(strpos($chunkInitBody, 'logAudit(') !== false, 'handleChunkInit() still logs too, matching core');
+});
+
+// ── H-6: WordPress Subscribers no longer receive full read+write+delete tokens ──
+
+test("H-6: the minted token follows the WP user's capabilities, not one site-wide default", function () use ($secret) {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 4242;
+    $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read', 'write', 'delete'];
+    $saveCaps = $GLOBALS['WP_CAPS'];
+
+    try {
+        // A Subscriber on an open-registration site: no upload_files. Used to get
+        // read+write+delete over an empty prefix.
+        $GLOBALS['WP_CAPS'] = ['read' => true];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertEqual(['read'], (array) $p->perms, 'subscriber gets read only');
+        assertEqual(true, $p->owner_only ?? null, 'subscriber is owner-scoped');
+        assertEqual(false, $p->allow_chmod ?? null, 'subscriber cannot chmod');
+
+        // An Author: upload_files but not delete_posts → editor.
+        $GLOBALS['WP_CAPS'] = ['read' => true, 'upload_files' => true];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertEqual(['read', 'write'], (array) $p->perms, 'author gets read+write');
+        assertEqual(true, $p->owner_only ?? null, 'author is owner-scoped');
+
+        // An Administrator → admin bundle.
+        $GLOBALS['WP_CAPS'] = ['read' => true, 'upload_files' => true, 'delete_posts' => true, 'manage_options' => true];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertEqual(['read', 'write', 'delete'], (array) $p->perms, 'admin gets the site ceiling');
+        assertEqual(false, $p->owner_only ?? false, 'admin is not owner-scoped');
+    } finally {
+        $GLOBALS['WP_CAPS'] = $saveCaps;
+    }
+});
+
+test('H-6: the site-wide perms option is a ceiling the capability role cannot exceed', function () use ($secret) {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 4243;
+    $savePerms = $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] ?? null;
+    $saveCaps  = $GLOBALS['WP_CAPS'];
+    try {
+        // Operator narrowed the whole site to read-only: even an administrator
+        // must not be minted a write/delete token by the preset.
+        $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read'];
+        $GLOBALS['WP_CAPS'] = ['read' => true, 'upload_files' => true, 'delete_posts' => true, 'manage_options' => true];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertEqual(['read'], (array) $p->perms, 'ceiling wins over the admin bundle');
+    } finally {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = $savePerms;
+        $GLOBALS['WP_CAPS'] = $saveCaps;
+    }
+});
+
+test('H-6: an explicit role override still means what it means in the other builders', function () use ($secret) {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 4244;
+    $saveCaps = $GLOBALS['WP_CAPS'];
+    try {
+        // A Subscriber, but the operator deliberately asked for editor.
+        $GLOBALS['WP_CAPS'] = ['read' => true];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(['role' => 'editor']), $secret);
+        assertEqual(['read', 'write'], (array) $p->perms, 'explicit role is not capability-capped');
+    } finally {
+        $GLOBALS['WP_CAPS'] = $saveCaps;
+    }
+});
+
+test('H-6: the REST permission callbacks require a capability, not just a session', function () {
+    $src = file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($src, 'function requiredCapability()') !== false, 'requiredCapability() exists');
+    assertTrue(strpos($src, "\$cap = 'upload_files';") !== false, 'it defaults to upload_files');
+    assertTrue(strpos($src, "apply_filters('fluxfiles_required_capability'") !== false,
+        'operators can lower the bar deliberately, via a filter');
+    // No permission callback may fall back to a bare is_user_logged_in().
+    assertTrue(strpos($src, 'return is_user_logged_in();') === false,
+        'no permission callback returns is_user_logged_in() alone');
+    foreach (['checkAuth', 'checkLoggedIn'] as $fn) {
+        $pos = strpos($src, "function {$fn}(");
+        assertTrue($pos !== false, "{$fn}() exists");
+        $tail = substr($src, $pos, 1200);
+        assertTrue(strpos($tail, 'current_user_can(self::requiredCapability())') !== false,
+            "{$fn}() checks the required capability");
+    }
+});
+
+test('M-1: CodeMirror is vendored, not pulled from a CDN into the JWT origin', function () {
+    $fm = file_get_contents(__DIR__ . '/../../core/assets/fm.js');
+    assertTrue(strpos($fm, 'cdnjs.cloudflare.com/ajax/libs/codemirror') === false,
+        'no cdnjs script tags remain');
+    assertTrue(is_file(__DIR__ . '/../../core/assets/vendor/codemirror/codemirror.min.js'),
+        'the vendored core bundle is present');
+    // Both proxies have to be able to serve assets/vendor/* or the lazy loaders 404.
+    $wp = file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($wp, 'vendor/[A-Za-z0-9._/-]+') !== false, 'the WP asset route reaches vendor/');
+    $sp = file_get_contents(__DIR__ . '/../../laravel/src/FluxFilesServiceProvider.php');
+    assertTrue(strpos($sp, '(?:/[a-zA-Z0-9._') !== false, 'the Laravel asset route spans slashes');
+    $build = file_get_contents(__DIR__ . '/../../../scripts/build-wordpress.sh');
+    assertTrue(strpos($build, 'assets/vendor') !== false, 'the plugin build bundles assets/vendor');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

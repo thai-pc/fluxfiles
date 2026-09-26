@@ -156,6 +156,42 @@ class FluxFilesController
     }
 
     /**
+     * Per-subject rate limit for the two token-authenticated media endpoints.
+     *
+     * `/img` and `/stream` authenticate on a per-file token, not the main JWT, so
+     * there is no Claims to run rateLimit() against — without this an unbounded
+     * loop over `/img`'s width/height/quality/format/dpr axes fills a tenant's
+     * `_variants/` with cache entries it can neither see nor purge. Own bucket,
+     * keyed on the token's `sub`, so it never eats the tenant's API read budget.
+     * Mirrors core's ff_media_rate_limit() in index.php.
+     *
+     * Returns false (429 already emitted) when the caller must stop.
+     */
+    private function mediaRateLimit(string $sub, string $bucket, int $default): bool
+    {
+        $limit = (int) config('fluxfiles.rate_limit_' . $bucket, $default);
+        if ($limit <= 0) {
+            return true; // explicitly disabled by the operator
+        }
+        try {
+            $storagePath = config('fluxfiles.storage_path');
+            (new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit))
+                ->check($sub !== '' ? $sub : 'anonymous', $bucket);
+            return true;
+        } catch (ApiException $e) {
+            // A limiter that cannot write its own state must not take the endpoint
+            // down with it — only a genuine 429 blocks the request.
+            if ($e->getHttpCode() !== 429) {
+                return true;
+            }
+            http_response_code(429);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Too many requests';
+            return false;
+        }
+    }
+
+    /**
      * Log a write action to the audit log (lưu trong storage của user).
      */
     private function logAudit(
@@ -1290,12 +1326,29 @@ class FluxFilesController
             $claims = $this->claims($request);
             $this->rateLimit($claims, false);
 
+            // Same gate as core's /api/fm/audit: reading the activity log needs an
+            // explicit 'audit' permission (off by default), so an ordinary read
+            // token cannot see who did what.
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+
             $audit = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
 
+            // $claims is what makes list() scope entries to the token's path
+            // prefix — audit.jsonl is per-disk, not per-tenant, so without it
+            // every tenant on a shared disk reads the whole log.
             return $this->ok($audit->list(
                 (int) $request->query('limit', 100),
                 (int) $request->query('offset', 0),
-                $claims->userId
+                ($request->query('actor') ?: null),
+                $claims,
+                [
+                    'action' => $request->query('action'),
+                    'from'   => $request->query('from'),
+                    'to'     => $request->query('to'),
+                    'path'   => $request->query('path'),
+                ]
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
@@ -1909,6 +1962,10 @@ class FluxFilesController
             exit;
         }
 
+        if (!$this->mediaRateLimit((string) ($scope['sub'] ?? ''), 'stream', 300)) {
+            exit;
+        }
+
         $disk = $scope['disk'];
         $path = $scope['path'];
 
@@ -2009,6 +2066,10 @@ class FluxFilesController
             http_response_code($e->getHttpCode());
             header('Content-Type: text/plain; charset=utf-8');
             echo $e->getMessage();
+            exit;
+        }
+
+        if (!$this->mediaRateLimit((string) ($scope['sub'] ?? ''), 'img', 120)) {
             exit;
         }
 
@@ -2609,8 +2670,12 @@ class FluxFilesController
         $basePath = $this->fluxfilesBasePath() . '/assets';
         $filePath = realpath($basePath . '/' . $file);
 
-        // Prevent directory traversal
-        if (!$filePath || strncmp($filePath, realpath($basePath), strlen(realpath($basePath))) !== 0) {
+        // Prevent directory traversal. Compared WITH a trailing separator so a
+        // sibling directory whose name merely starts with the base (…/assets-x)
+        // cannot pass the prefix test. `$file` may contain '/' (assets/vendor/…)
+        // so this check, not the route pattern, is what bounds it.
+        $realBase = realpath($basePath);
+        if (!$filePath || !$realBase || strncmp($filePath, $realBase . '/', strlen($realBase) + 1) !== 0) {
             abort(404);
         }
 

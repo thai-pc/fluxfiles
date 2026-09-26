@@ -284,8 +284,11 @@ private-local-media requirement.
 | `FLUXFILES_DB_AUTO_MIGRATE` | `false` | `true` runs pending core migrations automatically on boot (dev convenience). Production should run `php scripts/fluxfiles-migrate.php` explicitly during deploy. |
 | `FLUXFILES_DB_S3_BREADCRUMB` | `true` | On an S3/R2 disk with `backend=db`, write the `x-amz-meta-fluxfiles-id` breadcrumb (§8) on first save. `false` skips the extra `CopyObject` entirely, accepting the full raw-tooling migration risk. |
 | `FLUXFILES_ALLOWED_ORIGINS` | — | CORS allow-list for the embed. |
+| `FLUXFILES_FRAME_ANCESTORS` | — | CSP `frame-ancestors` source list for `/public/` (clickjacking). Falls back to `'self' <FLUXFILES_ALLOWED_ORIGINS>` when unset; **when neither is set no header is sent and any site may frame the UI** — set one of the two in production. `X-Frame-Options` is not sent alongside (it has no multi-origin form). |
 | `FLUXFILES_LOCALE` | `en` | Default UI locale. |
 | `FLUXFILES_RATE_LIMIT_READ` / `_WRITE` | 60 / 10 | Per-user req/min defaults (claims override). |
+| `FLUXFILES_IMG_RATE_LIMIT` | `120` | `/api/fm/img` requests/min, keyed on the image token's `sub`. Its own bucket because `/img` authenticates on a per-file token, not the main JWT, so it never reaches the read limiter above — and its width/height/quality/format/dpr axes would otherwise let a caller fill a tenant's `_variants/` cache. `0` disables the bucket. |
+| `FLUXFILES_STREAM_RATE_LIMIT` | `300` | `/api/fm/stream` requests/min, keyed on the stream token's `sub`. Higher than `/img` because a seeking `<video>` fires one Range request per seek. `0` disables the bucket. |
 | `FLUXFILES_LOCAL_PRIVATE` | `false` | Serve local media through `/api/fm/stream` (token-gated) instead of static URLs. |
 | `FLUXFILES_XACCEL` | — | nginx `X-Accel-Redirect` internal location for the stream fast-path. |
 | `FLUXFILES_TERMINAL_DISABLED` | `false` | Server kill-switch for the SSH terminal. |

@@ -321,7 +321,12 @@ class ImageOptimizer
     public static function transformCacheKey(string $key, int $width, int $quality, string $ver, string $variant = '', string $format = 'webp', int $height = 0, string $fit = 'contain'): string
     {
         $dir = dirname($key);
-        $basename = pathinfo($key, PATHINFO_FILENAME);
+        // FULL filename (with extension), matching process() and
+        // FileManager::variantKey(). PATHINFO_FILENAME strips the extension, which
+        // let `a.jpg` and `a.png` share one cache entry whenever they also shared
+        // an mtime second (`$ver` is lastModified()) — one image then served as
+        // the other.
+        $basename = pathinfo($key, PATHINFO_BASENAME);
         $variantsDir = ($dir !== '.' && $dir !== '') ? $dir . '/_variants' : '_variants';
         $ver = substr(preg_replace('/[^A-Za-z0-9]/', '', $ver) ?? '', 0, 12);
         // Optional extra segment (e.g. a watermark signature) — appended only when

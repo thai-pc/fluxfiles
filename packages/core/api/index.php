@@ -106,6 +106,22 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     // never leak the URL (token included) via the Referer header to any sub-resource
     // or outbound link. Does NOT affect the Origin header → CSRF same-origin still works.
     header('Referrer-Policy: no-referrer');
+    // Clickjacking: constrain who may frame the UI. There is no safe universal
+    // default — the whole product is an iframe embed, so `frame-ancestors 'self'`
+    // would break every working install. Precedence:
+    //   1. FLUXFILES_FRAME_ANCESTORS — explicit source list, verbatim.
+    //   2. FLUXFILES_ALLOWED_ORIGINS — the hosts already trusted for CORS.
+    //   3. neither set → no header (unchanged behaviour), which is the case an
+    //      operator should fix; docs/reference/CONFIG.md says so.
+    // X-Frame-Options is deliberately NOT sent alongside: it has no multi-origin
+    // form, so it would contradict an allow-list that CSP is expressing correctly.
+    $frameAncestors = trim((string) ($_ENV['FLUXFILES_FRAME_ANCESTORS'] ?? ''));
+    if ($frameAncestors === '' && $allowedOrigins !== []) {
+        $frameAncestors = "'self' " . implode(' ', $allowedOrigins);
+    }
+    if ($frameAncestors !== '' && preg_match('/^[A-Za-z0-9 :\/\.\*\-\']+$/', $frameAncestors)) {
+        header('Content-Security-Policy: frame-ancestors ' . $frameAncestors);
+    }
     $localeJson = $i18n->toJson();
     $locale = $i18n->locale();
     $dir = $i18n->direction();
@@ -1653,6 +1669,45 @@ function handleSsoExchange(): void
  * stream token in the query string. Honours HTTP Range so a <video>/<audio> can
  * seek without re-reading from the start. Emits raw bytes, not JSON.
  */
+/**
+ * Per-subject rate limit for the two token-authenticated media endpoints.
+ *
+ * `/img` and `/stream` dispatch and exit before the main `try` block, so they
+ * never reach the general read/write limiter — an unbounded loop over `/img`'s
+ * width/height/quality/format/dpr axes can otherwise fill a tenant's
+ * `_variants/` with cache entries it can neither see nor purge. The handler
+ * docblock's "mathematically bounded" argument predates those extra axes.
+ *
+ * Keyed on the token's `sub` (there is no Claims here), in its own bucket so it
+ * never eats the tenant's API read budget. Defaults are generous: a gallery
+ * page legitimately fires dozens of `/img` requests, and a seeking `<video>`
+ * fires one `/stream` Range request per seek.
+ *
+ * Returns false (and has already emitted the 429) when the caller must stop.
+ */
+function ff_media_rate_limit(string $sub, string $bucket, int $default): bool
+{
+    $limit = (int) ($_ENV['FLUXFILES_' . strtoupper($bucket) . '_RATE_LIMIT'] ?? $default);
+    if ($limit <= 0) {
+        return true; // explicitly disabled by the operator
+    }
+    try {
+        \FluxFiles\RateLimiterFactory::make($limit, $limit, 60)
+            ->check($sub !== '' ? $sub : 'anonymous', $bucket);
+        return true;
+    } catch (ApiException $e) {
+        // A limiter that cannot write its own state must not take the endpoint
+        // down with it — only a genuine 429 blocks the request.
+        if ($e->getHttpCode() !== 429) {
+            return true;
+        }
+        http_response_code(429);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Too many requests';
+        return false;
+    }
+}
+
 function handleMediaStream(): void
 {
     $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
@@ -1670,6 +1725,10 @@ function handleMediaStream(): void
         http_response_code($e->getHttpCode());
         header('Content-Type: text/plain; charset=utf-8');
         echo $e->getMessage();
+        return;
+    }
+
+    if (!ff_media_rate_limit((string) ($scope['sub'] ?? ''), 'stream', 300)) {
         return;
     }
 
@@ -1847,6 +1906,10 @@ function handleImageTransform(): void
         http_response_code($e->getHttpCode());
         header('Content-Type: text/plain; charset=utf-8');
         echo $e->getMessage();
+        return;
+    }
+
+    if (!ff_media_rate_limit((string) ($scope['sub'] ?? ''), 'img', 120)) {
         return;
     }
 

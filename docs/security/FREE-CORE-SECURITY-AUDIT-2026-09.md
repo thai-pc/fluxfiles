@@ -175,7 +175,7 @@ manifest's `original_key`, and both it and the caller-supplied `path` are
 re-checked, so a tampered BYOB manifest cannot pick the extension either.
 Three regression tests in `tests/integration/test-trash.php` (23/23).
 
-### [ ] H-6 — WordPress Subscribers receive full read+write+delete tokens
+### [x] H-6 — WordPress Subscribers receive full read+write+delete tokens
 **Where:** `packages/wordpress/includes/FluxFilesApi.php:475`,
 `FluxFilesPlugin.php:69,280`, `FluxFilesShortcode.php:24`
 
@@ -184,8 +184,29 @@ capability (`current_user_can('upload_files')`, `:490`). The activation default
 grants `['read','write','delete']` with an empty `prefix`, so any Subscriber —
 the default role on an open-registration site — gets a full-disk token.
 
-**Fix:** gate on a capability (`upload_files` at minimum) and default the
-minted role to the `viewer` preset unless the operator opts up.
+**Fixed** (commit pending, 2026-09-26): both halves.
+
+*The gate.* `FluxFilesApi::requiredCapability()` returns `upload_files` — the
+lowest built-in capability that already means "this person may put files on
+this site" — and both `checkAuth()` and `checkLoggedIn()` now require it
+alongside the session. `checkLoggedIn()` is included deliberately: what it
+hands back is a token for the very routes `checkAuth()` guards. An operator who
+genuinely wants a lower bar lowers it explicitly, via
+`add_filter('fluxfiles_required_capability', fn () => 'read')`.
+
+*The token.* `tokenForCurrentUser()` no longer mints one site-wide grant for
+everybody. `roleForCapabilities()` maps the current WP user onto a role preset
+— `manage_options`/`delete_posts` → `admin`, `upload_files` → `editor`,
+anything else → `viewer` — and the resulting perms are intersected with the
+site-wide `fluxfiles_default_perms`, so a site narrowed to read-only stays
+read-only for an administrator too. Only this *implicit* path is capped: an
+explicit `role`/`perms` override, or the `fluxfiles_token_overrides` filter
+(which runs after), still means exactly what it means in the other three token
+builders.
+
+Five tests in `packages/wordpress/tests/test-wp-smoke.php` (71/71) cover the
+three capability tiers, the ceiling, the explicit-override escape hatch, and
+that no permission callback falls back to a bare `is_user_logged_in()`.
 
 ### [x] H-7 — `/api/fm/img` serves the clean original to a preview-only token
 **Where:** `packages/core/api/index.php:1936` and `:1987`
@@ -228,7 +249,7 @@ undecodable path.
 
 ## MEDIUM-HIGH
 
-### [ ] M-1 — CodeMirror loaded from a CDN with no SRI into the JWT-bearing origin
+### [x] M-1 — CodeMirror loaded from a CDN with no SRI into the JWT-bearing origin
 **Where:** `packages/core/assets/fm.js:4345-4374`
 
 ~25 `<script>` tags built from
@@ -241,13 +262,29 @@ The repo already knows better in both directions: Alpine carries an
 deliberately vendored at `assets/vendor/xterm/` with the comment "from
 FluxFiles' OWN vendored copy … no third-party CDN" (`fm.js:3889`).
 
-**Fix:** vendor CodeMirror the way xterm already is, or add SRI hashes.
+**Fixed** (commit pending, 2026-09-26): vendored, the way xterm already is —
+26 files (core JS/CSS, the material-darker theme, the simple-mode addon and all
+22 modes) at `packages/core/assets/vendor/codemirror/`, 420 KB, all lazy-loaded
+exactly as before. SRI was the weaker option: it pins the bytes but still
+leaves the editor broken wherever cdnjs is blocked.
+
+Two things had to follow. fm.js now derives its asset base from its own
+`document.currentScript.src` (`FM_ASSETS_BASE`) instead of a hardcoded
+`'../assets'`, because under both proxies fm.js is served from an absolute
+route where a page-relative `../` resolves elsewhere — this fixes the same
+latent breakage for xterm. And both proxies' asset routes only ever matched
+`fm.js`/`fm.css`, so `assets/vendor/*` 404'd there: the Laravel route pattern
+now spans slashes and the WordPress route admits `vendor/**.{js,css}`, with the
+containment check in each handler tightened to compare against the base plus a
+trailing separator. `scripts/build-wordpress.sh` copies `assets/vendor/` into
+the plugin, without which the terminal and the code editor silently fell back
+in every WordPress install.
 
 ---
 
 ## MEDIUM
 
-### [ ] M-2 — Audit-log evasion via one HTTP header
+### [x] M-2 — Audit-log evasion via one HTTP header
 **Where:** `packages/core/api/StorageMetadataHandler.php:572-578`,
 `AuditLogStorage.php:24-45`
 
@@ -261,10 +298,17 @@ json_encode(["ts"=>1,"action"=>"delete","context"=>["ua"=>"A".chr(0xFF)."B"]]) /
 `false . "\n"` writes a blank line, so `User-Agent: A\xFFB` makes any
 destructive action unloggable while the operation still succeeds.
 
-**Fix:** pass `JSON_INVALID_UTF8_SUBSTITUTE`, and treat a `false` encode as a
-hard error rather than writing the result.
+**Fixed** (commit pending, 2026-09-26): `audit()` passes
+`JSON_INVALID_UTF8_SUBSTITUTE` and, if the encode still fails, falls back to a
+minimal entry carrying `json_last_error_msg()` and then to a hardcoded
+`audit_encode_failed` line — the log always gains a row, never a blank one. The
+five sibling writes that had the same exposure (`writeSidecar()`,
+`saveTrash()`, `saveHolds()`, `saveIndex()` and the dirs index) carry the flag
+too. New regression test `tests/unit/test-audit-invalid-utf8.php` (4/4) drives
+the real `A\xFFB` User-Agent end to end and asserts no line in `audit.jsonl` is
+blank or unparseable.
 
-### [ ] M-3 — `/api/fm/audit` missing permission gate and prefix scoping in both proxies
+### [x] M-3 — `/api/fm/audit` missing permission gate and prefix scoping in both proxies
 **Where:** `packages/laravel/src/Http/Controllers/FluxFilesController.php:1287-1303`
 (and the WordPress counterpart)
 
@@ -274,7 +318,14 @@ has **neither** — no perm check, and no `$claims` argument. Prefix scoping in
 `AuditLogStorage.php:70-76` only applies when a non-empty prefix is passed, so
 in proxy mode every tenant reads the whole per-disk audit log.
 
-### [ ] M-4 — `/img` and `/stream` bypass the rate limiter and quota
+**Fixed** (commit pending, 2026-09-26): both proxies now check
+`hasPerm('audit')` (403 `forbidden` otherwise) and pass `$claims` into
+`AuditLogStorage::list()`, so entries are scoped to the token's path prefix.
+The `action`/`from`/`to`/`path` filters core supports were missing from both
+ports as well and are forwarded now, so the proxied route answers the same
+question as the standalone one.
+
+### [x] M-4 — `/img` and `/stream` bypass the rate limiter and quota
 **Where:** `index.php:206` / `:214`
 
 Both dispatch and `exit` before the `try` block at `:256`, so neither reaches
@@ -284,13 +335,45 @@ which predates the `height`/`fit`/`format` axes now folded into
 `transformCacheKey()` — the real per-file ceiling is ~7k cache writes, into a
 `_variants/` the tenant can neither see nor purge.
 
-### [ ] M-5 — No framing headers; `postMessage` falls back to `targetOrigin: '*'`
+**Fixed** (commit pending, 2026-09-26): `ff_media_rate_limit()` in `index.php`
+(and the same `mediaRateLimit()` in both proxy controllers) runs immediately
+after each per-file token verifies. There is no `Claims` on these routes, only
+a signed token, so the bucket is keyed on the token's `sub` and lives in its
+own namespace rather than consuming the tenant's read budget. Defaults are
+deliberately generous — `FLUXFILES_IMG_RATE_LIMIT` 120/min,
+`FLUXFILES_STREAM_RATE_LIMIT` 300/min (Laravel: `rate_limit_img` /
+`rate_limit_stream`; WordPress: the `fluxfiles_rate_limit_<bucket>` filter) —
+because a gallery page legitimately fires dozens of `/img` requests and a
+seeking `<video>` one Range request per seek. Setting either to 0 disables that
+bucket. A non-429 failure (an unwritable state file, say) is swallowed: a
+broken limiter must not take media delivery down with it.
+
+### [x] M-5 — No framing headers; `postMessage` falls back to `targetOrigin: '*'`
 **Where:** `packages/core/assets/fm.js:549`
 
 `_parentOrigin` is assigned only in the `FM_CONFIG` branch (`:317`); the
 `__FM_BOOT__` demo branch returns at `:416` without setting it, so the send at
 `:549` degrades to `'*'`. No `X-Frame-Options` or `frame-ancestors` anywhere in
 `api/`, `public/`, `router.php` or `docker/`.
+
+**Fixed** (commit pending, 2026-09-26), in two parts.
+
+*postMessage.* `'*'` is now reachable for exactly one message — `FM_READY`, the
+handshake that must reach a parent whose origin is not yet known, and whose
+payload is deliberately non-sensitive (version, locale, capability names).
+Every other message can carry file keys, names, presigned URLs and event
+detail, so it is **dropped** rather than broadcast while `_parentOrigin` is
+unset. A server-injected boot can name its host explicitly via
+`__FM_BOOT__.parentOrigin` (a real `https?://host` only, never `'*'`), which is
+what the previously-affected branch should have been doing.
+
+*Framing.* `/public/` sends `Content-Security-Policy: frame-ancestors`, from
+`FLUXFILES_FRAME_ANCESTORS` if set, else `'self'` plus
+`FLUXFILES_ALLOWED_ORIGINS`. No header is sent when neither is configured, and
+`CONFIG.md` says plainly that this is the case to fix: `frame-ancestors 'self'`
+cannot be the default when the entire product is an iframe embed. `X-Frame-
+Options` is deliberately *not* sent alongside — it has no multi-origin form, so
+it would contradict any allow-list.
 
 ### [x] M-6 — git-deploy lock permanently wedgeable
 **Where:** `GitDeploy.php:97-111`
@@ -309,7 +392,7 @@ Verified in a real shell (`-1`, `abc`, `12x`, empty → cleared; `1234` kept).
 `test-git-deploy.php` asserts the guard is present *and* ordered before
 `kill -0`; `test-git-deploy-lock.php` 6/6.
 
-### [ ] M-7 — SSH multiplex runtime state lives under the document root
+### [x] M-7 — SSH multiplex runtime state lives under the document root
 **Where:** `packages/core/api/SshMultiplexer.php:124-128`, `:206-217`
 
 `runtimeDir()` defaults to `packages/core/storage/ssh-sockets` when
@@ -326,15 +409,20 @@ and unlinked in `execCold()`'s `finally`, so theft needs a name leak or a crash
 between write and unlink (**suspected**, not demonstrated), but a private key
 under a public root is the wrong default either way.
 
-**Fix:** deny `/storage/` except `/storage/uploads/` in both configs, and
-default `runtimeDir()` outside the document root (as `OidcDiscovery::cacheDir()`
-already does).
+**Fixed** (commit pending, 2026-09-26): both halves, because either alone
+leaves a real case open. `SshMultiplexer::runtimeDir()` now defaults to
+`sys_get_temp_dir()` — the same choice `SsoModule::cacheDir()` already makes —
+so a new install never writes this state under a served root. And
+`docker/nginx.conf` plus `router.php` deny `/storage/` outright, for the
+operator who has pointed `FLUXFILES_STORAGE_PATH` there deliberately. nginx
+uses `location ^~ /storage/` so the prefix match beats the `\.php$` regex;
+`/storage/uploads/` is a longer prefix, so public uploads still serve.
 
 ---
 
 ## LOW
 
-### [ ] L-1 — `/img` variant cache collision between same-named files
+### [x] L-1 — `/img` variant cache collision between same-named files
 **Where:** `packages/core/api/ImageOptimizer.php:321-338` vs `:368-374`
 
 `transformCacheKey()` uses `PATHINFO_FILENAME` (extension stripped). The
@@ -349,6 +437,14 @@ when they share an mtime second.
 
 Duplicated verbatim at `FluxFilesController.php:2085,2112` and
 `FluxFilesApi.php:2387,2417`.
+
+**Fixed** (commit pending, 2026-09-26): `transformCacheKey()` uses
+`PATHINFO_BASENAME`, matching `process()` and `FileManager::variantKey()` as
+its own comment always said it must. Deliberately not backward compatible —
+existing on-demand cache entries become orphans and regenerate on next request,
+which the existing delete/trash cleanup already sweeps.
+`tests/unit/test-image-transform.php` 29/29, including a new test that `a.jpg`
+and `a.png` cannot share an entry.
 
 ---
 

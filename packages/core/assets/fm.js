@@ -1,3 +1,20 @@
+// Base URL of the assets/ directory this very file was served from. The lazy
+// loaders below (xterm, CodeMirror) fetch vendored copies relative to it rather
+// than hardcoding '../assets/vendor': under the Laravel and WordPress proxies
+// fm.js is served from an absolute route, where a '../' relative to the *page*
+// resolves somewhere else entirely. `document.currentScript` is evaluated while
+// this file is being parsed, so it is still the <script> tag that loaded us.
+const FM_ASSETS_BASE = (function () {
+    try {
+        const src = document.currentScript && document.currentScript.src;
+        if (src) {
+            // Strip the filename and any ?v= cache-buster.
+            return new URL('.', src.split('?')[0]).href.replace(/\/$/, '');
+        }
+    } catch (e) { /* fall through */ }
+    return '../assets';
+})();
+
 function fluxFilesApp() {
     const LOCALE = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };
 
@@ -388,6 +405,13 @@ function fluxFilesApp() {
             // hardened demo (demo.php) injects a heavily-scoped, short-TTL demo token here.
             if (window.__FM_BOOT__ && window.__FM_BOOT__.token) {
                 const boot = window.__FM_BOOT__;
+                // A server-injected boot can name the host page it is framed by, so
+                // FM_SELECT/FM_EVENT reach it without the FM_CONFIG handshake. Only
+                // a real origin is accepted — never '*'.
+                if (!this._parentOrigin && typeof boot.parentOrigin === 'string'
+                    && /^https?:\/\/[^/]+$/.test(boot.parentOrigin)) {
+                    this._parentOrigin = boot.parentOrigin;
+                }
                 this.endpoint = boot.endpoint || window.location.origin;
                 this.token = boot.token;
                 if (boot.disk) this.currentDisk = boot.disk;
@@ -532,8 +556,22 @@ function fluxFilesApp() {
         },
 
         // PostMessage helper — serialize payload to avoid "Proxy object could not be cloned"
+        //
+        // targetOrigin is '*' for exactly one message: FM_READY, the handshake that
+        // has to reach a parent whose origin we do not know yet (it is what invites
+        // the FM_CONFIG reply that locks _parentOrigin). Its payload is deliberately
+        // non-sensitive — version, locale, capability names.
+        //
+        // Every other message can carry file keys, names, presigned URLs and event
+        // detail, so it is dropped rather than broadcast when the origin is still
+        // unknown. That case is reachable: the server-injected __FM_BOOT__ branch
+        // returns without ever setting _parentOrigin, so a page that framed us
+        // without handshaking used to receive every FM_SELECT/FM_EVENT. A boot
+        // payload can name its host explicitly via __FM_BOOT__.parentOrigin.
         postMessage(type, payload) {
             if (window.parent && window.parent !== window) {
+                const target = this._parentOrigin || (type === 'FM_READY' ? '*' : '');
+                if (!target) return;
                 let safePayload;
                 try {
                     safePayload = JSON.parse(JSON.stringify(payload ?? {}));
@@ -546,7 +584,7 @@ function fluxFilesApp() {
                     v: 1,
                     id: 'ff-' + Math.random().toString(36).substr(2, 9),
                     payload: safePayload
-                }, this._parentOrigin || '*');
+                }, target);
             }
         },
 
@@ -3893,7 +3931,7 @@ function fluxFilesApp() {
         _ensureXterm() {
             if (window.Terminal) return Promise.resolve();
             if (this._termLoading) return this._termLoading;
-            const base = '../assets/vendor/xterm';
+            const base = FM_ASSETS_BASE + '/vendor/xterm';
             const css = (href) => new Promise((res) => {
                 const l = document.createElement('link');
                 l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = res;
@@ -4336,13 +4374,19 @@ function fluxFilesApp() {
             return m[ext] || null;
         },
 
-        // Lazy-load CodeMirror 5 (core CSS/JS + the common modes) from CDN on first
-        // edit, so it never weighs on initial page load. Failure is non-fatal: the
-        // bound <textarea> is the fallback editor.
+        // Lazy-load CodeMirror 5 (core CSS/JS + the common modes) on first edit, so
+        // it never weighs on initial page load. Failure is non-fatal: the bound
+        // <textarea> is the fallback editor.
+        //
+        // Served from FluxFiles' OWN vendored copy (assets/vendor/codemirror/,
+        // 5.65.16) — same choice as xterm above, for the same reasons plus one
+        // more: these ~25 scripts execute in the origin that holds the main JWT in
+        // memory, and the CDN tags carried no `integrity`, so a compromised or
+        // MITM'd cdnjs response was arbitrary code next to the token.
         _ensureCodeMirror() {
             if (window.CodeMirror) return Promise.resolve();
             if (this._cmLoading) return this._cmLoading;
-            const base = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16';
+            const base = FM_ASSETS_BASE + '/vendor/codemirror';
             const css = (href) => new Promise((res) => {
                 const l = document.createElement('link');
                 l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = res;

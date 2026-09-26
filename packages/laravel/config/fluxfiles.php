@@ -111,6 +111,14 @@ return [
     'rate_limit_read'  => (int) env('FLUXFILES_RATE_LIMIT_READ', 60),
     'rate_limit_write' => (int) env('FLUXFILES_RATE_LIMIT_WRITE', 10),
 
+    // The /img and /stream endpoints authenticate on a per-file token, not the
+    // main JWT, so they get their own per-`sub` buckets instead of the read
+    // budget above. Generous by design: a gallery page fires dozens of /img
+    // requests, and a seeking <video> one /stream Range request per seek. Set
+    // either to 0 to disable that bucket.
+    'rate_limit_img'    => (int) env('FLUXFILES_IMG_RATE_LIMIT', 120),
+    'rate_limit_stream' => (int) env('FLUXFILES_STREAM_RATE_LIMIT', 300),
+
     /*
     |--------------------------------------------------------------------------
     | Disks

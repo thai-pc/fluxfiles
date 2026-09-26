@@ -89,8 +89,13 @@ class FluxFilesServiceProvider extends ServiceProvider
         // Static asset routes (no auth required)
         Route::get('fluxfiles.js', [FluxFilesController::class, 'sdkJs']);
         Route::get('public/index.html', [FluxFilesController::class, 'publicIndex']);
+        // `{file}` spans slashes so the vendored lazy-loaded libraries under
+        // assets/vendor/ (xterm, CodeMirror) are reachable too — fm.js derives
+        // its base from its own <script src>, which is this route. The pattern
+        // still admits no '..' segment, and the controller re-checks containment
+        // with realpath().
         Route::get('assets/{file}', [FluxFilesController::class, 'asset'])
-            ->where('file', '[a-zA-Z0-9._-]+');
+            ->where('file', '[a-zA-Z0-9._\\-]+(?:/[a-zA-Z0-9._\\-]+)*');
 
         // PUBLIC recipient routes — reached by someone with no Laravel session and
         // no JWT, authenticated only by the share/portal token in the query
