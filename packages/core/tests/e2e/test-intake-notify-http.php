@@ -309,7 +309,10 @@ try {
         assertTrue($elapsed < 8.0, 'a refused connection fails fast, not on the full curl timeout budget');
     });
 
-    test('no explicit webhook_secret -> the signature falls back to the SERVER secret', function () use ($B, $mint, $upload, $RECEIVER_URL, $capture, $SECRET) {
+    // NOT the raw server secret: that key also signs the auth JWTs, and the
+    // webhook receiver is a third-party endpoint that sees every signature, so
+    // WebhooksModule::effectiveSecret() derives a webhook-only key from it.
+    test('no explicit webhook_secret -> the signature falls back to a key DERIVED from the server secret', function () use ($B, $mint, $upload, $RECEIVER_URL, $capture, $SECRET) {
         resetCapture($capture);
         $p = $mint($B, ['user' => 'whop3e', 'claims' => ['allow_webhooks' => true, 'webhook_url' => $RECEIVER_URL]], []);
         [$st] = $upload($B, $p['token'], 'f.txt', 'hello');
@@ -317,7 +320,9 @@ try {
         usleep(200000);
         $c = lastCapture($capture);
         assertTrue($c !== null, 'receiver got a request');
-        assertEqual('sha256=' . hash_hmac('sha256', $c['body'], $SECRET), $c['sig'], 'falls back to FLUXFILES_SECRET when webhook_secret is empty');
+        $derived = hash_hmac('sha256', 'fluxfiles-webhook-signing-v1', $SECRET);
+        assertEqual('sha256=' . hash_hmac('sha256', $c['body'], $derived), $c['sig'], 'derives a webhook-only key when webhook_secret is empty');
+        assertTrue($c['sig'] !== 'sha256=' . hash_hmac('sha256', $c['body'], $SECRET), 'never signs with the raw JWT-signing secret');
     });
 
     stop($srv3);

@@ -30,6 +30,19 @@
             window.addEventListener('message', function (e) {
                 var msg = e.data;
                 if (!msg || msg.source !== 'fluxfiles') return;
+                // Complete the handshake like a real host: the iframe drops every
+                // message other than FM_READY until an FM_CONFIG reply tells it which
+                // origin its parent is (it can't know before that, and broadcasting
+                // file keys/paths to '*' would leak them to whoever framed it). Skip
+                // this and FM_TOKEN_REFRESH below never leaves the iframe.
+                if (msg.type === 'FM_READY') {
+                    ifr.contentWindow.postMessage({
+                        source: 'fluxfiles',
+                        type: 'FM_CONFIG',
+                        payload: { token: token, disk: 'local' }
+                    }, '*');
+                    return;
+                }
                 if (msg.type === 'FM_TOKEN_REFRESH') {
                     window.__refreshRequests++;
                     if (!window.__hostRefreshEnabled) return;     // simulate a host that can't refresh

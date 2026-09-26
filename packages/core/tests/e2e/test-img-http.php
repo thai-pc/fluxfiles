@@ -80,8 +80,10 @@ try {
         assertTrue(isWebp($body), 'body is WebP');
         assertEqual('nosniff', $h['x-content-type-options'] ?? '', 'nosniff');
         assertTrue(stripos($h['cache-control'] ?? '', 'immutable') !== false, 'immutable cache');
-        // A cache file landed in _variants/.
-        $variants = glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w800_q80_*.webp');
+        // A cache file landed in _variants/. The key carries the FULL basename
+        // (photo.jpg_w800_…, not photo_w800_…) since the C-1 fix — dropping the
+        // extension let a.jpg and a.png collide on one cache entry.
+        $variants = glob($coreDir . '/storage/uploads/e2e_img/_variants/photo.jpg_w800_q80_*.webp');
         assertTrue(!empty($variants), 'cache file written to _variants/');
     });
 
@@ -94,7 +96,7 @@ try {
     test('width is rounded to 100px (801 → 800, same cache file)', function () use ($imgUrl, $WEBP_ACCEPT, $coreDir) {
         [$st] = httpGet("{$imgUrl}&width=801&quality=80", $WEBP_ACCEPT);
         assertEqual(200, $st);
-        $files = glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w*_q80_*.webp');
+        $files = glob($coreDir . '/storage/uploads/e2e_img/_variants/photo.jpg_w*_q80_*.webp');
         // 800 and 801 must collapse to the same _w800_ key (no _w801_).
         assertTrue(count(array_filter($files, fn ($f) => strpos($f, '_w801_') !== false)) === 0, 'no w801 variant');
     });
@@ -102,7 +104,7 @@ try {
     test('quality snaps to the nearest allowed step (83 → 80)', function () use ($imgUrl, $WEBP_ACCEPT, $coreDir) {
         [$st] = httpGet("{$imgUrl}&width=400&quality=83", $WEBP_ACCEPT);
         assertEqual(200, $st);
-        assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w400_q80_*.webp')), 'q83→q80');
+        assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo.jpg_w400_q80_*.webp')), 'q83→q80');
     });
 
     test('content negotiation: no image/webp in Accept → original JPEG', function () use ($imgUrl) {
@@ -124,7 +126,7 @@ try {
             assertEqual('image/avif', $h['content-type'] ?? '', 'negotiated AVIF');
             assertTrue(isAvif($body), 'body is AVIF');
             // AVIF caches to its own .avif file, separate from the .webp variant.
-            assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w600_q80_*.avif')), 'avif cache written');
+            assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo.jpg_w600_q80_*.avif')), 'avif cache written');
         } else {
             assertEqual('image/webp', $h['content-type'] ?? '', 'falls back to WebP without AVIF support');
             assertTrue(isWebp($body), 'body is WebP fallback');
@@ -143,14 +145,14 @@ try {
         [$st, $h] = httpGet("{$imgUrl}&width=400&height=400&fit=cover&quality=80", $WEBP_ACCEPT);
         assertEqual(200, $st);
         assertEqual('image/webp', $h['content-type'] ?? '');
-        assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w400_h400_q80_cover_*.webp')), 'cover cache key');
+        assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo.jpg_w400_h400_q80_cover_*.webp')), 'cover cache key');
     });
 
     test('dpr=2 doubles the physical width (300 → 600) under the hood', function () use ($imgUrl, $WEBP_ACCEPT, $coreDir) {
         [$st] = httpGet("{$imgUrl}&width=300&dpr=2&quality=80", $WEBP_ACCEPT);
         assertEqual(200, $st);
         // 300 CSS px × DPR 2 = 600 physical px → a _w600_ variant, no _w300_.
-        assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w600_q80_*.webp')), 'dpr scaled to w600');
+        assertTrue(!empty(glob($coreDir . '/storage/uploads/e2e_img/_variants/photo.jpg_w600_q80_*.webp')), 'dpr scaled to w600');
     });
 
     test('bogus token → 403', function () use ($BASE) {
@@ -179,7 +181,7 @@ try {
         assertEqual('image/webp', $h['content-type'] ?? '', 'webp');
         assertTrue(isWebp($body), 'is webp');
         // Cache file has a _wm… segment, distinct from the clean _w500_q80 key.
-        $wmFiles = glob($coreDir . '/storage/uploads/e2e_img/_variants/photo_w500_q80_*_wm*.webp');
+        $wmFiles = glob($coreDir . '/storage/uploads/e2e_img/_variants/photo.jpg_w500_q80_*_wm*.webp');
         assertTrue(!empty($wmFiles), 'watermarked cache written with wm segment');
     });
 

@@ -4,10 +4,16 @@ import { mintToken, mintTokenWithClaims, openManager } from './helpers';
 // Config/code editor modal (M2). The read/write *logic* is covered by the PHP
 // integration + SFTP HTTP e2e; here we verify the UI: the Edit button gate
 // (allow_code_edit + text file), and that the modal loads content and PUTs the
-// edit. The /content endpoint is mocked, and CodeMirror's CDN is blocked so the
-// bound <textarea> fallback drives the test deterministically.
+// edit. The /content endpoint is mocked, and CodeMirror is blocked so the bound
+// <textarea> fallback drives the test deterministically.
 
+// CodeMirror is vendored under assets/vendor/codemirror/ (it used to come from
+// cdnjs; see the M-1 finding in docs/security/FREE-CORE-SECURITY-AUDIT-2026-09.md).
+// Both patterns stay matched so the block holds wherever the assets are served
+// from — a stale cdnjs-only pattern silently let the real editor load and the
+// #ff-editor-ta fallback never appeared.
 async function blockCodeMirror(page: import('@playwright/test').Page) {
+  await page.route('**/vendor/codemirror/**', (route) => route.abort());
   await page.route('**/cdnjs.cloudflare.com/**/codemirror/**', (route) => route.abort());
 }
 
