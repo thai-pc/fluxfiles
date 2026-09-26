@@ -5,6 +5,19 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed — a licence minted by `license-gen` could never pull an update
+
+- `scripts/license-gen.php` minted no `jti`, so `LicenseManager::id()` returned
+  null for every key it produced. That key verifies perfectly and unlocks its
+  modules — but `docs/update-server.example.php` refuses (503) to serve a build
+  when it has no id to ask the licence server about for the refund/revoke
+  check, so the install was permanently stuck on "license status service is not
+  configured". The id is now mandatory (random by default, `--jti=HEX24` pins
+  it when re-issuing a replacement key for an existing customer record) and
+  matches how `services/license-server/LicenseSigner.php` has always minted it.
+- The id is written to **stderr**, not stdout, so the documented
+  `php scripts/license-gen.php … > key.txt` still writes a clean one-line token.
+
 ### Fixed — the WordPress plugin version stopped tracking its tag
 
 - The plugin header said `0.2.43` while the tags had moved on to

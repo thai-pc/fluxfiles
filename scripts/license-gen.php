@@ -31,6 +31,8 @@
  *   --sites=N              limits.sites (0 = unlimited)
  *   --domains=a.com,b.com  soft domain binding (advisory)
  *   --kid=k1               signing key id (must match LicenseManager + the secret)
+ *   --jti=HEX24            pin the licence id (default: random) — record it, the
+ *                          update server asks the licence server about this id
  *   --key=PATH             read base64 secret from file (else env FLUXFILES_LICENSE_PRIVATE_KEY)
  */
 
@@ -112,6 +114,14 @@ if ($expVal !== 'none' && $expVal !== '') {
 $graceVal = (string) ($opts['grace'] ?? '14d');
 $grace = preg_match('/^(\d+)d$/', $graceVal, $gm) ? ((int) $gm[1]) * 86400 : 14 * 86400;
 
+// A caller may pin the id (re-minting a replacement key for an existing customer
+// record, so the update channel keeps recognising them); otherwise mint a fresh one.
+$jti = is_string($opts['jti'] ?? null) ? strtolower(trim($opts['jti'])) : bin2hex(random_bytes(12));
+if (!preg_match('/^[a-f0-9]{24}$/', $jti)) {
+    fwrite(STDERR, "Bad --jti (expected 24 lowercase hex characters).\n");
+    exit(1);
+}
+
 $payload = [
     'customer'    => is_string($opts['customer'] ?? null) ? $opts['customer'] : '',
     'edition'     => $edition,
@@ -119,6 +129,12 @@ $payload = [
     'enforcement' => $enforcement,
     'limits'      => ['sites' => (int) ($opts['sites'] ?? 0)],
     'issued'      => time(),
+    // Unique licence id. NOT optional: the update server refuses to serve a build
+    // for a key that carries none (it has nothing to ask the licence server about
+    // for the refund/revoke check), so a key minted without one verifies fine and
+    // is then permanently stuck on 503 at the update channel. Must match
+    // LicenseManager::id()'s 24-hex shape, and how LicenseSigner mints it.
+    'jti'         => $jti,
 ];
 if ($expires !== null) {
     $payload['expires'] = $expires;
@@ -133,4 +149,7 @@ $header = $b64url((string) json_encode(['alg' => 'Ed25519', 'kid' => $kid]));
 $body   = $b64url((string) json_encode($payload));
 $sig    = $b64url(sodium_crypto_sign_detached($header . '.' . $body, $secret));
 
+// The token on stdout, so the docs' `php scripts/license-gen.php … > key.txt` still
+// works; the id on stderr, because you have to record it somewhere to revoke later.
+fwrite(STDERR, "jti: {$jti}\n");
 fwrite(STDOUT, $header . '.' . $body . '.' . $sig . "\n");
