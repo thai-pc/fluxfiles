@@ -181,6 +181,55 @@ test('r2 public WITHOUT public_url → falls back to endpoint/bucket URL', funct
     assertContains('https://acc.r2.cloudflarestorage.com/r2-bucket/photos/a.jpg', $url);
 });
 
+// A presigned preview URL signs Content-Disposition in, so an .svg/.html served
+// straight from the bucket can't run as active content in the BUCKET's origin
+// (nothing sanitizes SVG on the way in — ImageOptimizer leaves it alone by design,
+// and a custom R2/CDN domain is commonly same-site with the host app). Same
+// inline-safe set as handleMediaStream() and the Share route.
+echo "\n► Presigned preview URL signs Content-Disposition (svg/html ≠ inline)\n";
+
+$S3_PRIVATE = ['driver' => 's3', 'region' => 'us-east-1', 'bucket' => 'my-bucket', 'visibility' => 'private'];
+
+test('svg → attachment (stored XSS in the bucket origin otherwise)', function () use ($DUMMY, $S3_PRIVATE) {
+    $fm  = makeFM(['s3' => $S3_PRIVATE + $DUMMY]);
+    $url = fileUrl($fm, 's3', 'logos/evil.svg');
+    assertContains('response-content-disposition=attachment', strtolower($url));
+});
+
+test('html → attachment', function () use ($DUMMY, $S3_PRIVATE) {
+    $fm  = makeFM(['s3' => $S3_PRIVATE + $DUMMY]);
+    assertContains('response-content-disposition=attachment', strtolower(fileUrl($fm, 's3', 'pages/evil.html')));
+});
+
+test('raster image / video / pdf stay inline so preview still works', function () use ($DUMMY, $S3_PRIVATE) {
+    $fm = makeFM(['s3' => $S3_PRIVATE + $DUMMY]);
+    foreach (['photos/a.jpg', 'clips/a.mp4', 'docs/a.pdf'] as $path) {
+        $url = strtolower(fileUrl($fm, 's3', $path));
+        assertContains('response-content-disposition=inline', $url, "{$path} must stay inline");
+    }
+});
+
+test('the disposition is signed, not just appended (tampering breaks the signature)', function () use ($DUMMY, $S3_PRIVATE) {
+    $fm  = makeFM(['s3' => $S3_PRIVATE + $DUMMY]);
+    $url = fileUrl($fm, 's3', 'logos/evil.svg');
+    assertContains('x-amz-signedheaders', strtolower($url));
+    // ResponseContentDisposition rides in the signed query string: it is part of
+    // X-Amz-Signature's input, so flipping it to inline invalidates the URL.
+    assertContains('x-amz-signature', strtolower($url));
+});
+
+test('presign() GET (the media-refresh route) signs it too', function () use ($DUMMY, $S3_PRIVATE) {
+    $fm  = makeFM(['s3' => $S3_PRIVATE + $DUMMY]);
+    $out = $fm->presign('s3', 'logos/evil.svg', 'GET', 600);
+    assertContains('response-content-disposition=attachment', strtolower((string) $out['url']));
+});
+
+test('presign() PUT carries no disposition (upload, not a served response)', function () use ($DUMMY, $S3_PRIVATE) {
+    $fm  = makeFM(['s3' => $S3_PRIVATE + $DUMMY]);
+    $out = $fm->presign('s3', 'logos/new.svg', 'PUT', 600, 1024);
+    assertNotContains('response-content-disposition', strtolower((string) $out['url']));
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

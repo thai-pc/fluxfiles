@@ -2260,13 +2260,18 @@ class FileManager
         $client = $this->disks->s3Client($disk);
         $bucket = $config['bucket'] ?? '';
 
-        $cmd = $client->getCommand(
-            $method === 'GET' ? 'GetObject' : 'PutObject',
-            [
-                'Bucket' => $bucket,
-                'Key'    => $scoped,
-            ]
-        );
+        $params = [
+            'Bucket' => $bucket,
+            'Key'    => $scoped,
+        ];
+        // Same reasoning as fileUrl()'s presign path: an inline .svg/.html executes in
+        // the bucket's origin, so sign the disposition in rather than letting R2/S3
+        // serve it with whatever Content-Type it stored.
+        if ($method === 'GET') {
+            $params['ResponseContentDisposition'] = $this->presignDisposition($scoped);
+        }
+
+        $cmd = $client->getCommand($method === 'GET' ? 'GetObject' : 'PutObject', $params);
 
         $request = $client->createPresignedRequest($cmd, "+{$ttl} seconds");
         $url = (string) $request->getUri();
@@ -3007,8 +3012,9 @@ class FileManager
         try {
             $client = $this->disks->s3Client($disk);
             $cmd = $client->getCommand('GetObject', [
-                'Bucket' => $config['bucket'] ?? '',
-                'Key'    => $path,
+                'Bucket'                     => $config['bucket'] ?? '',
+                'Key'                        => $path,
+                'ResponseContentDisposition' => $this->presignDisposition($path),
             ]);
             $request = $client->createPresignedRequest($cmd, "+{$ttl} seconds");
             return (string) $request->getUri();
@@ -3016,6 +3022,37 @@ class FileManager
             error_log('FluxFiles: presign GET URL failed — ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Content-Disposition to sign into a presigned S3/R2 GET URL.
+     *
+     * The same inline-safe set as handleMediaStream() and the Share route: media,
+     * raster images and PDF stay inline so <video>/<img>/pdf preview works, and
+     * everything else — .svg and .html above all — is forced to attachment.
+     *
+     * This matters even though the bucket is a different origin from FluxFiles (so
+     * no main JWT is reachable): an .svg served inline still executes as active
+     * content in the BUCKET's origin, and a custom R2/CDN domain is commonly a
+     * subdomain of the host app's site, which makes it same-site for SameSite=Lax
+     * cookies. Nothing sanitizes SVG on the way in (ImageOptimizer leaves it alone
+     * by design), so the disposition is the control.
+     */
+    private function presignDisposition(string $path): string
+    {
+        // MIME by extension, never sniffed — an .html that sniffs as text/html must
+        // not become active content.
+        $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
+            ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
+        $inline = (bool) preg_match('#^(video/|audio/|image/(?!svg))|^application/pdf$#', $mime);
+
+        $name  = basename($path);
+        $ascii = preg_replace('/[^\x20-\x7E]/', '_', $name) ?? 'file';
+        $ascii = str_replace(['"', '\\'], '_', $ascii);
+
+        return ($inline ? 'inline' : 'attachment')
+            . '; filename="' . $ascii . '"'
+            . "; filename*=UTF-8''" . rawurlencode($name);
     }
 
     /**
