@@ -3,6 +3,32 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.18] — 2026-09-30
+
+> Released: `core-v0.2.92`.
+
+### Fixed — preview presigned URLs now sign Content-Disposition in
+
+- `FileManager`'s two presigned-GET paths — `fileUrl()`'s private-disk preview
+  URL and the `/api/fm/presign` media-refresh route — passed only `Bucket` and
+  `Key`, so S3/R2 served the object with whatever `Content-Type` it had stored
+  and no `Content-Disposition` at all. An `.svg` or `.html` previewed that way
+  ran as active content in the **bucket's** origin. No main JWT is reachable
+  there, but a custom R2/CDN domain is commonly a subdomain of the host app's
+  site — which makes it same-site for `SameSite=Lax` cookies — and nothing
+  sanitizes SVG on the way in (`ImageOptimizer` leaves it alone by design), so
+  the disposition is the only control.
+- Both now sign one in via `presignDisposition()`, reusing the exact inline-safe
+  set `handleMediaStream()` and the Share route already enforce (media, raster
+  images and PDF inline; everything else attachment) and the RFC-5987 filename
+  shape of `ff_content_disposition()`. `DiskManager::presignGetUrl()` already
+  accepted a `$disposition` and the Share route already passed one — these two
+  callers were the gap, not the mechanism.
+- This affected **every** S3 disk with `visibility=private` (the default), not
+  only R2. `/img`'s presigned redirect is untouched: its cache keys are always
+  raster `.webp`/`.avif` variants, where inline is correct. `PUT` presigns carry
+  no disposition — they are uploads, not served responses.
+
 ## [0.3.17] — 2026-09-27
 
 > Released: `core-v0.2.91`, `node-v0.1.31`, `python-v0.1.2`,
