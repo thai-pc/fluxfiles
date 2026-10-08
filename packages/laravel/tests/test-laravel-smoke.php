@@ -600,8 +600,12 @@ test('fileManager() actually WIRES setDlpScanner() (not just a decodable claim) 
     // All 4 chunk-route handlers must independently refuse with 409 dlp_unscannable
     // while allow_dlp_scan is on — S3-multipart bytes never reach this server, so
     // they can never be scanned (same unscannable-side-door fix as virus).
+    // 5 sites, not 4: the 4 chunk handlers plus presign(), where a
+    // `method:"PUT"` mints a browser→S3 upload URL — the same unscannable side
+    // door by another name, so it is refused with the same code.
     $count = substr_count($ctrlSrc, "'dlp_unscannable'");
-    assertEqual(4, $count, 'all 4 chunk handlers (init/presign/complete/abort) check dlp_unscannable independently');
+    assertEqual(5, $count, 'the 4 chunk handlers AND presign(PUT) each check dlp_unscannable independently');
+    assertEqual(5, substr_count($ctrlSrc, "'virus_unscannable'"), 'and the same 5 sites for virus_unscannable');
 });
 
 test('gated media stream/img is wired (setStreamSecret + local disk private key)', function () {
