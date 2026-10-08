@@ -46,9 +46,21 @@ server {
         add_header Cache-Control "public";
     }
 
-    # Storage-resident bookkeeping (metadata, audit log, trash) must never be
-    # public, even when ordinary local uploads are public.
-    location ^~ /storage/uploads/_fluxfiles/ { deny all; }
+    # Never expose storage-resident bookkeeping (metadata, audit and trash).
+    # A regex location (checked BEFORE the plain `/storage/uploads/` prefix
+    # below) because a path-scoped token keeps its bookkeeping at
+    # `<prefix>/_fluxfiles/…`, so the directory is usually NESTED — a
+    # `^~ /storage/uploads/_fluxfiles/` prefix rule only covers the unscoped
+    # layout. Case-insensitive (`~*`) since on a case-insensitive filesystem
+    # `_FLUXFILES/` resolves to the same directory. `_variants/` is deliberately
+    # not blocked: variant URLs are public by design.
+    location ~* /_fluxfiles/ { deny all; }
+
+    # Everything else under storage/ is server runtime state, not public content:
+    # ssh-sockets/ (multiplex index.json + ephemeral BYOB private keys), locks,
+    # caches. `^~` stops the `\.php$` regex from claiming a file in there.
+    # /storage/uploads/ below is a longer prefix, so public uploads still serve.
+    location ^~ /storage/ { deny all; }
 
     # Uploaded files (local disk only).
     # Security: stop MIME-sniffing and neutralize active content (e.g. <script>
@@ -103,7 +115,10 @@ RewriteRule ^api/(.*)$ api/index.php [QSA,L]
 RewriteRule ^public/(index\.html)?$ api/index.php [QSA,L]
 
 # Never expose storage-resident bookkeeping through the public uploads path.
-RewriteRule ^storage/uploads/_fluxfiles/ - [F,L]
+# `_fluxfiles/` at ANY depth (a path-scoped token keeps its bookkeeping at
+# `<prefix>/_fluxfiles/…`) and case-insensitively (NC) — on a case-insensitive
+# filesystem `_FLUXFILES/` is the same directory. `_variants/` stays public.
+RewriteRule (^|/)_fluxfiles/ - [F,L,NC]
 
 # Block sensitive files
 <FilesMatch "^\.env|composer\.(json|lock)">

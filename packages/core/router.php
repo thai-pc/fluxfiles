@@ -75,6 +75,34 @@ if (strncmp($uri, '/api/', 5) === 0) {
     return true;
 }
 
+// Never expose storage-resident bookkeeping (metadata sidecars, the search/folder
+// index, audit.jsonl + its archives, trash.json and the soft-deleted bytes under
+// trash/<id>/, and _fluxfiles/originals/ — the pre-watermark masters the
+// preview-only overlay model depends on staying private).
+//
+// This MUST precede the public uploads branch below: the generic `/storage/` deny
+// further down never fires for a `/storage/uploads/…` URI because that branch
+// claims it first. Mirrors docker/nginx.conf's `_fluxfiles` deny rules.
+//
+// `_fluxfiles/` is matched as a path SEGMENT at any depth, not as a fixed
+// `/storage/uploads/_fluxfiles/` prefix: a path-scoped token puts the tenant's
+// bookkeeping at `<prefix>/_fluxfiles/…`, so the un-nested spelling is the rare
+// case (an unscoped token), not the common one. Case-INSENSITIVE, because on a
+// case-insensitive filesystem (APFS/Windows/SMB) `_FLUXFILES/` resolves to the
+// very same directory — same reasoning as FileManager::isReservedKey().
+//
+// `_variants/` is deliberately NOT blocked: variant URLs are public by design.
+if (strncmp($uri, '/storage/uploads/', 17) === 0) {
+    foreach (explode('/', trim($uri, '/')) as $segment) {
+        if (strcasecmp($segment, '_fluxfiles') === 0) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Forbidden';
+            return true;
+        }
+    }
+}
+
 // Serve uploaded files from /storage/uploads/
 if (strncmp($uri, '/storage/uploads/', 17) === 0) {
     $uploadsBase = realpath(__DIR__ . '/storage/uploads');
