@@ -3,7 +3,69 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.3.18] — 2026-09-30
+## [0.3.19] — 2026-10-08
+
+> Released: `core-v0.2.93`, `laravel-v0.2.45`, `wordpress-v0.2.53`.
+
+### Fixed — security audit: GitDeploy RCE, case-sensitive reserved paths, unauthenticated storage, presign/quota gaps
+
+- **GitDeploy RCE.** The pre-deploy `.git/config` audit was a denylist
+  (`git config --local --list --name-only` against a fixed set of dangerous
+  keys). Three confirmed bypasses, each reproduced with real git execution:
+  `include.path` (`--local --list` never expands includes, so a hidden
+  `filter.*.smudge` was invisible to the audit while git still ran it),
+  `extensions.worktreeConfig` (`--local` never reads `.git/config.worktree`),
+  and `core.askPass`/unset `core.hooksPath` (never denylisted at all). A
+  `write` + `allow_git_deploy` token could reach arbitrary command execution
+  as the SSH user, without `allow_terminal`. Inverted denylist → allowlist:
+  the audit now runs `git config --list --show-scope --name-only`, scoped to
+  `local`+`worktree`, and rejects any key not in the known-safe set `git
+  init`/clone/checkout produce. `core.hooksPath` is now pinned
+  unconditionally (not only when hooks are disabled) and `core.askPass`
+  joins the always-cleared flags. New error code `error.git_deploy_unsafe_repo`.
+- **Case-sensitive reserved-path check.** `isReservedSystemPath()` matched
+  `_fluxfiles/` with a case-sensitive `strpos`/`===`, so on a
+  case-insensitive filesystem (macOS APFS default, Windows, SMB/NFS)
+  `_FLUXFILES/x` passed the guard and resolved to the real bookkeeping
+  directory — reachable with a plain write-scoped token, reaching
+  `index.json` (poisons search/dedup for every tenant), `audit.jsonl`
+  (forgery), `trash.json`, and per-file metadata (`uploaded_by` hijack).
+  Deduplicated four case-sensitive copies of the same rule into one
+  `FileManager::isReservedKey()`. Also blocks writes into any `.git`
+  segment on SFTP disks — the root cause the GitDeploy RCE above depended
+  on (a write-scoped token could overwrite a deployed repo's own
+  `.git/config`). New error code `error.git_internal_path`.
+- **Unauthenticated storage bookkeeping.** `router.php` (the release-ZIP /
+  `bin/fluxfiles serve` path) served `_fluxfiles/` — including audit logs,
+  the search index, trash, and pre-watermark originals — with no auth,
+  because its generic `/storage/` deny sat after the branch that already
+  claimed `/storage/uploads/…` URIs. Same nesting gap existed in
+  `docker/nginx.conf` and `docs/guides/DEPLOYMENT.md`'s hand-written nginx
+  block; fixed in all three, plus added the blanket `/storage/` deny to
+  DEPLOYMENT.md that protects `ssh-sockets/`'s ephemeral BYOB SSH keys.
+- **Presign PUT bypassed the virus/DLP scan guard.** Chunked uploads already
+  refuse with `409 virus_unscannable`/`dlp_unscannable` when the matching
+  claim is on, because browser→S3 bytes can never be scanned — but
+  `POST /api/fm/presign {method:"PUT"}` mints the same kind of URL with no
+  equivalent guard. Added the same checks to `handlePresign()` and both
+  proxy adapters. Also retracted a false enforcement claim: a presigned
+  PUT's `ContentLength` parameter is dropped unconditionally by the AWS
+  SDK's signature blacklist (confirmed empirically — identical signature
+  with and without it), so `max_upload_mb`/`max_storage_mb`/`max_files` were
+  never actually enforced server-side for a PUT presign. Comment and docs
+  now say so plainly; bounded instead by a 15-minute TTL cap specific to
+  PUT presigns (vs the general 24h cap).
+- **Quota/usage disk leak.** `/api/fm/quota` and `/api/fm/usage` passed
+  `$_GET['disk']` straight to `QuotaManager`, which has no disk-allowlist
+  check of its own — a token scoped to `disks:["local"]` could request
+  `?disk=s3-private` and receive that disk's size, file count, and top
+  folder paths, and the usage-cache write would land `_fluxfiles/usage.json`
+  on the foreign disk. Added `hasDisk()`/`hasPerm('read')` checks in core
+  and both proxy adapters.
+
+All findings verified by reading the actual code and, for the RCE claims,
+by reproducing the exploit against real `git` execution before and after
+each fix — not taken on report alone.
 
 > Released: `core-v0.2.92`.
 
