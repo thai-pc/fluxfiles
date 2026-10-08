@@ -36,7 +36,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/mkdir` | `{disk, path}` | Create directory |
 | `POST` | `/cross-copy` | `{src_disk, src_path, dst_disk, dst_path}` | Copy between disks (file extension must not change; `allowedExt` enforced) |
 | `POST` | `/cross-move` | `{src_disk, src_path, dst_disk, dst_path}` | Move between disks (file extension must not change; `allowedExt` enforced) |
-| `POST` | `/presign` | `{disk, path, method, ttl, size?}` | Generate presigned URL (GET or PUT, max 86400s). `size` is required for PUT. |
+| `POST` | `/presign` | `{disk, path, method, ttl, size?}` | Generate presigned URL (GET, max 86400s; PUT, max 900s). `size` is required for PUT but is advisory only — S3/R2 cannot sign `ContentLength`, so the quota/size checks run at mint time, not enforced on the actual PUT body. |
 | `POST` | `/crop` | `{disk, path, x, y, width, height, save_path?}` | Crop image |
 | `POST` | `/ai-tag` | `{disk, path}` | AI-analyze image (requires AI config) |
 | `POST` | `/import-url` | `{disk, path, url, filename?}` | Server-side fetch a URL into storage (opt-in via `allow_url_import`; SSRF-guarded) |
