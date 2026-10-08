@@ -113,6 +113,36 @@ try {
         }
     });
 
+    // `presign {method:"PUT"}` mints a URL the browser PUTs straight to S3/R2,
+    // so those bytes never reach this server either — the same unscannable side
+    // door as the chunk routes above, and it must be refused with the same code.
+    test('presign PUT is refused while scanning is on (same side door as chunk)', function () use ($BASE, $tokOn) {
+        [$st, $j] = http("{$BASE}/api/fm/presign", ["Authorization: Bearer {$tokOn}"],
+            ['disk' => 'local', 'path' => 'big.bin', 'method' => 'PUT', 'ttl' => 600, 'size' => 1]);
+        assertEqual(409, $st, 'presign PUT http');
+        assertEqual('dlp_unscannable', $j['error_code'] ?? null, 'presign PUT code');
+        // Lower-case `put` must not slip past the comparison.
+        [$st2, $j2] = http("{$BASE}/api/fm/presign", ["Authorization: Bearer {$tokOn}"],
+            ['disk' => 'local', 'path' => 'big.bin', 'method' => 'put', 'ttl' => 600, 'size' => 1]);
+        assertEqual(409, $st2, 'lower-case put http');
+        assertEqual('dlp_unscannable', $j2['error_code'] ?? null, 'lower-case put code');
+    });
+
+    // A GET presign is a download URL, not an upload path — it must stay usable.
+    test('presign GET is NOT refused while scanning is on', function () use ($BASE, $tokOn) {
+        [, $j] = http("{$BASE}/api/fm/presign", ["Authorization: Bearer {$tokOn}"],
+            ['disk' => 'local', 'path' => 'x.txt', 'method' => 'GET', 'ttl' => 600]);
+        assertTrue(($j['error_code'] ?? '') !== 'dlp_unscannable', 'a GET presign must not be refused');
+    });
+
+    test('presign PUT still works normally when scanning is off', function () use ($BASE, $tokOff) {
+        // The local disk has no presign backend, so this must NOT be the refusal —
+        // any other outcome proves the guard is scoped to the claim.
+        [, $j] = http("{$BASE}/api/fm/presign", ["Authorization: Bearer {$tokOff}"],
+            ['disk' => 'local', 'path' => 'big.bin', 'method' => 'PUT', 'ttl' => 600, 'size' => 1]);
+        assertTrue(($j['error_code'] ?? '') !== 'dlp_unscannable', 'must not be refused for a token without the claim');
+    });
+
     test('chunk upload still works normally when scanning is off', function () use ($BASE, $tokOff) {
         // local disk has no multipart backend, so this must NOT be the DLP refusal —
         // any other outcome proves the guard is scoped to the claim.

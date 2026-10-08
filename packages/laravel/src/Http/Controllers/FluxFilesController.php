@@ -689,6 +689,27 @@ class FluxFilesController
                 throw new ApiException('Missing required fields', 400);
             }
 
+            // A `method:"PUT"` presign mints a URL the browser PUTs straight to
+            // S3/R2, so those bytes never reach this server and cannot be scanned
+            // either — the same unscannable side door the chunk routes refuse
+            // below, so it gets the same fail-closed treatment and the same codes.
+            if (strtoupper((string) $method) === 'PUT') {
+                if ($claims->allowVirusScan) {
+                    throw new ApiException(
+                        'Direct-to-storage upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
+                        409,
+                        'virus_unscannable'
+                    );
+                }
+                if ($claims->allowDlpScan) {
+                    throw new ApiException(
+                        'Direct-to-storage upload cannot be scanned for PII — use the standard upload, or turn off allow_dlp_scan',
+                        409,
+                        'dlp_unscannable'
+                    );
+                }
+            }
+
             return $this->ok($fm->presign(
                 $disk,
                 $path,
@@ -899,10 +920,20 @@ class FluxFilesController
             $claims = $this->claims($request);
             $this->rateLimit($claims, false);
 
+            $disk = (string) $request->query('disk', 'local');
+            // QuotaManager has no disk ACL of its own and DiskManager builds any
+            // configured disk regardless of claims, so the allowlist is enforced
+            // here — same gate order as search()/gitDeploy() above.
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+            }
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied: read', 403, 'permission_denied');
+            }
             $quotaManager = new QuotaManager($this->diskManager);
 
             return $this->ok($quotaManager->getQuotaInfo(
-                $request->query('disk', 'local'),
+                $disk,
                 $claims->pathPrefix,
                 $claims->maxStorageMb
             ));
@@ -922,7 +953,16 @@ class FluxFilesController
             $claims = $this->claims($request);
             $this->rateLimit($claims, false);
 
-            $disk = $request->query('disk', 'local');
+            $disk = (string) $request->query('disk', 'local');
+            // QuotaManager has no disk ACL of its own and DiskManager builds any
+            // configured disk regardless of claims, so the allowlist is enforced
+            // here — same gate order as search()/gitDeploy() above.
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+            }
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied: read', 403, 'permission_denied');
+            }
             $quotaManager = new QuotaManager($this->diskManager);
             $top = $claims->usageTopFoldersCount > 0 ? $claims->usageTopFoldersCount : 10;
             $depth = $claims->usageFolderDepth > 0 ? $claims->usageFolderDepth : 1;
@@ -1869,6 +1909,13 @@ class FluxFilesController
             }
             if (!empty($result['locked'])) {
                 throw new ApiException('A deploy is already in progress for this repo', 409, 'git_deploy_in_progress');
+            }
+            if (!empty($result['unsafe_config'])) {
+                throw new ApiException(
+                    'The repository\'s own git config contains a command-execution setting and was refused',
+                    409,
+                    'git_deploy_unsafe_repo'
+                );
             }
             $detail = $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '');
             $this->logAudit($claims, 'git_deploy', $disk, '', $detail);
