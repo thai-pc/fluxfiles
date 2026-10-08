@@ -261,15 +261,13 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      * True when any path segment is a reserved namespace (metadata sidecars in
      * _fluxfiles/ or image variants in _variants/). These must never enter the
      * folder index or surface in folder search at any depth.
+     *
+     * Delegates to FileManager::isReservedKey() — the one case-insensitive
+     * implementation of the rule (see its docblock for why the fold matters).
      */
     private function isReservedPath(string $key): bool
     {
-        foreach (explode('/', trim($key, '/')) as $seg) {
-            if ($seg === '_fluxfiles' || $seg === '_variants') {
-                return true;
-            }
-        }
-        return false;
+        return FileManager::isReservedKey($key);
     }
 
     /**
@@ -496,10 +494,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             // Never surface internal paths as duplicates — they're hidden from
             // listing, so the user would see a "file already exists" message
             // pointing at a file they can't see.
-            if (str_starts_with($fileKey, '_fluxfiles/')
-                || str_starts_with($fileKey, '_variants/')
-                || str_contains($fileKey, '/_fluxfiles/')
-                || str_contains($fileKey, '/_variants/')) {
+            if ($this->isReservedPath($fileKey)) {
                 continue;
             }
             // Never leak a file outside the caller's path scope — otherwise the
