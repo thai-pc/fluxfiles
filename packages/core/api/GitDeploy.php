@@ -58,6 +58,38 @@ class GitDeploy
     /** Printed by the lock guard when a deploy is already in progress. */
     private const LOCKED_MARK = '__ffdeploy_locked__';
 
+    /** Printed by the config audit when the repo's own .git/config is hostile. */
+    private const UNSAFE_MARK = '__ffdeploy_unsafe_config__';
+
+    /**
+     * ALLOWLIST (not a denylist) of config keys an ordinary `git init`/`git
+     * clone`/`git checkout -b` actually produces. Git's exec-from-config
+     * surface (filter.*, credential.*, core.askPass, core.hooksPath,
+     * core.gitProxy, core.pager/editor/sshCommand/fsmonitor, alias.*,
+     * diff.*.textconv, uploadpack.*, receive.*, include.path/includeIf.*,
+     * …) is large and grows per release, and three independent bypasses of
+     * an earlier denylist form of this check were found in one review
+     * (`include.path`, `extensions.worktreeConfig` + a worktree-scoped
+     * filter, and `core.askPass`/`core.hooksPath` simply not being listed).
+     * A denylist can only ever cover the keys someone thought of; an
+     * allowlist fails closed on anything unexpected, including a brand new
+     * git feature nobody on this project has heard of yet.
+     *
+     * Checked against `git config --list --show-scope --name-only`, scoped
+     * to the `local` and `worktree` rows only (see configAuditCommand() for
+     * why both scopes and why `--show-scope` instead of `--local`). The key
+     * part of a three-segment key (e.g. the `<anything>` in
+     * `filter.<anything>.smudge`, or the remote/branch name below) is
+     * attacker-chosen and NOT required to be ASCII-identifier-shaped, so the
+     * `[^.]+` segments intentionally do not further restrict its charset —
+     * the point of the allowlist is the key's *section/leaf*, not its name.
+     */
+    private const SAFE_CONFIG_RE = '^(core\\.(repositoryformatversion|filemode|bare|logallrefupdates'
+        . '|ignorecase|precomposeunicode|symlinks|autocrlf|safecrlf|sparsecheckout|worktree)'
+        . '|remote\\.[^.]+\\.(url|fetch|pushurl|tagopt|prune|mirror)'
+        . '|branch\\.[^.]+\\.(remote|merge|rebase)'
+        . '|submodule\\.active|pull\\.ff|push\\.default|init\\.defaultbranch|user\\.(name|email))$';
+
     /**
      * Build the fixed shell command: acquire the lock, run the git sync, release
      * the lock. Every variable piece ($path, $branch) is escapeshellarg()'d — this
@@ -78,16 +110,44 @@ class GitDeploy
         // claim opts into *hooks*, not into arbitrary command execution, and
         // every one of these is read from the repo's own .git/config, which is
         // an ordinary extensionless file any write-scoped token can overwrite
-        // (assertExt/assertSafeFilename do not stop it). Without them, a
-        // file-write in the repo escalates to RCE as the SSH user even with
-        // hooks disabled: `git pull` runs core.fsmonitor and core.sshCommand,
-        // and the ext/file transports run whatever a remote URL names.
+        // (assertExt/assertSafeFilename do not stop it: no extension means
+        // DANGEROUS_EXTENSIONS never fires, and assertNotSystem only guards
+        // _fluxfiles/ and _variants/). Without them, a file-write in the repo
+        // escalates to RCE as the SSH user even with hooks disabled: `git pull`
+        // runs core.fsmonitor and core.sshCommand, and the ext/file transports
+        // run whatever a remote URL names.
+        //
+        // The transport list is an ALLOWLIST (`protocol.allow=never` + explicit
+        // https/ssh), not a deny-list of the two transports we happened to think
+        // of: `core.gitProxy` + a `remote.origin.url = git://…` makes `git fetch`
+        // exec the named proxy binary, and `protocol.git.allow=never` is what
+        // actually stops it ("fatal: transport 'git' not allowed", before the
+        // proxy is ever spawned). `core.gitProxy=` is cleared too, so the same
+        // repo config can't reach any other transport that honours it.
         $safety = '-c core.fsmonitor=false '
             . '-c core.sshCommand=ssh '
             . '-c protocol.ext.allow=never '
-            . '-c protocol.file.allow=never ';
+            . '-c protocol.file.allow=never '
+            . '-c protocol.allow=never '
+            . '-c protocol.https.allow=always '
+            . '-c protocol.ssh.allow=always '
+            . '-c core.gitProxy= '
+            . '-c core.askPass= ';
 
-        $hooksFlag = $safety . ($hooksEnabled ? '' : '-c core.hooksPath=' . escapeshellarg('/dev/null') . ' ');
+        // core.hooksPath is pinned EITHER way, not just when hooks are
+        // disabled: the config-audit allowlist below already refuses a repo
+        // that sets it at all (it is not a safe key), but this is a second,
+        // independent layer — if the allowlist regex ever had a gap, an
+        // attacker-set core.hooksPath pointing at a directory of files they
+        // also wrote would still be RCE even with git_deploy_hooks=true. When
+        // hooks are enabled, pin it to the repo's OWN real hooks directory
+        // (same effective behaviour as git's default, just not readable out
+        // of .git/config) rather than leaving it unset.
+        $hooksFlag = $safety . (
+            $hooksEnabled
+                ? '-c core.hooksPath=' . escapeshellarg(rtrim($path, '/') . '/.git/hooks') . ' '
+                : '-c core.hooksPath=' . escapeshellarg('/dev/null') . ' '
+        );
 
         $sync = $branch !== ''
             ? sprintf(
@@ -128,16 +188,61 @@ class GitDeploy
             . 'mkdir "$L" 2>/dev/null || { echo ' . escapeshellarg(self::LOCKED_MARK) . '; exit 99; }; '
             . 'echo "$$" > "$L/pid" 2>/dev/null; '
             . 'trap \'if [ "$(cat "$L/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$L" 2>/dev/null; fi\' EXIT; '
+            . self::configAuditCommand($path)
             . $sync . ' 2>&1';
+    }
+
+    /**
+     * Fixed-shape pre-deploy audit of the repo's OWN config, emitted into the
+     * same single exec right before the sync so it short-circuits BEFORE any
+     * fetch/reset touches an attacker-controlled filter or transport.
+     *
+     * Uses `git config --list --show-scope --name-only`, NOT `--local`:
+     * `--local` only reads `.git/config` and misses two real bypasses —
+     * (1) `[include] path = /tmp/x.cfg` (or `includeIf.*`) in `.git/config`
+     * pulls in an arbitrary second file whose keys `--local --list` never
+     * prints, even though git itself expands and applies them; (2) a repo
+     * with `extensions.worktreeConfig=true` additionally reads
+     * `.git/config.worktree`, a second config file `--local` never looks
+     * at either. `--show-scope` prints every applicable key regardless of
+     * which file it came from, tagged `<scope>\t<key>` — so both bypasses
+     * surface as ordinary `local`/`worktree` rows. Only the `local` and
+     * `worktree` scopes are kept (the `grep -E '^(local|worktree)'` +
+     * `cut -f2` pair; `cut`'s default delimiter is a tab, matching the
+     * `--show-scope` output): `global`/`system` belong to the operator who
+     * set up the VPS, not to anyone who can write a file through FluxFiles,
+     * and must never fail a deploy.
+     *
+     * Each surviving key name (never a value — nothing attacker-supplied is
+     * interpolated into the shell) is checked against SAFE_CONFIG_RE, an
+     * ALLOWLIST: anything NOT on it aborts the deploy. `head -n1` keeps the
+     * first offending key so the output can name it (operator diagnosis),
+     * without needing every offender.
+     */
+    private static function configAuditCommand(string $path): string
+    {
+        $p = escapeshellarg($path);
+
+        return 'UNSAFE_KEY="$(git -C ' . $p
+            . ' config --list --show-scope --name-only 2>/dev/null'
+            . ' | grep -E ' . escapeshellarg('^(local|worktree)')
+            . ' | cut -f2'
+            . ' | grep -viE ' . escapeshellarg(self::SAFE_CONFIG_RE)
+            . ' | head -n1)"; '
+            . 'if [ -n "$UNSAFE_KEY" ]; then '
+            . 'echo ' . escapeshellarg(self::UNSAFE_MARK) . ' "$UNSAFE_KEY"; exit 98; '
+            . 'fi; ';
     }
 
     /**
      * Run the deploy over an existing SSH connection.
      *
-     * @return array{output:string,exit:int,truncated:bool,shell_ok:bool,locked:bool}
+     * @return array{output:string,exit:int,truncated:bool,shell_ok:bool,locked:bool,unsafe_config:bool}
      *         `shell_ok` false means the host forces a command / is SFTP-only (same
      *         signal SshTerminal::run() derives — see its docblock). `locked` true
      *         means a concurrent deploy is already running against this path.
+     *         `unsafe_config` true means the pre-deploy config audit refused the
+     *         repo (see configAuditCommand()) — nothing was fetched or reset.
      */
     public static function run(SSH2 $ssh, string $path, string $branch, bool $hooksEnabled, int $timeout): array
     {
@@ -154,6 +259,7 @@ class GitDeploy
         $shellOk = strpos($raw, self::SHELL_OK_MARK) !== false;
         $raw = (string) preg_replace('~^' . preg_quote(self::SHELL_OK_MARK, '~') . '\R?~', '', $raw, 1);
         $locked = strpos($raw, self::LOCKED_MARK) !== false;
+        $unsafeConfig = strpos($raw, self::UNSAFE_MARK) !== false;
 
         $truncated = false;
         if (strlen($raw) > self::MAX_OUTPUT) {
@@ -167,6 +273,7 @@ class GitDeploy
             'truncated' => $truncated,
             'shell_ok'  => $shellOk,
             'locked'    => $locked,
+            'unsafe_config' => $unsafeConfig,
         ];
     }
 }

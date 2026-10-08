@@ -1215,12 +1215,39 @@ class FluxFilesApi
             $path   = $body['path'] ?? null;
             $method = $body['method'] ?? null;
             $ttl    = $body['ttl'] ?? null;
+            // Core/Laravel both uppercase the method and forward size/size_bytes —
+            // without this, FileManager::presign()'s `in_array($method, ['GET','PUT'])`
+            // check rejects a lowercase "put" (400) before the guards below even run,
+            // and a PUT with no size always 400s on the required-size check.
+            $method = strtoupper((string) $method);
+            $sizeBytes = (int) ($body['size'] ?? $body['size_bytes'] ?? 0);
 
-            if (!$disk || !$path || !$method || !$ttl) {
+            if (!$disk || !$path || $method === '' || !$ttl) {
                 throw new ApiException('Missing required fields', 400);
             }
 
-            return $this->ok($fm->presign($disk, $path, $method, $ttl));
+            // A `method:"PUT"` presign mints a URL the browser PUTs straight to
+            // S3/R2, so those bytes never reach this server and cannot be scanned
+            // either — the same unscannable side door the chunk routes refuse
+            // below, so it gets the same fail-closed treatment and the same codes.
+            if ($method === 'PUT') {
+                if ($claims->allowVirusScan) {
+                    throw new ApiException(
+                        'Direct-to-storage upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
+                        409,
+                        'virus_unscannable'
+                    );
+                }
+                if ($claims->allowDlpScan) {
+                    throw new ApiException(
+                        'Direct-to-storage upload cannot be scanned for PII — use the standard upload, or turn off allow_dlp_scan',
+                        409,
+                        'dlp_unscannable'
+                    );
+                }
+            }
+
+            return $this->ok($fm->presign($disk, $path, $method, (int) $ttl, $sizeBytes));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -1733,6 +1760,15 @@ class FluxFilesApi
             $this->rateLimit($claims, false);
 
             $disk = (string) ($request->get_param('disk') ?? 'local');
+            // QuotaManager has no disk ACL of its own and DiskManager builds any
+            // configured disk regardless of claims, so the allowlist is enforced
+            // here — same gate order as handleSearch()/handleGitDeploy().
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+            }
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied: read', 403, 'permission_denied');
+            }
             $quotaManager = new QuotaManager($this->diskManager);
             $top = $claims->usageTopFoldersCount > 0 ? $claims->usageTopFoldersCount : 10;
             $depth = $claims->usageFolderDepth > 0 ? $claims->usageFolderDepth : 1;
@@ -2198,6 +2234,13 @@ class FluxFilesApi
             if (!empty($result['locked'])) {
                 throw new ApiException('A deploy is already in progress for this repo', 409, 'git_deploy_in_progress');
             }
+            if (!empty($result['unsafe_config'])) {
+                throw new ApiException(
+                    'The repository\'s own git config contains a command-execution setting and was refused',
+                    409,
+                    'git_deploy_unsafe_repo'
+                );
+            }
             $detail = $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '');
             $this->logAudit($claims, 'git_deploy', $disk, '', $detail);
             $this->dispatchWebhook($claims, 'git_deploy', ['disk' => $disk, 'path' => '', 'name' => '']);
@@ -2522,10 +2565,20 @@ class FluxFilesApi
             $claims = $this->claims();
             $this->rateLimit($claims, false);
 
+            $disk = (string) ($request->get_param('disk') ?? 'local');
+            // QuotaManager has no disk ACL of its own and DiskManager builds any
+            // configured disk regardless of claims, so the allowlist is enforced
+            // here — same gate order as handleSearch()/handleGitDeploy().
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+            }
+            if (!$claims->hasPerm('read')) {
+                throw new ApiException('Permission denied: read', 403, 'permission_denied');
+            }
             $quotaManager = new QuotaManager($this->diskManager);
 
             return $this->ok($quotaManager->getQuotaInfo(
-                $request->get_param('disk') ?? 'local',
+                $disk,
                 $claims->pathPrefix,
                 $claims->maxStorageMb
             ));

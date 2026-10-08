@@ -541,7 +541,7 @@ class FileManager
         }
 
         $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         $fs = $this->disks->disk($disk);
 
         // Content dedup (SHA-256) — OPT-IN via the `dedupe_uploads` claim. Off by
@@ -555,10 +555,7 @@ class FileManager
             $existing = $this->meta->findByHash($disk, $hash, $this->claims->pathPrefix, $ownerFilter);
             if ($existing) {
                 $existingKey = $existing['file_key'];
-                $isSystem = str_starts_with($existingKey, '_fluxfiles/')
-                    || str_starts_with($existingKey, '_variants/')
-                    || str_contains($existingKey, '/_fluxfiles/')
-                    || str_contains($existingKey, '/_variants/');
+                $isSystem = self::isReservedKey($existingKey);
                 if (!$isSystem && $fs->fileExists($existingKey)) {
                     return $this->unscopeItems([[
                         'key'       => $existingKey,
@@ -585,7 +582,7 @@ class FileManager
             // 'rename' → append -1, -2, … to the base name (extension preserved).
             $name   = $this->uniqueName($fs, rtrim($path, '/'), $name);
             $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
-            $this->assertNotSystem($scoped);
+            $this->assertNotSystem($scoped, $disk);
         }
 
         // Track parent directories for global folder search (best-effort)
@@ -713,7 +710,7 @@ class FileManager
         $this->assertPerm('delete');
 
         $scoped = $this->scopedPath($path);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
         $this->assertNoActiveHold($disk, $scoped);
         $fs = $this->disks->disk($disk);
@@ -767,7 +764,7 @@ class FileManager
         $this->assertPerm('delete');
 
         $scoped = $this->scopedPath($path);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
         // Covers both the file and directory branches below (trashDirectory() is a
         // private helper only ever reached through here).
@@ -911,7 +908,7 @@ class FileManager
         $target = ($newPath !== null && $newPath !== '')
             ? $this->scopedPath($newPath)
             : (string) ($entry['original_key'] ?? '');
-        $this->assertNotSystem($target);
+        $this->assertNotSystem($target, $disk);
 
         // Restore is a relocation out of the trash, so it gets the same
         // extension rules as rename/move/copy. Without them a caller could
@@ -1150,7 +1147,7 @@ class FileManager
         $this->assertPerm('write');
 
         $scoped = $this->scopedPath($path);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
         // Renaming a held path would let it evade holdBlocking()'s path-string
         // match (§6 of the design doc) — blocked as a security requirement, not
@@ -1171,7 +1168,7 @@ class FileManager
 
         $dir = dirname($scoped);
         $newPath = ($dir !== '.' && $dir !== '') ? $dir . '/' . $newName : $newName;
-        $this->assertNotSystem($newPath);
+        $this->assertNotSystem($newPath, $disk);
 
         if ($scoped === $newPath) {
             throw new ApiException('New name is the same as current name', 400, 'name_same');
@@ -1237,13 +1234,13 @@ class FileManager
         $this->assertPerm('write');
 
         $scopedFrom = $this->scopedPath($from);
-        $this->assertNotSystem($scopedFrom);
+        $this->assertNotSystem($scopedFrom, $disk);
         $this->assertOwner($disk, $scopedFrom);
         // Source-side only — moving a file INTO an existing hold's subtree is
         // fine (§6 of the design doc); only relocating a held path is blocked.
         $this->assertNoActiveHold($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
-        $this->assertNotSystem($scopedTo);
+        $this->assertNotSystem($scopedTo, $disk);
         $fs = $this->disks->disk($disk);
         $this->assertTargetAvailable($fs, $scopedTo);
         $isDir = false;
@@ -1281,10 +1278,10 @@ class FileManager
         $this->assertPerm('write');
 
         $scopedFrom = $this->scopedPath($from);
-        $this->assertNotSystem($scopedFrom);
+        $this->assertNotSystem($scopedFrom, $disk);
         $this->assertOwner($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
-        $this->assertNotSystem($scopedTo);
+        $this->assertNotSystem($scopedTo, $disk);
         $fs = $this->disks->disk($disk);
         $this->assertTargetAvailable($fs, $scopedTo);
 
@@ -1345,10 +1342,10 @@ class FileManager
         }
 
         $scopedSrc = $this->scopedPath($srcPath);
-        $this->assertNotSystem($scopedSrc);
+        $this->assertNotSystem($scopedSrc, $srcDisk);
         $this->assertOwner($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
-        $this->assertNotSystem($scopedDst);
+        $this->assertNotSystem($scopedDst, $dstDisk);
         $this->assertRelocationExt($scopedSrc, $scopedDst);
 
         $srcFs = $this->disks->disk($srcDisk);
@@ -1411,12 +1408,12 @@ class FileManager
         }
 
         $scopedSrc = $this->scopedPath($srcPath);
-        $this->assertNotSystem($scopedSrc);
+        $this->assertNotSystem($scopedSrc, $srcDisk);
         $this->assertOwner($srcDisk, $scopedSrc);
         // Source-side only, same as move() above.
         $this->assertNoActiveHold($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
-        $this->assertNotSystem($scopedDst);
+        $this->assertNotSystem($scopedDst, $dstDisk);
         $this->assertRelocationExt($scopedSrc, $scopedDst);
 
         $srcFs = $this->disks->disk($srcDisk);
@@ -1673,7 +1670,7 @@ class FileManager
         $this->assertPerm('write');
 
         $scoped = $this->scopedPath($path);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         $fs = $this->disks->disk($disk);
 
         // Refuse to "create" a folder that already exists (as a folder OR a file
@@ -1715,7 +1712,7 @@ class FileManager
         $this->assertPerm('write');
 
         $scopedSrc = $this->scopedPath($path);
-        $this->assertNotSystem($scopedSrc);
+        $this->assertNotSystem($scopedSrc, $disk);
         $this->assertOwner($disk, $scopedSrc);
         $fs = $this->disks->disk($disk);
 
@@ -1725,7 +1722,7 @@ class FileManager
 
         $result = $this->imageOptimizer->crop($imageData, $x, $y, $width, $height, $format);
         $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
-        $this->assertNotSystem($scopedDst);
+        $this->assertNotSystem($scopedDst, $disk);
         if ($savePath !== null) {
             // Extension is immutable — a "save as" crop keeps the source format,
             // same rule applyWatermark() enforces.
@@ -1801,7 +1798,7 @@ class FileManager
         }
 
         $scopedSrc = $this->scopedPath($path);
-        $this->assertNotSystem($scopedSrc);
+        $this->assertNotSystem($scopedSrc, $disk);
         $this->assertOwner($disk, $scopedSrc);
         $fs = $this->disks->disk($disk);
         if (!$fs->fileExists($scopedSrc)) {
@@ -1833,7 +1830,7 @@ class FileManager
         $sourceBytes = $hasBackup ? (string) $fs->read($backupKey) : (string) $fs->read($scopedSrc);
         $result = $this->imageOptimizer->burnWatermark($sourceBytes, $wm, $format);
 
-        $this->assertNotSystem($scopedDst);
+        $this->assertNotSystem($scopedDst, $disk);
         if (!$inPlace) {
             // Extension is immutable — a watermarked copy keeps the source format.
             if (strtolower(pathinfo($scopedDst, PATHINFO_EXTENSION)) !== $ext) {
@@ -1901,7 +1898,7 @@ class FileManager
         $this->assertPerm('write');
 
         $scoped = $this->scopedPath($path);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
@@ -1997,6 +1994,9 @@ class FileManager
 
     private const MAX_PRESIGN_TTL = 86400; // 24 hours
 
+    /** Tighter ceiling for PUT presigns specifically — see presign()'s use of it. */
+    private const MAX_PUT_PRESIGN_TTL = 900; // 15 minutes
+
     /** Max bytes the code editor will read/write (config files are small). */
     private const MAX_EDIT_BYTES = 5 * 1024 * 1024;
 
@@ -2081,7 +2081,7 @@ class FileManager
         }
         $this->assertPerm('write');
         $scoped = $this->scopedPath($path);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         // Overwriting a file's content is a destructive modify — honour owner_only,
         // like delete/rename/move/crop/watermark do (it was missing here).
         $this->assertOwner($disk, $scoped);
@@ -2176,7 +2176,7 @@ class FileManager
             throw new ApiException('Invalid mode: use a 3-digit octal like 644 or 755', 422, 'invalid_mode');
         }
         $scoped = $this->scopedPath($path);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
 
         [$conn, $root] = $this->disks->sftpConnection($disk);
@@ -2210,6 +2210,15 @@ class FileManager
         }
         if ($ttl > self::MAX_PRESIGN_TTL) {
             $ttl = self::MAX_PRESIGN_TTL;
+        }
+        // PUT presigns get a much shorter ceiling than GET: `size` is only
+        // checked HERE, at mint time (see the ContentLength note below for why
+        // it can't be signed into the URL itself), so the window during which a
+        // client could reuse the URL with a larger-than-declared body is exactly
+        // this TTL. Capping it tightly bounds that advisory check's blast radius
+        // without needing a different upload mechanism.
+        if ($method === 'PUT' && $ttl > self::MAX_PUT_PRESIGN_TTL) {
+            $ttl = self::MAX_PUT_PRESIGN_TTL;
         }
 
         $scoped = $this->scopedPath($path);
@@ -2270,6 +2279,25 @@ class FileManager
         if ($method === 'GET') {
             $params['ResponseContentDisposition'] = $this->presignDisposition($scoped);
         }
+        // NOT signing the declared size into the URL — `ContentLength` cannot be:
+        // the AWS SDK's SignatureV4::getHeaderBlacklist() drops `content-length`
+        // from the signature unconditionally (confirmed empirically: a presigned
+        // PutObject URL generated with and without a ContentLength param is
+        // byte-identical, `X-Amz-SignedHeaders=host`), and moveHeadersToQuery()
+        // only promotes `x-amz-*` headers to the query string, so there is no
+        // way to get the declared size into anything S3/R2 actually checks.
+        // So the max_upload_mb / max_storage_mb / max_files checks above are
+        // ADVISORY ONLY for a PUT presign: they run against the client-declared
+        // `size`, while the signed URL constrains only Bucket+Key — `size: 1`
+        // plus a 10 GB PUT body sails past every limit at once, and the quota
+        // accounting above will be wrong for that upload until a reconciling
+        // pass (e.g. a later `list()`/usage refresh that re-stats the object)
+        // corrects it. The blast radius is bounded by MAX_PUT_PRESIGN_TTL
+        // (15 min) above, not by anything signed here. A hard server-side cap
+        // needs createPresignedPost() + a `content-length-range` policy
+        // condition instead — a different client contract (POST form upload,
+        // not PUT) that would also have to change the UI, both proxy adapters,
+        // and the docs consistently, so it is a separate, larger change.
 
         $cmd = $client->getCommand($method === 'GET' ? 'GetObject' : 'PutObject', $params);
 
@@ -2524,8 +2552,7 @@ class FileManager
     /** True for FluxFiles-internal keys that must never be zipped/exposed. */
     private function isSystemKey(string $key): bool
     {
-        return str_starts_with($key, '_fluxfiles/') || str_starts_with($key, '_variants/')
-            || str_contains($key, '/_fluxfiles/') || str_contains($key, '/_variants/')
+        return self::isReservedKey($key)
             || strcasecmp(substr($key, -10), '.meta.json') === 0;
     }
 
@@ -2689,7 +2716,7 @@ class FileManager
             $destUser = trim($dest);
         }
         $destScoped = $this->scopedPath($destUser);
-        $this->assertNotSystem($destScoped);
+        $this->assertNotSystem($destScoped, $disk);
 
         $maxFiles = $this->claims->zipMaxFiles > 0 ? $this->claims->zipMaxFiles : self::ZIP_DEFAULT_MAX_FILES;
         $maxBytes = ($this->claims->zipMaxMb > 0 ? $this->claims->zipMaxMb : self::ZIP_DEFAULT_MAX_MB) * 1024 * 1024;
@@ -3103,10 +3130,7 @@ class FileManager
                     continue;
                 }
                 $key = $item->path();
-                if (str_starts_with($key, '_fluxfiles/') || str_starts_with($key, '_variants/')
-                    || str_contains($key, '/_fluxfiles/') || str_contains($key, '/_variants/')
-                    || substr($key, -10) === '.meta.json'
-                ) {
+                if ($this->isReservedSystemPath($key)) {
                     continue;
                 }
                 $meta = $this->meta->get($disk, $key);
@@ -3156,11 +3180,42 @@ class FileManager
      * forge one and hijack ownership of the real target file. Reading pre-existing
      * legacy sidecars still works (backward compat); this only closes new writes.
      */
-    private function assertNotSystem(string $scopedPath): void
+    /**
+     * $disk is optional and ADDITIVE: when given and the disk is SFTP, this also
+     * refuses any path with a `.git` segment (see isGitInternalSegment() for why
+     * SFTP specifically, and GitDeploy's config audit for the RCE this closes at
+     * the root rather than only auditing the symptom). Pure-read call sites
+     * (list/getContent/fileMeta/presign/getMode) intentionally omit $disk —
+     * this check targets writes, which is where the attack actually lands.
+     */
+    private function assertNotSystem(string $scopedPath, string $disk = ''): void
     {
         if ($this->isReservedSystemPath($scopedPath)) {
             throw new ApiException('Access denied: system path', 403, 'system_path');
         }
+        if ($disk !== '' && self::isGitInternalSegment($scopedPath)
+            && ($this->disks->config($disk)['driver'] ?? '') === 'sftp') {
+            throw new ApiException('Access denied: git-internal path', 403, 'git_internal_path');
+        }
+    }
+
+    /**
+     * True when any path segment is `.git` (case-insensitively, same reasoning
+     * as isReservedKey()'s case-fold — an SFTP server may sit on a
+     * case-insensitive filesystem too). `.gitignore`/`.gitattributes` are
+     * SIBLING files at a repo's root, not a `.git` segment, so they are
+     * unaffected and stay writable; only the internal directory itself (and
+     * anything nested under it, e.g. `.git/config`, `.git/hooks/post-merge`)
+     * is blocked.
+     */
+    private static function isGitInternalSegment(string $key): bool
+    {
+        foreach (explode('/', trim($key, '/')) as $seg) {
+            if (strcasecmp($seg, '.git') === 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -3171,20 +3226,43 @@ class FileManager
      */
     public function isReservedSystemPath(string $scopedPath): bool
     {
-        $normalized = trim($scopedPath, '/') . '/';
-        foreach (self::SYSTEM_PREFIXES as $prefix) {
-            if (strpos($normalized, $prefix) === 0 || strpos($normalized, '/' . $prefix) !== false) {
-                return true;
-            }
-        }
-        // Also block exact match (e.g. "_fluxfiles" without trailing slash)
-        $base = basename($scopedPath);
-        if ($base === '_fluxfiles' || $base === '_variants') {
+        if (self::isReservedKey($scopedPath)) {
             return true;
         }
         // Reserved legacy-sidecar filename shape — see doc-comment above.
         if (strcasecmp(substr($scopedPath, -10), '.meta.json') === 0) {
             return true;
+        }
+        return false;
+    }
+
+    /**
+     * THE single reserved-namespace rule: true when any path segment names a
+     * FluxFiles-internal directory (`_fluxfiles/` bookkeeping, `_variants/`
+     * derivatives), at any depth, with or without a trailing slash.
+     *
+     * The comparison is deliberately CASE-INSENSITIVE. The storage key is not
+     * the whole story: on a case-insensitive filesystem (APFS by default,
+     * Windows, most SMB/NFS mounts) a write to `_FLUXFILES/trash.json` passes a
+     * case-sensitive guard and then lands on the real `_fluxfiles/trash.json` —
+     * which is enough to poison the search index + hash dedup, forge audit
+     * lines, hijack a sidecar's `uploaded_by` (which assertOwner trusts), or
+     * plant a `trash.json` whose `original_key` becomes an attacker-chosen
+     * `move()` source. The `.meta.json` arm above was already case-folded; this
+     * closes the same hole for the directory arms.
+     *
+     * This is the sole implementation — StorageMetadataHandler::isReservedPath()
+     * and QuotaManager both call it, because having the rule written out four
+     * times is exactly how three of the copies ended up case-sensitive.
+     */
+    public static function isReservedKey(string $key): bool
+    {
+        foreach (explode('/', trim($key, '/')) as $seg) {
+            foreach (self::SYSTEM_PREFIXES as $prefix) {
+                if (strcasecmp($seg, rtrim($prefix, '/')) === 0) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -3338,7 +3416,7 @@ class FileManager
     public function assertCanModifyScopedPath(string $disk, string $scopedPath): string
     {
         $scopedPath = $this->claims->normalizeKey($scopedPath);
-        $this->assertNotSystem($scopedPath);
+        $this->assertNotSystem($scopedPath, $disk);
         $this->assertOwner($disk, $scopedPath);
         return $scopedPath;
     }

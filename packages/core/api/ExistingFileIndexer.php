@@ -142,10 +142,7 @@ class ExistingFileIndexer
 
     private function isInternalPath(string $key): bool
     {
-        return str_starts_with($key, '_fluxfiles/')
-            || str_starts_with($key, '_variants/')
-            || str_contains($key, '/_fluxfiles/')
-            || str_contains($key, '/_variants/');
+        return FileManager::isReservedKey($key);
     }
 
     private function hashFile(string $disk, string $key): ?string

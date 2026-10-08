@@ -87,7 +87,11 @@ class QuotaManager
                 continue;
             }
             $path = $item->path();
-            if (strpos($path, '_fluxfiles/') !== false || strpos($path, '_variants/') !== false) {
+            // FileManager::isReservedKey() is the single, case-insensitive rule —
+            // a case-sensitive substring test here let `_FLUXFILES/` files count
+            // against the user's quota (and, worse, diverge from what every other
+            // caller considers reserved).
+            if (FileManager::isReservedKey($path)) {
                 continue;
             }
             $count++;
@@ -181,7 +185,11 @@ class QuotaManager
             $path = $item->path();
             $size = $item->fileSize() ?? 0;
             $rawTotal += $size; // includes internal — matches getUsage / the quota meter
-            if (strpos($path, '_fluxfiles/') !== false || strpos($path, '_variants/') !== false) {
+            // FileManager::isReservedKey() is the single, case-insensitive rule —
+            // a case-sensitive substring test here let `_FLUXFILES/` files count
+            // against the user's quota (and, worse, diverge from what every other
+            // caller considers reserved).
+            if (FileManager::isReservedKey($path)) {
                 continue;
             }
             $total += $size;

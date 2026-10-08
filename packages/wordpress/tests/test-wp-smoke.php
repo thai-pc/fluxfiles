@@ -332,8 +332,12 @@ test('fileManager() actually WIRES setDlpScanner() (not just a decodable claim) 
     $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(strpos($apiSrc, 'setDlpScanner(') !== false, 'fileManager() wires setDlpScanner()');
     assertTrue(strpos($apiSrc, "ModuleRegistry::require('dlp'") !== false, 'the callback resolves the dlp module gate lazily, like virus');
+    // 5 sites, not 4: the 4 chunk handlers plus presign(), where a
+    // `method:"PUT"` mints a browser→S3 upload URL — the same unscannable side
+    // door by another name, so it is refused with the same code.
     $count = substr_count($apiSrc, "'dlp_unscannable'");
-    assertEqual(4, $count, 'all 4 chunk handlers (init/presign/complete/abort) check dlp_unscannable independently');
+    assertEqual(5, $count, 'the 4 chunk handlers AND presign(PUT) each check dlp_unscannable independently');
+    assertEqual(5, substr_count($apiSrc, "'virus_unscannable'"), 'and the same 5 sites for virus_unscannable');
 });
 
 // Legal hold (docs/design/RETENTION-LEGAL-HOLD-DESIGN.md): the gate forwards like any

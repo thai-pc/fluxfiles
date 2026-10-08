@@ -105,6 +105,44 @@ try {
         assertTrue(is_file($uploadRoot . '/usage_e2e/_fluxfiles/usage.json'), 'cache written under _fluxfiles/');
     });
 
+    // QuotaManager has no disk ACL of its own (DiskManager builds any CONFIGURED
+    // disk regardless of claims), so /quota and /usage have to enforce the token's
+    // `disks` allowlist themselves like every other disk-taking route. Without it
+    // a token scoped to `local` could read total_size/file_count/by_type and the
+    // top folder PATHS of a disk it cannot access — and ?refresh would then WRITE
+    // _fluxfiles/usage.json onto that foreign disk.
+    test('/usage and /quota refuse a disk outside the token allowlist (403 disk_denied)', function () use ($BASE, $tokWm) {
+        foreach (['usage', 'quota'] as $route) {
+            foreach (['s3', 'r2'] as $foreign) {
+                [$st, $j] = http("{$BASE}/api/fm/{$route}?disk={$foreign}", ["Authorization: Bearer {$tokWm}"]);
+                assertEqual(403, $st, "{$route}?disk={$foreign} http");
+                assertEqual('disk_denied', $j['error_code'] ?? null, "{$route}?disk={$foreign} code");
+            }
+        }
+        // ?refresh must not become a write primitive on the foreign disk either.
+        [$st, $j] = http("{$BASE}/api/fm/usage?disk=s3&refresh=true", ["Authorization: Bearer {$tokWm}"]);
+        assertEqual(403, $st, 'refresh on a foreign disk http');
+        assertEqual('disk_denied', $j['error_code'] ?? null, 'refresh on a foreign disk code');
+    });
+
+    test('/usage and /quota still need the read permission', function () use ($BASE, $SECRET, $tokWm) {
+        // Same token minus `read` — a write-only token must not read the dashboard.
+        $payload = (array) FluxFiles\JwtCompat::decode($tokWm, $SECRET);
+        $payload['perms'] = ['write'];
+        $tokNoRead = FluxFiles\JwtCompat::encode($payload, $SECRET);
+        foreach (['usage', 'quota'] as $route) {
+            [$st, $j] = http("{$BASE}/api/fm/{$route}?disk=local", ["Authorization: Bearer {$tokNoRead}"]);
+            assertEqual(403, $st, "{$route} without read http");
+            assertEqual('permission_denied', $j['error_code'] ?? null, "{$route} without read code");
+        }
+    });
+
+    test('an allowed disk still works (the ACL does not over-block)', function () use ($BASE, $tokWm) {
+        [$st, $j] = http("{$BASE}/api/fm/quota?disk=local", ["Authorization: Bearer {$tokWm}"]);
+        assertEqual(200, $st, 'quota on the allowed disk');
+        assertTrue(isset($j['data']['used']) || isset($j['data']['used_bytes']), 'quota payload returned');
+    });
+
 } finally {
     proc_terminate($proc); proc_close($proc);
     $dir = $uploadRoot . '/' . $prefix;

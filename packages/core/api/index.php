@@ -706,7 +706,7 @@ function routeRequest(
     }
 
     if ($method === 'POST' && $uri === '/api/fm/presign') {
-        return handlePresign($fm);
+        return handlePresign($fm, $claims);
     }
 
     if ($method === 'POST' && $uri === '/api/fm/crop') {
@@ -1133,6 +1133,13 @@ function routeRequest(
         if (!empty($result['locked'])) {
             throw new ApiException('A deploy is already in progress for this repo', 409, 'git_deploy_in_progress');
         }
+        if (!empty($result['unsafe_config'])) {
+            throw new ApiException(
+                'The repository\'s own git config contains a command-execution setting and was refused',
+                409,
+                'git_deploy_unsafe_repo'
+            );
+        }
         return $result;
     }
 
@@ -1184,17 +1191,25 @@ function routeRequest(
         return $rows;
     }
 
-    // Quota
-    if ($method === 'GET' && $uri === '/api/fm/quota') {
-        return $quotaManager->getQuotaInfo(
-            $_GET['disk'] ?? 'local',
-            $claims->pathPrefix,
-            $claims->maxStorageMb
-        );
-    }
-
-    if ($method === 'GET' && $uri === '/api/fm/usage') {
-        return handleUsage($quotaManager, $diskManager, $claims);
+    // Quota / usage. QuotaManager talks to DiskManager::disk() directly and has no
+    // hasDisk/assertDisk of its own, and DiskManager builds any CONFIGURED disk
+    // regardless of claims — so the ACL has to be enforced here, like every other
+    // disk-taking route does (FileManager::assertDisk → 'disk_denied'). Without it a
+    // token scoped to `local` could read total_size/file_count/by_type and the top
+    // folder PATHS of a disk it has no access to, and ?refresh would then WRITE
+    // _fluxfiles/usage.json onto that foreign disk.
+    if ($method === 'GET' && ($uri === '/api/fm/quota' || $uri === '/api/fm/usage')) {
+        $disk = (string) ($_GET['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+        }
+        if (!$claims->hasPerm('read')) {
+            throw new ApiException('Permission denied: read', 403, 'permission_denied');
+        }
+        if ($uri === '/api/fm/usage') {
+            return handleUsage($quotaManager, $diskManager, $claims);
+        }
+        return $quotaManager->getQuotaInfo($disk, $claims->pathPrefix, $claims->maxStorageMb);
     }
 
     // Audit log — users can only view their own logs
@@ -2205,7 +2220,7 @@ function ff_usage_cache_write($fs, string $path, array $resp): void
     }
 }
 
-function handlePresign(FileManager $fm): array
+function handlePresign(FileManager $fm, \FluxFiles\Claims $claims): array
 {
     $raw = file_get_contents('php://input');
     $body = json_decode($raw, true);
@@ -2217,6 +2232,34 @@ function handlePresign(FileManager $fm): array
     foreach (['disk', 'path', 'method', 'ttl'] as $key) {
         if (!isset($body[$key])) {
             throw new ApiException("Missing required field: {$key}", 400);
+        }
+    }
+
+    // A `method:"PUT"` presign is the same unscannable side door the chunk routes
+    // are refused for (see the allowVirusScan/allowDlpScan guards in
+    // routeRequest()): it mints a URL the browser PUTs straight to S3/R2, so the
+    // bytes never reach this server and no scan can ever run on them. Refusing
+    // only /api/fm/chunk/* while leaving this open would hand a tenant who paid
+    // for fail-closed scanning a one-request bypass.
+    //
+    // The check lives HERE rather than beside the chunk guard because this route
+    // is dispatched much earlier in routeRequest(), so a guard down there is
+    // never reached. Two independent `if`s, exactly like the chunk pair — the two
+    // claims are orthogonal, either (or both) can be on, each 409s on its own.
+    if (strtoupper((string) $body['method']) === 'PUT') {
+        if ($claims->allowVirusScan) {
+            throw new ApiException(
+                'Direct-to-storage upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
+                409,
+                'virus_unscannable'
+            );
+        }
+        if ($claims->allowDlpScan) {
+            throw new ApiException(
+                'Direct-to-storage upload cannot be scanned for PII — use the standard upload, or turn off allow_dlp_scan',
+                409,
+                'dlp_unscannable'
+            );
         }
     }
 
