@@ -5,7 +5,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.3.25] — 2026-10-14
 
-> Released: `core-v0.2.99`.
+> Released: `core-v0.2.99`, `wordpress-v0.2.59` (bundles the fixed UI).
 
 ### Fixed
 
