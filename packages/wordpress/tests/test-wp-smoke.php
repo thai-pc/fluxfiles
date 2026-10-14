@@ -1183,6 +1183,9 @@ function makeWpDbHandler(WpdbSpy $spy): WpDbMetadataHandler
 }
 
 test('WpDbMetadataHandler::audit() chains under a locked head row and advances it', function () {
+    if (!class_exists(\FluxFiles\AuditChain::class)) {
+        return; // core older than the audit chain (the floor guard runs this smoke against it)
+    }
     \FluxFiles\AuditChain::configure(str_repeat('k', 40));
     try {
         $spy = new WpdbSpy();
@@ -1205,6 +1208,9 @@ test('WpDbMetadataHandler::audit() chains under a locked head row and advances i
 });
 
 test('WpDbMetadataHandler::audit() without a secret stays a plain insert', function () {
+    if (!class_exists(\FluxFiles\AuditChain::class)) {
+        return; // core older than the audit chain (the floor guard runs this smoke against it)
+    }
     \FluxFiles\AuditChain::configure('');
     $keep = $_ENV['FLUXFILES_SECRET'] ?? null;
     unset($_ENV['FLUXFILES_SECRET']);
