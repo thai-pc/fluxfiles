@@ -3,6 +3,47 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.24] — 2026-10-14
+
+> Released: `core-v0.2.98`, `laravel-v0.2.49`,
+> `wordpress-v0.2.58`. Paid modules (own repos): `share v1.2.1`,
+> `intake v1.3.0`, `versioning v1.2.0`, `webhooks v1.1.1`, `ai v1.1.1`,
+> `backup v1.2.0`, `c2pa v1.1.1`, `sso v2.0.0`.
+
+Paid-module security audit. Every fix below has a test; the SFTP, S3
+(LocalStack) and MySQL/PostgreSQL suites were run against real services.
+
+### Security
+
+- **Intake portals**: anonymous uploads are now bound by the operator's
+  `max_storage` / `max_files` and scanned by DLP when `allow_dlp_scan` is on
+  (both were skipped on the public upload path). `intake/list` no longer
+  returns the webhook signing secret (`has_webhook` instead). Files received
+  through a portal are owned by the operator, so `owner_only` operators can
+  manage them.
+- **SSO** (breaking for SSO installs): the FluxFiles user id is the IdP `sub`
+  by default; `FLUXFILES_SSO_USER_CLAIM=email` uses the email **only when
+  `email_verified` is true**, so an IdP that lets users pick an unverified email
+  can no longer be used to take over another user's id. Group precedence now
+  follows the order of `FLUXFILES_SSO_CLAIMS_MAP`, not the IdP's group order.
+  Logins use PKCE (S256).
+- **Backup**: synced copies keep their owner/metadata on the destination disk
+  (new `FileManager::attachCopiedFile()`), so `owner_only` holds there.
+- **C2PA / AI Vision**: size cap before reading a file (`c2pa_too_large`,
+  `aivision_too_large`); AI output must be a real raster image before it is
+  written; C2PA-signed output keeps the source's owner.
+- **Share**: revoking an unknown share id writes nothing; share analytics keep
+  only the /24 (IPv4) or /48 (IPv6) of the visitor IP.
+
+### Fixed
+
+- **Versioning**: history follows a file through rename, move and restore to a
+  new path (files and folders — new `setVersionMover` hook), is erased when a
+  file is purged from the trash or a folder is deleted, and an overwrite by
+  zip extract is snapshotted like any other overwrite.
+- Module `composer.json` core floors raised to the first core with the API they
+  call (`ai`/`backup`/`c2pa` → `^0.2.86`, `webhooks` → `^0.2.88`).
+
 ## [0.3.23] — 2026-10-14
 
 > Released: `core-v0.2.97`, `laravel-v0.2.48`, `wordpress-v0.2.57`,
