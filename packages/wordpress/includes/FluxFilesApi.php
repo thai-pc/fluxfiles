@@ -303,6 +303,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/ai-vision', array_merge($writeArgs, [
             'callback' => [$api, 'handleAiVision'],
         ]));
+        register_rest_route($ns, $p . '/virus/scan', array_merge($writeArgs, [
+            'callback' => [$api, 'handleVirusScan'],
+        ]));
         register_rest_route($ns, $p . '/ocr', array_merge($writeArgs, [
             'callback' => [$api, 'handleOcr'],
         ]));
@@ -2178,6 +2181,31 @@ class FluxFilesApi
     /**
      * OCR (paid module) — text extraction; result is returned, never persisted.
      */
+    /** On-demand scan of an already-stored file (paid `virus` module) — core's POST /api/fm/virus/scan. */
+    public function handleVirusScan(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+            if (!method_exists($fm, 'scanForViruses')) {
+                throw new ApiException('On-demand virus scan needs a newer FluxFiles core', 501, 'virus_unavailable');
+            }
+            $virus = \FluxFiles\ModuleRegistry::require('virus', FluxFilesPlugin::license(), $claims);
+            $body = $this->body($request);
+            $disk = (string) ($body['disk'] ?? 'local');
+            $path = (string) ($body['path'] ?? '');
+            $result = $fm->scanForViruses($disk, $path, static fn (string $p): array => $virus->scanPath($p));
+            $this->logAudit($claims, 'virus_scan', $disk, $claims->scopePath($path),
+                !empty($result['clean']) ? 'clean' : 'infected: ' . (string) ($result['threat'] ?? 'unknown'));
+            $this->dispatchWebhook($claims, 'virus_scan', ['disk' => $disk, 'path' => $claims->scopePath($path), 'name' => basename($path)]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function handleOcr(\WP_REST_Request $request): \WP_REST_Response
     {
         try {

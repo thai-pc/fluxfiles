@@ -449,7 +449,28 @@
       "watermark_remove": "Quitar marca de agua",
       "legal_hold_place": "Retención legal aplicada",
       "legal_hold_release": "Retención legal liberada",
-      "legal_hold_blocked": "Bloqueado por retención legal"
+      "legal_hold_blocked": "Bloqueado por retención legal",
+      "access_denied": "Acceso denegado",
+      "zip_download": "Descarga zip",
+      "presign_get": "Enlace de descarga emitido",
+      "presign_put": "Enlace de subida emitido (PUT)",
+      "presign_post": "Formulario de subida emitido (POST)",
+      "share_create": "Enlace compartido creado",
+      "share_revoke": "Enlace compartido revocado",
+      "intake_create": "Portal de subida creado",
+      "intake_revoke": "Portal de subida revocado",
+      "version_restore": "Versión restaurada",
+      "webhook_test": "Prueba de webhook",
+      "ai_vision": "AI Vision",
+      "ocr": "Texto extraído (OCR)",
+      "backup": "Copia de seguridad",
+      "c2pa_verify": "Procedencia verificada (C2PA)",
+      "c2pa_sign": "Procedencia firmada (C2PA)",
+      "metadata_import": "Metadatos importados",
+      "content_read": "Archivo abierto",
+      "stream_read": "Archivo reproducido",
+      "virus_scan": "Análisis antivirus",
+      "audit_purge": "Registro de auditoría purgado"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Protección de datos",
       "legal_ediscovery": "Legal y eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Extraer texto (OCR)",
+    "note": "Lee el texto de esta imagen. No se cambia nada a menos que lo guardes.",
+    "language": "Idioma",
+    "run": "Extraer texto",
+    "busy": "Leyendo…",
+    "empty": "No se encontró texto en esta imagen.",
+    "result": "Texto extraído",
+    "copy": "Copiar texto",
+    "copied": "Texto copiado",
+    "save_caption": "Guardar como leyenda",
+    "saved": "Guardado en la leyenda del archivo"
+  },
+  "virus": {
+    "title": "Análisis antivirus",
+    "scan_now": "Buscar virus",
+    "note": "Analiza ahora este archivo guardado: útil para archivos subidos antes de activar el análisis.",
+    "scanning": "Analizando…",
+    "clean": "No se encontraron amenazas",
+    "infected": "Amenaza encontrada: {threat}",
+    "rescan": "Analizar de nuevo",
+    "uploads_scanned": "Las subidas se analizan en busca de virus",
+    "uploads_clean": "{count} archivo(s) analizado(s): sin amenazas"
+  },
+  "backup": {
+    "title": "Copia de seguridad de la carpeta",
+    "note": "Copia esta carpeta a otro disco de almacenamiento. Los archivos existentes se omiten salvo que elijas sobrescribir.",
+    "source": "Desde {disk}: {path}",
+    "destination": "Destino",
+    "overwrite": "Sobrescribir existentes",
+    "run": "Iniciar copia",
+    "busy": "Copiando…",
+    "result": "Copiados {copied}, omitidos {skipped}, errores {errors} — {size}",
+    "truncated": "Se detuvo en el límite de archivos por ejecución: ejecútalo de nuevo para continuar."
   }
 }

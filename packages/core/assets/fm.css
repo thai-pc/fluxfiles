@@ -3965,3 +3965,12 @@ body {
     color: #f0c674;
     border-color: rgba(234, 179, 8, 0.3);
 }
+
+/* ── OCR / Virus scan / Backup panels (paid modules) ── */
+.ff-ocr-lang { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-secondary); }
+.ff-ocr-lang select { font: inherit; padding: 4px 6px; border: 1px solid var(--color-border-secondary); border-radius: 6px; background: var(--color-background-primary); color: var(--color-text-primary); }
+.ff-ocr-result textarea { width: 100%; box-sizing: border-box; margin-top: 8px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px; border: 1px solid var(--color-border-secondary); border-radius: 6px; background: var(--color-background-secondary); color: var(--color-text-primary); resize: vertical; }
+.ff-scan-result { font-size: 13px; font-weight: 500; margin: 8px 0; }
+.ff-scan-clean { color: var(--color-text-success, #15803d); }
+.ff-scan-infected { color: var(--color-text-danger, #b91c1c); }
+.ff-scan-note { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--color-text-tertiary); margin-top: 4px; }

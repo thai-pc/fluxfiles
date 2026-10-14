@@ -668,6 +668,11 @@ class FileManager
         if ($exifStripped) {
             $result['exif_stripped'] = true;
         }
+        // assertNoVirus() above is fail-closed, so reaching here with a scanner
+        // wired means these exact bytes were scanned and came back clean.
+        if ($this->virusScanner !== null) {
+            $result['virus_scanned'] = true;
+        }
         if ($autoSaved > 0) {
             OptimizeStats::record($fs, $this->claims->pathPrefix, $autoSaved, 1);
             $result['optimized'] = true;
@@ -2399,6 +2404,51 @@ class FileManager
         ];
     }
 
+    /**
+     * On-demand virus scan of a file that is ALREADY stored — e.g. one uploaded
+     * before scanning was switched on, or arriving by a path no scan covers
+     * (chunked/presigned direct-to-bucket uploads). Read-only: reports, never
+     * deletes. $scanner is the Virus module's scanPath() (gated by the caller).
+     *
+     * @param callable(string):array $scanner
+     * @return array{path:string,clean:bool,threat:?string,scanned_at:int}
+     */
+    public function scanForViruses(string $disk, string $path, callable $scanner): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('read');
+        $scoped = $this->scopedPath($path);
+        $this->assertNotSystem($scoped);
+        $this->assertNotHidden($scoped);
+        $fs = $this->disks->disk($disk);
+        if (!$fs->fileExists($scoped)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+        if ((int) ($fs->fileSize($scoped) ?? 0) > self::SCAN_MAX_BYTES) {
+            throw new ApiException('File is too large to scan', 413, 'upload_too_large',
+                ['max' => (self::SCAN_MAX_BYTES / 1048576) . 'MB']);
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'ffscan');
+        if ($tmp === false) {
+            throw new ApiException('Could not stage file for scanning', 500, 'virus_failed');
+        }
+        try {
+            $in = $fs->readStream($scoped);
+            $out = fopen($tmp, 'wb');
+            stream_copy_to_stream($in, $out);
+            fclose($out);
+            if (is_resource($in)) {
+                fclose($in);
+            }
+            $verdict = $scanner($tmp);
+        } finally {
+            @unlink($tmp);
+        }
+        $clean = is_array($verdict) && ($verdict['clean'] ?? false) === true;
+        $threat = is_array($verdict) && isset($verdict['threat']) && $verdict['threat'] !== '' ? (string) $verdict['threat'] : null;
+        return ['path' => $path, 'clean' => $clean, 'threat' => $clean ? null : ($threat ?? 'unknown'), 'scanned_at' => time()];
+    }
+
     public function fileMeta(string $disk, string $path): array
     {
         $this->assertDisk($disk);
@@ -3466,6 +3516,9 @@ class FileManager
      * below this; a bigger file is stored as-is rather than risk the memory limit.
      */
     private const STRIP_EXIF_MAX = 64 * 1024 * 1024;
+
+    /** Largest stored file scanForViruses() stages to a temp file for the scanner. */
+    private const SCAN_MAX_BYTES = 512 * 1024 * 1024;
 
     /** Internal directories that must never be exposed or modified by users. */
     private const SYSTEM_PREFIXES = ['_fluxfiles/', '_variants/'];

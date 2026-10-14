@@ -449,7 +449,28 @@
       "watermark_remove": "Gỡ watermark",
       "legal_hold_place": "Đã đặt lệnh giữ pháp lý",
       "legal_hold_release": "Đã gỡ lệnh giữ pháp lý",
-      "legal_hold_blocked": "Lệnh giữ pháp lý đã chặn"
+      "legal_hold_blocked": "Lệnh giữ pháp lý đã chặn",
+      "access_denied": "Bị từ chối truy cập",
+      "zip_download": "Tải zip",
+      "presign_get": "Cấp liên kết tải xuống",
+      "presign_put": "Cấp liên kết tải lên (PUT)",
+      "presign_post": "Cấp biểu mẫu tải lên (POST)",
+      "share_create": "Tạo liên kết chia sẻ",
+      "share_revoke": "Thu hồi liên kết chia sẻ",
+      "intake_create": "Tạo cổng nhận tệp",
+      "intake_revoke": "Thu hồi cổng nhận tệp",
+      "version_restore": "Khôi phục phiên bản",
+      "webhook_test": "Thử webhook",
+      "ai_vision": "AI Vision",
+      "ocr": "Trích xuất văn bản (OCR)",
+      "backup": "Sao lưu",
+      "c2pa_verify": "Kiểm tra nguồn gốc (C2PA)",
+      "c2pa_sign": "Ký nguồn gốc (C2PA)",
+      "metadata_import": "Nhập metadata",
+      "content_read": "Mở tệp",
+      "stream_read": "Phát tệp",
+      "virus_scan": "Quét virus",
+      "audit_purge": "Xóa nhật ký kiểm toán"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Bảo vệ dữ liệu",
       "legal_ediscovery": "Pháp lý & eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Trích xuất văn bản (OCR)",
+    "note": "Đọc văn bản trong ảnh này. Không có gì thay đổi trừ khi bạn lưu lại.",
+    "language": "Ngôn ngữ",
+    "run": "Trích xuất",
+    "busy": "Đang đọc…",
+    "empty": "Không tìm thấy văn bản trong ảnh này.",
+    "result": "Văn bản đã trích xuất",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép văn bản",
+    "save_caption": "Lưu làm chú thích",
+    "saved": "Đã lưu vào chú thích của tệp"
+  },
+  "virus": {
+    "title": "Quét virus",
+    "scan_now": "Quét virus",
+    "note": "Quét ngay tệp đã lưu này — hữu ích cho tệp được tải lên trước khi bật quét.",
+    "scanning": "Đang quét…",
+    "clean": "Không phát hiện mối đe dọa",
+    "infected": "Phát hiện mối đe dọa: {threat}",
+    "rescan": "Quét lại",
+    "uploads_scanned": "Tệp tải lên được quét virus",
+    "uploads_clean": "Đã quét {count} tệp — không phát hiện mối đe dọa"
+  },
+  "backup": {
+    "title": "Sao lưu thư mục",
+    "note": "Sao chép thư mục này sang ổ lưu trữ khác. Tệp đã có sẽ được bỏ qua trừ khi bạn chọn ghi đè.",
+    "source": "Từ {disk}: {path}",
+    "destination": "Đến",
+    "overwrite": "Ghi đè tệp đã có",
+    "run": "Bắt đầu sao lưu",
+    "busy": "Đang sao lưu…",
+    "result": "Đã sao chép {copied}, bỏ qua {skipped}, lỗi {errors} — {size}",
+    "truncated": "Đã dừng ở giới hạn số tệp mỗi lần chạy — hãy chạy lại để tiếp tục."
   }
 }

@@ -449,7 +449,28 @@
       "watermark_remove": "Wasserzeichen entfernen",
       "legal_hold_place": "Rechtssperre gesetzt",
       "legal_hold_release": "Rechtssperre aufgehoben",
-      "legal_hold_blocked": "Durch Rechtssperre blockiert"
+      "legal_hold_blocked": "Durch Rechtssperre blockiert",
+      "access_denied": "Zugriff verweigert",
+      "zip_download": "ZIP-Download",
+      "presign_get": "Download-Link ausgestellt",
+      "presign_put": "Upload-Link ausgestellt (PUT)",
+      "presign_post": "Upload-Formular ausgestellt (POST)",
+      "share_create": "Freigabelink erstellt",
+      "share_revoke": "Freigabelink widerrufen",
+      "intake_create": "Upload-Portal erstellt",
+      "intake_revoke": "Upload-Portal widerrufen",
+      "version_restore": "Version wiederhergestellt",
+      "webhook_test": "Webhook-Test",
+      "ai_vision": "AI Vision",
+      "ocr": "Text erkannt (OCR)",
+      "backup": "Sicherung",
+      "c2pa_verify": "Herkunft geprüft (C2PA)",
+      "c2pa_sign": "Herkunft signiert (C2PA)",
+      "metadata_import": "Metadaten importiert",
+      "content_read": "Datei geöffnet",
+      "stream_read": "Datei gestreamt",
+      "virus_scan": "Virenscan",
+      "audit_purge": "Audit-Protokoll bereinigt"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Datenschutz",
       "legal_ediscovery": "Recht & eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Text erkennen (OCR)",
+    "note": "Liest den Text in diesem Bild. Es wird nichts geändert, solange Sie nicht speichern.",
+    "language": "Sprache",
+    "run": "Text erkennen",
+    "busy": "Wird gelesen…",
+    "empty": "In diesem Bild wurde kein Text gefunden.",
+    "result": "Erkannter Text",
+    "copy": "Text kopieren",
+    "copied": "Text kopiert",
+    "save_caption": "Als Beschriftung speichern",
+    "saved": "In der Beschriftung der Datei gespeichert"
+  },
+  "virus": {
+    "title": "Virenscan",
+    "scan_now": "Auf Viren prüfen",
+    "note": "Diese gespeicherte Datei jetzt prüfen — nützlich für Dateien, die vor dem Aktivieren der Prüfung hochgeladen wurden.",
+    "scanning": "Wird geprüft…",
+    "clean": "Keine Bedrohungen gefunden",
+    "infected": "Bedrohung gefunden: {threat}",
+    "rescan": "Erneut prüfen",
+    "uploads_scanned": "Uploads werden auf Viren geprüft",
+    "uploads_clean": "{count} Datei(en) geprüft — keine Bedrohungen"
+  },
+  "backup": {
+    "title": "Ordner sichern",
+    "note": "Kopiert diesen Ordner auf einen anderen Speicher. Vorhandene Dateien werden übersprungen, außer Sie wählen Überschreiben.",
+    "source": "Von {disk}: {path}",
+    "destination": "Nach",
+    "overwrite": "Vorhandene überschreiben",
+    "run": "Sicherung starten",
+    "busy": "Wird gesichert…",
+    "result": "Kopiert {copied}, übersprungen {skipped}, Fehler {errors} — {size}",
+    "truncated": "Beim Dateilimit pro Lauf gestoppt — erneut ausführen, um fortzufahren."
   }
 }

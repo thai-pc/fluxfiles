@@ -103,6 +103,7 @@ Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` cl
 | `POST` | `/webhooks/test` | — | `webhooks` | Send a one-off ping to the token's configured `webhook_url` |
 | `POST` | `/ai-vision` | `{disk, path, op, dest?}` | `ai` | BYO-key image ops: `bg_remove` / `upscale` / `smart_crop` |
 | `POST` | `/ocr` | `{disk, path, lang?}` | `ocr` | Extract text from an image via `tesseract`. Returns `{path, chars, text}` |
+| `POST` | `/virus/scan` | `{disk, path}` | `virus` | On-demand scan of an **already stored** file (e.g. uploaded before scanning was enabled, or via a direct-to-bucket path no scan covers). Read-only — reports, never deletes. Returns `{path, clean, threat, scanned_at}`; a malformed engine verdict counts as not clean. Requires `read` + `allow_virus_scan`; files over 512 MB → `413`. Audited as `virus_scan` with the verdict as detail. Uploads themselves now carry `virus_scanned: true` when the (fail-closed) upload scan ran. |
 | `POST` | `/backup` | `{from_disk, to_disk, path?, overwrite?}` | `backup` | One-way subtree sync between two disks (capped 5000 files/run) |
 | `POST` | `/c2pa` | `{disk, path}` | `c2pa` | Verify Content Credentials (C2PA) via `c2patool` |
 | `POST` | `/c2pa/sign` | `{disk, path, dest?}` | `c2pa` | Sign a file with Content Credentials |

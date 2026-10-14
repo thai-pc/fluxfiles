@@ -449,7 +449,28 @@
       "watermark_remove": "Watermerk verwijderen",
       "legal_hold_place": "Legal hold toegepast",
       "legal_hold_release": "Legal hold opgeheven",
-      "legal_hold_blocked": "Geblokkeerd door legal hold"
+      "legal_hold_blocked": "Geblokkeerd door legal hold",
+      "access_denied": "Toegang geweigerd",
+      "zip_download": "Zip-download",
+      "presign_get": "Downloadlink uitgegeven",
+      "presign_put": "Uploadlink uitgegeven (PUT)",
+      "presign_post": "Uploadformulier uitgegeven (POST)",
+      "share_create": "Deellink gemaakt",
+      "share_revoke": "Deellink ingetrokken",
+      "intake_create": "Uploadportaal gemaakt",
+      "intake_revoke": "Uploadportaal ingetrokken",
+      "version_restore": "Versie hersteld",
+      "webhook_test": "Webhooktest",
+      "ai_vision": "AI Vision",
+      "ocr": "Tekst herkend (OCR)",
+      "backup": "Back-up",
+      "c2pa_verify": "Herkomst gecontroleerd (C2PA)",
+      "c2pa_sign": "Herkomst ondertekend (C2PA)",
+      "metadata_import": "Metadata geïmporteerd",
+      "content_read": "Bestand geopend",
+      "stream_read": "Bestand gestreamd",
+      "virus_scan": "Virusscan",
+      "audit_purge": "Auditlog opgeschoond"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Gegevensbescherming",
       "legal_ediscovery": "Juridisch en eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Tekst herkennen (OCR)",
+    "note": "Leest de tekst in deze afbeelding. Er verandert niets tenzij je opslaat.",
+    "language": "Taal",
+    "run": "Herkennen",
+    "busy": "Bezig met lezen…",
+    "empty": "Geen tekst gevonden in deze afbeelding.",
+    "result": "Herkende tekst",
+    "copy": "Tekst kopiëren",
+    "copied": "Tekst gekopieerd",
+    "save_caption": "Opslaan als bijschrift",
+    "saved": "Opgeslagen in het bijschrift van het bestand"
+  },
+  "virus": {
+    "title": "Virusscan",
+    "scan_now": "Scannen op virussen",
+    "note": "Scan dit opgeslagen bestand nu — handig voor bestanden die zijn geüpload voordat scannen aanstond.",
+    "scanning": "Bezig met scannen…",
+    "clean": "Geen bedreigingen gevonden",
+    "infected": "Bedreiging gevonden: {threat}",
+    "rescan": "Opnieuw scannen",
+    "uploads_scanned": "Uploads worden gescand op virussen",
+    "uploads_clean": "{count} bestand(en) gescand — geen bedreigingen"
+  },
+  "backup": {
+    "title": "Map back-uppen",
+    "note": "Kopieer deze map naar een andere opslagschijf. Bestaande bestanden worden overgeslagen tenzij je overschrijven kiest.",
+    "source": "Van {disk}: {path}",
+    "destination": "Naar",
+    "overwrite": "Bestaande overschrijven",
+    "run": "Back-up starten",
+    "busy": "Bezig met back-up…",
+    "result": "Gekopieerd {copied}, overgeslagen {skipped}, fouten {errors} — {size}",
+    "truncated": "Gestopt bij de bestandslimiet per run — voer opnieuw uit om door te gaan."
   }
 }

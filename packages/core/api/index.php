@@ -483,7 +483,7 @@ try {
         // fact, so it goes in as free-form detail instead of leaving the entry blank.
         // Git deploy has no request-body path/key either (path/branch are claims,
         // not request fields) — log what was actually deployed instead.
-        $auditDetail = ff_audit_detail($auditAction, $body, $claims);
+        $auditDetail = ff_audit_detail($auditAction, $body, $claims, $data);
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey, null, null, $auditDetail);
 
         // Capture the webhook event; it's DISPATCHED AFTER the response is flushed
@@ -998,6 +998,17 @@ function routeRequest(
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->run($fm, $diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
     }
+    // On-demand scan of an already-stored file (paid `virus` module, 3-layer gate).
+    if ($method === 'POST' && $uri === '/api/fm/virus/scan') {
+        /** @var \FluxFiles\Virus\VirusScanModule $virus */
+        $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $body = jsonBodyAll();
+        return $fm->scanForViruses(
+            (string) ($body['disk'] ?? 'local'),
+            (string) ($body['path'] ?? ''),
+            static fn (string $p): array => $virus->scanPath($p)
+        );
+    }
     if ($method === 'POST' && $uri === '/api/fm/ocr') {
         $module = \FluxFiles\ModuleRegistry::require('ocr', \FluxFiles\LicenseManager::fromEnv(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
@@ -1505,6 +1516,7 @@ function resolveAuditAction(string $uri): string
         '/intake'        => 'intake_create',
         '/versions/restore' => 'version_restore',
         '/webhooks/test' => 'webhook_test',
+        '/virus/scan'    => 'virus_scan',
         '/ai-vision'     => 'ai_vision',
         '/ocr'           => 'ocr',
         '/backup'        => 'backup',
@@ -1557,9 +1569,12 @@ function resolveAuditAction(string $uri): string
  *
  * @param array<string,mixed> $body
  */
-function ff_audit_detail(string $action, array $body, \FluxFiles\Claims $claims): ?string
+function ff_audit_detail(string $action, array $body, \FluxFiles\Claims $claims, $data = null): ?string
 {
     switch ($action) {
+        case 'virus_scan':
+            // The verdict IS the event.
+            return is_array($data) && !empty($data['clean']) ? 'clean' : 'infected: ' . (string) ($data['threat'] ?? 'unknown');
         case 'terminal':
             // The command itself IS the security-relevant fact.
             return (string) ($body['cmd'] ?? '');

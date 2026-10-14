@@ -449,7 +449,28 @@
       "watermark_remove": "Remover marca d'água",
       "legal_hold_place": "Retenção legal aplicada",
       "legal_hold_release": "Retenção legal liberada",
-      "legal_hold_blocked": "Bloqueado por retenção legal"
+      "legal_hold_blocked": "Bloqueado por retenção legal",
+      "access_denied": "Acesso negado",
+      "zip_download": "Download zip",
+      "presign_get": "Link de download emitido",
+      "presign_put": "Link de envio emitido (PUT)",
+      "presign_post": "Formulário de envio emitido (POST)",
+      "share_create": "Link de compartilhamento criado",
+      "share_revoke": "Link de compartilhamento revogado",
+      "intake_create": "Portal de envio criado",
+      "intake_revoke": "Portal de envio revogado",
+      "version_restore": "Versão restaurada",
+      "webhook_test": "Teste de webhook",
+      "ai_vision": "AI Vision",
+      "ocr": "Texto extraído (OCR)",
+      "backup": "Backup",
+      "c2pa_verify": "Procedência verificada (C2PA)",
+      "c2pa_sign": "Procedência assinada (C2PA)",
+      "metadata_import": "Metadados importados",
+      "content_read": "Arquivo aberto",
+      "stream_read": "Arquivo reproduzido",
+      "virus_scan": "Verificação de vírus",
+      "audit_purge": "Log de auditoria limpo"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Proteção de dados",
       "legal_ediscovery": "Jurídico e eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Extrair texto (OCR)",
+    "note": "Lê o texto desta imagem. Nada é alterado a menos que você salve.",
+    "language": "Idioma",
+    "run": "Extrair texto",
+    "busy": "Lendo…",
+    "empty": "Nenhum texto encontrado nesta imagem.",
+    "result": "Texto extraído",
+    "copy": "Copiar texto",
+    "copied": "Texto copiado",
+    "save_caption": "Salvar como legenda",
+    "saved": "Salvo na legenda do arquivo"
+  },
+  "virus": {
+    "title": "Verificação de vírus",
+    "scan_now": "Verificar vírus",
+    "note": "Verifique agora este arquivo armazenado — útil para arquivos enviados antes de a verificação ser ativada.",
+    "scanning": "Verificando…",
+    "clean": "Nenhuma ameaça encontrada",
+    "infected": "Ameaça encontrada: {threat}",
+    "rescan": "Verificar novamente",
+    "uploads_scanned": "Os envios são verificados contra vírus",
+    "uploads_clean": "{count} arquivo(s) verificado(s) — nenhuma ameaça"
+  },
+  "backup": {
+    "title": "Fazer backup da pasta",
+    "note": "Copia esta pasta para outro disco de armazenamento. Arquivos já existentes são ignorados, a menos que você escolha sobrescrever.",
+    "source": "De {disk}: {path}",
+    "destination": "Para",
+    "overwrite": "Sobrescrever existentes",
+    "run": "Iniciar backup",
+    "busy": "Fazendo backup…",
+    "result": "Copiados {copied}, ignorados {skipped}, erros {errors} — {size}",
+    "truncated": "Parou no limite de arquivos por execução — execute novamente para continuar."
   }
 }

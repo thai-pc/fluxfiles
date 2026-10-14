@@ -449,7 +449,28 @@
       "watermark_remove": "移除水印",
       "legal_hold_place": "已设置法律保留",
       "legal_hold_release": "已解除法律保留",
-      "legal_hold_blocked": "法律保留已阻止操作"
+      "legal_hold_blocked": "法律保留已阻止操作",
+      "access_denied": "访问被拒绝",
+      "zip_download": "打包下载",
+      "presign_get": "签发下载链接",
+      "presign_put": "签发上传链接 (PUT)",
+      "presign_post": "签发上传表单 (POST)",
+      "share_create": "创建分享链接",
+      "share_revoke": "撤销分享链接",
+      "intake_create": "创建上传入口",
+      "intake_revoke": "撤销上传入口",
+      "version_restore": "恢复版本",
+      "webhook_test": "Webhook 测试",
+      "ai_vision": "AI Vision",
+      "ocr": "提取文字 (OCR)",
+      "backup": "备份",
+      "c2pa_verify": "已验证来源 (C2PA)",
+      "c2pa_sign": "已签名来源 (C2PA)",
+      "metadata_import": "导入元数据",
+      "content_read": "打开文件",
+      "stream_read": "播放文件",
+      "virus_scan": "病毒扫描",
+      "audit_purge": "清除审计日志"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "数据保护",
       "legal_ediscovery": "法律与电子取证"
     }
+  },
+  "ocr": {
+    "title": "提取文字 (OCR)",
+    "note": "识别此图片中的文字。除非保存，否则不会做任何更改。",
+    "language": "语言",
+    "run": "提取",
+    "busy": "识别中…",
+    "empty": "未在此图片中找到文字。",
+    "result": "提取的文字",
+    "copy": "复制文字",
+    "copied": "已复制文字",
+    "save_caption": "保存为说明",
+    "saved": "已保存到文件说明"
+  },
+  "virus": {
+    "title": "病毒扫描",
+    "scan_now": "扫描病毒",
+    "note": "立即扫描此已存储的文件——适用于开启扫描前上传的文件。",
+    "scanning": "扫描中…",
+    "clean": "未发现威胁",
+    "infected": "发现威胁：{threat}",
+    "rescan": "重新扫描",
+    "uploads_scanned": "上传的文件会进行病毒扫描",
+    "uploads_clean": "已扫描 {count} 个文件——未发现威胁"
+  },
+  "backup": {
+    "title": "备份文件夹",
+    "note": "将此文件夹复制到另一个存储盘。除非选择覆盖，否则会跳过已存在的文件。",
+    "source": "来源 {disk}：{path}",
+    "destination": "目标",
+    "overwrite": "覆盖已存在的文件",
+    "run": "开始备份",
+    "busy": "备份中…",
+    "result": "已复制 {copied}，跳过 {skipped}，错误 {errors} — {size}",
+    "truncated": "已达到单次运行的文件上限——再次运行以继续。"
   }
 }

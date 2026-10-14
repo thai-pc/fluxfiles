@@ -1521,6 +1521,7 @@ function fluxFilesApp() {
 
             let succeeded = 0;
             let autoSavedBytes = 0; // bytes the server auto-optimized away on upload
+            let scannedClean = 0;   // uploads the server virus-scanned and found clean
             for (let i = 0; i < total; i++) {
                 const file = files[i];
                 this.uploadCurrentIndex = i + 1;
@@ -1544,6 +1545,7 @@ function fluxFilesApp() {
                     }
                     // Server auto-optimized the image on upload (paid module) → tally savings.
                     if (res && res.optimized && res.saved_bytes > 0) autoSavedBytes += res.saved_bytes;
+                    if (res && res.virus_scanned) scannedClean++;
 
                     succeeded++;
                     setOverall(i + 1, 0); // snap to the file boundary
@@ -1562,6 +1564,9 @@ function fluxFilesApp() {
             this.uploadCurrentIndex = 0;
             this.uploadTotal = 0;
             this.uploadPhase = 'uploading';
+            if (scannedClean > 0 && autoSavedBytes === 0) {
+                this.showToast(this.t('virus.uploads_clean', { count: scannedClean }), 'success');
+            }
             if (autoSavedBytes > 0) {
                 this.showToast(
                     this.t('optimize.auto_saved', { size: this.formatSize(autoSavedBytes) })
@@ -2947,6 +2952,205 @@ function fluxFilesApp() {
 
         get aiVisionErrorIsInstall() { return this._isInstallError(this.aiVisionErrorCode); },
 
+        // ── OCR (paid `ocr` module: extract text from an image) ────────────────
+        // Same three-state proGate + per-file surfacing as AI Vision. The server
+        // runs tesseract on raster images only, so the UI offers it for those.
+        showOcr: false,
+        ocrTarget: null,
+        ocrLang: 'eng',
+        ocrBusy: false,
+        ocrSaving: false,
+        ocrText: null,              // null = not run yet; '' = ran, found no text
+        ocrError: '',
+        ocrErrorCode: '',
+        // Tesseract language packs most installs ship (`eng` always). The server
+        // sanitizes the value, so an uninstalled pack fails cleanly, not unsafely.
+        ocrLanguages: ['eng', 'vie', 'fra', 'deu', 'spa', 'por', 'ita', 'nld', 'tur', 'rus', 'ara', 'hin', 'tha', 'jpn', 'kor', 'chi_sim'],
+
+        canOcrFile(file) {
+            return this.ocrGate === 'on' && this._hasPerm('write') && !!file && file.type !== 'dir'
+                && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tif', 'tiff'].includes(this._fileExt(file));
+        },
+
+        openOcr(item) {
+            if (!this.canOcrFile(item)) return;
+            this.ocrTarget = item;
+            this.ocrText = null;
+            this.ocrError = '';
+            this.ocrErrorCode = '';
+            this.showOcr = true;
+        },
+
+        closeOcr() { this.showOcr = false; },
+
+        async runOcr() {
+            if (!this.ocrTarget || this.ocrBusy) return;
+            this.ocrBusy = true;
+            this.ocrError = '';
+            this.ocrErrorCode = '';
+            try {
+                const data = await this.api('POST', '/api/fm/ocr', {
+                    disk: this.currentDisk, path: this.ocrTarget.key, lang: this.ocrLang,
+                });
+                this.ocrText = (data && typeof data.text === 'string') ? data.text.trim() : '';
+                this.postMessage('FM_EVENT', { event: 'ocr:done', key: this.ocrTarget.key, chars: this.ocrText.length });
+            } catch (e) {
+                this.ocrError = e.message || this.t('error.generic');
+                this.ocrErrorCode = e.code || '';
+            } finally {
+                this.ocrBusy = false;
+            }
+        },
+
+        async copyOcrText() {
+            try {
+                await navigator.clipboard.writeText(this.ocrText || '');
+                this.showToast(this.t('ocr.copied'), 'success');
+            } catch (_) {
+                this.showToast(this.t('error.generic'), 'error');
+            }
+        },
+
+        // Keep the extracted text WITH the file so search finds the image by its
+        // words. Sends the other metadata fields unchanged — PUT /metadata
+        // replaces all four, so omitting one would wipe it.
+        async saveOcrAsCaption() {
+            if (!this.ocrTarget || !this.ocrText || this.ocrSaving) return;
+            this.ocrSaving = true;
+            const m = this.ocrTarget.meta || {};
+            const caption = this.ocrText.slice(0, 4000);
+            try {
+                await this.api('PUT', '/api/fm/metadata', {
+                    disk: this.currentDisk, key: this.ocrTarget.key,
+                    title: m.title ?? null, alt_text: m.alt_text ?? null, tags: m.tags ?? null, caption,
+                });
+                this.ocrTarget.meta = { ...m, caption };
+                if (this.detailFile && this.detailFile.key === this.ocrTarget.key) {
+                    this.detailFile.meta = { ...m, caption };
+                    this.metaForm = { ...this.metaForm, caption };
+                }
+                this.showToast(this.t('ocr.saved'), 'success');
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 4000);
+            } finally {
+                this.ocrSaving = false;
+            }
+        },
+
+        get ocrErrorIsInstall() { return this._isInstallError(this.ocrErrorCode); },
+
+        // ── Virus scan (paid `virus` module) ──────────────────────────────────
+        // Uploads are scanned server-side automatically when the token carries
+        // allow_virus_scan (fail-closed — see FileManager::assertNoVirus()); this
+        // adds an on-demand "scan now" for files already stored (uploaded before
+        // scanning was on, or via a direct-to-bucket path no scan covers).
+        showVirusScan: false,
+        virusTarget: null,
+        virusBusy: false,
+        virusResult: null,          // { clean, threat, scanned_at }
+        virusError: '',
+        virusErrorCode: '',
+
+        get uploadsAreScanned() { return this.tokenAllows('allow_virus_scan', false); },
+
+        canVirusScanFile(file) {
+            return this.virusGate === 'on' && this._hasPerm('read') && !!file && file.type !== 'dir';
+        },
+
+        openVirusScan(item) {
+            if (!this.canVirusScanFile(item)) return;
+            this.virusTarget = item;
+            this.virusResult = null;
+            this.virusError = '';
+            this.virusErrorCode = '';
+            this.showVirusScan = true;
+            this.runVirusScan();
+        },
+
+        closeVirusScan() { this.showVirusScan = false; },
+
+        async runVirusScan() {
+            if (!this.virusTarget || this.virusBusy) return;
+            this.virusBusy = true;
+            this.virusResult = null;
+            this.virusError = '';
+            this.virusErrorCode = '';
+            try {
+                this.virusResult = await this.api('POST', '/api/fm/virus/scan', {
+                    disk: this.currentDisk, path: this.virusTarget.key,
+                });
+                this.postMessage('FM_EVENT', {
+                    event: 'virus:scanned', key: this.virusTarget.key,
+                    clean: !!(this.virusResult && this.virusResult.clean),
+                });
+            } catch (e) {
+                this.virusError = e.message || this.t('error.generic');
+                this.virusErrorCode = e.code || '';
+            } finally {
+                this.virusBusy = false;
+            }
+        },
+
+        get virusErrorIsInstall() { return this._isInstallError(this.virusErrorCode); },
+
+        // ── Backup (paid `backup` module: sync a folder to another disk) ──────
+        showBackup: false,
+        backupTarget: null,         // the folder item ({ key: '' } = disk root)
+        backupTo: '',
+        backupOverwrite: false,
+        backupBusy: false,
+        backupResult: null,         // { copied, skipped, errors, bytes, truncated, … }
+        backupError: '',
+        backupErrorCode: '',
+
+        // Destination choices = the token's OWN disks (the server re-checks), minus
+        // the current one. Falls back to the configured list when the token is opaque.
+        get backupDisks() {
+            const own = this._tokenPayload().disks;
+            const list = Array.isArray(own) && own.length ? own : ((this.config && this.config.disks) || []);
+            return list.filter(d => d !== this.currentDisk);
+        },
+
+        canBackupFolder(item) {
+            return this.backupGate === 'on' && this._hasPerm('read') && this._hasPerm('write')
+                && !!item && item.type === 'dir' && this.backupDisks.length > 0;
+        },
+
+        openBackup(item) {
+            if (!this.canBackupFolder(item)) return;
+            this.backupTarget = item;
+            this.backupTo = this.backupDisks[0] || '';
+            this.backupOverwrite = false;
+            this.backupResult = null;
+            this.backupError = '';
+            this.backupErrorCode = '';
+            this.showBackup = true;
+        },
+
+        closeBackup() { this.showBackup = false; },
+
+        async runBackup() {
+            if (!this.backupTarget || !this.backupTo || this.backupBusy) return;
+            this.backupBusy = true;
+            this.backupResult = null;
+            this.backupError = '';
+            this.backupErrorCode = '';
+            try {
+                this.backupResult = await this.api('POST', '/api/fm/backup', {
+                    from_disk: this.currentDisk, to_disk: this.backupTo,
+                    path: this.backupTarget.key || '', overwrite: this.backupOverwrite,
+                });
+                this.postMessage('FM_EVENT', { event: 'backup:done', key: this.backupTarget.key, to: this.backupTo, result: this.backupResult });
+            } catch (e) {
+                this.backupError = e.message || this.t('error.generic');
+                this.backupErrorCode = e.code || '';
+            } finally {
+                this.backupBusy = false;
+            }
+        },
+
+        get backupErrorIsInstall() { return this._isInstallError(this.backupErrorCode); },
+
         // ── Legal hold (paid `legal-hold` module: place/release) ───────────────
         // Enforcement (blocking delete/trash/rename/move on a held path) is
         // free/core and already runs server-side without any of this UI; see
@@ -3462,6 +3666,11 @@ function fluxFilesApp() {
         // AI Vision (paid module: ai) — no toolbar entry of its own, surfaced
         // per-file (detail panel / context menu / action sheet) like Versioning.
         get aiVisionGate() { return this.proGate('allow_ai_vision', 'ai'); },
+        // OCR / Virus / Backup (paid modules) — per-file / per-folder surfacing,
+        // same three-state gate as AI Vision.
+        get ocrGate() { return this.proGate('allow_ocr', 'ocr'); },
+        get virusGate() { return this.proGate('allow_virus_scan', 'virus'); },
+        get backupGate() { return this.proGate('allow_backup', 'backup'); },
         // Audit export (paid module: audit-export) — surfaced only inside the
         // Activity Log panel, which is itself gated by canAudit (the `audit` perm).
         // Unlike Share/Intake this has no toolbar entry point of its own, so

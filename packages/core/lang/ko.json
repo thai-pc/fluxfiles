@@ -449,7 +449,28 @@
       "watermark_remove": "워터마크 제거",
       "legal_hold_place": "법적 보존이 설정됨",
       "legal_hold_release": "법적 보존이 해제됨",
-      "legal_hold_blocked": "법적 보존으로 차단됨"
+      "legal_hold_blocked": "법적 보존으로 차단됨",
+      "access_denied": "접근 거부",
+      "zip_download": "ZIP 다운로드",
+      "presign_get": "다운로드 링크 발급",
+      "presign_put": "업로드 링크 발급 (PUT)",
+      "presign_post": "업로드 폼 발급 (POST)",
+      "share_create": "공유 링크 생성",
+      "share_revoke": "공유 링크 취소",
+      "intake_create": "업로드 포털 생성",
+      "intake_revoke": "업로드 포털 취소",
+      "version_restore": "버전 복원",
+      "webhook_test": "웹훅 테스트",
+      "ai_vision": "AI Vision",
+      "ocr": "텍스트 추출 (OCR)",
+      "backup": "백업",
+      "c2pa_verify": "출처 확인 (C2PA)",
+      "c2pa_sign": "출처 서명 (C2PA)",
+      "metadata_import": "메타데이터 가져오기",
+      "content_read": "파일 열기",
+      "stream_read": "파일 스트리밍",
+      "virus_scan": "바이러스 검사",
+      "audit_purge": "감사 로그 삭제"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "데이터 보호",
       "legal_ediscovery": "법무 및 전자증거개시"
     }
+  },
+  "ocr": {
+    "title": "텍스트 추출 (OCR)",
+    "note": "이 이미지의 텍스트를 읽습니다. 저장하지 않으면 아무것도 바뀌지 않습니다.",
+    "language": "언어",
+    "run": "추출",
+    "busy": "읽는 중…",
+    "empty": "이 이미지에서 텍스트를 찾지 못했습니다.",
+    "result": "추출된 텍스트",
+    "copy": "텍스트 복사",
+    "copied": "텍스트를 복사했습니다",
+    "save_caption": "캡션으로 저장",
+    "saved": "파일 캡션에 저장했습니다"
+  },
+  "virus": {
+    "title": "바이러스 검사",
+    "scan_now": "바이러스 검사",
+    "note": "저장된 이 파일을 지금 검사합니다. 검사 기능을 켜기 전에 업로드된 파일에 유용합니다.",
+    "scanning": "검사 중…",
+    "clean": "위협이 발견되지 않았습니다",
+    "infected": "위협 발견: {threat}",
+    "rescan": "다시 검사",
+    "uploads_scanned": "업로드 파일은 바이러스 검사를 거칩니다",
+    "uploads_clean": "{count}개 파일 검사 — 위협 없음"
+  },
+  "backup": {
+    "title": "폴더 백업",
+    "note": "이 폴더를 다른 저장소 디스크로 복사합니다. 덮어쓰기를 선택하지 않으면 이미 있는 파일은 건너뜁니다.",
+    "source": "원본 {disk}: {path}",
+    "destination": "대상",
+    "overwrite": "기존 파일 덮어쓰기",
+    "run": "백업 시작",
+    "busy": "백업 중…",
+    "result": "복사 {copied}, 건너뜀 {skipped}, 오류 {errors} — {size}",
+    "truncated": "실행당 파일 한도에서 멈췄습니다. 계속하려면 다시 실행하세요."
   }
 }

@@ -449,7 +449,28 @@
       "watermark_remove": "Rimuovi filigrana",
       "legal_hold_place": "Blocco legale applicato",
       "legal_hold_release": "Blocco legale rilasciato",
-      "legal_hold_blocked": "Bloccato da un blocco legale"
+      "legal_hold_blocked": "Bloccato da un blocco legale",
+      "access_denied": "Accesso negato",
+      "zip_download": "Download zip",
+      "presign_get": "Link di download emesso",
+      "presign_put": "Link di caricamento emesso (PUT)",
+      "presign_post": "Modulo di caricamento emesso (POST)",
+      "share_create": "Link di condivisione creato",
+      "share_revoke": "Link di condivisione revocato",
+      "intake_create": "Portale di caricamento creato",
+      "intake_revoke": "Portale di caricamento revocato",
+      "version_restore": "Versione ripristinata",
+      "webhook_test": "Test webhook",
+      "ai_vision": "AI Vision",
+      "ocr": "Testo estratto (OCR)",
+      "backup": "Backup",
+      "c2pa_verify": "Provenienza verificata (C2PA)",
+      "c2pa_sign": "Provenienza firmata (C2PA)",
+      "metadata_import": "Metadati importati",
+      "content_read": "File aperto",
+      "stream_read": "File riprodotto",
+      "virus_scan": "Scansione antivirus",
+      "audit_purge": "Registro di audit eliminato"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Protezione dei dati",
       "legal_ediscovery": "Legale ed eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Estrai testo (OCR)",
+    "note": "Legge il testo in questa immagine. Non cambia nulla finché non salvi.",
+    "language": "Lingua",
+    "run": "Estrai testo",
+    "busy": "Lettura…",
+    "empty": "Nessun testo trovato in questa immagine.",
+    "result": "Testo estratto",
+    "copy": "Copia testo",
+    "copied": "Testo copiato",
+    "save_caption": "Salva come didascalia",
+    "saved": "Salvato nella didascalia del file"
+  },
+  "virus": {
+    "title": "Scansione antivirus",
+    "scan_now": "Cerca virus",
+    "note": "Scansiona ora questo file salvato — utile per i file caricati prima che la scansione fosse attiva.",
+    "scanning": "Scansione…",
+    "clean": "Nessuna minaccia trovata",
+    "infected": "Minaccia trovata: {threat}",
+    "rescan": "Scansiona di nuovo",
+    "uploads_scanned": "I caricamenti vengono scansionati contro i virus",
+    "uploads_clean": "{count} file scansionati — nessuna minaccia"
+  },
+  "backup": {
+    "title": "Backup della cartella",
+    "note": "Copia questa cartella su un altro disco. I file già presenti vengono saltati, a meno che tu non scelga di sovrascrivere.",
+    "source": "Da {disk}: {path}",
+    "destination": "Destinazione",
+    "overwrite": "Sovrascrivi esistenti",
+    "run": "Avvia backup",
+    "busy": "Backup in corso…",
+    "result": "Copiati {copied}, saltati {skipped}, errori {errors} — {size}",
+    "truncated": "Fermato al limite di file per esecuzione — eseguilo di nuovo per continuare."
   }
 }

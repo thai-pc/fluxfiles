@@ -1858,6 +1858,30 @@ class FluxFilesController
     /**
      * OCR (paid module) — text extraction; result is returned, never persisted.
      */
+    /** On-demand scan of an already-stored file (paid `virus` module) — core's POST /api/fm/virus/scan. */
+    public function virusScan(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            $fm = $this->fileManager($claims);
+            if (!method_exists($fm, 'scanForViruses')) {
+                throw new ApiException('On-demand virus scan needs a newer FluxFiles core', 501, 'virus_unavailable');
+            }
+            $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $disk = (string) $request->input('disk', 'local');
+            $path = (string) $request->input('path', '');
+            $result = $fm->scanForViruses($disk, $path, static fn (string $p): array => $virus->scanPath($p));
+            $this->logAudit($claims, 'virus_scan', $disk, $claims->scopePath($path),
+                !empty($result['clean']) ? 'clean' : 'infected: ' . (string) ($result['threat'] ?? 'unknown'));
+            $this->dispatchWebhook($claims, 'virus_scan', ['disk' => $disk, 'path' => $claims->scopePath($path), 'name' => basename($path)]);
+
+            return $this->ok($result);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function ocr(Request $request): JsonResponse
     {
         try {

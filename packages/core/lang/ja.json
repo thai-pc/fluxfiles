@@ -449,7 +449,28 @@
       "watermark_remove": "透かしを削除",
       "legal_hold_place": "リーガルホールドを設定しました",
       "legal_hold_release": "リーガルホールドを解除しました",
-      "legal_hold_blocked": "リーガルホールドによりブロックされました"
+      "legal_hold_blocked": "リーガルホールドによりブロックされました",
+      "access_denied": "アクセス拒否",
+      "zip_download": "ZIP ダウンロード",
+      "presign_get": "ダウンロードリンク発行",
+      "presign_put": "アップロードリンク発行 (PUT)",
+      "presign_post": "アップロードフォーム発行 (POST)",
+      "share_create": "共有リンク作成",
+      "share_revoke": "共有リンク取り消し",
+      "intake_create": "アップロードポータル作成",
+      "intake_revoke": "アップロードポータル取り消し",
+      "version_restore": "バージョン復元",
+      "webhook_test": "Webhook テスト",
+      "ai_vision": "AI Vision",
+      "ocr": "テキスト抽出 (OCR)",
+      "backup": "バックアップ",
+      "c2pa_verify": "来歴を確認 (C2PA)",
+      "c2pa_sign": "来歴に署名 (C2PA)",
+      "metadata_import": "メタデータ取り込み",
+      "content_read": "ファイルを開いた",
+      "stream_read": "ファイルを再生",
+      "virus_scan": "ウイルススキャン",
+      "audit_purge": "監査ログを削除"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "データ保護",
       "legal_ediscovery": "法務・eディスカバリー"
     }
+  },
+  "ocr": {
+    "title": "テキスト抽出 (OCR)",
+    "note": "この画像の文字を読み取ります。保存しない限り何も変更されません。",
+    "language": "言語",
+    "run": "抽出",
+    "busy": "読み取り中…",
+    "empty": "この画像に文字は見つかりませんでした。",
+    "result": "抽出したテキスト",
+    "copy": "テキストをコピー",
+    "copied": "テキストをコピーしました",
+    "save_caption": "キャプションとして保存",
+    "saved": "ファイルのキャプションに保存しました"
+  },
+  "virus": {
+    "title": "ウイルススキャン",
+    "scan_now": "ウイルスをスキャン",
+    "note": "保存済みのこのファイルを今すぐスキャンします。スキャン有効化前にアップロードされたファイルに便利です。",
+    "scanning": "スキャン中…",
+    "clean": "脅威は見つかりませんでした",
+    "infected": "脅威を検出: {threat}",
+    "rescan": "再スキャン",
+    "uploads_scanned": "アップロードはウイルススキャンされます",
+    "uploads_clean": "{count} 件をスキャン — 脅威なし"
+  },
+  "backup": {
+    "title": "フォルダーをバックアップ",
+    "note": "このフォルダーを別のストレージにコピーします。既存のファイルは上書きを選ばない限りスキップされます。",
+    "source": "元: {disk}: {path}",
+    "destination": "保存先",
+    "overwrite": "既存を上書き",
+    "run": "バックアップ開始",
+    "busy": "バックアップ中…",
+    "result": "コピー {copied}、スキップ {skipped}、エラー {errors} — {size}",
+    "truncated": "1回あたりのファイル上限で停止しました。続行するにはもう一度実行してください。"
   }
 }

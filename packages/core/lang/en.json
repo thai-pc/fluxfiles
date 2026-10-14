@@ -449,7 +449,28 @@
       "watermark_remove": "Remove watermark",
       "legal_hold_place": "Legal hold placed",
       "legal_hold_release": "Legal hold released",
-      "legal_hold_blocked": "Legal hold blocked"
+      "legal_hold_blocked": "Legal hold blocked",
+      "access_denied": "Access denied",
+      "zip_download": "Zip download",
+      "presign_get": "Download link issued",
+      "presign_put": "Upload link issued (PUT)",
+      "presign_post": "Upload form issued (POST)",
+      "share_create": "Share link created",
+      "share_revoke": "Share link revoked",
+      "intake_create": "Upload portal created",
+      "intake_revoke": "Upload portal revoked",
+      "version_restore": "Version restored",
+      "webhook_test": "Webhook test",
+      "ai_vision": "AI Vision",
+      "ocr": "Text extracted (OCR)",
+      "backup": "Backup",
+      "c2pa_verify": "Provenance checked (C2PA)",
+      "c2pa_sign": "Provenance signed (C2PA)",
+      "metadata_import": "Metadata imported",
+      "content_read": "File opened",
+      "stream_read": "File streamed",
+      "virus_scan": "Virus scan",
+      "audit_purge": "Audit log purged"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Data protection",
       "legal_ediscovery": "Legal & eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Extract text (OCR)",
+    "note": "Read the text in this image. Nothing is changed unless you save it.",
+    "language": "Language",
+    "run": "Extract text",
+    "busy": "Reading…",
+    "empty": "No text found in this image.",
+    "result": "Extracted text",
+    "copy": "Copy text",
+    "copied": "Text copied",
+    "save_caption": "Save as caption",
+    "saved": "Saved to the file's caption"
+  },
+  "virus": {
+    "title": "Virus scan",
+    "scan_now": "Scan for viruses",
+    "note": "Scan this stored file now — useful for files uploaded before scanning was turned on.",
+    "scanning": "Scanning…",
+    "clean": "No threats found",
+    "infected": "Threat found: {threat}",
+    "rescan": "Scan again",
+    "uploads_scanned": "Uploads are scanned for viruses",
+    "uploads_clean": "{count} file(s) scanned — no threats found"
+  },
+  "backup": {
+    "title": "Back up folder",
+    "note": "Copy this folder to another storage disk. Files already there are skipped unless you choose to overwrite.",
+    "source": "From {disk}: {path}",
+    "destination": "To",
+    "overwrite": "Overwrite existing",
+    "run": "Start backup",
+    "busy": "Backing up…",
+    "result": "Copied {copied}, skipped {skipped}, errors {errors} — {size}",
+    "truncated": "Stopped at the per-run file limit — run it again to continue."
   }
 }

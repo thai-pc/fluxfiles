@@ -449,7 +449,28 @@
       "watermark_remove": "Supprimer le filigrane",
       "legal_hold_place": "Conservation légale appliquée",
       "legal_hold_release": "Conservation légale levée",
-      "legal_hold_blocked": "Bloqué par une conservation légale"
+      "legal_hold_blocked": "Bloqué par une conservation légale",
+      "access_denied": "Accès refusé",
+      "zip_download": "Téléchargement zip",
+      "presign_get": "Lien de téléchargement émis",
+      "presign_put": "Lien d'envoi émis (PUT)",
+      "presign_post": "Formulaire d'envoi émis (POST)",
+      "share_create": "Lien de partage créé",
+      "share_revoke": "Lien de partage révoqué",
+      "intake_create": "Portail de dépôt créé",
+      "intake_revoke": "Portail de dépôt révoqué",
+      "version_restore": "Version restaurée",
+      "webhook_test": "Test du webhook",
+      "ai_vision": "AI Vision",
+      "ocr": "Texte extrait (OCR)",
+      "backup": "Sauvegarde",
+      "c2pa_verify": "Provenance vérifiée (C2PA)",
+      "c2pa_sign": "Provenance signée (C2PA)",
+      "metadata_import": "Métadonnées importées",
+      "content_read": "Fichier ouvert",
+      "stream_read": "Fichier diffusé",
+      "virus_scan": "Analyse antivirus",
+      "audit_purge": "Journal d'audit purgé"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Protection des données",
       "legal_ediscovery": "Juridique et eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Extraire le texte (OCR)",
+    "note": "Lit le texte de cette image. Rien n'est modifié tant que vous n'enregistrez pas.",
+    "language": "Langue",
+    "run": "Extraire",
+    "busy": "Lecture…",
+    "empty": "Aucun texte trouvé dans cette image.",
+    "result": "Texte extrait",
+    "copy": "Copier le texte",
+    "copied": "Texte copié",
+    "save_caption": "Enregistrer comme légende",
+    "saved": "Enregistré dans la légende du fichier"
+  },
+  "virus": {
+    "title": "Analyse antivirus",
+    "scan_now": "Rechercher des virus",
+    "note": "Analysez maintenant ce fichier stocké — utile pour les fichiers envoyés avant l'activation de l'analyse.",
+    "scanning": "Analyse en cours…",
+    "clean": "Aucune menace détectée",
+    "infected": "Menace détectée : {threat}",
+    "rescan": "Analyser à nouveau",
+    "uploads_scanned": "Les envois sont analysés contre les virus",
+    "uploads_clean": "{count} fichier(s) analysé(s) — aucune menace"
+  },
+  "backup": {
+    "title": "Sauvegarder le dossier",
+    "note": "Copie ce dossier vers un autre disque de stockage. Les fichiers déjà présents sont ignorés sauf si vous choisissez d'écraser.",
+    "source": "Depuis {disk} : {path}",
+    "destination": "Vers",
+    "overwrite": "Écraser l'existant",
+    "run": "Lancer la sauvegarde",
+    "busy": "Sauvegarde…",
+    "result": "Copiés {copied}, ignorés {skipped}, erreurs {errors} — {size}",
+    "truncated": "Arrêté à la limite de fichiers par exécution — relancez pour continuer."
   }
 }

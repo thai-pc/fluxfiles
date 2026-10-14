@@ -110,6 +110,7 @@ Route::post('versions/restore', [FluxFilesController::class, 'versionsRestore'])
 // AI Vision / OCR / Backup Bridge / C2PA (paid modules)
 Route::post('ai-vision', [FluxFilesController::class, 'aiVision']);
 Route::post('ocr', [FluxFilesController::class, 'ocr']);
+Route::post('virus/scan', [FluxFilesController::class, 'virusScan']);
 Route::post('backup', [FluxFilesController::class, 'backup']);
 Route::post('c2pa', [FluxFilesController::class, 'c2pa']);
 Route::post('c2pa/sign', [FluxFilesController::class, 'c2paSign']);

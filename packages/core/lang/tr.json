@@ -449,7 +449,28 @@
       "watermark_remove": "Filigranı kaldır",
       "legal_hold_place": "Yasal tutma uygulandı",
       "legal_hold_release": "Yasal tutma kaldırıldı",
-      "legal_hold_blocked": "Yasal tutma tarafından engellendi"
+      "legal_hold_blocked": "Yasal tutma tarafından engellendi",
+      "access_denied": "Erişim reddedildi",
+      "zip_download": "Zip indirme",
+      "presign_get": "İndirme bağlantısı verildi",
+      "presign_put": "Yükleme bağlantısı verildi (PUT)",
+      "presign_post": "Yükleme formu verildi (POST)",
+      "share_create": "Paylaşım bağlantısı oluşturuldu",
+      "share_revoke": "Paylaşım bağlantısı iptal edildi",
+      "intake_create": "Yükleme portalı oluşturuldu",
+      "intake_revoke": "Yükleme portalı iptal edildi",
+      "version_restore": "Sürüm geri yüklendi",
+      "webhook_test": "Webhook testi",
+      "ai_vision": "AI Vision",
+      "ocr": "Metin çıkarıldı (OCR)",
+      "backup": "Yedekleme",
+      "c2pa_verify": "Köken doğrulandı (C2PA)",
+      "c2pa_sign": "Köken imzalandı (C2PA)",
+      "metadata_import": "Meta veriler içe aktarıldı",
+      "content_read": "Dosya açıldı",
+      "stream_read": "Dosya akışı",
+      "virus_scan": "Virüs taraması",
+      "audit_purge": "Denetim günlüğü temizlendi"
     }
   },
   "bulk": {
@@ -729,5 +750,40 @@
       "data_protection": "Veri koruma",
       "legal_ediscovery": "Hukuk ve eDiscovery"
     }
+  },
+  "ocr": {
+    "title": "Metni çıkar (OCR)",
+    "note": "Bu görseldeki metni okur. Kaydetmediğiniz sürece hiçbir şey değişmez.",
+    "language": "Dil",
+    "run": "Çıkar",
+    "busy": "Okunuyor…",
+    "empty": "Bu görselde metin bulunamadı.",
+    "result": "Çıkarılan metin",
+    "copy": "Metni kopyala",
+    "copied": "Metin kopyalandı",
+    "save_caption": "Açıklama olarak kaydet",
+    "saved": "Dosyanın açıklamasına kaydedildi"
+  },
+  "virus": {
+    "title": "Virüs taraması",
+    "scan_now": "Virüs tara",
+    "note": "Bu kayıtlı dosyayı şimdi tarayın — tarama açılmadan önce yüklenen dosyalar için kullanışlı.",
+    "scanning": "Taranıyor…",
+    "clean": "Tehdit bulunamadı",
+    "infected": "Tehdit bulundu: {threat}",
+    "rescan": "Yeniden tara",
+    "uploads_scanned": "Yüklemeler virüslere karşı taranır",
+    "uploads_clean": "{count} dosya tarandı — tehdit yok"
+  },
+  "backup": {
+    "title": "Klasörü yedekle",
+    "note": "Bu klasörü başka bir depolama diskine kopyalar. Mevcut dosyalar, üzerine yazmayı seçmediğiniz sürece atlanır.",
+    "source": "Kaynak {disk}: {path}",
+    "destination": "Hedef",
+    "overwrite": "Mevcutların üzerine yaz",
+    "run": "Yedeklemeyi başlat",
+    "busy": "Yedekleniyor…",
+    "result": "Kopyalanan {copied}, atlanan {skipped}, hata {errors} — {size}",
+    "truncated": "Çalıştırma başına dosya sınırında durdu — devam etmek için yeniden çalıştırın."
   }
 }
