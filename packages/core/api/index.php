@@ -1310,6 +1310,26 @@ function routeRequest(
         exit;
     }
 
+    // Audit chain verification (Audit Export module, Enterprise) — recompute every
+    // entry's HMAC and walk the prev links (live log + archives) to detect edits,
+    // inserted/reordered lines and entries deleted from the middle. Admin-only like
+    // purge: the log is per-DISK, so a scoped tenant would learn about other
+    // tenants' entries (counts, breaks) from the report.
+    if ($method === 'GET' && $uri === '/api/fm/audit/verify') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        if (trim($claims->pathPrefix, '/') !== '') {
+            throw new ApiException('Audit verification requires an unscoped (admin) token', 403, 'forbidden');
+        }
+        $disk = (string) ($_GET['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        return \FluxFiles\AuditChain::verify(array_merge($metaRepo->readAuditArchive($disk), $metaRepo->readAudit($disk)));
+    }
+
     // Audit purge (paid module) — destructive, so admin-only: the audit log is
     // stored per-DISK, not per-tenant, so a path-scoped token could otherwise purge
     // lines belonging to other tenants sharing the same disk.

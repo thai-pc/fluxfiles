@@ -588,6 +588,8 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
                 'user_agent' => $row['user_agent'],
                 'detail'     => $row['detail'],
                 'created_at' => (int) $row['created_at'],
+                'prev_hash'  => $row['prev_hash'] ?? null,
+                'entry_hash' => $row['entry_hash'] ?? null,
             ];
         }
         return $entries;
@@ -595,19 +597,57 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
 
     public function audit(string $disk, string $action, array $context = []): void
     {
-        try {
-            $this->table('fluxfiles_audit_log')->insert([
-                'disk'       => $disk,
-                'owner'      => $context['user_id'] ?? null,
-                'action'     => $action,
-                'file_key'   => $context['file_key'] ?? null,
-                'ip'         => $context['ip'] ?? null,
-                'user_agent' => $context['user_agent'] ?? null,
-                'detail'     => $context['detail'] ?? null,
-                'created_at' => time(),
-            ]);
-        } catch (\Throwable $e) {
-            // Silent fail — matches StorageMetadataHandler::audit()'s best-effort contract.
+        $row = [
+            'disk'       => $disk,
+            'owner'      => $context['user_id'] ?? null,
+            'action'     => $action,
+            'file_key'   => $context['file_key'] ?? null,
+            'ip'         => $context['ip'] ?? null,
+            'user_agent' => $context['user_agent'] ?? null,
+            'detail'     => $context['detail'] ?? null,
+            'created_at' => time(),
+        ];
+        // `class_exists` keeps the adapter working against a core older than the
+        // audit chain (its declared floor).
+        $key = class_exists(\FluxFiles\AuditChain::class) ? \FluxFiles\AuditChain::key() : null;
+        if ($key === null) {
+            try {
+                $this->table('fluxfiles_audit_log')->insert($row);
+            } catch (\Throwable $e) {
+                // Silent fail — matches StorageMetadataHandler::audit()'s best-effort contract.
+            }
+            return;
+        }
+        // Tamper-evident chain (core's DbMetadataHandler::audit() twin): advance the
+        // per-disk head under lockForUpdate so concurrent writers can't fork it; the
+        // first write per disk races on inserting the head row, so retry once.
+        $entry = [
+            'ts' => $row['created_at'], 'action' => $action, 'user_id' => $row['owner'],
+            'file_key' => $row['file_key'], 'ip' => $row['ip'],
+            'user_agent' => $row['user_agent'], 'detail' => $row['detail'],
+        ];
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            try {
+                $this->db()->transaction(function () use ($disk, $row, $entry, $key) {
+                    $head = $this->table('fluxfiles_audit_chain_head')->where('disk', $disk)->lockForUpdate()->value('head_hash');
+                    $prev = $head;
+                    if ($prev === null) {
+                        $prev = $this->table('fluxfiles_audit_log')->where('disk', $disk)
+                            ->whereNotNull('entry_hash')->orderBy('id', 'desc')->value('entry_hash');
+                    }
+                    $prev = is_string($prev) ? $prev : '';
+                    $hash = \FluxFiles\AuditChain::hash($key, $prev, $entry);
+                    $this->table('fluxfiles_audit_log')->insert($row + ['prev_hash' => $prev, 'entry_hash' => $hash]);
+                    if ($head === null) {
+                        $this->table('fluxfiles_audit_chain_head')->insert(['disk' => $disk, 'head_hash' => $hash]);
+                    } else {
+                        $this->table('fluxfiles_audit_chain_head')->where('disk', $disk)->update(['head_hash' => $hash]);
+                    }
+                });
+                return;
+            } catch (\Throwable $e) {
+                // retry once, then give up silently (best-effort contract)
+            }
         }
     }
 
@@ -642,6 +682,8 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
                 'detail'       => $detail,
                 'created_at'   => $entry['created_at'],
                 'content_hash' => $entry['content_hash'],
+                'prev_hash'    => $entry['prev_hash'] ?? null,
+                'entry_hash'   => $entry['entry_hash'] ?? null,
             ];
         }
         if ($rows === []) {

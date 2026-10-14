@@ -35,6 +35,10 @@ class FluxFilesController
 
         $diskConfigs = config('fluxfiles.disks');
         $this->diskManager = new DiskManager($diskConfigs);
+        // Key for the tamper-evident audit chain (lives in config, not the env).
+        if (class_exists(\FluxFiles\AuditChain::class)) {
+            \FluxFiles\AuditChain::configure((string) config('fluxfiles.secret'));
+        }
         $this->metaRepo = config('fluxfiles.storage_backend') === 'db'
             ? new LaravelDbMetadataHandler($this->diskManager, config('fluxfiles.db_connection'))
             : new StorageMetadataHandler($this->diskManager);
@@ -1516,6 +1520,35 @@ class FluxFilesController
      * JSON envelope: the module streams its own headers + body directly, same
      * posture as core's own /api/fm/zip streaming route.
      */
+    /**
+     * Audit chain verification (paid audit-export module) — core's
+     * GET /api/fm/audit/verify. Admin-only: the log is per-disk, not per-tenant.
+     */
+    public function auditVerify(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+            if (trim($claims->pathPrefix, '/') !== '') {
+                throw new ApiException('Audit verification requires an unscoped (admin) token', 403, 'forbidden');
+            }
+            $disk = (string) $request->query('disk', 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            return $this->ok(\FluxFiles\AuditChain::verify(array_merge(
+                $this->metaRepo->readAuditArchive($disk),
+                $this->metaRepo->readAudit($disk)
+            )));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function auditExport(Request $request): \Symfony\Component\HttpFoundation\Response
     {
         try {

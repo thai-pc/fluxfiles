@@ -556,6 +556,8 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                     'user_agent' => $ctx['user_agent'] ?? null,
                     'detail'    => $ctx['detail'] ?? null,
                     'created_at' => $row['ts'] ?? 0,
+                    'prev_hash' => $row['prev'] ?? null,
+                    'entry_hash' => $row['hash'] ?? null,
                 ];
             }
             return $entries;
@@ -571,25 +573,16 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         // invalid byte made json_encode() return false. `false . "\n"` is just
         // "\n", so `User-Agent: A\xFFB` wrote a blank line and made any
         // destructive action unloggable while it still succeeded.
-        $entry = json_encode([
-            'ts' => time(),
-            'action' => $action,
-            'context' => $context,
-        ], JSON_INVALID_UTF8_SUBSTITUTE);
-        if ($entry === false) {
+        $row = ['ts' => time(), 'action' => $action, 'context' => $context];
+        if (json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE) === false) {
             // Nothing request-controlled can reach here any more (recursion and
             // NAN/INF are the remaining causes), but an audit entry we cannot
             // encode must still leave a trace rather than a blank line.
-            $entry = json_encode([
-                'ts' => time(),
-                'action' => $action,
-                'context' => ['encode_error' => json_last_error_msg()],
-            ], JSON_INVALID_UTF8_SUBSTITUTE);
-            if ($entry === false) {
-                $entry = '{"ts":' . time() . ',"action":"audit_encode_failed","context":{}}';
+            $row['context'] = ['encode_error' => json_last_error_msg()];
+            if (json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE) === false) {
+                $row = ['ts' => $row['ts'], 'action' => 'audit_encode_failed', 'context' => []];
             }
         }
-        $entry .= "\n";
         $fs = $this->diskManager->disk($disk);
         // Unlocked read-modify-write here would drop entries under concurrent
         // writers (two requests both read the same content, each appends one line,
@@ -616,13 +609,53 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                     $content = implode("\n", $kept) . "\n";
                 }
             }
-            $content .= $entry;
+            // Tamper-evidence: chain onto the newest chained entry, computed under
+            // the same lock as the append so two writers can't fork the chain.
+            $key = AuditChain::key();
+            if ($key !== null) {
+                $prev = self::lastChainHash($content);
+                $row['prev'] = $prev;
+                $row['hash'] = AuditChain::hash($key, $prev, self::chainFields($row));
+            }
+            $entry = json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE);
+            if ($entry === false) {
+                $entry = '{"ts":' . time() . ',"action":"audit_encode_failed","context":{}}';
+            }
+            $content .= $entry . "\n";
             $fs->write(self::AUDIT_KEY, $content);
         } catch (\Throwable $e) {
             // Silent fail
         } finally {
             $this->releaseAuditLock($disk);
         }
+    }
+
+    /** Hash of the newest CHAINED line in the live log ('' = start a new chain). */
+    private static function lastChainHash(string $content): string
+    {
+        $lines = explode("\n", rtrim($content, "\n"));
+        for ($i = count($lines) - 1; $i >= 0; $i--) {
+            if ($lines[$i] === '') {
+                continue;
+            }
+            $r = json_decode($lines[$i], true);
+            if (is_array($r) && is_string($r['hash'] ?? null) && $r['hash'] !== '') {
+                return $r['hash'];
+            }
+        }
+        return '';
+    }
+
+    /** @param array{ts:int,action:string,context:array} $row */
+    private static function chainFields(array $row): array
+    {
+        $c = $row['context'];
+        return [
+            'ts' => $row['ts'], 'action' => $row['action'],
+            'user_id' => $c['user_id'] ?? null, 'file_key' => $c['file_key'] ?? null,
+            'ip' => $c['ip'] ?? null, 'user_agent' => $c['user_agent'] ?? null,
+            'detail' => $c['detail'] ?? null,
+        ];
     }
 
     /**
@@ -655,6 +688,8 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                         'user_agent' => $ctx['user_agent'] ?? null,
                         'detail'     => $ctx['detail'] ?? null,
                         'created_at' => $row['ts'] ?? 0,
+                        'prev_hash'  => $row['prev'] ?? null,
+                        'entry_hash' => $row['hash'] ?? null,
                     ];
                 }
             }

@@ -28,6 +28,11 @@ function assertEqual($e, $a, string $m = ''): void { if ($e !== $a) throw new \R
 // illuminate/database + fluxfiles/fluxfiles (see packages/laravel/composer.json).
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../src/LaravelDbMetadataHandler.php';
+// The vendored core can predate AuditChain (it ships with core-v0.2.96+); load the
+// monorepo copy so the chain test below runs against the source of truth.
+if (!class_exists(\FluxFiles\AuditChain::class) && is_file(__DIR__ . '/../../core/api/AuditChain.php')) {
+    require_once __DIR__ . '/../../core/api/AuditChain.php';
+}
 
 use FluxFiles\DiskManager;
 use FluxFiles\Laravel\LaravelDbMetadataHandler;
@@ -115,9 +120,17 @@ $schema->create('fluxfiles_audit_log', function (Blueprint $table) {
     $table->text('user_agent')->nullable();
     $table->text('detail')->nullable();
     $table->bigInteger('created_at');
+    // 2026_10_14_000000_add_fluxfiles_audit_chain
+    $table->string('prev_hash', 64)->nullable();
+    $table->string('entry_hash', 64)->nullable();
     $table->index(['disk', 'owner', 'created_at']);
     $table->index(['disk', 'created_at']);
     $table->index(['disk', 'action', 'created_at']);
+});
+
+$schema->create('fluxfiles_audit_chain_head', function (Blueprint $table) {
+    $table->string('disk', 64)->primary();
+    $table->string('head_hash', 64);
 });
 
 $schema->create('fluxfiles_legal_holds', function (Blueprint $table) {
@@ -495,6 +508,23 @@ test('allHolds() returns every hold on the disk, keyed by id', function () use (
 // ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
+
+test('audit(): entries are HMAC-chained and an edited row is detected', function () use ($repo, $disk) {
+    \FluxFiles\AuditChain::configure(str_repeat('k', 40));
+    try {
+        for ($i = 0; $i < 4; $i++) {
+            $repo->audit($disk, 'upload', ['user_id' => 'u', 'file_key' => "chain/{$i}.txt", 'ip' => '1.2.3.4', 'user_agent' => 'ua']);
+        }
+        $r = \FluxFiles\AuditChain::verify($repo->readAudit($disk));
+        assertTrue($r['ok'] && $r['chained'] >= 4 && $r['gaps'] === 0, 'clean chain: ' . json_encode($r));
+        $head = Capsule::connection()->table('fluxfiles_audit_chain_head')->where('disk', $disk)->value('head_hash');
+        assertTrue($head === $r['head'], 'head row tracks the newest entry');
+        Capsule::connection()->table('fluxfiles_audit_log')->where('file_key', 'chain/1.txt')->update(['owner' => 'nobody']);
+        assertTrue(count(\FluxFiles\AuditChain::verify($repo->readAudit($disk))['tampered']) === 1, 'edit detected');
+    } finally {
+        \FluxFiles\AuditChain::configure('');
+    }
+});
 
 exec('rm -rf ' . escapeshellarg($storageRoot));
 

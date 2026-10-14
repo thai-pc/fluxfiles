@@ -1182,6 +1182,42 @@ function makeWpDbHandler(WpdbSpy $spy): WpDbMetadataHandler
     return new WpDbMetadataHandler(new \FluxFiles\DiskManager([]));
 }
 
+test('WpDbMetadataHandler::audit() chains under a locked head row and advances it', function () {
+    \FluxFiles\AuditChain::configure(str_repeat('k', 40));
+    try {
+        $spy = new WpdbSpy();
+        $prev = str_repeat('a', 64);
+        $spy->varQueue[] = $prev; // SELECT head_hash … FOR UPDATE
+        makeWpDbHandler($spy)->audit('local', 'upload', ['user_id' => 'u', 'file_key' => 'x.txt']);
+        $q = $spy->queries;
+        assertEqual('START TRANSACTION', $q[0] ?? null, 'transaction opened');
+        assertTrue(str_contains($q[1] ?? '', 'fluxfiles_audit_chain_head') && str_contains($q[1], 'FOR UPDATE'), 'head locked');
+        $insert = $q[2] ?? '';
+        assertTrue(str_contains($insert, 'prev_hash') && str_contains($insert, "'{$prev}'"), 'row links to the previous head');
+        preg_match_all("/'([0-9a-f]{64})'/", $insert, $m);
+        $hash = end($m[1]);
+        assertTrue($hash !== $prev && strlen((string) $hash) === 64, 'new entry hash written');
+        assertTrue(str_contains($q[3] ?? '', 'UPDATE') && str_contains($q[3], (string) $hash), 'head advanced to the new hash');
+        assertEqual('COMMIT', $q[4] ?? null, 'committed');
+    } finally {
+        \FluxFiles\AuditChain::configure('');
+    }
+});
+
+test('WpDbMetadataHandler::audit() without a secret stays a plain insert', function () {
+    \FluxFiles\AuditChain::configure('');
+    $keep = $_ENV['FLUXFILES_SECRET'] ?? null;
+    unset($_ENV['FLUXFILES_SECRET']);
+    try {
+        $spy = new WpdbSpy();
+        makeWpDbHandler($spy)->audit('local', 'upload', ['user_id' => 'u']);
+        assertEqual(1, count($spy->queries), 'single INSERT');
+        assertTrue(str_starts_with($spy->queries[0], 'INSERT INTO'), 'plain insert');
+    } finally {
+        if ($keep !== null) { $_ENV['FLUXFILES_SECRET'] = $keep; }
+    }
+});
+
 test('WpDbMetadataHandler::save() upserts with ON DUPLICATE KEY UPDATE against the file_metadata table', function () {
     $spy = new WpdbSpy();
     $handler = makeWpDbHandler($spy);

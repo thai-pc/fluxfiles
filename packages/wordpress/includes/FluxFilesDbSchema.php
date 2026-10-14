@@ -18,7 +18,7 @@ defined('ABSPATH') || exit;
 class FluxFilesDbSchema
 {
     /** Bump whenever the SQL below changes; drives the admin_init upgrade check. */
-    public const VERSION = '1.2.0';
+    public const VERSION = '1.3.0';
 
     public static function install(): void
     {
@@ -31,6 +31,8 @@ class FluxFilesDbSchema
         $tDirs = $wpdb->prefix . 'fluxfiles_directories';
         $tTrash = $wpdb->prefix . 'fluxfiles_trash';
         $tAudit = $wpdb->prefix . 'fluxfiles_audit_log';
+        // Head of the tamper-evident audit chain, one row per disk (AuditChain).
+        $tChainHead = $wpdb->prefix . 'fluxfiles_audit_chain_head';
         $tHolds = $wpdb->prefix . 'fluxfiles_legal_holds';
 
         $sql = "CREATE TABLE {$tFileMeta} (
@@ -100,6 +102,8 @@ CREATE TABLE {$tAudit} (
   detail text NULL,
   created_at bigint(20) NOT NULL,
   content_hash char(64) NULL,
+  prev_hash char(64) NULL,
+  entry_hash char(64) NULL,
   PRIMARY KEY  (id),
   KEY disk_owner_created_at (disk,owner,created_at),
   KEY disk_created_at (disk,created_at),
@@ -120,6 +124,12 @@ CREATE TABLE {$tHolds} (
   release_reason text NULL,
   PRIMARY KEY  (disk,id),
   KEY disk_released_at (disk,released_at)
+) {$charsetCollate};
+
+CREATE TABLE {$tChainHead} (
+  disk varchar(64) NOT NULL,
+  head_hash char(64) NOT NULL,
+  PRIMARY KEY  (disk)
 ) {$charsetCollate};";
 
         dbDelta($sql);

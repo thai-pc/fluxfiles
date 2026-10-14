@@ -33,6 +33,10 @@ class FluxFilesApi
         // Existing installs never re-run activate(), so (re)apply the storage
         // web-server rules here too — this is the path every upload goes through.
         FluxFilesPlugin::protectStorage();
+        // Key for the tamper-evident audit chain (an option, not the env).
+        if (class_exists(\FluxFiles\AuditChain::class)) {
+            \FluxFiles\AuditChain::configure((string) get_option('fluxfiles_secret', ''));
+        }
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
         $this->metaRepo = get_option('fluxfiles_storage_backend', 'json') === 'db'
@@ -259,6 +263,9 @@ class FluxFilesApi
         // Audit export/purge (paid module)
         register_rest_route($ns, $p . '/audit/export', array_merge($readArgs, [
             'callback' => [$api, 'handleAuditExport'],
+        ]));
+        register_rest_route($ns, $p . '/audit/verify', array_merge($readArgs, [
+            'callback' => [$api, 'handleAuditVerify'],
         ]));
         register_rest_route($ns, $p . '/audit/purge', array_merge($writeArgs, [
             'callback' => [$api, 'handleAuditPurge'],
@@ -2779,6 +2786,35 @@ class FluxFilesApi
      * JSON envelope: the module sends its own headers + body directly via native
      * header()/echo, then we exit — same posture as publicLink() above.
      */
+    /**
+     * Audit chain verification (paid audit-export module) — core's
+     * GET /api/fm/audit/verify. Admin-only: the log is per-disk, not per-tenant.
+     */
+    public function handleAuditVerify(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+            if (trim($claims->pathPrefix, '/') !== '') {
+                throw new ApiException('Audit verification requires an unscoped (admin) token', 403, 'forbidden');
+            }
+            $disk = (string) ($request->get_param('disk') ?: 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
+            return $this->ok(\FluxFiles\AuditChain::verify(array_merge(
+                $this->metaRepo->readAuditArchive($disk),
+                $this->metaRepo->readAudit($disk)
+            )));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function handleAuditExport(\WP_REST_Request $request): void
     {
         try {

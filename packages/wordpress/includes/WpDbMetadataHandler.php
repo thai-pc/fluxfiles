@@ -28,6 +28,7 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
     private string $tDirs;
     private string $tTrash;
     private string $tAudit;
+    private string $tChainHead;
     private string $tHolds;
 
     public function __construct(DiskManager $diskManager)
@@ -39,6 +40,7 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
         $this->tDirs = $wpdb->prefix . 'fluxfiles_directories';
         $this->tTrash = $wpdb->prefix . 'fluxfiles_trash';
         $this->tAudit = $wpdb->prefix . 'fluxfiles_audit_log';
+        $this->tChainHead = $wpdb->prefix . 'fluxfiles_audit_chain_head';
         $this->tHolds = $wpdb->prefix . 'fluxfiles_legal_holds';
     }
 
@@ -671,6 +673,8 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
                 'user_agent' => $row['user_agent'],
                 'detail'     => $row['detail'],
                 'created_at' => (int) $row['created_at'],
+                'prev_hash'  => $row['prev_hash'] ?? null,
+                'entry_hash' => $row['entry_hash'] ?? null,
             ];
         }
         return $entries;
@@ -678,20 +682,58 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
 
     public function audit(string $disk, string $action, array $context = []): void
     {
-        try {
-            [$colSql, $valSql, $bind] = $this->buildValueClause([
-                'disk' => $disk,
-                'owner' => $context['user_id'] ?? null,
-                'action' => $action,
-                'file_key' => $context['file_key'] ?? null,
-                'ip' => $context['ip'] ?? null,
-                'user_agent' => $context['user_agent'] ?? null,
-                'detail' => $context['detail'] ?? null,
-                'created_at' => time(),
-            ]);
-            $this->query("INSERT INTO {$this->tAudit} ({$colSql}) VALUES ({$valSql})", $bind);
-        } catch (\Throwable $e) {
-            // Silent fail — matches StorageMetadataHandler::audit()'s best-effort contract.
+        $cols = [
+            'disk' => $disk,
+            'owner' => $context['user_id'] ?? null,
+            'action' => $action,
+            'file_key' => $context['file_key'] ?? null,
+            'ip' => $context['ip'] ?? null,
+            'user_agent' => $context['user_agent'] ?? null,
+            'detail' => $context['detail'] ?? null,
+            'created_at' => time(),
+        ];
+        $key = class_exists(\FluxFiles\AuditChain::class) ? \FluxFiles\AuditChain::key() : null;
+        if ($key === null) {
+            try {
+                [$colSql, $valSql, $bind] = $this->buildValueClause($cols);
+                $this->query("INSERT INTO {$this->tAudit} ({$colSql}) VALUES ({$valSql})", $bind);
+            } catch (\Throwable $e) {
+                // Silent fail — matches StorageMetadataHandler::audit()'s best-effort contract.
+            }
+            return;
+        }
+        // Tamper-evident chain (core's DbMetadataHandler::audit() twin): advance the
+        // per-disk head under a row lock so concurrent writers can't fork it.
+        $entry = [
+            'ts' => $cols['created_at'], 'action' => $action, 'user_id' => $cols['owner'],
+            'file_key' => $cols['file_key'], 'ip' => $cols['ip'],
+            'user_agent' => $cols['user_agent'], 'detail' => $cols['detail'],
+        ];
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $this->wpdb->query('START TRANSACTION');
+            try {
+                $prev = $this->getVar("SELECT head_hash FROM {$this->tChainHead} WHERE disk = %s FOR UPDATE", [$disk]);
+                $haveHead = $prev !== null;
+                if (!$haveHead) {
+                    $prev = $this->getVar("SELECT entry_hash FROM {$this->tAudit} WHERE disk = %s AND entry_hash IS NOT NULL ORDER BY id DESC LIMIT 1", [$disk]);
+                }
+                $prev = is_string($prev) ? $prev : '';
+                $hash = \FluxFiles\AuditChain::hash($key, $prev, $entry);
+                [$colSql, $valSql, $bind] = $this->buildValueClause($cols + ['prev_hash' => $prev, 'entry_hash' => $hash]);
+                if ($this->query("INSERT INTO {$this->tAudit} ({$colSql}) VALUES ({$valSql})", $bind) === false) {
+                    throw new \RuntimeException('audit insert failed');
+                }
+                $ok = $haveHead
+                    ? $this->query("UPDATE {$this->tChainHead} SET head_hash = %s WHERE disk = %s", [$hash, $disk])
+                    : $this->query("INSERT INTO {$this->tChainHead} (disk, head_hash) VALUES (%s, %s)", [$disk, $hash]);
+                if ($ok === false) {
+                    throw new \RuntimeException('audit chain head update failed');
+                }
+                $this->wpdb->query('COMMIT');
+                return;
+            } catch (\Throwable $e) {
+                $this->wpdb->query('ROLLBACK');
+            }
         }
     }
 
@@ -728,6 +770,8 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
                 'detail' => $detail,
                 'created_at' => $entry['created_at'],
                 'content_hash' => $entry['content_hash'],
+                'prev_hash' => $entry['prev_hash'] ?? null,
+                'entry_hash' => $entry['entry_hash'] ?? null,
             ]);
             $affected = (int) $this->query("INSERT IGNORE INTO {$this->tAudit} ({$colSql}) VALUES ({$valSql})", $bind);
             $inserted += $affected;

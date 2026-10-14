@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles\Db;
 
+use FluxFiles\AuditChain;
+
 use FluxFiles\DiskManager;
 use FluxFiles\MetadataRepositoryInterface;
 
@@ -633,6 +635,8 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
                 'user_agent' => $row['user_agent'],
                 'detail'     => $row['detail'],
                 'created_at' => (int) $row['created_at'],
+                'prev_hash'  => $row['prev_hash'] ?? null,
+                'entry_hash' => $row['entry_hash'] ?? null,
             ];
         }
         return $entries;
@@ -640,23 +644,66 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
 
     public function audit(string $disk, string $action, array $context = []): void
     {
-        try {
-            $stmt = $this->db->pdo()->prepare(
-                'INSERT INTO audit_log (disk, owner, action, file_key, ip, user_agent, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $stmt->execute([
-                $disk,
-                $context['user_id'] ?? null,
-                $action,
-                $context['file_key'] ?? null,
-                $context['ip'] ?? null,
-                $context['user_agent'] ?? null,
-                $context['detail'] ?? null,
-                time(),
-            ]);
-        } catch (\Throwable $e) {
-            // Silent fail — matches StorageMetadataHandler::audit()'s best-effort contract.
+        $ts = time();
+        $values = [
+            $disk,
+            $context['user_id'] ?? null,
+            $action,
+            $context['file_key'] ?? null,
+            $context['ip'] ?? null,
+            $context['user_agent'] ?? null,
+            $context['detail'] ?? null,
+            $ts,
+        ];
+        $insert = 'INSERT INTO audit_log (disk, owner, action, file_key, ip, user_agent, detail, created_at, prev_hash, entry_hash)'
+            . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $key = AuditChain::key();
+        if ($key === null) {
+            try {
+                $this->db->pdo()->prepare($insert)->execute([...$values, null, null]);
+            } catch (\Throwable $e) {
+                // Silent fail — matches StorageMetadataHandler::audit()'s best-effort contract.
+            }
+            return;
         }
+        $entry = [
+            'ts' => $ts, 'action' => $action,
+            'user_id' => $values[1], 'file_key' => $values[3], 'ip' => $values[4],
+            'user_agent' => $values[5], 'detail' => $values[6],
+        ];
+        // Tamper-evident chain: read + advance the per-disk head under a row lock
+        // (BEGIN IMMEDIATE on SQLite), so concurrent writers serialise instead of
+        // forking. The very first write for a disk races on INSERTing the head row
+        // — the loser rolls back and retries once, then sees the row.
+        $pdo = $this->db->pdo();
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $this->db->beginExclusive();
+            try {
+                $forUpdate = $this->db->dialect()->forUpdateSuffix();
+                $sel = $pdo->prepare("SELECT head_hash FROM audit_chain_head WHERE disk = ?{$forUpdate}");
+                $sel->execute([$disk]);
+                $prev = $sel->fetchColumn();
+                $haveHead = $prev !== false;
+                if (!$haveHead) {
+                    // No head row yet (first chained write, or a log migrated in from
+                    // JSON): continue from the newest chained row if there is one.
+                    $last = $pdo->prepare('SELECT entry_hash FROM audit_log WHERE disk = ? AND entry_hash IS NOT NULL ORDER BY id DESC LIMIT 1');
+                    $last->execute([$disk]);
+                    $prev = $last->fetchColumn();
+                }
+                $prev = is_string($prev) ? $prev : '';
+                $hash = AuditChain::hash($key, $prev, $entry);
+                $pdo->prepare($insert)->execute([...$values, $prev, $hash]);
+                $pdo->prepare($haveHead
+                    ? 'UPDATE audit_chain_head SET head_hash = ? WHERE disk = ?'
+                    : 'INSERT INTO audit_chain_head (head_hash, disk) VALUES (?, ?)')->execute([$hash, $disk]);
+                $this->db->commit();
+                return;
+            } catch (\Throwable $e) {
+                $this->db->rollback();
+            }
+        }
+        // Silent fail after the retry — best-effort contract, as above.
     }
 
     /** Always empty: DB mode has no rotation/archive concept (no size cap to rotate against). */
@@ -676,7 +723,7 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
     {
         $sql = $this->db->dialect()->insertIgnore(
             'audit_log',
-            ['disk', 'owner', 'action', 'file_key', 'ip', 'user_agent', 'detail', 'created_at', 'content_hash'],
+            ['disk', 'owner', 'action', 'file_key', 'ip', 'user_agent', 'detail', 'created_at', 'content_hash', 'prev_hash', 'entry_hash'],
             ['disk', 'content_hash']
         );
         $stmt = $this->db->pdo()->prepare($sql);
@@ -696,6 +743,11 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
                 $detail,
                 $entry['created_at'],
                 $entry['content_hash'],
+                // Carried across verbatim so a chain built in audit.jsonl still
+                // verifies once migrated (AuditChain's canonical form is
+                // backend-independent).
+                $entry['prev_hash'] ?? null,
+                $entry['entry_hash'] ?? null,
             ]);
             $inserted += $stmt->rowCount();
         }

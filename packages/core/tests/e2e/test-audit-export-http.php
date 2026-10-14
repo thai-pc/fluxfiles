@@ -201,6 +201,14 @@ try {
         assertEqual('audit-export', $j['error_params']['module'] ?? null);
     });
 
+    test('GET /audit/verify: scoped token → 403 before the module gate; admin, module absent → 501', function () use ($B1, $auditHdr, $adminHdr) {
+        [$st, , $j] = reqJson('GET', "{$B1}/api/fm/audit/verify?disk=local", ['headers' => $auditHdr]);
+        assertEqual(403, $st, 'scoped');
+        [$st, , $j] = reqJson('GET', "{$B1}/api/fm/audit/verify?disk=local", ['headers' => $adminHdr]);
+        assertEqual(501, $st, 'module absent');
+        assertEnvelope($j, 'module_not_installed');
+    });
+
     // Regression: index.php's post-dispatch audit-logging block used to log the raw,
     // tenant-RELATIVE request path (or the equally-unscoped $data['key'] fallback) as
     // file_key. AuditLogStorage::list()/exportAll() scope entries via
@@ -252,6 +260,12 @@ try {
             assertEnvelope($j, 'license_required');
         });
 
+        test('GET /audit/verify → 402 license_required', function () use ($B2, $adminHdr) {
+            [$st, , $j] = reqJson('GET', "{$B2}/api/fm/audit/verify?disk=local", ['headers' => $adminHdr]);
+            assertEqual(402, $st);
+            assertEnvelope($j, 'license_required');
+        });
+
         stop($srv2);
 
         // ════════════════════════════════════════════════════════════════════
@@ -287,6 +301,20 @@ try {
                 'user_id' => 'tenant-a', 'file_key' => "{$PREFIX}/a/archived-old.txt",
             ]]);
             file_put_contents("{$uploadRoot}/_fluxfiles/audit/archive/audit-seed-e2e.jsonl", $archiveLine . "\n");
+
+            test('GET /audit/verify (licensed, admin) → a chain report for the disk', function () use ($B) {
+                $admin = fluxfiles_token(['user' => 'verifier', 'perms' => ['read', 'audit'], 'disks' => ['local'], 'prefix' => '', 'ttl' => 600,
+                    'claims' => ['allow_audit_export' => true]]);
+                [$st, , $j] = reqJson('GET', "{$B}/api/fm/audit/verify?disk=local", ['headers' => ["Authorization: Bearer {$admin}"]]);
+                assertEqual(200, $st);
+                foreach (['ok', 'configured', 'entries', 'chained', 'unchained', 'tampered', 'gaps', 'forks', 'head'] as $k) {
+                    assertTrue(array_key_exists($k, $j['data'] ?? []), "report has {$k}");
+                }
+                // The shared dev/CI audit.jsonl mixes entries written under other
+                // suites' secrets, so `ok` isn't asserted here — tamper detection
+                // itself is covered by tests/unit/test-audit-chain.php.
+                assertTrue($j['data']['configured'] === true && $j['data']['chained'] > 0, 'this run\'s writes are chained');
+            });
 
             test('NDJSON export: tenant-scoped rows only, live + archived merged', function () use ($B, $tenantA, $PREFIX) {
                 $opA = fluxfiles_token(['user' => 'tenant-a', 'perms' => ['read', 'audit'], 'disks' => ['local'], 'prefix' => "{$PREFIX}/a", 'ttl' => 600,

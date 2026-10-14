@@ -292,6 +292,8 @@ class JsonToDbMigrator
                 'detail'       => $context['detail'] ?? null,
                 'created_at'   => (int) $ts,
                 'content_hash' => $hash,
+                'prev_hash'    => is_string($row['prev'] ?? null) ? $row['prev'] : null,
+                'entry_hash'   => is_string($row['hash'] ?? null) ? $row['hash'] : null,
             ];
         }
         return $entries;
