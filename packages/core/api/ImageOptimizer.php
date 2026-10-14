@@ -405,4 +405,33 @@ class ImageOptimizer
 
         return $variants;
     }
+
+    /**
+     * Write a `_thumb.webp` variant for a NON-image file from a rendered poster
+     * raster (see MediaPoster). Same key as an image thumb, so every existing
+     * variant move/copy/delete path already covers it.
+     *
+     * @return array{key:string,width:int,height:int}|null
+     */
+    public function writePosterThumb(Filesystem $fs, string $filePath, string $rasterBytes): ?array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'ffpt_');
+        if ($tmp === false) {
+            return null;
+        }
+        try {
+            file_put_contents($tmp, $rasterBytes);
+            self::assertDecodablePath($tmp);
+            $dir = dirname($filePath);
+            $basename = pathinfo($filePath, PATHINFO_BASENAME);
+            $key = ($dir !== '.' && $dir !== '' ? $dir . '/' : '') . '_variants/' . $basename . '_thumb.webp';
+            $img = $this->manager->scaleDown($this->manager->read($tmp), $this->variants['thumb'] ?? 400);
+            $fs->write($key, (string) $this->manager->encodeWebp($img, 80));
+            return ['key' => $key, 'width' => $img->width(), 'height' => $img->height()];
+        } catch (\Throwable $e) {
+            return null;
+        } finally {
+            @unlink($tmp);
+        }
+    }
 }

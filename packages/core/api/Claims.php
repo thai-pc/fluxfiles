@@ -357,6 +357,11 @@ class Claims
      *            set FALSE to leave clients only the size-enforcing POST policy. */
     public bool $allowPresignPut = true;
 
+    /** @var bool Render a poster thumbnail (page 1 / a frame at 1s) for uploaded
+     *            PDFs and videos when Ghostscript / ffmpeg are installed. Default
+     *            TRUE (a no-op without the tools). See MediaPoster. */
+    public bool $mediaPosters = true;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -764,6 +769,7 @@ class Claims
         $c->auditReads = (bool) ($payload->audit_reads ?? false);
         $c->stripExif = (bool) ($payload->strip_exif ?? false);
         $c->allowPresignPut = isset($payload->allow_presign_put) ? (bool) $payload->allow_presign_put : true;
+        $c->mediaPosters = isset($payload->media_posters) ? (bool) $payload->media_posters : true;
         $c->watermark = self::sanitizeWatermark($payload);
         // A watermark OVERLAY exists solely to withhold the clean original — serving
         // it alongside (allow_download=true) would defeat the watermark entirely,

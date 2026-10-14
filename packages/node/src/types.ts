@@ -228,6 +228,8 @@ export interface BaseTokenOptions {
   stripExif?: boolean;
   /** Allow presigned PUT (size is advisory). Default true; false leaves only the size-enforcing POST policy. */
   allowPresignPut?: boolean;
+  /** Render a poster thumbnail for uploaded PDFs/videos (needs gs/ffmpeg on the server). Default true. */
+  mediaPosters?: boolean;
   /** DLP / PII detection on write (Enterprise) — scans upload, code-editor save, and
    *  each zip-extract entry before the bytes are written. Default false. */
   allowDlpScan?: boolean;

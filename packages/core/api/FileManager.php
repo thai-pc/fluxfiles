@@ -443,6 +443,19 @@ class FileManager
                 $item['variants'] = $this->claims->allowDownload
                     ? $this->getFileVariants($disk, $item['key'])
                     : null;
+                // Poster for a PDF/video (page 1 / a frame). Withheld from
+                // preview-only tokens like the clean variants above — it is an
+                // un-watermarked render of the content.
+                if ($this->claims->allowDownload && MediaPoster::kindFor($item['key']) !== null) {
+                    $pk = $this->variantKey($item['key'], 'thumb');
+                    try {
+                        if ($this->disks->disk($disk)->fileExists($pk)) {
+                            $item['poster'] = $this->fileUrl($disk, $pk);
+                        }
+                    } catch (\Throwable $e) {
+                        // no poster
+                    }
+                }
                 $imgBase = $this->imgBaseUrl($disk, $item['key']);
                 if ($imgBase !== null) {
                     $item['img_base'] = $imgBase;
@@ -695,6 +708,15 @@ class FileManager
                 $result['variants'] = $variantUrls;
             } catch (\Throwable $e) {
                 error_log('FluxFiles: Image optimization failed — ' . $e->getMessage());
+            }
+        } elseif ($this->claims->mediaPosters && MediaPoster::kindFor($name) !== null) {
+            // PDF page 1 / video frame → the same `_thumb.webp` variant an image gets.
+            // Optional tools, best-effort: a missing gs/ffmpeg or a failed render just
+            // leaves the generic icon.
+            $raster = MediaPoster::render($file['tmp_name'], $name);
+            $poster = $raster !== null ? $this->imageOptimizer->writePosterThumb($fs, $scoped, $raster) : null;
+            if ($poster !== null) {
+                $result['poster'] = $this->fileUrl($disk, $poster['key']);
             }
         }
 

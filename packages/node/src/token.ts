@@ -241,6 +241,7 @@ function applyTenantOverrides(
   if (opts.auditReads !== undefined) payload.audit_reads = !!opts.auditReads;
   if (opts.stripExif !== undefined) payload.strip_exif = !!opts.stripExif;
   if (opts.allowPresignPut !== undefined) payload.allow_presign_put = !!opts.allowPresignPut;
+  if (opts.mediaPosters !== undefined) payload.media_posters = !!opts.mediaPosters;
   if (opts.auditRetentionDays && opts.auditRetentionDays > 0) payload.audit_retention_days = Math.trunc(opts.auditRetentionDays);
   // DLP tuning claims travel with allowDlpScan; the server sanitizes/clamps these on decode.
   if (opts.allowDlpScan !== undefined) payload.allow_dlp_scan = !!opts.allowDlpScan;
