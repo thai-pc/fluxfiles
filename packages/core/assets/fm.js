@@ -1538,8 +1538,14 @@ function fluxFilesApp() {
                     };
 
                     let res = null;
-                    if (file.size > 10 * 1024 * 1024 && this.currentDisk !== 'local') {
+                    if (file.size > 10 * 1024 * 1024 && this.currentDisk !== 'local' && this.diskDriver === 's3') {
                         res = await this.chunkUpload(file, this.currentDisk, this.currentPath, onFrac);
+                    } else if (file.size > 8 * 1024 * 1024) {
+                        // Resumable (tus) for local/SFTP: no PHP post_max_size ceiling and a
+                        // dropped connection resumes. null → this server has no tus endpoint
+                        // (e.g. an older core, or a Laravel/WordPress proxy) → plain upload.
+                        res = await this.tusUpload(file, onFrac);
+                        if (res === null) res = await this.uploadOne(file, onFrac);
                     } else {
                         res = await this.uploadOne(file, onFrac);
                     }
@@ -1575,6 +1581,73 @@ function fluxFilesApp() {
                 );
             }
             this.loadFiles();
+        },
+
+        // ── Resumable upload (tus 1.0 core + creation/termination) ─────────────
+        // Sequential PATCH chunks; on a network error, 409 (offset drift) or 5xx it
+        // asks the server where it got to (HEAD) and resumes; a 413 from a proxy's
+        // body-size limit halves the chunk. Returns the finished file (from the
+        // X-FluxFiles-Result header), or null when the server has no tus endpoint.
+        async tusUpload(file, onFrac, _isRetry = false) {
+            const b64 = (str) => btoa(unescape(encodeURIComponent(str)));
+            const hdrs = (extra = {}) => ({ 'Authorization': 'Bearer ' + this.token, 'Tus-Resumable': '1.0.0', ...extra });
+            const fail = async (r) => {
+                let json = null;
+                try { json = await r.json(); } catch (_) { /* tus statuses carry no body */ }
+                let msg = json && json.error_code ? this.t('error.' + json.error_code, json.error_params || {}) : null;
+                if (json && msg === 'error.' + json.error_code) msg = null;
+                const err = new Error(msg || (json && json.error) || ('HTTP ' + r.status));
+                err.code = json && json.error_code;
+                return err;
+            };
+
+            const created = await fetch(this.joinUrl('/api/fm/tus'), {
+                method: 'POST',
+                headers: hdrs({
+                    'Upload-Length': String(file.size),
+                    'Upload-Metadata': 'filename ' + b64(file.name) + ',path ' + b64(this.currentPath || '') + ',disk ' + b64(this.currentDisk),
+                }),
+            });
+            if (created.status === 404 || created.status === 405 || created.status === 501) return null;
+            if (created.status === 401 && !_isRetry && await this._handleTokenExpired()) {
+                return this.tusUpload(file, onFrac, true);
+            }
+            if (created.status !== 201) throw await fail(created);
+            const url = this.joinUrl(created.headers.get('Location'));
+
+            let offset = 0;
+            let chunk = 5 * 1024 * 1024;
+            let retries = 0;
+            while (offset < file.size) {
+                let r = null;
+                try {
+                    r = await fetch(url, {
+                        method: 'PATCH',
+                        headers: hdrs({ 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': String(offset) }),
+                        body: file.slice(offset, offset + chunk),
+                    });
+                } catch (_) {
+                    r = null; // network drop — resync below
+                }
+                if (r && r.status === 204) {
+                    offset = parseInt(r.headers.get('Upload-Offset') || '0', 10);
+                    onFrac(file.size ? offset / file.size : 1);
+                    retries = 0;
+                    if (offset >= file.size) {
+                        const done = r.headers.get('X-FluxFiles-Result');
+                        return done ? JSON.parse(decodeURIComponent(escape(atob(done)))) : {};
+                    }
+                    continue;
+                }
+                if (r && r.status === 413 && chunk > 256 * 1024) { chunk = Math.floor(chunk / 2); continue; }
+                if (r && r.status === 401 && await this._handleTokenExpired()) continue;
+                if (r && r.status >= 400 && r.status < 500 && ![409, 423].includes(r.status)) throw await fail(r);
+                if (++retries > 5) throw (r ? await fail(r) : new Error(this.t('error.generic')));
+                await new Promise((z) => setTimeout(z, 500 * retries));
+                const head = await fetch(url, { method: 'HEAD', headers: hdrs() }).catch(() => null);
+                if (head && head.status === 200) offset = parseInt(head.headers.get('Upload-Offset') || '0', 10);
+            }
+            return {};
         },
 
         // Single-file upload over XHR so we get real byte-level upload progress

@@ -292,6 +292,7 @@ private-local-media requirement.
 | `FLUXFILES_FRAME_ANCESTORS` | — | CSP `frame-ancestors` source list for `/public/` (clickjacking). Falls back to `'self' <FLUXFILES_ALLOWED_ORIGINS>` when unset; **when neither is set no header is sent and any site may frame the UI** — set one of the two in production. `X-Frame-Options` is not sent alongside (it has no multi-origin form). |
 | `FLUXFILES_LOCALE` | `en` | Default UI locale. |
 | `FLUXFILES_RATE_LIMIT_READ` / `_WRITE` | 60 / 10 | Per-user req/min defaults (claims override). |
+| `FLUXFILES_TUS_RATE_LIMIT` | `600` | Resumable-upload (`/api/fm/tus`) PATCH/HEAD requests/min per user — its own bucket, since one large file is hundreds of chunks and the general write limit (10/min) would stall it. Creating an upload still counts against the write bucket. |
 | `FLUXFILES_IMG_RATE_LIMIT` | `120` | `/api/fm/img` requests/min, keyed on the image token's `sub`. Its own bucket because `/img` authenticates on a per-file token, not the main JWT, so it never reaches the read limiter above — and its width/height/quality/format/dpr axes would otherwise let a caller fill a tenant's `_variants/` cache. `0` disables the bucket. |
 | `FLUXFILES_STREAM_RATE_LIMIT` | `300` | `/api/fm/stream` requests/min, keyed on the stream token's `sub`. Higher than `/img` because a seeking `<video>` fires one Range request per seek. `0` disables the bucket. |
 | `FLUXFILES_LOCAL_PRIVATE` | `false` | Serve local media through `/api/fm/stream` (token-gated) instead of static URLs. |

@@ -51,8 +51,10 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
 if (in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: {$origin}");
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Authorization, Content-Type');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, HEAD, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset');
+    // Resumable (tus) uploads read these from a cross-origin response.
+    header('Access-Control-Expose-Headers: Location, Tus-Resumable, Upload-Offset, Upload-Length, Upload-Expires, X-FluxFiles-Result');
     header('Access-Control-Max-Age: 86400');
 }
 
@@ -68,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // all" (the previous behaviour silently skipped the check on an empty allowlist).
 // Requests with no Origin (non-browser API clients) are unaffected: they carry the
 // JWT bearer token and are not a CSRF vector.
-if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'DELETE'], true)) {
+if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
     $reqOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
     if ($reqOrigin !== '') {
         $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
@@ -402,7 +404,15 @@ try {
         $dbConn
     );
     $isWriteAction = in_array($method, ['POST', 'PUT', 'DELETE'], true);
-    $rateLimiter->check($claims->userId, $isWriteAction ? 'write' : 'read');
+    $isTus = $uri === '/api/fm/tus' || str_starts_with($uri, '/api/fm/tus/');
+    if ($isTus && in_array($method, ['PATCH', 'HEAD'], true)) {
+        // One large file = hundreds of PATCH chunks: its own roomy bucket, or the
+        // general write limit (10/min) would stall every big upload.
+        $tusLimit = (int) ($_ENV['FLUXFILES_TUS_RATE_LIMIT'] ?? 600);
+        \FluxFiles\RateLimiterFactory::make($tusLimit, $tusLimit, 60, $dbConn)->check($claims->userId, 'tus');
+    } else {
+        $rateLimiter->check($claims->userId, $isWriteAction ? 'write' : 'read');
+    }
 
     // URL import is an outbound HTTP request from the server — give it its own,
     // tighter bucket (default 10/min) so it can't be abused at the upload rate.
@@ -444,6 +454,45 @@ try {
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
     $quotaManager = new QuotaManager($diskManager);
+
+    // Resumable uploads (tus 1.0) — not a JSON-envelope API: status + headers only.
+    if ($isTus) {
+        $tusHeaders = [];
+        foreach ($_SERVER as $k => $v) {
+            if (str_starts_with($k, 'HTTP_')) {
+                $tusHeaders[strtolower(str_replace('_', '-', substr($k, 5)))] = (string) $v;
+            }
+        }
+        if (isset($_SERVER['CONTENT_TYPE'])) {
+            $tusHeaders['content-type'] = (string) $_SERVER['CONTENT_TYPE'];
+        }
+        $tusBody = fopen('php://input', 'rb');
+        [$tusStatus, $tusOut, $tusDone] = (new \FluxFiles\TusServer($storagePath))->handle(
+            $method,
+            $uri === '/api/fm/tus' ? '' : substr($uri, strlen('/api/fm/tus/')),
+            $tusHeaders,
+            $tusBody,
+            $fm,
+            $claims
+        );
+        header_remove('Content-Type');
+        http_response_code($tusStatus);
+        foreach ($tusOut as $hk => $hv) {
+            header($hk . ': ' . $hv);
+        }
+        if ($tusDone !== null) {
+            // The finished file, for the client (the PATCH itself has no body).
+            header('X-FluxFiles-Result: ' . base64_encode((string) json_encode($tusDone)));
+            $auditLog->log($claims->userId, 'upload', (string) ($tusDone['disk'] ?? 'local'), $claims->scopePath((string) ($tusDone['key'] ?? '')));
+            if ($webhookDispatcher !== null) {
+                if (function_exists('fastcgi_finish_request')) {
+                    fastcgi_finish_request();
+                }
+                $webhookDispatcher('upload', ['disk' => (string) ($tusDone['disk'] ?? 'local'), 'path' => $claims->scopePath((string) ($tusDone['key'] ?? '')), 'name' => (string) ($tusDone['name'] ?? '')]);
+            }
+        }
+        exit;
+    }
 
     // Routing
     $data = routeRequest($method, $uri, $fm, $metaRepo, $diskManager, $claims, $auditLog, $chunker, $quotaManager, $dbConn);

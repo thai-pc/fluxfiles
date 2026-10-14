@@ -129,6 +129,19 @@ Not gated by a per-token claim (there's no token yet) — a server kill-switch (
 | `GET` | `/sso/callback?code=&state=` | — | Verifies `state`, exchanges `code` at the IdP's token endpoint, verifies the `id_token` via JWKS, resolves the identity's groups to a claims set (`FLUXFILES_SSO_CLAIMS_MAP`), mints the real access JWT, and 302s to `/public/index.html#boot=<one-time token>` — a URL **fragment**, never a query string, so the real JWT is never logged or sent to the server. |
 | `POST` | `/sso/exchange` | `{token}` | Trades the one-time boot token (from the `#boot=` fragment) for the real access JWT: `{data: {token, expires_at}, error: null}`. This is the only way the real JWT is ever transmitted. |
 
+## Resumable upload (tus 1.0 — local / SFTP / any disk)
+
+The [tus 1.0.0](https://tus.io/protocols/resumable-upload) core protocol with the `creation` and `termination` extensions — any tus client works (e.g. `tus-js-client`); the built-in UI uses it for files > 8 MB on non-S3 disks. Every request carries `Authorization: Bearer <jwt>` and `Tus-Resumable: 1.0.0`.
+
+| Method | Path | Headers | Description |
+|--------|------|---------|-------------|
+| `POST` | `/tus` | `Upload-Length`, `Upload-Metadata: filename <b64>,path <b64>,disk <b64>` | Create → `201` + `Location: /api/fm/tus/<id>`. The upload rules (write perm, disk, extension/dangerous name, `max_upload`, path scope) are checked **here**, before any byte is staged. `Upload-Defer-Length` is not supported. |
+| `HEAD` | `/tus/<id>` | — | `Upload-Offset` / `Upload-Length` — where to resume. |
+| `PATCH` | `/tus/<id>` | `Upload-Offset`, `Content-Type: application/offset+octet-stream` | Append. Wrong offset → `409` (with the real one); a concurrent PATCH → `423`; bytes beyond `Upload-Length` → `413`. The final chunk runs the file through the **normal upload pipeline** (quota, virus/DLP scan, `strip_exif`, variants, ownership) and returns the result base64-JSON in `X-FluxFiles-Result`. |
+| `DELETE` | `/tus/<id>` | — | Abandon. |
+
+Uploads belong to the user that created them (others get `404`); unfinished ones expire after 24 h (max 20 per user). Partial bytes are staged in the server's storage dir (`<FLUXFILES_STORAGE_PATH>/tus/`) — on a multi-node deployment share that directory or use sticky sessions. PATCH/HEAD use their own rate bucket (`FLUXFILES_TUS_RATE_LIMIT`, 600/min). Core standalone only — the Laravel/WordPress proxies don't route `/tus` (the UI falls back to a plain upload there).
+
 ## Chunk Upload (S3 multipart, files > 10MB)
 
 | Method | Path | Body | Description |
