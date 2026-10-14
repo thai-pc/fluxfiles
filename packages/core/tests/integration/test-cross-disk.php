@@ -48,6 +48,8 @@ function makeCD(array $opts = []): array {
     $fm = new FileManager($dm, $claims, $meta);
     if ($opts['withQuota'] ?? false) { $fm->setQuotaManager(new QuotaManager($dm)); }
     if (isset($opts['versionKeeper'])) { $fm->setVersionKeeper($opts['versionKeeper']); }
+    if (isset($opts['versionPurger'])) { $fm->setVersionPurger($opts['versionPurger']); }
+    if (isset($opts['versionMover'])) { $fm->setVersionMover($opts['versionMover']); }
     return [$fm, $ra, $rb, $meta];
 }
 
@@ -186,6 +188,97 @@ test('writeScopedStream: NEW file (no prior existence) does NOT invoke the versi
     assertEqual(0, count($calls), 'no snapshot for a brand-new file');
 });
 
+// ── Versioning lifecycle hooks: mover on rename/move/restore, purger on trash purge ──
+test('setVersionMover: rename + move (file) hand the old → new scoped key to the mover', function () {
+    $calls = [];
+    $mover = function (string $d, string $from, string $to, $fs) use (&$calls): void { $calls[] = [$d, $from, $to]; };
+    [$fm, , $rb] = makeCD(['versionMover' => $mover]);
+    @mkdir($rb . '/dst', 0777, true);
+    file_put_contents($rb . '/a.txt', 'x');
+    $fm->rename('b', 'a.txt', 'b.txt');
+    $fm->move('b', 'b.txt', 'dst/c.txt');
+    assertEqual([['b', 'a.txt', 'b.txt'], ['b', 'b.txt', 'dst/c.txt']], $calls, 'one call per relocation with the scoped keys');
+});
+
+test('setVersionMover: directory rename/move re-keys every child (variants skipped)', function () {
+    $calls = [];
+    $mover = function (string $d, string $from, string $to, $fs) use (&$calls): void { $calls[] = [$from, $to]; };
+    [$fm, , $rb] = makeCD(['versionMover' => $mover]);
+    @mkdir($rb . '/dir/sub', 0777, true);
+    @mkdir($rb . '/dir/_variants', 0777, true);
+    file_put_contents($rb . '/dir/a.txt', 'x');
+    file_put_contents($rb . '/dir/sub/b.txt', 'y');
+    file_put_contents($rb . '/dir/_variants/a.txt_thumb.webp', 'v');
+    $fm->rename('b', 'dir', 'renamed');
+    sort($calls);
+    assertEqual([['dir/a.txt', 'renamed/a.txt'], ['dir/sub/b.txt', 'renamed/sub/b.txt']], $calls, 'children re-keyed, variant not');
+    $calls = [];
+    $fm->move('b', 'renamed', 'moved');
+    sort($calls);
+    assertEqual([['renamed/a.txt', 'moved/a.txt'], ['renamed/sub/b.txt', 'moved/sub/b.txt']], $calls, 'same on move');
+});
+
+test('setVersionMover: trash + restore to the ORIGINAL key never calls the mover; a new path does', function () {
+    $calls = [];
+    $mover = function (string $d, string $from, string $to, $fs) use (&$calls): void { $calls[] = [$from, $to]; };
+    [$fm, , $rb] = makeCD(['versionMover' => $mover]);
+    file_put_contents($rb . '/t.txt', 'x');
+    $r = $fm->trash('b', 't.txt');
+    $fm->restore('b', $r['trash_id']);
+    assertEqual([], $calls, 'history stays keyed by the original path through trash/restore');
+    $r = $fm->trash('b', 't.txt');
+    $fm->restore('b', $r['trash_id'], 'elsewhere.txt');
+    assertEqual([['t.txt', 'elsewhere.txt']], $calls, 'restore to a new path re-keys');
+});
+
+test('setVersionPurger: purgeTrash / emptyTrash purge by ORIGINAL key (file + every file of a dir)', function () {
+    $calls = [];
+    $purger = function (string $d, string $key, $fs) use (&$calls): void { $calls[] = $key; };
+    [$fm, , $rb] = makeCD(['versionPurger' => $purger]);
+    file_put_contents($rb . '/p.txt', 'x');
+    @mkdir($rb . '/d/sub', 0777, true);
+    @mkdir($rb . '/d/_variants', 0777, true);
+    file_put_contents($rb . '/d/a.txt', 'x');
+    file_put_contents($rb . '/d/sub/b.txt', 'y');
+    file_put_contents($rb . '/d/_variants/a.txt_thumb.webp', 'v');
+
+    $r = $fm->trash('b', 'p.txt');
+    assertEqual([], $calls, 'trash itself is not permanent → no purge');
+    $fm->purgeTrash('b', $r['trash_id']);
+    assertEqual(['p.txt'], $calls, 'purgeTrash purges the original key');
+
+    $calls = [];
+    $fm->trash('b', 'd');
+    $out = $fm->emptyTrash('b');
+    assertEqual(1, $out['purged']);
+    sort($calls);
+    assertEqual(['d/a.txt', 'd/sub/b.txt'], $calls, 'emptyTrash purges each file of the trashed dir, not variants');
+});
+
+test('setVersionPurger: /delete of a directory purges every child', function () {
+    $calls = [];
+    $purger = function (string $d, string $key, $fs) use (&$calls): void { $calls[] = $key; };
+    [$fm, , $rb] = makeCD(['versionPurger' => $purger]);
+    @mkdir($rb . '/d/sub', 0777, true);
+    file_put_contents($rb . '/d/a.txt', 'x');
+    file_put_contents($rb . '/d/sub/b.txt', 'y');
+    $fm->delete('b', 'd');
+    sort($calls);
+    assertEqual(['d/a.txt', 'd/sub/b.txt'], $calls);
+    assertTrue(!is_dir($rb . '/d'), 'directory gone');
+});
+
+test('version hooks are best-effort: a throwing mover/purger never fails the operation', function () {
+    $boom = function () { throw new \RuntimeException('boom'); };
+    [$fm, , $rb] = makeCD(['versionMover' => $boom, 'versionPurger' => $boom]);
+    file_put_contents($rb . '/a.txt', 'x');
+    $fm->rename('b', 'a.txt', 'b.txt');
+    assertTrue(is_file($rb . '/b.txt'), 'rename landed despite mover throwing');
+    $r = $fm->trash('b', 'b.txt');
+    $fm->purgeTrash('b', $r['trash_id']);
+    assertTrue(!is_dir($rb . '/_fluxfiles/trash/' . $r['trash_id']), 'purge landed despite purger throwing');
+});
+
 // ── isReservedSystemPath() — non-throwing counterpart to assertNotSystem() ────
 test('isReservedSystemPath: true for _fluxfiles/ and _variants/ subtree paths', function () {
     [$fm] = makeCD();
@@ -213,6 +306,37 @@ test('isReservedSystemPath: false for a normal user file path', function () {
     assertTrue(!$fm->isReservedSystemPath('photo.jpg'), 'plain file');
     assertTrue(!$fm->isReservedSystemPath('folder/report.pdf'), 'nested plain file');
     assertTrue(!$fm->isReservedSystemPath('folder/meta.json'), 'a plain "meta.json" (not "{name}.meta.json") is fine');
+});
+
+test('attachCopiedFile: owner + metadata + index reach the other disk; owner_only holds there', function () {
+    [$fm, $ra, $rb, $meta] = makeCD(['user' => 'alice', 'ownerOnly' => true]);
+    file_put_contents($ra . '/x.txt', 'DATA');
+    $meta->save('a', 'x.txt', ['uploaded_by' => 'alice', 'title' => 'Report']);
+    file_put_contents($rb . '/x.txt', 'DATA'); // the module's raw write (writeScopedStream)
+    $fm->attachCopiedFile('a', 'x.txt', 'b', 'x.txt');
+    $dst = $meta->get('b', 'x.txt');
+    assertEqual('alice', $dst['uploaded_by'] ?? null, 'owner copied to disk b');
+    assertEqual('Report', $dst['title'] ?? null, 'title copied to disk b');
+
+    $dm = new DiskManager([
+        'a' => ['driver' => 'local', 'root' => $ra, 'url' => '/a'],
+        'b' => ['driver' => 'local', 'root' => $rb, 'url' => '/b'],
+    ]);
+    $bob = new Claims('bob', ['read', 'write', 'delete'], ['a', 'b'], '', 50, null, 0);
+    $bob->ownerOnly = true;
+    $threw = null;
+    try { (new FileManager($dm, $bob, new StorageMetadataHandler($dm)))->delete('b', 'x.txt'); }
+    catch (ApiException $e) { $threw = $e->getErrorCode(); }
+    assertEqual('owner_only', $threw, 'another owner_only user cannot delete the backup copy');
+    assertTrue(is_file($rb . '/x.txt'), 'backup copy still there');
+});
+
+test('attachCopiedFile: same disk + key is a no-op', function () {
+    [$fm, $ra, , $meta] = makeCD();
+    file_put_contents($ra . '/y.txt', 'Y');
+    $meta->save('a', 'y.txt', ['uploaded_by' => 'u', 'title' => 'T']);
+    $fm->attachCopiedFile('a', 'y.txt', 'a', 'y.txt');
+    assertEqual('T', $meta->get('a', 'y.txt')['title'] ?? null, 'metadata untouched');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

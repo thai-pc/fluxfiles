@@ -55,6 +55,14 @@ class FileManager
      *            actually permanent. Called from delete() for the single-file case. */
     private $versionPurger = null;
 
+    /** @var callable|null Relocate the version history of a file whose key changes,
+     *            for the paid Versioning module. `fn(string $disk, string $fromScopedKey,
+     *            string $toScopedKey, $fs): void`. Set ONLY when the module is installed +
+     *            licensed. Versions are stored under a hash of the scoped key, so without
+     *            this a rename/move orphans the history under the OLD key forever — never
+     *            listed, never purged. Called from rename() / move() / restore(). */
+    private $versionMover = null;
+
     /** @var callable|null Virus scan of a locally-staged file, for the paid Virus module:
      *            `fn(string $localPath): array{clean:bool, threat:?string}`. Set ONLY when
      *            the `allow_virus_scan` claim is on — and the wiring layer resolves the
@@ -126,6 +134,18 @@ class FileManager
     public function setVersionPurger(callable $fn): void
     {
         $this->versionPurger = $fn;
+    }
+
+    /**
+     * Wire the version mover (paid Versioning module). The callback relocates the
+     * version history of a file whose scoped key changes (rename / move / restore
+     * to a new path): `fn(string $disk, string $fromScopedKey, string $toScopedKey, $fs): void`.
+     * Set only when the module is installed + licensed, so the free core has nothing
+     * to relocate.
+     */
+    public function setVersionMover(callable $fn): void
+    {
+        $this->versionMover = $fn;
     }
 
     /**
@@ -248,6 +268,99 @@ class FileManager
             ($this->versionPurger)($disk, $scopedKey, $fs);
         } catch (\Throwable $e) {
             error_log('FluxFiles: version purge failed — ' . $e->getMessage());
+        }
+    }
+
+    /** Relocate version history from $fromKey to $toKey on rename/move (no-op if no mover). */
+    private function moveVersions(string $disk, string $fromKey, string $toKey, $fs): void
+    {
+        if ($this->versionMover === null || $fromKey === $toKey) {
+            return;
+        }
+        try {
+            ($this->versionMover)($disk, $fromKey, $toKey, $fs);
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: version move failed — ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Relocate the version history of every file inside a directory that has
+     * ALREADY been moved from $fromDir to $toDir. Walks the destination (the
+     * subtree now lives there) and maps each file back to its old key, so the
+     * walk costs nothing unless a mover is wired. Variant files have no history.
+     */
+    private function moveVersionsDir(string $disk, string $fromDir, string $toDir, $fs): void
+    {
+        if ($this->versionMover === null) {
+            return;
+        }
+        $fromDir = rtrim($fromDir, '/');
+        $toDir   = rtrim($toDir, '/');
+        try {
+            foreach ($fs->listContents($toDir, true) as $item) {
+                if (!$item->isFile()) {
+                    continue;
+                }
+                $rel = substr($item->path(), strlen($toDir) + 1);
+                if ($rel === '' || $rel === false || strpos($rel, '_variants/') !== false) {
+                    continue;
+                }
+                $this->moveVersions($disk, $fromDir . '/' . $rel, $toDir . '/' . $rel, $fs);
+            }
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: version move (directory) failed — ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Purge the version history of every file inside a directory that is ABOUT
+     * to be permanently deleted (walks it while it still exists). No-op unless a
+     * purger is wired, so the free core pays for no extra listing.
+     */
+    private function purgeVersionsDir(string $disk, string $dir, $fs): void
+    {
+        if ($this->versionPurger === null) {
+            return;
+        }
+        try {
+            foreach ($fs->listContents(rtrim($dir, '/'), true) as $item) {
+                if ($item->isFile() && strpos($item->path(), '_variants/') === false) {
+                    $this->purgeVersions($disk, $item->path(), $fs);
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: version purge (directory) failed — ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Purge the version history behind a trash entry being permanently deleted.
+     * Versions are keyed by the ORIGINAL key (trash() never relocates them — the
+     * payload moves to `_fluxfiles/trash/<id>/…` but the history stays under
+     * dir(original_key), which is exactly why restore() to the original key keeps
+     * the association intact). A trashed directory's manifest lists every file as
+     * `files[].rel` under original_key, so the per-file keys are derivable here.
+     */
+    private function purgeTrashedVersions(string $disk, array $entry, $fs): void
+    {
+        if ($this->versionPurger === null) {
+            return;
+        }
+        $origin = (string) ($entry['original_key'] ?? '');
+        if ($origin === '') {
+            return;
+        }
+        if (empty($entry['is_dir'])) {
+            $this->purgeVersions($disk, $origin, $fs);
+            return;
+        }
+        foreach (($entry['files'] ?? []) as $f) {
+            $rel = $this->safeRel((string) ($f['rel'] ?? '')); // strip any traversal
+            if ($rel === '' || strpos($rel, '_variants/') !== false) {
+                continue;
+            }
+            $this->purgeVersions($disk, rtrim($origin, '/') . '/' . $rel, $fs);
         }
     }
 
@@ -782,6 +895,7 @@ class FileManager
         try {
             if ($isDir) {
                 $this->deleteVariantsDir($disk, $scoped);
+                $this->purgeVersionsDir($disk, $scoped, $fs); // walk BEFORE the tree is gone
                 $fs->deleteDirectory($scoped);
                 $this->meta->deleteChildren($disk, $scoped);
                 $this->meta->deleteDirPrefix($disk, $scoped);
@@ -996,6 +1110,10 @@ class FileManager
         if (!empty($entry['meta'])) {
             $this->meta->save($disk, $target, $entry['meta']);
         }
+        // Version history stayed under the ORIGINAL key while the file sat in the
+        // trash (trash() never relocates it), so a restore to the original key
+        // needs nothing — only a restore to a new path has to re-key it.
+        $this->moveVersions($disk, (string) ($entry['original_key'] ?? $target), $target, $fs);
         $this->meta->trackParents($disk, $target);
 
         try { $fs->deleteDirectory($trashDir); } catch (\Throwable $e) { /* best effort */ }
@@ -1059,6 +1177,12 @@ class FileManager
             }
         }
         $this->meta->trackDir($disk, $target);
+        // Same as the file case: history is keyed by the original path, so only a
+        // restore to a NEW path has to re-key each child's versions.
+        $origin = rtrim((string) ($entry['original_key'] ?? $target), '/');
+        if ($origin !== $target) {
+            $this->moveVersionsDir($disk, $origin, $target, $fs);
+        }
 
         try { $fs->deleteDirectory($trashDir); } catch (\Throwable $e) { /* best effort */ }
         $this->meta->removeTrash($disk, $id);
@@ -1107,6 +1231,10 @@ class FileManager
         $this->assertNoActiveHold($disk, (string) ($entry['original_key'] ?? ''));
 
         $fs = $this->disks->disk($disk);
+        // Permanent delete → the version history (Versioning module) goes too,
+        // same as `/delete`; otherwise "trash then purge" leaves the old bytes
+        // restorable under `_fluxfiles/versions/` (erasure + storage leak).
+        $this->purgeTrashedVersions($disk, $entry, $fs);
         try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $e) { /* best effort */ }
         $this->meta->removeTrash($disk, $id);
 
@@ -1134,6 +1262,7 @@ class FileManager
                 $held++;
                 continue;
             }
+            $this->purgeTrashedVersions($disk, $e, $fs); // permanent → history goes too
             try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $ex) { /* best effort */ }
             $this->meta->removeTrash($disk, $id);
             $n++;
@@ -1256,12 +1385,16 @@ class FileManager
             // Move metadata for children
             $this->meta->renameChildren($disk, $scoped, $newPath);
             $this->meta->renameDirPrefix($disk, $scoped, $newPath);
+            // Version history is keyed by scoped path — re-key every child's.
+            $this->moveVersionsDir($disk, $scoped, $newPath, $fs);
         } else {
             $fs->move($scoped, $newPath);
             // Move metadata
             $this->moveMetadata($disk, $scoped, $disk, $newPath);
             // Move image variants
             $this->moveVariants($disk, $scoped, $disk, $newPath);
+            // Move version history (Versioning module) with the file
+            $this->moveVersions($disk, $scoped, $newPath, $fs);
 
             $this->meta->trackParents($disk, $newPath);
         }
@@ -1307,9 +1440,11 @@ class FileManager
         if ($isDir) {
             $this->meta->renameChildren($disk, $scopedFrom, $scopedTo);
             $this->meta->renameDirPrefix($disk, $scopedFrom, $scopedTo);
+            $this->moveVersionsDir($disk, $scopedFrom, $scopedTo, $fs);
         } else {
             $this->moveMetadata($disk, $scopedFrom, $disk, $scopedTo);
             $this->moveVariants($disk, $scopedFrom, $disk, $scopedTo);
+            $this->moveVersions($disk, $scopedFrom, $scopedTo, $fs);
             $this->meta->trackParents($disk, $scopedTo);
         }
 
@@ -3156,10 +3291,12 @@ class FileManager
                 // without this an archive carrying `.git/config` (or a whole planted
                 // repo) is the one write path that skips the SFTP git-internal block.
                 $this->assertNotSystem($target, $disk);
+                $overwrite = false;
                 if ($fs->fileExists($target)) {
                     $this->assertOwner($disk, $target); // don't overwrite another user's file
                     if ($collision === 'overwrite') {
                         $this->assertNoActiveHold($disk, $target);
+                        $overwrite = true;
                     }
                     if ($collision === 'reject') {
                         throw new ApiException('A file already exists at the destination', 409, 'name_conflict', ['name' => $rel]);
@@ -3171,7 +3308,7 @@ class FileManager
                 }
 
                 $total += (int) $stat['size'];
-                $plan[] = ['orig' => $name, 'target' => $target, 'size' => (int) $stat['size']];
+                $plan[] = ['orig' => $name, 'target' => $target, 'size' => (int) $stat['size'], 'overwrite' => $overwrite];
                 if (count($plan) > $maxFiles) {
                     throw new ApiException('Archive has too many files', 413, 'zip_too_many', ['max' => $maxFiles]);
                 }
@@ -3265,6 +3402,12 @@ class FileManager
                             @file_put_contents($entryTmp, $res['data']);
                         }
                         unset($raw, $res);
+                    }
+                    // Overwriting an existing file (collision=overwrite) → snapshot the
+                    // current bytes (Versioning module) first, like upload()/putContent()
+                    // do — an overwrite by unzip must be as reversible as any other.
+                    if ($e['overwrite']) {
+                        $this->keepVersion($disk, $e['target'], $fs);
                     }
                     $in = fopen($entryTmp, 'rb');
                     $fs->writeStream($e['target'], $in);
@@ -4028,6 +4171,26 @@ class FileManager
         }
         $this->copyMetadata($disk, $srcScopedPath, $disk, $dstScopedPath);
         $this->meta->trackParents($disk, $dstScopedPath);
+    }
+
+    /**
+     * Cross-disk counterpart to attachDerivedFile() for a module that streamed a
+     * file from $srcDisk to $dstDisk through writeScopedStream() (Backup's sync):
+     * copies the source's metadata (uploaded_by/title/alt/tags…) onto the
+     * destination key and registers it in the DESTINATION disk's search/folder
+     * index — the same tail crossCopy() runs after its own write. Without it the
+     * synced copy has no owner on $dstDisk (assertOwner() → "legacy; allow" →
+     * owner_only bypassed there) and is invisible to search. Variants are NOT
+     * transferred (a backup is bytes + bookkeeping, not a full cross-copy). Both
+     * paths must already be scoped. No-op when src and dst are the same disk+key.
+     */
+    public function attachCopiedFile(string $srcDisk, string $srcScopedPath, string $dstDisk, string $dstScopedPath): void
+    {
+        if ($srcDisk === $dstDisk && $srcScopedPath === $dstScopedPath) {
+            return;
+        }
+        $this->copyMetadata($srcDisk, $srcScopedPath, $dstDisk, $dstScopedPath);
+        $this->meta->trackParents($dstDisk, $dstScopedPath);
     }
 
     /**

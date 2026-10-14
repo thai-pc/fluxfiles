@@ -125,6 +125,15 @@ class FluxFilesController
             $fm->setVersionPurger(static function (string $d, string $key, $fs) use ($versioning, $diskManager) {
                 $versioning->purge($fs, $key, $diskManager, $d);
             });
+            // Re-key version history on rename/move so it follows the file instead
+            // of being orphaned under the old path's hash. method_exists: an older
+            // installed module predates move() — keep/purge still work without it — and
+            // this adapter may run against a core floor that predates setVersionMover().
+            if (method_exists($versioning, 'move') && method_exists($fm, 'setVersionMover')) {
+                $fm->setVersionMover(static function (string $d, string $from, string $to, $fs) use ($versioning, $diskManager) {
+                    $versioning->move($fs, $from, $to, $diskManager, $d);
+                });
+            }
         }
 
         // Virus scan (paid module) — the proxy handles /upload itself, so without this

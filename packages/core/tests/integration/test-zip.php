@@ -340,5 +340,23 @@ test('extract collision: default rename keeps both; overwrite replaces', functio
     assertEqual('NEW', file_get_contents($root2 . '/out/keep.txt'), 'overwritten in place');
 });
 
+test('extract collision=overwrite snapshots the replaced file via the version keeper (new entries do not)', function () {
+    $root = sys_get_temp_dir() . '/ff-ext-' . uniqid();
+    @mkdir($root . '/out', 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $c = new Claims('u', ['read', 'write'], ['local'], '', 50, null, 0);
+    $c->allowExtract = true; $c->uploadCollision = 'overwrite';
+    $fm = new FileManager($dm, $c, new StorageMetadataHandler($dm));
+    $calls = [];
+    $fm->setVersionKeeper(function (string $d, string $key, $fs) use (&$calls): void {
+        $calls[] = [$key, (string) $fs->read($key)]; // bytes still the OLD ones when called
+    });
+    file_put_contents($root . '/out/keep.txt', 'OLD');
+    putZip($root, 'b.zip', ['keep.txt' => 'NEW', 'fresh.txt' => 'F']);
+    $fm->extractZip('local', 'b.zip', 'out');
+    assertEqual('NEW', file_get_contents($root . '/out/keep.txt'), 'overwritten in place');
+    assertEqual([['out/keep.txt', 'OLD']], $calls, 'keeper called once, before the write, only for the overwritten entry');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
