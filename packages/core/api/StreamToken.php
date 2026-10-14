@@ -31,25 +31,31 @@ final class StreamToken
      * @param int    $ttl    Seconds until expiry (clamped to [1, MAX_TTL])
      * @param string $secret FLUXFILES_SECRET
      */
-    public static function mint(string $disk, string $path, string $sub, int $ttl, string $secret): string
+    public static function mint(string $disk, string $path, string $sub, int $ttl, string $secret, bool $auditRead = false): string
     {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
-        return JwtCompat::encode([
+        $payload = [
             't'    => self::TYPE,
             'disk' => $disk,
             'path' => $path,
             'sub'  => $sub,
             'iat'  => $now,
             'exp'  => $now + $ttl,
-        ], $secret);
+        ];
+        // The serving endpoint has no Claims (only this token), so the tenant's
+        // `audit_reads` choice has to travel inside the token it signed.
+        if ($auditRead) {
+            $payload['ar'] = 1;
+        }
+        return JwtCompat::encode($payload, $secret);
     }
 
     /**
      * Verify a stream token and return its scoped {disk, path, sub}.
      * Throws ApiException(403) on any failure (bad signature, expired, wrong type).
      *
-     * @return array{disk:string,path:string,sub:string}
+     * @return array{disk:string,path:string,sub:string,auditRead:bool}
      */
     public static function verify(string $token, string $secret): array
     {
@@ -71,6 +77,11 @@ final class StreamToken
         if ($disk === '' || $path === '') {
             throw new ApiException('Stream token missing scope', 403, 'stream_token_invalid');
         }
-        return ['disk' => $disk, 'path' => $path, 'sub' => (string) ($p->sub ?? '')];
+        return [
+            'disk'      => $disk,
+            'path'      => $path,
+            'sub'       => (string) ($p->sub ?? ''),
+            'auditRead' => !empty($p->ar),
+        ];
     }
 }

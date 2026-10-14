@@ -453,6 +453,11 @@ try {
         $auditAction = resolveAuditAction($uri);
         $raw = file_get_contents('php://input');
         $body = json_decode($raw ?: '{}', true) ?: [];
+        if ($auditAction === 'presign') {
+            // A GET presign hands out a download URL, a PUT one an upload URL —
+            // two very different events for whoever reads the log.
+            $auditAction = strtoupper((string) ($body['method'] ?? '')) === 'PUT' ? 'presign_put' : 'presign_get';
+        }
         $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? $body['src_path'] ?? '';
         // Multipart uploads carry no JSON body, so the key isn't in $body — fall
         // back to the operation result (the uploaded file's key) so the entry
@@ -477,13 +482,7 @@ try {
         // fact, so it goes in as free-form detail instead of leaving the entry blank.
         // Git deploy has no request-body path/key either (path/branch are claims,
         // not request fields) — log what was actually deployed instead.
-        $auditDetail = $auditAction === 'terminal'
-            ? (string) ($body['cmd'] ?? '')
-            : ($auditAction === 'git_deploy'
-                ? $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '')
-                : (in_array($auditAction, ['legal_hold_place', 'legal_hold_release'], true)
-                    ? (string) ($body['reason'] ?? '')
-                    : null));
+        $auditDetail = ff_audit_detail($auditAction, $body, $claims);
         $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey, null, null, $auditDetail);
 
         // Capture the webhook event; it's DISPATCHED AFTER the response is flushed
@@ -494,6 +493,24 @@ try {
                 'path' => (string) $auditKey,
                 'name' => is_array($data) ? (string) ($data['name'] ?? basename((string) $auditKey)) : '',
             ]];
+        }
+    }
+
+    // Opt-in read auditing (`audit_reads`): who opened which file's bytes. Only
+    // the routes that return a file's CONTENT — a listing or a metadata lookup is
+    // not a read of the file. Best-effort: a log failure never fails the read.
+    if (!$isWriteAction && $data !== null && $claims->auditReads) {
+        $readAction = ['/api/fm/content' => 'content_read'][$uri] ?? null;
+        if ($readAction !== null) {
+            try {
+                $auditLog->log(
+                    $claims->userId,
+                    $readAction,
+                    (string) ($_GET['disk'] ?? 'local'),
+                    $claims->scopePath(ff_str_param($_GET, 'path'))
+                );
+            } catch (\Throwable $ignored) {
+            }
         }
     }
 
@@ -579,6 +596,13 @@ try {
         } catch (\Throwable $ignored) {
             // Auditing must never turn a clean 403 into a 500.
         }
+    }
+    // An authenticated request refused for lack of permission/scope is the signal
+    // an access review looks for first (someone probing paths, disks or
+    // capabilities they don't have) — record it. legal_hold_active already has its
+    // own `legal_hold_blocked` entry above.
+    if ($e->getHttpCode() === 403 && $e->getErrorCode() !== 'legal_hold_active' && isset($auditLog, $claims)) {
+        ff_audit_denied($auditLog, $claims, $e, $method, $uri);
     }
     http_response_code($e->getHttpCode());
     $errResp = ['data' => null, 'error' => $e->getMessage()];
@@ -1008,10 +1032,30 @@ function routeRequest(
     // guard/size violation in zipManifest throws before any byte → normal JSON error.
     if ($method === 'POST' && $uri === '/api/fm/zip') {
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $zipDisk = (string) ($body['disk'] ?? 'local');
+        $zipPaths = is_array($body['paths'] ?? null) ? $body['paths'] : [];
         $fm->streamZip(
-            (string) ($body['disk'] ?? 'local'),
-            is_array($body['paths'] ?? null) ? $body['paths'] : [],
-            isset($body['name']) ? (string) $body['name'] : null
+            $zipDisk,
+            $zipPaths,
+            isset($body['name']) ? (string) $body['name'] : null,
+            true,
+            // A bulk download is the classic exfiltration shape, and this route
+            // exits before the generic write audit below ever runs — so record it
+            // here, once every guard has passed and before the first byte is sent.
+            static function (array $manifest) use ($auditLog, $claims, $zipDisk, $zipPaths): void {
+                try {
+                    $auditLog->log(
+                        $claims->userId,
+                        'zip_download',
+                        $zipDisk,
+                        $claims->scopePath((string) ($zipPaths[0] ?? '')),
+                        null,
+                        null,
+                        ff_zip_audit_detail($manifest)
+                    );
+                } catch (\Throwable $ignored) {
+                }
+            }
         );
         exit;
     }
@@ -1430,7 +1474,22 @@ function routeRequest(
 function resolveAuditAction(string $uri): string
 {
     $map = [
+        // Order matters: the FIRST needle contained in the URI wins, so every
+        // longer route must precede its shorter prefix (/share/revoke → /share,
+        // /chunk/presign → /presign, /metadata/import → /metadata).
         '/audit/purge' => 'audit_purge',
+        '/share/revoke'  => 'share_revoke',
+        '/share'         => 'share_create',
+        '/intake/revoke' => 'intake_revoke',
+        '/intake'        => 'intake_create',
+        '/versions/restore' => 'version_restore',
+        '/webhooks/test' => 'webhook_test',
+        '/ai-vision'     => 'ai_vision',
+        '/ocr'           => 'ocr',
+        '/backup'        => 'backup',
+        '/c2pa/sign'     => 'c2pa_sign',
+        '/c2pa'          => 'c2pa_verify',
+        '/metadata/import' => 'metadata_import',
         '/hold/release' => 'legal_hold_release',
         '/hold'       => 'legal_hold_place',
         '/trash/restore' => 'restore',
@@ -1450,6 +1509,8 @@ function resolveAuditAction(string $uri): string
         '/mkdir'      => 'mkdir',
         '/metadata'   => 'metadata_update',
         '/chunk'      => 'chunk_upload',
+        '/presign'    => 'presign',
+        '/zip'        => 'zip_download',
         '/watermark/remove' => 'watermark_remove',
         '/watermark'  => 'watermark',
         '/optimize'   => 'optimize',
@@ -1467,6 +1528,104 @@ function resolveAuditAction(string $uri): string
     }
 
     return 'unknown';
+}
+
+/**
+ * Free-form `detail` for an audit entry — the security-relevant fact for actions
+ * whose path/key alone doesn't say what happened.
+ *
+ * @param array<string,mixed> $body
+ */
+function ff_audit_detail(string $action, array $body, \FluxFiles\Claims $claims): ?string
+{
+    switch ($action) {
+        case 'terminal':
+            // The command itself IS the security-relevant fact.
+            return (string) ($body['cmd'] ?? '');
+        case 'git_deploy':
+            // No request-body path (path/branch are claims) — log what was deployed.
+            return $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '');
+        case 'legal_hold_place':
+        case 'legal_hold_release':
+            return (string) ($body['reason'] ?? '');
+        case 'share_revoke':
+        case 'intake_revoke':
+            // The body carries only the link id — without it the entry is blank.
+            return 'jti=' . (is_scalar($body['jti'] ?? null) ? (string) $body['jti'] : '');
+        case 'version_restore':
+            return 'version=' . (is_scalar($body['version_id'] ?? null) ? (string) $body['version_id'] : '');
+        case 'presign_get':
+        case 'presign_put':
+            return 'ttl=' . (int) ($body['ttl'] ?? 0);
+        default:
+            return null;
+    }
+}
+
+/**
+ * "N files, X bytes: a, b, …" for a zip download, capped so one huge selection
+ * can't blow up a single audit line.
+ *
+ * @param array{entries:array<int,array{key:string,name:string,size:int}>,total:int,count:int} $manifest
+ */
+function ff_zip_audit_detail(array $manifest): string
+{
+    $names = array_map(static fn ($e) => (string) $e['key'], $manifest['entries'] ?? []);
+    $list = implode(', ', array_slice($names, 0, 20)) . (count($names) > 20 ? ', …' : '');
+    $detail = (int) ($manifest['count'] ?? count($names)) . ' files, ' . (int) ($manifest['total'] ?? 0) . ' bytes: ' . $list;
+    return mb_strlen($detail) > 1000 ? mb_substr($detail, 0, 999) . '…' : $detail;
+}
+
+/**
+ * Record an authenticated request that was refused with a 403 (`access_denied`,
+ * detail = the error code + method + route). Best-effort, never throws.
+ *
+ * The entry is written to a disk the token CAN access: the requested disk when
+ * allowed, otherwise the token's first disk (with the refused disk named in the
+ * detail) — a `disk_denied` probe must not cause a write onto that very disk.
+ * The key is the requested path scoped like any other entry; a path that can't
+ * be scoped (the cross-tenant probe itself) is logged normalized but unscoped, so
+ * it lands outside the tenant's own view and only an unscoped admin sees it.
+ */
+function ff_audit_denied(AuditLogStorage $auditLog, \FluxFiles\Claims $claims, ApiException $e, string $method, string $uri): void
+{
+    try {
+        $body = json_decode((string) file_get_contents('php://input') ?: '{}', true);
+        $body = is_array($body) ? $body : [];
+        $src = $body + $_POST + $_GET;
+        $rawKey = '';
+        foreach (['path', 'key', 'from', 'src_path'] as $k) {
+            if (isset($src[$k]) && is_scalar($src[$k]) && (string) $src[$k] !== '') {
+                $rawKey = (string) $src[$k];
+                break;
+            }
+        }
+        $disk = '';
+        foreach (['disk', 'src_disk'] as $k) {
+            if (isset($src[$k]) && is_scalar($src[$k])) {
+                $disk = (string) $src[$k];
+                break;
+            }
+        }
+        $detail = (string) ($e->getErrorCode() ?? 'forbidden') . ' ' . $method . ' ' . $uri;
+        if ($disk === '' || !$claims->hasDisk($disk)) {
+            if ($disk !== '') {
+                $detail .= ' disk=' . $disk;
+            }
+            $disk = $claims->allowedDisks[0] ?? '';
+        }
+        if ($disk === '') {
+            return; // a token with no disk at all has nowhere to log to
+        }
+        try {
+            $key = $rawKey === '' ? '' : $claims->scopePath($rawKey);
+        } catch (ApiException $scopeErr) {
+            $key = $claims->normalizeKey($rawKey);
+        }
+        $auditLog->log($claims->userId, 'access_denied', $disk, $key, null, null, mb_substr($detail, 0, 500));
+    } catch (\Throwable $ignored) {
+        // Auditing must never turn a clean 403 into a 500.
+    }
 }
 
 /** The full decoded JSON body (for routes with optional fields). */
@@ -1796,6 +1955,7 @@ function handleMediaStream(): void
             echo 'Not found';
             return;
         }
+        ff_audit_stream_read($scope, $diskConfigs);
         // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
         $xaccel = $_ENV['FLUXFILES_XACCEL'] ?? '';
         if ($xaccel !== '') {
@@ -1820,6 +1980,7 @@ function handleMediaStream(): void
             echo 'Not found';
             return;
         }
+        ff_audit_stream_read($scope, $diskConfigs, $dm);
         header('Content-Type: ' . $mime);
         $stream = $fs->readStream($path);
         while (!feof($stream)) {
@@ -1831,6 +1992,35 @@ function handleMediaStream(): void
         http_response_code(502);
         header('Content-Type: text/plain; charset=utf-8');
         echo 'Stream failed';
+    }
+}
+
+/**
+ * `audit_reads` for /stream: record a `stream_read` when the token says the
+ * tenant opted in. Only the FIRST request of a playback (no Range, or a Range
+ * starting at byte 0) — every seek of a <video> is its own Range request and
+ * would otherwise write one line per scrub. Best-effort, never blocks the bytes.
+ *
+ * @param array{disk:string,path:string,sub:string,auditRead?:bool} $scope
+ * @param array<string,mixed> $diskConfigs
+ */
+function ff_audit_stream_read(array $scope, array $diskConfigs, ?DiskManager $dm = null): void
+{
+    if (empty($scope['auditRead'])) {
+        return;
+    }
+    $range = trim((string) ($_SERVER['HTTP_RANGE'] ?? ''));
+    if ($range !== '' && !preg_match('/^bytes=0-/', $range)) {
+        return;
+    }
+    try {
+        $dm = $dm ?? new DiskManager($diskConfigs);
+        $repo = ($_ENV['FLUXFILES_STORAGE_BACKEND'] ?? 'json') === 'db'
+            ? new \FluxFiles\Db\DbMetadataHandler(\FluxFiles\Db\Connection::fromEnv(), $dm)
+            : new StorageMetadataHandler($dm);
+        (new AuditLogStorage($repo, [$scope['disk']]))
+            ->log($scope['sub'], 'stream_read', $scope['disk'], $scope['path']);
+    } catch (\Throwable $ignored) {
     }
 }
 

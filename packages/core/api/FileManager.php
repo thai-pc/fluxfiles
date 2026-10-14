@@ -2493,7 +2493,7 @@ class FileManager
     private function gatedLocalUrl(string $disk, string $path): string
     {
         $ttl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
-        $token = StreamToken::mint($disk, $path, $this->claims->userId, $ttl, $this->streamSecret);
+        $token = StreamToken::mint($disk, $path, $this->claims->userId, $ttl, $this->streamSecret, $this->claims->auditReads);
         return $this->apiBasePath . '/stream?token=' . rawurlencode($token);
     }
 
@@ -2696,9 +2696,15 @@ class FileManager
      *
      * @param string[] $paths
      */
-    public function streamZip(string $disk, array $paths, ?string $name = null, bool $sendHeaders = true): void
+    public function streamZip(string $disk, array $paths, ?string $name = null, bool $sendHeaders = true, ?callable $beforeStream = null): void
     {
         $manifest = $this->zipManifest($disk, $paths);
+        // Every guard has passed and nothing is on the wire yet — the one point a
+        // caller can still record the download (audit) before ZipStream takes over
+        // the response and the request ends in an exit.
+        if ($beforeStream !== null) {
+            $beforeStream($manifest);
+        }
         $fs = $this->disks->disk($disk);
 
         $zip = new \ZipStream\ZipStream(

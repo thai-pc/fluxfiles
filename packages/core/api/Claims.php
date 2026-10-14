@@ -340,6 +340,13 @@ class Claims
      *            save storage by refusing byte-for-byte duplicates. */
     public bool $dedupeUploads = false;
 
+    /** @var bool Also audit READS of a file's bytes (`content_read` for the code
+     *            editor's GET /content, `stream_read` for the first request of a
+     *            gated-local/SFTP /stream). Default FALSE: a busy gallery/player
+     *            would otherwise dominate the log. Writes, zip downloads, presigns
+     *            and denied attempts are always audited regardless. */
+    public bool $auditReads = false;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -744,6 +751,7 @@ class Claims
         // unlicensed, unframed server, so an absent claim can't upsell a paying tenant.
         $c->proHints = isset($payload->pro_hints) ? (bool) $payload->pro_hints : true;
         $c->dedupeUploads = (bool) ($payload->dedupe_uploads ?? false);
+        $c->auditReads = (bool) ($payload->audit_reads ?? false);
         $c->watermark = self::sanitizeWatermark($payload);
         // A watermark OVERLAY exists solely to withhold the clean original — serving
         // it alongside (allow_download=true) would defeat the watermark entirely,
