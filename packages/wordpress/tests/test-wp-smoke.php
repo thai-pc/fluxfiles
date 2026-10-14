@@ -1386,6 +1386,12 @@ test('proxy route surface covers every core /api/fm route', function () {
     $intentionallyUnproxied = [
         'sso/login', 'sso/callback', 'sso/exchange',
         'metadata/export', 'metadata/import',
+        // - tus (resumable uploads): stages partial bytes in core's own
+        //   <FLUXFILES_STORAGE_PATH>/tus/ and speaks raw tus (PATCH/HEAD, no JSON
+        //   envelope). The embedded UI falls back to a plain upload when /tus
+        //   404s, so proxy mode loses nothing it had before. A port would need the
+        //   adapter's own staging dir + PATCH body streaming — not done in v1.
+        'tus',
     ];
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
