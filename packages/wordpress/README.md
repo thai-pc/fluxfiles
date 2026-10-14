@@ -108,6 +108,49 @@ enable **Delete from storage** (Settings → FluxFiles, or the `fluxfiles_delete
 filter) to also remove it. The reverse direction (a file deleted in FluxFiles) is handled
 on demand by `wp fluxfiles verify`.
 
+## Who gets a token
+
+The shortcode, block editor, media button and media-library integration only
+mint a token for users holding the REST routes' capability (`upload_files` by
+default — Author and up). The bundle then follows the user's capabilities:
+`manage_options` / `delete_others_posts` (Administrator, Editor) → admin;
+`upload_files` (Author) → editor (read/write, owner-only); anyone else → viewer.
+To let Subscribers browse via `[fluxfiles]`, lower the bar deliberately:
+
+```php
+add_filter('fluxfiles_required_capability', fn () => 'read');
+```
+
+## Storage protection (Apache / nginx)
+
+Files live in `wp-content/fluxfiles/uploads/`, which your web server serves
+directly. On Apache/LiteSpeed the plugin writes `.htaccess` rules there
+automatically (deny `_fluxfiles/` bookkeeping and dotfiles, never execute
+uploads, serve HTML/SVG as inert downloads). **nginx ignores `.htaccess`** — add
+the equivalent yourself:
+
+```nginx
+location ^~ /wp-content/fluxfiles/ {
+    location ^~ /wp-content/fluxfiles/uploads/ {
+        allow all;   # the outer `deny all` is inherited otherwise
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Content-Security-Policy "sandbox" always;
+        location ~* /_fluxfiles/ { deny all; }
+        location ~ /\. { deny all; }
+        location ~* \.(php[0-9]?|pht|phtml?|phar|phps|pgif|shtml?|stm|cgi|pl|py)$ { deny all; }
+        location ~* \.(html?|xhtml|xml|svg)$ {
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Content-Security-Policy "sandbox" always;
+            add_header Content-Disposition "attachment" always;
+        }
+    }
+    deny all;
+}
+```
+
+…or enable **private local storage** in the settings, which stops serving the
+directory statically at all (files stream through the signed REST route).
+
 ## REST API
 
 A proxy is exposed at `/wp-json/fluxfiles/v1/api/fm/*` — `list`, `upload`,

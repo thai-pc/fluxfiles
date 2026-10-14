@@ -58,6 +58,7 @@ class FluxFilesPlugin
         if (!is_dir($storagePath . '/uploads')) {
             wp_mkdir_p($storagePath . '/uploads');
         }
+        self::protectStorage();
 
         // Set default options if not already set
         if (get_option('fluxfiles_secret') === false) {
@@ -102,6 +103,124 @@ class FluxFilesPlugin
     public static function storagePath(): string
     {
         return WP_CONTENT_DIR . '/fluxfiles';
+    }
+
+    /** Bump when the generated rules change, so existing installs get rewritten. */
+    private const PROTECT_VERSION = 1;
+    private const PROTECT_MARKER  = '# FluxFiles storage protection v';
+
+    /**
+     * Write web-server rules into the storage dir, which lives under the publicly
+     * served wp-content/. The standalone app gets these from router.php / the
+     * shipped nginx config; WordPress serves the directory raw, so without them:
+     *
+     *  - `uploads/…/_fluxfiles/` (audit log with IPs, search index, trash.json
+     *    and every tenant's soft-deleted bytes, the pre-watermark originals) was
+     *    downloadable by anyone;
+     *  - an uploaded .html/.svg rendered as active content in the SAME origin as
+     *    wp-admin — a stored-XSS path WordPress core itself closes for Authors;
+     *  - a host that maps `.php8`/`.pht`/… to PHP could execute an upload.
+     *
+     * Apache / LiteSpeed only (`.htaccess`); nginx sites must add the equivalent
+     * rules by hand (see readme.txt), or enable "private local storage".
+     * Idempotent and cheap (one file_exists per call); never overwrites a file
+     * the operator wrote themselves (no marker), only our own older versions.
+     */
+    public static function protectStorage(): void
+    {
+        $root = self::storagePath();
+        $uploads = $root . '/uploads';
+        if (!is_dir($uploads)) {
+            return;
+        }
+        self::writeProtectFile($root . '/.htaccess', self::rootHtaccess());
+        self::writeProtectFile($uploads . '/.htaccess', self::uploadsHtaccess());
+        foreach ([$root, $uploads] as $dir) {
+            if (!file_exists($dir . '/index.php')) {
+                @file_put_contents($dir . '/index.php', "<?php\n// Silence is golden.\n");
+            }
+        }
+    }
+
+    private static function writeProtectFile(string $path, string $body): void
+    {
+        $header = self::PROTECT_MARKER . self::PROTECT_VERSION;
+        if (is_file($path)) {
+            $current = (string) @file_get_contents($path, false, null, 0, 256);
+            if (strpos($current, $header) !== false) {
+                return; // already current
+            }
+            if (strpos($current, self::PROTECT_MARKER) === false) {
+                return; // operator-authored — leave it alone
+            }
+        }
+        @file_put_contents($path, $header . "\n" . $body);
+    }
+
+    /** Storage root: runtime state only — nothing here is public except uploads/. */
+    private static function rootHtaccess(): string
+    {
+        return <<<'HTACCESS'
+# Rate-limit state, demo/ssh runtime files: never web-served.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
+HTACCESS;
+    }
+
+    /** Public user uploads: serve as inert bytes, never as code or active content. */
+    private static function uploadsHtaccess(): string
+    {
+        return <<<'HTACCESS'
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from all
+</IfModule>
+
+# Storage-resident bookkeeping at ANY depth (a path-scoped tenant keeps it at
+# <prefix>/_fluxfiles/), case-insensitively, plus every dotfile.
+RedirectMatch 403 (?i)/_fluxfiles(/|$)
+RedirectMatch 403 /\.
+
+# Never hand an upload to a script handler.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .pht .phtml .phar .cgi .pl .py .shtml
+<FilesMatch "\.(?i:php[0-9]?|pht|phtml?|phar|phps|pgif|shtml?|stm|cgi|pl|py|asp|aspx|jsp)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# HTML-family documents are never rendered (works without mod_headers).
+<FilesMatch "\.(?i:html?|xhtml|shtml|xml)$">
+    ForceType application/octet-stream
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    # Images still display; scripts inside an SVG/HTML opened directly cannot run.
+    Header always set Content-Security-Policy "sandbox"
+    <FilesMatch "\.(?i:html?|xhtml|shtml|xml|svg)$">
+        Header always set Content-Disposition "attachment"
+    </FilesMatch>
+</IfModule>
+HTACCESS;
     }
 
     /**
@@ -343,10 +462,14 @@ class FluxFilesPlugin
      * Map the CURRENT WordPress user's capabilities onto a role preset name,
      * so the minted token can never exceed what they may do on the site.
      *
-     *   manage_options  → admin  (read/write/delete/audit, cross-owner)
-     *   delete_posts    → admin  (an Editor already deletes other people's content)
-     *   upload_files    → editor (read/write, owner_only)
-     *   anything else   → viewer (read, owner_only)
+     *   manage_options       → admin  (read/write/delete/audit, cross-owner)
+     *   delete_others_posts  → admin  (an Editor already deletes other people's content)
+     *   upload_files         → editor (read/write, owner_only)
+     *   anything else        → viewer (read, owner_only)
+     *
+     * NOT `delete_posts`: that is "delete MY OWN posts" and every Contributor and
+     * Author holds it by default, so mapping it to admin handed both roles a
+     * cross-owner read/write/delete + code-edit + chmod token over the whole disk.
      *
      * The presets are still intersected with the site-wide
      * `fluxfiles_default_perms` ceiling by generateToken(): a role can only
@@ -359,7 +482,7 @@ class FluxFilesPlugin
         if (!function_exists('current_user_can')) {
             return null;
         }
-        if (current_user_can('manage_options') || current_user_can('delete_posts')) {
+        if (current_user_can('manage_options') || current_user_can('delete_others_posts')) {
             return 'admin';
         }
         if (current_user_can('upload_files')) {
@@ -798,6 +921,17 @@ class FluxFilesPlugin
         // means exactly what it means in the other three builders; so does the
         // fluxfiles_token_overrides filter below, which runs after this.
         if (!isset($overrides['role']) && !isset($overrides['perms'])) {
+            // Same capability bar as the REST routes (FluxFilesApi::checkAuth). The
+            // shortcode, block editor, media button and media-library integration
+            // all mint through here and embed the result as a Bearer token — which
+            // checkAuth() then accepts WITHOUT re-checking the capability. So the
+            // gate has to live at mint time too, or `[fluxfiles]` on any page hands
+            // a Subscriber a read token over every user's files. Operators who want
+            // that can lower the bar via the `fluxfiles_required_capability` filter.
+            if (function_exists('current_user_can') && class_exists('FluxFilesApi')
+                && !current_user_can(FluxFilesApi::requiredCapability())) {
+                throw new \RuntimeException('The current WordPress user may not use FluxFiles.');
+            }
             $role = self::roleForCapabilities();
             if ($role !== null) {
                 $overrides['role']  = $role;

@@ -30,6 +30,9 @@ class FluxFilesApi
         if (!is_dir($storagePath)) {
             wp_mkdir_p($storagePath);
         }
+        // Existing installs never re-run activate(), so (re)apply the storage
+        // web-server rules here too — this is the path every upload goes through.
+        FluxFilesPlugin::protectStorage();
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
         $this->metaRepo = get_option('fluxfiles_storage_backend', 'json') === 'db'

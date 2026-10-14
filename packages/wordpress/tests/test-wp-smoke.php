@@ -1386,18 +1386,42 @@ test("H-6: the minted token follows the WP user's capabilities, not one site-wid
 
     try {
         // A Subscriber on an open-registration site: no upload_files. Used to get
-        // read+write+delete over an empty prefix.
+        // read+write+delete over an empty prefix, then a read token over every
+        // user's files via [fluxfiles]. Now: no token at all by default…
         $GLOBALS['WP_CAPS'] = ['read' => true];
-        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
-        assertEqual(['read'], (array) $p->perms, 'subscriber gets read only');
-        assertEqual(true, $p->owner_only ?? null, 'subscriber is owner-scoped');
-        assertEqual(false, $p->allow_chmod ?? null, 'subscriber cannot chmod');
+        $threw = false;
+        try { FluxFilesPlugin::tokenForCurrentUser(); } catch (\RuntimeException $e) { $threw = true; }
+        assertTrue($threw, 'subscriber is refused a token at mint time');
 
-        // An Author: upload_files but not delete_posts → editor.
-        $GLOBALS['WP_CAPS'] = ['read' => true, 'upload_files' => true];
+        // …unless the operator deliberately lowers the bar — then viewer.
+        $GLOBALS['WP_FILTERS']['fluxfiles_required_capability'][] = fn () => 'read';
+        try {
+            $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+            assertEqual(['read'], (array) $p->perms, 'subscriber gets read only');
+            assertEqual(true, $p->owner_only ?? null, 'subscriber is owner-scoped');
+            assertEqual(false, $p->allow_chmod ?? null, 'subscriber cannot chmod');
+
+            // A Contributor (delete_posts, no upload_files) with the lowered bar:
+            // delete_posts must NOT promote to admin.
+            $GLOBALS['WP_CAPS'] = ['read' => true, 'edit_posts' => true, 'delete_posts' => true];
+            $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+            assertEqual(['read'], (array) $p->perms, 'contributor is a viewer, not an admin');
+        } finally {
+            unset($GLOBALS['WP_FILTERS']['fluxfiles_required_capability']);
+        }
+
+        // An Author as WordPress really defines one: upload_files AND delete_posts
+        // (own posts) → editor, NOT admin.
+        $GLOBALS['WP_CAPS'] = ['read' => true, 'upload_files' => true, 'delete_posts' => true];
         $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
         assertEqual(['read', 'write'], (array) $p->perms, 'author gets read+write');
         assertEqual(true, $p->owner_only ?? null, 'author is owner-scoped');
+        assertTrue(empty($p->allow_code_edit), 'author gets no code editor');
+
+        // A WP Editor (delete_others_posts) → admin bundle.
+        $GLOBALS['WP_CAPS'] = ['read' => true, 'upload_files' => true, 'delete_posts' => true, 'delete_others_posts' => true];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertEqual(['read', 'write', 'delete'], (array) $p->perms, 'wp editor gets the site ceiling');
 
         // An Administrator → admin bundle.
         $GLOBALS['WP_CAPS'] = ['read' => true, 'upload_files' => true, 'delete_posts' => true, 'manage_options' => true];
@@ -1455,6 +1479,34 @@ test('H-6: the REST permission callbacks require a capability, not just a sessio
         assertTrue(strpos($tail, 'current_user_can(self::requiredCapability())') !== false,
             "{$fn}() checks the required capability");
     }
+});
+
+test('storage protection: .htaccess guards _fluxfiles/, scripts and active content', function () {
+    $root = FluxFilesPlugin::storagePath();
+    @mkdir($root . '/uploads', 0777, true);
+    @unlink($root . '/.htaccess');
+    @unlink($root . '/uploads/.htaccess');
+    FluxFilesPlugin::protectStorage();
+
+    $rootHt = (string) @file_get_contents($root . '/.htaccess');
+    assertTrue(strpos($rootHt, 'Require all denied') !== false, 'storage root denied');
+    $up = (string) @file_get_contents($root . '/uploads/.htaccess');
+    assertTrue(strpos($up, 'Require all granted') !== false, 'uploads re-allowed');
+    assertTrue(strpos($up, 'RedirectMatch 403 (?i)/_fluxfiles(/|$)') !== false, '_fluxfiles at any depth');
+    assertTrue(strpos($up, 'php_flag engine off') !== false, 'php engine off');
+    assertTrue(strpos($up, 'php[0-9]?|pht') !== false, 'php8/pht denied');
+    assertTrue(strpos($up, 'Content-Security-Policy "sandbox"') !== false, 'csp sandbox');
+    assertTrue(strpos($up, 'ForceType application/octet-stream') !== false, 'html never rendered');
+    assertTrue(is_file($root . '/uploads/index.php'), 'no directory listing');
+
+    // Never clobbers an operator-authored file…
+    file_put_contents($root . '/.htaccess', "# mine\n");
+    FluxFilesPlugin::protectStorage();
+    assertEqual("# mine\n", file_get_contents($root . '/.htaccess'), 'operator file kept');
+    // …but does refresh one of our own older versions.
+    file_put_contents($root . '/uploads/.htaccess', "# FluxFiles storage protection v0\nold\n");
+    FluxFilesPlugin::protectStorage();
+    assertTrue(strpos((string) file_get_contents($root . '/uploads/.htaccess'), 'Require all granted') !== false, 'own old version refreshed');
 });
 
 test('M-1: CodeMirror is vendored, not pulled from a CDN into the JWT origin', function () {
