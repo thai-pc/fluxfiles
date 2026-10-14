@@ -170,18 +170,79 @@ final class DemoMode
         return max(1, (int) (self::env('FLUXFILES_DEMO_IP_MINTS', '20')));
     }
 
-    /** Best-effort client IP, preferring the proxy/CDN header when present. */
+    /**
+     * Client IP for the per-IP mint throttle.
+     *
+     * `CF-Connecting-IP` / `X-Forwarded-For` are honoured ONLY when the direct
+     * peer (`REMOTE_ADDR`) is a proxy the operator declared in
+     * `FLUXFILES_DEMO_TRUSTED_PROXIES` (comma-separated IPs/CIDRs, e.g. the
+     * Cloudflare ranges or `127.0.0.1` for a local nginx). Trusting them
+     * unconditionally let any client send a fresh random header per request and
+     * mint unlimited sandboxes — evicting real visitors via the global budget
+     * purge and growing demo_ip.json without bound.
+     */
     public static function clientIp(): string
     {
-        $cf = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '';
-        if ($cf !== '') {
-            return (string) $cf;
+        $peer = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+        if (!self::isTrustedProxy($peer)) {
+            return $peer;
         }
-        $xff = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+        $cf = trim((string) ($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''));
+        if ($cf !== '' && filter_var($cf, FILTER_VALIDATE_IP) !== false) {
+            return $cf;
+        }
+        $xff = (string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '');
         if ($xff !== '') {
-            return trim(explode(',', (string) $xff)[0]);
+            // The right-most hop was appended by our trusted proxy; the left-most is
+            // client-supplied. Walk from the right past any further trusted proxies.
+            $hops = array_reverse(array_map('trim', explode(',', $xff)));
+            foreach ($hops as $hop) {
+                if (filter_var($hop, FILTER_VALIDATE_IP) === false) {
+                    break;
+                }
+                if (!self::isTrustedProxy($hop)) {
+                    return $hop;
+                }
+            }
         }
-        return (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+        return $peer;
+    }
+
+    /** True when $ip falls inside FLUXFILES_DEMO_TRUSTED_PROXIES. */
+    private static function isTrustedProxy(string $ip): bool
+    {
+        $list = array_filter(array_map('trim', explode(',', self::env('FLUXFILES_DEMO_TRUSTED_PROXIES'))));
+        foreach ($list as $cidr) {
+            if (self::ipInCidr($ip, $cidr)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function ipInCidr(string $ip, string $cidr): bool
+    {
+        [$net, $bits] = strpos($cidr, '/') !== false ? explode('/', $cidr, 2) : [$cidr, null];
+        $ipBin = @inet_pton($ip);
+        $netBin = @inet_pton($net);
+        if ($ipBin === false || $netBin === false || strlen($ipBin) !== strlen($netBin)) {
+            return false;
+        }
+        $max = strlen($ipBin) * 8;
+        $bits = $bits === null ? $max : (int) $bits;
+        if ($bits < 0 || $bits > $max) {
+            return false;
+        }
+        $bytes = intdiv($bits, 8);
+        if (substr($ipBin, 0, $bytes) !== substr($netBin, 0, $bytes)) {
+            return false;
+        }
+        $rem = $bits % 8;
+        if ($rem === 0) {
+            return true;
+        }
+        $mask = (0xFF << (8 - $rem)) & 0xFF;
+        return (ord($ipBin[$bytes]) & $mask) === (ord($netBin[$bytes]) & $mask);
     }
 
     /**

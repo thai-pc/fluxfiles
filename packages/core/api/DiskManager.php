@@ -73,6 +73,8 @@ class DiskManager
             $params = ['Bucket' => $cfg['bucket'] ?? '', 'Key' => $key];
             if ($disposition !== null && $disposition !== '') {
                 $params['ResponseContentDisposition'] = $disposition;
+                // Pin the type to the extension too — see FileManager::presignContentType().
+                $params['ResponseContentType'] = FileManager::presignContentType($key);
             }
             $cmd = $client->getCommand('GetObject', $params);
             return (string) $client->createPresignedRequest($cmd, '+' . max(1, $ttl) . ' seconds')->getUri();

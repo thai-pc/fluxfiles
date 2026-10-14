@@ -517,17 +517,23 @@ test('a normal access token still authenticates (the guard is not a blanket deni
 
 // ── 7. Rate-limit bucket keying ────────────────────────────────────────────
 
-test('rate-limit bucket: a real share token buckets by its jti, junk by token hash', function () {
+test('rate-limit bucket: a real share token buckets by its jti, junk by client IP', function () {
     $jti = bin2hex(random_bytes(12));
-    $tok = \FluxFiles\JwtCompat::encode(['jti' => $jti, 'share' => true, 'exp' => time() + 60], str_repeat('k', 40));
-    assertEqual($jti, \ShareRoutes\ff_share_token_jti($tok), 'per-share bucket');
-    // Junk still gets a stable, per-token bucket (never one global bucket that one
-    // visitor could exhaust for everybody).
-    $a = \ShareRoutes\ff_share_token_jti('garbage');
-    $b = \ShareRoutes\ff_share_token_jti('other-garbage');
+    $key = str_repeat('k', 40);
+    $tok = \FluxFiles\JwtCompat::encode(['jti' => $jti, 'share' => true, 'exp' => time() + 60], $key);
+    assertEqual($jti, \ShareRoutes\ff_share_token_jti($tok, $key), 'per-share bucket');
+    // An UNVERIFIED jti is never trusted as a key: same claim, wrong key → IP bucket.
+    assertTrue(\ShareRoutes\ff_share_token_jti($tok, str_repeat('x', 40)) !== $jti, 'forged signature');
+    // Junk gets a per-client-IP bucket: stable, not one global bucket, and — the
+    // point of the change — NOT a new key per junk token (unbounded file growth).
+    $_SERVER['REMOTE_ADDR'] = '203.0.113.7';
+    $a = \ShareRoutes\ff_share_token_jti('garbage', $key);
+    $b = \ShareRoutes\ff_share_token_jti('other-garbage', $key);
     assertEqual(24, strlen($a));
-    assertTrue($a !== $b, 'distinct buckets');
-    assertEqual($a, \ShareRoutes\ff_share_token_jti('garbage'), 'stable');
+    assertEqual($a, $b, 'junk tokens from one client share a bucket');
+    $_SERVER['REMOTE_ADDR'] = '203.0.113.8';
+    assertTrue($a !== \ShareRoutes\ff_share_token_jti('garbage', $key), 'distinct clients, distinct buckets');
+    unset($_SERVER['REMOTE_ADDR']);
 });
 
 test('unlock: rotating REMOTE_ADDR does NOT escape the per-share ceiling', function () {
@@ -538,6 +544,9 @@ test('unlock: rotating REMOTE_ADDR does NOT escape the per-share ceiling', funct
     @mkdir($dir, 0777, true);
     $envKeep = [$_ENV['FLUXFILES_STORAGE_PATH'] ?? null, $_ENV['FLUXFILES_SHARE_UNLOCK_LIMIT'] ?? null, $_ENV['FLUXFILES_SHARE_UNLOCK_TOTAL'] ?? null];
     $addrKeep = $_SERVER['REMOTE_ADDR'] ?? null;
+    $secretKeep = $_ENV['FLUXFILES_SECRET'] ?? null;
+    // Buckets key on the jti only once the signature verifies (ff_share_token_jti).
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $_ENV['FLUXFILES_STORAGE_PATH'] = $dir;
     $_ENV['FLUXFILES_SHARE_UNLOCK_LIMIT'] = '3';    // per share + IP
     $_ENV['FLUXFILES_SHARE_UNLOCK_TOTAL'] = '5';    // per share, whatever the IP
@@ -568,6 +577,7 @@ test('unlock: rotating REMOTE_ADDR does NOT escape the per-share ceiling', funct
         if ($ul === null) { unset($_ENV['FLUXFILES_SHARE_UNLOCK_LIMIT']); } else { $_ENV['FLUXFILES_SHARE_UNLOCK_LIMIT'] = $ul; }
         if ($ut === null) { unset($_ENV['FLUXFILES_SHARE_UNLOCK_TOTAL']); } else { $_ENV['FLUXFILES_SHARE_UNLOCK_TOTAL'] = $ut; }
         if ($addrKeep === null) { unset($_SERVER['REMOTE_ADDR']); } else { $_SERVER['REMOTE_ADDR'] = $addrKeep; }
+        if ($secretKeep === null) { unset($_ENV['FLUXFILES_SECRET']); } else { $_ENV['FLUXFILES_SECRET'] = $secretKeep; }
         rmrf($dir);
     }
 });
@@ -603,7 +613,7 @@ test('unlock: one IP is still capped tighter than the whole share', function () 
 test('rate-limit bucket: a forged jti claim cannot be an arbitrary string', function () {
     // The jti is read from the UNVERIFIED payload, so it must be shape-checked.
     $tok = \FluxFiles\JwtCompat::encode(['jti' => '../../etc/passwd', 'exp' => time() + 60], str_repeat('k', 40));
-    assertEqual(24, strlen(\ShareRoutes\ff_share_token_jti($tok)), 'fell back to a hash bucket');
+    assertEqual(24, strlen(\ShareRoutes\ff_share_token_jti($tok, str_repeat('k', 40))), 'fell back to a hash bucket');
 });
 
 // ── 7. With the paid module wired in (skipped when it isn't checked out) ───
@@ -767,6 +777,9 @@ test('intake upload: rotating REMOTE_ADDR does NOT escape the per-portal ceiling
     @mkdir($dir, 0777, true);
     $envKeep = [$_ENV['FLUXFILES_STORAGE_PATH'] ?? null, $_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'] ?? null, $_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL'] ?? null];
     $addrKeep = $_SERVER['REMOTE_ADDR'] ?? null;
+    $secretKeep = $_ENV['FLUXFILES_SECRET'] ?? null;
+    // Buckets key on the jti only once the signature verifies (ff_share_token_jti).
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
     $_ENV['FLUXFILES_STORAGE_PATH'] = $dir;
     $_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'] = '3';   // per portal + IP
     $_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL'] = '5';   // per portal, whatever the IP
@@ -797,6 +810,7 @@ test('intake upload: rotating REMOTE_ADDR does NOT escape the per-portal ceiling
         if ($ul === null) { unset($_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT']); } else { $_ENV['FLUXFILES_INTAKE_UPLOAD_LIMIT'] = $ul; }
         if ($ut === null) { unset($_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL']); } else { $_ENV['FLUXFILES_INTAKE_UPLOAD_TOTAL'] = $ut; }
         if ($addrKeep === null) { unset($_SERVER['REMOTE_ADDR']); } else { $_SERVER['REMOTE_ADDR'] = $addrKeep; }
+        if ($secretKeep === null) { unset($_ENV['FLUXFILES_SECRET']); } else { $_ENV['FLUXFILES_SECRET'] = $secretKeep; }
         rmrf($dir);
     }
 });

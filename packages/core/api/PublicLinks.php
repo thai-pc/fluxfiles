@@ -552,16 +552,31 @@ function ff_sso_rate_limit(string $kind): void
     $limiter($limit)->check('sso_' . $kind . ':' . $ip, 'read');
 }
 
-/** The share id from a token's unverified payload; a hash of the token otherwise. */
-function ff_share_token_jti(string $token): string
+/**
+ * The rate-limit bucket for a share/intake token: its `jti` when the token's
+ * signature verifies, otherwise a per-client-IP bucket.
+ *
+ * It used to read the jti from the UNVERIFIED payload and fall back to a hash of
+ * the raw token — so every junk token minted a brand-new key in the one shared
+ * rate_limit.json that every request in the deployment locks and rewrites. A
+ * stream of random tokens grew that file without bound inside each window and
+ * slowed every tenant's API. Verifying first (one HMAC) bounds the key space to
+ * real share ids plus client IPs, and still never collapses junk into a single
+ * global bucket one visitor could exhaust for everybody.
+ */
+function ff_share_token_jti(string $token, ?string $secret = null): string
 {
-    $parts = explode('.', $token);
-    if (count($parts) === 3) {
-        $payload = json_decode((string) base64_decode(strtr($parts[1], '-_', '+/')), true);
-        $jti = is_array($payload) ? ($payload['jti'] ?? '') : '';
-        if (is_string($jti) && preg_match('/^[A-Za-z0-9_-]{8,64}$/', $jti)) {
-            return $jti;
+    $secret = $secret ?? (string) ($_ENV['FLUXFILES_SECRET'] ?? '');
+    if ($token !== '' && $secret !== '') {
+        try {
+            $payload = \FluxFiles\JwtCompat::decode($token, $secret);
+            $jti = $payload->jti ?? '';
+            if (is_string($jti) && preg_match('/^[A-Za-z0-9_-]{8,64}$/', $jti)) {
+                return $jti;
+            }
+        } catch (\Throwable $e) {
+            // invalid / expired / wrong key → the per-IP bucket below
         }
     }
-    return substr(hash('sha256', $token), 0, 24);
+    return substr(hash('sha256', 'unverified|' . (string) ($_SERVER['REMOTE_ADDR'] ?? '')), 0, 24);
 }

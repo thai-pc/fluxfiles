@@ -196,11 +196,12 @@ test('N1: the same .git path on a LOCAL disk is NOT blocked by the git-internal 
 test('N1: .gitignore / .gitattributes (sibling files, not a .git/ segment) stay writable on SFTP', function () {
     [$fm] = rpSftpEnv();
     foreach (['.gitignore', '.gitattributes', 'project/.gitignore'] as $p) {
-        // assertCanModifyScopedPath() runs the exact same assertNotSystem($path,
-        // $disk) guard upload()/putContent()/etc. use, with no fs call reached
-        // first (ownerOnly is off here) — so this proves the guard itself lets
-        // the path through, without needing a live SFTP server.
-        $scoped = $fm->assertCanModifyScopedPath('sftp', $p);
+        // validateScopedPath($p, $disk) runs the exact same assertNotSystem($path,
+        // $disk) guard upload()/putContent()/etc. use, with no fs call at all —
+        // so this proves the guard itself lets the path through, without needing
+        // a live SFTP server. (assertCanModifyScopedPath() now also consults the
+        // legal-hold manifest, which reads the disk.)
+        $scoped = $fm->validateScopedPath($p, 'sftp');
         assertTrue($scoped === $p, "{$p} must stay writable, got {$scoped}");
     }
 });

@@ -433,7 +433,18 @@ silently implied away:**
    user-facing docs for the feature, worded as plainly as the git-deploy
    review's "non-atomic deploy onto a live webroot is documented, not
    solved" (§4.8 there).
-2. **In-place content mutation is not blocked in v1.** A legal hold in this
+2. **In-place content mutation — closed in the 2026-10 security pass.** Every
+   overwrite of an EXISTING held file now raises `legal_hold_active`:
+   overwrite/force upload, chunk + presign-PUT onto an existing key,
+   `/content` PUT, `/chmod`, in-place `/watermark` and `/watermark/remove`,
+   `/extract` with `upload_collision=overwrite`, `/optimize` (its source check),
+   metadata save/delete/import, and every module write funnelled through
+   `writeScopedFile()`/`writeScopedStream()`/`assertCanModifyScopedPath()`. A
+   NEW file landing inside a held folder is still allowed (same as move-into).
+   See docs/security/SECURITY-AUDIT-2026-10.md. The original v1 rationale is
+   kept below for history.
+
+   *(v1 text)* **In-place content mutation is not blocked in v1.** A legal hold in this
    design only blocks **removal and relocation** (delete/trash/rename/
    move/cross-move/purge/empty) — it does **not** block overwriting a held
    file's *bytes in place* via `upload_collision=overwrite`, `/api/fm/optimize`
@@ -680,10 +691,8 @@ paid modules.
 1. **Out-of-band storage deletion** (S3/R2 lifecycle rules, direct `rm`,
    console/CLI access, raw DB writes under the `db` backend) — **documented,
    not solved** (§6). FluxFiles enforces only at its own API layer.
-2. **In-place content mutation isn't blocked in v1** (overwrite-upload,
-   `/optimize`, `/watermark`, `/content` PUT, `/chmod`, extract-overwrite) —
-   **documented, not solved** (§6), explicitly recommended as the v2
-   increment.
+2. ~~**In-place content mutation isn't blocked in v1**~~ — **solved**
+   (2026-10 security pass, see §6 item 2).
 3. **`holds.json` has no archival-before-anything, unlike audit's
    archive-before-truncate.** Released entries are kept forever (needed for
    history), and there's no cap on *total* (only *active*) entries. For a

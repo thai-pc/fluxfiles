@@ -206,7 +206,7 @@ final class OptimizeModule
         $destUser = ($dest !== null && trim($dest) !== '')
             ? $dest
             : preg_replace('/\.[^.\/]+$/', '', $path) . '.' . $outExt;
-        $destScoped = $fm->validateUserPath($destUser);
+        $destScoped = $fm->validateUserPath($destUser, $disk);
         $fm->assertCanModifyScopedPath($disk, $destScoped);
 
         $fm->writeScopedFile($disk, $destScoped, $result['data']);

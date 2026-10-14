@@ -595,6 +595,7 @@ class FileManager
         // module) before replacing it.
         if ($fs->fileExists($scoped)) {
             $this->assertOwner($disk, $scoped);
+            $this->assertNoActiveHold($disk, $scoped);
             $this->keepVersion($disk, $scoped, $fs);
         }
 
@@ -1813,6 +1814,11 @@ class FileManager
 
         $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
         $inPlace = ($scopedDst === $scopedSrc);
+        if ($inPlace) {
+            // A burn-in rewrites the held record's bytes — refuse before the
+            // original is snapshotted, not after.
+            $this->assertNoActiveHold($disk, $scopedSrc);
+        }
 
         // Non-destructive burn-in: keep the true original so re-editing never STACKS
         // a second mark and "Remove watermark" can restore it (the model every
@@ -1900,6 +1906,7 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
+        $this->assertNoActiveHold($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
         $backupKey = $this->watermarkBackupKey($scoped);
@@ -2046,6 +2053,7 @@ class FileManager
         }
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertNotHidden($scoped);
 
         $fs = $this->disks->disk($disk);
         if (!$fs->fileExists($scoped)) {
@@ -2082,9 +2090,11 @@ class FileManager
         $this->assertPerm('write');
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped, $disk);
+        $this->assertNotHidden($scoped);
         // Overwriting a file's content is a destructive modify — honour owner_only,
         // like delete/rename/move/crop/watermark do (it was missing here).
         $this->assertOwner($disk, $scoped);
+        $this->assertNoActiveHold($disk, $scoped);
         $this->assertExt(strtolower(pathinfo($scoped, PATHINFO_EXTENSION)));
 
         if (strlen($content) > self::MAX_EDIT_BYTES) {
@@ -2150,6 +2160,7 @@ class FileManager
         $this->assertPerm('read');
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertNotHidden($scoped);
 
         [$conn, $root] = $this->disks->sftpConnection($disk);
         $location = ($root !== '' ? $root . '/' : '') . $scoped;
@@ -2177,7 +2188,9 @@ class FileManager
         }
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped, $disk);
+        $this->assertNotHidden($scoped);
         $this->assertOwner($disk, $scoped);
+        $this->assertNoActiveHold($disk, $scoped);
 
         [$conn, $root] = $this->disks->sftpConnection($disk);
         $location = ($root !== '' ? $root . '/' : '') . $scoped;
@@ -2223,6 +2236,7 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertNotHidden($scoped);
         $config = $this->disks->config($disk);
 
         if (($config['driver'] ?? '') !== 's3') {
@@ -2258,6 +2272,7 @@ class FileManager
             try {
                 if ($fs->fileExists($scoped)) {
                     $this->assertOwner($disk, $scoped);
+                    $this->assertNoActiveHold($disk, $scoped);
                 }
             } catch (ApiException $e) {
                 throw $e;
@@ -2278,6 +2293,7 @@ class FileManager
         // serve it with whatever Content-Type it stored.
         if ($method === 'GET') {
             $params['ResponseContentDisposition'] = $this->presignDisposition($scoped);
+            $params['ResponseContentType'] = self::presignContentType($scoped);
         }
         // NOT signing the declared size into the URL — `ContentLength` cannot be:
         // the AWS SDK's SignatureV4::getHeaderBlacklist() drops `content-length`
@@ -2317,6 +2333,7 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertNotHidden($scoped);
         $fs = $this->disks->disk($disk);
 
         // Each lookup is best-effort: some S3-compatible backends (notably Cloudflare R2)
@@ -2557,6 +2574,30 @@ class FileManager
     }
 
     /**
+     * Copy $in → $out, refusing to write more than $limit bytes. Returns the byte
+     * count, or null when the source held more than $limit (output then partial).
+     *
+     * @param resource $in
+     * @param resource $out
+     */
+    private static function copyCapped($in, $out, int $limit): ?int
+    {
+        $n = 0;
+        while (!feof($in)) {
+            $chunk = fread($in, 65536);
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            $n += strlen($chunk);
+            if ($n > $limit) {
+                return null;
+            }
+            fwrite($out, $chunk);
+        }
+        return $n;
+    }
+
+    /**
      * Expand a selection of files/folders into a flat zip manifest, applying every
      * guard (disk/read-perm/allow_zip/allow_download, path scope, owner_only, the
      * system-path skip) plus a pre-flight size/count check — so an oversized
@@ -2613,6 +2654,7 @@ class FileManager
         foreach ($paths as $p) {
             $scoped = $this->scopedPath($p);
             $this->assertNotSystem($scoped);
+            $this->assertNotHidden($scoped);
 
             if ($fs->directoryExists($scoped)) {
                 $this->assertOwnsTree($disk, $scoped);
@@ -2623,7 +2665,7 @@ class FileManager
                         continue;
                     }
                     $key = $item->path();
-                    if ($this->isSystemKey($key)) {
+                    if ($this->isSystemKey($key) || $this->isHiddenForToken($key)) {
                         continue;
                     }
                     $rel = ($parent !== '' && str_starts_with($key, $parent)) ? substr($key, strlen($parent)) : $key;
@@ -2770,8 +2812,15 @@ class FileManager
                 // Collision with an existing destination file → honour owner_only +
                 // the upload_collision policy (extract no longer clobbers silently).
                 $target = $prefix . $rel;
+                // Per-entry, disk-aware: isSystemKey() above has no `.git` arm, so
+                // without this an archive carrying `.git/config` (or a whole planted
+                // repo) is the one write path that skips the SFTP git-internal block.
+                $this->assertNotSystem($target, $disk);
                 if ($fs->fileExists($target)) {
                     $this->assertOwner($disk, $target); // don't overwrite another user's file
+                    if ($collision === 'overwrite') {
+                        $this->assertNoActiveHold($disk, $target);
+                    }
                     if ($collision === 'reject') {
                         throw new ApiException('A file already exists at the destination', 409, 'name_conflict', ['name' => $rel]);
                     }
@@ -2782,7 +2831,7 @@ class FileManager
                 }
 
                 $total += (int) $stat['size'];
-                $plan[] = ['orig' => $name, 'target' => $target];
+                $plan[] = ['orig' => $name, 'target' => $target, 'size' => (int) $stat['size']];
                 if (count($plan) > $maxFiles) {
                     throw new ApiException('Archive has too many files', 413, 'zip_too_many', ['max' => $maxFiles]);
                 }
@@ -2820,9 +2869,17 @@ class FileManager
                 // metadata/variant pipeline a local path (uniform across disks).
                 $entryTmp = tempnam(sys_get_temp_dir(), 'ffex');
                 $eh = fopen($entryTmp, 'wb');
-                stream_copy_to_stream($stream, $eh);
+                // The bomb caps in pass 1 trust the size the archive DECLARES in its
+                // central directory. Enforce it on the bytes actually inflated, so a
+                // lying header can't fill the temp dir (or storage) past the cap.
+                $copied = self::copyCapped($stream, $eh, $e['size']);
                 fclose($eh);
                 fclose($stream);
+                if ($copied === null) {
+                    @unlink($entryTmp);
+                    throw new ApiException('Archive is too large to extract', 413, 'zip_too_large',
+                        ['max_mb' => (int) ($maxBytes / 1048576), 'entry' => $e['orig'], 'extracted' => $written]);
+                }
                 try {
                     // Virus scan (paid Virus module) per entry, BEFORE it is written.
                     // A threat aborts the whole extract: entries already written were
@@ -3042,6 +3099,7 @@ class FileManager
                 'Bucket'                     => $config['bucket'] ?? '',
                 'Key'                        => $path,
                 'ResponseContentDisposition' => $this->presignDisposition($path),
+                'ResponseContentType'        => self::presignContentType($path),
             ]);
             $request = $client->createPresignedRequest($cmd, "+{$ttl} seconds");
             return (string) $request->getUri();
@@ -3065,6 +3123,21 @@ class FileManager
      * cookies. Nothing sanitizes SVG on the way in (ImageOptimizer leaves it alone
      * by design), so the disposition is the control.
      */
+    /**
+     * Content-Type to sign into a presigned S3/R2 GET URL, derived from the
+     * extension — never from what the object was stored with. The stored
+     * Content-Type is client-controlled: it is not part of a presigned PUT's
+     * signature, and Flysystem sniffs it from the bytes on a string write. So a
+     * `photo.png` PUT with `Content-Type: text/html` would otherwise come back
+     * from the bucket as inline (by extension, above) HTML. Overriding it here
+     * keeps the disposition and the type in agreement.
+     */
+    public static function presignContentType(string $path): string
+    {
+        return (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
+            ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
+    }
+
     private function presignDisposition(string $path): string
     {
         // MIME by extension, never sniffed — an .html that sniffs as text/html must
@@ -3208,6 +3281,34 @@ class FileManager
      * anything nested under it, e.g. `.git/config`, `.git/hooks/post-merge`)
      * is blocked.
      */
+    /**
+     * `show_hidden=false` used to be list()-only cosmetics: a dotfile (`.env`,
+     * `.git/config`, `.htpasswd`) was hidden from the listing yet still readable by
+     * name through /content, /presign, /zip, /meta. Enforce it on direct access too,
+     * so the claim means what operators reasonably read it as. Judged on the path
+     * RELATIVE to the tenant prefix, so a prefix that itself has a dotted segment
+     * never hides the tenant's whole tree.
+     */
+    private function assertNotHidden(string $scopedPath): void
+    {
+        if ($this->isHiddenForToken($scopedPath)) {
+            throw new ApiException('Access denied to path', 403, 'path_denied');
+        }
+    }
+
+    private function isHiddenForToken(string $scopedPath): bool
+    {
+        if ($this->claims->showHidden) {
+            return false;
+        }
+        foreach (explode('/', trim($this->claims->unscopePath($scopedPath), '/')) as $seg) {
+            if ($seg !== '' && $seg[0] === '.') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static function isGitInternalSegment(string $key): bool
     {
         foreach (explode('/', trim($key, '/')) as $seg) {
@@ -3287,10 +3388,21 @@ class FileManager
     /** Extensions that are always blocked regardless of allowedExt. */
     private const DANGEROUS_EXTENSIONS = [
         'php', 'phtml', 'phar', 'php3', 'php4', 'php5', 'php7', 'phps',
+        // Handler-mapped on common Apache/cPanel (EasyApache `.php8`, older
+        // Debian/Ubuntu `ph(p[3457]?|t|tml)`), plus server-side includes.
+        'php8', 'pht', 'phtm', 'phpt', 'pgif', 'shtml', 'shtm', 'stm',
         'cgi', 'pl', 'py', 'rb', 'sh', 'bash', 'bat', 'cmd', 'com',
         'exe', 'dll', 'msi', 'scr', 'vbs', 'wsf', 'jsp', 'jspx',
-        'asp', 'aspx', 'htaccess', 'htpasswd',
+        'asp', 'aspx', 'asa', 'ashx', 'asmx', 'htaccess', 'htpasswd',
     ];
+
+    /**
+     * Whole filenames that reconfigure the web server / PHP for the directory
+     * they land in, regardless of extension: `.user.ini` (PHP-FPM per-dir ini —
+     * `auto_prepend_file` turns any upload into code), `web.config` (IIS
+     * handler mappings). Compared case-insensitively.
+     */
+    private const DANGEROUS_FILENAMES = ['.user.ini', 'web.config', '.htaccess', '.htpasswd'];
 
     private function assertExt(string $ext): void
     {
@@ -3334,6 +3446,12 @@ class FileManager
      */
     private function assertSafeFilename(string $name): void
     {
+        // Trailing dots/spaces are dropped by Windows filesystems, so "x.php " or
+        // "x.php." lands as "x.php" — compare on the name Windows would keep.
+        $name = rtrim($name, ". \t");
+        if (in_array(strtolower($name), self::DANGEROUS_FILENAMES, true)) {
+            throw new ApiException("Dangerous filename: {$name}", 403, 'ext_dangerous');
+        }
         $parts = explode('.', strtolower($name));
         array_shift($parts); // remove the base name
         foreach ($parts as $part) {
@@ -3383,10 +3501,14 @@ class FileManager
         }
     }
 
-    public function validateUserPath(string $path): string
+    /**
+     * $disk is optional for backward compatibility with module callers; pass it
+     * on any WRITE so the SFTP `.git` block in assertNotSystem() applies too.
+     */
+    public function validateUserPath(string $path, string $disk = ''): string
     {
         $scoped = $this->scopedPath($path);
-        $this->assertNotSystem($scoped);
+        $this->assertNotSystem($scoped, $disk);
         return $scoped;
     }
 
@@ -3401,10 +3523,10 @@ class FileManager
      * anything built from this path afterwards. Idempotent on an already
      * scoped/normalized path.
      */
-    public function validateScopedPath(string $scopedPath): string
+    public function validateScopedPath(string $scopedPath, string $disk = ''): string
     {
         $scopedPath = $this->claims->normalizeKey($scopedPath);
-        $this->assertNotSystem($scopedPath);
+        $this->assertNotSystem($scopedPath, $disk);
         return $scopedPath;
     }
 
@@ -3418,7 +3540,30 @@ class FileManager
         $scopedPath = $this->claims->normalizeKey($scopedPath);
         $this->assertNotSystem($scopedPath, $disk);
         $this->assertOwner($disk, $scopedPath);
+        $this->assertNoHoldIfExists($disk, $scopedPath);
         return $scopedPath;
+    }
+
+    /**
+     * Legal hold for an OVERWRITE: only an existing file can be "modified" — a new
+     * file landing inside a held folder is allowed, exactly like move() lets a
+     * file be moved INTO a held subtree.
+     */
+    private function assertNoHoldIfExists(string $disk, string $scopedPath): void
+    {
+        // Hold lookup first: it's one cached manifest/table read and almost always
+        // empty, so the per-path existence probe only runs when a hold overlaps.
+        if ($this->meta->holdBlocking($disk, $scopedPath) === null) {
+            return;
+        }
+        try {
+            $exists = $this->disks->disk($disk)->fileExists($scopedPath);
+        } catch (\Throwable $e) {
+            $exists = true; // can't tell → fail closed on a held path
+        }
+        if ($exists) {
+            $this->assertNoActiveHold($disk, $scopedPath);
+        }
     }
 
     /** Validate multipart writes before S3 completes them; init may choose a free name. */
@@ -3426,7 +3571,7 @@ class FileManager
     {
         $this->assertDisk($disk);
         $this->assertPerm('write');
-        $key = $this->validateScopedPath($key);
+        $key = $this->validateScopedPath($key, $disk);
         $this->validateUploadName(basename($key), $size);
         $fs = $this->disks->disk($disk);
         if ($fs->fileExists($key) && $this->claims->uploadCollision !== 'overwrite') {
@@ -3440,6 +3585,7 @@ class FileManager
         $exists = $fs->fileExists($key);
         if ($exists) {
             $this->assertOwner($disk, $key);
+            $this->assertNoActiveHold($disk, $key);
         }
         if ($fs->directoryExists($key)) {
             throw new ApiException('A folder with this name already exists', 409, 'name_conflict');
@@ -3475,6 +3621,11 @@ class FileManager
      */
     public function writeScopedFile(string $disk, string $scopedPath, string $content): void
     {
+        // Module callers validate with validateUserPath(), historically without a
+        // disk — re-check here, where the disk is known, so a module write can't
+        // reach `_fluxfiles/` or an SFTP repo's `.git/`.
+        $scopedPath = $this->validateScopedPath($scopedPath, $disk);
+        $this->assertNoHoldIfExists($disk, $scopedPath);
         $this->assertExt(strtolower(pathinfo($scopedPath, PATHINFO_EXTENSION)));
         $this->assertSafeFilename(basename($scopedPath));
 
@@ -3535,6 +3686,8 @@ class FileManager
      */
     public function writeScopedStream(string $disk, string $scopedPath, $stream): void
     {
+        $scopedPath = $this->validateScopedPath($scopedPath, $disk); // see writeScopedFile()
+        $this->assertNoHoldIfExists($disk, $scopedPath);
         $this->assertExt(strtolower(pathinfo($scopedPath, PATHINFO_EXTENSION)));
         $this->assertSafeFilename(basename($scopedPath));
 

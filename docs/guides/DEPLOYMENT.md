@@ -47,8 +47,8 @@ server {
     }
 
     # Never expose storage-resident bookkeeping (metadata, audit and trash).
-    # A regex location (checked BEFORE the plain `/storage/uploads/` prefix
-    # below) because a path-scoped token keeps its bookkeeping at
+    # A regex location (it guards every non-`^~` location; the `^~`
+    # /storage/uploads/ block below repeats it as a nested rule) because a path-scoped token keeps its bookkeeping at
     # `<prefix>/_fluxfiles/…`, so the directory is usually NESTED — a
     # `^~ /storage/uploads/_fluxfiles/` prefix rule only covers the unscoped
     # layout. Case-insensitive (`~*`) since on a case-insensitive filesystem
@@ -65,12 +65,19 @@ server {
     # Uploaded files (local disk only).
     # Security: stop MIME-sniffing and neutralize active content (e.g. <script>
     # inside an uploaded SVG/HTML) so user files can't run as same-origin XSS.
-    location /storage/uploads/ {
+    location ^~ /storage/uploads/ {
         alias /var/www/fluxfiles/packages/core/storage/uploads/;
         expires 7d;
         add_header Cache-Control "public";
         add_header X-Content-Type-Options "nosniff" always;
         add_header Content-Security-Policy "sandbox" always;
+        # `^~` above means nginx does NOT consult the server-level regex locations
+        # for anything under here — so the `\.php$` FastCGI rule can never execute
+        # an uploaded file, and the deny rules must be repeated as nested locations.
+        location ~* /_fluxfiles/ { deny all; }
+        location ~ /\. { deny all; }
+        # Belt-and-braces: never hand a script-shaped upload to any handler.
+        location ~* \.(php[0-9]?|pht|phtml?|phar|phps|pgif|shtml?|stm|cgi|pl|py|jsp|aspx?)$ { deny all; }
         # HTML/SVG are never safe to render inline — force download.
         location ~* \.(html?|xhtml|shtml|xml|svg)$ {
             add_header X-Content-Type-Options "nosniff" always;
@@ -124,6 +131,39 @@ RewriteRule (^|/)_fluxfiles/ - [F,L,NC]
 <FilesMatch "^\.env|composer\.(json|lock)">
     Require all denied
 </FilesMatch>
+
+# Everything under storage/ except uploads/ is server runtime state
+# (rate_limit.json, demo_ip.json, ssh-sockets/ with ephemeral BYOB private keys).
+RewriteRule ^storage/(?!uploads/) - [F,L,NC]
+# Dotfiles anywhere (.env, an uploaded .user.ini/.htaccess, .git/…).
+RewriteRule (^|/)\. - [F,L]
+```
+
+And in `storage/uploads/.htaccess` (user content — never execute it, never let
+it render as same-origin active content):
+
+```apache
+# No script handler of any kind for user uploads.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .pht .phtml .phar .cgi .pl .py .shtml
+RemoveType .php .php3 .php4 .php5 .php7 .php8 .pht .phtml .phar
+Options -ExecCGI -Includes -Indexes
+<FilesMatch "\.(?i:php[0-9]?|pht|phtml?|phar|phps|pgif|shtml?|stm|cgi|pl|py)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Content-Security-Policy "sandbox"
+    <FilesMatch "\.(?i:html?|xhtml|shtml|xml|svg)$">
+        Header always set Content-Disposition "attachment"
+    </FilesMatch>
+</IfModule>
 ```
 
 ## Directory Permissions

@@ -56,17 +56,27 @@ class MetadataImporter
             'tags', 'mime', 'size', 'width', 'height', 'file_hash', 'object_uuid',
             'created_at', 'modified_at',
         ];
-        $updateCols = array_values(array_diff($cols, ['disk', 'path', 'path_hash']));
+        // `owner` is deliberately NOT in the update set: it's what assertOwner()
+        // trusts for owner_only, so an import must never reassign or wipe the owner
+        // of a row that already has one — otherwise any write token without
+        // owner_only could null out a co-tenant's ownership and hand the file to
+        // every owner_only user sharing the prefix. A new row still gets the
+        // imported owner (restore into an empty DB), and an existing ownerless row
+        // is filled in by the follow-up UPDATE below.
+        $updateCols = array_values(array_diff($cols, ['disk', 'path', 'path_hash', 'owner']));
         $sql = $this->db->dialect()->upsert('file_metadata', $cols, ['disk', 'path_hash'], $updateCols);
+        $fillOwner = 'UPDATE file_metadata SET owner = ? WHERE disk = ? AND path_hash = ? AND owner IS NULL';
 
         $this->db->beginExclusive();
         try {
             $stmt = $this->db->pdo()->prepare($sql);
+            $fillStmt = $this->db->pdo()->prepare($fillOwner);
             foreach ($entries as $entry) {
                 $path = (string) $entry['path'];
+                $owner = $ownerId ?? ($entry['owner'] ?? null);
                 $stmt->execute([
                     $disk,
-                    $ownerId ?? ($entry['owner'] ?? null),
+                    $owner,
                     $path,
                     $this->pathHash($path),
                     $entry['title'] ?? null,
@@ -82,6 +92,9 @@ class MetadataImporter
                     $entry['created_at'] ?? null,
                     $entry['modified_at'] ?? null,
                 ]);
+                if ($owner !== null && $owner !== '') {
+                    $fillStmt->execute([(string) $owner, $disk, $this->pathHash($path)]);
+                }
             }
             $this->db->commit();
         } catch (\Throwable $e) {

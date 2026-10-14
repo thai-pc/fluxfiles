@@ -482,6 +482,24 @@ test('allHolds() returns every hold on the disk, keyed by id', function () use (
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
 
+test('MetadataImporter never reassigns or wipes an existing owner', function () use ($repo, $disk, $conn) {
+    $repo->save($disk, 'own/victim.txt', ['uploaded_by' => 'victim', 'title' => 'v']);
+    $repo->save($disk, 'own/orphan.txt', ['title' => 'o']);
+    $importer = new \FluxFiles\Db\MetadataImporter($conn);
+    $res = $importer->import($disk, [
+        ['path' => 'own/victim.txt', 'owner' => null, 'title' => 'changed'],     // wipe attempt
+        ['path' => 'own/orphan.txt', 'owner' => 'attacker', 'title' => 'o2'],    // fills a null owner
+        ['path' => 'own/fresh.txt', 'owner' => 'restored', 'title' => 'f'],      // new row keeps owner
+    ], fn () => true, null);
+    assertEqual([], $res['errors'] ?? [], 'no errors');
+    assertEqual('victim', $repo->get($disk, 'own/victim.txt')['uploaded_by'] ?? null, 'owner not wiped');
+    assertEqual('changed', $repo->get($disk, 'own/victim.txt')['title'] ?? null, 'other fields still restored');
+    $res = $importer->import($disk, [['path' => 'own/victim.txt', 'owner' => 'attacker']], fn () => true, null);
+    assertEqual('victim', $repo->get($disk, 'own/victim.txt')['uploaded_by'] ?? null, 'owner not reassigned');
+    assertEqual('attacker', $repo->get($disk, 'own/orphan.txt')['uploaded_by'] ?? null, 'ownerless row filled');
+    assertEqual('restored', $repo->get($disk, 'own/fresh.txt')['uploaded_by'] ?? null, 'new row owner kept');
+});
+
 @unlink($dbFile);
 @unlink($dbFile . '-wal');
 @unlink($dbFile . '-shm');
