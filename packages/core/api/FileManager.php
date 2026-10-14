@@ -3045,6 +3045,16 @@ class FileManager
                             );
                         }
                     }
+                    // Same privacy rule as upload(): an archive of phone photos must not
+                    // be a way around `strip_exif`. Magic-byte detection, lossless.
+                    if ($this->claims->stripExif && (int) @filesize($entryTmp) <= self::STRIP_EXIF_MAX) {
+                        $raw = @file_get_contents($entryTmp);
+                        $res = is_string($raw) ? ExifStripper::strip($raw) : null;
+                        if ($res !== null && $res['removed']) {
+                            @file_put_contents($entryTmp, $res['data']);
+                        }
+                        unset($raw, $res);
+                    }
                     $in = fopen($entryTmp, 'rb');
                     $fs->writeStream($e['target'], $in);
                     if (is_resource($in)) {

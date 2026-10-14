@@ -190,6 +190,19 @@ test('upload without strip_exif keeps the original bytes', function () {
     assertTrue(file_get_contents($root . '/photo.jpg') === $in, 'untouched');
 });
 
+test('extract with strip_exif: images inside a zip are stripped too', function () {
+    [$fm, $root] = exifEnv(true);
+    $z = new \ZipArchive();
+    $z->open($root . '/photos.zip', \ZipArchive::CREATE);
+    $z->addFromString('trip/IMG_1.jpg', jpegWithMetadata(1));
+    $z->addFromString('trip/notes.txt', 'Exif is just a word here');
+    $z->close();
+    $fm->extractZip('local', 'photos.zip');
+    $img = (string) file_get_contents($root . '/photos/trip/IMG_1.jpg');
+    assertTrue($img !== '' && strpos($img, 'GPSLatitude') === false && strpos($img, 'Exif') === false, 'image stripped');
+    assertTrue(file_get_contents($root . '/photos/trip/notes.txt') === 'Exif is just a word here', 'non-image untouched');
+});
+
 test('claim decodes from a JWT payload', function () {
     $c = Claims::fromJwtPayload((object) ['sub' => 'u', 'strip_exif' => true]);
     assertTrue($c->stripExif === true, 'on');
