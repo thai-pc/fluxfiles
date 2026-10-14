@@ -395,6 +395,8 @@
     "aivision_provider_error": "Het verzoek aan de AI Vision-provider is mislukt.",
     "ocr_unavailable": "Er is geen OCR-engine geconfigureerd op deze server.",
     "ocr_too_large": "Dit bestand is te groot voor OCR (max {max}).",
+    "c2pa_too_large": "Dit bestand is te groot voor content credentials (C2PA) (max {max}).",
+    "aivision_too_large": "Dit bestand is te groot voor AI Vision (max {max}).",
     "ocr_failed": "De OCR-scan kon niet worden voltooid.",
     "ocr_timeout": "De OCR-scan is verlopen.",
     "byob_disk_collision": "Deze opslagschijfnaam komt in conflict met een schijf die al op de server is geconfigureerd.",

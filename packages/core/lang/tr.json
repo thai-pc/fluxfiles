@@ -395,6 +395,8 @@
     "aivision_provider_error": "AI Vision sağlayıcısına yapılan istek başarısız oldu.",
     "ocr_unavailable": "Bu sunucuda yapılandırılmış bir OCR motoru yok.",
     "ocr_too_large": "Bu dosya OCR için çok büyük (maks. {max}).",
+    "c2pa_too_large": "Bu dosya içerik kimlik bilgileri (C2PA) için çok büyük (en fazla {max}).",
+    "aivision_too_large": "Bu dosya AI Vision için çok büyük (en fazla {max}).",
     "ocr_failed": "OCR taraması tamamlanamadı.",
     "ocr_timeout": "OCR taraması zaman aşımına uğradı.",
     "byob_disk_collision": "Bu depolama diski adı, sunucuda zaten yapılandırılmış bir diskle çakışıyor.",

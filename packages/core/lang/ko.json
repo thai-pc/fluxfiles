@@ -395,6 +395,8 @@
     "aivision_provider_error": "AI Vision 제공업체 요청이 실패했습니다.",
     "ocr_unavailable": "이 서버에 OCR 엔진이 설정되어 있지 않습니다.",
     "ocr_too_large": "이 파일은 OCR을 수행하기에 너무 큽니다(최대 {max}).",
+    "c2pa_too_large": "이 파일은 콘텐츠 자격 증명(C2PA)에 비해 너무 큽니다 (최대 {max}).",
+    "aivision_too_large": "이 파일은 AI Vision에 비해 너무 큽니다 (최대 {max}).",
     "ocr_failed": "OCR 스캔을 완료하지 못했습니다.",
     "ocr_timeout": "OCR 스캔 시간이 초과되었습니다.",
     "byob_disk_collision": "이 저장소 디스크 이름이 서버에 이미 구성된 디스크와 충돌합니다.",

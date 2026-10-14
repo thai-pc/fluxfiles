@@ -395,6 +395,8 @@
     "aivision_provider_error": "Die Anfrage an den AI-Vision-Anbieter ist fehlgeschlagen.",
     "ocr_unavailable": "Auf diesem Server ist keine OCR-Engine konfiguriert.",
     "ocr_too_large": "Diese Datei ist für OCR zu groß (max. {max}).",
+    "c2pa_too_large": "Diese Datei ist zu groß für Content Credentials (C2PA) (max. {max}).",
+    "aivision_too_large": "Diese Datei ist zu groß für AI Vision (max. {max}).",
     "ocr_failed": "Der OCR-Scan konnte nicht abgeschlossen werden.",
     "ocr_timeout": "Der OCR-Scan hat das Zeitlimit überschritten.",
     "byob_disk_collision": "Dieser Speicher-Laufwerksname kollidiert mit einem bereits auf dem Server konfigurierten Laufwerk.",

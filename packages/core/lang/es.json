@@ -395,6 +395,8 @@
     "aivision_provider_error": "La solicitud al proveedor de AI Vision falló.",
     "ocr_unavailable": "No hay ningún motor de OCR configurado en este servidor.",
     "ocr_too_large": "Este archivo es demasiado grande para OCR (máx. {max}).",
+    "c2pa_too_large": "Este archivo es demasiado grande para credenciales de contenido (C2PA) (máx. {max}).",
+    "aivision_too_large": "Este archivo es demasiado grande para AI Vision (máx. {max}).",
     "ocr_failed": "No se pudo completar el escaneo OCR.",
     "ocr_timeout": "El escaneo OCR agotó el tiempo de espera.",
     "byob_disk_collision": "Este nombre de disco de almacenamiento entra en conflicto con un disco ya configurado en el servidor.",

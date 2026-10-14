@@ -395,6 +395,8 @@
     "aivision_provider_error": "فشل الطلب المرسل إلى مزوّد AI Vision.",
     "ocr_unavailable": "لا يوجد محرك OCR مُهيأ على هذا الخادم.",
     "ocr_too_large": "هذا الملف كبير جدًا على OCR (الحد الأقصى {max}).",
+    "c2pa_too_large": "هذا الملف كبير جدًا لبيانات اعتماد المحتوى (C2PA) (الحد الأقصى {max}).",
+    "aivision_too_large": "هذا الملف كبير جدًا لـ AI Vision (الحد الأقصى {max}).",
     "ocr_failed": "تعذّر إكمال فحص OCR.",
     "ocr_timeout": "انتهت مهلة فحص OCR.",
     "byob_disk_collision": "يتعارض اسم قرص التخزين هذا مع قرص تم تكوينه بالفعل على الخادم.",

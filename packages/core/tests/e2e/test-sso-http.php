@@ -216,7 +216,11 @@ file_put_contents("{$idpDir}/jwks.json", json_encode($jwks));
 // it — the "code" is actually a base64url-JSON payload describing the id_token
 // to mint (claims + which private key + which kid to sign it with), or a magic
 // string to simulate a broken token endpoint. This lets one fixture process
-// cover every id_token scenario without per-scenario variants.
+// cover every id_token scenario without per-scenario variants. A `pkce` key
+// carries the code_challenge the test read off the login redirect: the fixture
+// then behaves like a PKCE-enforcing IdP and refuses the exchange unless the
+// module's code_verifier S256-hashes to it (an IdP has no authorize-request
+// memory here, since the test never actually visits /authorize).
 $idpRouter = "{$idpDir}/router.php";
 file_put_contents($idpRouter, <<<PHP
 <?php
@@ -249,6 +253,16 @@ if (\$uri === '/token' && \$_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(400);
         echo 'bad code';
         return;
+    }
+    if (isset(\$decoded['pkce'])) {
+        \$verifier = (string) (\$body['code_verifier'] ?? '');
+        \$challenge = rtrim(strtr(base64_encode(hash('sha256', \$verifier, true)), '+/', '-_'), '=');
+        if (\$verifier === '' || !hash_equals(\$decoded['pkce'], \$challenge)) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'invalid_grant', 'error_description' => 'PKCE verification failed']);
+            return;
+        }
     }
     \$keyFile = (\$decoded['key'] ?? 'primary') === 'wrong' ? '{$wrongKeyFile}' : '{$primaryKeyFile}';
     \$priv = file_get_contents(\$keyFile);
@@ -424,7 +438,7 @@ try {
             // Now start the fixture IdP.
             [$idpProc, ] = bootIdp($IDP_PORT, "{$idpDir}/router-boot.php");
 
-            /** Perform a login redirect and return [state, nonce, locationUrl]. */
+            /** Perform a login redirect and return [state, nonce, locationUrl, codeChallenge]. */
             $doLogin = function () use ($B, $IDP_BASE) {
                 [$st, $h] = req('GET', "{$B}/api/fm/sso/login?redirect=" . rawurlencode('/public/index.html'));
                 assertEqual(302, $st, 'login redirects');
@@ -434,7 +448,17 @@ try {
                 assertTrue(!empty($q['state']) && !empty($q['nonce']), 'state+nonce present');
                 assertTrue(($q['client_id'] ?? '') === 'test-client', 'client_id passed through');
                 assertTrue(strpos($q['scope'] ?? '', 'openid') !== false, 'openid scope requested');
-                return [$q['state'], $q['nonce'], $loc];
+                assertEqual('S256', $q['code_challenge_method'] ?? null, 'PKCE S256 requested');
+                assertTrue(preg_match('/^[A-Za-z0-9_-]{43}$/', $q['code_challenge'] ?? '') === 1, 'code_challenge present: ' . ($q['code_challenge'] ?? ''));
+                return [$q['state'], $q['nonce'], $loc, $q['code_challenge']];
+            };
+
+            /** The `sub` of the real access JWT a successful callback+exchange produces. */
+            $subOf = function (array $h) use ($B, $SECRET): string {
+                $bootToken = substr(urlFragment($h['location'] ?? ''), strlen('boot='));
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/sso/exchange", ['json' => ['token' => $bootToken]]);
+                assertEqual(200, $st, json_encode($j));
+                return (string) \FluxFiles\JwtCompat::decode($j['data']['token'], $SECRET)->sub;
             };
 
             /** Standard claims for a valid id_token, nonce/exp filled in by the caller. */
@@ -447,9 +471,9 @@ try {
                 ];
             };
 
-            test('happy path: login → callback → exchange yields a working access JWT', function () use ($B, $doLogin, $baseClaims, $PREFIX) {
-                [$state, $nonce] = $doLogin();
-                $code = mkCode(['claims' => $baseClaims($nonce)]);
+            test('happy path: login → callback → exchange yields a working access JWT (through a PKCE-enforcing token endpoint)', function () use ($B, $doLogin, $baseClaims, $PREFIX, $SECRET) {
+                [$state, $nonce, , $challenge] = $doLogin();
+                $code = mkCode(['claims' => $baseClaims($nonce), 'pkce' => $challenge]);
                 [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
                 assertEqual(302, $st, $body);
                 $loc = $h['location'] ?? '';
@@ -470,6 +494,89 @@ try {
                 $jwt = $j2['data']['token'];
                 [$st3, , $j3] = reqJson('GET', "{$B}/api/fm/list?disk=local&path={$PREFIX}", ['headers' => ["Authorization: Bearer {$jwt}"]]);
                 assertEqual(200, $st3, json_encode($j3));
+                // Default identity is the IdP's `sub`, even though the id_token carried an email.
+                assertEqual('user-1', (string) \FluxFiles\JwtCompat::decode($jwt, $SECRET)->sub, 'user id defaults to sub, not email');
+            });
+
+            test('PKCE: the code_verifier sent to the token endpoint is bound to THIS login — a code issued for another challenge is refused (502)', function () use ($B, $doLogin, $baseClaims) {
+                [$state, $nonce] = $doLogin();
+                [, , , $otherChallenge] = $doLogin();
+                $code = mkCode(['claims' => $baseClaims($nonce), 'pkce' => $otherChallenge]);
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                assertEqual(502, $st, $body);
+            });
+
+            test('FLUXFILES_SSO_USER_CLAIM=email: a VERIFIED email becomes the user id', function () use ($B, $doLogin, $baseClaims, $subOf, $envFile, $phase4bEnv) {
+                file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=email\n");
+                try {
+                    [$state, $nonce] = $doLogin();
+                    $claims = $baseClaims($nonce); $claims['email_verified'] = true;
+                    [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                    assertEqual(302, $st, $body);
+                    assertEqual('alice@example.test', $subOf($h));
+                } finally {
+                    file_put_contents($envFile, $phase4bEnv);
+                }
+            });
+
+            // The account-takeover case: an IdP that lets users self-set an address
+            // emits it without email_verified (or with it false). The victim's email
+            // must not become the attacker's FluxFiles identity.
+            test('FLUXFILES_SSO_USER_CLAIM=email: an UNVERIFIED email falls back to sub, never to the email', function () use ($B, $doLogin, $baseClaims, $subOf, $envFile, $phase4bEnv) {
+                file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=email\n");
+                try {
+                    foreach ([null, false, 'false'] as $flag) {
+                        [$state, $nonce] = $doLogin();
+                        $claims = $baseClaims($nonce);
+                        if ($flag !== null) { $claims['email_verified'] = $flag; }
+                        [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                        assertEqual(302, $st, $body);
+                        assertEqual('user-1', $subOf($h), 'email_verified=' . json_encode($flag));
+                    }
+                } finally {
+                    file_put_contents($envFile, $phase4bEnv);
+                }
+            });
+
+            test('FLUXFILES_SSO_USER_CLAIM=email with an unverified email and no sub → 403 (nothing trustworthy to key on)', function () use ($B, $doLogin, $baseClaims, $envFile, $phase4bEnv) {
+                file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=email\n");
+                try {
+                    [$state, $nonce] = $doLogin();
+                    $claims = $baseClaims($nonce); unset($claims['sub']);
+                    [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                    assertEqual(403, $st, $body);
+                } finally {
+                    file_put_contents($envFile, $phase4bEnv);
+                }
+            });
+
+            test('FLUXFILES_SSO_USER_CLAIM=preferred_username is honoured only when explicitly configured', function () use ($B, $doLogin, $baseClaims, $subOf, $envFile, $phase4bEnv) {
+                [$state, $nonce] = $doLogin();
+                $claims = $baseClaims($nonce); $claims['preferred_username'] = 'alice';
+                [, $h] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                assertEqual('user-1', $subOf($h), 'ignored by default');
+
+                file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=preferred_username\n");
+                try {
+                    [$state, $nonce] = $doLogin();
+                    $claims['nonce'] = $nonce;
+                    [, $h] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                    assertEqual('alice', $subOf($h), 'used when configured');
+                } finally {
+                    file_put_contents($envFile, $phase4bEnv);
+                }
+            });
+
+            test('an unknown FLUXFILES_SSO_USER_CLAIM value → 500 sso_misconfigured rather than a silent fallback', function () use ($B, $doLogin, $baseClaims, $envFile, $phase4bEnv) {
+                file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=emial\n");
+                try {
+                    [$state, $nonce] = $doLogin();
+                    [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $baseClaims($nonce)])) . "&state=" . rawurlencode($state));
+                    assertEqual(500, $st, $body);
+                    assertTrue(stripos($body, 'misconfigured') !== false, $body);
+                } finally {
+                    file_put_contents($envFile, $phase4bEnv);
+                }
             });
 
             test('the boot token cannot be reused as a main Authorization: Bearer token', function () use ($B, $doLogin, $baseClaims) {
@@ -619,9 +726,9 @@ try {
                 assertEqual(403, $st, $body);
             });
 
-            test('callback rejects an id_token with no usable subject (no email/preferred_username/sub)', function () use ($B, $doLogin, $IDP_BASE) {
+            test('callback rejects an id_token with no sub (default identity claim) — an email alone is not enough', function () use ($B, $doLogin, $IDP_BASE) {
                 [$state, $nonce] = $doLogin();
-                $claims = ['iss' => $IDP_BASE, 'aud' => 'test-client', 'nonce' => $nonce, 'iat' => time(), 'exp' => time() + 300, 'groups' => ['engineers']];
+                $claims = ['iss' => $IDP_BASE, 'aud' => 'test-client', 'nonce' => $nonce, 'iat' => time(), 'exp' => time() + 300, 'groups' => ['engineers'], 'email' => 'alice@example.test', 'email_verified' => true];
                 $code = mkCode(['claims' => $claims]);
                 [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
                 assertEqual(403, $st, $body);

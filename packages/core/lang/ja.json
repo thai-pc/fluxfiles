@@ -395,6 +395,8 @@
     "aivision_provider_error": "AI Visionプロバイダーへのリクエストが失敗しました。",
     "ocr_unavailable": "このサーバーにはOCRエンジンが設定されていません。",
     "ocr_too_large": "このファイルはOCRには大きすぎます（最大{max}）。",
+    "c2pa_too_large": "このファイルはコンテンツ認証情報 (C2PA) には大きすぎます (最大 {max})。",
+    "aivision_too_large": "このファイルは AI Vision には大きすぎます (最大 {max})。",
     "ocr_failed": "OCRスキャンを完了できませんでした。",
     "ocr_timeout": "OCRスキャンがタイムアウトしました。",
     "byob_disk_collision": "このストレージディスク名は、サーバーに既に設定されているディスクと競合しています。",

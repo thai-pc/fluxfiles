@@ -395,6 +395,8 @@
     "aivision_provider_error": "A solicitação ao provedor de AI Vision falhou.",
     "ocr_unavailable": "Nenhum mecanismo de OCR está configurado neste servidor.",
     "ocr_too_large": "Este arquivo é grande demais para OCR (máx. {max}).",
+    "c2pa_too_large": "Este arquivo é grande demais para credenciais de conteúdo (C2PA) (máx. {max}).",
+    "aivision_too_large": "Este arquivo é grande demais para o AI Vision (máx. {max}).",
     "ocr_failed": "Não foi possível concluir a digitalização OCR.",
     "ocr_timeout": "A digitalização OCR expirou.",
     "byob_disk_collision": "Este nome de disco de armazenamento entra em conflito com um disco já configurado no servidor.",

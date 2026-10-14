@@ -395,6 +395,8 @@
     "aivision_provider_error": "Yêu cầu tới nhà cung cấp AI Vision không thành công.",
     "ocr_unavailable": "Máy chủ này chưa cấu hình công cụ OCR.",
     "ocr_too_large": "Tệp này quá lớn để nhận dạng ký tự OCR (tối đa {max}).",
+    "c2pa_too_large": "Tệp này quá lớn để xử lý thông tin xác thực nội dung C2PA (tối đa {max}).",
+    "aivision_too_large": "Tệp này quá lớn để xử lý bằng AI Vision (tối đa {max}).",
     "ocr_failed": "Không thể hoàn tất việc quét OCR.",
     "ocr_timeout": "Quá trình quét OCR đã hết thời gian chờ.",
     "byob_disk_collision": "Tên ổ đĩa lưu trữ này trùng với một ổ đĩa đã được cấu hình sẵn trên máy chủ.",
