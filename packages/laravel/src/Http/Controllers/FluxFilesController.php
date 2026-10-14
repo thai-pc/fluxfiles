@@ -843,9 +843,11 @@ class FluxFilesController
             if (!$claims->hasPerm('read')) {
                 throw new ApiException('Permission denied: read', 403);
             }
-            if (!$claims->isPathInScope($key)) {
-                throw new ApiException('Access denied to path', 403);
-            }
+            // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
+            // internal detail), so a prefixed tenant used to get 403 path_denied on every
+            // metadata read/save/delete. scopePath() prefixes it — idempotent for an
+            // already-scoped key — and refuses a sibling tenant's path (403 path_denied).
+            $key = $claims->scopePath((string) $key);
             $key = $fm->validateScopedPath($key);
 
             return $this->ok($this->metaRepo->get($disk, $key));
@@ -873,9 +875,11 @@ class FluxFilesController
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
             }
-            if (!$claims->isPathInScope($key)) {
-                throw new ApiException('Access denied to path', 403);
-            }
+            // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
+            // internal detail), so a prefixed tenant used to get 403 path_denied on every
+            // metadata read/save/delete. scopePath() prefixes it — idempotent for an
+            // already-scoped key — and refuses a sibling tenant's path (403 path_denied).
+            $key = $claims->scopePath((string) $key);
             $key = $fm->assertCanModifyScopedPath($disk, $key);
 
             $data = [
@@ -915,9 +919,11 @@ class FluxFilesController
             if (!$claims->hasPerm('write')) {
                 throw new ApiException('Permission denied: write', 403);
             }
-            if (!$claims->isPathInScope($key)) {
-                throw new ApiException('Access denied to path', 403);
-            }
+            // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
+            // internal detail), so a prefixed tenant used to get 403 path_denied on every
+            // metadata read/save/delete. scopePath() prefixes it — idempotent for an
+            // already-scoped key — and refuses a sibling tenant's path (403 path_denied).
+            $key = $claims->scopePath((string) $key);
             $key = $fm->assertCanModifyScopedPath($disk, $key);
 
             $this->metaRepo->delete($disk, $key);

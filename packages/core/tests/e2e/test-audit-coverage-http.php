@@ -140,6 +140,21 @@ try {
         @unlink($tmp);
     }
 
+    // Not audit-specific, but this suite already runs a prefixed tenant: the
+    // metadata editor sends the RELATIVE key list() returned, which used to 403.
+    test('metadata read/save/delete accept the relative key a prefixed tenant sees', function () use ($BASE, $tok, $prefix) {
+        [$st, $j] = req('PUT', "{$BASE}/api/fm/metadata", $tok, ['disk' => 'local', 'key' => 'a.txt', 'title' => 'Hello']);
+        assertEqual(200, $st, 'save: ' . json_encode($j));
+        [$st, $j] = req('GET', "{$BASE}/api/fm/metadata?disk=local&key=a.txt", $tok);
+        assertEqual('Hello', $j['data']['title'] ?? null, 'read back');
+        [$st, $j] = req('GET', "{$BASE}/api/fm/metadata?disk=local&key=" . rawurlencode("{$prefix}/u1/a.txt"), $tok);
+        assertEqual('Hello', $j['data']['title'] ?? null, 'an already-scoped key still works');
+        [$st, $j] = req('PUT', "{$BASE}/api/fm/metadata", $tok, ['disk' => 'local', 'key' => "{$prefix}/u2/x.txt", 'title' => 'pwn']);
+        assertEqual(403, $st, 'sibling tenant refused');
+        [$st] = req('DELETE', "{$BASE}/api/fm/metadata", $tok, ['disk' => 'local', 'key' => 'a.txt']);
+        assertEqual(200, $st, 'delete');
+    });
+
     test('presign is logged as presign_get with its ttl', function () use ($BASE, $tok, $auditFile, $user, $prefix) {
         [$st] = req('POST', "{$BASE}/api/fm/presign", $tok, ['disk' => 'local', 'path' => 'a.txt', 'method' => 'GET', 'ttl' => 120]);
         assertEqual(200, $st, 'presign on the private local disk');
