@@ -1055,6 +1055,67 @@ test('error(): ApiException params reach the REST response body (folder_exists �
     assertEqual($dirName, $data['error_params']['name'] ?? null, 'error_params carried through');
 });
 
+test('audit: a refused (403) request is logged as access_denied', function () {
+    $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
+    $keepGet = $_GET;
+    $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(7701, ['perms' => ['read']]);
+    $_GET = ['disk' => 'local', 'path' => 'probe-' . uniqid() . '.txt'];
+    try {
+        $resp = (new FluxFilesApi())->handleDelete(new WP_REST_Request(['disk' => 'local', 'path' => $_GET['path']]));
+        assertEqual(403, $resp->get_status(), 'read-only token cannot delete');
+        $log = (string) @file_get_contents(FluxFilesPlugin::storagePath() . '/uploads/_fluxfiles/audit.jsonl');
+        $hit = null;
+        foreach (array_filter(explode("\n", $log)) as $line) {
+            $row = json_decode($line, true);
+            if (($row['action'] ?? '') === 'access_denied' && ($row['context']['user_id'] ?? '') === '7701') {
+                $hit = $row;
+            }
+        }
+        assertTrue($hit !== null, 'access_denied written');
+        assertEqual($_GET['path'], $hit['context']['file_key'] ?? null, 'probed key recorded');
+        assertTrue(strpos((string) ($hit['context']['detail'] ?? ''), 'permission_denied') === 0, 'error code in detail');
+    } finally {
+        $_SERVER['HTTP_AUTHORIZATION'] = $keepAuth;
+        $_GET = $keepGet;
+    }
+});
+
+test('audit: a typed token refused at auth is never logged under a previous caller', function () use ($secret) {
+    $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
+    $api = new FluxFilesApi();
+    try {
+        // 1st request authenticates as user 7703 (sets lastClaims)…
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(7703);
+        $api->handleMkdir(new WP_REST_Request(['disk' => 'local', 'path' => 'lc-' . uniqid()]));
+        // …2nd presents a stream token as a Bearer → 403 token_not_access inside claims().
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . \FluxFiles\StreamToken::mint('local', 'x', 'evil', 60, $secret);
+        $resp = $api->handleDelete(new WP_REST_Request(['disk' => 'local', 'path' => 'x']));
+        assertEqual(403, $resp->get_status());
+        $log = (string) @file_get_contents(FluxFilesPlugin::storagePath() . '/uploads/_fluxfiles/audit.jsonl');
+        foreach (array_filter(explode("\n", $log)) as $line) {
+            $row = json_decode($line, true);
+            assertTrue(!(($row['action'] ?? '') === 'access_denied' && ($row['context']['user_id'] ?? '') === '7703'),
+                'no access_denied attributed to the previous caller');
+        }
+    } finally {
+        $_SERVER['HTTP_AUTHORIZATION'] = $keepAuth;
+    }
+});
+
+test('audit: presign/zip/share/c2pa/webhook/stream/content are covered in the proxy', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    foreach (["'presign_put' : 'presign_get'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
+              "'c2pa_verify'", "'webhook_test'", "'content_read'", "'stream_read'"] as $needle) {
+        assertTrue(strpos($src, $needle) !== false, "proxy logs {$needle}");
+    }
+    assertEqual(2, substr_count($src, '$this->auditStreamRead($scope, $request);'), 'both stream branches audited');
+});
+
+test('audit_reads forwards through the token builder', function () use ($secret) {
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(7702, ['audit_reads' => true]), $secret);
+    assertEqual(true, $p->audit_reads ?? null, 'audit_reads forwarded');
+});
+
 // ── DB storage backend (WpDbMetadataHandler) ─────────────────────────────────
 // Fast/no-DB coverage of the SQL WpDbMetadataHandler builds, using a spy
 // `wpdb` that records every query() string and lets a test seed canned

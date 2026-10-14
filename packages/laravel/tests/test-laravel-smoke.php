@@ -497,6 +497,23 @@ test('allow_audit_export (+ audit_retention_days) forwards in proxy mode', funct
     assertEqual(365, $p->audit_retention_days ?? 0, 'audit_retention_days forwarded in proxy mode');
 });
 
+test('audit_reads forwards in proxy mode', function () use ($secret) {
+    $p = \FluxFiles\JwtCompat::decode((new FluxFilesManager())->token(7, ['audit_reads' => true]), $secret);
+    assertEqual(true, $p->audit_reads ?? null, 'audit_reads forwarded');
+});
+
+test('audit: the proxy logs denials, presign, zip, share/intake, c2pa verify, webhook test and reads', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    $err = substr($src, strpos($src, 'private function error('), 400);
+    assertTrue(strpos($err, '$status === 403 && $this->lastClaims !== null') !== false, 'error() audits 403s');
+    assertTrue(strpos($src, 'return $this->lastClaims = JwtMiddleware::handle(') !== false, 'claims() remembers the caller');
+    foreach (["'presign_put' : 'presign_get'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
+              "'c2pa_verify'", "'webhook_test'", "'content_read'", "'stream_read'", "'access_denied'"] as $needle) {
+        assertTrue(strpos($src, $needle) !== false, "proxy logs {$needle}");
+    }
+    assertEqual(2, substr_count($src, '$this->auditStreamRead($scope, $request);'), 'both stream branches audited');
+});
+
 test('allow_ai_vision forwards in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
 
@@ -769,10 +786,14 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
         'chunkComplete'    => 'chunk_upload',
         'chunkAbort'       => 'chunk_upload',
         'setChmod'         => 'chmod',
+        // 2026-10 audit coverage — these used to be absent from the log entirely.
+        'presign'          => 'presign_get',
+        'c2pa'             => 'c2pa_verify',
+        'webhooksTest'     => 'webhook_test',
     ];
     foreach ($mustLog as $method => $action) {
         $body = $extractMethod($ctrlSrc, $method);
-        assertTrue(strpos($body, 'logAudit(') !== false, "{$method}() calls logAudit()");
+        assertTrue(strpos($body, 'logAudit(') !== false || strpos($body, 'logAuditQuiet(') !== false, "{$method}() calls logAudit()");
         assertTrue(strpos($body, "'{$action}'") !== false, "{$method}() logs the '{$action}' action");
         assertTrue(strpos($body, 'dispatchWebhook(') !== false, "{$method}() calls dispatchWebhook()");
     }

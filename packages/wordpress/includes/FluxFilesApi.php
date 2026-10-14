@@ -588,13 +588,21 @@ class FluxFilesApi
      */
     private function claims(): \FluxFiles\Claims
     {
+        // Reset FIRST: one FluxFilesApi instance serves every request of a REST batch,
+        // and a 403 thrown below (token_not_access) must not be audited under the
+        // PREVIOUS request's identity.
+        $this->lastClaims = null;
         $secret = get_option('fluxfiles_secret', '');
         $auth   = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        // Remembered so error() can audit a refused (403) request — see auditDenied().
         if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
-            return JwtMiddleware::handle($m[1], $secret);
+            return $this->lastClaims = JwtMiddleware::handle($m[1], $secret);
         }
-        return JwtMiddleware::handle(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        return $this->lastClaims = JwtMiddleware::handle(FluxFilesPlugin::tokenForCurrentUser(), $secret);
     }
+
+    /** Claims of the current request once authenticated (null before / on 401). */
+    private ?\FluxFiles\Claims $lastClaims = null;
 
     private function fileManager(\FluxFiles\Claims $claims): FileManager
     {
@@ -741,6 +749,85 @@ class FluxFilesApi
         $audit->log($claims->userId, $action, $disk, $key, null, null, $detail);
     }
 
+    /** logAudit() for paths where a log failure must never fail the request itself. */
+    private function logAuditQuiet(\FluxFiles\Claims $claims, string $action, string $disk, string $key, ?string $detail = null): void
+    {
+        try {
+            $this->logAudit($claims, $action, $disk, $key, $detail);
+        } catch (\Throwable $e) {
+        }
+    }
+
+    /**
+     * Record an authenticated request refused with a 403 (`access_denied`), the
+     * proxy twin of core's ff_audit_denied(): written to a disk the token CAN use
+     * (a `disk_denied` probe must not write onto that disk), key scoped like every
+     * other entry, or normalized-but-unscoped when the probe is the cross-tenant
+     * path itself (then only an unscoped admin sees it). Best-effort.
+     */
+    private function auditDenied(\FluxFiles\Claims $claims, ?string $code): void
+    {
+        try {
+            $body = json_decode((string) file_get_contents('php://input') ?: '{}', true);
+            $in = (is_array($body) ? $body : []) + $_POST + $_GET;
+            $rawKey = '';
+            foreach (['path', 'key', 'from', 'src_path'] as $k) {
+                if (isset($in[$k]) && is_scalar($in[$k]) && (string) $in[$k] !== '') {
+                    $rawKey = (string) $in[$k];
+                    break;
+                }
+            }
+            $disk = '';
+            foreach (['disk', 'src_disk'] as $k) {
+                if (isset($in[$k]) && is_scalar($in[$k])) {
+                    $disk = (string) $in[$k];
+                    break;
+                }
+            }
+            $route = (string) ($_GET['rest_route'] ?? (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?: ''));
+            $detail = ($code ?? 'forbidden') . ' ' . (string) ($_SERVER['REQUEST_METHOD'] ?? '') . ' ' . $route;
+            if ($disk === '' || !$claims->hasDisk($disk)) {
+                if ($disk !== '') {
+                    $detail .= ' disk=' . $disk;
+                }
+                $disk = $claims->allowedDisks[0] ?? '';
+            }
+            if ($disk === '') {
+                return;
+            }
+            try {
+                $key = $rawKey === '' ? '' : $claims->scopePath($rawKey);
+            } catch (ApiException $scopeErr) {
+                $key = $claims->normalizeKey($rawKey);
+            }
+            $this->logAudit($claims, 'access_denied', $disk, $key, mb_substr($detail, 0, 500));
+        } catch (\Throwable $e) {
+            // Auditing must never turn a clean 403 into a 500.
+        }
+    }
+
+    /**
+     * `audit_reads` for /stream (core's ff_audit_stream_read()): only the first
+     * request of a playback — no Range, or one starting at byte 0. Best-effort.
+     *
+     * @param array<string,mixed> $scope
+     */
+    private function auditStreamRead(array $scope, \WP_REST_Request $request): void
+    {
+        if (empty($scope['auditRead'])) {
+            return;
+        }
+        $range = trim((string) ($request->get_header('range') ?? ''));
+        if ($range !== '' && !preg_match('/^bytes=0-/', $range)) {
+            return;
+        }
+        try {
+            (new AuditLogStorage($this->metaRepo, [(string) $scope['disk']]))
+                ->log((string) $scope['sub'], 'stream_read', (string) $scope['disk'], (string) $scope['path']);
+        } catch (\Throwable $e) {
+        }
+    }
+
     /**
      * Fire a webhook for a file-changing action (paid module). Gated the same
      * 3-layer way index.php's inline wiring does it (installed + licensed +
@@ -770,6 +857,9 @@ class FluxFilesApi
 
     private function error(string $message, int $status = 400, ?string $code = null, array $params = []): \WP_REST_Response
     {
+        if ($status === 403 && $this->lastClaims !== null) {
+            $this->auditDenied($this->lastClaims, $code);
+        }
         // Forward the core's error_code + error_params so the embedded UI can show a
         // LOCALISED message (it maps `error.<code>` via i18n). Without these the UI
         // falls back to the raw English message — the whole point of this passthrough.
@@ -1250,7 +1340,11 @@ class FluxFilesApi
                 }
             }
 
-            return $this->ok($fm->presign($disk, $path, $method, (int) $ttl, $sizeBytes));
+            $presignResult = $fm->presign($disk, $path, $method, (int) $ttl, $sizeBytes);
+            // A GET presign hands out a download URL, a PUT one an upload URL.
+            $this->logAuditQuiet($claims, $method === 'PUT' ? 'presign_put' : 'presign_get', (string) $disk, $claims->scopePath((string) $path), 'ttl=' . (int) $ttl);
+            $this->dispatchWebhook($claims, $method === 'PUT' ? 'presign_put' : 'presign_get', ['disk' => (string) $disk, 'path' => $claims->scopePath((string) $path), 'name' => basename((string) $path)]);
+            return $this->ok($presignResult);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -1454,10 +1548,15 @@ class FluxFilesApi
             $this->rateLimit($claims, false);
             $fm = $this->fileManager($claims);
 
-            return $this->ok($fm->getContent(
+            $content = $fm->getContent(
                 $request->get_param('disk') ?? 'local',
                 (string) ($request->get_param('path') ?? '')
-            ));
+            );
+            // Opt-in read audit (`audit_reads`). `?? false` keeps an older core working.
+            if ($claims->auditReads ?? false) {
+                $this->logAuditQuiet($claims, 'content_read', (string) ($request->get_param('disk') ?? 'local'), $claims->scopePath((string) ($request->get_param('path') ?? '')));
+            }
+            return $this->ok($content);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -1540,11 +1639,19 @@ class FluxFilesApi
             $paths = is_array($body['paths'] ?? null) ? $body['paths'] : [];
             $name  = isset($body['name']) ? (string) $body['name'] : null;
 
-            // Resolve + validate first so a rejection is still a clean JSON error.
-            // Not audited, matching core: index.php's /zip handler exits before the
-            // audit block and '/zip' isn't in resolveAuditAction()'s map. Keeping the
-            // proxy a faithful passthrough beats quietly auditing more than core does.
-            $fm->zipManifest($disk, $paths);
+            // Resolve + validate first so a rejection is still a clean JSON error,
+            // then audit the bulk download (the classic exfiltration shape) before
+            // any byte is sent — core does the same.
+            $manifest = $fm->zipManifest($disk, $paths);
+            $names = array_map(static fn ($e) => (string) $e['key'], $manifest['entries'] ?? []);
+            $this->logAuditQuiet(
+                $claims,
+                'zip_download',
+                $disk,
+                $claims->scopePath((string) ($paths[0] ?? '')),
+                mb_substr((int) ($manifest['count'] ?? 0) . ' files, ' . (int) ($manifest['total'] ?? 0) . ' bytes: '
+                    . implode(', ', array_slice($names, 0, 20)) . (count($names) > 20 ? ', …' : ''), 0, 1000)
+            );
 
             // WP has already sent no body of its own, but it buffers — drop that so
             // ZipStream's own Content-Type/Disposition headers are the ones sent.
@@ -1554,6 +1661,9 @@ class FluxFilesApi
             $fm->streamZip($disk, $paths, $name);
             exit;
         } catch (ApiException $e) {
+            if ($e->getHttpCode() === 403 && $this->lastClaims !== null) {
+                $this->auditDenied($this->lastClaims, $e->getErrorCode());
+            }
             status_header($e->getHttpCode());
             wp_send_json(['data' => null, 'error' => $e->getMessage(),
                 'error_code' => $e->getErrorCode(), 'error_params' => $e->getErrorParams()], $e->getHttpCode());
@@ -1838,15 +1948,21 @@ class FluxFilesApi
             $body = $this->body($request);
             if ($op === 'revoke') {
                 $jti = (string) ($body['jti'] ?? '');
-                return $this->ok($module === 'share'
+                $revoked = $module === 'share'
                     ? $mod->revokeShare($this->diskManager, $claims, $disk, $jti)
-                    : $mod->revokePortal($this->diskManager, $claims, $disk, $jti));
+                    : $mod->revokePortal($this->diskManager, $claims, $disk, $jti);
+                $this->logAuditQuiet($claims, $module . '_revoke', $disk, '', 'jti=' . $jti);
+                $this->dispatchWebhook($claims, $module . '_revoke', ['disk' => $disk, 'path' => '', 'name' => '']);
+                return $this->ok($revoked);
             }
 
             $fm = $this->fileManager($claims);
             $res = $module === 'share'
                 ? $mod->createShare($fm, $this->diskManager, $claims, $secret, $body)
                 : $mod->createPortal($fm, $this->diskManager, $claims, $secret, $body);
+            // Minting a public link is exactly what an access review must be able to see.
+            $this->logAuditQuiet($claims, $module . '_create', $disk, $claims->scopePath((string) ($body['path'] ?? '')));
+            $this->dispatchWebhook($claims, $module . '_create', ['disk' => $disk, 'path' => $claims->scopePath((string) ($body['path'] ?? '')), 'name' => basename((string) ($body['path'] ?? ''))]);
 
             // The recipient URL. The module builds it when the token carries a base
             // URL; otherwise point at the page this plugin serves — a WordPress site
@@ -1959,6 +2075,8 @@ class FluxFilesApi
 
             $module = \FluxFiles\ModuleRegistry::require('webhooks', FluxFilesPlugin::license(), $claims);
             $result = $module->test($claims, (string) get_option('fluxfiles_secret', ''));
+            $this->logAuditQuiet($claims, 'webhook_test', $claims->allowedDisks[0] ?? 'local', '');
+            $this->dispatchWebhook($claims, 'webhook_test', ['disk' => $claims->allowedDisks[0] ?? 'local', 'path' => '', 'name' => '']);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -2106,7 +2224,10 @@ class FluxFilesApi
             $fm = $this->fileManager($claims);
 
             $module = \FluxFiles\ModuleRegistry::require('c2pa', FluxFilesPlugin::license(), $claims);
-            $result = $module->verify($fm, $this->diskManager, $claims, $this->body($request));
+            $c2paBody = $this->body($request);
+            $result = $module->verify($fm, $this->diskManager, $claims, $c2paBody);
+            $this->logAuditQuiet($claims, 'c2pa_verify', (string) ($c2paBody['disk'] ?? 'local'), $claims->scopePath((string) ($c2paBody['path'] ?? '')));
+            $this->dispatchWebhook($claims, 'c2pa_verify', ['disk' => (string) ($c2paBody['disk'] ?? 'local'), 'path' => $claims->scopePath((string) ($c2paBody['path'] ?? '')), 'name' => basename((string) ($c2paBody['path'] ?? ''))]);
 
             return $this->ok($result);
         } catch (ApiException $e) {
@@ -2375,6 +2496,7 @@ class FluxFilesApi
                 echo 'Not found';
                 exit;
             }
+            $this->auditStreamRead($scope, $request);
             // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
             $xaccel = (string) (getenv('FLUXFILES_XACCEL') ?: '');
             if ($xaccel !== '') {
@@ -2397,6 +2519,7 @@ class FluxFilesApi
                 echo 'Not found';
                 exit;
             }
+            $this->auditStreamRead($scope, $request);
             header('Content-Type: ' . $mime);
             $stream = $fs->readStream($path);
             while (!feof($stream)) {

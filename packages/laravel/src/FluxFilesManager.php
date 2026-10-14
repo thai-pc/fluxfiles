@@ -267,6 +267,9 @@ class FluxFilesManager
         if (array_key_exists('allow_audit_export', $overrides)) {
             $payload['allow_audit_export'] = (bool) $overrides['allow_audit_export'];
         }
+        if (array_key_exists('audit_reads', $overrides)) {
+            $payload['audit_reads'] = (bool) $overrides['audit_reads'];
+        }
         if (!empty($overrides['audit_retention_days'])) {
             $payload['audit_retention_days'] = (int) $overrides['audit_retention_days'];
         }
