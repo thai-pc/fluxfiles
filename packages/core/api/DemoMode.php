@@ -96,6 +96,9 @@ final class DemoMode
                 'allow_terminal'   => false,
                 'allow_optimize'   => false,
                 'byob'             => false,
+                // Anonymous visitors upload phone photos to a public demo — never
+                // keep their GPS position.
+                'strip_exif'       => true,
             ],
         ]);
     }

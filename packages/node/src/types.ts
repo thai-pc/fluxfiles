@@ -224,6 +224,8 @@ export interface BaseTokenOptions {
   auditRetentionDays?: number;
   /** Also audit file READS (`content_read`, `stream_read`). Default false. */
   auditReads?: boolean;
+  /** Strip EXIF/GPS/XMP from JPEG/PNG/WebP uploads (lossless, keeps orientation). Default false. */
+  stripExif?: boolean;
   /** DLP / PII detection on write (Enterprise) — scans upload, code-editor save, and
    *  each zip-extract entry before the bytes are written. Default false. */
   allowDlpScan?: boolean;

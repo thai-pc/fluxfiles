@@ -463,6 +463,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     // Audit Export tuning: default cutoff for /api/fm/audit/purge when the request
     // body omits `before` (the core clamps this on decode; travels with allow_audit_export).
+    if (array_key_exists('strip_exif', $webp)) {
+        $payload['strip_exif'] = (bool) $webp['strip_exif'];
+    }
     if (array_key_exists('audit_reads', $webp)) {
         $payload['audit_reads'] = (bool) $webp['audit_reads'];
     }

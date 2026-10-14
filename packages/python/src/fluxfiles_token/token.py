@@ -367,6 +367,8 @@ def _apply_tenant_overrides(
     # token.ts 1:1 (allowAuditExport -> allow_audit_export, etc).
     if extras.get("allow_audit_export") is not None:
         payload["allow_audit_export"] = bool(extras["allow_audit_export"])
+    if extras.get("strip_exif") is not None:
+        payload["strip_exif"] = bool(extras["strip_exif"])
     if extras.get("audit_reads") is not None:
         payload["audit_reads"] = bool(extras["audit_reads"])
     audit_retention_days = extras.get("audit_retention_days")
@@ -567,6 +569,7 @@ def create_token(
     allow_audit_export: bool | None = None,
     audit_retention_days: int | None = None,
     audit_reads: bool | None = None,
+    strip_exif: bool | None = None,
     allow_dlp_scan: bool | None = None,
     dlp_entity_types: list[str] | None = None,
     dlp_scan_extensions: list[str] | None = None,
@@ -706,6 +709,7 @@ def create_token(
         allow_audit_export=allow_audit_export,
         audit_retention_days=audit_retention_days,
         audit_reads=audit_reads,
+        strip_exif=strip_exif,
         allow_dlp_scan=allow_dlp_scan,
         dlp_entity_types=dlp_entity_types,
         dlp_scan_extensions=dlp_scan_extensions,
@@ -822,6 +826,7 @@ def create_byob_token(
     allow_audit_export: bool | None = None,
     audit_retention_days: int | None = None,
     audit_reads: bool | None = None,
+    strip_exif: bool | None = None,
     allow_dlp_scan: bool | None = None,
     dlp_entity_types: list[str] | None = None,
     dlp_scan_extensions: list[str] | None = None,
@@ -982,6 +987,7 @@ def create_byob_token(
         allow_audit_export=allow_audit_export,
         audit_retention_days=audit_retention_days,
         audit_reads=audit_reads,
+        strip_exif=strip_exif,
         allow_dlp_scan=allow_dlp_scan,
         dlp_entity_types=dlp_entity_types,
         dlp_scan_extensions=dlp_scan_extensions,

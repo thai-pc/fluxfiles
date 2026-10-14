@@ -347,6 +347,11 @@ class Claims
      *            and denied attempts are always audited regardless. */
     public bool $auditReads = false;
 
+    /** @var bool Strip embedded metadata (EXIF incl. GPS position, XMP, IPTC, PNG
+     *            text chunks) from JPEG/PNG/WebP uploads, losslessly, keeping only
+     *            the Orientation tag. Default FALSE. See ExifStripper. */
+    public bool $stripExif = false;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -752,6 +757,7 @@ class Claims
         $c->proHints = isset($payload->pro_hints) ? (bool) $payload->pro_hints : true;
         $c->dedupeUploads = (bool) ($payload->dedupe_uploads ?? false);
         $c->auditReads = (bool) ($payload->audit_reads ?? false);
+        $c->stripExif = (bool) ($payload->strip_exif ?? false);
         $c->watermark = self::sanitizeWatermark($payload);
         // A watermark OVERLAY exists solely to withhold the clean original — serving
         // it alongside (allow_download=true) would defeat the watermark entirely,

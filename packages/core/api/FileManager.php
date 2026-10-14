@@ -509,6 +509,20 @@ class FileManager
         // bytes" placement as the virus scan above. Scans the ORIGINAL upload.
         $this->assertNoPii($file['tmp_name'], $name);
 
+        // Privacy: drop EXIF/GPS/XMP before the bytes are hashed, measured, given
+        // variants or written — so nothing downstream ever sees the location.
+        // Lossless (container-level) and keeps Orientation; see ExifStripper.
+        $exifStripped = false;
+        if ($this->claims->stripExif && (int) ($file['size'] ?? 0) <= self::STRIP_EXIF_MAX) {
+            $raw = @file_get_contents($file['tmp_name']);
+            $res = is_string($raw) ? ExifStripper::strip($raw) : null;
+            if ($res !== null && $res['removed'] && @file_put_contents($file['tmp_name'], $res['data']) !== false) {
+                $file['size'] = strlen($res['data']);
+                $exifStripped = true;
+            }
+            unset($raw, $res);
+        }
+
         // Auto-optimize on upload (paid Optimize module). Recompress the image in
         // the temp file BEFORE anything downstream (hash, dims, write, variants) so
         // they all operate on the optimized bytes + the new .webp name. The hook is
@@ -651,6 +665,9 @@ class FileManager
             'name'     => $name,
             'variants' => null,
         ];
+        if ($exifStripped) {
+            $result['exif_stripped'] = true;
+        }
         if ($autoSaved > 0) {
             OptimizeStats::record($fs, $this->claims->pathPrefix, $autoSaved, 1);
             $result['optimized'] = true;
@@ -3387,6 +3404,12 @@ class FileManager
             throw new ApiException("Permission denied: {$perm}", 403, 'permission_denied');
         }
     }
+
+    /**
+     * Largest upload `strip_exif` reads into memory to rewrite. Photos are far
+     * below this; a bigger file is stored as-is rather than risk the memory limit.
+     */
+    private const STRIP_EXIF_MAX = 64 * 1024 * 1024;
 
     /** Internal directories that must never be exposed or modified by users. */
     private const SYSTEM_PREFIXES = ['_fluxfiles/', '_variants/'];

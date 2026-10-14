@@ -684,6 +684,9 @@ HTACCESS;
         if (array_key_exists('allow_audit_export', $overrides)) {
             $payload['allow_audit_export'] = (bool) $overrides['allow_audit_export'];
         }
+        if (array_key_exists('strip_exif', $overrides)) {
+            $payload['strip_exif'] = (bool) $overrides['strip_exif'];
+        }
         if (array_key_exists('audit_reads', $overrides)) {
             $payload['audit_reads'] = (bool) $overrides['audit_reads'];
         }
