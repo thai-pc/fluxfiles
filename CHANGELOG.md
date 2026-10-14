@@ -3,6 +3,35 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.21] — 2026-10-14
+
+> Released: `core-v0.2.95`, `laravel-v0.2.46`, `wordpress-v0.2.55`,
+> `node-v0.1.32`, `python-v0.1.3` (pushed in two batches — the
+> ≤3-tags-per-push rule).
+
+### Added — audit-log coverage
+
+- **No more `unknown` audit actions.** Every mutating route now has a name:
+  `presign_get` / `presign_put`, `share_create` / `share_revoke`,
+  `intake_create` / `intake_revoke`, `version_restore`, `webhook_test`,
+  `ai_vision`, `ocr`, `backup`, `c2pa_verify`, `c2pa_sign`, `metadata_import`.
+  Revoke/restore/presign entries carry the link id / version / TTL as detail.
+  A CI guard fails if a new POST/PUT/DELETE route resolves to `unknown`.
+  **Note for webhook consumers:** these events used to arrive as `unknown`.
+- **`zip_download`** — bulk downloads were never logged (the route exits before
+  the write audit). Now recorded with file count, bytes and the first 20 keys.
+- **`access_denied`** — every authenticated 403 (permission, path, disk,
+  owner-only, extension, …) is logged with the error code, method and route,
+  on a disk the token can access. A cross-tenant probe stays outside the
+  tenant's own `/audit` view; an unscoped admin sees it.
+- **New claim `audit_reads`** (default `false`): also log `content_read`
+  (code-editor `GET /api/fm/content`) and `stream_read` (first request of a
+  `/api/fm/stream` playback; seeks are skipped). Named in all five token
+  builders (`auditReads` in Node, `audit_reads=` in Python). Bytes fetched
+  straight from a static or presigned S3/R2 URL can't be seen by the server —
+  use the bucket's access logs for those.
+- **Laravel + WordPress proxies** mirror all of the above.
+
 ## [0.3.20] — 2026-10-14
 
 > Released: `core-v0.2.94`, `wordpress-v0.2.54`.
