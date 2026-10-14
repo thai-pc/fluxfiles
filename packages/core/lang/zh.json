@@ -387,7 +387,9 @@
     "ocr_too_large": "此文件过大，无法进行 OCR 识别（最大 {max}）。",
     "ocr_failed": "OCR 识别未能完成。",
     "ocr_timeout": "OCR 识别超时。",
-    "byob_disk_collision": "此存储磁盘名称与服务器上已配置的磁盘冲突。"
+    "byob_disk_collision": "此存储磁盘名称与服务器上已配置的磁盘冲突。",
+    "presign_put_disabled": "此账户已禁用 PUT 直传 — 请使用表单 (POST) 上传",
+    "presign_post_unsupported": "此存储不支持表单 (POST) 上传 — 请使用分片上传"
   },
   "presign": {
     "title": "预签名链接",

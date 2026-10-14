@@ -15,6 +15,9 @@
  *   FXTEST_S3_VISIBILITY   private (default) | public
  *   FXTEST_S3_PUBLIC_URL   optional CDN/custom-domain base
  *   FXTEST_S3_CREATE_BUCKET 1 → create bucket if missing (LocalStack)
+ *   FXTEST_S3_POST_POLICY_NOT_ENFORCED 1 → waive the "bucket rejects an oversized
+ *                          presigned-POST body" check (emulators such as moto don't
+ *                          enforce content-length-range; AWS S3 does)
  *   FXTEST_S3_ANON_NOT_ENFORCED 1 → waive the "private bucket denies an unsigned
  *                          GET" assertion, for an emulator that stores ACL /
  *                          public-access-block but never evaluates them for
@@ -243,6 +246,40 @@ test('presign PUT, upload bytes, then presign GET reads them', function () use (
     $read = file_get_contents($get['url']);
     assertTrue($read === $body, 'read-back mismatch');
 });
+
+/** multipart/form-data POST of $fields + a `file` part to $url; returns the HTTP status. */
+function formPost(string $url, array $fields, string $body, string $type): int {
+    $tmp = tempnam(sys_get_temp_dir(), 'ffpost');
+    file_put_contents($tmp, $body);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
+        CURLOPT_POSTFIELDS => $fields + ['file' => new CURLFile($tmp, $type, 'f')]]);
+    curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    @unlink($tmp);
+    return $code;
+}
+
+if (stripos($endpoint, 'r2.cloudflarestorage.com') === false) {
+    test('presign POST: an in-size form upload lands and reads back', function () use ($fm, $prefix) {
+        $k = $prefix . '/post.txt';
+        $body = 'hello-post-' . uniqid();
+        $p = $fm->presign('s3test', $k, 'POST', 600, strlen($body));
+        $code = formPost($p['url'], $p['fields'], $body, 'text/plain');
+        assertTrue($code >= 200 && $code < 300, "POST failed: {$code}");
+        assertTrue(file_get_contents($fm->presign('s3test', $k, 'GET', 600)['url']) === $body, 'read-back mismatch');
+    });
+
+    // AWS S3 enforces the policy's content-length-range; some emulators (moto)
+    // accept the body anyway — waive just this assertion for those.
+    if (getenv('FXTEST_S3_POST_POLICY_NOT_ENFORCED') === '1') {
+        echo "  {$yellow}SKIP{$reset} oversized POST rejection — FXTEST_S3_POST_POLICY_NOT_ENFORCED=1\n";
+    } else test('presign POST: the BUCKET rejects a body larger than the declared size', function () use ($fm, $prefix) {
+        $k = $prefix . '/post-big.txt';
+        $p = $fm->presign('s3test', $k, 'POST', 600, 10);
+        $code = formPost($p['url'], $p['fields'], str_repeat('x', 5000), 'text/plain');
+        assertTrue($code >= 400, "oversized body accepted: {$code}");
+    });
+}
 
 // ── Pre-existing object: PUT directly via the S3 client (no FluxFiles upload, so
 //    no sidecar / index / hash / variants) — mirrors TEST-PLAN section 2bis on S3/R2.

@@ -507,7 +507,7 @@ test('audit: the proxy logs denials, presign, zip, share/intake, c2pa verify, we
     $err = substr($src, strpos($src, 'private function error('), 400);
     assertTrue(strpos($err, '$status === 403 && $this->lastClaims !== null') !== false, 'error() audits 403s');
     assertTrue(strpos($src, 'return $this->lastClaims = JwtMiddleware::handle(') !== false, 'claims() remembers the caller');
-    foreach (["'presign_put' : 'presign_get'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
+    foreach (["'POST' => 'presign_post'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
               "'c2pa_verify'", "'webhook_test'", "'content_read'", "'stream_read'", "'access_denied'"] as $needle) {
         assertTrue(strpos($src, $needle) !== false, "proxy logs {$needle}");
     }

@@ -387,7 +387,9 @@
     "ocr_too_large": "Tệp này quá lớn để nhận dạng ký tự OCR (tối đa {max}).",
     "ocr_failed": "Không thể hoàn tất việc quét OCR.",
     "ocr_timeout": "Quá trình quét OCR đã hết thời gian chờ.",
-    "byob_disk_collision": "Tên ổ đĩa lưu trữ này trùng với một ổ đĩa đã được cấu hình sẵn trên máy chủ."
+    "byob_disk_collision": "Tên ổ đĩa lưu trữ này trùng với một ổ đĩa đã được cấu hình sẵn trên máy chủ.",
+    "presign_put_disabled": "Tải lên trực tiếp bằng PUT đã bị tắt cho tài khoản này — hãy dùng tải lên dạng form (POST)",
+    "presign_post_unsupported": "Bộ lưu trữ này không hỗ trợ tải lên dạng form (POST) — hãy dùng tải lên theo từng phần"
   },
   "presign": {
     "title": "URL có thời hạn",

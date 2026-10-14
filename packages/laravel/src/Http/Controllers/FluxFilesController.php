@@ -760,7 +760,8 @@ class FluxFilesController
             // S3/R2, so those bytes never reach this server and cannot be scanned
             // either — the same unscannable side door the chunk routes refuse
             // below, so it gets the same fail-closed treatment and the same codes.
-            if (strtoupper((string) $method) === 'PUT') {
+            // POST (form upload straight to the bucket) is the same unscannable door.
+            if (in_array(strtoupper((string) $method), ['PUT', 'POST'], true)) {
                 if ($claims->allowVirusScan) {
                     throw new ApiException(
                         'Direct-to-storage upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',
@@ -787,12 +788,12 @@ class FluxFilesController
             // A GET presign hands out a download URL, a PUT one an upload URL.
             $this->logAuditQuiet(
                 $claims,
-                strtoupper((string) $method) === 'PUT' ? 'presign_put' : 'presign_get',
+                (['PUT' => 'presign_put', 'POST' => 'presign_post'][strtoupper((string) $method)] ?? 'presign_get'),
                 (string) $disk,
                 $claims->scopePath((string) $path),
                 'ttl=' . (int) $ttl
             );
-            $this->dispatchWebhook($claims, strtoupper((string) $method) === 'PUT' ? 'presign_put' : 'presign_get', ['disk' => (string) $disk, 'path' => $claims->scopePath((string) $path), 'name' => basename((string) $path)]);
+            $this->dispatchWebhook($claims, (['PUT' => 'presign_put', 'POST' => 'presign_post'][strtoupper((string) $method)] ?? 'presign_get'), ['disk' => (string) $disk, 'path' => $claims->scopePath((string) $path), 'name' => basename((string) $path)]);
             return $this->ok($presignResult);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());

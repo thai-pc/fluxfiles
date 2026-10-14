@@ -387,7 +387,9 @@
     "ocr_too_large": "Ce fichier est trop volumineux pour l'OCR (max {max}).",
     "ocr_failed": "L'analyse OCR n'a pas pu être effectuée.",
     "ocr_timeout": "L'analyse OCR a expiré.",
-    "byob_disk_collision": "Ce nom de disque de stockage entre en conflit avec un disque déjà configuré sur le serveur."
+    "byob_disk_collision": "Ce nom de disque de stockage entre en conflit avec un disque déjà configuré sur le serveur.",
+    "presign_put_disabled": "Les envois directs PUT sont désactivés pour ce compte — utilisez un envoi par formulaire (POST)",
+    "presign_post_unsupported": "Ce stockage ne prend pas en charge les envois par formulaire (POST) — utilisez l'envoi par morceaux"
   },
   "presign": {
     "title": "URL présignée",

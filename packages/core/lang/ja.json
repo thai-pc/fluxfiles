@@ -387,7 +387,9 @@
     "ocr_too_large": "このファイルはOCRには大きすぎます（最大{max}）。",
     "ocr_failed": "OCRスキャンを完了できませんでした。",
     "ocr_timeout": "OCRスキャンがタイムアウトしました。",
-    "byob_disk_collision": "このストレージディスク名は、サーバーに既に設定されているディスクと競合しています。"
+    "byob_disk_collision": "このストレージディスク名は、サーバーに既に設定されているディスクと競合しています。",
+    "presign_put_disabled": "このアカウントでは PUT による直接アップロードが無効です — フォーム (POST) アップロードを使用してください",
+    "presign_post_unsupported": "このストレージはフォーム (POST) アップロードに対応していません — 分割アップロードを使用してください"
   },
   "presign": {
     "title": "署名付きURL",

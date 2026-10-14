@@ -352,6 +352,11 @@ class Claims
      *            the Orientation tag. Default FALSE. See ExifStripper. */
     public bool $stripExif = false;
 
+    /** @var bool May this token mint a presigned PUT? Default TRUE (back-compat).
+     *            A PUT URL can't bind the body size, so its `size` is advisory;
+     *            set FALSE to leave clients only the size-enforcing POST policy. */
+    public bool $allowPresignPut = true;
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -758,6 +763,7 @@ class Claims
         $c->dedupeUploads = (bool) ($payload->dedupe_uploads ?? false);
         $c->auditReads = (bool) ($payload->audit_reads ?? false);
         $c->stripExif = (bool) ($payload->strip_exif ?? false);
+        $c->allowPresignPut = isset($payload->allow_presign_put) ? (bool) $payload->allow_presign_put : true;
         $c->watermark = self::sanitizeWatermark($payload);
         // A watermark OVERLAY exists solely to withhold the clean original — serving
         // it alongside (allow_download=true) would defeat the watermark entirely,

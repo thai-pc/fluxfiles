@@ -387,7 +387,9 @@
     "ocr_too_large": "Diese Datei ist für OCR zu groß (max. {max}).",
     "ocr_failed": "Der OCR-Scan konnte nicht abgeschlossen werden.",
     "ocr_timeout": "Der OCR-Scan hat das Zeitlimit überschritten.",
-    "byob_disk_collision": "Dieser Speicher-Laufwerksname kollidiert mit einem bereits auf dem Server konfigurierten Laufwerk."
+    "byob_disk_collision": "Dieser Speicher-Laufwerksname kollidiert mit einem bereits auf dem Server konfigurierten Laufwerk.",
+    "presign_put_disabled": "Direkte PUT-Uploads sind für dieses Konto deaktiviert — verwenden Sie einen Formular-Upload (POST)",
+    "presign_post_unsupported": "Dieser Speicher unterstützt keine Formular-Uploads (POST) — verwenden Sie den Upload in Teilen"
   },
   "presign": {
     "title": "Vorsignierte URL",

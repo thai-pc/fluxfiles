@@ -387,7 +387,9 @@
     "ocr_too_large": "이 파일은 OCR을 수행하기에 너무 큽니다(최대 {max}).",
     "ocr_failed": "OCR 스캔을 완료하지 못했습니다.",
     "ocr_timeout": "OCR 스캔 시간이 초과되었습니다.",
-    "byob_disk_collision": "이 저장소 디스크 이름이 서버에 이미 구성된 디스크와 충돌합니다."
+    "byob_disk_collision": "이 저장소 디스크 이름이 서버에 이미 구성된 디스크와 충돌합니다.",
+    "presign_put_disabled": "이 계정에서는 PUT 직접 업로드가 비활성화되어 있습니다 — 폼(POST) 업로드를 사용하세요",
+    "presign_post_unsupported": "이 스토리지는 폼(POST) 업로드를 지원하지 않습니다 — 분할 업로드를 사용하세요"
   },
   "presign": {
     "title": "서명된 URL",

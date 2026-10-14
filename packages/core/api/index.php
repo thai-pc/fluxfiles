@@ -454,9 +454,10 @@ try {
         $raw = file_get_contents('php://input');
         $body = json_decode($raw ?: '{}', true) ?: [];
         if ($auditAction === 'presign') {
-            // A GET presign hands out a download URL, a PUT one an upload URL —
-            // two very different events for whoever reads the log.
-            $auditAction = strtoupper((string) ($body['method'] ?? '')) === 'PUT' ? 'presign_put' : 'presign_get';
+            // A GET presign hands out a download URL, a PUT/POST one an upload URL —
+            // very different events for whoever reads the log.
+            $presignMethod = strtoupper((string) ($body['method'] ?? ''));
+            $auditAction = $presignMethod === 'PUT' ? 'presign_put' : ($presignMethod === 'POST' ? 'presign_post' : 'presign_get');
         }
         $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? $body['src_path'] ?? '';
         // Multipart uploads carry no JSON body, so the key isn't in $body — fall
@@ -1556,6 +1557,7 @@ function ff_audit_detail(string $action, array $body, \FluxFiles\Claims $claims)
             return 'version=' . (is_scalar($body['version_id'] ?? null) ? (string) $body['version_id'] : '');
         case 'presign_get':
         case 'presign_put':
+        case 'presign_post':
             return 'ttl=' . (int) ($body['ttl'] ?? 0);
         default:
             return null;
@@ -2436,7 +2438,8 @@ function handlePresign(FileManager $fm, \FluxFiles\Claims $claims): array
     // is dispatched much earlier in routeRequest(), so a guard down there is
     // never reached. Two independent `if`s, exactly like the chunk pair — the two
     // claims are orthogonal, either (or both) can be on, each 409s on its own.
-    if (strtoupper((string) $body['method']) === 'PUT') {
+    // POST (a browser form upload straight to the bucket) is the same side door.
+    if (in_array(strtoupper((string) $body['method']), ['PUT', 'POST'], true)) {
         if ($claims->allowVirusScan) {
             throw new ApiException(
                 'Direct-to-storage upload cannot be virus-scanned — use the standard upload, or turn off allow_virus_scan',

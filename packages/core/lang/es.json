@@ -387,7 +387,9 @@
     "ocr_too_large": "Este archivo es demasiado grande para OCR (máx. {max}).",
     "ocr_failed": "No se pudo completar el escaneo OCR.",
     "ocr_timeout": "El escaneo OCR agotó el tiempo de espera.",
-    "byob_disk_collision": "Este nombre de disco de almacenamiento entra en conflicto con un disco ya configurado en el servidor."
+    "byob_disk_collision": "Este nombre de disco de almacenamiento entra en conflicto con un disco ya configurado en el servidor.",
+    "presign_put_disabled": "Las subidas directas PUT están desactivadas para esta cuenta: usa una subida por formulario (POST)",
+    "presign_post_unsupported": "Este almacenamiento no admite subidas por formulario (POST): usa la subida por partes"
   },
   "presign": {
     "title": "URL prefirmada",

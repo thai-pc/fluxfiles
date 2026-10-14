@@ -1104,7 +1104,7 @@ test('audit: a typed token refused at auth is never logged under a previous call
 
 test('audit: presign/zip/share/c2pa/webhook/stream/content are covered in the proxy', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    foreach (["'presign_put' : 'presign_get'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
+    foreach (["'POST' => 'presign_post'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
               "'c2pa_verify'", "'webhook_test'", "'content_read'", "'stream_read'"] as $needle) {
         assertTrue(strpos($src, $needle) !== false, "proxy logs {$needle}");
     }

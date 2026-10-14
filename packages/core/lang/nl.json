@@ -387,7 +387,9 @@
     "ocr_too_large": "Dit bestand is te groot voor OCR (max {max}).",
     "ocr_failed": "De OCR-scan kon niet worden voltooid.",
     "ocr_timeout": "De OCR-scan is verlopen.",
-    "byob_disk_collision": "Deze opslagschijfnaam komt in conflict met een schijf die al op de server is geconfigureerd."
+    "byob_disk_collision": "Deze opslagschijfnaam komt in conflict met een schijf die al op de server is geconfigureerd.",
+    "presign_put_disabled": "Directe PUT-uploads zijn uitgeschakeld voor dit account — gebruik een formulierupload (POST)",
+    "presign_post_unsupported": "Deze opslag ondersteunt geen formulieruploads (POST) — gebruik upload in delen"
   },
   "presign": {
     "title": "Voorondertekende URL",

@@ -387,7 +387,9 @@
     "ocr_too_large": "This file is too large for OCR (max {max}).",
     "ocr_failed": "The OCR scan could not be completed.",
     "ocr_timeout": "The OCR scan timed out.",
-    "byob_disk_collision": "This storage disk name conflicts with a disk already configured on the server."
+    "byob_disk_collision": "This storage disk name conflicts with a disk already configured on the server.",
+    "presign_put_disabled": "Direct PUT uploads are disabled for this account — use a form (POST) upload",
+    "presign_post_unsupported": "This storage does not support form (POST) uploads — use chunked upload"
   },
   "presign": {
     "title": "Presigned URL",

@@ -2224,8 +2224,13 @@ class FileManager
     {
         $this->assertDisk($disk);
 
-        if (!in_array($method, ['GET', 'PUT'], true)) {
-            throw new ApiException('Invalid presign method: must be GET or PUT', 400);
+        if (!in_array($method, ['GET', 'PUT', 'POST'], true)) {
+            throw new ApiException('Invalid presign method: must be GET, PUT or POST', 400);
+        }
+        // An operator who wants upload size enforced by the bucket itself turns the
+        // advisory-only PUT off and leaves clients the POST policy below.
+        if ($method === 'PUT' && !$this->claims->allowPresignPut) {
+            throw new ApiException('Presigned PUT is disabled for this token — use method POST', 403, 'presign_put_disabled');
         }
 
         // A preview-only token must not be able to mint a clean download URL.
@@ -2247,7 +2252,7 @@ class FileManager
         // client could reuse the URL with a larger-than-declared body is exactly
         // this TTL. Capping it tightly bounds that advisory check's blast radius
         // without needing a different upload mechanism.
-        if ($method === 'PUT' && $ttl > self::MAX_PUT_PRESIGN_TTL) {
+        if ($method !== 'GET' && $ttl > self::MAX_PUT_PRESIGN_TTL) {
             $ttl = self::MAX_PUT_PRESIGN_TTL;
         }
 
@@ -2271,7 +2276,7 @@ class FileManager
             throw new ApiException('Presigned URLs are only available for S3/R2 disks', 400);
         }
 
-        if ($method === 'PUT') {
+        if ($method === 'PUT' || $method === 'POST') {
             if ($sizeBytes <= 0) {
                 throw new ApiException('Missing required field: size', 400, 'missing_param');
             }
@@ -2300,6 +2305,10 @@ class FileManager
 
         $client = $this->disks->s3Client($disk);
         $bucket = $config['bucket'] ?? '';
+
+        if ($method === 'POST') {
+            return $this->presignPost($client, $config, $bucket, $scoped, $ttl, $sizeBytes);
+        }
 
         $params = [
             'Bucket' => $bucket,
@@ -2340,6 +2349,53 @@ class FileManager
         return [
             'url'        => $url,
             'expires_at' => time() + $ttl,
+        ];
+    }
+
+    /**
+     * Browser-form upload (S3 POST Object, SigV4 policy) — the size-ENFORCING
+     * counterpart of a presigned PUT. A PUT URL can't carry its size (S3 drops
+     * Content-Length from the signature), so `size` there is advisory. The POST
+     * policy is checked by the BUCKET: `content-length-range` caps the body at the
+     * size declared (and quota-checked) here, the key is pinned exactly, and the
+     * Content-Type is pinned to the extension's type — so neither an oversized body
+     * nor a spoofed `text/html` type can get past it.
+     *
+     * The client submits `multipart/form-data` to `url` with every entry of
+     * `fields` first and the file LAST (field name `file`).
+     *
+     * Cloudflare R2 does not implement POST Object → 400 presign_post_unsupported.
+     *
+     * @return array{url:string,fields:array<string,string>,expires_at:int,max_bytes:int}
+     */
+    private function presignPost($client, array $config, string $bucket, string $scoped, int $ttl, int $sizeBytes): array
+    {
+        $endpointHost = strtolower((string) (parse_url((string) ($config['endpoint'] ?? ''), PHP_URL_HOST) ?? ''));
+        if ($endpointHost !== '' && str_ends_with($endpointHost, '.r2.cloudflarestorage.com')) {
+            throw new ApiException(
+                'This storage (Cloudflare R2) does not support form (POST) uploads — use chunked upload',
+                400,
+                'presign_post_unsupported'
+            );
+        }
+        $contentType = self::presignContentType($scoped);
+        $post = new \Aws\S3\PostObjectV4(
+            $client,
+            $bucket,
+            ['key' => $scoped, 'Content-Type' => $contentType],
+            [
+                ['bucket' => $bucket],
+                ['eq', '$key', $scoped],
+                ['eq', '$Content-Type', $contentType],
+                ['content-length-range', 0, $sizeBytes],
+            ],
+            "+{$ttl} seconds"
+        );
+        return [
+            'url'        => (string) ($post->getFormAttributes()['action'] ?? ''),
+            'fields'     => array_map('strval', $post->getFormInputs()),
+            'expires_at' => time() + $ttl,
+            'max_bytes'  => $sizeBytes,
         ];
     }
 

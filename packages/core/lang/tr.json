@@ -387,7 +387,9 @@
     "ocr_too_large": "Bu dosya OCR için çok büyük (maks. {max}).",
     "ocr_failed": "OCR taraması tamamlanamadı.",
     "ocr_timeout": "OCR taraması zaman aşımına uğradı.",
-    "byob_disk_collision": "Bu depolama diski adı, sunucuda zaten yapılandırılmış bir diskle çakışıyor."
+    "byob_disk_collision": "Bu depolama diski adı, sunucuda zaten yapılandırılmış bir diskle çakışıyor.",
+    "presign_put_disabled": "Bu hesap için doğrudan PUT yüklemeleri devre dışı — form (POST) yüklemesi kullanın",
+    "presign_post_unsupported": "Bu depolama form (POST) yüklemelerini desteklemiyor — parçalı yükleme kullanın"
   },
   "presign": {
     "title": "Ön imzalı URL",
