@@ -3,6 +3,54 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.22] — 2026-10-14
+
+> Released: `core-v0.2.96`, `laravel-v0.2.47`, `wordpress-v0.2.56`,
+> `node-v0.1.33`, `python-v0.1.4` (pushed in two batches — the
+> ≤3-tags-per-push rule).
+
+### Added
+
+- **`strip_exif` claim** (default `false`) — strips EXIF (incl. **GPS
+  position**), XMP, IPTC and PNG text chunks from JPEG/PNG/WebP uploads,
+  **losslessly** (container-level, pixels and ICC profile untouched) and keeps
+  only the Orientation tag. Covers `/upload` and `/import-url`; the result
+  carries `exif_stripped: true`. Forced on in demo mode. Not yet applied to
+  Intake portal uploads, direct-to-bucket uploads or files inside an extracted
+  zip; HEIC/AVIF/TIFF are stored as-is. Builders: `stripExif` / `strip_exif=`.
+- **Presigned POST** — `POST /api/fm/presign` with `method: "POST"` returns
+  `{url, fields, expires_at, max_bytes}`: an S3 form-upload policy the
+  **bucket enforces** (body ≤ declared size, exact key, extension-pinned
+  `Content-Type`), closing the advisory-size gap of presigned PUT. Cloudflare
+  R2 has no POST Object → `400 presign_post_unsupported`. New claim
+  **`allow_presign_put`** (default `true`); `false` refuses PUT
+  (`403 presign_put_disabled`). Builders: `allowPresignPut` /
+  `allow_presign_put=`.
+- **Tamper-evident audit log** — every entry is HMAC-chained to the previous
+  one (key derived from `FLUXFILES_SECRET`) on every backend: `audit.jsonl`
+  (+ archives) and the core, Laravel and WordPress DB handlers (per-disk
+  `audit_chain_head` row lock). **`GET /api/fm/audit/verify?disk=`** (audit-
+  export module, `audit` perm, unscoped token) reports edited, inserted,
+  reordered and middle-deleted entries. JSON → DB migration carries the chain.
+  **Migrations:** core `0008_add_audit_chain.sql`, Laravel
+  `2026_10_14_000000_add_fluxfiles_audit_chain`, WordPress schema `1.3.0`
+  (applied automatically on the next admin page load).
+- **Operator UI for OCR, virus scan and backup** — panels behind the same
+  three-state Pro gate as AI Vision: OCR with language picker, copy and "save
+  as caption"; an "uploads are scanned" note, a per-batch clean-scan toast and
+  an on-demand **"Scan for viruses"** (new `POST /api/fm/virus/scan`, also
+  proxied by Laravel/WordPress); folder backup to another of the token's
+  disks with a copied/skipped/errors summary. All 16 languages, plus labels
+  for every audit action added this cycle.
+
+### Fixed
+
+- **Metadata editor for path-scoped tenants** — `GET/PUT/DELETE
+  /api/fm/metadata` required an already-prefixed key while `list()` hands the
+  UI prefix-free keys, so every prefixed tenant got `403 path_denied`. The key
+  is now scoped server-side (an already-scoped key still works; a sibling
+  tenant's path is still refused). Core and both proxies.
+
 ## [0.3.21] — 2026-10-14
 
 > Released: `core-v0.2.95`, `laravel-v0.2.46`, `wordpress-v0.2.55`,
