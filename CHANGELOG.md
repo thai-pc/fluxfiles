@@ -3,6 +3,23 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.25] — 2026-10-14
+
+> Released: `core-v0.2.99`.
+
+### Fixed
+
+- **Activity log order**: entries written in the same second (an upload and its
+  trash, a backup run's per-file lines) now list newest first — the write order
+  breaks the tie, in both the panel and the export.
+- **Activity toolbar**: export, integrity check, verify log and retention sit on
+  their own right-aligned row instead of wrapping the filter row.
+- **Monospace font**: `--font-mono` was used but never defined, so paths fell
+  back to Courier.
+- **OCR result box** grows with the extracted text (6–18 rows).
+- `storage/tus/` (partial resumable uploads) is runtime state: gitignored and
+  kept out of Docker images, like `uploads/` and `rate_limit.json`.
+
 ## [0.3.24] — 2026-10-14
 
 > Released: `core-v0.2.98`, `laravel-v0.2.49`,
