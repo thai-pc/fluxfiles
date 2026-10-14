@@ -57,6 +57,7 @@ Route::get('disk/doctor', [FluxFilesController::class, 'diskDoctor']);
 // Quota
 Route::get('quota', [FluxFilesController::class, 'quota']);
 Route::get('usage', [FluxFilesController::class, 'usage']);
+Route::get('duplicates', [FluxFilesController::class, 'duplicates']);
 
 // Commercial edition / license status (server-wide; free core → edition:free)
 Route::get('license', [FluxFilesController::class, 'license']);

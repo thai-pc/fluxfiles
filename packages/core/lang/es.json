@@ -73,7 +73,17 @@
     "document": "Documentos",
     "archive": "Archivos",
     "other": "Otros",
-    "unsupported": "El uso de almacenamiento no está disponible para este disco."
+    "unsupported": "El uso de almacenamiento no está disponible para este disco.",
+    "dupes_title": "Archivos duplicados",
+    "dupes_find": "Buscar duplicados",
+    "dupes_busy": "Comparando archivos…",
+    "dupes_none": "No hay duplicados entre {count} archivos.",
+    "dupes_wasted": "Las copias extra ocupan {size}.",
+    "dupes_truncated": "Se detuvo antes por ser una biblioteca muy grande: vuelve a ejecutarlo tras limpiar.",
+    "dupes_group": "{count} copias · {size} cada una",
+    "dupes_oldest": "más antiguo",
+    "dupes_trash": "Mover a la papelera",
+    "dupes_trashed": "Copia movida a la papelera"
   },
   "chmod": {
     "title": "Permisos",

@@ -73,7 +73,17 @@
     "document": "Tài liệu",
     "archive": "Lưu trữ",
     "other": "Khác",
-    "unsupported": "Không thể tính dung lượng lưu trữ cho ổ đĩa này."
+    "unsupported": "Không thể tính dung lượng lưu trữ cho ổ đĩa này.",
+    "dupes_title": "Tệp trùng lặp",
+    "dupes_find": "Tìm tệp trùng",
+    "dupes_busy": "Đang so sánh tệp…",
+    "dupes_none": "Không có tệp trùng trong {count} tệp.",
+    "dupes_wasted": "Các bản sao thừa chiếm {size}.",
+    "dupes_truncated": "Đã dừng sớm vì thư viện quá lớn — dọn dẹp xong hãy chạy lại để xem phần còn lại.",
+    "dupes_group": "{count} bản sao · mỗi bản {size}",
+    "dupes_oldest": "cũ nhất",
+    "dupes_trash": "Chuyển vào thùng rác",
+    "dupes_trashed": "Đã chuyển bản sao vào thùng rác"
   },
   "chmod": {
     "title": "Phân quyền",

@@ -241,6 +241,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/quota', array_merge($readArgs, [
             'callback' => [$api, 'handleQuota'],
         ]));
+        register_rest_route($ns, $p . '/duplicates', array_merge($readArgs, [
+            'callback' => [$api, 'handleDuplicates'],
+        ]));
         register_rest_route($ns, $p . '/usage', array_merge($readArgs, [
             'callback' => [$api, 'handleUsage'],
         ]));
@@ -1883,6 +1886,25 @@ class FluxFilesApi
      * listContents pass via getUsageBreakdown). Proxy mode recomputes each call
      * (no cache layer here); the standalone core endpoint adds the file cache.
      */
+    /** Duplicate finder (core's GET /api/fm/duplicates). */
+    public function handleDuplicates(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+            if (!method_exists($fm, 'findDuplicates')) {
+                throw new ApiException('The duplicate finder needs a newer FluxFiles core', 501, 'not_found');
+            }
+            return $this->ok($fm->findDuplicates(
+                (string) ($request->get_param('disk') ?: 'local'),
+                max(1, min(200, (int) ($request->get_param('limit') ?: 50)))
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function handleUsage(\WP_REST_Request $request): \WP_REST_Response
     {
         try {

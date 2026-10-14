@@ -3572,8 +3572,48 @@ function fluxFilesApp() {
         // Commercial edition / license status (server-wide; free core → edition:free)
         licenseInfo: null,
 
+        // ── Duplicate finder (usage dashboard) ─────────────────────────────────
+        dupes: null,            // { groups, total_wasted, scanned_files, truncated }
+        dupesBusy: false,
+        dupesError: '',
+
+        async findDuplicates() {
+            if (this.dupesBusy) return;
+            this.dupesBusy = true;
+            this.dupesError = '';
+            try {
+                this.dupes = await this.api('GET', '/api/fm/duplicates?disk=' + encodeURIComponent(this.currentDisk));
+            } catch (e) {
+                this.dupesError = e.message || this.t('error.generic');
+            } finally {
+                this.dupesBusy = false;
+            }
+        },
+
+        // Soft-delete one copy (restorable from Trash). The last copy of a group is
+        // never offered — the button hides once a group is down to one file.
+        async trashDuplicate(group, file) {
+            if (!group || group.files.length < 2) return;
+            try {
+                await this.api('POST', '/api/fm/trash', { disk: this.currentDisk, path: file.key });
+                group.files = group.files.filter(f => f.key !== file.key);
+                group.count = group.files.length;
+                this.dupes.total_wasted = Math.max(0, this.dupes.total_wasted - group.size);
+                if (group.files.length < 2) {
+                    this.dupes.groups = this.dupes.groups.filter(g => g !== group);
+                }
+                this.showToast(this.t('usage.dupes_trashed'), 'success');
+                this.postMessage('FM_EVENT', { event: 'trash:done', key: file.key });
+                this.loadFiles();
+            } catch (e) {
+                this.showToast(e.message || this.t('error.generic'), 'error', 4000);
+            }
+        },
+
         async openUsage() {
             this.showUsage = true;
+            this.dupes = null;          // per-disk result; recomputed on demand
+            this.dupesError = '';
             // License status is standalone-admin-only (see licenseBadgeVisible below) —
             // an embedded end-customer must never trigger the license fetch just by
             // opening the usage dashboard, or the badge would leak into their session.

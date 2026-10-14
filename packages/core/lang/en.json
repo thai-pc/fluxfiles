@@ -73,7 +73,17 @@
     "document": "Documents",
     "archive": "Archives",
     "other": "Other",
-    "unsupported": "Storage usage is not available for this disk."
+    "unsupported": "Storage usage is not available for this disk.",
+    "dupes_title": "Duplicate files",
+    "dupes_find": "Find duplicates",
+    "dupes_busy": "Comparing files…",
+    "dupes_none": "No duplicates among {count} files.",
+    "dupes_wasted": "Extra copies use {size}.",
+    "dupes_truncated": "Stopped early on a very large library — run again after cleaning up to see the rest.",
+    "dupes_group": "{count} copies · {size} each",
+    "dupes_oldest": "oldest",
+    "dupes_trash": "Move to trash",
+    "dupes_trashed": "Copy moved to trash"
   },
   "chmod": {
     "title": "Permissions",

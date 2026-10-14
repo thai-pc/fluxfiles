@@ -73,7 +73,17 @@
     "document": "Belgeler",
     "archive": "Arşivler",
     "other": "Diğer",
-    "unsupported": "Bu disk için depolama kullanımı kullanılamıyor."
+    "unsupported": "Bu disk için depolama kullanımı kullanılamıyor.",
+    "dupes_title": "Yinelenen dosyalar",
+    "dupes_find": "Yinelenenleri bul",
+    "dupes_busy": "Dosyalar karşılaştırılıyor…",
+    "dupes_none": "{count} dosya arasında yineleme yok.",
+    "dupes_wasted": "Fazla kopyalar {size} yer kaplıyor.",
+    "dupes_truncated": "Çok büyük bir kitaplıkta erken durdu — temizledikten sonra tekrar çalıştırın.",
+    "dupes_group": "{count} kopya · her biri {size}",
+    "dupes_oldest": "en eski",
+    "dupes_trash": "Çöp kutusuna taşı",
+    "dupes_trashed": "Kopya çöp kutusuna taşındı"
   },
   "chmod": {
     "title": "İzinler",

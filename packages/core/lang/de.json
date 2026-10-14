@@ -73,7 +73,17 @@
     "document": "Dokumente",
     "archive": "Archive",
     "other": "Sonstige",
-    "unsupported": "Die Speichernutzung ist für diesen Datenträger nicht verfügbar."
+    "unsupported": "Die Speichernutzung ist für diesen Datenträger nicht verfügbar.",
+    "dupes_title": "Doppelte Dateien",
+    "dupes_find": "Duplikate suchen",
+    "dupes_busy": "Dateien werden verglichen…",
+    "dupes_none": "Keine Duplikate unter {count} Dateien.",
+    "dupes_wasted": "Zusätzliche Kopien belegen {size}.",
+    "dupes_truncated": "Bei einer sehr großen Bibliothek vorzeitig gestoppt — nach dem Aufräumen erneut ausführen.",
+    "dupes_group": "{count} Kopien · je {size}",
+    "dupes_oldest": "älteste",
+    "dupes_trash": "In den Papierkorb",
+    "dupes_trashed": "Kopie in den Papierkorb verschoben"
   },
   "chmod": {
     "title": "Berechtigungen",

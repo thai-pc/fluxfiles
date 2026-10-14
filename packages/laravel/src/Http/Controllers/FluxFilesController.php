@@ -1035,6 +1035,28 @@ class FluxFilesController
      * listContents pass via getUsageBreakdown). Proxy mode recomputes each call
      * (no cache layer here); the standalone core endpoint adds the file cache.
      */
+    /**
+     * Duplicate finder (core's GET /api/fm/duplicates). Reuses the generic read
+     * bucket — like every other proxy route, this adapter has no per-action bucket.
+     */
+    public function duplicates(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, false);
+            $fm = $this->fileManager($claims);
+            if (!method_exists($fm, 'findDuplicates')) {
+                throw new ApiException('The duplicate finder needs a newer FluxFiles core', 501, 'not_found');
+            }
+            return $this->ok($fm->findDuplicates(
+                (string) $request->query('disk', 'local'),
+                max(1, min(200, (int) $request->query('limit', 50)))
+            ));
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function usage(Request $request): JsonResponse
     {
         try {

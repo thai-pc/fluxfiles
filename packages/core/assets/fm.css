@@ -3974,3 +3974,12 @@ body {
 .ff-scan-clean { color: var(--color-text-success, #15803d); }
 .ff-scan-infected { color: var(--color-text-danger, #b91c1c); }
 .ff-scan-note { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--color-text-tertiary); margin-top: 4px; }
+
+/* ── Duplicate finder (usage dashboard) ── */
+.ff-dupes .ff-btn { margin-top: 4px; }
+.ff-dupe-group { border: 1px solid var(--color-border-tertiary); border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+.ff-dupe-head { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 4px; }
+.ff-dupe-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; }
+.ff-dupe-key { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); }
+.ff-dupe-tag { font-size: 11px; color: var(--color-text-tertiary); }
+.ff-dupe-row .ff-btn { padding: 2px 8px; font-size: 12px; }

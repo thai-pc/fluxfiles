@@ -73,7 +73,17 @@
     "document": "文档",
     "archive": "压缩包",
     "other": "其他",
-    "unsupported": "此磁盘不支持存储用量统计。"
+    "unsupported": "此磁盘不支持存储用量统计。",
+    "dupes_title": "重复文件",
+    "dupes_find": "查找重复文件",
+    "dupes_busy": "正在比较文件…",
+    "dupes_none": "{count} 个文件中没有重复。",
+    "dupes_wasted": "多余副本占用 {size}。",
+    "dupes_truncated": "文件库过大，已提前停止——清理后再次运行可查看其余部分。",
+    "dupes_group": "{count} 个副本 · 每个 {size}",
+    "dupes_oldest": "最早",
+    "dupes_trash": "移至回收站",
+    "dupes_trashed": "副本已移至回收站"
   },
   "chmod": {
     "title": "权限",

@@ -73,7 +73,17 @@
     "document": "ドキュメント",
     "archive": "アーカイブ",
     "other": "その他",
-    "unsupported": "このディスクではストレージ使用量を取得できません。"
+    "unsupported": "このディスクではストレージ使用量を取得できません。",
+    "dupes_title": "重複ファイル",
+    "dupes_find": "重複を検索",
+    "dupes_busy": "ファイルを比較中…",
+    "dupes_none": "{count} 件のファイルに重複はありません。",
+    "dupes_wasted": "余分なコピーが {size} を使用しています。",
+    "dupes_truncated": "ライブラリが大きいため途中で停止しました。整理後に再実行すると残りが表示されます。",
+    "dupes_group": "{count} 個のコピー · 各 {size}",
+    "dupes_oldest": "最も古い",
+    "dupes_trash": "ゴミ箱へ移動",
+    "dupes_trashed": "コピーをゴミ箱へ移動しました"
   },
   "chmod": {
     "title": "パーミッション",

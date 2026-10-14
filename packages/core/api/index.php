@@ -416,7 +416,7 @@ try {
 
     // A forced usage recompute lists the whole prefix — give it its own tight
     // bucket (2/min) so it can't be abused to hammer the storage with ListObjects.
-    if ($uri === '/api/fm/usage' && ($_GET['refresh'] ?? '') === 'true') {
+    if (($uri === '/api/fm/usage' && ($_GET['refresh'] ?? '') === 'true') || $uri === '/api/fm/duplicates') {
         \FluxFiles\RateLimiterFactory::make(2, 2, 60, $dbConn)
             ->check($claims->userId, 'usage_refresh');
     }
@@ -1266,6 +1266,15 @@ function routeRequest(
             return handleUsage($quotaManager, $diskManager, $claims);
         }
         return $quotaManager->getQuotaInfo($disk, $claims->pathPrefix, $claims->maxStorageMb);
+    }
+
+    // Duplicate finder (usage dashboard). Lists + hashes the prefix, so it shares
+    // the forced-usage-recompute bucket below (2/min) rather than the read budget.
+    if ($method === 'GET' && $uri === '/api/fm/duplicates') {
+        return $fm->findDuplicates(
+            (string) ($_GET['disk'] ?? 'local'),
+            max(1, min(200, (int) ($_GET['limit'] ?? 50)))
+        );
     }
 
     // Audit log — users can only view their own logs

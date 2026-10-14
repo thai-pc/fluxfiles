@@ -73,7 +73,17 @@
     "document": "Documenten",
     "archive": "Archieven",
     "other": "Overig",
-    "unsupported": "Opslaggebruik is niet beschikbaar voor deze schijf."
+    "unsupported": "Opslaggebruik is niet beschikbaar voor deze schijf.",
+    "dupes_title": "Dubbele bestanden",
+    "dupes_find": "Duplicaten zoeken",
+    "dupes_busy": "Bestanden vergelijken…",
+    "dupes_none": "Geen duplicaten in {count} bestanden.",
+    "dupes_wasted": "Extra kopieën gebruiken {size}.",
+    "dupes_truncated": "Vroeg gestopt bij een zeer grote bibliotheek — voer opnieuw uit na opschonen.",
+    "dupes_group": "{count} kopieën · elk {size}",
+    "dupes_oldest": "oudste",
+    "dupes_trash": "Naar prullenbak",
+    "dupes_trashed": "Kopie naar prullenbak verplaatst"
   },
   "chmod": {
     "title": "Rechten",

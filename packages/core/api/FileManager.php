@@ -2405,6 +2405,95 @@ class FileManager
     }
 
     /**
+     * Duplicate finder for the usage dashboard: groups byte-identical files under
+     * the tenant's prefix and reports how much space the extra copies waste.
+     *
+     * Backend-agnostic and cheap by construction: one recursive listing, a size
+     * pre-filter (files of a unique size can't have a twin), then a streamed
+     * SHA-256 of only the size-colliding candidates, capped at $hashBudgetBytes
+     * read per call — over budget it returns what it has with `truncated: true`.
+     * Hidden/reserved paths follow the same rules as list().
+     *
+     * @return array{groups:array<int,array{hash:string,size:int,count:int,wasted:int,files:array<int,array{key:string,modified:?int}>}>,total_wasted:int,scanned_files:int,truncated:bool}
+     */
+    public function findDuplicates(string $disk, int $maxGroups = 50, int $hashBudgetBytes = 512 * 1024 * 1024): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('read');
+        $root = $this->scopedPath('');
+        $fs = $this->disks->disk($disk);
+
+        $bySize = [];
+        $scanned = 0;
+        foreach ($fs->listContents($root, true) as $item) {
+            if (!$item->isFile()) {
+                continue;
+            }
+            $key = $item->path();
+            if ($this->isReservedSystemPath($key) || $this->isHiddenForToken($key)) {
+                continue;
+            }
+            $size = (int) ($item->fileSize() ?? 0);
+            if ($size <= 0) {
+                continue;
+            }
+            $scanned++;
+            $bySize[$size][] = ['key' => $key, 'modified' => $item->lastModified()];
+        }
+
+        $byHash = [];
+        $budget = $hashBudgetBytes;
+        $truncated = false;
+        krsort($bySize); // biggest first: those waste the most, so they get the budget
+        foreach ($bySize as $size => $files) {
+            if (count($files) < 2) {
+                continue;
+            }
+            foreach ($files as $f) {
+                if ($budget < $size) {
+                    $truncated = true;
+                    break 2;
+                }
+                $stream = $fs->readStream($f['key']);
+                $ctx = hash_init('sha256');
+                hash_update_stream($ctx, $stream);
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+                $budget -= $size;
+                $byHash[$size . ':' . hash_final($ctx)][] = $f;
+            }
+        }
+
+        $groups = [];
+        $totalWasted = 0;
+        foreach ($byHash as $id => $files) {
+            if (count($files) < 2) {
+                continue;
+            }
+            [$size, $hash] = explode(':', $id, 2);
+            $wasted = (int) $size * (count($files) - 1);
+            $totalWasted += $wasted;
+            usort($files, static fn ($a, $b) => ($a['modified'] ?? 0) <=> ($b['modified'] ?? 0)); // oldest = the "original"
+            $groups[] = [
+                'hash'   => $hash,
+                'size'   => (int) $size,
+                'count'  => count($files),
+                'wasted' => $wasted,
+                'files'  => array_map(fn ($f) => ['key' => $this->outKey($f['key']), 'modified' => $f['modified']], $files),
+            ];
+        }
+        usort($groups, static fn ($a, $b) => $b['wasted'] <=> $a['wasted']);
+
+        return [
+            'groups'        => array_slice($groups, 0, max(1, $maxGroups)),
+            'total_wasted'  => $totalWasted,
+            'scanned_files' => $scanned,
+            'truncated'     => $truncated,
+        ];
+    }
+
+    /**
      * On-demand virus scan of a file that is ALREADY stored — e.g. one uploaded
      * before scanning was switched on, or arriving by a path no scan covers
      * (chunked/presigned direct-to-bucket uploads). Read-only: reports, never

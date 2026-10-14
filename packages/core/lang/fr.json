@@ -73,7 +73,17 @@
     "document": "Documents",
     "archive": "Archives",
     "other": "Autre",
-    "unsupported": "L'utilisation du stockage n'est pas disponible pour ce disque."
+    "unsupported": "L'utilisation du stockage n'est pas disponible pour ce disque.",
+    "dupes_title": "Fichiers en double",
+    "dupes_find": "Rechercher les doublons",
+    "dupes_busy": "Comparaison des fichiers…",
+    "dupes_none": "Aucun doublon parmi {count} fichiers.",
+    "dupes_wasted": "Les copies en trop occupent {size}.",
+    "dupes_truncated": "Arrêt anticipé sur une très grande bibliothèque — relancez après nettoyage pour voir le reste.",
+    "dupes_group": "{count} copies · {size} chacune",
+    "dupes_oldest": "le plus ancien",
+    "dupes_trash": "Mettre à la corbeille",
+    "dupes_trashed": "Copie mise à la corbeille"
   },
   "chmod": {
     "title": "Permissions",

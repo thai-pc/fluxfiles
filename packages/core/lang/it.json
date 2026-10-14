@@ -73,7 +73,17 @@
     "document": "Documenti",
     "archive": "Archivi",
     "other": "Altro",
-    "unsupported": "L'utilizzo dello spazio di archiviazione non è disponibile per questo disco."
+    "unsupported": "L'utilizzo dello spazio di archiviazione non è disponibile per questo disco.",
+    "dupes_title": "File duplicati",
+    "dupes_find": "Trova duplicati",
+    "dupes_busy": "Confronto dei file…",
+    "dupes_none": "Nessun duplicato tra {count} file.",
+    "dupes_wasted": "Le copie in più occupano {size}.",
+    "dupes_truncated": "Interrotto presto su una libreria molto grande — riesegui dopo la pulizia per vedere il resto.",
+    "dupes_group": "{count} copie · {size} ciascuna",
+    "dupes_oldest": "più vecchio",
+    "dupes_trash": "Sposta nel cestino",
+    "dupes_trashed": "Copia spostata nel cestino"
   },
   "chmod": {
     "title": "Permessi",

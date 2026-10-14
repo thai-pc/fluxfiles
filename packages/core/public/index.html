@@ -1789,6 +1789,34 @@
                                 </div>
                             </div>
                         </template>
+
+                        <!-- Duplicate finder: byte-identical files under this tenant's root. -->
+                        <div class="ff-usage-section ff-dupes">
+                            <h4 x-text="t('usage.dupes_title')"></h4>
+                            <button class="ff-btn ff-btn-ghost" x-show="!dupes" :disabled="dupesBusy" @click="findDuplicates()"
+                                    x-text="dupesBusy ? t('usage.dupes_busy') : t('usage.dupes_find')"></button>
+                            <p class="ff-new-folder-error" x-show="dupesError" x-text="dupesError"></p>
+                            <template x-if="dupes">
+                                <div>
+                                    <p class="ff-activity-state" x-show="!dupes.groups.length" x-text="t('usage.dupes_none', { count: dupes.scanned_files })"></p>
+                                    <p class="ff-activity-note" x-show="dupes.groups.length" x-text="t('usage.dupes_wasted', { size: formatSize(dupes.total_wasted) })"></p>
+                                    <p class="ff-activity-note" x-show="dupes.truncated" x-text="t('usage.dupes_truncated')"></p>
+                                    <template x-for="g in dupes.groups" :key="g.hash">
+                                        <div class="ff-dupe-group">
+                                            <div class="ff-dupe-head" x-text="t('usage.dupes_group', { count: g.count, size: formatSize(g.size) })"></div>
+                                            <template x-for="(f, i) in g.files" :key="f.key">
+                                                <div class="ff-dupe-row">
+                                                    <span class="ff-dupe-key" x-text="'/' + f.key" :title="f.key"></span>
+                                                    <span class="ff-dupe-tag" x-show="i === 0" x-text="t('usage.dupes_oldest')"></span>
+                                                    <button class="ff-btn ff-btn-ghost" x-show="_hasPerm('delete') && g.files.length > 1"
+                                                            @click="trashDuplicate(g, f)" x-text="t('usage.dupes_trash')"></button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </template>
             </div>
