@@ -492,7 +492,7 @@ test('REPLAY: the refusal survives dropping the `t` marker or the `share` flag',
 test('REPLAY: the intake portal token and the stream/img/grant tokens are refused too', function () {
     $secret = str_repeat('k', 40);
     $portal = \FluxFiles\JwtCompat::encode([
-        't' => 'intake', 'sub' => 'intake:u42', 'exp' => time() + 600, 'jti' => bin2hex(random_bytes(12)),
+        't' => 'intake', 'sub' => 'u42', 'exp' => time() + 600, 'jti' => bin2hex(random_bytes(12)),
         'perms' => ['write'], 'disks' => ['local'], 'prefix' => 'users/42/drop', 'intake' => true, 'store' => 'users/42/',
     ], $secret);
     expectApi(fn () => \FluxFiles\JwtMiddleware::handle($portal, $secret), 'token_not_access', 403);

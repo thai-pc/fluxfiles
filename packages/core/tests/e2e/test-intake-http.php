@@ -163,7 +163,7 @@ try {
 
     // A syntactically real portal token, so nothing can pass merely for being junk.
     $fakePortal = \FluxFiles\JwtCompat::encode([
-        't' => 'intake', 'sub' => 'intake:u1', 'iat' => time(), 'exp' => time() + 600, 'jti' => bin2hex(random_bytes(12)),
+        't' => 'intake', 'sub' => 'u1', 'iat' => time(), 'exp' => time() + 600, 'jti' => bin2hex(random_bytes(12)),
         'perms' => ['write'], 'disks' => ['local'], 'prefix' => "{$PREFIX}/drop",
         'intake' => true, 'store' => "{$PREFIX}/",
     ], $SECRET);

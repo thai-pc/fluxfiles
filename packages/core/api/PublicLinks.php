@@ -113,6 +113,15 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             $portalClaims = \FluxFiles\Claims::fromJwtPayload($payload);
             $portalFm = new FileManager($dm, $portalClaims, new StorageMetadataHandler($dm));
             $portalFm->setStreamSecret($secret);
+            // Tenant quota — same wiring as index.php and both proxies. The portal
+            // token carries the operator's `max_storage`/`max_files` (forwarded by
+            // IntakeModule::createPortal()); without a QuotaManager on this
+            // FileManager those claims are decoded and then never consulted, and an
+            // anonymous sender is the one writer who could fill a capped tenant
+            // past its limit. The usage is computed per the portal token's own
+            // prefix (the destination folder), so this is stricter than the
+            // operator's whole-prefix check, never looser — see createPortal().
+            $portalFm->setQuotaManager(new \FluxFiles\QuotaManager($dm));
             // Virus scan (paid module) — same fail-closed wiring as index.php/Laravel/
             // WordPress. Without this, an anonymous intake upload would never be
             // scanned even when the operator's own token has `allow_virus_scan` on,
@@ -124,6 +133,19 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
                     /** @var \FluxFiles\Virus\VirusScanModule $virus */
                     $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $portalClaims);
                     return $virus->scanPath($localPath);
+                });
+            }
+            // DLP / PII scan (paid module) — same lazy-gate-inside-callback, fail-closed
+            // contract as the virus scanner above (and index.php's own wiring). Without
+            // it a tenant that refuses PII on its own uploads would still accept it
+            // from any stranger through a portal. createPortal() forwards
+            // `allow_dlp_scan` + the entity/threshold/extension/size tuning claims so
+            // FileManager::assertNoPii() sees the operator's exact policy here.
+            if ($portalClaims->allowDlpScan) {
+                $portalFm->setDlpScanner(static function (string $localPath, string $name) use ($portalClaims): array {
+                    /** @var \FluxFiles\Dlp\DlpModule $dlp */
+                    $dlp = \FluxFiles\ModuleRegistry::require('dlp', \FluxFiles\LicenseManager::fromEnv(), $portalClaims);
+                    return $dlp->scanPath($localPath, $portalClaims->dlpEntityTypes, $portalClaims->dlpMinScore);
                 });
             }
             $res = $module->receiveUpload($portalFm, $dm, $secret, $token, $file, $password);
