@@ -32,6 +32,7 @@ Primary capabilities:
 - `packages/vue/`: Vue 3/Nuxt component/composable wrapper.
 - `packages/ckeditor4/`, `packages/tinymce/`, `packages/summernote/`: editor integrations.
 - `packages/node/`: server-side token SDK (`@fluxfiles/node` on npm), mints JWTs from JS.
+- `packages/mcp/`: Model Context Protocol server (`@fluxfiles/mcp` on npm, `fluxfiles-mcp` stdio bin) — agents browse/search/read through a scoped JWT; write/trash tools only behind explicit env flags. Released with `mcp-vX.Y.Z` tags.
 - `packages/python/`: server-side token SDK (`fluxfiles-token` on PyPI), mints JWTs from Python.
 - `docs/`: design and roadmap notes.
 

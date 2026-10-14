@@ -45,6 +45,7 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   `lang/`, `tests/`.
 - `packages/sdk/` — vanilla browser SDK (`FluxFiles` global).
 - `packages/node/` — server-side token SDK (`@fluxfiles/node`), mints JWTs in JS.
+- `packages/mcp/` — MCP server (`@fluxfiles/mcp`, stdio bin `fluxfiles-mcp`): read-only tools by default, write/trash behind env flags.
 - `packages/python/` — server-side token SDK (`fluxfiles-token` on PyPI), mints JWTs in Python.
 - `packages/{react,vue,ckeditor4,tinymce,summernote}/` — JS/TS wrappers (tsup/esbuild + vitest).
 - `packages/{laravel,wordpress}/` — PHP adapters (each bundles/uses the core).

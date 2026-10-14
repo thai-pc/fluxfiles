@@ -10,6 +10,7 @@ on:
       - "tinymce-v*"
       - "summernote-v*"
       - "node-v*"
+      - "mcp-v*"
 
 jobs:
   publish:
@@ -40,6 +41,9 @@ jobs:
           - pkg: node
             tag_prefix: "node-"
             build: "true"   # builds dist/ via tsup (also runs on prepublishOnly)
+          - pkg: mcp
+            tag_prefix: "mcp-"
+            build: "true"   # builds dist/ (incl. the executable dist/cli.js bin) via tsup
 
     steps:
       - uses: actions/checkout@v6
