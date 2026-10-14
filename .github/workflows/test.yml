@@ -485,6 +485,16 @@ jobs:
           npm run build
           npm test
 
+      - name: Install + typecheck + build + test @fluxfiles/mcp
+        working-directory: packages/mcp
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/ci-retry.sh" npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          npm test
+          test -x dist/cli.js || chmod +x dist/cli.js
+          head -1 dist/cli.js | grep -q '^#!/usr/bin/env node' # the bin must be directly executable
+
   python-token:
     name: Python token SDK (PHP↔Python parity)
     runs-on: ubuntu-latest
