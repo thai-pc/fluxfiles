@@ -1403,6 +1403,10 @@
                 <input type="date" x-model="activityFilter.from" :title="t('audit.filter_from')">
                 <input type="date" x-model="activityFilter.to" :title="t('audit.filter_to')">
                 <button class="ff-btn ff-btn-primary" @click="loadActivity()" x-text="t('audit.apply')"></button>
+            </div>
+            <!-- Tools get their own right-aligned row: sharing the filter row made it
+                 wrap at an arbitrary button once audit-export was on. -->
+            <div class="ff-activity-tools" x-show="auditExportGate !== 'hidden' || canVerifyChain || canRetention">
                 <!-- Audit export (paid module: audit-export). 'on' → real downloads,
                      'locked' → the same generic Pro teaser used by Links, 'hidden' → nothing. -->
                 <button class="ff-btn" x-show="auditExportGate === 'on'" :disabled="auditExportBusy" @click="downloadAuditExport('ndjson')" x-text="t('audit.export_ndjson')"></button>
@@ -2260,7 +2264,7 @@
                 <template x-if="ocrText !== null">
                     <div class="ff-ocr-result">
                         <p class="ff-activity-state" x-show="ocrText === ''" x-text="t('ocr.empty')"></p>
-                        <textarea x-show="ocrText !== ''" readonly rows="8" x-text="ocrText" :aria-label="t('ocr.result')"></textarea>
+                        <textarea x-show="ocrText !== ''" readonly :rows="Math.min(18, Math.max(6, (ocrText || '').split('\n').length))" x-text="ocrText" :aria-label="t('ocr.result')"></textarea>
                         <div class="ff-aivision-ops" x-show="ocrText !== ''">
                             <button class="ff-btn ff-btn-ghost" @click="copyOcrText()" x-text="t('ocr.copy')"></button>
                             <button class="ff-btn ff-btn-ghost" :disabled="ocrSaving || !_hasPerm('write')" @click="saveOcrAsCaption()" x-text="t('ocr.save_caption')"></button>

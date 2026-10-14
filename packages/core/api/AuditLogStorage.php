@@ -97,9 +97,7 @@ class AuditLogStorage
             });
         }
 
-        $all = array_values($all);
-        usort($all, fn($a, $b) => ($b['created_at'] ?? 0) <=> ($a['created_at'] ?? 0));
-        return array_slice($all, $offset, $limit);
+        return array_slice(self::newestFirst($all), $offset, $limit);
     }
 
     /**
@@ -113,7 +111,9 @@ class AuditLogStorage
         $all = [];
         foreach ($this->claimsDisks as $disk) {
             try {
-                $all = array_merge($all, $this->storage->readAudit($disk), $this->storage->readAuditArchive($disk));
+                // Archive first: it holds the OLDER lines rotated out of the live log,
+                // so archive+live is write order — what newestFirst() tie-breaks on.
+                $all = array_merge($all, $this->storage->readAuditArchive($disk), $this->storage->readAudit($disk));
             } catch (\Throwable $e) {
                 // Skip disk if error
             }
@@ -150,8 +150,27 @@ class AuditLogStorage
             $all = array_filter($all, fn($e) => ($e['user_id'] ?? '') === $actor);
         }
 
+        return array_slice(self::newestFirst($all), 0, self::MAX_EXPORT);
+    }
+
+    /**
+     * Newest first. `created_at` is whole seconds, so several entries from one
+     * request (an upload then its trash, a backup run's per-file lines) share a
+     * timestamp — sorting on it alone kept them in write order (oldest first)
+     * inside a newest-first list, so an upload showed ABOVE its own trash. Every
+     * backend returns a disk's
+     * entries in write order (JSONL append order / DB `id ASC`), so the position
+     * in that list is the real sequence: later-written wins a tie.
+     *
+     * @param array<int|string,array<string,mixed>> $all
+     * @return list<array<string,mixed>>
+     */
+    private static function newestFirst(array $all): array
+    {
         $all = array_values($all);
-        usort($all, fn($a, $b) => ($b['created_at'] ?? 0) <=> ($a['created_at'] ?? 0));
-        return array_slice($all, 0, self::MAX_EXPORT);
+        $idx = array_keys($all);
+        usort($idx, static fn (int $i, int $j): int =>
+            (($all[$j]['created_at'] ?? 0) <=> ($all[$i]['created_at'] ?? 0)) ?: ($j <=> $i));
+        return array_map(static fn (int $i) => $all[$i], $idx);
     }
 }

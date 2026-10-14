@@ -4,6 +4,11 @@
 **/dist
 storage/uploads
 packages/core/storage/uploads
+# runtime state, never baked into an image
+storage/tus
+packages/core/storage/tus
+**/storage/rate_limit.json
+**/storage/demo_ip.json
 **/.env
 **/test-results
 **/playwright-report

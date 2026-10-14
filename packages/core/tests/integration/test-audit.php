@@ -231,6 +231,28 @@ test('exportAll merges live + archived entries with the same scoping/filters as 
     assertEqual('users/42/new.png', $filtered[0]['file_key'], 'the matching entry');
 });
 
+test('same-second entries list newest first (write order breaks the tie)', function () {
+    [$audit] = makeAudit();
+    // Logged back-to-back: they share a whole-second created_at almost always.
+    $audit->log('u', 'upload', 'local', 'a.txt');
+    $audit->log('u', 'trash', 'local', 'a.txt');
+    $audit->log('u', 'restore', 'local', 'a.txt');
+    $rows = $audit->list();
+    if (count(array_unique(array_column($rows, 'created_at'))) === 1) {
+        assertEqual(['restore', 'trash', 'upload'], array_column($rows, 'action'), 'list newest first');
+        assertEqual(['restore', 'trash', 'upload'], array_column($audit->exportAll(), 'action'), 'export newest first');
+    }
+});
+
+test('newest first across different seconds still sorts by time', function () {
+    [$audit, $fs] = makeAudit();
+    $now = time();
+    // Written out of time order on purpose: time wins over write order.
+    $line = fn (string $action, int $ts) => json_encode(['ts' => $ts, 'action' => $action, 'context' => ['user_id' => 'u', 'file_key' => 'x']]);
+    $fs->write('_fluxfiles/audit.jsonl', implode("\n", [$line('b', $now - 10), $line('a', $now - 20), $line('c', $now)]) . "\n");
+    assertEqual(['c', 'b', 'a'], array_column($audit->list(), 'action'), 'time order');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

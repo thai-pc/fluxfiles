@@ -14,6 +14,7 @@
     --border-radius-md: 10px;
     --border-radius-lg: 16px;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 
     --ff-primary: #8957e5;
     --ff-primary-hover: #7745d3;
@@ -2268,6 +2269,14 @@ body {
     font-size: 13px;
 }
 .ff-activity-filters input[type="text"] { flex: 1 1 140px; min-width: 0; }
+.ff-activity-tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--ff-border);
+}
 .ff-activity-body { overflow: auto; padding: 8px 20px 20px; }
 .ff-activity-state { padding: 32px; text-align: center; color: var(--color-text-tertiary); }
 .ff-activity-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -3885,7 +3894,7 @@ body {
     border-radius: 6px;
     background: var(--ff-bg-hover);
     color: var(--color-text-primary);
-    font-family: var(--ff-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 
@@ -3969,7 +3978,7 @@ body {
 /* ── OCR / Virus scan / Backup panels (paid modules) ── */
 .ff-ocr-lang { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-secondary); }
 .ff-ocr-lang select { font: inherit; padding: 4px 6px; border: 1px solid var(--color-border-secondary); border-radius: 6px; background: var(--color-background-primary); color: var(--color-text-primary); }
-.ff-ocr-result textarea { width: 100%; box-sizing: border-box; margin-top: 8px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px; border: 1px solid var(--color-border-secondary); border-radius: 6px; background: var(--color-background-secondary); color: var(--color-text-primary); resize: vertical; }
+.ff-ocr-result textarea { width: 100%; box-sizing: border-box; margin-top: 8px; max-height: 50vh; font: 12px/1.5 var(--font-mono); padding: 8px; border: 1px solid var(--color-border-secondary); border-radius: 6px; background: var(--color-background-secondary); color: var(--color-text-primary); resize: vertical; }
 .ff-scan-result { font-size: 13px; font-weight: 500; margin: 8px 0; }
 .ff-scan-clean { color: var(--color-text-success, #15803d); }
 .ff-scan-infected { color: var(--color-text-danger, #b91c1c); }
