@@ -3,6 +3,49 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.23] — 2026-10-14
+
+> Released: `core-v0.2.97`, `laravel-v0.2.48`, `wordpress-v0.2.57`,
+> `node-v0.1.34`, `python-v0.1.5`, `mcp-v0.1.0` (pushed in two batches — the
+> ≤3-tags-per-push rule).
+
+### Added
+
+- **Resumable uploads (tus 1.0)** — `POST/HEAD/PATCH/DELETE /api/fm/tus`
+  (core + `creation`/`termination` extensions), so any tus client works. Large
+  uploads on local/SFTP disks are no longer capped by PHP's
+  `upload_max_filesize`, and a dropped connection resumes. Upload rules are
+  enforced at creation; the last chunk runs the normal upload pipeline (quota,
+  virus/DLP, `strip_exif`, variants, ownership). Partial bytes are staged in
+  `<FLUXFILES_STORAGE_PATH>/tus/` (swept after 24 h) — **multi-node: share that
+  directory or use sticky sessions**. New env `FLUXFILES_TUS_RATE_LIMIT`
+  (600/min). The UI uses it for files > 8 MB on non-S3 disks and falls back to
+  a plain upload where `/tus` doesn't exist (Laravel/WordPress proxies).
+- **`@fluxfiles/mcp`** — new npm package: a Model Context Protocol server
+  (`npx -y @fluxfiles/mcp`) so AI agents can list, search and read files
+  through a scoped FluxFiles JWT. Write/trash tools only behind
+  `FLUXFILES_MCP_WRITE` / `FLUXFILES_MCP_DELETE`.
+- **Duplicate finder** in the usage dashboard (`GET /api/fm/duplicates`):
+  byte-identical files, space wasted, move extra copies to trash.
+- **Poster thumbnails for PDFs and videos** — page 1 (Ghostscript) / a frame
+  at ~1 s (ffmpeg) as the item's `poster`, when those tools are installed (the
+  official Docker image does not ship them). New claim `media_posters`
+  (default `true`). ffmpeg runs with a forced demuxer and file-only protocols.
+- **Fixity (integrity) check** — `POST /api/fm/fixity/check` (audit-export
+  module): SHA-256 baseline in the tenant's `_fluxfiles/fixity.json`; changed
+  or missing files are split by the audit log into explained vs
+  **unexplained** (audited as `fixity_mismatch`). Activity panel gains
+  "Integrity check" and "Verify log".
+- **Retention rules** — claim `retention_rules` and
+  `POST /api/fm/retention/run` (legal-hold module): trash/delete files
+  unchanged for N days, preview first, **legal holds always win**. Nothing
+  runs on its own — call it from your scheduler. Activity panel "Retention".
+- **`strip_exif`** now also covers images inside a zip unpacked with
+  `/extract`, and Intake portal uploads (needs the next intake module release).
+
+All new claims are named in the five token builders (`mediaPosters`,
+`retentionRules` in Node; `media_posters=`, `retention_rules=` in Python).
+
 ## [0.3.22] — 2026-10-14
 
 > Released: `core-v0.2.96`, `laravel-v0.2.47`, `wordpress-v0.2.56`,
