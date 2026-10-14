@@ -482,7 +482,10 @@
       "virus_scan": "Analyse antivirus",
       "audit_purge": "Journal d'audit purgé",
       "fixity_check": "Contrôle d'intégrité",
-      "fixity_mismatch": "Modification de fichier inexpliquée"
+      "fixity_mismatch": "Modification de fichier inexpliquée",
+      "retention_run": "Exécution de conservation",
+      "retention_trash": "Mis à la corbeille par conservation",
+      "retention_delete": "Supprimé par conservation"
     },
     "fixity_run": "Contrôle d'intégrité",
     "fixity_busy": "Vérification des fichiers…",
@@ -808,5 +811,26 @@
     "busy": "Sauvegarde…",
     "result": "Copiés {copied}, ignorés {skipped}, erreurs {errors} — {size}",
     "truncated": "Arrêté à la limite de fichiers par exécution — relancez pour continuer."
+  },
+  "retention": {
+    "title": "Conservation",
+    "note": "Les fichiers inchangés pendant la période configurée sont mis à la corbeille ou supprimés. Les fichiers sous conservation légale ne sont jamais touchés.",
+    "rule_trash": "{path} : corbeille après {days} jours sans modification",
+    "rule_delete": "{path} : suppression définitive après {days} jours sans modification",
+    "preview": "Aperçu",
+    "apply": "Appliquer maintenant",
+    "busy": "En cours…",
+    "confirm": "Appliquer la conservation à {count} fichier(s) maintenant ? Les fichiers en corbeille sont restaurables, les supprimés non.",
+    "preview_summary": "{count} fichier(s) seraient concernés ({held} sous conservation légale, ignorés).",
+    "applied_summary": "Terminé : {count} fichier(s) traités, {held} sous conservation légale ignorés, {errors} erreur(s).",
+    "truncated": "Limite par exécution atteinte — refaites un aperçu pour voir le reste.",
+    "age": "{days} jours",
+    "result": {
+      "would_trash": "irait à la corbeille",
+      "would_delete": "serait supprimé",
+      "trashed": "mis à la corbeille",
+      "deleted": "supprimé",
+      "held": "ignoré — conservation légale"
+    }
   }
 }

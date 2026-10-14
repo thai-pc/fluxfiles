@@ -482,7 +482,10 @@
       "virus_scan": "Virusscan",
       "audit_purge": "Auditlog opgeschoond",
       "fixity_check": "Integriteitscontrole",
-      "fixity_mismatch": "Onverklaarde bestandswijziging"
+      "fixity_mismatch": "Onverklaarde bestandswijziging",
+      "retention_run": "Bewaartermijn uitgevoerd",
+      "retention_trash": "Naar prullenbak door bewaartermijn",
+      "retention_delete": "Verwijderd door bewaartermijn"
     },
     "fixity_run": "Integriteitscontrole",
     "fixity_busy": "Bestanden controleren…",
@@ -808,5 +811,26 @@
     "busy": "Bezig met back-up…",
     "result": "Gekopieerd {copied}, overgeslagen {skipped}, fouten {errors} — {size}",
     "truncated": "Gestopt bij de bestandslimiet per run — voer opnieuw uit om door te gaan."
+  },
+  "retention": {
+    "title": "Bewaartermijn",
+    "note": "Bestanden die gedurende de ingestelde periode niet zijn gewijzigd, gaan naar de prullenbak of worden verwijderd. Bestanden onder juridische bewaring blijven onaangeroerd.",
+    "rule_trash": "{path}: na {days} dagen ongewijzigd naar prullenbak",
+    "rule_delete": "{path}: na {days} dagen ongewijzigd definitief verwijderen",
+    "preview": "Voorbeeld",
+    "apply": "Nu toepassen",
+    "busy": "Bezig…",
+    "confirm": "Bewaartermijn nu toepassen op {count} bestand(en)? Bestanden in de prullenbak zijn te herstellen, verwijderde niet.",
+    "preview_summary": "{count} bestand(en) zouden worden geraakt ({held} onder juridische bewaring, overgeslagen).",
+    "applied_summary": "Klaar: {count} bestand(en) verwerkt, {held} onder juridische bewaring overgeslagen, {errors} fout(en).",
+    "truncated": "Limiet per run bereikt — bekijk opnieuw voor de rest.",
+    "age": "{days} dagen oud",
+    "result": {
+      "would_trash": "zou naar prullenbak gaan",
+      "would_delete": "zou worden verwijderd",
+      "trashed": "naar prullenbak",
+      "deleted": "verwijderd",
+      "held": "overgeslagen — juridische bewaring"
+    }
   }
 }

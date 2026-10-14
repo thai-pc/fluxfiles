@@ -482,7 +482,10 @@
       "virus_scan": "Quét virus",
       "audit_purge": "Xóa nhật ký kiểm toán",
       "fixity_check": "Kiểm tra toàn vẹn",
-      "fixity_mismatch": "Thay đổi tệp bất thường"
+      "fixity_mismatch": "Thay đổi tệp bất thường",
+      "retention_run": "Chạy lưu giữ dữ liệu",
+      "retention_trash": "Chuyển vào thùng rác theo lưu giữ",
+      "retention_delete": "Xóa theo lưu giữ"
     },
     "fixity_run": "Kiểm tra toàn vẹn",
     "fixity_busy": "Đang kiểm tra tệp…",
@@ -808,5 +811,26 @@
     "busy": "Đang sao lưu…",
     "result": "Đã sao chép {copied}, bỏ qua {skipped}, lỗi {errors} — {size}",
     "truncated": "Đã dừng ở giới hạn số tệp mỗi lần chạy — hãy chạy lại để tiếp tục."
+  },
+  "retention": {
+    "title": "Lưu giữ dữ liệu",
+    "note": "Tệp không thay đổi trong khoảng thời gian đã cấu hình sẽ bị chuyển vào thùng rác hoặc xóa. Tệp đang bị phong tỏa pháp lý không bao giờ bị động đến.",
+    "rule_trash": "{path}: chuyển vào thùng rác sau {days} ngày không đổi",
+    "rule_delete": "{path}: xóa vĩnh viễn sau {days} ngày không đổi",
+    "preview": "Xem trước",
+    "apply": "Áp dụng ngay",
+    "busy": "Đang xử lý…",
+    "confirm": "Áp dụng lưu giữ cho {count} tệp ngay? Tệp chuyển vào thùng rác có thể khôi phục; tệp đã xóa thì không.",
+    "preview_summary": "{count} tệp sẽ bị ảnh hưởng ({held} đang bị phong tỏa pháp lý, bỏ qua).",
+    "applied_summary": "Xong: đã xử lý {count} tệp, bỏ qua {held} tệp phong tỏa pháp lý, {errors} lỗi.",
+    "truncated": "Đã đạt giới hạn mỗi lần chạy — xem trước lại để thấy phần còn lại.",
+    "age": "{days} ngày",
+    "result": {
+      "would_trash": "sẽ chuyển vào thùng rác",
+      "would_delete": "sẽ bị xóa",
+      "trashed": "đã chuyển vào thùng rác",
+      "deleted": "đã xóa",
+      "held": "bỏ qua — phong tỏa pháp lý"
+    }
   }
 }

@@ -1414,6 +1414,7 @@
                         x-text="fixityBusy ? t('audit.fixity_busy') : t('audit.fixity_run')"></button>
                 <button class="ff-btn" x-show="canVerifyChain" :disabled="chainBusy" @click="verifyChain()"
                         x-text="chainBusy ? t('audit.chain_busy') : t('audit.chain_run')"></button>
+                <button class="ff-btn" x-show="canRetention" @click="openRetention()" x-text="t('retention.title')"></button>
             </div>
             <div class="ff-integrity" x-show="fixityResult || fixityError || chainResult || chainError">
                 <p class="ff-new-folder-error" x-show="fixityError" x-text="fixityError"></p>
@@ -2184,6 +2185,48 @@
                         <span x-show="aiVisionBusyOp === 'smart_crop'" x-text="t('aivision.busy')"></span>
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Retention panel (legal-hold module: apply the token's retention_rules) ═══ -->
+    <div class="ff-modal-overlay" x-show="showRetention" x-transition @click.self="closeRetention()" style="z-index:60;" x-cloak>
+        <div class="ff-aivision-modal" role="dialog" aria-modal="true" :aria-label="t('retention.title')" @keydown.escape.window="showRetention && closeRetention()">
+            <div class="ff-activity-head">
+                <h3 x-text="t('retention.title')"></h3>
+                <button class="ff-activity-close" @click="closeRetention()" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <p class="ff-activity-note" x-text="t('retention.note')"></p>
+            <div class="ff-activity-body">
+                <ul class="ff-integrity-list">
+                    <template x-for="(r, i) in retentionRules" :key="i">
+                        <li x-text="t(r.action === 'delete' ? 'retention.rule_delete' : 'retention.rule_trash', { path: '/' + (r.path || ''), days: r.days })"></li>
+                    </template>
+                </ul>
+                <div class="ff-aivision-ops">
+                    <button class="ff-btn ff-btn-ghost" :disabled="retentionBusy" @click="runRetention(true)"
+                            x-text="retentionBusy && retentionMode === 'preview' ? t('retention.busy') : t('retention.preview')"></button>
+                    <button class="ff-btn ff-btn-danger" :disabled="retentionBusy || !retentionResult || !retentionResult.dry_run || !retentionResult.items.length" @click="runRetention(false)"
+                            x-text="retentionBusy && retentionMode === 'apply' ? t('retention.busy') : t('retention.apply')"></button>
+                </div>
+                <p class="ff-new-folder-error" x-show="retentionError" x-text="retentionError"></p>
+                <p x-show="retentionError && retentionErrorIsInstall">
+                    <a class="ff-links-docs" href="https://fluxfiles.dev/docs/modules" target="_blank" rel="noopener noreferrer" x-text="t('links.pro_learn')"></a>
+                </p>
+                <template x-if="retentionResult">
+                    <div>
+                        <p class="ff-scan-result" :class="retentionResult.errors > 0 ? 'ff-scan-infected' : 'ff-scan-clean'"
+                           x-text="retentionResult.dry_run
+                               ? t('retention.preview_summary', { count: retentionResult.items.length, held: retentionResult.held })
+                               : t('retention.applied_summary', { count: retentionResult.acted, held: retentionResult.held, errors: retentionResult.errors })"></p>
+                        <p class="ff-activity-note" x-show="retentionResult.truncated" x-text="t('retention.truncated')"></p>
+                        <ul class="ff-integrity-list">
+                            <template x-for="it in retentionResult.items" :key="it.path">
+                                <li x-text="'/' + it.path + ' — ' + t('retention.result.' + it.result) + ' (' + t('retention.age', { days: it.age_days }) + ')'"></li>
+                            </template>
+                        </ul>
+                    </div>
+                </template>
             </div>
         </div>
     </div>

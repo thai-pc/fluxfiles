@@ -463,6 +463,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     // Audit Export tuning: default cutoff for /api/fm/audit/purge when the request
     // body omits `before` (the core clamps this on decode; travels with allow_audit_export).
+    if (!empty($webp['retention_rules']) && is_array($webp['retention_rules'])) {
+        $payload['retention_rules'] = array_values($webp['retention_rules']);
+    }
     if (array_key_exists('media_posters', $webp)) {
         $payload['media_posters'] = (bool) $webp['media_posters'];
     }

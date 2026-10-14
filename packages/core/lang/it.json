@@ -482,7 +482,10 @@
       "virus_scan": "Scansione antivirus",
       "audit_purge": "Registro di audit eliminato",
       "fixity_check": "Verifica integrità",
-      "fixity_mismatch": "Modifica file inspiegata"
+      "fixity_mismatch": "Modifica file inspiegata",
+      "retention_run": "Esecuzione conservazione",
+      "retention_trash": "Nel cestino per conservazione",
+      "retention_delete": "Eliminato per conservazione"
     },
     "fixity_run": "Verifica integrità",
     "fixity_busy": "Controllo dei file…",
@@ -808,5 +811,26 @@
     "busy": "Backup in corso…",
     "result": "Copiati {copied}, saltati {skipped}, errori {errors} — {size}",
     "truncated": "Fermato al limite di file per esecuzione — eseguilo di nuovo per continuare."
+  },
+  "retention": {
+    "title": "Conservazione",
+    "note": "I file non modificati per il periodo configurato vengono spostati nel cestino o eliminati. I file sotto blocco legale non vengono mai toccati.",
+    "rule_trash": "{path}: nel cestino dopo {days} giorni senza modifiche",
+    "rule_delete": "{path}: elimina definitivamente dopo {days} giorni senza modifiche",
+    "preview": "Anteprima",
+    "apply": "Applica ora",
+    "busy": "In corso…",
+    "confirm": "Applicare ora la conservazione a {count} file? I file nel cestino si possono ripristinare, quelli eliminati no.",
+    "preview_summary": "{count} file sarebbero interessati ({held} sotto blocco legale, saltati).",
+    "applied_summary": "Fatto: {count} file elaborati, {held} sotto blocco legale saltati, {errors} errori.",
+    "truncated": "Limite per esecuzione raggiunto — riapri l'anteprima per il resto.",
+    "age": "{days} giorni",
+    "result": {
+      "would_trash": "andrebbe nel cestino",
+      "would_delete": "verrebbe eliminato",
+      "trashed": "spostato nel cestino",
+      "deleted": "eliminato",
+      "held": "saltato — blocco legale"
+    }
   }
 }

@@ -482,7 +482,10 @@
       "virus_scan": "바이러스 검사",
       "audit_purge": "감사 로그 삭제",
       "fixity_check": "무결성 검사",
-      "fixity_mismatch": "설명되지 않은 파일 변경"
+      "fixity_mismatch": "설명되지 않은 파일 변경",
+      "retention_run": "보존 정책 실행",
+      "retention_trash": "보존 정책으로 휴지통 이동",
+      "retention_delete": "보존 정책으로 삭제"
     },
     "fixity_run": "무결성 검사",
     "fixity_busy": "파일 확인 중…",
@@ -808,5 +811,26 @@
     "busy": "백업 중…",
     "result": "복사 {copied}, 건너뜀 {skipped}, 오류 {errors} — {size}",
     "truncated": "실행당 파일 한도에서 멈췄습니다. 계속하려면 다시 실행하세요."
+  },
+  "retention": {
+    "title": "보존 정책",
+    "note": "설정한 기간 동안 변경되지 않은 파일은 휴지통으로 이동하거나 삭제됩니다. 법적 보존 중인 파일은 절대 건드리지 않습니다.",
+    "rule_trash": "{path}: {days}일 동안 변경 없으면 휴지통으로",
+    "rule_delete": "{path}: {days}일 동안 변경 없으면 영구 삭제",
+    "preview": "미리 보기",
+    "apply": "지금 적용",
+    "busy": "처리 중…",
+    "confirm": "지금 {count}개 파일에 보존 정책을 적용할까요? 휴지통의 파일은 복원할 수 있지만 삭제된 파일은 복원할 수 없습니다.",
+    "preview_summary": "{count}개 파일이 대상입니다 (법적 보존 {held}개는 건너뜀).",
+    "applied_summary": "완료: {count}개 처리, 법적 보존 {held}개 건너뜀, 오류 {errors}개.",
+    "truncated": "실행당 한도에 도달했습니다. 나머지는 다시 미리 보기 하세요.",
+    "age": "{days}일 경과",
+    "result": {
+      "would_trash": "휴지통으로 이동 예정",
+      "would_delete": "삭제 예정",
+      "trashed": "휴지통으로 이동됨",
+      "deleted": "삭제됨",
+      "held": "건너뜀 — 법적 보존"
+    }
   }
 }

@@ -93,6 +93,7 @@ Route::get('compliance/scorecard', [FluxFilesController::class, 'complianceScore
 Route::get('audit/export', [FluxFilesController::class, 'auditExport']);
 Route::get('audit/verify', [FluxFilesController::class, 'auditVerify']);
 Route::post('fixity/check', [FluxFilesController::class, 'fixityCheck']);
+Route::post('retention/run', [FluxFilesController::class, 'retentionRun']);
 Route::post('audit/purge', [FluxFilesController::class, 'auditPurge']);
 
 // Legal hold (paid module) — place/release/list are gated; status is free/core

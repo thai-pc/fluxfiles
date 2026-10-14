@@ -482,7 +482,10 @@
       "virus_scan": "Virüs taraması",
       "audit_purge": "Denetim günlüğü temizlendi",
       "fixity_check": "Bütünlük denetimi",
-      "fixity_mismatch": "Açıklanamayan dosya değişikliği"
+      "fixity_mismatch": "Açıklanamayan dosya değişikliği",
+      "retention_run": "Saklama çalıştırması",
+      "retention_trash": "Saklama ile çöp kutusuna",
+      "retention_delete": "Saklama ile silindi"
     },
     "fixity_run": "Bütünlük denetimi",
     "fixity_busy": "Dosyalar denetleniyor…",
@@ -808,5 +811,26 @@
     "busy": "Yedekleniyor…",
     "result": "Kopyalanan {copied}, atlanan {skipped}, hata {errors} — {size}",
     "truncated": "Çalıştırma başına dosya sınırında durdu — devam etmek için yeniden çalıştırın."
+  },
+  "retention": {
+    "title": "Saklama",
+    "note": "Belirlenen süre boyunca değişmeyen dosyalar çöp kutusuna taşınır veya silinir. Yasal saklamadaki dosyalara asla dokunulmaz.",
+    "rule_trash": "{path}: {days} gün değişmezse çöp kutusuna",
+    "rule_delete": "{path}: {days} gün değişmezse kalıcı olarak sil",
+    "preview": "Önizleme",
+    "apply": "Şimdi uygula",
+    "busy": "İşleniyor…",
+    "confirm": "{count} dosyaya saklama şimdi uygulansın mı? Çöp kutusundakiler geri yüklenebilir, silinenler yüklenemez.",
+    "preview_summary": "{count} dosya etkilenecek ({held} yasal saklamada, atlandı).",
+    "applied_summary": "Tamamlandı: {count} dosya işlendi, {held} yasal saklamada atlandı, {errors} hata.",
+    "truncated": "Çalıştırma sınırına ulaşıldı — kalanı görmek için yeniden önizleyin.",
+    "age": "{days} günlük",
+    "result": {
+      "would_trash": "çöp kutusuna gidecek",
+      "would_delete": "silinecek",
+      "trashed": "çöp kutusuna taşındı",
+      "deleted": "silindi",
+      "held": "atlandı — yasal saklama"
+    }
   }
 }

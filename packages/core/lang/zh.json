@@ -482,7 +482,10 @@
       "virus_scan": "病毒扫描",
       "audit_purge": "清除审计日志",
       "fixity_check": "完整性检查",
-      "fixity_mismatch": "无法解释的文件更改"
+      "fixity_mismatch": "无法解释的文件更改",
+      "retention_run": "执行保留策略",
+      "retention_trash": "因保留策略移至回收站",
+      "retention_delete": "因保留策略删除"
     },
     "fixity_run": "完整性检查",
     "fixity_busy": "正在检查文件…",
@@ -808,5 +811,26 @@
     "busy": "备份中…",
     "result": "已复制 {copied}，跳过 {skipped}，错误 {errors} — {size}",
     "truncated": "已达到单次运行的文件上限——再次运行以继续。"
+  },
+  "retention": {
+    "title": "保留策略",
+    "note": "在设定期限内未更改的文件将移至回收站或删除。处于法律保留状态的文件永不处理。",
+    "rule_trash": "{path}：{days} 天未更改后移至回收站",
+    "rule_delete": "{path}：{days} 天未更改后永久删除",
+    "preview": "预览",
+    "apply": "立即执行",
+    "busy": "处理中…",
+    "confirm": "现在对 {count} 个文件执行保留策略？回收站中的文件可恢复，已删除的不可恢复。",
+    "preview_summary": "将影响 {count} 个文件（{held} 个处于法律保留，已跳过）。",
+    "applied_summary": "完成：已处理 {count} 个文件，跳过 {held} 个法律保留文件，{errors} 个错误。",
+    "truncated": "已达单次上限——再次预览以查看其余部分。",
+    "age": "{days} 天",
+    "result": {
+      "would_trash": "将移至回收站",
+      "would_delete": "将被删除",
+      "trashed": "已移至回收站",
+      "deleted": "已删除",
+      "held": "已跳过——法律保留"
+    }
   }
 }

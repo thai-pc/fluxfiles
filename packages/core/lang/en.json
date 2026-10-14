@@ -482,7 +482,10 @@
       "virus_scan": "Virus scan",
       "audit_purge": "Audit log purged",
       "fixity_check": "Integrity check",
-      "fixity_mismatch": "Unexplained file change"
+      "fixity_mismatch": "Unexplained file change",
+      "retention_run": "Retention run",
+      "retention_trash": "Trashed by retention",
+      "retention_delete": "Deleted by retention"
     },
     "fixity_run": "Integrity check",
     "fixity_busy": "Checking files…",
@@ -808,5 +811,26 @@
     "busy": "Backing up…",
     "result": "Copied {copied}, skipped {skipped}, errors {errors} — {size}",
     "truncated": "Stopped at the per-run file limit — run it again to continue."
+  },
+  "retention": {
+    "title": "Retention",
+    "note": "Files that have not changed for the configured period are moved to trash or deleted. Files under legal hold are never touched.",
+    "rule_trash": "{path}: move to trash after {days} days unchanged",
+    "rule_delete": "{path}: delete permanently after {days} days unchanged",
+    "preview": "Preview",
+    "apply": "Apply now",
+    "busy": "Working…",
+    "confirm": "Apply retention to {count} file(s) now? Trashed files can be restored; deleted ones cannot.",
+    "preview_summary": "{count} file(s) would be affected ({held} on legal hold, skipped).",
+    "applied_summary": "Done: {count} file(s) processed, {held} on legal hold skipped, {errors} error(s).",
+    "truncated": "Per-run limit reached — preview again to see the rest.",
+    "age": "{days} days old",
+    "result": {
+      "would_trash": "would move to trash",
+      "would_delete": "would be deleted",
+      "trashed": "moved to trash",
+      "deleted": "deleted",
+      "held": "skipped — legal hold"
+    }
   }
 }

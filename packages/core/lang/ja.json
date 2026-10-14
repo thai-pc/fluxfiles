@@ -482,7 +482,10 @@
       "virus_scan": "ウイルススキャン",
       "audit_purge": "監査ログを削除",
       "fixity_check": "整合性チェック",
-      "fixity_mismatch": "説明のつかないファイル変更"
+      "fixity_mismatch": "説明のつかないファイル変更",
+      "retention_run": "保持ポリシー実行",
+      "retention_trash": "保持ポリシーでゴミ箱へ",
+      "retention_delete": "保持ポリシーで削除"
     },
     "fixity_run": "整合性チェック",
     "fixity_busy": "ファイルを確認中…",
@@ -808,5 +811,26 @@
     "busy": "バックアップ中…",
     "result": "コピー {copied}、スキップ {skipped}、エラー {errors} — {size}",
     "truncated": "1回あたりのファイル上限で停止しました。続行するにはもう一度実行してください。"
+  },
+  "retention": {
+    "title": "保持期間",
+    "note": "設定期間変更のないファイルはゴミ箱へ移動または削除されます。リーガルホールド中のファイルには一切触れません。",
+    "rule_trash": "{path}: {days} 日間変更なしでゴミ箱へ",
+    "rule_delete": "{path}: {days} 日間変更なしで完全削除",
+    "preview": "プレビュー",
+    "apply": "今すぐ適用",
+    "busy": "処理中…",
+    "confirm": "今すぐ {count} 件に保持ポリシーを適用しますか？ゴミ箱のファイルは復元できますが、削除したものはできません。",
+    "preview_summary": "{count} 件が対象になります（リーガルホールド中の {held} 件はスキップ）。",
+    "applied_summary": "完了: {count} 件を処理、リーガルホールド中の {held} 件をスキップ、エラー {errors} 件。",
+    "truncated": "1回の上限に達しました。残りはもう一度プレビューしてください。",
+    "age": "{days} 日経過",
+    "result": {
+      "would_trash": "ゴミ箱へ移動予定",
+      "would_delete": "削除予定",
+      "trashed": "ゴミ箱へ移動済み",
+      "deleted": "削除済み",
+      "held": "スキップ — リーガルホールド"
+    }
   }
 }

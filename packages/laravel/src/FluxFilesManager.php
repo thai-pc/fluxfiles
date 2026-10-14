@@ -267,6 +267,9 @@ class FluxFilesManager
         if (array_key_exists('allow_audit_export', $overrides)) {
             $payload['allow_audit_export'] = (bool) $overrides['allow_audit_export'];
         }
+        if (!empty($overrides['retention_rules']) && is_array($overrides['retention_rules'])) {
+            $payload['retention_rules'] = array_values($overrides['retention_rules']);
+        }
         if (array_key_exists('media_posters', $overrides)) {
             $payload['media_posters'] = (bool) $overrides['media_posters'];
         }

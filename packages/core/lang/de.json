@@ -482,7 +482,10 @@
       "virus_scan": "Virenscan",
       "audit_purge": "Audit-Protokoll bereinigt",
       "fixity_check": "Integritätsprüfung",
-      "fixity_mismatch": "Unerklärte Dateiänderung"
+      "fixity_mismatch": "Unerklärte Dateiänderung",
+      "retention_run": "Aufbewahrungslauf",
+      "retention_trash": "Durch Aufbewahrung im Papierkorb",
+      "retention_delete": "Durch Aufbewahrung gelöscht"
     },
     "fixity_run": "Integritätsprüfung",
     "fixity_busy": "Dateien werden geprüft…",
@@ -808,5 +811,26 @@
     "busy": "Wird gesichert…",
     "result": "Kopiert {copied}, übersprungen {skipped}, Fehler {errors} — {size}",
     "truncated": "Beim Dateilimit pro Lauf gestoppt — erneut ausführen, um fortzufahren."
+  },
+  "retention": {
+    "title": "Aufbewahrung",
+    "note": "Dateien, die im eingestellten Zeitraum nicht geändert wurden, werden in den Papierkorb verschoben oder gelöscht. Dateien unter Legal Hold bleiben unberührt.",
+    "rule_trash": "{path}: nach {days} Tagen ohne Änderung in den Papierkorb",
+    "rule_delete": "{path}: nach {days} Tagen ohne Änderung endgültig löschen",
+    "preview": "Vorschau",
+    "apply": "Jetzt anwenden",
+    "busy": "Wird ausgeführt…",
+    "confirm": "Aufbewahrung jetzt auf {count} Datei(en) anwenden? Papierkorb-Dateien sind wiederherstellbar, gelöschte nicht.",
+    "preview_summary": "{count} Datei(en) wären betroffen ({held} unter Legal Hold, übersprungen).",
+    "applied_summary": "Fertig: {count} Datei(en) verarbeitet, {held} unter Legal Hold übersprungen, {errors} Fehler.",
+    "truncated": "Limit pro Lauf erreicht — erneut Vorschau für den Rest.",
+    "age": "{days} Tage alt",
+    "result": {
+      "would_trash": "würde in den Papierkorb",
+      "would_delete": "würde gelöscht",
+      "trashed": "in den Papierkorb verschoben",
+      "deleted": "gelöscht",
+      "held": "übersprungen — Legal Hold"
+    }
   }
 }

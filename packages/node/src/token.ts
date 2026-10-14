@@ -242,6 +242,9 @@ function applyTenantOverrides(
   if (opts.stripExif !== undefined) payload.strip_exif = !!opts.stripExif;
   if (opts.allowPresignPut !== undefined) payload.allow_presign_put = !!opts.allowPresignPut;
   if (opts.mediaPosters !== undefined) payload.media_posters = !!opts.mediaPosters;
+  if (Array.isArray(opts.retentionRules) && opts.retentionRules.length) {
+    payload.retention_rules = opts.retentionRules.map((r) => ({ path: r.path ?? '', days: Math.trunc(r.days), action: r.action ?? 'trash' }));
+  }
   if (opts.auditRetentionDays && opts.auditRetentionDays > 0) payload.audit_retention_days = Math.trunc(opts.auditRetentionDays);
   // DLP tuning claims travel with allowDlpScan; the server sanitizes/clamps these on decode.
   if (opts.allowDlpScan !== undefined) payload.allow_dlp_scan = !!opts.allowDlpScan;

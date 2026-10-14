@@ -230,6 +230,8 @@ export interface BaseTokenOptions {
   allowPresignPut?: boolean;
   /** Render a poster thumbnail for uploaded PDFs/videos (needs gs/ffmpeg on the server). Default true. */
   mediaPosters?: boolean;
+  /** Retention rules (legal-hold module): files under `path` untouched for `days` → trash/delete. */
+  retentionRules?: Array<{ path?: string; days: number; action?: 'trash' | 'delete' }>;
   /** DLP / PII detection on write (Enterprise) — scans upload, code-editor save, and
    *  each zip-extract entry before the bytes are written. Default false. */
   allowDlpScan?: boolean;

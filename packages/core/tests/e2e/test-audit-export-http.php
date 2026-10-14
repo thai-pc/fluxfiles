@@ -201,6 +201,14 @@ try {
         assertEqual('audit-export', $j['error_params']['module'] ?? null);
     });
 
+    test('POST /retention/run: no audit perm → 403; with it, legal-hold module absent → 501', function () use ($B1, $noAuditToken, $auditHdr) {
+        [$st] = reqJson('POST', "{$B1}/api/fm/retention/run", ['json' => ['disk' => 'local'], 'headers' => ["Authorization: Bearer {$noAuditToken}"]]);
+        assertEqual(403, $st, 'no audit perm');
+        [$st, , $j] = reqJson('POST', "{$B1}/api/fm/retention/run", ['json' => ['disk' => 'local'], 'headers' => $auditHdr]);
+        assertEqual(501, $st, 'module absent');
+        assertEnvelope($j, 'module_not_installed');
+    });
+
     test('POST /fixity/check: no audit perm → 403; with it, module absent → 501', function () use ($B1, $noAuditToken, $auditHdr) {
         [$st] = reqJson('POST', "{$B1}/api/fm/fixity/check", ['json' => ['disk' => 'local'], 'headers' => ["Authorization: Bearer {$noAuditToken}"]]);
         assertEqual(403, $st, 'no audit perm');

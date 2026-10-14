@@ -1552,6 +1552,46 @@ class FluxFilesController
      * Audit chain verification (paid audit-export module) — core's
      * GET /api/fm/audit/verify. Admin-only: the log is per-disk, not per-tenant.
      */
+    /** Retention rules (legal-hold module) — core's POST /api/fm/retention/run. */
+    public function retentionRun(Request $request): JsonResponse
+    {
+        try {
+            $claims = $this->claims($request);
+            $this->rateLimit($claims, true);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+            $disk = (string) $request->input('disk', 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            $fm = $this->fileManager($claims);
+            if (!method_exists($fm, 'runRetention')) {
+                throw new ApiException('Retention rules need a newer FluxFiles core', 501, 'not_found');
+            }
+            \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $dryRun = filter_var($request->input('dry_run', true), FILTER_VALIDATE_BOOLEAN);
+            $report = $fm->runRetention($disk, $dryRun);
+            $this->auditRetention($claims, $disk, $report);
+            return $this->ok($report);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /** One audit line per file acted on, plus the run itself (core does the same). */
+    private function auditRetention(\FluxFiles\Claims $claims, string $disk, array $report): void
+    {
+        foreach ($report['items'] as $it) {
+            if (in_array($it['result'], ['trashed', 'deleted'], true)) {
+                $this->logAuditQuiet($claims, 'retention_' . $it['action'], $disk, $claims->scopePath($it['path']), 'age_days=' . $it['age_days']);
+            }
+        }
+        $this->logAuditQuiet($claims, 'retention_run', $disk, '', sprintf('%s acted=%d held=%d',
+            !empty($report['dry_run']) ? 'dry-run' : 'applied', (int) $report['acted'], (int) $report['held']));
+        $this->dispatchWebhook($claims, 'retention_run', ['disk' => $disk, 'path' => '', 'name' => '']);
+    }
+
     /** Fixity / integrity check (audit-export module) — core's POST /api/fm/fixity/check. */
     public function fixityCheck(Request $request): JsonResponse
     {

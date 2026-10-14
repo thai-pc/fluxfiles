@@ -267,6 +267,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/audit/export', array_merge($readArgs, [
             'callback' => [$api, 'handleAuditExport'],
         ]));
+        register_rest_route($ns, $p . '/retention/run', array_merge($writeArgs, [
+            'callback' => [$api, 'handleRetentionRun'],
+        ]));
         register_rest_route($ns, $p . '/fixity/check', array_merge($writeArgs, [
             'callback' => [$api, 'handleFixityCheck'],
         ]));
@@ -2849,6 +2852,47 @@ class FluxFilesApi
      * Audit chain verification (paid audit-export module) — core's
      * GET /api/fm/audit/verify. Admin-only: the log is per-disk, not per-tenant.
      */
+    /** Retention rules (legal-hold module) — core's POST /api/fm/retention/run. */
+    public function handleRetentionRun(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $body = $this->body($request);
+            $this->rateLimit($claims, true);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+            $disk = (string) ($body['disk'] ?? 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            $fm = $this->fileManager($claims);
+            if (!method_exists($fm, 'runRetention')) {
+                throw new ApiException('Retention rules need a newer FluxFiles core', 501, 'not_found');
+            }
+            \FluxFiles\ModuleRegistry::require('legal-hold', FluxFilesPlugin::license(), $claims);
+            $dryRun = filter_var($body['dry_run'] ?? true, FILTER_VALIDATE_BOOLEAN);
+            $report = $fm->runRetention($disk, $dryRun);
+            $this->auditRetention($claims, $disk, $report);
+            return $this->ok($report);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
+    /** One audit line per file acted on, plus the run itself (core does the same). */
+    private function auditRetention(\FluxFiles\Claims $claims, string $disk, array $report): void
+    {
+        foreach ($report['items'] as $it) {
+            if (in_array($it['result'], ['trashed', 'deleted'], true)) {
+                $this->logAuditQuiet($claims, 'retention_' . $it['action'], $disk, $claims->scopePath($it['path']), 'age_days=' . $it['age_days']);
+            }
+        }
+        $this->logAuditQuiet($claims, 'retention_run', $disk, '', sprintf('%s acted=%d held=%d',
+            !empty($report['dry_run']) ? 'dry-run' : 'applied', (int) $report['acted'], (int) $report['held']));
+        $this->dispatchWebhook($claims, 'retention_run', ['disk' => $disk, 'path' => '', 'name' => '']);
+    }
+
     /** Fixity / integrity check (audit-export module) — core's POST /api/fm/fixity/check. */
     public function handleFixityCheck(\WP_REST_Request $request): \WP_REST_Response
     {

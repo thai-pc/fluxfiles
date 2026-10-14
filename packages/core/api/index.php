@@ -1330,6 +1330,35 @@ function routeRequest(
         exit;
     }
 
+    // Retention rules (legal-hold module — the same compliance bundle; a hold always
+    // wins). `dry_run` (default true) only reports. Every file actually trashed/
+    // deleted gets its own audit line, since this one request can remove many.
+    if ($method === 'POST' && $uri === '/api/fm/retention/run') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $disk = (string) ($body['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $dryRun = filter_var($body['dry_run'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        $report = $fm->runRetention($disk, $dryRun);
+        if (!$dryRun) {
+            foreach ($report['items'] as $it) {
+                if (in_array($it['result'], ['trashed', 'deleted'], true)) {
+                    try {
+                        $auditLog->log($claims->userId, 'retention_' . $it['action'], $disk, $claims->scopePath($it['path']),
+                            null, null, 'age_days=' . $it['age_days']);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            }
+        }
+        return $report;
+    }
+
     // Fixity / integrity check (Audit Export module — the compliance bundle). Per
     // tenant root: the baseline lives in the tenant's own _fluxfiles/. Each
     // UNEXPLAINED change (no FluxFiles write/delete since the last check) is
@@ -1553,6 +1582,7 @@ function resolveAuditAction(string $uri): string
         '/webhooks/test' => 'webhook_test',
         '/virus/scan'    => 'virus_scan',
         '/fixity/check'  => 'fixity_check',
+        '/retention/run' => 'retention_run',
         '/ai-vision'     => 'ai_vision',
         '/ocr'           => 'ocr',
         '/backup'        => 'backup',
@@ -1608,6 +1638,11 @@ function resolveAuditAction(string $uri): string
 function ff_audit_detail(string $action, array $body, \FluxFiles\Claims $claims, $data = null): ?string
 {
     switch ($action) {
+        case 'retention_run':
+            return is_array($data)
+                ? sprintf('%s acted=%d held=%d', !empty($data['dry_run']) ? 'dry-run' : 'applied',
+                    (int) ($data['acted'] ?? 0), (int) ($data['held'] ?? 0))
+                : null;
         case 'fixity_check':
             return is_array($data)
                 ? sprintf('checked=%d unexplained=%d', (int) ($data['checked'] ?? 0),

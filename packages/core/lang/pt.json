@@ -482,7 +482,10 @@
       "virus_scan": "Verificação de vírus",
       "audit_purge": "Log de auditoria limpo",
       "fixity_check": "Verificação de integridade",
-      "fixity_mismatch": "Alteração de arquivo inexplicada"
+      "fixity_mismatch": "Alteração de arquivo inexplicada",
+      "retention_run": "Execução de retenção",
+      "retention_trash": "Para a lixeira por retenção",
+      "retention_delete": "Excluído por retenção"
     },
     "fixity_run": "Verificar integridade",
     "fixity_busy": "Verificando arquivos…",
@@ -808,5 +811,26 @@
     "busy": "Fazendo backup…",
     "result": "Copiados {copied}, ignorados {skipped}, erros {errors} — {size}",
     "truncated": "Parou no limite de arquivos por execução — execute novamente para continuar."
+  },
+  "retention": {
+    "title": "Retenção",
+    "note": "Arquivos sem alterações no período configurado vão para a lixeira ou são excluídos. Arquivos sob retenção legal nunca são tocados.",
+    "rule_trash": "{path}: para a lixeira após {days} dias sem alterações",
+    "rule_delete": "{path}: excluir definitivamente após {days} dias sem alterações",
+    "preview": "Pré-visualizar",
+    "apply": "Aplicar agora",
+    "busy": "Processando…",
+    "confirm": "Aplicar a retenção a {count} arquivo(s) agora? Os da lixeira podem ser restaurados; os excluídos não.",
+    "preview_summary": "{count} arquivo(s) seriam afetados ({held} sob retenção legal, ignorados).",
+    "applied_summary": "Concluído: {count} arquivo(s) processados, {held} sob retenção legal ignorados, {errors} erro(s).",
+    "truncated": "Limite por execução atingido — pré-visualize de novo para ver o resto.",
+    "age": "{days} dias",
+    "result": {
+      "would_trash": "iria para a lixeira",
+      "would_delete": "seria excluído",
+      "trashed": "movido para a lixeira",
+      "deleted": "excluído",
+      "held": "ignorado — retenção legal"
+    }
   }
 }

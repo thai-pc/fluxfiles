@@ -3614,6 +3614,52 @@ function fluxFilesApp() {
             }
         },
 
+        // ── Retention rules (legal-hold module) ────────────────────────────────
+        showRetention: false,
+        retentionBusy: false,
+        retentionMode: '',          // 'preview' | 'apply'
+        retentionResult: null,
+        retentionError: '',
+        retentionErrorCode: '',
+
+        get retentionRules() {
+            const r = this._tokenPayload().retention_rules;
+            return Array.isArray(r) ? r : [];
+        },
+        get canRetention() {
+            return this.legalHoldGate === 'on' && this._hasPerm('delete') && this.retentionRules.length > 0;
+        },
+        openRetention() {
+            this.retentionResult = null;
+            this.retentionError = '';
+            this.retentionErrorCode = '';
+            this.showRetention = true;
+        },
+        closeRetention() { this.showRetention = false; },
+
+        // Apply only after a preview, and confirm — it trashes/deletes in bulk.
+        async runRetention(dryRun) {
+            if (this.retentionBusy) return;
+            if (!dryRun && !window.confirm(this.t('retention.confirm', { count: this.retentionResult ? this.retentionResult.items.length : 0 }))) return;
+            this.retentionBusy = true;
+            this.retentionMode = dryRun ? 'preview' : 'apply';
+            this.retentionError = '';
+            this.retentionErrorCode = '';
+            try {
+                this.retentionResult = await this.api('POST', '/api/fm/retention/run', { disk: this.currentDisk, dry_run: dryRun });
+                if (!dryRun) {
+                    this.loadFiles();
+                    this.postMessage('FM_EVENT', { event: 'retention:applied', acted: this.retentionResult.acted });
+                }
+            } catch (e) {
+                this.retentionError = e.message || this.t('error.generic');
+                this.retentionErrorCode = e.code || '';
+            } finally {
+                this.retentionBusy = false;
+            }
+        },
+        get retentionErrorIsInstall() { return this._isInstallError(this.retentionErrorCode); },
+
         // ── Duplicate finder (usage dashboard) ─────────────────────────────────
         dupes: null,            // { groups, total_wasted, scanned_files, truncated }
         dupesBusy: false,

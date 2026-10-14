@@ -482,7 +482,10 @@
       "virus_scan": "Análisis antivirus",
       "audit_purge": "Registro de auditoría purgado",
       "fixity_check": "Comprobación de integridad",
-      "fixity_mismatch": "Cambio de archivo inexplicable"
+      "fixity_mismatch": "Cambio de archivo inexplicable",
+      "retention_run": "Ejecución de retención",
+      "retention_trash": "A la papelera por retención",
+      "retention_delete": "Eliminado por retención"
     },
     "fixity_run": "Comprobar integridad",
     "fixity_busy": "Comprobando archivos…",
@@ -808,5 +811,26 @@
     "busy": "Copiando…",
     "result": "Copiados {copied}, omitidos {skipped}, errores {errors} — {size}",
     "truncated": "Se detuvo en el límite de archivos por ejecución: ejecútalo de nuevo para continuar."
+  },
+  "retention": {
+    "title": "Retención",
+    "note": "Los archivos sin cambios durante el período configurado se mueven a la papelera o se eliminan. Los archivos con retención legal nunca se tocan.",
+    "rule_trash": "{path}: a la papelera tras {days} días sin cambios",
+    "rule_delete": "{path}: eliminar definitivamente tras {days} días sin cambios",
+    "preview": "Vista previa",
+    "apply": "Aplicar ahora",
+    "busy": "Procesando…",
+    "confirm": "¿Aplicar la retención a {count} archivo(s) ahora? Los de la papelera se pueden restaurar; los eliminados no.",
+    "preview_summary": "{count} archivo(s) se verían afectados ({held} con retención legal, omitidos).",
+    "applied_summary": "Hecho: {count} archivo(s) procesados, {held} con retención legal omitidos, {errors} error(es).",
+    "truncated": "Se alcanzó el límite por ejecución: vuelve a previsualizar para ver el resto.",
+    "age": "{days} días",
+    "result": {
+      "would_trash": "iría a la papelera",
+      "would_delete": "se eliminaría",
+      "trashed": "movido a la papelera",
+      "deleted": "eliminado",
+      "held": "omitido: retención legal"
+    }
   }
 }

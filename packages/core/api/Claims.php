@@ -362,6 +362,13 @@ class Claims
      *            TRUE (a no-op without the tools). See MediaPoster. */
     public bool $mediaPosters = true;
 
+    /** @var array<int,array{path:string,days:int,action:string}> Retention rules:
+     *            files under `path` (relative to the tenant root, '' = everything)
+     *            not modified for `days` days are moved to trash (`trash`) or
+     *            permanently deleted (`delete`) by POST /api/fm/retention/run.
+     *            Legal holds always win. Sanitized by sanitizeRetentionRules(). */
+    public array $retentionRules = [];
+
     /** @var array<string,mixed>|null Assembled, sanitized watermark config (null = off).
      *            Keys: enabled, type, text, logo_path, position, opacity, font_size.
      *            Applied on the fly by the /api/fm/img endpoint; the source is untouched. */
@@ -591,6 +598,39 @@ class Claims
      *
      * @return string[]
      */
+    /**
+     * At most 20 rules; each needs days >= 1 (capped at 100 years) and an action
+     * of `trash` (default) or `delete`. The path is normalized like any user path
+     * (dot segments dropped) — it is resolved under the tenant prefix at run time.
+     *
+     * @param mixed $raw
+     * @return array<int,array{path:string,days:int,action:string}>
+     */
+    public static function sanitizeRetentionRules($raw): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach (array_slice($raw, 0, 20) as $r) {
+            $r = is_object($r) ? (array) $r : $r;
+            if (!is_array($r)) {
+                continue;
+            }
+            $days = (int) ($r['days'] ?? 0);
+            if ($days < 1) {
+                continue;
+            }
+            $action = strtolower((string) ($r['action'] ?? 'trash'));
+            $out[] = [
+                'path'   => self::stripDotSegments((string) ($r['path'] ?? '')),
+                'days'   => min($days, 36500),
+                'action' => $action === 'delete' ? 'delete' : 'trash',
+            ];
+        }
+        return $out;
+    }
+
     public static function sanitizeDlpScanExtensions($raw): array
     {
         $out = [];
@@ -770,6 +810,7 @@ class Claims
         $c->stripExif = (bool) ($payload->strip_exif ?? false);
         $c->allowPresignPut = isset($payload->allow_presign_put) ? (bool) $payload->allow_presign_put : true;
         $c->mediaPosters = isset($payload->media_posters) ? (bool) $payload->media_posters : true;
+        $c->retentionRules = self::sanitizeRetentionRules($payload->retention_rules ?? null);
         $c->watermark = self::sanitizeWatermark($payload);
         // A watermark OVERLAY exists solely to withhold the clean original — serving
         // it alongside (allow_download=true) would defeat the watermark entirely,

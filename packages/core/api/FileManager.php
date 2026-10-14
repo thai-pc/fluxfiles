@@ -2516,6 +2516,81 @@ class FileManager
     }
 
     /**
+     * Apply the token's `retention_rules`: files under each rule's path not
+     * modified for `days` days go to trash (or are deleted). Dry-run lists what
+     * would happen and changes nothing. Every action goes through trash()/delete(),
+     * so owner_only, the `delete` perm and LEGAL HOLDS (always win) still apply —
+     * a held file is reported as `held`, never touched. At most $maxActions files
+     * per call (`truncated: true` → run again).
+     *
+     * @return array{dry_run:bool,rules:int,matched:int,acted:int,held:int,errors:int,truncated:bool,items:array<int,array{path:string,action:string,age_days:int,result:string}>}
+     */
+    public function runRetention(string $disk, bool $dryRun = true, int $maxActions = 500): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+        $fs = $this->disks->disk($disk);
+        $now = time();
+        $report = ['dry_run' => $dryRun, 'rules' => count($this->claims->retentionRules), 'matched' => 0,
+            'acted' => 0, 'held' => 0, 'errors' => 0, 'truncated' => false, 'items' => []];
+        // Collect first, act after: trashing moves files while a lazy listing of the
+        // same tree is still being iterated otherwise.
+        $candidates = [];
+        foreach ($this->claims->retentionRules as $rule) {
+            $root = $this->scopedPath($rule['path']);
+            if ($this->isReservedSystemPath($root)) {
+                continue;
+            }
+            $cutoff = $now - $rule['days'] * 86400;
+            try {
+                foreach ($fs->listContents($root, true) as $item) {
+                    if (!$item->isFile()) {
+                        continue;
+                    }
+                    $key = $item->path();
+                    if (isset($candidates[$key]) || $this->isReservedSystemPath($key) || $this->isHiddenForToken($key)) {
+                        continue;
+                    }
+                    $mtime = (int) ($item->lastModified() ?? $now);
+                    if ($mtime <= $cutoff) {
+                        $candidates[$key] = ['action' => $rule['action'], 'age_days' => intdiv($now - $mtime, 86400)];
+                    }
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+        ksort($candidates, SORT_STRING);
+        $report['matched'] = count($candidates);
+
+        foreach ($candidates as $key => $c) {
+            if (count($report['items']) >= $maxActions) {
+                $report['truncated'] = true;
+                break;
+            }
+            $rel = $this->outKey((string) $key);
+            $entry = ['path' => $rel, 'action' => $c['action'], 'age_days' => $c['age_days'], 'result' => 'pending'];
+            if ($this->meta->holdBlocking($disk, (string) $key) !== null) {
+                $entry['result'] = 'held';
+                $report['held']++;
+            } elseif ($dryRun) {
+                $entry['result'] = 'would_' . $c['action'];
+            } else {
+                try {
+                    $c['action'] === 'delete' ? $this->delete($disk, $rel) : $this->trash($disk, $rel);
+                    $entry['result'] = $c['action'] === 'delete' ? 'deleted' : 'trashed';
+                    $report['acted']++;
+                } catch (ApiException $e) {
+                    $entry['result'] = (string) ($e->getErrorCode() ?? 'error');
+                    $e->getErrorCode() === 'legal_hold_active' ? $report['held']++ : $report['errors']++;
+                }
+            }
+            $report['items'][] = $entry;
+        }
+        return $report;
+    }
+
+    /**
      * Run (or resume) a fixity pass over the token's root — see FixityChecker.
      * $auditEntries are the disk's audit rows, used to tell a change made through
      * FluxFiles (explained) from one made behind its back (unexplained).
