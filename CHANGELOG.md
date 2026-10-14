@@ -3,6 +3,52 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.20] — 2026-10-14
+
+> Released: `core-v0.2.94`, `wordpress-v0.2.54`.
+
+### Fixed — second-pass security audit (`docs/security/SECURITY-AUDIT-2026-10.md`)
+
+- **WordPress: Authors and Contributors were minted an admin token.** The
+  capability mapping sent `delete_posts` (held by every Contributor/Author for
+  their *own* posts) to the admin preset — cross-owner read/write/delete, code
+  editor, chmod, hidden files. Admin now requires `manage_options` or
+  `delete_others_posts`, and every token minted for the current user
+  (shortcode, block editor, media button, media integration) now requires the
+  same capability as the REST routes (`upload_files`; lower it via the
+  `fluxfiles_required_capability` filter). **Behaviour change:** Subscribers
+  no longer get a token from `[fluxfiles]` by default; Authors get the
+  owner-only editor bundle.
+- **WordPress: `wp-content/fluxfiles/` was served raw.** `_fluxfiles/` (audit
+  log, search index, trash bytes, pre-watermark originals) was public, and
+  uploaded HTML/SVG rendered in the wp-admin origin. The plugin now writes
+  `.htaccess` protection automatically (Apache/LiteSpeed); nginx users must
+  add the block from the WordPress README.
+- **Dangerous extensions:** `php8`, `pht`, `phtm`, `phpt`, `pgif`, SSI
+  (`shtml`/`shtm`/`stm`), `asa`/`ashx`/`asmx`, and the filenames `.user.ini`
+  / `web.config` are now refused; trailing dots/spaces are normalised.
+- **Zip extract** checks the SFTP `.git/` block on every entry (and module
+  writes now re-validate with the disk), and caps the bytes actually inflated
+  at the size the archive declares (zip-bomb via a lying header).
+- **S3/R2 presigned GETs** pin `response-content-type` from the extension, so
+  an object stored with a spoofed type can't be served as inline HTML.
+- **SSO boot token** now encrypts the nested access JWT (AES-256-GCM) instead
+  of carrying it readable in the `#boot=` fragment.
+- **Legal hold** now also blocks in-place mutation of an existing held file
+  (overwrite upload, chunk/presign PUT, `/content`, `/chmod`, watermark
+  burn/remove, extract-overwrite, `/optimize`, metadata edits, module writes).
+- **`show_hidden=false`** is enforced on `/content`, `/meta`, `/presign`,
+  `/zip`, `/chmod` — dotfiles were only hidden from the listing before.
+  **Behaviour change:** tenants that edit `.htaccess`/`.env` need `show_hidden`.
+- **Public share/intake rate limit** buckets by `jti` only for a verified
+  token (else by client IP), so junk tokens can't bloat `rate_limit.json`.
+- **Demo mode** trusts `CF-Connecting-IP`/`X-Forwarded-For` only from the new
+  `FLUXFILES_DEMO_TRUSTED_PROXIES` — **set it on a demo behind a CDN**.
+- **Metadata import** (DB backend) never reassigns or wipes an existing owner.
+- **nginx:** `/storage/uploads/` is now `^~` with nested deny rules so the
+  `\.php$` FastCGI location can never claim an upload; the Apache guide gains
+  `storage/` and uploads `.htaccess` rules.
+
 ## [0.3.19] — 2026-10-08
 
 > Released: `core-v0.2.93`, `laravel-v0.2.45`, `wordpress-v0.2.53`.
