@@ -480,8 +480,21 @@
       "content_read": "打开文件",
       "stream_read": "播放文件",
       "virus_scan": "病毒扫描",
-      "audit_purge": "清除审计日志"
-    }
+      "audit_purge": "清除审计日志",
+      "fixity_check": "完整性检查",
+      "fixity_mismatch": "无法解释的文件更改"
+    },
+    "fixity_run": "完整性检查",
+    "fixity_busy": "正在检查文件…",
+    "fixity_ok": "已检查 {checked} 个文件——没有无法解释的更改。",
+    "fixity_bad": "{count} 个文件在 FluxFiles 之外被更改或删除——已记录到活动日志。",
+    "fixity_changed": "已更改：{path}",
+    "fixity_missing": "缺失：{path}",
+    "fixity_partial": "文件库较大：本次检查提前停止——再次运行以继续。",
+    "chain_run": "校验日志",
+    "chain_busy": "校验中…",
+    "chain_ok": "日志完好——已校验 {count} 条记录。",
+    "chain_bad": "检测到日志被篡改——{tampered} 条被修改，{gaps} 处缺口。"
   },
   "bulk": {
     "move": "移动",

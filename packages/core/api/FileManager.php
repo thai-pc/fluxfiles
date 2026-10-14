@@ -2494,6 +2494,31 @@ class FileManager
     }
 
     /**
+     * Run (or resume) a fixity pass over the token's root — see FixityChecker.
+     * $auditEntries are the disk's audit rows, used to tell a change made through
+     * FluxFiles (explained) from one made behind its back (unexplained).
+     *
+     * @param array<int,array<string,mixed>> $auditEntries
+     * @return array<string,mixed>
+     */
+    public function runFixityCheck(string $disk, array $auditEntries, int $budgetBytes = 1024 * 1024 * 1024): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('read');
+        $report = FixityChecker::run(
+            $this->disks->disk($disk),
+            $this->scopedPath(''),
+            fn (string $k): bool => $this->isReservedSystemPath($k) || $this->isHiddenForToken($k),
+            $auditEntries,
+            $budgetBytes
+        );
+        foreach (['changed_explained', 'changed_unexplained', 'missing_explained', 'missing_unexplained'] as $list) {
+            $report[$list] = array_map(fn (string $k) => $this->outKey($k), $report[$list]);
+        }
+        return $report;
+    }
+
+    /**
      * On-demand virus scan of a file that is ALREADY stored — e.g. one uploaded
      * before scanning was switched on, or arriving by a path no scan covers
      * (chunked/presigned direct-to-bucket uploads). Read-only: reports, never

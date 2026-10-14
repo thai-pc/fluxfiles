@@ -480,8 +480,21 @@
       "content_read": "ファイルを開いた",
       "stream_read": "ファイルを再生",
       "virus_scan": "ウイルススキャン",
-      "audit_purge": "監査ログを削除"
-    }
+      "audit_purge": "監査ログを削除",
+      "fixity_check": "整合性チェック",
+      "fixity_mismatch": "説明のつかないファイル変更"
+    },
+    "fixity_run": "整合性チェック",
+    "fixity_busy": "ファイルを確認中…",
+    "fixity_ok": "{checked} 件を確認 — 説明のつかない変更はありません。",
+    "fixity_bad": "{count} 件が FluxFiles の外で変更・削除されました — アクティビティログに記録しました。",
+    "fixity_changed": "変更: {path}",
+    "fixity_missing": "欠落: {path}",
+    "fixity_partial": "ライブラリが大きいため途中で停止しました。続けるには再実行してください。",
+    "chain_run": "ログを検証",
+    "chain_busy": "検証中…",
+    "chain_ok": "ログは改ざんされていません — {count} 件を検証。",
+    "chain_bad": "改ざんを検出 — 変更 {tampered} 件、欠落 {gaps} 箇所。"
   },
   "bulk": {
     "move": "移動",

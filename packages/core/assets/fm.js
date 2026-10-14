@@ -3572,6 +3572,48 @@ function fluxFilesApp() {
         // Commercial edition / license status (server-wide; free core → edition:free)
         licenseInfo: null,
 
+        // ── Integrity tools (audit-export module) ──────────────────────────────
+        fixityBusy: false,
+        fixityResult: null,
+        fixityError: '',
+        chainBusy: false,
+        chainResult: null,
+        chainError: '',
+
+        // /audit/verify is per-DISK, so the server only serves an unscoped token.
+        get canVerifyChain() {
+            return this.auditExportGate === 'on' && String(this._tokenPayload().prefix || '').replace(/\//g, '') === '';
+        },
+
+        async runFixity() {
+            if (this.fixityBusy) return;
+            this.fixityBusy = true;
+            this.fixityError = '';
+            try {
+                this.fixityResult = await this.api('POST', '/api/fm/fixity/check', { disk: this.currentDisk });
+                this.loadActivity();
+            } catch (e) {
+                this.fixityResult = null;
+                this.fixityError = e.message || this.t('error.generic');
+            } finally {
+                this.fixityBusy = false;
+            }
+        },
+
+        async verifyChain() {
+            if (this.chainBusy) return;
+            this.chainBusy = true;
+            this.chainError = '';
+            try {
+                this.chainResult = await this.api('GET', '/api/fm/audit/verify?disk=' + encodeURIComponent(this.currentDisk));
+            } catch (e) {
+                this.chainResult = null;
+                this.chainError = e.message || this.t('error.generic');
+            } finally {
+                this.chainBusy = false;
+            }
+        },
+
         // ── Duplicate finder (usage dashboard) ─────────────────────────────────
         dupes: null,            // { groups, total_wasted, scanned_files, truncated }
         dupesBusy: false,

@@ -480,8 +480,21 @@
       "content_read": "Bestand geopend",
       "stream_read": "Bestand gestreamd",
       "virus_scan": "Virusscan",
-      "audit_purge": "Auditlog opgeschoond"
-    }
+      "audit_purge": "Auditlog opgeschoond",
+      "fixity_check": "Integriteitscontrole",
+      "fixity_mismatch": "Onverklaarde bestandswijziging"
+    },
+    "fixity_run": "Integriteitscontrole",
+    "fixity_busy": "Bestanden controleren…",
+    "fixity_ok": "{checked} bestanden gecontroleerd — geen onverklaarde wijzigingen.",
+    "fixity_bad": "{count} bestand(en) buiten FluxFiles gewijzigd of verwijderd — vastgelegd in het activiteitenlog.",
+    "fixity_changed": "Gewijzigd: {path}",
+    "fixity_missing": "Ontbreekt: {path}",
+    "fixity_partial": "Grote bibliotheek: deze ronde stopte vroeg — voer opnieuw uit om door te gaan.",
+    "chain_run": "Log verifiëren",
+    "chain_busy": "Bezig met verifiëren…",
+    "chain_ok": "Log intact — {count} items geverifieerd.",
+    "chain_bad": "Manipulatie gedetecteerd — {tampered} gewijzigde items, {gaps} hiaten."
   },
   "bulk": {
     "move": "Verplaatsen",

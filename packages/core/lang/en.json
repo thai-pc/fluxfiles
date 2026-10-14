@@ -480,8 +480,21 @@
       "content_read": "File opened",
       "stream_read": "File streamed",
       "virus_scan": "Virus scan",
-      "audit_purge": "Audit log purged"
-    }
+      "audit_purge": "Audit log purged",
+      "fixity_check": "Integrity check",
+      "fixity_mismatch": "Unexplained file change"
+    },
+    "fixity_run": "Integrity check",
+    "fixity_busy": "Checking files…",
+    "fixity_ok": "{checked} files checked — no unexplained changes.",
+    "fixity_bad": "{count} file(s) changed or removed outside FluxFiles — recorded in the activity log.",
+    "fixity_changed": "Changed: {path}",
+    "fixity_missing": "Missing: {path}",
+    "fixity_partial": "Large library: this pass stopped early — run it again to continue.",
+    "chain_run": "Verify log",
+    "chain_busy": "Verifying…",
+    "chain_ok": "Log intact — {count} entries verified.",
+    "chain_bad": "Log tampering detected — {tampered} altered entries, {gaps} gaps."
   },
   "bulk": {
     "move": "Move",

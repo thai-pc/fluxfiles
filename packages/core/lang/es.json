@@ -480,8 +480,21 @@
       "content_read": "Archivo abierto",
       "stream_read": "Archivo reproducido",
       "virus_scan": "Análisis antivirus",
-      "audit_purge": "Registro de auditoría purgado"
-    }
+      "audit_purge": "Registro de auditoría purgado",
+      "fixity_check": "Comprobación de integridad",
+      "fixity_mismatch": "Cambio de archivo inexplicable"
+    },
+    "fixity_run": "Comprobar integridad",
+    "fixity_busy": "Comprobando archivos…",
+    "fixity_ok": "{checked} archivos comprobados: sin cambios inexplicables.",
+    "fixity_bad": "{count} archivo(s) cambiados o eliminados fuera de FluxFiles: registrados en la actividad.",
+    "fixity_changed": "Cambiado: {path}",
+    "fixity_missing": "Falta: {path}",
+    "fixity_partial": "Biblioteca grande: esta pasada se detuvo antes; vuelve a ejecutarla para continuar.",
+    "chain_run": "Verificar registro",
+    "chain_busy": "Verificando…",
+    "chain_ok": "Registro intacto: {count} entradas verificadas.",
+    "chain_bad": "Manipulación detectada: {tampered} entradas alteradas, {gaps} huecos."
   },
   "bulk": {
     "move": "Mover",

@@ -480,8 +480,21 @@
       "content_read": "Dosya açıldı",
       "stream_read": "Dosya akışı",
       "virus_scan": "Virüs taraması",
-      "audit_purge": "Denetim günlüğü temizlendi"
-    }
+      "audit_purge": "Denetim günlüğü temizlendi",
+      "fixity_check": "Bütünlük denetimi",
+      "fixity_mismatch": "Açıklanamayan dosya değişikliği"
+    },
+    "fixity_run": "Bütünlük denetimi",
+    "fixity_busy": "Dosyalar denetleniyor…",
+    "fixity_ok": "{checked} dosya denetlendi — açıklanamayan değişiklik yok.",
+    "fixity_bad": "{count} dosya FluxFiles dışında değiştirildi veya silindi — etkinlik günlüğüne kaydedildi.",
+    "fixity_changed": "Değişti: {path}",
+    "fixity_missing": "Eksik: {path}",
+    "fixity_partial": "Büyük kitaplık: bu tur erken durdu — devam etmek için tekrar çalıştırın.",
+    "chain_run": "Günlüğü doğrula",
+    "chain_busy": "Doğrulanıyor…",
+    "chain_ok": "Günlük bozulmamış — {count} kayıt doğrulandı.",
+    "chain_bad": "Günlükte oynama tespit edildi — {tampered} değiştirilmiş kayıt, {gaps} boşluk."
   },
   "bulk": {
     "move": "Taşı",

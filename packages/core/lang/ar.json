@@ -480,8 +480,21 @@
       "content_read": "فتح الملف",
       "stream_read": "بث الملف",
       "virus_scan": "فحص الفيروسات",
-      "audit_purge": "مسح سجل التدقيق"
-    }
+      "audit_purge": "مسح سجل التدقيق",
+      "fixity_check": "فحص السلامة",
+      "fixity_mismatch": "تغيير ملف غير مبرر"
+    },
+    "fixity_run": "فحص السلامة",
+    "fixity_busy": "جارٍ فحص الملفات…",
+    "fixity_ok": "تم فحص {checked} ملف — لا توجد تغييرات غير مبررة.",
+    "fixity_bad": "{count} ملف تغيّر أو حُذف خارج FluxFiles — سُجّل في سجل النشاط.",
+    "fixity_changed": "تغيّر: {path}",
+    "fixity_missing": "مفقود: {path}",
+    "fixity_partial": "مكتبة كبيرة: توقف هذا الفحص مبكرًا — شغّله مجددًا للمتابعة.",
+    "chain_run": "التحقق من السجل",
+    "chain_busy": "جارٍ التحقق…",
+    "chain_ok": "السجل سليم — تم التحقق من {count} إدخال.",
+    "chain_bad": "تم اكتشاف تلاعب بالسجل — {tampered} إدخالات معدّلة، {gaps} فجوات."
   },
   "bulk": {
     "move": "نقل",

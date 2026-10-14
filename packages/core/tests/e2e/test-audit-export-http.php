@@ -201,6 +201,14 @@ try {
         assertEqual('audit-export', $j['error_params']['module'] ?? null);
     });
 
+    test('POST /fixity/check: no audit perm → 403; with it, module absent → 501', function () use ($B1, $noAuditToken, $auditHdr) {
+        [$st] = reqJson('POST', "{$B1}/api/fm/fixity/check", ['json' => ['disk' => 'local'], 'headers' => ["Authorization: Bearer {$noAuditToken}"]]);
+        assertEqual(403, $st, 'no audit perm');
+        [$st, , $j] = reqJson('POST', "{$B1}/api/fm/fixity/check", ['json' => ['disk' => 'local'], 'headers' => $auditHdr]);
+        assertEqual(501, $st, 'module absent');
+        assertEnvelope($j, 'module_not_installed');
+    });
+
     test('GET /audit/verify: scoped token → 403 before the module gate; admin, module absent → 501', function () use ($B1, $auditHdr, $adminHdr) {
         [$st, , $j] = reqJson('GET', "{$B1}/api/fm/audit/verify?disk=local", ['headers' => $auditHdr]);
         assertEqual(403, $st, 'scoped');
@@ -260,6 +268,12 @@ try {
             assertEnvelope($j, 'license_required');
         });
 
+        test('POST /fixity/check → 402 license_required', function () use ($B2, $auditHdr) {
+            [$st, , $j] = reqJson('POST', "{$B2}/api/fm/fixity/check", ['json' => ['disk' => 'local'], 'headers' => $auditHdr]);
+            assertEqual(402, $st);
+            assertEnvelope($j, 'license_required');
+        });
+
         test('GET /audit/verify → 402 license_required', function () use ($B2, $adminHdr) {
             [$st, , $j] = reqJson('GET', "{$B2}/api/fm/audit/verify?disk=local", ['headers' => $adminHdr]);
             assertEqual(402, $st);
@@ -301,6 +315,24 @@ try {
                 'user_id' => 'tenant-a', 'file_key' => "{$PREFIX}/a/archived-old.txt",
             ]]);
             file_put_contents("{$uploadRoot}/_fluxfiles/audit/archive/audit-seed-e2e.jsonl", $archiveLine . "\n");
+
+            test('POST /fixity/check (licensed) → baseline, then an unexplained edit is reported + audited', function () use ($B, $PREFIX, $uploadRoot) {
+                $tok = fluxfiles_token(['user' => 'fixity-op', 'perms' => ['read', 'audit'], 'disks' => ['local'], 'prefix' => "{$PREFIX}/fx", 'ttl' => 600,
+                    'claims' => ['allow_audit_export' => true]]);
+                @mkdir("{$uploadRoot}/{$PREFIX}/fx", 0777, true);
+                file_put_contents("{$uploadRoot}/{$PREFIX}/fx/ledger.csv", 'v1');
+                $hdr = ["Authorization: Bearer {$tok}"];
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/fixity/check", ['json' => ['disk' => 'local'], 'headers' => $hdr]);
+                assertEqual(200, $st, 'baseline run');
+                assertTrue(($j['data']['baselined'] ?? 0) >= 1 && $j['data']['ok'] === true, json_encode($j['data'] ?? $j));
+                sleep(1);
+                file_put_contents("{$uploadRoot}/{$PREFIX}/fx/ledger.csv", 'v2-behind-your-back');
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/fixity/check", ['json' => ['disk' => 'local'], 'headers' => $hdr]);
+                assertEqual(['ledger.csv'], $j['data']['changed_unexplained'] ?? null, 'unexplained edit reported');
+                [, , $a] = reqJson('GET', "{$B}/api/fm/audit?action=fixity_mismatch&limit=20", ['headers' => $hdr]);
+                $keys = array_column($a['data'] ?? [], 'file_key');
+                assertTrue(in_array("{$PREFIX}/fx/ledger.csv", $keys, true), 'fixity_mismatch audited: ' . json_encode($keys));
+            });
 
             test('GET /audit/verify (licensed, admin) → a chain report for the disk', function () use ($B) {
                 $admin = fluxfiles_token(['user' => 'verifier', 'perms' => ['read', 'audit'], 'disks' => ['local'], 'prefix' => '', 'ttl' => 600,

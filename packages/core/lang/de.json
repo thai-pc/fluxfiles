@@ -480,8 +480,21 @@
       "content_read": "Datei geöffnet",
       "stream_read": "Datei gestreamt",
       "virus_scan": "Virenscan",
-      "audit_purge": "Audit-Protokoll bereinigt"
-    }
+      "audit_purge": "Audit-Protokoll bereinigt",
+      "fixity_check": "Integritätsprüfung",
+      "fixity_mismatch": "Unerklärte Dateiänderung"
+    },
+    "fixity_run": "Integritätsprüfung",
+    "fixity_busy": "Dateien werden geprüft…",
+    "fixity_ok": "{checked} Dateien geprüft — keine unerklärten Änderungen.",
+    "fixity_bad": "{count} Datei(en) außerhalb von FluxFiles geändert oder entfernt — im Aktivitätsprotokoll vermerkt.",
+    "fixity_changed": "Geändert: {path}",
+    "fixity_missing": "Fehlt: {path}",
+    "fixity_partial": "Große Bibliothek: Dieser Durchlauf stoppte früh — erneut ausführen, um fortzufahren.",
+    "chain_run": "Protokoll prüfen",
+    "chain_busy": "Wird geprüft…",
+    "chain_ok": "Protokoll intakt — {count} Einträge geprüft.",
+    "chain_bad": "Manipulation erkannt — {tampered} veränderte Einträge, {gaps} Lücken."
   },
   "bulk": {
     "move": "Verschieben",

@@ -1402,6 +1402,35 @@
                 <button class="ff-btn" x-show="auditExportGate === 'on'" :disabled="auditExportBusy" @click="downloadAuditExport('ndjson')" x-text="t('audit.export_ndjson')"></button>
                 <button class="ff-btn" x-show="auditExportGate === 'on'" :disabled="auditExportBusy" @click="downloadAuditExport('csv')" x-text="t('audit.export_csv')"></button>
                 <button class="ff-btn ff-pro-locked-audit" x-show="auditExportGate === 'locked'" @click="openLocked()" :title="t('links.pro_title')" x-text="t('audit.export_pro')"></button>
+                <!-- Integrity tools (same audit-export gate): fixity of the files, and the
+                     tamper-evident chain of the log itself (unscoped admins only). -->
+                <button class="ff-btn" x-show="auditExportGate === 'on'" :disabled="fixityBusy" @click="runFixity()"
+                        x-text="fixityBusy ? t('audit.fixity_busy') : t('audit.fixity_run')"></button>
+                <button class="ff-btn" x-show="canVerifyChain" :disabled="chainBusy" @click="verifyChain()"
+                        x-text="chainBusy ? t('audit.chain_busy') : t('audit.chain_run')"></button>
+            </div>
+            <div class="ff-integrity" x-show="fixityResult || fixityError || chainResult || chainError">
+                <p class="ff-new-folder-error" x-show="fixityError" x-text="fixityError"></p>
+                <template x-if="fixityResult">
+                    <div>
+                        <p class="ff-scan-result" :class="fixityResult.ok ? 'ff-scan-clean' : 'ff-scan-infected'"
+                           x-text="fixityResult.ok
+                               ? t('audit.fixity_ok', { checked: fixityResult.checked })
+                               : t('audit.fixity_bad', { count: fixityResult.changed_unexplained.length + fixityResult.missing_unexplained.length })"></p>
+                        <ul class="ff-integrity-list" x-show="!fixityResult.ok">
+                            <template x-for="k in fixityResult.changed_unexplained" :key="'c' + k"><li x-text="t('audit.fixity_changed', { path: '/' + k })"></li></template>
+                            <template x-for="k in fixityResult.missing_unexplained" :key="'m' + k"><li x-text="t('audit.fixity_missing', { path: '/' + k })"></li></template>
+                        </ul>
+                        <p class="ff-activity-note" x-show="!fixityResult.complete" x-text="t('audit.fixity_partial')"></p>
+                    </div>
+                </template>
+                <p class="ff-new-folder-error" x-show="chainError" x-text="chainError"></p>
+                <template x-if="chainResult">
+                    <p class="ff-scan-result" :class="chainResult.ok ? 'ff-scan-clean' : 'ff-scan-infected'"
+                       x-text="chainResult.ok
+                           ? t('audit.chain_ok', { count: chainResult.chained })
+                           : t('audit.chain_bad', { tampered: chainResult.tampered.length, gaps: chainResult.gaps })"></p>
+                </template>
             </div>
             <div class="ff-activity-body">
                 <p class="ff-new-folder-error" x-show="activityError" x-text="activityError"></p>

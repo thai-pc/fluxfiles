@@ -480,8 +480,21 @@
       "content_read": "Mở tệp",
       "stream_read": "Phát tệp",
       "virus_scan": "Quét virus",
-      "audit_purge": "Xóa nhật ký kiểm toán"
-    }
+      "audit_purge": "Xóa nhật ký kiểm toán",
+      "fixity_check": "Kiểm tra toàn vẹn",
+      "fixity_mismatch": "Thay đổi tệp bất thường"
+    },
+    "fixity_run": "Kiểm tra toàn vẹn",
+    "fixity_busy": "Đang kiểm tra tệp…",
+    "fixity_ok": "Đã kiểm tra {checked} tệp — không có thay đổi bất thường.",
+    "fixity_bad": "{count} tệp bị thay đổi hoặc xóa bên ngoài FluxFiles — đã ghi vào nhật ký hoạt động.",
+    "fixity_changed": "Bị thay đổi: {path}",
+    "fixity_missing": "Bị mất: {path}",
+    "fixity_partial": "Thư viện lớn: lần này dừng sớm — chạy lại để tiếp tục.",
+    "chain_run": "Xác minh nhật ký",
+    "chain_busy": "Đang xác minh…",
+    "chain_ok": "Nhật ký nguyên vẹn — đã xác minh {count} mục.",
+    "chain_bad": "Phát hiện nhật ký bị sửa — {tampered} mục bị thay đổi, {gaps} khoảng trống."
   },
   "bulk": {
     "move": "Di chuyển",

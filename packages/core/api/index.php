@@ -1330,6 +1330,32 @@ function routeRequest(
         exit;
     }
 
+    // Fixity / integrity check (Audit Export module — the compliance bundle). Per
+    // tenant root: the baseline lives in the tenant's own _fluxfiles/. Each
+    // UNEXPLAINED change (no FluxFiles write/delete since the last check) is
+    // written to the audit log as its own `fixity_mismatch` entry.
+    if ($method === 'POST' && $uri === '/api/fm/fixity/check') {
+        if (!$claims->hasPerm('audit')) {
+            throw new ApiException('Permission denied', 403, 'forbidden');
+        }
+        $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $disk = (string) ($body['disk'] ?? 'local');
+        if (!$claims->hasDisk($disk)) {
+            throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+        }
+        \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $report = $fm->runFixityCheck($disk, $metaRepo->readAudit($disk));
+        foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
+            foreach ($report[$list] as $key) {
+                try {
+                    $auditLog->log($claims->userId, 'fixity_mismatch', $disk, $claims->scopePath((string) $key), null, null, $what);
+                } catch (\Throwable $ignored) {
+                }
+            }
+        }
+        return $report;
+    }
+
     // Audit chain verification (Audit Export module, Enterprise) — recompute every
     // entry's HMAC and walk the prev links (live log + archives) to detect edits,
     // inserted/reordered lines and entries deleted from the middle. Admin-only like
@@ -1526,6 +1552,7 @@ function resolveAuditAction(string $uri): string
         '/versions/restore' => 'version_restore',
         '/webhooks/test' => 'webhook_test',
         '/virus/scan'    => 'virus_scan',
+        '/fixity/check'  => 'fixity_check',
         '/ai-vision'     => 'ai_vision',
         '/ocr'           => 'ocr',
         '/backup'        => 'backup',
@@ -1581,6 +1608,11 @@ function resolveAuditAction(string $uri): string
 function ff_audit_detail(string $action, array $body, \FluxFiles\Claims $claims, $data = null): ?string
 {
     switch ($action) {
+        case 'fixity_check':
+            return is_array($data)
+                ? sprintf('checked=%d unexplained=%d', (int) ($data['checked'] ?? 0),
+                    count($data['changed_unexplained'] ?? []) + count($data['missing_unexplained'] ?? []))
+                : null;
         case 'virus_scan':
             // The verdict IS the event.
             return is_array($data) && !empty($data['clean']) ? 'clean' : 'infected: ' . (string) ($data['threat'] ?? 'unknown');

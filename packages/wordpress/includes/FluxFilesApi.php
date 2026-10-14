@@ -267,6 +267,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/audit/export', array_merge($readArgs, [
             'callback' => [$api, 'handleAuditExport'],
         ]));
+        register_rest_route($ns, $p . '/fixity/check', array_merge($writeArgs, [
+            'callback' => [$api, 'handleFixityCheck'],
+        ]));
         register_rest_route($ns, $p . '/audit/verify', array_merge($readArgs, [
             'callback' => [$api, 'handleAuditVerify'],
         ]));
@@ -2846,6 +2849,40 @@ class FluxFilesApi
      * Audit chain verification (paid audit-export module) — core's
      * GET /api/fm/audit/verify. Admin-only: the log is per-disk, not per-tenant.
      */
+    /** Fixity / integrity check (audit-export module) — core's POST /api/fm/fixity/check. */
+    public function handleFixityCheck(\WP_REST_Request $request): \WP_REST_Response
+    {
+        try {
+            $claims = $this->claims();
+            $this->rateLimit($claims, true);
+            if (!$claims->hasPerm('audit')) {
+                throw new ApiException('Permission denied', 403, 'forbidden');
+            }
+            $body = $this->body($request);
+            $disk = (string) ($body['disk'] ?? 'local');
+            if (!$claims->hasDisk($disk)) {
+                throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
+            }
+            $fm = $this->fileManager($claims);
+            if (!method_exists($fm, 'runFixityCheck')) {
+                throw new ApiException('The integrity check needs a newer FluxFiles core', 501, 'not_found');
+            }
+            \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
+            $report = $fm->runFixityCheck($disk, $this->metaRepo->readAudit($disk));
+            foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
+                foreach ($report[$list] as $key) {
+                    $this->logAuditQuiet($claims, 'fixity_mismatch', $disk, $claims->scopePath((string) $key), $what);
+                }
+            }
+            $this->logAuditQuiet($claims, 'fixity_check', $disk, '', sprintf('checked=%d unexplained=%d',
+                (int) $report['checked'], count($report['changed_unexplained']) + count($report['missing_unexplained'])));
+            $this->dispatchWebhook($claims, 'fixity_check', ['disk' => $disk, 'path' => '', 'name' => '']);
+            return $this->ok($report);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
+    }
+
     public function handleAuditVerify(\WP_REST_Request $request): \WP_REST_Response
     {
         try {

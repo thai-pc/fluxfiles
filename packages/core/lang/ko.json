@@ -480,8 +480,21 @@
       "content_read": "파일 열기",
       "stream_read": "파일 스트리밍",
       "virus_scan": "바이러스 검사",
-      "audit_purge": "감사 로그 삭제"
-    }
+      "audit_purge": "감사 로그 삭제",
+      "fixity_check": "무결성 검사",
+      "fixity_mismatch": "설명되지 않은 파일 변경"
+    },
+    "fixity_run": "무결성 검사",
+    "fixity_busy": "파일 확인 중…",
+    "fixity_ok": "{checked}개 파일 확인 — 설명되지 않은 변경 없음.",
+    "fixity_bad": "{count}개 파일이 FluxFiles 밖에서 변경되거나 삭제됨 — 활동 로그에 기록했습니다.",
+    "fixity_changed": "변경됨: {path}",
+    "fixity_missing": "없음: {path}",
+    "fixity_partial": "라이브러리가 커서 이번 검사가 일찍 멈췄습니다. 계속하려면 다시 실행하세요.",
+    "chain_run": "로그 검증",
+    "chain_busy": "검증 중…",
+    "chain_ok": "로그 무결 — {count}개 항목 검증됨.",
+    "chain_bad": "로그 변조 감지 — 변경된 항목 {tampered}개, 누락 {gaps}곳."
   },
   "bulk": {
     "move": "이동",

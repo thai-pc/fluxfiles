@@ -480,8 +480,21 @@
       "content_read": "Arquivo aberto",
       "stream_read": "Arquivo reproduzido",
       "virus_scan": "Verificação de vírus",
-      "audit_purge": "Log de auditoria limpo"
-    }
+      "audit_purge": "Log de auditoria limpo",
+      "fixity_check": "Verificação de integridade",
+      "fixity_mismatch": "Alteração de arquivo inexplicada"
+    },
+    "fixity_run": "Verificar integridade",
+    "fixity_busy": "Verificando arquivos…",
+    "fixity_ok": "{checked} arquivos verificados — nenhuma alteração inexplicada.",
+    "fixity_bad": "{count} arquivo(s) alterado(s) ou removido(s) fora do FluxFiles — registrado no log de atividades.",
+    "fixity_changed": "Alterado: {path}",
+    "fixity_missing": "Ausente: {path}",
+    "fixity_partial": "Biblioteca grande: esta passagem parou antes — execute novamente para continuar.",
+    "chain_run": "Verificar log",
+    "chain_busy": "Verificando…",
+    "chain_ok": "Log íntegro — {count} entradas verificadas.",
+    "chain_bad": "Adulteração detectada — {tampered} entradas alteradas, {gaps} lacunas."
   },
   "bulk": {
     "move": "Mover",

@@ -791,6 +791,7 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
         'c2pa'             => 'c2pa_verify',
         'webhooksTest'     => 'webhook_test',
         'virusScan'        => 'virus_scan',
+        'fixityCheck'      => 'fixity_check',
     ];
     foreach ($mustLog as $method => $action) {
         $body = $extractMethod($ctrlSrc, $method);
