@@ -1,6 +1,13 @@
 # Đề xuất feature — 2026-10 (bản nháp để review)
 
-> **Trạng thái:** chỉ là ý tưởng, chưa code gì. Mỗi mục đã được lọc qua bộ tiêu chí
+> **Trạng thái (cập nhật 2026-10-14):** đã làm #1 tus (`e9410b9`), #2 presigned POST
+> (`core-v0.2.96`), #3 `strip_exif` (`core-v0.2.96` + zip/intake sau đó), #4 file trùng
+> (`ce10ede`), #6 retention (`cf3d7a5`), #7 fixity (`f4209f1`), #8 MCP (`917133e`),
+> #9 poster PDF/video (`6395ce9`), #10 UI OCR/Virus/Backup (`core-v0.2.96`).
+> **#5 nhiều prefix: mới có spec** — `docs/design/MULTI-PREFIX-TOKEN-DESIGN.md`, chờ duyệt.
+>
+> *(Nội dung gốc bên dưới giữ nguyên để tham khảo.)*
+> **Trạng thái ban đầu:** chỉ là ý tưởng, chưa code gì. Mỗi mục đã được lọc qua bộ tiêu chí
 > của `docs/ROADMAP.md`: stateless, metadata nằm trong storage của khách, BYO-embed
 > nếu đã có OSS tốt, và chỉ thu phí khi không có OSS thay thế.
 > Đã đối chiếu để **không trùng** với các mục DONE/DROP trong ROADMAP.
