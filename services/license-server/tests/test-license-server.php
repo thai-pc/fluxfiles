@@ -185,7 +185,12 @@ function captureMail(callable $fn): string {
 
 test('mail: the key and the activation line reach the body', function () use ($secretB64) {
     $rec = issuer($secretB64)->issue(['email'=>'buyer@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-1'])['record'];
-    $out = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendLicense($rec), 'send reports success'));
+    putenv('FLUXFILES_MAIL_LOG_FULL=1');   // the log transport shows the key only when asked
+    try {
+        $out = captureMail(fn () => assertTrue((new LicenseMailer('log'))->sendLicense($rec), 'send reports success'));
+    } finally {
+        putenv('FLUXFILES_MAIL_LOG_FULL');
+    }
     assertTrue(str_contains($out, (string) $rec['license_key']), 'the key itself is in the mail');
     assertTrue(str_contains($out, 'FLUXFILES_LICENSE_KEY='), 'tells them how to activate it');
     assertTrue(str_contains($out, 'buyer@acme.com'), 'addressed to the buyer');
@@ -569,5 +574,70 @@ test('polar: unrelated events are ignored, not issued', function () {
         assertEqual(null, PolarWebhook::extract(['type' => $t, 'data' => []], []), $t);
     }
 });
+test('mail: the log transport redacts the working key by default', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'log@acme.com','plan'=>'pro','gateway'=>'polar','order_id'=>'MAIL-LOG'])['record'];
+    $out = captureMail(fn () => (new LicenseMailer('log'))->sendLicense($rec));
+    $key = (string) $rec['license_key'];
+    assertTrue(!str_contains($out, $key), 'full key not in the log');
+    assertTrue(str_contains($out, substr($key, 0, 12) . '…[redacted]'), 'a recognisable prefix is');
+});
+
+test('polar: an unmapped product never issues, even when its NAME is a real plan', function () {
+    foreach (['Enterprise', 'Lifetime', 'pro'] as $name) {
+        $body = ['type' => 'order.paid', 'data' => ['id' => 'ord_x', 'status' => 'paid',
+            'product_id' => 'prod_UNMAPPED', 'product' => ['id' => 'prod_UNMAPPED', 'name' => $name],
+            'customer' => ['email' => 'b@acme.com']]];
+        $o = PolarWebhook::extract($body, ['prod_pro' => 'pro']);
+        assertEqual('', $o['plan'], "product named {$name} → no plan (503 path)");
+    }
+});
+
+test('polar: order.paid without an order id is ignored (idempotency needs it)', function () {
+    $body = ['type' => 'order.paid', 'data' => ['status' => 'paid', 'product_id' => 'prod_pro',
+        'customer' => ['email' => 'b@acme.com']]];
+    assertEqual(null, PolarWebhook::extract($body, ['prod_pro' => 'pro']));
+});
+
+test('polar: a full refund is recognised; a partial refund or another event is not', function () {
+    assertEqual('ord_9', PolarWebhook::refundedOrderId(['type' => 'order.refunded', 'data' => ['id' => 'ord_9', 'status' => 'refunded']]));
+    assertEqual(null, PolarWebhook::refundedOrderId(['type' => 'order.refunded', 'data' => ['id' => 'ord_9', 'status' => 'partially_refunded']]));
+    assertEqual(null, PolarWebhook::refundedOrderId(['type' => 'order.paid', 'data' => ['id' => 'ord_9', 'status' => 'refunded']]));
+});
+
+test('issue(): two different buyers with the same display name never supersede each other', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $victim = $iss->issue(['email' => 'v@victim.com', 'customer' => 'John Smith', 'plan' => 'pro', 'gateway' => 'polar', 'order_id' => 'JS-1'])['record'];
+    $iss->issue(['email' => 'other@stranger.com', 'customer' => 'John Smith', 'plan' => 'pro', 'gateway' => 'polar', 'order_id' => 'JS-2']);
+    assertEqual('active', $store->findByJti((string) $victim['jti'])['status'], 'the first buyer keeps an active licence');
+});
+
+test('issue(): the same buyer renewing (email in any case) still supersedes', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $a = $iss->issue(['email' => 'Ren@X.com', 'customer' => 'Ren', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'RC-1'])['record'];
+    $iss->issue(['email' => 'ren@x.com', 'customer' => 'Ren R.', 'plan' => 'pro-monthly', 'gateway' => 'polar', 'order_id' => 'RC-2']);
+    assertEqual('superseded', $store->findByJti((string) $a['jti'])['status'], 'renewal retires the old row');
+});
+
+test('issue(): manual issues are never superseded (an operator may hand out two keys)', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $m = $iss->issue(['email' => 'm@x.com', 'plan' => 'pro', 'gateway' => 'manual', 'order_id' => 'manual-1'])['record'];
+    $iss->issue(['email' => 'm@x.com', 'plan' => 'pro', 'gateway' => 'polar', 'order_id' => 'MP-1']);
+    $iss->issue(['email' => 'm@x.com', 'plan' => 'pro', 'gateway' => 'manual', 'order_id' => 'manual-2']);
+    assertEqual('active', $store->findByJti((string) $m['jti'])['status'], 'manual row untouched');
+});
+
+test('store: a second licence for the same (gateway, order) cannot be stored', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $first = $iss->issue(['email' => 'race@x.com', 'plan' => 'pro', 'gateway' => 'polar', 'order_id' => 'RACE-1'])['record'];
+    // What a concurrent delivery that passed the "already issued?" check would insert:
+    $row = $store->record($first + ['jti' => bin2hex(random_bytes(12)), 'license_key' => 'other'] );
+    assertEqual($first['jti'], $row['jti'], 'the stored licence is returned, not a second one');
+    assertEqual(1, count($store->findByEmail('race@x.com')), 'one row for the order');
+});
+
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);

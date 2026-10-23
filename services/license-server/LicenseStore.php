@@ -20,10 +20,17 @@ final class LicenseStore
         if ($path !== ':memory:') {
             @mkdir(dirname($path), 0700, true);
         }
-        $this->db = new PDO('sqlite:' . $path, null, null, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
+        // The DB holds every buyer's email and licence key: create it (and its
+        // -wal/-shm files) owner-only, whatever the process umask is.
+        $prevUmask = umask(0077);
+        try {
+            $this->db = new PDO('sqlite:' . $path, null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
+        } finally {
+            umask($prevUmask);
+        }
         $this->db->exec('PRAGMA journal_mode=WAL');
         $this->migrate();
     }
@@ -44,7 +51,7 @@ final class LicenseStore
             license_key TEXT NOT NULL,
             gateway     TEXT,
             order_id    TEXT,
-            status      TEXT DEFAULT "active",
+            status      TEXT DEFAULT \'active\',
             created_at  INTEGER
         )');
         $this->db->exec('CREATE INDEX IF NOT EXISTS idx_email ON licenses(email)');
@@ -79,6 +86,14 @@ final class LicenseStore
         if (!in_array('grace_days', $cols, true)) {
             $this->db->exec('ALTER TABLE licenses ADD COLUMN grace_days INTEGER DEFAULT 14');
         }
+        // One licence per (gateway, order): record()'s check-then-insert alone lets two
+        // concurrent deliveries of the same order both mint. A database that already
+        // holds such a duplicate can't take the index — keep running and say so.
+        try {
+            $this->db->exec("CREATE UNIQUE INDEX IF NOT EXISTS uniq_order ON licenses(gateway, order_id) WHERE order_id != ''");
+        } catch (\PDOException $e) {
+            error_log('license store: duplicate (gateway, order_id) rows exist; uniq_order not created — ' . $e->getMessage());
+        }
     }
 
     /** Mark the licence as delivered. Returns false when the row is gone. */
@@ -104,7 +119,7 @@ final class LicenseStore
                 return $existing;
             }
         }
-        $stmt = $this->db->prepare('INSERT INTO licenses
+        $stmt = $this->db->prepare('INSERT OR IGNORE INTO licenses
             (jti,email,customer,plan,edition,modules,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days)
             VALUES (:jti,:email,:customer,:plan,:edition,:modules,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days)');
         $row = [
@@ -129,6 +144,14 @@ final class LicenseStore
             'grace_days'  => (int) ($rec['grace_days'] ?? 14),
         ];
         $stmt->execute($row);
+        if ($stmt->rowCount() === 0 && $row['order_id'] !== '') {
+            // Lost a race with a concurrent delivery of the same order (uniq_order):
+            // the licence that won is the one this order has.
+            $winner = $this->findByOrder($row['gateway'], $row['order_id']);
+            if ($winner !== null) {
+                return $winner;
+            }
+        }
         return $this->findByJti($row['jti']) ?? $row;
     }
 
@@ -187,8 +210,8 @@ final class LicenseStore
     public function undelivered(int $limit = 100): array
     {
         $s = $this->db->prepare(
-            'SELECT * FROM licenses WHERE mailed_at IS NULL AND status = "active"
-             ORDER BY created_at ASC LIMIT ?'
+            "SELECT * FROM licenses WHERE mailed_at IS NULL AND status = 'active'
+             ORDER BY created_at ASC LIMIT ?"
         );
         $s->bindValue(1, $limit, PDO::PARAM_INT);
         $s->execute();
@@ -211,7 +234,7 @@ final class LicenseStore
      */
     public function isUpdateEligible(string $jti): bool
     {
-        $s = $this->db->prepare('SELECT 1 FROM licenses WHERE jti = ? AND status IN ("active", "superseded") LIMIT 1');
+        $s = $this->db->prepare("SELECT 1 FROM licenses WHERE jti = ? AND status IN ('active', 'superseded') LIMIT 1");
         $s->execute([$jti]);
         return $s->fetchColumn() !== false;
     }
@@ -240,7 +263,7 @@ final class LicenseStore
     public function needingReminder(array $thresholdDays, int $now): array
     {
         $s = $this->db->query(
-            'SELECT * FROM licenses WHERE status = "active" AND expires IS NOT NULL ORDER BY created_at ASC'
+            "SELECT * FROM licenses WHERE status = 'active' AND expires IS NOT NULL ORDER BY created_at ASC"
         );
         $rows = $s->fetchAll();
 
@@ -310,57 +333,60 @@ final class LicenseStore
      * "renews soon" nag) — a self-contradicting pair every billing cycle.
      *
      * Call this right after storing the new row: it retires every OTHER `active` row
-     * for the same (customer, plan) so only the newest stays eligible for reminders
+     * for the same (buyer email, plan) — gateway rows only — so only the newest stays
+     * eligible for reminders
      * (and stops the admin/licenses list from showing stale duplicate "active" rows
-     * for the same customer). No-op when customer or plan is blank, since either
+     * for the same customer). Matched on the lower-cased EMAIL, never the display name (anyone can call
+     * themselves "John Smith"). No-op when email or plan is blank, since either
      * would otherwise match too broadly across unrelated purchases.
      *
      * @return int number of rows superseded
      */
-    public function supersedeActiveForCustomerPlan(string $customer, string $plan, string $exceptJti): int
+    public function supersedeActiveForBuyerPlan(string $email, string $plan, string $exceptJti): int
     {
-        if ($customer === '' || $plan === '') {
+        if (trim($email) === '' || $plan === '') {
             return 0;
         }
         $s = $this->db->prepare(
-            'UPDATE licenses SET status = "superseded"
-             WHERE customer = ? AND plan = ? AND status = "active" AND jti != ?'
+            "UPDATE licenses SET status = 'superseded'
+             WHERE lower(email) = lower(?) AND plan = ? AND status = 'active' AND gateway != 'manual' AND jti != ?"
         );
-        $s->execute([$customer, $plan, $exceptJti]);
+        $s->execute([trim($email), $plan, $exceptJti]);
         return $s->rowCount();
     }
 
     /**
-     * (customer, plan) pairs that currently have MORE THAN ONE `active` row — the
-     * backlog supersedeActiveForCustomerPlan() prevents going forward but can't
-     * retroactively clean up, since it only runs on the NEXT issue() for a pair.
-     * Used by the one-off backfill-supersede-duplicates.php script.
+     * (buyer email, plan) pairs with MORE THAN ONE `active` gateway row — the backlog
+     * supersedeActiveForBuyerPlan() prevents going forward but can't retroactively
+     * clean up, since it only runs on the NEXT issue() for a pair. Used by the
+     * one-off backfill-supersede-duplicates.php script. Manual rows are left out,
+     * matching supersedeActiveForBuyerPlan().
      *
-     * @return array<int,array{customer:string,plan:string,cnt:int}>
+     * @return array<int,array{email:string,plan:string,cnt:int}>
      */
-    public function duplicateActiveCustomerPlans(): array
+    public function duplicateActiveBuyerPlans(): array
     {
         $s = $this->db->query(
-            'SELECT customer, plan, COUNT(*) AS cnt FROM licenses
-             WHERE status = "active" AND customer != "" AND plan != ""
-             GROUP BY customer, plan HAVING COUNT(*) > 1'
+            "SELECT lower(email) AS email, plan, COUNT(*) AS cnt FROM licenses
+             WHERE status = 'active' AND gateway != 'manual' AND email != '' AND plan != ''
+             GROUP BY lower(email), plan HAVING COUNT(*) > 1"
         );
         return $s->fetchAll();
     }
 
     /**
-     * `active` rows for one (customer, plan) pair, newest-issued first — so callers
-     * can keep rows[0] and supersede the rest.
+     * `active` gateway rows for one (buyer email, plan) pair, newest-issued first —
+     * so callers can keep rows[0] and supersede the rest.
      *
      * @return array<int,array<string,mixed>>
      */
-    public function activeRowsForCustomerPlan(string $customer, string $plan): array
+    public function activeRowsForBuyerPlan(string $email, string $plan): array
     {
         $s = $this->db->prepare(
-            'SELECT * FROM licenses WHERE customer = ? AND plan = ? AND status = "active"
-             ORDER BY issued DESC, created_at DESC'
+            "SELECT * FROM licenses WHERE lower(email) = lower(?) AND plan = ? AND status = 'active'
+             AND gateway != 'manual' ORDER BY issued DESC, created_at DESC"
         );
-        $s->execute([$customer, $plan]);
+        $s->execute([trim($email), $plan]);
         return $s->fetchAll();
     }
 }

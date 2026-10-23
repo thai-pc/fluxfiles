@@ -74,15 +74,26 @@ final class LicenseIssuer
             'grace_days'  => $graceDays,
         ]);
 
+        if ((string) $record['jti'] !== (string) $p['jti']) {
+            // A concurrent delivery of this order stored its licence first; ours was
+            // never recorded, so hand back the one that was.
+            return ['key' => (string) $record['license_key'], 'record' => $record, 'reused' => true];
+        }
+
         // A recurring subscription renewal is a NEW order (fresh order_id) but the
-        // SAME customer+plan — retire any other still-`active` row for that pair so
-        // only this newest one stays eligible for reminders (see the store method's
-        // docblock for why the duplicate-row is otherwise unavoidable here).
-        $this->store->supersedeActiveForCustomerPlan(
-            (string) $record['customer'],
-            (string) $record['plan'],
-            (string) $record['jti']
-        );
+        // SAME buyer+plan — retire any other still-`active` gateway row for that pair
+        // so only this newest one stays eligible for reminders (see the store
+        // method's docblock for why the duplicate-row is otherwise unavoidable here).
+        // Keyed on the buyer's EMAIL, not their display name: two different people
+        // called "John Smith" must not retire each other's licences. Manual issues
+        // are left alone — an operator may deliberately hand one buyer two keys.
+        if ((string) $record['gateway'] !== 'manual') {
+            $this->store->supersedeActiveForBuyerPlan(
+                (string) $record['email'],
+                (string) $record['plan'],
+                (string) $record['jti']
+            );
+        }
 
         return ['key' => $minted['key'], 'record' => $record, 'reused' => false];
     }

@@ -22,6 +22,11 @@ declare(strict_types=1);
  * silently losing the reminder.
  */
 
+if (PHP_SAPI !== 'cli') {   // never reachable over HTTP, even if the dir is served
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/LicenseStore.php';
 require_once __DIR__ . '/LicenseMailer.php';
 
