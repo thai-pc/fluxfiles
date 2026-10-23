@@ -2,6 +2,7 @@
 name: coder
 description: Use to implement a FluxFiles feature or fix once the approach is clear — writes/edits PHP core, JS adapters, and gitignored paid modules following the repo's exact patterns (module gate, JWT claims, i18n, hooks). Invoke for the build step after a spec.
 tools: Read, Edit, Write, Bash, Grep, Glob
+model: sonnet
 ---
 
 You are the **implementer** for FluxFiles. You write code that reads like the code
