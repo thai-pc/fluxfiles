@@ -263,6 +263,67 @@ test('N5: bookkeeping writes send ACL=private even when the disk defaults to pub
     }
 });
 
+test('saving metadata on S3 keeps Content-Type, keeps public-read on a public disk, encodes CopySource', function () {
+    $dm = new DiskManager(['s3' => ['driver' => 's3', 'bucket' => 'b', 'region' => 'us-east-1',
+        'key' => 'k', 'secret' => 's', 'visibility' => 'public']]);
+    $copy = null;
+    $dm->s3Client('s3')->getHandlerList()->setHandler(
+        function (CommandInterface $cmd, RequestInterface $req) use (&$copy) {
+            if ($cmd->getName() === 'HeadObject') {
+                return Create::promiseFor(new Result(['ContentType' => 'image/png', 'CacheControl' => 'max-age=60']));
+            }
+            if ($cmd->getName() === 'CopyObject') {
+                $copy = $cmd->toArray();
+            }
+            return Create::promiseFor(new Result([]));
+        }
+    );
+    $m = new \ReflectionMethod(StorageMetadataHandler::class, 'saveToS3');
+    $m->setAccessible(true);
+    $m->invoke(new StorageMetadataHandler($dm), 's3', 'user/my photo+1.png', ['title' => 'T']);
+    assertEqual('image/png', $copy['ContentType'] ?? null, 'content type carried over');
+    assertEqual('max-age=60', $copy['CacheControl'] ?? null, 'cache-control carried over');
+    assertEqual('public-read', $copy['ACL'] ?? null, 'public disk stays public');
+    assertEqual('b/user/my%20photo%2B1.png', $copy['CopySource'] ?? null, 'CopySource percent-encoded per segment');
+});
+
+test('trash on a public AWS disk makes the trashed object private; restore makes it public again', function () {
+    $dm = new DiskManager(['s3' => ['driver' => 's3', 'bucket' => 'b', 'region' => 'us-east-1',
+        'key' => 'k', 'secret' => 's', 'visibility' => 'public']]);
+    $acls = [];
+    $store = ['user/a.txt' => 'x'];   // a tiny in-memory bucket: key => body
+    $dm->s3Client('s3')->getHandlerList()->setHandler(
+        function (CommandInterface $cmd, RequestInterface $req) use (&$acls, &$store) {
+            $n = $cmd->getName();
+            $k = (string) ($cmd['Key'] ?? '');
+            $missing = fn () => Create::rejectionFor(new S3Exception('missing', $cmd, ['response' => new Response(404), 'code' => 'NoSuchKey']));
+            switch ($n) {
+                case 'PutObjectAcl': $acls[] = [$k, (string) $cmd['ACL']]; return Create::promiseFor(new Result([]));
+                case 'PutObject': $store[$k] = (string) $cmd['Body']; return Create::promiseFor(new Result([]));
+                case 'CopyObject':
+                    $src = rawurldecode(substr((string) $cmd['CopySource'], strlen('b/')));
+                    $store[$k] = $store[$src] ?? '';
+                    return Create::promiseFor(new Result([]));
+                case 'DeleteObject': unset($store[$k]); return Create::promiseFor(new Result([]));
+                case 'HeadObject':
+                    return isset($store[$k]) ? Create::promiseFor(new Result(['ContentLength' => strlen($store[$k]), 'Metadata' => []])) : $missing();
+                case 'GetObject':
+                    return isset($store[$k]) ? Create::promiseFor(new Result(['Body' => \GuzzleHttp\Psr7\Utils::streamFor($store[$k]), 'ContentLength' => strlen($store[$k])])) : $missing();
+                case 'GetObjectAcl': return Create::promiseFor(new Result(['Grants' => []]));
+                default: return Create::promiseFor(new Result(['KeyCount' => 0]));
+            }
+        }
+    );
+    $c = new Claims('u', ['read', 'write', 'delete'], ['s3'], 'user', 50, null, 0, false);
+    $fm = new FileManager($dm, $c, new StorageMetadataHandler($dm));
+    $r = $fm->trash('s3', 'a.txt');
+    $tk = '_fluxfiles/trash/' . $r['trash_id'] . '/a.txt';
+    assertTrue(in_array([$tk, 'private'], $acls, true), 'trashed object set private: ' . json_encode($acls));
+    $acls = [];
+    $fm->restore('s3', $r['trash_id']);
+    assertTrue(in_array(['user/a.txt', 'public-read'], $acls, true), 'restored object public again: ' . json_encode($acls));
+});
+
 test('N5: local bookkeeping files keep their normal mode (no chmod to 0600)', function () {
     $root = tmpRoot('mode');
     $meta = new StorageMetadataHandler(new DiskManager(['local' => ['driver' => 'local', 'root' => $root]]));

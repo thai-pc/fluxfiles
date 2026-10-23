@@ -799,7 +799,9 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
             'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
             'released_by'    => $row['released_by'],
             'release_reason' => $row['release_reason'],
-        ];
+        ] + (isset($row['placed_by_scope']) && $row['placed_by_scope'] !== null
+            ? ['placed_by_scope' => (string) $row['placed_by_scope']]
+            : []);
     }
 
     public function allHolds(string $disk): array
@@ -833,11 +835,22 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
             'released_by'    => $entry['released_by'] ?? null,
             'release_reason' => $entry['release_reason'] ?? null,
         ];
-
-        $this->table('fluxfiles_legal_holds')->updateOrInsert(
-            ['disk' => $disk, 'id' => $id],
-            $row
-        );
+        // The placing token's scope (a narrower token may not release the hold).
+        // The 2026_10_23 migration adds the column; until it has run the hold is
+        // still written — without the scope — rather than refused.
+        if (array_key_exists('placed_by_scope', $entry)) {
+            $row['placed_by_scope'] = $entry['placed_by_scope'];
+        }
+        try {
+            $this->table('fluxfiles_legal_holds')->updateOrInsert(['disk' => $disk, 'id' => $id], $row);
+        } catch (\Throwable $e) {
+            if (!array_key_exists('placed_by_scope', $row)) {
+                throw $e;
+            }
+            error_log('FluxFiles: fluxfiles_legal_holds.placed_by_scope is missing — run `php artisan migrate` (' . $e->getMessage() . ')');
+            unset($row['placed_by_scope']);
+            $this->table('fluxfiles_legal_holds')->updateOrInsert(['disk' => $disk, 'id' => $id], $row);
+        }
     }
 
     public function releaseHold(string $disk, string $id, array $releaseInfo): void

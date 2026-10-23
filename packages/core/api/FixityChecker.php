@@ -52,14 +52,16 @@ final class FixityChecker
 
     /**
      * @param callable(string):bool $isSkipped  reserved/hidden filter (FileManager's rules)
-     * @param array<int,array<string,mixed>> $auditEntries readAudit() rows for the disk
+     * @param array<int,array<string,mixed>>|callable(?int):array<int,array<string,mixed>> $auditEntries
+     *        readAudit() rows for the disk, or a loader given the oldest baseline
+     *        time (null = no baseline yet) so a DB backend reads only that window
      * @return array<string,mixed> report
      */
     public static function run(
         Filesystem $fs,
         string $root,
         callable $isSkipped,
-        array $auditEntries,
+        $auditEntries,
         int $budgetBytes = 1024 * 1024 * 1024
     ): array {
         $manifestKey = ($root !== '' ? $root . '/' : '') . self::MANIFEST;
@@ -72,6 +74,16 @@ final class FixityChecker
         }
         $files = $manifest['files'];
         $cursor = (string) ($manifest['cursor'] ?? '');
+        if (is_callable($auditEntries)) {
+            // Only writes after a file's baseline can explain a change to it, so the
+            // oldest baseline bounds the audit window worth reading.
+            $since = null;
+            foreach ($files as $rec) {
+                $t = (int) ($rec['checked_at'] ?? 0);
+                $since = $since === null ? $t : min($since, $t);
+            }
+            $auditEntries = (array) $auditEntries($since);
+        }
 
         $present = [];
         foreach ($fs->listContents($root, true) as $item) {
@@ -160,6 +172,12 @@ final class FixityChecker
             // A full round finished: anything in the baseline that's gone now.
             foreach ($files as $key => $rec) {
                 $key = (string) $key;
+                // Not visible to THIS token (e.g. a dotfile with show_hidden=false):
+                // it wasn't listed, which doesn't make it missing — keep its baseline
+                // for a token that can see it.
+                if ($isSkipped($key)) {
+                    continue;
+                }
                 if (!isset($present[$key])) {
                     if ($explained($key, (int) $rec['checked_at'])) {
                         $report['missing_explained'][] = $key;

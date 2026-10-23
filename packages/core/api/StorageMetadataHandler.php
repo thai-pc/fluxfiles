@@ -835,14 +835,35 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             'fm-uploaded-by' => substr((string) ($data['uploaded_by'] ?? ''), 0, 1024),
         ];
 
-        $copySource = $bucket . '/' . $key;
-        $client->copyObject([
+        // Metadata lives in the object's headers, so saving it is a self-copy with
+        // MetadataDirective=REPLACE — which replaces ALL of them: without carrying
+        // the content headers over, an image came back as binary/octet-stream, and
+        // without an ACL a public AWS disk's object turned private (its URL 403s).
+        $params = [
             'Bucket' => $bucket,
             'Key' => $key,
-            'CopySource' => $copySource,
+            // CopySource is a URL path: each key segment must be percent-encoded, or
+            // a key with a space/`+`/`?` copies the wrong object or fails.
+            'CopySource' => $bucket . '/' . implode('/', array_map('rawurlencode', explode('/', $key))),
             'Metadata' => $metadata,
             'MetadataDirective' => 'REPLACE',
-        ]);
+        ];
+        try {
+            $head = $client->headObject(['Bucket' => $bucket, 'Key' => $key]);
+            foreach (['ContentType', 'ContentDisposition', 'ContentEncoding', 'ContentLanguage', 'CacheControl', 'Expires'] as $h) {
+                if (!empty($head[$h])) {
+                    $params[$h] = $head[$h];
+                }
+            }
+        } catch (\Throwable $e) {
+            // No head → the copy below fails the same way; nothing to carry over.
+        }
+        // Mirrors DiskManager: only a native AWS disk marked public writes public-read
+        // (its client strips ACL for every other disk anyway).
+        if (empty($config['endpoint']) && ($config['visibility'] ?? 'private') === 'public') {
+            $params['ACL'] = 'public-read';
+        }
+        $client->copyObject($params);
     }
 
     private function metaFromS3Headers(array $meta): array

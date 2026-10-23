@@ -188,6 +188,53 @@ test('WebP: EXIF/XMP chunks removed, VP8X flags cleared, RIFF size fixed', funct
     assertTrue(imagecreatefromstring($out) !== false, 'still decodes');
 });
 
+test('JPEG: vendor APPn, C2PA/JUMBF, FlashPix and JFXX thumbnails go; Adobe APP14 stays', function () {
+    ob_start(); imagejpeg(gdImage(), null, 90); $jpg = (string) ob_get_clean();
+    $extra = seg(0xE0, "JFXX\0\x10" . str_repeat('T', 16))
+        . seg(0xE2, "FPXR\0" . str_repeat('F', 12))
+        . seg(0xE3, 'Meta' . str_repeat('m', 8))       // vendor (Kodak/Samsung)
+        . seg(0xEB, "JP\0\0jumbc2pa" . str_repeat('c', 8)) // APP11 JUMBF / C2PA
+        . seg(0xEE, "Adobe\0d\0\0\0\0\x01");          // colour transform
+    $at = substr($jpg, 2, 2) === "\xFF\xE0" ? 4 + unpack('n', substr($jpg, 4, 2))[1] : 2;
+    $in = substr($jpg, 0, $at) . $extra . substr($jpg, $at);
+    $r = ExifStripper::strip($in);
+    assertTrue($r !== null && $r['removed'], 'stripped');
+    foreach (['JFXX', 'FPXR', 'Meta', 'jumbc2pa'] as $n) {
+        assertTrue(strpos($r['data'], $n) === false, "{$n} gone");
+    }
+    assertTrue(strpos($r['data'], "Adobe\0") !== false, 'APP14 kept');
+    assertTrue(scanData($r['data']) === scanData($in), 'pixels identical');
+    assertTrue(imagecreatefromstring($r['data']) !== false, 'still decodes');
+});
+
+test('PNG: bytes appended after IEND and a C2PA caBX chunk are cut', function () {
+    ob_start(); imagepng(gdImage()); $png = (string) ob_get_clean();
+    $at = 8 + 12 + 13;
+    $in = substr($png, 0, $at) . pngChunk('caBX', 'jumbc2pa') . substr($png, $at) . 'PK' . str_repeat("\0", 30);
+    $r = ExifStripper::strip($in);
+    assertTrue($r !== null && $r['removed'], 'stripped');
+    assertTrue($r['data'] === $png, 'exactly the original image');
+    $clean = ExifStripper::strip($png);
+    assertTrue($clean !== null && !$clean['removed'], 'a clean PNG is untouched');
+});
+
+test('WebP: unknown chunks and bytes past the RIFF size are cut', function () {
+    if (!function_exists('imagewebp')) {
+        return;
+    }
+    ob_start(); imagewebp(gdImage(), null, 80); $webp = (string) ob_get_clean();
+    $c2pa = 'C2PA' . pack('V', 8) . 'jumbc2pa';
+    $chunks = substr($webp, 12) . $c2pa;
+    $in = 'RIFF' . pack('V', 4 + strlen($chunks)) . 'WEBP' . $chunks . 'TRAILER-GPS';
+    $r = ExifStripper::strip($in);
+    assertTrue($r !== null && $r['removed'], 'stripped');
+    assertTrue(strpos($r['data'], 'jumbc2pa') === false && strpos($r['data'], 'TRAILER') === false, 'gone');
+    assertTrue(unpack('V', substr($r['data'], 4, 4))[1] === strlen($r['data']) - 8, 'RIFF size matches');
+    assertTrue(imagecreatefromstring($r['data']) !== false, 'still decodes');
+    $clean = ExifStripper::strip($webp);
+    assertTrue($clean !== null && !$clean['removed'], 'a clean WebP is untouched');
+});
+
 test('unsupported / corrupt input is left alone (null)', function () {
     assertTrue(ExifStripper::strip('GIF89a....') === null, 'gif');
     assertTrue(ExifStripper::strip("\xFF\xD8\xFF\xE1\xFF\xFF") === null, 'truncated jpeg');

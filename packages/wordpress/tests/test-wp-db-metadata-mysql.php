@@ -221,6 +221,7 @@ $pdo->exec("CREATE TABLE {$tHolds} (
   released_at bigint(20) NULL,
   released_by varchar(191) NULL,
   release_reason text NULL,
+  placed_by_scope text NULL,
   PRIMARY KEY (disk,id),
   KEY disk_released_at (disk,released_at)
 ) DEFAULT CHARSET=utf8mb4");
@@ -594,6 +595,11 @@ test('holdBlocking() matches case-insensitively', function () use ($repo, $disk)
     $repo->addHold($disk, 'hold-case', ['path' => 'Legal/Contract.PDF', 'placed_at' => 1]);
     assertTrue($repo->holdBlocking($disk, 'legal/contract.pdf') !== null, 'different letter case is still the held file');
     assertTrue($repo->holdBlocking($disk, 'LEGAL') !== null, 'its parent folder in another case is blocked too');
+});
+
+test('addHold() round-trips placed_by_scope (schema 1.4.0)', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'hold-scope', ['path' => 'scoped/a.txt', 'placed_by_scope' => 'tenant1', 'placed_at' => 1]);
+    assertEqual('tenant1', $repo->getHold($disk, 'hold-scope')['placed_by_scope'] ?? null);
 });
 
 test('allHolds() returns every hold on the disk, keyed by id', function () use ($repo, $disk) {

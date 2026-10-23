@@ -18,7 +18,7 @@ defined('ABSPATH') || exit;
 class FluxFilesDbSchema
 {
     /** Bump whenever the SQL below changes; drives the admin_init upgrade check. */
-    public const VERSION = '1.3.0';
+    public const VERSION = '1.4.0';
 
     public static function install(): void
     {
@@ -122,6 +122,7 @@ CREATE TABLE {$tHolds} (
   released_at bigint(20) NULL,
   released_by varchar(191) NULL,
   release_reason text NULL,
+  placed_by_scope text NULL,
   PRIMARY KEY  (disk,id),
   KEY disk_released_at (disk,released_at)
 ) {$charsetCollate};

@@ -26,9 +26,9 @@ function test(string $n, callable $f): void {
 }
 function assertTrue($c, string $m): void { if (!$c) throw new \RuntimeException($m); }
 
-function minimalPdf(): string {
+function minimalPdf(string $box = '0 0 200 100', string $extra = ''): string {
     $objs = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R >>"];
+        "<< /Type /Page /Parent 2 0 R /MediaBox [{$box}]{$extra} /Contents 4 0 R >>"];
     $stream = "0 0 1 rg 20 20 160 60 re f";
     $objs[] = "<< /Length " . strlen($stream) . " >>\nstream\n{$stream}\nendstream";
     $out = "%PDF-1.4\n"; $offs = [];
@@ -81,6 +81,21 @@ if (MediaPoster::available('pdf')) {
         [$fm, $root] = posterEnv(false);
         $r = up($fm, 'q.pdf', minimalPdf());
         assertTrue(!isset($r['poster']) && !is_file("{$root}/_variants/q.pdf_thumb.webp"), 'off');
+    });
+    test('a huge page renders into a bounded canvas, not a gigapixel raster', function () {
+        // 200in × 200in × UserUnit 10 → ~190k px a side at 96 dpi if rendered as-is.
+        $src = tempnam(sys_get_temp_dir(), 'pst');
+        file_put_contents($src, minimalPdf('0 0 14400 14400', ' /UserUnit 10'));
+        try {
+            $t = microtime(true);
+            $png = MediaPoster::render($src, 'huge.pdf');
+            $dt = microtime(true) - $t;
+        } finally {
+            @unlink($src);
+        }
+        $size = $png !== null ? getimagesizefromstring($png) : false;
+        assertTrue($size !== false && $size[0] <= 816 && $size[1] <= 1056, 'bounded: ' . json_encode($size ?: null));
+        assertTrue($dt < 10, "fast ({$dt}s)");
     });
 } else {
     echo "  {$yellow}SKIP{$reset} PDF poster cases — Ghostscript not installed\n";

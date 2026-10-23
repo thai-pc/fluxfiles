@@ -1614,7 +1614,11 @@ class FluxFilesController
 
             $origin = $request->header('Origin') ?: $request->query('origin');
 
-            return $this->ok((new BucketDoctor($this->diskManager))->diagnose($disk, $origin ?: null));
+            $report = (new BucketDoctor($this->diskManager))->diagnose($disk, $origin ?: null);
+            // It writes and deletes a probe object — logged like any other write.
+            $this->logAuditQuiet($claims, 'disk_doctor', $disk, '');
+
+            return $this->ok($report);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }

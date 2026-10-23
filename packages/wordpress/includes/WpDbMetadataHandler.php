@@ -882,7 +882,9 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
             'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
             'released_by'    => $row['released_by'],
             'release_reason' => $row['release_reason'],
-        ];
+        ] + (isset($row['placed_by_scope']) && $row['placed_by_scope'] !== null
+            ? ['placed_by_scope' => (string) $row['placed_by_scope']]
+            : []);
     }
 
     public function allHolds(string $disk): array
@@ -918,12 +920,26 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
             'released_by'    => $entry['released_by'] ?? null,
             'release_reason' => $entry['release_reason'] ?? null,
         ];
-        $updateCols = array_values(array_diff(array_keys($insertCols), ['disk', 'id']));
+        // The placing token's scope (a narrower token may not release the hold).
+        // Schema 1.4.0 adds the column via dbDelta on the next admin page load; a
+        // hold placed before that is still written, just without the scope.
+        if (array_key_exists('placed_by_scope', $entry)) {
+            $insertCols['placed_by_scope'] = $entry['placed_by_scope'];
+        }
+        if ($this->upsertHold($insertCols) === false && array_key_exists('placed_by_scope', $insertCols)) {
+            unset($insertCols['placed_by_scope']);
+            $this->upsertHold($insertCols);
+        }
+    }
 
+    /** @param array<string,mixed> $insertCols @return int|bool */
+    private function upsertHold(array $insertCols)
+    {
+        $updateCols = array_values(array_diff(array_keys($insertCols), ['disk', 'id']));
         [$colSql, $valSql, $bind] = $this->buildValueClause($insertCols);
         $updateSql = implode(', ', array_map(static fn ($c) => "{$c} = VALUES({$c})", $updateCols));
         $sql = "INSERT INTO {$this->tHolds} ({$colSql}) VALUES ({$valSql}) ON DUPLICATE KEY UPDATE {$updateSql}";
-        $this->query($sql, $bind);
+        return $this->query($sql, $bind);
     }
 
     public function releaseHold(string $disk, string $id, array $releaseInfo): void

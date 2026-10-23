@@ -351,6 +351,23 @@ class FileManager
         if ($origin === '') {
             return;
         }
+        // History moved into the trash with the payload: purge exactly that.
+        $id = (string) ($entry['_id'] ?? '');
+        if ($id !== '' && preg_match('/^[A-Za-z0-9_-]+$/', $id)) {
+            $trashDir = '_fluxfiles/trash/' . $id;
+            if (empty($entry['is_dir'])) {
+                $this->purgeVersions($disk, $trashDir . '/' . basename((string) ($entry['basename'] ?? '')), $fs);
+            } else {
+                foreach (($entry['files'] ?? []) as $f) {
+                    $rel = $this->safeRel((string) ($f['rel'] ?? ''));
+                    if ($rel !== '' && strpos($rel, '_variants/') === false) {
+                        $this->purgeVersions($disk, $trashDir . '/payload/' . $rel, $fs);
+                    }
+                }
+            }
+        }
+        // An entry trashed before history moved with it still has it under the
+        // original key(s) — purge those too, unless a live file now owns that path.
         $keys = [];
         if (empty($entry['is_dir'])) {
             $keys[] = $origin;
@@ -959,6 +976,33 @@ class FileManager
     }
 
     /** trash() for an already-scoped key — see deleteScoped() for why. */
+    /**
+     * On a public native-AWS disk every object is written public-read, and a move
+     * into the trash keeps that ACL — so trashed bytes stayed fetchable by URL
+     * under `_fluxfiles/trash/<id>/…`. Flip them private while trashed and back to
+     * the disk default on restore. Best-effort; a no-op on every other disk.
+     */
+    private function setTrashVisibility(string $disk, $fs, string $path, bool $isDir, string $visibility): void
+    {
+        $cfg = $this->disks->config($disk);
+        if (($cfg['driver'] ?? '') !== 's3' || !empty($cfg['endpoint']) || ($cfg['visibility'] ?? 'private') !== 'public') {
+            return;
+        }
+        try {
+            if (!$isDir) {
+                $fs->setVisibility($path, $visibility);
+                return;
+            }
+            foreach ($fs->listContents($path, true) as $item) {
+                if ($item->isFile()) {
+                    $fs->setVisibility($item->path(), $visibility);
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('FluxFiles: trash visibility change failed — ' . $e->getMessage());
+        }
+    }
+
     private function trashScoped(string $disk, string $scoped): array
     {
         $this->assertDisk($disk);
@@ -996,6 +1040,7 @@ class FileManager
         } catch (\Throwable $e) {
             throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
         }
+        $this->setTrashVisibility($disk, $fs, $trashDir . '/' . $basename, false, 'private');
 
         $movedVariants = [];
         foreach (['thumb', 'medium', 'large'] as $vsize) {
@@ -1007,6 +1052,14 @@ class FileManager
                 }
             } catch (\Throwable $e) { /* best effort */ }
         }
+
+        // Version history travels with the file into the trash, so a new file saved
+        // at the original path starts its own history and purging this entry can't
+        // touch it. (No flag on the entry — the DB backends only persist fixed
+        // columns — so restore/purge simply try the trash key AND the legacy
+        // original key; the versioning module ignores a key with no history and
+        // never takes history from under a live file.)
+        $this->moveVersions($disk, $scoped, $trashDir . '/' . $basename, $fs);
 
         // Drop the active metadata; the trash entry (written last) is the commit point.
         $this->meta->delete($disk, $scoped);
@@ -1070,6 +1123,9 @@ class FileManager
         } catch (\Throwable $e) {
             throw new ApiException('Trash failed: ' . $e->getMessage(), 500, 'trash_failed');
         }
+        $this->setTrashVisibility($disk, $fs, $trashDir . '/payload', true, 'private');
+
+        $this->moveVersionsDir($disk, $scoped, $trashDir . '/payload', $fs); // see the file case
 
         $this->meta->deleteChildren($disk, $scoped);
         $this->meta->deleteDirPrefix($disk, $scoped);
@@ -1149,6 +1205,7 @@ class FileManager
         } catch (\Throwable $e) {
             throw new ApiException('Restore failed: ' . $e->getMessage(), 500, 'restore_failed');
         }
+        $this->setTrashVisibility($disk, $fs, $target, false, 'public');
 
         foreach (($entry['variants'] ?? []) as $vsize) {
             $src = $trashDir . '/v/' . $vsize . '.webp';
@@ -1162,9 +1219,11 @@ class FileManager
         if (!empty($entry['meta'])) {
             $this->meta->save($disk, $target, $entry['meta']);
         }
-        // Version history stayed under the ORIGINAL key while the file sat in the
-        // trash (trash() never relocates it), so a restore to the original key
-        // needs nothing — only a restore to a new path has to re-key it.
+        // History travelled into the trash next to the payload — bring it back. An
+        // entry trashed before that still has it under the original key: re-key it
+        // too when restoring somewhere new (a no-op when there is none, and the
+        // module refuses to take it from under a live file).
+        $this->moveVersions($disk, $trashDir . '/' . $payloadName, $target, $fs);
         $this->moveVersions($disk, (string) ($entry['original_key'] ?? $target), $target, $fs);
         $this->meta->trackParents($disk, $target);
 
@@ -1198,6 +1257,7 @@ class FileManager
             } catch (\Throwable $e) {
                 throw new ApiException('Restore failed: ' . $e->getMessage(), 500, 'restore_failed');
             }
+            $this->setTrashVisibility($disk, $fs, $target, true, 'public');
         } else {
             try {
                 $fs->createDirectory($target); // an entirely empty folder has no payload
@@ -1229,8 +1289,10 @@ class FileManager
             }
         }
         $this->meta->trackDir($disk, $target);
-        // Same as the file case: history is keyed by the original path, so only a
-        // restore to a NEW path has to re-key each child's versions.
+        // Same as the file case: history comes back from the trash payload, and an
+        // older entry's history is re-keyed from the original path when restoring
+        // somewhere new.
+        $this->moveVersionsDir($disk, $payload, $target, $fs);
         $origin = rtrim((string) ($entry['original_key'] ?? $target), '/');
         if ($origin !== $target) {
             $this->moveVersionsDir($disk, $origin, $target, $fs);
@@ -1333,7 +1395,7 @@ class FileManager
         // Permanent delete → the version history (Versioning module) goes too,
         // same as `/delete`; otherwise "trash then purge" leaves the old bytes
         // restorable under `_fluxfiles/versions/` (erasure + storage leak).
-        $this->purgeTrashedVersions($disk, $entry, $fs);
+        $this->purgeTrashedVersions($disk, ['_id' => $id] + $entry, $fs);
         try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $e) { /* best effort */ }
         $this->meta->removeTrash($disk, $id);
 
@@ -1361,7 +1423,7 @@ class FileManager
                 $held++;
                 continue;
             }
-            $this->purgeTrashedVersions($disk, $e, $fs); // permanent → history goes too
+            $this->purgeTrashedVersions($disk, ['_id' => (string) $id] + $e, $fs); // permanent → history goes too
             try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $ex) { /* best effort */ }
             $this->meta->removeTrash($disk, $id);
             $n++;
@@ -2842,7 +2904,8 @@ class FileManager
      * @param array<int,array<string,mixed>> $auditEntries
      * @return array<string,mixed>
      */
-    public function runFixityCheck(string $disk, array $auditEntries, int $budgetBytes = 1024 * 1024 * 1024): array
+    /** @param array<int,array<string,mixed>>|callable(?int):array<int,array<string,mixed>> $auditEntries see FixityChecker::run() */
+    public function runFixityCheck(string $disk, $auditEntries, int $budgetBytes = 1024 * 1024 * 1024): array
     {
         $this->assertDisk($disk);
         $this->assertPerm('read');
@@ -4355,8 +4418,13 @@ class FileManager
     {
         // Module callers validate with validateUserPath(), historically without a
         // disk — re-check here, where the disk is known, so a module write can't
-        // reach `_fluxfiles/` or an SFTP repo's `.git/`.
+        // reach `_fluxfiles/` or an SFTP repo's `.git/`. The disk, `write` and scope
+        // checks are the module's job too, but a write primitive shouldn't rely on
+        // every future caller remembering them.
+        $this->assertDisk($disk);
+        $this->assertPerm('write');
         $scopedPath = $this->validateScopedPath($scopedPath, $disk);
+        $this->assertScopedKeyInScope($scopedPath);
         $this->assertNoHoldIfExists($disk, $scopedPath);
         $this->assertFileLeaf($scopedPath);
 
@@ -4478,7 +4546,10 @@ class FileManager
      */
     public function writeScopedStream(string $disk, string $scopedPath, $stream): void
     {
-        $scopedPath = $this->validateScopedPath($scopedPath, $disk); // see writeScopedFile()
+        $this->assertDisk($disk);            // see writeScopedFile()
+        $this->assertPerm('write');
+        $scopedPath = $this->validateScopedPath($scopedPath, $disk);
+        $this->assertScopedKeyInScope($scopedPath);
         $this->assertNoHoldIfExists($disk, $scopedPath);
         $this->assertFileLeaf($scopedPath);
 

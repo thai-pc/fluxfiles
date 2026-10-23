@@ -218,17 +218,23 @@ test('setVersionMover: directory rename/move re-keys every child (variants skipp
     assertEqual([['renamed/a.txt', 'moved/a.txt'], ['renamed/sub/b.txt', 'moved/sub/b.txt']], $calls, 'same on move');
 });
 
-test('setVersionMover: trash + restore to the ORIGINAL key never calls the mover; a new path does', function () {
+test('setVersionMover: history travels into the trash with the file and back out on restore', function () {
     $calls = [];
     $mover = function (string $d, string $from, string $to, $fs) use (&$calls): void { $calls[] = [$from, $to]; };
     [$fm, , $rb] = makeCD(['versionMover' => $mover]);
     file_put_contents($rb . '/t.txt', 'x');
     $r = $fm->trash('b', 't.txt');
+    $tk = '_fluxfiles/trash/' . $r['trash_id'] . '/t.txt';
+    assertEqual([['t.txt', $tk]], $calls, 'trash re-keys the history to the trash payload');
+    $calls = [];
     $fm->restore('b', $r['trash_id']);
-    assertEqual([], $calls, 'history stays keyed by the original path through trash/restore');
+    assertEqual([[$tk, 't.txt']], $calls, 'restore to the original key brings it back (legacy original→original is a no-op)');
+    $calls = [];
     $r = $fm->trash('b', 't.txt');
+    $tk = '_fluxfiles/trash/' . $r['trash_id'] . '/t.txt';
+    $calls = [];
     $fm->restore('b', $r['trash_id'], 'elsewhere.txt');
-    assertEqual([['t.txt', 'elsewhere.txt']], $calls, 'restore to a new path re-keys');
+    assertEqual([[$tk, 'elsewhere.txt'], ['t.txt', 'elsewhere.txt']], $calls, 'restore to a new path: trash key, then the legacy original key');
 });
 
 test('setVersionPurger: purgeTrash / emptyTrash purge by ORIGINAL key (file + every file of a dir)', function () {
@@ -245,14 +251,15 @@ test('setVersionPurger: purgeTrash / emptyTrash purge by ORIGINAL key (file + ev
     $r = $fm->trash('b', 'p.txt');
     assertEqual([], $calls, 'trash itself is not permanent → no purge');
     $fm->purgeTrash('b', $r['trash_id']);
-    assertEqual(['p.txt'], $calls, 'purgeTrash purges the original key');
+    assertEqual(['_fluxfiles/trash/' . $r['trash_id'] . '/p.txt', 'p.txt'], $calls, 'purgeTrash purges the trash key, then the legacy original key');
 
     $calls = [];
-    $fm->trash('b', 'd');
+    $rd = $fm->trash('b', 'd');
     $out = $fm->emptyTrash('b');
     assertEqual(1, $out['purged']);
     sort($calls);
-    assertEqual(['d/a.txt', 'd/sub/b.txt'], $calls, 'emptyTrash purges each file of the trashed dir, not variants');
+    $tp = '_fluxfiles/trash/' . $rd['trash_id'] . '/payload/';
+    assertEqual([$tp . 'a.txt', $tp . 'sub/b.txt', 'd/a.txt', 'd/sub/b.txt'], $calls, 'emptyTrash purges each file of the trashed dir (trash + legacy keys), not variants');
 });
 
 test('setVersionPurger: purging a trash entry spares the history of a NEW file at the same path', function () {
@@ -263,7 +270,7 @@ test('setVersionPurger: purging a trash entry spares the history of a NEW file a
     $r = $fm->trash('b', 'r.txt');
     file_put_contents($rb . '/r.txt', 'a new file saved at the same path');
     $fm->purgeTrash('b', $r['trash_id']);
-    assertEqual([], $calls, 'the live file owns the history at r.txt now — not purged');
+    assertEqual(['_fluxfiles/trash/' . $r['trash_id'] . '/r.txt'], $calls, 'only the trashed copy\'s history is purged; the live file at r.txt keeps its own');
     assertTrue(is_file($rb . '/r.txt'), 'live file untouched');
 });
 

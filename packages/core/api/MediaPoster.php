@@ -69,8 +69,12 @@ final class MediaPoster
                 if ($gs === null || strncmp((string) @file_get_contents($srcPath, false, null, 0, 5), '%PDF-', 5) !== 0) {
                     return null;
                 }
+                // A fixed Letter-sized canvas the page is scaled into: rendering at the
+                // page's own size lets a crafted MediaBox (200in², or a huge /UserUnit)
+                // ask for a gigapixel raster — minutes of CPU on one upload.
                 $args = [$gs, '-q', '-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=png16m',
                     '-dFirstPage=1', '-dLastPage=1', '-r96', '-dTextAlphaBits=4', '-dGraphicsAlphaBits=4',
+                    '-dDEVICEWIDTHPOINTS=612', '-dDEVICEHEIGHTPOINTS=792', '-dFIXEDMEDIA', '-dPDFFitPage',
                     '-o', $out, $srcPath];
             } else {
                 $ff = self::binary('ffmpeg');

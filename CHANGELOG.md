@@ -3,6 +3,68 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.28] — 2026-10-23
+
+> Released: `core-v0.2.102`, `laravel-v0.2.52`, `wordpress-v0.2.62`.
+> Paid modules (own repos): `versioning v1.3.1` (tests + docs only).
+
+The low-severity findings left over from the 2026-10-23 audit. Each fix has a
+regression test.
+
+### Upgrade notes
+
+- **DB storage backend** (`FLUXFILES_STORAGE_BACKEND=db`): run the new
+  migration — core applies `0009_add_legal_hold_scope.sql` on its own
+  migration run; **Laravel** `php artisan migrate`; **WordPress** upgrades the
+  schema to `1.4.0` on the next admin load. Until then holds still work; the
+  scope a hold was placed in just isn't kept (an `error_log` line per hold write).
+- **`strip_exif`** now also drops vendor APPn blocks, JFXX thumbnails, FlashPix
+  data and embedded **C2PA/JUMBF** manifests, and cuts bytes appended after a
+  PNG's `IEND` / past a WebP's RIFF size.
+
+### Fixed
+
+- **Version history follows the file into the trash.** Trashing a file or
+  folder moves its versions with it and restoring brings them back; purging
+  the trash purges them. Before, the history stayed at the old path, so a
+  purge left it behind on storage.
+- **Trashed files on AWS S3 are no longer public.** A public-visibility disk
+  sets each object `private` when it goes to the trash and `public` again on
+  restore, so a known URL stops serving a deleted file.
+- **`writeScopedFile` / `writeScopedStream`** (used by modules) check the disk,
+  the `write` permission and the token's scope themselves instead of trusting
+  the caller.
+- **Fixity check** on a DB backend reads only the audit window since the oldest
+  baseline instead of the whole log, and a file hidden from the current token
+  (`show_hidden=false`) is no longer reported as missing — its baseline is kept.
+- **Legal holds** keep the scope they were placed in (`placed_by_scope`) on the
+  DB backends too (it was silently dropped, so a tenant-scoped hold looked
+  unscoped after a round-trip). New column in core, Laravel and WordPress.
+- **S3 metadata writes** URL-encode the `CopySource` key and carry over
+  `Content-Type`, `Content-Disposition`, `Cache-Control`, … and the public ACL —
+  saving a title/tag could fail on a key with a space or `+` in it, and a
+  successful save reset the object's headers.
+- **Bucket Doctor** runs are written to the audit log (`disk_doctor`) — it is a
+  GET but it writes and deletes a probe object. Same in the Laravel and
+  WordPress proxies.
+- **tus server discovery**: `OPTIONS /api/fm/tus` answers with `Tus-Version` /
+  `Tus-Extension` (the preflight handler answered first, so clients saw a bare
+  204); both headers are CORS-exposed.
+- **PDF posters** render into a fixed Letter-sized canvas: a crafted page size
+  (or a huge `/UserUnit`) asked Ghostscript for a gigapixel raster.
+- **Audit export** filters and caps each disk before reading the next, so the
+  working set is one disk's history, not every disk's at once.
+- Activity-log labels for `intake_upload`, `share_download` and `disk_doctor`
+  in all 16 languages.
+
+### Docs
+
+- `versioning_max` / the versioning README: the version store is per disk, so
+  version bytes are outside the tenant prefix and not counted against
+  `max_storage_mb` (bounded by `versioning_max` × `versioning_max_mb`).
+- `strip_exif` lists everything it now removes; a stale WordPress comment about
+  `/api/fm/img` not being proxied is corrected.
+
 ## [0.3.27] — 2026-10-23
 
 > Released: `core-v0.2.101`, `laravel-v0.2.51`, `wordpress-v0.2.61`,

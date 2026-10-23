@@ -558,6 +558,17 @@ test('holdBlocking() matches case-insensitively (same file on a case-insensitive
     assertTrue($repo->holdBlocking($disk, 'LEGAL') !== null, 'its parent folder in another case is blocked too');
 });
 
+test('addHold(): before the scope migration the hold is still placed; after it the scope round-trips', function () use ($repo, $disk, $schema) {
+    $prev = ini_set('error_log', '/dev/null');
+    $repo->addHold($disk, 'hs1', ['path' => 'scoped/a.txt', 'placed_by_scope' => 'tenant1', 'placed_at' => 1]);
+    ini_set('error_log', (string) $prev);
+    $h = $repo->getHold($disk, 'hs1');
+    assertTrue($h !== null && !isset($h['placed_by_scope']), 'placed without the (missing) column');
+    $schema->table('fluxfiles_legal_holds', function (Blueprint $table) { $table->text('placed_by_scope')->nullable(); });
+    $repo->addHold($disk, 'hs2', ['path' => 'scoped/b.txt', 'placed_by_scope' => 'tenant1', 'placed_at' => 1]);
+    assertEqual('tenant1', $repo->getHold($disk, 'hs2')['placed_by_scope'] ?? null, 'scope round-trips once migrated');
+});
+
 test('allHolds() returns every hold on the disk, keyed by id', function () use ($repo, $disk) {
     $all = $repo->allHolds($disk);
     assertTrue(isset($all['h1']), 'h1 should be present');
