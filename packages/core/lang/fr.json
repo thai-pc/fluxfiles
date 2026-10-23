@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Charger plus ({count} restants)",
     "loading_more": "Chargement…",
-    "showing": "Affichage de {shown} sur {total}"
+    "showing": "Affichage de {shown} sur {total}",
+    "all_loaded": "Les {total} éléments sont affichés",
+    "load_failed": "Impossible de charger plus d'éléments.",
+    "back_to_top": "Retour en haut"
   },
   "variants": {
     "title": "Tailles d'image",

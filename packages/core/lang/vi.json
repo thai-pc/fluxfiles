@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Tải thêm (còn {count})",
     "loading_more": "Đang tải…",
-    "showing": "Hiện {shown} trong {total}"
+    "showing": "Hiện {shown} trong {total}",
+    "all_loaded": "Đã hiển thị tất cả {total} mục",
+    "load_failed": "Không tải thêm được mục nào.",
+    "back_to_top": "Lên đầu trang"
   },
   "variants": {
     "title": "Kích thước ảnh",

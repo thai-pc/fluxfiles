@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "더 보기 ({count}개 남음)",
     "loading_more": "불러오는 중…",
-    "showing": "{total}개 중 {shown}개 표시"
+    "showing": "{total}개 중 {shown}개 표시",
+    "all_loaded": "전체 {total}개 항목 표시됨",
+    "load_failed": "항목을 더 불러오지 못했습니다.",
+    "back_to_top": "맨 위로"
   },
   "variants": {
     "title": "이미지 크기",

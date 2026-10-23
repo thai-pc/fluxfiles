@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "さらに読み込む（残り {count} 件）",
     "loading_more": "読み込み中…",
-    "showing": "{total} 件中 {shown} 件を表示"
+    "showing": "{total} 件中 {shown} 件を表示",
+    "all_loaded": "全 {total} 件を表示しました",
+    "load_failed": "これ以上読み込めませんでした。",
+    "back_to_top": "先頭へ戻る"
   },
   "variants": {
     "title": "画像サイズ",

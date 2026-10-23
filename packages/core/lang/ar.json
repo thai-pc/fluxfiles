@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "تحميل المزيد (المتبقي {count})",
     "loading_more": "جارٍ التحميل…",
-    "showing": "عرض {shown} من {total}"
+    "showing": "عرض {shown} من {total}",
+    "all_loaded": "تم عرض كل العناصر ({total})",
+    "load_failed": "تعذّر تحميل المزيد من العناصر.",
+    "back_to_top": "العودة إلى الأعلى"
   },
   "variants": {
     "title": "أحجام الصورة",

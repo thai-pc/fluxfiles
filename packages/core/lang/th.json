@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "โหลดเพิ่ม (เหลือ {count})",
     "loading_more": "กำลังโหลด…",
-    "showing": "แสดง {shown} จาก {total}"
+    "showing": "แสดง {shown} จาก {total}",
+    "all_loaded": "แสดงครบทั้ง {total} รายการ",
+    "load_failed": "โหลดรายการเพิ่มไม่สำเร็จ",
+    "back_to_top": "กลับขึ้นด้านบน"
   },
   "variants": {
     "title": "ขนาดรูปภาพ",

@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Mehr laden ({count} übrig)",
     "loading_more": "Wird geladen…",
-    "showing": "{shown} von {total} angezeigt"
+    "showing": "{shown} von {total} angezeigt",
+    "all_loaded": "Alle {total} Einträge angezeigt",
+    "load_failed": "Weitere Einträge konnten nicht geladen werden.",
+    "back_to_top": "Nach oben"
   },
   "variants": {
     "title": "Bildgrößen",

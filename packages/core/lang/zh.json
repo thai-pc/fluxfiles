@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "加载更多（剩余 {count}）",
     "loading_more": "加载中…",
-    "showing": "显示 {shown} / {total}"
+    "showing": "显示 {shown} / {total}",
+    "all_loaded": "已显示全部 {total} 项",
+    "load_failed": "无法加载更多项目。",
+    "back_to_top": "返回顶部"
   },
   "variants": {
     "title": "图片尺寸",

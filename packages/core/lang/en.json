@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Load more ({count} remaining)",
     "loading_more": "Loading…",
-    "showing": "Showing {shown} of {total}"
+    "showing": "Showing {shown} of {total}",
+    "all_loaded": "All {total} items shown",
+    "load_failed": "Couldn't load more items.",
+    "back_to_top": "Back to top"
   },
   "variants": {
     "title": "Image Sizes",

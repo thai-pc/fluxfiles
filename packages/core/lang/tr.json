@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Daha fazla yükle ({count} kaldı)",
     "loading_more": "Yükleniyor…",
-    "showing": "{total} öğeden {shown} gösteriliyor"
+    "showing": "{total} öğeden {shown} gösteriliyor",
+    "all_loaded": "{total} öğenin tümü gösterildi",
+    "load_failed": "Daha fazla öğe yüklenemedi.",
+    "back_to_top": "Başa dön"
   },
   "variants": {
     "title": "Görsel boyutları",

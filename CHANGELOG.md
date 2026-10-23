@@ -3,6 +3,32 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.29] — Unreleased
+
+### Changed
+
+- **Infinite scroll in the file grid.** Folders load 200 items at a time
+  (was 1000), and the next page loads on its own as the grid is scrolled.
+  Shimmering placeholders show the next page coming in, a progress bar shows
+  how much of the folder is loaded, and an "All N items shown" mark appears at
+  the end. A failed page stops auto-loading and shows a **Retry** button; the
+  manual "Load more" button remains for browsers without
+  `IntersectionObserver`. Cards fade in as they appear, thumbnails blur in
+  once loaded (a broken thumbnail leaves the tinted tile), and a back-to-top
+  button appears in long folders. All motion respects
+  `prefers-reduced-motion`.
+- **`/api/fm/list` finds image variants and PDF/video posters with one
+  listing of the folder's `_variants/`** instead of a `fileExists()` per file
+  and size. On S3/R2/SFTP each of those was a network round trip — about 3
+  per image, so ~600 requests for a 200-image page before it could render.
+  Folders with fewer than 8 candidates still use per-file checks.
+
+### Fixed
+
+- Opening another folder while the next page of the previous one was still
+  loading appended that page to the new folder.
+- Opening a search hit whose folder page failed to load retried forever.
+
 ## [0.3.28] — 2026-10-23
 
 > Released: `core-v0.2.102`, `laravel-v0.2.52`, `wordpress-v0.2.62`.

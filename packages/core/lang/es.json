@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Cargar más ({count} restantes)",
     "loading_more": "Cargando…",
-    "showing": "Mostrando {shown} de {total}"
+    "showing": "Mostrando {shown} de {total}",
+    "all_loaded": "Se muestran los {total} elementos",
+    "load_failed": "No se pudieron cargar más elementos.",
+    "back_to_top": "Volver arriba"
   },
   "variants": {
     "title": "Tamaños de imagen",

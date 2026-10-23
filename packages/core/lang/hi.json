@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "और लोड करें ({count} शेष)",
     "loading_more": "लोड हो रहा है…",
-    "showing": "{total} में से {shown} दिखा रहे हैं"
+    "showing": "{total} में से {shown} दिखा रहे हैं",
+    "all_loaded": "सभी {total} आइटम दिखाए गए",
+    "load_failed": "और आइटम लोड नहीं हो सके।",
+    "back_to_top": "ऊपर जाएँ"
   },
   "variants": {
     "title": "छवि आकार",

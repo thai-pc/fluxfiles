@@ -2794,24 +2794,159 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 20px 16px 12px;
+    gap: 8px;
+    padding: 8px 16px 20px;
+    position: relative;
 }
-.ff-load-more button {
-    padding: 8px 20px;
+/* Zero-size marker the IntersectionObserver watches (fm.js observeListSentinel). */
+.ff-scroll-sentinel { position: absolute; top: 0; left: 0; width: 1px; height: 1px; pointer-events: none; }
+.ff-load-progress {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: min(280px, 100%);
+    animation: ff-fade-up .3s ease both;
+}
+.ff-load-progress-track {
+    width: 100%;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--color-border-tertiary);
+    overflow: hidden;
+}
+.ff-load-progress-bar {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--ff-primary), color-mix(in srgb, var(--ff-primary) 55%, #a78bfa));
+    transition: width .5s cubic-bezier(.2, .7, .2, 1);
+}
+/* A soft sweep across the bar while the next page is in flight. */
+.ff-load-progress.busy .ff-load-progress-bar {
+    background-size: 200% 100%;
+    background-image: linear-gradient(90deg, var(--ff-primary) 0%, color-mix(in srgb, var(--ff-primary) 40%, #fff) 50%, var(--ff-primary) 100%);
+    animation: ff-bar-sweep 1.1s linear infinite;
+}
+@keyframes ff-bar-sweep { from { background-position: 200% 0; } to { background-position: 0 0; } }
+.ff-load-more-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+.ff-load-spinner {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1.5px solid color-mix(in srgb, var(--ff-primary) 25%, transparent);
+    border-top-color: var(--ff-primary);
+    animation: ff-spin .7s linear infinite;
+}
+.ff-load-more-btn {
+    padding: 7px 18px;
     border: 1px solid var(--color-border);
-    border-radius: 6px;
+    border-radius: 999px;
     background: var(--color-surface);
     color: var(--color-text);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
+    transition: background var(--ff-transition), border-color var(--ff-transition), transform var(--ff-transition);
 }
-.ff-load-more button:hover:not(:disabled) { background: var(--color-surface-hover); }
-.ff-load-more button:disabled { opacity: 0.6; cursor: default; }
-.ff-load-more-meta {
+.ff-load-more-btn:hover:not(:disabled) { background: var(--color-surface-hover); border-color: var(--ff-primary); transform: translateY(-1px); }
+.ff-load-more-btn:disabled { opacity: 0.6; cursor: default; }
+.ff-load-more-error {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ff-danger, #dc2626);
+    animation: ff-fade-up .3s ease both;
+}
+.ff-load-done {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
     font-size: 11px;
     color: var(--color-text-tertiary);
+    background: var(--color-background-secondary);
+    animation: ff-fade-up .4s ease both;
 }
+.ff-load-done svg { color: var(--ff-primary); }
+
+/* Next-page skeletons: same grid as the cards, fading in one after another. */
+.ff-more-skeleton { margin-top: -12px; }
+.ff-more-skeleton .skel-card { animation: ff-fade-up .35s ease both; animation-delay: calc(var(--ff-i, 0) * 40ms); }
+.file-grid.list-view .skel-card { flex-direction: row; align-items: center; padding: 8px 16px; gap: 12px; border-radius: 8px; }
+.file-grid.list-view .skel-card .skel-thumb { width: 32px; height: 32px; flex-shrink: 0; }
+.file-grid.list-view .skel-card .skel-line { flex: 1; }
+
+/* Cards rise in as they mount — a new folder, or each page appended by scrolling.
+   Staggered by position (fm: --ff-i = index % 12) so a page ripples in. */
+.file-card {
+    animation: ff-card-in .38s cubic-bezier(.2, .7, .2, 1) backwards;
+    animation-delay: calc(var(--ff-i, 0) * 22ms);
+}
+@keyframes ff-card-in {
+    from { opacity: 0; transform: translateY(10px) scale(.985); }
+    to   { opacity: 1; transform: none; }
+}
+@keyframes ff-fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* Thumbnails: shimmer until the bytes arrive, then a blur-up fade-in. */
+.file-card .thumb.thumb-img:has(img:not(.is-loaded)) {
+    background: linear-gradient(90deg, var(--color-background-secondary) 25%, var(--ff-bg-hover) 37%, var(--color-background-secondary) 63%);
+    background-size: 400% 100%;
+    animation: ff-shimmer 1.4s ease infinite;
+}
+.file-card .thumb.thumb-img img {
+    opacity: 0;
+    transform: scale(1.04);
+    filter: blur(8px);
+    transition: opacity .35s ease, transform .5s cubic-bezier(.2, .7, .2, 1), filter .5s ease;
+}
+.file-card .thumb.thumb-img img.is-loaded { opacity: 1; transform: none; filter: none; }
+/* A thumbnail that failed to load leaves the tinted tile, not a broken-image glyph. */
+.file-card .thumb.thumb-img img.is-error { visibility: hidden; }
+
+/* Back to top: sticky at the bottom of the scroller, zero layout height. */
+.ff-back-top-wrap {
+    position: sticky;
+    bottom: 16px;
+    height: 0;
+    display: flex;
+    justify-content: flex-end;
+    pointer-events: none;
+    z-index: 5;
+}
+.ff-back-top {
+    transform: translateY(calc(-100% + 12px)) scale(.85);
+    opacity: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--color-border-secondary);
+    background: color-mix(in srgb, var(--color-background-primary) 85%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .10);
+    transition: opacity .25s ease, transform .3s cubic-bezier(.2, .7, .2, 1), border-color var(--ff-transition), color var(--ff-transition);
+}
+.ff-back-top.show { opacity: 1; transform: translateY(-100%) scale(1); pointer-events: auto; }
+.ff-back-top:hover { border-color: var(--ff-primary); color: var(--ff-primary); }
 
 /* Empty state */
 .ff-empty {
@@ -3817,6 +3952,11 @@ body {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+    /* Staggered entrances would still wait out their delay (hidden) — drop it. */
+    .file-card,
+    .ff-more-skeleton .skel-card {
+        animation-delay: 0s !important;
     }
 }
 

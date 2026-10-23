@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Meer laden ({count} over)",
     "loading_more": "Laden…",
-    "showing": "{shown} van {total} weergegeven"
+    "showing": "{shown} van {total} weergegeven",
+    "all_loaded": "Alle {total} items getoond",
+    "load_failed": "Kon geen extra items laden.",
+    "back_to_top": "Naar boven"
   },
   "variants": {
     "title": "Afbeeldingsformaten",

@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Загрузить ещё (осталось {count})",
     "loading_more": "Загрузка…",
-    "showing": "Показано {shown} из {total}"
+    "showing": "Показано {shown} из {total}",
+    "all_loaded": "Показаны все элементы: {total}",
+    "load_failed": "Не удалось загрузить ещё элементы.",
+    "back_to_top": "Наверх"
   },
   "variants": {
     "title": "Размеры изображения",
