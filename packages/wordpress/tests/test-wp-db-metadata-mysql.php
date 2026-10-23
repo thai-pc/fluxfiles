@@ -590,6 +590,12 @@ test('holdBlocking() IS bidirectional', function () use ($repo, $disk) {
     assertTrue($result !== null, 'holdBlocking() must see a hold on a descendant as blocking an ancestor operation');
 });
 
+test('holdBlocking() matches case-insensitively', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'hold-case', ['path' => 'Legal/Contract.PDF', 'placed_at' => 1]);
+    assertTrue($repo->holdBlocking($disk, 'legal/contract.pdf') !== null, 'different letter case is still the held file');
+    assertTrue($repo->holdBlocking($disk, 'LEGAL') !== null, 'its parent folder in another case is blocked too');
+});
+
 test('allHolds() returns every hold on the disk, keyed by id', function () use ($repo, $disk) {
     $repo->addHold($disk, 'hold-all-1', ['path' => 'all-1', 'placed_at' => 1]);
     $repo->addHold($disk, 'hold-all-2', ['path' => 'all-2', 'placed_at' => 1]);

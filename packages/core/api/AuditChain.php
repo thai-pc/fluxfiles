@@ -71,8 +71,61 @@ final class AuditChain
         return hash_hmac('sha256', $prev . "\n" . self::canonical($entry), $key);
     }
 
+    /** The chain fields of a readAudit()/readAuditArchive() row. */
+    private static function rowEntry(array $row): array
+    {
+        return [
+            'ts' => (int) ($row['created_at'] ?? 0), 'action' => (string) ($row['action'] ?? ''),
+            'user_id' => $row['user_id'] ?? null, 'file_key' => $row['file_key'] ?? null,
+            'ip' => $row['ip'] ?? null, 'user_agent' => $row['user_agent'] ?? null,
+            'detail' => $row['detail'] ?? null,
+        ];
+    }
+
+    /** Does this row carry a hash that the app's key actually produced? */
+    public static function isAuthentic(array $row, #[\SensitiveParameter] ?string $key): bool
+    {
+        $h = (string) ($row['entry_hash'] ?? '');
+        if ($h === '' || $key === null) {
+            return false;
+        }
+        return hash_equals(self::hash($key, (string) ($row['prev_hash'] ?? ''), self::rowEntry($row)), $h);
+    }
+
+    /**
+     * The rows a consumer may base a decision on (fixity's "explained"). A log
+     * with no chained row at all — no secret configured, or written before
+     * chaining existed — is returned as-is: there is nothing to check it against.
+     * Once ANY row is chained, only rows whose HMAC verifies count: an unchained
+     * or forged line is what someone with storage write (but not the app secret)
+     * would append to vouch for their own edit.
+     *
+     * @param array<int,array<string,mixed>> $entries
+     * @return array<int,array<string,mixed>>
+     */
+    public static function trustedEntries(array $entries): array
+    {
+        $chained = false;
+        foreach ($entries as $row) {
+            if ((string) ($row['entry_hash'] ?? '') !== '') {
+                $chained = true;
+                break;
+            }
+        }
+        if (!$chained) {
+            return $entries;
+        }
+        $key = self::key();
+        return array_values(array_filter($entries, static fn (array $row): bool => self::isAuthentic($row, $key)));
+    }
+
     /**
      * Verify a set of entries (any order; live + archived merged).
+     *
+     * An unchained row dated AFTER the oldest chained one is tampering, not a
+     * legacy line: once a secret is configured every write is chained, so an
+     * unhashed line inside the chained era was appended behind the app's back.
+     * Unchained rows from before the chain started stay counted, not failed.
      *
      * @param array<int,array<string,mixed>> $entries readAudit()/readAuditArchive()
      *        rows — created_at, action, user_id, file_key, ip, user_agent, detail,
@@ -89,22 +142,19 @@ final class AuditChain
         ];
         $byHash = [];
         $childrenOf = [];
+        $unchainedRows = [];
         foreach ($entries as $row) {
             $h = (string) ($row['entry_hash'] ?? '');
             if ($h === '') {
                 $report['unchained']++;
+                $unchainedRows[] = $row;
                 continue;
             }
             $report['chained']++;
             $prev = (string) ($row['prev_hash'] ?? '');
             $ts = (int) ($row['created_at'] ?? 0);
-            $entry = [
-                'ts' => $ts, 'action' => (string) ($row['action'] ?? ''),
-                'user_id' => $row['user_id'] ?? null, 'file_key' => $row['file_key'] ?? null,
-                'ip' => $row['ip'] ?? null, 'user_agent' => $row['user_agent'] ?? null,
-                'detail' => $row['detail'] ?? null,
-            ];
-            if ($key === null || !hash_equals(self::hash($key, $prev, $entry), $h)) {
+            $entry = self::rowEntry($row);
+            if (!self::isAuthentic($row, $key)) {
                 if (count($report['tampered']) < 50) {
                     $report['tampered'][] = ['created_at' => $ts, 'action' => $entry['action'], 'user_id' => $entry['user_id'], 'hash' => $h];
                 }
@@ -117,6 +167,15 @@ final class AuditChain
         }
         if ($report['chained'] === 0) {
             return $report;
+        }
+        foreach ($unchainedRows as $row) {
+            $ts = (int) ($row['created_at'] ?? 0);
+            if ($ts > (int) $report['first_ts']) {
+                if (count($report['tampered']) < 50) {
+                    $report['tampered'][] = ['created_at' => $ts, 'action' => (string) ($row['action'] ?? ''), 'user_id' => $row['user_id'] ?? null, 'hash' => ''];
+                }
+                $report['ok'] = false;
+            }
         }
         // Starts = entries whose predecessor isn't present. Exactly one is normal (the
         // first entry ever, or the oldest one left after a purge/rotation-delete);

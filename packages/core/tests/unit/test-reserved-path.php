@@ -185,10 +185,15 @@ test('N1: mkdir of .git/hooks on an SFTP disk is refused too', function () {
 });
 
 test('N1: the same .git path on a LOCAL disk is NOT blocked by the git-internal rule (SFTP-scoped, not blanket)', function () {
-    [$fm] = rpEnv();
+    [, $meta, $dm] = rpEnv();
     // assertNotSystem()'s git check only fires when the disk's driver is sftp —
     // on local/S3/R2 a `.git` segment is ordinary user content. Confirmed via
     // the generic path-validation helper so no real write is needed either way.
+    // show_hidden=true: validateUserPath() also enforces the dotfile rule, which
+    // is a separate (token-level) restriction from the reserved-namespace one.
+    $claims = new Claims('u', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, false);
+    $claims->showHidden = true;
+    $fm = new FileManager($dm, $claims, $meta);
     $scoped = $fm->validateUserPath('.git/config');
     assertTrue($scoped === '.git/config', 'local disk: .git/config is not treated as reserved, got ' . $scoped);
 });

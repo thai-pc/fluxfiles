@@ -48,6 +48,8 @@ token = create_token(
 
 Mint-time-only DX sugar — they expand into ordinary claims and are never
 themselves a JWT claim. Explicit kwargs always win over a preset default.
+Roles: `viewer`/`editor`/`admin`/`superadmin`; editions: `free`/`pro`/`agency`/
+`studio`/`enterprise`. An unknown name raises `FluxFilesTokenError`.
 
 ```python
 from fluxfiles_token import create_token
@@ -181,7 +183,8 @@ def fluxfiles_token(user=Depends(get_current_user)):
 `create_token` keyword arguments: `secret=None`, `user_id`, `perms=None`,
 `disks=None`, `prefix=None`, `max_upload_mb=None`, `allowed_ext=None`,
 `ttl=None`, `owner_only=None`, `max_storage_mb=None`, `max_files=None`,
-`edition=None`, `role=None`. Per-tenant overrides (omit to inherit the server
+`edition=None`, `role=None` (`ttl` must be a positive `int` of seconds, else
+`FluxFilesTokenError`). Per-tenant overrides (omit to inherit the server
 default): `ai_auto_tag=None` (bool), `rate_read=None` / `rate_write=None`
 (req/min), `variants=None` (`{"thumb": .., "medium": .., "large": ..}` px),
 and every other `allow_*`/module claim documented in

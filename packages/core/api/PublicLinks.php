@@ -29,8 +29,10 @@ declare(strict_types=1);
  */
 
 use FluxFiles\ApiException;
+use FluxFiles\AuditLogStorage;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
+use FluxFiles\MetadataRepositoryInterface;
 use FluxFiles\RateLimiterFactory;
 use FluxFiles\RateLimiterStorageInterface;
 use FluxFiles\StorageMetadataHandler;
@@ -52,6 +54,61 @@ function ff_str_param(array $src, string $key, string $default = ''): string
 }
 
 /**
+ * The metadata repository a public request must use: the one the operator
+ * configured (`FLUXFILES_STORAGE_BACKEND=db` → the self-hosted DB, else JSON in
+ * storage) — built exactly like index.php builds `$metaRepo`, minus the
+ * auto-migrate (a public request is no place to run migrations). A portal upload
+ * stamped through the JSON handler on a DB-mode install landed its `uploaded_by`,
+ * hash and index entry where nothing ever reads them: owner_only then treated the
+ * operator's own portal files as legacy, and they were missing from search.
+ *
+ * A host that injects its own DiskManager (WordPress, Laravel) has its own DB
+ * handler and should inject that too; without one it keeps the JSON handler it
+ * always had — its env is not the standalone app's, so the standalone switch
+ * isn't trusted for it.
+ */
+function ff_public_meta_repo(DiskManager $dm, ?MetadataRepositoryInterface $injected = null, bool $hostInjectedDisks = false): MetadataRepositoryInterface
+{
+    if ($injected !== null) {
+        return $injected;
+    }
+    if (!$hostInjectedDisks && ($_ENV['FLUXFILES_STORAGE_BACKEND'] ?? 'json') === 'db') {
+        return new \FluxFiles\Db\DbMetadataHandler(\FluxFiles\Db\Connection::fromEnv(), $dm);
+    }
+    return new StorageMetadataHandler($dm);
+}
+
+/**
+ * The `X-Accel-Redirect` target for a storage key. nginx URL-DECODES this header
+ * before matching the internal location, so a raw key is wrong for any name with
+ * a `%` (`50%25 off.pdf` resolved to `50% off.pdf` → 404) or a `?`/`#` (cut off
+ * as a query/fragment). Each segment is percent-encoded; the `/` separators stay.
+ */
+function ff_xaccel_uri(string $base, string $path): string
+{
+    $segments = array_map('rawurlencode', explode('/', ltrim($path, '/')));
+    return rtrim($base, '/') . '/' . implode('/', $segments);
+}
+
+/**
+ * Best-effort audit line for an anonymous public access (portal upload, share
+ * download). These requests carry no main JWT, so the normal post-route audit in
+ * index.php never sees them — without this an operator's audit log had no trace
+ * of what strangers dropped in or pulled out. Never throws: an audit write that
+ * fails must not turn a served download or a landed upload into an error.
+ */
+function ff_public_audit(callable $repo, string $actor, string $action, string $disk, string $key, string $detail): void
+{
+    try {
+        // A factory, so building the repository (a DB connect in DB mode) is
+        // inside the try too — this runs after the bytes are on the wire.
+        (new AuditLogStorage($repo(), [$disk]))->log($actor, $action, $disk, $key, null, null, $detail);
+    } catch (\Throwable $e) {
+        error_log('[fluxfiles] public ' . $action . ' audit failed: ' . $e->getMessage());
+    }
+}
+
+/**
  * Public Intake endpoints (no main JWT — authenticated by the portal token itself).
  *   GET  /api/fm/intake/info?token=…       → the landing page's data (label/caps).
  *   POST /api/fm/intake/upload {token,password?} + file → anonymous file drop.
@@ -61,8 +118,10 @@ function ff_str_param(array $src, string $key, string $default = ''): string
  * @param DiskManager|null      $injectedDm     a host whose storage is not laid out
  *                                              like the standalone app's (WordPress)
  * @param array<string,mixed>|null $injectedCfg the matching disk config
+ * @param MetadataRepositoryInterface|null $injectedMeta the host's metadata backend
+ *                                              (see ff_public_meta_repo())
  */
-function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedDm = null, ?array $injectedCfg = null): void
+function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedDm = null, ?array $injectedCfg = null, ?MetadataRepositoryInterface $injectedMeta = null): void
 {
     header('Content-Type: application/json; charset=utf-8');
     try {
@@ -111,7 +170,8 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
                 throw new ApiException('Invalid or expired portal link', 403, 'intake_invalid');
             }
             $portalClaims = \FluxFiles\Claims::fromJwtPayload($payload);
-            $portalFm = new FileManager($dm, $portalClaims, new StorageMetadataHandler($dm));
+            $metaRepo = ff_public_meta_repo($dm, $injectedMeta, $injectedDm !== null);
+            $portalFm = new FileManager($dm, $portalClaims, $metaRepo);
             $portalFm->setStreamSecret($secret);
             // Tenant quota — same wiring as index.php and both proxies. The portal
             // token carries the operator's `max_storage`/`max_files` (forwarded by
@@ -150,6 +210,28 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             }
             $res = $module->receiveUpload($portalFm, $dm, $secret, $token, $file, $password);
             echo json_encode(['data' => $res, 'error' => null]);
+
+            // An anonymous write into the operator's storage: `intake_upload` (one of
+            // FixityChecker's explained writes, so the change isn't flagged), stamped
+            // with the operator id the file itself carries as `uploaded_by`, and the
+            // portal in `detail` so it reads as "via portal", not "the operator did it".
+            $auditDisk = $portalClaims->allowedDisks[0] ?? '';
+            $auditName = is_array($res) ? (string) ($res['name'] ?? '') : '';
+            if ($auditDisk !== '' && $auditName !== '') {
+                try {
+                    $auditKey = $portalClaims->scopePath($auditName);
+                } catch (\Throwable $e) {
+                    $auditKey = rtrim($portalClaims->pathPrefix, '/') . '/' . $auditName;
+                }
+                ff_public_audit(
+                    static fn () => $metaRepo,
+                    $portalClaims->userId,
+                    'intake_upload',
+                    $auditDisk,
+                    $auditKey,
+                    'intake:' . (string) ($payload->jti ?? '')
+                );
+            }
 
             // Notify-on-receipt (paid: Intake + Webhooks): fired AFTER the response is
             // on the wire, same ordering as the main flow's webhook dispatch
@@ -223,8 +305,9 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
 /**
  * @param DiskManager|null      $injectedDm     see handleIntakePublic
  * @param array<string,mixed>|null $injectedCfg the matching disk config
+ * @param MetadataRepositoryInterface|null $injectedMeta see handleIntakePublic
  */
-function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm = null, ?array $injectedCfg = null): void
+function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm = null, ?array $injectedCfg = null, ?MetadataRepositoryInterface $injectedMeta = null): void
 {
     // Set per branch, not up front: the info/unlock branches emit JSON, while
     // `file` emits bytes (or a 302) and picks its own type. The error paths below
@@ -274,6 +357,23 @@ function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm
             // download counter; nothing is served if it throws.
             $res = $module->resolveShare($dm, $secret, $token, null, true, isset($_GET['g']) ? ff_str_param($_GET, 'g') : null);
             ff_share_send_bytes($dm, $diskConfigs, $res, ($_GET['dl'] ?? '') === '1');
+            // Audit the bytes leaving (after they're out — best-effort). Only the
+            // first request of a fetch: a Range continuation is the same download,
+            // and a <video> seek would otherwise write a line per scrub (the same
+            // rule ff_audit_stream_read() applies to /stream).
+            $range = trim((string) ($_SERVER['HTTP_RANGE'] ?? ''));
+            if ($range === '' || preg_match('/^bytes=0-/', $range)) {
+                $jti = (string) ($res['jti'] ?? '');
+                $owner = (string) ($res['owner'] ?? '');
+                ff_public_audit(
+                    static fn () => ff_public_meta_repo($dm, $injectedMeta, $injectedDm !== null),
+                    $owner !== '' ? $owner : 'share:' . $jti,
+                    'share_download',
+                    (string) ($res['disk'] ?? ''),
+                    (string) ($res['path'] ?? ''),
+                    'share:' . $jti
+                );
+            }
             return;
         }
 
@@ -415,7 +515,7 @@ function ff_share_send_bytes(DiskManager $dm, array $diskConfigs, array $res, bo
         if ($xaccel !== '' && !empty($cfg['private'])) {
             header('Content-Type: ' . $mime);
             header('X-Accel-Buffering: no');
-            header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
+            header('X-Accel-Redirect: ' . ff_xaccel_uri($xaccel, $path));
             return;
         }
         \FluxFiles\RangeStreamer::stream($abs, $mime, $_SERVER['HTTP_RANGE'] ?? null);

@@ -102,11 +102,53 @@ def _resolve_secret(explicit: str | None) -> str:
 
 
 def _sign(payload: dict[str, Any], secret: str) -> str:
+    # The core rejects a token without an integer `exp`; the `claims` escape hatch
+    # is merged last and could otherwise overwrite the validated one.
+    exp = payload.get("exp")
+    if isinstance(exp, bool) or not isinstance(exp, int):
+        raise FluxFilesTokenError("FluxFiles: `exp` must be an integer unix timestamp.")
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
 def _new_jti() -> str:
     return secrets.token_hex(12)
+
+
+def _resolve_ttl(ttl: object, fallback: int) -> int:
+    """Seconds added to `iat` for `exp`. The core rejects a token without a
+    numeric `exp`, so anything but a positive integer (``bool`` excluded — it is
+    an ``int`` subclass) raises instead of minting a malformed/never-expiring
+    token. Mirrors Node's `resolveTtl`."""
+    if ttl is None:
+        return fallback
+    if isinstance(ttl, bool) or not isinstance(ttl, int):
+        raise FluxFilesTokenError(
+            f"FluxFiles: ttl must be an integer number of seconds, got {type(ttl).__name__}."
+        )
+    if ttl <= 0:
+        raise FluxFilesTokenError(f"FluxFiles: ttl must be a positive number of seconds, got {ttl}.")
+    return ttl
+
+
+def _resolve_preset(
+    kind: str,
+    name: str | None,
+    presets: Mapping[str, dict[str, Any]],
+    no_preset: tuple[str, ...] = (),
+) -> dict[str, Any] | None:
+    """Look up a role/edition preset by name (case-insensitive). An unknown or
+    typo'd name raises rather than silently minting a token without the
+    intended bundle; empty/None = no preset; `no_preset` names are valid but
+    expand to nothing (edition ``free``). Mirrors Node's `resolvePreset`."""
+    if name is None or name == "":
+        return None
+    key = str(name).lower()
+    if key in presets:
+        return presets[key]
+    if key in no_preset:
+        return None
+    valid = ", ".join([*no_preset, *presets])
+    raise FluxFilesTokenError(f'FluxFiles: unknown {kind} "{name}" (valid: {valid}).')
 
 
 def _sanitize_variants(v: dict[str, int] | None) -> dict[str, int] | None:
@@ -140,7 +182,7 @@ def _apply_tenant_overrides(
     (fills absent keys only) -> every typed kwarg in `extras` (explicit,
     always overwrites a preset default) -> `claims` escape hatch (always wins,
     merged last)."""
-    edition_preset = EDITION_PRESETS.get(str(edition).lower()) if edition else None
+    edition_preset = _resolve_preset("edition", edition, EDITION_PRESETS, ("free",))
     if edition_preset:
         for k, v in edition_preset.items():
             if k not in payload:
@@ -219,9 +261,8 @@ def _apply_tenant_overrides(
         payload["allow_chmod"] = bool(extras["allow_chmod"])
     if extras.get("allow_code_edit") is not None:
         payload["allow_code_edit"] = bool(extras["allow_code_edit"])
-    # SSH terminal (SFTP disks). Core-standalone — the token must target a real
-    # core (this SDK mints for one), not a proxy adapter that doesn't serve
-    # /api/fm/terminal.
+    # SSH terminal (SFTP disks). Served by core and proxied by the Laravel and
+    # WordPress adapters too, so the token works against any of the three.
     if extras.get("allow_terminal") is not None:
         payload["allow_terminal"] = bool(extras["allow_terminal"])
     terminal_pty_url = extras.get("terminal_pty_url")
@@ -618,7 +659,7 @@ def create_token(
     # the base payload dict, because `perms`/`owner_only` already have an
     # unconditional default baked into that dict below — a plain "set if
     # absent" guard would never fire for them.
-    role_preset = ROLE_PRESETS.get(role.lower()) if role else None
+    role_preset = _resolve_preset("role", role, ROLE_PRESETS)
     resolved_perms = (
         perms
         if perms is not None
@@ -633,7 +674,7 @@ def create_token(
     payload: dict[str, Any] = {
         "sub": str(user_id),
         "iat": now,
-        "exp": now + (ttl if ttl is not None else 3600),
+        "exp": now + _resolve_ttl(ttl, 3600),
         "jti": _new_jti(),
         "perms": resolved_perms,
         "disks": disks if disks is not None else ["local"],
@@ -901,7 +942,7 @@ def create_byob_token(
     resolved_disks = names
 
     # Step 3: resolve perms/owner_only early.
-    role_preset = ROLE_PRESETS.get(role.lower()) if role else None
+    role_preset = _resolve_preset("role", role, ROLE_PRESETS)
     resolved_perms = (
         perms
         if perms is not None
@@ -917,7 +958,7 @@ def create_byob_token(
     payload: dict[str, Any] = {
         "sub": str(user_id),
         "iat": now,
-        "exp": now + (ttl if ttl is not None else 1800),
+        "exp": now + _resolve_ttl(ttl, 1800),
         "jti": _new_jti(),
         "perms": resolved_perms,
         "disks": resolved_disks,

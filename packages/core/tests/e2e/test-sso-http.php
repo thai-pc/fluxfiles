@@ -427,9 +427,13 @@ try {
             });
 
             test('a real state token, IdP still down → 502 sso_idp_unreachable', function () use ($B, $SECRET) {
-                $nonce = bin2hex(random_bytes(16));
+                // login() can't run while the IdP is down (it needs discovery), so
+                // mint the state + binding cookie pair by hand, exactly as login()
+                // derives them: nonce = first 16 bytes of HMAC(secret, 'sso-bind:'.cookie).
+                $binding = bin2hex(random_bytes(32));
+                $nonce = bin2hex(substr(hash_hmac('sha256', 'sso-bind:' . $binding, $SECRET, true), 0, 16));
                 $state = \FluxFiles\SsoStateToken::mint($nonce, '/public/index.html', $SECRET);
-                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=whatever&state=" . rawurlencode($state));
+                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=whatever&state=" . rawurlencode($state), ['headers' => ["Cookie: fluxfiles_sso_bind={$binding}"]]);
                 assertEqual(502, $st, $body);
                 assertTrue(stripos($h['content-type'] ?? '', 'text/plain') === 0);
                 assertTrue(stripos($body, 'identity provider') !== false || stripos($body, 'idp') !== false, $body);
@@ -438,9 +442,12 @@ try {
             // Now start the fixture IdP.
             [$idpProc, ] = bootIdp($IDP_PORT, "{$idpDir}/router-boot.php");
 
-            /** Perform a login redirect and return [state, nonce, locationUrl, codeChallenge]. */
+            /** Perform a login redirect and return [state, nonce, locationUrl, codeChallenge, bindingCookie]. */
             $doLogin = function () use ($B, $IDP_BASE) {
                 [$st, $h] = req('GET', "{$B}/api/fm/sso/login?redirect=" . rawurlencode('/public/index.html'));
+                // The browser-binding cookie (B3): "name=value" as a Cookie header would send it.
+                $cookie = preg_match('/^(fluxfiles_sso_bind=[0-9a-f]{64})/', $h['set-cookie'] ?? '', $cm) ? $cm[1] : '';
+                assertTrue($cookie !== '', 'login sets the binding cookie: ' . ($h['set-cookie'] ?? '(none)'));
                 assertEqual(302, $st, 'login redirects');
                 $loc = $h['location'] ?? '';
                 assertTrue(strpos($loc, $IDP_BASE) === 0, "redirects to the IdP: {$loc}");
@@ -450,7 +457,7 @@ try {
                 assertTrue(strpos($q['scope'] ?? '', 'openid') !== false, 'openid scope requested');
                 assertEqual('S256', $q['code_challenge_method'] ?? null, 'PKCE S256 requested');
                 assertTrue(preg_match('/^[A-Za-z0-9_-]{43}$/', $q['code_challenge'] ?? '') === 1, 'code_challenge present: ' . ($q['code_challenge'] ?? ''));
-                return [$q['state'], $q['nonce'], $loc, $q['code_challenge']];
+                return [$q['state'], $q['nonce'], $loc, $q['code_challenge'], $cookie];
             };
 
             /** The `sub` of the real access JWT a successful callback+exchange produces. */
@@ -472,9 +479,9 @@ try {
             };
 
             test('happy path: login → callback → exchange yields a working access JWT (through a PKCE-enforcing token endpoint)', function () use ($B, $doLogin, $baseClaims, $PREFIX, $SECRET) {
-                [$state, $nonce, , $challenge] = $doLogin();
+                [$state, $nonce, , $challenge, $cookie] = $doLogin();
                 $code = mkCode(['claims' => $baseClaims($nonce), 'pkce' => $challenge]);
-                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(302, $st, $body);
                 $loc = $h['location'] ?? '';
                 assertTrue(strpos($loc, '/public/index.html') === 0, "redirects to the app: {$loc}");
@@ -499,19 +506,61 @@ try {
             });
 
             test('PKCE: the code_verifier sent to the token endpoint is bound to THIS login — a code issued for another challenge is refused (502)', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 [, , , $otherChallenge] = $doLogin();
                 $code = mkCode(['claims' => $baseClaims($nonce), 'pkce' => $otherChallenge]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(502, $st, $body);
+            });
+
+            test('login sets the browser-binding cookie HttpOnly, SameSite=Lax, path-scoped to the callback (not Secure over plain http)', function () use ($B) {
+                [$st, $h] = req('GET', "{$B}/api/fm/sso/login?redirect=" . rawurlencode('/public/index.html'));
+                assertEqual(302, $st);
+                $sc = $h['set-cookie'] ?? '';
+                assertTrue(preg_match('/^fluxfiles_sso_bind=[0-9a-f]{64};/', $sc) === 1, "cookie value shape: {$sc}");
+                assertTrue(stripos($sc, 'HttpOnly') !== false, "HttpOnly: {$sc}");
+                assertTrue(stripos($sc, 'SameSite=Lax') !== false, "SameSite=Lax: {$sc}");
+                assertTrue(stripos($sc, 'path=/api/fm/sso/callback') !== false, "path-scoped to the callback: {$sc}");
+                assertTrue(stripos($sc, 'secure') === false, "no Secure on an http redirect URI: {$sc}");
+                $cookieValue = substr(explode(';', $sc)[0], strlen('fluxfiles_sso_bind='));
+                assertTrue(strpos($h['location'] ?? '', $cookieValue) === false, 'the cookie value never appears in the IdP URL');
+            });
+
+            // B3: code + state leak (logs, history, Referer, a pasted URL). The old
+            // server re-derived the PKCE verifier from the state alone, so anyone
+            // replaying them got the victim's #boot= token back in the Location.
+            test('B3: replaying a leaked code+state WITHOUT the binding cookie is refused (403, no boot token)', function () use ($B, $doLogin, $baseClaims) {
+                [$state, $nonce, , $challenge] = $doLogin();
+                $code = mkCode(['claims' => $baseClaims($nonce), 'pkce' => $challenge]);
+                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                assertEqual(403, $st, $body);
+                assertTrue(strpos($h['location'] ?? '', 'boot=') === false, 'no boot token handed out');
+            });
+
+            test('B3: a callback carrying ANOTHER login\'s binding cookie is refused (login CSRF / cross-browser replay)', function () use ($B, $doLogin, $baseClaims) {
+                [$state, $nonce, , $challenge] = $doLogin();          // victim's (or attacker's) login
+                [, , , , $otherCookie] = $doLogin();                   // a different browser's cookie
+                $code = mkCode(['claims' => $baseClaims($nonce), 'pkce' => $challenge]);
+                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$otherCookie}"]]);
+                assertEqual(403, $st, $body);
+                assertTrue(strpos($h['location'] ?? '', 'boot=') === false, 'no boot token handed out');
+            });
+
+            test('B3: a successful callback clears the binding cookie', function () use ($B, $doLogin, $baseClaims) {
+                [$state, $nonce, , $challenge, $cookie] = $doLogin();
+                $code = mkCode(['claims' => $baseClaims($nonce), 'pkce' => $challenge]);
+                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
+                assertEqual(302, $st, $body);
+                $sc = $h['set-cookie'] ?? '';
+                assertTrue(preg_match('/^fluxfiles_sso_bind=(deleted)?;/', $sc) === 1 && (stripos($sc, 'Max-Age=0') !== false || stripos($sc, 'expires=Thu, 01 Jan 1970') !== false || preg_match('/expires=[^;]*19\d\d|Max-Age=0/i', $sc) === 1), "cookie cleared: {$sc}");
             });
 
             test('FLUXFILES_SSO_USER_CLAIM=email: a VERIFIED email becomes the user id', function () use ($B, $doLogin, $baseClaims, $subOf, $envFile, $phase4bEnv) {
                 file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=email\n");
                 try {
-                    [$state, $nonce] = $doLogin();
+                    [$state, $nonce, , , $cookie] = $doLogin();
                     $claims = $baseClaims($nonce); $claims['email_verified'] = true;
-                    [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                    [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                     assertEqual(302, $st, $body);
                     assertEqual('alice@example.test', $subOf($h));
                 } finally {
@@ -526,10 +575,10 @@ try {
                 file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=email\n");
                 try {
                     foreach ([null, false, 'false'] as $flag) {
-                        [$state, $nonce] = $doLogin();
+                        [$state, $nonce, , , $cookie] = $doLogin();
                         $claims = $baseClaims($nonce);
                         if ($flag !== null) { $claims['email_verified'] = $flag; }
-                        [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                        [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                         assertEqual(302, $st, $body);
                         assertEqual('user-1', $subOf($h), 'email_verified=' . json_encode($flag));
                     }
@@ -541,9 +590,9 @@ try {
             test('FLUXFILES_SSO_USER_CLAIM=email with an unverified email and no sub → 403 (nothing trustworthy to key on)', function () use ($B, $doLogin, $baseClaims, $envFile, $phase4bEnv) {
                 file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=email\n");
                 try {
-                    [$state, $nonce] = $doLogin();
+                    [$state, $nonce, , , $cookie] = $doLogin();
                     $claims = $baseClaims($nonce); unset($claims['sub']);
-                    [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                    [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                     assertEqual(403, $st, $body);
                 } finally {
                     file_put_contents($envFile, $phase4bEnv);
@@ -551,16 +600,16 @@ try {
             });
 
             test('FLUXFILES_SSO_USER_CLAIM=preferred_username is honoured only when explicitly configured', function () use ($B, $doLogin, $baseClaims, $subOf, $envFile, $phase4bEnv) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $claims = $baseClaims($nonce); $claims['preferred_username'] = 'alice';
-                [, $h] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                [, $h] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual('user-1', $subOf($h), 'ignored by default');
 
                 file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=preferred_username\n");
                 try {
-                    [$state, $nonce] = $doLogin();
+                    [$state, $nonce, , , $cookie] = $doLogin();
                     $claims['nonce'] = $nonce;
-                    [, $h] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state));
+                    [, $h] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                     assertEqual('alice', $subOf($h), 'used when configured');
                 } finally {
                     file_put_contents($envFile, $phase4bEnv);
@@ -570,8 +619,8 @@ try {
             test('an unknown FLUXFILES_SSO_USER_CLAIM value → 500 sso_misconfigured rather than a silent fallback', function () use ($B, $doLogin, $baseClaims, $envFile, $phase4bEnv) {
                 file_put_contents($envFile, $phase4bEnv . "FLUXFILES_SSO_USER_CLAIM=emial\n");
                 try {
-                    [$state, $nonce] = $doLogin();
-                    [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $baseClaims($nonce)])) . "&state=" . rawurlencode($state));
+                    [$state, $nonce, , , $cookie] = $doLogin();
+                    [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $baseClaims($nonce)])) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                     assertEqual(500, $st, $body);
                     assertTrue(stripos($body, 'misconfigured') !== false, $body);
                 } finally {
@@ -580,9 +629,9 @@ try {
             });
 
             test('the boot token cannot be reused as a main Authorization: Bearer token', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $code = mkCode(['claims' => $baseClaims($nonce)]);
-                [, $h] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [, $h] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 $bootToken = substr(urlFragment($h['location'] ?? ''), strlen('boot='));
                 [$st, , $j] = reqJson('GET', "{$B}/api/fm/list?disk=local", ['headers' => ["Authorization: Bearer {$bootToken}"]]);
                 assertEqual(403, $st);
@@ -650,106 +699,121 @@ try {
             });
 
             test('callback rejects when the token endpoint is broken (502)', function () use ($B, $doLogin) {
-                [$state] = $doLogin();
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=BROKEN_ENDPOINT&state=" . rawurlencode($state));
+                [$state, , , , $cookie] = $doLogin();
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=BROKEN_ENDPOINT&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(502, $st, $body);
             });
 
             test('callback rejects when the token response has no id_token (502)', function () use ($B, $doLogin) {
-                [$state] = $doLogin();
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=NO_ID_TOKEN&state=" . rawurlencode($state));
+                [$state, , , , $cookie] = $doLogin();
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=NO_ID_TOKEN&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(502, $st, $body);
             });
 
             test('callback rejects an id_token signed with an unpublished key (signature mismatch)', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $code = mkCode(['key' => 'wrong', 'claims' => $baseClaims($nonce)]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(403, $st, $body);
                 assertTrue(stripos($body, 'sso_id_token_invalid') !== false || stripos($body, 'signature') !== false, $body);
             });
 
             test('callback rejects an id_token with an unknown kid', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $code = mkCode(['kid' => 'bogus-kid', 'claims' => $baseClaims($nonce)]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(403, $st, $body);
             });
 
             test('callback rejects an id_token with the wrong issuer', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $claims = $baseClaims($nonce); $claims['iss'] = 'http://attacker.example';
                 $code = mkCode(['claims' => $claims]);
-                [$st, , $j] = reqJson('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $j] = reqJson('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 // plain-text response (handleSsoCallback catches only ApiException, echoes text)
                 assertEqual(403, $st);
             });
 
             test('callback rejects an id_token with the wrong audience (string form)', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $claims = $baseClaims($nonce); $claims['aud'] = 'someone-elses-client';
                 $code = mkCode(['claims' => $claims]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(403, $st, $body);
             });
 
-            test('an id_token with an aud ARRAY containing our client_id is accepted', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
-                $claims = $baseClaims($nonce); $claims['aud'] = ['other-client', 'test-client'];
+            test('an id_token with an aud ARRAY containing our client_id (and azp = us) is accepted', function () use ($B, $doLogin, $baseClaims) {
+                [$state, $nonce, , , $cookie] = $doLogin();
+                $claims = $baseClaims($nonce); $claims['aud'] = ['other-client', 'test-client']; $claims['azp'] = 'test-client';
                 $code = mkCode(['claims' => $claims]);
-                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, $h, $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(302, $st, $body);
                 assertTrue(strpos(urlFragment($h['location'] ?? ''), 'boot=') === 0);
             });
 
+            // OIDC Core §3.1.3.7: several audiences → azp must be present and be us.
+            test('an id_token with several audiences but no azp is rejected (403)', function () use ($B, $doLogin, $baseClaims) {
+                [$state, $nonce, , , $cookie] = $doLogin();
+                $claims = $baseClaims($nonce); $claims['aud'] = ['other-client', 'test-client'];
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
+                assertEqual(403, $st, $body);
+            });
+
+            test('an id_token whose azp names another client is rejected, even with a single aud (403)', function () use ($B, $doLogin, $baseClaims) {
+                [$state, $nonce, , , $cookie] = $doLogin();
+                $claims = $baseClaims($nonce); $claims['azp'] = 'other-client';
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode(mkCode(['claims' => $claims])) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
+                assertEqual(403, $st, $body);
+            });
+
             test('an id_token with an aud ARRAY missing our client_id is rejected', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $claims = $baseClaims($nonce); $claims['aud'] = ['other-client', 'yet-another'];
                 $code = mkCode(['claims' => $claims]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(403, $st, $body);
             });
 
             test('callback rejects an id_token whose nonce does not match the login state', function () use ($B, $doLogin, $baseClaims) {
-                [$state, ] = $doLogin();
+                [$state, , , , $cookie] = $doLogin();
                 $code = mkCode(['claims' => $baseClaims('some-other-nonce')]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(403, $st, $body);
                 assertTrue(stripos($body, 'nonce') !== false, $body);
             });
 
             test('callback rejects an expired id_token', function () use ($B, $doLogin, $baseClaims, $IDP_BASE) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $claims = $baseClaims($nonce); $claims['iat'] = time() - 7200; $claims['exp'] = time() - 3600;
                 $code = mkCode(['claims' => $claims]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(403, $st, $body);
             });
 
             test('callback rejects an id_token with no sub (default identity claim) — an email alone is not enough', function () use ($B, $doLogin, $IDP_BASE) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $claims = ['iss' => $IDP_BASE, 'aud' => 'test-client', 'nonce' => $nonce, 'iat' => time(), 'exp' => time() + 300, 'groups' => ['engineers'], 'email' => 'alice@example.test', 'email_verified' => true];
                 $code = mkCode(['claims' => $claims]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(403, $st, $body);
             });
 
             test('group-mapping fails closed (403 sso_no_mapping) for a group with no claims-map entry and no default', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $claims = $baseClaims($nonce); $claims['groups'] = ['unmapped-group'];
                 $code = mkCode(['claims' => $claims]);
-                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state));
+                [$st, , $body] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(403, $st, $body);
                 assertTrue(stripos($body, 'sso_no_mapping') !== false || stripos($body, 'no fluxfiles_sso_claims_map') !== false || stripos($body, 'matched') !== false, $body);
             });
 
-            test('replaying the same state token twice still succeeds both times (v1: TTL-only, no single-use store — documented limitation)', function () use ($B, $doLogin, $baseClaims) {
-                [$state, $nonce] = $doLogin();
+            test('replaying the same state token twice from the SAME browser (same binding cookie) still succeeds both times (v1: TTL-only, no single-use store — documented limitation; the cookie is cleared client-side after the first)', function () use ($B, $doLogin, $baseClaims) {
+                [$state, $nonce, , , $cookie] = $doLogin();
                 $code1 = mkCode(['claims' => $baseClaims($nonce)]);
-                [$st1] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code1) . "&state=" . rawurlencode($state));
+                [$st1] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code1) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(302, $st1);
                 $code2 = mkCode(['claims' => $baseClaims($nonce)]);
-                [$st2] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code2) . "&state=" . rawurlencode($state));
+                [$st2] = req('GET', "{$B}/api/fm/sso/callback?code=" . rawurlencode($code2) . "&state=" . rawurlencode($state), ['headers' => ["Cookie: {$cookie}"]]);
                 assertEqual(302, $st2, 'no server-side single-use tracking in v1, by design (see SsoBootToken docblock)');
             });
 

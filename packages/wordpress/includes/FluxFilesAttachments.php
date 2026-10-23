@@ -61,8 +61,13 @@ class FluxFilesAttachments
 
         $existing = self::findByKey($disk, $key);
         if ($existing) {
-            // Refresh alt/caption if the pick carries newer metadata.
-            if ($alt !== '') { update_post_meta($existing, '_wp_attachment_image_alt', $alt); }
+            // Refresh alt text from a newer pick — but only on an attachment the
+            // picker may edit. The lookup is by storage key, so the attachment found
+            // here may be another user's; anyone who can merely SEE the file must
+            // not be able to rewrite the alt text on their published post.
+            if ($alt !== '' && function_exists('current_user_can') && current_user_can('edit_post', $existing)) {
+                update_post_meta($existing, '_wp_attachment_image_alt', $alt);
+            }
             return ['id' => $existing, 'url' => $url, 'mime' => $mime];
         }
 
@@ -245,9 +250,41 @@ class FluxFilesAttachments
     }
 
     /**
+     * True for a key that must never be attached to or deleted through the bridge:
+     * FluxFiles bookkeeping (`_fluxfiles/`, `_variants/` at any depth, case-folded
+     * like core's isReservedKey()), the reserved legacy-sidecar shape `*.meta.json`,
+     * any hidden/dot segment (`.htaccess`, `.env`, `..`), and NUL/backslash tricks.
+     */
+    public static function isUnsafeKey(string $key): bool
+    {
+        if ($key === '' || strpbrk($key, "\0\\") !== false) {
+            return true;
+        }
+        if (strcasecmp(substr($key, -10), '.meta.json') === 0) {
+            return true;
+        }
+        foreach (explode('/', trim($key, '/')) as $seg) {
+            if ($seg === '' || $seg[0] === '.') {
+                return true;
+            }
+            $lower = strtolower($seg);
+            if ($lower === '_fluxfiles' || $lower === '_variants') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * A FluxFiles-backed attachment was deleted in WP. By default the storage file is
      * LEFT in place (safe). Set the `fluxfiles_delete_storage` option / filter to also
      * remove it from your bucket. Never throws (a storage hiccup must not block WP).
+     *
+     * The delete runs as the WP user deleting the attachment, through their own
+     * FluxFiles token (FluxFilesApi::deleteAttachmentStorage): delete perm, tenant
+     * scope, owner_only and legal holds all apply, and it is audited. System and
+     * hidden paths are refused outright, whoever asks. It used to be a raw Flysystem
+     * delete of whatever key the post meta held.
      */
     public static function onDelete($postId): void
     {
@@ -259,15 +296,14 @@ class FluxFilesAttachments
         if (!$delete) {
             return;
         }
+        if (self::isUnsafeKey($loc['key'])) {
+            return;
+        }
         try {
-            $configs = FluxFilesPlugin::diskConfigs();
-            if (!isset($configs[$loc['disk']])) {
+            if (!class_exists('FluxFilesApi')) {
                 return;
             }
-            $fs = (new \FluxFiles\DiskManager($configs))->disk($loc['disk']);
-            if ($fs->fileExists($loc['key'])) {
-                $fs->delete($loc['key']);
-            }
+            (new FluxFilesApi())->deleteAttachmentStorage($loc['disk'], $loc['key'], (int) $postId);
         } catch (\Throwable) {
             // best-effort — the WP record is already gone; leave the file if we can't reach storage
         }

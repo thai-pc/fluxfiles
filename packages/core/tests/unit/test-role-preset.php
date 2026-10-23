@@ -106,6 +106,19 @@ function assertVector(array $vector, string $secret): void
         $opts['claims'] = $input['claims'];
     }
 
+    // `expect_error`: minting must throw (an unknown role/edition is a typo the
+    // caller has to hear about, not a token silently missing its bundle).
+    if (isset($vector['expect_error'])) {
+        try {
+            fluxfiles_token($opts);
+        } catch (\InvalidArgumentException $e) {
+            assertEqual(true, stripos($e->getMessage(), (string) $vector['expect_error']) !== false,
+                "{$vector['name']}: error message " . json_encode($e->getMessage()));
+            return;
+        }
+        throw new \RuntimeException("{$vector['name']}: expected an InvalidArgumentException");
+    }
+
     $payload = decode(fluxfiles_token($opts), $secret);
 
     foreach ($vector['expect'] ?? [] as $key => $expected) {

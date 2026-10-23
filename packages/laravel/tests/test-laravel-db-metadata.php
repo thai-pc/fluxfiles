@@ -332,6 +332,59 @@ test('deleteDirPrefix() removes a directory subtree', function () use ($repo, $d
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► LIKE metacharacters are escaped (ESCAPE clause — SQLite has no default){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+// Regression (A-N1): the pattern was backslash-escaped but the SQL had no
+// ESCAPE clause, which only works where backslash is LIKE's DEFAULT escape
+// (MySQL/Postgres). On SQLite a tenant prefix like `user_1` matched none of its
+// own children, and a literal `_`/`%` in a search term matched nothing.
+
+test('search() within a prefix containing "_" finds the tenant\'s files', function () use ($repo, $disk) {
+    $repo->save($disk, 'user_1/doc.txt', ['title' => 'UnderscoreTenant', 'uploaded_by' => 'u']);
+    $repo->save($disk, 'userX1/doc.txt', ['title' => 'UnderscoreTenant', 'uploaded_by' => 'u']);
+    $keys = array_column($repo->search($disk, 'UnderscoreTenant', 50, 'user_1'), 'file_key');
+    assertEqual(['user_1/doc.txt'], $keys, '"_" in the prefix is literal, not a one-char wildcard');
+});
+
+test('search() treats "_" and "%" in the query literally', function () use ($repo, $disk) {
+    $repo->save($disk, 'wild/a_b.txt', ['title' => 'wc', 'uploaded_by' => 'u']);
+    $repo->save($disk, 'wild/axb.txt', ['title' => 'wc', 'uploaded_by' => 'u']);
+    $repo->save($disk, 'wild/100%.txt', ['title' => 'wc', 'uploaded_by' => 'u']);
+    $repo->save($disk, 'wild/1000.txt', ['title' => 'wc', 'uploaded_by' => 'u']);
+    $repo->save($disk, 'wild/bang!.txt', ['title' => 'wc', 'uploaded_by' => 'u']);
+    assertEqual(['wild/a_b.txt'], array_column($repo->search($disk, 'a_b', 50, 'wild'), 'file_key'), 'literal _');
+    assertEqual(['wild/100%.txt'], array_column($repo->search($disk, '100%', 50, 'wild'), 'file_key'), 'literal %');
+    assertEqual(['wild/bang!.txt'], array_column($repo->search($disk, 'bang!', 50, 'wild'), 'file_key'), 'the escape char itself is literal too');
+});
+
+test('deleteChildren()/renameChildren() reach the subtree of a prefix containing "_"', function () use ($repo, $disk) {
+    $repo->save($disk, 'ren_src/a.txt', ['title' => 'A', 'uploaded_by' => 'u']);
+    $repo->save($disk, 'ren_src/sub/b.txt', ['title' => 'B', 'uploaded_by' => 'u']);
+    assertEqual(2, $repo->renameChildren($disk, 'ren_src', 'ren_dst'), 'both children renamed');
+    assertTrue($repo->get($disk, 'ren_dst/sub/b.txt') !== null, 'nested child moved');
+
+    $repo->save($disk, 'del_me/a.txt', ['title' => 'A', 'uploaded_by' => 'u']);
+    $repo->save($disk, 'delXme/keep.txt', ['title' => 'K', 'uploaded_by' => 'u']);
+    $repo->deleteChildren($disk, 'del_me');
+    assertEqual(null, $repo->get($disk, 'del_me/a.txt'), 'child of the "_" prefix deleted');
+    assertTrue($repo->get($disk, 'delXme/keep.txt') !== null, 'a sibling the "_" would have wildcard-matched survives');
+});
+
+test('directory index: searchFolders()/renameDirPrefix()/deleteDirPrefix() under a "_" prefix', function () use ($repo, $disk) {
+    $repo->trackDir($disk, 'team_a/photos');
+    $repo->trackDir($disk, 'teamXa/photos');
+    assertEqual(['team_a/photos'], array_column($repo->searchFolders($disk, 'photos', 50, 'team_a'), 'dir_key'), 'searchFolders scoped literally');
+
+    $repo->renameDirPrefix($disk, 'team_a', 'team_b');
+    $dirs = $repo->dirsCreated($disk);
+    assertTrue(array_key_exists('team_b/photos', $dirs), 'child dir re-keyed');
+    assertTrue(array_key_exists('teamXa/photos', $dirs), 'wildcard-lookalike sibling untouched');
+
+    $repo->deleteDirPrefix($disk, 'team_b');
+    assertTrue(!array_key_exists('team_b/photos', $repo->dirsCreated($disk)), 'child dir deleted');
+});
+
+// ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► findByHash() scoping{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
@@ -497,6 +550,12 @@ test('holdCovering() is NOT bidirectional (a hold on a child does not cover its 
 test('holdBlocking() IS bidirectional (a hold on a child blocks its parent folder)', function () use ($repo, $disk) {
     $repo->addHold($disk, 'h6', ['path' => 'projects/delta/child.txt', 'placed_at' => 1000]);
     assertTrue($repo->holdBlocking($disk, 'projects/delta') !== null, 'ancestor of a held descendant should be blocked');
+});
+
+test('holdBlocking() matches case-insensitively (same file on a case-insensitive filesystem)', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'h6c', ['path' => 'Legal/Contract.PDF', 'placed_at' => 1000]);
+    assertTrue($repo->holdBlocking($disk, 'legal/contract.pdf') !== null, 'different letter case is still the held file');
+    assertTrue($repo->holdBlocking($disk, 'LEGAL') !== null, 'its parent folder in another case is blocked too');
 });
 
 test('allHolds() returns every hold on the disk, keyed by id', function () use ($repo, $disk) {

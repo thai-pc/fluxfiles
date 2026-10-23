@@ -8,6 +8,7 @@ use FluxFiles\AuditChain;
 
 use FluxFiles\DiskManager;
 use FluxFiles\MetadataRepositoryInterface;
+use FluxFiles\StorageMetadataHandler;
 
 /**
  * SQL-backed metadata store (FLUXFILES_STORAGE_BACKEND=db). Unifies what the
@@ -614,18 +615,47 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
 
     public function readAudit(string $disk, ?string $userId = null): array
     {
+        return $this->readAuditWindow($disk, null, null, $userId);
+    }
+
+    /**
+     * readAudit() narrowed in SQL — the audit_log table has no rotation cap, so a
+     * caller that only needs a window (a page of /audit, a fixity window since
+     * the oldest baseline) shouldn't load the whole table. Not on
+     * MetadataRepositoryInterface (adding parameters there would break every
+     * implementer); StorageMetadataHandler has the same method.
+     *
+     * @param ?int $since Only rows with created_at >= $since.
+     * @param ?int $limit Only the NEWEST $limit matching rows (still oldest-first).
+     */
+    public function readAuditWindow(string $disk, ?int $since = null, ?int $limit = null, ?string $userId = null): array
+    {
         $sql = 'SELECT * FROM audit_log WHERE disk = ?';
         $params = [$disk];
         if ($userId !== null) {
             $sql .= ' AND owner = ?';
             $params[] = $userId;
         }
-        $sql .= ' ORDER BY id ASC';
+        if ($since !== null) {
+            $sql .= ' AND created_at >= ?';
+            $params[] = $since;
+        }
+        if ($limit !== null) {
+            // Integer-cast, not bound: LIMIT placeholders aren't portable across
+            // the three drivers (MySQL emulated prepares quote them).
+            $sql .= ' ORDER BY id DESC LIMIT ' . max(0, $limit);
+        } else {
+            $sql .= ' ORDER BY id ASC';
+        }
         $stmt = $this->db->pdo()->prepare($sql);
         $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        if ($limit !== null) {
+            $rows = array_reverse($rows);
+        }
 
         $entries = [];
-        foreach ($stmt->fetchAll() as $row) {
+        foreach ($rows as $row) {
             $entries[] = [
                 'user_id'    => $row['owner'] ?? '',
                 'action'     => $row['action'] ?? '',
@@ -972,14 +1002,7 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
             if ($entry['released_at'] !== null) {
                 continue; // released holds never block/cover
             }
-            $holdPath = trim((string) ($entry['path'] ?? ''), '/');
-            if ($holdPath === '') {
-                continue;
-            }
-            $overlaps = $holdPath === $scopedPath
-                || strpos($scopedPath, $holdPath . '/') === 0
-                || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
-            if ($overlaps) {
+            if (StorageMetadataHandler::holdPathOverlaps((string) ($entry['path'] ?? ''), $scopedPath, $bidirectional)) {
                 // $id is a PHP array key — an all-digit hold id string gets
                 // silently cast to int as an array key; cast back to string.
                 return ['hold_id' => (string) $id] + $entry;

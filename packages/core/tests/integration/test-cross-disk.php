@@ -255,6 +255,18 @@ test('setVersionPurger: purgeTrash / emptyTrash purge by ORIGINAL key (file + ev
     assertEqual(['d/a.txt', 'd/sub/b.txt'], $calls, 'emptyTrash purges each file of the trashed dir, not variants');
 });
 
+test('setVersionPurger: purging a trash entry spares the history of a NEW file at the same path', function () {
+    $calls = [];
+    $purger = function (string $d, string $key, $fs) use (&$calls): void { $calls[] = $key; };
+    [$fm, , $rb] = makeCD(['versionPurger' => $purger]);
+    file_put_contents($rb . '/r.txt', 'old');
+    $r = $fm->trash('b', 'r.txt');
+    file_put_contents($rb . '/r.txt', 'a new file saved at the same path');
+    $fm->purgeTrash('b', $r['trash_id']);
+    assertEqual([], $calls, 'the live file owns the history at r.txt now — not purged');
+    assertTrue(is_file($rb . '/r.txt'), 'live file untouched');
+});
+
 test('setVersionPurger: /delete of a directory purges every child', function () {
     $calls = [];
     $purger = function (string $d, string $key, $fs) use (&$calls): void { $calls[] = $key; };

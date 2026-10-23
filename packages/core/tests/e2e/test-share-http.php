@@ -789,6 +789,37 @@ try {
                 assertEqual([], $jOff['data']['events']);
             });
 
+            // ── audit 2026-10-23 ─────────────────────────────────────────────
+            test('B1: a preview-only token (allow_download=false or watermark) cannot mint a public link', function () use ($B, $PREFIX) {
+                foreach ([['allow_download' => false], ['watermark_enabled' => true]] as $extra) {
+                    $tok = fluxfiles_token(['user' => 'viewer', 'perms' => ['read'], 'disks' => ['local'], 'prefix' => $PREFIX,
+                        'ttl' => 600, 'claims' => ['allow_share' => true] + $extra]);
+                    [$st, , $j] = reqJson('POST', "{$B}/api/fm/share", [
+                        'json' => ['disk' => 'local', 'path' => 'reports/q3.pdf'],
+                        'headers' => ["Authorization: Bearer {$tok}"],
+                    ]);
+                    assertEqual(403, $st, json_encode($extra));
+                    assertEnvelope($j, 'download_forbidden');
+                }
+            });
+
+            test('N17: an anonymous share download leaves an audit line (actor = owner, detail = share id)', function () use ($mint, $B, $PREFIX) {
+                $s = $mint(['path' => 'reports/q3.pdf']);
+                [$st] = req('GET', "{$B}/api/fm/share/file?token=" . rawurlencode($s['token']));
+                assertEqual(200, $st);
+                $auditor = fluxfiles_token(['user' => 'auditor', 'perms' => ['read', 'audit'], 'disks' => ['local'], 'prefix' => $PREFIX, 'ttl' => 600]);
+                [$sa, , $ja] = reqJson('GET', "{$B}/api/fm/audit?action=share_download&limit=500", ['headers' => ["Authorization: Bearer {$auditor}"]]);
+                assertEqual(200, $sa, json_encode($ja));
+                $rows = $ja['data']['items'] ?? $ja['data']['entries'] ?? $ja['data'] ?? [];
+                $hit = null;
+                foreach ((array) $rows as $r) {
+                    if (is_array($r) && ($r['detail'] ?? '') === 'share:' . $s['jti']) { $hit = $r; }
+                }
+                assertTrue($hit !== null, 'share_download entry for this share: ' . json_encode($ja));
+                assertEqual('op42', $hit['user_id'] ?? null, 'attributed to the share owner');
+                assertTrue(strpos((string) ($hit['file_key'] ?? ''), 'reports/q3.pdf') !== false, 'names the file');
+            });
+
             stop($srv3);
         }
     }

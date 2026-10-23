@@ -1,6 +1,12 @@
 @php
     $manager = app(\FluxFiles\Laravel\FluxFilesManager::class);
+    // tokenForUser() = the per-user claims resolver (config `claims_resolver`)
+    // with this tag's :overrides merged on top.
     $token = $manager->tokenForUser($overrides);
+    // The default refresh hook re-mints from a ticket bound to this user + these
+    // overrides, so an expired token comes back with the SAME scope — never the
+    // broader config defaults. Sent as a header, never in the URL.
+    $refreshTicket = $onTokenRefresh ? null : $manager->refreshTicketForUser($overrides);
     $endpoint = $manager->endpoint();
     $containerId = 'fluxfiles-' . uniqid();
 @endphp
@@ -33,7 +39,11 @@
         onTokenRefresh: function () {
             return fetch(@json($tokenUrl), {
                 credentials: 'same-origin',
-                headers: { 'Accept': 'application/json' },
+                cache: 'no-store',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-FluxFiles-Refresh-Ticket': @json($refreshTicket),
+                },
             })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (j) { return (j && j.data && j.data.token) ? j.data.token : null; })

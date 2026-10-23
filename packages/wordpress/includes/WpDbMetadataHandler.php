@@ -998,13 +998,18 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
             if ($entry['released_at'] !== null) {
                 continue; // released holds never block/cover
             }
-            $holdPath = trim((string) ($entry['path'] ?? ''), '/');
+            // Case-insensitive like core's StorageMetadataHandler::holdPathOverlaps():
+            // on a case-insensitive filesystem "Contracts/x" and "contracts/x" are the
+            // same file, and over-blocking is the safe side for a legal hold. Inlined
+            // so the adapter still runs on a core that predates that helper.
+            $holdPath = mb_strtolower(trim((string) ($entry['path'] ?? ''), '/'), 'UTF-8');
             if ($holdPath === '') {
                 continue;
             }
-            $overlaps = $holdPath === $scopedPath
-                || strpos($scopedPath, $holdPath . '/') === 0
-                || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
+            $target = mb_strtolower(trim($scopedPath, '/'), 'UTF-8');
+            $overlaps = $holdPath === $target
+                || strpos($target, $holdPath . '/') === 0
+                || ($bidirectional && strpos($holdPath, $target . '/') === 0);
             if ($overlaps) {
                 // $id is a PHP array key — an all-digit hold id string gets
                 // silently cast to int as an array key; cast back to string.

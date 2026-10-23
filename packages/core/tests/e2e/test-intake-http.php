@@ -536,6 +536,45 @@ try {
                 assertEqual(1, $recAfter['rejected'] ?? -1, 'the aggregate counter is unconditional even with analytics off');
             });
 
+            // ── audit 2026-10-23 ─────────────────────────────────────────────
+            test('N17: an anonymous portal upload leaves an `intake_upload` audit line naming the portal', function () use ($B, $PREFIX, $opHdr, $upload) {
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/intake", ['json' => ['disk' => 'local', 'path' => 'audited'], 'headers' => $opHdr]);
+                assertEqual(200, $st);
+                $p = $j['data'];
+                [$stU, , $jU] = $upload($p['token'], 'evidence.txt', 'hello');
+                assertEqual(200, $stU, json_encode($jU));
+                $auditor = fluxfiles_token(['user' => 'auditor', 'perms' => ['read', 'audit'], 'disks' => ['local'], 'prefix' => $PREFIX, 'ttl' => 600]);
+                [$sa, , $ja] = reqJson('GET', "{$B}/api/fm/audit?action=intake_upload&limit=500", ['headers' => ["Authorization: Bearer {$auditor}"]]);
+                assertEqual(200, $sa, json_encode($ja));
+                $hit = null;
+                foreach ((array) ($ja['data'] ?? []) as $r) {
+                    if (is_array($r) && ($r['detail'] ?? '') === 'intake:' . $p['jti']) { $hit = $r; }
+                }
+                assertTrue($hit !== null, 'upload entry for this portal: ' . json_encode($ja));
+                assertEqual("{$PREFIX}/audited/evidence.txt", $hit['file_key'] ?? null, 'the stored key');
+            });
+
+            test('N1: a portal minted by a jpg-only / 1MB token accepts nothing wider', function () use ($B, $PREFIX, $upload) {
+                $narrow = fluxfiles_token(['user' => 'narrow', 'perms' => ['read', 'write'], 'disks' => ['local'], 'prefix' => $PREFIX,
+                    'ttl' => 600, 'max_upload' => 1, 'allowed_ext' => ['jpg'], 'claims' => ['allow_intake' => true]]);
+                [$st, , $j] = reqJson('POST', "{$B}/api/fm/intake", [
+                    'json' => ['disk' => 'local', 'path' => 'narrow', 'allowed_ext' => ['jpg', 'html', 'svg'], 'max_mb' => 500],
+                    'headers' => ["Authorization: Bearer {$narrow}"],
+                ]);
+                assertEqual(200, $st, json_encode($j));
+                assertEqual(['jpg'], $j['data']['allowed_ext']);
+                assertEqual(1, $j['data']['max_mb']);
+                [$stH, , $jH] = $upload($j['data']['token'], 'x.html', '<script>1</script>');
+                assertEqual(403, $stH);
+                assertEqual('ext_not_allowed', $jH['error_code'] ?? null);
+            });
+
+            test('N9: intake list on a disk the token was not granted → 403 disk_denied', function () use ($B, $opHdr) {
+                [$st, , $j] = reqJson('GET', "{$B}/api/fm/intake/list?disk=s3", ['headers' => $opHdr]);
+                assertEqual(403, $st);
+                assertEnvelope($j, 'disk_denied');
+            });
+
             stop($srv3);
         }
     }

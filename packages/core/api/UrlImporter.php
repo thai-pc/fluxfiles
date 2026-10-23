@@ -203,6 +203,10 @@ final class UrlImporter
         ];
 
         // Same pipeline as a normal upload: extension/quota/dedup/variants/AI-tag.
+        // `overwrite` maps to upload()'s $forceUpload, which only skips the
+        // content-dedup check: replacing an existing file of the same name still
+        // requires the operator's `upload_collision=overwrite` (a request flag must
+        // not override a `reject`/`rename` policy).
         return $this->fm->upload($disk, $path, $file, (bool) ($opts['overwrite'] ?? false));
     }
 

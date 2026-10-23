@@ -171,7 +171,20 @@ function fluxfiles_apply_edition_preset(array &$payload, ?string $edition): void
         'studio'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true],
         'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true, 'allow_dlp_scan' => true, 'allow_legal_hold' => true],
     ];
-    $claims = $presets[strtolower((string) $edition)] ?? [];
+    $key = strtolower(trim((string) $edition));
+    if ($key === '' || $key === 'free') {
+        return;
+    }
+    if (!isset($presets[$key])) {
+        // A typo ('enterprize') used to mint a token with none of the tier's
+        // claims and no hint why — fail at mint time instead.
+        throw new \InvalidArgumentException(sprintf(
+            "Unknown edition '%s' — expected one of: free, %s",
+            (string) $edition,
+            implode(', ', array_keys($presets))
+        ));
+    }
+    $claims = $presets[$key];
     foreach ($claims as $k => $v) {
         if (!array_key_exists($k, $payload)) {
             $payload[$k] = $v;
@@ -199,7 +212,20 @@ function fluxfiles_role_preset(?string $role): array
                           'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
     ];
 
-    return $presets[strtolower((string) $role)] ?? [];
+    $key = strtolower(trim((string) $role));
+    if ($key === '') {
+        return [];
+    }
+    if (!isset($presets[$key])) {
+        // Silently ignoring a typo ('editer') fell back to the builder's default
+        // perms instead of the role the caller asked for — fail at mint time.
+        throw new \InvalidArgumentException(sprintf(
+            "Unknown role '%s' — expected one of: %s",
+            (string) $role,
+            implode(', ', array_keys($presets))
+        ));
+    }
+    return $presets[$key];
 }
 
 /**
@@ -675,25 +701,41 @@ function fluxfiles_embed(
     string $width = '100%',
     string $height = '600px'
 ): string {
-    $endpoint = htmlspecialchars($endpoint, ENT_QUOTES, 'UTF-8');
-    $token = htmlspecialchars($token, ENT_QUOTES, 'UTF-8');
-    $disk = htmlspecialchars($disk, ENT_QUOTES, 'UTF-8');
-    $mode = htmlspecialchars($mode, ENT_QUOTES, 'UTF-8');
+    // Two contexts, two encoders. HTML attributes get htmlspecialchars; the
+    // values inside <script> get json_encode with every HEX flag, so a quote,
+    // `</script>`, `<!--` or `&` can't end the string or the script element
+    // (htmlspecialchars there left the JS reading `&quot;` literally and did
+    // nothing about a backslash). width/height were not escaped at all.
+    $attr = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+    $js = static fn (string $v): string => (string) json_encode(
+        $v,
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+    // A CSS length (calc() included) — no `;`/`:`/quotes, so the value can't
+    // start a second declaration; anything else falls back to the default.
+    $cssLen = static fn (string $v, string $fallback): string
+        => preg_match('#^[0-9a-z%.() +\-*/]+$#i', trim($v)) ? trim($v) : $fallback;
+    $style = $attr('width:' . $cssLen($width, '100%') . ';height:' . $cssLen($height, '600px'));
+    $endpointAttr = $attr($endpoint);
+    $endpointJs = $js($endpoint);
+    $tokenJs = $js($token);
+    $diskJs = $js($disk);
+    $modeJs = $js($mode);
 
     return <<<HTML
-<div id="fluxfiles-container" style="width:{$width};height:{$height}">
+<div id="fluxfiles-container" style="{$style}">
     <iframe id="fluxfiles-iframe"
-            src="{$endpoint}/public/index.html"
+            src="{$endpointAttr}/public/index.html"
             style="width:100%;height:100%;border:none;"
             allow="clipboard-write"></iframe>
 </div>
-<script src="{$endpoint}/fluxfiles.js"></script>
+<script src="{$endpointAttr}/fluxfiles.js"></script>
 <script>
 FluxFiles.open({
-    endpoint: "{$endpoint}",
-    token: "{$token}",
-    disk: "{$disk}",
-    mode: "{$mode}",
+    endpoint: {$endpointJs},
+    token: {$tokenJs},
+    disk: {$diskJs},
+    mode: {$modeJs},
     container: "#fluxfiles-container"
 });
 </script>

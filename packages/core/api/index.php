@@ -336,16 +336,26 @@ try {
         });
     }
 
-    // File versioning (paid module). Wire the version keeper ONLY when the token asks
-    // (`allow_versioning`) AND the module is installed + licensed — so the free core
-    // keeps no versions. FileManager calls it before overwriting an existing file.
-    if ($claims->allowVersioning
-        && \FluxFiles\ModuleRegistry::installed('versioning')
+    // File versioning (paid module). Two halves with different gates:
+    //  · housekeeping (purger + mover) runs whenever the module is installed +
+    //    licensed, REGARDLESS of this token's claim. History is written by one
+    //    token and outlives it — a `/delete` or rename by a token WITHOUT
+    //    `allow_versioning` used to leave the history behind under the old path,
+    //    where it was restorable after a "permanent" delete and got listed on the
+    //    next file created at that path (another user's, even).
+    //  · the keeper (new snapshots) only when the token asks (`allow_versioning`),
+    //    so the free core and unlicensed tenants keep no versions.
+    // The metadata repository is passed through so the module reads the file's
+    // owner from the configured backend (DB mode included) — that owner is the
+    // identity version history is bound to (see VersioningModule::lineage()).
+    if (\FluxFiles\ModuleRegistry::installed('versioning')
         && \FluxFiles\LicenseManager::fromEnv()->licensed('versioning')) {
         $versioning = new \FluxFiles\Versioning\VersioningModule();
-        $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager) {
-            $versioning->keep($fs, $key, $claims, $diskManager, $d);
-        });
+        if ($claims->allowVersioning) {
+            $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager, $metaRepo) {
+                $versioning->keep($fs, $key, $claims, $diskManager, $d, $metaRepo);
+            });
+        }
         // Erase version history on permanent delete, so `/delete` can't be undone via
         // a restore of a version saved before it — see VersioningModule::purge().
         $fm->setVersionPurger(static function (string $d, string $key, $fs) use ($versioning, $diskManager) {
@@ -355,8 +365,8 @@ try {
         // being orphaned under the old path's hash. method_exists: an older installed
         // module predates move() — keep/purge still work without it.
         if (method_exists($versioning, 'move')) {
-            $fm->setVersionMover(static function (string $d, string $from, string $to, $fs) use ($versioning, $diskManager) {
-                $versioning->move($fs, $from, $to, $diskManager, $d);
+            $fm->setVersionMover(static function (string $d, string $from, string $to, $fs) use ($versioning, $diskManager, $metaRepo) {
+                $versioning->move($fs, $from, $to, $diskManager, $d, $metaRepo);
             });
         }
     }
@@ -1038,12 +1048,12 @@ function routeRequest(
     // File versioning — list prior versions of a file / restore one. Same 3-layer gate.
     if ($method === 'GET' && $uri === '/api/fm/versions') {
         $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
-        return $module->listVersions($fm, $diskManager, $claims, ff_str_param($_GET, 'disk', 'local'), ff_str_param($_GET, 'path'));
+        return $module->listVersions($fm, $diskManager, $claims, ff_str_param($_GET, 'disk', 'local'), ff_str_param($_GET, 'path'), $metaRepo);
     }
     if ($method === 'POST' && $uri === '/api/fm/versions/restore') {
         $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
-        return $module->restore($fm, $diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''), (string) ($body['version_id'] ?? ''));
+        return $module->restore($fm, $diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''), (string) ($body['version_id'] ?? ''), $metaRepo);
     }
     // Webhooks — send a test ping to the configured endpoint so operators can verify it.
     if ($method === 'POST' && $uri === '/api/fm/webhooks/test') {
@@ -2137,7 +2147,7 @@ function handleMediaStream(): void
         if ($xaccel !== '') {
             header('Content-Type: ' . $mime);
             header('X-Accel-Buffering: no');
-            header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
+            header('X-Accel-Redirect: ' . ff_xaccel_uri($xaccel, $path));
             return;
         }
         \FluxFiles\RangeStreamer::stream($abs, $mime, $_SERVER['HTTP_RANGE'] ?? null);

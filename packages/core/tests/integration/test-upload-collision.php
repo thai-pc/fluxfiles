@@ -168,7 +168,10 @@ test('B1: owner_only + force_upload=1 → a different tenant CANNOT overwrite', 
     $fmA = new FileManager($dm, $claimsA, $meta);
     upload($fmA, 'shared2.txt', 'user-A original');
 
+    // Under the operator's `overwrite` policy the overwrite path is reached, and
+    // owner_only must still refuse it.
     $claimsB = new Claims('user-B', ['read', 'write', 'delete'], ['local'], '', 50, null, 0, true);
+    $claimsB->uploadCollision = 'overwrite';
     $fmB = new FileManager($dm, $claimsB, $meta);
     $tmp = tempnam(sys_get_temp_dir(), 'up');
     file_put_contents($tmp, 'user-B attack via force_upload');
@@ -190,6 +193,33 @@ test('B1: owner_only + force_upload=1 → a different tenant CANNOT overwrite', 
         @unlink($tmp);
     }
     assertEqual('user-A original', file_get_contents("$root/shared2.txt"), 'original bytes untouched');
+});
+
+test('B9: force_upload=1 does NOT override the collision policy (rename keeps both, reject 409s)', function () {
+    foreach (['rename', 'reject'] as $policy) {
+        [$fm, $dm, $root] = setup($policy);
+        upload($fm, 'keep.txt', 'original');
+        $tmp = tempnam(sys_get_temp_dir(), 'up');
+        file_put_contents($tmp, 'forced-different');
+        try {
+            $r = null;
+            try {
+                $r = $fm->upload('local', '', [
+                    'name' => 'keep.txt', 'tmp_name' => $tmp, 'size' => filesize($tmp),
+                    'error' => 0, 'type' => 'text/plain',
+                ], true);
+            } catch (ApiException $e) {
+                assertEqual('reject', $policy, "{$policy}: unexpected " . $e->getErrorCode());
+                assertEqual('name_conflict', $e->getErrorCode());
+            }
+            if ($policy === 'rename') {
+                assertEqual('keep (1).txt', $r['name'] ?? null, 'renamed, not overwritten');
+            }
+        } finally {
+            @unlink($tmp);
+        }
+        assertEqual('original', file_get_contents("$root/keep.txt"), "{$policy}: original untouched");
+    }
 });
 
 test('B1: owner_only → the OWNER can still overwrite their own file', function () {

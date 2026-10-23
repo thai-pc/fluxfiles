@@ -609,7 +609,15 @@ if (!function_exists('wp_remote_retrieve_response_code')) {
 if (!function_exists('wp_remote_retrieve_body')) {
     function wp_remote_retrieve_body($r) { return $r['body'] ?? ''; }
 }
-if (!class_exists('WP_Error')) { class WP_Error {} }
+if (!class_exists('WP_Error')) {
+    // Enough of WP_Error for the REST-auth filter and the updater to inspect codes.
+    class WP_Error {
+        private array $codes = [];
+        public function __construct($code = '', $message = '', $data = '') { if ($code !== '') { $this->codes[] = (string) $code; } }
+        public function get_error_codes(): array { return $this->codes; }
+        public function get_error_code() { return $this->codes[0] ?? ''; }
+    }
+}
 if (!function_exists('wp_json_encode')) { function wp_json_encode($d, $o = 0, $depth = 512) { return json_encode($d, $o, $depth); } }
 if (!function_exists('sanitize_file_name')) { function sanitize_file_name($n) { return preg_replace('/[^A-Za-z0-9._-]/', '-', (string) $n); } }
 if (!function_exists('esc_url_raw')) { function esc_url_raw($u) { return $u; } }
@@ -1739,6 +1747,538 @@ test('the update server serves the MIT plugin without demanding a paid licence',
         'the licence gate is skipped for them');
     assertTrue(strpos($srv, 'sodium_crypto_sign_detached') !== false,
         'the manifest is still signed either way');
+});
+
+// ── Adapter audit 2026-10-23 (A-H1 … A-N6, versioning B2) ────────────────────
+// Each test below fails on the pre-fix code; the comment on each names the finding.
+
+if (!function_exists('wp_set_current_user')) {
+    function wp_set_current_user($id) { $GLOBALS['WP_OPTIONS']['_test_user_id'] = (int) $id; return null; }
+}
+if (!function_exists('esc_html')) { function esc_html($s) { return htmlspecialchars((string) $s, ENT_QUOTES); } }
+if (!function_exists('esc_html__')) { function esc_html__($s, $d = null) { return htmlspecialchars((string) $s, ENT_QUOTES); } }
+if (!function_exists('wp_parse_url')) { function wp_parse_url($u, $c = -1) { return parse_url($u, $c); } }
+// A request whose multipart file part is settable (the shared stub returns none).
+if (!class_exists('FfUploadRequest')) {
+    class FfUploadRequest extends WP_REST_Request
+    {
+        private array $f;
+        public function __construct(array $q, array $f) { parent::__construct([], $q); $this->f = $f; }
+        public function get_file_params() { return $this->f; }
+    }
+}
+if (!function_exists('home_url')) { function home_url($p = '') { return 'http://wp.test/' . ltrim((string) $p, '/'); } }
+if (!function_exists('site_url')) { function site_url($p = '') { return 'http://wp.test/' . ltrim((string) $p, '/'); } }
+
+$ffUploads = FluxFilesPlugin::storagePath() . '/uploads';
+$ffPut = function (string $rel, string $bytes = 'x') use ($ffUploads): string {
+    $abs = $ffUploads . '/' . $rel;
+    @mkdir(dirname($abs), 0777, true);
+    file_put_contents($abs, $bytes);
+    return $abs;
+};
+$ffMetaRepo = function (): \FluxFiles\StorageMetadataHandler {
+    return new \FluxFiles\StorageMetadataHandler(new \FluxFiles\DiskManager(FluxFilesPlugin::diskConfigs()));
+};
+$ffAuditRows = function () use ($ffUploads): array {
+    $rows = [];
+    foreach (array_filter(explode("\n", (string) @file_get_contents($ffUploads . '/_fluxfiles/audit.jsonl'))) as $line) {
+        $r = json_decode($line, true);
+        if (is_array($r)) { $rows[] = $r; }
+    }
+    return $rows;
+};
+$ffAsUser = function (int $uid, array $claims, callable $fn) {
+    $keep = $_SERVER['HTTP_AUTHORIZATION'];
+    $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken($uid, $claims);
+    try { return $fn(); } finally { $_SERVER['HTTP_AUTHORIZATION'] = $keep; }
+};
+
+test('A-H1: the Bearer filter never clears a nonce error for a route outside /fluxfiles/v1 (URI/query substring trick)', function () {
+    $keep = [$_SERVER['HTTP_AUTHORIZATION'], $_SERVER['REQUEST_URI'] ?? null, $_GET, $GLOBALS['WP_OPTIONS']['_test_user_id'] ?? null];
+    try {
+        $GLOBALS['WP_OPTIONS']['_test_user_id'] = 1;          // the cookie user (an admin)
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer x';
+        $_SERVER['REQUEST_URI'] = '/wp-json/wp/v2/users?_wpnonce=bad&z=/fluxfiles/v1/';
+        $_SERVER['QUERY_STRING'] = '_wpnonce=bad&z=/fluxfiles/v1/';
+        $GLOBALS['wp'] = (object) ['query_vars' => ['rest_route' => '/wp/v2/users']];
+        $err = new WP_Error('rest_cookie_invalid_nonce', 'Cookie check failed', ['status' => 403]);
+        assertTrue(FluxFilesApi::bypassCookieAuthForBearer($err) === $err, 'wp/v2 keeps its CSRF error');
+        assertEqual(1, get_current_user_id(), 'cookie user untouched outside our namespace');
+
+        // ?rest_route= naming our namespace does not count when WP dispatches another route.
+        $_GET['rest_route'] = '/fluxfiles/v1/api/fm/list';
+        assertTrue(FluxFilesApi::bypassCookieAuthForBearer($err) === $err, 'the dispatched route (query var) is authoritative');
+        // Look-alike namespaces are not ours.
+        $GLOBALS['wp']->query_vars['rest_route'] = '/fluxfiles/v10/x';
+        assertTrue(FluxFilesApi::bypassCookieAuthForBearer($err) === $err, '/fluxfiles/v10 is not /fluxfiles/v1');
+    } finally {
+        [$_SERVER['HTTP_AUTHORIZATION'], $uri, $_GET, $uid] = $keep;
+        $_SERVER['REQUEST_URI'] = $uri;
+        $GLOBALS['WP_OPTIONS']['_test_user_id'] = $uid;
+        unset($GLOBALS['wp'], $_SERVER['QUERY_STRING']);
+    }
+});
+
+test('A-H1: on our route only rest_cookie_invalid_nonce is neutralised, and the request is downgraded to user 0', function () {
+    $keep = [$_SERVER['HTTP_AUTHORIZATION'], $GLOBALS['WP_OPTIONS']['_test_user_id'] ?? null];
+    try {
+        $GLOBALS['wp'] = (object) ['query_vars' => ['rest_route' => '/fluxfiles/v1/api/fm/list']];
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer abc.def.ghi';
+        $GLOBALS['WP_OPTIONS']['_test_user_id'] = 1;
+
+        $other = new WP_Error('jwt_auth_invalid_token', 'another plugin');
+        assertTrue(FluxFilesApi::bypassCookieAuthForBearer($other) === $other, "another plugin's error is never cleared");
+        assertTrue(FluxFilesApi::bypassCookieAuthForBearer(null) === null, 'no error → untouched');
+
+        $r = FluxFilesApi::bypassCookieAuthForBearer(new WP_Error('rest_cookie_invalid_nonce', 'x'));
+        assertTrue($r === true, 'stale nonce + Bearer on our route → proceeds');
+        assertEqual(0, get_current_user_id(), 'and never as the cookie user');
+
+        $GLOBALS['WP_OPTIONS']['_test_user_id'] = 1;
+        $_SERVER['HTTP_AUTHORIZATION'] = '';
+        $err = new WP_Error('rest_cookie_invalid_nonce', 'x');
+        assertTrue(FluxFilesApi::bypassCookieAuthForBearer($err) === $err, 'no Bearer → WP decides');
+    } finally {
+        [$_SERVER['HTTP_AUTHORIZATION'], $GLOBALS['WP_OPTIONS']['_test_user_id']] = $keep;
+        unset($GLOBALS['wp']);
+    }
+});
+
+test('A-H2: metadata save/delete/get refuse system paths (_fluxfiles/) like core', function () {
+    $api = new FluxFilesApi();
+    $save = $api->handleSaveMetadata(new WP_REST_Request(['disk' => 'local', 'key' => '_fluxfiles/audit.jsonl', 'title' => 't']));
+    assertEqual(403, $save->get_status(), 'save on _fluxfiles/ refused');
+    assertEqual('system_path', $save->get_data()['error_code'] ?? null);
+    $del = $api->handleDeleteMetadata(new WP_REST_Request(['disk' => 'local', 'key' => '_variants/x.jpg_thumb.webp']));
+    assertEqual(403, $del->get_status(), 'delete on _variants/ refused');
+    $get = $api->handleGetMetadata(new WP_REST_Request([], ['disk' => 'local', 'key' => '_fluxfiles/trash.json']));
+    assertEqual(403, $get->get_status(), 'get on _fluxfiles/ refused');
+});
+
+test("A-H2: an owner_only token cannot rewrite or wipe another user's metadata", function () use ($ffPut, $ffMetaRepo, $ffAsUser) {
+    $key = 'meta-own-' . uniqid() . '.txt';
+    $ffPut($key);
+    $ffMetaRepo()->save('local', $key, ['uploaded_by' => 'alice', 'title' => 'Alice’s']);
+    $ffAsUser(7811, ['owner_only' => true], function () use ($key) {
+        $api = new FluxFilesApi();
+        $r = $api->handleSaveMetadata(new WP_REST_Request(['disk' => 'local', 'key' => $key, 'title' => 'pwned']));
+        assertEqual(403, $r->get_status(), 'save refused');
+        assertEqual('owner_only', $r->get_data()['error_code'] ?? null);
+        $d = $api->handleDeleteMetadata(new WP_REST_Request(['disk' => 'local', 'key' => $key]));
+        assertEqual(403, $d->get_status(), 'delete refused');
+    });
+    assertEqual('Alice’s', $ffMetaRepo()->get('local', $key)['title'] ?? null, 'metadata untouched');
+});
+
+test('A-M3: audit + webhook keys are tenant-scoped (a prefixed tenant can find its own entries)', function () use ($ffAuditRows, $ffAsUser) {
+    $dir = 'aud-' . uniqid();
+    $ffAsUser(7821, ['prefix' => 'tenant-a'], function () use ($dir) {
+        $r = (new FluxFilesApi())->handleMkdir(new WP_REST_Request(['disk' => 'local', 'path' => $dir]));
+        assertEqual(200, $r->get_status(), 'mkdir ok');
+    });
+    $hit = null;
+    foreach ($ffAuditRows() as $row) {
+        if (($row['action'] ?? '') === 'mkdir' && ($row['context']['user_id'] ?? '') === '7821') { $hit = $row; }
+    }
+    assertTrue($hit !== null, 'mkdir audited');
+    assertEqual('tenant-a/' . $dir, $hit['context']['file_key'] ?? null, 'key carries the tenant prefix');
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($src, "\$context['path'] = \$this->auditKey(\$claims, \$context['path']);") !== false, 'webhook path scoped too');
+});
+
+test('A-M4: URL import checks write perm BEFORE any outbound fetch', function () use ($ffAsUser) {
+    $ffAsUser(7831, ['perms' => ['read'], 'allow_url_import' => true], function () {
+        $r = (new FluxFilesApi())->handleImportUrl(new WP_REST_Request(['disk' => 'local', 'url' => 'http://127.0.0.1:9/x.jpg']));
+        assertEqual(403, $r->get_status());
+        assertEqual('permission_denied', $r->get_data()['error_code'] ?? null, 'refused on perms, not by the SSRF guard after resolving');
+    });
+});
+
+test('A-M4: URL import has its own bucket and honours import_rate_limit', function () use ($ffAsUser) {
+    $ffAsUser(7832, ['allow_url_import' => true, 'import_rate_limit' => 1], function () {
+        $api = new FluxFilesApi();
+        $req = new WP_REST_Request(['disk' => 'local', 'url' => 'http://127.0.0.1:9/x.jpg']);
+        $first = $api->handleImportUrl($req);
+        assertTrue($first->get_status() !== 429, 'first import attempt is not throttled');
+        assertEqual(429, $api->handleImportUrl($req)->get_status(), 'second attempt in the window → 429');
+    });
+});
+
+test('A-N3: presign and c2pa verify spend the WRITE bucket, as core counts them', function () use ($ffAsUser) {
+    $ffAsUser(7841, ['rate_write' => 1], function () {
+        $api = new FluxFilesApi();
+        $req = new WP_REST_Request(['disk' => 'local', 'path' => 'p.txt', 'method' => 'GET', 'ttl' => 60]);
+        $api->handlePresign($req);
+        assertEqual(429, $api->handlePresign($req)->get_status(), 'presign throttled at rate_write');
+    });
+    $ffAsUser(7842, ['rate_write' => 1], function () {
+        $api = new FluxFilesApi();
+        $req = new WP_REST_Request(['disk' => 'local', 'path' => 'p.jpg']);
+        $api->handleC2pa($req);
+        assertEqual(429, $api->handleC2pa($req)->get_status(), 'c2pa verify throttled at rate_write');
+    });
+});
+
+test('A-M2: /duplicates and /usage?refresh=true use the dedicated 2/min bucket; plain /usage is cached', function () use ($ffAsUser) {
+    $ffAsUser(7851, [], function () {
+        $api = new FluxFilesApi();
+        $req = new WP_REST_Request([], ['disk' => 'local']);
+        $api->handleDuplicates($req);
+        $api->handleDuplicates($req);
+        assertEqual(429, $api->handleDuplicates($req)->get_status(), '3rd duplicate scan in a minute → 429');
+    });
+    $ffAsUser(7852, [], function () {
+        $api = new FluxFilesApi();
+        $refresh = new WP_REST_Request([], ['disk' => 'local', 'refresh' => 'true']);
+        assertEqual(200, $api->handleUsage($refresh)->get_status());
+        assertEqual(200, $api->handleUsage($refresh)->get_status());
+        assertEqual(429, $api->handleUsage($refresh)->get_status(), '3rd forced recompute → 429');
+        $plain = $api->handleUsage(new WP_REST_Request([], ['disk' => 'local']));
+        assertEqual(200, $plain->get_status(), 'a plain view still works (cache)');
+        assertTrue(array_key_exists('cache_age_seconds', $plain->get_data()['data'] ?? []), 'cache age reported');
+    });
+});
+
+test('A-N4: force_upload="false" is false (FILTER_VALIDATE_BOOLEAN), so it does not bypass dedupe', function () use ($ffAsUser) {
+    // (bool) "false" === true: the multipart field used to force EVERY upload that
+    // sent it, skipping the dedupe (and, on older cores, the collision policy).
+    $dir = 'force-' . uniqid();
+    $bytes = 'same-bytes-' . uniqid();
+    $mk = function () use ($bytes) {
+        $tmp = tempnam(sys_get_temp_dir(), 'ffup');
+        file_put_contents($tmp, $bytes);
+        return ['name' => 'same.txt', 'type' => 'text/plain', 'tmp_name' => $tmp, 'error' => 0, 'size' => filesize($tmp)];
+    };
+    $ffAsUser(7871, ['dedupe_uploads' => true], function () use ($dir, $mk) {
+        $api = new FluxFilesApi();
+        $a = $api->handleUpload(new FfUploadRequest(['disk' => 'local', 'path' => $dir, 'force_upload' => 'false'], ['file' => $mk()]));
+        $b = $api->handleUpload(new FfUploadRequest(['disk' => 'local', 'path' => $dir, 'force_upload' => 'false'], ['file' => $mk()]));
+        assertEqual(200, $a->get_status(), 'first upload ok');
+        assertEqual(200, $b->get_status(), 'second upload ok');
+        assertEqual(true, $b->get_data()['data']['duplicate'] ?? false, 'identical bytes reported as a duplicate, not force-stored');
+        $c = $api->handleUpload(new FfUploadRequest(['disk' => 'local', 'path' => $dir, 'force_upload' => 'true'], ['file' => $mk()]));
+        assertTrue(empty($c->get_data()['data']['duplicate']), '"true" still forces');
+    });
+});
+
+test('A-N5: search / search-folders results are unscoped like core', function () use ($ffAsUser) {
+    $name = 'findme' . bin2hex(random_bytes(4));
+    $ffAsUser(7861, ['prefix' => 'tenant-s'], function () use ($name) {
+        $api = new FluxFilesApi();
+        assertEqual(200, $api->handleMkdir(new WP_REST_Request(['disk' => 'local', 'path' => $name]))->get_status());
+        $rows = $api->handleSearchFolders(new WP_REST_Request([], ['disk' => 'local', 'q' => $name]))->get_data()['data'] ?? [];
+        assertTrue(count($rows) >= 1, 'folder found');
+        assertEqual($name, $rows[0]['dir_key'] ?? null, 'dir_key relative to the tenant root');
+    });
+});
+
+test('A-M1: /img fails closed on a token that carries an overlay watermark', function () use ($secret) {
+    assertTrue(method_exists('FluxFilesApi', 'imgScopeServable'), 'fail-closed rule exists');
+    $wm = \FluxFiles\ImageToken::verify(\FluxFiles\ImageToken::mint('local', 'a.jpg', 'u', 60, $secret, 2000, 80,
+        ['enabled' => true, 'type' => 'text', 'text' => 'CONFIDENTIAL']), $secret);
+    assertEqual(false, FluxFilesApi::imgScopeServable($wm), 'watermarked token refused');
+    $plain = \FluxFiles\ImageToken::verify(\FluxFiles\ImageToken::mint('local', 'a.jpg', 'u', 60, $secret, 2000), $secret);
+    assertEqual(true, FluxFilesApi::imgScopeServable($plain), 'plain token served');
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    $start = strpos($src, 'public function handleImg(');
+    $body = substr($src, $start, strpos($src, "\n    public function ", $start + 1) - $start);
+    $gate = strpos($body, 'self::imgScopeServable($scope)');
+    assertTrue($gate !== false && $gate < strpos($body, '$fs->read('), 'checked before any bytes are read');
+});
+
+test('A-N6: the iframe UI sends Referrer-Policy: no-referrer and frame-ancestors', function () {
+    $h = FluxFilesApi::uiHtmlHeaders('en');
+    assertTrue(in_array('Referrer-Policy: no-referrer', $h, true), 'no-referrer');
+    $csp = array_values(array_filter($h, fn ($x) => strpos($x, 'Content-Security-Policy: frame-ancestors') === 0));
+    assertEqual(1, count($csp), 'frame-ancestors present');
+    assertTrue(strpos($csp[0], "'self'") !== false && strpos($csp[0], 'http://wp.test') !== false, 'self + site origin');
+    add_filter('fluxfiles_frame_ancestors', fn () => "'self'; script-src *");
+    $h2 = FluxFilesApi::uiHtmlHeaders('en');
+    assertTrue(count(array_filter($h2, fn ($x) => strpos($x, 'Content-Security-Policy') === 0)) === 0, 'an injected directive is dropped');
+    $GLOBALS['WP_FILTERS'] = [];
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($src, "self::uiHtmlHeaders(\$locale)") !== false, 'serveUiHtml() uses them');
+});
+
+test('B2: version purger + mover are wired on installed+licensed, NOT behind the acting token\'s allow_versioning', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    $start = strpos($src, 'private function fileManager(');
+    $body = substr($src, $start, strpos($src, "\n    private function ", $start + 1) - $start);
+    $claimGate = strpos($body, 'if ($claims->allowVersioning ?? false) {');
+    assertTrue($claimGate !== false, 'keeper still claim-gated');
+    // Brace-match the claim-gated block; the purger/mover must sit outside it.
+    $depth = 0; $end = null;
+    for ($i = strpos($body, '{', $claimGate); $i < strlen($body); $i++) {
+        if ($body[$i] === '{') { $depth++; }
+        if ($body[$i] === '}' && --$depth === 0) { $end = $i; break; }
+    }
+    $block = substr($body, $claimGate, $end - $claimGate);
+    assertTrue(strpos($block, 'setVersionKeeper') !== false, 'keeper inside the claim gate');
+    assertTrue(strpos($block, 'setVersionPurger') === false, 'purger NOT inside the claim gate');
+    assertTrue(strpos($block, 'setVersionMover') === false, 'mover NOT inside the claim gate');
+    assertTrue(strpos($body, "method_exists(\$versioning, 'move') && method_exists(\$fm, 'setVersionMover')") !== false, 'method_exists guards kept');
+});
+
+test('A-H4: /attach resolves the key through the user\'s token — system path / missing file / foreign owner refused', function () use ($ffPut, $ffMetaRepo) {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 9101;
+    $GLOBALS['WP_POSTS'] = [];
+    $api = new FluxFilesApi();
+    try {
+        $r = $api->handleAttach(new WP_REST_Request(['url' => 'https://x/y', 'key' => '_fluxfiles/audit.jsonl', 'disk' => 'local']));
+        assertEqual(403, $r->get_status(), 'system path refused');
+        $r = $api->handleAttach(new WP_REST_Request(['url' => 'https://x/y', 'key' => 'nope-' . uniqid() . '.jpg', 'disk' => 'local']));
+        assertEqual(404, $r->get_status(), 'non-existent file refused');
+        $hidden = 'att-' . uniqid() . '/.env';
+        $ffPut($hidden);
+        assertEqual(403, $api->handleAttach(new WP_REST_Request(['key' => $hidden, 'disk' => 'local']))->get_status(), 'hidden file refused');
+
+        $foreign = 'att-' . uniqid() . '/theirs.jpg';
+        $ffPut($foreign);
+        $ffMetaRepo()->save('local', $foreign, ['uploaded_by' => 'someone-else']);
+        add_filter('fluxfiles_token_overrides', function ($o) { $o['owner_only'] = true; return $o; });
+        $r = $api->handleAttach(new WP_REST_Request(['key' => $foreign, 'disk' => 'local']));
+        assertEqual(403, $r->get_status(), "owner_only: no delete handle on someone else's file");
+        assertEqual('owner_only', $r->get_data()['error_code'] ?? null);
+        $GLOBALS['WP_FILTERS'] = [];
+
+        add_filter('fluxfiles_token_overrides', function ($o) { $o['prefix'] = 'tenant-x'; return $o; });
+        $outside = 'att-' . uniqid() . '/outside.jpg';
+        $ffPut($outside);   // exists at the disk root, i.e. OUTSIDE tenant-x
+        $r = $api->handleAttach(new WP_REST_Request(['key' => $outside, 'disk' => 'local']));
+        assertEqual(404, $r->get_status(), 'a key outside the tenant prefix resolves inside it (and is not there)');
+        assertEqual(0, count($GLOBALS['WP_POSTS']), 'no attachment created by any refused call');
+    } finally {
+        $GLOBALS['WP_FILTERS'] = [];
+    }
+});
+
+test('A-H4: /attach derives the URL (and srcset) server-side; client url/variants are not trusted', function () use ($ffPut) {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 9101;
+    $GLOBALS['WP_POSTS'] = [];
+    $dir = 'att-' . uniqid();
+    $ffPut($dir . '/pic.jpg');
+    $ffPut($dir . '/_variants/pic.jpg_thumb.webp');
+    $base = content_url('fluxfiles/uploads');
+    $r = (new FluxFilesApi())->handleAttach(new WP_REST_Request([
+        'url' => 'https://evil.example/x.jpg', 'key' => $dir . '/pic.jpg', 'disk' => 'local', 'width' => 1000, 'height' => 800,
+        'variants' => [
+            'thumb'  => ['url' => $base . '/' . $dir . '/_variants/pic.jpg_thumb.webp'],
+            'medium' => ['url' => 'https://evil.example/m.webp'],
+            'large'  => ['url' => $base . '/' . $dir . '/_variants/missing_large.webp'],
+        ],
+    ]));
+    assertEqual(200, $r->get_status(), 'attach ok');
+    $id = $r->get_data()['data']['id'];
+    $meta = $GLOBALS['WP_POSTS'][$id]['meta'];
+    assertEqual($base . '/' . $dir . '/pic.jpg', $meta['_fluxfiles_url'], 'URL from the disk config, not the body');
+    assertEqual($dir . '/pic.jpg', $meta['_fluxfiles_key'], 'scoped key stored');
+    $srcset = json_decode((string) ($meta['_fluxfiles_variants'] ?? '[]'), true);
+    assertEqual([150, 1000], array_map('intval', array_keys($srcset)), 'only the real, existing variant (+ original) kept');
+    assertTrue(strpos(json_encode($srcset), 'evil.example') === false, 'no foreign URL in the srcset');
+});
+
+test("A-H4: re-picking a file never rewrites alt text on someone else's attachment", function () {
+    $GLOBALS['WP_POSTS'] = [];
+    $first = FluxFilesAttachments::findOrCreate(['url' => 'https://cdn/a/b.jpg', 'key' => 'a/b.jpg', 'disk' => 'local', 'alt' => 'original']);
+    $keepCaps = $GLOBALS['WP_CAPS'];
+    try {
+        $GLOBALS['WP_CAPS']['edit_post'] = false;
+        FluxFilesAttachments::findOrCreate(['url' => 'https://cdn/a/b.jpg', 'key' => 'a/b.jpg', 'disk' => 'local', 'alt' => 'pwned']);
+        assertEqual('original', $GLOBALS['WP_POSTS'][$first['id']]['meta']['_wp_attachment_image_alt'], 'alt kept for a non-editor');
+        $GLOBALS['WP_CAPS']['edit_post'] = true;
+        FluxFilesAttachments::findOrCreate(['url' => 'https://cdn/a/b.jpg', 'key' => 'a/b.jpg', 'disk' => 'local', 'alt' => 'edited']);
+        assertEqual('edited', $GLOBALS['WP_POSTS'][$first['id']]['meta']['_wp_attachment_image_alt'], 'an editor may refresh it');
+    } finally {
+        $GLOBALS['WP_CAPS'] = $keepCaps;
+    }
+});
+
+test('A-H4: onDelete refuses system/hidden paths and legal holds, and audits a real delete', function () use ($ffPut, $ffMetaRepo, $ffAuditRows) {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 9102;
+    $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read', 'write', 'delete'];
+    $GLOBALS['WP_OPTIONS']['fluxfiles_delete_storage'] = '1';
+    $mkPost = function (string $key): int {
+        $id = $GLOBALS['WP_NEXT_ID']++;
+        $GLOBALS['WP_POSTS'][$id] = ['post' => [], 'meta' => ['_fluxfiles_url' => 'u', '_fluxfiles_key' => $key, '_fluxfiles_disk' => 'local']];
+        return $id;
+    };
+    try {
+        $sys = '_fluxfiles/probe-' . uniqid() . '.json';
+        $sysAbs = $ffPut($sys, '{}');
+        FluxFilesAttachments::onDelete($mkPost($sys));
+        assertTrue(is_file($sysAbs), 'a _fluxfiles/ file is never deleted via an attachment');
+
+        $hid = 'odh-' . uniqid() . '/.secret';
+        $hidAbs = $ffPut($hid);
+        FluxFilesAttachments::onDelete($mkPost($hid));
+        assertTrue(is_file($hidAbs), 'a hidden file is never deleted via an attachment');
+
+        $heldDir = 'held-' . uniqid();
+        $heldAbs = $ffPut($heldDir . '/a.txt');
+        $ffMetaRepo()->addHold('local', 'h-' . uniqid(), ['hold_id' => 'h1', 'path' => $heldDir, 'reason' => 'litigation',
+            'placed_by' => 'legal', 'placed_at' => time(), 'released_at' => null]);
+        FluxFilesAttachments::onDelete($mkPost($heldDir . '/a.txt'));
+        assertTrue(is_file($heldAbs), 'a file under legal hold survives');
+
+        $ok = 'odn-' . uniqid() . '/a.txt';
+        $okAbs = $ffPut($ok);
+        $GLOBALS['WP_OPTIONS']['_test_user_id'] = 0;   // cron / CLI: no user → no token → file stays
+        FluxFilesAttachments::onDelete($pid = $mkPost($ok));
+        assertTrue(is_file($okAbs), 'no WP user → nothing deleted');
+        $GLOBALS['WP_OPTIONS']['_test_user_id'] = 9102;
+        FluxFilesAttachments::onDelete($pid);
+        assertTrue(!is_file($okAbs), 'a normal file is deleted when opted in');
+        $hit = null;
+        foreach ($ffAuditRows() as $row) {
+            if (($row['action'] ?? '') === 'delete' && ($row['context']['file_key'] ?? '') === $ok) { $hit = $row; }
+        }
+        assertTrue($hit !== null, 'the storage delete is audited');
+        assertTrue(strpos((string) ($hit['context']['detail'] ?? ''), 'wp_attachment_delete') === 0, 'with its origin');
+    } finally {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_delete_storage'] = '0';
+    }
+});
+
+test('A-M6: the update endpoint must be https (http only for localhost) before the licence key is sent', function () {
+    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
+    assertTrue(FluxFilesUpdater::isSecureUrl('https://updates.example/u'), 'https ok');
+    assertTrue(FluxFilesUpdater::isSecureUrl('http://localhost:8080/u'), 'http localhost ok');
+    assertTrue(FluxFilesUpdater::isSecureUrl('http://127.0.0.1/u'), 'http loopback ok');
+    assertTrue(!FluxFilesUpdater::isSecureUrl('http://updates.example/u'), 'http elsewhere refused');
+    assertTrue(!FluxFilesUpdater::isSecureUrl('http://localhost.evil.example/u'), 'no suffix trick');
+
+    $GLOBALS['WP_FILTERS'] = [];
+    putenv('FLUXFILES_UPDATE_URL=http://updates.example/update');
+    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'k-123';
+    try {
+        FluxFilesUpdater::boot();
+        assertTrue(empty($GLOBALS['WP_FILTERS']['pre_set_site_transient_update_plugins']), 'no update hooks on http');
+        delete_transient('fluxfiles_update_manifest');
+        $GLOBALS['WP_HTTP_LAST'] = null;
+        FluxFilesUpdater::inject((object) ['response' => []]);
+        assertEqual(null, $GLOBALS['WP_HTTP_LAST'], 'the licence key is never sent over http');
+    } finally {
+        putenv('FLUXFILES_UPDATE_URL');
+        unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
+        delete_transient('fluxfiles_update_manifest');
+        $GLOBALS['WP_FILTERS'] = [];
+    }
+});
+
+test('A-M6: the downloaded zip is held to the signed manifest sha256', function () {
+    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
+    if (!function_exists('download_url')) {
+        function download_url($url) {
+            $tmp = tempnam(sys_get_temp_dir(), 'ffdl');
+            file_put_contents($tmp, $GLOBALS['FF_DL_BYTES'] ?? '');
+            return $tmp;
+        }
+    }
+    $url = 'https://cdn.example/fluxfiles-9.9.9.zip';
+    $slug = ['plugin' => 'fluxfiles/fluxfiles.php'];
+    $GLOBALS['WP_TRANSIENTS']['fluxfiles_update_manifest'] = ['version' => '9.9.9', 'url' => $url, 'sha256' => hash('sha256', 'GOOD-ZIP')];
+    putenv('FLUXFILES_UPDATE_URL=https://updates.example/update');
+    try {
+        $GLOBALS['FF_DL_BYTES'] = 'TAMPERED';
+        $r = FluxFilesUpdater::verifyDownload(false, $url, null, $slug);
+        assertTrue($r instanceof WP_Error && $r->get_error_code() === 'fluxfiles_update_checksum', 'mismatch → update fails');
+
+        $GLOBALS['FF_DL_BYTES'] = 'GOOD-ZIP';
+        $r = FluxFilesUpdater::verifyDownload(false, $url, null, $slug);
+        assertTrue(is_string($r) && hash_file('sha256', $r) === hash('sha256', 'GOOD-ZIP'), 'match → WP installs exactly those bytes');
+        @unlink($r);
+
+        $r = FluxFilesUpdater::verifyDownload(false, 'https://elsewhere.example/other.zip', null, $slug);
+        assertTrue($r instanceof WP_Error, 'our plugin from a URL the manifest did not sign → refused');
+
+        assertEqual(false, FluxFilesUpdater::verifyDownload(false, 'https://w.org/other-plugin.zip', null, ['plugin' => 'other/other.php']),
+            "another plugin's package passes through untouched");
+
+        $GLOBALS['WP_TRANSIENTS']['fluxfiles_update_manifest'] = ['version' => '9.9.9', 'url' => $url, 'sha256' => ''];
+        assertTrue(FluxFilesUpdater::verifyDownload(false, $url, null, $slug) instanceof WP_Error, 'no checksum → refused');
+    } finally {
+        putenv('FLUXFILES_UPDATE_URL');
+        delete_transient('fluxfiles_update_manifest');
+    }
+});
+
+test('A-N2: an unknown role or edition refuses to mint instead of failing open', function () {
+    foreach ([['role' => 'veiwer'], ['edition' => 'enterprize']] as $bad) {
+        $threw = false;
+        try { FluxFilesPlugin::generateToken(1, $bad); } catch (\InvalidArgumentException $e) { $threw = true; }
+        assertTrue($threw, 'generateToken refuses ' . json_encode($bad));
+        $threw = false;
+        try { FluxFilesPlugin::generateByobToken(1, [], $bad); } catch (\InvalidArgumentException $e) { $threw = true; }
+        assertTrue($threw, 'generateByobToken refuses ' . json_encode($bad));
+    }
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['role' => 'Viewer', 'edition' => 'PRO']), $GLOBALS['WP_OPTIONS']['fluxfiles_secret']);
+    assertEqual(['read'], (array) $p->perms, 'known names still work, case-insensitively');
+    FluxFilesPlugin::generateToken(1, ['role' => '', 'edition' => '']);   // empty = unset, no throw
+});
+
+// A-M7 needs WordPress's capability + MIME APIs; defined last so every earlier
+// token keeps the unrestricted behaviour it was written against.
+if (!function_exists('user_can')) {
+    function user_can($user, $cap) { return !empty($GLOBALS['WP_CAPS'][$cap]); }
+}
+if (!function_exists('get_allowed_mime_types')) {
+    // What a site with an "allow SVG" plugin returns: WP's own list never offers
+    // html/js to a user without unfiltered_html, but plugins widen upload_mimes.
+    function get_allowed_mime_types($user = null) {
+        return ['jpg|jpeg|jpe' => 'image/jpeg', 'png' => 'image/png', 'txt|asc|c|cc|h|srt' => 'text/plain',
+            'pdf' => 'application/pdf', 'svg' => 'image/svg+xml', 'htm|html' => 'text/html', 'xml' => 'application/xml',
+            'js' => 'application/javascript', 'php' => 'application/x-php'];
+    }
+}
+
+test('A-M7: a user without unfiltered_html never gets html/svg/xml/js/php in allowed_ext', function () use ($secret) {
+    $keepCaps = $GLOBALS['WP_CAPS'];
+    try {
+        $GLOBALS['WP_CAPS'] = ['upload_files' => true, 'read' => true];   // an Author
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(31), $secret);
+        $ext = (array) ($p->allowed_ext ?? null);
+        assertTrue($ext !== [] && isset($p->allowed_ext), 'unrestricted default becomes an explicit list');
+        foreach (['html', 'htm', 'svg', 'xml', 'js', 'php'] as $bad) {
+            assertTrue(!in_array($bad, $ext, true), "{$bad} withheld");
+        }
+        foreach (['jpg', 'png', 'txt', 'pdf'] as $good) {
+            assertTrue(in_array($good, $ext, true), "{$good} still allowed");
+        }
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(31, ['allowed_ext' => ['JPG', 'svg', 'exe', 'html']]), $secret);
+        assertEqual(['jpg'], (array) $p->allowed_ext, 'an explicit list is intersected with WP and the deny-list');
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(31, ['claims' => ['allowed_ext' => ['svg']]]), $secret);
+        assertEqual([], (array) $p->allowed_ext, 'the claims escape hatch cannot re-open it (empty = nothing allowed)');
+
+        $GLOBALS['WP_CAPS']['unfiltered_html'] = true;                     // an Administrator
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(32), $secret);
+        assertTrue(!isset($p->allowed_ext), 'unfiltered_html keeps the unrestricted default');
+    } finally {
+        $GLOBALS['WP_CAPS'] = $keepCaps;
+    }
+});
+
+test('A-M7: nginx sites get an admin notice that the uploads dir must not run PHP / serve active content', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $keep = [$_SERVER['SERVER_SOFTWARE'] ?? null, $GLOBALS['pagenow'] ?? null];
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_disks'] = ['local'];
+        $_SERVER['SERVER_SOFTWARE'] = 'nginx/1.25.3';
+        $GLOBALS['pagenow'] = 'plugins.php';
+        $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+        ob_start();
+        $admin->renderNginxStorageNotice();
+        $out = (string) ob_get_clean();
+        assertTrue(strpos($out, 'nginx') !== false && strpos($out, 'deny all') !== false, 'notice + rules shown on nginx');
+        assertTrue(strpos($out, '/wp-content/fluxfiles/uploads/') !== false, 'names the uploads location');
+
+        $_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4';
+        ob_start();
+        $admin->renderNginxStorageNotice();
+        assertEqual('', (string) ob_get_clean(), 'no notice on Apache (.htaccess applies)');
+    } finally {
+        [$_SERVER['SERVER_SOFTWARE'], $GLOBALS['pagenow']] = $keep;
+    }
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

@@ -112,9 +112,9 @@
       }
     },
     {
-      "name": "unknown_role_is_silently_ignored",
+      "name": "unknown_role_is_rejected",
       "input": { "user_id": "u", "role": "not-a-real-role" },
-      "expect": { "perms": ["read"], "owner_only_present": false }
+      "expect_error": "unknown"
     }
   ],
   "edition_presets": [

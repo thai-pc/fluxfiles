@@ -17,6 +17,11 @@ function resolveSecret(explicit?: string): string {
 
 /** Sign a payload as a compact HS256 JWT. */
 function sign(payload: Record<string, unknown>, secret: string): string {
+  // The core rejects a token without an integer `exp`; the `claims` escape hatch is
+  // merged last and could otherwise overwrite the validated one with NaN/a string.
+  if (typeof payload.exp !== 'number' || !Number.isSafeInteger(payload.exp)) {
+    throw new TypeError('FluxFiles: `exp` must be an integer unix timestamp.');
+  }
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const body = base64url(JSON.stringify(payload));
   const sig = base64url(hmacSha256(`${header}.${body}`, secret));
@@ -25,6 +30,42 @@ function sign(payload: Record<string, unknown>, secret: string): string {
 
 function newJti(): string {
   return randomBytes(12).toString('hex');
+}
+
+/**
+ * Resolve `ttl` to the seconds added to `iat`. The core rejects a token without a
+ * numeric `exp`, and a bad ttl used to slip through silently: `NaN` serialized as
+ * `exp: null` (never expires) and a string `'3600'` string-concatenated into a
+ * far-future `exp`. So anything but a positive safe integer throws.
+ */
+function resolveTtl(ttl: unknown, fallback: number): number {
+  if (ttl === undefined || ttl === null) return fallback;
+  if (typeof ttl !== 'number') {
+    throw new TypeError(`FluxFiles: ttl must be a number of seconds, got ${typeof ttl}.`);
+  }
+  if (!Number.isSafeInteger(ttl) || ttl <= 0) {
+    throw new RangeError(`FluxFiles: ttl must be a positive integer number of seconds, got ${ttl}.`);
+  }
+  return ttl;
+}
+
+/**
+ * Look up a preset by name (case-insensitive). An unknown/typo'd name throws rather
+ * than silently minting a token without the intended bundle. Empty = no preset.
+ * `noPreset` names are valid but expand to nothing (edition `free`).
+ */
+function resolvePreset<T>(
+  kind: 'role' | 'edition',
+  name: unknown,
+  presets: Record<string, T>,
+  noPreset: readonly string[] = [],
+): T | undefined {
+  if (name === undefined || name === null || name === '') return undefined;
+  const key = String(name).toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(presets, key)) return presets[key];
+  if (noPreset.includes(key)) return undefined;
+  const valid = [...noPreset, ...Object.keys(presets)].join(', ');
+  throw new RangeError(`FluxFiles: unknown ${kind} "${String(name)}" (valid: ${valid}).`);
 }
 
 /**
@@ -37,11 +78,11 @@ export function createToken(opts: CreateTokenOptions): string {
   // Role preset (DX sugar, docs/design/ACL-ROLE-PRESETS-DESIGN.md): resolved BEFORE the base
   // payload object, because `perms` already has an unconditional default baked into
   // that object below — a plain "set if absent" guard would never fire for it.
-  const rolePreset = opts.role ? ROLE_PRESETS[String(opts.role).toLowerCase()] : undefined;
+  const rolePreset = resolvePreset('role', opts.role, ROLE_PRESETS);
   const payload: Record<string, unknown> = {
     sub: opts.userId,
     iat: now,
-    exp: now + (opts.ttl ?? 3600),
+    exp: now + resolveTtl(opts.ttl, 3600),
     jti: newJti(),
     perms: opts.perms ?? (rolePreset?.perms as string[] | undefined) ?? ['read'],
     disks: opts.disks ?? ['local'],
@@ -77,11 +118,11 @@ export function createByobToken(opts: CreateByobTokenOptions): string {
   // object, same early-resolution reason as createToken() above — `perms`/`ownerOnly`
   // already have an unconditional default baked in (BYOB's own ['read','write'], not
   // plain tokens' ['read']), so a post-hoc "set if absent" guard could never fire.
-  const rolePreset = opts.role ? ROLE_PRESETS[String(opts.role).toLowerCase()] : undefined;
+  const rolePreset = resolvePreset('role', opts.role, ROLE_PRESETS);
   const payload: Record<string, unknown> = {
     sub: opts.userId,
     iat: now,
-    exp: now + (opts.ttl ?? 1800),
+    exp: now + resolveTtl(opts.ttl, 1800),
     jti: newJti(),
     perms: opts.perms ?? (rolePreset?.perms as string[] | undefined) ?? ['read', 'write'],
     disks: names,
@@ -144,7 +185,7 @@ function applyTenantOverrides(
   opts: BaseTokenOptions,
   rolePreset?: Record<string, unknown>,
 ): void {
-  const preset = opts.edition ? EDITION_PRESETS[String(opts.edition).toLowerCase()] : undefined;
+  const preset = resolvePreset('edition', opts.edition, EDITION_PRESETS, ['free']);
   if (preset) for (const [k, v] of Object.entries(preset)) if (!(k in payload)) payload[k] = v;
   // Role preset: the rest of the bundle, excluding `perms`/`owner_only` — both are
   // already resolved above (in createToken()), before this function ever runs.
@@ -186,8 +227,8 @@ function applyTenantOverrides(
   if (opts.allowDownload !== undefined) payload.allow_download = !!opts.allowDownload;
   if (opts.allowChmod !== undefined) payload.allow_chmod = !!opts.allowChmod;
   if (opts.allowCodeEdit !== undefined) payload.allow_code_edit = !!opts.allowCodeEdit;
-  // SSH terminal (SFTP disks). Core-standalone — the token must target a real core
-  // (Node mints for one), not a proxy adapter that doesn't serve /api/fm/terminal.
+  // SSH terminal (SFTP disks). Served by core and proxied by the Laravel and
+  // WordPress adapters too, so the token works against any of the three.
   if (opts.allowTerminal !== undefined) payload.allow_terminal = !!opts.allowTerminal;
   if (opts.terminalPtyUrl) payload.terminal_pty_url = String(opts.terminalPtyUrl);
   // One-click Git deploy (SFTP disks). Deliberately independent of allowTerminal:

@@ -351,16 +351,30 @@ class FileManager
         if ($origin === '') {
             return;
         }
+        $keys = [];
         if (empty($entry['is_dir'])) {
-            $this->purgeVersions($disk, $origin, $fs);
-            return;
-        }
-        foreach (($entry['files'] ?? []) as $f) {
-            $rel = $this->safeRel((string) ($f['rel'] ?? '')); // strip any traversal
-            if ($rel === '' || strpos($rel, '_variants/') !== false) {
-                continue;
+            $keys[] = $origin;
+        } else {
+            foreach (($entry['files'] ?? []) as $f) {
+                $rel = $this->safeRel((string) ($f['rel'] ?? '')); // strip any traversal
+                if ($rel !== '' && strpos($rel, '_variants/') === false) {
+                    $keys[] = rtrim($origin, '/') . '/' . $rel;
+                }
             }
-            $this->purgeVersions($disk, rtrim($origin, '/') . '/' . $rel, $fs);
+        }
+        foreach ($keys as $key) {
+            // History is keyed by path. If a NEW file has since been saved at the
+            // trashed file's original path, the history there is that file's now —
+            // purging this trash entry must not erase it (the versioning module
+            // already hides the old owner's versions from the new file).
+            try {
+                if ($fs->fileExists($key)) {
+                    continue;
+                }
+            } catch (\Throwable $e) {
+                continue; // can't tell → keep history rather than destroy someone else's
+            }
+            $this->purgeVersions($disk, $key, $fs);
         }
     }
 
@@ -393,6 +407,9 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        // The per-entry dotfile filter below only hides a dot-NAMED child; listing
+        // a dot-directory by path (`.ssh`) would still enumerate its contents.
+        $this->assertNotHidden($scoped);
         $fs = $this->disks->disk($disk);
 
         $all = [];
@@ -430,8 +447,9 @@ class FileManager
                 $entry['size']     = $item->fileSize();
                 $entry['modified'] = $item->lastModified();
                 // Preview-only tokens (allow_download=false) get no clean download URL.
-                if ($this->claims->allowDownload) {
-                    $entry['url'] = $this->fileUrl($disk, $item->path());
+                $url = $this->downloadUrl($disk, $item->path());
+                if ($url !== null) {
+                    $entry['url'] = $url;
                 }
             } else {
                 // Surface the folder mtime when the adapter provides one (local
@@ -553,9 +571,7 @@ class FileManager
                         }
                     }
                 }
-                $item['variants'] = $this->claims->allowDownload
-                    ? $this->getFileVariants($disk, $item['key'])
-                    : null;
+                $item['variants'] = $this->downloadVariants($disk, $item['key']);
                 // Poster for a PDF/video (page 1 / a frame). Withheld from
                 // preview-only tokens like the clean variants above — it is an
                 // un-watermarked render of the content.
@@ -682,6 +698,16 @@ class FileManager
 
         $scoped = $this->scopedPath(rtrim($path, '/') . '/' . $name);
         $this->assertNotSystem($scoped, $disk);
+        // Every name check above ran on $name, but the write goes to $scoped:
+        // scopedPath() drops `.`/`..`/empty segments, so a name of `..` (or '')
+        // collapses and the LAST segment of `path` becomes the file name
+        // unchecked (`path=shell.php` + `name=..` → shell.php). The final key's
+        // leaf must be the very name that was validated, and is re-checked.
+        if (self::leafOf($scoped) !== $name) {
+            throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
+        }
+        $this->assertFileLeaf($scoped);
+        $this->assertNotHidden($scoped);
         $fs = $this->disks->disk($disk);
 
         // Content dedup (SHA-256) — OPT-IN via the `dedupe_uploads` claim. Off by
@@ -699,11 +725,11 @@ class FileManager
                 if (!$isSystem && $fs->fileExists($existingKey)) {
                     return $this->unscopeItems([[
                         'key'       => $existingKey,
-                        'url'       => $this->fileUrl($disk, $existingKey),
+                        'url'       => $this->downloadUrl($disk, $existingKey),
                         'name'      => basename($existingKey),
                         'duplicate' => true,
                         'message'   => 'File already exists. Use force_upload to override.',
-                        'variants'  => $this->getFileVariants($disk, $existingKey),
+                        'variants'  => $this->downloadVariants($disk, $existingKey),
                     ]])[0];
                 }
                 // Stale / invalid hash entry — purge so it doesn't keep blocking uploads.
@@ -715,7 +741,10 @@ class FileManager
         // (that returned above), so a name clash means a DIFFERENT file sharing the
         // name. Default 'rename' keeps both (like Drive/Dropbox/WordPress); 'reject'
         // 409s for the host to prompt; 'overwrite' falls through to replace in place.
-        if (!$forceUpload && $this->claims->uploadCollision !== 'overwrite' && $fs->fileExists($scoped)) {
+        // $forceUpload (force_upload / import-url `overwrite`) only skips the dedup
+        // check above — it must not override the operator's collision policy, or a
+        // `reject`/`rename` token could still clobber files in place.
+        if ($this->claims->uploadCollision !== 'overwrite' && $fs->fileExists($scoped)) {
             if ($this->claims->uploadCollision === 'reject') {
                 throw new ApiException('A file with this name already exists', 409, 'name_conflict', ['name' => $name]);
             }
@@ -786,7 +815,7 @@ class FileManager
         // surface them on the upload result so the UI can toast "saved N".
         $result = [
             'key'      => $scoped,
-            'url'      => $this->fileUrl($disk, $scoped),
+            'url'      => $this->downloadUrl($disk, $scoped),
             'size'     => $file['size'],
             'name'     => $name,
             'variants' => null,
@@ -809,16 +838,7 @@ class FileManager
         if ($this->imageOptimizer->isImage($name)) {
             try {
                 $variants = $this->imageOptimizer->process($fs, $scoped, $file['tmp_name']);
-                $variantUrls = [];
-                foreach ($variants as $sizeName => $info) {
-                    $variantUrls[$sizeName] = [
-                        'url'    => $this->fileUrl($disk, $info['key']),
-                        'key'    => $info['key'],
-                        'width'  => $info['width'],
-                        'height' => $info['height'],
-                    ];
-                }
-                $result['variants'] = $variantUrls;
+                $result['variants'] = $this->variantUrls($disk, $variants);
             } catch (\Throwable $e) {
                 error_log('FluxFiles: Image optimization failed — ' . $e->getMessage());
             }
@@ -828,7 +848,7 @@ class FileManager
             // leaves the generic icon.
             $raster = MediaPoster::render($file['tmp_name'], $name);
             $poster = $raster !== null ? $this->imageOptimizer->writePosterThumb($fs, $scoped, $raster) : null;
-            if ($poster !== null) {
+            if ($poster !== null && $this->claims->allowDownload) {
                 $result['poster'] = $this->fileUrl($disk, $poster['key']);
             }
         }
@@ -867,7 +887,20 @@ class FileManager
         $this->assertDisk($disk);
         $this->assertPerm('delete');
 
-        $scoped = $this->scopedPath($path);
+        return $this->deleteScoped($disk, $this->scopedPath($path));
+    }
+
+    /**
+     * delete() for an already-scoped key, with every check delete() applies.
+     * For internal callers holding a real storage key (runRetention): sending
+     * it back through outKey()→scopedPath() is not an identity when a subfolder
+     * repeats the prefix's last segment, and would act on a different file.
+     */
+    private function deleteScoped(string $disk, string $scoped): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+        $this->assertScopedKeyInScope($scoped);
         $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
         $this->assertNoActiveHold($disk, $scoped);
@@ -922,7 +955,15 @@ class FileManager
         $this->assertDisk($disk);
         $this->assertPerm('delete');
 
-        $scoped = $this->scopedPath($path);
+        return $this->trashScoped($disk, $this->scopedPath($path));
+    }
+
+    /** trash() for an already-scoped key — see deleteScoped() for why. */
+    private function trashScoped(string $disk, string $scoped): array
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+        $this->assertScopedKeyInScope($scoped);
         $this->assertNotSystem($scoped, $disk);
         $this->assertOwner($disk, $scoped);
         // Covers both the file and directory branches below (trashDirectory() is a
@@ -1064,10 +1105,20 @@ class FileManager
         }
         $this->assertTrashScope($entry);
 
+        $origin = (string) ($entry['original_key'] ?? '');
         $target = ($newPath !== null && $newPath !== '')
             ? $this->scopedPath($newPath)
-            : (string) ($entry['original_key'] ?? '');
+            : $origin;
         $this->assertNotSystem($target, $disk);
+        // show_hidden=false: a trashed dotfile must not come back under a
+        // visible name (nor anything be restored as a dotfile).
+        $this->assertNotHidden($origin);
+        $this->assertNotHidden($target);
+        // A hold binds to the tenant-visible path and outlives a soft-delete
+        // (purgeTrash() checks the same key) — restoring is a relocation of the
+        // held record, refused like move()'s source. Source-side only, as in
+        // move(): the target can't exist yet (assertTargetAvailable below).
+        $this->assertNoActiveHold($disk, $origin);
 
         // Restore is a relocation out of the trash, so it gets the same
         // extension rules as rename/move/copy. Without them a caller could
@@ -1085,6 +1136,7 @@ class FileManager
         $this->assertTargetAvailable($fs, $target);
 
         $trashDir = '_fluxfiles/trash/' . $id;
+        $this->assertRestoreFits($disk, $entry, $trashDir, $fs);
 
         if (!empty($entry['is_dir'])) {
             return $this->restoreDirectory($disk, $id, $entry, $target, $trashDir, $fs);
@@ -1188,6 +1240,53 @@ class FileManager
         $this->meta->removeTrash($disk, $id);
 
         return ['restored' => true, 'key' => $this->outKey($target)];
+    }
+
+    /**
+     * Quota + max_files for a restore. The trash lives at the disk root
+     * (`_fluxfiles/trash/`), OUTSIDE a tenant prefix, so trashed bytes stop
+     * counting against max_storage/max_files — without this, trash-then-restore
+     * lands files past both limits. Measured from the payload actually on disk,
+     * not the manifest's `size`. With no prefix the trash sits inside the
+     * counted root already, so only the file count can change.
+     */
+    private function assertRestoreFits(string $disk, array $entry, string $trashDir, $fs): void
+    {
+        if ($this->quotaManager === null || ($this->claims->maxStorageMb <= 0 && $this->claims->maxFiles <= 0)) {
+            return;
+        }
+        $bytes = 0;
+        $files = 0;
+        if (!empty($entry['is_dir'])) {
+            $payload = $trashDir . '/payload';
+            try {
+                foreach ($fs->listContents($payload, true) as $item) {
+                    if (!$item->isFile()) {
+                        continue;
+                    }
+                    $bytes += (int) ($item->fileSize() ?? 0);
+                    if (!self::isReservedKey(substr($item->path(), strlen($payload) + 1))) {
+                        $files++;
+                    }
+                }
+            } catch (\Throwable $e) {
+                $bytes = (int) ($entry['size'] ?? 0); // fall back to the manifest
+                $files = count($entry['files'] ?? []);
+            }
+        } else {
+            $payload = $trashDir . '/' . basename((string) ($entry['basename'] ?? ''));
+            $bytes = $this->existingSize($fs, $payload) ?? (int) ($entry['size'] ?? 0);
+            $files = 1;
+        }
+        if (trim($this->claims->pathPrefix, '/') === '') {
+            $bytes = 0;
+        }
+        if ($this->claims->maxStorageMb > 0 && $bytes > 0) {
+            $this->quotaManager->assertQuota($disk, $this->claims->pathPrefix, $bytes, $this->claims->maxStorageMb);
+        }
+        if ($this->claims->maxFiles > 0 && $files > 0) {
+            $this->quotaManager->assertFileCount($disk, $this->claims->pathPrefix, $files, $this->claims->maxFiles);
+        }
     }
 
     /** List trash entries the caller may see (scoped to prefix + owner). */
@@ -1322,6 +1421,7 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped, $disk);
+        $this->assertNotHidden($scoped);
         $this->assertOwner($disk, $scoped);
         // Renaming a held path would let it evade holdBlocking()'s path-string
         // match (§6 of the design doc) — blocked as a security requirement, not
@@ -1332,7 +1432,9 @@ class FileManager
         if ($newName === '') {
             throw new ApiException('New name cannot be empty', 400, 'name_empty');
         }
-        if (preg_match('/[<>:"\/\\\\|?*\x00-\x1f]/', $newName)) {
+        // A dot-only name is a path segment, not a name: `..` would resolve the
+        // target to the parent directory.
+        if (preg_match('/[<>:"\/\\\\|?*\x00-\x1f]/', $newName) || trim($newName, '.') === '') {
             throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
         }
 
@@ -1343,6 +1445,9 @@ class FileManager
         $dir = dirname($scoped);
         $newPath = ($dir !== '.' && $dir !== '') ? $dir . '/' . $newName : $newName;
         $this->assertNotSystem($newPath, $disk);
+        // show_hidden=false: renaming `.env` → `env.txt` would expose it, and the
+        // reverse would hide a file from the token that owns it.
+        $this->assertNotHidden($newPath);
 
         if ($scoped === $newPath) {
             throw new ApiException('New name is the same as current name', 400, 'name_same');
@@ -1402,7 +1507,7 @@ class FileManager
         return [
             'key'  => $this->outKey($newPath),
             'name' => $newName,
-            'url'  => $isDir ? null : $this->fileUrl($disk, $newPath),
+            'url'  => $isDir ? null : $this->downloadUrl($disk, $newPath),
         ];
     }
 
@@ -1413,12 +1518,14 @@ class FileManager
 
         $scopedFrom = $this->scopedPath($from);
         $this->assertNotSystem($scopedFrom, $disk);
+        $this->assertNotHidden($scopedFrom);
         $this->assertOwner($disk, $scopedFrom);
         // Source-side only — moving a file INTO an existing hold's subtree is
         // fine (§6 of the design doc); only relocating a held path is blocked.
         $this->assertNoActiveHold($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
         $this->assertNotSystem($scopedTo, $disk);
+        $this->assertNotHidden($scopedTo);
         $fs = $this->disks->disk($disk);
         $this->assertTargetAvailable($fs, $scopedTo);
         $isDir = false;
@@ -1459,9 +1566,11 @@ class FileManager
 
         $scopedFrom = $this->scopedPath($from);
         $this->assertNotSystem($scopedFrom, $disk);
+        $this->assertNotHidden($scopedFrom);
         $this->assertOwner($disk, $scopedFrom);
         $scopedTo   = $this->scopedPath($to);
         $this->assertNotSystem($scopedTo, $disk);
+        $this->assertNotHidden($scopedTo);
         $fs = $this->disks->disk($disk);
         $this->assertTargetAvailable($fs, $scopedTo);
 
@@ -1523,9 +1632,11 @@ class FileManager
 
         $scopedSrc = $this->scopedPath($srcPath);
         $this->assertNotSystem($scopedSrc, $srcDisk);
+        $this->assertNotHidden($scopedSrc);
         $this->assertOwner($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
         $this->assertNotSystem($scopedDst, $dstDisk);
+        $this->assertNotHidden($scopedDst);
         $this->assertRelocationExt($scopedSrc, $scopedDst);
 
         $srcFs = $this->disks->disk($srcDisk);
@@ -1570,7 +1681,7 @@ class FileManager
 
         return [
             'key'      => $this->outKey($scopedDst),
-            'url'      => $this->fileUrl($dstDisk, $scopedDst),
+            'url'      => $this->downloadUrl($dstDisk, $scopedDst),
             'src_disk' => $srcDisk,
             'dst_disk' => $dstDisk,
         ];
@@ -1589,11 +1700,13 @@ class FileManager
 
         $scopedSrc = $this->scopedPath($srcPath);
         $this->assertNotSystem($scopedSrc, $srcDisk);
+        $this->assertNotHidden($scopedSrc);
         $this->assertOwner($srcDisk, $scopedSrc);
         // Source-side only, same as move() above.
         $this->assertNoActiveHold($srcDisk, $scopedSrc);
         $scopedDst = $this->scopedPath($dstPath);
         $this->assertNotSystem($scopedDst, $dstDisk);
+        $this->assertNotHidden($scopedDst);
         $this->assertRelocationExt($scopedSrc, $scopedDst);
 
         $srcFs = $this->disks->disk($srcDisk);
@@ -1636,12 +1749,17 @@ class FileManager
         $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $srcFs->delete($scopedSrc);
+        // Version history is per-disk (it lives under the SOURCE disk's
+        // `_fluxfiles/versions/`), so it can't follow the file across disks —
+        // and left behind it would be orphaned there, or silently re-attach to
+        // an unrelated file later created at the same source key.
+        $this->purgeVersions($srcDisk, $scopedSrc, $srcFs);
 
         $this->meta->trackParents($dstDisk, $scopedDst);
 
         return [
             'key'      => $this->outKey($scopedDst),
-            'url'      => $this->fileUrl($dstDisk, $scopedDst),
+            'url'      => $this->downloadUrl($dstDisk, $scopedDst),
             'src_disk' => $srcDisk,
             'dst_disk' => $dstDisk,
         ];
@@ -1893,6 +2011,7 @@ class FileManager
 
         $scopedSrc = $this->scopedPath($path);
         $this->assertNotSystem($scopedSrc, $disk);
+        $this->assertNotHidden($scopedSrc);
         $this->assertOwner($disk, $scopedSrc);
         $fs = $this->disks->disk($disk);
 
@@ -1903,6 +2022,7 @@ class FileManager
         $result = $this->imageOptimizer->crop($imageData, $x, $y, $width, $height, $format);
         $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
         $this->assertNotSystem($scopedDst, $disk);
+        $this->assertNotHidden($scopedDst);
         if ($savePath !== null) {
             // Extension is immutable — a "save as" crop keeps the source format,
             // same rule applyWatermark() enforces.
@@ -1929,17 +2049,7 @@ class FileManager
 
         $variants = null;
         try {
-            $variantResult = $this->imageOptimizer->process($fs, $scopedDst, $tmpFile);
-            $variantUrls = [];
-            foreach ($variantResult as $sizeName => $info) {
-                $variantUrls[$sizeName] = [
-                    'url'    => $this->fileUrl($disk, $info['key']),
-                    'key'    => $info['key'],
-                    'width'  => $info['width'],
-                    'height' => $info['height'],
-                ];
-            }
-            $variants = $variantUrls;
+            $variants = $this->variantUrls($disk, $this->imageOptimizer->process($fs, $scopedDst, $tmpFile));
         } catch (\Throwable $e) {
             error_log('FluxFiles: Variant regeneration after crop failed — ' . $e->getMessage());
         } finally {
@@ -1948,7 +2058,7 @@ class FileManager
 
         return $this->unscopeItems([[
             'key'      => $this->outKey($scopedDst),
-            'url'      => $this->fileUrl($disk, $scopedDst),
+            'url'      => $this->downloadUrl($disk, $scopedDst),
             'width'    => $result['width'],
             'height'   => $result['height'],
             'variants' => $variants,
@@ -1979,6 +2089,7 @@ class FileManager
 
         $scopedSrc = $this->scopedPath($path);
         $this->assertNotSystem($scopedSrc, $disk);
+        $this->assertNotHidden($scopedSrc);
         $this->assertOwner($disk, $scopedSrc);
         $fs = $this->disks->disk($disk);
         if (!$fs->fileExists($scopedSrc)) {
@@ -1992,6 +2103,7 @@ class FileManager
         $format = in_array($ext, ['jpg', 'jpeg'], true) ? 'jpg' : ($ext === 'webp' ? 'webp' : 'png');
 
         $scopedDst = $savePath ? $this->scopedPath($savePath) : $scopedSrc;
+        $this->assertNotHidden($scopedDst);
         $inPlace = ($scopedDst === $scopedSrc);
         if ($inPlace) {
             // A burn-in rewrites the held record's bytes — refuse before the
@@ -2040,13 +2152,7 @@ class FileManager
         $variants = null;
         try {
             file_put_contents($tmpFile, $result['data']);
-            $variants = [];
-            foreach ($this->imageOptimizer->process($fs, $scopedDst, $tmpFile) as $sizeName => $info) {
-                $variants[$sizeName] = [
-                    'url' => $this->fileUrl($disk, $info['key']), 'key' => $info['key'],
-                    'width' => $info['width'], 'height' => $info['height'],
-                ];
-            }
+            $variants = $this->variantUrls($disk, $this->imageOptimizer->process($fs, $scopedDst, $tmpFile));
         } catch (\Throwable $e) {
             error_log('FluxFiles: Variant regen after watermark failed — ' . $e->getMessage());
         } finally {
@@ -2055,7 +2161,7 @@ class FileManager
 
         return $this->unscopeItems([[
             'key'      => $this->outKey($scopedDst),
-            'url'      => $this->fileUrl($disk, $scopedDst),
+            'url'      => $this->downloadUrl($disk, $scopedDst),
             'width'    => $result['width'],
             'height'   => $result['height'],
             'variants' => $variants,
@@ -2102,13 +2208,7 @@ class FileManager
         $variants = null;
         try {
             file_put_contents($tmpFile, $original);
-            $variants = [];
-            foreach ($this->imageOptimizer->process($fs, $scoped, $tmpFile) as $sizeName => $info) {
-                $variants[$sizeName] = [
-                    'url' => $this->fileUrl($disk, $info['key']), 'key' => $info['key'],
-                    'width' => $info['width'], 'height' => $info['height'],
-                ];
-            }
+            $variants = $this->variantUrls($disk, $this->imageOptimizer->process($fs, $scoped, $tmpFile));
         } catch (\Throwable $e) {
             error_log('FluxFiles: Variant regen after watermark removal failed — ' . $e->getMessage());
         } finally {
@@ -2117,7 +2217,7 @@ class FileManager
 
         return $this->unscopeItems([[
             'key'      => $this->outKey($scoped),
-            'url'      => $this->fileUrl($disk, $scoped),
+            'url'      => $this->downloadUrl($disk, $scoped),
             'variants' => $variants,
             'watermarked' => false,
         ]])[0];
@@ -2134,7 +2234,11 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertNotHidden($scoped);
         $this->assertOwner($disk, $scoped);
+        // It rewrites title/alt/caption/tags — the same metadata edit the
+        // metadata endpoints refuse on a held file.
+        $this->assertNoActiveHold($disk, $scoped);
         $fs = $this->disks->disk($disk);
 
         $name = basename($scoped);
@@ -2653,7 +2757,8 @@ class FileManager
     /**
      * Apply the token's `retention_rules`: files under each rule's path not
      * modified for `days` days go to trash (or are deleted). Dry-run lists what
-     * would happen and changes nothing. Every action goes through trash()/delete(),
+     * would happen and changes nothing. Every action goes through trash()/delete()'s
+     * scoped cores (trashScoped()/deleteScoped() — same checks, real key),
      * so owner_only, the `delete` perm and LEGAL HOLDS (always win) still apply —
      * a held file is reported as `held`, never touched. At most $maxActions files
      * per call (`truncated: true` → run again).
@@ -2712,7 +2817,11 @@ class FileManager
                 $entry['result'] = 'would_' . $c['action'];
             } else {
                 try {
-                    $c['action'] === 'delete' ? $this->delete($disk, $rel) : $this->trash($disk, $rel);
+                    // Act on the listed storage key itself, not $rel: outKey() →
+                    // scopedPath() is not an identity when a subfolder repeats the
+                    // prefix's last segment (prefix `t` + key `t/t/a` → rel `t/a`
+                    // → scoped `t/a`, a different file).
+                    $c['action'] === 'delete' ? $this->deleteScoped($disk, (string) $key) : $this->trashScoped($disk, (string) $key);
                     $entry['result'] = $c['action'] === 'delete' ? 'deleted' : 'trashed';
                     $report['acted']++;
                 } catch (ApiException $e) {
@@ -2938,6 +3047,48 @@ class FileManager
         }
 
         return !empty($variants) ? $variants : null;
+    }
+
+    /**
+     * The clean-original URL a response may carry, or null for a preview-only
+     * token (allow_download=false). THE single gate shared by list() and every
+     * operation that echoes a URL back (upload, rename, cross-copy/move, crop,
+     * watermark): a stream token / presigned GET of the un-watermarked file is
+     * exactly what presign/getContent/zip refuse such a token.
+     */
+    private function downloadUrl(string $disk, string $key): ?string
+    {
+        return $this->claims->allowDownload ? $this->fileUrl($disk, $key) : null;
+    }
+
+    /** getFileVariants() behind the same allow_download gate as downloadUrl(). */
+    private function downloadVariants(string $disk, string $key): ?array
+    {
+        return $this->claims->allowDownload ? $this->getFileVariants($disk, $key) : null;
+    }
+
+    /**
+     * Shape ImageOptimizer::process() output for a response, behind the same
+     * allow_download gate as downloadUrl() — clean WebP variants are as much a
+     * copy of the original as its URL.
+     *
+     * @param array<string,array{key:string,width:int,height:int}> $processed
+     */
+    private function variantUrls(string $disk, array $processed): ?array
+    {
+        if (!$this->claims->allowDownload) {
+            return null;
+        }
+        $out = [];
+        foreach ($processed as $sizeName => $info) {
+            $out[$sizeName] = [
+                'url'    => $this->fileUrl($disk, $info['key']),
+                'key'    => $info['key'],
+                'width'  => $info['width'],
+                'height' => $info['height'],
+            ];
+        }
+        return $out;
     }
 
     /**
@@ -3214,6 +3365,7 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
+        $this->assertNotHidden($scoped);
         $this->assertPerm('read');
         $this->assertOwner($disk, $scoped);
         $fs = $this->disks->disk($disk);
@@ -3234,6 +3386,7 @@ class FileManager
         }
         $destScoped = $this->scopedPath($destUser);
         $this->assertNotSystem($destScoped, $disk);
+        $this->assertNotHidden($destScoped);
 
         $maxFiles = $this->claims->zipMaxFiles > 0 ? $this->claims->zipMaxFiles : self::ZIP_DEFAULT_MAX_FILES;
         $maxBytes = ($this->claims->zipMaxMb > 0 ? $this->claims->zipMaxMb : self::ZIP_DEFAULT_MAX_MB) * 1024 * 1024;
@@ -3275,6 +3428,12 @@ class FileManager
                 }
                 $rel = $this->safeRel($norm);
                 if ($rel === '') {
+                    continue;
+                }
+                // show_hidden=false: dot-entries (`.ssh/authorized_keys`, macOS
+                // `__MACOSX/._x`) are skipped, mirroring zipManifest()'s skip on
+                // the way out — a token that can't see dotfiles can't plant them.
+                if ($this->isHiddenForToken($prefix . $rel)) {
                     continue;
                 }
                 if ($this->isSystemKey($rel)) {
@@ -3964,6 +4123,35 @@ class FileManager
     }
 
     /**
+     * The last segment of a key — locale-independent, unlike basename(), so it
+     * can be compared byte-for-byte against a validated name.
+     */
+    private static function leafOf(string $key): string
+    {
+        $key = rtrim($key, '/');
+        $pos = strrpos($key, '/');
+        return $pos === false ? $key : substr($key, $pos + 1);
+    }
+
+    /**
+     * Name checks on the FINAL storage key of a file write — never on the
+     * client-supplied name it was built from, since scopedPath() can collapse
+     * `.`/`..`/empty segments and promote a different segment to the leaf.
+     * Refuses a target that is the tenant root itself or a dot-only leaf, then
+     * applies the allowed_ext and dangerous-name rules (upload()'s order) to the
+     * real leaf.
+     */
+    private function assertFileLeaf(string $scopedKey): void
+    {
+        $leaf = self::leafOf($scopedKey);
+        if (trim($this->outKey($scopedKey), '/') === '' || trim($leaf, ". \t") === '') {
+            throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
+        }
+        $this->assertExt(strtolower(pathinfo($leaf, PATHINFO_EXTENSION)));
+        $this->assertSafeFilename($leaf);
+    }
+
+    /**
      * Reject if a file or directory already exists at the destination, so
      * rename/move/copy never silently overwrite. Some adapters throw on the
      * directoryExists() probe — that is treated as "not a directory", not a hard error.
@@ -3995,6 +4183,11 @@ class FileManager
 
     public function validateUploadName(string $name, int $sizeBytes = 0): void
     {
+        // A dot-only/empty name is a path segment scopedPath() would drop, not a
+        // file name — the write would land on whatever segment precedes it.
+        if (trim($name, ". \t") === '') {
+            throw new ApiException('Name contains invalid characters', 400, 'name_invalid');
+        }
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
         $this->assertExt($ext);
         $this->assertSafeFilename($name);
@@ -4011,6 +4204,10 @@ class FileManager
     {
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped, $disk);
+        // show_hidden=false covers module callers too (share/ocr/ai/c2pa/backup/
+        // versioning/intake all scope through here) — otherwise a public share
+        // link or an OCR read of `.env` sidesteps the claim core enforces.
+        $this->assertNotHidden($scoped);
         return $scoped;
     }
 
@@ -4041,9 +4238,39 @@ class FileManager
     {
         $scopedPath = $this->claims->normalizeKey($scopedPath);
         $this->assertNotSystem($scopedPath, $disk);
+        $this->assertNotHidden($scopedPath);
         $this->assertOwner($disk, $scopedPath);
         $this->assertNoHoldIfExists($disk, $scopedPath);
         return $scopedPath;
+    }
+
+    /**
+     * READ-type counterpart to assertCanModifyScopedPath(), for modules that use
+     * a file as a SOURCE without changing it (share link, OCR, AI Vision / C2PA
+     * input). Same normalization, scope, system-path, show_hidden and owner_only
+     * checks — but NO legal-hold check: a hold freezes a record against change,
+     * it doesn't forbid reading, sharing or processing a copy of it (doing so
+     * made a held file unshareable — legal_hold_active on a pure read). Any
+     * module WRITE still goes through assertCanModifyScopedPath() /
+     * writeScopedFile(), which do check holds. Returns the safe path — callers
+     * must use the return value (see validateScopedPath()).
+     */
+    public function assertCanUseScopedPath(string $disk, string $scopedPath): string
+    {
+        $scopedPath = $this->claims->normalizeKey($scopedPath);
+        $this->assertScopedKeyInScope($scopedPath);
+        $this->assertNotSystem($scopedPath);
+        $this->assertNotHidden($scopedPath);
+        $this->assertOwner($disk, $scopedPath);
+        return $scopedPath;
+    }
+
+    /** Fail closed on an already-scoped key that isn't under the token's prefix. */
+    private function assertScopedKeyInScope(string $scopedKey): void
+    {
+        if (!$this->claims->isPathInScope($scopedKey)) {
+            throw new ApiException('Access denied to path', 403, 'path_denied');
+        }
     }
 
     /**
@@ -4119,7 +4346,10 @@ class FileManager
      * this rather than touching the disk directly: it's the only way their write
      * gets the same allowed_ext, dangerous-extension, and virus-scan checks every
      * other write path (upload/putContent/move/copy) already gets — a raw
-     * $fs->write() from a module would silently skip all three.
+     * $fs->write() from a module would silently skip all three. It also bounds
+     * the write by max_storage (byte delta) + max_files (new files only) and
+     * snapshots an existing target via the Versioning hook before overwriting
+     * it — so a caller must NOT keepVersion()/snapshot it again itself.
      */
     public function writeScopedFile(string $disk, string $scopedPath, string $content): void
     {
@@ -4128,10 +4358,11 @@ class FileManager
         // reach `_fluxfiles/` or an SFTP repo's `.git/`.
         $scopedPath = $this->validateScopedPath($scopedPath, $disk);
         $this->assertNoHoldIfExists($disk, $scopedPath);
-        $this->assertExt(strtolower(pathinfo($scopedPath, PATHINFO_EXTENSION)));
-        $this->assertSafeFilename(basename($scopedPath));
+        $this->assertFileLeaf($scopedPath);
 
         $fs = $this->disks->disk($disk);
+        $existing = $this->existingSize($fs, $scopedPath);
+        $this->assertWriteFits($disk, strlen($content), $existing);
         if ($this->virusScanner !== null || $this->dlpScanner !== null) {
             $tmp = tempnam(sys_get_temp_dir(), 'ffwsf');
             if ($tmp === false || @file_put_contents($tmp, $content) === false) {
@@ -4149,7 +4380,46 @@ class FileManager
                 @unlink($tmp);
             }
         }
+        // In-place overwrite (AI/C2PA output onto its source, version restore,
+        // in-place crop/watermark) → snapshot first, like upload()/putContent().
+        if ($existing !== null) {
+            $this->keepVersion($disk, $scopedPath, $fs);
+        }
         $fs->write($scopedPath, $content);
+    }
+
+    /** Size of an existing file at $key, or null when nothing is there. */
+    private function existingSize($fs, string $key): ?int
+    {
+        try {
+            return $fs->fileExists($key) ? (int) ($fs->fileSize($key) ?? 0) : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Quota (byte delta) + max_files (only for a NEW file) for a write of
+     * $newBytes over a file of $existingBytes (null = doesn't exist yet). The
+     * shared bound for the module write helpers and crop/watermark "save as",
+     * which create files exactly like upload()/copy() do.
+     */
+    private function assertWriteFits(string $disk, int $newBytes, ?int $existingBytes): void
+    {
+        if ($this->quotaManager === null) {
+            return;
+        }
+        if ($this->claims->maxStorageMb > 0) {
+            $this->quotaManager->assertQuota(
+                $disk,
+                $this->claims->pathPrefix,
+                $newBytes - (int) $existingBytes,
+                $this->claims->maxStorageMb
+            );
+        }
+        if ($this->claims->maxFiles > 0 && $existingBytes === null) {
+            $this->quotaManager->assertFileCount($disk, $this->claims->pathPrefix, 1, $this->claims->maxFiles);
+        }
     }
 
     /**
@@ -4210,8 +4480,7 @@ class FileManager
     {
         $scopedPath = $this->validateScopedPath($scopedPath, $disk); // see writeScopedFile()
         $this->assertNoHoldIfExists($disk, $scopedPath);
-        $this->assertExt(strtolower(pathinfo($scopedPath, PATHINFO_EXTENSION)));
-        $this->assertSafeFilename(basename($scopedPath));
+        $this->assertFileLeaf($scopedPath);
 
         $fs = $this->disks->disk($disk);
         $tmp = tempnam(sys_get_temp_dir(), 'ffwss');
@@ -4226,18 +4495,11 @@ class FileManager
             stream_copy_to_stream($stream, $out);
             fclose($out);
 
-            // Quota check on destination — crossCopy()/crossMove() already do this;
-            // checked before the scanners below so a rejection short-circuits
-            // without spending time scanning bytes that won't be written anyway.
-            if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
-                $fileSize = (int) filesize($tmp);
-                $this->quotaManager->assertQuota(
-                    $disk,
-                    $this->claims->pathPrefix,
-                    $fileSize,
-                    $this->claims->maxStorageMb
-                );
-            }
+            // Quota (delta over an existing target) + max_files for a new one —
+            // crossCopy()/crossMove() bound the same way; checked before the
+            // scanners below so a rejection short-circuits without spending time
+            // scanning bytes that won't be written anyway.
+            $this->assertWriteFits($disk, (int) filesize($tmp), $this->existingSize($fs, $scopedPath));
 
             if ($this->virusScanner !== null) {
                 $this->assertNoVirus($tmp, basename($scopedPath));

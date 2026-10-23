@@ -39,18 +39,20 @@ $uploadRoot = $coreDir . '/storage/uploads';
 $content = '';
 for ($i = 0; $i < 40; $i++) { $content .= chr(65 + ($i % 26)); }
 file_put_contents($uploadRoot . '/e2e_stream/clip.mp4', $content);
+// A name whose literal bytes include a percent-escape, a `#`, a `?` and a space.
+$oddName = '50%25 off #1?.mp4';
+file_put_contents($uploadRoot . '/e2e_stream/' . $oddName, $content);
 
 // The server loads packages/core/.env first (createImmutable populates $_ENV),
 // which is the reliable way to inject config into php -S. Write our test .env,
 // backing up any existing one so a developer's local .env is restored after.
 $envFile = $coreDir . '/.env';
 $envBackup = is_file($envFile) ? file_get_contents($envFile) : null;
-file_put_contents($envFile,
-    "FLUXFILES_SECRET={$SECRET}\n" .
+$envBody = "FLUXFILES_SECRET={$SECRET}\n" .
     "FLUXFILES_LOCAL_PRIVATE=true\n" .
     "FLUXFILES_RATE_LIMIT_READ=100000\n" .
-    "FLUXFILES_RATE_LIMIT_WRITE=100000\n"
-);
+    "FLUXFILES_RATE_LIMIT_WRITE=100000\n";
+file_put_contents($envFile, $envBody);
 
 $proc = proc_open(
     ['php', '-S', "127.0.0.1:{$PORT}", 'router.php'],
@@ -150,6 +152,21 @@ try {
         assertTrue(strpos($body, 'root:') === false, 'never served /etc/passwd');
     });
 
+    test('X-Accel-Redirect target is percent-encoded per segment (a %XX / # / ? name must not 404 in nginx)', function () use ($BASE, $SECRET, $envFile, $envBody, $oddName) {
+        // .env is re-read on every request by the router, so the fast path can be
+        // switched on for this one request without restarting the server.
+        file_put_contents($envFile, $envBody . "FLUXFILES_XACCEL=/internal-uploads\n");
+        try {
+            $tok = StreamToken::mint('local', 'e2e_stream/' . $oddName, 'e2e', 300, $SECRET);
+            [$st, $h, $body] = httpGet("{$BASE}/api/fm/stream?token=" . rawurlencode($tok));
+        } finally {
+            file_put_contents($envFile, $envBody);
+        }
+        assertEqual(200, $st);
+        assertEqual('/internal-uploads/e2e_stream/50%2525%20off%20%231%3F.mp4', $h['x-accel-redirect'] ?? '', 'encoded internal URI');
+        assertEqual('', $body, 'nginx serves the bytes, PHP sends none');
+    });
+
     test('token scoped to a non-existent file → 404', function () use ($BASE, $SECRET) {
         $tok = StreamToken::mint('local', 'e2e_stream/nope.mp4', 'e2e', 300, $SECRET);
         [$st] = httpGet("{$BASE}/api/fm/stream?token=" . rawurlencode($tok));
@@ -161,6 +178,7 @@ try {
     proc_terminate($proc);
     proc_close($proc);
     @unlink($uploadRoot . '/e2e_stream/clip.mp4');
+    @unlink($uploadRoot . '/e2e_stream/' . $oddName);
     @rmdir($uploadRoot . '/e2e_stream');
     if ($envBackup === null) { @unlink($envFile); }
     else { file_put_contents($envFile, $envBackup); }

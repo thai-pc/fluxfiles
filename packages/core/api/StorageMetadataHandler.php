@@ -22,6 +22,19 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private const MAX_AUDIT_BYTES = 5 * 1024 * 1024; // 5MB rotation threshold
     private const AUDIT_KEEP_LINES = 5000; // Keep last N entries after rotation
 
+    /**
+     * Flysystem write config for FluxFiles' own bookkeeping under `_fluxfiles/`
+     * (sidecars, index, audit, trash/hold manifests, fixity…). A native-AWS disk
+     * marked `visibility=public` defaults every write to a public-read ACL
+     * (DiskManager), which would publish the audit log and manifests at a
+     * predictable key. The S3 adapter takes an explicit `ACL` option over the
+     * filesystem default; the local and SFTP adapters ignore the key, so their
+     * file modes are untouched (a `visibility` option would chmod them 0600, and
+     * SFTP reports a refused chmod as a failed write). Disks that send no ACL at
+     * all (private AWS, R2/MinIO) strip it in DiskManager's middleware.
+     */
+    public const INTERNAL_WRITE = ['ACL' => 'private'];
+
     private DiskManager $diskManager;
 
     /** @var array<string, resource> Active file locks keyed by disk name */
@@ -532,6 +545,19 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     public function readAudit(string $disk, ?string $userId = null): array
     {
+        return $this->readAuditWindow($disk, null, null, $userId);
+    }
+
+    /**
+     * Mirrors DbMetadataHandler::readAuditWindow() (same contract, so a caller
+     * can use either backend). The live log is already capped by rotation, so
+     * here $since/$limit are plain filters.
+     *
+     * @param ?int $since Only entries with created_at >= $since.
+     * @param ?int $limit Only the NEWEST $limit matching entries (still oldest-first).
+     */
+    public function readAuditWindow(string $disk, ?int $since = null, ?int $limit = null, ?string $userId = null): array
+    {
         $fs = $this->diskManager->disk($disk);
         if (!$fs->fileExists(self::AUDIT_KEY)) {
             return [];
@@ -547,6 +573,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 if ($userId !== null && ($ctx['user_id'] ?? '') !== $userId) {
                     continue;
                 }
+                if ($since !== null && (int) ($row['ts'] ?? 0) < $since) {
+                    continue;
+                }
                 $entries[] = [
                     'user_id'   => $ctx['user_id'] ?? '',
                     'action'    => $row['action'] ?? '',
@@ -559,6 +588,9 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                     'prev_hash' => $row['prev'] ?? null,
                     'entry_hash' => $row['hash'] ?? null,
                 ];
+            }
+            if ($limit !== null) {
+                return $limit > 0 ? array_slice($entries, -$limit) : [];
             }
             return $entries;
         } catch (\Throwable $e) {
@@ -604,7 +636,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                     // rotation must never be the only copy of compliance history.
                     if ($dropped !== []) {
                         $archiveKey = self::AUDIT_ARCHIVE_DIR . 'audit-' . time() . '-' . bin2hex(random_bytes(3)) . '.jsonl';
-                        $fs->write($archiveKey, implode("\n", $dropped) . "\n");
+                        $fs->write($archiveKey, implode("\n", $dropped) . "\n", self::INTERNAL_WRITE);
                     }
                     $content = implode("\n", $kept) . "\n";
                 }
@@ -622,7 +654,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 $entry = '{"ts":' . time() . ',"action":"audit_encode_failed","context":{}}';
             }
             $content .= $entry . "\n";
-            $fs->write(self::AUDIT_KEY, $content);
+            $fs->write(self::AUDIT_KEY, $content, self::INTERNAL_WRITE);
         } catch (\Throwable $e) {
             // Silent fail
         } finally {
@@ -749,7 +781,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                     $kept[] = $line;
                 }
                 if ($liveLinesRemoved > 0) {
-                    $fs->write(self::AUDIT_KEY, $kept === [] ? '' : implode("\n", $kept) . "\n");
+                    $fs->write(self::AUDIT_KEY, $kept === [] ? '' : implode("\n", $kept) . "\n", self::INTERNAL_WRITE);
                 }
             }
         } catch (\Throwable $e) {
@@ -911,7 +943,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             'caption' => $data['caption'] ?? '',
             'tags' => $data['tags'] ?? '',
             'uploaded_by' => $data['uploaded_by'] ?? null,
-        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), self::INTERNAL_WRITE);
     }
 
     /**
@@ -1058,7 +1090,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         if ($dir !== '.' && !$fs->directoryExists($dir)) {
             $fs->createDirectory($dir);
         }
-        $fs->write(self::TRASH_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+        $fs->write(self::TRASH_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE), self::INTERNAL_WRITE);
     }
 
     // ---------------------------------------------------------------------
@@ -1068,19 +1100,37 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     // isn't warranted — unlike audit's own dedicated higher-volume lock).
     // ---------------------------------------------------------------------
 
-    /** @return array<string,array> */
+    /**
+     * Fails CLOSED: a manifest that exists but can't be read or decoded throws
+     * instead of reading as "no holds". Every hold check sits in front of a
+     * destructive operation, so an unreadable manifest must refuse the delete,
+     * and addHold()/releaseHold() must never rewrite holds.json from a failed
+     * read (that would replace every existing hold with just the new one).
+     *
+     * @return array<string,array>
+     */
     public function allHolds(string $disk): array
     {
         $fs = $this->diskManager->disk($disk);
-        if (!$fs->fileExists(self::HOLDS_KEY)) {
-            return [];
-        }
         try {
+            if (!$fs->fileExists(self::HOLDS_KEY)) {
+                return [];
+            }
             $data = json_decode($fs->read(self::HOLDS_KEY), true);
-            return is_array($data) ? $data : [];
         } catch (\Throwable $e) {
-            return [];
+            $data = null;
         }
+        if (!is_array($data)) {
+            error_log("FluxFiles: legal hold manifest on disk '{$disk}' is unreadable — refusing hold-guarded operations");
+            // No dedicated code: "treat everything as held" is exactly the
+            // fail-closed behaviour, and it reuses the translated message.
+            throw new ApiException(
+                'The legal hold manifest is unreadable; refusing the change until it is repaired',
+                403,
+                'legal_hold_active'
+            );
+        }
+        return $data;
     }
 
     public function getHold(string $disk, string $id): ?array
@@ -1155,7 +1205,14 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      */
     public function holdsCoveringMany(string $disk, array $scopedPaths): array
     {
-        $holds = $this->allHolds($disk);
+        // Listing badges only — every guard goes through holdBlocking(), which
+        // still fails closed. An unreadable manifest must not take the whole
+        // file listing down with it.
+        try {
+            $holds = $this->allHolds($disk);
+        } catch (ApiException $e) {
+            $holds = [];
+        }
         $out = [];
         foreach ($scopedPaths as $scopedPath) {
             $out[$scopedPath] = self::matchOverlappingHold($holds, $scopedPath, false);
@@ -1193,14 +1250,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             if (($entry['released_at'] ?? null) !== null) {
                 continue; // released holds never block/cover
             }
-            $holdPath = trim((string) ($entry['path'] ?? ''), '/');
-            if ($holdPath === '') {
-                continue;
-            }
-            $overlaps = $holdPath === $scopedPath
-                || strpos($scopedPath, $holdPath . '/') === 0
-                || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
-            if ($overlaps) {
+            if (self::holdPathOverlaps((string) ($entry['path'] ?? ''), $scopedPath, $bidirectional)) {
                 // $id comes from a PHP array key (json_decode(..., true) on
                 // holds.json casts any all-digit key to int) — cast back to
                 // string or a numeric-looking hold id silently changes type.
@@ -1210,6 +1260,27 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         return null;
     }
 
+    /**
+     * Hold `H` and target `P` overlap when they are the same path, `H` is an
+     * ancestor of `P`, or — bidirectional only — `P` is an ancestor of `H`.
+     * Case-INSENSITIVE on purpose: on a case-insensitive filesystem (macOS/
+     * Windows local disks) `Contracts/a.pdf` and `contracts/a.pdf` are one file,
+     * so an exact compare would let a differently-cased path slip past the hold.
+     * Over-blocking a same-letters sibling on a case-sensitive disk is the safe
+     * side. Shared with the DB backend so the two can never diverge.
+     */
+    public static function holdPathOverlaps(string $holdPath, string $scopedPath, bool $bidirectional): bool
+    {
+        $holdPath = mb_strtolower(trim($holdPath, '/'), 'UTF-8');
+        $scopedPath = mb_strtolower(trim($scopedPath, '/'), 'UTF-8');
+        if ($holdPath === '' || $scopedPath === '') {
+            return false;
+        }
+        return $holdPath === $scopedPath
+            || strpos($scopedPath, $holdPath . '/') === 0
+            || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
+    }
+
     private function saveHolds(string $disk, array $all): void
     {
         $fs = $this->diskManager->disk($disk);
@@ -1217,7 +1288,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         if ($dir !== '.' && !$fs->directoryExists($dir)) {
             $fs->createDirectory($dir);
         }
-        $fs->write(self::HOLDS_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+        $fs->write(self::HOLDS_KEY, json_encode($all, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE), self::INTERNAL_WRITE);
     }
 
     private function loadIndex(string $disk): array
@@ -1253,7 +1324,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         if ($dir !== '.' && !$fs->directoryExists($dir)) {
             $fs->createDirectory($dir);
         }
-        $fs->write(self::INDEX_KEY, json_encode($index, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+        $fs->write(self::INDEX_KEY, json_encode($index, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), self::INTERNAL_WRITE);
     }
 
     private function updateIndex(string $disk, string $key, array $data): void
@@ -1342,7 +1413,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
         try {
             // Map shape `{dirKey: <created ts|null>}` so folder created dates persist.
-            $fs->write(self::DIRS_KEY, json_encode((object) $dirs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+            $fs->write(self::DIRS_KEY, json_encode((object) $dirs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE), self::INTERNAL_WRITE);
         } catch (\Throwable $e) {
             // Silent fail
         }

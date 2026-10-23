@@ -30,7 +30,23 @@ final class FixityChecker
         'optimize', 'extract', 'url_import', 'version_restore', 'ai_vision', 'c2pa_sign',
         'delete', 'trash', 'purge', 'empty_trash', 'rename', 'move', 'cross_move',
         'copy', 'cross_copy', 'restore', 'backup', 'presign_put', 'presign_post',
+        'retention_trash', 'retention_delete', 'intake_upload',
     ];
+
+    /**
+     * Actions whose entry names the ARCHIVE, while the bytes they rewrite (and may
+     * overwrite) land next to it — an extract's default destination is a folder
+     * beside the archive. They explain everything under the archive's directory.
+     */
+    private const SIBLING_TREE_ACTIONS = ['extract'];
+
+    /**
+     * Opt-in shell access (SFTP disks only). A command or a deploy can touch any
+     * file and its entry carries no disk-relative key (the command / the remote
+     * repo path go in `detail`), so it explains every change on the disk in its
+     * window — the entry itself is the record of who did it.
+     */
+    private const DISK_WIDE_ACTIONS = ['terminal', 'git_deploy'];
 
     public const MANIFEST = '_fluxfiles/fixity.json';
 
@@ -66,15 +82,40 @@ final class FixityChecker
         ksort($present, SORT_STRING);
 
         // Last write/delete through FluxFiles per path (scoped keys, as audited).
+        // Only entries the audit chain vouches for count: once the log is chained,
+        // an unchained or forged line is exactly what someone with storage write
+        // access would append to turn their own edit into an "explained" change.
+        // Keys are cast back to string: PHP turns an all-digit key ("2024") into an
+        // int array key, which strict_types then refuses in readStream()/strcmp().
         $lastWrite = [];
-        foreach ($auditEntries as $e) {
-            if (in_array($e['action'] ?? '', self::WRITE_ACTIONS, true)) {
-                $k = (string) ($e['file_key'] ?? '');
-                $lastWrite[$k] = max($lastWrite[$k] ?? 0, (int) ($e['created_at'] ?? 0));
+        $lastTreeWrite = [];
+        $lastDiskWrite = 0;
+        foreach (AuditChain::trustedEntries($auditEntries) as $e) {
+            $action = (string) ($e['action'] ?? '');
+            $k = trim((string) ($e['file_key'] ?? ''), '/');
+            $ts = (int) ($e['created_at'] ?? 0);
+            if (in_array($action, self::WRITE_ACTIONS, true)) {
+                $lastWrite[$k] = max($lastWrite[$k] ?? 0, $ts);
+            }
+            if (in_array($action, self::SIBLING_TREE_ACTIONS, true)) {
+                $dir = $k !== '' && strpos($k, '/') !== false ? dirname($k) : '';
+                $lastTreeWrite[$dir] = max($lastTreeWrite[$dir] ?? 0, $ts);
+            }
+            if (in_array($action, self::DISK_WIDE_ACTIONS, true)) {
+                $lastDiskWrite = max($lastDiskWrite, $ts);
             }
         }
-        $explained = static function (string $key, int $since) use ($lastWrite): bool {
-            return ($lastWrite[$key] ?? 0) >= $since;
+        $explained = static function (string $key, int $since) use ($lastWrite, $lastTreeWrite, $lastDiskWrite): bool {
+            if ($lastDiskWrite >= $since || ($lastWrite[$key] ?? 0) >= $since) {
+                return true;
+            }
+            foreach ($lastTreeWrite as $dir => $ts) {
+                $dir = (string) $dir;
+                if ($ts >= $since && ($dir === '' || strpos($key, $dir . '/') === 0)) {
+                    return true;
+                }
+            }
+            return false;
         };
 
         $now = time();
@@ -84,6 +125,7 @@ final class FixityChecker
         $budget = $budgetBytes;
         $stoppedAt = '';
         foreach ($present as $key => $size) {
+            $key = (string) $key;
             if ($cursor !== '' && strcmp($key, $cursor) <= 0) {
                 continue; // resumed pass: already done this round
             }
@@ -117,11 +159,12 @@ final class FixityChecker
         if ($stoppedAt === '') {
             // A full round finished: anything in the baseline that's gone now.
             foreach ($files as $key => $rec) {
+                $key = (string) $key;
                 if (!isset($present[$key])) {
-                    if ($explained((string) $key, (int) $rec['checked_at'])) {
-                        $report['missing_explained'][] = (string) $key;
+                    if ($explained($key, (int) $rec['checked_at'])) {
+                        $report['missing_explained'][] = $key;
                     } else {
-                        $report['missing_unexplained'][] = (string) $key;
+                        $report['missing_unexplained'][] = $key;
                     }
                     unset($files[$key]);
                 }
@@ -137,7 +180,7 @@ final class FixityChecker
             ));
         }
         $manifest['files'] = $files;
-        $fs->write($manifestKey, (string) json_encode($manifest, JSON_UNESCAPED_SLASHES));
+        $fs->write($manifestKey, (string) json_encode($manifest, JSON_UNESCAPED_SLASHES), StorageMetadataHandler::INTERNAL_WRITE);
 
         $report['ok'] = $report['changed_unexplained'] === [] && $report['missing_unexplained'] === [];
         $report['last_complete_at'] = $manifest['last_complete_at'];

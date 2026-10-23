@@ -161,7 +161,9 @@ app.get('/fluxfiles/token', (req, res) => {
 `maxUploadMb?`, `allowedExt?`, `ttl?`, `ownerOnly?`, `maxStorageMb?`, `maxFiles?`.
 Per-tenant overrides (omit to inherit the server default): `aiAutoTag?` (bool),
 `rateRead?` / `rateWrite?` (req/min), `variants?` (`{ thumb?, medium?, large? }` px).
-Presets: `role?` (`viewer`/`editor`/`admin`/`superadmin`) and `edition?` (tier preset).
+Presets: `role?` (`viewer`/`editor`/`admin`/`superadmin`) and `edition?`
+(`free`/`pro`/`agency`/`studio`/`enterprise`); an unknown name throws a `RangeError`.
+`ttl` must be a positive integer (seconds) — anything else throws.
 Most other claims have a camelCase option too (e.g. `stripExif`, `mediaPosters`,
 `allowPresignPut`, `auditReads`, `retentionRules`, the `allow*` module gates — see
 `src/types.ts`), and **`claims?`** sets any claim by its raw snake_case name — the

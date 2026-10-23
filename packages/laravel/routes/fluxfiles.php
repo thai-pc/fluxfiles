@@ -13,9 +13,13 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Language routes (public, no auth needed)
-Route::get('lang', [FluxFilesController::class, 'langList'])->withoutMiddleware(['auth']);
-Route::get('lang/{locale}', [FluxFilesController::class, 'langGet'])->withoutMiddleware(['auth']);
+// Language routes (public, no auth needed). The UI fetches these WITHOUT its
+// Bearer, so they must also skip FluxFilesAuth — which no longer mints a token
+// for a Bearer-less request unless a claims resolver is configured.
+Route::get('lang', [FluxFilesController::class, 'langList'])
+    ->withoutMiddleware(['auth', \FluxFiles\Laravel\Http\Middleware\FluxFilesAuth::class]);
+Route::get('lang/{locale}', [FluxFilesController::class, 'langGet'])
+    ->withoutMiddleware(['auth', \FluxFiles\Laravel\Http\Middleware\FluxFilesAuth::class]);
 
 // API routes
 Route::get('list', [FluxFilesController::class, 'list']);

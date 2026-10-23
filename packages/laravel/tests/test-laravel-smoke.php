@@ -814,6 +814,424 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
     assertTrue(strpos($chunkInitBody, 'logAudit(') !== false, 'chunkInit() still logs too, matching core');
 });
 
+// ══ 2026-10-23 adapter audit ══════════════════════════════════════════════
+// Behavioural tests drive the real controller/middleware through the minimal
+// Illuminate HTTP stubs in laravel-http-stubs.php (this smoke runs on core's
+// autoload alone — CI never installs illuminate/* for it).
+require_once __DIR__ . '/laravel-http-stubs.php';
+require_once __DIR__ . '/../src/ClaimsResolver.php';
+require_once __DIR__ . '/../src/Http/Middleware/FluxFilesAuth.php';
+require_once __DIR__ . '/../src/Http/Controllers/FluxFilesController.php';
+
+use FluxFiles\Laravel\Http\Controllers\FluxFilesController;
+use FluxFiles\Laravel\Http\Middleware\FluxFilesAuth;
+use Illuminate\Http\Request;
+
+$ffTmp = sys_get_temp_dir() . '/ff_laravel_smoke_' . getmypid();
+@mkdir($ffTmp . '/disk', 0775, true);
+@mkdir($ffTmp . '/state', 0775, true);
+$GLOBALS['LARAVEL_CONFIG'] += [
+    'fluxfiles.storage_path'    => $ffTmp . '/state',
+    'fluxfiles.storage_backend' => 'json',
+    'fluxfiles.disks'           => ['local' => ['driver' => 'local', 'root' => $ffTmp . '/disk', 'url' => '/storage']],
+    'fluxfiles.base_path'       => realpath(__DIR__ . '/../../core'),
+    'fluxfiles.allowed_origins' => [],
+];
+register_shutdown_function(static function () use ($ffTmp) {
+    exec('rm -rf ' . escapeshellarg($ffTmp));
+});
+
+/** Run $fn with config keys temporarily overridden; resets the manager singleton too. */
+function withConfig(array $over, callable $fn)
+{
+    $prev = $GLOBALS['LARAVEL_CONFIG'];
+    $GLOBALS['LARAVEL_CONFIG'] = array_replace($prev, $over);
+    unset($GLOBALS['LARAVEL_MANAGER']);
+    try {
+        return $fn();
+    } finally {
+        $GLOBALS['LARAVEL_CONFIG'] = $prev;
+        unset($GLOBALS['LARAVEL_MANAGER']);
+    }
+}
+
+/** A fresh rate-limit state, so one test's buckets never leak into the next. */
+function freshController(): FluxFilesController
+{
+    @unlink($GLOBALS['LARAVEL_CONFIG']['fluxfiles.storage_path'] . '/rate_limit.json');
+    return new FluxFilesController();
+}
+
+function bearer(array $overrides, string $user = 'u1'): array
+{
+    return ['Authorization' => 'Bearer ' . (new FluxFilesManager())->token($user, $overrides)];
+}
+
+/** @return array<string,mixed> */
+function decodeJwt(string $token): array
+{
+    return (array) \FluxFiles\JwtCompat::decode($token, $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret']);
+}
+
+final class SmokeTenantResolver implements \FluxFiles\Laravel\ClaimsResolver
+{
+    public function resolve(\Illuminate\Contracts\Auth\Authenticatable $user): array
+    {
+        return ['perms' => ['read'], 'prefix' => 'tenants/' . $user->getAuthIdentifier(), 'claims' => ['show_hidden' => false]];
+    }
+}
+
+// ── A-N2: unknown role / edition ───────────────────────────────────────────
+test('A-N2: an unknown/typo role or edition throws instead of failing open to the defaults', function () {
+    $mgr = new FluxFilesManager();
+    foreach ([['role' => 'viewr'], ['edition' => 'enterprize']] as $bad) {
+        try {
+            $mgr->token('u', $bad);
+            throw new \RuntimeException('should throw for ' . json_encode($bad));
+        } catch (\InvalidArgumentException $e) {
+            assertTrue(stripos($e->getMessage(), 'unknown') !== false, 'names the problem');
+        }
+    }
+    try {
+        $mgr->tokenWithByob('u', [], ['role' => 'root']);
+        throw new \RuntimeException('BYOB builder should throw too');
+    } catch (\InvalidArgumentException $e) {
+    }
+    // Valid names (any case), empty, and edition "free" (a no-op preset) still mint.
+    $p = decodeJwt($mgr->token('u', ['role' => 'Viewer', 'edition' => 'free']));
+    assertEqual(['read'], (array) $p['perms'], 'case-insensitive role still applies');
+    decodeJwt($mgr->token('u', ['role' => '', 'edition' => '']));
+});
+
+// ── A-H3: per-user claims resolver ─────────────────────────────────────────
+test('A-H3: tokenForUser() applies the configured resolver; explicit overrides win; claims maps merge', function () {
+    $GLOBALS['LARAVEL_AUTH_USER'] = new StubUser(7);
+    try {
+        withConfig(['fluxfiles.claims_resolver' => SmokeTenantResolver::class], function () {
+            $mgr = new FluxFilesManager();
+            assertTrue($mgr->hasClaimsResolver(), 'class-string resolver detected');
+            $p = decodeJwt($mgr->tokenForUser());
+            assertEqual('tenants/7', $p['prefix'], 'resolver prefix applied (was the empty config default)');
+            assertEqual(['read'], (array) $p['perms'], 'resolver perms applied (was rwd)');
+
+            $p = decodeJwt($mgr->tokenForUser(['prefix' => 'tenants/7/album', 'claims' => ['allow_zip' => false]]));
+            assertEqual('tenants/7/album', $p['prefix'], 'component/tag override wins over the resolver');
+            assertEqual(false, $p['allow_zip'] ?? null, 'override claims map applied');
+            assertEqual(false, $p['show_hidden'] ?? null, 'resolver claims map kept (merged, not replaced)');
+        });
+        // Runtime registration wins over config and survives config:cache.
+        $mgr = new FluxFilesManager();
+        assertTrue(!$mgr->hasClaimsResolver(), 'no resolver by default');
+        $mgr->resolveClaimsUsing(fn ($u) => ['prefix' => 'rt/' . $u->getAuthIdentifier()]);
+        assertEqual('rt/7', decodeJwt($mgr->tokenForUser())['prefix'], 'runtime resolver');
+        $mgr->resolveClaimsUsing(fn ($u) => null);
+        try {
+            $mgr->tokenForUser();
+            throw new \RuntimeException('a non-array resolver result must fail closed');
+        } catch (\RuntimeException $e) {
+            assertTrue(strpos($e->getMessage(), 'must return an array') !== false, 'fails closed: ' . $e->getMessage());
+        }
+        withConfig(['fluxfiles.claims_resolver' => 12345], function () {
+            try {
+                (new FluxFilesManager())->tokenForUser();
+                throw new \RuntimeException('should throw');
+            } catch (\RuntimeException $e) {
+                assertTrue(strpos($e->getMessage(), 'claims_resolver must be') !== false, 'a misconfigured resolver is not "no resolver"');
+            }
+        });
+    } finally {
+        unset($GLOBALS['LARAVEL_AUTH_USER']);
+    }
+});
+
+test('A-H3: refresh ticket round-trips the rendered overrides and is bound to the user', function () {
+    $mgr = new FluxFilesManager();
+    $alice = new StubUser(1);
+    $ticket = $mgr->refreshTicket($alice, ['prefix' => 'a/', 'perms' => ['read']]);
+    assertEqual(['prefix' => 'a/', 'perms' => ['read']], $mgr->verifyRefreshTicket($alice, $ticket), 'round trip');
+    foreach ([
+        'other user' => fn () => $mgr->verifyRefreshTicket(new StubUser(2), $ticket),
+        'tampered'   => fn () => $mgr->verifyRefreshTicket($alice, substr($ticket, 0, -2) . 'xx'),
+        'forged'     => fn () => $mgr->verifyRefreshTicket($alice, rtrim(strtr(base64_encode('{"sub":"1","exp":9999999999,"o":{"perms":["read","write","delete"]}}'), '+/', '-_'), '=') . '.' . explode('.', $ticket)[1]),
+        'malformed'  => fn () => $mgr->verifyRefreshTicket($alice, 'nope'),
+        'expired'    => function () use ($mgr, $alice) {
+            $key = new \ReflectionMethod($mgr, 'ticketKey');
+            $key->setAccessible(true);
+            $body = rtrim(strtr(base64_encode('{"sub":"1","exp":' . (time() - 1) . ',"o":{}}'), '+/', '-_'), '=');
+            $mac = rtrim(strtr(base64_encode(hash_hmac('sha256', $body, $key->invoke($mgr), true)), '+/', '-_'), '=');
+            $mgr->verifyRefreshTicket($alice, $body . '.' . $mac);
+        },
+    ] as $what => $fn) {
+        try {
+            $fn();
+            throw new \LogicException("{$what}: accepted");
+        } catch (\RuntimeException $e) {
+        }
+    }
+});
+
+test('A-H3/A-N11: GET /token never mints the bare config defaults; no-store; Origin-checked', function () {
+    $user = new StubUser(9);
+    $call = function (array $headers = [], array $cfg = []) use ($user) {
+        return withConfig($cfg, function () use ($headers, $user) {
+            $resp = (new FluxFilesController())->token(new Request('GET', [], $headers, $user));
+            return [$resp->getStatusCode(), $resp->getData(), $resp->headers];
+        });
+    };
+
+    // No ticket, no resolver: refuse (used to be 200 + an unscoped rwd token).
+    [$st, $body, $h] = $call();
+    assertEqual(403, $st, 'no policy → refused');
+    assertEqual('token_refresh_unconfigured', $body['error_code'] ?? null, 'error code');
+    assertTrue(strpos($h['cache-control'] ?? '', 'no-store') !== false, 'no-store on errors too');
+
+    // With the component's ticket: exactly the rendered overrides.
+    $ticket = (new FluxFilesManager())->refreshTicket($user, ['prefix' => 'tag/9', 'perms' => ['read']]);
+    [$st, $body, $h] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket]);
+    assertEqual(200, $st, 'ticket refresh ok');
+    $p = decodeJwt($body['data']['token']);
+    assertEqual('tag/9', $p['prefix'], 'same prefix as the page');
+    assertEqual(['read'], (array) $p['perms'], 'same perms as the page');
+    assertTrue(strpos($h['cache-control'] ?? '', 'no-store') !== false, 'token response is no-store (A-N11)');
+
+    // Someone else's ticket → refused.
+    $foreign = (new FluxFilesManager())->refreshTicket(new StubUser(10), ['prefix' => '']);
+    [$st] = $call(['X-FluxFiles-Refresh-Ticket' => $foreign]);
+    assertEqual(403, $st, "another user's ticket is refused");
+
+    // Resolver configured: its policy.
+    [$st, $body] = $call([], ['fluxfiles.claims_resolver' => SmokeTenantResolver::class]);
+    assertEqual(200, $st, 'resolver refresh ok');
+    assertEqual('tenants/9', decodeJwt($body['data']['token'])['prefix'], 'resolver prefix');
+
+    // Cross-site caller (cookie-only route) → refused before minting.
+    [$st, $body] = $call(['X-FluxFiles-Refresh-Ticket' => $ticket, 'Origin' => 'https://evil.example']);
+    assertEqual(403, $st, 'cross-origin refresh refused');
+    assertEqual('origin_denied', $body['error_code'] ?? null, 'origin_denied');
+});
+
+test('A-H3: FluxFilesAuth — no Bearer: writes refused, reads need a resolver + same site', function () {
+    $user = new StubUser(5);
+    $seen = null;
+    $next = function ($req) use (&$seen) {
+        $seen = $req;
+        return response()->json(['data' => 'ok'], 200);
+    };
+    $run = function (Request $req, array $cfg = []) use ($next, &$seen) {
+        $seen = null;
+        return withConfig($cfg, fn () => (new FluxFilesAuth())->handle($req, $next));
+    };
+    $resolver = ['fluxfiles.claims_resolver' => SmokeTenantResolver::class];
+
+    // Cookie-only POST: used to be auto-minted a full-power token → CSRF-able.
+    $r = $run(new Request('POST', [], [], $user), $resolver);
+    assertEqual(401, $r->getStatusCode(), 'state-changing request without Bearer refused');
+    assertTrue($seen === null, 'controller never reached');
+
+    // Cookie-only GET without a resolver: used to get the config defaults.
+    $r = $run(new Request('GET', [], [], $user));
+    assertEqual(401, $r->getStatusCode(), 'no resolver → no implicit token');
+
+    // Cross-site GET (Origin or Sec-Fetch-Site) with a resolver → refused.
+    assertEqual(403, $run(new Request('GET', [], ['Origin' => 'https://evil.example'], $user), $resolver)->getStatusCode(), 'foreign Origin');
+    assertEqual(403, $run(new Request('GET', [], ['Sec-Fetch-Site' => 'cross-site'], $user), $resolver)->getStatusCode(), 'cross-site fetch');
+
+    // Same-site GET with a resolver → resolver-scoped token injected.
+    $r = $run(new Request('GET', [], ['Sec-Fetch-Site' => 'same-origin'], $user), $resolver);
+    assertEqual(200, $r->getStatusCode(), 'same-site read allowed');
+    assertEqual('tenants/5', decodeJwt((string) $seen->bearerToken())['prefix'], 'minted from the resolver, not the defaults');
+
+    // A Bearer passes through untouched (any method; the JWT is the credential).
+    $hdr = bearer(['perms' => ['read', 'write']]);
+    $r = $run(new Request('POST', [], $hdr + ['Origin' => 'https://other.example'], $user));
+    assertEqual(200, $r->getStatusCode(), 'Bearer request passes');
+    assertEqual(substr($hdr['Authorization'], 7), $seen->bearerToken(), 'Bearer not replaced');
+
+    // Pure origin decision: allow-listed origin + `none` (typed URL) pass.
+    assertTrue(FluxFilesAuth::isSameSiteRequest('https://cms.example', '', 'https://app.example.com', ['https://cms.example']), 'allow-listed Origin');
+    assertTrue(FluxFilesAuth::isSameSiteRequest('', 'none', 'https://app.example.com', []), 'typed URL');
+    assertTrue(!FluxFilesAuth::isSameSiteRequest('', 'same-site', 'https://app.example.com', []), 'sibling subdomain is not same-origin');
+});
+
+test('A-H3: lang routes skip FluxFilesAuth (the UI fetches them without a Bearer); blade sends the ticket header', function () {
+    $routes = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
+    assertEqual(2, substr_count($routes, "withoutMiddleware(['auth', \\FluxFiles\\Laravel\\Http\\Middleware\\FluxFilesAuth::class])"), 'both lang routes');
+    $blade = (string) file_get_contents(__DIR__ . '/../src/Views/components/fluxfiles.blade.php');
+    assertTrue(strpos($blade, "'X-FluxFiles-Refresh-Ticket': @json(\$refreshTicket)") !== false, 'default refresh hook sends the ticket');
+    assertTrue(strpos($blade, 'refreshTicketForUser($overrides)') !== false, 'ticket carries the tag overrides');
+});
+
+// ── A-M3: audit (and webhook) keys are scoped ──────────────────────────────
+test('A-M3: audit entries are logged under the scoped key, so the tenant sees its own', function () {
+    $secret = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
+    $claims = \FluxFiles\JwtMiddleware::handle((new FluxFilesManager())->token('t1', ['prefix' => 'tenant-a', 'perms' => ['read', 'write', 'audit']]), $secret);
+    $ctrl = freshController();
+    $log = new \ReflectionMethod($ctrl, 'logAudit');
+    $log->setAccessible(true);
+    $log->invoke($ctrl, $claims, 'upload', 'local', 'docs/a.txt');
+    $log->invoke($ctrl, $claims, 'upload', 'local', 'tenant-a/docs/b.txt'); // already scoped: idempotent
+    $repoProp = new \ReflectionProperty($ctrl, 'metaRepo');
+    $repoProp->setAccessible(true);
+    $keys = array_column($repoProp->getValue($ctrl)->readAudit('local'), 'file_key');
+    assertTrue(in_array('tenant-a/docs/a.txt', $keys, true), 'relative key scoped: ' . json_encode($keys));
+    assertTrue(in_array('tenant-a/docs/b.txt', $keys, true), 'scoped key not double-prefixed');
+    $listed = (new \FluxFiles\AuditLogStorage($repoProp->getValue($ctrl), ['local']))->list(100, 0, null, $claims);
+    $rows = $listed['entries'] ?? $listed['data'] ?? $listed;
+    assertEqual(2, count(array_filter((array) $rows, fn ($r) => is_array($r) && str_starts_with((string) ($r['file_key'] ?? ''), 'tenant-a/'))), "the tenant's own audit view shows both");
+
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    $wh = substr($src, strpos($src, 'private function dispatchWebhook('), 1200);
+    assertTrue(strpos($wh, "\$context['path'] = \$this->auditKey(\$claims, \$context['path'])") !== false, 'webhook path scoped too');
+});
+
+// ── A-N5: search results are tenant-relative ───────────────────────────────
+test('A-N5: search/search-folders strip the tenant prefix from returned keys', function () {
+    $ctrl = freshController();
+    $repoProp = new \ReflectionProperty($ctrl, 'metaRepo');
+    $repoProp->setAccessible(true);
+    $repo = $repoProp->getValue($ctrl);
+    @mkdir($GLOBALS['LARAVEL_CONFIG']['fluxfiles.disks']['local']['root'] . '/tenant-s/sub', 0775, true);
+    file_put_contents($GLOBALS['LARAVEL_CONFIG']['fluxfiles.disks']['local']['root'] . '/tenant-s/report.pdf', 'x');
+    $repo->save('local', 'tenant-s/report.pdf', ['title' => 'Quarterly', 'uploaded_by' => 'u1']);
+    $repo->trackDir('local', 'tenant-s/sub');
+    $hdr = bearer(['prefix' => 'tenant-s', 'perms' => ['read']]);
+
+    $rows = $ctrl->search(new Request('GET', ['disk' => 'local', 'q' => 'Quarterly'], $hdr))->getData()['data'];
+    assertEqual(['report.pdf'], array_column($rows, 'file_key'), 'file_key relative');
+    $dirs = $ctrl->searchFolders(new Request('GET', ['disk' => 'local', 'q' => 'sub'], $hdr))->getData()['data'];
+    assertEqual(['sub'], array_column($dirs, 'dir_key'), 'dir_key relative');
+});
+
+// ── A-N4: force_upload parsed as a boolean ─────────────────────────────────
+test('A-N4: force_upload="false" is false (dedupe still applies)', function () use ($ffTmp) {
+    $ctrl = freshController();
+    $hdr = bearer(['perms' => ['read', 'write'], 'prefix' => 'up-t', 'dedupe_uploads' => true, 'rate_write' => 50]);
+    $mk = function (string $name) use ($ffTmp) {
+        $tmp = tempnam($ffTmp, 'up');
+        file_put_contents($tmp, 'same-bytes-for-dedupe');
+        return new class($tmp, $name) {
+            public function __construct(private string $tmp, private string $name) {}
+            public function getClientOriginalName(): string { return $this->name; }
+            public function getMimeType(): string { return 'text/plain'; }
+            public function getRealPath(): string { return $this->tmp; }
+            public function getError(): int { return UPLOAD_ERR_OK; }
+            public function getSize(): int { return (int) filesize($this->tmp); }
+        };
+    };
+    $up = fn (string $name, array $extra) => $ctrl->upload(new Request('POST', ['disk' => 'local', 'path' => ''] + $extra, $hdr, null, 'https://app.example.com', ['file' => $mk($name)]))->getData();
+    $first = $up('one.txt', []);
+    assertTrue(empty($first['error']), 'first upload ok: ' . json_encode($first));
+    $second = $up('two.txt', ['force_upload' => 'false']);
+    assertEqual(true, $second['data']['duplicate'] ?? null, '"false" must not force past dedupe: ' . json_encode($second));
+});
+
+// ── A-M4: URL import — write perm before the fetch + its own bucket ────────
+test('A-M4: import-url checks write before fetching and has its own bucket (import_rate_limit)', function () {
+    $ctrl = freshController();
+    $ro = $ctrl->importUrl(new Request('POST', ['url' => 'http://127.0.0.1/x', 'disk' => 'local'], bearer(['perms' => ['read'], 'allow_url_import' => true])));
+    assertEqual(403, $ro->getStatusCode(), 'read-only token refused');
+    assertEqual('permission_denied', $ro->getData()['error_code'] ?? null, 'refused on the perm, not by the importer');
+
+    $ctrl = freshController();
+    $hdr = bearer(['perms' => ['read', 'write'], 'allow_url_import' => true, 'import_rate_limit' => 1, 'rate_write' => 50]);
+    $req = fn () => new Request('POST', ['url' => 'http://127.0.0.1/x', 'disk' => 'local'], $hdr);
+    $ctrl->importUrl($req());
+    $second = $ctrl->importUrl($req());
+    assertEqual(429, $second->getStatusCode(), 'import bucket honours the import_rate_limit claim');
+});
+
+// ── A-M2 / A-N3: dedicated + write buckets ─────────────────────────────────
+test('A-M2: /usage and /duplicates take the tight usage_refresh bucket (2/min)', function () {
+    foreach (['usage', 'duplicates'] as $route) {
+        $ctrl = freshController();
+        $hdr = bearer(['perms' => ['read'], 'rate_read' => 100]);
+        $codes = [];
+        for ($i = 0; $i < 3; $i++) {
+            $codes[] = $ctrl->{$route}(new Request('GET', ['disk' => 'local'], $hdr))->getStatusCode();
+        }
+        assertEqual(429, $codes[2], "{$route}: third call in a minute is limited (" . json_encode($codes) . ')');
+        assertTrue($codes[0] !== 429, "{$route}: first call not limited");
+    }
+});
+
+test('A-N3: presign PUT/POST and c2pa verify count against the WRITE bucket', function () {
+    $hdr = bearer(['perms' => ['read', 'write'], 'rate_read' => 100, 'rate_write' => 1]);
+    $ctrl = freshController();
+    $put = fn () => $ctrl->presign(new Request('POST', ['disk' => 'local', 'path' => 'a.txt', 'method' => 'PUT', 'ttl' => 60], $hdr))->getStatusCode();
+    $put();
+    assertEqual(429, $put(), 'second upload presign hits rate_write=1');
+
+    $ctrl = freshController();
+    $get = fn () => $ctrl->presign(new Request('POST', ['disk' => 'local', 'path' => 'a.txt', 'method' => 'GET', 'ttl' => 60], $hdr))->getStatusCode();
+    $get();
+    assertTrue($get() !== 429, 'a download presign stays on the read bucket');
+
+    $ctrl = freshController();
+    $c2pa = fn () => $ctrl->c2pa(new Request('POST', ['disk' => 'local', 'path' => 'a.jpg'], $hdr))->getStatusCode();
+    $c2pa();
+    assertEqual(429, $c2pa(), 'c2pa verify is a write (POST), as in core');
+});
+
+// ── A-M1: proxy /img fails closed on a watermark scope ─────────────────────
+test('A-M1: /img refuses (415) an image token that carries a watermark instead of serving it unmarked', function () use ($ffTmp) {
+    $root = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.disks']['local']['root'];
+    $png = $root . '/wm.png';
+    $im = imagecreatetruecolor(4, 4);
+    imagepng($im, $png);
+    $token = \FluxFiles\ImageToken::mint('local', 'wm.png', 'u1', 300, $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'], 2000, 80,
+        ['enabled' => true, 'type' => 'text', 'text' => 'CONFIDENTIAL']);
+    // img() emits raw bytes and exit()s, so run it in a child process.
+    $script = $ffTmp . '/img-child.php';
+    file_put_contents($script, '<?php
+        $GLOBALS["LARAVEL_CONFIG"] = ' . var_export($GLOBALS['LARAVEL_CONFIG'], true) . ';
+        function config($k, $d = null) { return $GLOBALS["LARAVEL_CONFIG"][$k] ?? $d; }
+        function env($k, $d = null) { return $d; }
+        require ' . var_export(getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php', true) . ';
+        require ' . var_export(__DIR__ . '/laravel-http-stubs.php', true) . ';
+        require ' . var_export(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php', true) . ';
+        (new FluxFiles\Laravel\Http\Controllers\FluxFilesController())->img(
+            new Illuminate\Http\Request("GET", ["token" => ' . var_export($token, true) . ', "format" => "webp", "width" => 100], ["Accept" => "image/webp"])
+        );');
+    $out = (string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script) . ' 2>&1');
+    assertTrue(strpos($out, 'Watermarked previews are not available') !== false, 'refused, got (hex): ' . bin2hex(substr($out, 0, 24)));
+});
+
+// ── A-N6: UI page headers ──────────────────────────────────────────────────
+test('A-N6: /public/index.html sends Referrer-Policy no-referrer and frame-ancestors', function () {
+    $h = withConfig(['fluxfiles.allowed_origins' => ['https://cms.example']], fn () => (new FluxFilesController())->publicIndex()->headers);
+    assertEqual('no-referrer', $h['referrer-policy'] ?? null, 'Referrer-Policy');
+    assertEqual("frame-ancestors 'self' https://cms.example", $h['content-security-policy'] ?? null, 'falls back to allowed_origins');
+    $h = withConfig(['fluxfiles.frame_ancestors' => "'self' https://a.example"], fn () => (new FluxFilesController())->publicIndex()->headers);
+    assertEqual("frame-ancestors 'self' https://a.example", $h['content-security-policy'] ?? null, 'explicit list wins');
+    $h = withConfig(['fluxfiles.frame_ancestors' => "x; script-src *"], fn () => (new FluxFilesController())->publicIndex()->headers);
+    assertTrue(!isset($h['content-security-policy']), 'an unsafe value is not emitted');
+});
+
+// ── B2: version purger/mover independent of the acting token's claim ──────
+test('B2: version purger + mover are wired whenever versioning is installed+licensed; only the keeper is claim-gated', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    $start = strpos($src, "if (\\FluxFiles\\ModuleRegistry::installed('versioning')");
+    assertTrue($start !== false, 'outer gate is installed+licensed only (no allowVersioning in it)');
+    $block = substr($src, $start, strpos($src, '// Virus scan (paid module)', $start) - $start);
+    $cond = substr($block, 0, strpos($block, '{'));
+    assertTrue(strpos($cond, 'allowVersioning') === false, 'outer condition does not test the claim');
+    $keeperGate = strpos($block, 'if ($claims->allowVersioning ?? false) {');
+    assertTrue($keeperGate !== false && strpos($block, 'setVersionKeeper(') > $keeperGate, 'keeper stays claim-gated');
+    $keeperEnd = strpos($block, '}', strpos($block, '});', $keeperGate) + 3);
+    assertTrue(strpos($block, 'setVersionPurger(') > $keeperEnd, 'purger is outside the claim gate');
+    assertTrue(strpos($block, "method_exists(\$fm, 'setVersionMover')") > $keeperEnd, 'mover is outside the claim gate (method_exists-guarded)');
+});
+
+// ── N3: audit purge gets the repository the controller already has ─────────
+test('N3: auditPurge passes the MetadataRepositoryInterface (works in DB mode), nothing assumes StorageMetadataHandler', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(strpos($src, '$module->purge($this->metaRepo, $claims, $disk, $before)') !== false, 'purge() gets $this->metaRepo');
+    $prop = new \ReflectionProperty(FluxFilesController::class, 'metaRepo');
+    assertEqual(\FluxFiles\MetadataRepositoryInterface::class, (string) $prop->getType(), 'typed as the interface');
+    assertEqual(1, substr_count($src, 'new StorageMetadataHandler('), 'StorageMetadataHandler only built as the json backend');
+    assertTrue(!preg_match('/StorageMetadataHandler\s+\$/', $src), 'no parameter/property typed StorageMetadataHandler');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

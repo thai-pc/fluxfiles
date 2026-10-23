@@ -9,7 +9,7 @@ export interface ServerConfig extends Partial<ToolOptions> {
   allowInsecureHttp?: boolean;
 }
 
-export const VERSION = '0.1.1';
+export const VERSION = '0.1.2';
 
 export function createServer(cfg: ServerConfig): McpServer {
   const client = new FluxFilesClient({ baseUrl: cfg.baseUrl, token: cfg.token, fetch: cfg.fetch, allowInsecureHttp: cfg.allowInsecureHttp });

@@ -49,7 +49,7 @@ export interface BaseTokenOptions {
   maxUploadMb?: number;
   /** Allowed extensions (lowercase, no dot). `null`/omitted = all non-dangerous types. */
   allowedExt?: string[] | null;
-  /** Time-to-live in seconds. */
+  /** Time-to-live in seconds — a positive integer (anything else throws). */
   ttl?: number;
   /** Restrict destructive ops to files the user uploaded. */
   ownerOnly?: boolean;
@@ -101,13 +101,13 @@ export interface BaseTokenOptions {
    *  config/executable files (wp-config.php, .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
   allowCodeEdit?: boolean;
   /** Allow the SSH terminal (POST /api/fm/terminal) on an SFTP disk. Default **false** — grants shell
-   *  access as the SSH user, so it's opt-in. Core-standalone: the token must target a real core
-   *  (this SDK does), not a proxy adapter that doesn't serve /api/fm/terminal. */
+   *  access as the SSH user, so it's opt-in. Served by core and proxied by the Laravel and
+   *  WordPress adapters too. */
   allowTerminal?: boolean;
   /** Optional self-hosted PTY terminal URL (ttyd / gotty / wetty, or any PTY-over-WebSocket
    *  server the operator runs). When set (and `allowTerminal` is true), the UI embeds it for a
    *  true interactive terminal instead of the built-in command-runner. Free; must be http(s).
-   *  Core-standalone only (like `allowTerminal`). */
+   *  Honored wherever `allowTerminal` is (core + the Laravel/WordPress proxies). */
   terminalPtyUrl?: string;
   /** Allow one-click Git deploy (POST /api/fm/git-deploy) on an SFTP disk. Default **false**.
    *  Deliberately independent of `allowTerminal`: it's a fixed-command-shape subset, not a
@@ -156,9 +156,10 @@ export interface BaseTokenOptions {
    *  identical re-upload is kept as a copy (like Finder / Drive / Dropbox); set true
    *  to save storage by blocking duplicates. */
   dedupeUploads?: boolean;
-  /** Edition preset that defaults a tier's claims (`pro`/`agency`/`enterprise`).
+  /** Edition preset that defaults a tier's claims (`free`/`pro`/`agency`/`studio`/
+   *  `enterprise`; `free` adds nothing). An unknown name throws a `RangeError`.
    *  DX sugar — explicit claim options still win, and the license gates the code. */
-  edition?: 'free' | 'pro' | 'agency' | 'enterprise';
+  edition?: 'free' | 'pro' | 'agency' | 'studio' | 'enterprise';
   /** Role preset that defaults a person's capability level (perms, owner-scoping,
    *  and free power-user toggles) — orthogonal to `edition`, which defaults which
    *  *paid features* a tier gets. DX sugar — explicit claim options still win, and

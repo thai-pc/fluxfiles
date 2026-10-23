@@ -62,6 +62,17 @@ WP Media Folder + WP Offload Media. Disable it with the `fluxfiles_enable_offloa
 filter or the settings checkbox. The attachment endpoint (`POST
 /wp-json/fluxfiles/v1/api/fm/attach`) requires the `upload_files` capability.
 
+The endpoint takes only the picked file's `key` + `disk` (plus display hints:
+width/height/alt/caption). The key is resolved through the **requesting user's own
+FluxFiles token** — disk allow-list, read permission, tenant prefix, system/hidden
+paths, existence and `owner_only` all apply — and the attachment URL (and srcset
+variants) are derived server-side from the disk config; a `url` in the body is
+ignored. Only disks with a **stable public URL** can be attached (public S3/R2 or
+a non-private local disk); private buckets, gated local storage and SFTP return
+422, and the picker falls back to inserting the plain URL. Re-picking a file that
+already has an attachment only refreshes its alt text if the user may edit that
+attachment.
+
 Picks also **sync alt text + caption** onto the attachment, and the Gutenberg block can
 **set the featured image** from a FluxFiles file.
 
@@ -105,7 +116,13 @@ wp fluxfiles verify --delete   # remove attachments whose file is gone
 
 **Delete sync.** Deleting an attachment leaves the file safe in your bucket by default;
 enable **Delete from storage** (Settings → FluxFiles, or the `fluxfiles_delete_storage`
-filter) to also remove it. The reverse direction (a file deleted in FluxFiles) is handled
+filter) to also remove it. The storage delete runs as the WordPress user deleting
+the attachment, through their own FluxFiles token: it needs the `delete`
+permission and honours the tenant prefix, `owner_only` and legal holds, and it is
+written to the audit log (`delete`, detail `wp_attachment_delete post=<id>`; a
+refusal is logged as `access_denied`). `_fluxfiles/`, `_variants/` and hidden
+(dot) paths are never deleted this way, and with no logged-in user (cron, WP-CLI)
+the file is kept. The reverse direction (a file deleted in FluxFiles) is handled
 on demand by `wp fluxfiles verify`.
 
 ## Who gets a token
@@ -120,6 +137,18 @@ To let Subscribers browse via `[fluxfiles]`, lower the bar deliberately:
 ```php
 add_filter('fluxfiles_required_capability', fn () => 'read');
 ```
+
+**Upload types follow WordPress.** For a user without `unfiltered_html` (everyone
+but Administrators/Editors on a single site, everyone but Super Admins on
+multisite) the minted `allowed_ext` is the intersection of the requested list (or
+"everything" when none was set) with the extensions `get_allowed_mime_types()`
+grants that user, and never includes `html`/`htm`/`xhtml`/`svg`/`svgz`/`xml`/`js`/
+`mjs`/`php*`/`phtml` — whatever the override, the `fluxfiles_token_overrides` filter
+or the raw `claims` map says. Those files would otherwise render as active content
+in the same origin as wp-admin. An empty result means *nothing* may be uploaded.
+
+An unknown `role` or `edition` override (e.g. a typo like `'veiwer'`) throws
+`InvalidArgumentException` instead of silently minting the site-wide default perms.
 
 ## Storage protection (Apache / nginx)
 
@@ -151,12 +180,48 @@ location ^~ /wp-content/fluxfiles/ {
 …or enable **private local storage** in the settings, which stops serving the
 directory statically at all (files stream through the signed REST route).
 
+On nginx the plugins screen and Settings → FluxFiles show an admin notice with
+these rules (rooted at your real content path) while the local disk is public.
+Once the rules are in place, hide it with
+`add_filter('fluxfiles_nginx_storage_notice', '__return_false');`.
+
 ## REST API
 
 A proxy is exposed at `/wp-json/fluxfiles/v1/api/fm/*` — `list`, `upload`,
 `delete`, `rename`, `move`, `copy`, `mkdir`, `cross-copy`, `cross-move`, `search`,
 `metadata`, … . The current WordPress user's identity is bridged into a short-lived
 FluxFiles JWT server-side; the signing secret never reaches the browser.
+
+- **Auth.** The iframe calls these routes with `Authorization: Bearer <jwt>` and no
+  nonce, which WordPress already treats as a cookie-less request. A Bearer call that
+  also carries a *stale* REST nonce (e.g. through `wp.apiFetch`) is let through to
+  the JWT check **only** for routes under `/fluxfiles/v1`, and is then run as user 0
+  — never as the logged-in cookie user. No other auth error is touched.
+- **Rate limits** mirror core: `import-url` has its own bucket (`import_rate_limit`
+  claim, else the `fluxfiles_import_rate_limit` filter, default 10/min, checked
+  together with the `write` permission before any outbound fetch); `/duplicates`
+  and `/usage?refresh=true` share a 2/min bucket (a plain `/usage` is served from a
+  cache, `usage_cache_ttl`, default 900 s); `presign` and `c2pa` verify count as
+  writes.
+- **Audit/webhooks** record tenant-scoped keys, as core does.
+- **`/img`** refuses (415) an image token that carries an overlay watermark — the
+  proxy does not composite one, and must not serve the clean image instead.
+- **The UI page** (`/public/index.html`) sends `Referrer-Policy: no-referrer` and
+  `Content-Security-Policy: frame-ancestors 'self' <site origins>`. A headless
+  front-end on another origin widens it with
+  `add_filter('fluxfiles_frame_ancestors', fn ($v) => $v . ' https://app.example.com');`
+  (`''` drops the header).
+
+## Updates
+
+Set `FLUXFILES_UPDATE_URL` (or the `fluxfiles_update_url` option/filter) to an
+update server and wp-admin offers new versions. The URL must be **https** — plain
+http is accepted for `localhost`/`127.0.0.1`/`::1` only — because the licence key
+travels as a Bearer header; otherwise update checks are disabled and an admin
+notice says why. The server's manifest is signature-checked, and the downloaded
+zip is re-hashed against the manifest's signed `sha256` before WordPress installs
+it: a mismatch, a missing checksum, or a package URL the manifest did not sign
+fails the update.
 
 ## Enable Import from URL
 

@@ -66,7 +66,9 @@ export class FluxFilesClient {
     } else if (opts.form) {
       body = opts.form;
     }
-    const res = await this.f(this.url(path, opts.query), { method, headers, body });
+    // redirect: 'error' — a redirect (open redirect, compromised proxy, http→https
+    // downgrade games) must never carry the bearer token to another URL.
+    const res = await this.f(this.url(path, opts.query), { method, headers, body, redirect: 'error' });
     type Envelope = { data?: T; error?: string | null; error_code?: string };
     let payload: Envelope | null = null;
     try {

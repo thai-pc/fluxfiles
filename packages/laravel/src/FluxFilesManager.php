@@ -70,12 +70,13 @@ class FluxFilesManager
     private static function applyEditionPreset(array &$payload, ?string $edition): void
     {
         $presets = [
+            'free'       => [],
             'pro'        => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
             'agency'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
             'studio'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true],
             'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true, 'allow_dlp_scan' => true, 'allow_legal_hold' => true],
         ];
-        foreach ($presets[strtolower((string) $edition)] ?? [] as $k => $v) {
+        foreach (self::pickPreset('edition', $edition, $presets) as $k => $v) {
             if (!array_key_exists($k, $payload)) {
                 $payload[$k] = $v;
             }
@@ -103,7 +104,34 @@ class FluxFilesManager
                               'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
         ];
 
-        return $presets[strtolower((string) $role)] ?? [];
+        return self::pickPreset('role', $role, $presets);
+    }
+
+    /**
+     * Look up a role/edition preset by name (case-insensitive). An unknown or
+     * typo'd name THROWS instead of silently minting a token without the intended
+     * bundle — for `role` that used to fail OPEN to the config defaults (rwd), the
+     * opposite of what a typo'd `'viewr'` meant. Empty/null = no preset. Mirrors
+     * the Node SDK's resolvePreset().
+     *
+     * @param array<string,array<string,mixed>> $presets
+     * @return array<string,mixed>
+     */
+    private static function pickPreset(string $kind, ?string $name, array $presets): array
+    {
+        if ($name === null || $name === '') {
+            return [];
+        }
+        $key = strtolower($name);
+        if (!array_key_exists($key, $presets)) {
+            throw new \InvalidArgumentException(sprintf(
+                'FluxFiles: unknown %s "%s" (valid: %s).',
+                $kind,
+                $name,
+                implode(', ', array_keys($presets))
+            ));
+        }
+        return $presets[$key];
     }
 
     /**
@@ -492,17 +520,203 @@ class FluxFilesManager
     }
 
     /**
-     * Generate a token for the currently authenticated user.
+     * Generate a token for the currently authenticated user: the per-user claims
+     * resolver's policy (see claimsFor()) with $overrides merged on top.
      */
     public function tokenForUser(array $overrides = []): string
     {
-        $user = auth()->user();
+        return $this->tokenForResolvedUser($this->currentUser(), $overrides);
+    }
 
+    /**
+     * token() for $user with the claims resolver's policy as the base layer and
+     * $overrides on top. Every IMPLICIT mint path (component, directive, refresh
+     * route, session fallback) goes through here, so none of them can hand out
+     * the bare config defaults when the operator has a per-user policy.
+     *
+     * @param string|int|Authenticatable $user
+     */
+    public function tokenForResolvedUser($user, array $overrides = []): string
+    {
+        return $this->token($user, self::mergeOverrides($this->claimsFor($user), $overrides));
+    }
+
+    /**
+     * Register the per-user claims resolver at runtime (takes precedence over the
+     * `fluxfiles.claims_resolver` config key). Unlike a closure in config, this
+     * survives `php artisan config:cache`. Pass null to unregister.
+     *
+     * @param (callable(Authenticatable): array<string,mixed>)|null $resolver
+     */
+    public function resolveClaimsUsing(?callable $resolver): void
+    {
+        $this->claimsResolver = $resolver;
+    }
+
+    /** True when a per-user claims resolver is registered (runtime or config). */
+    public function hasClaimsResolver(): bool
+    {
+        return $this->resolver() !== null;
+    }
+
+    /**
+     * The resolver's overrides for $user ([] when none is registered). Fails
+     * closed: a resolver that returns a non-array is a misconfiguration, not
+     * "no restrictions".
+     *
+     * @param string|int|Authenticatable $user
+     * @return array<string,mixed>
+     */
+    public function claimsFor($user): array
+    {
+        $resolver = $this->resolver();
+        if ($resolver === null) {
+            return [];
+        }
+        if (!$user instanceof Authenticatable) {
+            throw new \RuntimeException('The FluxFiles claims resolver needs an authenticated user object, not an id.');
+        }
+        $claims = $resolver($user);
+        if (!is_array($claims)) {
+            throw new \RuntimeException('The FluxFiles claims resolver must return an array of token overrides.');
+        }
+        return $claims;
+    }
+
+    /**
+     * A refresh ticket for the default `onTokenRefresh` hook: the overrides a page
+     * rendered its token with, HMAC-signed and bound to $user, so `GET
+     * /api/fm/token` re-mints the SAME scope instead of a broader one. Not a
+     * credential — the refresh route still requires the Laravel session — and it
+     * reveals nothing the JWT on the same page doesn't already carry.
+     *
+     * @param string|int|Authenticatable $user
+     */
+    public function refreshTicket($user, array $overrides = []): string
+    {
+        $body = self::b64url((string) json_encode([
+            'sub' => self::userId($user),
+            'exp' => time() + max(60, (int) config('fluxfiles.refresh_ticket_ttl', 43200)),
+            'o'   => $overrides,
+        ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+
+        return $body . '.' . self::b64url(hash_hmac('sha256', $body, $this->ticketKey(), true));
+    }
+
+    /** refreshTicket() for the currently authenticated user. */
+    public function refreshTicketForUser(array $overrides = []): string
+    {
+        return $this->refreshTicket($this->currentUser(), $overrides);
+    }
+
+    /**
+     * Verify a refresh ticket for $user and return the overrides it carries.
+     * Throws on a bad signature, an expired ticket, or one issued to another user.
+     *
+     * @param string|int|Authenticatable $user
+     * @return array<string,mixed>
+     */
+    public function verifyRefreshTicket($user, string $ticket): array
+    {
+        $parts = explode('.', $ticket);
+        if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+            throw new \RuntimeException('Malformed refresh ticket.');
+        }
+        $mac = self::b64url(hash_hmac('sha256', $parts[0], $this->ticketKey(), true));
+        if (!hash_equals($mac, $parts[1])) {
+            throw new \RuntimeException('Invalid refresh ticket signature.');
+        }
+        $json = base64_decode(strtr($parts[0], '-_', '+/'), true);
+        $data = is_string($json) ? json_decode($json, true) : null;
+        if (!is_array($data) || !is_array($data['o'] ?? null)) {
+            throw new \RuntimeException('Malformed refresh ticket.');
+        }
+        if ((int) ($data['exp'] ?? 0) < time()) {
+            throw new \RuntimeException('Refresh ticket expired.');
+        }
+        if (!hash_equals(self::userId($user), (string) ($data['sub'] ?? ''))) {
+            throw new \RuntimeException('Refresh ticket was issued to another user.');
+        }
+        return $data['o'];
+    }
+
+    /** @var (callable(Authenticatable): array<string,mixed>)|null */
+    private $claimsResolver = null;
+
+    /** The registered resolver as a callable, or null. Runtime registration wins over config. */
+    private function resolver(): ?callable
+    {
+        if ($this->claimsResolver !== null) {
+            return $this->claimsResolver;
+        }
+        $cfg = config('fluxfiles.claims_resolver');
+        if ($cfg === null || $cfg === '' || $cfg === false) {
+            return null;
+        }
+        if (is_string($cfg) && class_exists($cfg)) {
+            $obj = function_exists('app') ? app($cfg) : new $cfg();
+            if ($obj instanceof ClaimsResolver) {
+                return [$obj, 'resolve'];
+            }
+            if (is_callable($obj)) {
+                return $obj;
+            }
+            throw new \RuntimeException("fluxfiles.claims_resolver class {$cfg} must implement " . ClaimsResolver::class . ' or be invokable.');
+        }
+        if (is_callable($cfg)) {
+            return $cfg;
+        }
+        // Misconfigured is not "no resolver": falling back to the config defaults
+        // here would re-open exactly the hole the resolver exists to close.
+        throw new \RuntimeException('fluxfiles.claims_resolver must be a class name, an invokable or a callable.');
+    }
+
+    /**
+     * Resolver policy + explicit overrides. Shallow, except the `claims` escape
+     * hatch, whose maps are merged so an override can't silently drop a claim the
+     * resolver set there.
+     *
+     * @param array<string,mixed> $base
+     * @param array<string,mixed> $top
+     * @return array<string,mixed>
+     */
+    private static function mergeOverrides(array $base, array $top): array
+    {
+        $merged = array_replace($base, $top);
+        if (is_array($base['claims'] ?? null) && is_array($top['claims'] ?? null)) {
+            $merged['claims'] = array_replace($base['claims'], $top['claims']);
+        }
+        return $merged;
+    }
+
+    private function currentUser(): Authenticatable
+    {
+        $user = auth()->user();
         if (!$user) {
             throw new \RuntimeException('No authenticated user.');
         }
+        return $user;
+    }
 
-        return $this->token($user, $overrides);
+    /** @param string|int|Authenticatable $user */
+    private static function userId($user): string
+    {
+        return $user instanceof Authenticatable ? (string) $user->getAuthIdentifier() : (string) $user;
+    }
+
+    /** Ticket MAC key, derived so it can never be confused with the JWT signing key. */
+    private function ticketKey(): string
+    {
+        $secret = (string) config('fluxfiles.secret');
+        if ($secret === '') {
+            throw new \RuntimeException('FLUXFILES_SECRET is not configured.');
+        }
+        return hash_hmac('sha256', 'fluxfiles/laravel/refresh-ticket/v1', $secret, true);
+    }
+
+    private static function b64url(string $raw): string
+    {
+        return rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
     }
 
     /**

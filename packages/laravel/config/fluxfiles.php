@@ -91,6 +91,44 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | UI framing (CSP frame-ancestors)
+    |--------------------------------------------------------------------------
+    |
+    | Who may frame /public/index.html. Empty = "'self'" plus allowed_origins
+    | above; both empty = no header (any site may frame it). Same as core's
+    | FLUXFILES_FRAME_ANCESTORS.
+    |
+    */
+    'frame_ancestors' => env('FLUXFILES_FRAME_ANCESTORS', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Per-user claims resolver
+    |--------------------------------------------------------------------------
+    |
+    | The token policy for each user, used by every token minted WITHOUT an
+    | explicit overrides array: tokenForUser(), <x-fluxfiles>, @fluxfilesToken,
+    | the GET {route_prefix}/token refresh route and the session-only fallback in
+    | the FluxFilesAuth middleware. A class name implementing
+    | FluxFiles\Laravel\ClaimsResolver (resolved from the container), an
+    | invokable class, or a callable — `fn ($user) => ['prefix' => "users/{$user->id}"]`.
+    | Prefer a class name (closures can't be `config:cache`d), or register one at
+    | runtime with FluxFiles::resolveClaimsUsing(...) in a service provider.
+    |
+    | null = no per-user policy: the refresh route then only re-mints from the
+    | component's signed refresh ticket, and session-only API requests (no
+    | Bearer) are refused instead of getting the config `defaults` below.
+    |
+    */
+    'claims_resolver' => null,
+
+    // Lifetime (seconds) of the signed refresh ticket <x-fluxfiles> hands its
+    // default onTokenRefresh hook — how long a page left open can keep re-minting
+    // its token from the Laravel session. Default 12 hours.
+    'refresh_ticket_ttl' => 43200,
+
+    /*
+    |--------------------------------------------------------------------------
     | Storage Path
     |--------------------------------------------------------------------------
     |
@@ -118,6 +156,12 @@ return [
     // either to 0 to disable that bucket.
     'rate_limit_img'    => (int) env('FLUXFILES_IMG_RATE_LIMIT', 120),
     'rate_limit_stream' => (int) env('FLUXFILES_STREAM_RATE_LIMIT', 300),
+
+    // Dedicated buckets, matching core. URL import makes an outbound request per
+    // call (a token's `import_rate_limit` claim overrides this); /usage and
+    // /duplicates list the whole prefix per call. 0 disables a bucket.
+    'rate_limit_import' => (int) env('FLUXFILES_IMPORT_RATE_LIMIT', 10),
+    'rate_limit_usage'  => 2,
 
     /*
     |--------------------------------------------------------------------------

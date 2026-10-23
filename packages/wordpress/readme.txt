@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.2.35
-Stable tag: 0.2.60
+Stable tag: 0.2.61
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -103,6 +103,10 @@ works exactly as described above, minus those two features.
 Yes. Files picked through the FluxFiles UI register as real WordPress attachments — the media
 library, `wp_get_attachment_url()`, and the Gutenberg block all see them, even though the bytes
 live on S3/R2/local storage FluxFiles manages, not `wp-content/uploads/`.
+
+= My site runs on nginx. Is the uploads folder protected? =
+
+Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. While the local disk is public, the Plugins screen and Settings → FluxFiles show the nginx rules to add (no PHP execution, HTML/SVG/XML served inert, `_fluxfiles/` denied) — or turn on private local storage. Independently of the server, users without the `unfiltered_html` capability can never upload HTML, SVG, XML, JavaScript or PHP files through FluxFiles.
 
 == Screenshots ==
 

@@ -45,10 +45,21 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         return hash('sha256', $key);
     }
 
+    /**
+     * Every LIKE here is `<col> LIKE ? ESCAPE '!'`. Only MySQL (and Postgres)
+     * treat a backslash as LIKE's escape by default; SQLite and SQL Server have
+     * NO default escape character, so the old backslash-escaped pattern matched
+     * literally there — a prefix containing `_` or `%` (`user_1`) never matched
+     * its own children, and an unescaped `_` matched any character. `!` needs no
+     * quoting in any dialect's string literal, unlike the backslash (see core's
+     * PgsqlDialect::likeEscapeClause() for what a backslash costs on pdo_pgsql).
+     */
+    private const LIKE_ESCAPE = " ESCAPE '!'";
+
     /** Escape LIKE metacharacters in a bound value — never in the SQL string itself. */
     private function escapeLike(string $value): string
     {
-        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+        return str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $value);
     }
 
     private function fetchRow(string $disk, string $key): ?array
@@ -188,7 +199,7 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         return $this->table('fluxfiles_file_metadata')
             ->where('disk', $disk)
             ->where(function ($q) use ($prefix, $like) {
-                $q->where('path', $prefix)->orWhere('path', 'like', $like);
+                $q->where('path', $prefix)->orWhereRaw('path LIKE ?' . self::LIKE_ESCAPE, [$like]);
             })
             ->delete();
     }
@@ -199,7 +210,7 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         $candidates = $this->table('fluxfiles_file_metadata')
             ->where('disk', $disk)
             ->where(function ($q) use ($oldPrefix, $like) {
-                $q->where('path', $oldPrefix)->orWhere('path', 'like', $like);
+                $q->where('path', $oldPrefix)->orWhereRaw('path LIKE ?' . self::LIKE_ESCAPE, [$like]);
             })
             ->get(['id', 'path']);
 
@@ -266,15 +277,15 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         if ($prefix !== '') {
             $like = $this->escapeLike($prefix) . '/%';
             $q->where(function ($w) use ($prefix, $like) {
-                $w->where('path', $prefix)->orWhere('path', 'like', $like);
+                $w->where('path', $prefix)->orWhereRaw('path LIKE ?' . self::LIKE_ESCAPE, [$like]);
             });
         }
         $q->where(function ($w) use ($likeQ) {
-            $w->whereRaw('LOWER(path) LIKE LOWER(?)', [$likeQ])
-                ->orWhereRaw('LOWER(title) LIKE LOWER(?)', [$likeQ])
-                ->orWhereRaw('LOWER(alt_text) LIKE LOWER(?)', [$likeQ])
-                ->orWhereRaw('LOWER(caption) LIKE LOWER(?)', [$likeQ])
-                ->orWhereRaw('LOWER(tags) LIKE LOWER(?)', [$likeQ]);
+            $w->whereRaw('LOWER(path) LIKE LOWER(?)' . self::LIKE_ESCAPE, [$likeQ])
+                ->orWhereRaw('LOWER(title) LIKE LOWER(?)' . self::LIKE_ESCAPE, [$likeQ])
+                ->orWhereRaw('LOWER(alt_text) LIKE LOWER(?)' . self::LIKE_ESCAPE, [$likeQ])
+                ->orWhereRaw('LOWER(caption) LIKE LOWER(?)' . self::LIKE_ESCAPE, [$likeQ])
+                ->orWhereRaw('LOWER(tags) LIKE LOWER(?)' . self::LIKE_ESCAPE, [$likeQ]);
         });
         $rows = $q->orderBy('id', 'asc')->limit($cap)->get();
 
@@ -476,7 +487,7 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         $candidates = $this->table('fluxfiles_directories')
             ->where('disk', $disk)
             ->where(function ($q) use ($oldPrefix, $like) {
-                $q->where('path', $oldPrefix)->orWhere('path', 'like', $like);
+                $q->where('path', $oldPrefix)->orWhereRaw('path LIKE ?' . self::LIKE_ESCAPE, [$like]);
             })
             ->get(['path', 'path_hash']);
 
@@ -522,7 +533,7 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         return $this->table('fluxfiles_directories')
             ->where('disk', $disk)
             ->where(function ($q) use ($prefix, $like) {
-                $q->where('path', $prefix)->orWhere('path', 'like', $like);
+                $q->where('path', $prefix)->orWhereRaw('path LIKE ?' . self::LIKE_ESCAPE, [$like]);
             })
             ->delete();
     }
@@ -537,10 +548,10 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         if ($prefix !== '') {
             $like = $this->escapeLike($prefix) . '/%';
             $q->where(function ($w) use ($prefix, $like) {
-                $w->where('path', $prefix)->orWhere('path', 'like', $like);
+                $w->where('path', $prefix)->orWhereRaw('path LIKE ?' . self::LIKE_ESCAPE, [$like]);
             });
         }
-        $q->whereRaw('LOWER(path) LIKE LOWER(?)', [$likeQ]);
+        $q->whereRaw('LOWER(path) LIKE LOWER(?)' . self::LIKE_ESCAPE, [$likeQ]);
         $rows = $q->orderBy('path', 'asc')->limit($cap)->get(['path', 'created_at']);
 
         $results = [];
@@ -899,13 +910,18 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
             if ($entry['released_at'] !== null) {
                 continue; // released holds never block/cover
             }
-            $holdPath = trim((string) ($entry['path'] ?? ''), '/');
+            // Case-insensitive like core's StorageMetadataHandler::holdPathOverlaps():
+            // on a case-insensitive filesystem "Contracts/x" and "contracts/x" are the
+            // same file, and over-blocking is the safe side for a legal hold. Inlined
+            // so the adapter still runs on a core that predates that helper.
+            $holdPath = mb_strtolower(trim((string) ($entry['path'] ?? ''), '/'), 'UTF-8');
             if ($holdPath === '') {
                 continue;
             }
-            $overlaps = $holdPath === $scopedPath
-                || strpos($scopedPath, $holdPath . '/') === 0
-                || ($bidirectional && strpos($holdPath, $scopedPath . '/') === 0);
+            $target = mb_strtolower(trim($scopedPath, '/'), 'UTF-8');
+            $overlaps = $holdPath === $target
+                || strpos($target, $holdPath . '/') === 0
+                || ($bidirectional && strpos($holdPath, $target . '/') === 0);
             if ($overlaps) {
                 // $id is a PHP array key — an all-digit hold id string gets
                 // silently cast to int as an array key; cast back to string.

@@ -82,6 +82,9 @@ final class TusServer
             return [200, $base + ['Upload-Offset' => (string) $state['offset'], 'Upload-Length' => (string) $state['length']], null];
         }
         if ($method === 'DELETE') {
+            if (!empty($state['finalizing'])) {
+                return [423, $base, null]; // upload() is reading the staged bytes right now
+            }
             $this->remove($id);
             return [204, $base, null];
         }
@@ -118,7 +121,7 @@ final class TusServer
         $fm->validateChunkUpload($disk, $scoped, $length, true);
 
         $this->sweep();
-        if ($this->activeFor($claims->userId) >= self::MAX_ACTIVE_PER_USER) {
+        if ($this->activeFor($claims->userId, $claims->pathPrefix) >= self::MAX_ACTIVE_PER_USER) {
             throw new ApiException('Too many unfinished uploads', 429, 'rate_limited');
         }
         $id = bin2hex(random_bytes(16));
@@ -152,6 +155,13 @@ final class TusServer
         try {
             // Re-read under the lock: a concurrent PATCH may have advanced it.
             $state = $this->load($id) ?? $state;
+            if (!empty($state['finalizing'])) {
+                // The last byte is in and another PATCH is running upload() on
+                // it. Without this, a retried final PATCH (offset == length, empty
+                // body) got the lock as soon as the first released it and ran the
+                // upload pipeline a second time on the same staged file.
+                return [423, $base + ['Upload-Offset' => (string) $state['offset']], null];
+            }
             if ((int) $headers['upload-offset'] !== (int) $state['offset']) {
                 return [409, $base + ['Upload-Offset' => (string) $state['offset']], null];
             }
@@ -174,6 +184,11 @@ final class TusServer
                 $remaining -= strlen($chunk);
             }
             fflush($fh);
+            // Claim completion while still holding the lock, so exactly one PATCH
+            // ever hands the staged file to upload().
+            if ((int) $state['offset'] >= (int) $state['length']) {
+                $state['finalizing'] = true;
+            }
             $this->save($id, $state);
         } finally {
             flock($fh, LOCK_UN);
@@ -224,12 +239,13 @@ final class TusServer
         }
     }
 
-    private function activeFor(string $user): int
+    /** Same identity as ownership in handle(): `sub` alone is not unique across tenants. */
+    private function activeFor(string $user, string $prefix): int
     {
         $n = 0;
         foreach (glob($this->dir . '/*.json') ?: [] as $f) {
             $s = json_decode((string) @file_get_contents($f), true);
-            if (is_array($s) && ($s['user'] ?? null) === $user) {
+            if (is_array($s) && ($s['user'] ?? null) === $user && ($s['prefix'] ?? null) === $prefix) {
                 $n++;
             }
         }

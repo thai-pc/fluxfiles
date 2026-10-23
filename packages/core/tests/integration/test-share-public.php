@@ -51,7 +51,7 @@ function expectApi(callable $f, string $code, ?int $http = null): void
 // same public routes; a plain require would still not do, because the namespace
 // re-declaration is what lets this test observe header() calls.
 $indexSrc = (string) file_get_contents(__DIR__ . '/../../api/PublicLinks.php');
-$wanted = ['ff_share_send_bytes', 'ff_share_headers', 'ff_content_disposition', 'ff_share_payload', 'ff_share_token_jti', 'ff_share_rate_limit', 'ff_intake_rate_limit'];
+$wanted = ['ff_share_send_bytes', 'ff_share_headers', 'ff_content_disposition', 'ff_share_payload', 'ff_share_token_jti', 'ff_share_rate_limit', 'ff_intake_rate_limit', 'ff_xaccel_uri', 'ff_public_meta_repo'];
 $code = '';
 foreach ($wanted as $fn) {
     if (!preg_match('#\nfunction ' . $fn . '\(.*?\n\}\n#s', $indexSrc, $m)) {
@@ -62,7 +62,7 @@ foreach ($wanted as $fn) {
 }
 eval(
     'namespace ShareRoutes;' .
-    'use FluxFiles\ApiException; use FluxFiles\DiskManager; use FluxFiles\RateLimiterFileStorage; use FluxFiles\RateLimiterFactory; use FluxFiles\RateLimiterStorageInterface;' .
+    'use FluxFiles\ApiException; use FluxFiles\DiskManager; use FluxFiles\MetadataRepositoryInterface; use FluxFiles\StorageMetadataHandler; use FluxFiles\RateLimiterFileStorage; use FluxFiles\RateLimiterFactory; use FluxFiles\RateLimiterStorageInterface;' .
     // Header sink: shadows the builtin for the extracted code only (namespace fallback).
     'function header(string $h, bool $replace = true, int $code = 0): void { $GLOBALS["ff_headers"][] = [$h, $code]; }' .
     $code
@@ -120,6 +120,7 @@ function makeRoot(): string
     file_put_contents($root . '/users/42/vector.svg', '<svg onload="alert(1)"></svg>');
     file_put_contents($root . '/users/42/page.html', '<script>alert(1)</script>');
     file_put_contents($root . '/users/42/notes.txt', 'text');
+    file_put_contents($root . '/users/42/50%25 off #1?.pdf', 'PCT');
     return $root;
 }
 function rmrf(string $dir): void
@@ -248,6 +249,46 @@ test('X-Accel fast path only on a PRIVATE local disk (public still streams)', fu
         assertEqual('PDF-BYTES-Q3', $body2);
     } finally {
         unset($_ENV['FLUXFILES_XACCEL']);
+    }
+});
+
+test('X-Accel target is percent-encoded per segment (a name with %XX / # / ? / space must not 404)', function () use ($LOCAL_PRIVATE) {
+    $_ENV['FLUXFILES_XACCEL'] = '/internal-uploads/';
+    try {
+        $dm = new DiskManager(['local' => $LOCAL_PRIVATE]);
+        [, $h] = sendBytes($dm, ['local' => $LOCAL_PRIVATE], res('local', 'users/42/50%25 off #1?.pdf', 'application/pdf'));
+        // nginx decodes the header once before matching the internal location, so
+        // the literal key must arrive encoded: `%` → %25, space → %20, `#` → %23, `?` → %3F.
+        assertEqual('/internal-uploads/users/42/50%2525%20off%20%231%3F.pdf', hdr($h, 'X-Accel-Redirect'));
+    } finally {
+        unset($_ENV['FLUXFILES_XACCEL']);
+    }
+    assertEqual('/x/a/b%20c', \ShareRoutes\ff_xaccel_uri('/x', '/a/b c'), 'separators kept, no double slash');
+});
+
+test('N2: the public routes use the configured metadata backend (db → DbMetadataHandler)', function () {
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => sys_get_temp_dir(), 'url' => '/s']]);
+    $prev = $_ENV['FLUXFILES_STORAGE_BACKEND'] ?? null;
+    try {
+        unset($_ENV['FLUXFILES_STORAGE_BACKEND']);
+        assertTrue(\ShareRoutes\ff_public_meta_repo($dm) instanceof \FluxFiles\StorageMetadataHandler, 'json by default');
+        $_ENV['FLUXFILES_STORAGE_BACKEND'] = 'db';
+        $_ENV['FLUXFILES_DB_DSN'] = 'sqlite::memory:';
+        $repo = null;
+        try {
+            $repo = \ShareRoutes\ff_public_meta_repo($dm);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('db mode must build the DB handler, got: ' . $e->getMessage());
+        }
+        assertTrue($repo instanceof \FluxFiles\Db\DbMetadataHandler, 'db mode → DbMetadataHandler, not the JSON sidecars');
+        // A host that injected its own disks (WordPress/Laravel) keeps JSON unless
+        // it also injects its repository — its env isn't the standalone app's.
+        assertTrue(\ShareRoutes\ff_public_meta_repo($dm, null, true) instanceof \FluxFiles\StorageMetadataHandler, 'host-injected disks: json default');
+        $injected = new \FluxFiles\StorageMetadataHandler($dm);
+        assertTrue(\ShareRoutes\ff_public_meta_repo($dm, $injected, true) === $injected, 'an injected repository wins');
+    } finally {
+        if ($prev === null) { unset($_ENV['FLUXFILES_STORAGE_BACKEND']); } else { $_ENV['FLUXFILES_STORAGE_BACKEND'] = $prev; }
+        unset($_ENV['FLUXFILES_DB_DSN']);
     }
 });
 

@@ -3,6 +3,83 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.27] — 2026-10-23
+
+> Released: `core-v0.2.101`, `laravel-v0.2.51`, `wordpress-v0.2.61`,
+> `node-v0.1.35`, `python-v0.1.6`, `mcp-v0.1.2` (two pushes — the ≤3-tags rule).
+> Paid modules (own repos): `share v1.3.0`, `intake v1.4.0`,
+> `versioning v1.3.0`, `sso v2.1.0`, `ai v1.2.0`, `c2pa v1.2.0`, `ocr v1.2.0`,
+> `virus v1.2.0`, `backup v1.3.0`, `legal-hold v1.1.0`, `dlp v1.0.2`,
+> `audit-export v1.0.2` (`webhooks` unchanged).
+
+Full security + logic audit of the free core, the 13 paid modules, the
+Laravel/WordPress adapters and the client SDKs (2026-10-23). Every fix has a
+regression test that fails on the previous code.
+
+### Upgrade notes (behaviour changes)
+
+- **Laravel**: implicit tokens no longer fall back to the config defaults
+  (`prefix ''`, read/write/delete for any logged-in user). Configure
+  `fluxfiles.claims_resolver` (per-user overrides) — a resolver returning `[]`
+  restores the old behaviour explicitly. Cookie-only writes are refused; the
+  Blade component refreshes with a signed ticket that keeps its own scope.
+- **SSO**: a login is bound to the browser (HttpOnly `fluxfiles_sso_bind`
+  cookie) — `/sso/login` and the redirect URI must be on the same host.
+- **`show_hidden=false`** (the default) now refuses dot-segments everywhere a
+  path is taken (list-by-path, upload, copy/move/rename, modules); zip extract
+  skips dot-entries. Tenants that deploy dotfiles need `show_hidden: true`.
+- **`force_upload`** only skips the duplicate-content check; overwriting needs
+  `upload_collision: overwrite` (same for `/import-url` `overwrite`).
+- Tokens **without `exp`** are rejected; the token builders reject a
+  non-integer/non-positive `ttl` and an unknown `role`/`edition`.
+- **C2PA** runs c2patool with networking disabled (needs `--settings`); **OCR**
+  is images-only with a megapixel cap (`FLUXFILES_OCR_MAX_MEGAPIXELS`).
+- **WordPress**: `/attach` only links a file the user can reach and whose URL
+  is public; users without `unfiltered_html` can't upload html/svg/js.
+
+### Security — high
+
+- Upload accepted a dangerous filename through `path` when the client name was
+  `..` (e.g. `shell.php` written unchecked) — the final key's name is now
+  validated.
+- WordPress: the REST "Bearer bypass" filter cleared WordPress's nonce check for
+  *any* REST route (substring match on the URL), letting a cross-site request run
+  as the logged-in user. It now acts only on `/fluxfiles/v1` routes, only on
+  `rest_cookie_invalid_nonce`, and runs the request as user 0.
+- WordPress: metadata save/delete skipped owner_only and legal holds; `/attach`
+  + delete-storage could delete any storage key (incl. `_fluxfiles/`).
+- Laravel: any logged-in user could obtain an unscoped token (see notes).
+- Share: a preview-only/watermark token could publish the original file; core
+  rename/move/copy/crop/watermark results returned a URL to the clean original
+  for such tokens; proxied `/img` served unwatermarked previews.
+- Versioning: history was keyed by path, so a new owner of a reused path could
+  list and restore the previous owner's versions — history is now bound to the
+  owner chain, and purge/move hooks run regardless of the acting token's claim.
+- SSO: anyone holding `code`+`state` could replay the callback (PKCE derived
+  from state alone); now bound to the browser, plus issuer/`azp` checks.
+- Restoring from trash ignored legal holds.
+
+### Security — medium/low (selection)
+
+- Trash restore and module-generated files now honour `max_storage`/`max_files`;
+  retention could delete the wrong file when a subfolder shared the prefix name.
+- Legal-hold reads fail closed on an unreadable manifest; hold paths match
+  case-insensitively; a tenant token can't release an admin's hold.
+- `_fluxfiles/` and module stores are written private on public S3 disks.
+- Audit chain: unhashed lines after the chain started count as tampering, and
+  fixity trusts only verified entries.
+- DLP decodes UTF-16/32 text; AI Vision accepts only real raster formats; ClamAV
+  is called with `--fdpass` and its "FOUND" verdict wins over the exit code.
+- C2PA no longer fetches remote manifests (confirmed SSRF).
+- Intake portals can't grant more than the minting token (extensions/size);
+  public share/intake honour the DB storage backend and write audit entries.
+- Proxies: dedicated rate limits for `/usage`, `/duplicates` and URL import,
+  write-permission check before import, tenant-scoped audit keys, UI security
+  headers; WordPress updater verifies the zip's sha256 and requires https.
+- tus: finalisation is single-shot under the lock; the upload cap is per tenant.
+- MCP 0.1.2 marks storage-derived strings as untrusted data and never follows
+  redirects; `fm.js` ignores `FM_COMMAND` until a parent origin is locked.
+
 ## [0.3.26] — 2026-10-23
 
 > Released: `core-v0.2.100`, `laravel-v0.2.50`, `wordpress-v0.2.60`,

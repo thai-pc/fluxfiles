@@ -406,8 +406,69 @@ HTACCESS;
             $payload['owner_only'] = true;
         }
         self::applyTenantOverrides($payload, $overrides, $roleDefaults);
+        // Last, so neither `allowed_ext` nor the raw `claims` escape hatch can undo it.
+        self::restrictActiveContent($payload, $userId);
 
         return \FluxFiles\JwtCompat::encode($payload, $secret);
+    }
+
+    /**
+     * File types that render as ACTIVE content (script/markup/server code) when
+     * served from the site's own origin. A user without `unfiltered_html` can never
+     * be handed a token that uploads them, whatever the override or filter says.
+     */
+    private const ACTIVE_CONTENT_EXT = [
+        'html', 'htm', 'xhtml', 'shtml', 'shtm', 'svg', 'svgz', 'xml', 'xsl', 'xslt',
+        'js', 'mjs', 'cjs', 'swf', 'phtml', 'pht', 'phar', 'phps',
+    ];
+
+    /**
+     * Stored XSS guard (Author → Administrator). The local disk lives under
+     * wp-content/, the SAME origin as wp-admin, and only Apache gets the .htaccess
+     * that serves uploads inertly — on nginx an uploaded .html/.svg runs script as
+     * the site. WordPress itself withholds these types from anyone lacking
+     * `unfiltered_html`; FluxFiles used to mint `allowed_ext: null` (= everything).
+     *
+     * For such a user the minted `allowed_ext` becomes: the requested list (or, when
+     * unrestricted, everything) ∩ the extensions get_allowed_mime_types() grants that
+     * user, minus ACTIVE_CONTENT_EXT and php*. An empty result stays `[]`, which core
+     * reads as "nothing allowed" (fail closed), never as "no restriction".
+     * Outside WordPress (no user_can()/get_allowed_mime_types()) it is a no-op.
+     *
+     * @param array<string,mixed> $payload
+     */
+    private static function restrictActiveContent(array &$payload, int $userId): void
+    {
+        if (!function_exists('user_can') || !function_exists('get_allowed_mime_types')) {
+            return;
+        }
+        if (user_can($userId, 'unfiltered_html')) {
+            return;
+        }
+        // The token's user, not the current one: get_allowed_mime_types(null) would
+        // judge whoever is logged in (an admin minting a token for an Author).
+        $wpExt = [];
+        foreach (array_keys((array) get_allowed_mime_types($userId > 0 ? $userId : null)) as $group) {
+            foreach (explode('|', strtolower((string) $group)) as $ext) {
+                $ext = trim($ext);
+                if ($ext !== '') {
+                    $wpExt[$ext] = true;
+                }
+            }
+        }
+        $requested = $payload['allowed_ext'] ?? null;
+        $candidates = is_array($requested)
+            ? array_map(static fn ($e) => strtolower(ltrim(trim((string) $e), '.')), $requested)
+            : array_keys($wpExt);
+        $out = [];
+        foreach ($candidates as $ext) {
+            if ($ext === '' || !isset($wpExt[$ext]) || in_array($ext, self::ACTIVE_CONTENT_EXT, true)
+                || strncmp($ext, 'php', 3) === 0) {
+                continue;
+            }
+            $out[$ext] = true;
+        }
+        $payload['allowed_ext'] = array_keys($out);
     }
 
     /**
@@ -427,7 +488,16 @@ HTACCESS;
             'studio'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true],
             'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true, 'allow_dlp_scan' => true, 'allow_legal_hold' => true],
         ];
-        foreach ($presets[strtolower((string) $edition)] ?? [] as $k => $v) {
+        if ($edition === null || $edition === '') {
+            return;
+        }
+        $key = strtolower($edition);
+        if (!isset($presets[$key])) {
+            // A typo (`'enterprize'`) used to mint a token silently WITHOUT the tier the
+            // operator meant — fail loudly at mint time instead.
+            throw new \InvalidArgumentException('Unknown FluxFiles edition "' . $edition . '" (expected: ' . implode(', ', array_keys($presets)) . ')');
+        }
+        foreach ($presets[$key] as $k => $v) {
             if (!array_key_exists($k, $payload)) {
                 $payload[$k] = $v;
             }
@@ -455,7 +525,17 @@ HTACCESS;
                               'allow_extract' => true, 'allow_chmod' => true, 'allow_code_edit' => true, 'show_hidden' => true],
         ];
 
-        return $presets[strtolower((string) $role)] ?? [];
+        if ($role === null || $role === '') {
+            return [];
+        }
+        $key = strtolower($role);
+        if (!isset($presets[$key])) {
+            // An unknown role used to expand to NOTHING, so the token fell back to the
+            // site-wide default perms (read+write+delete) — a typo like `'veiwer'`
+            // failed OPEN. Refuse to mint instead.
+            throw new \InvalidArgumentException('Unknown FluxFiles role "' . $role . '" (expected: ' . implode(', ', array_keys($presets)) . ')');
+        }
+        return $presets[$key];
     }
 
     /**
@@ -892,6 +972,8 @@ HTACCESS;
             $payload['owner_only'] = true;
         }
         self::applyTenantOverrides($payload, $overrides, $roleDefaults);
+        // Last, so neither `allowed_ext` nor the raw `claims` escape hatch can undo it.
+        self::restrictActiveContent($payload, $userId);
 
         return \FluxFiles\JwtCompat::encode($payload, $secret);
     }

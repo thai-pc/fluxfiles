@@ -136,16 +136,20 @@ final class OptimizeModule
             throw new ApiException('File not found', 404, 'not_found');
         }
 
+        // Per-tenant size cap (optimize_max_mb, 0 = no limit): skip oversized files
+        // rather than spend CPU/time on them — judged on the STORED size, before
+        // the whole file is pulled into memory.
+        $maxBytes = max(0, $claims->optimizeMaxMb) * 1024 * 1024;
+        if ($maxBytes > 0) {
+            $storedBytes = (int) $fs->fileSize($scoped);
+            if ($storedBytes > $maxBytes) {
+                return $this->skipped($path, $storedBytes, 'too_large');
+            }
+        }
+
         $src = (string) $fs->read($scoped);
         $originalBytes = strlen($src);
         $ext = strtolower(pathinfo($scoped, PATHINFO_EXTENSION));
-
-        // Per-tenant size cap (optimize_max_mb, 0 = no limit): skip oversized files
-        // rather than spend CPU/time on them.
-        $maxBytes = max(0, $claims->optimizeMaxMb) * 1024 * 1024;
-        if ($maxBytes > 0 && $originalBytes > $maxBytes) {
-            return $this->skipped($path, $originalBytes, 'too_large');
-        }
 
         // ── PDF branch (Ghostscript) — downsample embedded images, stays a PDF ──
         if ($ext === 'pdf' || PdfOptimizer::isPdf($src)) {
@@ -160,7 +164,8 @@ final class OptimizeModule
 
             // Same .pdf extension → overwrite in place (or write to an explicit dest).
             $destUser = ($dest !== null && trim($dest) !== '') ? $dest : $path;
-            $destScoped = $fm->validateUserPath($destUser);
+            $destScoped = $fm->validateUserPath($destUser, $disk);
+            $this->assertDestination($fs, $claims, $scoped, $destScoped, $ext); // stays a PDF under its own extension
             $fm->assertCanModifyScopedPath($disk, $destScoped);
             $fm->writeScopedFile($disk, $destScoped, $optimized);
             // Explicit `dest` can point at a genuinely new path — carry the source
@@ -207,6 +212,7 @@ final class OptimizeModule
             ? $dest
             : preg_replace('/\.[^.\/]+$/', '', $path) . '.' . $outExt;
         $destScoped = $fm->validateUserPath($destUser, $disk);
+        $this->assertDestination($fs, $claims, $scoped, $destScoped, $outExt);
         $fm->assertCanModifyScopedPath($disk, $destScoped);
 
         $fm->writeScopedFile($disk, $destScoped, $result['data']);
@@ -242,6 +248,34 @@ final class OptimizeModule
             'replaced'        => $replaced,
             'skipped'         => false,
         ];
+    }
+
+    /**
+     * The output keeps the extension of what it was encoded as (an explicit `dest`
+     * must not turn WebP bytes into `x.php`/`x.svg`, nor move a PDF to another
+     * extension), and
+     * never silently replaces a DIFFERENT existing file — the default
+     * `<name>.webp` may already be another upload. Overwriting it is allowed
+     * only under the operator's `upload_collision=overwrite` policy, the same
+     * rule upload() applies. The source itself (in-place PDF) is not a collision.
+     */
+    private function assertDestination($fs, Claims $claims, string $srcScoped, string $destScoped, string $wantExt): void
+    {
+        $destExt = strtolower(pathinfo($destScoped, PATHINFO_EXTENSION));
+        if ($destExt !== $wantExt) {
+            throw new ApiException('Changing the file extension is not allowed', 400, 'ext_changed', ['from' => $wantExt, 'to' => $destExt]);
+        }
+        if ($destScoped === $srcScoped || $claims->uploadCollision === 'overwrite') {
+            return;
+        }
+        try {
+            $taken = $fs->fileExists($destScoped) || $fs->directoryExists($destScoped);
+        } catch (\Throwable $e) {
+            $taken = false;
+        }
+        if ($taken) {
+            throw new ApiException('A file or folder with that name already exists', 409, 'name_exists');
+        }
     }
 
     /** @return array<string,mixed> */

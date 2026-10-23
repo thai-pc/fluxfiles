@@ -16,10 +16,12 @@ defined('ABSPATH') || exit;
  *     here with the same `UpdateClient` and embedded release public key the CLI uses.
  *     An unsigned or tampered manifest is discarded, so nobody who merely controls the
  *     network can point a site at their own zip.
- *   - WordPress performs the download itself, so it does NOT re-check the sha256 the
- *     manifest carries. The protection that matters is therefore the signature on the
- *     URL, not the checksum — an attacker cannot substitute a URL without the release
- *     private key.
+ *   - The signature covers the URL AND the zip's sha256, so the download is held to
+ *     it: `upgrader_pre_download` fetches the package itself, re-hashes it and fails
+ *     the update on a mismatch (or on a manifest with no checksum). Without that, a
+ *     CDN/mirror compromise or an http hop could swap the bytes under a valid URL.
+ *   - The endpoint must be https (plain http only for localhost): the request carries
+ *     the licence key as a Bearer credential.
  *   - Results are cached in a transient. This runs on every admin page load, and a
  *     wp-admin that pauses for a network round trip is a worse bug than a stale
  *     version number.
@@ -43,19 +45,108 @@ class FluxFilesUpdater
         // No endpoint configured → the site simply never checks. Deliberately silent:
         // a self-hosted install with no update server is a supported setup, not an
         // error to nag about.
+        if (self::configuredEndpoint() === '') {
+            return;
+        }
         if (self::endpoint() === '') {
+            // Configured but refused (not https): say so once per admin view instead of
+            // silently never updating — and never send the licence key over it.
+            add_action('admin_notices', [self::class, 'insecureEndpointNotice']);
             return;
         }
         add_filter('pre_set_site_transient_update_plugins', [self::class, 'inject']);
         add_filter('plugins_api', [self::class, 'info'], 20, 3);
+        add_filter('upgrader_pre_download', [self::class, 'verifyDownload'], 10, 4);
         add_action('upgrader_process_complete', [self::class, 'flush'], 10, 0);
     }
 
-    /** Where to ask. Filterable so a site can point at its own mirror. */
-    private static function endpoint(): string
+    /** The raw configured endpoint. Filterable so a site can point at its own mirror. */
+    private static function configuredEndpoint(): string
     {
         $url = (string) (getenv('FLUXFILES_UPDATE_URL') ?: get_option('fluxfiles_update_url', ''));
-        return (string) apply_filters('fluxfiles_update_url', $url);
+        return trim((string) apply_filters('fluxfiles_update_url', $url));
+    }
+
+    /** The endpoint to use, or '' when it isn't a safe place to send the licence key. */
+    private static function endpoint(): string
+    {
+        $url = self::configuredEndpoint();
+        return self::isSecureUrl($url) ? $url : '';
+    }
+
+    /** https, or plain http to the local machine only (a dev/test update server). */
+    public static function isSecureUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return false;
+        }
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        if ($scheme === 'https') {
+            return true;
+        }
+        $host = strtolower(trim((string) $parts['host'], '[]'));
+        return $scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+    }
+
+    public static function insecureEndpointNotice(): void
+    {
+        if (!function_exists('current_user_can') || !current_user_can('manage_options')) {
+            return;
+        }
+        echo '<div class="notice notice-error"><p><strong>FluxFiles:</strong> ';
+        echo esc_html('the update server URL must use https (plain http is accepted for localhost only). Update checks are disabled until it does, so the licence key is never sent in clear text.');
+        echo '</p></div>';
+    }
+
+    /**
+     * `upgrader_pre_download`: for THIS plugin's update, download the package
+     * ourselves and hold it to the signed manifest's sha256. Returning a file path
+     * makes WordPress install exactly those verified bytes; a WP_Error aborts the
+     * update. Any other package (other plugins, a manual zip upload) passes through.
+     *
+     * @param mixed $reply
+     * @param mixed $package
+     * @param mixed $upgrader
+     * @param mixed $hookExtra
+     * @return mixed
+     */
+    public static function verifyDownload($reply, $package, $upgrader = null, $hookExtra = [])
+    {
+        if ($reply !== false || !is_string($package) || $package === '') {
+            return $reply;
+        }
+        $m = self::manifest();
+        $ours = (is_array($hookExtra) && ($hookExtra['plugin'] ?? '') === self::slug())
+            || ($m !== null && $m['url'] !== '' && hash_equals($m['url'], $package));
+        if (!$ours) {
+            return $reply;
+        }
+        if ($m === null || $m['url'] === '' || !hash_equals($m['url'], $package)) {
+            return new \WP_Error('fluxfiles_update_unverified', 'FluxFiles update refused: the package does not match the signed release manifest.');
+        }
+        $want = strtolower(trim($m['sha256']));
+        if (!preg_match('/^[0-9a-f]{64}$/', $want)) {
+            return new \WP_Error('fluxfiles_update_unverified', 'FluxFiles update refused: the signed manifest carries no sha256 for the package.');
+        }
+        if (!function_exists('download_url') && defined('ABSPATH') && is_file(ABSPATH . 'wp-admin/includes/file.php')) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        if (!function_exists('download_url')) {
+            return new \WP_Error('fluxfiles_update_unverified', 'FluxFiles update refused: cannot download the package for verification.');
+        }
+        $tmp = download_url($package);
+        if (is_wp_error($tmp)) {
+            return $tmp;
+        }
+        $got = is_string($tmp) && is_file($tmp) ? (string) hash_file('sha256', $tmp) : '';
+        if ($got === '' || !hash_equals($want, $got)) {
+            if (is_string($tmp)) {
+                @unlink($tmp);
+            }
+            return new \WP_Error('fluxfiles_update_checksum', 'FluxFiles update refused: the downloaded package does not match the signed sha256.');
+        }
+        return $tmp;
     }
 
     private static function slug(): string
@@ -78,9 +169,13 @@ class FluxFilesUpdater
             }
         }
 
+        $endpoint = self::endpoint();
+        if ($endpoint === '') {
+            return null; // unset or not https — never send the licence key there
+        }
         $url = add_query_arg(
             ['module' => self::MODULE, 'current' => FLUXFILES_VERSION],
-            self::endpoint()
+            $endpoint
         );
         // The licence key is a bearer credential, so it travels in the header and
         // never in the query string — a URL is written to access logs, proxy logs and

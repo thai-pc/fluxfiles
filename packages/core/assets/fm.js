@@ -379,7 +379,11 @@ function fluxFilesApp() {
                     }
                 }
 
-                if (msg.type === 'FM_COMMAND') {
+                // FM_COMMAND acts with the current token (crossMove, aiTag…), so it
+                // needs an established parent origin — the FM_CONFIG lock above or a
+                // __FM_BOOT__ parentOrigin. A server-injected boot without one never
+                // locks, so otherwise any page framing the UI could drive it.
+                if (msg.type === 'FM_COMMAND' && this._parentOrigin) {
                     this.handleCommand(msg.payload);
                 }
             });

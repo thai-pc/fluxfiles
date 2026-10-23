@@ -16,8 +16,22 @@ class JwtMiddleware
         }
 
         self::assertAccessToken($payload);
+        self::assertExpiry($payload);
 
         return Claims::fromJwtPayload($payload, $secret);
+    }
+
+    /**
+     * Require a numeric `exp`. php-jwt only checks `exp` when it is present, so a
+     * token minted without one would never expire. Every builder (embed.php,
+     * node, python, Laravel, WordPress) always sets it, so a missing/non-numeric
+     * `exp` means a hand-rolled or tampered token — refuse it like a bad one.
+     */
+    private static function assertExpiry(object $payload): void
+    {
+        if (!isset($payload->exp) || (!is_int($payload->exp) && !is_float($payload->exp))) {
+            throw new ApiException('Invalid or expired token', 401, 'token_invalid');
+        }
     }
 
     /**

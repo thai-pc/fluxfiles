@@ -113,6 +113,74 @@ Managing a **remote VPS / shared host** over SFTP is supported in both modes.
 
 ## Usage
 
+> **Upgrading from an earlier 0.2.x?** Implicit tokens no longer fall back to the
+> `defaults` in `config/fluxfiles.php` (read/write/delete, empty prefix = every
+> user sees everything). If you relied on that, register a
+> [per-user claims resolver](#per-user-token-policy-claims-resolver) — returning
+> `[]` keeps the old behaviour deliberately. In proxy mode, a request **without** a
+> Bearer token is now refused for POST/PUT/DELETE, and for reads unless a resolver
+> is configured; the embedded UI always sends its Bearer, so only custom
+> cookie-only `fetch()` calls are affected. See [Session-only requests](#session-only-requests-proxy-mode).
+
+### Per-user token policy (claims resolver)
+
+Tokens minted **without** an explicit overrides array — `tokenForUser()`,
+`<x-fluxfiles>`, `@fluxfilesToken`, the `GET {route_prefix}/token` refresh route and
+the session fallback below — take their scope from a resolver you register once:
+
+```php
+// app/FluxFiles/TenantClaims.php
+use FluxFiles\Laravel\ClaimsResolver;
+use Illuminate\Contracts\Auth\Authenticatable;
+
+class TenantClaims implements ClaimsResolver
+{
+    public function resolve(Authenticatable $user): array
+    {
+        return [
+            'prefix' => 'users/' . $user->getAuthIdentifier(),
+            'role'   => $user->is_admin ? 'admin' : 'editor',
+        ];
+    }
+}
+```
+
+```php
+// config/fluxfiles.php — a class name is resolved through the container
+'claims_resolver' => \App\FluxFiles\TenantClaims::class,
+
+// …or at runtime, e.g. in AppServiceProvider::boot() (survives config:cache)
+FluxFiles::resolveClaimsUsing(fn ($user) => ['prefix' => 'users/' . $user->id]);
+```
+
+The resolver returns the same array `token()` accepts. Explicit overrides (a
+component's `:overrides`, `tokenForUser([...])`) are merged **on top**, and the two
+`claims` maps are merged key by key. Throw from the resolver to refuse a user; a
+non-array result is an error, never "no restrictions". `token($user, $overrides)`
+itself is unchanged — it never consults the resolver.
+
+**Token refresh.** `<x-fluxfiles>`'s default `onTokenRefresh` sends a signed
+*refresh ticket* (an `X-FluxFiles-Refresh-Ticket` header, never the URL) that binds
+the tag's `:overrides` to the logged-in user, so an expired token is re-minted with
+the **same** scope it was rendered with. Without a ticket the route uses the
+resolver, and without either it answers `403 token_refresh_unconfigured` (the UI then
+asks for a reload). Tickets last `refresh_ticket_ttl` seconds (default 12 h); the
+response is `Cache-Control: no-store`.
+
+### Session-only requests (proxy mode)
+
+The proxied API authenticates on the FluxFiles Bearer token. A request that carries
+only the Laravel session cookie:
+
+- **POST / PUT / DELETE** → `401 token_missing`. The route prefix is CSRF-exempt
+  (see below), so a cookie-only write is exactly what a cross-site form can forge.
+- **GET / HEAD** → allowed only when a claims resolver is configured (the token is
+  minted from it) **and** the request comes from this site or one of
+  `allowed_origins` (checked via `Origin` / `Sec-Fetch-Site`; cross-site → `403
+  origin_denied`). Without a resolver → `401 token_missing`.
+
+The language routes (`lang`, `lang/{locale}`) need neither.
+
 ### Blade Component
 
 ```blade
@@ -240,8 +308,11 @@ FluxFiles.open({
 ```php
 use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
 
-FluxFiles::token($user, $overrides);   // Generate JWT token
-FluxFiles::tokenForUser($overrides);   // Token for auth user
+FluxFiles::token($user, $overrides);   // Generate JWT token (no resolver)
+FluxFiles::tokenForUser($overrides);   // Token for auth user (resolver + overrides)
+FluxFiles::tokenForResolvedUser($user, $overrides); // Same, for a given user
+FluxFiles::resolveClaimsUsing($callable);            // Register the claims resolver
+FluxFiles::refreshTicketForUser($overrides);         // Ticket for a custom refresh hook
 FluxFiles::endpoint();                  // Get FluxFiles URL
 FluxFiles::iframeSrc();                 // Get iframe source URL
 FluxFiles::sdkUrl();                    // Get SDK script URL
@@ -297,6 +368,13 @@ return [
     'route_prefix' => 'api/fm',
     'middleware'    => ['web', 'auth'],
 
+    // Per-user token policy — see "Per-user token policy" above.
+    'claims_resolver'    => null,
+    'refresh_ticket_ttl' => 43200,   // seconds
+
+    // CSP frame-ancestors for /public/index.html (empty = 'self' + allowed_origins).
+    'frame_ancestors' => env('FLUXFILES_FRAME_ANCESTORS', ''),
+
     // 'json' (default — bookkeeping in each disk's _fluxfiles/) or 'db'
     // (your app's own database connection; run the package migration)
     'storage_backend' => env('FLUXFILES_STORAGE_BACKEND', 'json'),
@@ -329,8 +407,10 @@ return [
 ];
 ```
 
-(Abridged — the published file also carries the `/img` and `/stream` rate limits,
-`storage_path`, and comments for every key.)
+(Abridged — the published file also carries the rate limits — read/write, `/img`,
+`/stream`, URL import (`FLUXFILES_IMPORT_RATE_LIMIT`, default 10/min; a token's
+`import_rate_limit` wins) and `/usage` + `/duplicates` (2/min: this proxy recomputes
+usage on every call) — plus `storage_path`, and comments for every key.)
 
 ### CSRF exclusion (proxy mode only)
 
@@ -366,6 +446,10 @@ protected $except = [
 
 > **Standalone mode** is unaffected — the core runs as its own server with its own
 > Origin-based CSRF check, and Laravel only mints tokens / embeds the iframe.
+
+Excluding the prefix is safe because the routes never act on the session cookie
+alone for a write: a request without a Bearer token is refused for POST/PUT/DELETE
+(see [Session-only requests](#session-only-requests-proxy-mode)).
 
 ## Permissions & Deployment
 

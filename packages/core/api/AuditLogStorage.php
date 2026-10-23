@@ -54,10 +54,16 @@ class AuditLogStorage
     public function list(int $limit = 100, int $offset = 0, ?string $actor = null, ?Claims $claims = null, array $filters = []): array
     {
         $limit = max(1, min($limit, self::MAX_LIST));
+        // A `from` date lets the backend skip older rows (a DB backend filters in
+        // SQL instead of loading the whole audit table). The full filter below
+        // still runs, so this only narrows what is read, never what is returned.
+        $since = isset($filters['from']) && $filters['from'] !== null && $filters['from'] !== '' ? (int) $filters['from'] : null;
         $all = [];
         foreach ($this->claimsDisks as $disk) {
             try {
-                $entries = $this->storage->readAudit($disk, $actor);
+                $entries = $since !== null && method_exists($this->storage, 'readAuditWindow')
+                    ? $this->storage->readAuditWindow($disk, $since, null, $actor)
+                    : $this->storage->readAudit($disk, $actor);
                 $all = array_merge($all, $entries);
             } catch (\Throwable $e) {
                 // Skip disk if error

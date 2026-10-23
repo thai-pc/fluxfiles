@@ -13,6 +13,7 @@ class FluxFilesAdmin
         add_action('admin_init', [$this, 'registerSettings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('admin_notices', [$this, 'renderLicenseExpiryNotice']);
+        add_action('admin_notices', [$this, 'renderNginxStorageNotice']);
         add_action('wp_ajax_fluxfiles_dismiss_license_notice', [$this, 'handleDismissLicenseNotice']);
     }
 
@@ -369,6 +370,70 @@ class FluxFilesAdmin
         );
 
         $this->enqueueDismissScript();
+    }
+
+    /**
+     * True when this site runs on nginx, which never reads the .htaccess that
+     * FluxFilesPlugin::protectStorage() writes. Uses WP's own `$is_nginx` global
+     * (wp-includes/vars.php) with a SERVER_SOFTWARE fallback.
+     */
+    public static function isNginx(): bool
+    {
+        if (!empty($GLOBALS['is_nginx'])) {
+            return true;
+        }
+        return stripos((string) ($_SERVER['SERVER_SOFTWARE'] ?? ''), 'nginx') !== false;
+    }
+
+    /**
+     * nginx + a public local disk: the uploads dir under wp-content/ is served by
+     * nginx raw, in the SAME origin as wp-admin, with none of the .htaccess rules
+     * (no PHP execution, HTML/SVG served inert, `_fluxfiles/` denied). The plugin
+     * cannot write nginx config, so the operator has to — say so on the screens
+     * where they manage plugins / FluxFiles. Hidden once local storage is private,
+     * or via `add_filter('fluxfiles_nginx_storage_notice', '__return_false')` after
+     * adding the rules.
+     */
+    public function renderNginxStorageNotice(): void
+    {
+        if (!current_user_can('manage_options') || !self::isNginx()) {
+            return;
+        }
+        $page = (string) ($GLOBALS['pagenow'] ?? '');
+        if ($page !== 'plugins.php' && !($page === 'options-general.php' && ($_GET['page'] ?? '') === 'fluxfiles')) {
+            return;
+        }
+        if ((bool) get_option('fluxfiles_local_private', false)
+            || !in_array('local', (array) get_option('fluxfiles_disks', ['local']), true)
+            || !apply_filters('fluxfiles_nginx_storage_notice', true)) {
+            return;
+        }
+        // Same rules as README.md "Storage protection (Apache / nginx)", rooted at
+        // this site's actual content path.
+        $root = '/' . trim((string) wp_parse_url(content_url('fluxfiles'), PHP_URL_PATH), '/') . '/';
+        $dir = $root . 'uploads/';
+        $snippet = "location ^~ {$root} {\n"
+            . "    location ^~ {$dir} {\n"
+            . "        allow all;\n"
+            . "        add_header X-Content-Type-Options \"nosniff\" always;\n"
+            . "        add_header Content-Security-Policy \"sandbox\" always;\n"
+            . "        location ~* /_fluxfiles/ { deny all; }\n"
+            . "        location ~ /\\. { deny all; }\n"
+            . "        location ~* \\.(php[0-9]?|pht|phtml?|phar|phps|pgif|shtml?|stm|cgi|pl|py)$ { deny all; }\n"
+            . "        location ~* \\.(html?|xhtml|xml|svgz?)$ {\n"
+            . "            add_header X-Content-Type-Options \"nosniff\" always;\n"
+            . "            add_header Content-Security-Policy \"sandbox\" always;\n"
+            . "            add_header Content-Disposition \"attachment\" always;\n"
+            . "        }\n"
+            . "    }\n"
+            . "    deny all;\n"
+            . "}";
+        printf(
+            '<div class="notice notice-warning"><p><strong>FluxFiles:</strong> %s</p><pre style="white-space:pre-wrap">%s</pre><p>%s</p></div>',
+            esc_html__('This site runs on nginx, which ignores the .htaccess protecting the FluxFiles uploads folder. Uploads there are served from the same origin as wp-admin: the folder must never execute PHP and must not serve HTML/SVG/XML as active content, and its _fluxfiles/ bookkeeping must not be public. Add rules like these to your server block (then reload nginx):', 'fluxfiles'),
+            esc_html($snippet),
+            esc_html__('Alternatively turn on private local storage so files are only served through signed links.', 'fluxfiles')
+        );
     }
 
     /**

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createToken, createByobToken, verifyToken, decodeToken } from '../src';
-import { encryptByob, decryptByob } from '../src/crypto';
+import { encryptByob, decryptByob, base64url, hmacSha256 } from '../src/crypto';
 
 const SECRET = 'test-secret-key-that-is-at-least-32-bytes-long';
 
@@ -45,7 +45,21 @@ const VECTORS = JSON.parse(readFileSync(VECTORS_PATH, 'utf8')) as {
  * harness, since "absent" and "present-but-false" both mean "not enabled" for
  * every boolean claim these fixtures cover.
  */
+const VALID_ROLES = ['viewer', 'editor', 'admin', 'superadmin'];
+const VALID_EDITIONS = ['free', 'pro', 'agency', 'studio', 'enterprise'];
+
 function assertVector(v: TokenVector): void {
+  // A vector naming an unknown role/edition must now throw (A-N2): a typo used to
+  // silently mint a token without the intended bundle.
+  if (
+    (v.input.role && !VALID_ROLES.includes(v.input.role.toLowerCase())) ||
+    (v.input.edition && !VALID_EDITIONS.includes(v.input.edition.toLowerCase()))
+  ) {
+    expect(() =>
+      createToken({ secret: SECRET, userId: v.input.user_id, role: v.input.role as any, edition: v.input.edition as any }),
+    ).toThrow(/unknown/);
+    return;
+  }
   const c = decodeToken(
     createToken({
       secret: SECRET,
@@ -471,10 +485,14 @@ describe('BYOB + role/edition presets (docs/design/PYTHON-TOKEN-SDK-DESIGN.md §
 describe('verifyToken', () => {
   it('rejects expiry at the current second, future activation and malformed dates', () => {
     const now = Math.floor(Date.now() / 1000);
-    for (const claims of [{ exp: now }, { nbf: now + 3600 }, { iat: now + 3600 }, { exp: 'tomorrow' }]) {
+    for (const claims of [{ exp: now }, { nbf: now + 3600 }, { iat: now + 3600 }]) {
       const token = createToken({ secret: SECRET, userId: 'u', claims });
       expect(() => verifyToken(token, SECRET)).toThrow();
     }
+    // createToken() itself refuses a non-integer exp now, so hand-sign the malformed one.
+    const enc = (o: unknown) => base64url(JSON.stringify(o));
+    const head = `${enc({ alg: 'HS256', typ: 'JWT' })}.${enc({ sub: 'u', iat: now, exp: 'tomorrow' })}`;
+    expect(() => verifyToken(`${head}.${base64url(hmacSha256(head, SECRET))}`, SECRET)).toThrow();
     const active = createToken({ secret: SECRET, userId: 'u', claims: { nbf: now - 1, exp: now + 3600 } });
     expect(verifyToken(active, SECRET).sub).toBe('u');
   });
@@ -483,7 +501,8 @@ describe('verifyToken', () => {
     expect(verifyToken(token, SECRET).sub).toBe('u');
     expect(() => verifyToken(token, 'another-secret-that-is-32-bytes-min!!')).toThrow(/invalid token signature/);
 
-    const expired = createToken({ secret: SECRET, userId: 'u', ttl: -10 });
+    // A non-positive ttl is rejected at mint time; backdate `exp` via the escape hatch.
+    const expired = createToken({ secret: SECRET, userId: 'u', claims: { exp: Math.floor(Date.now() / 1000) - 10 } });
     expect(() => verifyToken(expired, SECRET)).toThrow(/expired/);
   });
 });
@@ -493,5 +512,67 @@ describe('BYOB encrypt/decrypt round-trip (Node ↔ Node)', () => {
     const cfg = { driver: 's3', key: 'AK', secret: 'SK', bucket: 'b', region: 'eu-west-1' };
     const blob = encryptByob(cfg, SECRET);
     expect(decryptByob(blob, SECRET)).toEqual(cfg);
+  });
+});
+
+describe('ttl / exp validation (A-M5)', () => {
+  const byobDisks = { s: { driver: 's3' as const, key: 'AK', secret: 'SK', bucket: 'b' } };
+
+  it.each([
+    ['NaN', NaN, RangeError],
+    ['Infinity', Infinity, RangeError],
+    ['zero', 0, RangeError],
+    ['negative', -10, RangeError],
+    ['fractional', 1.5, RangeError],
+    ['numeric string', '3600', TypeError],
+    ['boolean', true, TypeError],
+  ])('rejects ttl %s', (_label, ttl, err) => {
+    expect(() => createToken({ secret: SECRET, userId: 'u', ttl: ttl as any })).toThrow(err);
+    expect(() => createByobToken({ secret: SECRET, userId: 'u', ttl: ttl as any, byobDisks })).toThrow(err);
+  });
+
+  it('always emits an integer exp (default + explicit ttl, plain + BYOB)', () => {
+    for (const [ttl, want] of [[undefined, 3600], [1, 1], [7200, 7200]] as const) {
+      const c = decodeToken(createToken({ secret: SECRET, userId: 'u', ttl })) as Record<string, number>;
+      expect(Number.isSafeInteger(c.exp)).toBe(true);
+      expect(c.exp - c.iat).toBe(want);
+    }
+    const b = decodeToken(createByobToken({ secret: SECRET, userId: 'u', byobDisks })) as Record<string, number>;
+    expect(Number.isSafeInteger(b.exp)).toBe(true);
+    expect(b.exp - b.iat).toBe(1800);
+  });
+
+  it('refuses a non-integer exp smuggled through the claims escape hatch', () => {
+    for (const exp of ['9999999999', 1.5, NaN, true]) {
+      expect(() => createToken({ secret: SECRET, userId: 'u', claims: { exp } })).toThrow(/exp/);
+    }
+  });
+});
+
+describe('unknown role / edition (A-N2)', () => {
+  const byobDisks = { s: { driver: 's3' as const, key: 'AK', secret: 'SK', bucket: 'b' } };
+
+  it('throws with the list of valid names', () => {
+    expect(() => createToken({ secret: SECRET, userId: 'u', role: 'admn' as any })).toThrow(
+      /unknown role "admn" \(valid: viewer, editor, admin, superadmin\)/,
+    );
+    expect(() => createToken({ secret: SECRET, userId: 'u', edition: 'enterprize' as any })).toThrow(
+      /unknown edition "enterprize" \(valid: free, pro, agency, studio, enterprise\)/,
+    );
+    expect(() => createByobToken({ secret: SECRET, userId: 'u', role: 'owner' as any, byobDisks })).toThrow(RangeError);
+    expect(() => createByobToken({ secret: SECRET, userId: 'u', edition: 'gold' as any, byobDisks })).toThrow(RangeError);
+  });
+
+  it('does not resolve Object.prototype keys as presets', () => {
+    expect(() => createToken({ secret: SECRET, userId: 'u', role: 'constructor' as any })).toThrow(RangeError);
+    expect(() => createToken({ secret: SECRET, userId: 'u', edition: 'toString' as any })).toThrow(RangeError);
+  });
+
+  it('accepts valid names case-insensitively, incl. free and studio', () => {
+    const c = decodeToken(createToken({ secret: SECRET, userId: 'u', role: 'Admin' as any, edition: 'FREE' as any })) as Record<string, unknown>;
+    expect(c.perms).toEqual(['read', 'write', 'delete', 'audit']);
+    expect(c.allow_share).toBeUndefined();
+    const s = decodeToken(createToken({ secret: SECRET, userId: 'u', edition: 'studio' })) as Record<string, unknown>;
+    expect(s.allow_versioning).toBe(true);
   });
 });

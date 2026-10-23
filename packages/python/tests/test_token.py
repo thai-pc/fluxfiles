@@ -8,6 +8,7 @@ cases instead of hand-copying them per language.
 """
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -30,13 +31,27 @@ VECTORS_PATH = Path(__file__).resolve().parents[3] / "docs" / "testdata" / "toke
 VECTORS: dict[str, Any] = json.loads(VECTORS_PATH.read_text())
 
 
+VALID_ROLES = {"viewer", "editor", "admin", "superadmin"}
+VALID_EDITIONS = {"free", "pro", "agency", "studio", "enterprise"}
+
+
 def _assert_vector(v: dict[str, Any]) -> None:
     """Mint a vector's `input` via create_token() and assert its expect/expect_true/
     expect_absent fields against the decoded claims. `<claim>_present` asserts
     effective presence (is True), not literal key presence — matches the Node/PHP
     harnesses, since "absent" and "present-but-false" both mean "not enabled" for
-    every boolean claim these fixtures cover."""
+    every boolean claim these fixtures cover.
+
+    A vector naming an unknown role/edition must now raise (A-N2): a typo used to
+    silently mint a token without the intended bundle."""
     inp = v["input"]
+    if (inp.get("role") and inp["role"].lower() not in VALID_ROLES) or (
+        inp.get("edition") and inp["edition"].lower() not in VALID_EDITIONS
+    ):
+        with pytest.raises(FluxFilesTokenError, match="unknown"):
+            create_token(secret=SECRET, user_id=inp["user_id"], role=inp.get("role"),
+                         edition=inp.get("edition"))
+        return
     token = create_token(
         secret=SECRET,
         user_id=inp["user_id"],
@@ -109,6 +124,71 @@ def _assert_byob_role_vector(v: dict[str, Any]) -> None:
 @pytest.mark.parametrize("v", VECTORS["byob_role_presets"], ids=lambda v: v["name"])
 def test_byob_role_preset_vectors(v: dict[str, Any]) -> None:
     _assert_byob_role_vector(v)
+
+
+@pytest.mark.parametrize("bad", [0, -1, 1.5, float("nan"), float("inf"), "3600", True])
+def test_rejects_invalid_ttl(bad: Any) -> None:
+    """A-M5: a NaN/string/non-positive ttl used to mint a token with a null or
+    far-future `exp`; the core now rejects tokens without a numeric exp."""
+    with pytest.raises(FluxFilesTokenError, match="ttl"):
+        create_token(secret=SECRET, user_id="u", ttl=bad)
+    with pytest.raises(FluxFilesTokenError, match="ttl"):
+        create_byob_token(
+            secret=SECRET,
+            user_id="u",
+            ttl=bad,
+            byob_disks={"s": {"driver": "s3", "key": "AK", "secret": "SK", "bucket": "b"}},
+        )
+
+
+def test_exp_is_always_an_integer() -> None:
+    for ttl in (None, 1, 7200):
+        c = decode_token(create_token(secret=SECRET, user_id="u", ttl=ttl))
+        assert type(c["exp"]) is int
+        assert c["exp"] - c["iat"] == (ttl or 3600)
+    c = decode_token(
+        create_byob_token(
+            secret=SECRET,
+            user_id="u",
+            byob_disks={"s": {"driver": "s3", "key": "AK", "secret": "SK", "bucket": "b"}},
+        )
+    )
+    assert type(c["exp"]) is int
+    assert c["exp"] - c["iat"] == 1800
+
+
+def test_claims_escape_hatch_cannot_emit_a_non_integer_exp() -> None:
+    for bad in ("9999999999", 1.5, float("nan"), True):
+        with pytest.raises(FluxFilesTokenError, match="exp"):
+            create_token(secret=SECRET, user_id="u", claims={"exp": bad})
+
+
+def test_unknown_role_or_edition_raises_with_valid_list() -> None:
+    """A-N2: a typo'd preset name raises (listing the valid names) instead of
+    being silently ignored; names are case-insensitive and `free` is valid."""
+    with pytest.raises(FluxFilesTokenError, match="viewer, editor, admin, superadmin"):
+        create_token(secret=SECRET, user_id="u", role="admn")
+    with pytest.raises(FluxFilesTokenError, match="free, pro, agency, studio, enterprise"):
+        create_token(secret=SECRET, user_id="u", edition="enterprize")
+    with pytest.raises(FluxFilesTokenError, match="unknown role"):
+        create_byob_token(
+            secret=SECRET,
+            user_id="u",
+            role="owner",
+            byob_disks={"s": {"driver": "s3", "key": "AK", "secret": "SK", "bucket": "b"}},
+        )
+    with pytest.raises(FluxFilesTokenError, match="unknown edition"):
+        create_byob_token(
+            secret=SECRET,
+            user_id="u",
+            edition="gold",
+            byob_disks={"s": {"driver": "s3", "key": "AK", "secret": "SK", "bucket": "b"}},
+        )
+    c = decode_token(create_token(secret=SECRET, user_id="u", role="Admin", edition="FREE"))
+    assert c["perms"] == ["read", "write", "delete", "audit"]
+    assert "allow_share" not in c
+    c = decode_token(create_token(secret=SECRET, user_id="u", edition="studio"))
+    assert c["allow_versioning"] is True
 
 
 def test_byob_explicit_perms_overrides_role_viewer() -> None:
@@ -344,7 +424,8 @@ def test_verify_token_round_trips_and_rejects_tampering_or_expiry() -> None:
     with pytest.raises(jwt.InvalidSignatureError):
         verify_token(token, "another-secret-that-is-32-bytes-min!!")
 
-    expired = create_token(secret=SECRET, user_id="u", ttl=-10)
+    # A non-positive ttl is rejected at mint time; backdate `exp` via the escape hatch.
+    expired = create_token(secret=SECRET, user_id="u", claims={"exp": int(time.time()) - 10})
     with pytest.raises(jwt.ExpiredSignatureError):
         verify_token(expired, SECRET)
 
