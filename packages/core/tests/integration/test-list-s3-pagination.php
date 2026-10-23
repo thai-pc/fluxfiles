@@ -107,6 +107,14 @@ function s3Env(array $keys, string $prefix = '', bool $showHidden = false): arra
             }
         }
     );
+    // Presigned GET URLs are built through the same handler list (init step) —
+    // count them so a test can tell "signed the page" from "signed the folder".
+    $stats->presigns = 0;
+    $dm->s3Client('s3')->getHandlerList()->appendInit(\Aws\Middleware::tap(function ($cmd) use ($stats) {
+        if ($cmd->getName() === 'GetObject') {
+            $stats->presigns++;
+        }
+    }), 'test.count');
     $c = new Claims('u', ['read'], ['s3'], $prefix, 50, null, 0, false);
     $c->showHidden = $showHidden;
     return [new FileManager($dm, $c, new StorageMetadataHandler($dm)), $stats];
@@ -195,6 +203,19 @@ test('tenant prefix: keys and cursors stay relative to the token root', function
     assertTrue($stats->startAfter > 0, 'fast path used under a prefix');
     $p2 = $fm->list('s3', 'pics', 6, 'pics/f005.jpg');
     assertTrue(strpos((string) $p2['items'][0]['key'], 'tenant/') !== 0, 'keys come back unscoped');
+});
+
+test('a page signs URLs for its own rows only, not for the whole folder', function () {
+    $keys = [];
+    for ($i = 0; $i < 300; $i++) {
+        $keys[] = sprintf('big/f%04d.txt', $i);
+    }
+    [$fm, $stats] = s3Env($keys);
+    $stats->presigns = 0;
+    $page = $fm->list('s3', 'big', 20);
+    assertTrue(count($page['items']) === 20 && $page['total'] === 300, 'page of 20 out of 300');
+    assertTrue($stats->presigns <= 20, "presigned GETs for one page: {$stats->presigns}");
+    assertTrue(isset($page['items'][0]['url']), 'rows still carry their URL');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  Passed: {$passed}  Failed: {$failed}\n\n";

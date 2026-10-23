@@ -3,6 +3,21 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.32] — 2026-10-23
+
+> Released: `core-v0.2.106`, `wordpress-v0.2.66` (the plugin bundles core).
+
+### Fixed
+
+- **`/api/fm/list` signed a download URL for every file in the folder, not
+  just the page it returned.** On S3/R2 each is a presign, so a 200-item page
+  of a 10,000-file folder built ~10,000 URLs. URLs are now added only to the
+  page's rows.
+  - Measured on LocalStack with 10,000 indexed files and pages of 200: a page
+    after the first takes **0.21 s** (was 7.2 s), the first page 1.25 s (was 7.1 s).
+  - Together with `[0.3.31]`'s StartAfter paging, later pages make 2 LIST
+    calls instead of 12.
+
 ## [0.3.31] — 2026-10-23
 
 > Released: `core-v0.2.105`, `wordpress-v0.2.65` (the plugin bundles core).
