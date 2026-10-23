@@ -429,46 +429,40 @@ class FileManager
         $this->assertNotHidden($scoped);
         $fs = $this->disks->disk($disk);
 
+        // S3/R2, a later page that resumes among the FILES (folders sort first, so
+        // they were all on earlier pages): ask the bucket for the keys after the
+        // cursor instead of re-listing the whole folder — 1000 keys per LIST call,
+        // so a 50k-file folder cost ~50 calls for every page. `total` is only
+        // known from a full listing, so it is null on these pages (the UI keeps
+        // the first page's count).
+        if ($limit > 0 && $cursor !== '') {
+            $tail = $this->listS3FilesAfter($disk, $fs, $scoped, $this->scopedPath($cursor), $limit);
+            if ($tail !== null) {
+                [$page, $hasMore] = $tail;
+                $this->attachMetadata($disk, $page);
+                return [
+                    'items'       => $this->unscopeItems($page),
+                    'next_cursor' => $hasMore ? $this->outKey($page[count($page) - 1]['key']) : null,
+                    'total'       => null,
+                    'disk_driver' => 's3',
+                ];
+            }
+        }
+
         $all = [];
 
         /** @var StorageAttributes $item */
         foreach ($fs->listContents($scoped, false) as $item) {
             $name = basename($item->path());
-
-            // Hide internal system directories.
-            if ($name === '_fluxfiles' || $name === '_variants') {
+            if ($this->hiddenFromListing($name, $item->isFile(), $item->path(), $fs)) {
                 continue;
             }
-            // Hide dotfiles (.env, .gitignore, .git/…) unless the token opts in —
-            // matches Finder / cPanel / Nextcloud, and keeps a `.env` out of sight.
-            if (!$this->claims->showHidden && $name !== '' && $name[0] === '.') {
-                continue;
-            }
-            // Hide a LEGACY sidecar ({file}.meta.json next to its file) but show genuine
-            // user-uploaded *.meta.json files (no matching base file). New sidecars live
-            // under _fluxfiles/meta/ and are already hidden by the check above.
-            if (substr($name, -10) === '.meta.json' && $item->isFile()
-                && $fs->fileExists(substr($item->path(), 0, -10))
-            ) {
-                continue;
-            }
-
-            $entry = [
-                'key'  => $item->path(),
-                'name' => $name,
-                'type' => $item->isFile() ? 'file' : 'dir',
-            ];
 
             if ($item->isFile()) {
                 /** @var FileAttributes $item */
-                $entry['size']     = $item->fileSize();
-                $entry['modified'] = $item->lastModified();
-                // Preview-only tokens (allow_download=false) get no clean download URL.
-                $url = $this->downloadUrl($disk, $item->path());
-                if ($url !== null) {
-                    $entry['url'] = $url;
-                }
+                $entry = $this->fileListEntry($disk, $item->path(), $item->fileSize(), $item->lastModified());
             } else {
+                $entry = ['key' => $item->path(), 'name' => $name, 'type' => 'dir'];
                 // Surface the folder mtime when the adapter provides one (local
                 // does; S3/R2 prefixes don't) so the UI can sort folders by date.
                 try {
@@ -526,6 +520,92 @@ class FileManager
         // Legacy mode: return flat array with all items + metadata.
         $this->attachMetadata($disk, $all);
         return $this->unscopeItems($all);
+    }
+
+    /** Entries list() never shows: system folders, dotfiles (unless show_hidden), legacy sidecars. */
+    private function hiddenFromListing(string $name, bool $isFile, string $path, $fs): bool
+    {
+        // Hide internal system directories.
+        if ($name === '_fluxfiles' || $name === '_variants') {
+            return true;
+        }
+        // Hide dotfiles (.env, .gitignore, .git/…) unless the token opts in —
+        // matches Finder / cPanel / Nextcloud, and keeps a `.env` out of sight.
+        if (!$this->claims->showHidden && $name !== '' && $name[0] === '.') {
+            return true;
+        }
+        // Hide a LEGACY sidecar ({file}.meta.json next to its file) but show genuine
+        // user-uploaded *.meta.json files (no matching base file). New sidecars live
+        // under _fluxfiles/meta/ and are already hidden by the check above.
+        return substr($name, -10) === '.meta.json' && $isFile && $fs->fileExists(substr($path, 0, -10));
+    }
+
+    /** @return array<string,mixed> */
+    private function fileListEntry(string $disk, string $path, ?int $size, ?int $mtime): array
+    {
+        $entry = ['key' => $path, 'name' => basename($path), 'type' => 'file', 'size' => $size, 'modified' => $mtime];
+        // Preview-only tokens (allow_download=false) get no clean download URL.
+        $url = $this->downloadUrl($disk, $path);
+        if ($url !== null) {
+            $entry['url'] = $url;
+        }
+        return $entry;
+    }
+
+    /**
+     * The next page of FILES after $absCursor in folder $scoped, straight from an
+     * S3/R2 bucket (ListObjectsV2 StartAfter), or null when this shortcut doesn't
+     * apply — not an S3 disk, the cursor is a folder (still among the folders,
+     * which sort first) or gone, or the bucket call failed — and list() falls
+     * back to a full listing. Same filters and entry shape as the full listing;
+     * keys come back in byte order, which is what list()'s strcmp sort uses.
+     *
+     * @return array{0: array<int,array<string,mixed>>, 1: bool}|null [page, has more]
+     */
+    private function listS3FilesAfter(string $disk, $fs, string $scoped, string $absCursor, int $limit): ?array
+    {
+        $cfg = $this->disks->config($disk);
+        if (($cfg['driver'] ?? '') !== 's3') {
+            return null;
+        }
+        $prefix = trim($scoped, '/') === '' ? '' : trim($scoped, '/') . '/';
+        if (strpos($absCursor, $prefix) !== 0 || strpos(substr($absCursor, strlen($prefix)), '/') !== false) {
+            return null;
+        }
+        try {
+            if (!$fs->fileExists($absCursor)) {
+                return null;
+            }
+            $client = $this->disks->s3Client($disk);
+            $params = ['Bucket' => (string) ($cfg['bucket'] ?? ''), 'Prefix' => $prefix, 'Delimiter' => '/',
+                'StartAfter' => $absCursor, 'MaxKeys' => min(1000, $limit + 1)];
+            $out = [];
+            do {
+                $res = $client->listObjectsV2($params);
+                foreach ((array) ($res['Contents'] ?? []) as $o) {
+                    $key = (string) ($o['Key'] ?? '');
+                    if ($key === '' || substr($key, -1) === '/') {
+                        continue; // folder marker object
+                    }
+                    if ($this->hiddenFromListing(basename($key), true, $key, $fs)) {
+                        continue;
+                    }
+                    $mtime = $o['LastModified'] ?? null;
+                    $out[] = $this->fileListEntry($disk, $key, isset($o['Size']) ? (int) $o['Size'] : null,
+                        $mtime instanceof \DateTimeInterface ? $mtime->getTimestamp() : null);
+                    if (count($out) > $limit) {
+                        return [array_slice($out, 0, $limit), true];
+                    }
+                }
+                $token = !empty($res['IsTruncated']) ? (string) ($res['NextContinuationToken'] ?? '') : '';
+                unset($params['StartAfter']);
+                $params['ContinuationToken'] = $token;
+                $params['MaxKeys'] = 1000;
+            } while ($token !== '');
+            return [$out, false];
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
@@ -802,35 +882,40 @@ class FileManager
             }
         }
 
-        // Save file hash for duplicate detection
-        if ($hash !== false) {
-            $this->meta->saveHash($disk, $scoped, $hash);
-        }
-
-        // Store ownership + MIME, and image dimensions (so listings and the
-        // select payload can carry them without re-opening the object).
-        // size + modified are indexed too, so search results can sort by date/size.
-        $attrs = [
-            'uploaded_by' => $this->claims->userId,
-            'size'        => (int) ($file['size'] ?? 0),
-            'modified'    => time(),
-            'created'     => time(), // first-upload time; kept immutable by the index merge
-        ];
-        $mime = @mime_content_type($file['tmp_name']);
-        if ($mime === false || $mime === null || $mime === '') {
-            $mime = $file['type'] ?? null;
-        }
-        if ($mime) {
-            $attrs['mime'] = $mime;
-        }
-        if ($this->imageOptimizer->isImage($name)) {
-            $dims = @getimagesize($file['tmp_name']);
-            if (is_array($dims) && isset($dims[0], $dims[1])) {
-                $attrs['width']  = (int) $dims[0];
-                $attrs['height'] = (int) $dims[1];
+        // Hash (duplicate detection) + metadata below land in one index write.
+        $this->beginIndexBatch($disk);
+        try {
+            if ($hash !== false) {
+                $this->meta->saveHash($disk, $scoped, $hash);
             }
+
+            // Store ownership + MIME, and image dimensions (so listings and the
+            // select payload can carry them without re-opening the object).
+            // size + modified are indexed too, so search results can sort by date/size.
+            $attrs = [
+                'uploaded_by' => $this->claims->userId,
+                'size'        => (int) ($file['size'] ?? 0),
+                'modified'    => time(),
+                'created'     => time(), // first-upload time; kept immutable by the index merge
+            ];
+            $mime = @mime_content_type($file['tmp_name']);
+            if ($mime === false || $mime === null || $mime === '') {
+                $mime = $file['type'] ?? null;
+            }
+            if ($mime) {
+                $attrs['mime'] = $mime;
+            }
+            if ($this->imageOptimizer->isImage($name)) {
+                $dims = @getimagesize($file['tmp_name']);
+                if (is_array($dims) && isset($dims[0], $dims[1])) {
+                    $attrs['width']  = (int) $dims[0];
+                    $attrs['height'] = (int) $dims[1];
+                }
+            }
+            $this->meta->save($disk, $scoped, $attrs);
+        } finally {
+            $this->endIndexBatch($disk);
         }
-        $this->meta->save($disk, $scoped, $attrs);
 
         // Record the on-upload optimization savings into the tenant's counter, and
         // surface them on the upload result so the UI can toast "saved N".
@@ -1923,8 +2008,38 @@ class FileManager
 
     private function moveMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
     {
-        $this->copyMetadata($srcDisk, $srcKey, $dstDisk, $dstKey);
-        $this->meta->delete($srcDisk, $srcKey);
+        // Same disk: the save + delete become one index write.
+        $batch = $srcDisk === $dstDisk;
+        if ($batch) {
+            $this->beginIndexBatch($srcDisk);
+        }
+        try {
+            $this->copyMetadata($srcDisk, $srcKey, $dstDisk, $dstKey);
+            $this->meta->delete($srcDisk, $srcKey);
+        } finally {
+            if ($batch) {
+                $this->endIndexBatch($srcDisk);
+            }
+        }
+    }
+
+    /**
+     * Group metadata writes into one index update where the backend supports it
+     * (the JSON backend rewrites its disk-wide index per write; the DB backends
+     * write per row and have nothing to batch).
+     */
+    private function beginIndexBatch(string $disk): void
+    {
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->beginIndexBatch($disk);
+        }
+    }
+
+    private function endIndexBatch(string $disk): void
+    {
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->endIndexBatch($disk);
+        }
     }
 
     private function copyVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void

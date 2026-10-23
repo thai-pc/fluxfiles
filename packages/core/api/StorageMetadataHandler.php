@@ -41,6 +41,20 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private array $indexLocks = [];
     private array $auditLocks = [];
 
+    /**
+     * Index lock nesting per disk. While it is held, the index is read once and
+     * kept here, and saveIndex() only updates this copy — the file is written
+     * once, when the outermost holder releases. Nothing else can write the index
+     * meanwhile (we hold its lock), so the copy is authoritative.
+     *
+     * @var array<string,int>
+     */
+    private array $indexDepth = [];
+    /** @var array<string,array> */
+    private array $heldIndex = [];
+    /** @var array<string,bool> */
+    private array $heldIndexDirty = [];
+
     public function __construct(DiskManager $diskManager)
     {
         $this->diskManager = $diskManager;
@@ -140,18 +154,21 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     public function deleteChildren(string $disk, string $prefix): int
     {
-        $index = $this->loadIndex($disk);
-        $count = 0;
-        foreach (array_keys($index) as $k) {
-            // loadIndex() can hand back an int key for a decimal-integer-looking
-            // file name (PHP array-key coercion, see loadIndex()'s docblock).
-            $k = (string) $k;
-            if ($k === $prefix || strpos($k, $prefix . '/') === 0) {
-                $this->delete($disk, $k);
-                $count++;
+        // One index write for the whole folder, not one per child.
+        return $this->withIndexBatch($disk, function () use ($disk, $prefix): int {
+            $index = $this->loadIndex($disk);
+            $count = 0;
+            foreach (array_keys($index) as $k) {
+                // loadIndex() can hand back an int key for a decimal-integer-looking
+                // file name (PHP array-key coercion, see loadIndex()'s docblock).
+                $k = (string) $k;
+                if ($k === $prefix || strpos($k, $prefix . '/') === 0) {
+                    $this->delete($disk, $k);
+                    $count++;
+                }
             }
-        }
-        return $count;
+            return $count;
+        });
     }
 
     public function renameChildren(string $disk, string $oldPrefix, string $newPrefix): int
@@ -977,14 +994,69 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      * go through Flysystem (disk-aware), the lock is just best-effort and is
      * impossible to take locally anyway — same as S3 has always been.
      */
+    /**
+     * Re-entrant: nested holders (save() → updateIndex(), or a batch) only count.
+     * Before this, the inner release dropped the outer holder's lock early.
+     */
     private function acquireIndexLock(string $disk): void
     {
-        $this->acquireLock($disk, 'index.lock', $this->indexLocks);
+        $this->indexDepth[$disk] = ($this->indexDepth[$disk] ?? 0) + 1;
+        if ($this->indexDepth[$disk] === 1) {
+            try {
+                $this->acquireLock($disk, 'index.lock', $this->indexLocks);
+            } catch (\Throwable $e) {
+                unset($this->indexDepth[$disk]);
+                throw $e;
+            }
+        }
     }
 
     private function releaseIndexLock(string $disk): void
     {
-        $this->releaseLock($disk, $this->indexLocks);
+        $depth = ($this->indexDepth[$disk] ?? 1) - 1;
+        if ($depth > 0) {
+            $this->indexDepth[$disk] = $depth;
+            return;
+        }
+        unset($this->indexDepth[$disk]);
+        try {
+            if (!empty($this->heldIndexDirty[$disk])) {
+                $this->writeIndex($disk, $this->heldIndex[$disk]);
+            }
+        } finally {
+            unset($this->heldIndex[$disk], $this->heldIndexDirty[$disk]);
+            $this->releaseLock($disk, $this->indexLocks);
+        }
+    }
+
+    /**
+     * Run several metadata writes for one disk as one index update: the index is
+     * read once and written once, instead of once per call — an upload's hash +
+     * metadata, or a rename's save + delete, each rewrote the whole disk-wide file.
+     *
+     * @template T
+     * @param callable():T $fn
+     * @return T
+     */
+    public function withIndexBatch(string $disk, callable $fn)
+    {
+        $this->acquireIndexLock($disk);
+        try {
+            return $fn();
+        } finally {
+            $this->releaseIndexLock($disk);
+        }
+    }
+
+    /** Explicit form of withIndexBatch(); every begin needs an end (in a finally). */
+    public function beginIndexBatch(string $disk): void
+    {
+        $this->acquireIndexLock($disk);
+    }
+
+    public function endIndexBatch(string $disk): void
+    {
+        $this->releaseIndexLock($disk);
     }
 
     private function acquireAuditLock(string $disk): void
@@ -1314,6 +1386,18 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function loadIndex(string $disk): array
     {
+        if (isset($this->heldIndex[$disk])) {
+            return $this->heldIndex[$disk];
+        }
+        $index = $this->readIndex($disk);
+        if (($this->indexDepth[$disk] ?? 0) > 0) {
+            $this->heldIndex[$disk] = $index;
+        }
+        return $index;
+    }
+
+    private function readIndex(string $disk): array
+    {
         $fs = $this->diskManager->disk($disk);
         if (!$fs->fileExists(self::INDEX_KEY)) {
             return [];
@@ -1339,6 +1423,17 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     }
 
     private function saveIndex(string $disk, array $index): void
+    {
+        if (($this->indexDepth[$disk] ?? 0) > 0) {
+            // Under the lock: keep it in memory, written once on the final release.
+            $this->heldIndex[$disk] = $index;
+            $this->heldIndexDirty[$disk] = true;
+            return;
+        }
+        $this->writeIndex($disk, $index);
+    }
+
+    private function writeIndex(string $disk, array $index): void
     {
         $fs = $this->diskManager->disk($disk);
         $dir = dirname(self::INDEX_KEY);
