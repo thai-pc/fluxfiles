@@ -66,6 +66,7 @@
     "top_folders": "Thư mục lớn nhất",
     "files": "tệp",
     "warning": "Bạn sắp hết dung lượng.",
+    "index_large": "Thư viện lớn: index metadata đã {size}, bị đọc toàn bộ mỗi lần xem danh sách và ghi lại mỗi lần upload. Hãy chuyển server sang backend cơ sở dữ liệu (FLUXFILES_STORAGE_BACKEND=db) để giữ tốc độ.",
     "critical": "Bạn gần hết dung lượng. Hãy dọn dẹp hoặc nâng cấp.",
     "image": "Hình ảnh",
     "video": "Video",

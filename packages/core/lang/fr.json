@@ -66,6 +66,7 @@
     "top_folders": "Plus grands dossiers",
     "files": "fichiers",
     "warning": "Votre stockage est presque plein.",
+    "index_large": "Grande bibliothèque : l'index des métadonnées fait {size}, il est lu en entier à chaque liste et réécrit à chaque envoi. Passez le serveur au backend base de données (FLUXFILES_STORAGE_BACKEND=db).",
     "critical": "Stockage presque saturé. Pensez à nettoyer ou à mettre à niveau.",
     "image": "Images",
     "video": "Vidéos",

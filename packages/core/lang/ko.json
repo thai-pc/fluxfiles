@@ -66,6 +66,7 @@
     "top_folders": "가장 큰 폴더",
     "files": "개 파일",
     "warning": "저장공간이 부족합니다.",
+    "index_large": "대용량 라이브러리: 메타데이터 인덱스가 {size}이며 목록을 볼 때마다 전체를 읽고 업로드할 때마다 다시 씁니다. 서버를 데이터베이스 백엔드(FLUXFILES_STORAGE_BACKEND=db)로 전환하세요.",
     "critical": "저장공간이 거의 찼습니다. 정리하거나 업그레이드하세요.",
     "image": "이미지",
     "video": "동영상",

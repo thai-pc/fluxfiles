@@ -143,6 +143,21 @@ try {
         assertTrue(isset($j['data']['used']) || isset($j['data']['used_bytes']), 'quota payload returned');
     });
 
+    test('metadata index size goes to operator (unscoped) tokens only', function () use ($BASE, $tokWm) {
+        [, $j] = http("{$BASE}/api/fm/usage?disk=local&refresh=true", ["Authorization: Bearer {$tokWm}"]);
+        assertTrue(!isset($j['data']['metadata_index']), 'a tenant token never sees the disk-wide index');
+        $op = fluxfiles_token('usage-op', ['read'], ['local'], '', 50, null, 3600);
+        [$st, $j] = http("{$BASE}/api/fm/usage?disk=local&refresh=true", ["Authorization: Bearer {$op}"]);
+        assertEqual(200, $st);
+        $mi = $j['data']['metadata_index'] ?? null;
+        assertTrue(is_array($mi) && $mi['bytes'] > 0, 'reported: ' . json_encode($mi));
+        assertEqual(5 * 1024 * 1024, $mi['warn_bytes'], 'default threshold');
+        assertEqual(false, $mi['warn'], 'a small index does not warn');
+        // Served from the usage cache too.
+        [, $j] = http("{$BASE}/api/fm/usage?disk=local", ["Authorization: Bearer {$op}"]);
+        assertTrue(isset($j['data']['metadata_index']['bytes']), 'present on a cache hit');
+    });
+
 } finally {
     proc_terminate($proc); proc_close($proc);
     $dir = $uploadRoot . '/' . $prefix;

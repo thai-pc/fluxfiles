@@ -115,3 +115,30 @@ test('license banner: edition + grace note from a mocked /license', async ({ pag
   await expect(banner).toContainText('grace period');
   await expect(banner).toContainText('7'); // days left
 });
+
+test('operators see a "switch to the database backend" banner when the metadata index is large', async ({ page }) => {
+  await openManager(page, mintToken());
+  const base = {
+    computed_at: new Date().toISOString(), cache_age_seconds: 0,
+    quota: { used_bytes: 1_000, limit_bytes: null, percent: null, status: 'ok' },
+    file_count: 1, content_bytes: 1_000, by_type: [], top_folders: [],
+  };
+  let index: Record<string, unknown> | undefined = { bytes: 12_582_912, warn_bytes: 5_242_880, warn: true };
+  await page.route('**/api/fm/usage*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ data: index ? { ...base, metadata_index: index } : base }) }),
+  );
+
+  await page.getByRole('button', { name: 'Storage usage' }).first().click();
+  const banner = page.locator('.ff-usage-modal .ff-usage-banner.is-info');
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText('FLUXFILES_STORAGE_BACKEND=db');
+  await expect(banner).toContainText('12');
+
+  // Under the threshold (or absent, as for tenant tokens / the DB backend): no banner.
+  await page.keyboard.press('Escape');
+  index = { bytes: 1_000, warn_bytes: 5_242_880, warn: false };
+  await page.getByRole('button', { name: 'Storage usage' }).first().click();
+  await expect(page.locator('.ff-usage-modal')).toBeVisible();
+  await expect(page.locator('.ff-usage-modal .ff-usage-banner.is-info')).toHaveCount(0);
+});

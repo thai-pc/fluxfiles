@@ -1345,7 +1345,60 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         if ($dir !== '.' && !$fs->directoryExists($dir)) {
             $fs->createDirectory($dir);
         }
-        $fs->write(self::INDEX_KEY, json_encode($index, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), self::INTERNAL_WRITE);
+        $json = (string) json_encode($index, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        $fs->write(self::INDEX_KEY, $json, self::INTERNAL_WRITE);
+        $this->warnIfIndexLarge($disk, strlen($json));
+    }
+
+    /**
+     * Size of the disk-wide index in bytes, or null when there is none (or the
+     * backend has no such file). The usage dashboard reports it to operators.
+     */
+    public function indexBytes(string $disk): ?int
+    {
+        try {
+            $fs = $this->diskManager->disk($disk);
+            return $fs->fileExists(self::INDEX_KEY) ? (int) $fs->fileSize(self::INDEX_KEY) : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Index size past which the JSON backend stops scaling (`FLUXFILES_INDEX_WARN_MB`,
+     * default 5; 0 = never warn). The index is one file per DISK: every list page
+     * reads and decodes all of it, and every upload/rename/delete rewrites all of
+     * it under a lock — ~300 ms and ~270 MB of PHP memory per page at 100k files.
+     * The database backend (FLUXFILES_STORAGE_BACKEND=db) has no such file.
+     */
+    public static function indexWarnBytes(): int
+    {
+        $v = $_ENV['FLUXFILES_INDEX_WARN_MB'] ?? getenv('FLUXFILES_INDEX_WARN_MB');
+        $mb = ($v === false || $v === null || $v === '') ? 5.0 : (float) $v;
+        return $mb > 0 ? (int) ($mb * 1024 * 1024) : 0;
+    }
+
+    /** error_log() once an hour per disk (per server) while the index is over the limit. */
+    private function warnIfIndexLarge(string $disk, int $bytes): void
+    {
+        $limit = self::indexWarnBytes();
+        if ($limit === 0 || $bytes < $limit) {
+            return;
+        }
+        $cfg = $this->diskManager->config($disk);
+        $marker = sys_get_temp_dir() . '/fluxfiles-index-warn-' . substr(sha1($disk . '|' . ($cfg['bucket'] ?? '') . '|' . ($cfg['root'] ?? '')), 0, 16);
+        $last = @filemtime($marker);
+        if ($last !== false && time() - $last < 3600) {
+            return;
+        }
+        @touch($marker);
+        error_log(sprintf(
+            "FluxFiles: the metadata index for disk '%s' is %.1f MB. Every list page reads it in full and every "
+            . 'write rewrites it, so lists and uploads slow down as it grows. Switch to the database backend '
+            . '(FLUXFILES_STORAGE_BACKEND=db, then php scripts/migrate-json-to-db.php) — see docs/design/DB-STORAGE-MIGRATION-DESIGN.md.',
+            $disk,
+            $bytes / 1048576
+        ));
     }
 
     private function updateIndex(string $disk, string $key, array $data): void

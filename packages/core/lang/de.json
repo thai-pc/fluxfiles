@@ -66,6 +66,7 @@
     "top_folders": "Größte Ordner",
     "files": "Dateien",
     "warning": "Ihr Speicher wird knapp.",
+    "index_large": "Große Bibliothek: Der Metadaten-Index ist {size} groß, wird bei jeder Liste vollständig gelesen und bei jedem Upload neu geschrieben. Stellen Sie den Server auf das Datenbank-Backend um (FLUXFILES_STORAGE_BACKEND=db).",
     "critical": "Speicher fast voll. Bitte aufräumen oder upgraden.",
     "image": "Bilder",
     "video": "Videos",

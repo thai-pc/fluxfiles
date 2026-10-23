@@ -66,6 +66,7 @@
     "top_folders": "Grootste mappen",
     "files": "bestanden",
     "warning": "Je opslag raakt vol.",
+    "index_large": "Grote bibliotheek: de metadata-index is {size}, wordt bij elke lijst volledig gelezen en bij elke upload herschreven. Zet de server over op de database-backend (FLUXFILES_STORAGE_BACKEND=db).",
     "critical": "Opslag bijna vol. Overweeg op te ruimen of te upgraden.",
     "image": "Afbeeldingen",
     "video": "Video's",
