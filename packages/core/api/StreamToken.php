@@ -31,7 +31,7 @@ final class StreamToken
      * @param int    $ttl    Seconds until expiry (clamped to [1, MAX_TTL])
      * @param string $secret FLUXFILES_SECRET
      */
-    public static function mint(string $disk, string $path, string $sub, int $ttl, string $secret, bool $auditRead = false): string
+    public static function mint(string $disk, string $path, string $sub, int $ttl, #[\SensitiveParameter] string $secret, bool $auditRead = false): string
     {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
@@ -57,7 +57,7 @@ final class StreamToken
      *
      * @return array{disk:string,path:string,sub:string,auditRead:bool}
      */
-    public static function verify(string $token, string $secret): array
+    public static function verify(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): array
     {
         if ($token === '' || $secret === '') {
             throw new ApiException('Stream token required', 403, 'stream_token_invalid');

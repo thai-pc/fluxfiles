@@ -7,7 +7,7 @@
  * Author:      thai-pc
  * Author URI:  https://github.com/thai-pc
  * License:     MIT
- * Requires PHP: 8.1
+ * Requires PHP: 8.2.35
  * Requires at least: 6.0
  * Update URI:  https://github.com/thai-pc/fluxfiles
  *
@@ -20,6 +20,25 @@ define('FLUXFILES_VERSION', '0.2.59');
 define('FLUXFILES_PLUGIN_FILE', __FILE__);
 define('FLUXFILES_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FLUXFILES_PLUGIN_URL', plugin_dir_url(__FILE__));
+// Keep in step with `Requires PHP` above (test-wp-smoke guards it).
+define('FLUXFILES_MIN_PHP', '8.2.35');
+
+// The bundled vendor/ refuses to load below the floor with a fatal (Composer's
+// platform check), which would take the whole site down. WordPress holds back an
+// install/update on an older PHP, but a plugin already active when the server's PHP
+// is downgraded — or copied in by hand — still gets here: stop with a notice instead.
+if (version_compare(PHP_VERSION, FLUXFILES_MIN_PHP, '<')) {
+    add_action('admin_notices', function () {
+        echo '<div class="notice notice-error"><p><strong>FluxFiles:</strong> ';
+        echo esc_html(sprintf(
+            'requires PHP %s or newer (the latest security-patched 8.2, or 8.3+). This server runs PHP %s, so FluxFiles is not loaded.',
+            FLUXFILES_MIN_PHP,
+            PHP_VERSION
+        ));
+        echo '</p></div>';
+    });
+    return;
+}
 
 // Require the FluxFiles core autoloader (plugin-local vendor, monorepo packages/core, or legacy repo root)
 $fluxfilesAutoloadCandidates = [

@@ -91,6 +91,7 @@ jobs:
           VERSION="${MONOREPO_TAG#wordpress-v}"
           mv build/fluxfiles.zip "build/fluxfiles-${VERSION}.zip"
           SHA=$(sha256sum "build/fluxfiles-${VERSION}.zip" | cut -d' ' -f1)
+          REQUIRES_PHP=$(sed -n 's/^ \* Requires PHP: *//p' packages/wordpress/fluxfiles.php | head -1)
 
           cat > /tmp/notes.md <<EOF
           WordPress plugin v${VERSION} — self-contained ZIP (wrapper + FluxFiles core + browser SDK + vendor/).
@@ -125,7 +126,8 @@ jobs:
             "wordpress": {
               "version": "${VERSION}",
               "zip": "fluxfiles-${VERSION}.zip",
-              "sha256": "${SHA}"
+              "sha256": "${SHA}",
+              "requires_php": "${REQUIRES_PHP}"
             }
           }
           EOF

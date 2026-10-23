@@ -35,7 +35,7 @@ final class ShareGrant
      * @param int    $ttl    Seconds until expiry (clamped to [1, MAX_TTL]; 0 = default)
      * @param string $secret FLUXFILES_SECRET
      */
-    public static function mint(string $jti, int $ttl, string $secret): string
+    public static function mint(string $jti, int $ttl, #[\SensitiveParameter] string $secret): string
     {
         $ttl = $ttl > 0 ? min($ttl, self::MAX_TTL) : self::DEFAULT_TTL;
         $now = time();
@@ -54,7 +54,7 @@ final class ShareGrant
      *
      * @return array{jti:string,exp:int}
      */
-    public static function verify(string $grant, string $jti, string $secret): array
+    public static function verify(#[\SensitiveParameter] string $grant, string $jti, #[\SensitiveParameter] string $secret): array
     {
         if ($grant === '' || $secret === '' || $jti === '') {
             throw new ApiException('Unlock required', 403, 'share_grant_invalid');

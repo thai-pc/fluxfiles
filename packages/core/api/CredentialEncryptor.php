@@ -24,7 +24,7 @@ class CredentialEncryptor
      * @param string $secret The FLUXFILES_SECRET (used to derive encryption key)
      * @return string Base64-encoded ciphertext (nonce + ciphertext + tag)
      */
-    public static function encrypt(array $config, string $secret): string
+    public static function encrypt(#[\SensitiveParameter] array $config, #[\SensitiveParameter] string $secret): string
     {
         $key = self::deriveKey($secret);
         $plaintext = json_encode($config, JSON_UNESCAPED_SLASHES);
@@ -58,7 +58,7 @@ class CredentialEncryptor
      * @return array Decrypted disk config
      * @throws ApiException If decryption fails (tampered or wrong secret)
      */
-    public static function decrypt(string $blob, string $secret): array
+    public static function decrypt(string $blob, #[\SensitiveParameter] string $secret): array
     {
         $key = self::deriveKey($secret);
         $raw = base64_decode($blob, true);
@@ -235,7 +235,7 @@ class CredentialEncryptor
      * Derive an encryption key from the JWT secret using HKDF.
      * Separate from signing key to provide defense-in-depth.
      */
-    private static function deriveKey(string $secret): string
+    private static function deriveKey(#[\SensitiveParameter] string $secret): string
     {
         return hash_hkdf('sha256', $secret, 32, self::HKDF_INFO);
     }

@@ -44,7 +44,7 @@ final class ImageToken
         string $path,
         string $sub,
         int $ttl,
-        string $secret,
+        #[\SensitiveParameter] string $secret,
         int $maxWidth,
         int $defaultQuality = 0,
         ?array $watermark = null,
@@ -77,7 +77,7 @@ final class ImageToken
     /**
      * @return array{disk:string,path:string,maxWidth:int,defaultQuality:int,sub:string,watermark:array|null,allowDownload:bool}
      */
-    public static function verify(string $token, string $secret): array
+    public static function verify(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): array
     {
         if ($token === '' || $secret === '') {
             throw new ApiException('Image token required', 403, 'img_token_invalid');

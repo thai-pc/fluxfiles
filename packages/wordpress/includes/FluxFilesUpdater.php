@@ -29,6 +29,14 @@ class FluxFilesUpdater
     private const TRANSIENT = 'fluxfiles_update_manifest';
     private const CACHE_TTL = 6 * HOUR_IN_SECONDS;
     private const MODULE = 'wordpress';
+    /**
+     * Shown by WordPress on the update row and in "View details", and used to hold
+     * back an update on a site whose PHP is older. Keep in step with the plugin
+     * header's `Requires PHP` and composer.json's php floor (a security-patched 8.2).
+     * A manifest may override it, so a future release can raise the floor for sites
+     * still running this (older) updater.
+     */
+    private const REQUIRES_PHP = '8.2.35';
 
     public static function boot(): void
     {
@@ -101,6 +109,12 @@ class FluxFilesUpdater
                         'url' => (string) ($payload['url'] ?? ''),
                         'sha256' => (string) ($payload['sha256'] ?? ''),
                     ];
+                    // Optional: the release's PHP floor, so WordPress holds the update
+                    // back on an older PHP even though this installed updater predates it.
+                    $req = (string) ($payload['requires_php'] ?? '');
+                    if (preg_match('/^\d+\.\d+(\.\d+)?$/', $req)) {
+                        $manifest['requires_php'] = $req;
+                    }
                 }
             }
         }
@@ -136,7 +150,7 @@ class FluxFilesUpdater
             'package' => $m['url'],
             'url' => 'https://github.com/thai-pc/fluxfiles',
             'tested' => get_bloginfo('version'),
-            'requires_php' => '8.1',
+            'requires_php' => (string) ($m['requires_php'] ?? self::REQUIRES_PHP),
         ];
         return $transient;
     }
@@ -161,7 +175,7 @@ class FluxFilesUpdater
             'name' => 'FluxFiles',
             'slug' => $args->slug,
             'version' => $m['version'] ?? FLUXFILES_VERSION,
-            'requires_php' => '8.1',
+            'requires_php' => (string) ($m['requires_php'] ?? self::REQUIRES_PHP),
             'download_link' => $m['url'] ?? '',
             'sections' => [
                 'description' => 'Multi-storage file manager with Local/S3/R2/SFTP support, '

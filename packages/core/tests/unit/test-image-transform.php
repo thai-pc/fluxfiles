@@ -362,5 +362,15 @@ test('ImageToken: allow_download round-trips, and an old token without it stays 
     assertEqual(true, ImageToken::verify($old, $imgSecret)['allowDownload'], 'absent dl → allowed');
 });
 
+test('transform: valid header but undecodable body → null (no uncaught decoder exception)', function () use ($opt) {
+    // getimagesize() reads only the IHDR, so a PNG cut off after its header passes
+    // every pre-check; the decode itself must not throw out of transform().
+    $png = pngBytes(64, 64);
+    $truncated = substr($png, 0, 40);
+    assertTrue(@getimagesizefromstring($truncated) !== false, 'fixture: header still parses');
+    assertEqual(null, $opt->transform($truncated, 32, 80), 'webp');
+    assertEqual(null, $opt->transform($truncated, 32, 80, null, 'avif'), 'avif');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

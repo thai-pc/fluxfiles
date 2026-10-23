@@ -303,7 +303,7 @@ function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm
  * @param array{info:array<string,mixed>,preview:array<string,mixed>|null} $out
  * @return array<string,mixed>
  */
-function ff_share_payload(array $out, string $token, string $secret): array
+function ff_share_payload(array $out, #[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): array
 {
     $info = is_array($out['info'] ?? null) ? $out['info'] : [];
     $prev = is_array($out['preview'] ?? null) ? $out['preview'] : null;
@@ -586,7 +586,7 @@ function ff_sso_rate_limit(string $kind): void
  * real share ids plus client IPs, and still never collapses junk into a single
  * global bucket one visitor could exhaust for everybody.
  */
-function ff_share_token_jti(string $token, ?string $secret = null): string
+function ff_share_token_jti(#[\SensitiveParameter] string $token, #[\SensitiveParameter] ?string $secret = null): string
 {
     $secret = $secret ?? (string) ($_ENV['FLUXFILES_SECRET'] ?? '');
     if ($token !== '' && $secret !== '') {

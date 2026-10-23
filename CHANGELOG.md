@@ -3,6 +3,38 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.26] — 2026-10-23
+
+> Released: _pending_ — `core`, `laravel`, `wordpress` + every paid module
+> (their `composer.json` PHP floor changed).
+
+### Changed — PHP requirement
+
+- **Minimum PHP is now 8.2.35**, the latest security-patched 8.2 (8.3 and 8.4
+  remain supported and tested). PHP 8.1 reached end-of-life on 31 Dec 2025, and
+  the committed core/Laravel lock files already needed 8.2. Every `composer.json`
+  declares `^8.2.35` and pins `config.platform.php` to it, so lock files can't
+  drift above the floor again. Upgrade note: Composer refuses to install on an
+  older PHP, and the bundled `vendor/` refuses to load on one.
+- **WordPress**: `Requires PHP: 8.2.35`. Below it the plugin shows an admin notice
+  instead of loading (no white screen), and the self-updater advertises the floor
+  so WordPress holds the update back on an older PHP — the release catalogue now
+  carries `requires_php`. `test-wp-smoke.php` keeps the five places that state the
+  floor in agreement.
+- CI drops PHP 8.1 (matrix 8.2–8.4).
+
+### Security
+
+- Secrets, passwords, bearer tokens and credentials passed as function arguments
+  are marked `#[\SensitiveParameter]` (PHP 8.2), so they show as
+  `SensitiveParameterValue` instead of plaintext in stack traces and error logs.
+
+### Fixed
+
+- `/api/fm/img`: an image whose header is valid but whose body can't be decoded
+  (truncated/corrupt) was an uncaught fatal 500; it is now treated like any other
+  untransformable file (415 for a preview-only token, the original otherwise).
+
 ## [0.3.25] — 2026-10-14
 
 > Released: `core-v0.2.99`, `wordpress-v0.2.59` (bundles the fixed UI).

@@ -14,7 +14,7 @@
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
 
-Standalone, embeddable file manager built with PHP 8.1+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
+Standalone, embeddable file manager built with PHP 8.2.35+. Multi-storage support (Local, AWS S3, Cloudflare R2), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
 
 Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, **TinyMCE**, and **Summernote**.
 
@@ -88,7 +88,7 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 
 ## Requirements
 
-- **PHP** >= 8.1 (Flysystem 3 + Intervention Image v3 + firebase/php-jwt v7; tested with 8.1 — 8.4)
+- **PHP** >= 8.2.35 — the latest security-patched 8.2 (tested with 8.2 — 8.4; 8.1 is end-of-life)
 - **Extensions:** `gd`, `curl`, `json`, `openssl`, `mbstring`, `fileinfo`
 - **Composer** >= 2.0
 

@@ -1657,6 +1657,29 @@ test('plugin version agrees across header, constant and readme.txt', function ()
     assertEqual($header, $stable, 'readme.txt Stable tag matches the plugin header');
 });
 
+// The PHP floor lives in four places WordPress and Composer each read separately;
+// one left behind lets a site update into a release its PHP can't run, or keeps
+// advertising an end-of-life PHP.
+test('Requires PHP agrees across header, readme.txt, composer.json and the updater', function () {
+    $main     = file_get_contents(__DIR__ . '/../fluxfiles.php');
+    $readme   = file_get_contents(__DIR__ . '/../readme.txt');
+    $composer = json_decode((string) file_get_contents(__DIR__ . '/../composer.json'), true);
+    $updater  = file_get_contents(__DIR__ . '/../includes/FluxFilesUpdater.php');
+
+    preg_match('/^ \* Requires PHP: *(.+)$/m', $main, $h);
+    preg_match('/^Requires PHP: *(.+)$/m', $readme, $r);
+    preg_match("/const REQUIRES_PHP = '([^']*)';/", $updater, $u);
+    $header = trim($h[1] ?? '');
+
+    assertTrue(preg_match('/^\d+\.\d+\.\d+$/', $header) === 1, "header Requires PHP is X.Y.Z (got '{$header}')");
+    assertEqual($header, trim($r[1] ?? ''), 'readme.txt Requires PHP matches the plugin header');
+    assertEqual('^' . $header, $composer['require']['php'] ?? null, 'composer.json php floor matches');
+    assertEqual($header, $composer['config']['platform']['php'] ?? null, 'composer platform pin matches');
+    assertEqual($header, $u[1] ?? null, 'FluxFilesUpdater::REQUIRES_PHP matches');
+    preg_match("/define\('FLUXFILES_MIN_PHP', '([^']*)'\);/", $main, $m);
+    assertEqual($header, $m[1] ?? null, 'FLUXFILES_MIN_PHP (the runtime guard) matches');
+});
+
 // The ZIP is the only artifact a wordpress-v* tag produces (the plugin is not
 // split to a Composer repo like core/laravel), so the release path has to stay
 // wired: the build must accept the tag's version and stamp it into the built

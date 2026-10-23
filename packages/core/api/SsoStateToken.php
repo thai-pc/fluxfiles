@@ -23,7 +23,7 @@ final class SsoStateToken
     /**
      * @param string $redirect Same-origin relative path to return to after login
      */
-    public static function mint(string $nonce, string $redirect, string $secret, int $ttl = self::MAX_TTL): string
+    public static function mint(string $nonce, string $redirect, #[\SensitiveParameter] string $secret, int $ttl = self::MAX_TTL): string
     {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
@@ -42,7 +42,7 @@ final class SsoStateToken
      *
      * @return array{nonce:string,redirect:string}
      */
-    public static function verify(string $token, string $secret): array
+    public static function verify(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): array
     {
         if ($token === '' || $secret === '') {
             throw new ApiException('SSO state token required', 403, 'sso_state_token_invalid');

@@ -50,7 +50,7 @@ class LicenseManager
      * @param string|null              $key        the FLUXFILES_LICENSE_KEY value
      * @param array<string,string>|null $publicKeys override key map (tests); null = embedded
      */
-    public function __construct(?string $key, ?array $publicKeys = null, ?int $now = null)
+    public function __construct(#[\SensitiveParameter] ?string $key, ?array $publicKeys = null, ?int $now = null)
     {
         $this->now = $now ?? time();
         $keys = $publicKeys ?? self::PUBLIC_KEYS;
@@ -76,7 +76,7 @@ class LicenseManager
      * @param array<string,string> $publicKeys
      * @return array<string,mixed>|null
      */
-    private static function verify(?string $key, array $publicKeys): ?array
+    private static function verify(#[\SensitiveParameter] ?string $key, array $publicKeys): ?array
     {
         if (!is_string($key) || $key === '' || !function_exists('sodium_crypto_sign_verify_detached')) {
             return null;

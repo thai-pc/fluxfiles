@@ -129,6 +129,11 @@ $payload = [
     'sha256'  => $entry['sha256'],
     'expires' => time() + 3600, // short replay window; the client re-checks each run
 ];
+// Optional PHP floor for this release (the WordPress catalogue entry carries one), so
+// the plugin's updater can hold the update back on an older PHP.
+if (!empty($entry['requires_php'])) {
+    $payload['requires_php'] = (string) $entry['requires_php'];
+}
 
 $b64url = static fn (string $s): string => rtrim(strtr(base64_encode($s), '+/', '-_'), '=');
 $header = $b64url((string) json_encode(['alg' => 'Ed25519', 'kid' => $RELEASE_KID]));
