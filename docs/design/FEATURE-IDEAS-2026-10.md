@@ -1,18 +1,30 @@
-# Đề xuất feature — 2026-10 (bản nháp để review)
+# Đề xuất feature — 2026-10
 
-> **Trạng thái (cập nhật 2026-10-14):** đã làm #1 tus (`e9410b9`), #2 presigned POST
-> (`core-v0.2.96`), #3 `strip_exif` (`core-v0.2.96` + zip/intake sau đó), #4 file trùng
-> (`ce10ede`), #6 retention (`cf3d7a5`), #7 fixity (`f4209f1`), #8 MCP (`917133e`),
-> #9 poster PDF/video (`6395ce9`), #10 UI OCR/Virus/Backup (`core-v0.2.96`).
-> **#5 nhiều prefix: mới có spec** — `docs/design/MULTI-PREFIX-TOKEN-DESIGN.md`, chờ duyệt.
+> **Trạng thái (cập nhật 2026-10-23, đối chiếu code core-v0.2.100):** 9/10 ý tưởng đã
+> ship; chỉ #5 còn ở dạng spec. Bảng dưới ghi bản phát hành và những chỗ bản đã ship
+> **khác** với đề xuất gốc — nội dung đề xuất gốc ở phía dưới giữ nguyên để tham khảo,
+> nên khi hai phần mâu thuẫn thì bảng này đúng.
 >
-> *(Nội dung gốc bên dưới giữ nguyên để tham khảo.)*
-> **Trạng thái ban đầu:** chỉ là ý tưởng, chưa code gì. Mỗi mục đã được lọc qua bộ tiêu chí
-> của `docs/ROADMAP.md`: stateless, metadata nằm trong storage của khách, BYO-embed
-> nếu đã có OSS tốt, và chỉ thu phí khi không có OSS thay thế.
-> Đã đối chiếu để **không trùng** với các mục DONE/DROP trong ROADMAP.
+> | # | Ý tưởng | Trạng thái | Ship khác đề xuất ở chỗ nào |
+> |---|---|---|---|
+> | 1 | tus resumable | **Đã ship** core-v0.2.97 (`e9410b9`); siết lại ở core-v0.2.100 | Phần dở dang lưu ở `<FLUXFILES_STORAGE_PATH>/tus/` trên **server** (không phải `_fluxfiles/uploads-partial/` trong storage) → multi-node cần thư mục chung hoặc sticky session. Mọi luật upload (quota, số file, trùng tên, owner_only, legal hold) kiểm tra ngay lúc **tạo**; upload gắn với `sub` + prefix + disk của token. Chỉ core standalone — proxy Laravel/WordPress không có `/tus`. Tự viết (`TusServer.php`), không dùng `tus-php`. |
+> | 2 | Presigned POST | **Đã ship** core-v0.2.96 | Claim tên `allow_presign_put` (mặc định `true`; `false` → `403 presign_put_disabled`), không phải `presign_put`. R2 không có POST Object → `400 presign_post_unsupported`. |
+> | 3 | `strip_exif` | **Đã ship** core-v0.2.96; zip/intake core-v0.2.97; cắt MPF/trailer core-v0.2.100 | Không re-encode bằng intervention mà cắt **lossless** ở mức container (giữ ICC + Orientation). Không có claim `strip_exif_keep_orientation` và không có badge "ảnh chứa GPS" trong panel chi tiết. |
+> | 4 | Tìm file trùng | **Đã ship** core-v0.2.97 (`ce10ede`) | Endpoint là `GET /api/fm/duplicates` (không phải `/usage/duplicates`); băm SHA-256 trực tiếp (lọc theo size trước, tối đa 512 MB/lần), không dựa vào `file_hash`. Chưa có "file lâu không đụng tới". |
+> | 5 | Nhiều prefix / token | **Chưa làm** — spec nháp `docs/design/MULTI-PREFIX-TOKEN-DESIGN.md`, chờ quyết định | — |
+> | 6 | Retention | **Đã ship** core-v0.2.97 (`cf3d7a5`), trong module `legal-hold` | Không chạy "lazy" khi list: chạy bằng `POST /api/fm/retention/run` (mặc định `dry_run`), operator tự gọi từ scheduler. Rule là `{path, days, action: trash\|delete}`, tối đa 20 rule, 500 file/lần; cần quyền `audit` + `delete`. Không có `bin/fluxfiles retention:run`. |
+> | 7 | Fixity | **Đã ship** core-v0.2.97 (`f4209f1`), trong module `audit-export` | Baseline SHA-256 riêng ở `<prefix>/_fluxfiles/fixity.json` (không dùng `file_hash`); tách thay đổi "có giải thích" (có trong audit log) với "không giải thích" (ghi audit `fixity_mismatch`); 1 GB/lần, chạy tiếp bằng cursor. Không bắn webhook riêng. |
+> | 8 | MCP server | **Đã ship** `@fluxfiles/mcp` 0.1.0 (`917133e`); 0.1.1 chỉ cho https tới host không phải local | Tool: list/search/read/info/link/usage; ghi (`write_text_file`, `create_folder`) chỉ khi `FLUXFILES_MCP_WRITE=1`, trash khi thêm `FLUXFILES_MCP_DELETE=1`. Không có tool `share`. |
+> | 9 | Poster PDF/video | **Đã ship** core-v0.2.97 (`6395ce9`) | Từ core-v0.2.100 claim `media_posters` **mặc định tắt** (opt-in); Ghostscript < 10.05.0 coi như không cài; gs/ffmpeg chạy với môi trường tối thiểu (`ProcessEnv::minimal()`). Tạo lúc upload, không lazy qua `/img`. |
+> | 10 | UI OCR/Virus/Backup | **Đã ship** core-v0.2.96 | Virus có thêm `POST /api/fm/virus/scan` (quét file đã lưu). Backup không có dry-run. |
 >
 > Ký hiệu công sức: **S** ≈ 1–3 ngày, **M** ≈ 1–2 tuần, **L** > 2 tuần.
+
+*(Nội dung gốc — bản nháp để review, trước khi làm.)*
+**Trạng thái ban đầu:** chỉ là ý tưởng, chưa code gì. Mỗi mục đã được lọc qua bộ tiêu chí
+của `docs/ROADMAP.md`: stateless, metadata nằm trong storage của khách, BYO-embed
+nếu đã có OSS tốt, và chỉ thu phí khi không có OSS thay thế.
+Đã đối chiếu để **không trùng** với các mục DONE/DROP trong ROADMAP.
 
 ## Tóm tắt ưu tiên
 

@@ -1,12 +1,16 @@
 # Intake notify-on-receipt (→ Webhooks)
 
-Status: **Implemented and shipped** (`b37e1fa feat(intake): fire webhooks
+Status: **Implemented in core-v0.2.77** (CHANGELOG `[0.2.94b]`; `b37e1fa feat(intake): fire webhooks
 intake_received event on portal upload`). Webhook config is baked into the
 intake record at create time and read via `IntakeModule::webhookConfigFor()`;
 dispatch is post-response in `packages/core/api/PublicLinks.php`, firing
 `WebhooksModule::dispatch(..., 'intake_received', ...)` when both `intake`
 and `webhooks` are installed+licensed. Failures are `error_log`-only,
 matching Webhooks' at-most-once design elsewhere in the codebase.
+Later hardening (intake module v1.3.0, CHANGELOG `[0.3.24]`): the operator's
+`GET /api/fm/intake/list` returns `has_webhook` instead of the stored record's signing
+secret, closing the one place §6's "secret never leaves" guarantee did not hold for the
+operator-side listing.
 
 > **Scope note.** This is the one open item left from `docs/ROADMAP.md` §6c's
 > Intake+ wishlist — everything else there (operator UI, branding, analytics,

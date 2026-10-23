@@ -1,6 +1,6 @@
 # SSH ControlMaster (connection reuse) — Security + Performance Review
 
-Status: **Implemented and shipped, scoped exactly as recommended below.**
+Status: **Implemented and shipped in core-v0.2.82, scoped exactly as recommended below.**
 This doc began as the pre-implementation review `docs/ROADMAP.md` line 240's
 "connect per request, no pool" principle implied must exist before that line
 was crossed (a principle also stated in `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`

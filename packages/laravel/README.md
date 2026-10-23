@@ -1,6 +1,6 @@
 # FluxFiles for Laravel
 
-Laravel adapter for [FluxFiles](https://github.com/thai-pc/fluxfiles) — a standalone, embeddable file manager with multi-storage support (Local, AWS S3, Cloudflare R2).
+Laravel adapter for [FluxFiles](https://github.com/thai-pc/fluxfiles) — a standalone, embeddable file manager with multi-storage support (Local, AWS S3, Cloudflare R2, SFTP).
 
 ## Requirements
 
@@ -31,7 +31,7 @@ For the default local disk, expose Laravel public storage once:
 php artisan storage:link
 ```
 
-The default `local` disk writes to `storage/app/public/fluxfiles/uploads` and returns URLs under `/storage/fluxfiles/uploads`.
+The default `local` disk writes to `storage/app/public/fluxfiles/uploads` (override with `FLUXFILES_LOCAL_ROOT`) and returns URLs under `/storage/fluxfiles/uploads`.
 
 ### Cloud storage (optional)
 
@@ -66,6 +66,12 @@ R2_PUBLIC_URL=                # r2.dev or custom domain for a public bucket
 > **Proxy mode:** exclude the route prefix from CSRF or uploads/deletes return
 > **419** — see [CSRF exclusion](#csrf-exclusion-proxy-mode-only).
 
+Proxy mode exposes every core route, including the paid-module routes and the public
+Share/Intake recipient pages, **except** three that only the standalone core serves:
+resumable **tus** uploads (`/tus` — the UI falls back to a plain single-request
+upload, so PHP's `upload_max_filesize` applies to local disks), the DB-backend
+metadata export/import, and the SSO login bridge.
+
 Set mode in `.env`:
 
 ```env
@@ -77,12 +83,10 @@ FLUXFILES_ENDPOINT=https://your-fluxfiles-server.com
 
 ## SFTP disk & SSH terminal
 
-Managing a **remote VPS / shared host** over SFTP is supported in both modes, with
-one gap: `chmod` (cPanel-style permission editing) has no `proxy`-mode route yet,
-so it's a **standalone-mode** feature.
+Managing a **remote VPS / shared host** over SFTP is supported in both modes.
 
-- **`standalone` mode (recommended for SFTP):** run the FluxFiles server (or the
-  Docker image), give it the `SFTP_*` env vars (see the
+- **`standalone` mode:** run the FluxFiles server (or the Docker image), give it the
+  `SFTP_*` env vars (see the
   [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)
   and [SSH terminal](https://github.com/thai-pc/fluxfiles#ssh-terminal-sftp-disks)),
   and point Laravel at it with `FLUXFILES_ENDPOINT`. Then mint tokens with the
@@ -96,12 +100,15 @@ so it's a **standalone-mode** feature.
   ]);
   ```
 
-- **`proxy` mode:** the SSH terminal (`POST /terminal`) and one-click Git deploy
-  (`POST /git-deploy`) **are** proxied through Laravel routes — add an `sftp`
-  entry to `config('fluxfiles.disks')` (same shape as the core standalone config,
-  e.g. `driver`/`host`/`port`/`username`/`private_key` or `password`) and mint
-  tokens with `disks => ['sftp']` and, opt-in, `allow_terminal`/`allow_git_deploy`.
-  `chmod` is the one SFTP feature still unavailable here (core-standalone only).
+  Standalone mode also gives large SFTP uploads resumable tus chunking.
+
+- **`proxy` mode:** chmod (`GET`/`POST /chmod`), the SSH terminal (`POST /terminal`)
+  and one-click Git deploy (`POST /git-deploy`) **are** proxied through Laravel
+  routes — add an `sftp` entry to `config('fluxfiles.disks')` (same shape as the
+  core standalone config, e.g. `driver`/`host`/`port`/`username`/`private_key` or
+  `password`) or hand the user a BYOB `sftp` disk, and mint tokens with
+  `disks => ['sftp']` and, opt-in, `allow_terminal`/`allow_git_deploy`. Git deploy and
+  the terminal use the generic write rate bucket here (core has dedicated ones).
   **Burn-in watermark** works in both modes.
 
 ## Usage
@@ -138,6 +145,9 @@ $token = FluxFiles::token(auth()->id(), [
     'ttl'         => 7200,  // seconds — token lifetime (7200 = 2 hours)
 ]);
 ```
+
+Any claim from the [configuration reference](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md)
+can also be passed by its raw name in a `'claims' => [...]` map.
 
 ### Enable Import from URL
 
@@ -287,6 +297,11 @@ return [
     'route_prefix' => 'api/fm',
     'middleware'    => ['web', 'auth'],
 
+    // 'json' (default — bookkeeping in each disk's _fluxfiles/) or 'db'
+    // (your app's own database connection; run the package migration)
+    'storage_backend' => env('FLUXFILES_STORAGE_BACKEND', 'json'),
+    'db_connection'   => env('FLUXFILES_DB_CONNECTION', null),
+
     'disks' => [
         'local' => [...],
         's3'    => [...],
@@ -313,6 +328,9 @@ return [
     'ai_auto_tag' => env('FLUXFILES_AI_AUTO_TAG', false),
 ];
 ```
+
+(Abridged — the published file also carries the `/img` and `/stream` rate limits,
+`storage_path`, and comments for every key.)
 
 ### CSRF exclusion (proxy mode only)
 
@@ -351,8 +369,10 @@ protected $except = [
 
 ## Permissions & Deployment
 
-FluxFiles keeps **all of its state on disk** (no database). Two locations must be
-writable by the user PHP-FPM runs as (usually `www-data`):
+By default FluxFiles keeps **all of its state on disk** (no database — unless you set
+`storage_backend` to `db`, which moves the bookkeeping below into your app's database
+connection). Two locations must be writable by the user PHP-FPM runs as (usually
+`www-data`):
 
 | Path | Holds | Created when |
 | --- | --- | --- |
@@ -387,7 +407,7 @@ If the disk root is **inside `public/`**, make sure `_fluxfiles/` is not served:
 its contents are internal (the index can reveal file names). For nginx:
 
 ```nginx
-location ~ /_fluxfiles/ { deny all; }
+location ~* /_fluxfiles/ { deny all; }
 ```
 
 > On **S3 / R2** disks there is nothing to chmod — `_fluxfiles/` lives in the
@@ -435,7 +455,8 @@ file **`0600`** automatically on the first request.
 
 > Standalone mode (running the core server directly) puts the file at
 > `packages/core/storage/rate_limit.json` instead — there it **is** under the web
-> root, so block it at the web server (`location /storage/rate_limit.json { deny all; }`).
+> root, so block it at the web server (see the core's `docs/guides/DEPLOYMENT.md`,
+> which denies the whole `storage/` runtime directory).
 
 ## Using an existing upload directory
 
@@ -528,8 +549,9 @@ After seeding, both file and folder search work for the existing tree.
 - **Blade component** `<x-fluxfiles>` with auto token generation
 - **Blade directives** `@fluxfilesToken` and `@fluxfilesEndpoint`
 - **Facade** `FluxFiles::token()` for programmatic token generation
-- **Proxy mode** — serve FluxFiles API through Laravel routes
+- **Proxy mode** — serve the FluxFiles API (incl. paid-module routes, `/img`, `/stream` and the Share/Intake recipient pages) through Laravel routes
 - **Standalone mode** — connect to a separate FluxFiles server
+- **Optional DB backend** — `storage_backend = db` keeps the bookkeeping in your app's database
 - **Auto-discovery** — ServiceProvider and Facade register automatically
 - **16 languages** — en, vi, zh, ja, ko, fr, de, es, ar, pt, it, ru, th, hi, tr, nl
 

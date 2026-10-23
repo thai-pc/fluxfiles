@@ -1,6 +1,9 @@
-# Legal Hold — Design Spec
+# Legal Hold + Retention — Design Spec
 
-Status: **Implemented and shipped.** Paid capability, Enterprise-only
+Status: **Implemented.** Legal hold shipped in **core-v0.2.82** (module `legal-hold`
+v1.0.0); blocking of in-place mutation of a held file (the v1 gap in §6) in
+**core-v0.2.94**; retention rules in **core-v0.2.97** (see §11 — added after this spec
+and not designed in §0–§10). Paid capability, Enterprise-only
 add-on (never a standalone SKU). Module id `legal-hold`, class
 `\FluxFiles\LegalHold\LegalHoldModule` (gitignored private package
 `packages/legal-hold/`, registered in `ModuleRegistry::$map`), claim
@@ -109,7 +112,7 @@ Add one claim to `docs/reference/CONFIG.md` §2.13 (paid-module gates table):
 No other new claims. (`legal_hold_max_active` is deliberately **not** a
 claim — see §5, it's a system-integrity cap, not a per-tenant business knob,
 same reasoning as `versioning_max`'s hard cap of 100 vs. the per-tenant soft
-default.)
+default.) The later `retention_rules` claim is described in §11.
 
 New env var, `docs/reference/CONFIG.md` §3:
 
@@ -225,7 +228,8 @@ litigation: *someone tried to delete this while it was under hold.* Add a
 second exception in the same catch block: when an `ApiException` carries
 `error_code === 'legal_hold_active'`, log `legal_hold_blocked` with the
 disk/path and the blocking `hold_id` in `error_params`, even though the
-request itself returned 403.
+request itself returned 403. (Since core-v0.2.95 every authenticated 403 is
+additionally audited as `access_denied`.)
 
 ---
 
@@ -432,8 +436,10 @@ silently implied away:**
    filesystem ACLs for local disks) — document this in the eventual
    user-facing docs for the feature, worded as plainly as the git-deploy
    review's "non-atomic deploy onto a live webroot is documented, not
-   solved" (§4.8 there).
-2. **In-place content mutation — closed in the 2026-10 security pass.** Every
+   solved" (§4.8 there). The paid `audit-export` module's fixity check
+   (`POST /api/fm/fixity/check`, core-v0.2.97) can at least *detect* such an
+   out-of-band change after the fact.
+2. **In-place content mutation — closed in the 2026-10 security pass (core-v0.2.94).** Every
    overwrite of an EXISTING held file now raises `legal_hold_active`:
    overwrite/force upload, chunk + presign-PUT onto an existing key,
    `/content` PUT, `/chmod`, in-place `/watermark` and `/watermark/remove`,
@@ -441,8 +447,9 @@ silently implied away:**
    metadata save/delete/import, and every module write funnelled through
    `writeScopedFile()`/`writeScopedStream()`/`assertCanModifyScopedPath()`. A
    NEW file landing inside a held folder is still allowed (same as move-into).
-   See docs/security/SECURITY-AUDIT-2026-10.md. The original v1 rationale is
-   kept below for history.
+   Resumable `/tus` uploads check the hold when the upload is created
+   (core-v0.2.100). See docs/security/SECURITY-AUDIT-2026-10.md. The original
+   v1 rationale is kept below for history.
 
    *(v1 text)* **In-place content mutation is not blocked in v1.** A legal hold in this
    design only blocks **removal and relocation** (delete/trash/rename/
@@ -474,7 +481,8 @@ silently implied away:**
 - `api/StorageMetadataHandler.php` — implements them against `_fluxfiles/holds.json`
   (same `acquireIndexLock`/`releaseIndexLock` discipline as trash).
 - `api/Db/DbMetadataHandler.php` — implements the same 7 methods against a new
-  `legal_holds` table, following `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`'s
+  `legal_holds` table (core migration `0007_create_legal_holds.sql`), following
+  `docs/design/DB-STORAGE-MIGRATION-DESIGN.md`'s
   established pattern (mirrors how trash/audit already got DB-backend
   counterparts). **This must ship day one, not be deferred** — the Enterprise
   buyer this feature targets is exactly the kind of operator likely to also
@@ -517,7 +525,7 @@ silently implied away:**
   against," not just "which core added the scaffolding" (this bit the
   `virus` module once).
 - Own repo, own `v1.0.0`-style tags, packaged via `php scripts/pack-modules.php`
-  into the update-server catalogue like the other 10 modules.
+  into the update-server catalogue like the other paid modules.
 
 **Laravel proxy (`packages/laravel/`):**
 - **Enforcement needs zero new code.** `FluxFilesController`'s existing
@@ -681,7 +689,7 @@ matches the `auditExportGate` inline-pill pattern.
 private `legal-hold` module's own repo (same as other paid modules' real
 behavior tests) since `LegalHoldModule` doesn't exist in the OSS checkout;
 core's public CI only exercises the free enforcement primitives + the
-`ModuleRegistry` 501/402 paths, per existing precedent for the other 10
+`ModuleRegistry` 501/402 paths, per existing precedent for the other
 paid modules.
 
 ---
@@ -692,7 +700,7 @@ paid modules.
    console/CLI access, raw DB writes under the `db` backend) — **documented,
    not solved** (§6). FluxFiles enforces only at its own API layer.
 2. ~~**In-place content mutation isn't blocked in v1**~~ — **solved**
-   (2026-10 security pass, see §6 item 2).
+   (2026-10 security pass, core-v0.2.94, see §6 item 2).
 3. **`holds.json` has no archival-before-anything, unlike audit's
    archive-before-truncate.** Released entries are kept forever (needed for
    history), and there's no cap on *total* (only *active*) entries. For a
@@ -700,12 +708,11 @@ paid modules.
    future `_fluxfiles/legal-hold/archive/` pattern (mirroring
    `_fluxfiles/audit/archive/`) is the natural fix if this becomes a real
    operational issue — deferred, not designed here.
-4. **Metadata edits (title/tags/alt text via `PUT /api/fm/metadata`) are not
-   blocked by a hold.** Judgment call: metadata edits don't destroy or
-   relocate the underlying record, so they were left out of scope — but some
-   compliance interpretations might consider tag/caption changes on a held
-   record a form of tampering too. Flagged as a genuine, arguable limitation,
-   not resolved here.
+4. ~~**Metadata edits (title/tags/alt text via `PUT /api/fm/metadata`) are not
+   blocked by a hold.**~~ — **decided the other way** in the 2026-10 security
+   pass (core-v0.2.94): metadata save, delete and import on a held file now
+   raise `legal_hold_active`, treating a tag/caption change on a held record as
+   a modification.
 5. **Only one active hold per exact path in v1** (a second placement attempt
    on an already-held path gets `409`, not a second independent hold record).
    An enterprise juggling multiple simultaneous matters that touch
@@ -716,3 +723,28 @@ paid modules.
 6. **`audit` perm reuse (§3) bundles legal-hold authority with raw audit-log
    visibility** — cannot be split finer without a new perm bucket. Accepted
    trade-off, not a default any future work should assume is permanent.
+
+---
+
+## 11. Retention rules (shipped later, core-v0.2.97)
+
+Not part of the original spec above; recorded here because it ships in the same
+`legal-hold` module and leans on the same enforcement. The idea list
+(`docs/design/FEATURE-IDEAS-2026-10.md` #6) proposed lazy application on `list()`;
+what shipped is an explicit, operator-scheduled run instead.
+
+- **Claim `retention_rules`** — `[{path, days, action}]`, up to 20 rules. `path` is
+  relative to the tenant root (`''` = everything); `action` is `trash` (default,
+  restorable) or `delete` (permanent). Documented in `docs/reference/CONFIG.md` §2.13.
+- **`POST /api/fm/retention/run {disk, dry_run?}`** — gated by `audit` perm +
+  `ModuleRegistry::require('legal-hold', …)` (so `allow_legal_hold`).
+  `dry_run` defaults to **true** and only reports. A real run trashes/deletes
+  files under each rule's path whose `modified` is older than `days`, at most 500
+  per call (`truncated: true` → call again). Every action goes through
+  `FileManager::trash()`/`delete()`, so `owner_only`, the `delete` perm and
+  **legal holds** apply — a held file is reported as `held` and never touched.
+  Each file acted on is audited as `retention_trash`/`retention_delete`.
+- **Nothing runs on its own.** There is no background scheduler (stateless core);
+  the operator's cron calls the route. The UI's "Retention" dialog in the
+  Activity panel previews and applies it for a token that carries rules.
+- Proxied by both the Laravel and WordPress adapters.

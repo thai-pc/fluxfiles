@@ -1,6 +1,6 @@
 # ACL / Role Presets — Stateless "Role" Layer for JWT Minting
 
-> **Status: Implemented and shipped.** The `role` mint-time preset described
+> **Status: Implemented in core-v0.2.80** (with the matching Node/Laravel/WordPress builders; CHANGELOG `[0.3.00]`). The `role` mint-time preset described
 > in this document is live across all five token builders — shipped in
 > commit `70f1cea` ("feat(acl): implement role mint-time preset across all
 > token builders", 2026-09-01), with a same-day fix for a viewer/editor
@@ -653,6 +653,12 @@ Cross-language test vectors for this now live in `docs/testdata/
 token-vectors.json`'s `byob_role_presets` group, consumed by
 `packages/core/tests/unit/test-byob.php` and
 `packages/node/tests/token.test.ts`.
+
+**WordPress capability mapping (later, not part of the preset itself):** the WordPress
+plugin picks a role for the current WP user from their capabilities. Since
+wordpress-v0.2.54 `admin` requires `manage_options` or `delete_others_posts`
+(`delete_posts` alone used to grant it to Contributors/Authors), `upload_files` maps to
+`editor`, anything else to `viewer` — see `docs/security/SECURITY-AUDIT-2026-10.md` H-1.
 
 **Tests**: `packages/core/tests/unit/test-role-preset.php` loads its cases from
 the shared cross-language fixture `docs/testdata/token-vectors.json` (also

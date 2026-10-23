@@ -30,7 +30,10 @@ mismatched checksum aborts without writing anything.
 
 Module ids: `share`, `intake`, `versioning`, `webhooks`, `ai`, `ocr`, `virus`,
 `backup`, `c2pa`, `audit-export`, `sso`, `dlp`, `legal-hold`. Install only the ones your edition includes —
-the rest will refuse with `402`.
+the rest will refuse with `402`. (Optimization used to be a paid module; it is part of
+the free core now and needs nothing installed.)
+
+Every module requires PHP 8.2.35 or newer, like the core.
 
 You do **not** need `composer dump-autoload`: FluxFiles loads installed modules itself
 (`packages/core/autoload.php`), precisely because Composer cannot see a directory that
@@ -101,6 +104,12 @@ Or use the tier preset, which sets the claims an edition includes:
 $token = fluxfiles_token(['user' => 'user-42', 'edition' => 'pro']);
 ```
 
+> **Virus and DLP scanning are fail-closed.** The `enterprise` preset turns on
+> `allow_virus_scan` and `allow_dlp_scan`. With either claim on, an upload is
+> **refused** (not stored unscanned) whenever the scan can't run — module not
+> installed, licence missing, or the engine (ClamAV/VirusTotal, Presidio) unreachable.
+> Only grant them where the engine is configured.
+
 WordPress mints tokens for you; set the edition under **Settings → FluxFiles**, or
 filter `fluxfiles_token_overrides`.
 
@@ -114,10 +123,11 @@ The claim names are in [`CONFIG.md`](../reference/CONFIG.md) — one row per cla
 so there is no `allow_sso` claim to mint. It puts an OIDC login screen in front of
 the standalone `/public/` UI. It is useful when FluxFiles is the login-facing app;
 an embed hosted by your own application should normally keep minting tokens there.
+It is not available through the Laravel/WordPress proxies.
 
 1. Install the `sso` module and set `FLUXFILES_LICENSE_KEY` as above.
 2. Register `https://files.example.com/api/fm/sso/callback` as the exact redirect
-   URI with your OIDC provider.
+   URI with your OIDC provider. Logins use PKCE (S256), so the client must allow it.
 3. Configure the server and restart PHP-FPM/container:
 
 ```dotenv
@@ -126,16 +136,25 @@ FLUXFILES_SSO_OIDC_ISSUER=https://id.example.com/realms/acme
 FLUXFILES_SSO_OIDC_CLIENT_ID=fluxfiles
 FLUXFILES_SSO_OIDC_CLIENT_SECRET=server-side-secret
 FLUXFILES_SSO_OIDC_REDIRECT_URI=https://files.example.com/api/fm/sso/callback
-FLUXFILES_SSO_CLAIMS_MAP='{"editors":{"perms":["read","write"],"disks":["local"],"prefix":"users/{sub}/"}}'
+FLUXFILES_SSO_CLAIMS_MAP='{"admins":{"perms":["read","write","delete","audit"],"disks":["local"]},"editors":{"perms":["read","write"],"disks":["local"],"prefix":"team/","claims":{"owner_only":true}}}'
 ```
 
 `FLUXFILES_SSO_CLAIMS_MAP` maps an IdP group/role to the normal
-`fluxfiles_token()` options object; the first matching group wins. Set
-`FLUXFILES_SSO_GROUPS_CLAIM` when the IdP uses a different group path, or provide
+`fluxfiles_token()` options object. Exactly one entry applies: the **first entry in
+the order you wrote the map** whose group the user holds — the IdP's own group order
+is ignored — so list the most-privileged group first. Values are used as written:
+there is no per-user placeholder, so a shared `prefix` plus `owner_only` (as above) is
+the way to give a group one folder in which each user manages only their own uploads.
+Set `FLUXFILES_SSO_GROUPS_CLAIM` when the IdP uses a different group path, or provide
 `FLUXFILES_SSO_DEFAULT_CLAIMS` only when a deliberate fallback is appropriate.
-An empty map/default fails closed with `403 sso_no_mapping`. OIDC is the only
-protocol in v1; SAML is not supported. The complete variable reference, including
-rate limits and token TTL, is in [`CONFIG.md`](../reference/CONFIG.md#4-server-env-vars-server-wide).
+An empty map/default fails closed with `403 sso_no_mapping`.
+
+The FluxFiles user id (what `owner_only`, the audit log and per-user prefixes key on)
+is the IdP's `sub` by default. `FLUXFILES_SSO_USER_CLAIM=email` uses the email address
+**only when the IdP marks it verified**, falling back to `sub` otherwise; switching it on
+an existing install changes every user's id. OIDC is the only protocol; SAML is not
+supported. The complete variable reference, including rate limits and token TTL, is in
+[`CONFIG.md`](../reference/CONFIG.md#4-server-env-vars-server-wide).
 
 ---
 
@@ -160,7 +179,8 @@ php vendor/bin/fluxfiles update share            # install it
 ```
 
 WordPress checks for plugin updates itself and offers them in **Dashboard → Updates**
-like any other plugin.
+like any other plugin. An update that needs a newer PHP than the site runs is held
+back by WordPress rather than installed.
 
 Updates are gated by the support window on your key, not by whether the software runs.
 Annual/perpetual terms keep every installed module running indefinitely when the term

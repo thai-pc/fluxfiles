@@ -1,5 +1,15 @@
 # Free/core security audit — 2026-09-26
 
+> **Point-in-time record (2026-09-26).** Every "Fixed (commit pending)" item below
+> shipped in core-v0.2.89 / laravel-v0.2.43 / wordpress-v0.2.50 (`CHANGELOG.md`
+> `[0.3.14]`). The document is kept as history and not updated; later fixes are in
+> [`CHANGELOG.md`](../../CHANGELOG.md) and the follow-up
+> [`SECURITY-AUDIT-2026-10.md`](SECURITY-AUDIT-2026-10.md) — notably, H-6's WordPress
+> capability map (`delete_posts` → admin) was itself found too generous there (H-1) and
+> tightened to `manage_options`/`delete_others_posts`, and git deploy (H-4) later gained
+> a pre-deploy `.git/config` audit whose first, denylist version was bypassable and was
+> replaced by an allowlist in core-v0.2.92.
+
 Scope: the MIT free/core surface only (`packages/core/`, plus the Laravel and
 WordPress proxy adapters and the browser SDK). Gitignored paid modules were out
 of scope except where a free/core path reaches into them.

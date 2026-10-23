@@ -1,10 +1,10 @@
 # FluxFiles Core (PHP)
 
-Core PHP engine for FluxFiles — a standalone, embeddable file manager with multi-storage support (Local/S3/R2) via Flysystem v3.
+Core PHP engine for FluxFiles — a standalone, embeddable file manager with multi-storage support (Local/S3/R2/SFTP) via Flysystem v3.
 
 This package provides:
 - API router (`api/index.php`)
-- Core classes (`api/*.php`)
+- Core classes (`api/*.php`, plus `api/Db/` for the optional database backend)
 - UI assets (`assets/`, `public/`)
 - Translations (`lang/`)
 - Helper functions (`embed.php`)
@@ -13,6 +13,7 @@ This package provides:
 
 - PHP >= 8.2.35 — the latest security-patched 8.2 (8.3/8.4 also supported). 8.1 is end-of-life.
 - Composer >= 2
+- Optional: Ghostscript ≥ 10.05.0 (PDF optimize / posters), ffmpeg (video posters)
 
 ## Where the files land — `git clone` vs `composer require`
 
@@ -56,6 +57,9 @@ FLUXFILES_SECRET=your-random-secret-key-min-32-chars
 FLUXFILES_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
 ```
 
+Every other setting — server env vars and the per-tenant JWT claims — is listed in the
+[configuration reference](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
@@ -65,4 +69,3 @@ MIT — see [LICENSE](LICENSE) for details.
 - Main repository: `https://github.com/thai-pc/fluxfiles`
 - Laravel adapter: `https://packagist.org/packages/fluxfiles/laravel`
 - Issues: `https://github.com/thai-pc/fluxfiles/issues`
-

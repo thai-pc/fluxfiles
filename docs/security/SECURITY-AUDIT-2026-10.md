@@ -1,5 +1,11 @@
 # Security audit — 2026-10-14 (second pass)
 
+> **Point-in-time record (2026-10-14).** Every finding below was fixed and released in
+> core-v0.2.94 / wordpress-v0.2.54 (`CHANGELOG.md` `[0.3.20]`); it is kept as history and
+> not updated. For later fixes see [`CHANGELOG.md`](../../CHANGELOG.md) — e.g. the
+> paid-module audit in `[0.3.24]` and the `strip_exif`/`media_posters`/minimal-environment
+> hardening in `[0.3.26]`.
+
 Scope: free core (`packages/core/api`), the WordPress and Laravel adapters,
 the SDK/React/Vue wrappers, the editor plugins, deployment configs, and a
 spot-check of the private modules that core calls into. Everything already

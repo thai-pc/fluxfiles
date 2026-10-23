@@ -1,6 +1,6 @@
 # Proactive License-Expiry Notifications — Design
 
-Status: **Implemented and shipped.** All four surfaces below exist: §A's
+Status: **Implemented in core-v0.2.84** (with laravel-v0.2.40 / wordpress-v0.2.47; CHANGELOG `[0.3.08]`). All four surfaces below exist: §A's
 eager `loadLicense()` fetch + `licenseBadgeVisible` toolbar badge
 (`packages/core/assets/fm.js`), §B's WordPress `admin_notices` dismissible
 notice (`FluxFilesAdmin.php`'s `renderLicenseExpiryNotice()` +

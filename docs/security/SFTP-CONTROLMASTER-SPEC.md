@@ -1,6 +1,11 @@
 # SSH ControlMaster — Design Spec
 
-Status: **Implemented and shipped, essentially as designed below.**
+Status: **Implemented in core-v0.2.82, essentially as designed below.**
+Two later changes the sections below have been updated for: the runtime
+dir's default base moved from `packages/core/storage` to
+`sys_get_temp_dir()` in core-v0.2.89 (§5, §10, §17), and every `ssh`
+subprocess runs with `ProcessEnv::minimal()` as its environment since
+core-v0.2.100 (§11). The changelog (`CHANGELOG.md`) is authoritative for anything later.
 Follow-up to `docs/security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md` (**conditional go,
 narrowly scoped**), which is the constraint source of truth — this doc
 turned its §4 into exact names, file paths, function signatures, and flag
@@ -30,7 +35,7 @@ not an oversight.
 |---|---|
 | Opt-in name | **`ssh_multiplex`** — a **disk config key**, not a JWT claim (see §2) |
 | Cache/socket key | `hash('sha256', json_encode([host,port,username,password,private_key,passphrase,host_fingerprint,strict_algorithms]))` (§4) |
-| Socket dir | `{FLUXFILES_STORAGE_PATH}/ssh-sockets/` (0700), filename = first 20 hex chars of the cache-key hash + `.sock` (§5) |
+| Socket dir | `{FLUXFILES_STORAGE_PATH}/ssh-sockets/` when that env var is set, otherwise `{sys_get_temp_dir()}/ssh-sockets/` (0700), filename = first 20 hex chars of the cache-key hash + `.sock` (§5) |
 | `ControlPersist` | `60` seconds, env-tunable `[10, 120]` clamp (§6) |
 | Teardown | Cache key itself absorbs config changes (no separate "revoke" plumbing); LRU eviction + opportunistic sweep are the only *active* teardown paths (§6) |
 | Auth gate | Multiplex-eligible **iff** `private_key` is set **and** `private_key_passphrase` is empty — passphrase-protected keys fall back too, not just password-only (§7 — extends the review's F4 gate) |
@@ -152,23 +157,36 @@ Notes:
 
 ## 5. Socket directory & filename (closes F2)
 
-Base dir, mirroring `RateLimiterFactory`'s existing pattern exactly:
+Base dir (`SshMultiplexer::runtimeDir()`):
 
 ```php
-$base = rtrim($_ENV['FLUXFILES_STORAGE_PATH'] ?? (__DIR__ . '/../storage'), '/');
+$base = rtrim((string) ($_ENV['FLUXFILES_STORAGE_PATH'] ?? sys_get_temp_dir()), '/');
 $socketDir = $base . '/ssh-sockets';
 ```
+
+**Default changed in core-v0.2.89** (free-core security audit, M-7). As
+originally shipped in core-v0.2.82 this mirrored `RateLimiterFactory`'s
+`__DIR__ . '/../storage'` fallback. That was wrong for this directory: it
+holds `index.json` (naming disks and SSH hosts) plus ephemeral BYOB private
+keys under `keys/`, and `packages/core/storage` sits inside the served
+document root in both shipped configs (`docker/nginx.conf`'s
+`root /app/packages/core`, and `router.php`). The fallback is now
+`sys_get_temp_dir()` — the same choice the SSO module's JWKS cache makes. An
+operator-set `FLUXFILES_STORAGE_PATH` still wins (and `docker/nginx.conf` /
+`router.php` now deny `/storage/` regardless).
 
 - Created lazily, **only** on the first `/api/fm/terminal` request that
   actually attempts a multiplex connect (never at boot) — same "don't touch
   disk for unrelated requests" discipline as `RateLimiterFileStorage`.
 - `mkdir($socketDir, 0700, true)`, then an ownership check before ever
   reading/writing into it — same defensive pattern `OidcDiscovery`'s
-  `isOwnedByUs()` already uses for its JWKS cache dir, because
-  `FLUXFILES_STORAGE_PATH`'s *default* fallback (`__DIR__/../storage`) is
-  safe, but an operator-supplied path could theoretically be a
-  pre-existing, loosely-permissioned directory. Refuse to use it (fall back
-  to phpseclib for the request, `error_log` once) rather than trust it.
+  `isOwnedByUs()` already uses for its JWKS cache dir. This matters more,
+  not less, with the temp-dir default: `{tmp}/ssh-sockets` is a fixed,
+  predictable name in a shared directory, so another local user could
+  pre-create it, and an operator-supplied `FLUXFILES_STORAGE_PATH` could
+  likewise be a pre-existing, loosely-permissioned directory. Refuse to use
+  a directory we don't own (fall back to phpseclib for the request,
+  `error_log` once) rather than trust it.
 - Filename = **`substr($cacheKeyHash, 0, 20) . '.sock'`** — never a
   `host-username` string, so a local process that can merely `ls` the
   directory (but not open a socket, since perms are 0700) still learns
@@ -182,8 +200,8 @@ $socketDir = $base . '/ssh-sockets';
   request (fall back, `error_log` a clear "socket path too long — set
   `FLUXFILES_STORAGE_PATH` shorter" message) instead of letting `proc_open`
   fail with an opaque `bind: File name too long`. An operator with a very
-  deeply nested `FLUXFILES_STORAGE_PATH` should set it to something short
-  (e.g. `/var/lib/fluxfiles`) rather than relying on a project-relative path.
+  deeply nested `FLUXFILES_STORAGE_PATH` (or a long per-user macOS
+  `$TMPDIR`) should set it to something short (e.g. `/var/lib/fluxfiles`).
 
 ```php
 private static function socketPath(string $cacheKeyHash, string $socketDir): string
@@ -477,10 +495,11 @@ not concurrent usage" fix F6 asks for.
 
 **Tracking structure — a small locked JSON file, not a DB, not
 `_fluxfiles/`.** It's local-server-only ephemeral state (the opposite of
-"travels with user storage"), so it lives under `FLUXFILES_STORAGE_PATH`
-next to `rate_limit.json`, not under any per-disk `_fluxfiles/` prefix:
+"travels with user storage"), so it lives in the §5 runtime dir (under
+`FLUXFILES_STORAGE_PATH` when set, otherwise the system temp dir), not under
+any per-disk `_fluxfiles/` prefix:
 
-`{FLUXFILES_STORAGE_PATH}/ssh-sockets/index.json`
+`{runtime base}/ssh-sockets/index.json`
 
 ```json
 {
@@ -527,6 +546,12 @@ All argv, no shell string — same discipline as `PdfOptimizer`'s
 `proc_open($args, ...)` (array form; PHP execs directly, no `/bin/sh -c`
 involved, so no flag/metacharacter injection from any array element).
 
+**Environment (since core-v0.2.100):** every invocation below passes
+`ProcessEnv::minimal()` as `proc_open`'s `$env` argument (as do the other
+core subprocess call sites), so the `ssh` child gets a minimal
+`PATH`/`HOME`/`TMPDIR`-style environment instead of inheriting PHP-FPM's full
+environment (which may hold `FLUXFILES_SECRET`, storage credentials, etc.).
+
 ### 11.1 Cold connect + first command
 
 ```php
@@ -556,7 +581,7 @@ $args = array_merge($args, [
 ]);
 
 $desc = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-$proc = @proc_open($args, $desc, $pipes);
+$proc = @proc_open($args, $desc, $pipes, null, ProcessEnv::minimal());
 // poll proc_get_status() same as PdfOptimizer::compress(), proc_terminate(9) past
 // $connectTimeout (this is the CONNECT+first-command timeout, distinct from the
 // per-command $timeout used on the reuse path in 11.2), capture exit at first
@@ -787,10 +812,13 @@ to the client as a new error. This is a deliberate simplification: it means
 
 ## 17. Storage layout (runtime-only, not `_fluxfiles/`)
 
-All under `{FLUXFILES_STORAGE_PATH}/ssh-sockets/` (0700, app-local — this is
-the opposite of storage-resident state; it must **never** be placed under a
-disk's `_fluxfiles/` prefix, since it's per-app-server process/fd state, not
-metadata that travels with user storage):
+All under `{FLUXFILES_STORAGE_PATH}/ssh-sockets/` — or
+`{sys_get_temp_dir()}/ssh-sockets/` when `FLUXFILES_STORAGE_PATH` is unset
+(§5) — 0700, app-local. This is the opposite of storage-resident state; it
+must **never** be placed under a disk's `_fluxfiles/` prefix, since it's
+per-app-server process/fd state, not metadata that travels with user
+storage. Nor should it sit anywhere web-served (the reason the default moved
+off `packages/core/storage` in core-v0.2.89):
 
 ```
 ssh-sockets/
@@ -897,17 +925,17 @@ no live SSH host configured, so it never blocks CI by default):
 - **The Laravel/WordPress proxy adapters' own SSH terminal endpoints are
   explicitly NOT in scope either, and this is not the same statement as
   the two exclusions above.** `FluxFilesController::terminal()` (Laravel)
-  and `FluxFilesApi::handleTerminal()` (WordPress) each build their own
-  `SSH2` connection via plain phpseclib directly — they do not call
-  `SshTerminal::run()`, `DiskManager::multiplexHandle()`, or
-  `SshMultiplexer` at all, unlike how both proxies *do* port
-  `GitDeploy::run()` and `/api/fm/stream`/`/api/fm/img` token minting
-  directly for parity. A future reader should not assume a proxied
-  `/wp-json/fluxfiles/v1/terminal` or Laravel `POST .../terminal` call gets
-  multiplexed just because core's own `/api/fm/terminal` does — it never
-  will, unless a future change explicitly ports `SshMultiplexer` into both
-  proxy controllers the same way `GitDeploy` was ported, which would be a
-  new decision requiring its own review update, not an assumed extension
+  and `FluxFilesApi::handleTerminal()` (WordPress) each obtain their own
+  phpseclib `SSH2` connection and call `SshTerminal::run()` on it — the
+  plain per-request phpseclib path. Neither calls
+  `DiskManager::multiplexHandle()` or `SshMultiplexer`, unlike how both
+  proxies *do* port `GitDeploy::run()` and `/api/fm/stream`/`/api/fm/img`
+  token minting directly for parity. A future reader should not assume a
+  proxied `/wp-json/fluxfiles/v1/terminal` or Laravel `POST .../terminal`
+  call gets multiplexed just because core's own `/api/fm/terminal` does — it
+  never will, unless a future change explicitly ports the §13 branch into
+  both proxy controllers the same way `GitDeploy` was ported, which would be
+  a new decision requiring its own review update, not an assumed extension
   of this spec.
 
 ---
@@ -940,4 +968,3 @@ no live SSH host configured, so it never blocks CI by default):
   several sequential SSH actions around one deploy trigger), this spec's
   §19 boundary should be revisited **through the review**, not silently
   extended.
-</content>

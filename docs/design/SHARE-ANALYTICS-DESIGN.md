@@ -1,6 +1,6 @@
 # Share Analytics — Per-Event Log for the Share Module
 
-Status: **Implemented and shipped.** `share_analytics` claim, per-event JSONL
+Status: **Implemented in core-v0.2.75 (module `share` v1.2.0).** `share_analytics` claim, per-event JSONL
 log (`_fluxfiles/share-events/<jti>.jsonl`), and `GET /api/fm/share/analytics`
 all live in `packages/share/src/ShareModule.php` and `Claims::$shareAnalytics`.
 See the CHANGELOG "Share per-event analytics" entry (`share`'s composer floor
@@ -10,6 +10,11 @@ bumped to `^0.2.75`). All five token builders now give it named forwarding —
 `packages/python/src/fluxfiles_token/token.py` —
 closing a gap where embed.php/Node initially shipped with only the generic
 raw-claims escape hatch while Laravel/WordPress got explicit plumbing.
+
+> **Shipped differently since:** the stored visitor IP is now **truncated** — only
+> the /24 of an IPv4 address or the /48 of an IPv6 one is kept (share module v1.2.1,
+> `CHANGELOG.md` `[0.3.24]`). That reverses the "no IP truncation" decision in §12;
+> the full-IP examples in §4–§6 describe the original design.
 
 > Scope note: this spec is about **analytics only**. A separate, already-implemented
 > feature ("Branded Share" — `share_brand_*` claims, `Claims::sanitizeShareBrand()`,
@@ -86,6 +91,8 @@ the existing `share_preview` row and **before** `share_brand_name`:
 | `share_analytics` | bool | `false` | Log a per-event record (timestamp, view/download/unlock_fail, IP, user-agent) for a share, in addition to the existing `views`/`downloads`/`unlock_fails` counters. Off by default — this persists visitor IP addresses (privacy/compliance footprint), unlike the plain counters. Baked into the share record at create time, like `share_url_ttl`. |
 ```
 
+(The live `CONFIG.md` row now also states the IP truncation.)
+
 No other new claims. Rotation/retention sizing (§5) is intentionally **not** a claim
 — hardcoded constants, mirroring `AuditLogStorage::MAX_AUDIT_BYTES` /
 `AUDIT_KEEP_LINES`, which aren't tenant-configurable either. Keeping the claim
@@ -144,7 +151,8 @@ One new **operator-authed** endpoint, nested under `/share` like the existing
 
   `analytics_enabled` distinguishes "this share was created with logging off" from
   "logging is on but nothing happened yet" — the operator UI needs that to explain
-  an empty list correctly instead of implying a bug.
+  an empty list correctly instead of implying a bug. (As shipped today the `ip`
+  values are truncated — see the note at the top.)
 
 - Errors (both **reused**, no new error codes / no new i18n strings needed — see §8):
   `404 share_revoked` (unknown jti — same "not found and revoked are one answer"
@@ -210,7 +218,8 @@ fully pruned (below), instead of being a filtered-out subset of a shared blob.
 - `type` — `"view"` | `"download"` | `"unlock_fail"` (mirrors the three existing
   aggregate counter names exactly, so the UI can reuse one vocabulary).
 - `ip` — string, validated (`filter_var(..., FILTER_VALIDATE_IP)`), or `""` if
-  `REMOTE_ADDR` is missing/invalid — never a raw unvalidated value.
+  `REMOTE_ADDR` is missing/invalid — never a raw unvalidated value. As shipped
+  today it is stored truncated to the /24 (IPv4) or /48 (IPv6) network.
 - `ua` — string, control-characters stripped + length-capped (§8).
 
 **Rotation** (mirrors `StorageMetadataHandler`'s audit rotation, scaled down to
@@ -331,7 +340,8 @@ And `createShare()`'s record assembly (`ShareModule.php:109-131`, alongside
 'analytics' => $claims->shareAnalytics,   // baked in at create time — see Claims::$shareAnalytics
 ```
 
-`appendEvent()`:
+`appendEvent()` (original design — the shipped version additionally truncates `$ip`
+to its /24 or /48 network before encoding):
 
 ```php
 private function appendEvent($fs, string $prefix, string $jti, string $type): void
@@ -531,10 +541,11 @@ operator dashboard table, which is out of scope for this spec.
   JSONL file with IP/UA in the operator's own bucket) — the per-token claim is
   judged sufficient. Worth revisiting if a multi-tenant SaaS operator ever asks
   for a way to hard-block analytics across every tenant regardless of claims.
-- **IP truncation/anonymization** (e.g. zero the last IPv4 octet) was considered
-  and deliberately **not** built — it would be a second privacy knob on top of
-  the existing off/on one, adding claim surface for a decision `share_analytics`
-  already delegates to the operator (if full IPs are a compliance problem, the
-  claim stays off). Revisit only if real operator demand shows up.
+- ~~**IP truncation/anonymization** (e.g. zero the last IPv4 octet) was considered
+  and deliberately **not** built~~ — **reversed** in the 2026-10-14 paid-module
+  security audit (share module v1.2.1): every stored IP is now truncated to its /24
+  (IPv4) or /48 (IPv6) network, unconditionally, with no extra claim. The original
+  reasoning ("a second privacy knob … `share_analytics` already delegates to the
+  operator") is kept here for history.
 - **No date-range filter** in v1 (§7) — add `from`/`to` later if requested;
   the rotation cap already bounds lookback in practice.

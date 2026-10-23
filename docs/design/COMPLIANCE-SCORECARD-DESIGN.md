@@ -1,8 +1,9 @@
 # Compliance Readiness Scorecard — Design Spec
 
-> **Status: Implemented and shipped.** The scorecard ships free/core at
+> **Status: Implemented in core-v0.2.82** (CHANGELOG `[0.3.06]`). The scorecard ships free/core at
 > `GET /api/fm/compliance/scorecard` (`packages/core/api/ComplianceScorecard.php`,
-> routed in `index.php`, proxied by Laravel's `FluxFilesController::complianceScorecard()`).
+> routed in `index.php`, proxied by Laravel's `FluxFilesController::complianceScorecard()`
+> and the WordPress REST proxy).
 > `allow_dlp_scan` (module id `dlp`) and `allow_legal_hold` (module id `legal-hold`)
 > — assumed names when this spec was written — are now final: both are registered
 > in `ModuleRegistry::$map`, parsed in `Claims.php`, and the scorecard rows below
@@ -461,7 +462,7 @@ gated the same way (`audit` perm) — same pattern as the existing
    per renamed id) — nothing else in this design depends on the exact
    string. Flagging so whoever implements this checks the final names
    against those two specs' `docs/reference/CONFIG.md` entries before shipping, not
-   after.
+   after. *(Resolved: both names shipped as assumed — see the status note.)*
 2. **Should the scorecard eventually include free/hygiene settings**, not
    just the six paid-adjacent modules — e.g. `owner_only`,
    `audit_retention_days` being set to a nonzero value, SFTP

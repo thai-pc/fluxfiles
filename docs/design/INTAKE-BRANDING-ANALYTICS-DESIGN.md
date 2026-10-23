@@ -1,11 +1,15 @@
 # Intake Branding + Per-Event Analytics — Design
 
-Status: **Implemented and shipped.** Branding (`intake_brand_*` claims,
+Status: **Implemented in core-v0.2.76** (module `intake` v1.2.0, CHANGELOG `[0.2.93]`). Branding (`intake_brand_*` claims,
 `Claims::sanitizeIntakeBrand()`, rendered in `packages/core/public/intake.html`)
 and per-event analytics (`intake_analytics` claim, `GET /api/fm/intake/analytics`,
 `IntakeModule::analytics()`) both live in `packages/intake/src/IntakeModule.php`.
 See the CHANGELOG "Intake branding + per-event analytics" entry (`intake`'s
 composer floor bumped to `^0.2.76`).
+Since shipped: the revoke tombstone retains `owner` (§B.5's required fix landed),
+`tests/e2e/test-intake-http.php` exists (§B.11), and the public rate-limit buckets key on
+the `jti` only for a signature-verified token, else on the client IP (core-v0.2.94 —
+§A.10 below describes the earlier unverified-`jti` keying).
 
 > Scope note: this spec covers **two additions** to the Intake module
 > (`packages/intake/src/IntakeModule.php`, gitignored private package, gated by
@@ -253,12 +257,17 @@ exactly like Share):
   virus-scan wiring runs here too — see the code comment at
   `PublicLinks.php:116-128` — so `allow_virus_scan` still applies to an
   anonymous intake upload even though there's no operator-authenticated request
-  behind it). Rate-limited under the tighter `upload` bucket.
+  behind it). Rate-limited under the tighter `upload` bucket. Since intake v1.3.0 the
+  upload is also bound by the operator's `max_storage`/`max_files`, DLP-scanned when
+  the operator's token had `allow_dlp_scan`, gets `strip_exif` when it was on, and is
+  owned by the operator.
 
 **Rate limits** (`ff_intake_rate_limit()`, same JSON-file limiter as Share, 60s
 window, bucketed by the portal's unverified `jti` — tampering it invalidates
 the token's signature anyway, so it can't be used to dodge the bucket with a
-still-working token):
+still-working token). *(Since core-v0.2.94 the signature is verified first; an
+unverifiable token buckets by client IP instead, so junk tokens can't bloat
+`rate_limit.json`.)*
 
 | Env var | Default | Bucket key | Notes |
 |---|---|---|---|
@@ -596,6 +605,8 @@ portal is revoked — the endpoint would have to fail closed (`404`) for every
 revoked portal under `owner_only`, worse for the paying operator than a
 one-field tombstone change. Same accepted limitation as Share: a portal that
 is never explicitly revoked keeps its events file forever (§B.12).
+*(Shipped: the intake tombstone now carries `owner` — see
+`docs/guides/OPERATOR-SHARE-INTAKE-UI.md` §6.2.)*
 
 ### B.6 Write path (in `IntakeModule.php`)
 
@@ -821,10 +832,11 @@ alongside the existing `max_files cap`/counter tests):
 - Branding (§A.9's module-level case) can live in this same file alongside
   the above, since both features touch `createPortal()`/`portalInfo()`.
 
-**`packages/core/tests/e2e/test-intake-http.php`** — **does not exist yet**
-(confirmed: only `test-share-http.php` exists under `packages/core/tests/e2e/`
-today; Intake currently has no HTTP-level e2e coverage of its public routes at
-all, unlike Share). This spec's scope is the two features above, not filling
+**`packages/core/tests/e2e/test-intake-http.php`** — **did not exist when this was
+written** (only `test-share-http.php` existed under `packages/core/tests/e2e/`
+then; Intake had no HTTP-level e2e coverage of its public routes at
+all, unlike Share). *(It exists now, on ports 8113-8115, alongside
+`test-intake-notify-http.php`.)* This spec's scope is the two features above, not filling
 that pre-existing gap, but since the new `/api/fm/intake/analytics` route is
 exactly the kind of operator-authed route `test-share-http.php` exercises for
 Share, the recommended path is to **create** `test-intake-http.php` following
@@ -878,10 +890,10 @@ in §A.9); this is an operator API addition.
   `rejected` volume with enough distinct `reason` values to need it (§B.7).
 - **No date-range filter** in v1, same as Share — the rotation cap already
   bounds lookback in practice.
-- **`test-intake-http.php` doesn't exist yet** (§B.11) — this spec treats
+- **`test-intake-http.php` didn't exist yet** (§B.11) — this spec treated
   creating it as in-scope groundwork for shipping the new route with adequate
-  coverage, but flags it here since it's a larger lift than "add a phase to an
-  existing file," which is all Share's equivalent doc needed.
+  coverage, but flagged it here since it was a larger lift than "add a phase to an
+  existing file," which is all Share's equivalent doc needed. *(Resolved — it exists.)*
 
 ---
 

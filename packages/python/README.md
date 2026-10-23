@@ -61,6 +61,10 @@ token = create_token(user_id="user-42", role="editor")
 token = create_token(user_id="tenant-9", edition="enterprise")
 ```
 
+> The `enterprise` edition turns on `allow_virus_scan` and `allow_dlp_scan`, which are
+> **fail-closed**: on a server without the module, licence or scanning engine, uploads
+> for that token are refused rather than stored unscanned.
+
 ### Enable Import from URL
 
 Import-from-URL is **off by default**. Turn it on for a token by setting the
@@ -99,9 +103,9 @@ token = create_token(
 )
 ```
 
-These are **standalone-core** features: `fluxfiles-token` mints for a real
-FluxFiles server (Docker / standalone), which serves them — they aren't
-available behind the WordPress / Laravel-proxy adapters.
+The standalone core / Docker image serves these, and so do the Laravel and
+WordPress proxy adapters (`/chmod`, `/terminal` and `/git-deploy` are all proxied)
+whenever the token reaches an SFTP disk there.
 
 ### BYOB — encrypt a user's own bucket credentials
 

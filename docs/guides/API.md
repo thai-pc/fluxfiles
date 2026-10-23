@@ -1,22 +1,28 @@
 # API Reference
 
-Full HTTP route reference for the core standalone server. For adapter-specific
-route proxying (which of these each framework wrapper exposes), see the
-relevant package README; the [`.claude/api-map.md`](../../.claude/api-map.md)
+Full HTTP route reference for the core standalone server. The Laravel and
+WordPress proxy adapters expose every route below **except** `/tus` (resumable
+upload — the UI falls back to a plain upload), `/metadata/export` + `/metadata/import`
+(DB-backend tooling) and the SSO bridge (`/sso/*`); WordPress serves them under
+`/wp-json/fluxfiles/v1/`. The [`.claude/api-map.md`](../../.claude/api-map.md)
 file carries the same information at implementation depth for anyone working
 on the core itself.
 
 Base path: `/api/fm/`
 
 All responses follow the format: `{ "data": { ... }, "error": null }`
-On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP status.
+On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP status
+(plus `error_code` when available). File downloads (`/zip`, `/audit/export`),
+`/stream`, `/img` and `/tus` are the exceptions.
 
-## Public Endpoints (no auth)
+## Public Endpoints (no main JWT)
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/fm/lang` | List available locales → `[{code, name, dir}]` |
 | `GET` | `/api/fm/lang/{code}` | Get translation messages for a locale |
+| `GET` | `/api/fm/share/info?token=` · `POST /api/fm/share/unlock` · `GET /api/fm/share/file?token=` | Share recipient landing (`/public/share.html`), authenticated by the share link itself — `share` module installed + licensed |
+| `GET` | `/api/fm/intake/info?token=` · `POST /api/fm/intake/upload` | Upload-portal recipient page (`/public/intake.html`) — `intake` module installed + licensed |
 
 ## File Operations (JWT required)
 
@@ -29,10 +35,10 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/trash/restore` | `{disk, trash_id, path?}` | Restore a trashed file/folder (→ 409 if the target is occupied) |
 | `GET` | `/trash/list?disk=` | — | List trash entries (scoped to the token's prefix/owner) |
 | `POST` | `/trash/purge` | `{disk, trash_id}` | Permanently delete one trash item |
-| `POST` | `/trash/empty` | `{disk}` | Permanently delete all visible trash items |
+| `POST` | `/trash/empty` | `{disk}` | Permanently delete all visible trash items (held items are skipped → `{purged, held}`) |
 | `POST` | `/rename` | `{disk, path, name}` | Rename file or directory (a file's extension is fixed — base name only) |
 | `POST` | `/move` | `{disk, from, to}` | Move within same disk (file extension must not change; `allowedExt` enforced) |
-| `POST` | `/copy` | `{disk, from, to}` | Copy within same disk (file extension must not change; `allowedExt` enforced) |
+| `POST` | `/copy` | `{disk, from, to}` | Copy a file within same disk (file extension must not change; `allowedExt` enforced; folders → `400 copy_dir_unsupported`) |
 | `POST` | `/mkdir` | `{disk, path}` | Create directory |
 | `POST` | `/cross-copy` | `{src_disk, src_path, dst_disk, dst_path}` | Copy between disks (file extension must not change; `allowedExt` enforced) |
 | `POST` | `/cross-move` | `{src_disk, src_path, dst_disk, dst_path}` | Move between disks (file extension must not change; `allowedExt` enforced) |
@@ -40,14 +46,14 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/crop` | `{disk, path, x, y, width, height, save_path?}` | Crop image |
 | `POST` | `/ai-tag` | `{disk, path}` | AI-analyze image (requires AI config) |
 | `POST` | `/import-url` | `{disk, path, url, filename?}` | Server-side fetch a URL into storage (opt-in via `allow_url_import`; SSRF-guarded) |
-| `POST` | `/optimize` | `{disk, path\|paths[], overwrite?}` | Recompress an image to WebP or a PDF via Ghostscript, at rest (**free/core**). Opt-in via `allow_optimize` (needs `write` + `delete`) |
+| `POST` | `/optimize` | `{disk, path\|paths[], overwrite?}` | Recompress an image to WebP or a PDF via Ghostscript (≥ 10.05.0; else `501 pdf_unavailable`), at rest (**free/core**). Opt-in via `allow_optimize` (needs `write` + `delete`) |
 
 ## Archives, editor & permissions
 
 | Method | Path | Body / Params | Description |
 |--------|------|---------------|-------------|
 | `POST` | `/zip` | `{disk, paths[], name?}` | Stream a **zip** of the selected files/folders (read + `allow_download` + `allow_zip`; pre-flight size caps). Proxied by the Laravel and WordPress adapters too |
-| `POST` | `/extract` | `{disk, path, dest?}` | **Extract** a zip in place — atomic, zip-slip / zip-bomb / quota / dangerous-ext guarded (`allow_extract`) |
+| `POST` | `/extract` | `{disk, path, dest?}` | **Extract** a zip in place — zip-slip / zip-bomb / quota / dangerous-ext guarded, all checked before the first write (`allow_extract`). Not transactional: a per-entry scan or storage failure can leave earlier entries written |
 | `GET` | `/content?disk=&path=` | — | Read a text file's content (read perm; binary → 415, > 5 MB → 413) |
 | `PUT` | `/content` | `{disk, path, content}` | Overwrite a text/config file (`allow_code_edit`, default **false**; existing files only) |
 | `GET` | `/chmod?disk=&path=` | — | Read an SFTP file's octal mode (SFTP disks only) |
@@ -55,9 +61,9 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/watermark` | `{disk, path, type, text?, logo_data?, x, y, scale, opacity, color?, dest?}` | Burn-in watermark editor (logo/text), permanent (**free/core**). Non-destructive: snapshots the original on first burn so it can be undone |
 | `POST` | `/watermark/remove` | `{disk, path}` | Restore the pre-watermark original (404 if none) |
 | `POST` | `/terminal` | `{disk, cmd, cwd?, confirm?}` | Stateless SSH command-runner, **SFTP disks only** (**free/core**). Opt-in via `allow_terminal` (default off) + `write`. Dangerous commands need `confirm` |
-| `POST` | `/git-deploy` | `{disk}` | One-click Git deploy, **SFTP disks only** (**free/core**). Fixed-shape subset of `/terminal` — repo path/branch/hooks come from operator claims (`git_deploy_path`/`git_deploy_branch`/`git_deploy_hooks`), never the request body. Opt-in via `allow_git_deploy` (default off) + `write` |
+| `POST` | `/git-deploy` | `{disk}` | One-click Git deploy, **SFTP disks only** (**free/core**). Fixed-shape subset of `/terminal` — repo path/branch/hooks come from operator claims (`git_deploy_path`/`git_deploy_branch`/`git_deploy_hooks`), never the request body. Opt-in via `allow_git_deploy` (default off) + `write`. A repo whose `.git/config` carries keys outside a known-safe allowlist is refused (`409 git_deploy_unsafe_repo`) |
 
-> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media). Proxied by core-standalone, Laravel, and WordPress alike.
+> **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media, SFTP serving). Proxied by core-standalone, Laravel, and WordPress alike.
 
 ## Metadata
 
@@ -81,7 +87,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `GET` | `/duplicates?disk=&limit=` | — | **Duplicate finder** — byte-identical files under the token's root, grouped `{hash, size, count, wasted, files[{key, modified}]}` (oldest first) + `total_wasted`, `scanned_files`, `truncated`. Size pre-filter, then a streamed SHA-256 of only same-size candidates, capped at 512 MB read per call (`truncated: true` past that). Hidden/reserved paths follow `list()`. `read` perm; shares the 2/min usage-refresh bucket. |
 | `GET` | `/audit?limit=&offset=&action=&from=&to=&path=&actor=` | `limit` default 100 | Activity log, **scoped to the token's prefix**. Requires the `audit` permission (403 otherwise). |
 | `GET` | `/disk/doctor?disk=&origin=` | — | **Bucket Doctor** — diagnose an S3/R2 disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write`. |
-| `GET` | `/license` | — | Server's commercial edition/status: `{edition, status, modules, expires, days_left}`. Free MIT core → `{edition:'free'}` |
+| `GET` | `/license` | — | Server's commercial edition/status: `{edition, status, modules, limits, expires, days_left}`. Free MIT core → `{edition:'free'}` |
 | `GET` | `/compliance/scorecard` | — | **Compliance Readiness Scorecard** (**free/core**) — read-only checklist across virus scan / C2PA / audit export / SSO / DLP / legal hold; every paid row reports `available: false` on an unlicensed server instead of erroring. Requires the `audit` permission |
 | `GET` | `/hold/status?disk=&path=` | — | **Legal hold status** (**free/core**) — whether a path is currently on hold. Requires `read`; `reason`/`placed_by`/`placed_at` are only included with the `audit` permission |
 
@@ -94,9 +100,9 @@ Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` cl
 | `POST` | `/share` | `{disk, path, ttl?, label?, password?, max_downloads?}` | `share` | Create a public share link. Token is returned once, never stored |
 | `GET` | `/share/list?disk=` | — | `share` | List the caller's own share records |
 | `POST` | `/share/revoke` | `{disk, jti}` | `share` | Revoke a share |
-| `GET` | `/share/analytics?disk=&jti=&limit=&offset=&event=` | — | `share` | Per-event share log (view/download/unlock_fail), opt-in via `share_analytics` |
+| `GET` | `/share/analytics?disk=&jti=&limit=&offset=&event=` | — | `share` | Per-event share log (view/download/unlock_fail; IPs truncated to /24 or /48), opt-in via `share_analytics` |
 | `POST` | `/intake` | `{disk, path, ttl?, label?, password?, max_files?, max_mb?, allowed_ext?}` | `intake` | Create a write-only upload portal for a folder |
-| `GET` | `/intake/list?disk=` | — | `intake` | List the caller's own intake portals |
+| `GET` | `/intake/list?disk=` | — | `intake` | List the caller's own intake portals (`has_webhook`, never the signing secret) |
 | `POST` | `/intake/revoke` | `{disk, jti}` | `intake` | Revoke an upload portal |
 | `GET` | `/intake/analytics?disk=&jti=&limit=&offset=&event=` | — | `intake` | Per-event portal log (received/rejected), opt-in via `intake_analytics` |
 | `GET` | `/versions?disk=&path=` | — | `versioning` | List prior versions of a file |
@@ -104,7 +110,7 @@ Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` cl
 | `POST` | `/webhooks/test` | — | `webhooks` | Send a one-off ping to the token's configured `webhook_url` |
 | `POST` | `/ai-vision` | `{disk, path, op, dest?}` | `ai` | BYO-key image ops: `bg_remove` / `upscale` / `smart_crop` |
 | `POST` | `/ocr` | `{disk, path, lang?}` | `ocr` | Extract text from an image via `tesseract`. Returns `{path, chars, text}` |
-| `POST` | `/virus/scan` | `{disk, path}` | `virus` | On-demand scan of an **already stored** file (e.g. uploaded before scanning was enabled, or via a direct-to-bucket path no scan covers). Read-only — reports, never deletes. Returns `{path, clean, threat, scanned_at}`; a malformed engine verdict counts as not clean. Requires `read` + `allow_virus_scan`; files over 512 MB → `413`. Audited as `virus_scan` with the verdict as detail. Uploads themselves now carry `virus_scanned: true` when the (fail-closed) upload scan ran. |
+| `POST` | `/virus/scan` | `{disk, path}` | `virus` | On-demand scan of an **already stored** file (e.g. uploaded before scanning was enabled, or via a direct-to-bucket path no scan covers). Read-only — reports, never deletes. Returns `{path, clean, threat, scanned_at}`; a malformed engine verdict counts as not clean. Requires `read` + `allow_virus_scan`; files over 512 MB → `413`. Audited as `virus_scan` with the verdict as detail. Uploads themselves carry `virus_scanned: true` when the (fail-closed) upload scan ran. |
 | `POST` | `/backup` | `{from_disk, to_disk, path?, overwrite?}` | `backup` | One-way subtree sync between two disks (capped 5000 files/run) |
 | `POST` | `/c2pa` | `{disk, path}` | `c2pa` | Verify Content Credentials (C2PA) via `c2patool` |
 | `POST` | `/c2pa/sign` | `{disk, path, dest?}` | `c2pa` | Sign a file with Content Credentials |
@@ -113,20 +119,20 @@ Gated by a 3-layer check (module installed + licensed + a per-token `allow_*` cl
 | `POST` | `/retention/run` | `{disk, dry_run?}` | `legal-hold` | Apply the token's `retention_rules`: files under each rule's path not modified for `days` days are moved to trash or deleted. `dry_run` defaults to **true** (report only). Returns `{dry_run, rules, matched, acted, held, errors, truncated, items[{path, action, age_days, result}]}`; ≤ 500 files per call. **Legal holds always win** (`result: held`). Every file acted on is audited as `retention_trash` / `retention_delete`. Requires `audit` + `delete`. Nothing runs on its own — call it from your scheduler. |
 | `POST` | `/fixity/check` | `{disk}` | `audit-export` | **Integrity (fixity) check** of the token's root. The first pass stores a SHA-256 baseline in `<prefix>/_fluxfiles/fixity.json`; later passes report files `changed_*` / `missing_*` since the baseline, split into **explained** (a FluxFiles write/delete of that path is in the audit log since the last check) and **unexplained** (edited/removed directly on the storage, or corrupted). Each unexplained item is also audited as `fixity_mismatch`. Up to 1 GB is hashed per call; `complete: false` means run again to continue (a cursor resumes). Requires the `audit` permission + `allow_audit_export`. |
 | `POST` | `/audit/purge` | `{disk?, before?}` | `audit-export` | Delete audit entries (live log + rotated archives) older than `before` (unix ts; falls back to the token's `audit_retention_days`, else `400 audit_purge_no_cutoff`). **Admin-only**: requires an unscoped token (empty `pathPrefix`) — `audit.jsonl` is per-disk, not per-tenant |
-| `POST` | `/hold` | `{disk, path, reason?}` | `legal-hold` | Place a legal hold on a file/folder, blocking delete/trash/rename/move on it (enforcement itself is free/core and stays active even if the module is uninstalled/unlicensed). Requires the `audit` permission |
-| `POST` | `/hold/release` | `{disk, hold_id, reason?}` | `legal-hold` | Release a hold. Requires the `audit` permission |
+| `POST` | `/hold` | `{disk, path, reason}` | `legal-hold` | Place a legal hold on a file/folder, blocking delete/trash/rename/move and in-place modification of it (enforcement itself is free/core and stays active even if the module is uninstalled/unlicensed). Requires the `audit` permission |
+| `POST` | `/hold/release` | `{disk, hold_id, reason}` | `legal-hold` | Release a hold. Requires the `audit` permission |
 | `GET` | `/hold/list?disk=&include_released=` | — | `legal-hold` | List holds on the token's scope. Requires the `audit` permission |
 
-> Virus scanning (`virus` module) has no dedicated endpoint — when `allow_virus_scan` is on, `/upload`, `/import-url`, `/content` (PUT), and `/extract` scan bytes before they're written. DLP/PII scanning (`dlp` module) works the same way via `allow_dlp_scan` — no endpoint of its own, `/api/fm/chunk/*` refuses it outright the way it refuses virus scanning.
+> Besides the on-demand `/virus/scan` above, virus scanning (`virus` module) runs on the write path: when `allow_virus_scan` is on, `/upload`, `/import-url`, `/tus`, `/content` (PUT), and `/extract` scan bytes before they're written (fail-closed). DLP/PII scanning (`dlp` module) works the same way via `allow_dlp_scan` and has no endpoint of its own. `/chunk/*` and presigned PUT/POST are refused outright while either claim is on.
 
 ### SSO Bridge (paid module `sso`, pre-auth)
 
-Not gated by a per-token claim (there's no token yet) — a server kill-switch (`FLUXFILES_SSO_ENABLED=true`) plus the module installed + licensed. Exists to put a login screen in front of the **standalone `/public` UI** when there's no host app minting tokens via `fluxfiles_token()`. OIDC only in v1 (no SAML). See the public [SSO Bridge setup](ACTIVATE.md#sso-bridge-setup-standalone-ui) for the flow and configuration.
+Not gated by a per-token claim (there's no token yet) — a server kill-switch (`FLUXFILES_SSO_ENABLED=true`) plus the module installed + licensed. Exists to put a login screen in front of the **standalone `/public` UI** when there's no host app minting tokens via `fluxfiles_token()`; not proxied by the adapters. OIDC only (no SAML), with PKCE (S256). See the public [SSO Bridge setup](ACTIVATE.md#sso-bridge-setup-standalone-ui) for the flow and configuration.
 
 | Method | Path | Params / Body | Description |
 |--------|------|----------------|-------------|
 | `GET` | `/sso/login?redirect=` | — | Signs a short-lived state token, 302s to the IdP's `authorization_endpoint`. `redirect` must be a same-origin relative path. |
-| `GET` | `/sso/callback?code=&state=` | — | Verifies `state`, exchanges `code` at the IdP's token endpoint, verifies the `id_token` via JWKS, resolves the identity's groups to a claims set (`FLUXFILES_SSO_CLAIMS_MAP`), mints the real access JWT, and 302s to `/public/index.html#boot=<one-time token>` — a URL **fragment**, never a query string, so the real JWT is never logged or sent to the server. |
+| `GET` | `/sso/callback?code=&state=` | — | Verifies `state`, exchanges `code` at the IdP's token endpoint, verifies the `id_token` via JWKS, resolves the identity's groups to a claims set (`FLUXFILES_SSO_CLAIMS_MAP`, first match in the map's own order), takes the user id from `FLUXFILES_SSO_USER_CLAIM` (default `sub`), mints the real access JWT, and 302s to `/public/index.html#boot=<one-time token>` — a URL **fragment**, never a query string, carrying the JWT sealed with AES-256-GCM. |
 | `POST` | `/sso/exchange` | `{token}` | Trades the one-time boot token (from the `#boot=` fragment) for the real access JWT: `{data: {token, expires_at}, error: null}`. This is the only way the real JWT is ever transmitted. |
 
 ## Resumable upload (tus 1.0 — local / SFTP / any disk)
@@ -135,20 +141,22 @@ The [tus 1.0.0](https://tus.io/protocols/resumable-upload) core protocol with th
 
 | Method | Path | Headers | Description |
 |--------|------|---------|-------------|
-| `POST` | `/tus` | `Upload-Length`, `Upload-Metadata: filename <b64>,path <b64>,disk <b64>` | Create → `201` + `Location: /api/fm/tus/<id>`. The upload rules (write perm, disk, extension/dangerous name, `max_upload`, path scope) are checked **here**, before any byte is staged. `Upload-Defer-Length` is not supported. |
+| `POST` | `/tus` | `Upload-Length`, `Upload-Metadata: filename <b64>,path <b64>,disk <b64>` | Create → `201` + `Location: /api/fm/tus/<id>`. The upload rules (write perm, disk, extension/dangerous name, `max_upload`, path scope, quota, file count, name collision, `owner_only`, legal hold) are checked **here**, before any byte is staged. `Upload-Defer-Length` is not supported. |
 | `HEAD` | `/tus/<id>` | — | `Upload-Offset` / `Upload-Length` — where to resume. |
 | `PATCH` | `/tus/<id>` | `Upload-Offset`, `Content-Type: application/offset+octet-stream` | Append. Wrong offset → `409` (with the real one); a concurrent PATCH → `423`; bytes beyond `Upload-Length` → `413`. The final chunk runs the file through the **normal upload pipeline** (quota, virus/DLP scan, `strip_exif`, variants, ownership) and returns the result base64-JSON in `X-FluxFiles-Result`. |
 | `DELETE` | `/tus/<id>` | — | Abandon. |
 
-Uploads belong to the user that created them (others get `404`); unfinished ones expire after 24 h (max 20 per user). Partial bytes are staged in the server's storage dir (`<FLUXFILES_STORAGE_PATH>/tus/`) — on a multi-node deployment share that directory or use sticky sessions. PATCH/HEAD use their own rate bucket (`FLUXFILES_TUS_RATE_LIMIT`, 600/min). Core standalone only — the Laravel/WordPress proxies don't route `/tus` (the UI falls back to a plain upload there).
+Uploads belong to the token that created them — same user id, tenant prefix and disk (others get `404`); unfinished ones expire after 24 h (max 20 per user). Partial bytes are staged in the server's storage dir (`<FLUXFILES_STORAGE_PATH>/tus/`) — on a multi-node deployment share that directory or use sticky sessions. PATCH/HEAD use their own rate bucket (`FLUXFILES_TUS_RATE_LIMIT`, 600/min). Core standalone only — the Laravel/WordPress proxies don't route `/tus` (the UI falls back to a plain upload there).
 
 ## Chunk Upload (S3 multipart, files > 10MB)
+
+Refused with `409 virus_unscannable` / `dlp_unscannable` while `allow_virus_scan` / `allow_dlp_scan` is on — the parts go browser→S3 and can't be scanned.
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
 | `POST` | `/chunk/init` | `{disk, path, size}` | Initiate → `{upload_id, key, chunk_size}` |
 | `POST` | `/chunk/presign` | `{disk, key, upload_id, part_number}` | Presign URL for part |
-| `POST` | `/chunk/complete` | `{disk, key, upload_id, parts}` | Complete upload |
+| `POST` | `/chunk/complete` | `{disk, key, upload_id, parts}` | Complete upload (part sizes/ETags and collision/owner/quota/count policy validated first) |
 | `POST` | `/chunk/abort` | `{disk, key, upload_id}` | Abort upload |
 
 ## Upload Response Example
@@ -176,9 +184,13 @@ Uploads belong to the user that created them (others get `404`); unfinished ones
 }
 ```
 
+Depending on the token, the result may also carry `exif_stripped: true` (`strip_exif`),
+`virus_scanned: true` (`allow_virus_scan`) and a `poster` variant (`media_posters`).
+
 ## Duplicate Detection
 
-If a file with the same SHA-256 hash exists, upload returns:
+With the `dedupe_uploads` claim on (default off — a byte-identical upload is then
+simply kept as a copy), a file whose SHA-256 hash already exists returns:
 
 ```json
 {
@@ -191,4 +203,5 @@ If a file with the same SHA-256 hash exists, upload returns:
 }
 ```
 
-Send `force_upload=true` (in form data) to upload anyway.
+Send `force_upload=true` (in form data) to upload anyway. To find duplicates that
+already exist, use `GET /duplicates` above.

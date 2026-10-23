@@ -13,8 +13,7 @@
 > `docs/reference/METADATA-STORAGE-DESIGN.md` remains accurate as the description of the
 > default configuration; this doc is its companion for the `db` mode, not its
 > supersession — that other doc should carry a short pointer note to this
-> effect near its "No more SQLite" line (not yet added there; this doc cannot
-> edit it — see the handoff note that accompanies this design). This doc keeps
+> effect near its "No more SQLite" line (now added there). This doc keeps
 > the *files themselves* (bytes) fully storage-resident and BYOB-neutral in
 > **both** modes — that part was never in question — but, only when opted in,
 > moves the *bookkeeping* (per-file metadata, search index, folder index,

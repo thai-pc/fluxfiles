@@ -32,7 +32,9 @@ $token = fluxfiles_token([
     'allowedExt'  => ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'pdf', 'docx'],
     'ttl'         => 3600,
     'claims'      => [
-        'auto_optimize' => true,                 // WebP at rest, no per-image tooling
+        'allow_optimize' => true,                // optimize is free/core but opt-in per token
+        'auto_optimize'  => true,                // WebP at rest, no per-image tooling
+        'strip_exif'     => true,                // drop GPS/camera data from client photos
     ],
 ]);
 ```
@@ -104,7 +106,9 @@ $token = fluxfiles_token([
 ```
 
 Drop `'edition' => 'enterprise'` down to `'pro'` (no virus scan) for firms that
-don't need the compliance module.
+don't need the compliance module — and note that the `enterprise` preset's
+`allow_virus_scan`/`allow_dlp_scan` are **fail-closed** (see Notes below), so only
+use it where a scanner is actually configured.
 
 ---
 
@@ -132,11 +136,10 @@ $token = fluxfiles_token([
 ]);
 ```
 
-Note: `embed.php` now also defines a `'edition' => 'studio'` preset (`pro` +
-`allow_versioning`/`allow_webhooks`/`allow_ai_vision`/`allow_ocr`) — see
-`LICENSING-PLAN.md`. This example sets the Studio-tier claims explicitly via the
-`claims` map anyway, since it also narrows `webhook_events` and caps
-`versioning_max`, which the preset doesn't do for you.
+Note: `embed.php` also defines a `'edition' => 'studio'` preset (`pro` +
+`allow_versioning`/`allow_webhooks`/`allow_ai_vision`/`allow_ocr`). This example sets
+the Studio-tier claims explicitly via the `claims` map anyway, since it also narrows
+`webhook_events` and caps `versioning_max`, which the preset doesn't do for you.
 
 ---
 
@@ -158,9 +161,13 @@ $token = fluxfiles_token([
         'terminal_pty_url' => 'https://term.acme.com/', // BYO ttyd/gotty for a real interactive shell
         'allow_chmod'      => true,
         'allow_code_edit'  => true,                // .env / nginx.conf / wp-config.php
+        'show_hidden'      => true,                // dotfiles (.env, .htaccess) are refused by name without it
     ],
 ]);
 ```
+
+Large uploads to an SFTP disk go through resumable tus uploads when you run the
+standalone core, so they aren't capped by the box's PHP `upload_max_filesize`.
 
 ---
 
@@ -168,7 +175,8 @@ $token = fluxfiles_token([
 
 **For:** self-hosted, air-gappable deployments where data can't leave the
 customer's own infra. **Enterprise** — virus scan is fail-closed, C2PA signs
-provenance, everything is owner-scoped and audited.
+provenance, everything is owner-scoped and audited (HMAC-chained log, legal hold,
+retention rules, fixity checks).
 
 ```php
 $token = fluxfiles_token([
@@ -182,15 +190,19 @@ $token = fluxfiles_token([
                                                    //    allow_virus_scan + allow_c2pa + allow_backup + allow_audit_export +
                                                    //    allow_dlp_scan + allow_legal_hold (full bundle, embed.php)
     'claims'    => [
-        'allowed_ext' => ['pdf', 'tiff', 'docx'],
+        'allowed_ext'    => ['pdf', 'tiff', 'docx'],
         'dedupe_uploads' => true,
+        'strip_exif'     => true,
+        'audit_reads'    => true,                 // also log code-editor reads and media playback
     ],
 ]);
 ```
 
 Combine with `fluxfiles_byob_token()` instead of `fluxfiles_token()` when the
 customer must use their own S3/R2 bucket rather than the operator's — see
-`CONFIG.md` §2.12 "BYOB (Bring Your Own Bucket)" and `embed.php`.
+`CONFIG.md` §2.12 "BYOB (Bring Your Own Bucket)" and `embed.php`. A compliance
+officer's token would add the `audit` permission (and `retention_rules` if retention
+is wanted) — see `CONFIG.md` §2.13.
 
 ---
 
@@ -198,12 +210,14 @@ customer must use their own S3/R2 bucket rather than the operator's — see
 
 - **`edition` is DX sugar, not the license gate.** It just pre-fills the claims a
   tier usually wants (`fluxfiles_apply_edition_preset` in `embed.php`) — the real
-  enforcement is still the operator's license key + the module being installed. A
-  claim from an unlicensed/uninstalled module is simply ignored server-side. Today
-  the preset exists for `pro` / `agency` / `studio` / `enterprise` (see note under
-  preset #4 above); Studio-tier tokens (preset #4) still set their claims explicitly
-  anyway since it also narrows `webhook_events` and caps `versioning_max`, which the
-  preset doesn't do for you.
+  enforcement is still the operator's license key + the module being installed.
+  Calling a feature whose module is missing or unlicensed answers `501`/`402`; the
+  claim alone unlocks nothing. **Exception — fail-closed claims:** with
+  `allow_virus_scan` or `allow_dlp_scan` on, a missing module, licence or engine makes
+  every write that needs a scan **fail** instead of storing the file unscanned. The
+  preset exists for `pro` / `agency` / `studio` / `enterprise`; Studio-tier tokens
+  (preset #4) still set their claims explicitly anyway since it also narrows
+  `webhook_events` and caps `versioning_max`, which the preset doesn't do for you.
 - Every claim above is documented in full (defaults, clamping, sanitization) in
   [`CONFIG.md`](../reference/CONFIG.md) — these presets only combine existing claims, they don't
   introduce new ones.

@@ -86,9 +86,9 @@ const token = createToken({
 });
 ```
 
-These are **standalone-core** features: `@fluxfiles/node` mints for a real
-FluxFiles server (Docker / standalone), which serves them — they aren't available
-behind the WordPress / Laravel-proxy adapters.
+The standalone core / Docker image serves these, and so do the Laravel and WordPress
+proxy adapters (`/chmod`, `/terminal` and `/git-deploy` are all proxied) whenever the
+token reaches an SFTP disk there.
 
 ### BYOB — encrypt a user's own bucket credentials
 
@@ -112,6 +112,8 @@ const token = createByobToken({
 
 Credentials are AES-256-GCM encrypted into the token and decrypted only at
 runtime by the FluxFiles server (which also re-validates the endpoint for SSRF).
+A BYOB disk may also use `driver: 'sftp'` (host/username plus password or private key);
+`local` is always refused.
 
 ### Verify / decode (optional)
 
@@ -159,8 +161,14 @@ app.get('/fluxfiles/token', (req, res) => {
 `maxUploadMb?`, `allowedExt?`, `ttl?`, `ownerOnly?`, `maxStorageMb?`, `maxFiles?`.
 Per-tenant overrides (omit to inherit the server default): `aiAutoTag?` (bool),
 `rateRead?` / `rateWrite?` (req/min), `variants?` (`{ thumb?, medium?, large? }` px).
+Presets: `role?` (`viewer`/`editor`/`admin`/`superadmin`) and `edition?` (tier preset).
+Most other claims have a camelCase option too (e.g. `stripExif`, `mediaPosters`,
+`allowPresignPut`, `auditReads`, `retentionRules`, the `allow*` module gates — see
+`src/types.ts`), and **`claims?`** sets any claim by its raw snake_case name — the
+same escape hatch as PHP. The full claim list is the core's
+[configuration reference](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md).
 `createByobToken` replaces `disks` with `byobDisks` (a map of name → S3-compatible
-config) and does not take `maxStorageMb`/`maxFiles` (matching the core).
+or SFTP config) and does not take `maxStorageMb`/`maxFiles` (matching the core).
 
 ## Compatibility
 
@@ -177,4 +185,3 @@ MIT — see [LICENSE](LICENSE) for details.
 
 - Main repository: `https://github.com/thai-pc/fluxfiles`
 - Documentation: `https://github.com/thai-pc/fluxfiles#node-server-side-token-sdk`
-- Issues: `https://github.com/thai-pc/fluxfiles/issues`

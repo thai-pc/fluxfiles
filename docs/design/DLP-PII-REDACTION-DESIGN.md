@@ -1,11 +1,17 @@
 # DLP / PII Detection-on-Upload — Design Spec
 
-Status: **Implemented and shipped.** Module id `dlp`, class `\FluxFiles\Dlp\DlpModule`
+Status: **Implemented in core-v0.2.82** (CHANGELOG `[0.3.06]`, module `dlp` v1.0.0). Module id `dlp`, class `\FluxFiles\Dlp\DlpModule`
 (gitignored private package `packages/dlp/`, registered in `ModuleRegistry::$map`),
 claim `allow_dlp_scan` (parsed in `Claims.php`). Companion to `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`
 (style/depth reference) and the shipped Virus module (closest analog — gitignored code,
 but its shape is fully visible from `ModuleRegistry.php`/`Claims.php`/`FileManager.php`/
 `index.php` and is what this spec mirrors throughout).
+Later additions not described below: presigned PUT/POST are refused with
+`409 dlp_unscannable` while the claim is on, like chunk upload (core-v0.2.92); resumable
+`/tus` uploads are scanned through the normal pipeline (core-v0.2.97); Intake portal
+uploads are scanned when the operator's token had `allow_dlp_scan` (intake v1.3.0). Zip
+extract is **not** all-or-nothing as §4 says — structural checks run first, but a
+per-entry scan failure can leave earlier entries written.
 
 **Framing decision, stated up front:** this is **not a new standalone SKU**. Per
 `docs/COMMERCIAL-STRATEGY.md` §3a/§6 ("Compliance is one Enterprise *bundle*, not
@@ -156,7 +162,7 @@ existing write paths:
 |---|---|
 | `POST /api/fm/upload` (and therefore `POST /api/fm/import-url`, which funnels through the same `upload()`) | Scans the uploaded file **before** hash/dims/write/variants, if its extension is eligible (§2.1). |
 | `PUT /api/fm/content` (code/config editor save) | Scans the new text content before it overwrites the file — the same staging-to-temp-file pattern Virus already uses at this call site (`FileManager.php` line ~1955). |
-| `POST /api/fm/extract` (each zip entry) | Scans each eligible entry **before** it's written, same as Virus's per-entry hook (`FileManager.php` line ~2617) — one infected/PII-bearing entry aborts the whole extract (two-pass atomic, matches `extract`'s existing all-or-nothing contract). |
+| `POST /api/fm/extract` (each zip entry) | Scans each eligible entry **before** it's written, same as Virus's per-entry hook (`FileManager.php` line ~2617) — one infected/PII-bearing entry aborts the whole extract (two-pass atomic, matches `extract`'s existing all-or-nothing contract). *(As shipped: the remaining entries are not written, but entries written before the failing one stay — extract's structural checks are all-or-nothing, its per-entry scan/write pass is not.)* |
 | Internal `putContent`/`writeStream` helpers | Scanned at the same low level Virus already hooks (`FileManager.php` lines ~3078/~3117) — this is a free ride: any *other* feature that writes bytes through these helpers (watermark burn-in output, metadata import, a future C2PA-sign output path) automatically gets DLP coverage too, with no per-feature wiring. |
 | `POST /api/fm/chunk/init\|presign\|complete\|abort` | **Refused outright with `409 dlp_unscannable` while `allow_dlp_scan` is true** — S3-multipart bytes go browser→S3 directly and never reach this server, so they cannot be scanned (identical unscannable-side-door problem, identical resolution, as `virus_unscannable`). This is the exact "multipart uploads have the identical problem" case flagged in the task brief. |
 
@@ -303,7 +309,7 @@ feature.
 - `src/PresidioClient.php` — the thin HTTP wrapper described in §2.2 (plain bounded
   cURL, no persistent state).
 - `tests/` — the module's own test suite (not visible in this repo; mirrors the layout
-  of the other 10 private modules).
+  of the other private modules).
 
 ### 7.2 Free/core changes (this repo, MIT)
 
@@ -452,6 +458,8 @@ router) to play the role of Presidio, and exercises over real HTTP:
   → succeeds anyway (extension not eligible, engine never called) — the key regression
   test for §2.1's design.
 
+(As built, `test-dlp-http.php` runs on port 8151 — 8113 went to the intake suite.)
+
 **CI guards that will fail until this is done right** (call out explicitly, both are
 existing repo mechanisms, not new ones to build):
 - `tests/unit/test-config-doc.php` — fails until the 5 claims are in `docs/reference/CONFIG.md`.
@@ -497,9 +505,10 @@ just remembering to bump the number by hand (gitignored packages aren't CI-visib
    fixed by this module.
 4. **No on-demand "scan already-stored files" endpoint in v1** (e.g. `POST
    /api/fm/dlp/scan {disk,path}` to audit an existing bucket). Write-time-only, exactly
-   like Virus. A bulk-audit crawl is a different feature shape (closer to `backup`'s
+   like Virus was at the time. A bulk-audit crawl is a different feature shape (closer to `backup`'s
    "operator-driven, cron-scheduled subtree walk" than to a per-request write gate) and
-   is left as a stated future item, not built here.
+   is left as a stated future item, not built here. *(Virus later gained an on-demand
+   `POST /api/fm/virus/scan`; DLP still has none.)*
 5. **No persistent circuit-breaker/backoff state** (§2.2) — a sustained Presidio outage
    fails closed on every eligible write until fixed. This is the correct failure mode
    for a security control (loud, not silently degraded) and avoids introducing new

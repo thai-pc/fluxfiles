@@ -5,6 +5,12 @@ FluxFiles yourself. This is separate from [`OPERATIONS.md`](OPERATIONS.md),
 which is the runbook for the different job of **selling** FluxFiles (Polar,
 the licence server, module hosting) — none of that applies here.
 
+Requires PHP **8.2.35 or newer** (8.3/8.4 supported) with `gd`, `curl`, `json`,
+`openssl`, `mbstring`, `fileinfo`. Optional binaries: Ghostscript **≥ 10.05.0** (PDF
+optimize, PDF posters — an older `gs` is treated as absent), ffmpeg (video posters),
+ClamAV / tesseract / c2patool for the matching paid modules. All of them run with a
+minimal environment, never the PHP process's own.
+
 ## Nginx
 
 ```nginx
@@ -57,8 +63,9 @@ server {
     location ~* /_fluxfiles/ { deny all; }
 
     # Everything else under storage/ is server runtime state, not public content:
-    # ssh-sockets/ (multiplex index.json + ephemeral BYOB private keys), locks,
-    # caches. `^~` stops the `\.php$` regex from claiming a file in there.
+    # ssh-sockets/ (multiplex index.json + ephemeral BYOB private keys), tus/
+    # (partial resumable uploads), locks, caches. `^~` stops the `\.php$` regex
+    # from claiming a file in there.
     # /storage/uploads/ below is a longer prefix, so public uploads still serve.
     location ^~ /storage/ { deny all; }
 
@@ -133,7 +140,8 @@ RewriteRule (^|/)_fluxfiles/ - [F,L,NC]
 </FilesMatch>
 
 # Everything under storage/ except uploads/ is server runtime state
-# (rate_limit.json, demo_ip.json, ssh-sockets/ with ephemeral BYOB private keys).
+# (rate_limit.json, demo_ip.json, tus/ partial uploads, ssh-sockets/ with
+# ephemeral BYOB private keys).
 RewriteRule ^storage/(?!uploads/) - [F,L,NC]
 # Dotfiles anywhere (.env, an uploaded .user.ini/.htaccess, .git/…).
 RewriteRule (^|/)\. - [F,L]
@@ -178,6 +186,11 @@ chmod 600 .env
 chmod 600 storage/rate_limit.json   # if exists
 ```
 
+`storage/` also holds `tus/` (partial resumable uploads, swept after 24 h). On a
+**multi-node** deployment behind a load balancer, either share
+`<FLUXFILES_STORAGE_PATH>/tus/` between the nodes or use sticky sessions — a tus
+`PATCH` must reach the node that holds the upload's partial bytes.
+
 ## Upload size limits (three layers)
 
 A large upload must pass **three** independent limits — the smallest one wins.
@@ -198,6 +211,10 @@ upload_max_filesize = 100M
 post_max_size       = 110M     ; a little above upload_max_filesize
 ```
 
-> Files **larger than 10 MB on S3/R2 disks** use chunked (multipart) upload, which
-> sends 5 MB parts directly to the bucket — so those bypass `post_max_size`. Local
-> disk always uses a single request, so the PHP/nginx limits above apply in full.
+> Two paths avoid the PHP limits for big files. **S3/R2 disks:** files larger than
+> 10 MB use chunked (multipart) upload, which sends 5 MB parts directly to the bucket,
+> bypassing `post_max_size`. **Local/SFTP disks (standalone core):** files larger than
+> 8 MB use resumable **tus** upload in small chunks, so only each chunk — not the whole
+> file — has to fit the web-server/PHP body limits, and `max_upload` still caps the total.
+> Behind the Laravel/WordPress proxies there is no `/tus` route, so local uploads there
+> are a single request and the PHP/nginx limits above apply in full.

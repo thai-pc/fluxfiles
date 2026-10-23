@@ -1,6 +1,8 @@
 # One-Click Git Deploy (SSH exec) — Security + Performance Review
 
-Status: **Implemented and shipped (2026-09-03).** This doc began as the
+Status: **Implemented in core-v0.2.81 (2026-09-03)** — the first core both proxy
+adapters accept for `/git-deploy` — and hardened twice since (core-v0.2.89,
+core-v0.2.92; see §8). This doc began as the
 pre-implementation "dedicated security review" `docs/ROADMAP.md`'s
 `⏸️ LATER / conditional` section required before anyone built
 `allow_ssh_exec` / one-click Git deploy; §1–§6 below are that original
@@ -8,7 +10,8 @@ review, kept intact as a record of the analysis that shaped the design. The
 feature has since been built exactly to §4's constraints and is live in
 core (free/core, not a paid module) with Laravel/WordPress proxy parity —
 see §7 for what actually shipped, including a hardening addition (a
-PID-liveness check on the deploy lock) made after initial ship.
+PID-liveness check on the deploy lock) made after initial ship, and §8 for the
+later config-exec hardening.
 
 **Recommendation up front: conditional go**, but not as originally framed.
 The roadmap describes this as introducing "a big new attack surface." That
@@ -131,7 +134,9 @@ narrower action," addressing F1–F7 in order:
    > -c protocol.ext.allow=never -c protocol.file.allow=never`, and applies
    > those four **unconditionally** — the `git_deploy_hooks` claim opts into
    > *hooks*, not into arbitrary command execution, so enabling it must not
-   > re-open this. Locked by `tests/unit/test-git-deploy.php`.
+   > re-open this. Locked by `tests/unit/test-git-deploy.php`. (The claim
+   > shipped as `git_deploy_hooks`, not the `allow_git_hooks` name proposed
+   > above. See §8 for the further hardening that followed.)
 4. **A dedicated claim, never bundled with `allow_sftp` or `allow_terminal`.**
    Matches the roadmap's own instinct. Concretely: `allow_git_deploy` (bool,
    default false) is independent — a token can have `allow_sftp` +
@@ -297,4 +302,31 @@ Implemented per §4, free/core (not a paid module — same tier as
   `FLUXFILES_GIT_DEPLOY_RATE_LIMIT` — a deliberate adapter-level gap, not an
   oversight. Requires core ≥ 0.2.81 (`composer.json` floor bumped in both
   packages since `GitDeploy` didn't exist at 0.2.80).
-</content>
+
+## 8. Later hardening (after initial ship)
+
+Two security passes found that F2 — "a hostile repo runs code on deploy" — had
+more doors than hooks. Both are fixed; the summary is kept here so §4.3's
+"closes F2 by default" is read with them in mind.
+
+- **core-v0.2.89 (free/core audit 2026-09-26, H-4/M-6).** The `-c core.fsmonitor=false
+  -c core.sshCommand=ssh -c protocol.ext.allow=never -c protocol.file.allow=never`
+  flags described in the §4.3 amendment, applied whether or not hooks are enabled,
+  and a digits-only check on the lock PID (a planted `-1` used to wedge the lock).
+  See `docs/security/FREE-CORE-SECURITY-AUDIT-2026-09.md`.
+- **core-v0.2.92 (2026-10-08).** A pre-deploy audit of the repo's own config had been
+  added as a *denylist* (`git config --local --list --name-only` against known-dangerous
+  keys) and was bypassed three ways: `include.path` (`--local --list` never expands
+  includes, so a hidden `filter.*.smudge` was invisible), `extensions.worktreeConfig`
+  (`--local` never reads `.git/config.worktree`), and keys never on the list
+  (`core.askPass`, an attacker-set `core.hooksPath`). It is now an **allowlist**: the
+  audit runs `git config --list --show-scope --name-only` over the `local` + `worktree`
+  scopes and refuses the repo (`409 git_deploy_unsafe_repo`) if any key falls outside
+  the known-safe set `git init`/clone/checkout produce. `core.hooksPath` is pinned on
+  every run — `/dev/null`, or the repo's own `.git/hooks` when `git_deploy_hooks` is
+  true — and `core.askPass` joins the always-cleared flags. Writes into any `.git`
+  path segment on an SFTP disk are now refused by `FileManager::isReservedKey()`
+  (`error.git_internal_path`), including zip-extract entries and module writes
+  (core-v0.2.94), which removes the write primitive the bypasses relied on.
+
+F5 (non-atomic deploy) remains documented, not solved.

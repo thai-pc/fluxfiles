@@ -1,11 +1,14 @@
 # Spec — Operator UI for Share links and Intake portals
 
-> Status: implemented and shipped. Implements the approved plan
+> Status: **Implemented in core-v0.2.68** (CHANGELOG `[0.2.83]`). Implements the approved plan
 > `.claude/work/plan-operator-share-intake-ui.md` (decisions there are settled input). Scope:
 > the **free MIT core** standalone UI (`packages/core/assets/fm.js` + `fm.css` +
 > `public/index.html` + `lang/*.json`), plus four prerequisite fixes in the gitignored paid
 > packages and the two PHP adapters. See `51bcc2f feat(core): operator UI for Share links and
 > Upload portals` + follow-ups (`509aa8e`, `d36c7cd`, `1f8b2ec` WordPress support).
+> This is a design record, not an operator guide — it lives under `guides/` only because of
+> where it was first filed. The same `proGate()` three-state pattern now also gates the
+> Versioning, AI Vision, OCR, Virus, Backup, Audit-export and Legal-hold UIs.
 
 ## 0. One objection to the settled decisions
 
@@ -419,10 +422,11 @@ a missing owner, so under `owner_only` a legacy portal is invisible and un-revok
 >   all eleven ... so the claims are forwarded like any other" (:468-471).
 > - Route-parity guard tests confirm neither adapter's unproxied allowlist contains any
 >   Share/Intake route: Laravel's `$intentionallyUnproxied` in
->   `packages/laravel/tests/test-laravel-smoke.php` (~:383-405: `chmod`, `zip`, `sso/*`,
->   `metadata/export`, `metadata/import` only), and WordPress's equivalent test —
+>   `packages/laravel/tests/test-laravel-smoke.php` (now `sso/*`, `metadata/export`,
+>   `metadata/import` and `tus` only — `chmod` and `zip` came off it once both were proxied),
+>   and WordPress's equivalent test —
 >   `'proxy route surface covers every core /api/fm route'`
->   (`packages/wordpress/tests/test-wp-smoke.php:1102`, allowlist ~:1140-1144) — which is the
+>   (`packages/wordpress/tests/test-wp-smoke.php`) — which is the
 >   **same guard `docs/design/SHARE-PUBLIC-LANDING.md` §8 previously said WordPress lacked**; that
 >   claim there is also being corrected as part of this pass.
 > - Claim forwarding itself is asserted directly too: Laravel's smoke test around :222-253, and

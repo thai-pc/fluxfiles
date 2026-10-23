@@ -38,11 +38,12 @@ environment, so a sandbox token cannot accidentally reach production.
 
 The paid modules are tagged and pushed, but a tag is a version, not a download.
 `ModuleRegistry::$map` (`packages/core/api/ModuleRegistry.php`) is the source of
-truth for how many there are — **thirteen** as of this writing (`share`, `intake`,
+truth for how many there are — **thirteen** as of core-v0.2.100 (`share`, `intake`,
 `versioning`, `webhooks`, `ai`, `ocr`, `virus`, `backup`, `c2pa`, `audit-export`,
 `sso`, `dlp`, `legal-hold`; recount from that file rather than trusting this
 number, since it has drifted before — it was nine before `audit-export`/`sso`
 shipped 2026-08-29, then eleven before `dlp`/`legal-hold` shipped 2026-09-06).
+`optimize` is no longer a module (free/core); don't publish a zip for it.
 
 Build the artifacts:
 
@@ -65,6 +66,14 @@ only reachable.
 > Serve **exactly** the bytes `pack-modules.php` hashed. `UpdateClient` re-hashes the
 > download and refuses a mismatch, so a rebuilt-but-not-rehashed zip breaks every
 > install at once.
+
+**The WordPress plugin has its own catalogue entry.** A `wordpress-v*` tag runs
+`.github/workflows/wordpress-release.yml`, which attaches the plugin ZIP plus a
+`wordpress-catalogue.json` (version, zip, sha256, `requires_php`) to the GitHub
+release. Merge that entry into `build/modules/catalogue.json` on the update server
+(`pack-modules.php` preserves it) — without it the plugin's update check answers
+`404 unknown module`, and without `requires_php` WordPress can't hold an update back
+from a site whose PHP is too old (the floor is 8.2.35).
 
 ---
 
@@ -181,8 +190,9 @@ paste into step 3.
 > `polar-setup.php`, and the landing's `Pricing.astro`. A static marketing page cannot
 > ask the API what something costs. They have already been out of step once — the page
 > advertised Studio at $299/yr while the product was created at $249. `docs/
-> LICENSING-PLAN.md` §C is the canonical source for what the prices *should* be —
-> check new figures against it before changing either `CATALOGUE` or `Pricing.astro`.
+> LICENSING-PLAN.md` (a local, gitignored note) §C is the canonical source for what the
+> prices *should* be — check new figures against it before changing either `CATALOGUE`
+> or `Pricing.astro`.
 
 `enterprise` and `lifetime` are deliberately not created: Enterprise is a custom
 conversation an instant-buy button would undercut, and lifetime is worth offering only
@@ -209,6 +219,9 @@ link, so a half-filled `.env` is visible instead of broken.
 
 Set the checkout success URL to your success page with `?checkout_id={CHECKOUT_ID}`.
 Polar substitutes it; the page exchanges it for the key.
+
+Product screenshots for the landing come from `scripts/landing-screenshots/` (see its
+README) — regenerate them after UI changes.
 
 ---
 
@@ -239,10 +252,11 @@ buyer cannot see.
   canceller keeps the year they paid for. Revoking sooner needs a
   `subscription.canceled` handler.
 - **Module floors are checked by hand.** A module's `composer.json` must require the
-  first core release that actually *calls* it. This cannot be CI-guarded — the packages
-  are gitignored, so CI cannot see them. Seven of nine were wrong once (back when there
-  were only nine modules, before `audit-export`/`sso` shipped 2026-08-29 brought the
-  total to eleven, and `dlp`/`legal-hold` shipped 2026-09-06 brought it to thirteen).
+  first core release that actually *calls* it — and, since 2026-10-23, PHP `^8.2.35`
+  like the core. This cannot be CI-guarded — the packages are gitignored, so CI cannot
+  see them. Seven of nine were wrong once (back when there were only nine modules,
+  before `audit-export`/`sso` shipped 2026-08-29 brought the total to eleven, and
+  `dlp`/`legal-hold` shipped 2026-09-06 brought it to thirteen).
 - **WordPress cannot run the CLI installer.** Shared hosting has no shell; those
   customers unpack the module zip by hand — see `ACTIVATE.md`.
 
