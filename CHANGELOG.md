@@ -3,7 +3,9 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.3.29] — Unreleased
+## [0.3.29] — 2026-10-23
+
+> Released: `core-v0.2.103`, `wordpress-v0.2.63` (the plugin bundles the core UI).
 
 ### Changed
 
