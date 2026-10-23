@@ -405,7 +405,11 @@
     "ocr_timeout": "De OCR-scan is verlopen.",
     "byob_disk_collision": "Deze opslagschijfnaam komt in conflict met een schijf die al op de server is geconfigureerd.",
     "presign_put_disabled": "Directe PUT-uploads zijn uitgeschakeld voor dit account — gebruik een formulierupload (POST)",
-    "presign_post_unsupported": "Deze opslag ondersteunt geen formulieruploads (POST) — gebruik upload in delen"
+    "presign_post_unsupported": "Deze opslag ondersteunt geen formulieruploads (POST) — gebruik upload in delen",
+    "invalid_sort": "Onbekende sortering.",
+    "invalid_order": "De volgorde moet oplopend of aflopend zijn.",
+    "invalid_type": "Onbekend bestandstypefilter.",
+    "cursor_stale": "De map is tijdens het laden gewijzigd. Opnieuw laden…"
   },
   "presign": {
     "title": "Voorondertekende URL",

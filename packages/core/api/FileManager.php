@@ -417,10 +417,44 @@ class FileManager
         $this->apiBasePath = rtrim($base, '/');
     }
 
-    public function list(string $disk, string $path, int $limit = 0, string $cursor = ''): array
+    /** Sort keys list() accepts ('' = key order, the original API behaviour). */
+    public const LIST_SORTS = ['', 'name', 'date', 'size', 'type'];
+    /** File kinds list() can filter on — the same buckets as the UI's fileIcon(). */
+    public const LIST_TYPES = ['all', 'image', 'video', 'audio', 'document', 'other'];
+    /** Extension → kind. Mirrors fileIcon() in assets/fm.js; keep the two in step. */
+    private const LIST_KIND_EXT = [
+        'image'    => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'],
+        'video'    => ['mp4', 'webm', 'mov', 'avi'],
+        'audio'    => ['mp3', 'wav', 'ogg', 'flac'],
+        'document' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'],
+    ];
+
+    /**
+     * @param string $sort  '' (folders first, then files, by key — what S3 lists in)
+     *                      or name|date|size|type, applied to the WHOLE folder before
+     *                      it is cut into pages, so "newest first" means the newest
+     *                      in the folder, not on the page. Folders always come first.
+     *                      `date` is the storage modified time.
+     * @param string $order asc|desc
+     * @param string $type  all|image|video|audio|document|other — files only;
+     *                      folders are always listed. `total` counts what matched.
+     */
+    public function list(string $disk, string $path, int $limit = 0, string $cursor = '',
+        string $sort = '', string $order = 'asc', string $type = 'all'): array
     {
         $this->assertDisk($disk);
         $this->assertPerm('read');
+        $order = $order === '' ? 'asc' : $order;
+        $type = $type === '' ? 'all' : $type;
+        if (!in_array($sort, self::LIST_SORTS, true)) {
+            throw new ApiException('Invalid sort', 400, 'invalid_sort');
+        }
+        if ($order !== 'asc' && $order !== 'desc') {
+            throw new ApiException('Invalid order', 400, 'invalid_order');
+        }
+        if (!in_array($type, self::LIST_TYPES, true)) {
+            throw new ApiException('Invalid type filter', 400, 'invalid_type');
+        }
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped);
@@ -435,8 +469,9 @@ class FileManager
         // so a 50k-file folder cost ~50 calls for every page. `total` is only
         // known from a full listing, so it is null on these pages (the UI keeps
         // the first page's count).
-        if ($limit > 0 && $cursor !== '') {
-            $tail = $this->listS3FilesAfter($disk, $fs, $scoped, $this->scopedPath($cursor), $limit);
+        // Only in key order: StartAfter resumes in the bucket's byte order.
+        if ($limit > 0 && $cursor !== '' && $sort === '' && $order === 'asc') {
+            $tail = $this->listS3FilesAfter($disk, $fs, $scoped, $this->scopedPath($cursor), $limit, $type);
             if ($tail !== null) {
                 [$page, $hasMore] = $tail;
                 $this->attachMetadata($disk, $page);
@@ -476,13 +511,15 @@ class FileManager
             $all[] = $entry;
         }
 
-        // Stable ordering for deterministic cursor pagination: dirs first, then files, both by key ASC.
-        usort($all, static function (array $a, array $b): int {
-            if ($a['type'] !== $b['type']) {
-                return $a['type'] === 'dir' ? -1 : 1;
-            }
-            return strcmp($a['key'], $b['key']);
-        });
+        if ($type !== 'all') {
+            $all = array_values(array_filter($all, fn (array $e): bool =>
+                $e['type'] === 'dir' || self::listKind($e['name']) === $type));
+        }
+
+        // Deterministic order for cursor pagination: folders first, then files, by
+        // the requested sort with the key as the final tie-break, so a cursor (the
+        // last key handed out) always resumes at the same place.
+        $all = $this->sortListing($disk, $all, $sort, $order);
 
         $total = count($all);
 
@@ -491,14 +528,22 @@ class FileManager
             // we handed out, so re-scope it to the absolute key space first.
             if ($cursor !== '') {
                 $absCursor = $this->scopedPath($cursor);
-                $start = 0;
+                $start = null;
                 foreach ($all as $i => $it) {
                     if ($it['key'] === $absCursor) {
                         $start = $i + 1;
                         break;
                     }
                 }
-                $all = array_slice($all, $start);
+                if ($start === null && $sort !== '') {
+                    // The cursor row is gone (deleted, renamed, or no longer matching
+                    // the filter). In a sorted listing its place can't be recovered
+                    // from the key alone, and restarting at row 0 would silently
+                    // re-walk the folder — tell the client to reload instead.
+                    throw new ApiException('The listing changed; reload it', 409, 'cursor_stale');
+                }
+                // Key order (the original API): unchanged — an unknown cursor restarts.
+                $all = array_slice($all, $start ?? 0);
             }
 
             $page = array_slice($all, 0, $limit);
@@ -520,6 +565,112 @@ class FileManager
         // Legacy mode: return flat array with all items + metadata.
         $this->attachMetadata($disk, $all);
         return $this->unscopeItems($all);
+    }
+
+    /** image|video|audio|document|other for a file name — fileIcon() in assets/fm.js. */
+    private static function listKind(string $name): string
+    {
+        $ext = strtolower((string) pathinfo($name, PATHINFO_EXTENSION));
+        foreach (self::LIST_KIND_EXT as $kind => $exts) {
+            if (in_array($ext, $exts, true)) {
+                return $kind;
+            }
+        }
+        return 'other';
+    }
+
+    /**
+     * Folders first, then files, in the requested order — the same order the UI's
+     * comparators (_compareItems / filteredFolders in assets/fm.js) produce:
+     *  - names: ICU root collation with numeric ordering (ext-intl), which is what
+     *    the browser's localeCompare(…, {numeric: true}) uses — "img2" before
+     *    "img10", and "Ảnh", "éclair" where a reader expects them, not after "Z".
+     *    Without ext-intl, strnatcasecmp() (byte order for non-ASCII).
+     *  - date: files by storage mtime; folders by their tracked creation time,
+     *    else mtime (S3/R2 prefixes have none). Size/type don't apply to folders.
+     *  - ties: a FILE tie under date/size/type breaks by name ascending (like the
+     *    UI); name sorts and folder ties follow the direction; the key is last.
+     * Sort keys are computed once per row, not per comparison: a page re-sorts the
+     * whole folder, so this is the cost that grows with folder size.
+     *
+     * @param array<int,array<string,mixed>> $all
+     * @return array<int,array<string,mixed>>
+     */
+    private function sortListing(string $disk, array $all, string $sort, string $order): array
+    {
+        $dir = $order === 'desc' ? -1 : 1;
+        if ($sort === '') {
+            usort($all, static function (array $a, array $b) use ($dir): int {
+                if ($a['type'] !== $b['type']) {
+                    return $a['type'] === 'dir' ? -1 : 1;
+                }
+                return strcmp($a['key'], $b['key']) * $dir;
+            });
+            return $all;
+        }
+
+        $coll = self::listCollator();
+        $created = [];
+        if ($sort === 'date') {
+            try {
+                $created = $this->meta->dirsCreated($disk);
+            } catch (\Throwable $e) {
+                $created = [];
+            }
+        }
+        $rows = [];
+        foreach ($all as $e) {
+            $isDir = $e['type'] === 'dir';
+            $name = (string) $e['name'];
+            $nameKey = $coll !== null ? $coll->getSortKey($name) : false;
+            $v = 0;
+            if ($sort === 'date') {
+                $v = $isDir
+                    ? (int) ($created[$e['key']] ?? $e['modified'] ?? 0)
+                    : (int) ($e['modified'] ?? 0);
+            } elseif ($sort === 'size' && !$isDir) {
+                $v = (int) ($e['size'] ?? 0);
+            } elseif ($sort === 'type' && !$isDir) {
+                // The UI's icon name for "other" is 'file' — sort on the same strings.
+                $kind = self::listKind($name);
+                $v = $kind === 'other' ? 'file' : $kind;
+            }
+            $rows[] = ['e' => $e, 'd' => $isDir, 'n' => $nameKey !== false ? $nameKey : $name,
+                'nat' => $nameKey === false, 'v' => $v, 'k' => (string) $e['key']];
+        }
+        usort($rows, static function (array $a, array $b) use ($sort, $dir): int {
+            if ($a['d'] !== $b['d']) {
+                return $a['d'] ? -1 : 1;
+            }
+            if ($sort !== 'name' && ($sort === 'date' || !$a['d'])) {
+                $p = $a['v'] <=> $b['v'];
+                if ($p !== 0) {
+                    return $p * $dir;
+                }
+            }
+            $nameDir = ($sort === 'name' || $a['d']) ? $dir : 1;
+            $n = ($a['nat'] || $b['nat']) ? strnatcasecmp((string) $a['e']['name'], (string) $b['e']['name']) : strcmp($a['n'], $b['n']);
+            if ($n !== 0) {
+                return $n * $nameDir;
+            }
+            return strcmp($a['k'], $b['k']) * $nameDir;
+        });
+        return array_column($rows, 'e');
+    }
+
+    /** ICU root collation with numeric ordering, or null without ext-intl. */
+    private static function listCollator(): ?\Collator
+    {
+        static $coll = false;
+        if ($coll === false) {
+            $coll = null;
+            if (class_exists(\Collator::class)) {
+                $c = new \Collator('root');
+                $c->setAttribute(\Collator::NUMERIC_COLLATION, \Collator::ON);
+                $coll = $c;
+            }
+        }
+        return $coll;
     }
 
     /** Entries list() never shows: system folders, dotfiles (unless show_hidden), legacy sidecars. */
@@ -563,7 +714,7 @@ class FileManager
      *
      * @return array{0: array<int,array<string,mixed>>, 1: bool}|null [page, has more]
      */
-    private function listS3FilesAfter(string $disk, $fs, string $scoped, string $absCursor, int $limit): ?array
+    private function listS3FilesAfter(string $disk, $fs, string $scoped, string $absCursor, int $limit, string $type = 'all'): ?array
     {
         $cfg = $this->disks->config($disk);
         if (($cfg['driver'] ?? '') !== 's3') {
@@ -589,6 +740,9 @@ class FileManager
                         continue; // folder marker object
                     }
                     if ($this->hiddenFromListing(basename($key), true, $key, $fs)) {
+                        continue;
+                    }
+                    if ($type !== 'all' && self::listKind(basename($key)) !== $type) {
                         continue;
                     }
                     $mtime = $o['LastModified'] ?? null;

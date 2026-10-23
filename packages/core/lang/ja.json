@@ -405,7 +405,11 @@
     "ocr_timeout": "OCRスキャンがタイムアウトしました。",
     "byob_disk_collision": "このストレージディスク名は、サーバーに既に設定されているディスクと競合しています。",
     "presign_put_disabled": "このアカウントでは PUT による直接アップロードが無効です — フォーム (POST) アップロードを使用してください",
-    "presign_post_unsupported": "このストレージはフォーム (POST) アップロードに対応していません — 分割アップロードを使用してください"
+    "presign_post_unsupported": "このストレージはフォーム (POST) アップロードに対応していません — 分割アップロードを使用してください",
+    "invalid_sort": "不明な並べ替えです。",
+    "invalid_order": "並び順は昇順か降順で指定してください。",
+    "invalid_type": "不明なファイル種別フィルターです。",
+    "cursor_stale": "読み込み中にフォルダーが変更されました。再読み込みしています…"
   },
   "presign": {
     "title": "署名付きURL",

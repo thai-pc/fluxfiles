@@ -218,5 +218,25 @@ test('a page signs URLs for its own rows only, not for the whole folder', functi
     assertTrue(isset($page['items'][0]['url']), 'rows still carry their URL');
 });
 
+test('a sorted listing never resumes via StartAfter (byte order is not that order)', function () {
+    [$fm, $stats] = s3Env(fixture());
+    $first = $fm->list('s3', 'pics', 10, '', 'name', 'asc');
+    $fm->list('s3', 'pics', 10, (string) $first['next_cursor'], 'name', 'asc');
+    assertTrue($stats->startAfter === 0, "StartAfter calls: {$stats->startAfter}");
+});
+
+test('key order + a type filter still resumes via StartAfter, filtered', function () {
+    $keys = fixture();
+    $keys[] = 'pics/movie.mp4';
+    $keys[] = 'pics/zz-song.mp3';
+    [$fm, $stats] = s3Env($keys);
+    $first = $fm->list('s3', 'pics', 5, '', '', 'asc', 'image');
+    $second = $fm->list('s3', 'pics', 5, (string) $first['next_cursor'], '', 'asc', 'image');
+    assertTrue($stats->startAfter === 1, "StartAfter calls: {$stats->startAfter}");
+    foreach ($second['items'] as $it) {
+        assertTrue(substr($it['name'], -4) === '.jpg', 'only images: ' . $it['name']);
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  Passed: {$passed}  Failed: {$failed}\n\n";
 exit($failed > 0 ? 1 : 0);

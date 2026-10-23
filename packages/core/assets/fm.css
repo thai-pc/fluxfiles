@@ -2918,6 +2918,23 @@ body {
 /* A thumbnail that failed to load leaves the tinted tile, not a broken-image glyph. */
 .file-card .thumb.thumb-img img.is-error { visibility: hidden; }
 
+/* Re-sorting / re-filtering on the server: keep the grid, dim it, sweep a bar. */
+.ff-content.is-refreshing .file-grid { opacity: .55; transition: opacity .2s ease; pointer-events: none; }
+.ff-content.is-refreshing::before {
+    content: '';
+    position: sticky;
+    top: 0;
+    display: block;
+    height: 2px;
+    margin: -16px -16px 14px;
+    background: linear-gradient(90deg, transparent, var(--ff-primary), transparent);
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: ff-refresh-sweep 1s ease-in-out infinite;
+    z-index: 6;
+}
+@keyframes ff-refresh-sweep { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+
 /* Back to top: sticky at the bottom of the scroller, zero layout height. */
 .ff-back-top-wrap {
     position: sticky;

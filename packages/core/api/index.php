@@ -719,8 +719,11 @@ function routeRequest(
         return $fm->list(
             $_GET['disk'] ?? 'local',
             $_GET['path'] ?? '',
-            max(0, (int) ($_GET['limit'] ?? 0)),
-            (string) ($_GET['cursor'] ?? '')
+            max(0, (int) ff_str_param($_GET, 'limit', '0')),
+            ff_str_param($_GET, 'cursor'),
+            ff_str_param($_GET, 'sort'),
+            ff_str_param($_GET, 'order', 'asc'),
+            ff_str_param($_GET, 'type', 'all')
         );
     }
 

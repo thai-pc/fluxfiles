@@ -405,7 +405,11 @@
     "ocr_timeout": "La scansione OCR è andata in timeout.",
     "byob_disk_collision": "Questo nome di disco di archiviazione è in conflitto con un disco già configurato sul server.",
     "presign_put_disabled": "I caricamenti diretti PUT sono disattivati per questo account — usa un caricamento tramite modulo (POST)",
-    "presign_post_unsupported": "Questo storage non supporta i caricamenti tramite modulo (POST) — usa il caricamento a blocchi"
+    "presign_post_unsupported": "Questo storage non supporta i caricamenti tramite modulo (POST) — usa il caricamento a blocchi",
+    "invalid_sort": "Ordinamento sconosciuto.",
+    "invalid_order": "L'ordine deve essere crescente o decrescente.",
+    "invalid_type": "Filtro tipo file sconosciuto.",
+    "cursor_stale": "La cartella è cambiata durante il caricamento. Ricarico…"
   },
   "presign": {
     "title": "URL prefirmato",

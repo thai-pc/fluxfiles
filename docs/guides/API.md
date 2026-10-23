@@ -28,7 +28,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 
 | Method | Path | Body / Params | Description |
 |--------|------|---------------|-------------|
-| `GET` | `/list?disk=&path=` | — | List directory contents |
+| `GET` | `/list?disk=&path=[&limit=&cursor=&sort=&order=&type=]` | — | List directory contents. With `limit`, returns `{items, next_cursor, total}` pages. `sort` = `name`/`date`/`size`/`type` (omit for key order), `order` = `asc`/`desc`, `type` = `image`/`video`/`audio`/`document`/`other` (files only; folders always listed). Sorting and filtering apply to the whole folder before paging; folders come first. |
 | `POST` | `/upload` | `multipart: disk, path, file, force_upload?` | Upload file |
 | `DELETE` | `/delete` | `{disk, path}` | **Permanently** delete a file or directory (recursive) |
 | `POST` | `/trash` | `{disk, path}` | Soft-delete a **file or folder** to trash (move-based, restorable; folders move the whole subtree) |

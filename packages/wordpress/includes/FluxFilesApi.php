@@ -1185,11 +1185,17 @@ class FluxFilesApi
             $this->rateLimit($claims, false);
             $fm = $this->fileManager($claims);
 
+            // Scalars only: `?sort[]=x` must be a 400 from core, not a PHP warning.
+            $q = static fn (string $k, string $d = ''): string => is_scalar($v = $request->get_param($k)) ? (string) $v : $d;
             return $this->ok($fm->list(
                 $request->get_param('disk') ?? 'local',
                 $request->get_param('path') ?? '',
-                max(0, (int) ($request->get_param('limit') ?? 0)),
-                (string) ($request->get_param('cursor') ?? '')
+                max(0, (int) $q('limit', '0')),
+                $q('cursor'),
+                // Server-side sort/filter (core >= 0.2.107); an older core ignores them.
+                $q('sort'),
+                $q('order', 'asc'),
+                $q('type', 'all')
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
