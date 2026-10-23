@@ -80,6 +80,30 @@ test('a byte budget spreads one round over several calls via the cursor', functi
     assertTrue(!empty($r['complete']) && $total === 5, "all 5 covered exactly once ({$total})");
 });
 
+test('a token that cannot see dotfiles does not report them missing (and keeps their baseline)', function () {
+    [$fm, $base] = fxEnv();
+    file_put_contents("{$base}/t/.env", 'SECRET=1');
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $base, 'url' => '/s']]);
+    $seer = new Claims('auditor', ['read', 'audit'], ['local'], 't', 50, null, 0, false);
+    $seer->showHidden = true;
+    $fmSeer = new FileManager($dm, $seer, new StorageMetadataHandler($dm));
+    $fmSeer->runFixityCheck('local', []);              // baseline incl. .env
+    $r = $fm->runFixityCheck('local', []);              // show_hidden=false token
+    assertTrue($r['missing_unexplained'] === [], 'no false "missing": ' . json_encode($r['missing_unexplained']));
+    file_put_contents("{$base}/t/.env", 'SECRET=2');
+    $r2 = $fmSeer->runFixityCheck('local', []);
+    assertTrue(in_array('.env', $r2['changed_unexplained'], true), 'baseline kept: a later change to .env is still caught');
+});
+
+test('the audit loader is called with the oldest baseline time (windowed read)', function () {
+    [$fm] = fxEnv();
+    $seen = [];
+    $fm->runFixityCheck('local', function (?int $since) use (&$seen) { $seen[] = $since; return []; });
+    $fm->runFixityCheck('local', function (?int $since) use (&$seen) { $seen[] = $since; return []; });
+    assertTrue($seen[0] === null, 'no baseline yet → null');
+    assertTrue(is_int($seen[1]) && $seen[1] > 0 && $seen[1] <= time(), 'second pass gets the baseline time');
+});
+
 test('the manifest lives in the tenant\'s own _fluxfiles and is never itself checked', function () {
     [$fm, $base] = fxEnv();
     $fm->runFixityCheck('local', []);

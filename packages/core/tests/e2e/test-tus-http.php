@@ -61,6 +61,15 @@ try {
     $other = fluxfiles_token(['user' => 'tus-other', 'perms' => ['read', 'write'], 'disks' => ['local'], 'prefix' => $prefix]);
     $payload = random_bytes(1_200_000);
 
+    test('OPTIONS discovery advertises the protocol even without a token', function () use ($BASE) {
+        [$st, $h] = tus('OPTIONS', "{$BASE}/api/fm/tus", '');
+        assertEqual(204, $st);
+        assertEqual('1.0.0', $h['tus-version'] ?? null, 'Tus-Version');
+        assertEqual('creation,termination', $h['tus-extension'] ?? null, 'Tus-Extension');
+        [, $h] = tus('OPTIONS', "{$BASE}/api/fm/list", '');
+        assertTrue(!isset($h['tus-version']), 'non-tus preflight stays plain');
+    });
+
     test('create → PATCH part → (connection lost) → HEAD → resume → complete through the upload pipeline', function () use ($BASE, $tok, $payload, $uploadRoot, $prefix) {
         [$st, $h] = tus('POST', "{$BASE}/api/fm/tus", $tok, ['Upload-Length' => (string) strlen($payload),
             'Upload-Metadata' => meta(['filename' => 'big.bin', 'path' => 'inbox', 'disk' => 'local'])]);

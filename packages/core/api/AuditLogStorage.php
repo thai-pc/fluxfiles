@@ -119,12 +119,29 @@ class AuditLogStorage
             try {
                 // Archive first: it holds the OLDER lines rotated out of the live log,
                 // so archive+live is write order — what newestFirst() tie-breaks on.
-                $all = array_merge($all, $this->storage->readAuditArchive($disk), $this->storage->readAudit($disk));
+                $rows = array_merge($this->storage->readAuditArchive($disk), $this->storage->readAudit($disk));
             } catch (\Throwable $e) {
-                // Skip disk if error
+                continue; // Skip disk if error
             }
+            // Filter and cap each disk before the next is read: only the newest
+            // MAX_EXPORT overall survive, so no disk needs to contribute more — the
+            // working set stays at one disk's history plus the capped results,
+            // instead of every disk's full history at once.
+            // Reversed back to write order: the final newestFirst() tie-breaks on it.
+            $rows = self::newestFirst(self::applyExportFilters($rows, $claims, $filters));
+            $all = array_merge($all, array_reverse(array_slice($rows, 0, self::MAX_EXPORT)));
+            unset($rows);
         }
 
+        return array_slice(self::newestFirst($all), 0, self::MAX_EXPORT);
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $all
+     * @return array<int,array<string,mixed>>
+     */
+    private static function applyExportFilters(array $all, ?Claims $claims, array $filters): array
+    {
         if ($claims !== null && trim($claims->pathPrefix, '/') !== '') {
             $all = array_filter(
                 $all,
@@ -155,8 +172,7 @@ class AuditLogStorage
             $actor = (string) $filters['actor'];
             $all = array_filter($all, fn($e) => ($e['user_id'] ?? '') === $actor);
         }
-
-        return array_slice(self::newestFirst($all), 0, self::MAX_EXPORT);
+        return array_values($all);
     }
 
     /**

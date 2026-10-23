@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace FluxFiles;
 
 /**
- * Lossless removal of embedded metadata (EXIF incl. GPS, XMP, IPTC, text chunks)
- * from JPEG, PNG and WebP — the `strip_exif` claim.
+ * Lossless removal of embedded metadata (EXIF incl. GPS, XMP, IPTC, text chunks,
+ * vendor APPn blocks, C2PA/JUMBF manifests, bytes appended after the image) from
+ * JPEG, PNG and WebP — the `strip_exif` claim. A C2PA manifest goes too: stripping
+ * breaks its hash binding anyway, and it can carry its own EXIF assertion (GPS).
  *
  * Works on the container bytes, never re-encodes pixels: no quality loss, no
  * GD/Imagick dependency, and the colour profile (JPEG APP2 / PNG iCCP) is kept.
@@ -86,12 +88,19 @@ final class ExifStripper
                     $orientation = self::tiffOrientation(substr($payload, 6));
                 }
                 $removed = true;
-            } elseif ($marker === 0xED || $marker === 0xFE) { // APP13 IPTC/Photoshop, COM
+            } elseif ($marker === 0xFE || ($marker >= 0xE3 && $marker <= 0xEF && $marker !== 0xEE)) {
+                // COM, and every APPn but APP14 (Adobe colour transform, needed to
+                // decode CMYK): APP13 IPTC/Photoshop, APP11 JUMBF/C2PA, vendor blocks
+                // (Ricoh/Samsung/Qualcomm/…) that carry their own copies of the data.
                 $removed = true;
-            } elseif ($marker === 0xE2 && strncmp($payload, "MPF\0", 4) === 0) {
-                // APP2 Multi-Picture index: it points at the secondary images appended
-                // after the main one (HDR gain maps, depth/portrait maps) — dropped
-                // together with them below. Other APP2 (the ICC profile) is kept.
+            } elseif ($marker === 0xE2 && strncmp($payload, "ICC_PROFILE\0", 12) !== 0) {
+                // APP2 that isn't the ICC profile: the Multi-Picture index (it points at
+                // the secondary images appended after the main one — HDR gain maps,
+                // depth/portrait maps — dropped with them below) or FlashPix data.
+                $removed = true;
+            } elseif ($marker === 0xE0 && strncmp($payload, "JFXX\0", 5) === 0) {
+                // JFIF extension thumbnail: a second, older copy of the picture (it
+                // can still show what an edit cropped out).
                 $removed = true;
             } elseif ($marker === 0xE0 && $app0 === '' && $head === '') {
                 $app0 = $seg;
@@ -213,8 +222,8 @@ final class ExifStripper
 
     // ── PNG ─────────────────────────────────────────────────────────────────
 
-    /** Ancillary chunks that carry metadata (eXIf = EXIF incl. GPS; text chunks). */
-    private const PNG_DROP = ['eXIf', 'tEXt', 'zTXt', 'iTXt'];
+    /** Ancillary chunks that carry metadata (eXIf = EXIF incl. GPS; text chunks; caBX = C2PA). */
+    private const PNG_DROP = ['eXIf', 'tEXt', 'zTXt', 'iTXt', 'caBX'];
 
     /** @return array{0:string,1:bool}|null */
     private static function stripPng(string $b): ?array
@@ -237,6 +246,9 @@ final class ExifStripper
             }
             $pos += $total;
             if ($type === 'IEND') {
+                if ($pos < $len) {
+                    $removed = true; // bytes after IEND aren't part of the image
+                }
                 break;
             }
         }
@@ -245,10 +257,19 @@ final class ExifStripper
 
     // ── WebP ────────────────────────────────────────────────────────────────
 
+    /** Chunks that make up the image; anything else (EXIF, XMP, C2PA, unknown) goes. */
+    private const WEBP_KEEP = ['VP8 ', 'VP8L', 'VP8X', 'ALPH', 'ANIM', 'ANMF', 'ICCP'];
+
     /** @return array{0:string,1:bool}|null */
     private static function stripWebp(string $b): ?array
     {
         $len = strlen($b);
+        // Only what the RIFF header declares is the image; bytes appended past it go.
+        $riffEnd = 8 + unpack('V', substr($b, 4, 4))[1];
+        if ($riffEnd > $len) {
+            return null;
+        }
+        $len = $riffEnd;
         $pos = 12;
         $chunks = '';
         $removed = false;
@@ -260,7 +281,7 @@ final class ExifStripper
             if ($pos + 8 + $size > $len) {
                 return null;
             }
-            if ($fourcc === 'EXIF' || $fourcc === 'XMP ') {
+            if (!in_array($fourcc, self::WEBP_KEEP, true)) {
                 $removed = true;
             } else {
                 if ($fourcc === 'VP8X') {
@@ -269,6 +290,9 @@ final class ExifStripper
                 $chunks .= substr($b, $pos, min($total, $len - $pos));
             }
             $pos += $total;
+        }
+        if ($len < strlen($b)) {
+            $removed = true;
         }
         if (!$removed) {
             return [$b, false];

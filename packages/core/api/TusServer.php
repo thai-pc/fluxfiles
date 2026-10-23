@@ -52,10 +52,8 @@ final class TusServer
     public function handle(string $method, string $id, array $headers, $body, FileManager $fm, Claims $claims): array
     {
         $base = ['Tus-Resumable' => self::VERSION, 'Cache-Control' => 'no-store'];
-        if ($method === 'OPTIONS') {
-            return [204, $base + ['Tus-Version' => self::VERSION, 'Tus-Extension' => 'creation,termination',
-                'Tus-Max-Size' => (string) ($claims->maxUploadMb * 1024 * 1024)], null];
-        }
+        // OPTIONS (discovery) is answered by index.php's preflight handler: it
+        // arrives without a token, so it never reaches here.
         if (($headers['tus-resumable'] ?? '') !== self::VERSION) {
             return [412, $base + ['Tus-Version' => self::VERSION], null];
         }

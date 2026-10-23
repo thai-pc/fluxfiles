@@ -880,11 +880,12 @@ HTACCESS;
             }
         }
         // NOTE: the OVERLAY watermark (preview-time, served via /api/fm/img) is
-        // intentionally NOT forwarded. The WordPress plugin is proxy-only (the REST
-        // API never exposes /api/fm/img and sets no stream secret), so list() can't
-        // emit the watermarked img_base; and an overlay watermark forces the token
-        // preview-only (allow_download off in core), which would leave images with
-        // neither a clean URL nor a preview — i.e. broken. Use the burn-in watermark
+        // intentionally NOT forwarded. The WordPress plugin is proxy-only, and its
+        // /api/fm/img port (FluxFilesApi) serves only the plain resized transform —
+        // it doesn't implement overlay compositing. Forwarding the claim would mint
+        // a token whose watermark the proxy silently drops, and an overlay
+        // watermark also forces the token preview-only (allow_download off in
+        // core), so there'd be no clean URL either. Use the burn-in watermark
         // instead (POST .../api/fm/watermark, handled by handleWatermark), which
         // writes the mark into the file and is fully proxied.
         // Usage-dashboard claims.

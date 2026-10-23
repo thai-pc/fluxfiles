@@ -434,6 +434,23 @@ test('indexFile() never overwrites an already-stamped object_uuid', function () 
 echo "\n{$yellow}► legal hold storage primitives{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
+test('addHold() keeps placed_by_scope (migration 0009) and still writes without the column', function () use ($repo, $disk, $diskManager) {
+    $repo->addHold($disk, 'scope1', ['path' => 'a/b.txt', 'placed_by' => 'admin', 'placed_by_scope' => '', 'placed_at' => 1]);
+    assertEqual('', $repo->getHold($disk, 'scope1')['placed_by_scope'] ?? null, 'unscoped admin scope round-trips');
+    $repo->addHold($disk, 'scope2', ['path' => 'a/c.txt', 'placed_by_scope' => 'tenant1', 'placed_at' => 1]);
+    assertEqual('tenant1', $repo->getHold($disk, 'scope2')['placed_by_scope'] ?? null);
+    // A DB that hasn't run 0009 yet: the hold is still placed, just without the scope.
+    $old = new Connection('sqlite::memory:');
+    (new MigrationRunner($old))->migrate(__DIR__ . '/../../db/migrations');
+    $old->pdo()->exec('ALTER TABLE legal_holds DROP COLUMN placed_by_scope');
+    $oldRepo = new DbMetadataHandler($old, $diskManager);
+    $prev = ini_set('error_log', '/dev/null');
+    $oldRepo->addHold($disk, 'scope3', ['path' => 'x.txt', 'placed_by_scope' => 't', 'placed_at' => 1]);
+    ini_set('error_log', (string) $prev);
+    $h = $oldRepo->getHold($disk, 'scope3');
+    assertTrue($h !== null && !isset($h['placed_by_scope']), 'placed without the scope column');
+});
+
 test('addHold()/getHold() roundtrip', function () use ($repo, $disk) {
     $repo->addHold($disk, 'h1', [
         'path' => 'docs/contract.pdf', 'is_dir' => false, 'reason' => 'litigation',

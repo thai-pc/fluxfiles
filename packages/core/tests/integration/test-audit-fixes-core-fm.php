@@ -512,5 +512,16 @@ test('N14: assertCanUseScopedPath allows a held SOURCE, keeps the other guards',
     expectCode('owner_only', fn () => $fm->assertCanUseScopedPath('local', 'tenant/theirs.txt'));
 });
 
+test('writeScopedFile/Stream enforce disk, write permission and tenant scope themselves', function () {
+    [$fm] = env('tenant1', ['permissions' => ['read']]);
+    expectCode('permission_denied', fn () => $fm->writeScopedFile('local', 'tenant1/a.txt', 'x'));
+    [$fm2] = env('tenant1');
+    expectCode('path_denied', fn () => $fm2->writeScopedFile('local', 'tenant2/a.txt', 'x'));
+    $s = fopen('php://memory', 'r+'); fwrite($s, 'x'); rewind($s);
+    expectCode('path_denied', fn () => $fm2->writeScopedStream('local', 'tenant2/b.txt', $s));
+    expectCode('disk_denied', fn () => $fm2->writeScopedFile('nope', 'tenant1/c.txt', 'x'));
+    $fm2->writeScopedFile('local', 'tenant1/ok.txt', 'fine');   // control: in scope + write → ok
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

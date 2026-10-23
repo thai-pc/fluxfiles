@@ -54,12 +54,20 @@ if (in_array($origin, $allowedOrigins, true)) {
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, HEAD, DELETE, OPTIONS');
     header('Access-Control-Allow-Headers: Authorization, Content-Type, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset');
     // Resumable (tus) uploads read these from a cross-origin response.
-    header('Access-Control-Expose-Headers: Location, Tus-Resumable, Upload-Offset, Upload-Length, Upload-Expires, X-FluxFiles-Result');
+    header('Access-Control-Expose-Headers: Location, Tus-Resumable, Tus-Version, Tus-Extension, Upload-Offset, Upload-Length, Upload-Expires, X-FluxFiles-Result');
     header('Access-Control-Max-Age: 86400');
 }
 
-// Preflight
+// Preflight. A tus client's OPTIONS (server discovery) is answered here too —
+// it carries no token, so it never reached TusServer anyway; the size cap is
+// per-token and only enforced at creation.
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    $preflightPath = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+    if ($preflightPath === '/api/fm/tus' || str_starts_with($preflightPath, '/api/fm/tus/')) {
+        header('Tus-Resumable: ' . \FluxFiles\TusServer::VERSION);
+        header('Tus-Version: ' . \FluxFiles\TusServer::VERSION);
+        header('Tus-Extension: creation,termination');
+    }
     http_response_code(204);
     exit;
 }
@@ -1440,7 +1448,10 @@ function routeRequest(
             throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
         }
         \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
-        $report = $fm->runFixityCheck($disk, $metaRepo->readAudit($disk));
+        $report = $fm->runFixityCheck($disk, static fn (?int $since): array =>
+            $since !== null && method_exists($metaRepo, 'readAuditWindow')
+                ? $metaRepo->readAuditWindow($disk, $since)
+                : $metaRepo->readAudit($disk));
         foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
             foreach ($report[$list] as $key) {
                 try {
@@ -1593,7 +1604,14 @@ function routeRequest(
             throw new ApiException('Permission denied', 403, 'forbidden');
         }
         $origin = $_SERVER['HTTP_ORIGIN'] ?? ($_GET['origin'] ?? null);
-        return (new BucketDoctor($diskManager))->diagnose($disk, $origin ?: null);
+        $report = (new BucketDoctor($diskManager))->diagnose($disk, $origin ?: null);
+        // A GET, but it writes and deletes a probe object on the bucket — record it
+        // like any other write so the activity log shows who touched the storage.
+        try {
+            $auditLog->log($claims->userId, 'disk_doctor', $disk, '', null, null, null);
+        } catch (\Throwable $ignored) {
+        }
+        return $report;
     }
 
     // Chunk upload. S3 multipart sends the bytes browser→S3 on presigned URLs, so they

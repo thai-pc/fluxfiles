@@ -885,7 +885,9 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
             'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
             'released_by'    => $row['released_by'],
             'release_reason' => $row['release_reason'],
-        ];
+        ] + (isset($row['placed_by_scope']) && $row['placed_by_scope'] !== null
+            ? ['placed_by_scope' => (string) $row['placed_by_scope']]
+            : []);
     }
 
     public function allHolds(string $disk): array
@@ -921,9 +923,30 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
             'released_by'    => $entry['released_by'] ?? null,
             'release_reason' => $entry['release_reason'] ?? null,
         ];
+        // The placing token's scope (legal-hold module: a narrower token may not
+        // release it). Migration 0009 adds the column; before it has run, the hold
+        // is still written — without the scope, so release falls back to the old
+        // in-scope rule — rather than refusing to place a hold at all.
+        if (array_key_exists('placed_by_scope', $entry)) {
+            $insertCols['placed_by_scope'] = $entry['placed_by_scope'];
+        }
+        try {
+            $this->upsertHold($insertCols);
+        } catch (\PDOException $e) {
+            if (!array_key_exists('placed_by_scope', $insertCols)) {
+                throw $e;
+            }
+            error_log('FluxFiles: legal_holds.placed_by_scope is missing — run DB migration 0009 (' . $e->getMessage() . ')');
+            unset($insertCols['placed_by_scope']);
+            $this->upsertHold($insertCols);
+        }
+    }
+
+    /** @param array<string,mixed> $insertCols */
+    private function upsertHold(array $insertCols): void
+    {
         $updateCols = $insertCols;
         unset($updateCols['disk'], $updateCols['id']);
-
         $sql = $this->db->dialect()->upsert('legal_holds', array_keys($insertCols), ['disk', 'id'], array_keys($updateCols));
         $stmt = $this->db->pdo()->prepare($sql);
         $stmt->execute(array_values($insertCols));
