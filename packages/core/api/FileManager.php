@@ -460,7 +460,7 @@ class FileManager
 
             if ($item->isFile()) {
                 /** @var FileAttributes $item */
-                $entry = $this->fileListEntry($disk, $item->path(), $item->fileSize(), $item->lastModified());
+                $entry = $this->fileListEntry($item->path(), $item->fileSize(), $item->lastModified());
             } else {
                 $entry = ['key' => $item->path(), 'name' => $name, 'type' => 'dir'];
                 // Surface the folder mtime when the adapter provides one (local
@@ -540,16 +540,17 @@ class FileManager
         return substr($name, -10) === '.meta.json' && $isFile && $fs->fileExists(substr($path, 0, -10));
     }
 
-    /** @return array<string,mixed> */
-    private function fileListEntry(string $disk, string $path, ?int $size, ?int $mtime): array
+    /**
+     * A file row as list() scans it. No URL yet: on S3/R2 that is a presign per
+     * file, and the scan covers the WHOLE folder while only one page is returned —
+     * attachMetadata() adds it to the page's rows only. (Signing every row first
+     * cost ~10k presigns, 10+ s, per 200-item page of a 10k-file folder.)
+     *
+     * @return array<string,mixed>
+     */
+    private function fileListEntry(string $path, ?int $size, ?int $mtime): array
     {
-        $entry = ['key' => $path, 'name' => basename($path), 'type' => 'file', 'size' => $size, 'modified' => $mtime];
-        // Preview-only tokens (allow_download=false) get no clean download URL.
-        $url = $this->downloadUrl($disk, $path);
-        if ($url !== null) {
-            $entry['url'] = $url;
-        }
-        return $entry;
+        return ['key' => $path, 'name' => basename($path), 'type' => 'file', 'size' => $size, 'modified' => $mtime];
     }
 
     /**
@@ -591,7 +592,7 @@ class FileManager
                         continue;
                     }
                     $mtime = $o['LastModified'] ?? null;
-                    $out[] = $this->fileListEntry($disk, $key, isset($o['Size']) ? (int) $o['Size'] : null,
+                    $out[] = $this->fileListEntry($key, isset($o['Size']) ? (int) $o['Size'] : null,
                         $mtime instanceof \DateTimeInterface ? $mtime->getTimestamp() : null);
                     if (count($out) > $limit) {
                         return [array_slice($out, 0, $limit), true];
@@ -656,6 +657,11 @@ class FileManager
                 continue;
             }
             if (($item['type'] ?? '') === 'file') {
+                // Preview-only tokens (allow_download=false) get no clean download URL.
+                $url = $this->downloadUrl($disk, $item['key']);
+                if ($url !== null) {
+                    $item['url'] = $url;
+                }
                 $item['meta'] = $metaMap[$item['key']] ?? null;
                 // Preview-only tokens get no stable URL and no clean WebP variants —
                 // the (watermarked) img_base is the only image view they receive.
