@@ -564,7 +564,7 @@
                             <span class="ff-dd-mark" x-show="sortBy === 'type'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
                         </button>
                         <div class="ff-dd-divider"></div>
-                        <button @click="sortDir = (sortDir === 'asc' ? 'desc' : 'asc'); sortMenuOpen = false">
+                        <button @click="toggleSortDir()">
                             <span x-text="sortDir === 'asc' ? (t('sort.descending') || 'Descending') : (t('sort.ascending') || 'Ascending')"></span>
                         </button>
                     </div>
@@ -583,7 +583,8 @@
         </div>
 
         <!-- Content area -->
-        <div class="ff-content" @scroll.passive="onContentScroll($event)">
+        <div class="ff-content" :class="{ 'is-refreshing': listRefreshing }" :aria-busy="listRefreshing ? 'true' : 'false'"
+             @scroll.passive="onContentScroll($event)">
 
             <!-- Drop zone -->
             <div class="ff-dropzone"

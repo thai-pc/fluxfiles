@@ -405,7 +405,11 @@
     "ocr_timeout": "OCR 스캔 시간이 초과되었습니다.",
     "byob_disk_collision": "이 저장소 디스크 이름이 서버에 이미 구성된 디스크와 충돌합니다.",
     "presign_put_disabled": "이 계정에서는 PUT 직접 업로드가 비활성화되어 있습니다 — 폼(POST) 업로드를 사용하세요",
-    "presign_post_unsupported": "이 스토리지는 폼(POST) 업로드를 지원하지 않습니다 — 분할 업로드를 사용하세요"
+    "presign_post_unsupported": "이 스토리지는 폼(POST) 업로드를 지원하지 않습니다 — 분할 업로드를 사용하세요",
+    "invalid_sort": "알 수 없는 정렬 방식입니다.",
+    "invalid_order": "정렬 순서는 오름차순 또는 내림차순이어야 합니다.",
+    "invalid_type": "알 수 없는 파일 형식 필터입니다.",
+    "cursor_stale": "불러오는 동안 폴더가 바뀌었습니다. 다시 불러오는 중…"
   },
   "presign": {
     "title": "서명된 URL",

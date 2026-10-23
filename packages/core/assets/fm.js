@@ -75,6 +75,17 @@ function fluxFilesApp() {
         autoLoadSupported: typeof IntersectionObserver !== 'undefined',
         showBackToTop: false,
         _scrollTicking: false,
+        // The sort/order/type the loaded rows were fetched with. Every later page
+        // must be asked for with the SAME view — a cursor only means something in
+        // the order it came from (resuming it under another sort skips files).
+        _listView: null,
+        // Every row of the folder for _listView.type is loaded (no next page).
+        _listComplete: false,
+        // Render in the browser's own order? True when the whole folder arrived in
+        // one page, or after a re-sort done locally; false while rows are pages the
+        // server ordered — re-sorting those would make each new page jump in.
+        _listOrderLocal: true,
+        listRefreshing: false, // re-sorting on the server: dim the grid, keep it
         detailFile: null,
         selectedVariant: 'original',
         activeTab: 'info',
@@ -774,20 +785,65 @@ function fluxFilesApp() {
         },
 
         // Load files (first page)
-        async loadFiles() {
+        // Query string for /api/fm/list: folder, page size, and the active sort and
+        // type filter — the server applies them to the WHOLE folder before paging,
+        // so "newest first" or "images only" is right beyond the loaded pages.
+        _currentListView() {
+            return {
+                sort: this.sortBy || 'name',
+                order: this.sortDir === 'desc' ? 'desc' : 'asc',
+                type: this.typeFilter || 'all',
+            };
+        },
+
+        _listQuery(view) {
+            return '/api/fm/list?disk=' + encodeURIComponent(this.currentDisk) +
+                '&path=' + encodeURIComponent(this.currentPath) +
+                '&limit=' + encodeURIComponent(this.listLimit) +
+                '&sort=' + encodeURIComponent(view.sort) +
+                '&order=' + encodeURIComponent(view.order) +
+                '&type=' + encodeURIComponent(view.type);
+        },
+
+        // Make the rows match the toolbar's sort/filter. Called on every change, when
+        // a search is cleared, and after each load (the toolbar may have changed while
+        // it was in flight — that load used the old view). Re-orders in place when
+        // the loaded rows are the whole folder for what's asked; otherwise asks the
+        // server again, keeping the grid and the selection on screen.
+        _applyListView() {
+            if (this.searchResults !== null || this.loading || this.listRefreshing) return;
+            const loaded = this._listView;
+            if (!loaded) return;
+            const want = this._currentListView();
+            if (want.sort === loaded.sort && want.order === loaded.order && want.type === loaded.type) return;
+            if (this._listComplete && (loaded.type === 'all' || want.type === loaded.type)) {
+                this._listOrderLocal = true;   // we hold every row it needs
+                return;
+            }
+            this.loadFiles({ keepView: true });
+        },
+
+        async loadFiles(opts = {}) {
+            const keepView = !!opts.keepView;
             const gen = ++this._listGen;
-            this.loading = true;
+            const view = this._currentListView();
+            if (keepView) {
+                this.listRefreshing = true;
+            } else {
+                this.loading = true;
+            }
             this.loadError = null;
             this.loadMoreError = null;
             this.loadingMore = false;
+            // Whatever was loaded no longer describes what this request returns: no
+            // in-place re-sort, and no next page off the old cursor, until it lands.
+            this._listComplete = false;
             this.listCursor = null;
-            this.listTotal = 0;
+            if (!keepView) {
+                this.listTotal = 0;
+            }
             try {
-                const res = await this.api('GET',
-                    '/api/fm/list?disk=' + encodeURIComponent(this.currentDisk) +
-                    '&path=' + encodeURIComponent(this.currentPath) +
-                    '&limit=' + encodeURIComponent(this.listLimit)
-                );
+                const res = await this.api('GET', this._listQuery(view));
                 // The user moved on to another folder while this one loaded.
                 if (gen !== this._listGen) return;
 
@@ -797,10 +853,23 @@ function fluxFilesApp() {
                 this.listTotal = Array.isArray(res) ? items.length : (res?.total ?? items.length);
                 this.diskDriver = Array.isArray(res) ? '' : (res?.disk_driver ?? '');
 
+                this._listView = view;
+                this._listComplete = !this.listCursor;
+                this._listOrderLocal = !this.listCursor;   // one page: sort it here, as before
                 this.folders = items.filter(i => i.type === 'dir');
                 this.files = items.filter(i => i.type === 'file');
-                this.selected = [];
-                this.detailFile = null;
+                if (keepView) {
+                    // Same folder, new order: keep the selection and the open file —
+                    // even when they're further down than this first page — unless
+                    // the new type filter hides them.
+                    const byKey = new Map(items.map(i => [i.key, i]));
+                    const keep = (it) => byKey.get(it.key) || (it.type === 'dir' || this._matchTypeFilter(it) ? it : null);
+                    this.selected = this.selected.map(keep).filter(Boolean);
+                    this.detailFile = this.detailFile ? keep(this.detailFile) : null;
+                } else {
+                    this.selected = [];
+                    this.detailFile = null;
+                }
 
                 // Seed the tree cache with the current dir's children (free — we
                 // just fetched them) and auto-expand the trail down to here.
@@ -815,6 +884,11 @@ function fluxFilesApp() {
             } catch (err) {
                 if (gen !== this._listGen) return;
                 console.error('FluxFiles: Failed to load files', err);
+                if (keepView) {
+                    // A failed re-sort keeps what's on screen (in its old order).
+                    this.showToast(err.message || this.t('error.load_failed'), 'error', 4000);
+                    return;
+                }
                 // Persistent inline error (+ retry) so a failed load isn't mistaken
                 // for an empty folder once the transient toast fades.
                 this.loadError = err.message || this.t('error.load_failed');
@@ -822,7 +896,12 @@ function fluxFilesApp() {
                 this.files = [];
                 this.showToast(this.loadError, 'error', 4000);
             } finally {
-                if (gen === this._listGen) this.loading = false;
+                if (gen === this._listGen) {
+                    this.loading = false;
+                    this.listRefreshing = false;
+                    // The toolbar may have changed while this was in flight.
+                    if (!this.loadError) this.$nextTick(() => this._applyListView());
+                }
             }
         },
 
@@ -845,21 +924,20 @@ function fluxFilesApp() {
         // Load the next page and append to existing folders/files. Resolves true when
         // a page was appended (false: nothing to load, busy, stale or failed).
         async loadMoreFiles() {
-            if (!this.listCursor || this.loadingMore) return false;
+            // No cursor while a (re)load is in flight — loadFiles() clears it — so a
+            // page can't be asked for off a cursor from the previous order.
+            if (!this.listCursor || this.loadingMore || !this._listView) return false;
             const gen = this._listGen;
             this.loadingMore = true;
             this.loadMoreError = null;
             try {
-                const res = await this.api('GET',
-                    '/api/fm/list?disk=' + encodeURIComponent(this.currentDisk) +
-                    '&path=' + encodeURIComponent(this.currentPath) +
-                    '&limit=' + encodeURIComponent(this.listLimit) +
-                    '&cursor=' + encodeURIComponent(this.listCursor)
-                );
+                // The view the cursor came from — not the toolbar's, which may differ.
+                const res = await this.api('GET', this._listQuery(this._listView) + '&cursor=' + encodeURIComponent(this.listCursor));
                 if (gen !== this._listGen) return false;
 
                 const items = Array.isArray(res) ? res : (res?.items || []);
                 this.listCursor = Array.isArray(res) ? null : (res?.next_cursor ?? null);
+                if (!this.listCursor) this._listComplete = true;
 
                 // Dedupe by key in case of overlap.
                 const existing = new Set([...this.folders, ...this.files].map(i => i.key));
@@ -873,6 +951,14 @@ function fluxFilesApp() {
                 return true;
             } catch (err) {
                 if (gen !== this._listGen) return false;
+                if (err && err.code === 'cursor_stale') {
+                    // The row the cursor points at is gone (deleted/renamed meanwhile):
+                    // its place in a sorted folder can't be recovered — start over,
+                    // keeping the grid.
+                    this.loadingMore = false;
+                    this.loadFiles({ keepView: true });
+                    return false;
+                }
                 console.error('FluxFiles: Failed to load more files', err);
                 this.loadMoreError = err.message || this.t('pagination.load_failed');
                 return false;
@@ -899,7 +985,7 @@ function fluxFilesApp() {
         },
 
         _autoLoadNext() {
-            if (this.loading || this.loadingMore || this.loadMoreError || !this.listCursor) return;
+            if (this.loading || this.listRefreshing || this.loadingMore || this.loadMoreError || !this.listCursor) return;
             if (this.searchResults !== null) return;
             this.loadMoreFiles();
         },
@@ -960,6 +1046,7 @@ function fluxFilesApp() {
 
             // Clear search state when query is empty or too short
             if (q.length < 2) {
+                const wasSearching = this.searchResults !== null;
                 this.searchResults = null;
                 this.searchFolderResults = null;
                 this.searchError = '';
@@ -970,6 +1057,8 @@ function fluxFilesApp() {
                     clearTimeout(this._searchTimer);
                     this._searchTimer = null;
                 }
+                // Sort/filter changed while the search results were showing?
+                if (wasSearching) this._applyListView();
                 return;
             }
 
@@ -1040,6 +1129,11 @@ function fluxFilesApp() {
             this.searchResults = null;
             this.searchFolderResults = null;
             this.searchError = '';
+            // The server now applies the type filter: one that excludes the hit
+            // would page through the whole folder and never find it.
+            if (!this._matchTypeFilter({ name: s.split('/').pop(), type: 'file' })) {
+                this.typeFilter = 'all';
+            }
             this._pendingSelectKey = s;
             this.navigate(dir);
         },
@@ -3460,8 +3554,10 @@ function fluxFilesApp() {
             let av, bv;
             switch (this.sortBy) {
                 case 'date':
-                    av = Number(a.created || a.modified || 0);
-                    bv = Number(b.created || b.modified || 0);
+                    // Modified time, like the server's sort — the two must agree or
+                    // pages the server cut would interleave as they load.
+                    av = Number(a.modified || a.created || 0);
+                    bv = Number(b.modified || b.created || 0);
                     break;
                 case 'size':
                     av = Number(a.size || 0);
@@ -3507,7 +3603,9 @@ function fluxFilesApp() {
                 }
                 return false;
             });
-            return arr.slice().sort((a, b) => this._compareItems(a, b));
+            // Server-ordered pages are already in order; re-sorting them here would
+            // move every new page's rows into the middle as it arrives.
+            return this._listOrderLocal ? arr.slice().sort((a, b) => this._compareItems(a, b)) : arr;
         },
 
         isPreviewable(file, type) {
@@ -3583,13 +3681,14 @@ function fluxFilesApp() {
                 if (f.key && String(f.key).toLowerCase().includes(q)) return true;
                 return false;
             }) : this.folders.slice();
+            if (!this._listOrderLocal) return arr;   // server order (see filteredFiles)
             // For folders, 'size'/'type' sort falls back to name (folders have no size/type).
             const effectiveBy = (this.sortBy === 'size' || this.sortBy === 'type') ? 'name' : this.sortBy;
             const dir = this.sortDir === 'desc' ? -1 : 1;
             return arr.sort((a, b) => {
                 if (effectiveBy === 'date') {
-                    const av = Number(a.created || a.modified || 0);
-                    const bv = Number(b.created || b.modified || 0);
+                    const av = Number(a.modified || a.created || 0);
+                    const bv = Number(b.modified || b.created || 0);
                     if (av !== bv) return (av < bv ? -1 : 1) * dir;
                 }
                 const an = String(a.name || '').toLowerCase();
@@ -3642,13 +3741,25 @@ function fluxFilesApp() {
                 this.sortDir = (by === 'date' || by === 'size') ? 'desc' : 'asc';
             }
             this.sortMenuOpen = false;
+            this._applyListView();
+        },
+
+        toggleSortDir() {
+            this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            this.sortMenuOpen = false;
+            this._applyListView();
         },
 
         setTypeFilter(v) {
             const allowed = ['all','image','video','audio','document','other'];
             if (!allowed.includes(v)) return;
+            if (this.typeFilter === v) {
+                this.filterMenuOpen = false;
+                return;
+            }
             this.typeFilter = v;
             this.filterMenuOpen = false;
+            this._applyListView();
         },
 
         // Human-readable label for the currently active sort (for the button)

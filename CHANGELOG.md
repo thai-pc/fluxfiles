@@ -3,6 +3,53 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.33] — 2026-10-23
+
+> Released: `core-v0.2.107`, `laravel-v0.2.53`, `wordpress-v0.2.67`.
+
+### Changed
+
+- **Sorting and the type filter now run on the server, over the whole
+  folder.** `GET /api/fm/list` takes `sort=name|date|size|type`,
+  `order=asc|desc` and `type=image|video|audio|document|other`. They are
+  applied before paging, and `total` counts what matched. Before, the UI sorted
+  and filtered only the rows it had loaded:
+  - "Newest first" in a 10,000-file folder showed the newest of the first 200.
+  - "Videos" paged through the whole folder looking for matches.
+- Ordering details:
+  - Folders always come first.
+  - Names use ICU root collation with numeric ordering when ext-intl is
+    present, the same order as the browser's `localeCompare(…, {numeric: true})`.
+    Accented names (Vietnamese "Ảnh", "Bảng") sort where a reader expects, not
+    after "Z". Without ext-intl the server falls back to `strnatcasecmp`.
+  - `date` is the storage modified time (folders: tracked creation time).
+  - Unknown values → 400; empty `order`/`type` mean the defaults.
+  - With no `sort` the API behaves exactly as before.
+- UI:
+  - Changing the sort or filter re-queries the server, keeping the grid (dimmed)
+    and the selection, unless every row is already loaded, in which case it
+    re-sorts in place.
+  - Rows from server-ordered pages are no longer re-sorted in the browser, so
+    each new page appends instead of jumping into the middle.
+  - The date sort uses the modified time, like the server.
+- The Laravel and WordPress proxies forward `sort`/`order`/`type`.
+- The S3/R2 `StartAfter` shortcut from `[0.3.31]` now serves only API clients
+  that list in key order. The UI always sends a sort, so its pages re-list the
+  folder; URLs are still signed for the page only (`[0.3.32]`).
+
+### Fixed
+
+- A cursor is only resumed in the order it came from. A sort or filter
+  changed during a search, while a folder was loading, or while a re-sort was
+  in flight could fetch the next page in the new order off the old cursor,
+  silently skipping files.
+- A sorted listing whose cursor row was deleted or renamed meanwhile answers
+  `409 cursor_stale`, and the UI reloads the folder. Before, it restarted from
+  the first row. Key-order listings keep the old behaviour.
+- A failed re-sort keeps the rows on screen instead of emptying the grid.
+- Array-valued query parameters (`?sort[]=x`) give a 400, not a PHP warning
+  (core, Laravel, WordPress).
+
 ## [0.3.32] — 2026-10-23
 
 > Released: `core-v0.2.106`, `wordpress-v0.2.66` (the plugin bundles core).

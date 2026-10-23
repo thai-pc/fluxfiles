@@ -405,7 +405,11 @@
     "ocr_timeout": "The OCR scan timed out.",
     "byob_disk_collision": "This storage disk name conflicts with a disk already configured on the server.",
     "presign_put_disabled": "Direct PUT uploads are disabled for this account — use a form (POST) upload",
-    "presign_post_unsupported": "This storage does not support form (POST) uploads — use chunked upload"
+    "presign_post_unsupported": "This storage does not support form (POST) uploads — use chunked upload",
+    "invalid_sort": "Unknown sort option.",
+    "invalid_order": "Sort order must be ascending or descending.",
+    "invalid_type": "Unknown file type filter.",
+    "cursor_stale": "The folder changed while it was loading. Reloading…"
   },
   "presign": {
     "title": "Presigned URL",

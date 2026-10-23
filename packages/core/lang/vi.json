@@ -405,7 +405,11 @@
     "ocr_timeout": "Quá trình quét OCR đã hết thời gian chờ.",
     "byob_disk_collision": "Tên ổ đĩa lưu trữ này trùng với một ổ đĩa đã được cấu hình sẵn trên máy chủ.",
     "presign_put_disabled": "Tải lên trực tiếp bằng PUT đã bị tắt cho tài khoản này — hãy dùng tải lên dạng form (POST)",
-    "presign_post_unsupported": "Bộ lưu trữ này không hỗ trợ tải lên dạng form (POST) — hãy dùng tải lên theo từng phần"
+    "presign_post_unsupported": "Bộ lưu trữ này không hỗ trợ tải lên dạng form (POST) — hãy dùng tải lên theo từng phần",
+    "invalid_sort": "Kiểu sắp xếp không hợp lệ.",
+    "invalid_order": "Chiều sắp xếp phải là tăng dần hoặc giảm dần.",
+    "invalid_type": "Bộ lọc loại file không hợp lệ.",
+    "cursor_stale": "Thư mục đã thay đổi trong lúc tải. Đang tải lại…"
   },
   "presign": {
     "title": "URL có thời hạn",

@@ -396,11 +396,18 @@ class FluxFilesController
             $this->rateLimit($claims, false);
             $fm = $this->fileManager($claims);
 
+            // Scalars only: `?sort[]=x` must be a 400 from core, not an
+            // "Array to string conversion" error.
+            $q = static fn (string $k, string $d = ''): string => is_scalar($v = $request->query($k)) ? (string) $v : $d;
             return $this->ok($fm->list(
                 $request->query('disk', 'local'),
                 $request->query('path', ''),
-                max(0, (int) $request->query('limit', 0)),
-                (string) $request->query('cursor', '')
+                max(0, (int) $q('limit', '0')),
+                $q('cursor'),
+                // Server-side sort/filter (core >= 0.2.107); an older core ignores them.
+                $q('sort'),
+                $q('order', 'asc'),
+                $q('type', 'all')
             ));
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
