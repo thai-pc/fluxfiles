@@ -6,38 +6,9 @@ This directory is for AI agents working on the FluxFiles codebase. Read this fil
 
 FluxFiles is a standalone, embeddable PHP file manager (PHP ≥ 8.2.35). The core app exposes a PHP API and zero-build frontend that can be embedded by iframe/SDK. The repo also ships adapters for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE, and Summernote, token SDKs for Node and Python, and an MCP server.
 
-Primary capabilities:
+## Where to look
 
-- Local, AWS S3, Cloudflare R2 and SFTP storage through Flysystem v3.
-- JWT auth with permission, disk, path prefix, upload size, extension, quota, owner-only, and BYOB disk claims.
-- File operations: list, upload (plain, resumable tus, S3 multipart, presigned PUT/POST), download presign, rename, move, copy, delete/trash, mkdir, cross-disk copy/move, import-from-URL, zip/extract.
-- Metadata: title, alt text, caption, tags, file hash, ownership, search index, folder index, HMAC-chained audit log.
-- Image processing: WebP variants, on-demand WebP/AVIF, crop, watermark, optional `strip_exif`, opt-in PDF/video posters.
-- Optional AI tagging through Claude/OpenAI-compatible vision providers.
-- Iframe SDK and framework wrappers that communicate by `postMessage`.
-
-## High-Level Structure
-
-- `packages/core/`: main PHP package and standalone app.
-- `packages/core/api/index.php`: HTTP entrypoint, CORS, locale routes, auth, dependency wiring, route dispatch.
-- `packages/core/api/FileManager.php`: central file operation service and most security checks.
-- `packages/core/api/DiskManager.php`: builds Flysystem disks for local/S3/R2/SFTP and runtime BYOB disks.
-- `packages/core/api/Claims.php`: decoded JWT claim model and path scoping.
-- `packages/core/api/StorageMetadataHandler.php`: metadata, index, folder index, hash, and audit storage.
-- `packages/core/assets/` and `packages/core/public/`: standalone UI assets.
-- `packages/sdk/`: browser SDK exposed as `FluxFiles`.
-- `packages/laravel/`: Laravel service provider, facade, config, route proxy, Blade component.
-- `packages/wordpress/`: WordPress plugin wrapper around the core package.
-- `packages/react/`: React component/hooks wrapper.
-- `packages/vue/`: Vue 3/Nuxt component/composable wrapper.
-- `packages/ckeditor4/`, `packages/tinymce/`, `packages/summernote/`: editor integrations.
-- `packages/node/`: server-side token SDK (`@fluxfiles/node` on npm), mints JWTs from JS.
-- `packages/mcp/`: Model Context Protocol server (`@fluxfiles/mcp` on npm, `fluxfiles-mcp` stdio bin) — agents browse/search/read through a scoped JWT; write/trash tools only behind explicit env flags (`FLUXFILES_MCP_WRITE` / `FLUXFILES_MCP_DELETE`); refuses plain `http://` to a non-local host since 0.1.1 (`FLUXFILES_MCP_ALLOW_HTTP=1` overrides). Released with `mcp-vX.Y.Z` tags.
-- `packages/python/`: server-side token SDK (`fluxfiles-token` on PyPI), mints JWTs from Python.
-- `docs/`: guides, reference, design and security records — indexed in `docs/README.md`.
-
-More detailed maps:
-
+- `.claude/rules/` holds notes that load only when you work on the files they name (watermark compositing, modal-chrome theming, SFTP hardening, ACL role presets).
 - See `architecture.md` for runtime flow and module responsibilities.
 - See `development.md` for commands, tests, and change guidance.
 - See `api-map.md` for current core routes (and which ones the Laravel/WordPress proxies do not expose).
@@ -59,43 +30,6 @@ More detailed maps:
 - **PHP floor is `^8.2.35`** (8.1 is EOL; CI matrix 8.2–8.4). Five places must agree: every `composer.json` `require.php` + `config.platform.php`, the WP plugin header/`readme.txt` `Requires PHP`, `FLUXFILES_MIN_PHP` and `FluxFilesUpdater::REQUIRES_PHP` (the WP release catalogue carries `requires_php`); `test-wp-smoke.php` guards the WP side.
 - **Paid-module releases** are their own repos (`v1.0.0`, not `core-v…`), so the ≤3-tags rule does not apply. Two rules that do: (1) a module's core floor must be the first core release whose `index.php` **calls** that module — composer answers "which core may this install against", and core is the caller, so a lower floor permits an install that is present, licensed and never invoked (this shipped for `virus`); it can't be CI-guarded because the packages are gitignored, so check it by hand. (2) A tag is not a release — `php scripts/pack-modules.php` builds the zips + `build/modules/catalogue.json` that `docs/update-server.example.php` serves and `UpdateClient` re-hashes. It builds from the **tag** (never the worktree), refuses a non-reproducible build, and rejects a layout `UpdateClient::install()` would mis-extract.
 
-## Common Entry Points
-
-- Standalone dev server:
-
-```bash
-cd packages/core
-php -S localhost:8080 router.php
-```
-
-- Generate a test token:
-
-```bash
-php packages/core/tests/generate-token.php
-```
-
-- Core package install:
-
-```bash
-composer install -d packages/core
-```
-
-- React package checks:
-
-```bash
-cd packages/react
-npm run typecheck
-npm run build
-```
-
-- Vue package checks:
-
-```bash
-cd packages/vue
-npm run typecheck
-npm run build
-```
-
 ## Current Notes
 
 - Delete: `/delete` is permanent (used by purge/API). Files **and folders** have **soft-delete** via `/trash` (+ `/trash/restore|list|purge|empty`) — move-based into `_fluxfiles/trash/<id>/` with a `_fluxfiles/trash.json` manifest (storage-resident, scoped by prefix/owner; folders move the whole subtree incl. variants). The UI soft-deletes everything to trash.
@@ -115,11 +49,7 @@ npm run build
 - **Duplicate finder** (`GET /api/fm/duplicates`, `FileManager::findDuplicates`, free/core): byte-identical files under the token's root, size pre-filter then streamed SHA-256 (≤ 512 MB hashed per call), shares the 2/min usage-refresh bucket; the usage dashboard moves extra copies to trash.
 - **SSH terminal** (`POST /api/fm/terminal`, `SshTerminal`, SFTP disks only): stateless **command-runner** (one `exec` per request, cwd threaded back), opt-in `allow_terminal` claim (default off), `write` perm, audited, server kill-switch `FLUXFILES_TERMINAL_DISABLED`. **Proxied by both Laravel and WordPress too** (`FluxFilesController::terminal()` / `FluxFilesApi::handleTerminal()`), gate claim forwards unconditionally in both proxy adapters. **Optional free PTY upgrade:** the `terminal_pty_url` claim (http(s) only, validated in Claims) makes the UI **embed a self-hosted ttyd/gotty/wetty** (the operator runs it on their own box) via iframe for a true interactive terminal (vim/top/htop) instead of the command-runner — empty (default) → command-runner. **Free/core config toggle, never a paid module** (a paid PTY SKU was rejected: browser terminals are commodity OSS). The Go-sidecar idea is dropped in favor of BYO ttyd.
 - **One-click Git deploy** (`POST /api/fm/git-deploy`, `GitDeploy.php`, SFTP disks only, free/core): a fixed-command-shape **subset** of the SSH terminal above, not a second arbitrary-shell door — repo path/branch/hooks-enabled are **operator claims** (`git_deploy_path`/`git_deploy_branch`/`git_deploy_hooks`), never accepted from the request body. Dedicated `allow_git_deploy` claim (default off), never bundled with `allow_sftp`/`allow_terminal`. `core.hooksPath` is pinned either way (`/dev/null` by default, the repo's own `.git/hooks` with `git_deploy_hooks`), other config-driven exec is neutered unconditionally, and a pre-deploy **allowlist** audit of `git config --list --show-scope` (local + worktree scopes) refuses a repo with any unexpected key (`409 git_deploy_unsafe_repo`; the earlier denylist was bypassable and was replaced in core-v0.2.92). Writes into any `.git` segment on SFTP disks are refused everywhere. `mkdir`-based lock directory (PID-liveness checked) on the repo itself serializes concurrent deploys. **Proxied by both Laravel and WordPress too** (`FluxFilesController::gitDeploy()` / `FluxFilesApi::handleGitDeploy()`, requires core ≥ 0.2.81) — both proxies reuse the generic write rate-limit bucket instead of core's dedicated `FLUXFILES_GIT_DEPLOY_RATE_LIMIT` bucket, since neither adapter has any per-action bucket precedent (not even `import-url`). See `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` for the full threat model; non-atomic deploy onto a live webroot is documented, not solved (§4.8).
-- **ACL role presets** (`docs/design/ACL-ROLE-PRESETS-DESIGN.md`): a mint-time-only `role` claim-bundle preset — **four roles**, `viewer`/`editor`/`admin`/`superadmin` (`superadmin` shares `admin`'s claim bundle but is the one role documented as safe to combine with an empty `prefix`), structurally parallel to the existing `edition` preset — shipped across all the token builders (`packages/core/embed.php`'s `fluxfiles_role_preset()`/`fluxfiles_apply_role_preset()`, `packages/node/src/token.ts`'s `ROLE_PRESETS`, Laravel's `FluxFilesManager.php`, WordPress's `FluxFilesPlugin.php`, and later the Python SDK) in commit `70f1cea` (2026-09-01). Same-day fix (`d880b98` core/Laravel/WordPress, `fb7c8a2` Node) for a `viewer`/`editor` bug: the presets originally omitted `allow_extract`/`allow_chmod`, assuming an absent claim decodes false, but `Claims::fromJwtPayload` defaults those two specifically to **true** when absent — so a minted `viewer`/`editor` token unintentionally carried `allow_chmod=true`, letting a read-only/contributor role chmod on an SFTP disk. Fixed by setting both explicitly in every builder. No new server-side state and no new JWT claim: `role` only expands to *existing* claims at mint time (never touches `prefix`/`disks`/`userId`/quota/rate-limit/BYO-embed-URL claims, and never implies any paid-module `allow_<x>` claim or `allow_terminal` — terminal access stays an explicit opt-in regardless of role). WordPress maps WP capabilities to roles; `admin` needs `manage_options` or `delete_others_posts` (since wordpress-v0.2.54 — `delete_posts` alone used to mint admin for Contributors/Authors).
-- **SFTP host-key / cipher hardening** (`DiskManager::buildSftpProvider()`, config keys `require_host_key`/`strict_algorithms`, env `SFTP_REQUIRE_HOST_KEY`/`SFTP_STRICT_ALGORITHMS`): two opt-in (default-off, backward-compatible) tightenings on top of the pre-existing `host_fingerprint` pinning. `require_host_key` fails closed at disk-build time (`sftp_host_key_required` error) if `host_fingerprint` isn't also set, instead of silently trusting any host key. `strict_algorithms` passes a modern-only `preferredAlgorithms` allowlist (curve25519/ECDH/DH-group16+ KEX, ed25519/ecdsa/rsa-sha2 host keys, AES-GCM/CTR/ChaCha20 ciphers, SHA-2 MACs) to `SftpConnectionProvider`, excluding phpseclib's legacy-compat defaults (SHA-1 KEX, RC4, 3DES, CBC ciphers, ssh-dss, MD5/SHA-1 MACs) — turning it on for a legacy/embedded SFTP server fails the handshake outright rather than downgrading. BYOB SFTP configs get both keys for free since `CredentialEncryptor::validate()` doesn't allowlist config fields.
 - Both `/stream` and `/img` mint only when `FileManager::setStreamSecret()` is called — index.php always does, and the Laravel/WordPress **proxy** controllers now do too (unconditionally, in their shared `fileManager()` builder), so both routes are **proxied** by both adapters (ported directly into each controller since `handleMediaStream()`/`handleImageTransform()` are inline functions in `index.php`, not a reusable file — same pattern as the SSH terminal port). They reuse `FLUXFILES_SECRET` for their per-file tokens (`t=stream` / `t=img`, distinct types — one can't be used on the other's endpoint). SFTP-disk streaming rides the same `/api/fm/stream` route, so it's proxied too. The preview-time watermark **overlay** claim (`watermark_enabled`) is still NOT forwarded by either proxy adapter — that's a separate, still-valid restriction: the proxy's `/img` port doesn't implement overlay compositing, so forwarding the claim would mint a token whose watermark gets silently dropped (see `FluxFilesManager.php`'s comment on `watermark_enabled`).
-- **Watermark logo + transparent base gotcha:** intervention/image v3's `place()` with opacity<100 composites through an opaque GD scratch image (`imagecopymerge`), so a logo over a **transparent (alpha) PNG/WebP** base comes out a dark box (JPEG is fine — no alpha). Fix = bake opacity into the logo's own alpha then place at 100% (`ImageCompat::bakeLogoOpacity`, used by both `placeLogo` overlay + `placeLogoAt` burn-in). Don't reintroduce opacity-on-`place()`.
-- **Modal chrome dark-mode anti-flash:** the React/Vue/SDK modal chrome lives in the HOST origin and can't read the cross-origin iframe's resolved theme, so when the `theme` prop is `auto`/unset it mirrors the embedded UI's boot: resolve dark from `localStorage['fluxfiles_theme']` first, then OS, and persist an explicit theme. Computing chrome `dark` only from `prefers-color-scheme` flashes a light header before a dark theme settles.
 - **Paid modules: 13** — `share`, `intake`, `versioning`, `webhooks`, `ai`, `ocr`, `virus`, `backup`, `c2pa`, `audit-export`, `sso`, `dlp`, `legal-hold` (all gitignored private packages, gated by the `ModuleRegistry` 3-layer check). **`ModuleRegistry::$map` is the source of truth — read it rather than trusting a count written down anywhere, including here.** `optimize` was once paid but is now FREE/core, not counted here (see the optimization note above). Strategy: Share + Intake are the sellable heroes (Pro); Versioning + Webhooks are à-la-carte; AI/OCR/terminal/backup are not standalone SKUs (free OSS or BYO-key) — see the gitignored `docs/COMMERCIAL-STRATEGY.md`. `audit-export`/`sso` are the Enterprise Compliance Bundle (later joined by `dlp`/`legal-hold`), built deliberately ahead of a named prospect (an explicit override of `docs/ROADMAP.md`'s default caution against speculative builds).
 - **Operator UI for paid modules** — all behind the same `proGate('allow_x', '<module>')` three-state treatment (hidden / locked teaser / on): Share, Intake, Versioning, **AI Vision** (modal for bg_remove/upscale/smart_crop + detail-panel/context-menu/action-sheet entries; `canAiVisionFile()` mirrors `ImageOptimizer::isImage()`'s raster set, no SVG), **OCR** (language picker, copy, "save as caption"), **Virus** ("uploads are scanned" note, per-batch clean-scan toast, on-demand "Scan for viruses" → `POST /api/fm/virus/scan`), **Backup** (folder → another of the token's disks, copied/skipped/errors summary), **Audit export** (inside the Activity panel, plus "Integrity check" → `/fixity/check` and "Verify log" → `/audit/verify`), **Legal hold** (place/release, plus "Retention" → `/retention/run` when the token carries `retention_rules`). C2PA, Webhooks and DLP remain engine-only (API/config, no UI); SSO adds only the "Sign in with SSO" button.
 - **Audit log is archive-before-truncate and tamper-evident; export/verify/purge/fixity are a separate paid layer.** `StorageMetadataHandler::audit()`'s rotation writes the dropped tail to `_fluxfiles/audit/archive/audit-<ts>-<hex>.jsonl` first, under the same lock — a free/core correctness fix. Every entry is HMAC-chained to the previous one (`AuditChain`, key = HKDF of `FLUXFILES_SECRET`) on every backend (JSON, core/Laravel/WordPress DB handlers with an `audit_chain_head` row lock). `readAuditArchive()`/`purgeAuditBefore()` are the storage primitives (no Claims/license awareness); `GET /api/fm/audit/export` (NDJSON/CSV, full unpaginated dump), `GET /api/fm/audit/verify` (chain check, unscoped token), `POST /api/fm/fixity/check` (SHA-256 baseline in the tenant's `_fluxfiles/fixity.json`, unexplained changes audited as `fixity_mismatch`) and `POST /api/fm/audit/purge` (admin-only: requires an unscoped token, since `audit.jsonl` is per-disk not per-tenant) are gated by the `audit-export` module + `allow_audit_export` claim. Every mutating route resolves to a named audit action (CI guard), plus `zip_download`, `presign_*`, `access_denied`; reads only with `audit_reads`.
