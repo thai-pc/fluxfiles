@@ -41,7 +41,7 @@ own endpoint enforces.
 All authenticated routes require `Authorization: Bearer <JWT>`.
 
 - `GET /api/fm/list?disk=local&path=&limit=0&cursor=`
-  - Lists files and directories. With `limit > 0`, returns `{items,next_cursor,total}`; otherwise returns the legacy flat array. Rows carry `on_hold` (legal hold), `poster` (when `media_posters` produced one) and `img_base`/`img_srcset` for images.
+  - Lists files and directories. With `limit > 0`, returns `{items,next_cursor,total}`; otherwise returns the legacy flat array. Order is folders first, then files, each by key. On S3/R2, a page whose cursor is a file reads the bucket from that key on (`ListObjectsV2 StartAfter`) instead of re-listing the folder, and returns `total: null` — keep the first page's count. Rows carry `on_hold` (legal hold), `poster` (when `media_posters` produced one) and `img_base`/`img_srcset` for images.
 
 - `POST /api/fm/upload`
   - Multipart form fields: `file`, `disk`, `path`, optional `force_upload`. Pipeline: ext/dangerous-name checks, quota/`max_files`, collision policy, legal hold on overwrite, virus/DLP scan (fail-closed, before write), `strip_exif`, variants, `media_posters`, ownership, optional AI tag/`auto_optimize`.

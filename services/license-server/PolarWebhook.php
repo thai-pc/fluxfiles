@@ -92,11 +92,19 @@ final class PolarWebhook
         $email = (string) ($d['customer']['email'] ?? $d['customer_email'] ?? '');
         $productId = (string) ($d['product_id'] ?? $d['product']['id'] ?? '');
         $orderId = (string) ($d['id'] ?? '');
+        if ($orderId === '') {
+            // Idempotency is keyed on the order id; without one every redelivery
+            // would mint another licence.
+            error_log('polar webhook: order.paid without an order id — ignored');
+            return null;
+        }
 
-        // Fall back to the product NAME only to make a misconfigured map obvious in the
-        // logs; Plans::valid() still refuses anything that is not a real plan, so an
-        // unmapped product fails loudly rather than issuing the wrong edition.
-        $plan = (string) ($plans[$productId] ?? strtolower((string) ($d['product']['name'] ?? '')));
+        // Only an explicitly mapped product issues. There is deliberately no fallback
+        // to the product NAME: "Enterprise" or "Lifetime" ARE real plan ids, so a test
+        // product, discount variant or trial that merely carries such a name would
+        // otherwise sell that edition. An unmapped product gets plan '' and the
+        // webhook's 503 "add it to the map and redeliver" path.
+        $plan = (string) ($plans[$productId] ?? '');
 
         return [
             'email' => $email,
@@ -107,6 +115,23 @@ final class PolarWebhook
             // without this the buyer's own page could never find their licence.
             'checkout_id' => (string) ($d['checkout_id'] ?? ''),
         ];
+    }
+
+    /**
+     * The order a fully-refunded `order.refunded` event is about, or null for
+     * anything else (a partial refund keeps the licence; so does any other event).
+     */
+    public static function refundedOrderId(array $body): ?string
+    {
+        if ((string) ($body['type'] ?? '') !== 'order.refunded') {
+            return null;
+        }
+        $d = $body['data'] ?? [];
+        if (!is_array($d) || (string) ($d['status'] ?? '') !== 'refunded') {
+            return null;
+        }
+        $id = (string) ($d['id'] ?? '');
+        return $id !== '' ? $id : null;
     }
 
     /**

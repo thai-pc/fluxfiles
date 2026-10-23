@@ -10,7 +10,8 @@ purchase → gateway webhook → this service:
   1. verify webhook signature
   2. plan → sign an Ed25519 license (same key the core trusts)
   3. store the record in SQLite (email│plan│key│expires│sites│order)
-  4. return the key → the gateway emails it → customer sets FLUXFILES_LICENSE_KEY
+  4. email the key to the buyer (and show it on the success page via /claim)
+     → customer sets FLUXFILES_LICENSE_KEY
 ```
 
 ## Setup
@@ -40,8 +41,8 @@ export FLUXFILES_RESEND_API_KEY=re_...        # resend.com → API Keys
 # export FLUXFILES_SMTP_USER=...
 # export FLUXFILES_SMTP_PASS=...
 
-# run (dev) — behind nginx/caddy in prod
-php -S 0.0.0.0:9000 server.php
+# run (dev) — behind nginx/caddy in prod; bind loopback, never 0.0.0.0
+php -S 127.0.0.1:9000 server.php
 ```
 
 Point the Polar webhook at `https://your-host/webhook/polar`, subscribed to
@@ -64,11 +65,12 @@ returns the same key rather than minting a second one.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/webhook/polar` | Standard Webhooks sig | Issue on `order.paid`, then email the key |
-| GET | `/claim?order_id=` | none (see below) | Hand the key to the checkout success page |
+| POST | `/webhook/polar` | Standard Webhooks sig | Issue on `order.paid`, then email the key; a full `order.refunded` marks it `refunded` |
+| GET | `/claim?checkout_id=` | none (see below) | Hand the key to the checkout success page |
 | POST | `/issue` | Bearer admin | Manual issue `{email, plan, customer?, order_id?}` |
 | GET | `/licenses[?email=]` | Bearer admin | List / lookup |
-| POST | `/revoke` | Bearer admin | `{jti, status}` mark revoked/refunded |
+| POST | `/revoke` | Bearer admin | `{jti, status}` with status `revoked`, `refunded` or `active` |
+| POST | `/redeliver` | Bearer admin | Re-send every licence whose mail failed |
 | POST | `/update-status` | Bearer update-status token | `{jti}` → `{active: bool}` for the update server |
 | GET | `/health` | — | Liveness |
 
@@ -150,9 +152,12 @@ Every renewal of a recurring plan (`pro-monthly`, `studio-monthly`,
 `support-monthly`) is a new Polar order with a new `order_id`, so `record()`'s
 `(gateway, order_id)` idempotency mints a fresh row each cycle rather than
 updating one in place. `LicenseIssuer::issue()` calls
-`LicenseStore::supersedeActiveForCustomerPlan()` right after storing that new
-row, which retires any other still-`active` row for the same `(customer,
-plan)` — so only the newest one stays eligible for `needingReminder()`. Without
+`LicenseStore::supersedeActiveForBuyerPlan()` right after storing that new
+row, which retires any other still-`active` gateway row for the same `(buyer
+email, plan)` — so only the newest one stays eligible for `needingReminder()`.
+It matches on the email, never the display name: two buyers who both call
+themselves "John Smith" must not retire each other's licences. Manual
+(`/issue`) rows are never superseded. Without
 this, a customer who just renewed could get an "expired" nag (from the stale
 row) in the same run as a "renews soon" nag (from the new one).
 
@@ -179,7 +184,7 @@ Two paths, on purpose — one is convenient, the other survives a closed tab:
    response — the sale succeeded and the record is stored, so a non-2xx here would make
    Polar retry and leave the buyer wondering whether they were charged.
 
-2. **`GET /claim?order_id=…`**, for the checkout success page. Set the Polar success URL
+2. **`GET /claim?checkout_id=…`**, for the checkout success page. Set the Polar success URL
    to `https://you/success?checkout_id={CHECKOUT_ID}` and have the page call this.
 
 `/claim` is the only unauthenticated endpoint that returns a secret, so it is narrow by

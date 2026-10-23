@@ -310,6 +310,16 @@ final class LicenseMailer
 
     private function sendLog(string $to, string $subject, string $body): bool
     {
+        // Server logs are read by more people and kept longer than a mailbox: show
+        // the message, but not the working key in it — unless the operator asks
+        // (FLUXFILES_MAIL_LOG_FULL=1, e.g. while testing a setup).
+        if (getenv('FLUXFILES_MAIL_LOG_FULL') !== '1') {
+            $body = (string) preg_replace_callback(
+                '/[A-Za-z0-9_-]{16,}(?:\.[A-Za-z0-9_+\/=-]{16,})+/',
+                static fn (array $m): string => substr($m[0], 0, 12) . '…[redacted]',
+                $body
+            );
+        }
         error_log("license mail [log transport] to={$to} subject={$subject}\n{$body}");
         return true;
     }

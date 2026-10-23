@@ -10,6 +10,8 @@ packages/core/storage/tus
 **/storage/rate_limit.json
 **/storage/demo_ip.json
 **/.env
+# the license server's customer DB (emails + every issued key) from a dev checkout
+services/license-server/data
 **/test-results
 **/playwright-report
 *.log

@@ -9,7 +9,9 @@ declare(strict_types=1);
  *   POST /webhook/polar         — Polar order webhook (the store)
  *   POST /issue                 — admin-authed manual issue {email, plan}
  *   GET  /licenses[?email=]     — admin: list / lookup
- *   POST /revoke                — admin: {jti, status} mark revoked/refunded
+ *   POST /revoke                — admin: {jti, status} mark revoked/refunded/active
+ *   POST /redeliver             — admin: re-send licences whose mail failed
+ *   GET  /claim?checkout_id=    — public: the buyer's key, for an hour after purchase
  *   POST /update-status          — update-server auth: {jti} → active/revoked
  *   GET  /health                — liveness
  *
@@ -38,6 +40,8 @@ use FluxFiles\LicenseServer\LicenseIssuer;
 use FluxFiles\LicenseServer\PolarWebhook;
 
 header('Content-Type: application/json; charset=utf-8');
+// Responses can carry licence keys (/claim, /issue, /licenses): never cache them.
+header('Cache-Control: no-store');
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
@@ -87,6 +91,21 @@ try {
         }
 
         $body = json_decode($raw, true) ?: [];
+
+        // A full refund retires the licence for the update channel (the key keeps
+        // working offline — that is inherent to offline licensing — but stops
+        // receiving module updates). Idempotent: a redelivery finds it already done.
+        $refunded = PolarWebhook::refundedOrderId($body);
+        if ($refunded !== null) {
+            $store = new LicenseStore();
+            $rec = $store->findByOrder('polar', $refunded);
+            if ($rec !== null && in_array((string) $rec['status'], ['active', 'superseded'], true)) {
+                $store->setStatus((string) $rec['jti'], 'refunded');
+                error_log("polar webhook: order {$refunded} refunded — licence {$rec['jti']} marked refunded");
+            }
+            respond(200, ['refunded' => $rec !== null]);
+        }
+
         $plans = json_decode(env('FLUXFILES_POLAR_PLAN_MAP', '{}'), true) ?: [];
         $order = PolarWebhook::extract($body, $plans);
 
@@ -213,11 +232,15 @@ try {
     if ($method === 'POST' && $uri === '/issue') {
         if (!adminOk()) { respond(401, ['error' => 'unauthorized']); }
         $b = json_decode($raw, true) ?: [];
-        $res = $issuer->issue([
-            'email' => (string) ($b['email'] ?? ''), 'plan' => (string) ($b['plan'] ?? ''),
-            'customer' => (string) ($b['customer'] ?? ''), 'gateway' => 'manual',
-            'order_id' => (string) ($b['order_id'] ?? ('manual-' . bin2hex(random_bytes(6)))),
-        ]);
+        try {
+            $res = $issuer->issue([
+                'email' => (string) ($b['email'] ?? ''), 'plan' => (string) ($b['plan'] ?? ''),
+                'customer' => (string) ($b['customer'] ?? ''), 'gateway' => 'manual',
+                'order_id' => (string) ($b['order_id'] ?? ('manual-' . bin2hex(random_bytes(6)))),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            respond(400, ['error' => $e->getMessage()]);   // bad email / unknown plan, for the admin
+        }
         respond(200, ['license_key' => $res['key'], 'record' => $res['record']]);
     }
 
@@ -255,11 +278,20 @@ try {
     if ($method === 'POST' && $uri === '/revoke') {
         if (!adminOk()) { respond(401, ['error' => 'unauthorized']); }
         $b = json_decode($raw, true) ?: [];
-        $ok = (new LicenseStore())->setStatus((string) ($b['jti'] ?? ''), (string) ($b['status'] ?? 'revoked'));
+        $status = (string) ($b['status'] ?? 'revoked');
+        // `superseded` is the store's own bookkeeping and stays update-eligible, so
+        // setting it (or anything unknown) by hand would silently un-revoke a key.
+        if (!in_array($status, ['revoked', 'refunded', 'active'], true)) {
+            respond(400, ['error' => 'status must be revoked, refunded or active']);
+        }
+        $ok = (new LicenseStore())->setStatus((string) ($b['jti'] ?? ''), $status);
         respond($ok ? 200 : 404, ['updated' => $ok]);
     }
 
     respond(404, ['error' => 'not found']);
 } catch (\Throwable $e) {
-    respond(500, ['error' => $e->getMessage()]);
+    // Log the detail for the operator; the caller (possibly unauthenticated) gets
+    // nothing about the signer, the database or the input that broke.
+    error_log('license server: ' . $e);
+    respond(500, ['error' => 'internal error']);
 }

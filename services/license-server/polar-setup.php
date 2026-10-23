@@ -25,6 +25,11 @@ declare(strict_types=1);
  * to disk or echoed.
  */
 
+if (PHP_SAPI !== 'cli') {   // never reachable over HTTP, even if the dir is served
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/Plans.php';
 
 use FluxFiles\LicenseServer\Plans;
