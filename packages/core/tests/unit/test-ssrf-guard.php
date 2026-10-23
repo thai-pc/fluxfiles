@@ -156,7 +156,6 @@ test('an allowlisted host does not switch the backstop off for other addresses',
         // still be rejected, even though an allowlist exists.
         assertFalse(SsrfGuard::isPublicIp('10.0.0.5'), 'unrelated private IP is still not public');
         $r = new ReflectionMethod(SsrfGuard::class, 'sameIp');
-        $r->setAccessible(true);
         assertTrue($r->invoke(null, '::ffff:127.0.0.1', '127.0.0.1'), 'sameIp compares by value, not spelling');
         assertFalse($r->invoke(null, '10.0.0.5', '10.0.0.6'), 'different addresses are not the same');
     } finally {

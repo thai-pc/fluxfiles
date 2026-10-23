@@ -84,7 +84,6 @@ function httpGet(string $url, array $headers = []): array {
     ]);
     $body = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     return [$status, $hdr, (string) $body];
 }
 

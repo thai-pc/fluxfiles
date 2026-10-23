@@ -1,5 +1,5 @@
 # Reproducible PHP env for running the FluxFiles core test suite on any PHP version.
-#   docker build --build-arg PHP_VERSION=8.4 -f docker/Dockerfile -t fluxfiles-test .
+#   docker build --build-arg PHP_VERSION=8.5 -f docker/Dockerfile -t fluxfiles-test .
 #   docker run --rm fluxfiles-test                 # runs unit + integration suite
 ARG PHP_VERSION=8.3
 FROM php:${PHP_VERSION}-cli
@@ -10,6 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-install -j"$(nproc)" gd zip \
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
     && rm -rf /var/lib/apt/lists/*
+
+# The official image ships no php.ini, so display_errors defaults to ON and a
+# warning lands in a test's captured output (test-share-public compares streamed
+# bytes). Send errors to stderr, as CI's setup-php does.
+RUN printf 'display_errors=stderr\n' > /usr/local/etc/php/conf.d/zz-tests.ini
 
 WORKDIR /app
 COPY . .

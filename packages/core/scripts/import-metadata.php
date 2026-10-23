@@ -37,12 +37,12 @@ if ($handle === false) {
 
 $entries = [];
 if ($format === 'csv') {
-    $header = fgetcsv($handle);
+    $header = fgetcsv($handle, escape: '\\');
     if ($header === false) {
         fwrite(STDERR, "'{$inPath}' has no header row.\n");
         exit(1);
     }
-    while (($row = fgetcsv($handle)) !== false) {
+    while (($row = fgetcsv($handle, escape: '\\')) !== false) {
         $entry = array_combine($header, $row);
         // The exporter writes empty string, not null, for CSV — restore null
         // so the importer's `?? null` defaulting behaves the same as NDJSON.

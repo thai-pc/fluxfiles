@@ -78,7 +78,6 @@ function makeImage(int $w, int $h, string $fmt): string
         case 'bmp': imagebmp($im, $path); break;
         default: imagepng($im, $path); break;
     }
-    imagedestroy($im);
     return $path;
 }
 

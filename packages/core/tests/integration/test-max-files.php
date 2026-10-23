@@ -46,7 +46,6 @@ function pngUpload(string $name): array
     $tmp = tempnam(sys_get_temp_dir(), 'ff');
     $im = imagecreatetruecolor(4, 4);
     imagepng($im, $tmp);
-    imagedestroy($im);
     return ['name' => $name, 'type' => 'image/png', 'tmp_name' => $tmp, 'error' => 0, 'size' => filesize($tmp)];
 }
 

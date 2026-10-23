@@ -86,7 +86,6 @@ function byobVector(string $name): array
 function deriveByobKey(string $secret): string
 {
     $ref = new ReflectionMethod(FluxFiles\CredentialEncryptor::class, 'deriveKey');
-    $ref->setAccessible(true);
     return $ref->invoke(null, $secret);
 }
 

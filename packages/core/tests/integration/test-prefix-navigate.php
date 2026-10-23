@@ -47,7 +47,6 @@ function placeImage(string $root, string $rel): void
     @mkdir(dirname($full), 0777, true);
     $im = imagecreatetruecolor(8, 8);
     imagepng($im, $full);
-    imagedestroy($im);
 }
 function files(array $list): array { return array_values(array_filter($list, fn($e) => ($e['type'] ?? '') === 'file')); }
 

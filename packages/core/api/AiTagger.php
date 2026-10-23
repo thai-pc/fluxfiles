@@ -325,7 +325,6 @@ PROMPT;
             $height = imagesy($image);
 
             if ($width <= self::MAX_IMAGE_WIDTH) {
-                imagedestroy($image);
                 return $imageData;
             }
 
@@ -334,7 +333,6 @@ PROMPT;
 
             $resized = imagecreatetruecolor($newWidth, $newHeight);
             if ($resized === false) {
-                imagedestroy($image);
                 return $imageData;
             }
 
@@ -346,8 +344,6 @@ PROMPT;
             imagejpeg($resized, null, 85);
             $result = ob_get_clean();
 
-            imagedestroy($image);
-            imagedestroy($resized);
 
             return $result ?: $imageData;
         } catch (\Throwable $e) {
@@ -372,7 +368,6 @@ PROMPT;
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
 
         if ($response === false) {
             error_log("FluxFiles AI API request failed: {$error}");

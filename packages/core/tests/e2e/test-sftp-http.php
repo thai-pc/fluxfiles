@@ -65,7 +65,7 @@ for ($i = 0; $i < 50; $i++) { $c = @fsockopen('127.0.0.1', $PORT, $e, $s, 0.2); 
 function http(string $url, array $headers = []): array {
     $ch = curl_init($url);
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => $headers]);
-    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     return [$st, (string) $body];
 }
 
@@ -83,7 +83,7 @@ try {
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}"],
             CURLOPT_POSTFIELDS => ['disk' => 'sftp', 'path' => '', 'file' => new CURLFile($tmp, 'text/plain', $name)]]);
-        $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); @unlink($tmp);
+        $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);@unlink($tmp);
         assertEqual(200, $st, 'upload ok: ' . $body);
     });
 
@@ -120,7 +120,7 @@ try {
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}", 'Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'mode' => '600'])]);
-        $b = curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        $b = curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         assertEqual(200, $s, 'set mode: ' . $b);
         assertEqual('600', json_decode($b, true)['data']['mode'] ?? '', 'mode set to 600');
 
@@ -133,7 +133,7 @@ try {
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}", 'Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'mode' => '999'])]);
-        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         assertEqual(422, $s, 'invalid mode rejected');
     });
 
@@ -152,7 +152,7 @@ try {
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'PUT',
             CURLOPT_HTTPHEADER => ["Authorization: Bearer {$edit}", 'Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'content' => "edited via the code editor\n"])]);
-        $b = curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        $b = curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         assertEqual(200, $s, 'put content: ' . $b);
 
         [, $g2] = http("{$BASE}/api/fm/content?disk=sftp&path=" . rawurlencode($name), ["Authorization: Bearer {$edit}"]);
@@ -164,7 +164,7 @@ try {
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'PUT',
             CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}", 'Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'content' => 'x'])]);
-        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         assertEqual(403, $s, 'edit forbidden without the claim');
     });
 
@@ -177,7 +177,7 @@ try {
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => ["Authorization: Bearer {$ro}", 'Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name, 'mode' => '755'])]);
-        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        curl_exec($ch); $s = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         assertEqual(403, $s, 'allow_chmod=false blocks chmod');
     });
 
@@ -186,7 +186,7 @@ try {
     curl_setopt_array($del, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'DELETE',
         CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}", 'Content-Type: application/json'],
         CURLOPT_POSTFIELDS => json_encode(['disk' => 'sftp', 'path' => $name])]);
-    curl_exec($del); curl_close($del);
+    curl_exec($del);
 
 } finally {
     proc_terminate($proc); proc_close($proc);

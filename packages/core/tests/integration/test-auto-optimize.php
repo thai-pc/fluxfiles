@@ -47,7 +47,7 @@ function jpegBytes(int $w = 600, int $h = 400): string {
         imagefilledellipse($im, random_int(0, $w), random_int(0, $h), random_int(5, 50), random_int(5, 50),
             imagecolorallocate($im, random_int(0, 255), random_int(0, 255), random_int(0, 255)));
     }
-    ob_start(); imagejpeg($im, null, 92); $b = ob_get_clean(); imagedestroy($im);
+    ob_start(); imagejpeg($im, null, 92); $b = ob_get_clean();
     return $b;
 }
 /** Write bytes to a temp upload + return the $file array. */

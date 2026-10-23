@@ -45,7 +45,7 @@ function imgFile(int $w = 200, int $h = 150): string
     $im = imagecreatetruecolor($w, $h);
     imagefilledrectangle($im, 0, 0, $w, $h, imagecolorallocate($im, 60, 120, 180));
     $p = sys_get_temp_dir() . '/fxai-' . uniqid() . '.png';
-    imagepng($im, $p); imagedestroy($im);
+    imagepng($im, $p);
     return $p;
 }
 function fileArr(string $tmp, string $name): array { return ['name' => $name, 'size' => filesize($tmp), 'tmp_name' => $tmp]; }
@@ -88,7 +88,6 @@ function probe(AiTagger $t, array $envelope = []): ProbeAiTagger
     $p = (new ReflectionClass(ProbeAiTagger::class))->newInstanceWithoutConstructor();
     foreach (['provider', 'apiKey', 'model', 'baseUrl'] as $prop) {
         $r = new ReflectionProperty(AiTagger::class, $prop);
-        $r->setAccessible(true);
         $r->setValue($p, $r->getValue($t));
     }
     $p->envelope = $envelope ?: [
@@ -117,7 +116,6 @@ function analyzeWithStubbedHttp(AiTagger $t, array $envelope): array
 function modelOf(AiTagger $t): string
 {
     $r = new ReflectionProperty(AiTagger::class, 'model');
-    $r->setAccessible(true);
     return (string) $r->getValue($t);
 }
 
@@ -126,7 +124,6 @@ function parse(string $text): array
 {
     $t = new AiTagger('claude', 'dummy-key');
     $ref = new ReflectionMethod($t, 'parseJsonResponse');
-    $ref->setAccessible(true);
     return $ref->invoke($t, $text);
 }
 

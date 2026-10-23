@@ -99,12 +99,10 @@ $socketDir = $storagePath . '/ssh-sockets';
 
 function muxCacheKey(array $cfg): string {
     $m = new \ReflectionMethod(SshMultiplexer::class, 'cacheKey');
-    $m->setAccessible(true);
     return $m->invoke(null, $cfg);
 }
 function muxSocketPath(string $hash, string $dir): string {
     $m = new \ReflectionMethod(SshMultiplexer::class, 'socketPath');
-    $m->setAccessible(true);
     return $m->invoke(null, $hash, $dir);
 }
 

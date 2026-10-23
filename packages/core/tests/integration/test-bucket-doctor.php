@@ -56,7 +56,6 @@ test('remediation() includes an AbortIncompleteMultipartUpload lifecycle snippet
     $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => sys_get_temp_dir(), 'url' => '/storage']]);
     $doctor = new BucketDoctor($dm);
     $m = new \ReflectionMethod($doctor, 'remediation');
-    $m->setAccessible(true);
     $remediation = $m->invoke($doctor, 'my-bucket', 'https://app.example');
 
     assertTrue(isset($remediation['lifecycle']), 'remediation has a lifecycle key');

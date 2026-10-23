@@ -47,7 +47,7 @@ function request(string $method, string $path, string $token, ?array $body = nul
     curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
         CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Content-Type: application/json']]);
     if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
-    $raw = curl_exec($ch); $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE); curl_close($ch);
+    $raw = curl_exec($ch); $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     return [$status, json_decode((string) $raw, true) ?? ['raw' => $raw]];
 }
 function check(bool $ok, string $message): void { if (!$ok) throw new RuntimeException($message); }

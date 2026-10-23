@@ -73,7 +73,6 @@ function req(string $method, string $url, array $opt = []): array {
     curl_setopt_array($ch, $o);
     $body = (string) curl_exec($ch);
     $st = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     return [$st, $hdr, $body];
 }
 /** @return array{0:int,1:array<string,string>,2:array<string,mixed>|null} */
@@ -321,7 +320,7 @@ try {
                 'ttl' => 600, 'claims' => ['allow_intake' => true]]);
             $opHdr = ["Authorization: Bearer {$op}"];
             /** Mint a portal through the real operator route. @return array<string,mixed> */
-            $mint = static function (array $body, array $hdr = null) use ($B, $opHdr): array {
+            $mint = static function (array $body, ?array $hdr = null) use ($B, $opHdr): array {
                 [$st, , $j] = reqJson('POST', "{$B}/api/fm/intake", ['json' => array_merge(['disk' => 'local', 'path' => 'drop'], $body), 'headers' => $hdr ?? $opHdr]);
                 if ($st !== 200) { throw new \RuntimeException('mint failed: ' . $st . ' ' . json_encode($j)); }
                 return $j['data'];

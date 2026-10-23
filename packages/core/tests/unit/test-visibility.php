@@ -114,7 +114,6 @@ function makeFM(array $diskConfigs): FileManager
 function fileUrl(FileManager $fm, string $disk, string $path): string
 {
     $ref = new ReflectionMethod($fm, 'fileUrl');
-    $ref->setAccessible(true);
     return (string) $ref->invoke($fm, $disk, $path);
 }
 

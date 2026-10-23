@@ -45,7 +45,7 @@ function pngTemp(): string {
     $t = tempnam(sys_get_temp_dir(), 'ffimptest_');
     $im = imagecreatetruecolor(8, 8);
     imagesetpixel($im, 0, 0, imagecolorallocate($im, ($n * 37) % 256, ($n * 91) % 256, ($n * 53) % 256));
-    imagepng($im, $t); imagedestroy($im);
+    imagepng($im, $t);
     return $t;
 }
 function htmlTemp(): string { $t = tempnam(sys_get_temp_dir(), 'ffimptest_'); file_put_contents($t, "<!doctype html><html><body><script>alert(1)</script></body></html>"); return $t; }

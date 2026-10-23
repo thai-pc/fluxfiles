@@ -75,7 +75,6 @@ function req(string $method, string $url, array $opt = []): array {
     curl_setopt_array($ch, $o);
     $body = (string) curl_exec($ch);
     $st = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     return [$st, $hdr, $body];
 }
 /** @return array{0:int,1:array<string,string>,2:array<string,mixed>|null} */

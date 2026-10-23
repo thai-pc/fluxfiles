@@ -27,7 +27,6 @@ function fixturePng(): string
     imagesetpixel($im, 0, 0, imagecolorallocate($im, random_int(0, 255), random_int(0, 255), random_int(0, 255)));
     ob_start();
     imagepng($im);
-    imagedestroy($im);
     return (string) ob_get_clean();
 }
 

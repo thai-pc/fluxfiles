@@ -746,7 +746,6 @@ if (class_exists('\FluxFiles\Share\ShareModule')) {
         // write over a tombstone — reached here through reflection, because every
         // public entrypoint correctly throws before it.
         $put = new \ReflectionMethod($mod, 'putRecord');
-        $put->setAccessible(true);
         $live['views'] = 99;
         $put->invoke($mod, $dm->disk('local'), 'users/42/', $r['jti'], $live);
         assertEqual(true, json_decode((string) file_get_contents($store), true)[$r['jti']]['revoked'], 'stale write ignored');

@@ -77,7 +77,6 @@ final class OidcDiscovery
         $body = curl_exec($ch);
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $errno = curl_errno($ch);
-        curl_close($ch);
 
         if ($errno !== 0 || $body === false || $status < 200 || $status >= 300) {
             throw new ApiException('Could not reach the identity provider', 502, 'sso_idp_unreachable');

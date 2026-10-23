@@ -90,7 +90,6 @@ test('curl uses the validated IP without resolving the original hostname again',
     $body = curl_exec($ch);
     assertEqual(200, curl_getinfo($ch, CURLINFO_RESPONSE_CODE));
     assertTrue(is_string($body) && str_starts_with($body, "\x89PNG"));
-    curl_close($ch);
 });
 
 test('happy path: fetches /png → upload pipeline, filename from Content-Disposition', function () use ($base, $root) {

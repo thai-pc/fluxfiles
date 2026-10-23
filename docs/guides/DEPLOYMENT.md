@@ -5,7 +5,7 @@ FluxFiles yourself. This is separate from [`OPERATIONS.md`](OPERATIONS.md),
 which is the runbook for the different job of **selling** FluxFiles (Polar,
 the licence server, module hosting) — none of that applies here.
 
-Requires PHP **8.2.35 or newer** (8.3/8.4 supported) with `gd`, `curl`, `json`,
+Requires PHP **8.2.35 or newer** (8.3/8.4/8.5 supported) with `gd`, `curl`, `json`,
 `openssl`, `mbstring`, `fileinfo`. Optional binaries: Ghostscript **≥ 10.05.0** (PDF
 optimize, PDF posters — an older `gs` is treated as absent), ffmpeg (video posters),
 ClamAV / tesseract / c2patool for the matching paid modules. All of them run with a
