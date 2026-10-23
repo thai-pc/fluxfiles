@@ -66,6 +66,7 @@
     "top_folders": "Maiores pastas",
     "files": "arquivos",
     "warning": "Seu armazenamento está acabando.",
+    "index_large": "Biblioteca grande: o índice de metadados tem {size}, é lido inteiro a cada listagem e regravado a cada envio. Mude o servidor para o backend de banco de dados (FLUXFILES_STORAGE_BACKEND=db).",
     "critical": "Armazenamento quase cheio. Considere limpar ou fazer upgrade.",
     "image": "Imagens",
     "video": "Vídeos",

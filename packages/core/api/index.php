@@ -1338,7 +1338,7 @@ function routeRequest(
             throw new ApiException('Permission denied: read', 403, 'permission_denied');
         }
         if ($uri === '/api/fm/usage') {
-            return handleUsage($quotaManager, $diskManager, $claims);
+            return handleUsage($quotaManager, $diskManager, $claims, $metaRepo);
         }
         return $quotaManager->getQuotaInfo($disk, $claims->pathPrefix, $claims->maxStorageMb);
     }
@@ -2542,7 +2542,7 @@ function ff_serve_bytes(string $data, string $mime, bool $immutable = false): vo
  * `_fluxfiles/usage.json` (per prefix, TTL = usage_cache_ttl). `?refresh=true`
  * bypasses the cache (rate-limited upstream).
  */
-function handleUsage(QuotaManager $quotaManager, DiskManager $diskManager, \FluxFiles\Claims $claims): array
+function handleUsage(QuotaManager $quotaManager, DiskManager $diskManager, \FluxFiles\Claims $claims, $metaRepo = null): array
 {
     $disk = $_GET['disk'] ?? 'local';
     $prefix = $claims->pathPrefix;
@@ -2564,7 +2564,7 @@ function handleUsage(QuotaManager $quotaManager, DiskManager $diskManager, \Flux
         if ($cached !== null) {
             $cached['cache_age_seconds'] = max(0, time() - (int) strtotime($cached['computed_at'] ?? 'now'));
             $cached['optimize'] = $optimizeStats;
-            return $cached;
+            return $cached + ff_usage_index_info($metaRepo, $disk, $claims);
         }
     }
 
@@ -2583,7 +2583,27 @@ function handleUsage(QuotaManager $quotaManager, DiskManager $diskManager, \Flux
     }
     $resp['cache_age_seconds'] = 0;
     $resp['optimize'] = $optimizeStats;
-    return $resp;
+    return $resp + ff_usage_index_info($metaRepo, $disk, $claims);
+}
+
+/**
+ * Size of the JSON backend's disk-wide metadata index, for operators only (an
+ * unscoped token — the index spans every tenant on the disk). `warn` asks the
+ * UI to suggest the database backend. Empty on the DB backend (no such file).
+ *
+ * @return array{metadata_index?: array{bytes:int,warn_bytes:int,warn:bool}}
+ */
+function ff_usage_index_info($metaRepo, string $disk, \FluxFiles\Claims $claims): array
+{
+    if (trim($claims->pathPrefix, '/') !== '' || !is_object($metaRepo) || !method_exists($metaRepo, 'indexBytes')) {
+        return [];
+    }
+    $bytes = $metaRepo->indexBytes($disk);
+    if ($bytes === null) {
+        return [];
+    }
+    $warnAt = \FluxFiles\StorageMetadataHandler::indexWarnBytes();
+    return ['metadata_index' => ['bytes' => $bytes, 'warn_bytes' => $warnAt, 'warn' => $warnAt > 0 && $bytes >= $warnAt]];
 }
 
 /** Read a fresh (< $ttl) cached usage summary at $path, or null. */

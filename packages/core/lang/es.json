@@ -66,6 +66,7 @@
     "top_folders": "Carpetas más grandes",
     "files": "archivos",
     "warning": "Te estás quedando sin almacenamiento.",
+    "index_large": "Biblioteca grande: el índice de metadatos ocupa {size}, se lee entero en cada listado y se reescribe en cada subida. Cambia el servidor al backend de base de datos (FLUXFILES_STORAGE_BACKEND=db).",
     "critical": "Casi sin almacenamiento. Considera limpiar o mejorar el plan.",
     "image": "Imágenes",
     "video": "Vídeos",

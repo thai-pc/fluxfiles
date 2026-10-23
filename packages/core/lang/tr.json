@@ -66,6 +66,7 @@
     "top_folders": "En büyük klasörler",
     "files": "dosya",
     "warning": "Depolama alanınız azalıyor.",
+    "index_large": "Büyük kitaplık: meta veri dizini {size} boyutunda; her listede tamamen okunuyor, her yüklemede yeniden yazılıyor. Sunucuyu veritabanı arka ucuna geçirin (FLUXFILES_STORAGE_BACKEND=db).",
     "critical": "Depolama neredeyse dolu. Temizleyin veya yükseltin.",
     "image": "Görseller",
     "video": "Videolar",

@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.30] — 2026-10-23
+
+> Released: `core-v0.2.104`, `wordpress-v0.2.64` (the plugin bundles core).
+
+### Added
+
+- **Large-library warning for the JSON backend.** Each disk keeps one
+  metadata index (`_fluxfiles/index.json`). Every list page reads all of it,
+  and every write rewrites all of it. Measured at 100k files: ~300 ms and
+  ~270 MB of PHP memory per list page, 28 MB rewritten per upload.
+  - When the index passes `FLUXFILES_INDEX_WARN_MB` (default 5 MB; `0` turns
+    it off), the server logs a warning at most once an hour per disk pointing
+    to `FLUXFILES_STORAGE_BACKEND=db`.
+  - The standalone usage dashboard shows unscoped (operator) tokens a banner.
+    The usage response carries `metadata_index: {bytes, warn_bytes, warn}` for
+    those tokens only.
+- `docs/guides/DEPLOYMENT.md`: *Large libraries*, with the measurements and
+  the migration steps.
+
 ## [0.3.29] — 2026-10-23
 
 > Released: `core-v0.2.103`, `wordpress-v0.2.63` (the plugin bundles the core UI).

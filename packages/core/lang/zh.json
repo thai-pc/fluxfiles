@@ -66,6 +66,7 @@
     "top_folders": "最大文件夹",
     "files": "个文件",
     "warning": "存储空间即将不足。",
+    "index_large": "大型资料库：元数据索引已达 {size}，每次列出都会完整读取，每次上传都会整体重写。请将服务器切换到数据库后端（FLUXFILES_STORAGE_BACKEND=db）。",
     "critical": "存储空间几乎用尽，请清理或升级。",
     "image": "图片",
     "video": "视频",

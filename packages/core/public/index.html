@@ -1837,6 +1837,11 @@
                         <template x-if="usageInfo.quota.status === 'warning'">
                             <div class="ff-usage-banner is-warning" x-text="t('usage.warning')"></div>
                         </template>
+                        <!-- Operator-only (unscoped token): the JSON metadata index has outgrown
+                             the file backend — suggest the database backend. -->
+                        <template x-if="usageInfo.metadata_index && usageInfo.metadata_index.warn">
+                            <div class="ff-usage-banner is-info" x-text="t('usage.index_large', { size: formatSize(usageInfo.metadata_index.bytes) })"></div>
+                        </template>
 
                         <!-- By type -->
                         <div class="ff-usage-section" x-show="usageInfo.by_type.length">

@@ -218,3 +218,31 @@ post_max_size       = 110M     ; a little above upload_max_filesize
 > file — has to fit the web-server/PHP body limits, and `max_upload` still caps the total.
 > Behind the Laravel/WordPress proxies there is no `/tus` route, so local uploads there
 > are a single request and the PHP/nginx limits above apply in full.
+
+## Large libraries: when to switch to the database backend
+
+With the default JSON backend (`FLUXFILES_STORAGE_BACKEND=json`), each disk keeps
+**one** metadata index, `_fluxfiles/index.json`, covering every file on that disk
+across all tenants. Every list page reads and decodes the whole file. Every
+upload, rename, move or delete rewrites the whole file while holding a lock.
+Cost grows with the number of files on the disk, not the number in the folder
+being opened. Measured on a local disk (PHP 8.2, one list page of 200 items):
+
+| Files on the disk | `index.json` | One list page | PHP peak memory |
+|---|---|---|---|
+| 1,500 | 0.3 MB | 18 ms | 7 MB |
+| 20,500 | 5.5 MB | 66 ms | 58 MB |
+| 100,500 | 27.7 MB | 299 ms | 269 MB |
+
+On S3/R2 add the transfer of the whole file on each request. Past roughly
+20,000 files (or a `memory_limit` under 256 MB), use the database backend:
+set `FLUXFILES_STORAGE_BACKEND=db` with `FLUXFILES_DB_DSN`, then run
+`php scripts/migrate-json-to-db.php` once to import the existing bookkeeping.
+The database backend reads and writes only the rows a request needs instead of
+one file covering the whole disk. File bytes stay in your storage either way. See
+`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`.
+
+The server warns before this becomes a problem. When the index passes
+`FLUXFILES_INDEX_WARN_MB` (default 5), it logs a warning at most once an hour
+per disk. The usage dashboard also shows operators (tokens with no `prefix`) a
+banner.

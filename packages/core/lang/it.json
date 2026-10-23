@@ -66,6 +66,7 @@
     "top_folders": "Cartelle più grandi",
     "files": "file",
     "warning": "Lo spazio sta per esaurirsi.",
+    "index_large": "Libreria grande: l'indice dei metadati è di {size}, viene letto per intero a ogni elenco e riscritto a ogni caricamento. Passa il server al backend database (FLUXFILES_STORAGE_BACKEND=db).",
     "critical": "Spazio quasi esaurito. Valuta di pulire o fare upgrade.",
     "image": "Immagini",
     "video": "Video",

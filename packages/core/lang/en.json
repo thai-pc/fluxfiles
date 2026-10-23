@@ -66,6 +66,7 @@
     "top_folders": "Largest folders",
     "files": "files",
     "warning": "You're running low on storage.",
+    "index_large": "Large library: the metadata index is {size} and is read in full on every list and rewritten on every upload. Switch the server to the database backend (FLUXFILES_STORAGE_BACKEND=db) to keep it fast.",
     "critical": "You're almost out of storage. Consider cleaning up or upgrading.",
     "image": "Images",
     "video": "Videos",
