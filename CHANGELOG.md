@@ -3,6 +3,56 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.31] — 2026-10-23
+
+> Released: `core-v0.2.105`, `wordpress-v0.2.65` (the plugin bundles core).
+> `services/license-server` is deployed by hand (no tag): redeploy it to pick up
+> the fixes below.
+
+### Changed
+
+- **One index write per operation (JSON backend).** The disk-wide
+  `_fluxfiles/index.json` used to be rewritten twice per upload (hash, then
+  metadata), twice per rename (save, then delete), and **once per file** when
+  a folder was deleted. Each of these now rewrites it once. The index lock is
+  re-entrant: before, a nested release (`save()` → `updateIndex()`) dropped the
+  outer holder's lock early.
+- **S3/R2 pages after the first read the bucket from the cursor on**
+  (`ListObjectsV2 StartAfter`) once the listing has reached the files, instead
+  of re-listing the whole folder for every page (~50 LIST calls per page for a
+  50k-file folder). These pages return `total: null`; the UI keeps the first
+  page's count. Folders still come first; a cursor that is still among the
+  folders, or any bucket error, falls back to the full listing.
+
+### Security — license server (`services/license-server`, audit 2026-10-23)
+
+The code being public is fine: licences are Ed25519-signed with a key that
+never leaves the server, and core pins the algorithm and key id. Fixes:
+
+- **An unmapped Polar product whose name matched a plan id issued that plan.**
+  A product called "Enterprise" missing from `FLUXFILES_POLAR_PLAN_MAP` sold an
+  Enterprise licence. Only mapped products issue now; anything else takes the
+  503 "add it to the map and redeliver" path.
+- **Full refunds now act.** `order.refunded` (status `refunded`) marks the
+  licence `refunded`, so it stops receiving module updates. Partial refunds
+  keep it.
+- **Renewal supersession is keyed on the buyer's email, not their display
+  name.** Two buyers both called "John Smith" retired each other's licences
+  (breaking `/claim`, redelivery and reminders). Manual issues are never
+  superseded.
+- A unique `(gateway, order_id)` index means concurrent deliveries of one order
+  can't mint two keys. `order.paid` without an order id is ignored.
+- `/revoke` only accepts `revoked`, `refunded` or `active`.
+- Errors return a generic 500 and are logged, instead of echoing exception text.
+- Every response sends `Cache-Control: no-store`.
+- CLI scripts refuse to run outside the CLI.
+- The SQLite file is created owner-only (0600).
+- The `log` mail transport redacts the key (`FLUXFILES_MAIL_LOG_FULL=1` shows it).
+- SQL string literals use single quotes.
+- Deploy guidance: rsync excludes `.env`/`data/`, the signing key lives
+  outside the code dir, `.dockerignore` excludes the customer DB, `php -S` runs
+  with several workers, and the README uses `/claim?checkout_id=`.
+
 ## [0.3.30] — 2026-10-23
 
 > Released: `core-v0.2.104`, `wordpress-v0.2.64` (the plugin bundles core).
