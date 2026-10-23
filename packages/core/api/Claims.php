@@ -649,7 +649,7 @@ class Claims
      * @param object $payload JWT payload
      * @param string $secret  FLUXFILES_SECRET (needed to decrypt BYOB credentials)
      */
-    public static function fromJwtPayload(object $payload, string $secret = ''): self
+    public static function fromJwtPayload(object $payload, #[\SensitiveParameter] string $secret = ''): self
     {
         // Decrypt BYOB disk credentials if present
         $byobDisks = [];

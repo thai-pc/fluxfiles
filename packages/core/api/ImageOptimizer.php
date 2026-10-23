@@ -241,7 +241,16 @@ class ImageOptimizer
             return null; // don't flatten an animated GIF to a single frame
         }
 
-        $image = $this->manager->read($sourceData);
+        // getimagesize() only reads the header: a truncated or corrupt body (or one
+        // GD can't parse) passes the checks above and throws here. /api/fm/img runs
+        // outside the router's catch-all, so that was a fatal 500; treat it like any
+        // other untransformable file instead. Only the DECODE is caught — a failure
+        // while watermarking must never fall through to serving the clean original.
+        try {
+            $image = $this->manager->read($sourceData);
+        } catch (\Throwable $e) {
+            return null;
+        }
         if ($width > 0 || $height > 0) {
             $image = $this->manager->resizeTo($image, $width, $height, $fit);
         }

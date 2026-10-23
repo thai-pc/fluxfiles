@@ -11,7 +11,7 @@ This package provides:
 
 ## Requirements
 
-- PHP >= 8.1 (Flysystem 3 + Intervention Image v3)
+- PHP >= 8.2.35 — the latest security-patched 8.2 (8.3/8.4 also supported). 8.1 is end-of-life.
 - Composer >= 2
 
 ## Where the files land — `git clone` vs `composer require`

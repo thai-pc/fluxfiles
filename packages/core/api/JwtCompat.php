@@ -29,7 +29,7 @@ final class JwtCompat
      *
      * @param array<string,mixed> $payload
      */
-    public static function encode(array $payload, string $secret): string
+    public static function encode(array $payload, #[\SensitiveParameter] string $secret): string
     {
         return JWT::encode($payload, $secret, 'HS256');
     }
@@ -43,7 +43,7 @@ final class JwtCompat
      *
      * @return \stdClass
      */
-    public static function decode(string $token, string $secret)
+    public static function decode(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret)
     {
         if (\class_exists('\\Firebase\\JWT\\Key')) {
             // v6 / v7 path — wrap secret in Key(<secret>, <alg>).

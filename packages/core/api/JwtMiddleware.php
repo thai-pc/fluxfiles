@@ -6,7 +6,7 @@ namespace FluxFiles;
 
 class JwtMiddleware
 {
-    public static function handle(string $token, string $secret): Claims
+    public static function handle(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): Claims
     {
         try {
             $payload = JwtCompat::decode($token, $secret);

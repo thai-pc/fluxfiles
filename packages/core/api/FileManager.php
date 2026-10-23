@@ -369,7 +369,7 @@ class FileManager
      * `'private' => true` are served through a per-file /api/fm/stream token
      * instead of a static URL. Without a secret the feature stays off.
      */
-    public function setStreamSecret(string $secret): void
+    public function setStreamSecret(#[\SensitiveParameter] string $secret): void
     {
         $this->streamSecret = $secret;
     }

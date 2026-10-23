@@ -213,7 +213,7 @@ final class SshMultiplexer
     }
 
     /** Ephemeral private-key file, written just before proc_open, 0600, keys/ subdir. */
-    private static function ensureKeyFile(string $privateKey, string $dir): ?string
+    private static function ensureKeyFile(#[\SensitiveParameter] string $privateKey, string $dir): ?string
     {
         if (!self::ensureOwnedDir($dir)) {
             return null;

@@ -19,7 +19,7 @@ class Connection
     private ?\PDO $pdo = null;
     private ?Dialect $dialect = null;
 
-    public function __construct(string $dsn, string $user = '', string $password = '')
+    public function __construct(string $dsn, string $user = '', #[\SensitiveParameter] string $password = '')
     {
         $this->dsn = $dsn;
         $this->user = $user;

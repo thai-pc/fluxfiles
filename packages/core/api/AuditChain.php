@@ -30,7 +30,7 @@ final class AuditChain
     private static ?string $secret = null;
 
     /** Adapters (Laravel config, WordPress option) hand their secret in here. */
-    public static function configure(string $secret): void
+    public static function configure(#[\SensitiveParameter] string $secret): void
     {
         self::$secret = $secret !== '' ? $secret : null;
     }
@@ -66,7 +66,7 @@ final class AuditChain
     }
 
     /** The entry hash given its predecessor's ('' = chain start). */
-    public static function hash(string $key, string $prev, array $entry): string
+    public static function hash(#[\SensitiveParameter] string $key, string $prev, array $entry): string
     {
         return hash_hmac('sha256', $prev . "\n" . self::canonical($entry), $key);
     }

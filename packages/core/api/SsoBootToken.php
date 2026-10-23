@@ -42,7 +42,7 @@ final class SsoBootToken
     /** Distinct from CredentialEncryptor's info string → an independent key. */
     private const HKDF_INFO = 'fluxfiles-sso-boot-enc';
 
-    public static function mint(string $realJwt, string $secret, int $ttl = self::MAX_TTL): string
+    public static function mint(#[\SensitiveParameter] string $realJwt, #[\SensitiveParameter] string $secret, int $ttl = self::MAX_TTL): string
     {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
@@ -60,7 +60,7 @@ final class SsoBootToken
      * Throws ApiException(403) on any failure (bad signature, expired, wrong
      * type, missing/undecryptable payload).
      */
-    public static function verify(string $token, string $secret): string
+    public static function verify(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): string
     {
         if ($token === '' || $secret === '') {
             throw new ApiException('SSO boot token required', 403, 'sso_boot_token_invalid');
@@ -81,12 +81,12 @@ final class SsoBootToken
         return $realJwt;
     }
 
-    private static function key(string $secret): string
+    private static function key(#[\SensitiveParameter] string $secret): string
     {
         return hash_hkdf('sha256', $secret, 32, self::HKDF_INFO);
     }
 
-    private static function seal(string $plaintext, string $secret): string
+    private static function seal(#[\SensitiveParameter] string $plaintext, #[\SensitiveParameter] string $secret): string
     {
         $nonce = random_bytes(self::NONCE_LEN);
         $tag = '';
@@ -97,7 +97,7 @@ final class SsoBootToken
         return rtrim(strtr(base64_encode($nonce . $ct . $tag), '+/', '-_'), '=');
     }
 
-    private static function open(string $blob, string $secret): ?string
+    private static function open(string $blob, #[\SensitiveParameter] string $secret): ?string
     {
         if ($blob === '') {
             return null;

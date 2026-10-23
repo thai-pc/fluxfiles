@@ -38,4 +38,4 @@ php tests/e2e/test-s3-live.php
 
 Tests load `FLUXFILES_SECRET` from `.env` (repo root or `packages/core/`). It must be ≥ 32 bytes — firebase/php-jwt v7 rejects shorter HS256 keys.
 
-CI (`.github/workflows/test.yml`) runs `unit/` + `integration/` on PHP 8.1–8.4, `e2e/test-api.sh` per version, and `e2e/test-s3-live.php` against a LocalStack container.
+CI (`.github/workflows/test.yml`) runs `unit/` + `integration/` on PHP 8.2–8.4, `e2e/test-api.sh` per version, and `e2e/test-s3-live.php` against a LocalStack container.
