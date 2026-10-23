@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { FluxFilesClient, buildTools, createServer } from '../src/index.js';
+import { FluxFilesClient, assertSafeBaseUrl, buildTools, createServer } from '../src/index.js';
 
 type Call = { method: string; url: string; headers: Record<string, string>; body?: unknown };
 
@@ -89,5 +89,20 @@ describe('MCP server (in-memory transport)', () => {
     const res = await client.callTool({ name: 'read_text_file', arguments: { path: '../secret' } });
     expect(res.isError).toBe(true);
     expect((res.content as Array<{ text: string }>)[0].text).toBe('Access denied to path (path_denied)');
+  });
+});
+
+describe('transport safety', () => {
+  it('refuses plain http to a remote host, allows https and localhost', () => {
+    expect(() => new FluxFilesClient({ baseUrl: 'http://files.example.com', token: 't' })).toThrow(/plain http/);
+    expect(() => new FluxFilesClient({ baseUrl: 'https://files.example.com', token: 't' })).not.toThrow();
+    for (const local of ['http://localhost:8080', 'http://127.0.0.1', 'http://[::1]:9000']) {
+      expect(() => assertSafeBaseUrl(local)).not.toThrow();
+    }
+  });
+  it('lets an operator opt in to http on a trusted network, and rejects other schemes', () => {
+    expect(() => assertSafeBaseUrl('http://10.0.0.5', true)).not.toThrow();
+    expect(() => assertSafeBaseUrl('file:///etc/passwd')).toThrow(/http\(s\)/);
+    expect(() => assertSafeBaseUrl('not a url')).toThrow(/valid URL/);
   });
 });

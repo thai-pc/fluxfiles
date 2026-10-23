@@ -7,6 +7,7 @@
  *   FLUXFILES_DISK         default disk (default: local)
  *   FLUXFILES_MCP_WRITE    "1" → also expose write_text_file / create_folder
  *   FLUXFILES_MCP_DELETE   "1" (with WRITE) → also expose move_to_trash
+ *   FLUXFILES_MCP_ALLOW_HTTP "1" → allow plain http to a non-local host (token in clear text)
  */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
@@ -25,5 +26,6 @@ const server = createServer({
   disk: process.env.FLUXFILES_DISK || 'local',
   allowWrite: on(process.env.FLUXFILES_MCP_WRITE),
   allowDelete: on(process.env.FLUXFILES_MCP_DELETE),
+  allowInsecureHttp: on(process.env.FLUXFILES_MCP_ALLOW_HTTP),
 });
 await server.connect(new StdioServerTransport());

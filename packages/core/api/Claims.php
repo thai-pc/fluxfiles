@@ -359,8 +359,9 @@ class Claims
 
     /** @var bool Render a poster thumbnail (page 1 / a frame at 1s) for uploaded
      *            PDFs and videos when Ghostscript / ffmpeg are installed. Default
-     *            TRUE (a no-op without the tools). See MediaPoster. */
-    public bool $mediaPosters = true;
+     *            FALSE (opt-in): it runs two large parsers on every uploaded
+     *            PDF/video from whoever can upload. See MediaPoster. */
+    public bool $mediaPosters = false;
 
     /** @var array<int,array{path:string,days:int,action:string}> Retention rules:
      *            files under `path` (relative to the tenant root, '' = everything)
@@ -809,7 +810,7 @@ class Claims
         $c->auditReads = (bool) ($payload->audit_reads ?? false);
         $c->stripExif = (bool) ($payload->strip_exif ?? false);
         $c->allowPresignPut = isset($payload->allow_presign_put) ? (bool) $payload->allow_presign_put : true;
-        $c->mediaPosters = isset($payload->media_posters) ? (bool) $payload->media_posters : true;
+        $c->mediaPosters = isset($payload->media_posters) ? (bool) $payload->media_posters : false;
         $c->retentionRules = self::sanitizeRetentionRules($payload->retention_rules ?? null);
         $c->watermark = self::sanitizeWatermark($payload);
         // A watermark OVERLAY exists solely to withhold the clean original — serving

@@ -86,6 +86,32 @@ if (MediaPoster::available('pdf')) {
     echo "  {$yellow}SKIP{$reset} PDF poster cases — Ghostscript not installed\n";
 }
 
+test('media_posters is opt-in: absent from the token → off', function () {
+    $c = Claims::fromJwtPayload((object) ['sub' => 'u', 'perms' => ['read'], 'disks' => ['local']]);
+    assertTrue($c->mediaPosters === false, 'default off');
+    $on = Claims::fromJwtPayload((object) ['sub' => 'u', 'perms' => ['read'], 'disks' => ['local'], 'media_posters' => true]);
+    assertTrue($on->mediaPosters === true, 'explicit true');
+});
+
+test('external tools get a minimal environment (no inherited secrets)', function () {
+    $env = \FluxFiles\ProcessEnv::minimal();
+    assertTrue(array_keys($env) === ['PATH', 'HOME', 'TMPDIR', 'LANG'], 'only PATH/HOME/TMPDIR/LANG: ' . implode(',', array_keys($env)));
+    putenv('FLUXFILES_PROBE_SECRET=leak-me');
+    $proc = proc_open(['sh', '-c', 'printf %s "${FLUXFILES_PROBE_SECRET:-none}"'], [1 => ['pipe', 'w']], $pipes, null, $env);
+    $seen = stream_get_contents($pipes[1]); fclose($pipes[1]); proc_close($proc);
+    putenv('FLUXFILES_PROBE_SECRET');
+    assertTrue($seen === 'none', 'a parent secret does not reach the child');
+});
+
+test('Ghostscript older than the minimum is treated as missing', function () {
+    assertTrue(version_compare('10.04.9', \FluxFiles\PdfOptimizer::MIN_GS_VERSION, '<'), 'floor sanity');
+    $gs = \FluxFiles\PdfOptimizer::binary();
+    if ($gs !== null) {
+        $v = trim((string) shell_exec(escapeshellarg($gs) . ' --version'));
+        assertTrue(version_compare($v, \FluxFiles\PdfOptimizer::MIN_GS_VERSION, '>='), "a found gs is new enough ({$v})");
+    }
+});
+
 if (MediaPoster::available('video')) {
     test('video upload gets a poster frame', function () {
         $tmp = tempnam(sys_get_temp_dir(), 'vid') . '.mp4';

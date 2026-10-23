@@ -111,6 +111,25 @@ try {
         assertEqual(400, $st, 'no Upload-Length');
     });
 
+    test('same user id in another tenant (prefix) cannot touch the upload', function () use ($BASE, $tok, $prefix) {
+        $twin = fluxfiles_token(['user' => 'tus-u', 'perms' => ['read', 'write'], 'disks' => ['local'], 'prefix' => $prefix . '_other']);
+        [, $h] = tus('POST', "{$BASE}/api/fm/tus", $tok, ['Upload-Length' => '10', 'Upload-Metadata' => meta(['filename' => 'b.txt'])]);
+        $loc = $h['location'];
+        [$st] = tus('HEAD', $BASE . $loc, $twin);
+        assertEqual(404, $st, 'HEAD from the twin');
+        [$st] = tus('PATCH', $BASE . $loc, $twin, ['Content-Type' => 'application/offset+octet-stream', 'Upload-Offset' => '0'], '0123456789');
+        assertEqual(404, $st, 'PATCH from the twin');
+        [$st] = tus('DELETE', $BASE . $loc, $tok);
+        assertEqual(204, $st);
+    });
+
+    test('quota is checked at creation, before any byte is staged on the server', function () use ($BASE, $prefix) {
+        $capped = fluxfiles_token(['user' => 'tus-q', 'perms' => ['read', 'write'], 'disks' => ['local'], 'prefix' => $prefix . '_q', 'maxUploadMb' => 10, 'maxStorageMb' => 1]);
+        [$st, $h, $raw] = tus('POST', "{$BASE}/api/fm/tus", $capped, ['Upload-Length' => (string) (2 * 1024 * 1024), 'Upload-Metadata' => meta(['filename' => 'q.bin'])]);
+        assertTrue($st >= 400 && !isset($h['location']), "refused at create ({$st}): {$raw}");
+        assertTrue(strpos($raw, 'quota') !== false, 'quota error');
+    });
+
     test('more bytes than Upload-Length are refused (413) and nothing is stored', function () use ($BASE, $tok, $uploadRoot, $prefix) {
         [, $h] = tus('POST', "{$BASE}/api/fm/tus", $tok, ['Upload-Length' => '4', 'Upload-Metadata' => meta(['filename' => 'four.txt'])]);
         [$st] = tus('PATCH', $BASE . $h['location'], $tok, ['Content-Type' => 'application/offset+octet-stream', 'Upload-Offset' => '0'], 'abcdefgh');

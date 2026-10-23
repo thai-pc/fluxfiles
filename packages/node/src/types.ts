@@ -228,7 +228,7 @@ export interface BaseTokenOptions {
   stripExif?: boolean;
   /** Allow presigned PUT (size is advisory). Default true; false leaves only the size-enforcing POST policy. */
   allowPresignPut?: boolean;
-  /** Render a poster thumbnail for uploaded PDFs/videos (needs gs/ffmpeg on the server). Default true. */
+  /** Render a poster thumbnail for uploaded PDFs/videos (needs gs/ffmpeg on the server). Default false — opt in. */
   mediaPosters?: boolean;
   /** Retention rules (legal-hold module): files under `path` untouched for `days` → trash/delete. */
   retentionRules?: Array<{ path?: string; days: number; action?: 'trash' | 'delete' }>;

@@ -6,12 +6,13 @@ export interface ServerConfig extends Partial<ToolOptions> {
   baseUrl: string;
   token: string;
   fetch?: typeof fetch;
+  allowInsecureHttp?: boolean;
 }
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 
 export function createServer(cfg: ServerConfig): McpServer {
-  const client = new FluxFilesClient({ baseUrl: cfg.baseUrl, token: cfg.token, fetch: cfg.fetch });
+  const client = new FluxFilesClient({ baseUrl: cfg.baseUrl, token: cfg.token, fetch: cfg.fetch, allowInsecureHttp: cfg.allowInsecureHttp });
   const server = new McpServer({ name: 'fluxfiles', version: VERSION });
   const tools = buildTools(client, {
     disk: cfg.disk ?? 'local',

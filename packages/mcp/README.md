@@ -60,6 +60,7 @@ permissions, its quota. No storage credentials are involved.
 | `FLUXFILES_DISK` | Default disk (default `local`) |
 | `FLUXFILES_MCP_WRITE` | `1` to expose the write tools |
 | `FLUXFILES_MCP_DELETE` | `1` (with `WRITE`) to expose `move_to_trash` |
+| `FLUXFILES_MCP_ALLOW_HTTP` | `1` to allow plain `http://` to a non-local host. Off by default — the token would travel in clear text; `localhost` is always allowed |
 
 ## Security notes
 

@@ -88,6 +88,11 @@ final class ExifStripper
                 $removed = true;
             } elseif ($marker === 0xED || $marker === 0xFE) { // APP13 IPTC/Photoshop, COM
                 $removed = true;
+            } elseif ($marker === 0xE2 && strncmp($payload, "MPF\0", 4) === 0) {
+                // APP2 Multi-Picture index: it points at the secondary images appended
+                // after the main one (HDR gain maps, depth/portrait maps) — dropped
+                // together with them below. Other APP2 (the ICC profile) is kept.
+                $removed = true;
             } elseif ($marker === 0xE0 && $app0 === '' && $head === '') {
                 $app0 = $seg;
             } else {
@@ -98,11 +103,70 @@ final class ExifStripper
         if ($pos >= $len) {
             return null; // never reached the scan data
         }
+        // Anything after the main image's EOI is not this image: phones append MPF
+        // secondary JPEGs (each with its OWN EXIF, GPS included) and vendor trailers
+        // there. Keeping "everything from SOS on" carried all of it through untouched.
+        $end = self::jpegImageEnd($b, $pos);
+        if ($end < $len) {
+            $removed = true;
+        }
         if (!$removed) {
             return [$b, false];
         }
         $exif = ($orientation !== null && $orientation !== 1) ? self::minimalExifApp1($orientation) : '';
-        return ["\xFF\xD8" . $app0 . $exif . $head . substr($b, $pos), true];
+        return ["\xFF\xD8" . $app0 . $exif . $head . substr($b, $pos, $end - $pos), true];
+    }
+
+    /**
+     * Offset just past the main image's EOI, walking from its first SOS: between
+     * scans it steps over whole segments (a progressive JPEG has DHT/SOS/… there),
+     * inside entropy-coded data it skips byte stuffing (FF 00), RSTn and fill bytes,
+     * so the first real marker after a scan is found — never an FF D9 that happens
+     * to sit inside a table. Malformed input → strlen (nothing is cut).
+     */
+    private static function jpegImageEnd(string $b, int $pos): int
+    {
+        $len = strlen($b);
+        while ($pos + 1 < $len && $b[$pos] === "\xFF") {
+            $marker = ord($b[$pos + 1]);
+            if ($marker === 0xD9) {
+                return $pos + 2;
+            }
+            if ($marker === 0xFF) {
+                $pos++;
+                continue;
+            }
+            if ($marker === 0x01 || ($marker >= 0xD0 && $marker <= 0xD7)) {
+                $pos += 2;
+                continue;
+            }
+            if ($pos + 4 > $len) {
+                return $len;
+            }
+            $segLen = unpack('n', substr($b, $pos + 2, 2))[1];
+            if ($segLen < 2 || $pos + 2 + $segLen > $len) {
+                return $len;
+            }
+            $pos += 2 + $segLen;
+            if ($marker !== 0xDA) {
+                continue;
+            }
+            // Entropy-coded data until the next real marker.
+            while (true) {
+                $ff = strpos($b, "\xFF", $pos);
+                if ($ff === false || $ff + 1 >= $len) {
+                    return $len;
+                }
+                $next = ord($b[$ff + 1]);
+                if ($next === 0x00 || ($next >= 0xD0 && $next <= 0xD7)) {
+                    $pos = $ff + 2;
+                    continue;
+                }
+                $pos = $ff;
+                break;
+            }
+        }
+        return $len;
     }
 
     /** Orientation (1–8) from a TIFF block (the bytes after "Exif\0\0"), or null. */

@@ -24,8 +24,8 @@ namespace FluxFiles;
  * upload takes (extension rules, quota, virus/DLP scan, strip_exif, variants,
  * metadata, ownership) — so tus is a transport, not a second write path.
  *
- * An upload belongs to the user (and disk) that created it; any other caller
- * gets 404, never a hint that the id exists.
+ * An upload belongs to the user, tenant prefix and disk that created it; any
+ * other caller gets 404, never a hint that the id exists.
  */
 final class TusServer
 {
@@ -67,7 +67,13 @@ final class TusServer
             return [404, $base, null];
         }
         $state = $this->load($id);
-        if ($state === null || $state['user'] !== $claims->userId || $state['expires'] < time()) {
+        // An upload belongs to the token that created it: same user, same tenant
+        // prefix, a disk it may still use. `sub` alone is not unique across tenants
+        // (two tenants can both have a user "1").
+        if ($state === null || $state['user'] !== $claims->userId
+            || ($state['prefix'] ?? null) !== $claims->pathPrefix
+            || !$claims->hasDisk((string) $state['disk'])
+            || $state['expires'] < time()) {
             return [404, $base, null];
         }
         $base['Upload-Expires'] = gmdate('D, d M Y H:i:s \G\M\T', $state['expires']);
@@ -105,14 +111,18 @@ final class TusServer
             throw new ApiException('Permission denied: write', 403, 'permission_denied');
         }
         $fm->validateUploadName($name, $length);
-        $fm->validateUserPath(rtrim($path, '/') . '/' . $name, $disk);
+        $scoped = $fm->validateUserPath(rtrim($path, '/') . '/' . $name, $disk);
+        // Quota, file count, name collision, owner_only and legal hold — the same
+        // pre-flight the S3 chunk API runs. Without it the bytes were staged on
+        // the SERVER's disk first and only refused at the very end.
+        $fm->validateChunkUpload($disk, $scoped, $length, true);
 
         $this->sweep();
         if ($this->activeFor($claims->userId) >= self::MAX_ACTIVE_PER_USER) {
             throw new ApiException('Too many unfinished uploads', 429, 'rate_limited');
         }
         $id = bin2hex(random_bytes(16));
-        $state = ['user' => $claims->userId, 'disk' => $disk, 'path' => $path, 'name' => $name,
+        $state = ['user' => $claims->userId, 'prefix' => $claims->pathPrefix, 'disk' => $disk, 'path' => $path, 'name' => $name,
             'length' => $length, 'offset' => 0, 'expires' => time() + self::EXPIRY_SEC];
         touch($this->part($id));
         @chmod($this->part($id), 0600);

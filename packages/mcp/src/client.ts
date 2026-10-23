@@ -16,6 +16,27 @@ export interface ClientConfig {
   baseUrl: string;
   token: string;
   fetch?: typeof fetch;
+  /** Allow plain `http://` to a non-local host. Off: the token would cross the network in clear text. */
+  allowInsecureHttp?: boolean;
+}
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
+/** Refuse to send the bearer token in clear text, except to this machine. */
+export function assertSafeBaseUrl(baseUrl: string, allowInsecureHttp = false): void {
+  let u: URL;
+  try {
+    u = new URL(baseUrl);
+  } catch {
+    throw new Error(`FLUXFILES_URL is not a valid URL: ${baseUrl}`);
+  }
+  if (u.protocol === 'https:') return;
+  if (u.protocol !== 'http:') throw new Error(`FLUXFILES_URL must be http(s), got ${u.protocol}`);
+  if (LOCAL_HOSTS.has(u.hostname) || allowInsecureHttp) return;
+  throw new Error(
+    `Refusing to send the FluxFiles token over plain http to ${u.hostname} — use https, ` +
+      'or set FLUXFILES_MCP_ALLOW_HTTP=1 if this network is trusted.',
+  );
 }
 
 export class FluxFilesClient {
@@ -23,6 +44,7 @@ export class FluxFilesClient {
   private readonly f: typeof fetch;
 
   constructor(private readonly cfg: ClientConfig) {
+    assertSafeBaseUrl(cfg.baseUrl, cfg.allowInsecureHttp);
     this.base = cfg.baseUrl.replace(/\/+$/, '');
     this.f = cfg.fetch ?? fetch;
   }

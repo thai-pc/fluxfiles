@@ -5,8 +5,12 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [0.3.26] — 2026-10-23
 
-> Released: _pending_ — `core`, `laravel`, `wordpress` + every paid module
-> (their `composer.json` PHP floor changed).
+> Released: `core-v0.2.100`, `laravel-v0.2.50`, `wordpress-v0.2.60`,
+> `mcp-v0.1.1` (two pushes — the ≤3-tags rule). Paid modules (own repos, every
+> one's PHP floor changed): `share v1.2.2`, `intake v1.3.1`, `versioning v1.2.1`,
+> `webhooks v1.1.2`, `ai v1.1.2`, `ocr v1.1.1`, `virus v1.1.1`, `backup v1.2.1`,
+> `c2pa v1.1.2`, `audit-export v1.0.1`, `sso v2.0.1`, `dlp v1.0.1`,
+> `legal-hold v1.0.1`.
 
 ### Changed — PHP requirement
 
@@ -25,12 +29,37 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Security
 
+- **`strip_exif` let GPS through on phone photos**: JPEGs from recent phones carry
+  an APP2 "MPF" index and secondary images (HDR gain map, depth map) appended
+  after the main image, each with its OWN EXIF. Everything after the scan data
+  was kept, so their GPS survived. The main image's EOI is now located properly
+  (scans walked, stuffing/RST skipped) and anything after it — MPF images,
+  vendor trailers — is cut; the MPF index goes too, the ICC profile stays.
+- **`media_posters` is now opt-in** (default `false`): it ran Ghostscript and
+  ffmpeg on every uploaded PDF/video. Ghostscript older than **10.05.0** is
+  treated as not installed (published `-dSAFER` bypasses) — for posters and PDF
+  optimize alike.
+- **External tools get a minimal environment** (PATH/HOME/TMPDIR/LANG): gs,
+  ffmpeg, ssh, tesseract, c2patool and clamdscan used to inherit every
+  environment variable — `FLUXFILES_SECRET` and cloud keys in a container deploy.
+- **tus**: quota, file count, name collision, owner_only and legal hold are
+  checked when the upload is created (bytes were staged on the server first and
+  refused only at the end), and an upload is bound to the creating token's
+  tenant prefix and disk, not just its `sub` (two tenants can share a user id).
+- **`@fluxfiles/mcp` 0.1.1** refuses plain `http://` to a non-local host — the
+  bearer token would cross the network in clear text
+  (`FLUXFILES_MCP_ALLOW_HTTP=1` to override on a trusted network).
 - Secrets, passwords, bearer tokens and credentials passed as function arguments
   are marked `#[\SensitiveParameter]` (PHP 8.2), so they show as
   `SensitiveParameterValue` instead of plaintext in stack traces and error logs.
 
 ### Fixed
 
+- **Lock files**: the Laravel lock pinned core 0.2.79 and the WordPress lock
+  0.2.36 against a `^0.2.88` floor (`composer validate` failed), which silently
+  broke `test-laravel-db-metadata.php`. Both refreshed; a new CI job fails on
+  any such drift and runs the Laravel DB test. (The WordPress ZIP is built from
+  core's lock, so no released plugin was affected.)
 - `/api/fm/img`: an image whose header is valid but whose body can't be decoded
   (truncated/corrupt) was an uncaught fatal 500; it is now treated like any other
   untransformable file (415 for a preview-only token, the original otherwise).

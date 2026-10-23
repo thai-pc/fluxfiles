@@ -448,7 +448,7 @@ final class SshMultiplexer
     private static function execProcess(array $args, int $timeoutSec): array
     {
         $desc = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']];
-        $proc = @proc_open($args, $desc, $pipes);
+        $proc = @proc_open($args, $desc, $pipes, null, ProcessEnv::minimal());
         if (!is_resource($proc)) {
             return ['stdout' => '', 'exit' => -1, 'timed_out' => false];
         }

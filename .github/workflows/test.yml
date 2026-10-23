@@ -73,6 +73,41 @@ jobs:
       - name: Laravel adapter smoke (stubbed Laravel, uses core autoload)
         run: php packages/laravel/tests/test-laravel-smoke.php
 
+  # Lock files that drift from their composer.json slip by every other job (they
+  # all run `composer update` or load core's autoload): the Laravel lock once
+  # pinned core 0.2.79 and the WordPress lock 0.2.36 against a ^0.2.88 floor, and
+  # test-laravel-db-metadata.php — which runs on that lock — was silently broken.
+  lockfiles-and-laravel-db:
+    name: Lock files valid + Laravel DB adapter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip, pdo, pdo_sqlite
+          coverage: none
+          tools: composer
+
+      - name: composer.json and composer.lock agree (core, laravel, wordpress)
+        run: |
+          set -e
+          for d in core laravel wordpress; do
+            echo "::group::$d"
+            composer validate --no-check-publish --strict -d "packages/$d"
+            echo "::endgroup::"
+          done
+
+      - name: Install Laravel adapter dependencies (from its lock)
+        run: composer install -d packages/laravel --prefer-dist --no-interaction --no-progress
+
+      - name: Laravel DB metadata handler (SQLite via illuminate/database)
+        run: php packages/laravel/tests/test-laravel-db-metadata.php
+
   adapter-core-floor:
     name: Adapter ↔ core floor guard
     runs-on: ubuntu-latest

@@ -29,22 +29,57 @@ final class PdfOptimizer
     /** @var string|null|false memoized resolved binary path (false = not looked up). */
     private static $binary = false;
 
-    /** Locate the `gs` binary, or null when Ghostscript isn't installed. */
+    /**
+     * Oldest Ghostscript we will run on an uploaded PDF. -dSAFER is the only thing
+     * between a hostile PDF and the server, and older releases have published
+     * SAFER bypasses; a too-old gs is treated exactly like a missing one.
+     */
+    public const MIN_GS_VERSION = '10.05.0';
+
+    /**
+     * Locate a `gs` binary that is new enough (MIN_GS_VERSION), or null when
+     * Ghostscript isn't installed or is too old to trust with untrusted PDFs.
+     */
     public static function binary(): ?string
     {
         if (self::$binary !== false) {
             return self::$binary;
         }
+        $found = null;
         // Common absolute locations first (no shell), then `command -v` as a fallback.
         foreach (['/usr/bin/gs', '/usr/local/bin/gs', '/opt/homebrew/bin/gs', '/bin/gs'] as $cand) {
             if (@is_executable($cand)) {
-                return self::$binary = $cand;
+                $found = $cand;
+                break;
             }
         }
-        // `command -v gs` carries no user input, so this is safe.
-        $found = @trim((string) @shell_exec('command -v gs 2>/dev/null'));
-        self::$binary = ($found !== '' && @is_executable($found)) ? $found : null;
-        return self::$binary;
+        if ($found === null) {
+            // `command -v gs` carries no user input, so this is safe.
+            $cmd = @trim((string) @shell_exec('command -v gs 2>/dev/null'));
+            $found = ($cmd !== '' && @is_executable($cmd)) ? $cmd : null;
+        }
+        if ($found !== null) {
+            $version = self::version($found);
+            if ($version === null || version_compare($version, self::MIN_GS_VERSION, '<')) {
+                error_log('FluxFiles: Ghostscript ' . ($version ?? '(unknown version)') . ' is older than '
+                    . self::MIN_GS_VERSION . ' — PDF optimize/posters are disabled until it is upgraded.');
+                $found = null;
+            }
+        }
+        return self::$binary = $found;
+    }
+
+    /** `gs --version` → "10.07.1", or null when it can't be read. */
+    private static function version(string $gs): ?string
+    {
+        $proc = @proc_open([$gs, '--version'], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, null, ProcessEnv::minimal());
+        if (!is_resource($proc)) {
+            return null;
+        }
+        $out = trim((string) stream_get_contents($pipes[1]));
+        fclose($pipes[1]);
+        proc_close($proc);
+        return preg_match('/^\d+\.\d+(\.\d+)?$/', $out) ? $out : null;
     }
 
     public static function available(): bool
@@ -106,7 +141,7 @@ final class PdfOptimizer
                 1 => ['file', '/dev/null', 'w'],
                 2 => ['file', '/dev/null', 'w'],
             ];
-            $proc = @proc_open($args, $desc, $pipes);
+            $proc = @proc_open($args, $desc, $pipes, null, ProcessEnv::minimal());
             if (!is_resource($proc)) {
                 return null;
             }

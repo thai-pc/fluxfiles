@@ -161,7 +161,7 @@ function mint(claims) {
   return execFileSync('php', [join(here, 'lib', 'mint.php'), JSON.stringify(claims)],
     { env: { ...process.env, FF_SHOT_SECRET: SECRET } }).toString().trim();
 }
-const BASE_CLAIMS = { perms: ['read', 'write', 'delete', 'audit'], disks: ['local'], prefix: '', max_upload: 10 };
+const BASE_CLAIMS = { perms: ['read', 'write', 'delete', 'audit'], disks: ['local'], prefix: '', max_upload: 10, media_posters: true };
 const tokenFor = (sub, extra = {}) => mint({ ...BASE_CLAIMS, sub, ...extra });
 
 async function api(token, method, path, body) {

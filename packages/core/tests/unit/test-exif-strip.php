@@ -107,6 +107,46 @@ test('JPEG without metadata is returned unchanged (idempotent)', function () {
     assertTrue($r !== null && !$r['removed'] && $r['data'] === $clean, 'untouched');
 });
 
+test('JPEG: MPF secondary images (with their own GPS EXIF) after EOI are cut', function () {
+    // Phone HDR/portrait JPEGs: an APP2 "MPF" index + secondary JPEGs appended after
+    // the main image, each carrying its own EXIF (GPS included).
+    $main = jpegWithMetadata(1);
+    $main = substr($main, 0, 2) . seg(0xE2, "MPF\0" . str_repeat("\0", 40)) . substr($main, 2);
+    $secondary = jpegWithMetadata(1);
+    $in = $main . $secondary;
+    $r = ExifStripper::strip($in);
+    assertTrue($r !== null && $r['removed'], 'stripped');
+    $out = $r['data'];
+    foreach (['Exif', 'GPSLatitude', "MPF\0"] as $needle) {
+        assertTrue(strpos($out, $needle) === false, "{$needle} gone (secondary image included)");
+    }
+    assertTrue(substr_count($out, "\xFF\xD8") === 1, 'only the main image is left');
+    assertTrue(substr($out, -2) === "\xFF\xD9", 'ends at the main EOI');
+    assertTrue(imagecreatefromstring($out) !== false, 'still decodes');
+});
+
+test('JPEG: progressive scans survive intact; a vendor trailer is cut', function () {
+    $im = gdImage();
+    imageinterlace($im, true);
+    ob_start(); imagejpeg($im, null, 90); $jpg = (string) ob_get_clean();
+    assertTrue(substr_count($jpg, "\xFF\xDA") > 1, 'fixture: several scans');
+    $clean = ExifStripper::strip($jpg)['data']; // drops GD's COM segment
+    $body = substr($clean, strpos($clean, "\xFF\xDA"));
+    $r = ExifStripper::strip($clean . 'SEFHsamsung-trailer-with-location');
+    assertTrue($r['removed'], 'trailer counts as removed');
+    assertTrue(substr($r['data'], strpos($r['data'], "\xFF\xDA")) === $body, 'every scan byte-identical');
+    assertTrue(strpos($r['data'], 'SEFH') === false, 'trailer gone');
+    assertTrue(imagecreatefromstring($r['data']) !== false, 'still decodes');
+});
+
+test('JPEG: an ICC profile in APP2 is still kept', function () {
+    $icc = seg(0xE2, "ICC_PROFILE\0\x01\x01" . str_repeat('P', 32));
+    $in = jpegWithMetadata(1);
+    $in = substr($in, 0, 2) . $icc . substr($in, 2);
+    $out = ExifStripper::strip($in)['data'];
+    assertTrue(strpos($out, 'ICC_PROFILE') !== false, 'colour profile kept');
+});
+
 test('PNG: eXIf and text chunks are removed, iCCP-style chunks kept', function () {
     ob_start(); imagepng(gdImage()); $png = (string) ob_get_clean();
     $at = 8 + 12 + 13; // after the IHDR chunk

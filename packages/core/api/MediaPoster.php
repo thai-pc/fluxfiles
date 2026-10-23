@@ -46,7 +46,7 @@ final class MediaPoster
 
     public static function available(string $kind): bool
     {
-        return self::binary($kind === 'pdf' ? 'gs' : 'ffmpeg') !== null;
+        return ($kind === 'pdf' ? PdfOptimizer::binary() : self::binary('ffmpeg')) !== null;
     }
 
     /**
@@ -65,7 +65,7 @@ final class MediaPoster
         }
         try {
             if ($kind === 'pdf') {
-                $gs = self::binary('gs');
+                $gs = PdfOptimizer::binary(); // shared lookup, incl. its minimum-version gate
                 if ($gs === null || strncmp((string) @file_get_contents($srcPath, false, null, 0, 5), '%PDF-', 5) !== 0) {
                     return null;
                 }
@@ -98,7 +98,7 @@ final class MediaPoster
     private static function exec(array $args): bool
     {
         $desc = [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']];
-        $proc = @proc_open($args, $desc, $pipes);
+        $proc = @proc_open($args, $desc, $pipes, null, ProcessEnv::minimal());
         if (!is_resource($proc)) {
             return false;
         }
