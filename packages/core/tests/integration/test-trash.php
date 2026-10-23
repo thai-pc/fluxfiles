@@ -55,7 +55,6 @@ function makeObjStoreFM(): array
     $dm = new DiskManager(['objstore' => ['driver' => 's3', 'bucket' => 'fake']]);
     $fs = new \League\Flysystem\Filesystem(new \League\Flysystem\Local\LocalFilesystemAdapter($root));
     $p = new \ReflectionProperty(DiskManager::class, 'disks');
-    $p->setAccessible(true);
     $p->setValue($dm, ['objstore' => $fs]);
 
     $meta = new StorageMetadataHandler($dm);
@@ -256,7 +255,7 @@ test('trash keeps image variants of a folder subtree and restore brings them bac
     [$fm, $fs] = makeFM();
     $png = imagecreatetruecolor(60, 40);
     $tmp = sys_get_temp_dir() . '/fxt-' . uniqid() . '.png';
-    imagepng($png, $tmp); imagedestroy($png);
+    imagepng($png, $tmp);
     $fm->upload('local', 'gallery', ['name' => 'a.png', 'tmp_name' => $tmp, 'size' => filesize($tmp), 'error' => 0], true);
     assertTrue($fs->fileExists('gallery/_variants/a.png_thumb.webp'), 'variant created');
     $fm->mkdir('local', 'gallery/empty_sub');

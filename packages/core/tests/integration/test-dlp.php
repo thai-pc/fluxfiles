@@ -76,7 +76,7 @@ const FAKE_SSN = '123-45-6789';
 
 /** Marks any file whose bytes contain FAKE_SSN as PII-bearing — the shape the real
  *  module returns per §6.2: 'entities' carries ONLY deduped type names, never text. */
-function fakeScanner(array &$seen = null): callable {
+function fakeScanner(?array &$seen = null): callable {
     return function (string $path, string $name) use (&$seen): array {
         if ($seen !== null) { $seen[] = basename($path); }
         $bytes = (string) @file_get_contents($path);

@@ -86,7 +86,6 @@ test('non-private local → static URL even with a secret', function () {
 test('gated local has NO permanent URL (private → null)', function () {
     [$fm] = makeFM(true, true);
     $m = new \ReflectionMethod($fm, 'permanentUrl');
-    $m->setAccessible(true);
     $cfg = new \ReflectionMethod($fm, 'isGatedLocal');
     assertEqual(null, $m->invoke($fm, 'local', 'album/clip.mp4'), 'gated → no permanent url');
 });
@@ -94,7 +93,6 @@ test('gated local has NO permanent URL (private → null)', function () {
 test('non-gated local still has a permanent URL', function () {
     [$fm] = makeFM(false, true);
     $m = new \ReflectionMethod($fm, 'permanentUrl');
-    $m->setAccessible(true);
     assertEqual('/storage/uploads/album/clip.mp4', $m->invoke($fm, 'local', 'album/clip.mp4'));
 });
 
@@ -107,7 +105,6 @@ function makeImgFM(bool $webpEnabled, bool $withSecret): array
     @mkdir($root . '/pics', 0777, true);
     $im = imagecreatetruecolor(40, 30);
     imagejpeg($im, $root . '/pics/a.jpg', 80);
-    imagedestroy($im);
     file_put_contents($root . '/pics/notes.txt', 'x');
 
     $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage/uploads']]);
@@ -161,7 +158,6 @@ test('watermark claim → img_base token carries the watermark config', function
     [$fm] = makeImgFM(true, true);
     // Set the watermark on the claims the FM already holds (reflection — claims is private).
     $cl = (new \ReflectionObject($fm))->getProperty('claims');
-    $cl->setAccessible(true);
     $cl->getValue($fm)->watermark = ['enabled' => true, 'type' => 'text', 'text' => 'WM', 'position' => 'center', 'opacity' => 0.6, 'font_size' => 24];
 
     $a = picEntry($fm, 'a.jpg');
@@ -180,7 +176,6 @@ function makeDownloadFM(bool $allowDownload): array
     @mkdir($root . '/pics', 0777, true);
     $im = imagecreatetruecolor(40, 30);
     imagejpeg($im, $root . '/pics/a.jpg', 80);
-    imagedestroy($im);
 
     $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/storage/uploads']]);
     $claims = new Claims('u1', ['read', 'write'], ['local'], '', 50, null, 0);

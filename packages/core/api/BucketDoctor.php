@@ -352,7 +352,6 @@ class BucketDoctor
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             return [$code, is_string($body) ? $body : ''];
         } finally {
-            curl_close($ch);
         }
     }
 

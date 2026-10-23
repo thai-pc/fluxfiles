@@ -102,7 +102,7 @@ function req(string $method, string $url, string $tok, $body = null, array $extr
     }
     $opts[CURLOPT_HTTPHEADER] = $headers;
     curl_setopt_array($ch, $opts);
-    $raw = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    $raw = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     return [$st, json_decode((string) $raw, true), (string) $raw];
 }
 /** Audit entries written by $user since the run started. */

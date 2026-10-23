@@ -81,7 +81,7 @@ test('crossMove: moves file (dst created, src deleted) + metadata', function () 
 test('crossCopy: image variants transferred to the destination disk', function () {
     [$fm, $ra, $rb, $meta] = makeCD();
     $im = imagecreatetruecolor(300, 200); imagefilledrectangle($im, 0, 0, 299, 199, imagecolorallocate($im, 9, 130, 210));
-    imagepng($im, $ra . '/pic.png'); imagedestroy($im);
+    imagepng($im, $ra . '/pic.png');
     // a variant beside the source (as upload would have produced)
     @mkdir($ra . '/_variants', 0777, true);
     file_put_contents($ra . '/_variants/pic.png_thumb.webp', 'WEBPDATA');

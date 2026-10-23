@@ -77,7 +77,6 @@ for ($i = 0; $i < 50; $i++) {
 $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => sys_get_temp_dir(), 'url' => '/storage']]);
 $doctor = new BucketDoctor($dm);
 $httpGet = new \ReflectionMethod($doctor, 'httpGet');
-$httpGet->setAccessible(true);
 
 echo "\n{$yellow}══ BucketDoctor httpGet() — SSRF hardening ══{$reset}\n\n";
 

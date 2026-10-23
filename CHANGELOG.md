@@ -3,6 +3,34 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.34] — 2026-10-24
+
+> Released: `core-v0.2.108`, `wordpress-v0.2.68` (the plugin bundles core).
+> Paid modules (own repos, deprecation clean-up only): `webhooks v1.1.3`,
+> `ai v1.2.1`, `virus v1.2.1`, `sso v2.1.1`, `dlp v1.0.3`, `audit-export v1.0.3`.
+
+### Added
+
+- **PHP 8.5 in CI.** The `core-php`, `api-e2e` and `selfboot-e2e` jobs now
+  run on 8.2, 8.3, 8.4 and 8.5. `make test-all` covers 8.5 as well. The whole
+  suite was run on PHP 8.5.12 before switching it on: 131 suites (core unit,
+  integration and self-booting e2e, the paid modules, the Laravel and
+  WordPress adapters, the license server) all pass, with no deprecation left.
+
+### Fixed
+
+- **PHP 8.5 deprecations.** Removed calls that have done nothing since PHP
+  8.0/8.1 and now warn: `imagedestroy()`, `curl_close()`,
+  `ReflectionProperty/ReflectionMethod::setAccessible()`. The CSV functions
+  now pass `escape` explicitly, keeping today's `"\"`, so exported and
+  imported CSV is byte-for-byte unchanged. Two test helpers declare their
+  nullable parameter explicitly. Covers core, the paid modules and the
+  license server.
+- `make test` / `make test-php`: the test image ships no `php.ini`, so
+  `display_errors` was on and a warning landed in `test-share-public`'s
+  captured stream. Errors now go to stderr, as in CI. This affected every PHP
+  version, not just 8.5.
+
 ## [0.3.33] — 2026-10-23
 
 > Released: `core-v0.2.107`, `laravel-v0.2.53`, `wordpress-v0.2.67`.

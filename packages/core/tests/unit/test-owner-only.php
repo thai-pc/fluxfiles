@@ -127,7 +127,6 @@ class MockMetadataRepository implements MetadataRepositoryInterface
 function callAssertOwner(FileManager $fm, string $disk, string $scopedPath): void
 {
     $ref = new ReflectionMethod($fm, 'assertOwner');
-    $ref->setAccessible(true);
     $ref->invoke($fm, $disk, $scopedPath);
 }
 

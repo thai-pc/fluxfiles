@@ -42,7 +42,7 @@ for ($i = 0; $i < 50; $i++) { $c = @fsockopen('127.0.0.1', $PORT, $e, $s, 0.2); 
 function http(string $url, array $headers = []): array {
     $ch = curl_init($url);
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => $headers]);
-    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     return [$st, json_decode((string) $body, true)];
 }
 function upload(string $base, string $tok, string $disk, string $path, string $file, string $mime): void {
@@ -51,7 +51,7 @@ function upload(string $base, string $tok, string $disk, string $path, string $f
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}"],
         CURLOPT_POSTFIELDS => ['disk' => $disk, 'path' => $path, 'file' => new CURLFile($tmp, $mime, basename($path) ?: 'f')]]);
-    curl_exec($ch); curl_close($ch); @unlink($tmp);
+    curl_exec($ch);@unlink($tmp);
 }
 
 echo "\n{$cyan}══ Usage dashboard over HTTP (M2 e2e) ══{$reset}\n\n";

@@ -57,7 +57,6 @@ function httpPost(string $url, array $json, string $bearer): array {
     $body = curl_exec($ch);
     $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $ct = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-    curl_close($ch);
     return [$st, (string) $ct, (string) $body];
 }
 

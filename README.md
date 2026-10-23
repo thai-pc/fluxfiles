@@ -1451,7 +1451,7 @@ php packages/laravel/tests/test-laravel-smoke.php   # (and wordpress)
 bash scripts/pack-smoke.sh all                       # verifies the published dist/types
 
 # Docker — clean-container runs across a PHP matrix
-make test PHP=8.4   # one version  ·  make test-all  # 8.2–8.4  ·  make up  # app:8080 + S3:4566
+make test PHP=8.5   # one version  ·  make test-all  # 8.2–8.5  ·  make up  # app:8080 + S3:4566
 ```
 
 `.github/workflows/test.yml` runs all of this (16 jobs, including dedicated

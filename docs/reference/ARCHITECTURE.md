@@ -215,7 +215,7 @@ Notes:
 
 ## 6. CI map (`.github/workflows/test.yml`, 16 jobs)
 
-`core-php` (unit+integration, PHP 8.2–8.4) · `lockfiles-and-laravel-db` (every
+`core-php` (unit+integration, PHP 8.2–8.5) · `lockfiles-and-laravel-db` (every
 `composer.lock` agrees with its `composer.json`; Laravel DB adapter test) ·
 **`adapter-core-floor`** (PHP floors are honest) · `iframe-allow` · `api-e2e` ·
 `selfboot-e2e` (every `tests/e2e/*-http.php` + `test-sftp-live.php`, boots its own

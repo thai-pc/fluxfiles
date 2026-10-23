@@ -68,7 +68,6 @@ function req(string $method, string $url, array $opt = []): array {
     curl_setopt_array($ch, $o);
     $body = (string) curl_exec($ch);
     $st = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     return [$st, $hdr, $body];
 }
 /** @return array{0:int,1:array<string,string>,2:array<string,mixed>|null} */
@@ -117,7 +116,6 @@ file_put_contents("{$uploadRoot}/{$PREFIX}/notes.txt", 'plain text');
 $im = imagecreatetruecolor(400, 300);
 imagefilledrectangle($im, 0, 0, 399, 299, imagecolorallocate($im, 30, 120, 200));
 imagepng($im, "{$uploadRoot}/{$PREFIX}/photo.png");
-imagedestroy($im);
 
 $envFile = $coreDir . '/.env';
 $envBackup = is_file($envFile) ? file_get_contents($envFile) : null;

@@ -38,7 +38,6 @@ $uploadRoot = $coreDir . '/storage/uploads';
 $im = imagecreatetruecolor(1200, 800);
 imagefilledrectangle($im, 0, 0, 1199, 799, imagecolorallocate($im, 200, 100, 50));
 imagejpeg($im, $uploadRoot . '/e2e_img/photo.jpg', 92);
-imagedestroy($im);
 
 $envFile = $coreDir . '/.env';
 $envBackup = is_file($envFile) ? file_get_contents($envFile) : null;
@@ -60,7 +59,7 @@ function httpGet(string $url, array $headers = []): array {
             return strlen($line);
         },
     ]);
-    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     return [$st, $hdr, (string) $body];
 }
 function isWebp(string $b): bool { return strncmp($b, 'RIFF', 4) === 0 && substr($b, 8, 4) === 'WEBP'; }
@@ -209,7 +208,7 @@ try {
         $lg = imagecreatetruecolor(60, 30); imagesavealpha($lg, true);
         imagefill($lg, 0, 0, imagecolorallocatealpha($lg, 0, 0, 0, 127));
         imagefilledrectangle($lg, 2, 2, 57, 27, imagecolorallocate($lg, 255, 255, 255));
-        imagepng($lg, $uploadRoot . '/e2e_img/_config/logo.png'); imagedestroy($lg);
+        imagepng($lg, $uploadRoot . '/e2e_img/_config/logo.png');
 
         $wm = ['enabled' => true, 'type' => 'logo', 'logo_path' => 'e2e_img/_config/logo.png', 'position' => 'top-left', 'opacity' => 0.8];
         $t = ImageToken::mint('local', 'e2e_img/photo.jpg', 'e2e', 300, $SECRET, 2000, 0, $wm);
@@ -241,7 +240,6 @@ try {
         $im = imagecreatetruecolor(8, 8);
         imagefill($im, 0, 0, imagecolorallocate($im, 10, 20, 30));
         ob_start(); imagegif($im); $frame = (string) ob_get_clean();
-        imagedestroy($im);
         // ImageOptimizer::isAnimatedGif() counts Graphic Control Extension
         // blocks, so splice two in ahead of the image descriptor (GD still
         // decodes the file — an unknown-to-it extension block is skipped).

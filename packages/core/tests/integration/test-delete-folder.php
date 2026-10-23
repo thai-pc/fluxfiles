@@ -43,7 +43,7 @@ function imgFile(int $w, int $h): string
     $im = imagecreatetruecolor($w, $h);
     imagefilledrectangle($im, 0, 0, $w, $h, imagecolorallocate($im, 40, 120, 200));
     $p = sys_get_temp_dir() . '/fxdf-' . uniqid() . '.png';
-    imagepng($im, $p); imagedestroy($im);
+    imagepng($im, $p);
     return $p;
 }
 function up(FileManager $fm, string $dir, string $name, string $tmp): void

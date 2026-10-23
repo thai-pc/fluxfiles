@@ -47,7 +47,7 @@ function tus(string $method, string $url, string $tok, array $headers = [], stri
             return strlen($line);
         }]);
     if ($body !== '') { curl_setopt($ch, CURLOPT_POSTFIELDS, $body); }
-    $raw = (string) curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    $raw = (string) curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     return [$st, $out, $raw];
 }
 function meta(array $kv): string {
@@ -150,7 +150,7 @@ try {
         $ch = curl_init("{$BASE}/api/fm/tus");
         curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'POST', CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}", 'Tus-Resumable: 0.2.2', 'Upload-Length: 1']]);
-        curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         assertEqual(412, $st);
         [, $h] = tus('POST', "{$BASE}/api/fm/tus", $tok, ['Upload-Length' => '2', 'Upload-Metadata' => meta(['filename' => 'b.txt'])]);
         [$st] = tus('PATCH', $BASE . $h['location'], $tok, ['Content-Type' => 'text/plain', 'Upload-Offset' => '0'], 'hi');

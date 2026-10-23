@@ -96,7 +96,6 @@ function png(int $w = 64, int $h = 48): string {
     imagefilledrectangle($im, 0, 0, $w, $h, imagecolorallocate($im, 200, 40, 40));
     ob_start();
     imagepng($im);
-    imagedestroy($im);
     return (string) ob_get_clean();
 }
 
@@ -108,7 +107,6 @@ function noisyJpeg(string $path, int $w = 400, int $h = 300): void {
             imagecolorallocate($im, random_int(0, 255), random_int(0, 255), random_int(0, 255)));
     }
     imagejpeg($im, $path, 92);
-    imagedestroy($im);
 }
 
 echo "\n{$cyan}══ 2026-10-23 free-core audit: FileManager / Optimize / UrlImporter ══{$reset}\n\n";

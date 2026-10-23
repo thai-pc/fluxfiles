@@ -131,9 +131,8 @@ final class UrlImporter
             try {
                 SsrfGuard::assertConnectedIpSafe($ch, $safeIps);
             } catch (ApiException $e) {
-                curl_close($ch); fclose($fh); throw $e;
+fclose($fh); throw $e;
             }
-            curl_close($ch);
             fclose($fh);
 
             if ($ok === false) {

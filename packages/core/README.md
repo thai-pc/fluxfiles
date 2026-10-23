@@ -11,7 +11,7 @@ This package provides:
 
 ## Requirements
 
-- PHP >= 8.2.35 — the latest security-patched 8.2 (8.3/8.4 also supported). 8.1 is end-of-life.
+- PHP >= 8.2.35 — the latest security-patched 8.2 (8.3/8.4/8.5 also supported). 8.1 is end-of-life.
 - Composer >= 2
 - Optional: Ghostscript ≥ 10.05.0 (PDF optimize / posters), ffmpeg (video posters)
 

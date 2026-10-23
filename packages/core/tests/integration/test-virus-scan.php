@@ -63,7 +63,7 @@ function uploadFile(string $name, string $bytes): array {
 }
 /** Marks any file whose bytes contain NEEDLE as infected — the shape the module returns. */
 const NEEDLE = 'X5O!P%@AP-FAKE-TEST-SIGNATURE';
-function fakeScanner(array &$seen = null): callable {
+function fakeScanner(?array &$seen = null): callable {
     return function (string $path) use (&$seen): array {
         if ($seen !== null) { $seen[] = basename($path); }
         $bytes = (string) @file_get_contents($path);

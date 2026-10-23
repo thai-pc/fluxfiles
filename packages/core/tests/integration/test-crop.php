@@ -41,7 +41,6 @@ function placeImage(string $root, string $rel, int $w, int $h, string $fmt = 'pn
         case 'webp': imagewebp($im, $f); break;
         default: imagepng($im, $f);
     }
-    imagedestroy($im);
 }
 function makeFM(array $perms = ['read', 'write', 'delete']): array
 {

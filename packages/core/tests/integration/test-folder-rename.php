@@ -54,7 +54,7 @@ function imgFile(int $w, int $h): string
     $im = imagecreatetruecolor($w, $h);
     imagefilledrectangle($im, 0, 0, $w, $h, imagecolorallocate($im, 40, 120, 200));
     $p = sys_get_temp_dir() . '/fxfr-' . uniqid() . '.png';
-    imagepng($im, $p); imagedestroy($im);
+    imagepng($im, $p);
     return $p;
 }
 function up(FileManager $fm, string $dir, string $name, string $tmp): void
@@ -276,7 +276,6 @@ function walkMove(string $root, string $from, string $to): void
     $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
 
     $m = new \ReflectionMethod(FileManager::class, 'moveDirectoryTree');
-    $m->setAccessible(true);
     $m->invoke($fm, 'objstore', $dm->disk('local'), $from, $to);
 }
 

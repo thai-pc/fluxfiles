@@ -41,7 +41,6 @@ function makeJpeg(int $width = 1000, int $height = 600): string
     imagefilledrectangle($im, 0, 0, $width, $height, imagecolorallocate($im, 40, 120, 200));
     $p = tempnam(sys_get_temp_dir(), 'fxti') . '.jpg';
     imagejpeg($im, $p, 85);
-    imagedestroy($im);
     return $p;
 }
 

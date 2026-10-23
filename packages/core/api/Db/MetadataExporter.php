@@ -63,7 +63,7 @@ class MetadataExporter
     {
         $count = 0;
         if ($format === 'csv') {
-            fputcsv($handle, self::COLUMNS);
+            fputcsv($handle, self::COLUMNS, escape: '\\');
         }
         foreach ($this->rows($disk, $prefix, $owner) as $row) {
             if ($format === 'csv') {
@@ -71,7 +71,7 @@ class MetadataExporter
                 foreach (self::COLUMNS as $col) {
                     $ordered[] = $row[$col] ?? '';
                 }
-                fputcsv($handle, $ordered);
+                fputcsv($handle, $ordered, escape: '\\');
             } else {
                 fwrite($handle, json_encode($row, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
             }

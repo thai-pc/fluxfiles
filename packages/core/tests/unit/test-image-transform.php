@@ -35,7 +35,6 @@ function jpegBytes(int $w, int $h): string
     $im = imagecreatetruecolor($w, $h);
     imagefilledrectangle($im, 0, 0, $w - 1, $h - 1, imagecolorallocate($im, 120, 60, 200));
     ob_start(); imagejpeg($im, null, 90); $b = ob_get_clean();
-    imagedestroy($im);
     return (string) $b;
 }
 
@@ -45,7 +44,6 @@ function pngBytes(int $w, int $h): string
     $im = imagecreatetruecolor($w, $h);
     imagefilledrectangle($im, 0, 0, $w - 1, $h - 1, imagecolorallocate($im, 30, 200, 90));
     ob_start(); imagepng($im); $b = ob_get_clean();
-    imagedestroy($im);
     return (string) $b;
 }
 
@@ -122,7 +120,7 @@ test('transform: decompression-bomb (huge declared dimensions) → null', functi
 // ── isAnimatedGif ─────────────────────────────────────────────────────────
 test('isAnimatedGif: static GIF (GD, 1 frame) → false', function () {
     $im = imagecreatetruecolor(4, 4);
-    ob_start(); imagegif($im); $gif = ob_get_clean(); imagedestroy($im);
+    ob_start(); imagegif($im); $gif = ob_get_clean();
     assertEqual(false, ImageOptimizer::isAnimatedGif((string) $gif), 'single-frame is not animated');
 });
 
@@ -161,7 +159,6 @@ function pngLogo(int $w = 80, int $h = 40): string
     imagefill($im, 0, 0, imagecolorallocatealpha($im, 0, 0, 0, 127)); // transparent
     imagefilledrectangle($im, 4, 4, $w - 5, $h - 5, imagecolorallocate($im, 250, 250, 250));
     ob_start(); imagepng($im); $b = ob_get_clean();
-    imagedestroy($im);
     return (string) $b;
 }
 
@@ -200,19 +197,18 @@ test('burnWatermark: logo over a TRANSPARENT png keeps its color (alpha-blend re
     // PNG base — fine on JPEG (no alpha). We bake opacity into the logo's alpha instead.
     $lg = imagecreatetruecolor(80, 40);
     imagefilledrectangle($lg, 0, 0, 79, 39, imagecolorallocate($lg, 0, 150, 220)); // bright blue
-    ob_start(); imagepng($lg); $logo = (string) ob_get_clean(); imagedestroy($lg);
+    ob_start(); imagepng($lg); $logo = (string) ob_get_clean();
 
     $im = imagecreatetruecolor(300, 200);
     imagesavealpha($im, true);
     imagefill($im, 0, 0, imagecolorallocatealpha($im, 0, 0, 0, 127)); // fully transparent base
-    ob_start(); imagepng($im); $base = (string) ob_get_clean(); imagedestroy($im);
+    ob_start(); imagepng($im); $base = (string) ob_get_clean();
 
     $r = $opt->burnWatermark($base, ['type' => 'logo', 'logo_data' => $logo, 'x' => 0.1, 'y' => 0.1, 'scale' => 0.4, 'opacity' => 0.6], 'png');
     assertTrue(strncmp($r['data'], "\x89PNG", 4) === 0, 'valid PNG');
     $img = imagecreatefromstring($r['data']);
     $px = imagecolorat($img, (int) round(0.1 * $r['width']) + 12, (int) round(0.1 * $r['height']) + 12);
     [$rr, $gg, $bb] = [($px >> 16) & 255, ($px >> 8) & 255, $px & 255];
-    imagedestroy($img);
     // Before the fix this came out dark navy (~0,75,110). The logo's blue must survive.
     assertTrue($rr < 40 && $gg > 120 && $bb > 180, "logo color preserved over transparency, got {$rr},{$gg},{$bb}");
 });

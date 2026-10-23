@@ -280,7 +280,7 @@ test('extract registers files: metadata + search index + image variants', functi
 
     // a real PNG (big enough to generate variants) + a text file
     $im = imagecreatetruecolor(400, 300); imagefilledrectangle($im, 0, 0, 399, 299, imagecolorallocate($im, 10, 120, 200));
-    ob_start(); imagepng($im); $png = ob_get_clean(); imagedestroy($im);
+    ob_start(); imagepng($im); $png = ob_get_clean();
     putZip($root, 'media.zip', ['photo.png' => $png, 'readme.txt' => 'hi']);
 
     $r = $fm->extractZip('local', 'media.zip');

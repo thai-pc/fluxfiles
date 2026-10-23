@@ -279,7 +279,6 @@ test('saving metadata on S3 keeps Content-Type, keeps public-read on a public di
         }
     );
     $m = new \ReflectionMethod(StorageMetadataHandler::class, 'saveToS3');
-    $m->setAccessible(true);
     $m->invoke(new StorageMetadataHandler($dm), 's3', 'user/my photo+1.png', ['title' => 'T']);
     assertEqual('image/png', $copy['ContentType'] ?? null, 'content type carried over');
     assertEqual('max-age=60', $copy['CacheControl'] ?? null, 'cache-control carried over');

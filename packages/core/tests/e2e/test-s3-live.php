@@ -127,7 +127,6 @@ function httpStatus(string $url): int {
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_NOBODY => false, CURLOPT_TIMEOUT => 20, CURLOPT_SSL_VERIFYPEER => true]);
     curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     return $code;
 }
 
@@ -169,7 +168,7 @@ $uploadedUrl = null;
 $im = imagecreatetruecolor(1000, 600);
 imagefilledrectangle($im, 0, 0, 1000, 600, imagecolorallocate($im, 30, 120, 200));
 $tmp = sys_get_temp_dir() . '/fxlive-' . uniqid() . '.png';
-imagepng($im, $tmp); imagedestroy($im);
+imagepng($im, $tmp);
 $fileArr = ['name' => 'live.png', 'size' => filesize($tmp), 'tmp_name' => $tmp];
 
 echo "{$yellow}► Upload + variants{$reset}\n";
@@ -240,7 +239,7 @@ test('presign PUT, upload bytes, then presign GET reads them', function () use (
     $put = $fm->presign('s3test', $putKey, 'PUT', 600, strlen($body));
     $ch = curl_init($put['url']);
     curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $body, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20]);
-    curl_exec($ch); $putCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    curl_exec($ch); $putCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     assertTrue($putCode === 200, "PUT failed: {$putCode}");
     $get = $fm->presign('s3test', $putKey, 'GET', 600);
     $read = file_get_contents($get['url']);
@@ -254,7 +253,7 @@ function formPost(string $url, array $fields, string $body, string $type): int {
     $ch = curl_init($url);
     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
         CURLOPT_POSTFIELDS => $fields + ['file' => new CURLFile($tmp, $type, 'f')]]);
-    curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     @unlink($tmp);
     return $code;
 }
@@ -287,7 +286,7 @@ echo "\n{$yellow}► Pre-existing object (PUT outside FluxFiles){$reset}\n";
 $preKey = $prefix . '/pre-existing/orig.png';
 $preImg = imagecreatetruecolor(900, 600);
 imagefilledrectangle($preImg, 0, 0, 900, 600, imagecolorallocate($preImg, 200, 90, 40));
-ob_start(); imagepng($preImg); $preBytes = ob_get_clean(); imagedestroy($preImg);
+ob_start(); imagepng($preImg); $preBytes = ob_get_clean();
 
 test('PUT object directly, then it appears in FileManager list', function () use ($dm, $fm, $bucket, $prefix, $preKey, $preBytes) {
     $dm->s3Client('s3test')->putObject(['Bucket' => $bucket, 'Key' => $preKey, 'Body' => $preBytes, 'ContentType' => 'image/png']);
@@ -353,7 +352,6 @@ test('multipart: initiate → presign part → PUT → complete → readable', f
     $resp = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    curl_close($ch);
     assertEqual(200, $code, "part PUT failed: {$code}");
 
     preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
@@ -410,7 +408,6 @@ test('B2: owner_only — a different tenant cannot complete a multipart upload o
     curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $body, CURLOPT_HEADER => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
     $resp = curl_exec($ch);
     $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    curl_close($ch);
     preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
     $etag = trim($m[1] ?? '', '"');
 
@@ -456,7 +453,6 @@ test('chunk complete: reports the REAL selected-parts size, not the client-decla
     curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $body, CURLOPT_HEADER => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
     $resp = curl_exec($ch);
     $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    curl_close($ch);
     preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
     $etag = trim($m[1] ?? '', '"');
 
@@ -483,7 +479,6 @@ test('B3: chunk complete rejects oversized parts before replacing the original',
     curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $body, CURLOPT_HEADER => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60]);
     $resp = curl_exec($ch);
     $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    curl_close($ch);
     preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
     $etag = trim($m[1] ?? '', '"');
 
@@ -526,7 +521,6 @@ test('B3: chunk complete rejects over-quota parts before publishing', function (
     curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $body, CURLOPT_HEADER => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60]);
     $resp = curl_exec($ch);
     $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    curl_close($ch);
     preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
     $etag = trim($m[1] ?? '', '"');
 
@@ -558,7 +552,6 @@ test('regression: a chunked upload whose real size is within limits still comple
     curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $body, CURLOPT_HEADER => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
     $resp = curl_exec($ch);
     $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    curl_close($ch);
     preg_match('/ETag:\s*("?[^"\r\n]+"?)/i', substr($resp, 0, $hsize), $m);
     $etag = trim($m[1] ?? '', '"');
 

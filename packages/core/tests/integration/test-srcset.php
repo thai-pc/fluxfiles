@@ -90,7 +90,6 @@ function makeSrcsetFM(array $opts = []): array {
     @mkdir($root . '/pics', 0777, true);
     $im = imagecreatetruecolor(40, 30);
     imagejpeg($im, $root . '/pics/a.jpg', 80);
-    imagedestroy($im);
     file_put_contents($root . '/pics/notes.txt', 'x');
 
     $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);

@@ -956,7 +956,6 @@ test('A-H3: refresh ticket round-trips the rendered overrides and is bound to th
         'malformed'  => fn () => $mgr->verifyRefreshTicket($alice, 'nope'),
         'expired'    => function () use ($mgr, $alice) {
             $key = new \ReflectionMethod($mgr, 'ticketKey');
-            $key->setAccessible(true);
             $body = rtrim(strtr(base64_encode('{"sub":"1","exp":' . (time() - 1) . ',"o":{}}'), '+/', '-_'), '=');
             $mac = rtrim(strtr(base64_encode(hash_hmac('sha256', $body, $key->invoke($mgr), true)), '+/', '-_'), '=');
             $mgr->verifyRefreshTicket($alice, $body . '.' . $mac);
@@ -1067,11 +1066,9 @@ test('A-M3: audit entries are logged under the scoped key, so the tenant sees it
     $claims = \FluxFiles\JwtMiddleware::handle((new FluxFilesManager())->token('t1', ['prefix' => 'tenant-a', 'perms' => ['read', 'write', 'audit']]), $secret);
     $ctrl = freshController();
     $log = new \ReflectionMethod($ctrl, 'logAudit');
-    $log->setAccessible(true);
     $log->invoke($ctrl, $claims, 'upload', 'local', 'docs/a.txt');
     $log->invoke($ctrl, $claims, 'upload', 'local', 'tenant-a/docs/b.txt'); // already scoped: idempotent
     $repoProp = new \ReflectionProperty($ctrl, 'metaRepo');
-    $repoProp->setAccessible(true);
     $keys = array_column($repoProp->getValue($ctrl)->readAudit('local'), 'file_key');
     assertTrue(in_array('tenant-a/docs/a.txt', $keys, true), 'relative key scoped: ' . json_encode($keys));
     assertTrue(in_array('tenant-a/docs/b.txt', $keys, true), 'scoped key not double-prefixed');
@@ -1088,7 +1085,6 @@ test('A-M3: audit entries are logged under the scoped key, so the tenant sees it
 test('A-N5: search/search-folders strip the tenant prefix from returned keys', function () {
     $ctrl = freshController();
     $repoProp = new \ReflectionProperty($ctrl, 'metaRepo');
-    $repoProp->setAccessible(true);
     $repo = $repoProp->getValue($ctrl);
     @mkdir($GLOBALS['LARAVEL_CONFIG']['fluxfiles.disks']['local']['root'] . '/tenant-s/sub', 0775, true);
     file_put_contents($GLOBALS['LARAVEL_CONFIG']['fluxfiles.disks']['local']['root'] . '/tenant-s/report.pdf', 'x');

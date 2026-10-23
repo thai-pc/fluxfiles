@@ -55,7 +55,7 @@ function http(string $url, array $headers = [], ?array $post = null): array {
     $opts = [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => $headers];
     if ($post !== null) { $opts[CURLOPT_POST] = true; $opts[CURLOPT_POSTFIELDS] = json_encode($post); $opts[CURLOPT_HTTPHEADER] = array_merge($headers, ['Content-Type: application/json']); }
     curl_setopt_array($ch, $opts);
-    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     return [$st, json_decode((string) $body, true)];
 }
 function upload(string $base, string $tok, string $disk, string $path, string $bytes): array {
@@ -65,7 +65,7 @@ function upload(string $base, string $tok, string $disk, string $path, string $b
         CURLOPT_HTTPHEADER => ["Authorization: Bearer {$tok}"],
         CURLOPT_POSTFIELDS => ['disk' => $disk, 'path' => dirname($path) === '.' ? '' : dirname($path),
             'file' => new CURLFile($tmp, 'text/plain', basename($path))]]);
-    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); @unlink($tmp);
+    $body = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);@unlink($tmp);
     return [$st, json_decode((string) $body, true)];
 }
 

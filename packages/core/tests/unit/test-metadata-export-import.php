@@ -131,9 +131,9 @@ test('streamTo() writes a CSV header plus one data row per file', function () us
     $count = $exporter->streamTo($handle, $disk, 'csv', 'docs');
     assertEqual(2, $count);
     rewind($handle);
-    $header = fgetcsv($handle);
+    $header = fgetcsv($handle, escape: '\\');
     assertEqual(MetadataExporter::COLUMNS, $header);
-    $row1 = fgetcsv($handle);
+    $row1 = fgetcsv($handle, escape: '\\');
     assertTrue($row1 !== false);
     fclose($handle);
 });

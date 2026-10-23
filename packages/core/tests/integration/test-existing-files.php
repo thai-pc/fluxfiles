@@ -55,7 +55,6 @@ function placeImage(string $root, string $rel, int $w, int $h): void
     $full = $root . '/' . $rel;
     @mkdir(dirname($full), 0777, true);
     imagepng($im, $full);
-    imagedestroy($im);
 }
 function fileArray(string $tmpPath, string $name): array
 {

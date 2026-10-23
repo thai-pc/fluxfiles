@@ -55,7 +55,6 @@ function makeJpeg(string $path, int $w = 800, int $h = 600): void {
             imagecolorallocate($im, random_int(0, 255), random_int(0, 255), random_int(0, 255)));
     }
     imagejpeg($im, $path, 92);
-    imagedestroy($im);
 }
 
 /** A minimal, valid one-page PDF (enough to exercise the gs path / 501 gating). */
@@ -79,7 +78,7 @@ function makeImagePdf(string $path, int $w = 2400, int $h = 1800): void {
         imagefilledellipse($im, random_int(0, $w), random_int(0, $h), random_int(10, 120), random_int(10, 120),
             imagecolorallocate($im, random_int(0, 255), random_int(0, 255), random_int(0, 255)));
     }
-    ob_start(); imagejpeg($im, null, 90); $jpg = (string) ob_get_clean(); imagedestroy($im);
+    ob_start(); imagejpeg($im, null, 90); $jpg = (string) ob_get_clean();
 
     $content = 'q 144 0 0 108 0 0 cm /Im0 Do Q';
     $objs = [

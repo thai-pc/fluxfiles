@@ -31,13 +31,11 @@ function assertTrue($c, string $m = ''): void { if (!$c) throw new \RuntimeExcep
 /** Reflect the private static DiskManager::buildSftpProvider($cfg). */
 function buildProvider(array $cfg) {
     $m = new \ReflectionMethod(DiskManager::class, 'buildSftpProvider');
-    $m->setAccessible(true);
     return $m->invoke(null, $cfg);
 }
 /** Read a private property off the built provider. */
 function prop($obj, string $name) {
     $r = new \ReflectionProperty(get_class($obj), $name);
-    $r->setAccessible(true);
     return $r->getValue($obj);
 }
 
@@ -275,7 +273,6 @@ test('BucketDoctor: SFTP failure reports an SFTP-shaped reachability check, not 
 
 test('BucketDoctor::shortMsg unwraps to the root-cause exception', function () {
     $m = new \ReflectionMethod(\FluxFiles\BucketDoctor::class, 'shortMsg');
-    $m->setAccessible(true);
     $doctor = new \FluxFiles\BucketDoctor(new DiskManager([]));
     $root = new \RuntimeException("Login failed");
     $wrapped = new \RuntimeException("Unable to list contents for '', shallow listing", 0, $root);

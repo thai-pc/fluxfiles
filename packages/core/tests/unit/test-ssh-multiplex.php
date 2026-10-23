@@ -47,13 +47,11 @@ function assertSameSet(array $expected, array $actual, string $m = ''): void {
 /** Reflected call to a private/protected static method. */
 function callPrivateStatic(string $class, string $method, array $args = []) {
     $m = new \ReflectionMethod($class, $method);
-    $m->setAccessible(true);
     return $m->invokeArgs(null, $args);
 }
 /** Reflected call to a private/protected instance method. */
 function callPrivateMethod(object $obj, string $method, array $args = []) {
     $m = new \ReflectionMethod(get_class($obj), $method);
-    $m->setAccessible(true);
     return $m->invokeArgs($obj, $args);
 }
 
@@ -142,7 +140,6 @@ test('F2: computed socket filename never contains the host/username substrings',
 test('F2: a long FLUXFILES_STORAGE_PATH triggers the >100-byte sun_path guard BEFORE any proc_open', function () {
     $savedEnv = $_ENV['FLUXFILES_STORAGE_PATH'] ?? null;
     $binProp = new \ReflectionProperty(SshMultiplexer::class, 'sshBinary');
-    $binProp->setAccessible(true);
     $savedBin = $binProp->getValue();
 
     // Force sshBinary() to resolve without touching the real lookup, so this test
