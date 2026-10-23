@@ -64,7 +64,6 @@ const PACKAGED_PATHS = ['composer.json', 'LICENSE', 'README.md', 'src'];
 $ids = array_slice($argv, 1);
 if ($ids === []) {
     $map = new ReflectionProperty(ModuleRegistry::class, 'map');
-    $map->setAccessible(true);
     $ids = array_keys($map->getValue());
 }
 
