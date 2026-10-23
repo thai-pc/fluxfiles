@@ -553,6 +553,10 @@ class FileManager
         // manifest (O(N) redundant reads for an N-item page).
         $holdMap = $this->meta->holdsCoveringMany($disk, array_column($items, 'key'));
         $canSeeHoldDetail = $this->claims->hasPerm('audit');
+        // Which variants/posters exist, from ONE listing per `_variants/` folder
+        // instead of 3–4 fileExists() per file — on S3/R2/SFTP each of those is a
+        // round trip, so a 200-image page cost ~600 requests before it rendered.
+        $variantSet = $this->claims->allowDownload ? $this->existingVariants($disk, $items) : [];
 
         foreach ($items as &$item) {
             $hold = $holdMap[$item['key']] ?? null;
@@ -588,14 +592,14 @@ class FileManager
                         }
                     }
                 }
-                $item['variants'] = $this->downloadVariants($disk, $item['key']);
+                $item['variants'] = $this->downloadVariants($disk, $item['key'], $variantSet);
                 // Poster for a PDF/video (page 1 / a frame). Withheld from
                 // preview-only tokens like the clean variants above — it is an
                 // un-watermarked render of the content.
                 if ($this->claims->allowDownload && MediaPoster::kindFor($item['key']) !== null) {
                     $pk = $this->variantKey($item['key'], 'thumb');
                     try {
-                        if ($this->disks->disk($disk)->fileExists($pk)) {
+                        if ($this->variantExists($disk, $pk, $variantSet)) {
                             $item['poster'] = $this->fileUrl($disk, $pk);
                         }
                     } catch (\Throwable $e) {
@@ -3090,18 +3094,21 @@ class FileManager
     /**
      * Look up existing variant files (thumb/medium/large WebP) for an image.
      */
-    private function getFileVariants(string $disk, string $key): ?array
+    /**
+     * @param array<string,array<string,true>> $known existingVariants() result; a
+     *        folder missing from it falls back to a per-file fileExists()
+     */
+    private function getFileVariants(string $disk, string $key, array $known = []): ?array
     {
         if (!$this->imageOptimizer->isImage($key)) {
             return null;
         }
 
-        $fs = $this->disks->disk($disk);
         $variants = [];
 
         foreach (['thumb', 'medium', 'large'] as $size) {
             $vk = $this->variantKey($key, $size);
-            if ($fs->fileExists($vk)) {
+            if ($this->variantExists($disk, $vk, $known)) {
                 $variants[$size] = [
                     'url' => $this->fileUrl($disk, $vk),
                     'key' => $vk,
@@ -3124,10 +3131,70 @@ class FileManager
         return $this->claims->allowDownload ? $this->fileUrl($disk, $key) : null;
     }
 
-    /** getFileVariants() behind the same allow_download gate as downloadUrl(). */
-    private function downloadVariants(string $disk, string $key): ?array
+    /**
+     * getFileVariants() behind the same allow_download gate as downloadUrl().
+     *
+     * @param array<string,array<string,true>> $known see getFileVariants()
+     */
+    private function downloadVariants(string $disk, string $key, array $known = []): ?array
     {
-        return $this->claims->allowDownload ? $this->getFileVariants($disk, $key) : null;
+        return $this->claims->allowDownload ? $this->getFileVariants($disk, $key, $known) : null;
+    }
+
+    /** Below this many candidates in a folder, per-file checks are cheaper than a listing. */
+    private const VARIANT_LISTING_MIN = 8;
+
+    /**
+     * The variant files that exist, per `_variants/` folder, for the images and
+     * PDFs/videos among $items — one non-recursive listing per folder. Folders with
+     * only a few candidates are left out (callers fall back to fileExists()), as is
+     * any folder whose listing fails.
+     *
+     * @param array<int,array<string,mixed>> $items
+     * @return array<string,array<string,true>> variants dir => [variant key => true]
+     */
+    private function existingVariants(string $disk, array $items): array
+    {
+        $count = [];
+        foreach ($items as $it) {
+            if (($it['type'] ?? '') !== 'file') {
+                continue;
+            }
+            $key = (string) $it['key'];
+            if ($this->imageOptimizer->isImage($key) || MediaPoster::kindFor($key) !== null) {
+                $dir = dirname($this->variantKey($key, 'thumb'));
+                $count[$dir] = ($count[$dir] ?? 0) + 1;
+            }
+        }
+        $known = [];
+        $fs = $this->disks->disk($disk);
+        foreach ($count as $dir => $n) {
+            if ($n < self::VARIANT_LISTING_MIN) {
+                continue;
+            }
+            try {
+                $set = [];
+                foreach ($fs->listContents((string) $dir, false) as $v) {
+                    if ($v->isFile()) {
+                        $set[$v->path()] = true;
+                    }
+                }
+                $known[(string) $dir] = $set;
+            } catch (\Throwable $e) {
+                // fall back to per-file checks for this folder
+            }
+        }
+        return $known;
+    }
+
+    /** @param array<string,array<string,true>> $known */
+    private function variantExists(string $disk, string $variantKey, array $known): bool
+    {
+        $dir = dirname($variantKey);
+        if (isset($known[$dir])) {
+            return isset($known[$dir][$variantKey]);
+        }
+        return $this->disks->disk($disk)->fileExists($variantKey);
     }
 
     /**

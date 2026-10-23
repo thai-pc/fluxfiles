@@ -225,7 +225,10 @@
   "pagination": {
     "load_more": "Carica altri ({count} rimanenti)",
     "loading_more": "Caricamento…",
-    "showing": "Mostrati {shown} di {total}"
+    "showing": "Mostrati {shown} di {total}",
+    "all_loaded": "Tutti i {total} elementi visualizzati",
+    "load_failed": "Impossibile caricare altri elementi.",
+    "back_to_top": "Torna su"
   },
   "variants": {
     "title": "Dimensioni immagine",

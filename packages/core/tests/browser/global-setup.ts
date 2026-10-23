@@ -15,9 +15,9 @@ export default async function globalSetup() {
 
   // Specs never clean up what they upload/create, so the shared `local` disk root
   // accumulates entries run after run. Once the root passes the UI's `listLimit`
-  // (1000, dirs sorted before files), newly uploaded files stop appearing in the
-  // first page of /api/fm/list — every spec that waits on a freshly-uploaded
-  // card then times out. Wipe it before each run so the count never grows unbounded.
+  // (200, dirs sorted before files), newly uploaded files stop appearing in the
+  // first page of /api/fm/list until the grid is scrolled — every spec that waits
+  // on a freshly-uploaded card then times out. Wipe it before each run so the count never grows unbounded.
   const uploadsDir = join(coreDir, 'storage', 'uploads');
   try {
     for (const entry of readdirSync(uploadsDir)) {

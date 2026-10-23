@@ -583,7 +583,7 @@
         </div>
 
         <!-- Content area -->
-        <div class="ff-content">
+        <div class="ff-content" @scroll.passive="onContentScroll($event)">
 
             <!-- Drop zone -->
             <div class="ff-dropzone"
@@ -770,8 +770,9 @@
                                 <span style="font-weight:400;color:var(--color-text-tertiary);" x-text="'(' + filteredFiles.length + ')'"></span>
                             </div>
                             <div class="file-grid" :class="{ 'list-view': view === 'list' }">
-                                <template x-for="file in filteredFiles" :key="file.key">
+                                <template x-for="(file, idx) in filteredFiles" :key="file.key">
                                     <div class="file-card"
+                                         :style="'--ff-i:' + (idx % 12)"
                                          :class="{ selected: isSelected(file), dragging: dragItem && dragItem.key === file.key }"
                                          draggable="true"
                                          @dragstart="onItemDragStart(file, $event)"
@@ -792,13 +793,17 @@
                                         <!-- Thumbnail -->
                                         <template x-if="isPreviewable(file, 'image') && previewUrl(file, 'thumb')">
                                             <div class="thumb thumb-img">
-                                                <img :src="previewUrl(file, 'thumb')" :alt="file.name" loading="lazy">
+                                                <img :src="previewUrl(file, 'thumb')" :alt="file.name" loading="lazy" decoding="async"
+                                                     x-init="$nextTick(() => { if ($el.complete) $el.classList.add('is-loaded') })"
+                                                     @load="$el.classList.add('is-loaded')" @error="$el.classList.add('is-loaded', 'is-error')">
                                             </div>
                                         </template>
                                         <!-- Poster for a PDF / video (page 1 / a frame), when the server rendered one. -->
                                         <template x-if="!isPreviewable(file, 'image') && file.poster">
                                             <div class="thumb thumb-img ff-thumb-poster" :class="'is-' + fileIcon(file)">
-                                                <img :src="file.poster" :alt="file.name" loading="lazy">
+                                                <img :src="file.poster" :alt="file.name" loading="lazy" decoding="async"
+                                                     x-init="$nextTick(() => { if ($el.complete) $el.classList.add('is-loaded') })"
+                                                     @load="$el.classList.add('is-loaded')" @error="$el.classList.add('is-loaded', 'is-error')">
                                             </div>
                                         </template>
                                         <template x-if="(!isPreviewable(file, 'image') || !previewUrl(file, 'thumb')) && !(!isPreviewable(file, 'image') && file.poster)">
@@ -833,13 +838,46 @@
                         </div>
                     </template>
 
-                    <!-- Load more (pagination) -->
-                    <div class="ff-load-more" x-show="(searchResults === null) && listCursor">
-                        <button type="button" @click="loadMoreFiles()" :disabled="loadingMore">
-                            <span x-show="!loadingMore" x-text="t('pagination.load_more', { count: Math.max(0, listTotal - (folders.length + files.length)) })"></span>
-                            <span x-show="loadingMore" x-text="t('pagination.loading_more') || 'Loading…'"></span>
-                        </button>
-                        <div class="ff-load-more-meta" x-text="t('pagination.showing', { shown: (folders.length + files.length), total: listTotal })"></div>
+                    <!-- Next page placeholders while it streams in -->
+                    <div class="file-grid ff-more-skeleton" :class="{ 'list-view': view === 'list' }"
+                         x-show="(searchResults === null) && loadingMore" x-cloak aria-hidden="true">
+                        <template x-for="i in 6" :key="'more-' + i">
+                            <div class="skel-card" :style="'--ff-i:' + i">
+                                <div class="skel-thumb"></div>
+                                <div class="skel-line"></div>
+                                <div class="skel-line short"></div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Infinite scroll: sentinel + progress; the button is the fallback
+                         (no IntersectionObserver) and Retry appears after a failed page. -->
+                    <div class="ff-load-more" x-show="(searchResults === null) && (listCursor || loadMoreError || listTotal > listLimit)"
+                         role="status" aria-live="polite">
+                        <div class="ff-scroll-sentinel" x-init="observeListSentinel($el)" aria-hidden="true"></div>
+                        <template x-if="listCursor && !loadMoreError">
+                            <div class="ff-load-progress" :class="{ busy: loadingMore }">
+                                <div class="ff-load-progress-track"><div class="ff-load-progress-bar" :style="'width:' + listProgress + '%'"></div></div>
+                                <div class="ff-load-more-meta">
+                                    <span class="ff-load-spinner" x-show="loadingMore"></span>
+                                    <span x-text="loadingMore ? t('pagination.loading_more') : t('pagination.showing', { shown: (folders.length + files.length), total: listTotal })"></span>
+                                </div>
+                                <button type="button" class="ff-load-more-btn" x-show="!autoLoadSupported" @click="loadMoreFiles()" :disabled="loadingMore"
+                                        x-text="t('pagination.load_more', { count: Math.max(0, listTotal - (folders.length + files.length)) })"></button>
+                            </div>
+                        </template>
+                        <template x-if="loadMoreError">
+                            <div class="ff-load-more-error">
+                                <span x-text="loadMoreError"></span>
+                                <button type="button" class="ff-load-more-btn" @click="retryLoadMore()" x-text="t('common.retry')"></button>
+                            </div>
+                        </template>
+                        <template x-if="!listCursor && !loadMoreError && listTotal > listLimit">
+                            <div class="ff-load-done">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 6.2l2.2 2.2 4.8-4.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                <span x-text="t('pagination.all_loaded', { total: listTotal })"></span>
+                            </div>
+                        </template>
                     </div>
 
                     <!-- Empty -->
@@ -856,6 +894,13 @@
                 </div>
             </template>
 
+            <!-- Back to top (sticky inside the scroller, takes no layout space) -->
+            <div class="ff-back-top-wrap">
+                <button type="button" class="ff-back-top" :class="{ show: showBackToTop }" @click="scrollContentTop()"
+                        :title="t('pagination.back_to_top')" :aria-label="t('pagination.back_to_top')" :tabindex="showBackToTop ? 0 : -1">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 11.5V3M3.5 6.5L7 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
         </div>
 
         <!-- Status bar -->

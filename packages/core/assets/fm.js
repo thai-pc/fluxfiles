@@ -62,11 +62,19 @@ function fluxFilesApp() {
         _searchSeq: 0,
         _activeSearchId: 0,
         _pendingSelectKey: null,
-        // Pagination state for /api/fm/list
-        listLimit: 1000,
+        // Pagination state for /api/fm/list. Pages are small so the first screen
+        // renders fast; the rest streams in as the user scrolls (infinite scroll).
+        listLimit: 200,
         listCursor: null,    // null = no more pages or not paginated
         listTotal: 0,
         loadingMore: false,
+        loadMoreError: null, // a failed page pauses auto-loading until Retry
+        _listGen: 0,         // bumped per folder load; a stale page is dropped
+        _listObserver: null,
+        _listSentinel: null,
+        autoLoadSupported: typeof IntersectionObserver !== 'undefined',
+        showBackToTop: false,
+        _scrollTicking: false,
         detailFile: null,
         selectedVariant: 'original',
         activeTab: 'info',
@@ -767,8 +775,11 @@ function fluxFilesApp() {
 
         // Load files (first page)
         async loadFiles() {
+            const gen = ++this._listGen;
             this.loading = true;
             this.loadError = null;
+            this.loadMoreError = null;
+            this.loadingMore = false;
             this.listCursor = null;
             this.listTotal = 0;
             try {
@@ -777,6 +788,8 @@ function fluxFilesApp() {
                     '&path=' + encodeURIComponent(this.currentPath) +
                     '&limit=' + encodeURIComponent(this.listLimit)
                 );
+                // The user moved on to another folder while this one loaded.
+                if (gen !== this._listGen) return;
 
                 // Paginated mode returns {items, next_cursor, total}; legacy mode returns a flat array.
                 const items = Array.isArray(res) ? res : (res?.items || []);
@@ -798,7 +811,9 @@ function fluxFilesApp() {
                 if (this._pendingSelectKey) {
                     await this._resolvePendingSelection();
                 }
+                this.$nextTick(() => this._maybeAutoLoad());
             } catch (err) {
+                if (gen !== this._listGen) return;
                 console.error('FluxFiles: Failed to load files', err);
                 // Persistent inline error (+ retry) so a failed load isn't mistaken
                 // for an empty folder once the transient toast fades.
@@ -807,7 +822,7 @@ function fluxFilesApp() {
                 this.files = [];
                 this.showToast(this.loadError, 'error', 4000);
             } finally {
-                this.loading = false;
+                if (gen === this._listGen) this.loading = false;
             }
         },
 
@@ -827,10 +842,13 @@ function fluxFilesApp() {
             this.loadQuota();
         },
 
-        // Load the next page and append to existing folders/files.
+        // Load the next page and append to existing folders/files. Resolves true when
+        // a page was appended (false: nothing to load, busy, stale or failed).
         async loadMoreFiles() {
-            if (!this.listCursor || this.loadingMore) return;
+            if (!this.listCursor || this.loadingMore) return false;
+            const gen = this._listGen;
             this.loadingMore = true;
+            this.loadMoreError = null;
             try {
                 const res = await this.api('GET',
                     '/api/fm/list?disk=' + encodeURIComponent(this.currentDisk) +
@@ -838,6 +856,7 @@ function fluxFilesApp() {
                     '&limit=' + encodeURIComponent(this.listLimit) +
                     '&cursor=' + encodeURIComponent(this.listCursor)
                 );
+                if (gen !== this._listGen) return false;
 
                 const items = Array.isArray(res) ? res : (res?.items || []);
                 this.listCursor = Array.isArray(res) ? null : (res?.next_cursor ?? null);
@@ -849,12 +868,73 @@ function fluxFilesApp() {
                     if (it.type === 'dir') this.folders.push(it);
                     else this.files.push(it);
                 }
+                // A tall screen may still show the sentinel: keep filling it.
+                this.$nextTick(() => this._maybeAutoLoad());
+                return true;
             } catch (err) {
+                if (gen !== this._listGen) return false;
                 console.error('FluxFiles: Failed to load more files', err);
-                this.showToast(err.message || this.t('error.generic'), 'error', 4000);
+                this.loadMoreError = err.message || this.t('pagination.load_failed');
+                return false;
             } finally {
-                this.loadingMore = false;
+                if (gen === this._listGen) this.loadingMore = false;
             }
+        },
+
+        retryLoadMore() {
+            this.loadMoreError = null;
+            this.loadMoreFiles();
+        },
+
+        // Infinite scroll: watch a sentinel under the grid, inside the scrolling
+        // .ff-content, and fetch the next page a screen before it comes into view.
+        observeListSentinel(el) {
+            this._listSentinel = el;
+            if (!this.autoLoadSupported) return;
+            if (this._listObserver) this._listObserver.disconnect();
+            this._listObserver = new IntersectionObserver((entries) => {
+                if (entries.some(e => e.isIntersecting)) this._autoLoadNext();
+            }, { root: el.closest('.ff-content'), rootMargin: '0px 0px 600px 0px' });
+            this._listObserver.observe(el);
+        },
+
+        _autoLoadNext() {
+            if (this.loading || this.loadingMore || this.loadMoreError || !this.listCursor) return;
+            if (this.searchResults !== null) return;
+            this.loadMoreFiles();
+        },
+
+        // The observer only fires on a CHANGE of visibility, so after a page lands
+        // with the sentinel still in range (big screen, or a filter hiding most of
+        // the page) nothing would trigger the next one — check by hand.
+        _maybeAutoLoad() {
+            const el = this._listSentinel;
+            if (!this.autoLoadSupported || !el || !el.isConnected || el.offsetParent === null) return;
+            const root = el.closest('.ff-content');
+            if (!root) return;
+            if (el.getBoundingClientRect().top - root.getBoundingClientRect().bottom < 600) {
+                this._autoLoadNext();
+            }
+        },
+
+        onContentScroll(e) {
+            if (this._scrollTicking) return;
+            this._scrollTicking = true;
+            const el = e.target;
+            requestAnimationFrame(() => {
+                this._scrollTicking = false;
+                this.showBackToTop = el.scrollTop > 900;
+            });
+        },
+
+        scrollContentTop() {
+            const el = document.querySelector('.ff-content');
+            if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        get listProgress() {
+            const shown = this.folders.length + this.files.length;
+            return this.listTotal > 0 ? Math.min(100, Math.round(shown / this.listTotal * 100)) : 100;
         },
 
         async _resolvePendingSelection() {
@@ -863,7 +943,8 @@ function fluxFilesApp() {
             let found = this.files.find(f => f && f.key === key);
             // Keep paging until we find it or there are no more pages.
             while (!found && this.listCursor) {
-                await this.loadMoreFiles();
+                // A failed page leaves the cursor where it was — stop, don't spin.
+                if (!(await this.loadMoreFiles())) break;
                 found = this.files.find(f => f && f.key === key);
             }
             this._pendingSelectKey = null;
