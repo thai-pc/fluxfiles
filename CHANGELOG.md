@@ -3,6 +3,33 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.35] — 2026-10-24
+
+> Released: `core-v0.2.109`, `laravel-v0.2.54`, `wordpress-v0.2.69`.
+> Paid modules (own repos, PHP floor only): `share v1.3.1`, `intake v1.4.1`,
+> `versioning v1.3.2`, `webhooks v1.1.4`, `ai v1.2.2`, `ocr v1.2.1`,
+> `virus v1.2.2`, `backup v1.3.1`, `c2pa v1.2.1`, `audit-export v1.0.4`,
+> `sso v2.1.2`, `dlp v1.0.4`, `legal-hold v1.1.1`.
+
+### Changed
+
+- **PHP 8.1 is supported again; the floor is now `^8.1.0`** (was `^8.2.35`).
+  FluxFiles aims to run on as many PHP versions as its dependencies allow.
+  Keeping PHP itself security-patched is up to whoever runs it. CI now covers
+  **8.1, 8.2, 8.3, 8.4 and 8.5** (`core-php`, `api-e2e`, `selfboot-e2e`).
+  The lock-file job installs the committed locks on 8.1, the floor.
+  - Checked on PHP 8.1.34 before switching: 132 suites (core, self-booting
+    e2e, the paid modules, both adapters, the Laravel DB adapter, the license
+    server) pass with no deprecations, and every source file lints.
+  - All 16 `composer.json` files (core, Laravel, WordPress, the 13 modules)
+    declare `^8.1.0` and pin `config.platform.php` to `8.1.0`, so locks always
+    resolve to versions that run on 8.1. The WordPress header, `readme.txt`,
+    `FLUXFILES_MIN_PHP` and the updater's `REQUIRES_PHP` say `8.1.0`.
+  - The Laravel adapter still accepts Laravel 10, 11 and 12. On PHP 8.1
+    Composer picks Laravel 10, since 11 and 12 need PHP 8.2. Its committed dev
+    lock is now Laravel 10.
+  - PHP 8.0 stays out: `intervention/image` v3 requires 8.1.
+
 ## [0.3.34] — 2026-10-24
 
 > Released: `core-v0.2.108`, `wordpress-v0.2.68` (the plugin bundles core).

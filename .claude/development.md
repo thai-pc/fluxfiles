@@ -2,7 +2,7 @@
 
 ## Environment
 
-- PHP requirement: `>= 8.2.35` (latest security-patched 8.2; 8.3/8.4/8.5 also tested). Five places must agree — every `composer.json` `require.php` + `config.platform.php`, the WP plugin header/`readme.txt` `Requires PHP`, `FLUXFILES_MIN_PHP` and `FluxFilesUpdater::REQUIRES_PHP`; `test-wp-smoke.php` guards the WP side. Raising it again = same edits + `composer update --lock`.
+- PHP requirement: `>= 8.1` (8.1–8.5 tested in CI; keeping PHP patched is the operator's job). Five places must agree — every `composer.json` `require.php` + `config.platform.php`, the WP plugin header/`readme.txt` `Requires PHP`, `FLUXFILES_MIN_PHP` and `FluxFilesUpdater::REQUIRES_PHP`; `test-wp-smoke.php` guards the WP side. Raising it again = same edits + `composer update --lock`.
 - Core PHP dependencies live in `packages/core/composer.json`.
 - Root `vendor/` exists in this checkout, but core package commands should usually run with `-d packages/core` or from `packages/core`.
 - Node packages:
@@ -180,7 +180,7 @@ Docker (dev/test + production):
 
 ```bash
 # Run the core suite in a clean container on a given PHP version
-make test PHP=8.5         # or: make test-all  (8.2–8.5)
+make test PHP=8.5         # or: make test-all  (8.1–8.5)
 
 # Dev stack: standalone app (:8080) + LocalStack S3 (:4566)
 make up                   # docker compose up --build

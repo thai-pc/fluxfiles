@@ -33,7 +33,7 @@ Module ids: `share`, `intake`, `versioning`, `webhooks`, `ai`, `ocr`, `virus`,
 the rest will refuse with `402`. (Optimization used to be a paid module; it is part of
 the free core now and needs nothing installed.)
 
-Every module requires PHP 8.2.35 or newer, like the core.
+Every module requires PHP 8.1 or newer, like the core.
 
 You do **not** need `composer dump-autoload`: FluxFiles loads installed modules itself
 (`packages/core/autoload.php`), precisely because Composer cannot see a directory that

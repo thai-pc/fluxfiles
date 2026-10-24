@@ -73,7 +73,7 @@ only reachable.
 release. Merge that entry into `build/modules/catalogue.json` on the update server
 (`pack-modules.php` preserves it) — without it the plugin's update check answers
 `404 unknown module`, and without `requires_php` WordPress can't hold an update back
-from a site whose PHP is too old (the floor is 8.2.35).
+from a site whose PHP is too old (the floor is 8.1).
 
 ---
 
@@ -252,7 +252,7 @@ buyer cannot see.
   canceller keeps the year they paid for. Revoking sooner needs a
   `subscription.canceled` handler.
 - **Module floors are checked by hand.** A module's `composer.json` must require the
-  first core release that actually *calls* it — and, since 2026-10-23, PHP `^8.2.35`
+  first core release that actually *calls* it — and, since 2026-10-23, PHP `^8.1.0`
   like the core. This cannot be CI-guarded — the packages are gitignored, so CI cannot
   see them. Seven of nine were wrong once (back when there were only nine modules,
   before `audit-export`/`sso` shipped 2026-08-29 brought the total to eleven, and

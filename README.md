@@ -15,7 +15,7 @@
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
 
-Standalone, embeddable file manager built with PHP 8.2.35+. Multi-storage support (Local, AWS S3, Cloudflare R2, SFTP), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
+Standalone, embeddable file manager built with PHP 8.1+. Multi-storage support (Local, AWS S3, Cloudflare R2, SFTP), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
 
 Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, **TinyMCE**, and **Summernote**.
 
@@ -90,7 +90,7 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 
 ## Requirements
 
-- **PHP** >= 8.2.35 — the latest security-patched 8.2 (tested with 8.2 — 8.4; 8.1 is end-of-life)
+- **PHP** >= 8.1 — tested with 8.1 – 8.5 (keep PHP on a security-patched release; that part is up to the host)
 - **Extensions:** `gd`, `curl`, `json`, `openssl`, `mbstring`, `fileinfo`
 - **Composer** >= 2.0
 - Optional: Ghostscript **≥ 10.05.0** (PDF optimize / PDF posters — older versions are treated as absent), ffmpeg (video posters)
@@ -1451,7 +1451,7 @@ php packages/laravel/tests/test-laravel-smoke.php   # (and wordpress)
 bash scripts/pack-smoke.sh all                       # verifies the published dist/types
 
 # Docker — clean-container runs across a PHP matrix
-make test PHP=8.5   # one version  ·  make test-all  # 8.2–8.5  ·  make up  # app:8080 + S3:4566
+make test PHP=8.5   # one version  ·  make test-all  # 8.1–8.5  ·  make up  # app:8080 + S3:4566
 ```
 
 `.github/workflows/test.yml` runs all of this (16 jobs, including dedicated

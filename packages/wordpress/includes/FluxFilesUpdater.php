@@ -34,11 +34,11 @@ class FluxFilesUpdater
     /**
      * Shown by WordPress on the update row and in "View details", and used to hold
      * back an update on a site whose PHP is older. Keep in step with the plugin
-     * header's `Requires PHP` and composer.json's php floor (a security-patched 8.2).
+     * header's `Requires PHP` and composer.json's php floor (8.1).
      * A manifest may override it, so a future release can raise the floor for sites
      * still running this (older) updater.
      */
-    private const REQUIRES_PHP = '8.2.35';
+    private const REQUIRES_PHP = '8.1.0';
 
     public static function boot(): void
     {
