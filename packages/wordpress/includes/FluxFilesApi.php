@@ -1080,6 +1080,75 @@ class FluxFilesApi
     }
 
     /**
+     * The three refused writes core's index.php records even though the write
+     * itself failed: `virus_detected` → `virus_blocked`, `pii_detected` →
+     * `dlp_blocked` (detail = entity-TYPE names only, never matched text),
+     * `legal_hold_active` → `legal_hold_blocked` (detail = hold id). Key rules are
+     * core's ff_blocked_write_key(): an editor save names the file in the body
+     * `path`, an upload names the folder in `$_POST['path']` and the file in the
+     * error `name`, an extract entry stays relative. Best-effort.
+     *
+     * @param array<string,mixed> $params
+     */
+    private function auditRefusedWrite(\FluxFiles\Claims $claims, ?string $code, array $params): void
+    {
+        $action = [
+            'virus_detected'    => 'virus_blocked',
+            'pii_detected'      => 'dlp_blocked',
+            'legal_hold_active' => 'legal_hold_blocked',
+        ][(string) $code] ?? null;
+        if ($action === null) {
+            return;
+        }
+        try {
+            $json = json_decode((string) file_get_contents('php://input') ?: '{}', true);
+            $body = is_array($json) ? $json : [];
+            $in = $body + $_POST + $_GET;
+            $disk = '';
+            foreach (['disk', 'src_disk'] as $k) {
+                if (isset($in[$k]) && is_scalar($in[$k]) && (string) $in[$k] !== '') {
+                    $disk = (string) $in[$k];
+                    break;
+                }
+            }
+            if ($disk === '' || !$claims->hasDisk($disk)) {
+                $disk = $claims->allowedDisks[0] ?? 'local';
+            }
+            $detail = null;
+            if ($action === 'legal_hold_blocked') {
+                $rel = '';
+                foreach (['path', 'from', 'src_path'] as $k) {
+                    if (isset($body[$k]) && is_scalar($body[$k]) && (string) $body[$k] !== '') {
+                        $rel = (string) $body[$k];
+                        break;
+                    }
+                }
+                // trash/purge carries only a trash_id: fall back to the tenant-relative
+                // path FileManager put in the exception; scopePath() is idempotent.
+                if ($rel === '') {
+                    $rel = (string) ($params['path'] ?? '');
+                }
+                $detail = (string) ($params['hold_id'] ?? '');
+            } else {
+                $name = (string) ($params['name'] ?? $params['entry'] ?? '');
+                if (!isset($params['entry']) && is_string($body['path'] ?? null) && $body['path'] !== '') {
+                    $rel = $body['path'];
+                } elseif (!isset($params['entry']) && is_string($_POST['path'] ?? null) && trim($_POST['path'], '/') !== '') {
+                    $rel = trim($_POST['path'], '/') . '/' . $name;
+                } else {
+                    $rel = $name;
+                }
+                if ($action === 'dlp_blocked') {
+                    $detail = implode(',', array_map('strval', (array) ($params['entities'] ?? [])));
+                }
+            }
+            $this->logAudit($claims, $action, $disk, $rel, $detail);
+        } catch (\Throwable $e) {
+            // Auditing must never turn a clean 4xx into a 500.
+        }
+    }
+
+    /**
      * `audit_reads` for /stream (core's ff_audit_stream_read()): only the first
      * request of a playback — no Range, or one starting at byte 0. Best-effort.
      *
@@ -1135,7 +1204,11 @@ class FluxFilesApi
 
     private function error(string $message, int $status = 400, ?string $code = null, array $params = []): \WP_REST_Response
     {
-        if ($status === 403 && $this->lastClaims !== null) {
+        if ($this->lastClaims !== null) {
+            $this->auditRefusedWrite($this->lastClaims, $code, $params);
+        }
+        // legal_hold_active already has its own `legal_hold_blocked` line (core does the same).
+        if ($status === 403 && $this->lastClaims !== null && $code !== 'legal_hold_active') {
             $this->auditDenied($this->lastClaims, $code);
         }
         // Forward the core's error_code + error_params so the embedded UI can show a
@@ -1997,7 +2070,7 @@ class FluxFilesApi
             $fm->streamZip($disk, $paths, $name);
             exit;
         } catch (ApiException $e) {
-            if ($e->getHttpCode() === 403 && $this->lastClaims !== null) {
+            if ($e->getHttpCode() === 403 && $this->lastClaims !== null && $e->getErrorCode() !== 'legal_hold_active') {
                 $this->auditDenied($this->lastClaims, $e->getErrorCode());
             }
             status_header($e->getHttpCode());
@@ -2398,6 +2471,17 @@ class FluxFilesApi
         // The core handler reads the signing secret and the storage path from $_ENV.
         $_ENV['FLUXFILES_SECRET'] = (string) get_option('fluxfiles_secret', '');
         $_ENV['FLUXFILES_STORAGE_PATH'] = FluxFilesPlugin::storagePath();
+        // …and gates on the licence via core's env-only `fromEnv()` helper (it reads
+        // $_ENV, never a WP option) — which the "no fromEnv() in the proxy" smoke guard
+        // can't see, because the call lives in the core file required above. A WordPress
+        // licence normally lives in the plugin OPTION (Settings → FluxFiles → Licence —
+        // shared hosting has no env to put it in), so without this every recipient of a
+        // share link / upload portal got `402 license_required` on a fully licensed
+        // site, and a portal upload's virus/DLP scan (also fromEnv) refused the file.
+        $licenseKey = FluxFilesPlugin::licenseKey();
+        if ($licenseKey !== '') {
+            $_ENV['FLUXFILES_LICENSE_KEY'] = $licenseKey;
+        }
 
         if ($which === 'share') {
             handleSharePublic($method, $uri, $this->diskManager, FluxFilesPlugin::diskConfigs(), $this->metaRepo);

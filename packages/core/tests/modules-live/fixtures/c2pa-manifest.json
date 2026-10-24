@@ -1,0 +1,9 @@
+{
+  "alg": "es256",
+  "private_key": "/etc/c2pa/es256.pem",
+  "sign_cert": "/etc/c2pa/es256.pub",
+  "claim_generator": "FluxFiles modules-live test",
+  "assertions": [
+    { "label": "c2pa.actions", "data": { "actions": [ { "action": "c2pa.published" } ] } }
+  ]
+}

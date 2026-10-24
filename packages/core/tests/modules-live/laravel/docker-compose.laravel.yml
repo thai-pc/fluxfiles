@@ -1,0 +1,31 @@
+# Live paid-module rig, LARAVEL PROXY edition: a real Laravel 12 app with the
+# FluxFiles adapter (proxy mode) + core + all 13 modules installed via Composer,
+# and the same engines as the base rig (../docker-compose.yml) under its own
+# project name, so neither stack depends on the other running.
+# Started/stopped by global-setup.ts / global-teardown.ts (see ../README.md).
+name: ff-live-laravel
+x-base: &base
+  image: ff-modules-live:latest
+  pull_policy: never
+services:
+  laravel:
+    image: ff-live-laravel:latest
+    pull_policy: never
+    build: .
+    ports: ["8290:8290"]
+    env_file: .stage/laravel.env
+    depends_on: [ff-ai, ff-hooks, localstack, ff-presidio]
+  ff-ai:             # self-hosted image-model stand-in for AI Vision (provider=http)
+    <<: *base
+    command: ["php", "-S", "0.0.0.0:8192", "/fixtures/ai.php"]
+  ff-hooks:          # webhook receiver; tests read GET /events
+    <<: *base
+    command: ["php", "-S", "0.0.0.0:8193", "/fixtures/hooks.php"]
+    ports: ["8293:8193"]
+  localstack:        # second disk (S3) for the Backup module
+    image: localstack/localstack:4
+    environment: { SERVICES: s3 }
+    volumes: ["../fixtures/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro"]
+  ff-presidio:       # Microsoft Presidio analyzer — the DLP module's engine
+    image: mcr.microsoft.com/presidio-analyzer:latest
+    environment: { PORT: "3000" }

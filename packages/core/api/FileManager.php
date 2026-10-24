@@ -4291,7 +4291,8 @@ class FileManager
     {
         $hold = $this->meta->holdBlocking($disk, $scopedPath);
         if ($hold !== null) {
-            $params = ['hold_id' => $hold['hold_id'] ?? null, 'path' => $scopedPath];
+            // The client sees its own (tenant-relative) path, never the internal prefix.
+            $params = ['hold_id' => $hold['hold_id'] ?? null, 'path' => $this->outKey($scopedPath)];
             if ($this->claims->hasPerm('audit')) {
                 $params['reason'] = $hold['reason'] ?? null;
                 $params['placed_by'] = $hold['placed_by'] ?? null;
@@ -4796,6 +4797,51 @@ class FileManager
             $this->keepVersion($disk, $scopedPath, $fs);
         }
         $fs->write($scopedPath, $content);
+
+        $mime = null;
+        if (class_exists(\finfo::class)) {
+            $m = @(new \finfo(FILEINFO_MIME_TYPE))->buffer($content);
+            $mime = is_string($m) && $m !== '' ? $m : null;
+        }
+        $dims = $this->imageOptimizer->isImage($scopedPath) ? @getimagesizefromstring($content) : false;
+        $this->recordModuleWrite($disk, $scopedPath, $existing === null, strlen($content),
+            hash('sha256', $content), $mime, is_array($dims) ? $dims : null);
+    }
+
+    /**
+     * Descriptive metadata + content hash for a file a module wrote through
+     * writeScopedFile()/writeScopedStream(), in ONE index write — what upload()
+     * records, so list() carries mime/width/height (→ img_srcset, select payload)
+     * and duplicate detection sees the file. Ownership: a NEW file is owned by the
+     * acting user like an upload (owner_only stays consistent); an overwrite sends
+     * neither `uploaded_by` nor `created`, and the save() merge keeps the existing
+     * owner and any user-entered title/alt/caption/tags.
+     *
+     * @param array<int,mixed>|null $dims getimagesize() result
+     */
+    private function recordModuleWrite(string $disk, string $key, bool $isNew, int $size, ?string $hash, ?string $mime, ?array $dims): void
+    {
+        $attrs = ['size' => $size, 'modified' => time()];
+        if ($isNew) {
+            $attrs['uploaded_by'] = $this->claims->userId;
+            $attrs['created'] = time();
+        }
+        if ($mime !== null) {
+            $attrs['mime'] = $mime;
+        }
+        if ($dims !== null && isset($dims[0], $dims[1])) {
+            $attrs['width']  = (int) $dims[0];
+            $attrs['height'] = (int) $dims[1];
+        }
+        $this->beginIndexBatch($disk);
+        try {
+            if ($hash !== null) {
+                $this->meta->saveHash($disk, $key, $hash);
+            }
+            $this->meta->save($disk, $key, $attrs);
+        } finally {
+            $this->endIndexBatch($disk);
+        }
     }
 
     /** Size of an existing file at $key, or null when nothing is there. */
@@ -4849,7 +4895,15 @@ class FileManager
         if ($srcScopedPath === $dstScopedPath) {
             return;
         }
-        $this->copyMetadata($disk, $srcScopedPath, $disk, $dstScopedPath);
+        // Only the user-facing fields: size/mime/dimensions/dates describe the NEW
+        // bytes (recorded by the write), and the source's would clobber them.
+        $src = $this->meta->get($disk, $srcScopedPath);
+        if ($src) {
+            $this->meta->save($disk, $dstScopedPath, array_diff_key(
+                $src,
+                array_flip(['size', 'modified', 'created', 'mime', 'width', 'height'])
+            ));
+        }
         $this->meta->trackParents($disk, $dstScopedPath);
     }
 
@@ -4931,8 +4985,16 @@ class FileManager
             if ($fs->fileExists($scopedPath)) {
                 $this->keepVersion($disk, $scopedPath, $fs);
             }
+            $isNew = !$fs->fileExists($scopedPath);
             $fs->writeStream($scopedPath, $in);
             if (is_resource($in)) { fclose($in); }
+
+            $mime = @mime_content_type($tmp);
+            $dims = $this->imageOptimizer->isImage($scopedPath) ? @getimagesize($tmp) : false;
+            $hash = hash_file('sha256', $tmp);
+            $this->recordModuleWrite($disk, $scopedPath, $isNew, (int) filesize($tmp),
+                $hash === false ? null : $hash, is_string($mime) && $mime !== '' ? $mime : null,
+                is_array($dims) ? $dims : null);
         } finally {
             @unlink($tmp);
         }

@@ -322,6 +322,19 @@ test('list() over an N-item page reads the holds manifest a BOUNDED number of ti
 // Summary
 // ═══════════════════════════════════════════════════════════════
 
+test('a refused write tells the client its own path, never the tenant prefix', function () {
+    [$fm, , , $meta] = makeFM('tenant-a');
+    upload($fm, '', 'evidence.txt');
+    placeHold($meta, 'local', 'tenant-a/evidence.txt');
+    try {
+        $fm->delete('local', 'evidence.txt');
+        throw new \RuntimeException('expected legal_hold_active');
+    } catch (ApiException $e) {
+        assertEqual('legal_hold_active', $e->getErrorCode());
+        assertEqual('evidence.txt', $e->getErrorParams()['path'] ?? null, 'tenant-relative path');
+    }
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

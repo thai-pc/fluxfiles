@@ -41,3 +41,11 @@ test('no token → authentication screen is shown', async ({ page }) => {
   await page.goto('/public/index.html');
   await expect(page.locator('.ff-auth-screen')).toBeVisible({ timeout: 10_000 });
 });
+
+test('the server sets <html lang/dir> for the requested locale (and keeps translate="no")', async ({ page }) => {
+  await page.goto(`/public/index.html?token=${mintToken()}&disk=local&lang=ar`);
+  const html = page.locator('html');
+  await expect(html).toHaveAttribute('lang', 'ar');
+  await expect(html).toHaveAttribute('dir', 'rtl');
+  await expect(html).toHaveAttribute('translate', 'no');
+});

@@ -833,6 +833,32 @@ class FluxFilesManager
     }
 
     /**
+     * Put the FLUXFILES_* server env captured in `fluxfiles.server_env` back into
+     * $_ENV for every key the real environment does not already carry. Core and the
+     * paid modules read their settings (license, engine endpoints, kill switches)
+     * from $_ENV/getenv(), which `php artisan config:cache` empties of anything that
+     * only lived in .env. Never overwrites a value that is already set, never
+     * touches a non-FLUXFILES_ key. Returns how many keys it filled.
+     *
+     * @param array<mixed,mixed> $captured
+     */
+    public static function seedServerEnv(array $captured): int
+    {
+        $filled = 0;
+        foreach ($captured as $key => $value) {
+            if (!is_string($key) || strncmp($key, 'FLUXFILES_', 10) !== 0 || !is_scalar($value)) {
+                continue;
+            }
+            if (array_key_exists($key, $_ENV) || getenv($key) !== false) {
+                continue;
+            }
+            $_ENV[$key] = (string) $value;
+            $filled++;
+        }
+        return $filled;
+    }
+
+    /**
      * The public URL of a bundled recipient page (share.html / intake.html), with
      * the one-shot token attached. Served from this app's own site root by
      * FluxFilesController::publicPage() (registered outside the FluxFilesAuth

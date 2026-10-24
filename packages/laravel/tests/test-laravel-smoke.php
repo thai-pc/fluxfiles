@@ -1228,6 +1228,178 @@ test('N3: auditPurge passes the MetadataRepositoryInterface (works in DB mode), 
     assertTrue(!preg_match('/StorageMetadataHandler\s+\$/', $src), 'no parameter/property typed StorageMetadataHandler');
 });
 
+// ══ 2026-10-24 live Laravel paid-module rig (core/tests/modules-live/laravel) ══
+// Each of these broke a real `composer require fluxfiles/laravel` install on Linux
+// and was invisible to the macOS-hosted adapter e2e.
+
+/** Read the local disk's audit.jsonl rows (the smoke's JSON backend). */
+function smokeAuditRows(string $root): array
+{
+    $f = $root . '/_fluxfiles/audit.jsonl';
+    // Rows are {ts, action, context:{user_id, file_key, detail…}} — flattened here.
+    return is_file($f) ? array_values(array_filter(array_map(
+        static fn ($l) => is_array($r = json_decode($l, true)) ? ['action' => $r['action'] ?? ''] + (array) ($r['context'] ?? []) : null,
+        preg_split('/\R/', (string) file_get_contents($f)) ?: []
+    ))) : [];
+}
+
+test('L1: every src/ class autoloads on a CASE-SENSITIVE filesystem (the <x-fluxfiles> component was unloadable on Linux)', function () {
+    $composer = json_decode((string) file_get_contents(__DIR__ . '/../composer.json'), true);
+    $src = realpath(__DIR__ . '/../src');
+    $psr4 = $composer['autoload']['psr-4'] ?? [];
+    assertEqual(['FluxFiles\\Laravel\\' => 'src/'], $psr4, 'psr-4 root');
+    $classmapDirs = array_map(static fn ($d) => realpath(__DIR__ . '/../' . $d), (array) ($composer['autoload']['classmap'] ?? []));
+    // Exact-case existence check: walk each segment with scandir() (is_file() is
+    // case-insensitive on the default macOS filesystem, which is how this hid).
+    $existsExactCase = static function (string $base, string $relative): bool {
+        $dir = $base;
+        foreach (explode('/', $relative) as $seg) {
+            if (!is_dir($dir) || !in_array($seg, scandir($dir) ?: [], true)) {
+                return false;
+            }
+            $dir .= '/' . $seg;
+        }
+        return true;
+    };
+    $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS));
+    $checked = 0;
+    foreach ($it as $file) {
+        if ($file->getExtension() !== 'php' || str_ends_with($file->getFilename(), '.blade.php')) {
+            continue;
+        }
+        $code = (string) file_get_contents($file->getPathname());
+        if (!preg_match('/^namespace\s+([^;]+);/m', $code, $ns) || !preg_match('/^(?:final\s+|abstract\s+)?(?:class|interface|trait)\s+(\w+)/m', $code, $cl)) {
+            continue;
+        }
+        $fqcn = trim($ns[1]) . '\\' . $cl[1];
+        assertTrue(str_starts_with($fqcn, 'FluxFiles\\Laravel\\'), "$fqcn under the psr-4 root");
+        $expected = str_replace('\\', '/', substr($fqcn, strlen('FluxFiles\\Laravel\\'))) . '.php';
+        $inClassmap = false;
+        foreach ($classmapDirs as $d) {
+            if ($d && str_starts_with(realpath($file->getPathname()), $d . '/')) {
+                $inClassmap = true;
+            }
+        }
+        assertTrue($existsExactCase($src, $expected) || $inClassmap, "$fqcn: neither src/$expected (exact case) nor a classmap entry");
+        $checked++;
+    }
+    assertTrue($checked >= 8, "scanned the adapter's classes ($checked)");
+    assertTrue(in_array(realpath(__DIR__ . '/../src/Views/components'), $classmapDirs, true), 'the Blade component dir is classmapped');
+});
+
+test('L2: /fluxfiles.js resolves on a default Composer install (core ships no fluxfiles.js) and the bundled copy matches packages/sdk', function () use ($ffTmp) {
+    $bundled = realpath(__DIR__ . '/../resources/fluxfiles.js');
+    assertTrue($bundled !== false, 'adapter ships resources/fluxfiles.js');
+    @mkdir($ffTmp . '/core-split', 0775, true);   // a core install: no fluxfiles.js, no ../sdk sibling
+    assertEqual($bundled, realpath((string) FluxFilesController::resolveSdkPath($ffTmp . '/core-split')), 'falls back to the bundled copy');
+    file_put_contents($ffTmp . '/core-split/fluxfiles.js', '/* operator copy */');
+    assertEqual($ffTmp . '/core-split/fluxfiles.js', FluxFilesController::resolveSdkPath($ffTmp . '/core-split'), 'an operator copy in the base path wins');
+    @unlink($ffTmp . '/core-split/fluxfiles.js');
+    $sdk = __DIR__ . '/../../sdk/fluxfiles.js';
+    if (is_file($sdk)) {   // monorepo: keep the shipped copy in lock-step with the SDK source
+        assertTrue(hash_file('sha256', $sdk) === hash_file('sha256', $bundled), 'packages/laravel/resources/fluxfiles.js is stale — cp packages/sdk/fluxfiles.js packages/laravel/resources/');
+    }
+    $resp = withConfig(['fluxfiles.base_path' => $ffTmp . '/core-split'], fn () => (new FluxFilesController())->sdkJs());
+    assertEqual(200, $resp->getStatusCode(), 'sdkJs() serves it');
+    assertTrue(str_contains((string) $resp->content, 'FluxFiles'), 'SDK body');
+});
+
+test('L3: /public/index.html carries the translations (embedded UI rendered raw i18n keys without them)', function () {
+    $html = (string) (new FluxFilesController())->publicIndex()->content;
+    assertTrue(str_contains($html, 'window.__FM_LOCALE__ = { locale: "en"'), 'English injected by default');
+    assertTrue(!str_contains($html, "messages: {} }"), 'the empty placeholder is replaced');
+    assertTrue(preg_match('/"new_folder":"New folder"/', $html) === 1, 'real labels present');
+    $vi = withConfig(['fluxfiles.locale' => 'vi'], fn () => (string) (new FluxFilesController())->publicIndex()->content);
+    assertTrue(str_contains($vi, '<html lang="vi" dir="ltr" translate="no"') && str_contains($vi, 'locale: "vi"'), 'fluxfiles.locale picks the locale (and the <html> tag follows)');
+    $bad = FluxFilesController::injectLocale('<html lang="en"><script>x</script>', __DIR__ . '/nonexistent-lang', 'en');
+    assertEqual('<html lang="en"><script>x</script>', $bad, 'no lang dir → page untouched');
+});
+
+test('L4: FLUXFILES_* server env survives config:cache — captured into config, re-seeded into $_ENV, never overwriting', function () {
+    $_ENV['FLUXFILES_ZZ_SMOKE_CAPTURE'] = 'yes';
+    $_ENV['ZZ_SMOKE_NOT_OURS'] = 'no';
+    $cfg = require __DIR__ . '/../config/fluxfiles.php';
+    unset($_ENV['FLUXFILES_ZZ_SMOKE_CAPTURE'], $_ENV['ZZ_SMOKE_NOT_OURS']);
+    assertEqual('yes', $cfg['server_env']['FLUXFILES_ZZ_SMOKE_CAPTURE'] ?? null, 'FLUXFILES_* captured');
+    assertTrue(!array_key_exists('ZZ_SMOKE_NOT_OURS', $cfg['server_env']), 'non-FLUXFILES_ env not captured');
+
+    $_ENV['FLUXFILES_ZZ_PRESENT'] = 'real-env';
+    $n = FluxFilesManager::seedServerEnv([
+        'FLUXFILES_ZZ_SEEDED'  => 'from-cache',
+        'FLUXFILES_ZZ_PRESENT' => 'stale-cache',
+        'APP_KEY'              => 'must-not-leak',
+        'FLUXFILES_ZZ_ARRAY'   => ['nope'],
+    ]);
+    assertEqual(1, $n, 'one key filled');
+    assertEqual('from-cache', $_ENV['FLUXFILES_ZZ_SEEDED'] ?? null, 'absent key seeded');
+    assertEqual('real-env', $_ENV['FLUXFILES_ZZ_PRESENT'], 'a real value always wins');
+    assertTrue(!isset($_ENV['APP_KEY']) || $_ENV['APP_KEY'] !== 'must-not-leak', 'only FLUXFILES_* keys');
+    unset($_ENV['FLUXFILES_ZZ_SEEDED'], $_ENV['FLUXFILES_ZZ_PRESENT']);
+    // What this is for: the license gate reads $_ENV, in the adapter AND in core's PublicLinks.php.
+    assertTrue(!\FluxFiles\LicenseManager::fromEnv(['FLUXFILES_LICENSE_KEY' => null])->licensed('share'), 'sanity: no key → unlicensed');
+    $prov = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    assertTrue(str_contains($prov, "FluxFilesManager::seedServerEnv((array) config('fluxfiles.server_env', []))"), 'provider seeds at register()');
+});
+
+test('L5: an upload is audited under the uploaded FILE key, not its destination folder', function () use ($ffTmp) {
+    $ctrl = freshController();
+    $hdr = bearer(['perms' => ['read', 'write'], 'prefix' => 'aud-up', 'rate_write' => 50]);
+    $tmp = tempnam($ffTmp, 'up');
+    file_put_contents($tmp, 'audit-me-' . uniqid());
+    $file = new class($tmp) {
+        public function __construct(private string $tmp) {}
+        public function getClientOriginalName(): string { return 'evidence.txt'; }
+        public function getMimeType(): string { return 'text/plain'; }
+        public function getRealPath(): string { return $this->tmp; }
+        public function getError(): int { return UPLOAD_ERR_OK; }
+        public function getSize(): int { return (int) filesize($this->tmp); }
+    };
+    $res = $ctrl->upload(new Request('POST', ['disk' => 'local', 'path' => ''], $hdr, null, 'https://app.example.com', ['file' => $file]))->getData();
+    assertTrue(empty($res['error']), 'upload ok: ' . json_encode($res));
+    $rows = array_values(array_filter(smokeAuditRows($ffTmp . '/disk'), static fn ($r) => ($r['action'] ?? '') === 'upload' && ($r['user_id'] ?? '') === 'u1'));
+    $keys = array_column($rows, 'file_key');
+    assertTrue(in_array('aud-up/evidence.txt', $keys, true), 'file key logged, got ' . json_encode($keys));
+    assertTrue(!in_array('aud-up', $keys, true) && !in_array('', $keys, true), 'never the bare folder');
+});
+
+test('L6: refused writes leave virus_blocked / dlp_blocked / legal_hold_blocked audit lines (core parity)', function () use ($ffTmp) {
+    $ctrl = freshController();
+    $claims = \FluxFiles\JwtMiddleware::handle(
+        (new FluxFilesManager())->token('refuser', ['perms' => ['read', 'write'], 'prefix' => 'refused']),
+        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret']
+    );
+    (new \ReflectionProperty(FluxFilesController::class, 'lastClaims'))->setValue($ctrl, $claims);
+    $error = new \ReflectionMethod(FluxFilesController::class, 'error');
+    $error->invoke($ctrl, 'virus', 422, 'virus_detected', ['name' => 'eicar.txt', 'threat' => 'Eicar-Signature']);
+    $error->invoke($ctrl, 'pii', 422, 'pii_detected', ['name' => 'card.txt', 'entities' => ['CREDIT_CARD']]);
+    $resp = $error->invoke($ctrl, 'held', 403, 'legal_hold_active', ['hold_id' => 'h-1', 'path' => 'refused/held.txt']);
+    assertEqual('legal_hold_active', $resp->getData()['error_code'] ?? null, 'response unchanged');
+    $mine = array_values(array_filter(smokeAuditRows($ffTmp . '/disk'), static fn ($r) => ($r['user_id'] ?? '') === 'refuser'));
+    $by = [];
+    foreach ($mine as $r) {
+        $by[$r['action']][] = $r;
+    }
+    assertEqual('refused/eicar.txt', $by['virus_blocked'][0]['file_key'] ?? null, 'virus_blocked, scoped key');
+    assertEqual('refused/card.txt', $by['dlp_blocked'][0]['file_key'] ?? null, 'dlp_blocked, scoped key');
+    assertEqual('CREDIT_CARD', $by['dlp_blocked'][0]['detail'] ?? null, 'entity TYPE only');
+    assertEqual('refused/held.txt', $by['legal_hold_blocked'][0]['file_key'] ?? null, 'legal_hold_blocked');
+    assertEqual('h-1', $by['legal_hold_blocked'][0]['detail'] ?? null, 'hold id as detail');
+    assertTrue(!isset($by['access_denied']), 'a hold refusal is not ALSO logged as access_denied');
+    $error->invoke($ctrl, 'nope', 403, 'permission_denied', []);
+    $mine = array_filter(smokeAuditRows($ffTmp . '/disk'), static fn ($r) => ($r['user_id'] ?? '') === 'refuser' && ($r['action'] ?? '') === 'access_denied');
+    assertEqual(1, count($mine), 'other 403s still audited as access_denied');
+});
+
+test('L7: audit/export errors use the standard envelope (error_code/error_params), not code/params', function () {
+    $ctrl = freshController();
+    $resp = $ctrl->auditExport(new Request('GET', ['format' => 'ndjson'], bearer(['perms' => ['read']])));
+    assertEqual(403, $resp->getStatusCode(), 'no audit perm → 403');
+    $body = $resp->getData();
+    assertTrue(array_key_exists('data', $body) && $body['data'] === null, 'data:null');
+    assertEqual('forbidden', $body['error_code'] ?? null, 'error_code present');
+    assertTrue(!array_key_exists('code', $body), 'legacy `code` key gone');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

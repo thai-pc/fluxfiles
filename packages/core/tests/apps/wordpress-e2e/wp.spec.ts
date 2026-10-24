@@ -1,4 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { pngFile, largePngFile, cardByName, uploadFile } from '../e2e/helpers';
 
 const BASE = 'http://localhost:8888';
@@ -81,39 +84,78 @@ test('wordpress proxy: gated media stream + on-demand img are served through the
 // URL. Exercised through the block editor (which carries a REST nonce), so this covers
 // real wp_insert_attachment + WP_Query idempotency + wp_get_attachment_url — none of
 // which the stubbed PHP smoke can prove.
-test('wordpress attachment bridge: /attach creates an offloaded attachment (idempotent) + URL rewrite', async ({ page }) => {
-  await loginAdmin(page);
-  // The block editor page exposes wpApiSettings.nonce for authenticated REST calls.
+//
+// Since the 2026-10-23 hardening, /attach only links a file that EXISTS on the disk,
+// computes the URL itself (the client's `url` is ignored), and refuses a disk with no
+// stable public URL. setup.sh gates the local disk (fluxfiles_local_private=1) for the
+// stream/img test, so the success path flips it off for the duration of the test.
+function wpCli(...args: string[]) {
+  execFileSync('npx', ['--yes', '@wordpress/env', 'run', 'cli', 'wp', ...args],
+    { cwd: dirname(fileURLToPath(import.meta.url)), stdio: 'ignore' });
+}
+
+async function uploadViaShortcode(page: Page, name: string) {
+  await page.goto(`${BASE}/files/`);
+  const fm = page.frameLocator('iframe');
+  await expect(fm.locator('.ff-app')).toBeVisible({ timeout: 25_000 });
+  await uploadFile(fm, pngFile(name));
+  await expect(cardByName(fm, name)).toBeVisible({ timeout: 15_000 });
+}
+
+async function attachFromEditor(page: Page, body: Record<string, string>) {
   await page.goto(`${BASE}/wp-admin/post-new.php`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!(window as any).wpApiSettings?.nonce, null, { timeout: 20_000 });
-
-  const url = `https://cdn.example.com/wp/e2e-${Date.now()}.jpg`;
-  const key = url.split('/').slice(-2).join('/');
-
-  const result = await page.evaluate(async ({ base, url, key }) => {
+  return page.evaluate(async ({ base, body }) => {
     const nonce = (window as any).wpApiSettings.nonce as string;
-    const attach = () =>
-      fetch(`${base}/wp-json/fluxfiles/v1/api/fm/attach`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-        body: JSON.stringify({ url, key, disk: 'local', name: key.split('/').pop(), mime: 'image/jpeg', alt: 'e2e alt' }),
-      }).then((r) => r.json());
-
+    const attach = () => fetch(`${base}/wp-json/fluxfiles/v1/api/fm/attach`, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+      body: JSON.stringify(body),
+    }).then(async (r) => ({ status: r.status, json: await r.json() }));
     const first = await attach();
     const second = await attach(); // idempotent on (disk,key) → same id
-    const id = first?.data?.id;
-    // REST media item reflects the URL-rewrite filter via source_url.
+    const id = first.json?.data?.id;
     const media = id
       ? await fetch(`${base}/wp-json/wp/v2/media/${id}`, { credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce } }).then((r) => r.json())
       : null;
-    return { firstId: id, secondId: second?.data?.id, sourceUrl: media?.source_url, altText: media?.alt_text };
-  }, { base: BASE, url, key });
+    return { status: first.status, error: first.json?.error, firstId: id, secondId: second.json?.data?.id,
+      sourceUrl: media?.source_url as string | undefined, altText: media?.alt_text };
+  }, { base: BASE, body });
+}
 
-  expect(result.firstId).toBeGreaterThan(0);           // real attachment created
-  expect(result.secondId).toBe(result.firstId);        // idempotent — no duplicate
-  expect(result.sourceUrl).toBe(url);                  // URL rewritten to FluxFiles
-  expect(result.altText).toBe('e2e alt');              // alt synced
+test('wordpress attachment bridge: a gated disk or a missing file is refused', async ({ page }) => {
+  await loginAdmin(page);
+  const name = `wp-attach-gated-${Date.now()}.png`;
+  await uploadViaShortcode(page, name);
+
+  const gated = await attachFromEditor(page, { key: name, disk: 'local', name, mime: 'image/png' });
+  expect(gated.status).toBe(422);                                  // no stable public URL
+  expect(gated.firstId).toBeUndefined();
+
+  const missing = await attachFromEditor(page, { key: `nope-${Date.now()}.png`, disk: 'local', name: 'x.png', mime: 'image/png' });
+  expect(missing.status).toBe(404);                                // only files that exist
+});
+
+test('wordpress attachment bridge: /attach creates an offloaded attachment (idempotent) + URL rewrite', async ({ page }) => {
+  await loginAdmin(page);
+  wpCli('option', 'update', 'fluxfiles_local_private', '0');      // public local disk for this test
+  try {
+    const name = `wp-attach-${Date.now()}.png`;
+    await uploadViaShortcode(page, name);
+    const result = await attachFromEditor(page, {
+      key: name, disk: 'local', name, mime: 'image/png', alt: 'e2e alt',
+      url: 'https://attacker.example/not-this.png',                 // must be ignored
+    });
+    expect(result.status).toBe(200);
+    expect(result.firstId).toBeGreaterThan(0);                     // real attachment created
+    expect(result.secondId).toBe(result.firstId);                  // idempotent — no duplicate
+    expect(result.sourceUrl).toMatch(/^https?:\/\//);              // the server's stable URL…
+    expect(result.sourceUrl).toContain(name);
+    expect(result.sourceUrl).not.toContain('attacker.example');    // …never the client's
+    expect(result.altText).toBe('e2e alt');                        // alt synced
+  } finally {
+    wpCli('option', 'update', 'fluxfiles_local_private', '1');    // back to what setup.sh set
+  }
 });
 
 // Native-picker integration (experimental): with fluxfiles_replace_picker on (set in

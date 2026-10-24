@@ -1,0 +1,34 @@
+# Live paid-module rig, WordPress edition: the real plugin (scripts/build-wordpress.sh
+# artifact) + the 13 modules installed into it + a real license, behind the WP REST
+# proxy, with the same engines as ../docker-compose.yml. Own project name and ports
+# (8390–8399) so it never collides with the standalone rig (8190s) or wp-env (8888).
+# Started/stopped by global-setup.ts / global-teardown.ts.
+name: ff-live-wp
+x-app: &app
+  image: ff-modules-live:latest
+  pull_policy: never
+services:
+  wp:
+    image: ff-live-wp:latest
+    pull_policy: never
+    build: .
+    ports: ["8390:8390"]
+    env_file: .stage/wp.env
+    depends_on: [ff-db, ff-ai, ff-hooks, localstack, ff-presidio]
+  ff-db:
+    image: mariadb:lts
+    environment: { MARIADB_ROOT_PASSWORD: root, MARIADB_DATABASE: wp, MARIADB_USER: wp, MARIADB_PASSWORD: wp }
+  ff-ai:             # self-hosted image-model stand-in for AI Vision (provider=http)
+    <<: *app
+    command: ["php", "-S", "0.0.0.0:8192", "/fixtures/ai.php"]
+  ff-hooks:          # webhook receiver; tests read GET /events
+    <<: *app
+    command: ["php", "-S", "0.0.0.0:8193", "/fixtures/hooks.php"]
+    ports: ["8393:8193"]
+  localstack:        # S3 disk (Backup target), configured through the plugin's S3 options
+    image: localstack/localstack:4
+    environment: { SERVICES: s3 }
+    volumes: ["../fixtures/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro"]
+  ff-presidio:       # Microsoft Presidio analyzer — the DLP module's engine
+    image: mcr.microsoft.com/presidio-analyzer:latest
+    environment: { PORT: "3000" }

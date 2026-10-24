@@ -110,8 +110,11 @@ $token = fluxfiles_token(['user' => 'user-42', 'edition' => 'pro']);
 > installed, licence missing, or the engine (ClamAV/VirusTotal, Presidio) unreachable.
 > Only grant them where the engine is configured.
 
-WordPress mints tokens for you; set the edition under **Settings → FluxFiles**, or
-filter `fluxfiles_token_overrides`.
+WordPress mints tokens for you. Paste the licence under **Settings → FluxFiles →
+Licence**; turn modules on per token with the `fluxfiles_token_overrides` filter
+(`edition`, or individual `allow_*` claims) — there is no settings field for them.
+Engine settings (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_ENDPOINT`,
+`FLUXFILES_C2PA_MANIFEST`, …) are read from the server environment.
 
 The claim names are in [`CONFIG.md`](../reference/CONFIG.md) — one row per claim, with defaults.
 

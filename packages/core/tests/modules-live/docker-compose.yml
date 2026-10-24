@@ -1,0 +1,32 @@
+# Live paid-module rig: core + all 13 modules + their real engines.
+# Started/stopped by global-setup.ts / global-teardown.ts (see README.md).
+name: ff-modules-live
+x-app: &app
+  image: ff-modules-live:latest
+  pull_policy: never
+services:
+  core:
+    <<: *app
+    build: .
+    ports: ["8190:8190"]
+    env_file: .stage/core.env
+    depends_on: [ff-idp, ff-ai, ff-hooks, localstack, ff-presidio]
+  ff-idp:            # OIDC IdP for the SSO module (browser + core both use http://ff-idp:8191)
+    <<: *app
+    command: ["php", "-S", "0.0.0.0:8191", "/fixtures/idp.php"]
+    environment: { IDP_CLIENT_ID: fluxfiles-live }
+    ports: ["8191:8191"]
+  ff-ai:             # self-hosted image-model stand-in for the AI Vision module (provider=http)
+    <<: *app
+    command: ["php", "-S", "0.0.0.0:8192", "/fixtures/ai.php"]
+  ff-hooks:          # webhook receiver; tests read GET /events
+    <<: *app
+    command: ["php", "-S", "0.0.0.0:8193", "/fixtures/hooks.php"]
+    ports: ["8193:8193"]
+  localstack:        # second disk (S3) for the Backup module
+    image: localstack/localstack:4
+    environment: { SERVICES: s3 }
+    volumes: ["./fixtures/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro"]
+  ff-presidio:       # Microsoft Presidio analyzer — the DLP module's real engine
+    image: mcr.microsoft.com/presidio-analyzer:latest
+    environment: { PORT: "3000" }

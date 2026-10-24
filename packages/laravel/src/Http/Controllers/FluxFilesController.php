@@ -331,6 +331,66 @@ class FluxFilesController
     }
 
     /**
+     * The three refused writes core's index.php records even though the write
+     * itself failed — they are the security events the scanners and holds exist to
+     * produce: `virus_detected` → `virus_blocked`, `pii_detected` → `dlp_blocked`
+     * (detail = entity-TYPE names only, never matched text), `legal_hold_active` →
+     * `legal_hold_blocked` (detail = hold id). Without this a proxy-mode tenant's
+     * blocked EICAR upload, PII upload or attempt to destroy held evidence left no
+     * audit line at all. Best-effort: auditing never turns a clean 4xx into a 500.
+     *
+     * @param array<string,mixed> $params
+     */
+    private function auditRefusedWrite(\FluxFiles\Claims $claims, ?string $code, array $params): void
+    {
+        $action = [
+            'virus_detected'    => 'virus_blocked',
+            'pii_detected'      => 'dlp_blocked',
+            'legal_hold_active' => 'legal_hold_blocked',
+        ][(string) $code] ?? null;
+        if ($action === null) {
+            return;
+        }
+        try {
+            $req = function_exists('request') ? request() : null;
+            $in = $req !== null ? (array) $req->all() : [];
+            $disk = '';
+            foreach (['disk', 'src_disk'] as $k) {
+                if (isset($in[$k]) && is_scalar($in[$k]) && (string) $in[$k] !== '') {
+                    $disk = (string) $in[$k];
+                    break;
+                }
+            }
+            if ($disk === '' || !$claims->hasDisk($disk)) {
+                $disk = $claims->allowedDisks[0] ?? 'local';
+            }
+            $detail = null;
+            if ($action === 'legal_hold_blocked') {
+                $key = '';
+                foreach (['path', 'from', 'src_path'] as $k) {
+                    if (isset($in[$k]) && is_scalar($in[$k]) && (string) $in[$k] !== '') {
+                        $key = (string) $in[$k];
+                        break;
+                    }
+                }
+                // trash/purge carries only a trash_id: use the (already scoped) key
+                // FileManager put in the exception — scopePath() is idempotent.
+                if ($key === '') {
+                    $key = (string) ($params['path'] ?? '');
+                }
+                $detail = (string) ($params['hold_id'] ?? '');
+            } else {
+                $key = (string) ($params['name'] ?? $params['entry'] ?? '');
+                if ($action === 'dlp_blocked') {
+                    $detail = implode(',', array_map('strval', (array) ($params['entities'] ?? [])));
+                }
+            }
+            $this->logAuditQuiet($claims, $action, $disk, $key, $detail);
+        } catch (\Throwable $e) {
+        }
+    }
+
+    /**
      * Fire a webhook for a file-changing action (paid module). Gated the same
      * 3-layer way index.php's inline wiring does it (installed + licensed +
      * `allow_webhooks` + a configured `webhook_url`) — best-effort, never throws
@@ -369,7 +429,11 @@ class FluxFilesController
      */
     private function error(string $message, int $status = 400, ?string $code = null, array $params = []): JsonResponse
     {
-        if ($status === 403 && $this->lastClaims !== null) {
+        if ($this->lastClaims !== null) {
+            $this->auditRefusedWrite($this->lastClaims, $code, $params);
+        }
+        // legal_hold_active already has its own `legal_hold_blocked` line (core does the same).
+        if ($status === 403 && $this->lastClaims !== null && $code !== 'legal_hold_active') {
             $this->auditDenied($this->lastClaims, $code);
         }
         // Forward the core's error_code + error_params so the embedded UI can show a
@@ -451,11 +515,18 @@ class FluxFilesController
                 filter_var($request->input('force_upload', false), FILTER_VALIDATE_BOOLEAN)
             );
 
-            $this->logAudit($claims, 'upload', $disk !== '' ? $disk : 'local', $path);
+            // The entry names the uploaded FILE (core: the result's `key` when the
+            // request has no JSON body). `$path` is only the destination folder —
+            // '' at the root — which left the audit line and the webhook payload
+            // without any trace of what was uploaded.
+            $uploadedKey = isset($result['key']) && is_string($result['key']) && $result['key'] !== ''
+                ? $result['key']
+                : ltrim(rtrim($path, '/') . '/' . (string) ($result['name'] ?? $fileData['name']), '/');
+            $this->logAudit($claims, 'upload', $disk !== '' ? $disk : 'local', $uploadedKey);
             $this->dispatchWebhook($claims, 'upload', [
                 'disk' => $disk !== '' ? $disk : 'local',
-                'path' => $path,
-                'name' => (string) ($result['name'] ?? basename($path)),
+                'path' => $uploadedKey,
+                'name' => (string) ($result['name'] ?? basename($uploadedKey)),
             ]);
 
             return $this->ok($result);
@@ -1820,10 +1891,10 @@ class FluxFilesController
                 ], (string) $request->query('format', 'ndjson'));
             });
         } catch (ApiException $e) {
-            return response()->json(
-                ['error' => $e->getMessage(), 'code' => $e->getErrorCode(), 'params' => $e->getErrorParams()],
-                $e->getHttpCode()
-            );
+            // The standard envelope (`error_code`/`error_params`, like every other
+            // route and core): the UI localises on `error_code`, and error() also
+            // audits a 403 as access_denied. This used to send `code`/`params`.
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
     }
 
@@ -3141,6 +3212,7 @@ class FluxFilesController
             ['"../assets/fm.css?v=' . $ver('fm.css') . '"', '"../assets/fm.js?v=' . $ver('fm.js') . '"'],
             $html
         );
+        $html = self::injectLocale($html, $base . '/lang', (string) config('fluxfiles.locale', ''));
 
         $resp = response($html, 200)
             ->header('Content-Type', 'text/html; charset=utf-8')
@@ -3154,6 +3226,40 @@ class FluxFilesController
             $resp->header('Content-Security-Policy', 'frame-ancestors ' . $frameAncestors);
         }
         return $resp;
+    }
+
+    /**
+     * Inject the UI's translations as `window.__FM_LOCALE__`, the same way core's
+     * index.php serves /public/index.html. The embedded (iframe) boot path only
+     * fetches messages when the host's FM_CONFIG names a locale — `<x-fluxfiles>`
+     * doesn't — and otherwise keeps "the server-injected locale", so without this
+     * every proxy-mode embed rendered raw i18n keys (`toolbar.upload`,
+     * `share.title`, …) instead of labels. `fluxfiles.locale` (FLUXFILES_LOCALE)
+     * picks the locale; empty/unsupported → English, as in core.
+     */
+    public static function injectLocale(string $html, string $langDir, string $locale = ''): string
+    {
+        if (!class_exists(\FluxFiles\I18n::class) || !is_dir($langDir)) {
+            return $html;
+        }
+        $i18n = new \FluxFiles\I18n($langDir, $locale !== '' ? $locale : null);
+        $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+        $injection = 'window.__FM_LOCALE__ = { locale: ' . json_encode($i18n->locale(), $flags)
+            . ', dir: ' . json_encode($i18n->direction(), $flags)
+            . ', messages: ' . $i18n->toJson() . ' };';
+        $html = str_replace(
+            "window.__FM_LOCALE__ = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };",
+            $injection,
+            $html
+        );
+        // The tag carries more attributes (`<html lang="en" translate="no">`), so
+        // match the opening only — core's exact '<html lang="en">' never matches.
+        return (string) preg_replace(
+            '/<html lang="en"/',
+            '<html lang="' . htmlspecialchars($i18n->locale()) . '" dir="' . htmlspecialchars($i18n->direction()) . '"',
+            $html,
+            1
+        );
     }
 
     /**
@@ -3176,11 +3282,35 @@ class FluxFilesController
         return ($value !== '' && preg_match('/^[A-Za-z0-9 :\/\.\*\-\']+$/', $value)) ? $value : '';
     }
 
+    /**
+     * Where the browser SDK the `<x-fluxfiles>` component loads from `/fluxfiles.js`
+     * lives. The core package Composer installs (the fluxfiles-core split of
+     * packages/core) does NOT contain it — it is packages/sdk's file — so looking only
+     * in the core base path 404'd on every default `composer require fluxfiles/laravel`
+     * install and the component never booted (`FluxFiles is not defined`). Order:
+     * an operator-supplied copy in the base path (release ZIP layout), the monorepo
+     * sibling (same lookup as core's router.php), then the copy this adapter ships in
+     * resources/ (kept byte-identical to packages/sdk by test-laravel-smoke.php).
+     */
+    public static function resolveSdkPath(string $basePath): ?string
+    {
+        foreach ([
+            rtrim($basePath, '/') . '/fluxfiles.js',
+            rtrim($basePath, '/') . '/../sdk/fluxfiles.js',
+            dirname(__DIR__, 3) . '/resources/fluxfiles.js',
+        ] as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+        return null;
+    }
+
     public function sdkJs(): \Illuminate\Http\Response
     {
-        $path = $this->fluxfilesBasePath() . '/fluxfiles.js';
+        $path = self::resolveSdkPath($this->fluxfilesBasePath());
 
-        if (!file_exists($path)) {
+        if ($path === null) {
             abort(404, 'FluxFiles SDK not found');
         }
 

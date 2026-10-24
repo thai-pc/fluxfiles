@@ -42,6 +42,13 @@ run option update fluxfiles_replace_picker 1 >/dev/null
 # Gate the local disk so list() emits real /api/fm/stream + /api/fm/img URLs
 # (what wp.spec.ts's stream/img test hits) instead of a static wp-content URL.
 run option update fluxfiles_local_private 1 >/dev/null
+# The e2e makes more than the proxy's default 10 writes/min per user (uploads +
+# /attach calls back to back), so raise this test site's rate claims — the same
+# move core's own test servers make with FLUXFILES_RATE_LIMIT_WRITE.
+npx --yes @wordpress/env run cli sh -c 'mkdir -p wp-content/mu-plugins && cat > wp-content/mu-plugins/fluxfiles-e2e.php <<"PHP"
+<?php
+add_filter("fluxfiles_token_overrides", static function ($o) { return (array) $o + ["rate_read" => 10000, "rate_write" => 10000]; });
+PHP' >/dev/null
 run rewrite structure '/%postname%/' --hard >/dev/null 2>&1
 run rewrite flush --hard >/dev/null 2>&1
 
