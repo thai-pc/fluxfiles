@@ -108,7 +108,7 @@
   - `FluxFilesController` proxies the core API (every route except tus, metadata export/import and SSO) and serves core assets in Laravel mode.
 
 - WordPress:
-  - `fluxfiles.php` boots the plugin (and refuses to load below PHP 8.2.35 with an admin notice).
+  - `fluxfiles.php` boots the plugin (and refuses to load below PHP 8.1 with an admin notice).
   - `includes/FluxFilesPlugin.php` wires activation, admin, REST API, media button, shortcode, and storage protection (`.htaccess` for `wp-content/fluxfiles/`).
   - `includes/FluxFilesApi.php` registers the REST proxy routes under `/wp-json/fluxfiles/v1/`.
   - `FluxFilesPlugin::diskConfigs()` maps WordPress options to core disk configs.

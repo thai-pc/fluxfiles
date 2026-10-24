@@ -3,8 +3,8 @@ Contributors: thaipc
 Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
-Requires PHP: 8.2.35
-Stable tag: 0.2.68
+Requires PHP: 8.1.0
+Stable tag: 0.2.69
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -133,7 +133,7 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * REST proxy at `/wp-json/fluxfiles/v1/` with JWT bridged from the WordPress user.
 * `wp fluxfiles seed` WP-CLI command — index pre-existing files/folders under `wp-content/fluxfiles/uploads/` (or any configured S3/R2 disk) so they appear in search.
 * Local, AWS S3, and Cloudflare R2 storage; cursor-based pagination; 16 languages with RTL.
-* Requires PHP 8.2.35+ (the latest security-patched 8.2). Prefer installing from a ZIP that bundles `vendor/`.
+* Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
 
@@ -144,4 +144,4 @@ Bundles FluxFiles core 0.2.5 — deletes now go to a restorable Trash (files and
 Bundles FluxFiles core 0.2.4 (Bucket Doctor, activity log, extension immutability). Install from the release ZIP that includes `vendor/`, or rebuild with `composer install --no-dev`.
 
 = 0.2.0 =
-Requires **PHP 8.2.35+** and a build that includes `vendor/` (release ZIP or run `composer install --no-dev` before deploying). Review settings after activation.
+Requires **PHP 8.1+** and a build that includes `vendor/` (release ZIP or run `composer install --no-dev` before deploying). Review settings after activation.

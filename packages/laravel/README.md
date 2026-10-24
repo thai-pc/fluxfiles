@@ -4,7 +4,7 @@ Laravel adapter for [FluxFiles](https://github.com/thai-pc/fluxfiles) — a stan
 
 ## Requirements
 
-- PHP >= 8.2.35 (matches `fluxfiles/fluxfiles`)
+- PHP >= 8.1 (matches `fluxfiles/fluxfiles`; Laravel 11/12 themselves need 8.2)
 - Laravel 10, 11, or 12
 
 ## Installation

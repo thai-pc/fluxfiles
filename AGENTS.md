@@ -9,7 +9,7 @@ three integration patterns, the publish topology), see [`docs/reference/ARCHITEC
 
 ## What FluxFiles is
 
-A standalone, embeddable PHP file manager (PHP **≥ 8.2.35**). The core exposes a PHP
+A standalone, embeddable PHP file manager (PHP **≥ 8.1**). The core exposes a PHP
 API + a zero-build (Alpine.js + htmx) frontend that hosts embed by iframe/SDK.
 Adapters ship for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE,
 Summernote, plus a vanilla SDK, server-side token SDKs for Node and Python, and an
@@ -150,7 +150,7 @@ php packages/laravel/tests/test-laravel-smoke.php
 CI is `.github/workflows/test.yml` (16 jobs: core-php, lockfiles-and-laravel-db,
 adapter-core-floor, iframe-allow, api-e2e, selfboot-e2e, s3-localstack, db-mysql,
 db-postgres, wrappers, node-sdk (also builds/tests `@fluxfiles/mcp`), python-token,
-browser-e2e, editor-e2e, pack-smoke, docker-build), on a PHP 8.2–8.5 matrix where it
+browser-e2e, editor-e2e, pack-smoke, docker-build), on a PHP 8.1–8.5 matrix where it
 matters. `selfboot-e2e` runs every `tests/e2e/*-http.php` (each boots its own `php -S`)
 plus `test-sftp-live.php` against an `atmoz/sftp` container. `db-mysql`/`db-postgres`
 run the `FLUXFILES_STORAGE_BACKEND=db` suite against real MySQL/PostgreSQL service
@@ -176,7 +176,7 @@ Laravel DB adapter test.
   `scripts/build-wordpress.sh`; a `wordpress-v*` tag runs `wordpress-release.yml`,
   which attaches the ZIP (+ sha256 and a catalogue entry carrying `requires_php`) to a
   GitHub Release.
-- **PHP floor** (`^8.2.35`) is stated in five places that must agree — every
+- **PHP floor** (`^8.1.0`; CI covers 8.1–8.5) is stated in five places that must agree — every
   `composer.json` `require.php` + `config.platform.php`, the WP plugin header/`readme.txt`
   `Requires PHP`, `FLUXFILES_MIN_PHP` and `FluxFilesUpdater::REQUIRES_PHP`;
   `test-wp-smoke.php` guards the WordPress side.

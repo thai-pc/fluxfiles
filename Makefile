@@ -5,7 +5,7 @@ PHP ?= 8.3
 
 help:
 	@echo "make test            # run the core suite in Docker (PHP=$(PHP))"
-	@echo "make test-all        # run the suite on PHP 8.2, 8.3, 8.4, 8.5"
+	@echo "make test-all        # run the suite on PHP 8.1 – 8.5"
 	@echo "make test-php PHP=8.4 # run the suite on a specific PHP version"
 	@echo "make up / down       # start / stop the dev stack (app + LocalStack S3)"
 	@echo "make s3-local        # run the live S3 test against a throwaway LocalStack"
@@ -18,7 +18,7 @@ test-php:
 	docker run --rm fluxfiles-test:$(PHP)
 
 test-all:
-	@for v in 8.2 8.3 8.4 8.5; do \
+	@for v in 8.1 8.2 8.3 8.4 8.5; do \
 		echo "=== PHP $$v ==="; \
 		docker build -q --build-arg PHP_VERSION=$$v -f docker/Dockerfile -t fluxfiles-test:$$v . >/dev/null && \
 		docker run --rm fluxfiles-test:$$v || exit 1; \
