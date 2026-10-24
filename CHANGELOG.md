@@ -3,6 +3,45 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.37] — 2026-10-24
+
+> Released: `core-v0.2.111`, `wordpress-v0.2.71` (the plugin bundles core).
+> Paid modules: `backup v1.3.2` (core floor now `^0.2.111`), `dlp v1.0.5`.
+
+### Added
+
+- **WordPress: Settings → FluxFiles → Module engines.** The paid modules'
+  engine settings can now be set from WordPress. Before, they came only from
+  environment variables, which shared hosting doesn't offer. The 14 settings
+  cover AI Vision, OCR, Virus scan, C2PA, DLP, Webhooks and Legal hold. They
+  are stored in the `fluxfiles_module_env` option and copied into `$_ENV` before
+  any module runs, on the REST API and on the public share/intake pages.
+  - A real environment variable always wins. The screen shows that field as
+    set by the environment and read-only.
+  - API keys are never shown back. Leaving the field empty keeps the saved key,
+    and a checkbox removes it.
+  - Each value is checked against its type (http(s) URLs, number ranges, a
+    fixed provider list), including values written with `wp option update`.
+- **Core: `FileManager::withIndexBatch($disk, $fn)`.** Modules can now group
+  several writes into a single update of the disk's search/folder index. The
+  index is saved and its lock released even when `$fn` throws, and batches can
+  nest.
+
+### Fixed
+
+- **Backup updated the destination index twice per copied file**: once for the
+  bytes and once for the copied metadata. A run of N files now does N index
+  writes. The index is saved after each file, so a run that times out keeps
+  the files it already copied indexed.
+- **DLP: `FLUXFILES_DLP_TIMEOUT` was ignored when it was set through `.env` or by
+  an adapter** (it was read with `getenv()` only).
+
+### Docs
+
+- `docs/reference/CONFIG.md`: added `FLUXFILES_DLP_LANGUAGE` and
+  `FLUXFILES_DLP_TIMEOUT`, and a note that these engine settings can be set in
+  WordPress.
+
 ## [0.3.36] — 2026-10-24
 
 > Released: `core-v0.2.110`, `laravel-v0.2.55`, `wordpress-v0.2.70`.

@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1.0
-Stable tag: 0.2.70
+Stable tag: 0.2.71
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -81,6 +81,10 @@ If you cannot use WP-CLI, trigger the same indexing by re-uploading files throug
 = What storage backends are supported? =
 
 Local disk, AWS S3, and Cloudflare R2. You can configure multiple disks and allow users to switch between them.
+
+= How do I configure the paid modules' engines (AI Vision, DLP, C2PA, VirusTotal...) without environment variables? =
+
+Under Settings > FluxFiles > Module engines. API keys are write-only; a real environment variable of the same name always wins.
 
 = Does it require an external server? =
 

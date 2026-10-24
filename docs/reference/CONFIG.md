@@ -290,6 +290,8 @@ private-local-media requirement.
 
 ## 4. Server env vars (server-wide)
 
+> **WordPress:** the module engine variables below (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_*`, `FLUXFILES_C2PA_MANIFEST`, `FLUXFILES_VIRUSTOTAL_*`, `FLUXFILES_CLAMSCAN_TIMEOUT`, `FLUXFILES_OCR_MAX_MEGAPIXELS`, `FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) can instead be set under Settings → FluxFiles → Module engines (stored in the `fluxfiles_module_env` option). A real environment variable wins.
+
 | Env var | Default | Notes |
 |---|---|---|
 | `FLUXFILES_SECRET` | — | **Required.** HS256 signing secret (**≥ 32 bytes**) — also used for stream/img per-file tokens and (HKDF-derived) the audit-log HMAC chain. |
@@ -332,6 +334,8 @@ private-local-media requirement.
 | `FLUXFILES_AIVISION_ENDPOINT` | — | Endpoint URL, required when `FLUXFILES_AIVISION_PROVIDER=http`. Operator-trusted (server env, not user input) — no SSRF guard. |
 | `FLUXFILES_AIVISION_TIMEOUT` | `60` | AI Vision provider request timeout (seconds). |
 | `FLUXFILES_DLP_ENDPOINT` | — | DLP/PII scanner endpoint for the paid DLP module. Required when DLP scanning is enabled for a token. |
+| `FLUXFILES_DLP_LANGUAGE` | `en` | Language code sent to the DLP scanner with each analyze request. |
+| `FLUXFILES_DLP_TIMEOUT` | `10` | DLP scanner request timeout (seconds, minimum 1). |
 | `FLUXFILES_C2PA_MANIFEST` | — | Path to the C2PA (paid) signing manifest JSON (claim_generator + cert/key). Empty → `501 c2pa_unconfigured`. |
 | `FLUXFILES_VIRUSTOTAL_KEY` | — | VirusTotal API key — cloud fallback for the Virus module (paid) when local ClamAV isn't installed. SHA-256 lookup only; bytes never leave the server. |
 | `FLUXFILES_VIRUSTOTAL_TIMEOUT` | `20` | VirusTotal request timeout (seconds). |

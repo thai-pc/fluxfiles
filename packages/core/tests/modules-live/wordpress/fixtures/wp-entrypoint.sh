@@ -22,6 +22,10 @@ wp option update fluxfiles_s3_key test --quiet
 wp option update fluxfiles_s3_secret test --quiet
 wp option update fluxfiles_s3_endpoint http://localstack:4566 --quiet
 wp option update fluxfiles_disks '["local","s3"]' --format=json --quiet
+# Module engine settings: the plugin's "Module engines" option (Settings → FluxFiles),
+# the way a shared-hosting customer sets them. FLUXFILES_C2PA_MANIFEST stays a REAL
+# env var (wp.env) so the rig also proves an env var wins over / coexists with the option.
+wp option update fluxfiles_module_env "$(cat /wpfixtures/module-env.json)" --format=json --quiet
 # Module claims: the edition preset + per-module tuning, through the filter above.
 wp option update fluxfiles_e2e_overrides "$(cat /wpfixtures/overrides.json)" --quiet
 mkdir -p wp-content/mu-plugins && cp /wpfixtures/fluxfiles-live.php wp-content/mu-plugins/

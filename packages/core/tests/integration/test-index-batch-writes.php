@@ -230,5 +230,58 @@ test('attachDerivedFile keeps the derived file\'s own dims/size, inherits user m
     assertTrue(($m['width'] ?? 0) === 30 && ($m['size'] ?? 0) === strlen($dst), 'not clobbered by source: ' . json_encode($m));
 });
 
+test('withIndexBatch: N file writes + metadata copies are one index write; returns the closure value', function () {
+    [$fm, $dm, , $root] = env();
+    $mk = function (string $b) { $s = fopen('php://temp', 'r+'); fwrite($s, $b); rewind($s); return $s; };
+    $dm->adapter->indexWrites = 0;
+    $ret = $fm->withIndexBatch('local', function () use ($fm, $mk) {
+        for ($i = 0; $i < 5; $i++) {
+            $fm->writeScopedStream('local', $fm->validateUserPath("wb{$i}.txt"), $mk("b{$i}"));
+            $fm->attachCopiedFile('local', "wb{$i}.txt", 'local', "wb{$i}-copy.txt");
+        }
+        return 'done';
+    });
+    assertTrue($ret === 'done', 'closure value returned');
+    assertTrue($dm->adapter->indexWrites === 1, "index writes: {$dm->adapter->indexWrites}");
+    $idx = index($root);
+    assertTrue(isset($idx['wb0.txt'], $idx['wb4.txt']) && ($idx['wb4.txt']['uploaded_by'] ?? '') === 'u', json_encode(array_keys($idx)));
+});
+
+test('withIndexBatch: nested batches still write once, after the outermost ends', function () {
+    [$fm, $dm, , $root] = env();
+    $dm->adapter->indexWrites = 0;
+    $fm->withIndexBatch('local', function () use ($fm, $dm) {
+        up($fm, 'n1.txt', 'one');            // has its own inner batch
+        $fm->withIndexBatch('local', function () use ($fm) { up($fm, 'n2.txt', 'two'); });
+        assertTrue($dm->adapter->indexWrites === 0, 'nothing flushed before the outer batch ends');
+    });
+    assertTrue($dm->adapter->indexWrites === 1, "index writes: {$dm->adapter->indexWrites}");
+    $idx = index($root);
+    assertTrue(isset($idx['n1.txt'], $idx['n2.txt']), json_encode(array_keys($idx)));
+});
+
+test('withIndexBatch: a throw still flushes what landed and releases the lock', function () {
+    [$fm, $dm, , $root] = env();
+    $dm->adapter->indexWrites = 0;
+    $caught = false;
+    try {
+        $fm->withIndexBatch('local', function () use ($fm) {
+            up($fm, 't1.txt', 'one');
+            throw new \RuntimeException('boom');
+        });
+    } catch (\RuntimeException $e) { $caught = $e->getMessage() === 'boom'; }
+    assertTrue($caught, 'exception propagates unchanged');
+    assertTrue(isset(index($root)['t1.txt']), 'index flushed for the file that landed');
+    assertTrue($dm->adapter->indexWrites === 1, "index writes: {$dm->adapter->indexWrites}");
+    // Lock released: a second handler can take the exclusive index lock without blocking.
+    $fp = fopen("{$root}/_fluxfiles/index.lock", 'c+');
+    assertTrue(flock($fp, LOCK_EX | LOCK_NB), 'index.lock is free after the throw');
+    fclose($fp);
+    // ...and the batch depth was reset: a later plain upload writes immediately (1 write).
+    $dm->adapter->indexWrites = 0;
+    up($fm, 't2.txt', 'two');
+    assertTrue($dm->adapter->indexWrites === 1 && isset(index($root)['t2.txt']), 'no stuck batch depth');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  Passed: {$passed}  Failed: {$failed}\n\n";
 exit($failed > 0 ? 1 : 0);

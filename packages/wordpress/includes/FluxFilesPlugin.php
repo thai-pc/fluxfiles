@@ -254,6 +254,108 @@ HTACCESS;
     }
 
     /**
+     * Engine settings of the paid modules. The modules read them from the process
+     * environment only (getenv() then $_ENV) — shared hosting has none — so they are
+     * kept in ONE option (`fluxfiles_module_env`, keyed by env name) and seeded into
+     * $_ENV by seedModuleEnv(). This list is the whitelist: nothing else is ever
+     * stored or seeded. Types: enum, int (min/max clamp), url (http/https), bool
+     * ('true' or empty), text (pattern), path (server file), secret (never echoed).
+     * SSO (FLUXFILES_SSO_*) is deliberately absent: it does not apply to WordPress.
+     */
+    public const MODULE_ENV_OPTION = 'fluxfiles_module_env';
+    public const MODULE_ENV = [
+        'FLUXFILES_AIVISION_PROVIDER'      => ['module' => 'AI Vision', 'label' => 'Provider', 'type' => 'enum', 'options' => ['removebg', 'http'], 'default' => 'removebg'],
+        'FLUXFILES_AIVISION_ENDPOINT'      => ['module' => 'AI Vision', 'label' => 'Endpoint (provider = http)', 'type' => 'url'],
+        'FLUXFILES_AIVISION_KEY'           => ['module' => 'AI Vision', 'label' => 'API key', 'type' => 'secret'],
+        'FLUXFILES_AIVISION_TIMEOUT'       => ['module' => 'AI Vision', 'label' => 'Timeout (seconds)', 'type' => 'int', 'min' => 1, 'max' => 600, 'default' => 60],
+        'FLUXFILES_OCR_MAX_MEGAPIXELS'     => ['module' => 'OCR', 'label' => 'Max image size (megapixels)', 'type' => 'int', 'min' => 1, 'max' => 1000, 'default' => 40],
+        'FLUXFILES_CLAMSCAN_TIMEOUT'       => ['module' => 'Virus scan', 'label' => 'ClamAV timeout (seconds)', 'type' => 'int', 'min' => 1, 'max' => 600, 'default' => 60],
+        'FLUXFILES_VIRUSTOTAL_KEY'         => ['module' => 'Virus scan', 'label' => 'VirusTotal API key', 'type' => 'secret'],
+        'FLUXFILES_VIRUSTOTAL_TIMEOUT'     => ['module' => 'Virus scan', 'label' => 'VirusTotal timeout (seconds)', 'type' => 'int', 'min' => 1, 'max' => 300, 'default' => 20],
+        'FLUXFILES_C2PA_MANIFEST'          => ['module' => 'C2PA', 'label' => 'Signing manifest (server file path)', 'type' => 'path'],
+        'FLUXFILES_DLP_ENDPOINT'           => ['module' => 'DLP', 'label' => 'Scanner endpoint', 'type' => 'url'],
+        'FLUXFILES_DLP_LANGUAGE'           => ['module' => 'DLP', 'label' => 'Language', 'type' => 'text', 'default' => 'en'],
+        'FLUXFILES_DLP_TIMEOUT'            => ['module' => 'DLP', 'label' => 'Timeout (seconds)', 'type' => 'int', 'min' => 1, 'max' => 300, 'default' => 10],
+        'FLUXFILES_WEBHOOK_ALLOW_INTERNAL' => ['module' => 'Webhooks', 'label' => 'Allow internal / private-network targets', 'type' => 'bool'],
+        'FLUXFILES_LEGAL_HOLD_MAX_ACTIVE'  => ['module' => 'Legal hold', 'label' => 'Max active holds (0 = no cap)', 'type' => 'int', 'min' => 0, 'max' => 1000000, 'default' => 1000],
+    ];
+
+    /** Keys seedModuleEnv() put into $_ENV in this process (so the settings screen can tell them from a real env var). */
+    private static array $seededModuleEnv = [];
+
+    /**
+     * Normalise one stored value to its type; '' means "unset / use the module default".
+     * Shared by the settings sanitiser and the seeder, so a value written behind the
+     * screen's back (wp option update) is held to the same rules.
+     *
+     * @param mixed $raw
+     */
+    public static function cleanModuleEnvValue(string $key, $raw): string
+    {
+        $def = self::MODULE_ENV[$key] ?? null;
+        if ($def === null || !is_scalar($raw)) {
+            return '';
+        }
+        $v = trim(preg_replace('/[\x00-\x1F\x7F]/', '', (string) $raw) ?? '');
+        if ($v === '') {
+            return '';
+        }
+        switch ($def['type']) {
+            case 'enum':
+                $v = strtolower($v);
+                return in_array($v, $def['options'], true) ? $v : '';
+            case 'int':
+                if (preg_match('/^-?\d+$/', $v) !== 1) {
+                    return '';
+                }
+                return (string) max($def['min'], min($def['max'], (int) $v));
+            case 'url':
+                $scheme = strtolower((string) parse_url($v, PHP_URL_SCHEME));
+                return (($scheme === 'http' || $scheme === 'https') && filter_var($v, FILTER_VALIDATE_URL) !== false) ? $v : '';
+            case 'bool':
+                return in_array(strtolower($v), ['1', 'true', 'on', 'yes'], true) ? 'true' : '';
+            case 'text':
+                return substr(preg_replace('/[^A-Za-z_-]/', '', $v) ?? '', 0, 12);
+            default: // path, secret: verbatim (control chars already removed)
+                return $v;
+        }
+    }
+
+    /** True when a REAL environment variable (not one we seeded) provides $key. */
+    public static function moduleEnvFromEnvironment(string $key): bool
+    {
+        if ((string) getenv($key) !== '') {
+            return true;
+        }
+        return !isset(self::$seededModuleEnv[$key]) && (string) ($_ENV[$key] ?? '') !== '';
+    }
+
+    /**
+     * Copy the stored module engine settings into $_ENV, where the paid modules read
+     * them. A real env var always wins (same shape as the Laravel adapter's
+     * FluxFilesManager::seedServerEnv()); only whitelisted keys, never putenv().
+     * Called wherever the plugin runs core/module code — see FluxFilesApi.
+     */
+    public static function seedModuleEnv(): int
+    {
+        $stored = get_option(self::MODULE_ENV_OPTION, []);
+        if (!is_array($stored)) {
+            return 0;
+        }
+        $filled = 0;
+        foreach (self::MODULE_ENV as $key => $_def) {
+            $value = self::cleanModuleEnvValue($key, $stored[$key] ?? '');
+            if ($value === '' || array_key_exists($key, $_ENV) || getenv($key) !== false) {
+                continue;
+            }
+            $_ENV[$key] = $value;
+            self::$seededModuleEnv[$key] = true;
+            $filled++;
+        }
+        return $filled;
+    }
+
+    /**
      * Get the FluxFiles base installation path (project root).
      */
     public static function basePath(): string

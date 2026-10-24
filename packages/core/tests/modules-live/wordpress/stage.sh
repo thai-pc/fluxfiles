@@ -30,13 +30,12 @@ umask 077
 # FF_E2E_* are consumed by the entrypoint (wp-cli writes them into WP OPTIONS — the
 # documented WordPress path). FLUXFILES_LICENSE_KEY is deliberately NOT set in the
 # env, so the run proves the Settings → Licence option is what the plugin uses.
+# Engine settings (AI Vision, DLP, webhooks) go through the "Module engines" option
+# (fixtures/module-env.json, see the entrypoint); only the C2PA manifest stays a real
+# env var, to prove an env var coexists with the option.
 cat > "$ST/wp.env" <<ENV
 FF_E2E_SECRET=$SECRET
 FF_E2E_LICENSE=$(cat "$ST/license.txt")
-FLUXFILES_WEBHOOK_ALLOW_INTERNAL=true
-FLUXFILES_AIVISION_PROVIDER=http
-FLUXFILES_AIVISION_ENDPOINT=http://ff-ai:8192/
-FLUXFILES_DLP_ENDPOINT=http://ff-presidio:3000
 FLUXFILES_C2PA_MANIFEST=/fixtures/c2pa-manifest.json
 ENV
 echo "staged plugin: $(find "$ST/plugin" -type f | wc -l | tr -d ' ') files"
