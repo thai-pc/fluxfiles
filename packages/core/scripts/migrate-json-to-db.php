@@ -11,13 +11,7 @@ $envDirs = [
     realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'),
     realpath(__DIR__ . '/../../..') ?: (__DIR__ . '/../../..'),
 ];
-foreach ($envDirs as $dir) {
-    if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
-        $dotenv = Dotenv\Dotenv::createImmutable($dir);
-        $dotenv->safeLoad();
-        break;
-    }
-}
+\FluxFiles\EnvBootstrap::load($envDirs);
 
 // Deliberately does NOT gate on FLUXFILES_STORAGE_BACKEND — the cutover flow
 // (dry-run -> real run -> verify -> flip the backend -> optional cleanup)

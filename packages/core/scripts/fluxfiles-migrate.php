@@ -11,13 +11,7 @@ $envDirs = [
     realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'),
     realpath(__DIR__ . '/../../..') ?: (__DIR__ . '/../../..'),
 ];
-foreach ($envDirs as $dir) {
-    if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
-        $dotenv = Dotenv\Dotenv::createImmutable($dir);
-        $dotenv->safeLoad();
-        break;
-    }
-}
+\FluxFiles\EnvBootstrap::load($envDirs);
 
 if (($_ENV['FLUXFILES_STORAGE_BACKEND'] ?? 'json') !== 'db') {
     fwrite(STDERR, "FLUXFILES_STORAGE_BACKEND is not 'db' — nothing to migrate.\n");

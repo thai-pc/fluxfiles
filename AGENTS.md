@@ -123,6 +123,7 @@ php packages/core/tests/generate-token.php
 ```
 
 JWT signing secret is `FLUXFILES_SECRET` and **must be ≥ 32 bytes** (php-jwt v7).
+Config is read by `\FluxFiles\EnvBootstrap::load()` in every entry point. It reads real env vars (`FLUXFILES_*`, `AWS_*`, `R2_*`, `SFTP_*`) first and fills the rest from `.env`, so a real env var wins. Don't call Dotenv directly.
 
 ## Tests
 

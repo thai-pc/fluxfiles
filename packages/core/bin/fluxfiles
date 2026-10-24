@@ -63,12 +63,7 @@ if ($command === 'update') {
 
     // Load .env from the package root or the host project root so the license +
     // update URL are available (mirrors the index command below).
-    foreach ([realpath(__DIR__ . '/..'), realpath(__DIR__ . '/../../..')] as $dir) {
-        if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
-            Dotenv\Dotenv::createImmutable($dir)->safeLoad();
-            break;
-        }
-    }
+    \FluxFiles\EnvBootstrap::load([realpath(__DIR__ . '/..'), realpath(__DIR__ . '/../../..')]);
     $updateBase = rtrim((string) ($_ENV['FLUXFILES_UPDATE_URL'] ?? 'https://updates.fluxfiles.dev'), '/');
     $license = (string) ($_ENV['FLUXFILES_LICENSE_KEY'] ?? '');
     if ($license === '') {
@@ -181,12 +176,7 @@ $envDirs = [
     realpath(__DIR__ . '/../../..') ?: (__DIR__ . '/../../..'),
 ];
 
-foreach ($envDirs as $dir) {
-    if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
-        Dotenv\Dotenv::createImmutable($dir)->safeLoad();
-        break;
-    }
-}
+\FluxFiles\EnvBootstrap::load($envDirs);
 
 $diskConfigs = require __DIR__ . '/../config/disks.php';
 $disk = (string) ($opts['disk'] ?? 'local');

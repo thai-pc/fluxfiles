@@ -290,6 +290,8 @@ private-local-media requirement.
 
 ## 4. Server env vars (server-wide)
 
+> **Where values come from.** The standalone app and the CLI tools (`api/index.php`, `bin/fluxfiles`, `scripts/*.php`) read both real environment variables (php-fpm `env[...]`, Kubernetes, systemd, `php -S`) and the `.env` file. A non-empty real env var wins over `.env`, and `.env` fills in whatever the environment doesn't set. Only names starting with `FLUXFILES_`, `AWS_`, `R2_` or `SFTP_` are read from the environment. This works whatever PHP's `variables_order` is set to (`\FluxFiles\EnvBootstrap`, since core 0.2.112).
+
 > **WordPress:** the module engine variables below (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_*`, `FLUXFILES_C2PA_MANIFEST`, `FLUXFILES_VIRUSTOTAL_*`, `FLUXFILES_CLAMSCAN_TIMEOUT`, `FLUXFILES_OCR_MAX_MEGAPIXELS`, `FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) can instead be set under Settings → FluxFiles → Module engines (stored in the `fluxfiles_module_env` option). A real environment variable wins.
 
 | Env var | Default | Notes |

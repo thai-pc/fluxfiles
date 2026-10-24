@@ -3,6 +3,37 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.38] — 2026-10-24
+
+> Released: `core-v0.2.112`.
+
+### Fixed
+
+- **A setting given as a real environment variable could be lost.** This hit
+  the standalone app and the CLI tools when PHP ran with the production
+  `variables_order = GPCS`. Core reads `$_ENV`, which PHP then leaves empty.
+  Dotenv also skipped the `.env` value for any key it found in `$_SERVER`. A
+  key set in the real environment, and also in `.env`, ended up in neither
+  place, and the app answered `500 FLUXFILES_SECRET is not configured`. This
+  affected php-fpm with `env[...]` or `clear_env = no`, Kubernetes or systemd
+  without a `.env`, Apache `SetEnv`, and `php -S`.
+  - The new `\FluxFiles\EnvBootstrap` copies real `FLUXFILES_*`, `AWS_*`,
+    `R2_*` and `SFTP_*` variables into `$_ENV` first. Dotenv then fills in
+    whatever is still missing from `.env`. No other variables are copied.
+  - `api/index.php`, `bin/fluxfiles` and the `scripts/*.php` tools all load
+    their config this way.
+  - `embed.php` falls back to the real `FLUXFILES_SECRET` when the host app
+    has no `.env`.
+
+### Changed
+
+- **A non-empty real environment variable now wins over `.env`**, the same
+  rule the Laravel and WordPress adapters already follow. If you set a key in
+  both places with different values, the environment value is now the one
+  used. The official Docker image behaves as before: it runs php-fpm with
+  `clear_env = no` and no `php.ini`, so `variables_order` is `EGPCS` and the
+  container's environment already reached `$_ENV` and won over `.env`.
+
 ## [0.3.37] — 2026-10-24
 
 > Released: `core-v0.2.111`, `wordpress-v0.2.71` (the plugin bundles core).

@@ -11,13 +11,7 @@ $envDirs = [
     realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'),
     realpath(__DIR__ . '/../../..') ?: (__DIR__ . '/../../..'),
 ];
-foreach ($envDirs as $dir) {
-    if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
-        $dotenv = Dotenv\Dotenv::createImmutable($dir);
-        $dotenv->safeLoad();
-        break;
-    }
-}
+\FluxFiles\EnvBootstrap::load($envDirs);
 
 $opts = getopt('', ['disk:', 'in:', 'format:']);
 $disk = $opts['disk'] ?? 'local';

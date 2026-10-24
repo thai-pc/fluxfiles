@@ -19,7 +19,7 @@ use FluxFiles\MetadataRepositoryInterface;
 use FluxFiles\QuotaManager;
 use FluxFiles\StorageMetadataHandler;
 
-// Load .env
+// Load config: real env vars first, then .env for anything still unset (EnvBootstrap)
 $envDirs = [
     // Package root (default when installed via composer)
     realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'),
@@ -27,13 +27,7 @@ $envDirs = [
     realpath(__DIR__ . '/../../..') ?: (__DIR__ . '/../../..'),
 ];
 
-foreach ($envDirs as $dir) {
-    if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
-        $dotenv = Dotenv\Dotenv::createImmutable($dir);
-        $dotenv->safeLoad();
-        break;
-    }
-}
+\FluxFiles\EnvBootstrap::load($envDirs);
 
 // Trusted SFTP/import hosts allowed past the SSRF public-IP requirement. Legit
 // use: an operator whose SFTP server lives on their own private/reserved network
