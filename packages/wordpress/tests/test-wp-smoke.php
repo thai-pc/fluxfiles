@@ -1088,6 +1088,47 @@ test('audit: a refused (403) request is logged as access_denied', function () {
     }
 });
 
+test('audit: refused writes leave virus_blocked / dlp_blocked / legal_hold_blocked lines (core parity)', function () {
+    $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
+    $keepPost = $_POST;
+    $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(7704, ['perms' => ['read', 'write'], 'prefix' => 'refused']);
+    $api = new FluxFilesApi();
+    try {
+        $api->handleMkdir(new WP_REST_Request(['disk' => 'local', 'path' => 'rf-' . uniqid()])); // authenticates → lastClaims
+        $error = new ReflectionMethod(FluxFilesApi::class, 'error');
+        $_POST = ['disk' => 'local', 'path' => 'docs/in'];
+        $error->invoke($api, 'virus', 422, 'virus_detected', ['name' => 'eicar.txt', 'threat' => 'Eicar-Signature']);
+        $_POST = [];
+        $error->invoke($api, 'pii', 422, 'pii_detected', ['name' => 'card.txt', 'entities' => ['CREDIT_CARD', 'IBAN']]);
+        $resp = $error->invoke($api, 'held', 403, 'legal_hold_active', ['hold_id' => 'h-1', 'path' => 'held.txt']);
+        assertEqual('legal_hold_active', $resp->get_data()['error_code'] ?? null, 'response unchanged');
+        $by = [];
+        $read = function () use (&$by) {
+            $by = [];
+            $log = (string) @file_get_contents(FluxFilesPlugin::storagePath() . '/uploads/_fluxfiles/audit.jsonl');
+            foreach (array_filter(explode("\n", $log)) as $line) {
+                $row = json_decode($line, true);
+                if (($row['context']['user_id'] ?? '') === '7704') {
+                    $by[$row['action']][] = $row['context'];
+                }
+            }
+        };
+        $read();
+        assertEqual('refused/docs/in/eicar.txt', $by['virus_blocked'][0]['file_key'] ?? null, 'virus_blocked: scoped key incl. upload folder');
+        assertEqual('refused/card.txt', $by['dlp_blocked'][0]['file_key'] ?? null, 'dlp_blocked: scoped key');
+        assertEqual('CREDIT_CARD,IBAN', $by['dlp_blocked'][0]['detail'] ?? null, 'entity TYPES only');
+        assertEqual('refused/held.txt', $by['legal_hold_blocked'][0]['file_key'] ?? null, 'legal_hold_blocked: scoped key');
+        assertEqual('h-1', $by['legal_hold_blocked'][0]['detail'] ?? null, 'hold id as detail');
+        assertTrue(!isset($by['access_denied']), 'a hold refusal is not ALSO logged as access_denied');
+        $error->invoke($api, 'nope', 403, 'permission_denied', []);
+        $read();
+        assertEqual(1, count($by['access_denied'] ?? []), 'other 403s still audited as access_denied');
+    } finally {
+        $_SERVER['HTTP_AUTHORIZATION'] = $keepAuth;
+        $_POST = $keepPost;
+    }
+});
+
 test('audit: a typed token refused at auth is never logged under a previous caller', function () use ($secret) {
     $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
     $api = new FluxFilesApi();
@@ -2278,6 +2319,113 @@ test('A-M7: nginx sites get an admin notice that the uploads dir must not run PH
         assertEqual('', (string) ob_get_clean(), 'no notice on Apache (.htaccess applies)');
     } finally {
         [$_SERVER['SERVER_SOFTWARE'], $GLOBALS['pagenow']] = $keep;
+    }
+});
+
+// ── Paid modules through the proxy (found by tests/modules-live/wordpress) ──────
+// The LIVE WordPress rig (real plugin + 13 real modules + a licence pasted into the
+// Settings screen) turned up two plugin bugs; these lock both without Docker.
+
+test('public share/intake routes: the option-stored licence reaches core\'s LicenseManager::fromEnv()', function () {
+    // handleSharePublic()/handleIntakePublic() gate on LicenseManager::fromEnv(), which
+    // reads $_ENV only — but a WordPress licence lives in the `fluxfiles_license_key`
+    // option. Every share-link / upload-portal recipient on a licensed site got
+    // `402 license_required`. publicLink() exits after the core handler, so this runs
+    // it in a child process and reads $_ENV back from a shutdown function.
+    $child = <<<'CHILD'
+<?php
+[$self, $autoload, $wpDir, $optKey, $envKey] = $argv;
+if ($envKey !== '') { $_ENV['FLUXFILES_LICENSE_KEY'] = $envKey; }
+define('ABSPATH', sys_get_temp_dir() . '/');
+define('WP_CONTENT_DIR', sys_get_temp_dir() . '/ff-wp-lic-' . getmypid());
+define('FLUXFILES_PLUGIN_FILE', $wpDir . '/fluxfiles.php');
+define('FLUXFILES_PLUGIN_DIR', $wpDir . '/');
+$GLOBALS['WP_OPTIONS'] = ['fluxfiles_secret' => 'wp-smoke-secret-key-0123456789abcdef', 'fluxfiles_license_key' => $optKey];
+function get_option($k, $d = false) { return $GLOBALS['WP_OPTIONS'][$k] ?? $d; }
+function wp_mkdir_p($d) { return is_dir($d) || mkdir($d, 0777, true); }
+function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, '/'); }
+function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
+function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
+function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function status_header($c) {}
+function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
+function add_action(...$a) {} function add_filter(...$a) {}
+function apply_filters($t, $v, ...$a) { return $v; }
+class WP_REST_Request {
+    public function get_method() { return 'GET'; }
+    public function get_route() { return '/fluxfiles/v1/api/fm/share/info'; }
+}
+require $autoload;
+require $wpDir . '/includes/FluxFilesPlugin.php';
+require $wpDir . '/includes/FluxFilesApi.php';
+register_shutdown_function(static function () {
+    echo "\nENV_LICENSE=" . json_encode($_ENV['FLUXFILES_LICENSE_KEY'] ?? null);
+});
+$_GET = ['token' => 'not-a-share-token'];
+$m = new ReflectionMethod('FluxFilesApi', 'publicLink');
+$m->invoke(new FluxFilesApi(), 'share', new WP_REST_Request());
+CHILD;
+    $file = tempnam(sys_get_temp_dir(), 'ffwplic') . '.php';
+    file_put_contents($file, $child);
+    $autoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
+    $run = static function (string $opt, string $env) use ($file, $autoload): string {
+        $cmd = [PHP_BINARY, $file, realpath($autoload), realpath(__DIR__ . '/..'), $opt, $env];
+        $p = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $out = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+        proc_close($p);
+        return (string) $out;
+    };
+    try {
+        $out = $run('key-from-settings', '');
+        assertTrue(strpos($out, '"error_code"') !== false, 'the core share handler actually ran: ' . substr($out, 0, 300));
+        assertTrue(strpos($out, 'ENV_LICENSE="key-from-settings"') !== false,
+            'the option licence is in $_ENV when the core handler gates on it: ' . substr($out, -200));
+        // No option → an env-provided key (Docker/VPS installs) is left exactly as it was.
+        $out = $run('', 'key-from-env');
+        assertTrue(strpos($out, 'ENV_LICENSE="key-from-env"') !== false, 'env licence untouched when the option is empty');
+        $out = $run('', '');
+        assertTrue(strpos($out, 'ENV_LICENSE=null') !== false, 'no licence anywhere → nothing invented');
+    } finally {
+        @unlink($file);
+    }
+});
+
+test('settings: `audit` can be granted as a default permission (else no embed token ever carries it)', function () use ($secret) {
+    // tokenForCurrentUser() intersects the capability-derived role's perms with the
+    // `fluxfiles_default_perms` option. The admin role carries `audit`, but the
+    // Settings screen could only ever store read/write/delete, so not even an
+    // Administrator's shortcode token had it: Activity log, audit export/verify,
+    // fixity, legal hold and retention all answered 403 through the plugin.
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    if (!function_exists('esc_attr')) { function esc_attr($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
+    if (!function_exists('esc_html')) { function esc_html($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    assertEqual(['read', 'write', 'audit'], $admin->sanitizePerms(['read', 'write', 'audit', 'root']), 'audit survives the sanitizer, junk does not');
+    $keep = $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] ?? null;
+    $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read', 'audit'];
+    ob_start();
+    try { $admin->renderPermsField(); } finally { $html = (string) ob_get_clean(); }
+    assertTrue(strpos($html, 'value="audit" checked') !== false, 'an "Audit" checkbox is rendered (and reflects the option)');
+
+    $keepUser = $GLOBALS['WP_OPTIONS']['_test_user_id'] ?? null;
+    $keepCaps = $GLOBALS['WP_CAPS'];
+    try {
+        $GLOBALS['WP_OPTIONS']['_test_user_id'] = 1;
+        $GLOBALS['WP_CAPS'] = ['manage_options' => true, 'upload_files' => true, 'read' => true, 'unfiltered_html' => true];
+        $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read', 'write', 'delete', 'audit'];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertTrue(in_array('audit', $p->perms, true), 'an Administrator gets audit once it is ticked');
+        $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read', 'write', 'delete'];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertTrue(!in_array('audit', $p->perms, true), 'and not when it is unticked (the option stays the ceiling)');
+        $GLOBALS['WP_CAPS'] = ['upload_files' => true, 'read' => true];
+        $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read', 'write', 'delete', 'audit'];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::tokenForCurrentUser(), $secret);
+        assertTrue(!in_array('audit', $p->perms, true), 'an Author never gets audit, ticked or not (role still caps)');
+    } finally {
+        $GLOBALS['WP_OPTIONS']['_test_user_id'] = $keepUser;
+        $GLOBALS['WP_CAPS'] = $keepCaps;
+        $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = $keep;
     }
 });
 

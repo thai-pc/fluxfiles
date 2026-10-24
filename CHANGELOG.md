@@ -3,6 +3,70 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.36] — 2026-10-24
+
+> Released: `core-v0.2.110`, `laravel-v0.2.55`, `wordpress-v0.2.70`.
+> Paid modules: `ai v1.2.3`, `webhooks v1.1.5`, `legal-hold v1.1.2`.
+
+Found by a new live test rig (`packages/core/tests/modules-live/`). It runs all
+13 paid modules against real engines in Docker: ClamAV, Tesseract, c2patool,
+Presidio, LocalStack S3, an OIDC IdP, an AI provider and a webhook receiver. It
+runs them standalone and again through the Laravel and WordPress proxies.
+
+### Fixed
+
+- **Laravel: `<x-fluxfiles>` never booted on a default Composer install.**
+  `/fluxfiles.js` returned 404 because the SDK is not in the core package. The
+  adapter now ships its own copy (`resources/fluxfiles.js`, kept identical to
+  `packages/sdk` by the smoke test). It still prefers an operator copy or the
+  monorepo sibling when one exists.
+- **Laravel: the embedded UI showed raw i18n keys** (`toolbar.upload`, …). The
+  proxy now injects the translations the way core does. `FLUXFILES_LOCALE`
+  picks the language and the `<html lang/dir>` attributes follow it.
+- **Laravel: `php artisan config:cache` turned off every paid module (402) and
+  every kill switch.** Laravel stops loading `.env` once config is cached, and
+  core plus the modules read `FLUXFILES_*` from the environment.
+  `fluxfiles.server_env` now captures those values into the config cache, and
+  they are put back at boot. A real env var always wins.
+- **Laravel: the Blade component class was not autoloaded** (classmap added).
+- **Laravel: upload audit lines and webhooks named the folder, not the file.**
+- **Laravel: `/audit/export` errors used `code`/`params`** instead of the
+  standard `error_code`/`error_params` envelope.
+- **WordPress: share links and upload portals answered `402 license_required`
+  on a licensed site** when the licence was entered in Settings → FluxFiles.
+  The public handler only read the env.
+- **WordPress: the `audit` permission could not be granted** on the settings
+  screen, so Activity, audit export, fixity, legal hold and retention were
+  unreachable.
+- **Laravel + WordPress: refused writes left no audit line.** A blocked
+  EICAR/PII upload or a write to a held file is now logged as `virus_blocked`,
+  `dlp_blocked` or `legal_hold_blocked`, as core does. A hold refusal no longer
+  also writes an `access_denied` line.
+- **Core: virus/DLP refusals were audited under the wrong key.** Uploads into a
+  folder were logged at the root, so the tenant's Activity log never showed
+  them. A `legal_hold_active` error also leaked the internal tenant prefix in
+  `error_params.path`.
+- **Core: files written by modules had no metadata.** AI results, backups and
+  other `writeScopedFile`/`writeScopedStream` writes now record mime, size,
+  dimensions and hash, plus the owner on a new file. An overwrite never changes
+  the owner.
+- **Core: the intake portal could post a file before `/intake/info` answered**,
+  before it knew the portal's password and limits. Uploads now start disabled.
+- **Core: the standalone page's `<html lang>`/`dir` never changed** (RTL
+  locales rendered LTR). It replaced an exact `<html lang="en">`, but the tag
+  now carries `translate="no"` too.
+- **AI module: `provider=http` without an API key counted as "not
+  configured".** A self-hosted endpoint needs no key. `removebg` still requires
+  one.
+- **Webhooks / legal-hold modules: `FLUXFILES_WEBHOOK_ALLOW_INTERNAL` and
+  `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE` were ignored** when set as real env vars
+  (`getenv`) rather than in `$_ENV`.
+
+### Docs
+
+- `docs/guides/ACTIVATE.md`: the WordPress steps now point at Settings →
+  FluxFiles → Licence and the `fluxfiles_token_overrides` filter.
+
 ## [0.3.35] — 2026-10-24
 
 > Released: `core-v0.2.109`, `laravel-v0.2.54`, `wordpress-v0.2.69`.

@@ -18,6 +18,10 @@ class FluxFilesServiceProvider extends ServiceProvider
         $this->app->singleton(FluxFilesManager::class, function () {
             return new FluxFilesManager();
         });
+
+        // Core + the paid modules read FLUXFILES_* from $_ENV; restore what
+        // `config:cache` dropped (see `server_env` in config/fluxfiles.php).
+        FluxFilesManager::seedServerEnv((array) config('fluxfiles.server_env', []));
     }
 
     public function boot(): void

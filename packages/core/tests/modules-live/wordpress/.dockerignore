@@ -1,0 +1,9 @@
+.stage/repo
+.stage/zips
+.stage/*.txt
+.stage/*.env
+.stage/build.log
+specs
+test-results
+playwright-report
+*.ts

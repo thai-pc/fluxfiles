@@ -1,0 +1,16 @@
+{
+  "edition": "enterprise",
+  "allow_code_edit": true,
+  "webhook_url": "http://ff-hooks:8193/hook",
+  "webhook_secret": "live-hook-secret",
+  "dlp_entity_types": [
+    "CREDIT_CARD"
+  ],
+  "retention_rules": [
+    {
+      "path": "",
+      "days": 3650,
+      "action": "trash"
+    }
+  ]
+}

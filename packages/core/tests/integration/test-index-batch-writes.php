@@ -166,5 +166,69 @@ test('nested lock: an inner release no longer drops the outer holder\'s lock', f
     });
 });
 
+function png(int $w, int $h): string
+{
+    $im = imagecreatetruecolor($w, $h);
+    ob_start(); imagepng($im); return (string) ob_get_clean();
+}
+
+function listed(FileManager $fm, string $name): array
+{
+    foreach ($fm->list('local', '')['items'] ?? $fm->list('local', '') as $it) {
+        if (($it['key'] ?? '') === $name) { return $it; }
+    }
+    return [];
+}
+
+test('writeScopedFile: a NEW image gets mime/size/dims/owner/hash in ONE index write', function () {
+    [$fm, $dm, , $root] = env();
+    $bytes = png(40, 30);
+    $dm->adapter->indexWrites = 0;
+    $fm->writeScopedFile('local', $fm->validateUserPath('out.png'), $bytes);
+    assertTrue($dm->adapter->indexWrites === 1, "index writes: {$dm->adapter->indexWrites}");
+    $it = listed($fm, 'out.png');
+    assertTrue(($it['mime'] ?? '') === 'image/png' && ($it['width'] ?? 0) === 40 && ($it['height'] ?? 0) === 30, json_encode($it));
+    assertTrue(($it['meta']['uploaded_by'] ?? '') === 'u' && ($it['meta']['size'] ?? 0) === strlen($bytes), json_encode($it['meta'] ?? null));
+    assertTrue((index($root)['out.png']['file_hash'] ?? '') === hash('sha256', $bytes), 'hash indexed');
+    $r = up($fm, 'dup.png', $bytes);
+    assertTrue(($r['duplicate'] ?? false) === true && $r['key'] === 'out.png', 'duplicate detection sees it: ' . json_encode($r));
+});
+
+test('writeScopedFile: an overwrite keeps owner + user metadata, refreshes size/dims', function () {
+    [$fm, , $meta, $root] = env();
+    up($fm, 'p.png', png(10, 10));
+    $meta->save('local', 'p.png', ['uploaded_by' => 'alice', 'title' => 'My title', 'alt_text' => 'alt', 'tags' => 'a,b']);
+    $new = png(64, 48);
+    $fm->writeScopedFile('local', $fm->validateUserPath('p.png'), $new);
+    $m = array_merge($meta->get('local', 'p.png') ?? [], listed($fm, 'p.png')['meta'] ?? [], index($root)['p.png'] ?? []);
+    assertTrue(($m['uploaded_by'] ?? '') === 'alice', 'owner kept: ' . json_encode($m));
+    assertTrue(($m['title'] ?? '') === 'My title' && ($m['alt_text'] ?? '') === 'alt' && ($m['tags'] ?? '') === 'a,b', json_encode($m));
+    assertTrue(($m['width'] ?? 0) === 64 && ($m['height'] ?? 0) === 48 && ($m['size'] ?? 0) === strlen($new), json_encode($m));
+});
+
+test('writeScopedStream: new image recorded like an upload; overwrite keeps owner', function () {
+    [$fm, , $meta, $root] = env();
+    $mk = function (string $b) { $s = fopen('php://temp', 'r+'); fwrite($s, $b); rewind($s); return $s; };
+    $fm->writeScopedStream('local', $fm->validateUserPath('s.png'), $mk(png(20, 12)));
+    $m = array_merge($meta->get('local', 's.png') ?? [], index($root)['s.png'] ?? []);
+    assertTrue(($m['uploaded_by'] ?? '') === 'u' && ($m['width'] ?? 0) === 20 && ($m['mime'] ?? '') === 'image/png', json_encode($m));
+    $meta->save('local', 's.png', ['uploaded_by' => 'bob']);
+    $fm->writeScopedStream('local', $fm->validateUserPath('s.png'), $mk(png(8, 8)));
+    $m = array_merge($meta->get('local', 's.png') ?? [], index($root)['s.png'] ?? []);
+    assertTrue(($m['uploaded_by'] ?? '') === 'bob' && ($m['width'] ?? 0) === 8, json_encode($m));
+});
+
+test('attachDerivedFile keeps the derived file\'s own dims/size, inherits user metadata', function () {
+    [$fm, , $meta, $root] = env();
+    up($fm, 'src.png', png(10, 10));
+    $meta->save('local', 'src.png', ['title' => 'Src']);
+    $dst = png(30, 30);
+    $fm->writeScopedFile('local', 'dst.png', $dst);
+    $fm->attachDerivedFile('local', 'src.png', 'dst.png');
+    $m = array_merge($meta->get('local', 'dst.png') ?? [], index($root)['dst.png'] ?? []);
+    assertTrue(($m['title'] ?? '') === 'Src', json_encode($m));
+    assertTrue(($m['width'] ?? 0) === 30 && ($m['size'] ?? 0) === strlen($dst), 'not clobbered by source: ' . json_encode($m));
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  Passed: {$passed}  Failed: {$failed}\n\n";
 exit($failed > 0 ? 1 : 0);

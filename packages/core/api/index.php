@@ -156,7 +156,8 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
         $injection,
         $html
     );
-    $html = str_replace('<html lang="en">', '<html lang="' . htmlspecialchars($locale) . '" dir="' . htmlspecialchars($dir) . '">', $html);
+    // The tag carries more attributes (translate="no"), so match the opening only.
+    $html = preg_replace('/<html lang="en"/', '<html lang="' . htmlspecialchars($locale) . '" dir="' . htmlspecialchars($dir) . '"', $html, 1) ?? $html;
 
     // Public demo mode (FLUXFILES_DEMO=1): inject a hardened, per-visitor demo token as
     // window.__FM_BOOT__ so an embedded iframe lets anonymous visitors upload for real
@@ -616,7 +617,7 @@ try {
                 $claims->userId,
                 'virus_blocked',
                 (string) ($_POST['disk'] ?? $vBody['disk'] ?? 'local'),
-                (string) ($p['name'] ?? $p['entry'] ?? '')
+                ff_blocked_write_key($claims, $vBody, $p)
             );
         } catch (\Throwable $ignored) {
             // Auditing must never turn a clean 422 into a 500.
@@ -635,7 +636,7 @@ try {
                 $claims->userId,
                 'dlp_blocked',
                 (string) ($_POST['disk'] ?? $dBody['disk'] ?? 'local'),
-                (string) ($p['name'] ?? $p['entry'] ?? ''),
+                ff_blocked_write_key($claims, $dBody, $p),
                 null,
                 null,
                 implode(',', array_map('strval', (array) ($p['entities'] ?? [])))
@@ -655,11 +656,11 @@ try {
             $hBody = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
             $hRawKey = (string) ($hBody['path'] ?? $hBody['from'] ?? $hBody['src_path'] ?? '');
             // /trash/purge's body is {disk, trash_id} only — no path in the request —
-            // so fall back to the scoped path FileManager::assertNoActiveHold() already
-            // put in the exception params (resolved from the trash entry's
-            // original_key). Unlike $hRawKey, that one is already an internal scoped
-            // storage key, so it must NOT be passed through scopePath() again.
-            $hKey = $hRawKey !== '' ? $claims->scopePath($hRawKey) : (string) ($p['path'] ?? '');
+            // so fall back to the path FileManager::assertNoActiveHold() put in the
+            // exception params (resolved from the trash entry's original_key). That
+            // one is tenant-relative (it is shown to the client), so it is scoped
+            // again here like the request path; scopePath() is idempotent.
+            $hKey = $claims->scopePath($hRawKey !== '' ? $hRawKey : (string) ($p['path'] ?? ''));
             $auditLog->log(
                 $claims->userId,
                 'legal_hold_blocked',
@@ -1723,6 +1724,33 @@ function resolveAuditAction(string $uri): string
  *
  * @param array<string,mixed> $body
  */
+/**
+ * The storage key a refused (virus/DLP-blocked) write would have had, scoped like
+ * every other audit file_key — a prefixed tenant's export filter must see its own
+ * blocked events. Editor save names the file in the body; an upload names the
+ * folder in $_POST['path'] and the file in the error params; an extract entry
+ * stays relative to the tenant root (its destination isn't known here).
+ *
+ * @param array<string,mixed> $body
+ * @param array<string,mixed> $params
+ */
+function ff_blocked_write_key(\FluxFiles\Claims $claims, array $body, array $params): string
+{
+    $name = (string) ($params['name'] ?? $params['entry'] ?? '');
+    if (!isset($params['entry']) && is_string($body['path'] ?? null) && $body['path'] !== '') {
+        $rel = $body['path'];
+    } elseif (!isset($params['entry']) && is_string($_POST['path'] ?? null) && trim($_POST['path'], '/') !== '') {
+        $rel = trim($_POST['path'], '/') . '/' . $name;
+    } else {
+        $rel = $name;
+    }
+    try {
+        return $claims->scopePath($rel);
+    } catch (\Throwable $e) {
+        return $name;
+    }
+}
+
 function ff_audit_detail(string $action, array $body, \FluxFiles\Claims $claims, $data = null): ?string
 {
     switch ($action) {

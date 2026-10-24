@@ -355,6 +355,17 @@ $schedule->call(function () {
 $licenseInfo = FluxFiles::licenseInfo();
 ```
 
+**Server env and `php artisan config:cache`.** Core and the paid modules read
+their server settings from the environment: `FLUXFILES_LICENSE_KEY`, the module
+engines (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_ENDPOINT`, `FLUXFILES_C2PA_MANIFEST`,
+`FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, …), and kill switches such as
+`FLUXFILES_TERMINAL_DISABLED`. Put them in `.env` like any other setting. The
+adapter captures every `FLUXFILES_*` value into the `server_env` config key, so it
+ends up in the config cache, and restores it at boot. A value set in the real
+process environment always wins. Before this, a cached config dropped anything that
+was only in `.env`: every paid module answered 402 and the kill switches stopped
+working.
+
 ## Configuration
 
 After publishing, edit `config/fluxfiles.php`:

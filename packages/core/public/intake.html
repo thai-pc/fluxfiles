@@ -57,7 +57,7 @@
       <div class="drop" id="drop">
         <div><strong>Choose files</strong> or drag &amp; drop here</div>
       </div>
-      <input type="file" id="file" multiple class="hidden">
+      <input type="file" id="file" multiple class="hidden" disabled>
       <div class="list" id="list"></div>
       <div class="meta" id="constraints"></div>
     </div>
@@ -76,7 +76,9 @@
       var API = String(window.__FM_API_BASE__ || '/api/fm').replace(/\/+$/, '');
       var $ = function (id) { return document.getElementById(id); };
       var gate = $('gate'), form = $('form');
-      var uploadsDisabled = false;
+      // Closed until /intake/info has answered: a file picked before that would be
+      // posted without knowing the portal's password/limits (info is still null).
+      var uploadsDisabled = true;
 
       function fail(text) { gate.textContent = text; gate.classList.remove('hidden'); }
 

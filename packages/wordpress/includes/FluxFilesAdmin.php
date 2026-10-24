@@ -7,6 +7,9 @@ defined('ABSPATH') || exit;
  */
 class FluxFilesAdmin
 {
+    /** Permissions an operator may grant on the settings screen (the token ceiling). */
+    public const PERMS = ['read', 'write', 'delete', 'audit'];
+
     public function __construct()
     {
         add_action('admin_menu', [$this, 'addMenuPage']);
@@ -529,7 +532,11 @@ JS);
     public function renderPermsField(): void
     {
         $current = get_option('fluxfiles_default_perms', ['read', 'write', 'delete']);
-        $allPerms = ['read', 'write', 'delete'];
+        // `audit` is the permission the compliance features check (Activity log, audit
+        // export/verify, fixity, legal hold, retention). The capability-derived role
+        // only hands it to admin-level users, and only when it is ticked here — this
+        // option is the ceiling every embed token is intersected with.
+        $allPerms = self::PERMS;
 
         foreach ($allPerms as $perm) {
             $checked = in_array($perm, $current, true) ? 'checked' : '';
@@ -626,7 +633,7 @@ JS);
         if (!is_array($input)) {
             return ['read'];
         }
-        return array_values(array_intersect($input, ['read', 'write', 'delete']));
+        return array_values(array_intersect($input, self::PERMS));
     }
 
     /**
