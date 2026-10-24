@@ -11,13 +11,7 @@ $envDirs = [
     realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'),
     realpath(__DIR__ . '/../../..') ?: (__DIR__ . '/../../..'),
 ];
-foreach ($envDirs as $dir) {
-    if (is_string($dir) && file_exists(rtrim($dir, '/') . '/.env')) {
-        $dotenv = Dotenv\Dotenv::createImmutable($dir);
-        $dotenv->safeLoad();
-        break;
-    }
-}
+\FluxFiles\EnvBootstrap::load($envDirs);
 
 // docs/design/DB-STORAGE-MIGRATION-DESIGN.md §8: reunite file_metadata rows with S3/R2
 // objects an external tool (raw sync, CRR, a bucket migration) moved outside

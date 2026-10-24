@@ -80,7 +80,9 @@ function fluxfiles_token(
  */
 function _fluxfiles_build_token(array $o): string
 {
-    $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+    // $_ENV when the host loaded a .env; otherwise the real env var (PHP leaves
+    // $_ENV empty under the production variables_order = GPCS).
+    $secret = $_ENV['FLUXFILES_SECRET'] ?? (string) getenv('FLUXFILES_SECRET');
     $now = time();
     $pick = static function (array $keys, $default) use ($o) {
         foreach ($keys as $k) {
@@ -288,7 +290,7 @@ function fluxfiles_byob_token(
     ?string $edition = null,
     ?string $role = null
 ): string {
-    $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+    $secret = $_ENV['FLUXFILES_SECRET'] ?? (string) getenv('FLUXFILES_SECRET');
     $now = time();
 
     // Encrypt each BYOB disk config
@@ -365,7 +367,7 @@ function fluxfiles_mixed_token(
     ?array $webp = null,
     ?array $usage = null
 ): string {
-    $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+    $secret = $_ENV['FLUXFILES_SECRET'] ?? (string) getenv('FLUXFILES_SECRET');
     $now = time();
 
     // Encrypt BYOB disks
