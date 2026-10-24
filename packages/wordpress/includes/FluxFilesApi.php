@@ -38,6 +38,11 @@ class FluxFilesApi
             \FluxFiles\AuditChain::configure((string) get_option('fluxfiles_secret', ''));
         }
 
+        // Module engine settings (Settings → FluxFiles → Module engines) live in an
+        // option; the paid modules read $_ENV. Seeded here so every REST handler —
+        // scan, webhooks, AI, … — sees them before any module runs.
+        FluxFilesPlugin::seedModuleEnv();
+
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
         $this->metaRepo = get_option('fluxfiles_storage_backend', 'json') === 'db'
             ? new WpDbMetadataHandler($this->diskManager)
@@ -2482,6 +2487,9 @@ class FluxFilesApi
         if ($licenseKey !== '') {
             $_ENV['FLUXFILES_LICENSE_KEY'] = $licenseKey;
         }
+        // Same for the module engine settings (portal uploads run virus/DLP scans,
+        // share/intake dispatch webhooks): a real env var still wins.
+        FluxFilesPlugin::seedModuleEnv();
 
         if ($which === 'share') {
             handleSharePublic($method, $uri, $this->diskManager, FluxFilesPlugin::diskConfigs(), $this->metaRepo);

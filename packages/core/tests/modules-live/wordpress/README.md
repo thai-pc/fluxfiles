@@ -16,7 +16,7 @@ What is real, and how it is configured (the operator's way, not the test's):
 | Module claims | `fixtures/fluxfiles-live.php`, an mu-plugin on the `fluxfiles_token_overrides` filter (the only supported way: the plugin has no settings UI for module claims). It uses `edition: enterprise` plus tuning from `fixtures/overrides.json` |
 | `audit` permission | ticked in Settings → FluxFiles → Default Permissions **through the real settings form** (`grantAuditViaSettings()`) |
 | Second disk (Backup) | the plugin's S3 options, pointed at LocalStack |
-| Module engine config | container env (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_ENDPOINT`, `FLUXFILES_C2PA_MANIFEST`, `FLUXFILES_WEBHOOK_ALLOW_INTERNAL`). The plugin offers no option for these |
+| Module engine config | the plugin's `fluxfiles_module_env` option (Settings → FluxFiles → Module engines; `fixtures/module-env.json`, written by the entrypoint): AI Vision provider/endpoint, DLP endpoint, webhook allow-internal. `FLUXFILES_C2PA_MANIFEST` stays a real container env var to prove env and option coexist (`proxy.spec.ts`) |
 
 WordPress runs on `ff-live-wp:latest` = `ff-modules-live:latest` (PHP 8.2 + ClamAV
 clamd + Tesseract + c2patool + Ghostscript) + mysqli + wp-cli, served by `php -S`

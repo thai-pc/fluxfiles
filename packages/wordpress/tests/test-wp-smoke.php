@@ -2429,6 +2429,180 @@ test('settings: `audit` can be granted as a default permission (else no embed to
     }
 });
 
+// ── Module engine settings (Settings → FluxFiles → Module engines) ─────────────
+
+test('module engines: values are sanitised per type, junk keys dropped', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    $keep = $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] ?? null;
+    unset($GLOBALS['WP_OPTIONS']['fluxfiles_module_env']);
+    try {
+        $out = $admin->sanitizeModuleEnv([
+            'FLUXFILES_AIVISION_PROVIDER' => 'HTTP',
+            'FLUXFILES_AIVISION_ENDPOINT' => 'https://rembg.test/run',
+            'FLUXFILES_AIVISION_TIMEOUT' => '99999',
+            'FLUXFILES_OCR_MAX_MEGAPIXELS' => '-5',
+            'FLUXFILES_DLP_ENDPOINT' => 'javascript:alert(1)',
+            'FLUXFILES_DLP_LANGUAGE' => 'en<script>',
+            'FLUXFILES_WEBHOOK_ALLOW_INTERNAL' => '1',
+            'FLUXFILES_LEGAL_HOLD_MAX_ACTIVE' => '0',
+            'FLUXFILES_C2PA_MANIFEST' => '/no/such/manifest.json',
+            'FLUXFILES_SECRET' => 'must-not-be-stored',
+            'FLUXFILES_SSO_OIDC_ISSUER' => 'https://idp.test',
+        ]);
+        assertEqual('http', $out['FLUXFILES_AIVISION_PROVIDER'], 'enum lower-cased');
+        assertEqual('https://rembg.test/run', $out['FLUXFILES_AIVISION_ENDPOINT']);
+        assertEqual('600', $out['FLUXFILES_AIVISION_TIMEOUT'], 'int clamped to max');
+        assertEqual('1', $out['FLUXFILES_OCR_MAX_MEGAPIXELS'], 'int clamped to min');
+        assertTrue(!isset($out['FLUXFILES_DLP_ENDPOINT']), 'non-http(s) URL rejected');
+        assertEqual('enscript', $out['FLUXFILES_DLP_LANGUAGE'], 'language stripped to letters');
+        assertEqual('true', $out['FLUXFILES_WEBHOOK_ALLOW_INTERNAL'], 'bool normalised');
+        assertEqual('0', $out['FLUXFILES_LEGAL_HOLD_MAX_ACTIVE'], '0 is a legal value (no cap)');
+        assertEqual('/no/such/manifest.json', $out['FLUXFILES_C2PA_MANIFEST'], 'unreadable path kept (warned, not rejected)');
+        assertTrue(!isset($out['FLUXFILES_SECRET']) && !isset($out['FLUXFILES_SSO_OIDC_ISSUER']), 'non-whitelisted keys dropped');
+        $bad = $admin->sanitizeModuleEnv(['FLUXFILES_AIVISION_PROVIDER' => 'evil', 'FLUXFILES_AIVISION_TIMEOUT' => 'abc']);
+        assertEqual([], $bad, 'bad enum / non-numeric int are unset');
+    } finally {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = $keep;
+        if ($keep === null) { unset($GLOBALS['WP_OPTIONS']['fluxfiles_module_env']); }
+    }
+});
+
+test('module engines: secrets are never echoed; empty keeps, the clear flag removes', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    if (!function_exists('esc_attr')) { function esc_attr($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
+    if (!function_exists('esc_html')) { function esc_html($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
+    if (!function_exists('selected')) { function selected($a, $b, $e = true) { return (string) $a === (string) $b ? 'selected' : ''; } }
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    $keep = $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] ?? null;
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = ['FLUXFILES_VIRUSTOTAL_KEY' => 'vt-secret-123'];
+        assertEqual('vt-secret-123', $admin->sanitizeModuleEnv(['FLUXFILES_VIRUSTOTAL_KEY' => ''])['FLUXFILES_VIRUSTOTAL_KEY'], 'empty keeps');
+        assertEqual('vt-new', $admin->sanitizeModuleEnv(['FLUXFILES_VIRUSTOTAL_KEY' => ' vt-new '])['FLUXFILES_VIRUSTOTAL_KEY'], 'non-empty replaces');
+        assertTrue(!isset($admin->sanitizeModuleEnv(['FLUXFILES_VIRUSTOTAL_KEY' => '', 'FLUXFILES_VIRUSTOTAL_KEY__clear' => '1'])['FLUXFILES_VIRUSTOTAL_KEY']), 'clear removes');
+        assertTrue(!isset($admin->sanitizeModuleEnv(['FLUXFILES_VIRUSTOTAL_KEY' => 'x', 'FLUXFILES_VIRUSTOTAL_KEY__clear' => '1'])['FLUXFILES_VIRUSTOTAL_KEY']), 'clear wins over a typed value');
+
+        ob_start();
+        try { $admin->renderModuleEnvField('FLUXFILES_VIRUSTOTAL_KEY'); } finally { $html = (string) ob_get_clean(); }
+        assertTrue(strpos($html, 'vt-secret-123') === false, 'secret not echoed into the page');
+        assertTrue(strpos($html, 'Saved') !== false && strpos($html, 'type="password"') !== false, 'shows saved state in a password input');
+    } finally {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = $keep;
+        if ($keep === null) { unset($GLOBALS['WP_OPTIONS']['fluxfiles_module_env']); }
+    }
+});
+
+test('module engines: a real env var is shown as winning on the settings screen', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    if (!function_exists('esc_attr')) { function esc_attr($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
+    if (!function_exists('esc_html')) { function esc_html($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
+    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+    putenv('FLUXFILES_DLP_TIMEOUT=33');
+    try {
+        ob_start();
+        try { $admin->renderModuleEnvField('FLUXFILES_DLP_TIMEOUT'); } finally { $html = (string) ob_get_clean(); }
+        assertTrue(strpos($html, 'environment variable') !== false && strpos($html, 'disabled') !== false && strpos($html, 'name=') === false,
+            'read-only, no submittable input: ' . $html);
+    } finally {
+        putenv('FLUXFILES_DLP_TIMEOUT');
+    }
+});
+
+test('module engines: seedModuleEnv fills $_ENV, a real env var wins, junk keys are ignored', function () {
+    $keepOpt = $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] ?? null;
+    $keys = ['FLUXFILES_AIVISION_ENDPOINT', 'FLUXFILES_DLP_ENDPOINT', 'FLUXFILES_DLP_TIMEOUT', 'FLUXFILES_OCR_MAX_MEGAPIXELS', 'FLUXFILES_SECRET_X', 'FLUXFILES_WEBHOOK_ALLOW_INTERNAL'];
+    $keepEnv = [];
+    foreach ($keys as $k) { $keepEnv[$k] = $_ENV[$k] ?? null; unset($_ENV[$k]); }
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = [
+            'FLUXFILES_AIVISION_ENDPOINT' => 'https://rembg.test/run',
+            'FLUXFILES_DLP_ENDPOINT' => 'javascript:evil',          // invalid -> not seeded
+            'FLUXFILES_DLP_TIMEOUT' => '15',                         // real env var set below
+            'FLUXFILES_OCR_MAX_MEGAPIXELS' => '25',                  // $_ENV already set below
+            'FLUXFILES_WEBHOOK_ALLOW_INTERNAL' => 'true',
+            'FLUXFILES_SECRET_X' => 'nope',
+        ];
+        putenv('FLUXFILES_DLP_TIMEOUT=99');
+        $_ENV['FLUXFILES_OCR_MAX_MEGAPIXELS'] = '7';
+        $n = FluxFilesPlugin::seedModuleEnv();
+        assertEqual(2, $n, 'two keys seeded');
+        assertEqual('https://rembg.test/run', $_ENV['FLUXFILES_AIVISION_ENDPOINT'] ?? null);
+        assertEqual('true', $_ENV['FLUXFILES_WEBHOOK_ALLOW_INTERNAL'] ?? null);
+        assertTrue(!isset($_ENV['FLUXFILES_DLP_TIMEOUT']), 'getenv() value wins, nothing seeded over it');
+        assertEqual('7', $_ENV['FLUXFILES_OCR_MAX_MEGAPIXELS'], '$_ENV value wins');
+        assertTrue(!isset($_ENV['FLUXFILES_DLP_ENDPOINT']), 'invalid stored value not seeded');
+        assertTrue(!isset($_ENV['FLUXFILES_SECRET_X']), 'non-whitelisted key never seeded');
+        assertEqual(false, getenv('FLUXFILES_AIVISION_ENDPOINT'), 'never putenv()');
+        assertTrue(!FluxFilesPlugin::moduleEnvFromEnvironment('FLUXFILES_AIVISION_ENDPOINT'), 'a seeded key is not mistaken for a real env var');
+        assertTrue(FluxFilesPlugin::moduleEnvFromEnvironment('FLUXFILES_DLP_TIMEOUT'), 'a real env var is recognised');
+    } finally {
+        putenv('FLUXFILES_DLP_TIMEOUT');
+        foreach ($keepEnv as $k => $v) { if ($v === null) { unset($_ENV[$k]); } else { $_ENV[$k] = $v; } }
+        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = $keepOpt;
+        if ($keepOpt === null) { unset($GLOBALS['WP_OPTIONS']['fluxfiles_module_env']); }
+    }
+});
+
+test('module engines: the REST API path and publicLink() both seed before any module runs', function () {
+    // Child process: FluxFilesApi's constructor (every REST handler) must seed; then the
+    // option changes and publicLink() must seed again by itself (it exits afterwards).
+    $child = <<<'CHILD'
+<?php
+[$self, $autoload, $wpDir, $mode] = $argv;
+define('ABSPATH', sys_get_temp_dir() . '/');
+define('WP_CONTENT_DIR', sys_get_temp_dir() . '/ff-wp-menv-' . getmypid());
+define('FLUXFILES_PLUGIN_FILE', $wpDir . '/fluxfiles.php');
+define('FLUXFILES_PLUGIN_DIR', $wpDir . '/');
+$GLOBALS['WP_OPTIONS'] = ['fluxfiles_secret' => 'wp-smoke-secret-key-0123456789abcdef'];
+function get_option($k, $d = false) { return $GLOBALS['WP_OPTIONS'][$k] ?? $d; }
+function wp_mkdir_p($d) { return is_dir($d) || mkdir($d, 0777, true); }
+function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, '/'); }
+function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
+function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
+function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function status_header($c) {}
+function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
+function add_action(...$a) {} function add_filter(...$a) {}
+function apply_filters($t, $v, ...$a) { return $v; }
+class WP_REST_Request {
+    public function get_method() { return 'GET'; }
+    public function get_route() { return '/fluxfiles/v1/api/fm/share/info'; }
+}
+require $autoload;
+require $wpDir . '/includes/FluxFilesPlugin.php';
+require $wpDir . '/includes/FluxFilesApi.php';
+register_shutdown_function(static function () {
+    echo "\nENV=" . json_encode([$_ENV['FLUXFILES_AIVISION_ENDPOINT'] ?? null, $_ENV['FLUXFILES_DLP_ENDPOINT'] ?? null]);
+});
+$GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = ['FLUXFILES_AIVISION_ENDPOINT' => 'https://a.test/x'];
+$api = new FluxFilesApi();
+if ($mode === 'public') {
+    $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = ['FLUXFILES_DLP_ENDPOINT' => 'https://d.test/x'];
+    $_GET = ['token' => 'not-a-share-token'];
+    (new ReflectionMethod('FluxFilesApi', 'publicLink'))->invoke($api, 'share', new WP_REST_Request());
+}
+CHILD;
+    $file = tempnam(sys_get_temp_dir(), 'ffwpmenv') . '.php';
+    file_put_contents($file, $child);
+    $autoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
+    $run = static function (string $mode) use ($file, $autoload): string {
+        $p = proc_open([PHP_BINARY, $file, realpath($autoload), realpath(__DIR__ . '/..'), $mode], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $out = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+        proc_close($p);
+        return (string) $out;
+    };
+    try {
+        $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+        assertTrue(substr_count($src, 'FluxFilesPlugin::seedModuleEnv()') >= 2, 'API constructor and publicLink() both call the seeder');
+        $out = $run('public');
+        // a.test = seeded by the constructor (option set before `new`); d.test = set
+        // afterwards, so only publicLink()'s own call can have seeded it.
+        assertTrue(strpos($out, 'ENV=["https:\/\/a.test\/x","https:\/\/d.test\/x"]') !== false, 'constructor and publicLink() both seed: ' . substr($out, -300));
+    } finally {
+        @unlink($file);
+    }
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

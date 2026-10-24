@@ -49,3 +49,18 @@ test('compliance scorecard over the proxy sees the licensed modules', async ({ p
   const card = await api(m, 'GET', '/api/fm/compliance/scorecard');
   expect(JSON.stringify(card)).toMatch(/legal|audit/i);
 });
+
+test('module engines: configured through the plugin option; a real env var still coexists (and wins)', async ({ page }) => {
+  // Not in the process env: they only reach the modules through seedModuleEnv().
+  for (const k of ['FLUXFILES_AIVISION_ENDPOINT', 'FLUXFILES_DLP_ENDPOINT', 'FLUXFILES_WEBHOOK_ALLOW_INTERNAL']) {
+    expect(wp('eval', `echo getenv("${k}") === false ? "unset" : "set";`)).toBe('unset');
+  }
+  expect(wp('eval', 'echo getenv("FLUXFILES_C2PA_MANIFEST") === false ? "unset" : "set";')).toBe('set');
+  expect(wp('option', 'get', 'fluxfiles_module_env', '--format=json')).toContain('ff-presidio');
+  // The settings screen marks the env-provided key as winning and offers the rest.
+  await loginAdmin(page);
+  await page.goto('/wp-admin/options-general.php?page=fluxfiles');
+  await expect(page.getByText('Set by the FLUXFILES_C2PA_MANIFEST environment variable')).toBeVisible();
+  await expect(page.locator('input[name="fluxfiles_module_env[FLUXFILES_DLP_ENDPOINT]"]')).toHaveValue('http://ff-presidio:3000');
+  await expect(page.locator('input[name="fluxfiles_module_env[FLUXFILES_C2PA_MANIFEST]"]')).toHaveCount(0);
+});

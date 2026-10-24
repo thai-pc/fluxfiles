@@ -113,8 +113,11 @@ $token = fluxfiles_token(['user' => 'user-42', 'edition' => 'pro']);
 WordPress mints tokens for you. Paste the licence under **Settings → FluxFiles →
 Licence**; turn modules on per token with the `fluxfiles_token_overrides` filter
 (`edition`, or individual `allow_*` claims) — there is no settings field for them.
-Engine settings (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_ENDPOINT`,
-`FLUXFILES_C2PA_MANIFEST`, …) are read from the server environment.
+Engine settings (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_*`, `FLUXFILES_C2PA_MANIFEST`,
+`FLUXFILES_VIRUSTOTAL_*`, `FLUXFILES_CLAMSCAN_TIMEOUT`, `FLUXFILES_OCR_MAX_MEGAPIXELS`,
+`FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) can be set under
+**Settings → FluxFiles → Module engines** when you have no environment. API keys there are
+write-only (never shown again); a real environment variable of the same name always wins.
 
 The claim names are in [`CONFIG.md`](../reference/CONFIG.md) — one row per claim, with defaults.
 

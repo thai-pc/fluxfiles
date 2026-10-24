@@ -123,6 +123,35 @@ class FluxFilesAdmin
             'fluxfiles_license'
         );
 
+        // ── Module engines ──────────────────────────────────────────────────
+        // The paid modules read their engine settings (AI provider, DLP endpoint, …)
+        // from the process environment, which shared hosting does not have — so they
+        // live in one option and FluxFilesPlugin::seedModuleEnv() hands them over.
+        add_settings_section(
+            'fluxfiles_module_env',
+            'Module engines',
+            function () {
+                echo '<p>Engine settings for the paid modules, for hosts without environment variables. '
+                   . 'Leave a field empty for the module default. A real environment variable of the same name always wins.</p>';
+            },
+            'fluxfiles'
+        );
+        register_setting('fluxfiles', FluxFilesPlugin::MODULE_ENV_OPTION, [
+            'type' => 'array',
+            'sanitize_callback' => [$this, 'sanitizeModuleEnv'],
+        ]);
+        foreach (FluxFilesPlugin::MODULE_ENV as $key => $def) {
+            add_settings_field(
+                'fluxfiles_module_env_' . $key,
+                $def['module'] . ' — ' . $def['label'],
+                function () use ($key) {
+                    $this->renderModuleEnvField($key);
+                },
+                'fluxfiles',
+                'fluxfiles_module_env'
+            );
+        }
+
         // Permissions section
         add_settings_section(
             'fluxfiles_permissions',
@@ -510,6 +539,89 @@ JS);
         );
     }
 
+    /**
+     * One engine setting. A real env var is shown read-only (the stored value would
+     * be ignored). Secrets are never echoed: only a "saved" state, an empty box keeps
+     * the stored value, and a checkbox clears it.
+     */
+    public function renderModuleEnvField(string $key): void
+    {
+        $def = FluxFilesPlugin::MODULE_ENV[$key] ?? null;
+        if ($def === null) {
+            return;
+        }
+        $stored = get_option(FluxFilesPlugin::MODULE_ENV_OPTION, []);
+        $stored = is_array($stored) ? $stored : [];
+        $value = (string) ($stored[$key] ?? '');
+        $name = FluxFilesPlugin::MODULE_ENV_OPTION . '[' . $key . ']';
+
+        if (FluxFilesPlugin::moduleEnvFromEnvironment($key)) {
+            printf(
+                '<input type="text" class="regular-text" value="%s" readonly disabled />'
+                . '<p class="description">Set by the %s environment variable, which wins — this field is ignored.</p>',
+                esc_attr($def['type'] === 'secret' ? '(set in the environment)' : (string) (getenv($key) ?: ($_ENV[$key] ?? ''))),
+                esc_html($key)
+            );
+            return;
+        }
+
+        switch ($def['type']) {
+            case 'secret':
+                printf(
+                    '<input type="password" name="%s" value="" autocomplete="new-password" class="regular-text" placeholder="%s" />',
+                    esc_attr($name),
+                    esc_attr($value !== '' ? 'Saved — leave empty to keep' : 'Not set')
+                );
+                if ($value !== '') {
+                    printf(
+                        '<label style="margin-left:10px"><input type="checkbox" name="%s[%s__clear]" value="1" /> Remove the saved key</label>',
+                        esc_attr(FluxFilesPlugin::MODULE_ENV_OPTION),
+                        esc_attr($key)
+                    );
+                }
+                break;
+            case 'bool':
+                printf(
+                    '<input type="hidden" name="%1$s" value="" /><label><input type="checkbox" name="%1$s" value="true" %2$s /> Enabled</label>',
+                    esc_attr($name),
+                    $value === 'true' ? 'checked' : ''
+                );
+                break;
+            case 'enum':
+                echo '<select name="' . esc_attr($name) . '">';
+                foreach ($def['options'] as $opt) {
+                    printf(
+                        '<option value="%1$s" %2$s>%1$s</option>',
+                        esc_attr($opt),
+                        selected($value !== '' ? $value : (string) $def['default'], $opt, false)
+                    );
+                }
+                echo '</select>';
+                break;
+            case 'int':
+                printf(
+                    '<input type="number" name="%s" value="%s" min="%d" max="%d" class="small-text" placeholder="%s" />',
+                    esc_attr($name),
+                    esc_attr($value),
+                    (int) $def['min'],
+                    (int) $def['max'],
+                    esc_attr((string) ($def['default'] ?? ''))
+                );
+                break;
+            default: // url, text, path
+                printf(
+                    '<input type="text" name="%s" value="%s" class="regular-text" placeholder="%s" />',
+                    esc_attr($name),
+                    esc_attr($value),
+                    esc_attr($def['type'] === 'url' ? 'https://' : (string) ($def['default'] ?? ''))
+                );
+                if ($def['type'] === 'path' && $value !== '' && !is_readable($value)) {
+                    echo '<p class="description" style="color:#b32d2e">This file is not readable by PHP.</p>';
+                }
+        }
+        echo '<p class="description"><code>' . esc_html($key) . '</code></p>';
+    }
+
     private function addField(string $name, string $label, string $section, string $type = 'text'): void
     {
         add_settings_field(
@@ -624,6 +736,44 @@ JS);
     // -------------------------------------------------------------------------
     // Sanitizers
     // -------------------------------------------------------------------------
+
+    /**
+     * Per-type clean-up of the module engine settings (FluxFilesPlugin::cleanModuleEnvValue).
+     * Only whitelisted keys survive. Secrets: empty input keeps the stored value, the
+     * `<KEY>__clear` flag removes it. A bad URL is dropped, an unreadable C2PA path is
+     * kept with a warning.
+     *
+     * @param mixed $input
+     */
+    public function sanitizeModuleEnv($input): array
+    {
+        $input = is_array($input) ? $input : [];
+        $prev = get_option(FluxFilesPlugin::MODULE_ENV_OPTION, []);
+        $prev = is_array($prev) ? $prev : [];
+        $out = [];
+        foreach (FluxFilesPlugin::MODULE_ENV as $key => $def) {
+            $raw = $input[$key] ?? '';
+            $value = FluxFilesPlugin::cleanModuleEnvValue($key, $raw);
+            if ($def['type'] === 'secret') {
+                if (!empty($input[$key . '__clear'])) {
+                    $value = '';
+                } elseif ($value === '') {
+                    $value = FluxFilesPlugin::cleanModuleEnvValue($key, $prev[$key] ?? '');
+                }
+            } elseif ($value === '' && is_scalar($raw) && trim((string) $raw) !== '' && function_exists('add_settings_error')) {
+                add_settings_error(FluxFilesPlugin::MODULE_ENV_OPTION, 'fluxfiles_module_env_' . $key,
+                    $def['label'] . ': the value was not valid and was not saved.');
+            }
+            if ($value !== '' && $def['type'] === 'path' && !is_readable($value) && function_exists('add_settings_error')) {
+                add_settings_error(FluxFilesPlugin::MODULE_ENV_OPTION, 'fluxfiles_module_env_' . $key,
+                    $def['label'] . ': ' . $value . ' is not readable by PHP (saved anyway).', 'warning');
+            }
+            if ($value !== '') {
+                $out[$key] = $value;
+            }
+        }
+        return $out;
+    }
 
     /**
      * @param mixed $input

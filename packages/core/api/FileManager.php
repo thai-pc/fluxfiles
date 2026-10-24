@@ -2202,6 +2202,29 @@ class FileManager
         }
     }
 
+    /**
+     * Public, exception-safe form of the index batch for modules that issue
+     * several FileManager writes on one disk (Backup's per-file
+     * writeScopedStream() + attachCopiedFile()): everything inside $fn is one
+     * index read + one index write. Re-entrant (nests with FileManager's own
+     * batches), always ends the batch in `finally` (so the index is flushed and
+     * the lock released even when $fn throws), and a plain passthrough on
+     * backends with nothing to batch (the DB backends write per row).
+     *
+     * @template T
+     * @param callable():T $fn
+     * @return T
+     */
+    public function withIndexBatch(string $disk, callable $fn)
+    {
+        $this->beginIndexBatch($disk);
+        try {
+            return $fn();
+        } finally {
+            $this->endIndexBatch($disk);
+        }
+    }
+
     private function copyVariants(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
     {
         $this->transferVariants($srcDisk, $srcKey, $dstDisk, $dstKey, false);
