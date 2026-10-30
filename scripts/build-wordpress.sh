@@ -27,8 +27,10 @@ CORE_DIR="$ROOT_DIR/packages/core"
 WP_DIR="$ROOT_DIR/packages/wordpress"
 SDK_DIR="$ROOT_DIR/packages/sdk"
 
-echo "==> Cleaning build directory..."
-rm -rf "$BUILD_DIR"
+echo "==> Cleaning the plugin build..."
+# Only this script's own outputs: build/ also holds the paid-module zips and
+# catalogue.json from scripts/pack-modules.php, which must survive a plugin build.
+rm -rf "$PLUGIN_DIR" "$BUILD_DIR/fluxfiles.zip"
 mkdir -p "$PLUGIN_DIR"
 
 echo "==> Copying WordPress plugin source..."
