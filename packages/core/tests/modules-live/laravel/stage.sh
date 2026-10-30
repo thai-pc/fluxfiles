@@ -7,7 +7,9 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; LIVE="$(cd "$HERE/.." && pwd)"; REPO="$(cd "$LIVE/../../../.." && pwd)"
 ST="$HERE/.stage"; rm -rf "$ST/src"; mkdir -p "$ST/src/core" "$ST/src/laravel" "$ST/src/modules"
-EXCL=(--exclude .env --exclude 'storage/*' --exclude node_modules --exclude tests --exclude test-results --exclude vendor --exclude composer.lock)
+# Anchored (/vendor, /tests): an unanchored 'vendor' also dropped core's
+# assets/vendor/ (vendored Alpine, xterm, CodeMirror), so the UI never booted.
+EXCL=(--exclude .env --exclude 'storage/*' --exclude node_modules --exclude /tests --exclude test-results --exclude /vendor --exclude /composer.lock)
 rsync -a --delete "${EXCL[@]}" "$REPO/packages/core/" "$ST/src/core/"
 mkdir -p "$ST/src/core/storage"
 rsync -a --delete "${EXCL[@]}" "$REPO/packages/laravel/" "$ST/src/laravel/"
