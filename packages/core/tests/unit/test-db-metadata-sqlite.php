@@ -517,6 +517,51 @@ test('MetadataImporter never reassigns or wipes an existing owner', function () 
     assertEqual('restored', $repo->get($disk, 'own/fresh.txt')['uploaded_by'] ?? null, 'new row owner kept');
 });
 
+// ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► getBulk() batching + copyIndexEntry(){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('getBulk() returns the same shape: row fields for hits, null for misses, input order', function () use ($repo, $disk) {
+    $repo->indexFile($disk, 'gb/a.jpg', ['title' => 'A', 'mime' => 'image/jpeg', 'width' => 3, 'height' => 4, 'size' => 99, 'uploaded_by' => 'u1']);
+    $bulk = $repo->getBulk($disk, ['gb/missing.jpg', 'gb/a.jpg']);
+    assertEqual(['gb/missing.jpg', 'gb/a.jpg'], array_keys($bulk), 'input order');
+    assertEqual(null, $bulk['gb/missing.jpg'], 'miss is null');
+    assertEqual(['title', 'alt_text', 'caption', 'tags', 'uploaded_by', 'mime', 'width', 'height', 'size', 'modified', 'created'], array_keys($bulk['gb/a.jpg']), 'row shape');
+    assertEqual('A', $bulk['gb/a.jpg']['title']);
+    assertEqual('u1', $bulk['gb/a.jpg']['uploaded_by']);
+    assertEqual(99, (int) $bulk['gb/a.jpg']['size']);
+    assertEqual([], $repo->getBulk($disk, []), 'empty input');
+});
+
+test('getBulk() over 1200 keys (chunked) finds every hit, nulls the rest, scopes by disk', function () use ($repo, $disk) {
+    $keys = [];
+    for ($i = 0; $i < 1200; $i++) {
+        $keys[] = "gbm/f{$i}.txt";
+        if ($i % 3 === 0) { $repo->indexFile($disk, "gbm/f{$i}.txt", ['title' => "T{$i}"]); }
+    }
+    $repo->indexFile('otherdisk', 'gbm/f1.txt', ['title' => 'wrong disk']);
+    $bulk = $repo->getBulk($disk, $keys);
+    assertEqual(1200, count($bulk), 'one result per key');
+    for ($i = 0; $i < 1200; $i++) {
+        if ($i % 3 === 0) { assertEqual("T{$i}", $bulk["gbm/f{$i}.txt"]['title'], "hit $i"); }
+        else { assertEqual(null, $bulk["gbm/f{$i}.txt"], "miss $i"); }
+    }
+});
+
+test('copyIndexEntry() carries the whole row (hash, mime, size, dims, dates, null text) to another key', function () use ($repo, $disk) {
+    $repo->indexFile($disk, 'ci/src.jpg', ['mime' => 'image/jpeg', 'width' => 10, 'height' => 20, 'size' => 555, 'modified' => 1700000000, 'created' => 1600000000, 'uploaded_by' => 'o', 'file_hash' => 'abc123']);
+    $repo->save($disk, 'ci/dst.jpg', ['uploaded_by' => 'o']); // what the old copyMetadata() did: sidecar fields only
+    $repo->copyIndexEntry($disk, 'ci/src.jpg', $disk, 'ci/dst.jpg');
+    $b = $repo->getBulk($disk, ['ci/src.jpg', 'ci/dst.jpg']);
+    assertEqual($b['ci/src.jpg'], $b['ci/dst.jpg'], 'public row fields equal');
+    assertEqual(null, $b['ci/dst.jpg']['title'], 'null title stays null (not "")');
+    assertEqual('image/jpeg', $b['ci/dst.jpg']['mime']);
+    $dups = $repo->findByHash($disk, 'abc123');
+    assertTrue($dups !== null, 'hash carried');
+    $repo->copyIndexEntry($disk, 'ci/none.jpg', $disk, 'ci/other.jpg'); // no source row: no-op
+    assertEqual(null, $repo->getBulk($disk, ['ci/other.jpg'])['ci/other.jpg'], 'nothing created');
+});
+
 @unlink($dbFile);
 @unlink($dbFile . '-wal');
 @unlink($dbFile . '-shm');

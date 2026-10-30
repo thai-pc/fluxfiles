@@ -54,6 +54,22 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private array $heldIndex = [];
     /** @var array<string,bool> */
     private array $heldIndexDirty = [];
+    /**
+     * Same held-copy treatment for dirs.json and trash.json: a bulk operation
+     * (extract, restore of a folder, empty-trash, retention) otherwise rewrote
+     * them once per file. Same lock, a dirty flag, flushed on the outermost end.
+     *
+     * @var array<string,array>
+     */
+    private array $heldDirs = [];
+    /** @var array<string,bool> */
+    private array $heldDirsDirty = [];
+    /** @var array<string,array> */
+    private array $heldTrash = [];
+    /** Disks whose dirs.json was last read in the legacy list shape (re-written as a map on the next track). */
+    private array $dirsLegacyShape = [];
+    /** @var array<string,bool> */
+    private array $heldTrashDirty = [];
 
     public function __construct(DiskManager $diskManager)
     {
@@ -130,6 +146,29 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             return true;
         } finally {
             $this->releaseIndexLock($disk);
+        }
+    }
+
+    /**
+     * Carry the complete index entry of $srcKey to $dstKey verbatim (hash, mime,
+     * size, dimensions, created/modified, and the exact null-vs-"" of the text
+     * fields). A rename/move/copy keeps the bytes, so every one of those still
+     * holds; save() alone only carries the sidecar fields and used to leave the
+     * destination with blanks. No-op when the source has no index entry.
+     */
+    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $entry = $this->loadIndex($srcDisk)[$srcKey] ?? null;
+        if (!is_array($entry)) {
+            return;
+        }
+        $this->acquireIndexLock($dstDisk);
+        try {
+            $index = $this->loadIndex($dstDisk);
+            $index[$dstKey] = $entry;
+            $this->saveIndex($dstDisk, $index);
+        } finally {
+            $this->releaseIndexLock($dstDisk);
         }
     }
 
@@ -243,6 +282,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $index = $this->loadIndex($disk);
         $prefix = trim($pathPrefix, '/');
         $q = mb_strtolower($query);
+        $qAscii = preg_match('/[\x80-\xFF]/', $q) !== 1;
         $results = [];
 
         foreach ($index as $fileKey => $meta) {
@@ -267,7 +307,14 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 $meta['caption'] ?? '',
                 $meta['tags'] ?? '',
             ]));
-            if (strpos(mb_strtolower($searchable), $q) !== false) {
+            // ASCII query: a plain stripos() hit is always a real hit; only a miss on
+            // a haystack with non-ASCII bytes needs the full mb_strtolower() (it
+            // folds e.g. the Kelvin sign to "k"), so ASCII-only rows skip it.
+            $hit = $qAscii && stripos($searchable, $q) !== false;
+            if (!$hit && (!$qAscii || preg_match('/[\x80-\xFF]/', $searchable) === 1)) {
+                $hit = strpos(mb_strtolower($searchable), $q) !== false;
+            }
+            if ($hit) {
                 $row = array_merge(['file_key' => $fileKey], $meta);
                 unset($row['file_hash']);
                 $row['title_hl'] = $this->highlight($row['title'] ?? '', $query);
@@ -327,8 +374,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $dirs = $this->loadDirsIndex($disk);
             if (!array_key_exists($dirKey, $dirs)) {
                 $dirs[$dirKey] = time(); // record the folder's created time once
+                $this->saveDirsIndex($disk, $dirs);
+            } elseif (!empty($this->dirsLegacyShape[$disk])) {
+                $this->saveDirsIndex($disk, $dirs); // one-time migration of a legacy list-shaped file
             }
-            $this->saveDirsIndex($disk, $dirs);
         } finally {
             $this->releaseIndexLock($disk);
         }
@@ -356,6 +405,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $this->acquireIndexLock($disk);
         try {
             $dirs = $this->loadDirsIndex($disk);
+            $changed = false;
             foreach ($parts as $p) {
                 if ($p === '' || $p === '.' || $p === '..') continue;
                 $acc[] = $p;
@@ -363,9 +413,12 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 if ($this->isReservedPath($d)) continue;
                 if (!array_key_exists($d, $dirs)) {
                     $dirs[$d] = time();
+                    $changed = true;
                 }
             }
-            $this->saveDirsIndex($disk, $dirs);
+            if ($changed || !empty($this->dirsLegacyShape[$disk])) {
+                $this->saveDirsIndex($disk, $dirs);
+            }
         } finally {
             $this->releaseIndexLock($disk);
         }
@@ -1020,12 +1073,55 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         }
         unset($this->indexDepth[$disk]);
         try {
-            if (!empty($this->heldIndexDirty[$disk])) {
-                $this->writeIndex($disk, $this->heldIndex[$disk]);
-            }
+            $this->flushHeld($disk);
         } finally {
-            unset($this->heldIndex[$disk], $this->heldIndexDirty[$disk]);
+            unset(
+                $this->heldIndex[$disk], $this->heldIndexDirty[$disk],
+                $this->heldDirs[$disk], $this->heldDirsDirty[$disk],
+                $this->heldTrash[$disk], $this->heldTrashDirty[$disk]
+            );
             $this->releaseLock($disk, $this->indexLocks);
+        }
+    }
+
+    /**
+     * Write every held copy that changed. Each one is attempted even when an
+     * earlier write throws (the first error is rethrown afterwards), so what
+     * landed in memory is never silently dropped.
+     */
+    private function flushHeld(string $disk): void
+    {
+        $first = null;
+        foreach ([
+            [&$this->heldIndexDirty, &$this->heldIndex, fn (array $d) => $this->writeIndex($disk, $d)],
+            [&$this->heldDirsDirty, &$this->heldDirs, fn (array $d) => $this->writeDirsIndex($disk, $d)],
+            [&$this->heldTrashDirty, &$this->heldTrash, fn (array $d) => $this->saveTrashNow($disk, $d)],
+        ] as [&$dirty, &$held, $write]) {
+            if (empty($dirty[$disk])) {
+                continue;
+            }
+            try {
+                $write($held[$disk]);
+                unset($dirty[$disk]);
+            } catch (\Throwable $e) {
+                $first ??= $e;
+            }
+        }
+        if ($first !== null) {
+            throw $first;
+        }
+    }
+
+    /**
+     * Write the held copies to storage now, keeping the lock. A long bulk
+     * operation calls this every few hundred entries so a crash loses at most
+     * one window and the lock isn't held across one giant final write.
+     * No-op outside a batch.
+     */
+    public function checkpointIndexBatch(string $disk): void
+    {
+        if (($this->indexDepth[$disk] ?? 0) > 0) {
+            $this->flushHeld($disk);
         }
     }
 
@@ -1135,6 +1231,19 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     /** @return array<string,array> */
     public function allTrash(string $disk): array
     {
+        if (isset($this->heldTrash[$disk])) {
+            return $this->heldTrash[$disk];
+        }
+        $all = $this->readTrash($disk);
+        if (($this->indexDepth[$disk] ?? 0) > 0) {
+            $this->heldTrash[$disk] = $all;
+        }
+        return $all;
+    }
+
+    /** @return array<string,array> */
+    private function readTrash(string $disk): array
+    {
         $fs = $this->diskManager->disk($disk);
         if (!$fs->fileExists(self::TRASH_KEY)) {
             return [];
@@ -1178,6 +1287,16 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     }
 
     private function saveTrash(string $disk, array $all): void
+    {
+        if (($this->indexDepth[$disk] ?? 0) > 0) {
+            $this->heldTrash[$disk] = $all;
+            $this->heldTrashDirty[$disk] = true;
+            return;
+        }
+        $this->saveTrashNow($disk, $all);
+    }
+
+    private function saveTrashNow(string $disk, array $all): void
     {
         $fs = $this->diskManager->disk($disk);
         $dir = dirname(self::TRASH_KEY);
@@ -1541,6 +1660,19 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      */
     private function loadDirsIndex(string $disk): array
     {
+        if (isset($this->heldDirs[$disk])) {
+            return $this->heldDirs[$disk];
+        }
+        $dirs = $this->readDirsIndex($disk);
+        if (($this->indexDepth[$disk] ?? 0) > 0) {
+            $this->heldDirs[$disk] = $dirs;
+        }
+        return $dirs;
+    }
+
+    /** @return array<string,?int> */
+    private function readDirsIndex(string $disk): array
+    {
         $fs = $this->diskManager->disk($disk);
         if (!$fs->fileExists(self::DIRS_KEY)) {
             return [];
@@ -1554,6 +1686,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             // Two on-disk shapes: legacy list of keys `["a","b"]`, and the current
             // map `{"a": <created ts|null>}`. Normalize to key => (?int created).
             $isList = array_is_list($data);
+            $this->dirsLegacyShape[$disk] = $isList;
             $set = [];
             foreach ($data as $kk => $vv) {
                 $k = $isList ? $vv : $kk;
@@ -1572,6 +1705,17 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
      * @param array<string, true> $dirs
      */
     private function saveDirsIndex(string $disk, array $dirs): void
+    {
+        unset($this->dirsLegacyShape[$disk]);
+        if (($this->indexDepth[$disk] ?? 0) > 0) {
+            $this->heldDirs[$disk] = $dirs;
+            $this->heldDirsDirty[$disk] = true;
+            return;
+        }
+        $this->writeDirsIndex($disk, $dirs);
+    }
+
+    private function writeDirsIndex(string $disk, array $dirs): void
     {
         $fs = $this->diskManager->disk($disk);
         $dir = dirname(self::DIRS_KEY);

@@ -3,6 +3,63 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.42] — 2026-10-30
+
+> Released: `core-v0.2.115`, `laravel-v0.2.57`, `wordpress-v0.2.73` (the plugin bundles core).
+
+Results of a code review of performance, correctness and core/proxy drift.
+
+### Fixed
+
+- **Renaming, moving or copying a file wiped its index entry.** After the
+  operation the entry lost `file_hash`, `mime`, `size`, `modified`, `created`
+  and the image dimensions, and empty text fields came back as `""` instead of
+  `null`. This broke srcset, the duplicate finder, and date/size sorting. The
+  whole entry is now carried to the new key: JSON backend, core DB backend,
+  and the Laravel and WordPress DB handlers.
+- **Laravel/WordPress: X-Accel-Redirect paths were not percent-encoded.** A
+  file name containing `%`, `?` or `#` returned 404 or was cut short behind
+  nginx. Core fixed this in 0.2.101, but the proxies' copies never got it.
+- **Laravel/WordPress audited and announced content edits as `content_edit`.**
+  Core and the UI's Activity labels use `content_update`, which both proxies
+  now use too, for the audit line and the webhook event alike.
+- **Laravel logged a virus/DLP-blocked upload under the bare file name**,
+  without its folder. It now uses the same key as core and WordPress.
+- **21 permission errors per proxy had no error code**, so the UI couldn't
+  translate them. They now carry the codes core uses (`disk_denied`,
+  `permission_denied`, `path_denied`). A guard test fails on any new uncoded
+  403.
+
+### Performance
+
+- **Bulk operations update the index once instead of once per file:** zip
+  extract, folder restore, empty trash and retention. A 50-entry zip went
+  from 100 index writes and 50 `dirs.json` writes to 1 of each. For very
+  large runs the index is saved every 500 entries or 5 seconds, so other
+  requests aren't blocked for minutes.
+- **`dirs.json` is written only when a new folder appears.**
+- **Rate limiting no longer goes through one global lock.** Each user and
+  action gets its own file under `rate_limit.d/`. At 1,000 active users a
+  request went from 16 ms to 0.2 ms. Deleting `rate_limit.json` still resets
+  every limit.
+- **DB backends (core, Laravel, WordPress) load the metadata for a list page
+  with one query per 500 keys** instead of one query per file.
+- **Folder delete/rename/move with `owner_only`** checks ownership with one
+  bulk metadata read and doesn't re-read each file's size.
+- **Standalone boot skips the `/api/fm/lang` request** when the page already
+  carries its translations. It used to run, one call after another, before
+  the file list loaded.
+- **Caching and compression:**
+  - `index.html` now has an ETag and returns 304. Demo mode, which puts a
+    per-visitor token in the page, does not.
+  - Lazily loaded editor/terminal libraries carry a version query, so a
+    long-cached old copy isn't used after an upgrade.
+  - The Docker image's nginx turns on gzip (fm.js goes from 236 KB to 57 KB)
+    and caches versioned assets for a year.
+  - Laravel and WordPress serve versioned assets as immutable for a year and
+    answer 304. WordPress used to re-send fm.js every 5 minutes.
+  - `docs/guides/DEPLOYMENT.md` has a new "Compression" section.
+
 ## [0.3.41] — 2026-10-30
 
 > Released: `core-v0.2.114`, `wordpress-v0.2.72` (the plugin bundles core).

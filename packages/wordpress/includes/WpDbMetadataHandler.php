@@ -249,6 +249,29 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
         return true;
     }
 
+    /**
+     * Carry the whole index row (owner, mime/size/dims, created/modified, hash and
+     * the exact null-vs-"" of the text columns) after a rename/move/copy. Called by
+     * core's FileManager::copyMetadata() when present; no-op without a source row.
+     * (No S3 breadcrumb here — this adapter has none.)
+     */
+    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $src = $this->fetchRow($srcDisk, $srcKey);
+        if ($src === null) {
+            return;
+        }
+        $insertCols = [
+            'disk' => $dstDisk, 'owner' => $src['owner'], 'path' => $dstKey, 'path_hash' => $this->pathHash($dstKey),
+            'title' => $src['title'], 'alt_text' => $src['alt_text'], 'caption' => $src['caption'], 'tags' => $src['tags'],
+            'mime' => $src['mime'], 'size' => $src['size'], 'width' => $src['width'], 'height' => $src['height'],
+            'created_at' => $src['created_at'], 'modified_at' => $src['modified_at'], 'file_hash' => $src['file_hash'],
+        ];
+        $updateCols = array_values(array_diff(array_keys($insertCols), ['disk', 'path', 'path_hash']));
+
+        $this->upsertFileMetadata($insertCols, $updateCols);
+    }
+
     public function delete(string $disk, string $key): void
     {
         $this->query(
@@ -313,24 +336,37 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
     {
         $result = [];
         foreach ($keys as $key) {
-            $row = $this->fetchRow($disk, $key);
-            if ($row === null) {
-                $result[$key] = null;
-                continue;
+            $result[$key] = null;
+        }
+        // One IN (...) query per chunk of keys instead of a SELECT per key.
+        $byHash = [];
+        foreach (array_keys($result) as $key) {
+            $byHash[$this->pathHash((string) $key)][] = $key;
+        }
+        foreach (array_chunk(array_keys($byHash), 500) as $hashes) {
+            $rows = $this->getResults(
+                "SELECT * FROM {$this->tFileMeta} WHERE disk = %s AND path_hash IN ("
+                . implode(',', array_fill(0, count($hashes), '%s')) . ')',
+                array_merge([$disk], $hashes)
+            );
+            foreach ($rows as $row) {
+                $row = (array) $row;
+                foreach ($byHash[$row['path_hash']] ?? [] as $key) {
+                    $result[$key] = [
+                        'title'       => $row['title'],
+                        'alt_text'    => $row['alt_text'],
+                        'caption'     => $row['caption'],
+                        'tags'        => $row['tags'],
+                        'uploaded_by' => $row['owner'],
+                        'mime'        => $row['mime'],
+                        'width'       => $row['width'],
+                        'height'      => $row['height'],
+                        'size'        => $row['size'],
+                        'modified'    => $row['modified_at'],
+                        'created'     => $row['created_at'],
+                    ];
+                }
             }
-            $result[$key] = [
-                'title'       => $row['title'],
-                'alt_text'    => $row['alt_text'],
-                'caption'     => $row['caption'],
-                'tags'        => $row['tags'],
-                'uploaded_by' => $row['owner'],
-                'mime'        => $row['mime'],
-                'width'       => $row['width'],
-                'height'      => $row['height'],
-                'size'        => $row['size'],
-                'modified'    => $row['modified_at'],
-                'created'     => $row['created_at'],
-            ];
         }
         return $result;
     }

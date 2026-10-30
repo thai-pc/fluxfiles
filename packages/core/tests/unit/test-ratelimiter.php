@@ -67,7 +67,7 @@ echo "{$yellow}► Read rate limiting{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('Read within limit passes', function () use ($testFile) {
-    @unlink($testFile);
+    @unlink($testFile); exec('rm -rf /tmp/ff_test_ratelimit.d');
     $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 5, writeLimit: 3, windowSeconds: 60);
 
     // 5 reads should all pass
@@ -78,7 +78,7 @@ test('Read within limit passes', function () use ($testFile) {
 });
 
 test('Read over limit throws ApiException 429', function () use ($testFile) {
-    @unlink($testFile);
+    @unlink($testFile); exec('rm -rf /tmp/ff_test_ratelimit.d');
     $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 3, writeLimit: 3, windowSeconds: 60);
 
     // Use up all 3 read slots
@@ -100,7 +100,7 @@ echo "\n{$yellow}► Write rate limiting{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('Write within limit passes', function () use ($testFile) {
-    @unlink($testFile);
+    @unlink($testFile); exec('rm -rf /tmp/ff_test_ratelimit.d');
     $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 5, writeLimit: 3, windowSeconds: 60);
 
     // 3 writes should all pass
@@ -110,7 +110,7 @@ test('Write within limit passes', function () use ($testFile) {
 });
 
 test('Write over limit throws ApiException 429', function () use ($testFile) {
-    @unlink($testFile);
+    @unlink($testFile); exec('rm -rf /tmp/ff_test_ratelimit.d');
     $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 5, writeLimit: 2, windowSeconds: 60);
 
     // Use up all 2 write slots
@@ -132,7 +132,7 @@ echo "\n{$yellow}► User isolation{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('Different users have independent limits', function () use ($testFile) {
-    @unlink($testFile);
+    @unlink($testFile); exec('rm -rf /tmp/ff_test_ratelimit.d');
     $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 2, writeLimit: 2, windowSeconds: 60);
 
     // User A uses up all read slots
@@ -157,19 +157,22 @@ test('Different users have independent limits', function () use ($testFile) {
 echo "\n{$yellow}► File storage{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
-test('Rate limit file is created', function () use ($testFile) {
-    @unlink($testFile);
-    assertEqual(false, file_exists($testFile));
+test('Rate limit shard file is created (per userId:actionType, under <name>.d/)', function () use ($testFile) {
+    $shards = '/tmp/ff_test_ratelimit.d';
+    exec('rm -rf ' . escapeshellarg($shards));
 
     $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 5, writeLimit: 5, windowSeconds: 60);
     $limiter->check('user-file', 'read');
 
-    assertEqual(true, file_exists($testFile), 'Rate limit file should exist after first check');
+    $hash = sha1('user-file:read');
+    $file = $shards . '/' . substr($hash, 0, 2) . '/' . $hash . '.json';
+    assertEqual(true, file_exists($file), 'Shard file should exist after first check');
+    assertEqual(true, preg_match('/^ffrl1:[0-9a-f]{16}$/', (string) file_get_contents($testFile)) === 1, 'the old global file is just an epoch marker now');
 
-    // Verify it contains valid JSON
-    $data = json_decode(file_get_contents($testFile), true);
-    assertEqual(true, is_array($data), 'File should contain valid JSON array');
-    assertEqual(true, isset($data['user-file:read']), 'File should have entry for user-file:read');
+    // Verify it contains valid JSON: this caller's timestamps only
+    $data = json_decode(file_get_contents($file), true);
+    assertEqual(true, is_array($data) && count($data['t'] ?? []) === 1, 'File should hold one timestamp');
+    exec('rm -rf ' . escapeshellarg($shards));
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -177,7 +180,7 @@ echo "\n{$yellow}► Window expiry{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
 test('Rate limit resets after window expires', function () use ($testFile) {
-    @unlink($testFile);
+    @unlink($testFile); exec('rm -rf /tmp/ff_test_ratelimit.d');
     // Use a 1-second window with a limit of 1
     $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 1, writeLimit: 1, windowSeconds: 1);
 
@@ -204,24 +207,16 @@ test('Rate limit resets after window expires', function () use ($testFile) {
 echo "\n{$yellow}► Stale key pruning{$reset}\n";
 // ═══════════════════════════════════════════════════════════════
 
-test('an inactive userId:actionType key is pruned once its entries age out', function () use ($testFile) {
-    @unlink($testFile);
-    // 1s window so "user-old"'s entry expires almost immediately.
+test('a caller\'s expired timestamps are dropped from its own shard on its next request', function () use ($testFile) {
     $limiter = new FluxFiles\RateLimiterFileStorage($testFile, readLimit: 5, writeLimit: 5, windowSeconds: 1);
     $limiter->check('user-old', 'read');
-
-    $data = json_decode(file_get_contents($testFile), true);
-    assertEqual(true, isset($data['user-old:read']), 'key present right after the request');
-
+    $limiter->check('user-old', 'read');
     sleep(2);
+    $limiter->check('user-old', 'read');
 
-    // A different user's request is what triggers the prune sweep — it must not
-    // leave user-old's now-stale key sitting in the file forever.
-    $limiter->check('user-new', 'read');
-
-    $data = json_decode(file_get_contents($testFile), true);
-    assertEqual(false, isset($data['user-old:read']), 'stale key pruned from the file');
-    assertEqual(true, isset($data['user-new:read']), 'active key still present');
+    $hash = sha1('user-old:read');
+    $data = json_decode(file_get_contents('/tmp/ff_test_ratelimit.d/' . substr($hash, 0, 2) . '/' . $hash . '.json'), true);
+    assertEqual(1, count($data['t']), 'only the fresh timestamp remains');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -231,6 +226,7 @@ test('an inactive userId:actionType key is pruned once its entries age out', fun
 if (file_exists($testFile)) {
     unlink($testFile);
 }
+exec('rm -rf ' . escapeshellarg('/tmp/ff_test_ratelimit.d'));
 
 // ═══════════════════════════════════════════════════════════════
 // Summary

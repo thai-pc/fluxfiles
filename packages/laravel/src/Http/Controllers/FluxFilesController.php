@@ -380,7 +380,20 @@ class FluxFilesController
                 }
                 $detail = (string) ($params['hold_id'] ?? '');
             } else {
-                $key = (string) ($params['name'] ?? $params['entry'] ?? '');
+                // Core's ff_blocked_write_key(): an editor save names the file in the JSON
+                // body `path`, an upload names the folder in the form `path` + the error
+                // `name`, an extract entry stays relative to the tenant root.
+                $name = (string) ($params['name'] ?? $params['entry'] ?? '');
+                $isJson = $req !== null && method_exists($req, 'isJson') && $req->isJson();
+                $formPath = $isJson ? null : ($in['path'] ?? null);
+                if (!isset($params['entry']) && $isJson && is_string($in['path'] ?? null) && $in['path'] !== '') {
+                    $rel = $in['path'];
+                } elseif (!isset($params['entry']) && is_string($formPath) && trim($formPath, '/') !== '') {
+                    $rel = trim($formPath, '/') . '/' . $name;
+                } else {
+                    $rel = $name;
+                }
+                $key = $rel;
                 if ($action === 'dlp_blocked') {
                     $detail = implode(',', array_map('strval', (array) ($params['entities'] ?? [])));
                 }
@@ -993,10 +1006,10 @@ class FluxFilesController
                 throw new ApiException('Missing disk or key parameter', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
             if (!$claims->hasPerm('read')) {
-                throw new ApiException('Permission denied: read', 403);
+                throw new ApiException('Permission denied: read', 403, 'permission_denied');
             }
             // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
             // internal detail), so a prefixed tenant used to get 403 path_denied on every
@@ -1025,10 +1038,10 @@ class FluxFilesController
                 throw new ApiException('Missing disk or key', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
             if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403);
+                throw new ApiException('Permission denied: write', 403, 'permission_denied');
             }
             // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
             // internal detail), so a prefixed tenant used to get 403 path_denied on every
@@ -1069,10 +1082,10 @@ class FluxFilesController
                 throw new ApiException('Missing disk or key', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
             if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403);
+                throw new ApiException('Permission denied: write', 403, 'permission_denied');
             }
             // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
             // internal detail), so a prefixed tenant used to get 403 path_denied on every
@@ -1106,10 +1119,10 @@ class FluxFilesController
                 throw new ApiException('Missing search query', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
             if (!$claims->hasPerm('read')) {
-                throw new ApiException('Permission denied: read', 403);
+                throw new ApiException('Permission denied: read', 403, 'permission_denied');
             }
 
             $rows = $this->metaRepo->search(
@@ -1147,10 +1160,10 @@ class FluxFilesController
                 throw new ApiException('Missing search query', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
             if (!$claims->hasPerm('read')) {
-                throw new ApiException('Permission denied: read', 403);
+                throw new ApiException('Permission denied: read', 403, 'permission_denied');
             }
 
             $rows = $this->metaRepo->searchFolders(
@@ -1419,8 +1432,8 @@ class FluxFilesController
                 (string) $request->input('path', ''),
                 (string) $request->input('content', '')
             );
-            $this->logAudit($claims, 'content_edit', (string) $request->input('disk', 'local'), (string) $request->input('path', ''));
-            $this->dispatchWebhook($claims, 'content_edit', [
+            $this->logAudit($claims, 'content_update', (string) $request->input('disk', 'local'), (string) $request->input('path', ''));
+            $this->dispatchWebhook($claims, 'content_update', [
                 'disk' => (string) $request->input('disk', 'local'),
                 'path' => (string) $request->input('path', ''),
                 'name' => basename((string) $request->input('path', '')),
@@ -2485,6 +2498,18 @@ class FluxFilesController
      * HTTP Range so a <video>/<audio> can seek. Emits raw bytes, not JSON.
      */
     /**
+     * The `X-Accel-Redirect` target for a storage key (core's ff_xaccel_uri(), inlined:
+     * the adapter floor predates it). nginx URL-DECODES this header, so a raw key breaks
+     * for a `%` (404) or `?`/`#` (cut off as query/fragment): each segment is
+     * percent-encoded, the `/` separators stay.
+     */
+    public static function xaccelUri(string $base, string $path): string
+    {
+        $segments = array_map('rawurlencode', explode('/', ltrim($path, '/')));
+        return rtrim($base, '/') . '/' . implode('/', $segments);
+    }
+
+    /**
      * `audit_reads` for /stream (core's ff_audit_stream_read()): only the first
      * request of a playback — no Range, or one starting at byte 0 — so seeking a
      * <video> doesn't write a line per scrub. Best-effort.
@@ -2574,7 +2599,7 @@ class FluxFilesController
             if ($xaccel !== '') {
                 header('Content-Type: ' . $mime);
                 header('X-Accel-Buffering: no');
-                header('X-Accel-Redirect: ' . rtrim($xaccel, '/') . '/' . $path);
+                header('X-Accel-Redirect: ' . self::xaccelUri($xaccel, $path));
                 exit;
             }
             \FluxFiles\RangeStreamer::stream($abs, $mime, $request->server('HTTP_RANGE'));
@@ -2955,7 +2980,7 @@ class FluxFilesController
             }
 
             if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403);
+                throw new ApiException('Permission denied: write', 403, 'permission_denied');
             }
 
             $disk = $request->input('disk');
@@ -2965,7 +2990,7 @@ class FluxFilesController
                 throw new ApiException('Missing required fields', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
 
             $sizeBytes = (int) ($request->input('size') ?? $request->input('size_bytes') ?? 0);
@@ -3009,7 +3034,7 @@ class FluxFilesController
             }
 
             if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403);
+                throw new ApiException('Permission denied: write', 403, 'permission_denied');
             }
 
             $disk       = $request->input('disk');
@@ -3021,10 +3046,10 @@ class FluxFilesController
                 throw new ApiException('Missing required fields', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
             if (!$claims->isPathInScope($key)) {
-                throw new ApiException('Access denied to path', 403);
+                throw new ApiException('Access denied to path', 403, 'path_denied');
             }
             $key = $fm->validateScopedPath($key);
 
@@ -3059,7 +3084,7 @@ class FluxFilesController
             }
 
             if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403);
+                throw new ApiException('Permission denied: write', 403, 'permission_denied');
             }
 
             $disk     = $request->input('disk');
@@ -3071,10 +3096,10 @@ class FluxFilesController
                 throw new ApiException('Missing required fields', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
             if (!$claims->isPathInScope($key)) {
-                throw new ApiException('Access denied to path', 403);
+                throw new ApiException('Access denied to path', 403, 'path_denied');
             }
             $key = $fm->validateScopedPath($key);
 
@@ -3129,7 +3154,7 @@ class FluxFilesController
             }
 
             if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403);
+                throw new ApiException('Permission denied: write', 403, 'permission_denied');
             }
 
             $disk     = $request->input('disk');
@@ -3140,10 +3165,10 @@ class FluxFilesController
                 throw new ApiException('Missing required fields', 400);
             }
             if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403);
+                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
             }
             if (!$claims->isPathInScope($key)) {
-                throw new ApiException('Access denied to path', 403);
+                throw new ApiException('Access denied to path', 403, 'path_denied');
             }
             $key = $fm->validateScopedPath($key);
 
@@ -3334,8 +3359,33 @@ class FluxFilesController
             ->header('Cache-Control', 'public, max-age=86400');
     }
 
-    public function asset(string $file): \Illuminate\Http\Response
+    /**
+     * Cache validators for a static UI asset. The page URL carries `?v=<content hash>`,
+     * so a request WITH `v` is immutable for a year; any other gets a cheap
+     * mtime+size ETag (no md5_file per request) and a 304 on a match.
+     *
+     * @return array{0:string,1:bool} [Cache-Control, notModified]
+     */
+    public static function assetCaching(string $filePath, bool $versioned, string $ifNoneMatch, string &$etag): array
     {
+        $etag = '"' . dechex((int) filemtime($filePath)) . '-' . dechex((int) filesize($filePath)) . '"';
+        if ($versioned) {
+            return ['public, max-age=31536000, immutable', false];
+        }
+        $match = false;
+        foreach (explode(',', $ifNoneMatch) as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === '*' || (str_starts_with($candidate, 'W/') ? substr($candidate, 2) : $candidate) === $etag) {
+                $match = true;
+                break;
+            }
+        }
+        return ['public, max-age=86400', $match];
+    }
+
+    public function asset(string $file, ?\Illuminate\Http\Request $request = null): \Illuminate\Http\Response
+    {
+        $request ??= (function_exists('request') ? request() : null);
         $basePath = $this->fluxfilesBasePath() . '/assets';
         $filePath = realpath($basePath . '/' . $file);
 
@@ -3361,9 +3411,17 @@ class FluxFilesController
                 break;
         }
 
+        $etag = '';
+        $versioned = $request !== null && (string) $request->query('v', '') !== '';
+        [$cache, $notModified] = self::assetCaching($filePath, $versioned, $request !== null ? (string) $request->header('If-None-Match', '') : '', $etag);
+        if ($notModified) {
+            return response('', 304)->header('ETag', $etag)->header('Cache-Control', $cache);
+        }
+
         return response(file_get_contents($filePath), 200)
             ->header('Content-Type', $mime . '; charset=utf-8')
-            ->header('Cache-Control', 'public, max-age=86400');
+            ->header('ETag', $etag)
+            ->header('Cache-Control', $cache);
     }
 
     private function fluxfilesBasePath(): string

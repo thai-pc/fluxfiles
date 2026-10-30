@@ -182,6 +182,24 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
         $html = str_replace('</head>', "<script>window.__FM_SSO__ = {$ssoJson};</script>\n</head>", $html);
     }
 
+    // Conditional GET: the page is dynamic (locale + asset hashes) but identical
+    // between visits, so let the browser revalidate for a 304 instead of
+    // re-downloading ~250 KB. `no-cache` stays — it means "revalidate", not "don't
+    // store". Per-request injections that make the body unique to this response:
+    //   - DemoMode __FM_BOOT__ (a fresh per-visitor token) -> never ETag
+    //   - the time() fallback of $assetVer when an asset file is missing
+    // Everything else (locale, asset hashes, SSO flag, frame-ancestors) is a pure
+    // function of env + files, so it is covered by hashing the final HTML.
+    if (!\FluxFiles\DemoMode::enabled() && is_file(__DIR__ . '/../assets/fm.js') && is_file(__DIR__ . '/../assets/fm.css')) {
+        $etag = '"' . md5($html) . '"';
+        header('ETag: ' . $etag);
+        $inm = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+        if ($inm !== '' && (trim($inm) === '*' || (preg_match_all('#(?:W/)?("[^"]*")#', $inm, $em) && in_array($etag, $em[1], true)))) {
+            http_response_code(304);
+            exit;
+        }
+    }
+
     echo $html;
     exit;
 }
@@ -191,13 +209,23 @@ if ($method === 'GET' && $uri === '/api/fm/lang') {
     $files = glob(__DIR__ . '/../lang/*.json');
     $result = [];
     foreach ($files as $f) {
-        $data = json_decode(file_get_contents($f), true);
-        if (!is_array($data)) continue;
-        $code = $data['_meta']['locale'] ?? basename($f, '.json');
+        // Only `_meta` is needed, and it leads every locale file — decode just that
+        // object from the first KB instead of parsing all ~30 KB x 16 files.
+        $head = (string) file_get_contents($f, false, null, 0, 2048);
+        $meta = null;
+        if (preg_match('/"_meta"\s*:\s*(\{[^{}]*\})/', $head, $mm)) {
+            $meta = json_decode($mm[1], true);
+        }
+        if (!is_array($meta)) { // unexpected layout → full parse, as before
+            $data = json_decode(file_get_contents($f), true);
+            if (!is_array($data)) continue;
+            $meta = $data['_meta'] ?? [];
+        }
+        $code = $meta['locale'] ?? basename($f, '.json');
         $result[] = [
             'code' => $code,
-            'name' => $data['_meta']['name'] ?? $code,
-            'dir'  => $data['_meta']['direction'] ?? 'ltr',
+            'name' => $meta['name'] ?? $code,
+            'dir'  => $meta['direction'] ?? 'ltr',
         ];
     }
     echo json_encode(['data' => $result, 'error' => null]);

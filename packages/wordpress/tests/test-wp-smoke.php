@@ -2603,6 +2603,86 @@ CHILD;
     }
 });
 
+// ── 1.x proxy-parity fixes: X-Accel encoding, audit action names, 403 codes, asset caching ──
+test('xaccelUri(): percent-encodes each segment (%, ?, #, space) and keeps the / separators', function () {
+    assertEqual('/internal/a%20b/50%25%20off%3F%23.pdf', FluxFilesApi::xaccelUri('/internal/', 'a b/50% off?#.pdf'), 'segments encoded');
+    assertEqual('/internal/x/y.txt', FluxFilesApi::xaccelUri('/internal', '/x/y.txt'), 'plain key unchanged');
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($src, "'X-Accel-Redirect: ' . self::xaccelUri(") !== false, 'the header uses the encoder');
+    assertTrue(strpos($src, "rtrim(\$xaccel, '/') . '/' . \$path") === false, 'no raw concatenation left');
+});
+
+test('audit: a code-editor save is logged as content_update (the name the UI labels), not content_edit', function () {
+    $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
+    $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(7710, ['perms' => ['read', 'write'], 'allow_code_edit' => true, 'prefix' => 'cu-' . uniqid()]);
+    try {
+        $api = new FluxFilesApi();
+        $dir = 'cu-dir-' . uniqid();
+        $api->handleMkdir(new WP_REST_Request(['disk' => 'local', 'path' => $dir]));
+        $root = FluxFilesPlugin::storagePath() . '/uploads';
+        $claims = (new ReflectionProperty(FluxFilesApi::class, 'lastClaims'))->getValue($api);
+        $abs = $root . '/' . $claims->scopePath($dir) . '/conf.txt';
+        file_put_contents($abs, 'old');
+        $resp = $api->handlePutContent(new WP_REST_Request(['disk' => 'local', 'path' => $dir . '/conf.txt', 'content' => 'new']));
+        assertEqual(200, $resp->get_status(), 'save ok: ' . json_encode($resp->get_data()));
+        $actions = [];
+        foreach (array_filter(explode("\n", (string) @file_get_contents($root . '/_fluxfiles/audit.jsonl'))) as $line) {
+            $row = json_decode($line, true);
+            if (($row['context']['user_id'] ?? '') === '7710') {
+                $actions[] = $row['action'] ?? '';
+            }
+        }
+        assertTrue(in_array('content_update', $actions, true), 'content_update logged: ' . json_encode($actions));
+        assertTrue(!in_array('content_edit', $actions, true), 'legacy name gone');
+    } finally {
+        $_SERVER['HTTP_AUTHORIZATION'] = $keepAuth;
+    }
+});
+
+test('403s carry the error codes core uses (disk_denied / permission_denied) and none is codeless', function () {
+    $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
+    try {
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(7711, ['perms' => ['read'], 'disks' => ['local']]);
+        $api = new FluxFilesApi();
+        $r = $api->handleSaveMetadata(new WP_REST_Request(['disk' => 'local', 'key' => 'a.txt', 'title' => 't']));
+        assertEqual(403, $r->get_status(), 'write needed');
+        assertEqual('permission_denied', $r->get_data()['error_code'] ?? null, 'permission_denied');
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(7712, ['perms' => ['read', 'write'], 'disks' => ['local']]);
+        $r = $api->handleSearch(new WP_REST_Request(['disk' => 'nope', 'q' => 'x']));
+        assertEqual(403, $r->get_status(), 'disk refused');
+        assertEqual('disk_denied', $r->get_data()['error_code'] ?? null, 'disk_denied');
+    } finally {
+        $_SERVER['HTTP_AUTHORIZATION'] = $keepAuth;
+    }
+    // Guard: every 403 ApiException names a code (the UI localises by code; a bare one shows raw English).
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(preg_match_all('/new ApiException\((?:[^;]*?),\s*403\s*\)/s', $src, $m) === 0, 'codeless 403 left: ' . json_encode($m[0] ?? []));
+});
+
+test('assetCaching(): ?v= is immutable; otherwise a cheap ETag with a real 304', function () {
+    $f = tempnam(sys_get_temp_dir(), 'ffa');
+    file_put_contents($f, 'body{}');
+    try {
+        [$h, $nm] = FluxFilesApi::assetCaching($f, true, '');
+        assertTrue(in_array('Cache-Control: public, max-age=31536000, immutable', $h, true), 'immutable when versioned');
+        assertEqual(false, $nm, 'versioned is not a 304');
+        [$h, $nm] = FluxFilesApi::assetCaching($f, false, '');
+        assertEqual(false, $nm, 'no validator -> 200');
+        assertTrue(in_array('Cache-Control: public, max-age=300, must-revalidate', $h, true), 'revalidating cache');
+        $etagHeader = array_values(array_filter($h, fn ($x) => strpos($x, 'ETag: ') === 0))[0] ?? '';
+        $etag = substr($etagHeader, 6);
+        assertTrue($etag !== '', 'ETag sent');
+        [, $nm] = FluxFilesApi::assetCaching($f, false, $etag);
+        assertEqual(true, $nm, 'matching If-None-Match -> 304');
+        [, $nm] = FluxFilesApi::assetCaching($f, false, 'W/' . $etag);
+        assertEqual(true, $nm, 'weak validator matches');
+        [, $nm] = FluxFilesApi::assetCaching($f, false, '"other"');
+        assertEqual(false, $nm, 'different ETag -> 200');
+    } finally {
+        @unlink($f);
+    }
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

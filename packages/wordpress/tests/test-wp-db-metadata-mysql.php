@@ -275,6 +275,21 @@ test('created_at is sticky on the first write and not overwritten by a later sav
     assertEqual(500, $bulk['sticky.jpg']['created']);
 });
 
+test('getBulk() batches keys: misses are null, hits keep shape, >500 keys chunk correctly', function () use ($repo, $disk) {
+    $keys = [];
+    for ($i = 0; $i < 620; $i++) {
+        $keys[] = "bulk/f{$i}.jpg";
+    }
+    $repo->save($disk, 'bulk/f0.jpg', ['uploaded_by' => 'b', 'size' => 10]);
+    $repo->save($disk, 'bulk/f619.jpg', ['uploaded_by' => 'b', 'size' => 20]);
+    $bulk = $repo->getBulk($disk, $keys);
+    assertEqual(620, count($bulk));
+    assertEqual(10, $bulk['bulk/f0.jpg']['size']);
+    assertEqual(20, $bulk['bulk/f619.jpg']['size']);
+    assertEqual(null, $bulk['bulk/f300.jpg']);
+    assertEqual(['title','alt_text','caption','tags','uploaded_by','mime','width','height','size','modified','created'], array_keys($bulk['bulk/f0.jpg']));
+});
+
 // ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► indexFile(){$reset}\n";
 // ═══════════════════════════════════════════════════════════════
@@ -295,6 +310,44 @@ test('indexFile(overwrite=true) updates the row and returns true', function () u
     $bulk = $repo->getBulk($disk, ['idx2.jpg']);
     assertEqual('image/png', $bulk['idx2.jpg']['mime']);
     assertEqual(999, $bulk['idx2.jpg']['size']);
+});
+
+// ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► copyIndexEntry(){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('copyIndexEntry() carries every index field (same disk and cross-disk), keeps null-vs-"" and no-ops without a source', function () use ($repo, $disk) {
+    $repo->indexFile($disk, 'cp-src.jpg', [
+        'uploaded_by' => 'owner-1', 'mime' => 'image/jpeg', 'size' => 1234, 'width' => 640, 'height' => 480,
+        'created' => 111, 'modified' => 222, 'file_hash' => 'cafef00d',
+    ], true);
+    $repo->copyIndexEntry($disk, 'cp-src.jpg', $disk, 'cp-dst.jpg');
+    $repo->copyIndexEntry($disk, 'cp-src.jpg', 'other', 'cp-x.jpg');
+    foreach ([[$disk, 'cp-dst.jpg'], ['other', 'cp-x.jpg']] as [$d, $k]) {
+        $r = $repo->getBulk($d, [$k])[$k];
+        assertTrue($r !== null, "$d/$k row should exist");
+        assertEqual('owner-1', $r['uploaded_by']);
+        assertEqual('image/jpeg', $r['mime']);
+        assertEqual(1234, (int) $r['size']);
+        assertEqual(640, (int) $r['width']);
+        assertEqual(480, (int) $r['height']);
+        assertEqual(111, (int) $r['created']);
+        assertEqual(222, (int) $r['modified']);
+        // indexFile() left the text columns NULL; the copy must not turn them into "".
+        assertEqual(null, $r['title']);
+        assertEqual(null, $r['tags']);
+        $found = $repo->findByHash($d, 'cafef00d');
+        assertTrue($found !== null, 'file_hash should be carried');
+    }
+    // "" stays "" (a saved-but-empty sidecar), distinct from NULL.
+    $repo->save($disk, 'cp-text.jpg', ['uploaded_by' => 'u', 'title' => '', 'tags' => 'a,b', 'created' => 1, 'modified' => 2]);
+    $repo->copyIndexEntry($disk, 'cp-text.jpg', $disk, 'cp-text2.jpg');
+    $r = $repo->getBulk($disk, ['cp-text2.jpg'])['cp-text2.jpg'];
+    assertEqual('', $r['title']);
+    assertEqual('a,b', $r['tags']);
+    // Missing source: nothing is created.
+    $repo->copyIndexEntry($disk, 'cp-missing.jpg', $disk, 'cp-never.jpg');
+    assertEqual(null, $repo->getBulk($disk, ['cp-never.jpg'])['cp-never.jpg']);
 });
 
 // ═══════════════════════════════════════════════════════════════

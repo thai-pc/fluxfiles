@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1.0
-Stable tag: 0.2.72
+Stable tag: 0.2.73
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 

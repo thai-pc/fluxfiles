@@ -221,6 +221,31 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         return true;
     }
 
+    /**
+     * Carry the whole row of $srcKey to $dstKey (hash, mime, size, dims, dates,
+     * and the exact null-vs-"" of the text columns) after a rename/move/copy —
+     * save() alone only carries the sidecar-shaped fields. No-op without a source row.
+     */
+    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    {
+        $src = $this->fetchRow($srcDisk, $srcKey);
+        if ($src === null) {
+            return;
+        }
+        $dst = $this->fetchRow($dstDisk, $dstKey);
+        $insertCols = [
+            'disk' => $dstDisk, 'owner' => $src['owner'], 'path' => $dstKey, 'path_hash' => $this->pathHash($dstKey),
+            'title' => $src['title'], 'alt_text' => $src['alt_text'], 'caption' => $src['caption'], 'tags' => $src['tags'],
+            'mime' => $src['mime'], 'size' => $src['size'], 'width' => $src['width'], 'height' => $src['height'],
+            'created_at' => $src['created_at'], 'modified_at' => $src['modified_at'], 'file_hash' => $src['file_hash'],
+            'object_uuid' => $this->maybeWriteS3Breadcrumb($dstDisk, $dstKey, $dst['object_uuid'] ?? null),
+        ];
+        $updateCols = $insertCols;
+        unset($updateCols['disk'], $updateCols['path'], $updateCols['path_hash']);
+        $sql = $this->db->dialect()->upsert('file_metadata', array_keys($insertCols), ['disk', 'path_hash'], array_keys($updateCols));
+        $this->db->pdo()->prepare($sql)->execute(array_values($insertCols));
+    }
+
     public function delete(string $disk, string $key): void
     {
         $stmt = $this->db->pdo()->prepare('DELETE FROM file_metadata WHERE disk = ? AND path_hash = ?');
@@ -279,26 +304,36 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
 
     public function getBulk(string $disk, array $keys): array
     {
+        // One SELECT per 500 keys (path_hash IN (…)) instead of one per key.
         $result = [];
+        $byHash = [];
         foreach ($keys as $key) {
-            $row = $this->fetchRow($disk, $key);
-            if ($row === null) {
-                $result[$key] = null;
-                continue;
+            $result[$key] = null;
+            $byHash[$this->pathHash((string) $key)][] = $key;
+        }
+        $pdo = $this->db->pdo();
+        foreach (array_chunk(array_keys($byHash), 500) as $hashes) {
+            $in = implode(',', array_fill(0, count($hashes), '?'));
+            $stmt = $pdo->prepare("SELECT * FROM file_metadata WHERE disk = ? AND path_hash IN ({$in})");
+            $stmt->execute(array_merge([$disk], $hashes));
+            foreach ($stmt->fetchAll() as $row) {
+                $entry = [
+                    'title'       => $row['title'],
+                    'alt_text'    => $row['alt_text'],
+                    'caption'     => $row['caption'],
+                    'tags'        => $row['tags'],
+                    'uploaded_by' => $row['owner'],
+                    'mime'        => $row['mime'],
+                    'width'       => $row['width'],
+                    'height'      => $row['height'],
+                    'size'        => $row['size'],
+                    'modified'    => $row['modified_at'],
+                    'created'     => $row['created_at'],
+                ];
+                foreach ($byHash[$row['path_hash']] ?? [] as $key) {
+                    $result[$key] = $entry;
+                }
             }
-            $result[$key] = [
-                'title'       => $row['title'],
-                'alt_text'    => $row['alt_text'],
-                'caption'     => $row['caption'],
-                'tags'        => $row['tags'],
-                'uploaded_by' => $row['owner'],
-                'mime'        => $row['mime'],
-                'width'       => $row['width'],
-                'height'      => $row['height'],
-                'size'        => $row['size'],
-                'modified'    => $row['modified_at'],
-                'created'     => $row['created_at'],
-            ];
         }
         return $result;
     }

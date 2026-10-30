@@ -444,6 +444,7 @@ class FileManager
     {
         $this->assertDisk($disk);
         $this->assertPerm('read');
+        $this->listDirsMemo = null;
         $order = $order === '' ? 'asc' : $order;
         $type = $type === '' ? 'all' : $type;
         if (!in_array($sort, self::LIST_SORTS, true)) {
@@ -596,6 +597,9 @@ class FileManager
      * @param array<int,array<string,mixed>> $all
      * @return array<int,array<string,mixed>>
      */
+    /** dirs.json as sortListing() read it, for attachMetadata() of the same list() call. */
+    private ?array $listDirsMemo = null;
+
     private function sortListing(string $disk, array $all, string $sort, string $order): array
     {
         $dir = $order === 'desc' ? -1 : 1;
@@ -614,6 +618,7 @@ class FileManager
         if ($sort === 'date') {
             try {
                 $created = $this->meta->dirsCreated($disk);
+                $this->listDirsMemo = $created; // attachMetadata() of this same list() reuses it
             } catch (\Throwable $e) {
                 $created = [];
             }
@@ -778,7 +783,8 @@ class FileManager
         }
         $metaMap = !empty($fileKeys) ? $this->meta->getBulk($disk, $fileKeys) : [];
         // Folder created timestamps live in our own dirs index (works on S3/R2 too).
-        $dirsCreated = $this->meta->dirsCreated($disk);
+        $dirsCreated = $this->listDirsMemo ?? $this->meta->dirsCreated($disk);
+        $this->listDirsMemo = null;
 
         // Legal hold enrichment — free/core, unconditional (docs/RETENTION-LEGAL-HOLD-
         // DESIGN.md §4.2). holdsCoveringMany() loads the holds manifest/table ONCE
@@ -1356,7 +1362,7 @@ class FileManager
                 }
                 // Snapshot metadata for real files (variant files have none).
                 $meta = (strpos($rel, '_variants/') === false) ? ($this->meta->get($disk, $item->path()) ?: []) : [];
-                try { $total += (int) $fs->fileSize($item->path()); } catch (\Throwable $e) { /* best effort */ }
+                $total += (int) ($item->fileSize() ?? 0); // listContents already carries it
                 $files[] = ['rel' => $rel, 'meta' => $meta];
             }
         } catch (\Throwable $e) {
@@ -1513,31 +1519,39 @@ class FileManager
             } catch (\Throwable $e) { /* best effort */ }
         }
 
-        foreach (($entry['dirs'] ?? []) as $d) {
-            $rel = $this->safeRel((string) $d); // strip any traversal
-            if ($rel === '') {
-                continue;
+        // One index/dirs write for the whole folder, not one per entry (see bulkOpen()).
+        $bulk = $this->bulkOpen($disk);
+        try {
+            foreach (($entry['dirs'] ?? []) as $d) {
+                $rel = $this->safeRel((string) $d); // strip any traversal
+                if ($rel === '') {
+                    continue;
+                }
+                try { $fs->createDirectory($target . '/' . $rel); } catch (\Throwable $e) { /* best effort */ }
+                // trackDir ignores reserved segments, so `_variants/` stays out of the index.
+                $this->meta->trackDir($disk, $target . '/' . $rel);
+                $this->bulkTick($disk, $bulk);
             }
-            try { $fs->createDirectory($target . '/' . $rel); } catch (\Throwable $e) { /* best effort */ }
-            // trackDir ignores reserved segments, so `_variants/` stays out of the index.
-            $this->meta->trackDir($disk, $target . '/' . $rel);
-        }
 
-        foreach (($entry['files'] ?? []) as $f) {
-            $rel = $this->safeRel((string) ($f['rel'] ?? '')); // strip any traversal
-            if ($rel === '') {
-                continue;
+            foreach (($entry['files'] ?? []) as $f) {
+                $rel = $this->safeRel((string) ($f['rel'] ?? '')); // strip any traversal
+                if ($rel === '') {
+                    continue;
+                }
+                $dst = $target . '/' . $rel;
+                if (!empty($f['meta'])) {
+                    $this->meta->save($disk, $dst, $f['meta']);
+                }
+                // Rebuild the folder tree in the dirs index for real files.
+                if (strpos($rel, '_variants/') === false) {
+                    $this->meta->trackParents($disk, $dst);
+                }
+                $this->bulkTick($disk, $bulk);
             }
-            $dst = $target . '/' . $rel;
-            if (!empty($f['meta'])) {
-                $this->meta->save($disk, $dst, $f['meta']);
-            }
-            // Rebuild the folder tree in the dirs index for real files.
-            if (strpos($rel, '_variants/') === false) {
-                $this->meta->trackParents($disk, $dst);
-            }
+            $this->meta->trackDir($disk, $target);
+        } finally {
+            $this->bulkClose($disk, $bulk);
         }
-        $this->meta->trackDir($disk, $target);
         // Same as the file case: history comes back from the trash payload, and an
         // older entry's history is re-keyed from the original path when restoring
         // somewhere new.
@@ -1664,18 +1678,25 @@ class FileManager
         $fs = $this->disks->disk($disk);
         $n = 0;
         $held = 0;
-        foreach ($this->meta->allTrash($disk) as $id => $e) {
-            if (!$this->trashVisible($e)) {
-                continue;
+        // trash.json is rewritten once per batch window, not once per purged item.
+        $bulk = $this->bulkOpen($disk);
+        try {
+            foreach ($this->meta->allTrash($disk) as $id => $e) {
+                if (!$this->trashVisible($e)) {
+                    continue;
+                }
+                if ($this->meta->holdBlocking($disk, (string) ($e['original_key'] ?? '')) !== null) {
+                    $held++;
+                    continue;
+                }
+                $this->purgeTrashedVersions($disk, ['_id' => (string) $id] + $e, $fs); // permanent → history goes too
+                try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $ex) { /* best effort */ }
+                $this->meta->removeTrash($disk, $id);
+                $n++;
+                $this->bulkTick($disk, $bulk);
             }
-            if ($this->meta->holdBlocking($disk, (string) ($e['original_key'] ?? '')) !== null) {
-                $held++;
-                continue;
-            }
-            $this->purgeTrashedVersions($disk, ['_id' => (string) $id] + $e, $fs); // permanent → history goes too
-            try { $fs->deleteDirectory('_fluxfiles/trash/' . $id); } catch (\Throwable $ex) { /* best effort */ }
-            $this->meta->removeTrash($disk, $id);
-            $n++;
+        } finally {
+            $this->bulkClose($disk, $bulk);
         }
         return ['purged' => $n, 'held' => $held];
     }
@@ -2158,11 +2179,23 @@ class FileManager
         return $driver === 'local' || $driver === 'sftp';
     }
 
-    private function copyMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    /**
+     * @param bool $sameBytes true when the destination holds the source's exact
+     *        bytes (copy/move/rename/backup), so the index entry — hash, mime, size,
+     *        dimensions, dates — is carried over whole. False for "save as copy" of
+     *        an EDITED image, where those describe the old bytes and must not leak.
+     */
+    private function copyMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey, bool $sameBytes = true): void
     {
         $existing = $this->meta->get($srcDisk, $srcKey);
         if ($existing) {
             $this->meta->save($dstDisk, $dstKey, $existing);
+        }
+        // save() only carries the sidecar fields; without this a rename left the
+        // index entry without file_hash/mime/size/dims and turned null text into "".
+        // Duck-typed: adapter-supplied handlers without the method keep today's behaviour.
+        if ($sameBytes && method_exists($this->meta, 'copyIndexEntry')) {
+            $this->meta->copyIndexEntry($srcDisk, $srcKey, $dstDisk, $dstKey);
         }
     }
 
@@ -2199,6 +2232,45 @@ class FileManager
     {
         if ($this->meta instanceof StorageMetadataHandler) {
             $this->meta->endIndexBatch($disk);
+        }
+    }
+
+    // A bulk loop (extract, folder restore, empty-trash, retention) runs inside ONE
+    // index batch so the disk-wide index / dirs.json / trash.json are written once,
+    // not once per entry. A batch holds the index lock, so it is renewed every
+    // BULK_BATCH_ENTRIES entries or BULK_BATCH_SECONDS: the held changes are written
+    // and the lock is handed back for a moment, so other requests aren't starved
+    // for the minutes a large bulk run can take.
+    private const BULK_BATCH_ENTRIES = 500;
+    private const BULK_BATCH_SECONDS = 5.0;
+
+    /** @return array{open:bool,n:int,t:float} */
+    private function bulkOpen(string $disk): array
+    {
+        $this->beginIndexBatch($disk);
+        return ['open' => true, 'n' => 0, 't' => microtime(true)];
+    }
+
+    /** Count one finished entry; renew the batch when the window is used up. */
+    private function bulkTick(string $disk, array &$b): void
+    {
+        if (!$b['open'] || ++$b['n'] < self::BULK_BATCH_ENTRIES && microtime(true) - $b['t'] < self::BULK_BATCH_SECONDS) {
+            return;
+        }
+        if ($this->meta instanceof StorageMetadataHandler) {
+            $this->meta->checkpointIndexBatch($disk); // also when an outer batch holds the lock
+        }
+        $b['open'] = false;
+        $this->endIndexBatch($disk);
+        $b = $this->bulkOpen($disk);
+    }
+
+    /** Ends the batch (flushing what landed) — call from a `finally`. */
+    private function bulkClose(string $disk, array &$b): void
+    {
+        if ($b['open']) {
+            $b['open'] = false;
+            $this->endIndexBatch($disk);
         }
     }
 
@@ -2404,7 +2476,7 @@ class FileManager
         if ($scopedDst !== $scopedSrc) {
             // "Save as copy" creates a new file — carry over metadata (title/tags/
             // uploaded_by) and register it in the search + folder index, same as copy().
-            $this->copyMetadata($disk, $scopedSrc, $disk, $scopedDst);
+            $this->copyMetadata($disk, $scopedSrc, $disk, $scopedDst, false);
             $this->meta->trackParents($disk, $scopedDst);
         }
 
@@ -2507,7 +2579,7 @@ class FileManager
         } else {
             // "Save as copy" creates a new file — carry over metadata (title/tags/
             // uploaded_by) and register it in the search + folder index, same as copy().
-            $this->copyMetadata($disk, $scopedSrc, $disk, $scopedDst);
+            $this->copyMetadata($disk, $scopedSrc, $disk, $scopedDst, false);
             $this->meta->trackParents($disk, $scopedDst);
         }
 
@@ -3167,33 +3239,40 @@ class FileManager
         ksort($candidates, SORT_STRING);
         $report['matched'] = count($candidates);
 
-        foreach ($candidates as $key => $c) {
-            if (count($report['items']) >= $maxActions) {
-                $report['truncated'] = true;
-                break;
-            }
-            $rel = $this->outKey((string) $key);
-            $entry = ['path' => $rel, 'action' => $c['action'], 'age_days' => $c['age_days'], 'result' => 'pending'];
-            if ($this->meta->holdBlocking($disk, (string) $key) !== null) {
-                $entry['result'] = 'held';
-                $report['held']++;
-            } elseif ($dryRun) {
-                $entry['result'] = 'would_' . $c['action'];
-            } else {
-                try {
-                    // Act on the listed storage key itself, not $rel: outKey() →
-                    // scopedPath() is not an identity when a subfolder repeats the
-                    // prefix's last segment (prefix `t` + key `t/t/a` → rel `t/a`
-                    // → scoped `t/a`, a different file).
-                    $c['action'] === 'delete' ? $this->deleteScoped($disk, (string) $key) : $this->trashScoped($disk, (string) $key);
-                    $entry['result'] = $c['action'] === 'delete' ? 'deleted' : 'trashed';
-                    $report['acted']++;
-                } catch (ApiException $e) {
-                    $entry['result'] = (string) ($e->getErrorCode() ?? 'error');
-                    $e->getErrorCode() === 'legal_hold_active' ? $report['held']++ : $report['errors']++;
+        // Deletes/trashes share one index + trash.json write per batch window.
+        $bulk = $dryRun ? ['open' => false, 'n' => 0, 't' => 0.0] : $this->bulkOpen($disk);
+        try {
+            foreach ($candidates as $key => $c) {
+                if (count($report['items']) >= $maxActions) {
+                    $report['truncated'] = true;
+                    break;
                 }
+                $rel = $this->outKey((string) $key);
+                $entry = ['path' => $rel, 'action' => $c['action'], 'age_days' => $c['age_days'], 'result' => 'pending'];
+                if ($this->meta->holdBlocking($disk, (string) $key) !== null) {
+                    $entry['result'] = 'held';
+                    $report['held']++;
+                } elseif ($dryRun) {
+                    $entry['result'] = 'would_' . $c['action'];
+                } else {
+                    try {
+                        // Act on the listed storage key itself, not $rel: outKey() →
+                        // scopedPath() is not an identity when a subfolder repeats the
+                        // prefix's last segment (prefix `t` + key `t/t/a` → rel `t/a`
+                        // → scoped `t/a`, a different file).
+                        $c['action'] === 'delete' ? $this->deleteScoped($disk, (string) $key) : $this->trashScoped($disk, (string) $key);
+                        $entry['result'] = $c['action'] === 'delete' ? 'deleted' : 'trashed';
+                        $report['acted']++;
+                    } catch (ApiException $e) {
+                        $entry['result'] = (string) ($e->getErrorCode() ?? 'error');
+                        $e->getErrorCode() === 'legal_hold_active' ? $report['held']++ : $report['errors']++;
+                    }
+                }
+                $report['items'][] = $entry;
+                $this->bulkTick($disk, $bulk);
             }
-            $report['items'][] = $entry;
+        } finally {
+            $this->bulkClose($disk, $bulk);
         }
         return $report;
     }
@@ -3829,6 +3908,7 @@ class FileManager
             fclose($src);
         }
 
+        $bulk = ['open' => false, 'n' => 0, 't' => 0.0];
         try {
             $za = new \ZipArchive();
             if ($za->open($tmp) !== true) {
@@ -3924,6 +4004,8 @@ class FileManager
             // upload (metadata + folder index + hash + image variants), so extracted
             // files get thumbnails and show up in search — not just on disk. ──
             $written = 0;
+            // One index + dirs.json write per batch window instead of ~3 per entry.
+            $bulk = $this->bulkOpen($disk);
             foreach ($plan as $e) {
                 $stream = $za->getStream($e['orig']);
                 if (!is_resource($stream)) {
@@ -4006,10 +4088,12 @@ class FileManager
                     @unlink($entryTmp);
                 }
                 $written++;
+                $this->bulkTick($disk, $bulk);
             }
             $za->close();
         } finally {
             @unlink($tmp);
+            $this->bulkClose($disk, $bulk);
         }
 
         return ['extracted' => $written, 'dest' => $destUser, 'bytes' => $total];
@@ -4278,6 +4362,7 @@ class FileManager
 
         $fs = $this->disks->disk($disk);
         try {
+            $keys = [];
             foreach ($fs->listContents($scopedDir, true) as $item) {
                 if (!$item->isFile()) {
                     continue;
@@ -4286,8 +4371,19 @@ class FileManager
                 if ($this->isReservedSystemPath($key)) {
                     continue;
                 }
-                $meta = $this->meta->get($disk, $key);
-                $owner = $meta['uploaded_by'] ?? null;
+                $keys[] = $key;
+            }
+            // Owners from ONE bulk read instead of a get() per file. A key the bulk
+            // result doesn't answer with an owner (not indexed, or no owner on the
+            // entry) is looked up exactly as before, so this check never gets laxer.
+            $owners = $keys === [] ? [] : $this->meta->getBulk($disk, $keys);
+            foreach ($keys as $key) {
+                $meta = $owners[$key] ?? null;
+                $owner = is_array($meta) ? ($meta['uploaded_by'] ?? null) : null;
+                if ($owner === null) {
+                    $meta = $this->meta->get($disk, $key);
+                    $owner = $meta['uploaded_by'] ?? null;
+                }
                 if ($owner !== null && $owner !== $this->claims->userId) {
                     throw new ApiException('This folder contains files you do not own', 403, 'owner_only');
                 }
