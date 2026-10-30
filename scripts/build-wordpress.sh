@@ -61,9 +61,15 @@ echo "==> Bundling core UI assets (fm.js, fm.css) into plugin assets/..."
 mkdir -p "$PLUGIN_DIR/assets"
 cp "$CORE_DIR/assets/fm.js"  "$PLUGIN_DIR/assets/fm.js"
 cp "$CORE_DIR/assets/fm.css" "$PLUGIN_DIR/assets/fm.css"
+# The pre-minified pair the UI is actually served from (scripts/build-ui.sh); the
+# plugin falls back to fm.js/fm.css above when they are absent or FLUXFILES_DEBUG is on.
+for f in fm.min.js fm.min.css; do
+    if [ -f "$CORE_DIR/assets/$f" ]; then cp "$CORE_DIR/assets/$f" "$PLUGIN_DIR/assets/$f"; fi
+done
 
-# The vendored libraries fm.js lazy-loads on demand (xterm for the SSH terminal,
-# CodeMirror for the code editor). Deliberately not on a CDN — they run in the
+# The vendored libraries: Alpine (loaded by the page itself) plus what fm.js
+# lazy-loads on demand (xterm for the SSH terminal, CodeMirror for the code
+# editor). Deliberately not on a CDN — they run in the
 # origin that holds the JWT — so they have to ship inside the plugin or those
 # two features silently fall back.
 cp -r "$CORE_DIR/assets/vendor" "$PLUGIN_DIR/assets/vendor"

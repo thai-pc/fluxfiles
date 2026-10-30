@@ -244,6 +244,7 @@
     "forbidden": "Bu işlem için yetkiniz yok",
     "not_found": "Bulunamadı",
     "quota_exceeded": "Depolama kotası aşıldı ({used} / {max})",
+    "metadata_object_too_large": "Bu nesne 5 GiB'tan büyük olduğu için meta verileri S3'te değiştirilemez.",
     "upload_too_large": "Dosya çok büyük (maks. {max})",
     "too_many_files": "Dosya sınırına ulaşıldı (en fazla {max})",
     "ext_not_allowed": ".{ext} dosya türüne izin verilmiyor",

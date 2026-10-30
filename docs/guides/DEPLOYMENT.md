@@ -232,6 +232,26 @@ chmod 600 storage/rate_limit.json   # if exists
 chmod -R go-rwx storage/rate_limit.d # if exists (per-user rate-limit shards)
 ```
 
+**Folders on a public local disk** (one the web server serves directly, i.e. not
+`FLUXFILES_LOCAL_PRIVATE=true`) are created `0755`, so nginx/Apache can read them
+even when they run as a different user than PHP. A private disk keeps `0700`.
+Before core 0.2.116 every new folder was `0700`, which made files in new folders
+404/403 when the web server and php-fpm used different users. Fix folders created
+by older versions once:
+
+```bash
+find /path/to/public/disk/root -type d -perm 700 -not -path '*/_fluxfiles*' -exec chmod 755 {} +
+```
+
+`_fluxfiles/` (audit log, index, trashed and versioned file bytes) stays `0700` on
+every disk: core re-tightens it whenever it writes there. That is only a backstop.
+The web server must still deny `_fluxfiles/` (see the nginx rule above), and the
+`.htaccess` core writes there only covers Apache.
+
+A **private** disk keeps `0700` folders, so it can only be read through PHP. If you
+use the nginx `X-Accel-Redirect` fast path for `/api/fm/stream`, nginx must run as
+the same user (or group, with the folders opened to it) as php-fpm.
+
 `storage/` also holds `tus/` (partial resumable uploads, swept after 24 h). On a
 **multi-node** deployment behind a load balancer, either share
 `<FLUXFILES_STORAGE_PATH>/tus/` between the nodes or use sticky sessions — a tus

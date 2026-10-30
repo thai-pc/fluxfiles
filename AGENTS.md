@@ -44,7 +44,9 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   CORS, auth, dispatch), `api/FileManager.php` (file ops + most security checks),
   `api/DiskManager.php` (Flysystem disks), `api/Claims.php` (JWT claims),
   `api/StorageMetadataHandler.php` (metadata/index/audit), `api/Db/` (opt-in DB
-  backend), `assets/`, `public/`, `lang/`, `tests/`.
+  backend), `assets/` (the page serves the committed `fm.min.js`/`fm.min.css`: after
+  editing `fm.js`/`fm.css` run `bash scripts/build-ui.sh`; CI fails on a stale pair),
+  `public/`, `lang/`, `tests/`.
 - `packages/sdk/` — vanilla browser SDK (`FluxFiles` global).
 - `packages/node/` — server-side token SDK (`@fluxfiles/node`), mints JWTs in JS.
 - `packages/mcp/` — MCP server (`@fluxfiles/mcp`, stdio bin `fluxfiles-mcp`): read-only tools by default, write/trash behind env flags; refuses plain `http://` to a non-local host (`FLUXFILES_MCP_ALLOW_HTTP=1` overrides).

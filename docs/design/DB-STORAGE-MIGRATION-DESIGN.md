@@ -301,6 +301,21 @@ called "quota" need different treatment:
    Flysystem `listContents()` — regardless of the metadata backend. This is
    a case where accepting existing perf characteristics is correct, not lazy.
 
+   One walk now yields both figures (`QuotaManager::walk()` → bytes + file
+   count), so an upload carrying both `max_storage` and `max_files` scans the
+   prefix once instead of twice. The guarantee is "at check time, used +
+   incoming ≤ limit"; there is no reservation, so two requests whose checks
+   overlap can both pass near the limit (as before). A cached figure was
+   deliberately **not** used for the decision: it can be overtaken by a walk,
+   miss writes made through a child/parent prefix or straight to the bucket,
+   and so fail open on a hard limit.
+
+   The `/api/fm/quota` **meter** is display-only and may be up to 120 s stale:
+   `QuotaManager::figures()` serves `<prefix>/_fluxfiles/quota.json` (also in
+   DB mode — it is a tiny storage-resident file, not a table) and refreshes it
+   with one walk when stale; the usage dashboard's walk refreshes it too. No
+   write path touches or reads that file.
+
 2. **The `/api/fm/usage` dashboard breakdown** (`file_count`/`by_type`/
    `by_folder` — display-only figures, already excluding `_fluxfiles/`/
    `_variants/` even today) is a good fit for a DB fast-path when
@@ -950,7 +965,7 @@ changes.
 
 | Env var | Default | Notes |
 |---|---|---|
-| `FLUXFILES_STORAGE_BACKEND` | `json` | `json` (unchanged default behavior) or `db` — selects whether metadata/search/folder-index/audit/trash/rate-limits live in `_fluxfiles/*.json` (incl. `rate_limit.json`) or the configured database; one switch drives both `MetadataRepositoryInterface` and `RateLimiterStorageInterface` (§3.7). Quota **enforcement** always uses a live storage scan regardless of this setting (§3.3). |
+| `FLUXFILES_STORAGE_BACKEND` | `json` | `json` (unchanged default behavior) or `db` — selects whether metadata/search/folder-index/audit/trash/rate-limits live in `_fluxfiles/*.json` (incl. `rate_limit.json`) or the configured database; one switch drives both `MetadataRepositoryInterface` and `RateLimiterStorageInterface` (§3.7). Quota **enforcement** always uses a live storage scan regardless of this setting (§3.3); only the `/quota` meter may be cached (120 s). |
 | `FLUXFILES_DB_DSN` | — | PDO DSN for the `db` backend, e.g. `sqlite:/var/www/fluxfiles/storage/fluxfiles.sqlite3`, `mysql:host=127.0.0.1;dbname=fluxfiles;charset=utf8mb4`, `pgsql:host=127.0.0.1;dbname=fluxfiles`. Required when `FLUXFILES_STORAGE_BACKEND=db` (core standalone only — Laravel/WordPress use their own framework connection instead, see below). |
 | `FLUXFILES_DB_USER` / `FLUXFILES_DB_PASSWORD` | — | Credentials for `FLUXFILES_DB_DSN` (ignored for SQLite). |
 | `FLUXFILES_DB_AUTO_MIGRATE` | `false` | `true` runs pending core migrations automatically on boot (dev convenience only). Production should run `php scripts/fluxfiles-migrate.php` explicitly during deploy. |

@@ -39,6 +39,8 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     /** @var array<string, resource> Active file locks keyed by disk name */
     private array $indexLocks = [];
+    /** @var array<string,array> headers written with an object, until its save() — see s3WriteMetadata() */
+    private array $s3Known = [];
     private array $auditLocks = [];
 
     /**
@@ -94,12 +96,23 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         try {
             // Merge with existing so partial updates (e.g. {uploaded_by} right after upload,
             // or {title, alt_text} from the metadata edit form) don't wipe unrelated fields.
-            $existing = $this->get($disk, $key) ?? [];
-            $merged = array_merge($existing, $data);
-
             if ($this->isS3Compatible($disk)) {
-                $this->saveToS3($disk, $key, $merged);
+                // Headers just written WITH the object (s3WriteMetadata) are known —
+                // no HEAD needed. Otherwise one HEAD serves both the merge and the
+                // content-header carry-over that a REPLACE self-copy needs.
+                $known = $this->s3Known[$disk . "\0" . $key] ?? null;
+                unset($this->s3Known[$disk . "\0" . $key]);
+                $head = $known === null ? $this->headS3($disk, $key) : null;
+                $existing = $known ?? ($head !== null ? $this->metaFromS3Headers($head['Metadata'] ?? []) : []);
+                $merged = array_merge($existing, $data);
+                // The headers ARE the metadata, and changing them costs a server-side
+                // copy of the whole object — only pay it when one actually changed.
+                if ($known === null && $head === null || $this->s3Headers($existing) !== $this->s3Headers($merged)) {
+                    $this->saveToS3($disk, $key, $merged, $head);
+                }
             } else {
+                $existing = $this->get($disk, $key) ?? [];
+                $merged = array_merge($existing, $data);
                 $this->saveToLocal($disk, $key, $merged);
             }
             $this->updateIndex($disk, $key, $merged);
@@ -150,21 +163,36 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     }
 
     /**
-     * Carry the complete index entry of $srcKey to $dstKey verbatim (hash, mime,
-     * size, dimensions, created/modified, and the exact null-vs-"" of the text
+     * Carry the complete index entry of $srcKey to $dstKey (hash, mime, size,
+     * dimensions, created/modified, and the exact null-vs-"" of the text
      * fields). A rename/move/copy keeps the bytes, so every one of those still
      * holds; save() alone only carries the sidecar fields and used to leave the
      * destination with blanks. No-op when the source has no index entry.
+     *
+     * A COPY keeps the destination's `uploaded_by` (whatever the save() that just
+     * ran decided); a MOVE ($objectMoved) carries the source's, so a leftover
+     * destination entry (an object deleted out-of-band, a lost update) can never
+     * decide who owns the moved file. $fresh (a copy, not a move/rename) stamps
+     * created/modified with now so the copy doesn't sort as old.
      */
-    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey, bool $objectMoved = false, bool $fresh = false): void
     {
         $entry = $this->loadIndex($srcDisk)[$srcKey] ?? null;
         if (!is_array($entry)) {
             return;
         }
+        if ($fresh) {
+            $now = time();
+            $entry['created'] = $now;
+            $entry['modified'] = $now;
+        }
         $this->acquireIndexLock($dstDisk);
         try {
             $index = $this->loadIndex($dstDisk);
+            $dst = $index[$dstKey] ?? null;
+            if (!$objectMoved && is_array($dst) && array_key_exists('uploaded_by', $dst)) {
+                $entry['uploaded_by'] = $dst['uploaded_by'];
+            }
             $index[$dstKey] = $entry;
             $this->saveIndex($dstDisk, $index);
         } finally {
@@ -275,6 +303,27 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             }
         }
         return $result;
+    }
+
+    /**
+     * Owner recorded in the search index for each key (null: not indexed or no
+     * owner) — ONE index read, no sidecar/S3 HEAD fallback. The index can disagree
+     * with the sidecar/object header (a lost update, an operator edit), and the
+     * sidecar/header is what assertOwner() trusts, so callers may use this only to
+     * DENY early, never to allow.
+     *
+     * @param string[] $keys
+     * @return array<string,?string>
+     */
+    public function indexOwners(string $disk, array $keys): array
+    {
+        $index = $this->loadIndex($disk);
+        $out = [];
+        foreach ($keys as $key) {
+            $o = is_array($index[$key] ?? null) ? ($index[$key]['uploaded_by'] ?? null) : null;
+            $out[$key] = is_string($o) && $o !== '' ? $o : null;
+        }
+        return $out;
     }
 
     public function search(string $disk, string $query, int $limit = 50, string $pathPrefix = '', bool $includeHidden = false): array
@@ -879,31 +928,59 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function getFromS3(string $disk, string $key): ?array
     {
+        $head = $this->headS3($disk, $key);
+        return $head === null ? null : $this->metaFromS3Headers($head['Metadata'] ?? []);
+    }
+
+    /** HeadObject result, or null when the object can't be read. */
+    private function headS3(string $disk, string $key): ?\Aws\Result
+    {
         try {
             $client = $this->diskManager->s3Client($disk);
             $config = $this->diskManager->config($disk);
-            $bucket = $config['bucket'] ?? '';
-            $result = $client->headObject(['Bucket' => $bucket, 'Key' => $key]);
-            $meta = $result['Metadata'] ?? [];
-            return $this->metaFromS3Headers($meta);
+            return $client->headObject(['Bucket' => $config['bucket'] ?? '', 'Key' => $key]);
         } catch (\Throwable $e) {
             return null;
         }
     }
 
-    private function saveToS3(string $disk, string $key, array $data): void
+    /** The five header-backed fields as the S3 `Metadata` map. @return array<string,string> */
+    private function s3Headers(array $data): array
+    {
+        return [
+            'fm-title' => substr((string) ($data['title'] ?? ''), 0, 1024),
+            'fm-alt' => substr((string) ($data['alt_text'] ?? ''), 0, 1024),
+            'fm-caption' => substr((string) ($data['caption'] ?? ''), 0, 1024),
+            'fm-tags' => substr((string) ($data['tags'] ?? ''), 0, 1024),
+            'fm-uploaded-by' => substr((string) ($data['uploaded_by'] ?? ''), 0, 1024),
+        ];
+    }
+
+    /**
+     * S3 `Metadata` to hand to the PUT that creates $key, so its headers are born
+     * with the object instead of being set by a follow-up self-copy. Remembers them
+     * so the save() that follows the write needs neither a HEAD nor a copy. Null on
+     * non-S3 disks (their sidecar is written by save()).
+     *
+     * @return array<string,string>|null
+     */
+    public function s3WriteMetadata(string $disk, string $key, array $data): ?array
+    {
+        if (!$this->isS3Compatible($disk)) {
+            return null;
+        }
+        $headers = $this->s3Headers($data);
+        $this->s3Known[$disk . "\0" . $key] = $this->metaFromS3Headers($headers);
+        return $headers;
+    }
+
+    private function saveToS3(string $disk, string $key, array $data, ?\Aws\Result $head = null): void
     {
         $client = $this->diskManager->s3Client($disk);
         $config = $this->diskManager->config($disk);
         $bucket = $config['bucket'] ?? '';
 
-        $metadata = [
-            'fm-title' => substr($data['title'] ?? '', 0, 1024),
-            'fm-alt' => substr($data['alt_text'] ?? '', 0, 1024),
-            'fm-caption' => substr($data['caption'] ?? '', 0, 1024),
-            'fm-tags' => substr($data['tags'] ?? '', 0, 1024),
-            'fm-uploaded-by' => substr((string) ($data['uploaded_by'] ?? ''), 0, 1024),
-        ];
+        $metadata = $this->s3Headers($data);
 
         // Metadata lives in the object's headers, so saving it is a self-copy with
         // MetadataDirective=REPLACE — which replaces ALL of them: without carrying
@@ -918,8 +995,16 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             'Metadata' => $metadata,
             'MetadataDirective' => 'REPLACE',
         ];
+        $tooBig = false;
         try {
-            $head = $client->headObject(['Bucket' => $bucket, 'Key' => $key]);
+            $head ??= $client->headObject(['Bucket' => $bucket, 'Key' => $key]);
+            // CopyObject is a single request, capped at 5 GiB, and the headers ARE the
+            // metadata (get()/assertOwner() read nothing else): silently skipping would
+            // leave them stale while the index shows the edit. Refuse instead, after
+            // this try (it swallows throwables).
+            if ((int) ($head['ContentLength'] ?? 0) > 5 * 1024 * 1024 * 1024) {
+                $tooBig = true;
+            }
             foreach (['ContentType', 'ContentDisposition', 'ContentEncoding', 'ContentLanguage', 'CacheControl', 'Expires'] as $h) {
                 if (!empty($head[$h])) {
                     $params[$h] = $head[$h];
@@ -927,6 +1012,13 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             }
         } catch (\Throwable $e) {
             // No head → the copy below fails the same way; nothing to carry over.
+        }
+        if ($tooBig) {
+            throw new ApiException(
+                "'{$key}' is over 5 GiB: its S3 metadata headers can't be rewritten",
+                422,
+                'metadata_object_too_large'
+            );
         }
         // Mirrors DiskManager: only a native AWS disk marked public writes public-read
         // (its client strips ACL for every other disk anyway).
@@ -1061,7 +1153,72 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 unset($this->indexDepth[$disk]);
                 throw $e;
             }
+            if (isset($this->indexLocks[$disk])) {
+                $this->hookShutdown();
+            }
         }
+    }
+
+    /** @var array<int,\WeakReference<self>> handlers that may hold an open batch at shutdown */
+    private static array $shutdownRefs = [];
+    private static bool $shutdownHooked = false;
+
+    /**
+     * `finally` does not run on a max_execution_time fatal, which would drop the
+     * held (not yet written) index/dirs/trash changes and leave the lock to the
+     * process teardown. A shutdown function writes them and releases the lock. One
+     * static hook for all handlers (weak refs, so long-running workers don't
+     * pin them); a batch that ended normally is already gone from indexDepth, so
+     * nothing ever runs twice.
+     */
+    private function hookShutdown(): void
+    {
+        foreach (self::$shutdownRefs as $id => $ref) {
+            if ($ref->get() === null) {
+                unset(self::$shutdownRefs[$id]);
+            }
+        }
+        self::$shutdownRefs[spl_object_id($this)] = \WeakReference::create($this);
+        if (!self::$shutdownHooked) {
+            self::$shutdownHooked = true;
+            register_shutdown_function([self::class, 'flushOpenBatchesOnShutdown']);
+        }
+    }
+
+    /** @internal shutdown hook */
+    public static function flushOpenBatchesOnShutdown(): void
+    {
+        foreach (self::$shutdownRefs as $ref) {
+            $h = $ref->get();
+            if ($h !== null) {
+                $h->abortOpenBatches();
+            }
+        }
+    }
+
+    private function abortOpenBatches(): void
+    {
+        foreach (array_keys($this->indexDepth) as $disk) {
+            unset($this->indexDepth[$disk]);
+            try {
+                $this->finishBatch((string) $disk);
+            } catch (\Throwable $e) {
+                error_log('FluxFiles: flushing an open index batch at shutdown failed — ' . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * True only while a batch is open AND a real exclusive lock backs it. The
+     * held copies (index, dirs, trash) are authoritative only under a lock that
+     * excludes other writers; on a disk where acquireLock() takes none (S3/R2/
+     * SFTP, or a local flock that failed) a held copy would overwrite whatever a
+     * concurrent request wrote meanwhile, so those disks keep the per-operation
+     * read-modify-write.
+     */
+    private function holdsLock(string $disk): bool
+    {
+        return ($this->indexDepth[$disk] ?? 0) > 0 && isset($this->indexLocks[$disk]);
     }
 
     private function releaseIndexLock(string $disk): void
@@ -1072,6 +1229,12 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             return;
         }
         unset($this->indexDepth[$disk]);
+        $this->finishBatch($disk);
+    }
+
+    /** Outermost end of a batch: write the held copies, drop them, release the lock. */
+    private function finishBatch(string $disk): void
+    {
         try {
             $this->flushHeld($disk);
         } finally {
@@ -1186,7 +1349,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         // Suppress the native warning: under Laravel, HandleExceptions promotes a
         // bare mkdir()/fopen() warning to a fatal ErrorException, so a non-writable
         // uploads dir would surface as a cryptic 500 instead of an actionable error.
-        if (!is_dir($lockDir) && !@mkdir($lockDir, 0775, true) && !is_dir($lockDir)) {
+        if (!is_dir($lockDir) && !@mkdir($lockDir, 0700, true) && !is_dir($lockDir)) {
             throw new ApiException(
                 "Storage is not writable: cannot create '{$lockDir}'. Grant the web "
                 . "server user write access to the uploads directory.",
@@ -1235,7 +1398,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             return $this->heldTrash[$disk];
         }
         $all = $this->readTrash($disk);
-        if (($this->indexDepth[$disk] ?? 0) > 0) {
+        if ($this->holdsLock($disk)) {
             $this->heldTrash[$disk] = $all;
         }
         return $all;
@@ -1288,7 +1451,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function saveTrash(string $disk, array $all): void
     {
-        if (($this->indexDepth[$disk] ?? 0) > 0) {
+        if ($this->holdsLock($disk)) {
             $this->heldTrash[$disk] = $all;
             $this->heldTrashDirty[$disk] = true;
             return;
@@ -1510,7 +1673,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             return $this->heldIndex[$disk];
         }
         $index = $this->readIndex($disk);
-        if (($this->indexDepth[$disk] ?? 0) > 0) {
+        if ($this->holdsLock($disk)) {
             $this->heldIndex[$disk] = $index;
         }
         return $index;
@@ -1544,7 +1707,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
 
     private function saveIndex(string $disk, array $index): void
     {
-        if (($this->indexDepth[$disk] ?? 0) > 0) {
+        if ($this->holdsLock($disk)) {
             // Under the lock: keep it in memory, written once on the final release.
             $this->heldIndex[$disk] = $index;
             $this->heldIndexDirty[$disk] = true;
@@ -1664,7 +1827,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             return $this->heldDirs[$disk];
         }
         $dirs = $this->readDirsIndex($disk);
-        if (($this->indexDepth[$disk] ?? 0) > 0) {
+        if ($this->holdsLock($disk)) {
             $this->heldDirs[$disk] = $dirs;
         }
         return $dirs;
@@ -1707,7 +1870,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private function saveDirsIndex(string $disk, array $dirs): void
     {
         unset($this->dirsLegacyShape[$disk]);
-        if (($this->indexDepth[$disk] ?? 0) > 0) {
+        if ($this->holdsLock($disk)) {
             $this->heldDirs[$disk] = $dirs;
             $this->heldDirsDirty[$disk] = true;
             return;

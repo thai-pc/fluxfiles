@@ -2659,6 +2659,27 @@ test('403s carry the error codes core uses (disk_denied / permission_denied) and
     assertTrue(preg_match_all('/new ApiException\((?:[^;]*?),\s*403\s*\)/s', $src, $m) === 0, 'codeless 403 left: ' . json_encode($m[0] ?? []));
 });
 
+test('assetVersionMatches(): only a v naming the served file (or its vendor tree) may be immutable', function () {
+    $dir = sys_get_temp_dir() . '/ffav-' . bin2hex(random_bytes(3));
+    mkdir($dir . '/vendor/codemirror', 0775, true);
+    file_put_contents($dir . '/fm.js', 'js!');
+    file_put_contents($dir . '/vendor/codemirror/x.js', 'X');
+    file_put_contents($dir . '/vendor/codemirror/y.css', 'Y');
+    $real = realpath($dir);
+    try {
+        assertTrue(FluxFilesApi::assetVersionMatches("$real/fm.js", $real, substr(md5('js!'), 0, 8)), '8-hex prefix of the file md5');
+        assertTrue(FluxFilesApi::assetVersionMatches("$real/fm.js", $real, substr(md5('js!'), 0, 10)), '10-hex prefix');
+        assertTrue(!FluxFilesApi::assetVersionMatches("$real/fm.js", $real, '0123456789'), 'unrelated hash');
+        assertTrue(!FluxFilesApi::assetVersionMatches("$real/fm.js", $real, 'abc'), 'too short / junk');
+        $tree = substr(md5("x.js\0X\0y.css\0Y\0"), 0, 10);
+        assertTrue(FluxFilesApi::assetVersionMatches("$real/vendor/codemirror/x.js", $real, $tree), 'vendor tree hash');
+        assertTrue(!FluxFilesApi::assetVersionMatches("$real/fm.js", $real, $tree), 'a tree hash only counts for vendor files');
+    } finally {
+        array_map('unlink', glob("$dir/vendor/codemirror/*")); @unlink("$dir/fm.js");
+        @rmdir("$dir/vendor/codemirror"); @rmdir("$dir/vendor"); @rmdir($dir);
+    }
+});
+
 test('assetCaching(): ?v= is immutable; otherwise a cheap ETag with a real 304', function () {
     $f = tempnam(sys_get_temp_dir(), 'ffa');
     file_put_contents($f, 'body{}');

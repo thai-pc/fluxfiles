@@ -1,3 +1,8 @@
+// NOTE: the page serves the pre-minified fm.min.js / fm.min.css, NOT this file.
+// After editing fm.js or fm.css run `bash scripts/build-ui.sh` and commit the result
+// (CI's "UI min assets are fresh" job fails otherwise). FLUXFILES_DEBUG=1 serves
+// this readable source instead.
+
 // Base URL of the assets/ directory this very file was served from. The lazy
 // loaders below (xterm, CodeMirror) fetch vendored copies relative to it rather
 // than hardcoding '../assets/vendor': under the Laravel and WordPress proxies
@@ -15,18 +20,25 @@ const FM_ASSETS_BASE = (function () {
     return '../assets';
 })();
 
-// The ?v= hash fm.js itself was loaded with. Lazy vendor assets reuse it so the
-// long-lived `immutable` cache can't pin a stale xterm/CodeMirror after an
-// upgrade (core bumps it whenever fm.js changes; empty → no query).
-const FM_ASSETS_VER = (function () {
-    try {
-        const src = document.currentScript && document.currentScript.src;
-        const v = src && new URL(src).searchParams.get('v');
-        return v ? '?v=' + encodeURIComponent(v) : '';
-    } catch (e) { return ''; }
-})();
+// Content hashes of the lazily loaded vendor trees (assets/vendor/<name>/). They are
+// the ?v= of those files, so a vendor-only update changes the URL even when this
+// file is unchanged (the long-lived `immutable` cache can't pin an old xterm /
+// CodeMirror). Rewritten by scripts/build-ui.sh; tests/unit/test-vendor-ver.php
+// fails when they no longer match the files.
+const FM_VENDOR_VER = { xterm: '031a9e8fb6', codemirror: '37088e0200' }; // vendor-ver
+
+// One collator for every name sort. `a.localeCompare(b, undefined, {numeric:true})`
+// builds a fresh collator per call, which made a 2,000-row sort ~15x slower.
+// Locale `undefined` = the browser default, exactly what localeCompare used.
+const FM_COLLATOR = new Intl.Collator(undefined, { numeric: true });
 
 function fluxFilesApp() {
+    // Memo slots for the sorted list getters (kept out of the reactive state on
+    // purpose: writing them from a getter would re-trigger the effects reading it).
+    const _sortMemo = { files: { src: null, sig: '', out: null }, folders: { src: null, sig: '', out: null } };
+    // Set of selected keys behind isSelected(), rebuilt when `selected` changes
+    // identity or length (every mutation site replaces it or push/splices it).
+    const _selMemo = { arr: null, len: -1, keys: null };
     const LOCALE = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };
 
     return {
@@ -61,6 +73,7 @@ function fluxFilesApp() {
         // scan recent items than to hunt alphabetically. Overridable + remembered.
         sortBy: 'date',     // 'name' | 'date' | 'size' | 'type'
         sortDir: 'desc',    // 'asc' | 'desc'
+        _listRev: 0,        // bumped when a listed row's sort key changes in place (see _memoSorted)
         typeFilter: 'all',  // 'all' | 'image' | 'video' | 'audio' | 'document' | 'other'
         sortMenuOpen: false,
         filterMenuOpen: false,
@@ -188,7 +201,6 @@ function fluxFilesApp() {
         // Mobile: sidebar drawer + mobile UI state
         sidebarOpen: false,
         mobileSearchOpen: false,
-        mobileMoreOpen: false,
         mobileActionSheet: null, // null or file/folder object for action sheet
 
         // Detail panel: resizable width (desktop), persisted
@@ -1183,12 +1195,6 @@ function fluxFilesApp() {
             window.history.replaceState({}, '', url.toString());
         },
 
-        navigateUp() {
-            const parts = this.currentPath.split('/').filter(Boolean);
-            parts.pop();
-            this.navigate(parts.join('/'));
-        },
-
         // ── Sidebar folder tree (lazy expand/collapse) ──────────────────────
         // Fetch a directory's child folders once and cache them ('' = root).
         async loadDirChildren(key) {
@@ -1491,7 +1497,13 @@ function fluxFilesApp() {
         },
 
         isSelected(file) {
-            return this.selected.some(s => s.key === file.key);
+            const sel = this.selected;
+            if (_selMemo.arr !== sel || _selMemo.len !== sel.length) {
+                _selMemo.arr = sel;
+                _selMemo.len = sel.length;
+                _selMemo.keys = new Set(sel.map(s => s.key));
+            }
+            return _selMemo.keys.has(file.key);
         },
 
         // Select all / deselect all (folders + files)
@@ -1511,20 +1523,6 @@ function fluxFilesApp() {
             document.addEventListener('mouseup', this._resizeDetailUp);
             document.body.style.cursor = 'col-resize';
             document.body.style.userSelect = 'none';
-        },
-
-        toggleSelectAll() {
-            const total = this.filteredFolders.length + this.filteredFiles.length;
-            if (total > 0 && this.selected.length === total) {
-                this.deselectAll();
-            } else {
-                this.selectAll();
-            }
-        },
-
-        get allSelected() {
-            const total = this.filteredFolders.length + this.filteredFiles.length;
-            return total > 0 && this.selected.length === total;
         },
 
         // Shift+click range select (folders + files in display order)
@@ -2816,12 +2814,6 @@ function fluxFilesApp() {
             this.postMessage('FM_CLOSE', {});
         },
 
-        // Watch search query changes
-        _initSearchWatcher() {
-            // Alpine doesn't provide deep watchers here; poll via microtask on input binding changes.
-            // We keep it simple: run schedule on next tick in places that mutate searchQuery.
-        },
-
         // Utility
         // Activity log (audit) — decode the JWT payload client-side (cosmetic only;
         // the server enforces the 'audit' permission) to know whether to show it.
@@ -3563,37 +3555,58 @@ function fluxFilesApp() {
             return kind === this.typeFilter;
         },
 
-        // Comparator based on sortBy / sortDir
-        _compareItems(a, b) {
+        // Sort files by sortBy / sortDir. Sort keys are computed once per item (not per
+        // comparison) and names go through the shared collator. Ordering is identical to
+        // the old per-pair comparator: name -> natural order; others -> key, then name asc.
+        _sortFiles(arr) {
+            const by = this.sortBy;
             const dir = this.sortDir === 'desc' ? -1 : 1;
-            let av, bv;
-            switch (this.sortBy) {
-                case 'date':
+            const keyed = arr.map(f => {
+                const n = String(f.name || '').toLowerCase();
+                let k = n;
+                if (by === 'date') {
                     // Modified time, like the server's sort — the two must agree or
                     // pages the server cut would interleave as they load.
-                    av = Number(a.modified || a.created || 0);
-                    bv = Number(b.modified || b.created || 0);
-                    break;
-                case 'size':
-                    av = Number(a.size || 0);
-                    bv = Number(b.size || 0);
-                    break;
-                case 'type':
-                    av = this.fileIcon(a) || '';
-                    bv = this.fileIcon(b) || '';
-                    break;
-                case 'name':
-                default:
-                    av = String(a.name || '').toLowerCase();
-                    bv = String(b.name || '').toLowerCase();
-                    return av.localeCompare(bv, undefined, { numeric: true }) * dir;
+                    k = Number(f.modified || f.created || 0);
+                } else if (by === 'size') {
+                    k = Number(f.size || 0);
+                } else if (by === 'type') {
+                    k = this.fileIcon(f) || '';
+                }
+                return { f, n, k };
+            });
+            if (by === 'date' || by === 'size' || by === 'type') {
+                keyed.sort((x, y) => {
+                    if (x.k < y.k) return -1 * dir;
+                    if (x.k > y.k) return 1 * dir;
+                    // Stable tie-break by name
+                    return FM_COLLATOR.compare(x.n, y.n);
+                });
+            } else {
+                keyed.sort((x, y) => FM_COLLATOR.compare(x.n, y.n) * dir);
             }
-            if (av < bv) return -1 * dir;
-            if (av > bv) return 1 * dir;
-            // Stable tie-break by name
-            const an = String(a.name || '').toLowerCase();
-            const bn = String(b.name || '').toLowerCase();
-            return an.localeCompare(bn, undefined, { numeric: true });
+            return keyed.map(o => o.f);
+        },
+
+        // Re-sort only when the filtered rows or the sort params changed. The filter
+        // pass is cheap and always runs (so search/meta edits are seen); the expensive
+        // sort is skipped when the same rows come back in the same order.
+        _memoSorted(slot, arr, sorter) {
+            // _listRev: an in-place edit of a sort key on a row that stays in `files`
+            // (the editor's save changes `size`) bumps it, so the memo can't serve a stale order.
+            const sig = this.sortBy + '|' + this.sortDir + '|' + this._listRev;
+            const src = slot.src;
+            if (slot.out && slot.sig === sig && src.length === arr.length) {
+                let same = true;
+                for (let i = 0; i < arr.length; i++) {
+                    if (src[i] !== arr[i]) { same = false; break; }
+                }
+                if (same) return slot.out;
+            }
+            slot.src = arr;
+            slot.sig = sig;
+            slot.out = sorter(arr);
+            return slot.out;
         },
 
         get filteredFiles() {
@@ -3620,7 +3633,7 @@ function fluxFilesApp() {
             });
             // Server-ordered pages are already in order; re-sorting them here would
             // move every new page's rows into the middle as it arrives.
-            return this._listOrderLocal ? arr.slice().sort((a, b) => this._compareItems(a, b)) : arr;
+            return this._listOrderLocal ? this._memoSorted(_sortMemo.files, arr, a => this._sortFiles(a)) : arr;
         },
 
         isPreviewable(file, type) {
@@ -3698,18 +3711,22 @@ function fluxFilesApp() {
             }) : this.folders.slice();
             if (!this._listOrderLocal) return arr;   // server order (see filteredFiles)
             // For folders, 'size'/'type' sort falls back to name (folders have no size/type).
-            const effectiveBy = (this.sortBy === 'size' || this.sortBy === 'type') ? 'name' : this.sortBy;
+            return this._memoSorted(_sortMemo.folders, arr, a => this._sortFolders(a));
+        },
+
+        _sortFolders(arr) {
+            const byDate = this.sortBy === 'date';
             const dir = this.sortDir === 'desc' ? -1 : 1;
-            return arr.sort((a, b) => {
-                if (effectiveBy === 'date') {
-                    const av = Number(a.modified || a.created || 0);
-                    const bv = Number(b.modified || b.created || 0);
-                    if (av !== bv) return (av < bv ? -1 : 1) * dir;
-                }
-                const an = String(a.name || '').toLowerCase();
-                const bn = String(b.name || '').toLowerCase();
-                return an.localeCompare(bn, undefined, { numeric: true }) * dir;
+            const keyed = arr.map(f => ({
+                f,
+                n: String(f.name || '').toLowerCase(),
+                t: byDate ? Number(f.modified || f.created || 0) : 0,
+            }));
+            keyed.sort((x, y) => {
+                if (byDate && x.t !== y.t) return (x.t < y.t ? -1 : 1) * dir;
+                return FM_COLLATOR.compare(x.n, y.n) * dir;
             });
+            return keyed.map(o => o.f);
         },
 
         // Basename of a search row (file or folder) for name sorting.
@@ -3731,9 +3748,9 @@ function fluxFilesApp() {
                     const av = val(a), bv = val(b);
                     if (av < bv) return -1 * dir;
                     if (av > bv) return 1 * dir;
-                    return this._searchName(a).localeCompare(this._searchName(b), undefined, { numeric: true });
+                    return FM_COLLATOR.compare(this._searchName(a), this._searchName(b));
                 }
-                return this._searchName(a).localeCompare(this._searchName(b), undefined, { numeric: true }) * dir;
+                return FM_COLLATOR.compare(this._searchName(a), this._searchName(b)) * dir;
             });
         },
 
@@ -3741,7 +3758,7 @@ function fluxFilesApp() {
             const rows = Array.isArray(this.searchFolderResults) ? this.searchFolderResults.slice() : [];
             const dir = this.sortDir === 'desc' ? -1 : 1;
             return rows.sort((a, b) =>
-                this._searchName(a).localeCompare(this._searchName(b), undefined, { numeric: true }) * dir);
+                FM_COLLATOR.compare(this._searchName(a), this._searchName(b)) * dir);
         },
 
         // Toggle sort: if choosing same key, flip direction; otherwise set new key with asc.
@@ -3812,21 +3829,6 @@ function fluxFilesApp() {
                 file: 'thumb-file'
             };
             return map[kind] || 'thumb-file';
-        },
-
-        // Thumbnail emoji icon
-        thumbIcon(file) {
-            if (!file) return '📄';
-            const kind = this.fileIcon(file);
-            const map = {
-                image: '🖼',
-                video: '🎬',
-                audio: '🎵',
-                document: '📄',
-                folder: '📁',
-                file: '📝'
-            };
-            return map[kind] || '📄';
         },
 
         // Status bar text
@@ -4555,12 +4557,12 @@ function fluxFilesApp() {
             const base = FM_ASSETS_BASE + '/vendor/xterm';
             const css = (href) => new Promise((res) => {
                 const l = document.createElement('link');
-                l.rel = 'stylesheet'; l.href = href + FM_ASSETS_VER; l.onload = res; l.onerror = res;
+                l.rel = 'stylesheet'; l.href = href + ('?v=' + FM_VENDOR_VER.xterm); l.onload = res; l.onerror = res;
                 document.head.appendChild(l);
             });
             const js = (src) => new Promise((res, rej) => {
                 const s = document.createElement('script');
-                s.src = src + FM_ASSETS_VER; s.onload = res; s.onerror = rej;
+                s.src = src + ('?v=' + FM_VENDOR_VER.xterm); s.onload = res; s.onerror = rej;
                 document.head.appendChild(s);
             });
             this._termLoading = (async () => {
@@ -5064,12 +5066,12 @@ function fluxFilesApp() {
             const base = FM_ASSETS_BASE + '/vendor/codemirror';
             const css = (href) => new Promise((res) => {
                 const l = document.createElement('link');
-                l.rel = 'stylesheet'; l.href = href + FM_ASSETS_VER; l.onload = res; l.onerror = res;
+                l.rel = 'stylesheet'; l.href = href + ('?v=' + FM_VENDOR_VER.codemirror); l.onload = res; l.onerror = res;
                 document.head.appendChild(l);
             });
             const js = (src) => new Promise((res, rej) => {
                 const s = document.createElement('script');
-                s.src = src + FM_ASSETS_VER; s.onload = res; s.onerror = rej;
+                s.src = src + ('?v=' + FM_VENDOR_VER.codemirror); s.onload = res; s.onerror = rej;
                 document.head.appendChild(s);
             });
             this._cmLoading = (async () => {
@@ -5163,6 +5165,7 @@ function fluxFilesApp() {
                 this.editorOriginal = this.editorContent;
                 if (this.detailFile && data && typeof data.size === 'number') {
                     this.detailFile.size = data.size;
+                    this._listRev++;
                 }
                 this.showToast(this.t('editor.saved') || 'Saved');
             } catch (e) {

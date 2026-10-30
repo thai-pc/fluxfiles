@@ -3,6 +3,82 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.43] — 2026-10-30
+
+> Released: `core-v0.2.116`, `laravel-v0.2.58`, `wordpress-v0.2.74` (the plugin bundles core).
+
+Round 2 of the code review, plus fixes found by independent reviews of round 1
+and round 2.
+
+### Security / data loss
+
+- **Bulk operations could lose other users' changes on S3, R2 and SFTP disks.**
+  This bug shipped in 0.2.115.
+  - Zip extract, folder restore, empty trash and retention held the trash
+    manifest and the indexes in memory, for up to 5 seconds or 500 entries.
+  - These disks have no file lock, so another user's trash entry, upload or
+    new folder written during that time was overwritten when the batch was
+    saved. For example, a file trashed while someone else emptied the trash
+    became unrestorable.
+  - Batching now applies only on disks that hold a real lock. Other disks
+    read, change and write each entry one at a time, as before 0.2.115.
+- **`owner_only` could be bypassed on S3 for files rewritten in place.**
+  Editing a file's content, extracting over an existing file, module writes,
+  watermark changes and multipart uploads dropped the owner header. That bug
+  predates this release.
+  - Every S3 write now carries the right owner: the existing owner when a file
+    is overwritten, the writer for a new file.
+  - Moves keep the source file's owner on every backend.
+- **Folder `owner_only` check is never laxer than the metadata.** When the
+  index and the file's own metadata disagree about the owner, a deny from
+  either one wins.
+- **Public local disks create folders `0755`** (issue: files in new folders
+  returned 403/404 when nginx and php-fpm run as different users). Before,
+  Flysystem created them `0700`.
+  - A private disk keeps `0700`.
+  - `_fluxfiles/` is forced to `0700` on every disk, because it holds the
+    audit log, the index and the bytes of trashed files.
+  - `docs/guides/DEPLOYMENT.md` has a one-time `chmod` for folders created by
+    older versions.
+
+### Performance
+
+- **Quota checks walk storage once instead of twice** when both
+  `max_storage_mb` and `max_files` are set. Enforcement is always a live walk;
+  only the `/quota` meter may show a figure up to 120 s old.
+- **S3 metadata is written with the upload.** An upload no longer issues a
+  self-copy of the object, and a metadata edit copies the object only when a
+  header-backed field changes. Before, every upload copied the whole object
+  again; in DB mode a rename copied it twice.
+- **S3 objects over 5 GiB:** a metadata change that would need the object
+  re-copied now fails with `422 metadata_object_too_large` instead of leaving
+  stale headers behind.
+- **UI:**
+  - The UI now loads `fm.min.js` and `fm.min.css`, which cuts what the browser
+    downloads from about 96 KB to about 59 KB gzipped. The sources are kept,
+    and CI fails when the minified files are stale. Set `FLUXFILES_DEBUG=true`
+    to load the sources instead.
+  - Alpine.js now ships with FluxFiles (same version and bytes), so the UI no
+    longer needs unpkg and works offline or on air-gapped installs.
+  - `fm.js` is deferred.
+  - Sorting a large folder is about 15 times faster.
+- **Asset caching:**
+  - Versioned assets are cached for a year, but only when the `v=` value is a
+    real content hash. Lazily loaded libraries carry their own hash.
+  - Laravel and WordPress check `v=` against the file before marking it
+    immutable.
+
+### Upgrade notes
+
+- **Webhook consumers:** since 0.3.42, content edits made through the
+  Laravel/WordPress proxies are sent as `content_update`, no longer
+  `content_edit`. Update any `webhook_events` filter that names the old event.
+- **Rate limits:** since 0.3.42, rate limits are stored per user. Upgrading
+  resets the current counters once. Nodes that share a storage path should be
+  upgraded together, or they keep resetting each other.
+- **Folder permissions:** existing folders created as `0700` before this
+  release keep that mode. Run the command in `DEPLOYMENT.md` once.
+
 ## [0.3.42] — 2026-10-30
 
 > Released: `core-v0.2.115`, `laravel-v0.2.57`, `wordpress-v0.2.73` (the plugin bundles core).

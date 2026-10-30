@@ -215,6 +215,8 @@ composer install -d packages/laravel
 - For auth/security changes, add or update claim-focused tests. `prefix`, `owner_only`, `disks`, `perms`, `allowed_ext`, `max_upload`, and `max_storage` are security-sensitive.
 - For any new external tool, run it via `proc_open` with an argv array and `ProcessEnv::minimal()` as the environment.
 - For UI changes in `packages/core/assets/fm.js`, test through the iframe with a real token; new strings go into all 16 `lang/*.json` files.
+- **After editing `fm.js` or `fm.css` run `bash scripts/build-ui.sh`** and commit the regenerated `fm.min.js` / `fm.min.css`. The page serves the `.min` pair whenever it exists, so an edit without a rebuild changes nothing in the browser (set `FLUXFILES_DEBUG=1` to serve the readable sources while developing). CI's `ui-min-fresh` job rebuilds and fails on any diff. Alpine is vendored at `assets/vendor/alpine/` (MIT, `LICENSE` beside it).
+- **Quota**: enforcement (`QuotaManager::check()`/`assertQuota()`/`assertFileCount()`) is always a LIVE walk, one per write; never feed it from `_fluxfiles/quota.json`, which is the `/quota` meter's display-only cache.
 - For React/Vue wrapper changes, update source files under `src/`; rebuild only when publishing or when the task asks for dist artifacts.
 
 ## Release/Package Notes

@@ -133,13 +133,26 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     // Cache-bust the UI assets with a short content hash, so a core update is never
     // served from a stale browser/proxy cache (the static fm.js/fm.css URLs carry no
     // version of their own). Per-file hash → each invalidates only when it changes.
+    // Prefer the pre-minified fm.min.js / fm.min.css (built by scripts/build-ui.sh and
+    // committed) when present; FLUXFILES_DEBUG=1 serves the readable sources instead.
+    $debugUi = in_array(strtolower((string) ($_ENV['FLUXFILES_DEBUG'] ?? '')), ['1', 'true', 'yes', 'on'], true);
+    $assetFile = static function (string $file) use ($debugUi): string {
+        $min = preg_replace('/\.(js|css)$/', '.min.$1', $file);
+        return (!$debugUi && is_file(__DIR__ . '/../assets/' . $min)) ? $min : $file;
+    };
     $assetVer = static function (string $file): string {
         $p = __DIR__ . '/../assets/' . $file;
         return is_file($p) ? substr(md5_file($p), 0, 10) : (string) time();
     };
+    $jsFile = $assetFile('fm.js');
+    $cssFile = $assetFile('fm.css');
     $html = str_replace(
-        ['../assets/fm.css"', '../assets/fm.js"'],
-        ['../assets/fm.css?v=' . $assetVer('fm.css') . '"', '../assets/fm.js?v=' . $assetVer('fm.js') . '"'],
+        ['../assets/fm.css"', '../assets/fm.js"', '../assets/vendor/alpine/alpine.min.js"'],
+        [
+            '../assets/' . $cssFile . '?v=' . $assetVer($cssFile) . '"',
+            '../assets/' . $jsFile . '?v=' . $assetVer($jsFile) . '"',
+            '../assets/vendor/alpine/alpine.min.js?v=' . $assetVer('vendor/alpine/alpine.min.js') . '"',
+        ],
         $html
     );
     // HEX flags keep these safe to embed inside the inline <script> (no </script> breakout).
@@ -187,10 +200,12 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     // re-downloading ~250 KB. `no-cache` stays — it means "revalidate", not "don't
     // store". Per-request injections that make the body unique to this response:
     //   - DemoMode __FM_BOOT__ (a fresh per-visitor token) -> never ETag
-    //   - the time() fallback of $assetVer when an asset file is missing
+    //   - the time() fallback of $assetVer when an asset file is missing (fm.js,
+    //     fm.css and Alpine are all checked below)
     // Everything else (locale, asset hashes, SSO flag, frame-ancestors) is a pure
     // function of env + files, so it is covered by hashing the final HTML.
-    if (!\FluxFiles\DemoMode::enabled() && is_file(__DIR__ . '/../assets/fm.js') && is_file(__DIR__ . '/../assets/fm.css')) {
+    if (!\FluxFiles\DemoMode::enabled() && is_file(__DIR__ . '/../assets/fm.js') && is_file(__DIR__ . '/../assets/fm.css')
+        && is_file(__DIR__ . '/../assets/vendor/alpine/alpine.min.js')) {
         $etag = '"' . md5($html) . '"';
         header('ETag: ' . $etag);
         $inm = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
@@ -2774,7 +2789,7 @@ function handleChunkInit(
     $scopedPath = $fm->validateUserPath((string) $path);
     $scopedPath = $fm->validateChunkUpload($disk, $scopedPath, $sizeBytes, true);
 
-    return $chunker->initiate($disk, $scopedPath);
+    return $chunker->initiate($disk, $scopedPath, $fm->chunkInitMetadata($disk, $scopedPath));
 }
 
 function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims, FileManager $fm): array

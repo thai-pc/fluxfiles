@@ -3001,7 +3001,7 @@ class FluxFilesController
             $scopedPath = $fm->validateChunkUpload($disk, $scopedPath, $sizeBytes, true);
 
             $chunker = new ChunkUploader($this->diskManager);
-            $result = $chunker->initiate($disk, $scopedPath);
+            $result = $chunker->initiate($disk, $scopedPath, method_exists($fm, 'chunkInitMetadata') ? $fm->chunkInitMetadata($disk, $scopedPath) : []);
             $this->logAudit($claims, 'chunk_upload', $disk, $scopedPath);
             $this->dispatchWebhook($claims, 'chunk_upload', ['disk' => $disk, 'path' => $scopedPath, 'name' => basename($scopedPath)]);
 
@@ -3240,18 +3240,7 @@ class FluxFilesController
         }
 
         $html = file_get_contents($path);
-        // Cache-bust the UI assets with a content hash, so a core update is never
-        // served from a stale browser/proxy cache (the static fm.js/fm.css URLs
-        // carry no version of their own).
-        $ver = static function (string $file) use ($base): string {
-            $p = $base . '/assets/' . $file;
-            return is_file($p) ? substr(md5_file($p), 0, 10) : (string) time();
-        };
-        $html = str_replace(
-            ['"../assets/fm.css"', '"../assets/fm.js"'],
-            ['"../assets/fm.css?v=' . $ver('fm.css') . '"', '"../assets/fm.js?v=' . $ver('fm.js') . '"'],
-            $html
-        );
+        $html = self::rewriteUiAssets($html, $base . '/assets', self::uiDebug());
         $html = self::injectLocale($html, $base . '/lang', (string) config('fluxfiles.locale', ''));
 
         $resp = response($html, 200)
@@ -3266,6 +3255,49 @@ class FluxFilesController
             $resp->header('Content-Security-Policy', 'frame-ancestors ' . $frameAncestors);
         }
         return $resp;
+    }
+
+    /** FLUXFILES_DEBUG (config `fluxfiles.debug`, else the raw env var): serve the readable fm.js/fm.css. */
+    private static function uiDebug(): bool
+    {
+        $v = config('fluxfiles.debug');
+        if ($v === null) {
+            $v = $_ENV['FLUXFILES_DEBUG'] ?? getenv('FLUXFILES_DEBUG');
+        }
+        if (is_bool($v)) {
+            return $v;
+        }
+        return in_array(strtolower((string) $v), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    /**
+     * Cache-bust the UI assets with a content hash, so a core update is never served
+     * from a stale browser/proxy cache (the static URLs carry no version of their own),
+     * and prefer the pre-minified fm.min.js / fm.min.css when the installed core ships
+     * them (older cores don't -> falls back to fm.js / fm.css). `$debug` forces the
+     * readable sources. The vendored Alpine is versioned the same way when present.
+     */
+    public static function rewriteUiAssets(string $html, string $assetsDir, bool $debug = false): string
+    {
+        $pick = static function (string $file) use ($assetsDir, $debug): string {
+            $min = (string) preg_replace('/\.(js|css)$/', '.min.$1', $file);
+            return (!$debug && is_file($assetsDir . '/' . $min)) ? $min : $file;
+        };
+        $ver = static function (string $file) use ($assetsDir): string {
+            $p = $assetsDir . '/' . $file;
+            return is_file($p) ? substr(md5_file($p), 0, 10) : (string) time();
+        };
+        $css = $pick('fm.css');
+        $js = $pick('fm.js');
+        return str_replace(
+            ['"../assets/fm.css"', '"../assets/fm.js"', '"../assets/vendor/alpine/alpine.min.js"'],
+            [
+                '"../assets/' . $css . '?v=' . $ver($css) . '"',
+                '"../assets/' . $js . '?v=' . $ver($js) . '"',
+                '"../assets/vendor/alpine/alpine.min.js?v=' . $ver('vendor/alpine/alpine.min.js') . '"',
+            ],
+            $html
+        );
     }
 
     /**
@@ -3360,9 +3392,86 @@ class FluxFilesController
     }
 
     /**
-     * Cache validators for a static UI asset. The page URL carries `?v=<content hash>`,
-     * so a request WITH `v` is immutable for a year; any other gets a cheap
-     * mtime+size ETag (no md5_file per request) and a 304 on a match.
+     * Hash memo keyed by path + mtime + size (so a changed file is a new key): per
+     * request always, and across requests through APCu when it is enabled - the
+     * unauthenticated asset route must not re-read and re-hash files on every hit,
+     * 304 revalidations included.
+     */
+    private static function memoAssetHash(string $key, callable $compute): string
+    {
+        static $mem = [];
+        if (isset($mem[$key])) {
+            return $mem[$key];
+        }
+        $apcu = function_exists('apcu_fetch') && filter_var(ini_get('apc.enabled'), FILTER_VALIDATE_BOOLEAN);
+        if ($apcu) {
+            $hit = apcu_fetch('fluxfiles_asset_' . md5($key), $ok);
+            if ($ok && is_string($hit)) {
+                return $mem[$key] = $hit;
+            }
+        }
+        $val = $compute();
+        if ($apcu && $val !== '') {
+            apcu_store('fluxfiles_asset_' . md5($key), $val, 3600);
+        }
+        return $mem[$key] = $val;
+    }
+
+    /**
+     * Does ?v= name the file that is actually being served? Only then is the URL
+     * safe to cache as immutable: a stale node mid-rolling-deploy, or a hand-typed
+     * v, would otherwise pin the wrong bytes for a year. Accepts a prefix (>= 8
+     * hex) of the file's md5 (fm.js / fm.css / Alpine, as the page links them), or
+     * - for the lazily loaded vendor/xterm and vendor/codemirror files - of that
+     * vendor tree's content hash (fm.js's FM_VENDOR_VER; same algorithm as
+     * scripts/vendor-ver.mjs). Needs no newer core API: it only reads the files.
+     */
+    public static function assetVersionMatches(string $filePath, string $assetsDir, string $v): bool
+    {
+        if (!preg_match('/^[0-9a-f]{8,32}$/', $v)) {
+            return false;
+        }
+        $len = strlen($v);
+        $st = @stat($filePath);
+        $md5 = $st === false ? false : self::memoAssetHash($filePath . '|' . $st['mtime'] . '|' . $st['size'], static fn () => (string) @md5_file($filePath));
+        if ($md5 !== false && $md5 !== '' && hash_equals(substr($md5, 0, $len), $v)) {
+            return true;
+        }
+        $base = rtrim($assetsDir, '/');
+        if (strncmp($filePath, $base . '/', strlen($base) + 1) === 0
+            && preg_match('#^vendor/(xterm|codemirror)/#', substr($filePath, strlen($base) + 1), $m)) {
+            $dir = $base . '/vendor/' . $m[1];
+            $files = [];
+            $sig = '';
+            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                if ($f->isFile()) {
+                    $rel = str_replace('\\', '/', substr($f->getPathname(), strlen($dir) + 1));
+                    $files[] = $rel;
+                    $sig .= $rel . ':' . $f->getMTime() . ':' . $f->getSize() . ';';
+                }
+            }
+            // Stat-only signature: the (~700 KB) tree is re-read and re-hashed only when a file changed.
+            $tree = self::memoAssetHash('tree|' . $dir . '|' . md5($sig), static function () use ($files, $dir): string {
+                sort($files, SORT_STRING);
+                $h = hash_init('md5');
+                foreach ($files as $r) {
+                    hash_update($h, $r . "\0");
+                    hash_update($h, (string) file_get_contents($dir . '/' . $r));
+                    hash_update($h, "\0");
+                }
+                return hash_final($h);
+            });
+            return hash_equals(substr($tree, 0, $len), $v);
+        }
+        return false;
+    }
+
+    /**
+     * Cache validators for a static UI asset. $versioned is true only when `?v=`
+     * matched the served file (assetVersionMatches()) - then it is immutable for a
+     * year; any other request gets a short revalidating cache, a cheap mtime+size
+     * ETag and a 304 on a match.
      *
      * @return array{0:string,1:bool} [Cache-Control, notModified]
      */
@@ -3380,7 +3489,7 @@ class FluxFilesController
                 break;
             }
         }
-        return ['public, max-age=86400', $match];
+        return ['public, max-age=300, must-revalidate', $match];
     }
 
     public function asset(string $file, ?\Illuminate\Http\Request $request = null): \Illuminate\Http\Response
@@ -3412,7 +3521,8 @@ class FluxFilesController
         }
 
         $etag = '';
-        $versioned = $request !== null && (string) $request->query('v', '') !== '';
+        $versioned = $request !== null
+            && self::assetVersionMatches($filePath, $realBase, (string) $request->query('v', ''));
         [$cache, $notModified] = self::assetCaching($filePath, $versioned, $request !== null ? (string) $request->header('If-None-Match', '') : '', $etag);
         if ($notModified) {
             return response('', 304)->header('ETag', $etag)->header('Cache-Control', $cache);

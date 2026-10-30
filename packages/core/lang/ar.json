@@ -244,6 +244,7 @@
     "forbidden": "ليس لديك صلاحية للقيام بذلك",
     "not_found": "غير موجود",
     "quota_exceeded": "تم تجاوز حصة التخزين ({used} / {max})",
+    "metadata_object_too_large": "هذا الكائن أكبر من 5 GiB، لذلك لا يمكن تغيير بياناته الوصفية على S3.",
     "upload_too_large": "الملف كبير جداً (الحد الأقصى {max})",
     "too_many_files": "تم بلوغ حد عدد الملفات (الحد الأقصى {max})",
     "ext_not_allowed": "نوع الملف .{ext} غير مسموح به",

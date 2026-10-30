@@ -123,5 +123,29 @@ test('local disks are wrapped, non-local filesystems are never written to', func
     assertEqual(1, substr_count($src, 'new GuardedLocalAdapter('), 'only the local branch wraps');
 });
 
+test('on a public disk, upload folders are 0755 but every _fluxfiles/ dir is 0700', function () {
+    // Public-disk folders are 0755 so a web server running as another user can
+    // serve uploads; _fluxfiles/ (audit log, index, trash bytes) must stay closed.
+    $old = umask(022);
+    try {
+        foreach (['', 'tenant/'] as $prefix) {
+            [$fm, , $root] = makeFM($prefix);
+            $tmp = tempnam(sys_get_temp_dir(), 'fxg');
+            file_put_contents($tmp, 'x');
+            $fm->upload('local', 'sub', ['name' => 'a.txt', 'tmp_name' => $tmp, 'size' => 1, 'type' => 'text/plain', 'error' => 0]);
+            $fm->trash('local', 'sub/a.txt');
+            $base = $root . '/' . rtrim($prefix, '/');
+            assertEqual(0755, fileperms(rtrim($base, '/') . '/sub') & 0777, "{$prefix}sub");
+            foreach (array_filter([$root . '/_fluxfiles', $prefix !== '' ? $base . '/_fluxfiles' : null]) as $d) {
+                if (is_dir($d)) {
+                    assertEqual(0700, fileperms($d) & 0777, $d);
+                }
+            }
+        }
+    } finally {
+        umask($old);
+    }
+});
+
 echo "\n  {$passed} passed, {$failed} failed\n\n";
 exit($failed > 0 ? 1 : 0);

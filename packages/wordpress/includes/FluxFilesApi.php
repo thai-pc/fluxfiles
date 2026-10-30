@@ -514,7 +514,7 @@ class FluxFilesApi
         // assets/vendor/ (xterm, CodeMirror) — fm.js derives its base from its
         // own <script src>, which is this route. No '..' can match, and
         // serveUiAsset() re-checks containment with realpath().
-        register_rest_route($ns, '/assets/(?P<file>fm\.(?:js|css)|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
+        register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
             'callback' => [$api, 'serveUiAsset'],
         ]));
         register_rest_route($ns, $p . '/lang', array_merge($publicArgs, [
@@ -3672,7 +3672,7 @@ class FluxFilesApi
             $scopedPath = $fm->validateUserPath($path);
             $scopedPath = $fm->validateChunkUpload($disk, $scopedPath, $sizeBytes, true);
             $chunker = new ChunkUploader($this->diskManager);
-            $result = $chunker->initiate($disk, $scopedPath);
+            $result = $chunker->initiate($disk, $scopedPath, method_exists($fm, 'chunkInitMetadata') ? $fm->chunkInitMetadata($disk, $scopedPath) : []);
             $this->logAudit($claims, 'chunk_upload', $disk, $scopedPath);
             $this->dispatchWebhook($claims, 'chunk_upload', ['disk' => $disk, 'path' => $scopedPath, 'name' => basename($scopedPath)]);
 
@@ -3897,11 +3897,26 @@ class FluxFilesApi
         // append a content-hash version so browsers pick up new builds.
         $assetsBase = rest_url('fluxfiles/v1/assets');
         $assetsDir  = FluxFilesPlugin::corePath('assets') ?: '';
-        $jsHash  = $assetsDir && is_file("$assetsDir/fm.js")  ? substr(md5_file("$assetsDir/fm.js"),  0, 8) : 'x';
-        $cssHash = $assetsDir && is_file("$assetsDir/fm.css") ? substr(md5_file("$assetsDir/fm.css"), 0, 8) : 'x';
+        $dbg = getenv('FLUXFILES_DEBUG');
+        $debugUi = (defined('FLUXFILES_DEBUG') && FLUXFILES_DEBUG)
+            || in_array(strtolower((string) ($dbg === false ? '' : $dbg)), ['1', 'true', 'yes', 'on'], true);
+        // Prefer the pre-minified fm.min.js / fm.min.css when the bundled core ships
+        // them (older cores don't -> fall back to the sources); debug forces sources.
+        $pick = static function (string $file) use ($assetsDir, $debugUi): string {
+            $min = (string) preg_replace('/\.(js|css)$/', '.min.$1', $file);
+            return (!$debugUi && $assetsDir && is_file("$assetsDir/$min")) ? $min : $file;
+        };
+        $hash = static function (string $file) use ($assetsDir): string {
+            return $assetsDir && is_file("$assetsDir/$file") ? substr(md5_file("$assetsDir/$file"), 0, 8) : 'x';
+        };
+        $jsFile  = $pick('fm.js');
+        $cssFile = $pick('fm.css');
         $jsSep  = strpos($assetsBase, '?') !== false ? '&' : '?';
-        $html = str_replace('"../assets/fm.css"', '"' . esc_url($assetsBase . '/fm.css') . $jsSep . 'v=' . $cssHash . '"', $html);
-        $html = str_replace('"../assets/fm.js"',  '"' . esc_url($assetsBase . '/fm.js')  . $jsSep . 'v=' . $jsHash  . '"', $html);
+        $html = str_replace('"../assets/fm.css"', '"' . esc_url($assetsBase . '/' . $cssFile) . $jsSep . 'v=' . $hash($cssFile) . '"', $html);
+        $html = str_replace('"../assets/fm.js"',  '"' . esc_url($assetsBase . '/' . $jsFile)  . $jsSep . 'v=' . $hash($jsFile)  . '"', $html);
+        // Vendored Alpine (core >= the release that stopped loading it from unpkg).
+        $alpine = 'vendor/alpine/alpine.min.js';
+        $html = str_replace('"../assets/' . $alpine . '"', '"' . esc_url($assetsBase . '/' . $alpine) . $jsSep . 'v=' . $hash($alpine) . '"', $html);
 
         // Bypass REST JSON serialization — the browser iframe must receive raw HTML
         // with the right content type, not a JSON-wrapped string.
@@ -3950,7 +3965,7 @@ class FluxFilesApi
     public function serveUiAsset(\WP_REST_Request $request)
     {
         $file = (string) $request->get_param('file');
-        // Regex on the route already restricts to fm.js / fm.css / vendor/*.{js,css}.
+        // Regex on the route already restricts to fm[.min].js / fm[.min].css / vendor/*.{js,css}.
         $assetsDir = FluxFilesPlugin::corePath('assets');
         if ($assetsDir === null) {
             return $this->error('Assets not bundled', 500);
@@ -3966,11 +3981,11 @@ class FluxFilesApi
             return $this->error('Asset not found', 404);
         }
         $mime = substr($file, -3) === '.js' ? 'application/javascript' : 'text/css';
-        // The UI page links `?v=<content hash>`, so a versioned request is immutable;
-        // otherwise validate with a cheap mtime+size ETag (no md5_file) and 304.
+        // The UI page links `?v=<content hash>`: immutable only when it matches the file
+        // served here; otherwise a short cache + a cheap mtime+size ETag and 304.
         [$headers, $notModified] = self::assetCaching(
             $real,
-            (string) $request->get_param('v') !== '',
+            self::assetVersionMatches($real, $realBase, (string) $request->get_param('v')),
             (string) ($request->get_header('if_none_match') ?? '')
         );
         if ($notModified) {
@@ -3984,7 +3999,84 @@ class FluxFilesApi
     }
 
     /**
-     * Cache headers for a UI asset.
+     * Hash memo keyed by path + mtime + size (so a changed file is a new key): per
+     * request always, and across requests through APCu when it is enabled - the
+     * unauthenticated asset route must not re-read and re-hash files on every hit,
+     * 304 revalidations included.
+     */
+    private static function memoAssetHash(string $key, callable $compute): string
+    {
+        static $mem = [];
+        if (isset($mem[$key])) {
+            return $mem[$key];
+        }
+        $apcu = function_exists('apcu_fetch') && filter_var(ini_get('apc.enabled'), FILTER_VALIDATE_BOOLEAN);
+        if ($apcu) {
+            $hit = apcu_fetch('fluxfiles_asset_' . md5($key), $ok);
+            if ($ok && is_string($hit)) {
+                return $mem[$key] = $hit;
+            }
+        }
+        $val = $compute();
+        if ($apcu && $val !== '') {
+            apcu_store('fluxfiles_asset_' . md5($key), $val, 3600);
+        }
+        return $mem[$key] = $val;
+    }
+
+    /**
+     * Does ?v= name the file that is actually being served? Only then is the URL
+     * safe to cache as immutable: a stale node mid-rolling-deploy, or a hand-typed
+     * v, would otherwise pin the wrong bytes for a year. Accepts a prefix (>= 8
+     * hex) of the file's md5 (fm.js / fm.css / Alpine, as the page links them), or
+     * - for the lazily loaded vendor/xterm and vendor/codemirror files - of that
+     * vendor tree's content hash (fm.js's FM_VENDOR_VER; same algorithm as
+     * scripts/vendor-ver.mjs). Needs no newer core API: it only reads the files.
+     */
+    public static function assetVersionMatches(string $filePath, string $assetsDir, string $v): bool
+    {
+        if (!preg_match('/^[0-9a-f]{8,32}$/', $v)) {
+            return false;
+        }
+        $len = strlen($v);
+        $st = @stat($filePath);
+        $md5 = $st === false ? false : self::memoAssetHash($filePath . '|' . $st['mtime'] . '|' . $st['size'], static fn () => (string) @md5_file($filePath));
+        if ($md5 !== false && $md5 !== '' && hash_equals(substr($md5, 0, $len), $v)) {
+            return true;
+        }
+        $base = rtrim($assetsDir, '/');
+        if (strncmp($filePath, $base . '/', strlen($base) + 1) === 0
+            && preg_match('#^vendor/(xterm|codemirror)/#', substr($filePath, strlen($base) + 1), $m)) {
+            $dir = $base . '/vendor/' . $m[1];
+            $files = [];
+            $sig = '';
+            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                if ($f->isFile()) {
+                    $rel = str_replace('\\', '/', substr($f->getPathname(), strlen($dir) + 1));
+                    $files[] = $rel;
+                    $sig .= $rel . ':' . $f->getMTime() . ':' . $f->getSize() . ';';
+                }
+            }
+            // Stat-only signature: the (~700 KB) tree is re-read and re-hashed only when a file changed.
+            $tree = self::memoAssetHash('tree|' . $dir . '|' . md5($sig), static function () use ($files, $dir): string {
+                sort($files, SORT_STRING);
+                $h = hash_init('md5');
+                foreach ($files as $r) {
+                    hash_update($h, $r . "\0");
+                    hash_update($h, (string) file_get_contents($dir . '/' . $r));
+                    hash_update($h, "\0");
+                }
+                return hash_final($h);
+            });
+            return hash_equals(substr($tree, 0, $len), $v);
+        }
+        return false;
+    }
+
+    /**
+     * Cache headers for a UI asset. $versioned is true only when `?v=` matched the
+     * served file (assetVersionMatches()).
      *
      * @return array{0:string[],1:bool} [headers, notModified]
      */

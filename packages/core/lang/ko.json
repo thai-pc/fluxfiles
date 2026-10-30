@@ -244,6 +244,7 @@
     "forbidden": "이 작업을 수행할 권한이 없습니다",
     "not_found": "찾을 수 없습니다",
     "quota_exceeded": "저장 용량을 초과했습니다 ({used} / {max})",
+    "metadata_object_too_large": "이 객체는 5 GiB를 초과하여 S3에서 메타데이터를 변경할 수 없습니다.",
     "upload_too_large": "파일이 너무 큽니다 (최대 {max})",
     "too_many_files": "파일 개수 제한에 도달했습니다 (최대 {max})",
     "ext_not_allowed": ".{ext} 파일 유형은 허용되지 않습니다",

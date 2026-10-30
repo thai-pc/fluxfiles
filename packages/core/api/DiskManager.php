@@ -10,6 +10,8 @@ use Aws\S3\S3Client;
 use League\Flysystem\AwsS3V3\AwsS3V3Adapter;
 use League\Flysystem\Filesystem;
 use League\Flysystem\Local\LocalFilesystemAdapter;
+use League\Flysystem\UnixVisibility\PortableVisibilityConverter;
+use League\Flysystem\Visibility;
 
 class DiskManager
 {
@@ -118,7 +120,15 @@ class DiskManager
             if (!is_dir($root)) {
                 mkdir($root, 0755, true);
             }
-            $adapter = new GuardedLocalAdapter(new LocalFilesystemAdapter($root), $root);
+            // Flysystem creates directories 0700 by default, so a web server running as
+            // a different user than PHP couldn't read files in any new folder of a
+            // public disk. Public disks get 0755 directories; a private disk (served
+            // only through /api/fm/stream) keeps 0700.
+            $visibility = PortableVisibilityConverter::fromArray(
+                [],
+                empty($cfg['private']) ? Visibility::PUBLIC : Visibility::PRIVATE
+            );
+            $adapter = new GuardedLocalAdapter(new LocalFilesystemAdapter($root, $visibility), $root);
         } elseif ($driver === 's3') {
             $s3Params = [
                 'credentials' => [

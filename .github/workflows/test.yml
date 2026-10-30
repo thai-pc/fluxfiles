@@ -134,6 +134,26 @@ jobs:
       - name: Check adapters against their declared core floor
         run: bash scripts/check-adapter-core-floor.sh
 
+  ui-min-fresh:
+    name: UI min assets are fresh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # fm.min.js / fm.min.css are committed build outputs (what the page serves).
+      # Rebuild with the esbuild version pinned in scripts/build-ui.sh and fail on
+      # any difference: someone edited fm.js/fm.css without running the build.
+      - name: Rebuild and compare
+        run: |
+          bash scripts/build-ui.sh
+          git diff --exit-code -- packages/core/assets/fm.min.js packages/core/assets/fm.min.css \
+            || { echo "::error::fm.min.* are stale - run 'bash scripts/build-ui.sh' and commit"; exit 1; }
+          git status --porcelain -- packages/core/assets | grep -q '^??' && { echo "::error::untracked fm.min.* - commit them"; exit 1; } || true
+
   iframe-allow:
     name: iframe allow parity
     runs-on: ubuntu-latest
@@ -361,6 +381,36 @@ jobs:
           FXTEST_S3_SECRET: test
           FXTEST_S3_VISIBILITY: private
         run: php tests/integration/test-dir-parity.php
+
+      # Metadata is written WITH the object (no HEAD/self-copy round trips): counts the
+      # S3 requests an upload/rename/move/copy cost and checks the headers/breadcrumbs.
+      - name: S3 metadata request counts (LocalStack)
+        working-directory: packages/core
+        env:
+          FXTEST_S3_LABEL: LocalStack
+          FXTEST_S3_ENDPOINT: http://127.0.0.1:4566
+          FXTEST_S3_REGION: us-east-1
+          FXTEST_S3_BUCKET: fluxfiles-test
+          FXTEST_S3_KEY: test
+          FXTEST_S3_SECRET: test
+          FXTEST_S3_VISIBILITY: private
+          FXTEST_S3_CREATE_BUCKET: '1'
+        run: php tests/e2e/test-s3-metadata-calls-live.php
+
+      # Every S3 write path keeps the owner header (owner_only on S3 reads only it);
+      # >5 GiB header rewrites are refused; a move carries the source's owner.
+      - name: S3 owner header on every write path (LocalStack)
+        working-directory: packages/core
+        env:
+          FXTEST_S3_LABEL: LocalStack
+          FXTEST_S3_ENDPOINT: http://127.0.0.1:4566
+          FXTEST_S3_REGION: us-east-1
+          FXTEST_S3_BUCKET: fluxfiles-test
+          FXTEST_S3_KEY: test
+          FXTEST_S3_SECRET: test
+          FXTEST_S3_VISIBILITY: private
+          FXTEST_S3_CREATE_BUCKET: '1'
+        run: php tests/e2e/test-s3-owner-writes-live.php
 
       - name: LocalStack log on failure
         if: failure()

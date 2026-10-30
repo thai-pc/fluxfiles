@@ -1465,17 +1465,48 @@ test('L12: assets are immutable when versioned (?v=), else ETag + a real 304', f
     @mkdir($ffTmp . '/core-assets/assets', 0775, true);
     file_put_contents($ffTmp . '/core-assets/assets/fm.js', 'console.log(1);');
     $get = fn (array $q, array $h = []) => withConfig(['fluxfiles.base_path' => $ffTmp . '/core-assets'], fn () => (new FluxFilesController())->asset('fm.js', new Request('GET', $q, $h)));
-    $v = $get(['v' => 'abc123']);
-    assertEqual('public, max-age=31536000, immutable', $v->headers['cache-control'] ?? null, 'immutable with v');
+    $good = substr(md5('console.log(1);'), 0, 10);
+    $v = $get(['v' => $good]);
+    assertEqual('public, max-age=31536000, immutable', $v->headers['cache-control'] ?? null, 'immutable when v matches the served file');
+    // A v that does NOT name the served bytes (stale node mid-deploy, hand-typed) must not pin them.
+    assertEqual('public, max-age=300, must-revalidate', $get(['v' => 'abc12345ef'])->headers['cache-control'] ?? null, 'mismatched v is not immutable');
+    assertEqual('public, max-age=300, must-revalidate', $get(['v' => 'abc123'])->headers['cache-control'] ?? null, 'junk v is not immutable');
+    // Lazy vendor files carry their vendor tree's hash (fm.js FM_VENDOR_VER).
+    @mkdir($ffTmp . '/core-assets/assets/vendor/xterm', 0775, true);
+    file_put_contents($ffTmp . '/core-assets/assets/vendor/xterm/a.js', 'A');
+    file_put_contents($ffTmp . '/core-assets/assets/vendor/xterm/b.css', 'B');
+    $tree = substr(md5("a.js\0A\0b.css\0B\0"), 0, 10);
+    $vget = fn (string $q) => withConfig(['fluxfiles.base_path' => $ffTmp . '/core-assets'], fn () => (new FluxFilesController())->asset('vendor/xterm/a.js', new Request('GET', ['v' => $q])));
+    assertEqual('public, max-age=31536000, immutable', $vget($tree)->headers['cache-control'] ?? null, 'vendor tree hash is immutable');
+    assertEqual('public, max-age=300, must-revalidate', $vget(substr($tree, 1) . '0')->headers['cache-control'] ?? null, 'wrong tree hash is not');
     $plain = $get([]);
     assertEqual(200, $plain->getStatusCode(), '200 without validator');
     $etag = $plain->headers['etag'] ?? '';
     assertTrue($etag !== '', 'ETag sent');
-    assertEqual('public, max-age=86400', $plain->headers['cache-control'] ?? null, 'revalidating cache');
+    assertEqual('public, max-age=300, must-revalidate', $plain->headers['cache-control'] ?? null, 'revalidating cache');
     $nm = $get([], ['If-None-Match' => $etag]);
     assertEqual(304, $nm->getStatusCode(), 'matching If-None-Match -> 304');
     assertEqual('', (string) $nm->content, '304 has no body');
     assertEqual(200, $get([], ['If-None-Match' => '"stale"'])->getStatusCode(), 'stale ETag -> 200');
+});
+
+test('L13: UI html points at fm.min.* when the core ships them, else (or in debug) the sources', function () use ($ffTmp) {
+    $dir = $ffTmp . '/core-min/assets';
+    @mkdir($dir . '/vendor/alpine', 0775, true);
+    foreach (['fm.js', 'fm.css'] as $f) {
+        file_put_contents("$dir/$f", "/* $f */");
+    }
+    $html = '<link href="../assets/fm.css"><script defer src="../assets/fm.js"></script><script defer src="../assets/vendor/alpine/alpine.min.js"></script>';
+    $old = FluxFilesController::rewriteUiAssets($html, $dir, false);
+    assertTrue(str_contains($old, '../assets/fm.js?v=') && str_contains($old, '../assets/fm.css?v='), 'no min files -> sources');
+    foreach (['fm.min.js', 'fm.min.css', 'vendor/alpine/alpine.min.js'] as $f) {
+        file_put_contents("$dir/$f", "/* $f */");
+    }
+    $new = FluxFilesController::rewriteUiAssets($html, $dir, false);
+    assertTrue(str_contains($new, '../assets/fm.min.js?v=') && str_contains($new, '../assets/fm.min.css?v='), 'min preferred');
+    assertTrue(str_contains($new, 'alpine.min.js?v='), 'alpine versioned');
+    $dbg = FluxFilesController::rewriteUiAssets($html, $dir, true);
+    assertTrue(str_contains($dbg, '../assets/fm.js?v=') && !str_contains($dbg, 'fm.min'), 'debug -> sources');
 });
 
 // ── Doctor: web exposure + config drift + fluxfiles:doctor ────────────────

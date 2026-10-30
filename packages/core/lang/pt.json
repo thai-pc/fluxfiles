@@ -244,6 +244,7 @@
     "forbidden": "Você não tem permissão para realizar esta ação",
     "not_found": "Não encontrado",
     "quota_exceeded": "Cota de armazenamento excedida ({used} / {max})",
+    "metadata_object_too_large": "Este objeto tem mais de 5 GiB, por isso os metadados não podem ser alterados no S3.",
     "upload_too_large": "Arquivo muito grande (máx. {max})",
     "too_many_files": "Limite de arquivos atingido (máx. {max})",
     "ext_not_allowed": "Tipo de arquivo .{ext} não é permitido",

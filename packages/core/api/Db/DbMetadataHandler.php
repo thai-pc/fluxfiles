@@ -57,6 +57,12 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         if ($existingUuid !== null) {
             return $existingUuid;
         }
+        // Already stamped by the PUT that created the object (s3WriteMetadata).
+        $pending = $this->pendingUuid[$disk . "\0" . $key] ?? null;
+        if ($pending !== null) {
+            unset($this->pendingUuid[$disk . "\0" . $key]);
+            return $pending;
+        }
         if (($_ENV['FLUXFILES_DB_S3_BREADCRUMB'] ?? 'true') === 'false') {
             return null;
         }
@@ -86,6 +92,31 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    /** @var array<string,string> uuid stamped on an object at write time, until its row is saved */
+    private array $pendingUuid = [];
+
+    /**
+     * S3 `Metadata` for the PUT that creates $key: the breadcrumb is born with the
+     * object, so the first save() needs no HEAD + self-copy. An existing row keeps
+     * its uuid (a PUT over the object wiped the header, so it is re-stamped).
+     * Null off S3 or with the breadcrumb disabled.
+     *
+     * @return array<string,string>|null
+     */
+    public function s3WriteMetadata(string $disk, string $key, array $data = []): ?array
+    {
+        if (($_ENV['FLUXFILES_DB_S3_BREADCRUMB'] ?? 'true') === 'false'
+            || ($this->diskManager->config($disk)['driver'] ?? '') !== 's3') {
+            return null;
+        }
+        $uuid = ($this->fetchRow($disk, $key)['object_uuid'] ?? null) ?: null;
+        if ($uuid === null) {
+            $uuid = $this->generateUuidV4();
+            $this->pendingUuid[$disk . "\0" . $key] = $uuid;
+        }
+        return ['fluxfiles-id' => $uuid];
     }
 
     /** Escape LIKE metacharacters in a bound value — never in the SQL string itself. */
@@ -225,20 +256,27 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
      * Carry the whole row of $srcKey to $dstKey (hash, mime, size, dims, dates,
      * and the exact null-vs-"" of the text columns) after a rename/move/copy —
      * save() alone only carries the sidecar-shaped fields. No-op without a source row.
+     * A COPY keeps the destination's owner (as save() just decided); a MOVE
+     * ($objectMoved) always carries the source's, so a leftover destination row can
+     * never decide who owns the moved file. $fresh (a copy, not a move) stamps
+     * created/modified with now.
      */
-    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey, bool $objectMoved = false, bool $fresh = false): void
     {
         $src = $this->fetchRow($srcDisk, $srcKey);
         if ($src === null) {
             return;
         }
         $dst = $this->fetchRow($dstDisk, $dstKey);
+        // A same-disk MOVE carries the object's headers (the breadcrumb included), so
+        // the row keeps its uuid and nothing is written to the object.
+        $keepUuid = $objectMoved && $srcDisk === $dstDisk ? ($src['object_uuid'] ?? null) : null;
         $insertCols = [
-            'disk' => $dstDisk, 'owner' => $src['owner'], 'path' => $dstKey, 'path_hash' => $this->pathHash($dstKey),
+            'disk' => $dstDisk, 'owner' => $dst !== null && !$objectMoved ? $dst['owner'] : $src['owner'], 'path' => $dstKey, 'path_hash' => $this->pathHash($dstKey),
             'title' => $src['title'], 'alt_text' => $src['alt_text'], 'caption' => $src['caption'], 'tags' => $src['tags'],
             'mime' => $src['mime'], 'size' => $src['size'], 'width' => $src['width'], 'height' => $src['height'],
-            'created_at' => $src['created_at'], 'modified_at' => $src['modified_at'], 'file_hash' => $src['file_hash'],
-            'object_uuid' => $this->maybeWriteS3Breadcrumb($dstDisk, $dstKey, $dst['object_uuid'] ?? null),
+            'created_at' => $fresh ? time() : $src['created_at'], 'modified_at' => $fresh ? time() : $src['modified_at'], 'file_hash' => $src['file_hash'],
+            'object_uuid' => $this->maybeWriteS3Breadcrumb($dstDisk, $dstKey, $keepUuid ?? $dst['object_uuid'] ?? null),
         ];
         $updateCols = $insertCols;
         unset($updateCols['disk'], $updateCols['path'], $updateCols['path_hash']);
