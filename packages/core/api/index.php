@@ -268,7 +268,7 @@ if ($method === 'GET' && preg_match('#^/api/fm/lang/([a-z]{2,5})$#', $uri, $m)) 
 // string (a <video>/<audio> element can't send an Authorization header), NOT by the
 // main access JWT. Only ever serves files on a local disk marked `private => true`.
 if ($method === 'GET' && $uri === '/api/fm/stream') {
-    handleMediaStream();
+    ff_media_endpoint()->stream($_GET, \FluxFiles\MediaEndpoint::headersFromServer($_SERVER));
     exit;
 }
 
@@ -276,7 +276,7 @@ if ($method === 'GET' && $uri === '/api/fm/stream') {
 // string (an <img> can't send an Authorization header). Serves a resized WebP from
 // (or into) the file's _variants/ cache. Never raw bytes of an arbitrary file.
 if ($method === 'GET' && $uri === '/api/fm/img') {
-    handleImageTransform();
+    ff_media_endpoint()->image($_GET, \FluxFiles\MediaEndpoint::headersFromServer($_SERVER));
     exit;
 }
 
@@ -355,12 +355,9 @@ try {
         $metaRepo = new StorageMetadataHandler($diskManager);
     }
     $fm = new FileManager($diskManager, $claims, $metaRepo);
-    $fm->setQuotaManager(new QuotaManager($diskManager));
-    // Enables gated-local media: file URLs on a `private => true` local disk become
-    // tokened /api/fm/stream links (served by handleMediaStream, above).
-    $fm->setStreamSecret($secret);
 
-    // AI Tagger (optional)
+    // AI Tagger (optional) — built when the operator configured a provider.
+    $aiTagger = null;
     $aiProvider = $_ENV['FLUXFILES_AI_PROVIDER'] ?? '';
     if ($aiProvider !== '') {
         $aiTagger = new \FluxFiles\AiTagger(
@@ -369,95 +366,15 @@ try {
             $_ENV['FLUXFILES_AI_MODEL'] ?? null,
             $_ENV['FLUXFILES_AI_BASE_URL'] ?? null
         );
-        $fm->setAiTagger($aiTagger);
     }
 
-    // On-upload auto-optimize (FREE/core). Wire the optimizer hook when the token
-    // asks for it (`auto_optimize`). The module does the work; FileManager records
-    // the savings + renames to .webp.
-    if ($claims->autoOptimize) {
-        $optimizeModule = new \FluxFiles\OptimizeModule();
-        $fm->setUploadOptimizer(static function (string $bytes, int $quality) use ($optimizeModule) {
-            return $optimizeModule->optimizeBytes($bytes, $quality);
-        });
-    }
+    // Quota, stream secret, optimizer, AI, versioning, virus/DLP (fail-closed — the
+    // module gate lives inside the callbacks), all in one place.
+    \FluxFiles\FileManagerFactory::wire($fm, $claims, $diskManager, $metaRepo, $secret, $aiTagger);
 
-    // File versioning (paid module). Two halves with different gates:
-    //  · housekeeping (purger + mover) runs whenever the module is installed +
-    //    licensed, REGARDLESS of this token's claim. History is written by one
-    //    token and outlives it — a `/delete` or rename by a token WITHOUT
-    //    `allow_versioning` used to leave the history behind under the old path,
-    //    where it was restorable after a "permanent" delete and got listed on the
-    //    next file created at that path (another user's, even).
-    //  · the keeper (new snapshots) only when the token asks (`allow_versioning`),
-    //    so the free core and unlicensed tenants keep no versions.
-    // The metadata repository is passed through so the module reads the file's
-    // owner from the configured backend (DB mode included) — that owner is the
-    // identity version history is bound to (see VersioningModule::lineage()).
-    if (\FluxFiles\ModuleRegistry::installed('versioning')
-        && \FluxFiles\LicenseManager::fromEnv()->licensed('versioning')) {
-        $versioning = new \FluxFiles\Versioning\VersioningModule();
-        if ($claims->allowVersioning) {
-            $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager, $metaRepo) {
-                $versioning->keep($fs, $key, $claims, $diskManager, $d, $metaRepo);
-            });
-        }
-        // Erase version history on permanent delete, so `/delete` can't be undone via
-        // a restore of a version saved before it — see VersioningModule::purge().
-        $fm->setVersionPurger(static function (string $d, string $key, $fs) use ($versioning, $diskManager) {
-            $versioning->purge($fs, $key, $diskManager, $d);
-        });
-        // Re-key version history on rename/move so it follows the file instead of
-        // being orphaned under the old path's hash. method_exists: an older installed
-        // module predates move() — keep/purge still work without it.
-        if (method_exists($versioning, 'move')) {
-            $fm->setVersionMover(static function (string $d, string $from, string $to, $fs) use ($versioning, $diskManager, $metaRepo) {
-                $versioning->move($fs, $from, $to, $diskManager, $d, $metaRepo);
-            });
-        }
-    }
-
-    // Virus scan (paid module). Wired whenever the token asks for it — and ONLY on the
-    // claim, unlike the passive hooks above, because this one is fail-closed: the
-    // module/licence gate runs INSIDE the callback (lazily, on the first write that
-    // needs a scan) so a tenant with `allow_virus_scan` but no installed/licensed
-    // module gets 501/402/403 on upload instead of silently unscanned files. Resolving
-    // it here instead would break plain reads for the same tenant.
-    if ($claims->allowVirusScan) {
-        $fm->setVirusScanner(static function (string $localPath) use ($claims): array {
-            /** @var \FluxFiles\Virus\VirusScanModule $virus */
-            $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $claims);
-            return $virus->scanPath($localPath);
-        });
-    }
-
-    // DLP / PII scan (paid module, Enterprise bundle). Same lazy-gate-inside-callback
-    // contract as virus scanning above: wired only when the token asks for it
-    // (`allow_dlp_scan`), and ModuleRegistry::require() resolves install/license/claim
-    // on the first eligible write rather than here, so a plain read never pays the
-    // gate cost. See docs/design/DLP-PII-REDACTION-DESIGN.md.
-    if ($claims->allowDlpScan) {
-        $fm->setDlpScanner(static function (string $localPath, string $name) use ($claims): array {
-            /** @var \FluxFiles\Dlp\DlpModule $dlp */
-            $dlp = \FluxFiles\ModuleRegistry::require('dlp', \FluxFiles\LicenseManager::fromEnv(), $claims);
-            return $dlp->scanPath($localPath, $claims->dlpEntityTypes, $claims->dlpMinScore);
-        });
-    }
-
-    // Webhooks (paid module). Fire a signed HTTP POST on file events. Wired only when
-    // the token carries a `webhook_url` + `allow_webhooks` AND the module is installed
-    // + licensed. Event-driven = stateless: it fires on the request that caused the
-    // event (no scheduler/queue). Best-effort — a webhook failure never breaks the op.
-    $webhookDispatcher = null;
+    // Webhooks (paid module): fires after the response; see FileManagerFactory.
+    $webhookDispatcher = \FluxFiles\FileManagerFactory::webhookDispatcher($claims, $secret);
     $webhookEvent = null;
-    if ($claims->allowWebhooks && $claims->webhookUrl !== ''
-        && \FluxFiles\ModuleRegistry::installed('webhooks')
-        && \FluxFiles\LicenseManager::fromEnv()->licensed('webhooks')) {
-        $webhooks = new \FluxFiles\Webhooks\WebhooksModule();
-        $webhookDispatcher = static function (string $event, array $context) use ($webhooks, $claims, $secret) {
-            $webhooks->dispatch($claims, $secret, $event, $context);
-        };
-    }
 
     // Rate limiting (JSON file). Per-tenant `rate_read`/`rate_write` claims override
     // the server defaults when set (> 0); otherwise inherit the env limits.
@@ -563,41 +480,17 @@ try {
 
     // Log write actions
     if ($isWriteAction && $data !== null) {
-        $auditAction = resolveAuditAction($uri);
         $raw = file_get_contents('php://input');
-        $body = json_decode($raw ?: '{}', true) ?: [];
-        if ($auditAction === 'presign') {
-            // A GET presign hands out a download URL, a PUT/POST one an upload URL —
-            // very different events for whoever reads the log.
-            $presignMethod = strtoupper((string) ($body['method'] ?? ''));
-            $auditAction = $presignMethod === 'PUT' ? 'presign_put' : ($presignMethod === 'POST' ? 'presign_post' : 'presign_get');
-        }
-        $auditKey = $body['path'] ?? $body['key'] ?? $body['from'] ?? $body['src_path'] ?? '';
-        // Multipart uploads carry no JSON body, so the key isn't in $body — fall
-        // back to the operation result (the uploaded file's key) so the entry
-        // isn't blank. Only fills when empty, so other actions are unchanged.
-        if ($auditKey === '' && is_array($data) && isset($data['key'])) {
-            $auditKey = (string) $data['key'];
-        }
-        // Every path above (request body AND $data['key']) is tenant-relative —
-        // FileManager::outKey()/unscopePath() strips the prefix before a path
-        // ever reaches the client or comes back from one. isPathInScope() (used
-        // by list()/exportAll() to keep tenants from reading each other's
-        // entries) matches on the FULL scoped path, so logging the relative one
-        // verbatim made a scoped tenant's own actions permanently invisible to
-        // themselves — the prefix check could never match. Re-apply the same
-        // prefixing FileManager used for the operation itself (idempotent, so
-        // this is safe even if a path were already scoped).
-        if ($auditKey !== '') {
-            $auditKey = $claims->scopePath((string) $auditKey);
-        }
-        $auditDisk = $body['disk'] ?? $body['src_disk'] ?? $_POST['disk'] ?? 'local';
+        $body = \FluxFiles\AuditPolicy::decodeBody((string) $raw);
         // Terminal has no path/key — the command itself IS the security-relevant
         // fact, so it goes in as free-form detail instead of leaving the entry blank.
         // Git deploy has no request-body path/key either (path/branch are claims,
         // not request fields) — log what was actually deployed instead.
-        $auditDetail = ff_audit_detail($auditAction, $body, $claims, $data);
-        $auditLog->log($claims->userId, $auditAction, $auditDisk, (string) $auditKey, null, null, $auditDetail);
+        $audit = \FluxFiles\AuditPolicy::successEntry($uri, $body, $_POST, $claims, $data);
+        $auditAction = $audit['action'];
+        $auditDisk = $audit['disk'];
+        $auditKey = $audit['key'];
+        $auditLog->log($claims->userId, $auditAction, $auditDisk, $auditKey, null, null, $audit['detail']);
 
         // Capture the webhook event; it's DISPATCHED AFTER the response is flushed
         // (below) so a slow/unreachable endpoint never adds to the client's latency.
@@ -641,82 +534,18 @@ try {
         $webhookDispatcher($webhookEvent[0], $webhookEvent[1]);
     }
 } catch (ApiException $e) {
-    // A blocked infected file is the one rejection that must leave a trace: the audit
-    // log only records SUCCESSFUL writes, so without this the security event a virus
-    // scanner exists to produce would be the single thing it never records.
-    if ($e->getErrorCode() === 'virus_detected' && isset($auditLog, $claims)) {
-        $p = $e->getErrorParams();
-        try {
-            // The disk lands in $_POST for a multipart upload and in the JSON body for
-            // the editor/extract paths — resolve both, like the success branch does.
-            $vBody = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
-            $auditLog->log(
-                $claims->userId,
-                'virus_blocked',
-                (string) ($_POST['disk'] ?? $vBody['disk'] ?? 'local'),
-                ff_blocked_write_key($claims, $vBody, $p)
-            );
-        } catch (\Throwable $ignored) {
-            // Auditing must never turn a clean 422 into a 500.
-        }
-    }
-    // A blocked PII write is the same kind of security event virus_detected is —
-    // it must leave a trace even though the write itself failed. `detail` carries
-    // ONLY the matched entity-TYPE names (never matched text/offsets/counts — see
-    // §6.2 of docs/design/DLP-PII-REDACTION-DESIGN.md), matching the plain-string shape
-    // every other audit `detail` already uses.
-    if ($e->getErrorCode() === 'pii_detected' && isset($auditLog, $claims)) {
-        $p = $e->getErrorParams();
-        try {
-            $dBody = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
-            $auditLog->log(
-                $claims->userId,
-                'dlp_blocked',
-                (string) ($_POST['disk'] ?? $dBody['disk'] ?? 'local'),
-                ff_blocked_write_key($claims, $dBody, $p),
-                null,
-                null,
-                implode(',', array_map('strval', (array) ($p['entities'] ?? [])))
-            );
-        } catch (\Throwable $ignored) {
-            // Auditing must never turn a clean 422 into a 500.
-        }
-    }
-    // A refused delete/trash/rename/move on a held path is itself a security-relevant
-    // event (someone tried to destroy/modify evidence) — leave a trace even though
-    // the write itself failed, same as virus_blocked/dlp_blocked above. Enforcement
-    // runs unconditionally inside FileManager (free/core, no module/claim check), so
-    // this fires regardless of whether the legal-hold module is installed/licensed.
-    if ($e->getErrorCode() === 'legal_hold_active' && isset($auditLog, $claims)) {
-        $p = $e->getErrorParams();
-        try {
-            $hBody = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
-            $hRawKey = (string) ($hBody['path'] ?? $hBody['from'] ?? $hBody['src_path'] ?? '');
-            // /trash/purge's body is {disk, trash_id} only — no path in the request —
-            // so fall back to the path FileManager::assertNoActiveHold() put in the
-            // exception params (resolved from the trash entry's original_key). That
-            // one is tenant-relative (it is shown to the client), so it is scoped
-            // again here like the request path; scopePath() is idempotent.
-            $hKey = $claims->scopePath($hRawKey !== '' ? $hRawKey : (string) ($p['path'] ?? ''));
-            $auditLog->log(
-                $claims->userId,
-                'legal_hold_blocked',
-                (string) ($hBody['disk'] ?? $hBody['src_disk'] ?? $_POST['disk'] ?? 'local'),
-                $hKey,
-                null,
-                null,
-                (string) ($p['hold_id'] ?? '')
-            );
-        } catch (\Throwable $ignored) {
-            // Auditing must never turn a clean 403 into a 500.
-        }
-    }
-    // An authenticated request refused for lack of permission/scope is the signal
-    // an access review looks for first (someone probing paths, disks or
-    // capabilities they don't have) — record it. legal_hold_active already has its
-    // own `legal_hold_blocked` entry above.
-    if ($e->getHttpCode() === 403 && $e->getErrorCode() !== 'legal_hold_active' && isset($auditLog, $claims)) {
-        ff_audit_denied($auditLog, $claims, $e, $method, $uri);
+    // Refused writes that must leave a trace even though the write failed: an
+    // infected file (virus_blocked), PII (dlp_blocked), and a destructive op on a
+    // held path (legal_hold_blocked) — the audit log only records SUCCESSFUL writes.
+    // Then any other authenticated 403 as access_denied (the signal an access review
+    // looks for first). See AuditPolicy.
+    if (isset($auditLog, $claims)) {
+        $errBody = in_array($e->getErrorCode(), ['virus_detected', 'pii_detected', 'legal_hold_active'], true)
+            || $e->getHttpCode() === 403
+            ? \FluxFiles\AuditPolicy::decodeBody((string) file_get_contents('php://input'))
+            : [];
+        \FluxFiles\AuditPolicy::recordRefusedWrite($auditLog, $claims, $e, $errBody, $_POST);
+        \FluxFiles\AuditPolicy::recordDenied($auditLog, $claims, $e, $method, $uri, $errBody, $_POST, $_GET);
     }
     http_response_code($e->getHttpCode());
     $errResp = ['data' => null, 'error' => $e->getMessage()];
@@ -779,9 +608,7 @@ function routeRequest(
 
     // Upload from URL — gated by the `allow_url_import` claim + SSRF guard inside.
     if ($method === 'POST' && $uri === '/api/fm/import-url') {
-        if (!$claims->hasPerm('write')) {
-            throw new ApiException('Permission denied: write', 403, 'permission_denied');
-        }
+        $claims->requirePerm('write');
         $b = json_decode(file_get_contents('php://input'), true);
         if (!is_array($b) || empty($b['url'])) {
             throw new ApiException('Missing required field: url', 400, 'missing_param');
@@ -1179,7 +1006,7 @@ function routeRequest(
                         $claims->scopePath((string) ($zipPaths[0] ?? '')),
                         null,
                         null,
-                        ff_zip_audit_detail($manifest)
+                        \FluxFiles\AuditPolicy::zipDetail($manifest)
                     );
                 } catch (\Throwable $ignored) {
                 }
@@ -1215,104 +1042,14 @@ function routeRequest(
     // kill-switch, the allow_terminal claim, write perm, an SFTP disk that
     // actually grants a shell, and a double-confirm for catastrophic commands.
     if ($method === 'POST' && $uri === '/api/fm/terminal') {
-        if (($_ENV['FLUXFILES_TERMINAL_DISABLED'] ?? '') === 'true') {
-            throw new ApiException('The terminal is disabled on this server', 403, 'terminal_disabled');
-        }
-        if (!$claims->allowTerminal) {
-            throw new ApiException('Terminal access is not allowed', 403, 'terminal_forbidden');
-        }
-        $body = jsonBodyAll();
-        if (!$claims->hasPerm('write')) {
-            throw new ApiException('Permission denied: write', 403, 'permission_denied');
-        }
-        $disk = (string) ($body['disk'] ?? '');
-        if (!$claims->hasDisk($disk)) {
-            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-        }
-        if (($diskManager->config($disk)['driver'] ?? '') !== 'sftp') {
-            throw new ApiException('The terminal only works on an SFTP disk', 400, 'terminal_unsupported');
-        }
-        $cmd = trim((string) ($body['cmd'] ?? ''));
-        if ($cmd === '') {
-            throw new ApiException('Missing command', 400, 'missing_param');
-        }
-        // Catastrophic-command guardrail: double-confirm unless the host opted out.
-        $confirmOff = ($_ENV['FLUXFILES_TERMINAL_CONFIRM'] ?? '') === 'false';
-        if (!$confirmOff && empty($body['confirm']) && \FluxFiles\SshTerminal::isDangerous($cmd)) {
-            throw new ApiException('This command looks dangerous — confirm to run it', 409, 'terminal_confirm_required');
-        }
-        $timeout = (int) ($_ENV['FLUXFILES_TERMINAL_TIMEOUT'] ?? 30);
-        // ControlMaster connection reuse (SshTerminal path only — see
-        // docs/security/SFTP-CONTROLMASTER-SPEC.md). multiplexHandle() returns null for any
-        // ineligible disk (not SFTP, ssh_multiplex off, password-only, or a
-        // passphrase-protected key), in which case this falls back to the existing
-        // per-request phpseclib connection below, unchanged.
-        $mux = (($_ENV['FLUXFILES_SSH_MULTIPLEX_DISABLED'] ?? '') === 'true')
-            ? null
-            : $diskManager->multiplexHandle($disk);
-        if ($mux !== null) {
-            [$handle, $root] = $mux;
-            // Resolve cwd against the SFTP ROOT (not the SSH login home) — a relative
-            // path from the client ("html") must be anchored to $root, or `cd html`
-            // runs from /root and every command 404s.
-            $cwd = \FluxFiles\SshTerminal::resolveCwd((string) ($body['cwd'] ?? ''), $root);
-            $result = $handle->run($cmd, $cwd, $timeout);
-        } else {
-            [$conn, $root] = $diskManager->sftpConnection($disk);
-            $cwd = \FluxFiles\SshTerminal::resolveCwd((string) ($body['cwd'] ?? ''), $root);
-            $result = \FluxFiles\SshTerminal::run($conn, $cmd, $cwd, $timeout);
-        }
-        // No separate shell probe (it doubled the SSH round-trips per command):
-        // run() prints a cwd marker on any real shell, so its absence means the
-        // host forces a command / allows SFTP only.
-        if (empty($result['shell_ok'])) {
-            throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
-        }
-        return $result;
+        return \FluxFiles\TerminalService::run($claims, $diskManager, jsonBodyAll(...), $_ENV);
     }
 
     // One-click Git deploy — a fixed-command-shape subset of the terminal above.
     // The repo path/branch are OPERATOR claims (minted into the JWT), never read
     // from the request body — see docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.
     if ($method === 'POST' && $uri === '/api/fm/git-deploy') {
-        if (($_ENV['FLUXFILES_GIT_DEPLOY_DISABLED'] ?? '') === 'true') {
-            throw new ApiException('Git deploy is disabled on this server', 403, 'git_deploy_disabled');
-        }
-        if (!$claims->allowGitDeploy) {
-            throw new ApiException('Git deploy is not allowed', 403, 'git_deploy_forbidden');
-        }
-        if (!$claims->hasPerm('write')) {
-            throw new ApiException('Permission denied: write', 403, 'permission_denied');
-        }
-        $body = jsonBodyAll();
-        $disk = (string) ($body['disk'] ?? '');
-        if (!$claims->hasDisk($disk)) {
-            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-        }
-        if (($diskManager->config($disk)['driver'] ?? '') !== 'sftp') {
-            throw new ApiException('Git deploy only works on an SFTP disk', 400, 'terminal_unsupported');
-        }
-        if ($claims->gitDeployPath === '') {
-            throw new ApiException('git_deploy_path claim is not configured for this token', 400, 'git_deploy_unconfigured');
-        }
-        [$conn, $root] = $diskManager->sftpConnection($disk);
-        $path = \FluxFiles\SshTerminal::resolveCwd($claims->gitDeployPath, $root);
-        $timeout = (int) ($_ENV['FLUXFILES_GIT_DEPLOY_TIMEOUT'] ?? 120);
-        $result = \FluxFiles\GitDeploy::run($conn, $path, $claims->gitDeployBranch, $claims->gitDeployHooks, $timeout);
-        if (empty($result['shell_ok'])) {
-            throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
-        }
-        if (!empty($result['locked'])) {
-            throw new ApiException('A deploy is already in progress for this repo', 409, 'git_deploy_in_progress');
-        }
-        if (!empty($result['unsafe_config'])) {
-            throw new ApiException(
-                'The repository\'s own git config contains a command-execution setting and was refused',
-                409,
-                'git_deploy_unsafe_repo'
-            );
-        }
-        return $result;
+        return \FluxFiles\GitDeployService::run($claims, $diskManager, jsonBodyAll(...), $_ENV);
     }
 
     // Search
@@ -1322,12 +1059,8 @@ function routeRequest(
             throw new ApiException('Missing search query', 400, 'missing_param');
         }
         $disk = $_GET['disk'] ?? 'local';
-        if (!$claims->hasDisk($disk)) {
-            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-        }
-        if (!$claims->hasPerm('read')) {
-            throw new ApiException('Permission denied: read', 403, 'permission_denied');
-        }
+        $claims->requireDisk($disk);
+        $claims->requirePerm('read');
         $rows = $metaRepo->search($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix, $claims->showHidden);
         // Strip the tenant prefix so search keys are relative to the client root,
         // matching list()/navigation (the prefix stays an internal detail).
@@ -1347,12 +1080,8 @@ function routeRequest(
             throw new ApiException('Missing search query', 400, 'missing_param');
         }
         $disk = $_GET['disk'] ?? 'local';
-        if (!$claims->hasDisk($disk)) {
-            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-        }
-        if (!$claims->hasPerm('read')) {
-            throw new ApiException('Permission denied: read', 403, 'permission_denied');
-        }
+        $claims->requireDisk($disk);
+        $claims->requirePerm('read');
         $rows = $metaRepo->searchFolders($disk, $q, (int) ($_GET['limit'] ?? 50), $claims->pathPrefix, $claims->showHidden);
         foreach ($rows as &$row) {
             if (isset($row['dir_key'])) {
@@ -1372,12 +1101,8 @@ function routeRequest(
     // _fluxfiles/usage.json onto that foreign disk.
     if ($method === 'GET' && ($uri === '/api/fm/quota' || $uri === '/api/fm/usage')) {
         $disk = (string) ($_GET['disk'] ?? 'local');
-        if (!$claims->hasDisk($disk)) {
-            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-        }
-        if (!$claims->hasPerm('read')) {
-            throw new ApiException('Permission denied: read', 403, 'permission_denied');
-        }
+        $claims->requireDisk($disk);
+        $claims->requirePerm('read');
         if ($uri === '/api/fm/usage') {
             return handleUsage($quotaManager, $diskManager, $claims, $metaRepo);
         }
@@ -1693,207 +1418,6 @@ function routeRequest(
     throw new ApiException('Not found', 404, 'not_found');
 }
 
-function resolveAuditAction(string $uri): string
-{
-    $map = [
-        // Order matters: the FIRST needle contained in the URI wins, so every
-        // longer route must precede its shorter prefix (/share/revoke → /share,
-        // /chunk/presign → /presign, /metadata/import → /metadata).
-        '/audit/purge' => 'audit_purge',
-        '/share/revoke'  => 'share_revoke',
-        '/share'         => 'share_create',
-        '/intake/revoke' => 'intake_revoke',
-        '/intake'        => 'intake_create',
-        '/versions/restore' => 'version_restore',
-        '/webhooks/test' => 'webhook_test',
-        '/virus/scan'    => 'virus_scan',
-        '/fixity/check'  => 'fixity_check',
-        '/retention/run' => 'retention_run',
-        '/ai-vision'     => 'ai_vision',
-        '/ocr'           => 'ocr',
-        '/backup'        => 'backup',
-        '/c2pa/sign'     => 'c2pa_sign',
-        '/c2pa'          => 'c2pa_verify',
-        '/metadata/import' => 'metadata_import',
-        '/hold/release' => 'legal_hold_release',
-        '/hold'       => 'legal_hold_place',
-        '/trash/restore' => 'restore',
-        '/trash/purge'   => 'purge',
-        '/trash/empty'   => 'empty_trash',
-        '/trash'      => 'trash',
-        '/import-url' => 'url_import',
-        '/upload'     => 'upload',
-        '/rename'     => 'rename',
-        '/delete'     => 'delete',
-        '/ai-tag'     => 'ai_tag',
-        '/crop'       => 'crop',
-        '/cross-move' => 'cross_move',
-        '/cross-copy' => 'cross_copy',
-        '/move'       => 'move',
-        '/copy'       => 'copy',
-        '/mkdir'      => 'mkdir',
-        '/metadata'   => 'metadata_update',
-        '/chunk'      => 'chunk_upload',
-        '/presign'    => 'presign',
-        '/zip'        => 'zip_download',
-        '/watermark/remove' => 'watermark_remove',
-        '/watermark'  => 'watermark',
-        '/optimize'   => 'optimize',
-        '/extract'    => 'extract',
-        '/chmod'      => 'chmod',
-        '/content'    => 'content_update',
-        '/terminal'   => 'terminal',
-        '/git-deploy' => 'git_deploy',
-    ];
-
-    foreach ($map as $needle => $action) {
-        if (strpos($uri, $needle) !== false) {
-            return $action;
-        }
-    }
-
-    return 'unknown';
-}
-
-/**
- * Free-form `detail` for an audit entry — the security-relevant fact for actions
- * whose path/key alone doesn't say what happened.
- *
- * @param array<string,mixed> $body
- */
-/**
- * The storage key a refused (virus/DLP-blocked) write would have had, scoped like
- * every other audit file_key — a prefixed tenant's export filter must see its own
- * blocked events. Editor save names the file in the body; an upload names the
- * folder in $_POST['path'] and the file in the error params; an extract entry
- * stays relative to the tenant root (its destination isn't known here).
- *
- * @param array<string,mixed> $body
- * @param array<string,mixed> $params
- */
-function ff_blocked_write_key(\FluxFiles\Claims $claims, array $body, array $params): string
-{
-    $name = (string) ($params['name'] ?? $params['entry'] ?? '');
-    if (!isset($params['entry']) && is_string($body['path'] ?? null) && $body['path'] !== '') {
-        $rel = $body['path'];
-    } elseif (!isset($params['entry']) && is_string($_POST['path'] ?? null) && trim($_POST['path'], '/') !== '') {
-        $rel = trim($_POST['path'], '/') . '/' . $name;
-    } else {
-        $rel = $name;
-    }
-    try {
-        return $claims->scopePath($rel);
-    } catch (\Throwable $e) {
-        return $name;
-    }
-}
-
-function ff_audit_detail(string $action, array $body, \FluxFiles\Claims $claims, $data = null): ?string
-{
-    switch ($action) {
-        case 'retention_run':
-            return is_array($data)
-                ? sprintf('%s acted=%d held=%d', !empty($data['dry_run']) ? 'dry-run' : 'applied',
-                    (int) ($data['acted'] ?? 0), (int) ($data['held'] ?? 0))
-                : null;
-        case 'fixity_check':
-            return is_array($data)
-                ? sprintf('checked=%d unexplained=%d', (int) ($data['checked'] ?? 0),
-                    count($data['changed_unexplained'] ?? []) + count($data['missing_unexplained'] ?? []))
-                : null;
-        case 'virus_scan':
-            // The verdict IS the event.
-            return is_array($data) && !empty($data['clean']) ? 'clean' : 'infected: ' . (string) ($data['threat'] ?? 'unknown');
-        case 'terminal':
-            // The command itself IS the security-relevant fact.
-            return (string) ($body['cmd'] ?? '');
-        case 'git_deploy':
-            // No request-body path (path/branch are claims) — log what was deployed.
-            return $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '');
-        case 'legal_hold_place':
-        case 'legal_hold_release':
-            return (string) ($body['reason'] ?? '');
-        case 'share_revoke':
-        case 'intake_revoke':
-            // The body carries only the link id — without it the entry is blank.
-            return 'jti=' . (is_scalar($body['jti'] ?? null) ? (string) $body['jti'] : '');
-        case 'version_restore':
-            return 'version=' . (is_scalar($body['version_id'] ?? null) ? (string) $body['version_id'] : '');
-        case 'presign_get':
-        case 'presign_put':
-        case 'presign_post':
-            return 'ttl=' . (int) ($body['ttl'] ?? 0);
-        default:
-            return null;
-    }
-}
-
-/**
- * "N files, X bytes: a, b, …" for a zip download, capped so one huge selection
- * can't blow up a single audit line.
- *
- * @param array{entries:array<int,array{key:string,name:string,size:int}>,total:int,count:int} $manifest
- */
-function ff_zip_audit_detail(array $manifest): string
-{
-    $names = array_map(static fn ($e) => (string) $e['key'], $manifest['entries'] ?? []);
-    $list = implode(', ', array_slice($names, 0, 20)) . (count($names) > 20 ? ', …' : '');
-    $detail = (int) ($manifest['count'] ?? count($names)) . ' files, ' . (int) ($manifest['total'] ?? 0) . ' bytes: ' . $list;
-    return mb_strlen($detail) > 1000 ? mb_substr($detail, 0, 999) . '…' : $detail;
-}
-
-/**
- * Record an authenticated request that was refused with a 403 (`access_denied`,
- * detail = the error code + method + route). Best-effort, never throws.
- *
- * The entry is written to a disk the token CAN access: the requested disk when
- * allowed, otherwise the token's first disk (with the refused disk named in the
- * detail) — a `disk_denied` probe must not cause a write onto that very disk.
- * The key is the requested path scoped like any other entry; a path that can't
- * be scoped (the cross-tenant probe itself) is logged normalized but unscoped, so
- * it lands outside the tenant's own view and only an unscoped admin sees it.
- */
-function ff_audit_denied(AuditLogStorage $auditLog, \FluxFiles\Claims $claims, ApiException $e, string $method, string $uri): void
-{
-    try {
-        $body = json_decode((string) file_get_contents('php://input') ?: '{}', true);
-        $body = is_array($body) ? $body : [];
-        $src = $body + $_POST + $_GET;
-        $rawKey = '';
-        foreach (['path', 'key', 'from', 'src_path'] as $k) {
-            if (isset($src[$k]) && is_scalar($src[$k]) && (string) $src[$k] !== '') {
-                $rawKey = (string) $src[$k];
-                break;
-            }
-        }
-        $disk = '';
-        foreach (['disk', 'src_disk'] as $k) {
-            if (isset($src[$k]) && is_scalar($src[$k])) {
-                $disk = (string) $src[$k];
-                break;
-            }
-        }
-        $detail = (string) ($e->getErrorCode() ?? 'forbidden') . ' ' . $method . ' ' . $uri;
-        if ($disk === '' || !$claims->hasDisk($disk)) {
-            if ($disk !== '') {
-                $detail .= ' disk=' . $disk;
-            }
-            $disk = $claims->allowedDisks[0] ?? '';
-        }
-        if ($disk === '') {
-            return; // a token with no disk at all has nowhere to log to
-        }
-        try {
-            $key = $rawKey === '' ? '' : $claims->scopePath($rawKey);
-        } catch (ApiException $scopeErr) {
-            $key = $claims->normalizeKey($rawKey);
-        }
-        $auditLog->log($claims->userId, 'access_denied', $disk, $key, null, null, mb_substr($detail, 0, 500));
-    } catch (\Throwable $ignored) {
-        // Auditing must never turn a clean 403 into a 500.
-    }
-}
-
 /** The full decoded JSON body (for routes with optional fields). */
 function jsonBodyAll(): array
 {
@@ -1934,12 +1458,8 @@ function handleGetMetadata(MetadataRepositoryInterface $metaRepo, \FluxFiles\Cla
     if ($key === null) {
         throw new ApiException('Missing key parameter', 400, 'missing_param');
     }
-    if (!$claims->hasDisk($disk)) {
-        throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-    }
-    if (!$claims->hasPerm('read')) {
-        throw new ApiException('Permission denied: read', 403, 'permission_denied');
-    }
+    $claims->requireDisk($disk);
+    $claims->requirePerm('read');
     // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
     // internal detail), so a prefixed tenant used to get 403 path_denied on every
     // metadata read/save/delete. scopePath() prefixes it — idempotent for an
@@ -1968,12 +1488,8 @@ function handleSaveMetadata(MetadataRepositoryInterface $metaRepo, DiskManager $
     if ($key === null) {
         throw new ApiException('Missing key', 400, 'missing_param');
     }
-    if (!$claims->hasDisk($disk)) {
-        throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-    }
-    if (!$claims->hasPerm('write')) {
-        throw new ApiException('Permission denied: write', 403, 'permission_denied');
-    }
+    $claims->requireDisk($disk);
+    $claims->requirePerm('write');
     // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
     // internal detail), so a prefixed tenant used to get 403 path_denied on every
     // metadata read/save/delete. scopePath() prefixes it — idempotent for an
@@ -1998,12 +1514,8 @@ function handleSaveMetadata(MetadataRepositoryInterface $metaRepo, DiskManager $
 function handleDeleteMetadata(MetadataRepositoryInterface $metaRepo, \FluxFiles\Claims $claims, FileManager $fm): array
 {
     [$disk, $key] = jsonBody('disk', 'key');
-    if (!$claims->hasDisk($disk)) {
-        throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-    }
-    if (!$claims->hasPerm('write')) {
-        throw new ApiException('Permission denied: write', 403, 'permission_denied');
-    }
+    $claims->requireDisk($disk);
+    $claims->requirePerm('write');
     // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
     // internal detail), so a prefixed tenant used to get 403 path_denied on every
     // metadata read/save/delete. scopePath() prefixes it — idempotent for an
@@ -2020,7 +1532,7 @@ function handleDeleteMetadata(MetadataRepositoryInterface $metaRepo, \FluxFiles\
  * signs an SsoStateToken, and delegates to the paid module to build the IdP's
  * authorization URL (from OidcDiscovery) and 302 there. Emits plain text on
  * failure — this is a browser navigation, not a fetch(), so there's no JSON
- * envelope to return errors in (same posture as handleMediaStream).
+ * envelope to return errors in (same posture as MediaEndpoint).
  */
 function handleSsoLogin(): void
 {
@@ -2111,216 +1623,23 @@ function handleSsoExchange(): void
 }
 
 /**
- * Serve one file on a gated (private) local disk, authenticated by a per-file
- * stream token in the query string. Honours HTTP Range so a <video>/<audio> can
- * seek without re-reading from the start. Emits raw bytes, not JSON.
+ * The /stream + /img endpoint (see MediaEndpoint) wired for the standalone app:
+ * the configured disks, FLUXFILES_SECRET, the env-driven per-sub rate limit, the
+ * optional nginx X-Accel location, and the operator's metadata backend for
+ * `audit_reads`. These routes run before auth, so there is no Claims here — the
+ * disk list is the unfiltered config, exactly as before.
  */
-/**
- * Per-subject rate limit for the two token-authenticated media endpoints.
- *
- * `/img` and `/stream` dispatch and exit before the main `try` block, so they
- * never reach the general read/write limiter — an unbounded loop over `/img`'s
- * width/height/quality/format/dpr axes can otherwise fill a tenant's
- * `_variants/` with cache entries it can neither see nor purge. The handler
- * docblock's "mathematically bounded" argument predates those extra axes.
- *
- * Keyed on the token's `sub` (there is no Claims here), in its own bucket so it
- * never eats the tenant's API read budget. Defaults are generous: a gallery
- * page legitimately fires dozens of `/img` requests, and a seeking `<video>`
- * fires one `/stream` Range request per seek.
- *
- * Returns false (and has already emitted the 429) when the caller must stop.
- */
-function ff_media_rate_limit(string $sub, string $bucket, int $default): bool
+function ff_media_endpoint(): \FluxFiles\MediaEndpoint
 {
-    $limit = (int) ($_ENV['FLUXFILES_' . strtoupper($bucket) . '_RATE_LIMIT'] ?? $default);
-    if ($limit <= 0) {
-        return true; // explicitly disabled by the operator
-    }
-    try {
-        \FluxFiles\RateLimiterFactory::make($limit, $limit, 60)
-            ->check($sub !== '' ? $sub : 'anonymous', $bucket);
-        return true;
-    } catch (ApiException $e) {
-        // A limiter that cannot write its own state must not take the endpoint
-        // down with it — only a genuine 429 blocks the request.
-        if ($e->getHttpCode() !== 429) {
-            return true;
-        }
-        http_response_code(429);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Too many requests';
-        return false;
-    }
+    $dm = new DiskManager(require __DIR__ . '/../config/disks.php');
+    return new \FluxFiles\MediaEndpoint(
+        $dm,
+        (string) ($_ENV['FLUXFILES_SECRET'] ?? ''),
+        \FluxFiles\MediaEndpoint::defaultRateLimit(),
+        (string) ($_ENV['FLUXFILES_XACCEL'] ?? ''),
+        static fn () => ff_public_meta_repo($dm)
+    );
 }
-
-function handleMediaStream(): void
-{
-    $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
-    // Mirror the main app's guard: a misconfigured/placeholder secret must not
-    // verify stream tokens either (consistency — the rest of the API is disabled).
-    if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
-        http_response_code(500);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'FLUXFILES_SECRET is not configured';
-        return;
-    }
-    try {
-        $scope = \FluxFiles\StreamToken::verify(ff_str_param($_GET, 'token'), $secret);
-    } catch (ApiException $e) {
-        http_response_code($e->getHttpCode());
-        header('Content-Type: text/plain; charset=utf-8');
-        echo $e->getMessage();
-        return;
-    }
-
-    if (!ff_media_rate_limit((string) ($scope['sub'] ?? ''), 'stream', 300)) {
-        return;
-    }
-
-    $disk = $scope['disk'];
-    $path = $scope['path'];
-
-    // Reject any traversal in the (signed) path defensively.
-    if ($path === '' || strpos($path, "\0") !== false
-        || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
-        http_response_code(403);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Invalid path';
-        return;
-    }
-
-    $diskConfigs = require __DIR__ . '/../config/disks.php';
-    $config = $diskConfigs[$disk] ?? null;
-    $driver = is_array($config) ? ($config['driver'] ?? '') : '';
-
-    // Two servable cases: a gated (private) local disk, or any SFTP disk (which
-    // has no static/presigned URL, so it must be streamed through the app). S3/R2
-    // use presigned URLs the browser fetches directly, so they never reach here.
-    $isGatedLocal = $driver === 'local' && !empty($config['private']);
-    $isSftp = $driver === 'sftp';
-    if (!$isGatedLocal && !$isSftp) {
-        http_response_code(403);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Streaming not available for this disk';
-        return;
-    }
-
-    // MIME by extension (don't trust on-disk sniffing for active types).
-    $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
-        ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
-    // Inline only for media/image/pdf; everything else is forced to download so a
-    // stray .html/.svg can't execute in the FluxFiles origin.
-    $inlineOk = (bool) preg_match('#^(video/|audio/|image/(?!svg))|^application/pdf$#', $mime);
-    header('X-Content-Type-Options: nosniff');
-    header('Cache-Control: private, no-store');
-    header('Content-Disposition: ' . ($inlineOk ? 'inline' : 'attachment')
-        . '; filename="' . rawurlencode(basename($path)) . '"');
-
-    if ($isGatedLocal) {
-        $root = realpath($config['root'] ?? (__DIR__ . '/../storage/uploads'));
-        $abs  = realpath(($root ?: '') . '/' . $path);
-        // The resolved file must stay inside the disk root (symlink / traversal guard).
-        if ($root === false || $abs === false || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs)) {
-            http_response_code(404);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Not found';
-            return;
-        }
-        ff_audit_stream_read($scope, $diskConfigs);
-        // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
-        $xaccel = $_ENV['FLUXFILES_XACCEL'] ?? '';
-        if ($xaccel !== '') {
-            header('Content-Type: ' . $mime);
-            header('X-Accel-Buffering: no');
-            header('X-Accel-Redirect: ' . ff_xaccel_uri($xaccel, $path));
-            return;
-        }
-        \FluxFiles\RangeStreamer::stream($abs, $mime, $_SERVER['HTTP_RANGE'] ?? null);
-        return;
-    }
-
-    // SFTP: read through Flysystem and stream the bytes (no presign, no static URL).
-    // SFTP can't do byte-range natively, so Range is not advertised — the whole
-    // file is sent. SFTP is for browsing/editing VPS files, not media seeking.
-    try {
-        $dm = new DiskManager($diskConfigs);
-        $fs = $dm->disk($disk);
-        if (!$fs->fileExists($path)) {
-            http_response_code(404);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Not found';
-            return;
-        }
-        ff_audit_stream_read($scope, $diskConfigs, $dm);
-        header('Content-Type: ' . $mime);
-        $stream = $fs->readStream($path);
-        while (!feof($stream)) {
-            echo fread($stream, 8192);
-            @flush();
-        }
-        if (is_resource($stream)) { fclose($stream); }
-    } catch (\Throwable $e) {
-        http_response_code(502);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Stream failed';
-    }
-}
-
-/**
- * `audit_reads` for /stream: record a `stream_read` when the token says the
- * tenant opted in. Only the FIRST request of a playback (no Range, or a Range
- * starting at byte 0) — every seek of a <video> is its own Range request and
- * would otherwise write one line per scrub. Best-effort, never blocks the bytes.
- *
- * @param array{disk:string,path:string,sub:string,auditRead?:bool} $scope
- * @param array<string,mixed> $diskConfigs
- */
-function ff_audit_stream_read(array $scope, array $diskConfigs, ?DiskManager $dm = null): void
-{
-    if (empty($scope['auditRead'])) {
-        return;
-    }
-    $range = trim((string) ($_SERVER['HTTP_RANGE'] ?? ''));
-    if ($range !== '' && !preg_match('/^bytes=0-/', $range)) {
-        return;
-    }
-    try {
-        $dm = $dm ?? new DiskManager($diskConfigs);
-        $repo = ($_ENV['FLUXFILES_STORAGE_BACKEND'] ?? 'json') === 'db'
-            ? new \FluxFiles\Db\DbMetadataHandler(\FluxFiles\Db\Connection::fromEnv(), $dm)
-            : new StorageMetadataHandler($dm);
-        (new AuditLogStorage($repo, [$scope['disk']]))
-            ->log($scope['sub'], 'stream_read', $scope['disk'], $scope['path']);
-    } catch (\Throwable $ignored) {
-    }
-}
-
-/**
- * Snap a requested quality to the nearest allowed step (default 80). A fixed set
- * of steps bounds the number of cache variants a single file can spawn. (Kept as
- * a local array, not a top-level const, since this file's route dispatch runs
- * before the file finishes loading — consts aren't hoisted like functions.)
- */
-function ff_snap_quality($raw): int
-{
-    $allowedSteps = [60, 75, 80, 90];
-    $q = (int) $raw;
-    if ($q <= 0) {
-        return 80;
-    }
-    $best = 80;
-    $bestDiff = PHP_INT_MAX;
-    foreach ($allowedSteps as $allowed) {
-        $d = abs($allowed - $q);
-        if ($d < $bestDiff) {
-            $bestDiff = $d;
-            $best = $allowed;
-        }
-    }
-    return $best;
-}
-
 
 /**
  * This request's own origin (scheme + host), honouring a TLS-terminating proxy.
@@ -2360,248 +1679,6 @@ function ff_request_origin(): string
 function ff_public_link_url(string $page, string $token): string
 {
     return ff_request_origin() . '/public/' . $page . '?token=' . rawurlencode($token);
-}
-
-/**
- * Serve an on-demand WebP transform of one image, cached in the file's
- * _variants/ directory. Authenticated by an image token (query string). The width
- * is rounded to 100px and clamped to the tenant's max so the number of cacheable
- * variants per file is mathematically bounded (no per-request counting needed).
- */
-function handleImageTransform(): void
-{
-    $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
-    if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
-        http_response_code(500);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'FLUXFILES_SECRET is not configured';
-        return;
-    }
-    try {
-        $scope = \FluxFiles\ImageToken::verify(ff_str_param($_GET, 'token'), $secret);
-    } catch (ApiException $e) {
-        http_response_code($e->getHttpCode());
-        header('Content-Type: text/plain; charset=utf-8');
-        echo $e->getMessage();
-        return;
-    }
-
-    if (!ff_media_rate_limit((string) ($scope['sub'] ?? ''), 'img', 120)) {
-        return;
-    }
-
-    $disk = $scope['disk'];
-    $path = $scope['path'];
-    if ($path === '' || strpos($path, "\0") !== false
-        || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
-        http_response_code(403);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Invalid path';
-        return;
-    }
-
-    $optimizer = new \FluxFiles\ImageOptimizer();
-    if (!$optimizer->isImage($path)) {
-        http_response_code(403);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Not an image';
-        return;
-    }
-
-    // DPR: device-pixel-ratio multiplier (1–3, snapped) so a CSS width can be
-    // requested while the physical pixels honor a retina screen. Applied to the
-    // requested width/height BEFORE clamping to the tenant max.
-    $dpr = (float) ($_GET['dpr'] ?? 1);
-    $dpr = $dpr >= 2.5 ? 3.0 : ($dpr >= 1.5 ? 2.0 : 1.0);
-
-    // Width: round to 100px, clamp to the tenant max (mw, default 2000). 0 = keep size.
-    $maxWidth = $scope['maxWidth'] > 0 ? $scope['maxWidth'] : 2000;
-    $reqWidth = (int) round(((int) ($_GET['width'] ?? 0)) * $dpr);
-    $width = $reqWidth > 0 ? min($maxWidth, max(100, (int) round($reqWidth / 100) * 100)) : 0;
-    // Height + fit (box sizing): height rounds to 100px and clamps to the same
-    // dimension ceiling; fit 'cover' crops to fill, else 'contain' fits within.
-    $reqHeight = (int) round(((int) ($_GET['height'] ?? 0)) * $dpr);
-    $height = $reqHeight > 0 ? min($maxWidth, max(100, (int) round($reqHeight / 100) * 100)) : 0;
-    $fit = (($_GET['fit'] ?? 'contain') === 'cover') ? 'cover' : 'contain';
-    $defaultQuality = $scope['defaultQuality'] > 0 ? $scope['defaultQuality'] : 80;
-    $quality = ff_snap_quality($_GET['quality'] ?? $defaultQuality);
-
-    // Output format: 'avif'/'webp' force it; 'auto' (default) content-negotiates
-    // from Accept — AVIF first (smallest, when the build supports it), then WebP,
-    // else '' = serve the original for ancient clients (resolved below).
-    $reqFormat = strtolower(ff_str_param($_GET, 'format', 'auto'));
-    $avifOk = $optimizer->avifSupported();
-    $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
-    if ($reqFormat === 'avif') {
-        $format = $avifOk ? 'avif' : 'webp';
-    } elseif ($reqFormat === 'webp') {
-        $format = 'webp';
-    } elseif ($avifOk && strpos($accept, 'image/avif') !== false) {
-        $format = 'avif';
-    } elseif (strpos($accept, 'image/webp') !== false) {
-        $format = 'webp';
-    } else {
-        $format = ''; // negotiation: client accepts neither modern format
-    }
-
-    $diskConfigs = require __DIR__ . '/../config/disks.php';
-    try {
-        $dm = new DiskManager($diskConfigs);
-        $fs = $dm->disk($disk);
-    } catch (\Throwable $e) {
-        http_response_code(404);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Disk not available';
-        return;
-    }
-
-    if (!$fs->fileExists($path)) {
-        http_response_code(404);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Not found';
-        return;
-    }
-
-    $origMime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
-        ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
-
-    // Resolve the effective watermark from the token (logo presence → text
-    // fallback) WITHOUT reading the logo bytes yet — enough for the cache key.
-    [$wmEnabled, $wmSigCfg, $logoVer, $wmLogoPath] = ff_resolve_watermark($fs, $scope['watermark'] ?? null, $scope['sub']);
-    $wmSig = \FluxFiles\ImageOptimizer::watermarkSignature($wmSigCfg, $logoVer);
-
-    // A preview-only token (allow_download=false, with or without a watermark)
-    // must never reach a path that returns the untransformed source. Watermark
-    // implies this, but not the reverse — Claims only forces the implication one
-    // way — so check the token's own `dl` flag, not just $wmEnabled.
-    $noOriginal = $wmEnabled || !$scope['allowDownload'];
-
-    // Content negotiation: a client that accepts neither AVIF nor WebP → serve
-    // the original unchanged (old browsers). NEVER when $noOriginal — that would
-    // hand back the clean image; force WebP there. A bare wildcard Accept (curl's
-    // default) lands here, so this is a one-request bypass if left open.
-    if ($format === '') {
-        if (!$noOriginal) {
-            ff_serve_bytes((string) $fs->read($path), $origMime);
-            return;
-        }
-        $format = 'webp';
-    }
-
-    // Cache key is stamped with the source mtime (+ watermark signature, format,
-    // height/fit) so a re-upload, config/logo change, or a different output
-    // format/size never re-matches a stale image.
-    $ver = (string) (@$fs->lastModified($path) ?: '0');
-    $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig, $format, $height, $fit);
-    $outMime = 'image/' . $format;
-
-    if ($fs->fileExists($cacheKey)) {
-        // S3/R2: redirect to a presigned URL of the cached image so the bucket
-        // serves the bytes directly (no app-server egress). Local disks read
-        // cheaply, so we just serve them.
-        if (($diskConfigs[$disk]['driver'] ?? '') === 's3') {
-            $redirect = $dm->presignGetUrl($disk, $cacheKey, 3600);
-            if ($redirect !== null) {
-                header('Cache-Control: private, max-age=600');
-                header('Vary: Accept');
-                header('Location: ' . $redirect, true, 302);
-                return;
-            }
-        }
-        ff_serve_bytes((string) $fs->read($cacheKey), $outMime, true);
-        return;
-    }
-
-    // Cache miss: build the full watermark config (now reading the logo bytes).
-    $wmCfg = null;
-    if ($wmEnabled) {
-        $wmCfg = $wmSigCfg;
-        if (($wmSigCfg['type'] ?? '') === 'logo' && $wmLogoPath !== '') {
-            $wmCfg['logo_data'] = (string) $fs->read($wmLogoPath);
-        }
-    }
-
-    $out = $optimizer->transform((string) $fs->read($path), $width, $quality, $wmCfg, $format, $height, $fit);
-    if ($out === null) {
-        // Animated GIF / SVG / non-raster / bomb. A preview-only token must not
-        // leak the clean original, so refuse rather than serve it untouched.
-        if ($noOriginal) {
-            http_response_code(415);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo $wmEnabled ? 'Cannot watermark this image type' : 'Cannot transform this image type';
-            return;
-        }
-        ff_serve_bytes((string) $fs->read($path), $origMime);
-        return;
-    }
-
-    // Honor the format transform() actually produced (it falls back to WebP if an
-    // AVIF encode isn't available at runtime) so the cache key + Content-Type can
-    // never disagree with the bytes.
-    $outFormat = $out['format'] ?? $format;
-    if ($outFormat !== $format) {
-        $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, $wmSig, $outFormat, $height, $fit);
-        $outMime = 'image/' . $outFormat;
-    }
-    try { $fs->write($cacheKey, $out['data']); } catch (\Throwable $e) { /* best-effort cache */ }
-    ff_serve_bytes($out['data'], $outMime, true);
-}
-
-/**
- * Resolve a token's watermark into a config usable for the cache key, choosing
- * the logo-vs-text fallback up front (reads only the logo's mtime, not its bytes).
- * Returns [enabled, sigConfig|null, logoVer|null, logoPath]. A missing logo file
- * falls back to a text watermark (warning header) — never to a clean image.
- *
- * @return array{0:bool,1:array|null,2:int|null,3:string}
- */
-function ff_resolve_watermark($fs, ?array $wm, string $sub): array
-{
-    if (!is_array($wm) || empty($wm['enabled'])) {
-        return [false, null, null, ''];
-    }
-    $position = in_array($wm['position'] ?? '', \FluxFiles\ImageOptimizer::WM_POSITIONS, true)
-        ? (string) $wm['position'] : 'bottom-right';
-    $opacity = max(0.0, min(1.0, (float) ($wm['opacity'] ?? 0.6)));
-    $fontSize = max(8, min(200, (int) ($wm['font_size'] ?? 24)));
-    $text = trim((string) ($wm['text'] ?? ''));
-    $logoPath = (string) ($wm['logo_path'] ?? '');
-    $logoSafe = $logoPath !== '' && strpos($logoPath, "\0") === false
-        && !preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $logoPath));
-
-    if (($wm['type'] ?? 'text') === 'logo' && $logoSafe && $fs->fileExists($logoPath)) {
-        $sig = ['enabled' => true, 'type' => 'logo', 'position' => $position, 'opacity' => $opacity, 'logo_path' => $logoPath];
-        return [true, $sig, (int) (@$fs->lastModified($logoPath) ?: 0), $logoPath];
-    }
-
-    if (($wm['type'] ?? 'text') === 'logo') {
-        // Logo configured but missing/unsafe → fall back to text, never clean.
-        header('X-FluxFiles-Warning: watermark-logo-missing');
-        if ($text === '') {
-            $text = $sub !== '' ? $sub : 'PREVIEW';
-        }
-    }
-    if ($text === '') {
-        $text = $sub !== '' ? $sub : 'PREVIEW';
-    }
-    $sig = ['enabled' => true, 'type' => 'text', 'text' => $text, 'position' => $position, 'opacity' => $opacity, 'font_size' => $fontSize];
-    return [true, $sig, null, ''];
-}
-
-/** Emit image bytes with safe headers; $immutable adds a long-lived cache policy. */
-function ff_serve_bytes(string $data, string $mime, bool $immutable = false): void
-{
-    header('Content-Type: ' . $mime);
-    header('X-Content-Type-Options: nosniff');
-    header('Content-Disposition: inline');
-    // Output format is content-negotiated from Accept (format=auto → avif/webp),
-    // so caches must key on it to avoid serving the wrong format to a client.
-    header('Vary: Accept');
-    header($immutable
-        ? 'Cache-Control: public, max-age=31536000, immutable'
-        : 'Cache-Control: private, no-store');
-    header('Content-Length: ' . strlen($data));
-    echo $data;
 }
 
 /**
@@ -2762,9 +1839,7 @@ function handleChunkInit(
     \FluxFiles\QuotaManager $quotaManager
 ): array
 {
-    if (!$claims->hasPerm('write')) {
-        throw new ApiException('Permission denied: write', 403, 'permission_denied');
-    }
+    $claims->requirePerm('write');
 
     $raw = file_get_contents('php://input');
     $body = json_decode($raw, true);
@@ -2778,9 +1853,7 @@ function handleChunkInit(
         throw new ApiException('Missing required field: disk or path', 400);
     }
 
-    if (!$claims->hasDisk($disk)) {
-        throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-    }
+    $claims->requireDisk($disk);
 
     $sizeBytes = (int) ($body['size'] ?? $body['size_bytes'] ?? 0);
     if ($sizeBytes <= 0) {
@@ -2794,13 +1867,9 @@ function handleChunkInit(
 
 function handleChunkPresign(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims, FileManager $fm): array
 {
-    if (!$claims->hasPerm('write')) {
-        throw new ApiException('Permission denied: write', 403, 'permission_denied');
-    }
+    $claims->requirePerm('write');
     [$disk, $key, $uploadId, $partNumber] = jsonBody('disk', 'key', 'upload_id', 'part_number');
-    if (!$claims->hasDisk($disk)) {
-        throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-    }
+    $claims->requireDisk($disk);
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
@@ -2818,13 +1887,9 @@ function handleChunkComplete(
     \FluxFiles\QuotaManager $quotaManager
 ): array
 {
-    if (!$claims->hasPerm('write')) {
-        throw new ApiException('Permission denied: write', 403, 'permission_denied');
-    }
+    $claims->requirePerm('write');
     [$disk, $key, $uploadId, $parts] = jsonBody('disk', 'key', 'upload_id', 'parts');
-    if (!$claims->hasDisk($disk)) {
-        throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-    }
+    $claims->requireDisk($disk);
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }
@@ -2847,13 +1912,9 @@ function handleChunkComplete(
 
 function handleChunkAbort(\FluxFiles\ChunkUploader $chunker, \FluxFiles\Claims $claims, FileManager $fm): array
 {
-    if (!$claims->hasPerm('write')) {
-        throw new ApiException('Permission denied: write', 403, 'permission_denied');
-    }
+    $claims->requirePerm('write');
     [$disk, $key, $uploadId] = jsonBody('disk', 'key', 'upload_id');
-    if (!$claims->hasDisk($disk)) {
-        throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-    }
+    $claims->requireDisk($disk);
     if (!$claims->isPathInScope($key)) {
         throw new ApiException('Access denied to path', 403, 'path_denied');
     }

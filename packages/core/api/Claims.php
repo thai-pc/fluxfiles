@@ -872,6 +872,32 @@ class Claims
     }
 
     /**
+     * Throwing twin of hasPerm(): one place that owns the 403 + error_code, so
+     * callers (core routes, services, and the Laravel/WordPress proxies) stop
+     * hand-writing codeless or differently-coded 403s.
+     *
+     * @throws ApiException 403 `permission_denied`
+     */
+    public function requirePerm(string $perm): void
+    {
+        if (!$this->hasPerm($perm)) {
+            throw new ApiException("Permission denied: {$perm}", 403, 'permission_denied');
+        }
+    }
+
+    /**
+     * Throwing twin of hasDisk() — see requirePerm().
+     *
+     * @throws ApiException 403 `disk_denied`
+     */
+    public function requireDisk(string $disk): void
+    {
+        if (!$this->hasDisk($disk)) {
+            throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
+        }
+    }
+
+    /**
      * Generic check for a named `allow_*` feature claim — used by ModuleRegistry to
      * gate a paid module by its declared claim without hard-coding the property.
      * Unknown claim names are denied (fail-closed). Add a case when a module needs one.

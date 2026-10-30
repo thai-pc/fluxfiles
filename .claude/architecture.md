@@ -43,7 +43,7 @@
 - `api/DiskManager.php`
   - Builds Flysystem local, S3-compatible, and **SFTP** disks.
   - R2/MinIO-style endpoints are treated as S3 with path-style endpoint and `retain_visibility` disabled.
-  - **SFTP** (`SFTP_*` env, or BYOB): a 3rd driver for VPS/hosting. Connect/disconnect per request (no pool, no DB); password OR private key; host is `SsrfGuard::assertHostSafe`-checked (allowlist via `FLUXFILES_SSRF_ALLOW_HOSTS`); optional host-key pinning / strict algorithms / ControlMaster multiplexing for the terminal. SFTP has no static/presigned URL, so `fileUrl()` returns a tokened `/api/fm/stream` link and `handleMediaStream` reads it via Flysystem (no Range). Chunk upload + presign reject SFTP (S3-only); large SFTP uploads use tus instead. Serving is proxied by the Laravel/WordPress adapters too (they port `/stream`).
+  - **SFTP** (`SFTP_*` env, or BYOB): a 3rd driver for VPS/hosting. Connect/disconnect per request (no pool, no DB); password OR private key; host is `SsrfGuard::assertHostSafe`-checked (allowlist via `FLUXFILES_SSRF_ALLOW_HOSTS`); optional host-key pinning / strict algorithms / ControlMaster multiplexing for the terminal. SFTP has no static/presigned URL, so `fileUrl()` returns a tokened `/api/fm/stream` link and `MediaEndpoint::stream()` reads it via Flysystem (no Range). Chunk upload + presign reject SFTP (S3-only); large SFTP uploads use tus instead. Serving is proxied by the Laravel/WordPress adapters too (they port `/stream`).
   - BYOB disks can be registered at runtime (s3 or sftp), but local BYOB disks are rejected.
 
 - `api/StorageMetadataHandler.php`

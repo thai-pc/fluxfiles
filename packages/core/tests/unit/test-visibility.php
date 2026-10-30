@@ -184,7 +184,7 @@ test('r2 public WITHOUT public_url → falls back to endpoint/bucket URL', funct
 // straight from the bucket can't run as active content in the BUCKET's origin
 // (nothing sanitizes SVG on the way in — ImageOptimizer leaves it alone by design,
 // and a custom R2/CDN domain is commonly same-site with the host app). Same
-// inline-safe set as handleMediaStream() and the Share route.
+// inline-safe set as MediaEndpoint::stream() and the Share route.
 echo "\n► Presigned preview URL signs Content-Disposition (svg/html ≠ inline)\n";
 
 $S3_PRIVATE = ['driver' => 's3', 'region' => 'us-east-1', 'bucket' => 'my-bucket', 'visibility' => 'private'];
