@@ -29,7 +29,7 @@ Go through the diff (`git diff`, `git status`) and check each that applies:
 - `Claims::isAllowed` has a case for each `allow_<x>` claim (else the 3-layer gate 403s
   every module). Module registered in `ModuleRegistry::$map`. Route uses
   `ModuleRegistry::require`. Free core degrades to `501 module_not_installed`.
-- Private-module files (`packages/{share,intake,versioning,webhooks,ai,ocr,virus,backup,c2pa,optimize}/`)
+- Private-module files (`packages/{share,intake,versioning,webhooks,ai,ocr,virus,backup,c2pa,audit-export,sso,dlp,legal-hold}/`)
   are **gitignored and NOT staged** — run `git diff --cached --name-only | grep packages/<x>/`.
 - **Gate + config claims travel together.** A module's `allow_<x>` is forwarded in all four
   channels (embed / node / laravel / wordpress) *and so are its tuning claims*. Shipping the
