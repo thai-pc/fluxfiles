@@ -14,11 +14,13 @@ packages/core/.env.adapter-e2e.bak
 # Storage
 storage/uploads/
 storage/rate_limit.json
+storage/rate_limit.d/
 storage/tus/
 
 # Core package storage (runtime/test artifacts)
 packages/core/storage/uploads/
 packages/core/storage/rate_limit.json
+packages/core/storage/rate_limit.d/
 packages/core/storage/demo_ip.json
 # tus resumable-upload staging (partial bytes, swept after 24h)
 packages/core/storage/tus/

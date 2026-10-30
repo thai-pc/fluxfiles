@@ -8,6 +8,7 @@ packages/core/storage/uploads
 storage/tus
 packages/core/storage/tus
 **/storage/rate_limit.json
+**/storage/rate_limit.d
 **/storage/demo_ip.json
 **/.env
 # the license server's customer DB (emails + every issued key) from a dev checkout

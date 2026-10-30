@@ -1400,6 +1400,84 @@ test('L7: audit/export errors use the standard envelope (error_code/error_params
     assertTrue(!array_key_exists('code', $body), 'legacy `code` key gone');
 });
 
+// ── proxy-parity fixes: X-Accel encoding, audit names, blocked-write key, 403 codes, asset caching ──
+if (!function_exists('request')) {
+    /** Current-request stub: tests park a Request in $GLOBALS['SMOKE_REQ']; null otherwise. */
+    function request() { return $GLOBALS['SMOKE_REQ'] ?? null; }
+}
+
+test('L8: xaccelUri() percent-encodes each segment (%, ?, #, space) and keeps the / separators', function () {
+    assertEqual('/internal/a%20b/50%25%20off%3F%23.pdf', FluxFilesController::xaccelUri('/internal/', 'a b/50% off?#.pdf'), 'segments encoded');
+    assertEqual('/internal/x/y.txt', FluxFilesController::xaccelUri('/internal', '/x/y.txt'), 'plain key unchanged');
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(str_contains($src, "'X-Accel-Redirect: ' . self::xaccelUri("), 'the header uses the encoder');
+    assertTrue(!str_contains($src, "rtrim(\$xaccel, '/') . '/' . \$path"), 'no raw concatenation left');
+});
+
+test('L9: a code-editor save is audited and webhooked as content_update (the name the UI labels)', function () use ($ffTmp) {
+    $ctrl = freshController();
+    $prefix = 'cu-' . uniqid();
+    $hdr = bearer(['perms' => ['read', 'write'], 'allow_code_edit' => true, 'prefix' => $prefix], 'cu-user');
+    @mkdir($ffTmp . '/disk/' . $prefix, 0775, true);
+    file_put_contents($ffTmp . '/disk/' . $prefix . '/conf.txt', 'old');
+    $res = $ctrl->putContent(new Request('PUT', ['disk' => 'local', 'path' => 'conf.txt', 'content' => 'new'], $hdr))->getData();
+    assertTrue(empty($res['error']), 'save ok: ' . json_encode($res));
+    $actions = array_column(array_filter(smokeAuditRows($ffTmp . '/disk'), static fn ($r) => ($r['user_id'] ?? '') === 'cu-user'), 'action');
+    assertTrue(in_array('content_update', $actions, true), 'content_update logged: ' . json_encode($actions));
+    assertTrue(!in_array('content_edit', $actions, true), 'legacy name gone');
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(!str_contains($src, "'content_edit'"), 'webhook event renamed too');
+});
+
+test('L10: a blocked upload into a subfolder is audited under folder/name (core ff_blocked_write_key)', function () use ($ffTmp) {
+    $ctrl = freshController();
+    $claims = \FluxFiles\JwtMiddleware::handle(
+        (new FluxFilesManager())->token('bw-user', ['perms' => ['read', 'write'], 'prefix' => 'bw']),
+        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret']
+    );
+    (new \ReflectionProperty(FluxFilesController::class, 'lastClaims'))->setValue($ctrl, $claims);
+    $error = new \ReflectionMethod(FluxFilesController::class, 'error');
+    $GLOBALS['SMOKE_REQ'] = new Request('POST', ['disk' => 'local', 'path' => '/docs/in/']);
+    try {
+        $error->invoke($ctrl, 'virus', 422, 'virus_detected', ['name' => 'eicar.txt', 'threat' => 'X']);
+        $error->invoke($ctrl, 'virus', 422, 'virus_detected', ['entry' => 'inner/zip.txt']);   // extract entry stays relative
+    } finally {
+        unset($GLOBALS['SMOKE_REQ']);
+    }
+    $keys = array_column(array_filter(smokeAuditRows($ffTmp . '/disk'), static fn ($r) => ($r['user_id'] ?? '') === 'bw-user' && ($r['action'] ?? '') === 'virus_blocked'), 'file_key');
+    assertTrue(in_array('bw/docs/in/eicar.txt', $keys, true), 'folder + name, scoped: ' . json_encode($keys));
+    assertTrue(in_array('bw/inner/zip.txt', $keys, true), 'extract entry relative: ' . json_encode($keys));
+});
+
+test('L11: 403s carry the codes core uses (disk_denied / permission_denied) and none is codeless', function () {
+    $ctrl = freshController();
+    $r = $ctrl->saveMetadata(new Request('PUT', ['disk' => 'local', 'key' => 'a.txt'], bearer(['perms' => ['read']])));
+    assertEqual(403, $r->getStatusCode(), 'write needed');
+    assertEqual('permission_denied', $r->getData()['error_code'] ?? null, 'permission_denied');
+    $r = $ctrl->search(new Request('GET', ['disk' => 'nope', 'q' => 'x'], bearer(['perms' => ['read', 'write']])));
+    assertEqual(403, $r->getStatusCode(), 'disk refused');
+    assertEqual('disk_denied', $r->getData()['error_code'] ?? null, 'disk_denied');
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(preg_match_all('/new ApiException\((?:[^;]*?),\s*403\s*\)/s', $src, $m) === 0, 'codeless 403 left: ' . json_encode($m[0] ?? []));
+});
+
+test('L12: assets are immutable when versioned (?v=), else ETag + a real 304', function () use ($ffTmp) {
+    @mkdir($ffTmp . '/core-assets/assets', 0775, true);
+    file_put_contents($ffTmp . '/core-assets/assets/fm.js', 'console.log(1);');
+    $get = fn (array $q, array $h = []) => withConfig(['fluxfiles.base_path' => $ffTmp . '/core-assets'], fn () => (new FluxFilesController())->asset('fm.js', new Request('GET', $q, $h)));
+    $v = $get(['v' => 'abc123']);
+    assertEqual('public, max-age=31536000, immutable', $v->headers['cache-control'] ?? null, 'immutable with v');
+    $plain = $get([]);
+    assertEqual(200, $plain->getStatusCode(), '200 without validator');
+    $etag = $plain->headers['etag'] ?? '';
+    assertTrue($etag !== '', 'ETag sent');
+    assertEqual('public, max-age=86400', $plain->headers['cache-control'] ?? null, 'revalidating cache');
+    $nm = $get([], ['If-None-Match' => $etag]);
+    assertEqual(304, $nm->getStatusCode(), 'matching If-None-Match -> 304');
+    assertEqual('', (string) $nm->content, '304 has no body');
+    assertEqual(200, $get([], ['If-None-Match' => '"stale"'])->getStatusCode(), 'stale ETag -> 200');
+});
+
 // ── Doctor: web exposure + config drift + fluxfiles:doctor ────────────────
 require_once __DIR__ . '/../src/Doctor.php';
 

@@ -104,7 +104,7 @@ server {
     # Block dotfiles and sensitive paths
     location ~ /\. { deny all; }
     location ~ ^/(\.env|composer\.|vendor/) { deny all; }
-    location /storage/rate_limit.json { deny all; }
+    location /storage/rate_limit { deny all; }   # rate_limit.json + rate_limit.d/ shards
     location /_fluxfiles/ { deny all; }
 }
 ```
@@ -140,7 +140,7 @@ RewriteRule (^|/)_fluxfiles/ - [F,L,NC]
 </FilesMatch>
 
 # Everything under storage/ except uploads/ is server runtime state
-# (rate_limit.json, demo_ip.json, tus/ partial uploads, ssh-sockets/ with
+# (rate_limit.json + rate_limit.d/, demo_ip.json, tus/ partial uploads, ssh-sockets/ with
 # ephemeral BYOB private keys).
 RewriteRule ^storage/(?!uploads/) - [F,L,NC]
 # Dotfiles anywhere (.env, an uploaded .user.ini/.htaccess, .git/…).
@@ -186,6 +186,39 @@ Options -ExecCGI -Includes -Indexes
 </IfModule>
 ```
 
+## Compression
+
+`fm.js` is ~236 KB raw (~57 KB gzipped) and the UI HTML ~219 KB (~34 KB). The
+bundled [`docker/nginx.conf`](../../docker/nginx.conf) enables gzip; on your own
+server turn it on too.
+
+nginx (inside `server { }`; `text/html` is compressed by default):
+
+```nginx
+gzip on;
+gzip_comp_level 6;
+gzip_vary on;
+gzip_min_length 1024;
+gzip_types text/css application/javascript application/json image/svg+xml text/plain;
+```
+
+Apache (`mod_deflate`):
+
+```apache
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript application/json image/svg+xml
+</IfModule>
+```
+
+Also cache `/assets/` for a year with `Cache-Control: public, max-age=31536000,
+immutable`: every asset URL carries a `?v=` content hash, and the lazily loaded
+vendor files (xterm, CodeMirror) reuse fm.js's hash. The HTML itself is sent
+with `no-cache` plus an `ETag` and answers `304` on revalidation (not in demo
+mode, whose page embeds a per-visitor token).
+
+> On Laravel/WordPress hosts the host web server (or CDN) decides compression and
+> static caching; configure it there, FluxFiles does not compress responses itself.
+
 ## Directory Permissions
 
 ```bash
@@ -196,6 +229,7 @@ chown -R www-data:www-data /var/www/fluxfiles/storage/
 chmod -R 755 storage/
 chmod 600 .env
 chmod 600 storage/rate_limit.json   # if exists
+chmod -R go-rwx storage/rate_limit.d # if exists (per-user rate-limit shards)
 ```
 
 `storage/` also holds `tus/` (partial resumable uploads, swept after 24 h). On a

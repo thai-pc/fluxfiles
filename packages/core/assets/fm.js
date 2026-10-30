@@ -15,6 +15,17 @@ const FM_ASSETS_BASE = (function () {
     return '../assets';
 })();
 
+// The ?v= hash fm.js itself was loaded with. Lazy vendor assets reuse it so the
+// long-lived `immutable` cache can't pin a stale xterm/CodeMirror after an
+// upgrade (core bumps it whenever fm.js changes; empty → no query).
+const FM_ASSETS_VER = (function () {
+    try {
+        const src = document.currentScript && document.currentScript.src;
+        const v = src && new URL(src).searchParams.get('v');
+        return v ? '?v=' + encodeURIComponent(v) : '';
+    } catch (e) { return ''; }
+})();
+
 function fluxFilesApp() {
     const LOCALE = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };
 
@@ -514,8 +525,11 @@ function fluxFilesApp() {
                 const initLocale = async () => {
                     if (urlLocale) {
                         await this.switchLocale(urlLocale);
-                    } else {
-                        // Check if server configured a specific locale via FLUXFILES_LOCALE
+                    } else if (!this.i18nReady) {
+                        // Only when the page was NOT server-injected: an injected page
+                        // already carries the resolved locale + messages, so asking
+                        // /api/fm/lang for Content-Language would be a wasted
+                        // round-trip serialised in front of loadFiles().
                         try {
                             const res = await fetch(this.joinUrl('/api/fm/lang'));
                             const serverLocale = res.headers.get('Content-Language') || 'en';
@@ -4541,12 +4555,12 @@ function fluxFilesApp() {
             const base = FM_ASSETS_BASE + '/vendor/xterm';
             const css = (href) => new Promise((res) => {
                 const l = document.createElement('link');
-                l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = res;
+                l.rel = 'stylesheet'; l.href = href + FM_ASSETS_VER; l.onload = res; l.onerror = res;
                 document.head.appendChild(l);
             });
             const js = (src) => new Promise((res, rej) => {
                 const s = document.createElement('script');
-                s.src = src; s.onload = res; s.onerror = rej;
+                s.src = src + FM_ASSETS_VER; s.onload = res; s.onerror = rej;
                 document.head.appendChild(s);
             });
             this._termLoading = (async () => {
@@ -5050,12 +5064,12 @@ function fluxFilesApp() {
             const base = FM_ASSETS_BASE + '/vendor/codemirror';
             const css = (href) => new Promise((res) => {
                 const l = document.createElement('link');
-                l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = res;
+                l.rel = 'stylesheet'; l.href = href + FM_ASSETS_VER; l.onload = res; l.onerror = res;
                 document.head.appendChild(l);
             });
             const js = (src) => new Promise((res, rej) => {
                 const s = document.createElement('script');
-                s.src = src; s.onload = res; s.onerror = rej;
+                s.src = src + FM_ASSETS_VER; s.onload = res; s.onerror = rej;
                 document.head.appendChild(s);
             });
             this._cmLoading = (async () => {
