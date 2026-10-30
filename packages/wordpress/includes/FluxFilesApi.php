@@ -4,14 +4,17 @@ defined('ABSPATH') || exit;
 
 use FluxFiles\ApiException;
 use FluxFiles\AuditLogStorage;
+use FluxFiles\AuditPolicy;
 use FluxFiles\BucketDoctor;
 use FluxFiles\ChunkUploader;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
 use FluxFiles\JwtMiddleware;
+use FluxFiles\MediaEndpoint;
 use FluxFiles\MetadataRepositoryInterface;
 use FluxFiles\QuotaManager;
-use FluxFiles\RateLimiterFileStorage;
+use FluxFiles\RateLimiterFactory;
+use FluxFiles\RateLimiterStorageInterface;
 use FluxFiles\StorageMetadataHandler;
 use FluxFiles\UrlImporter;
 
@@ -34,14 +37,16 @@ class FluxFilesApi
         // web-server rules here too — this is the path every upload goes through.
         FluxFilesPlugin::protectStorage();
         // Key for the tamper-evident audit chain (an option, not the env).
-        if (class_exists(\FluxFiles\AuditChain::class)) {
-            \FluxFiles\AuditChain::configure((string) get_option('fluxfiles_secret', ''));
-        }
+        \FluxFiles\AuditChain::configure((string) get_option('fluxfiles_secret', ''));
 
         // Module engine settings (Settings → FluxFiles → Module engines) live in an
         // option; the paid modules read $_ENV. Seeded here so every REST handler —
         // scan, webhooks, AI, … — sees them before any module runs.
         FluxFilesPlugin::seedModuleEnv();
+        // Core's module gates (FileManagerFactory's virus/DLP/versioning/webhooks wiring,
+        // the public share/intake handlers) read the licence from $_ENV; a WordPress
+        // licence normally lives in an option.
+        FluxFilesPlugin::seedLicenseEnv();
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
         $this->metaRepo = get_option('fluxfiles_storage_backend', 'json') === 'db'
@@ -248,9 +253,7 @@ class FluxFilesApi
         ]));
 
         // SFTP file permissions. SFTP reaches proxy mode two ways: a BYOB sftp disk
-        // in the token (registered in fileManager()) and an operator-configured one,
-        // which is also why /terminal + /git-deploy are proxied — chmod is the same
-        // class of SFTP-only route and was simply never ported.
+        // in the token (registered in fileManager()) and an operator-configured one.
         register_rest_route($ns, $p . '/chmod', [
             [
                 'methods'             => 'GET',
@@ -384,18 +387,6 @@ class FluxFilesApi
             'callback' => [$api, 'handleC2paSign'],
         ]));
 
-        // SSH terminal (command-runner, SFTP disks only; free/core, not a paid module)
-        register_rest_route($ns, $p . '/terminal', array_merge($writeArgs, [
-            'callback' => [$api, 'handleTerminal'],
-        ]));
-
-        // One-click Git deploy (SFTP disks only; free/core, not a paid module) —
-        // target path/branch/hooks come from claims, never the request body
-        // (docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1).
-        register_rest_route($ns, $p . '/git-deploy', array_merge($writeArgs, [
-            'callback' => [$api, 'handleGitDeploy'],
-        ]));
-
         // ── Share + Intake ──────────────────────────────────────────────────
         // Operator side: create/list/revoke, behind the normal JWT + the paid-module
         // gate. The public recipient routes are registered separately below and are
@@ -456,8 +447,7 @@ class FluxFilesApi
         // Gated media stream/img — reached with a per-file signed token in the
         // query string (an <img>/<video> element can't send an Authorization
         // header), same public posture as the share/intake routes above. See
-        // FluxFilesApi::handleStream()/handleImg() (ported from index.php's
-        // handleMediaStream()/handleImageTransform()).
+        // FluxFilesApi::handleStream()/handleImg() (core's shared MediaEndpoint).
         register_rest_route($ns, $p . '/stream', array_merge($public, [
             'methods' => 'GET', 'callback' => [$api, 'handleStream'],
         ]));
@@ -511,7 +501,7 @@ class FluxFilesApi
             'callback' => [$api, 'serveUiHtml'],
         ]));
         // fm.js/fm.css plus the vendored lazy-loaded libraries under
-        // assets/vendor/ (xterm, CodeMirror) — fm.js derives its base from its
+        // assets/vendor/ (CodeMirror) — fm.js derives its base from its
         // own <script src>, which is this route. No '..' can match, and
         // serveUiAsset() re-checks containment with realpath().
         register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
@@ -633,6 +623,12 @@ class FluxFilesApi
                 (string) get_option('fluxfiles_secret', '')
             );
             $this->rateLimit($claims, true);
+            // The attachment hands out the file's clean, stable URL, i.e. the original.
+            // A token that may not download originals (allow_download=false, which a
+            // watermark forces) must not mint one — core's download gate, same code.
+            if (!$claims->allowDownload) {
+                throw new ApiException('Download is not allowed for this token', 403, 'download_forbidden');
+            }
             $fm = $this->fileManager($claims);
 
             // disk allow-list + read perm + scope + system + hidden (core's fileMeta()).
@@ -750,16 +746,8 @@ class FluxFilesApi
             if (FluxFilesAttachments::isUnsafeKey($key)) {
                 throw new ApiException('Access denied: system path', 403, 'system_path');
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
+            $claims->requireDisk($disk);
             $scoped = $claims->scopePath($key);
-            // Explicit, so a hold is honoured even on a core floor whose delete()
-            // predates hold enforcement.
-            $hold = $this->metaRepo->holdBlocking($disk, $scoped);
-            if ($hold !== null) {
-                throw new ApiException('This item is under legal hold and cannot be modified', 403, 'legal_hold_active');
-            }
             if (!$this->diskManager->disk($disk)->fileExists($scoped)) {
                 return false;
             }
@@ -813,7 +801,7 @@ class FluxFilesApi
         $this->lastClaims = null;
         $secret = get_option('fluxfiles_secret', '');
         $auth   = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-        // Remembered so error() can audit a refused (403) request — see auditDenied().
+        // Remembered so error() can audit a refused (403) request — see auditRefusal().
         if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
             return $this->lastClaims = JwtMiddleware::handle($m[1], $secret);
         }
@@ -829,12 +817,21 @@ class FluxFilesApi
             $this->diskManager->registerByobDisk($byobName, $byobConfig);
         }
         $fm = new FileManager($this->diskManager, $claims, $this->metaRepo);
-        $fm->setQuotaManager(new QuotaManager($this->diskManager));
 
-        // Turns on isGatedLocal()/gatedLocalUrl()/imgBaseUrl() inside list() —
-        // unconditional, same as index.php. Without this, list() never emits
-        // img_base/gatedLocal URLs even though stream/img are now routed.
-        $fm->setStreamSecret((string) get_option('fluxfiles_secret', ''));
+        // Quota, stream secret (turns on gated-local / img_base URLs in list()),
+        // optimizer, versioning, and virus/DLP — fail-closed, the module gate lives
+        // inside the callbacks — all wired by core exactly as index.php does.
+        // On-upload AI auto-tag: only for `ai_auto_tag` tokens AND a configured provider
+        // (core's index.php wires it whenever a provider exists; this plugin keeps the
+        // stricter, claim-gated policy).
+        \FluxFiles\FileManagerFactory::wire(
+            $fm,
+            $claims,
+            $this->diskManager,
+            $this->metaRepo,
+            (string) get_option('fluxfiles_secret', ''),
+            $this->aiTagger($claims)
+        );
 
         // WordPress's REST API only ever resolves under /wp-json/{namespace}/… — never
         // at a bare root path the way standalone's/Laravel's /api/fm/* really is at the
@@ -844,153 +841,91 @@ class FluxFilesApi
         // $ns/$p literals, which this must match).
         $fm->setApiBasePath(rest_url('fluxfiles/v1') . '/api/fm');
 
-        // On-upload auto-optimize (FREE/core). Wire the optimizer hook when the token
-        // asks for it (`auto_optimize`) — mirrors index.php's wiring. The module does
-        // the work; FileManager records the savings + renames to .webp.
-        if ($claims->autoOptimize ?? false) {
-            $optimizeModule = new \FluxFiles\OptimizeModule();
-            $fm->setUploadOptimizer(static function (string $bytes, int $quality) use ($optimizeModule) {
-                return $optimizeModule->optimizeBytes($bytes, $quality);
-            });
-        }
-
-        // On-upload AI auto-tag. Wired only when the token asks for it (`ai_auto_tag`)
-        // AND an AI provider is configured server-side — without one this stays a
-        // no-op. FileManager::upload() re-checks $this->aiTagger !== null itself
-        // before calling analyze(), the same gate the manual ai-tag action uses.
-        if ($claims->aiAutoTag) {
-            $aiProvider = get_option('fluxfiles_ai_provider', '');
-            if (!empty($aiProvider)) {
-                $fm->setAiTagger(new \FluxFiles\AiTagger(
-                    $aiProvider,
-                    get_option('fluxfiles_ai_api_key', ''),
-                    get_option('fluxfiles_ai_model', '') ?: null,
-                    get_option('fluxfiles_ai_base_url', '') ?: null
-                ));
-            }
-        }
-
-        // File versioning (paid module). Only the KEEPER (snapshot before overwrite) is
-        // gated on the acting token's `allow_versioning` claim — so the free core keeps
-        // no versions. The purger + mover are housekeeping for history that already
-        // EXISTS, which may belong to another user whose token did carry the claim: a
-        // delete/rename by a token without it must still erase/re-key that history, or
-        // a permanent delete becomes undoable and a re-used path inherits someone
-        // else's versions. So those two are wired whenever installed + licensed.
-        if (\FluxFiles\ModuleRegistry::installed('versioning')
-            && FluxFilesPlugin::license()->licensed('versioning')) {
-            $versioning = new \FluxFiles\Versioning\VersioningModule();
-            $diskManager = $this->diskManager;
-            // The metadata repo lets the module bind history to the file's owner
-            // (finding B2); an older module simply ignores the extra argument.
-            $metaRepo = $this->metaRepo;
-            if ($claims->allowVersioning ?? false) {
-                $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager, $metaRepo) {
-                    $versioning->keep($fs, $key, $claims, $diskManager, $d, $metaRepo);
-                });
-            }
-            // Erase version history on permanent delete, so `/delete` can't be undone
-            // via a restore of a version saved before it — see VersioningModule::purge().
-            $fm->setVersionPurger(static function (string $d, string $key, $fs) use ($versioning, $diskManager) {
-                $versioning->purge($fs, $key, $diskManager, $d);
-            });
-            // Re-key version history on rename/move so it follows the file instead
-            // of being orphaned under the old path's hash. method_exists: an older
-            // installed module predates move() — keep/purge still work without it — and
-            // this adapter may run against a core floor that predates setVersionMover().
-            if (method_exists($versioning, 'move') && method_exists($fm, 'setVersionMover')) {
-                $fm->setVersionMover(static function (string $d, string $from, string $to, $fs) use ($versioning, $diskManager, $metaRepo) {
-                    $versioning->move($fs, $from, $to, $diskManager, $d, $metaRepo);
-                });
-            }
-        }
-
-        // Virus scan (paid module) — this REST proxy handles /upload itself, so without
-        // the wiring a tenant with `allow_virus_scan` would get unscanned files here
-        // while the same token is scanned in standalone. The module gate resolves INSIDE
-        // the callback so reads are unaffected and a missing/unlicensed module surfaces
-        // as 501/402/403 on the upload rather than silently skipping the scan.
-        if (($claims->allowVirusScan ?? false)) {
-            $fm->setVirusScanner(static function (string $localPath) use ($claims): array {
-                /** @var \FluxFiles\Virus\VirusScanModule $virus */
-                $virus = \FluxFiles\ModuleRegistry::require('virus', FluxFilesPlugin::license(), $claims);
-                return $virus->scanPath($localPath);
-            });
-        }
-
-        // DLP / PII scan (paid module) — same "REST proxy handles /upload itself"
-        // reasoning and the same lazy-gate-inside-the-callback contract as above.
-        if (($claims->allowDlpScan ?? false)) {
-            $fm->setDlpScanner(static function (string $localPath, string $name) use ($claims): array {
-                /** @var \FluxFiles\Dlp\DlpModule $dlp */
-                $dlp = \FluxFiles\ModuleRegistry::require('dlp', FluxFilesPlugin::license(), $claims);
-                return $dlp->scanPath($localPath, $claims->dlpEntityTypes, $claims->dlpMinScore);
-            });
-        }
         return $fm;
+    }
+
+    private function aiTagger(\FluxFiles\Claims $claims): ?\FluxFiles\AiTagger
+    {
+        if (!$claims->aiAutoTag) {
+            return null;
+        }
+        $aiProvider = get_option('fluxfiles_ai_provider', '');
+        if (empty($aiProvider)) {
+            return null;
+        }
+        return new \FluxFiles\AiTagger(
+            $aiProvider,
+            get_option('fluxfiles_ai_api_key', ''),
+            get_option('fluxfiles_ai_model', '') ?: null,
+            get_option('fluxfiles_ai_base_url', '') ?: null
+        );
+    }
+
+    /**
+     * The limiter for this install: the JSON file under the storage path, or — in db
+     * mode — the plugin's own table, so rate state lives with the rest of the
+     * bookkeeping instead of on disk (core: RateLimiterFactory::make()). Core's DB
+     * limiter needs PDO + an unprefixed table; WordPress has `$wpdb` and prefixed
+     * tables, hence WpRateLimiterStorage behind the same interface.
+     */
+    private function limiter(int $readLimit, int $writeLimit): RateLimiterStorageInterface
+    {
+        if (get_option('fluxfiles_storage_backend', 'json') === 'db') {
+            // An auto-update does not reliably re-fire activation; make sure the
+            // rate_limits table exists before the first request that needs it.
+            FluxFilesDbSchema::maybeUpgrade();
+            // A table that cannot be used (even after a self-heal) degrades to the file limiter.
+            return new WpRateLimiterStorage($readLimit, $writeLimit, 60, RateLimiterFactory::makeFile(FluxFilesPlugin::storagePath(), $readLimit, $writeLimit, 60));
+        }
+        return RateLimiterFactory::makeFile(FluxFilesPlugin::storagePath(), $readLimit, $writeLimit, 60);
     }
 
     private function rateLimit(\FluxFiles\Claims $claims, bool $isWrite): void
     {
-        $storagePath = FluxFilesPlugin::storagePath();
         // Per-tenant `rate_read`/`rate_write` claims override the server defaults.
-        // `?? 0` tolerates a core older than 0.2.8 (property absent) — degrade to the
-        // RateLimiterFileStorage default rather than warn/fatal on a version mismatch.
-        $readLimit  = ($claims->rateRead ?? 0) > 0 ? $claims->rateRead : 60;
-        $writeLimit = ($claims->rateWrite ?? 0) > 0 ? $claims->rateWrite : 10;
-        $rateLimiter = new RateLimiterFileStorage($storagePath . '/rate_limit.json', $readLimit, $writeLimit);
-        $rateLimiter->check($claims->userId, $isWrite ? 'write' : 'read');
+        $readLimit  = $claims->rateRead > 0 ? $claims->rateRead : 60;
+        $writeLimit = $claims->rateWrite > 0 ? $claims->rateWrite : 10;
+        $this->limiter($readLimit, $writeLimit)->check($claims->userId, $isWrite ? 'write' : 'read');
     }
 
     /**
      * A dedicated per-user bucket on top of rateLimit(), for the routes core gives
-     * their own tighter budget (index.php: `import`, `usage_refresh`). Same file +
-     * window as the generic buckets, keyed by name so it never eats the read/write
-     * budget. Throws ApiException 429 like rateLimit().
+     * their own tighter budget (index.php: `import`, `usage_refresh`). Same window as
+     * the generic buckets, keyed by name so it never eats the read/write budget.
+     * Throws ApiException 429 like rateLimit().
      */
     private function bucketLimit(\FluxFiles\Claims $claims, string $bucket, int $limit): void
     {
         if ($limit <= 0) {
             return;
         }
-        (new RateLimiterFileStorage(FluxFilesPlugin::storagePath() . '/rate_limit.json', $limit, $limit))
-            ->check($claims->userId, $bucket);
+        $this->limiter($limit, $limit)->check($claims->userId, $bucket);
     }
 
     /**
-     * Per-subject rate limit for the two token-authenticated media endpoints.
-     *
-     * `/img` and `/stream` authenticate on a per-file token, not the main JWT, so
-     * there is no Claims to run rateLimit() against — without this an unbounded
-     * loop over `/img`'s width/height/quality/format/dpr axes fills a tenant's
-     * `_variants/` with cache entries it can neither see nor purge. Own bucket,
-     * keyed on the token's `sub`, so it never eats the tenant's API read budget.
-     * Mirrors core's ff_media_rate_limit() in index.php.
-     *
-     * Returns false (429 already emitted) when the caller must stop.
+     * The shared /stream + /img endpoint (core's MediaEndpoint) wired for WordPress:
+     * this install's DiskManager and signing secret, the per-sub limiter below, the
+     * optional nginx X-Accel location, and the site's metadata repo for `audit_reads`.
+     * The subclass only swaps status() for status_header().
      */
-    private function mediaRateLimit(string $sub, string $bucket, int $default): bool
+    private function mediaEndpoint(): MediaEndpoint
     {
-        $limit = (int) apply_filters('fluxfiles_rate_limit_' . $bucket, $default);
-        if ($limit <= 0) {
-            return true; // explicitly disabled by the operator
-        }
-        try {
-            $storagePath = FluxFilesPlugin::storagePath();
-            (new RateLimiterFileStorage($storagePath . '/rate_limit.json', $limit, $limit))
-                ->check($sub !== '' ? $sub : 'anonymous', $bucket);
-            return true;
-        } catch (ApiException $e) {
-            // A limiter that cannot write its own state must not take the endpoint
-            // down with it — only a genuine 429 blocks the request.
-            if ($e->getHttpCode() !== 429) {
-                return true;
-            }
-            status_header(429);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Too many requests';
-            return false;
-        }
+        // Core's defaults (stream 300/min, img 120/min, FLUXFILES_<BUCKET>_RATE_LIMIT),
+        // which the `fluxfiles_rate_limit_{bucket}` filter may still override; <= 0 disables.
+        $limitFor = static function (string $bucket, int $default): int {
+            $name = 'FLUXFILES_' . strtoupper($bucket) . '_RATE_LIMIT';
+            $env = getenv($name);
+            $base = $env !== false && $env !== '' ? (int) $env : (int) ($_ENV[$name] ?? $default);
+            return (int) apply_filters('fluxfiles_rate_limit_' . $bucket, $base);
+        };
+        $xaccel = getenv('FLUXFILES_XACCEL');
+        return new FluxFilesMediaEndpoint(
+            $this->diskManager,
+            (string) get_option('fluxfiles_secret', ''),
+            MediaEndpoint::defaultRateLimit($limitFor, fn (int $limit): RateLimiterStorageInterface => $this->limiter($limit, $limit)),
+            $xaccel !== false ? (string) $xaccel : (string) ($_ENV['FLUXFILES_XACCEL'] ?? ''),
+            $this->metaRepo
+        );
     }
 
     /**
@@ -1035,171 +970,51 @@ class FluxFilesApi
     }
 
     /**
-     * Record an authenticated request refused with a 403 (`access_denied`), the
-     * proxy twin of core's ff_audit_denied(): written to a disk the token CAN use
-     * (a `disk_denied` probe must not write onto that disk), key scoped like every
-     * other entry, or normalized-but-unscoped when the probe is the cross-tenant
-     * path itself (then only an unscoped admin sees it). Best-effort.
+     * Audit an authenticated request that was refused: the 403 `access_denied` line
+     * and the three refused writes (`virus_blocked`, `dlp_blocked`,
+     * `legal_hold_blocked`) — core's AuditPolicy decides entry shape, disk and key, so
+     * this proxy records exactly what index.php does. Best-effort, never throws.
      */
-    private function auditDenied(\FluxFiles\Claims $claims, ?string $code): void
+    private function auditRefusal(\FluxFiles\Claims $claims, ApiException $e): void
     {
         try {
-            $body = json_decode((string) file_get_contents('php://input') ?: '{}', true);
-            $in = (is_array($body) ? $body : []) + $_POST + $_GET;
-            $rawKey = '';
-            foreach (['path', 'key', 'from', 'src_path'] as $k) {
-                if (isset($in[$k]) && is_scalar($in[$k]) && (string) $in[$k] !== '') {
-                    $rawKey = (string) $in[$k];
-                    break;
-                }
-            }
-            $disk = '';
-            foreach (['disk', 'src_disk'] as $k) {
-                if (isset($in[$k]) && is_scalar($in[$k])) {
-                    $disk = (string) $in[$k];
-                    break;
-                }
-            }
+            $body = AuditPolicy::decodeBody((string) file_get_contents('php://input'));
+            $log = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
+            AuditPolicy::recordRefusedWrite($log, $claims, $e, $body, $_POST);
             $route = (string) ($_GET['rest_route'] ?? (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?: ''));
-            $detail = ($code ?? 'forbidden') . ' ' . (string) ($_SERVER['REQUEST_METHOD'] ?? '') . ' ' . $route;
-            if ($disk === '' || !$claims->hasDisk($disk)) {
-                if ($disk !== '') {
-                    $detail .= ' disk=' . $disk;
-                }
-                $disk = $claims->allowedDisks[0] ?? '';
-            }
-            if ($disk === '') {
-                return;
-            }
-            try {
-                $key = $rawKey === '' ? '' : $claims->scopePath($rawKey);
-            } catch (ApiException $scopeErr) {
-                $key = $claims->normalizeKey($rawKey);
-            }
-            // writeAudit(), not logAudit(): $key is already scoped — or deliberately
-            // left unscoped for a cross-tenant probe, which must not be re-prefixed.
-            $this->writeAudit($claims, 'access_denied', $disk, $key, mb_substr($detail, 0, 500));
-        } catch (\Throwable $e) {
-            // Auditing must never turn a clean 403 into a 500.
-        }
-    }
-
-    /**
-     * The three refused writes core's index.php records even though the write
-     * itself failed: `virus_detected` → `virus_blocked`, `pii_detected` →
-     * `dlp_blocked` (detail = entity-TYPE names only, never matched text),
-     * `legal_hold_active` → `legal_hold_blocked` (detail = hold id). Key rules are
-     * core's ff_blocked_write_key(): an editor save names the file in the body
-     * `path`, an upload names the folder in `$_POST['path']` and the file in the
-     * error `name`, an extract entry stays relative. Best-effort.
-     *
-     * @param array<string,mixed> $params
-     */
-    private function auditRefusedWrite(\FluxFiles\Claims $claims, ?string $code, array $params): void
-    {
-        $action = [
-            'virus_detected'    => 'virus_blocked',
-            'pii_detected'      => 'dlp_blocked',
-            'legal_hold_active' => 'legal_hold_blocked',
-        ][(string) $code] ?? null;
-        if ($action === null) {
-            return;
-        }
-        try {
-            $json = json_decode((string) file_get_contents('php://input') ?: '{}', true);
-            $body = is_array($json) ? $json : [];
-            $in = $body + $_POST + $_GET;
-            $disk = '';
-            foreach (['disk', 'src_disk'] as $k) {
-                if (isset($in[$k]) && is_scalar($in[$k]) && (string) $in[$k] !== '') {
-                    $disk = (string) $in[$k];
-                    break;
-                }
-            }
-            if ($disk === '' || !$claims->hasDisk($disk)) {
-                $disk = $claims->allowedDisks[0] ?? 'local';
-            }
-            $detail = null;
-            if ($action === 'legal_hold_blocked') {
-                $rel = '';
-                foreach (['path', 'from', 'src_path'] as $k) {
-                    if (isset($body[$k]) && is_scalar($body[$k]) && (string) $body[$k] !== '') {
-                        $rel = (string) $body[$k];
-                        break;
-                    }
-                }
-                // trash/purge carries only a trash_id: fall back to the tenant-relative
-                // path FileManager put in the exception; scopePath() is idempotent.
-                if ($rel === '') {
-                    $rel = (string) ($params['path'] ?? '');
-                }
-                $detail = (string) ($params['hold_id'] ?? '');
-            } else {
-                $name = (string) ($params['name'] ?? $params['entry'] ?? '');
-                if (!isset($params['entry']) && is_string($body['path'] ?? null) && $body['path'] !== '') {
-                    $rel = $body['path'];
-                } elseif (!isset($params['entry']) && is_string($_POST['path'] ?? null) && trim($_POST['path'], '/') !== '') {
-                    $rel = trim($_POST['path'], '/') . '/' . $name;
-                } else {
-                    $rel = $name;
-                }
-                if ($action === 'dlp_blocked') {
-                    $detail = implode(',', array_map('strval', (array) ($params['entities'] ?? [])));
-                }
-            }
-            $this->logAudit($claims, $action, $disk, $rel, $detail);
-        } catch (\Throwable $e) {
+            AuditPolicy::recordDenied($log, $claims, $e, (string) ($_SERVER['REQUEST_METHOD'] ?? ''), $route, $body, $_POST, $_GET);
+        } catch (\Throwable $ignored) {
             // Auditing must never turn a clean 4xx into a 500.
         }
     }
 
     /**
-     * The `X-Accel-Redirect` target for a storage key (core's ff_xaccel_uri(), inlined:
-     * the adapter floor predates it). nginx URL-DECODES this header, so a raw key breaks
-     * for a `%` (404) or `?`/`#` (cut off as query/fragment): each segment is
-     * percent-encoded, the `/` separators stay.
-     */
-    public static function xaccelUri(string $base, string $path): string
-    {
-        $segments = array_map('rawurlencode', explode('/', ltrim($path, '/')));
-        return rtrim($base, '/') . '/' . implode('/', $segments);
-    }
-
-    /**
-     * `audit_reads` for /stream (core's ff_audit_stream_read()): only the first
-     * request of a playback — no Range, or one starting at byte 0. Best-effort.
+     * The audit line for a successful mutating request — core's AuditPolicy (action
+     * from the core route name, tenant-scoped key, disk, detail), so this proxy and
+     * index.php can never disagree on what a write is recorded as.
      *
-     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $body decoded JSON body ([] for multipart)
+     * @param mixed $data the operation result
+     * @param array<string,mixed> $post multipart form fields
      */
-    private function auditStreamRead(array $scope, \WP_REST_Request $request): void
+    private function auditOk(\FluxFiles\Claims $claims, string $coreRoute, array $body, $data = null, array $post = []): void
     {
-        if (empty($scope['auditRead'])) {
-            return;
-        }
-        $range = trim((string) ($request->get_header('range') ?? ''));
-        if ($range !== '' && !preg_match('/^bytes=0-/', $range)) {
-            return;
-        }
-        try {
-            (new AuditLogStorage($this->metaRepo, [(string) $scope['disk']]))
-                ->log((string) $scope['sub'], 'stream_read', (string) $scope['disk'], (string) $scope['path']);
-        } catch (\Throwable $e) {
-        }
+        $e = AuditPolicy::successEntry('/api/fm/' . $coreRoute, $body, $post, $claims, $data);
+        $this->writeAudit($claims, $e['action'], $e['disk'], $e['key'], $e['detail']);
     }
 
     /**
-     * Fire a webhook for a file-changing action (paid module). Gated the same
-     * 3-layer way index.php's inline wiring does it (installed + licensed +
-     * `allow_webhooks` + a configured `webhook_url`) — best-effort, never throws
-     * into the request path (WebhooksModule::dispatch swallows its own failures).
+     * Fire a webhook for a file-changing action (paid module): FileManagerFactory
+     * decides whether the dispatcher exists (installed + licensed + `allow_webhooks`
+     * + a configured `webhook_url`). Best-effort, never throws into the request path
+     * (WebhooksModule::dispatch swallows its own failures).
      *
      * @param array<string,mixed> $context
      */
     private function dispatchWebhook(\FluxFiles\Claims $claims, string $event, array $context, bool $scopePath = true): void
     {
-        if (!$claims->allowWebhooks || $claims->webhookUrl === ''
-            || !\FluxFiles\ModuleRegistry::installed('webhooks')
-            || !FluxFilesPlugin::license()->licensed('webhooks')) {
+        $dispatch = \FluxFiles\FileManagerFactory::webhookDispatcher($claims, (string) get_option('fluxfiles_secret', ''));
+        if ($dispatch === null) {
             return;
         }
         // Core sends the scoped audit key as `path`; most callers here pass the
@@ -1207,8 +1022,7 @@ class FluxFilesApi
         if ($scopePath && isset($context['path']) && is_string($context['path'])) {
             $context['path'] = $this->auditKey($claims, $context['path']);
         }
-        $secret = (string) get_option('fluxfiles_secret', '');
-        (new \FluxFiles\Webhooks\WebhooksModule())->dispatch($claims, $secret, $event, $context);
+        $dispatch($event, $context);
     }
 
     /**
@@ -1221,12 +1035,9 @@ class FluxFilesApi
 
     private function error(string $message, int $status = 400, ?string $code = null, array $params = []): \WP_REST_Response
     {
-        if ($this->lastClaims !== null) {
-            $this->auditRefusedWrite($this->lastClaims, $code, $params);
-        }
-        // legal_hold_active already has its own `legal_hold_blocked` line (core does the same).
-        if ($status === 403 && $this->lastClaims !== null && $code !== 'legal_hold_active') {
-            $this->auditDenied($this->lastClaims, $code);
+        if ($this->lastClaims !== null
+            && ($status === 403 || in_array($code, ['virus_detected', 'pii_detected', 'legal_hold_active'], true))) {
+            $this->auditRefusal($this->lastClaims, new ApiException($message, $status, $code, $params));
         }
         // Forward the core's error_code + error_params so the embedded UI can show a
         // LOCALISED message (it maps `error.<code>` via i18n). Without these the UI
@@ -1282,7 +1093,6 @@ class FluxFilesApi
                 $request->get_param('path') ?? '',
                 max(0, (int) $q('limit', '0')),
                 $q('cursor'),
-                // Server-side sort/filter (core >= 0.2.107); an older core ignores them.
                 $q('sort'),
                 $q('order', 'asc'),
                 $q('type', 'all')
@@ -1315,12 +1125,8 @@ class FluxFilesApi
 
             // The uploaded file's key (core's multipart fallback), not the target dir.
             $uploadedKey = (string) ($result['key'] ?? ($request->get_param('path') ?? ''));
-            $this->logAudit(
-                $claims,
-                'upload',
-                $request->get_param('disk') ?? 'local',
-                $uploadedKey
-            );
+            // Multipart: the disk is a form field, the key comes from the result.
+            $this->auditOk($claims, 'upload', [], $result, ['disk' => (string) ($request->get_param('disk') ?? 'local')]);
             $this->dispatchWebhook($claims, 'upload', [
                 'disk' => $request->get_param('disk') ?? 'local',
                 'path' => $uploadedKey,
@@ -1349,7 +1155,7 @@ class FluxFilesApi
             }
 
             $result = $fm->delete($disk, $path);
-            $this->logAudit($claims, 'delete', $disk, $path);
+            $this->auditOk($claims, 'delete', $body, $result);
             $this->dispatchWebhook($claims, 'delete', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -1375,7 +1181,7 @@ class FluxFilesApi
             }
 
             $result = $fm->rename($disk, $path, $name);
-            $this->logAudit($claims, 'rename', $disk, $path);
+            $this->auditOk($claims, 'rename', $body, $result);
             $this->dispatchWebhook($claims, 'rename', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -1401,7 +1207,7 @@ class FluxFilesApi
             }
 
             $result = $fm->move($disk, $from, $to);
-            $this->logAudit($claims, 'move', $disk, $from);
+            $this->auditOk($claims, 'move', $body, $result);
             $this->dispatchWebhook($claims, 'move', ['disk' => $disk, 'path' => $from, 'name' => basename($from)]);
 
             return $this->ok($result);
@@ -1427,7 +1233,7 @@ class FluxFilesApi
             }
 
             $result = $fm->copy($disk, $from, $to);
-            $this->logAudit($claims, 'copy', $disk, $from);
+            $this->auditOk($claims, 'copy', $body, $result);
             $this->dispatchWebhook($claims, 'copy', ['disk' => $disk, 'path' => $from, 'name' => basename($from)]);
 
             return $this->ok($result);
@@ -1452,7 +1258,7 @@ class FluxFilesApi
             }
 
             $result = $fm->mkdir($disk, $path);
-            $this->logAudit($claims, 'mkdir', $disk, $path);
+            $this->auditOk($claims, 'mkdir', $body, $result);
             $this->dispatchWebhook($claims, 'mkdir', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -1470,10 +1276,8 @@ class FluxFilesApi
             // must not be able to make the server request URLs at all, and the fetch
             // gets its own tighter bucket (`import_rate_limit` claim, default 10/min)
             // so it can't run at the generic upload rate.
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
-            $importLimit = ($claims->importRateLimit ?? 0) > 0
+            $claims->requirePerm('write');
+            $importLimit = $claims->importRateLimit > 0
                 ? (int) $claims->importRateLimit
                 : (int) apply_filters('fluxfiles_import_rate_limit', 10);
             $this->bucketLimit($claims, 'import', $importLimit);
@@ -1522,7 +1326,7 @@ class FluxFilesApi
             }
 
             $result = $fm->crossCopy($srcDisk, $srcPath, $dstDisk, $dstPath);
-            $this->logAudit($claims, 'cross_copy', $srcDisk, $srcPath);
+            $this->auditOk($claims, 'cross-copy', $body, $result);
             $this->dispatchWebhook($claims, 'cross_copy', ['disk' => $srcDisk, 'path' => $srcPath, 'name' => basename($srcPath)]);
 
             return $this->ok($result);
@@ -1549,7 +1353,7 @@ class FluxFilesApi
             }
 
             $result = $fm->crossMove($srcDisk, $srcPath, $dstDisk, $dstPath);
-            $this->logAudit($claims, 'cross_move', $srcDisk, $srcPath);
+            $this->auditOk($claims, 'cross-move', $body, $result);
             $this->dispatchWebhook($claims, 'cross_move', ['disk' => $srcDisk, 'path' => $srcPath, 'name' => basename($srcPath)]);
 
             return $this->ok($result);
@@ -1586,7 +1390,7 @@ class FluxFilesApi
                 (int) $height,
                 $body['save_path'] ?? null
             );
-            $this->logAudit($claims, 'crop', $disk, $path);
+            $this->auditOk($claims, 'crop', $body, $result);
             $this->dispatchWebhook($claims, 'crop', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -1627,7 +1431,7 @@ class FluxFilesApi
             }
             $dest = isset($body['dest']) && $body['dest'] !== '' ? (string) $body['dest'] : null;
             $result = $fm->applyWatermark((string) ($body['disk'] ?? 'local'), $path, $wm, $dest);
-            $this->logAudit($claims, 'watermark', (string) ($body['disk'] ?? 'local'), $path);
+            $this->auditOk($claims, 'watermark', $body, $result);
             $this->dispatchWebhook($claims, 'watermark', ['disk' => (string) ($body['disk'] ?? 'local'), 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -1650,7 +1454,7 @@ class FluxFilesApi
             }
             $disk = (string) ($body['disk'] ?? 'local');
             $result = $fm->removeWatermark($disk, $path);
-            $this->logAudit($claims, 'watermark_remove', $disk, $path);
+            $this->auditOk($claims, 'watermark/remove', $body, $result);
             $this->dispatchWebhook($claims, 'watermark_remove', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -1691,7 +1495,7 @@ class FluxFilesApi
             }
 
             $result = $fm->aiTag($disk, $path);
-            $this->logAudit($claims, 'ai_tag', $disk, $path);
+            $this->auditOk($claims, 'ai-tag', $body, $result);
             $this->dispatchWebhook($claims, 'ai_tag', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -1789,12 +1593,8 @@ class FluxFilesApi
             if (!$disk || !$key) {
                 throw new ApiException('Missing disk or key parameter', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (!$claims->hasPerm('read')) {
-                throw new ApiException('Permission denied: read', 403, 'permission_denied');
-            }
+            $claims->requireDisk($disk);
+            $claims->requirePerm('read');
             // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
             // internal detail), so a prefixed tenant used to get 403 path_denied on every
             // metadata read/save/delete. scopePath() prefixes it — idempotent for an
@@ -1823,12 +1623,8 @@ class FluxFilesApi
             if (!$disk || !$key) {
                 throw new ApiException('Missing disk or key', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
+            $claims->requireDisk($disk);
+            $claims->requirePerm('write');
             // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
             // internal detail), so a prefixed tenant used to get 403 path_denied on every
             // metadata read/save/delete. scopePath() prefixes it — idempotent for an
@@ -1870,12 +1666,8 @@ class FluxFilesApi
             if (!$disk || !$key) {
                 throw new ApiException('Missing disk or key', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
+            $claims->requireDisk($disk);
+            $claims->requirePerm('write');
             // The UI sends the RELATIVE key list() handed it (the tenant prefix is an
             // internal detail), so a prefixed tenant used to get 403 path_denied on every
             // metadata read/save/delete. scopePath() prefixes it — idempotent for an
@@ -1908,12 +1700,8 @@ class FluxFilesApi
             if (!$query) {
                 throw new ApiException('Missing search query', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (!$claims->hasPerm('read')) {
-                throw new ApiException('Permission denied: read', 403, 'permission_denied');
-            }
+            $claims->requireDisk($disk);
+            $claims->requirePerm('read');
 
             $rows = $this->metaRepo->search(
                 $disk,
@@ -1942,12 +1730,8 @@ class FluxFilesApi
             if (!$query) {
                 throw new ApiException('Missing search query', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (!$claims->hasPerm('read')) {
-                throw new ApiException('Permission denied: read', 403, 'permission_denied');
-            }
+            $claims->requireDisk($disk);
+            $claims->requirePerm('read');
 
             $rows = $this->metaRepo->searchFolders(
                 $disk,
@@ -1978,8 +1762,8 @@ class FluxFilesApi
                 $request->get_param('disk') ?? 'local',
                 (string) ($request->get_param('path') ?? '')
             );
-            // Opt-in read audit (`audit_reads`). `?? false` keeps an older core working.
-            if ($claims->auditReads ?? false) {
+            // Opt-in read audit (`audit_reads`).
+            if ($claims->auditReads) {
                 $this->logAuditQuiet($claims, 'content_read', (string) ($request->get_param('disk') ?? 'local'), $claims->scopePath((string) ($request->get_param('path') ?? '')));
             }
             return $this->ok($content);
@@ -2001,7 +1785,7 @@ class FluxFilesApi
                 (string) ($body['path'] ?? ''),
                 (string) ($body['content'] ?? '')
             );
-            $this->logAudit($claims, 'content_update', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->auditOk($claims, 'content', $body, $result);
             $this->dispatchWebhook($claims, 'content_update', [
                 'disk' => (string) ($body['disk'] ?? 'local'),
                 'path' => (string) ($body['path'] ?? ''),
@@ -2030,7 +1814,7 @@ class FluxFilesApi
                 (string) ($body['path'] ?? ''),
                 isset($body['dest']) ? (string) $body['dest'] : null
             );
-            $this->logAudit($claims, 'extract', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->auditOk($claims, 'extract', $body, $result);
             $this->dispatchWebhook($claims, 'extract', [
                 'disk' => (string) ($body['disk'] ?? 'local'),
                 'path' => (string) ($body['path'] ?? ''),
@@ -2069,14 +1853,12 @@ class FluxFilesApi
             // then audit the bulk download (the classic exfiltration shape) before
             // any byte is sent — core does the same.
             $manifest = $fm->zipManifest($disk, $paths);
-            $names = array_map(static fn ($e) => (string) $e['key'], $manifest['entries'] ?? []);
             $this->logAuditQuiet(
                 $claims,
                 'zip_download',
                 $disk,
                 $claims->scopePath((string) ($paths[0] ?? '')),
-                mb_substr((int) ($manifest['count'] ?? 0) . ' files, ' . (int) ($manifest['total'] ?? 0) . ' bytes: '
-                    . implode(', ', array_slice($names, 0, 20)) . (count($names) > 20 ? ', …' : ''), 0, 1000)
+                AuditPolicy::zipDetail($manifest)
             );
 
             // WP has already sent no body of its own, but it buffers — drop that so
@@ -2087,8 +1869,8 @@ class FluxFilesApi
             $fm->streamZip($disk, $paths, $name);
             exit;
         } catch (ApiException $e) {
-            if ($e->getHttpCode() === 403 && $this->lastClaims !== null && $e->getErrorCode() !== 'legal_hold_active') {
-                $this->auditDenied($this->lastClaims, $e->getErrorCode());
+            if ($e->getHttpCode() === 403 && $this->lastClaims !== null) {
+                $this->auditRefusal($this->lastClaims, $e);
             }
             status_header($e->getHttpCode());
             wp_send_json(['data' => null, 'error' => $e->getMessage(),
@@ -2098,8 +1880,7 @@ class FluxFilesApi
 
     /**
      * Read the Unix mode of one file on an SFTP disk. SFTP is reachable in proxy
-     * mode via a BYOB sftp disk in the token (see fileManager()), which is the same
-     * reason /terminal and /git-deploy are proxied.
+     * mode via a BYOB sftp disk in the token (see fileManager()).
      */
     public function handleGetChmod(\WP_REST_Request $request): \WP_REST_Response
     {
@@ -2166,7 +1947,7 @@ class FluxFilesApi
             }
 
             $result = $fm->trash((string) $disk, (string) $path);
-            $this->logAudit($claims, 'trash', (string) $disk, (string) $path);
+            $this->auditOk($claims, 'trash', $body, $result);
             $this->dispatchWebhook($claims, 'trash', ['disk' => (string) $disk, 'path' => (string) $path, 'name' => basename((string) $path)]);
 
             return $this->ok($result);
@@ -2306,9 +2087,6 @@ class FluxFilesApi
             // generic 60/min read one (index.php `usage_refresh`).
             $this->bucketLimit($claims, 'usage_refresh', 2);
             $fm = $this->fileManager($claims);
-            if (!method_exists($fm, 'findDuplicates')) {
-                throw new ApiException('The duplicate finder needs a newer FluxFiles core', 501, 'not_found');
-            }
             return $this->ok($fm->findDuplicates(
                 (string) ($request->get_param('disk') ?: 'local'),
                 max(1, min(200, (int) ($request->get_param('limit') ?: 50)))
@@ -2327,13 +2105,9 @@ class FluxFilesApi
             $disk = (string) ($request->get_param('disk') ?? 'local');
             // QuotaManager has no disk ACL of its own and DiskManager builds any
             // configured disk regardless of claims, so the allowlist is enforced
-            // here — same gate order as handleSearch()/handleGitDeploy().
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (!$claims->hasPerm('read')) {
-                throw new ApiException('Permission denied: read', 403, 'permission_denied');
-            }
+            // here — same gate order as handleSearch().
+            $claims->requireDisk($disk);
+            $claims->requirePerm('read');
             $quotaManager = new QuotaManager($this->diskManager);
             $top = $claims->usageTopFoldersCount > 0 ? $claims->usageTopFoldersCount : 10;
             $depth = $claims->usageFolderDepth > 0 ? $claims->usageFolderDepth : 1;
@@ -2348,7 +2122,7 @@ class FluxFilesApi
                 $this->bucketLimit($claims, 'usage_refresh', 2);
             }
             $cacheKey = 'fluxfiles_usage_' . md5($disk . '|' . $claims->pathPrefix . '|' . $top . '|' . $depth);
-            $ttl = ($claims->usageCacheTtl ?? 0) > 0 ? (int) $claims->usageCacheTtl : 900;
+            $ttl = $claims->usageCacheTtl > 0 ? (int) $claims->usageCacheTtl : 900;
             $cached = $refresh ? false : get_transient($cacheKey);
             if (is_array($cached) && isset($cached['at'], $cached['breakdown']) && is_array($cached['breakdown'])) {
                 $breakdown = $cached['breakdown'];
@@ -2495,10 +2269,7 @@ class FluxFilesApi
         // shared hosting has no env to put it in), so without this every recipient of a
         // share link / upload portal got `402 license_required` on a fully licensed
         // site, and a portal upload's virus/DLP scan (also fromEnv) refused the file.
-        $licenseKey = FluxFilesPlugin::licenseKey();
-        if ($licenseKey !== '') {
-            $_ENV['FLUXFILES_LICENSE_KEY'] = $licenseKey;
-        }
+        FluxFilesPlugin::seedLicenseEnv();
         // Same for the module engine settings (portal uploads run virus/DLP scans,
         // share/intake dispatch webhooks): a real env var still wins.
         FluxFilesPlugin::seedModuleEnv();
@@ -2535,7 +2306,7 @@ class FluxFilesApi
             $module = new \FluxFiles\OptimizeModule();
             $body = $this->body($request);
             $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
-            $this->logAudit($claims, 'optimize', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->auditOk($claims, 'optimize', $body, $result);
             $this->dispatchWebhook($claims, 'optimize', [
                 'disk' => (string) ($body['disk'] ?? 'local'),
                 'path' => (string) ($body['path'] ?? ''),
@@ -2611,7 +2382,7 @@ class FluxFilesApi
             $path = (string) ($body['path'] ?? '');
             $versionId = (string) ($body['version_id'] ?? '');
             $result = $module->restore($fm, $this->diskManager, $claims, $disk, $path, $versionId, $this->metaRepo);
-            $this->logAudit($claims, 'version_restore', $disk, $path, $versionId);
+            $this->auditOk($claims, 'versions/restore', $body, $result);
             $this->dispatchWebhook($claims, 'version_restore', ['disk' => $disk, 'path' => $path, 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -2634,7 +2405,7 @@ class FluxFilesApi
             $module = \FluxFiles\ModuleRegistry::require('ai', FluxFilesPlugin::license(), $claims);
             $body = $this->body($request);
             $result = $module->run($fm, $this->diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
-            $this->logAudit($claims, 'ai_vision', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->auditOk($claims, 'ai-vision', $body, $result);
             $this->dispatchWebhook($claims, 'ai_vision', [
                 'disk' => (string) ($body['disk'] ?? 'local'),
                 'path' => (string) ($body['path'] ?? ''),
@@ -2657,16 +2428,12 @@ class FluxFilesApi
             $claims = $this->claims();
             $this->rateLimit($claims, true);
             $fm = $this->fileManager($claims);
-            if (!method_exists($fm, 'scanForViruses')) {
-                throw new ApiException('On-demand virus scan needs a newer FluxFiles core', 501, 'virus_unavailable');
-            }
             $virus = \FluxFiles\ModuleRegistry::require('virus', FluxFilesPlugin::license(), $claims);
             $body = $this->body($request);
             $disk = (string) ($body['disk'] ?? 'local');
             $path = (string) ($body['path'] ?? '');
             $result = $fm->scanForViruses($disk, $path, static fn (string $p): array => $virus->scanPath($p));
-            $this->logAudit($claims, 'virus_scan', $disk, $claims->scopePath($path),
-                !empty($result['clean']) ? 'clean' : 'infected: ' . (string) ($result['threat'] ?? 'unknown'));
+            $this->auditOk($claims, 'virus/scan', $body, $result);
             $this->dispatchWebhook($claims, 'virus_scan', ['disk' => $disk, 'path' => $claims->scopePath($path), 'name' => basename($path)]);
 
             return $this->ok($result);
@@ -2685,7 +2452,7 @@ class FluxFilesApi
             $module = \FluxFiles\ModuleRegistry::require('ocr', FluxFilesPlugin::license(), $claims);
             $body = $this->body($request);
             $result = $module->run($fm, $this->diskManager, $claims, $body);
-            $this->logAudit($claims, 'ocr', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->auditOk($claims, 'ocr', $body, $result);
             $this->dispatchWebhook($claims, 'ocr', [
                 'disk' => (string) ($body['disk'] ?? 'local'),
                 'path' => (string) ($body['path'] ?? ''),
@@ -2761,7 +2528,7 @@ class FluxFilesApi
             $module = \FluxFiles\ModuleRegistry::require('c2pa', FluxFilesPlugin::license(), $claims);
             $body = $this->body($request);
             $result = $module->sign($fm, $this->diskManager, $claims, $body);
-            $this->logAudit($claims, 'c2pa_sign', (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''));
+            $this->auditOk($claims, 'c2pa/sign', $body, $result);
             $this->dispatchWebhook($claims, 'c2pa_sign', [
                 'disk' => (string) ($body['disk'] ?? 'local'),
                 'path' => (string) ($body['path'] ?? ''),
@@ -2774,450 +2541,53 @@ class FluxFilesApi
         }
     }
 
-    /**
-     * SSH terminal (command-runner) — SFTP disks only. Free/core, not a
-     * ModuleRegistry module. Mirrors index.php's /api/fm/terminal gate order
-     * exactly: server kill-switch, allow_terminal claim, write perm, disk ACL,
-     * driver check, dangerous-command double-confirm, then run.
-     */
-    public function handleTerminal(\WP_REST_Request $request): \WP_REST_Response
-    {
-        try {
-            if ((getenv('FLUXFILES_TERMINAL_DISABLED') ?: '') === 'true') {
-                throw new ApiException('The terminal is disabled on this server', 403, 'terminal_disabled');
-            }
-            $claims = $this->claims();
-            if (!$claims->allowTerminal) {
-                throw new ApiException('Terminal access is not allowed', 403, 'terminal_forbidden');
-            }
-            $this->rateLimit($claims, true);
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
-            $body = $this->body($request);
-            $disk = (string) ($body['disk'] ?? '');
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (($this->diskManager->config($disk)['driver'] ?? '') !== 'sftp') {
-                throw new ApiException('The terminal only works on an SFTP disk', 400, 'terminal_unsupported');
-            }
-            $cmd = trim((string) ($body['cmd'] ?? ''));
-            if ($cmd === '') {
-                throw new ApiException('Missing command', 400, 'missing_param');
-            }
-            $confirmOff = (getenv('FLUXFILES_TERMINAL_CONFIRM') ?: '') === 'false';
-            if (!$confirmOff && empty($body['confirm']) && \FluxFiles\SshTerminal::isDangerous($cmd)) {
-                throw new ApiException('This command looks dangerous — confirm to run it', 409, 'terminal_confirm_required');
-            }
-            [$conn, $root] = $this->diskManager->sftpConnection($disk);
-            $cwd = \FluxFiles\SshTerminal::resolveCwd((string) ($body['cwd'] ?? ''), $root);
-            $timeout = (int) (getenv('FLUXFILES_TERMINAL_TIMEOUT') ?: 30);
-            $result = \FluxFiles\SshTerminal::run($conn, $cmd, $cwd, $timeout);
-            if (empty($result['shell_ok'])) {
-                throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
-            }
-            $this->logAudit($claims, 'terminal', $disk, '', $cmd);
-            $this->dispatchWebhook($claims, 'terminal', ['disk' => $disk, 'path' => '', 'name' => '']);
-
-            return $this->ok($result);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
-        }
-    }
-
-    /**
-     * One-click Git deploy — SFTP disks only. Free/core, not a ModuleRegistry
-     * module. Mirrors index.php's /api/fm/git-deploy gate order exactly: server
-     * kill-switch, allow_git_deploy claim, write perm, disk ACL, driver check,
-     * unconfigured-path check, then run. Target path/branch/hooks come from
-     * claims only — the request body carries at most `disk` — per
-     * docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1. No dedicated rate-limit bucket
-     * here (this plugin has no per-action bucket precedent — see handleTerminal()/
-     * handleImportUrl() — so it reuses the generic write bucket like everything else).
-     */
-    public function handleGitDeploy(\WP_REST_Request $request): \WP_REST_Response
-    {
-        try {
-            if ((getenv('FLUXFILES_GIT_DEPLOY_DISABLED') ?: '') === 'true') {
-                throw new ApiException('Git deploy is disabled on this server', 403, 'git_deploy_disabled');
-            }
-            $claims = $this->claims();
-            if (!$claims->allowGitDeploy) {
-                throw new ApiException('Git deploy is not allowed', 403, 'git_deploy_forbidden');
-            }
-            $this->rateLimit($claims, true);
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
-            $body = $this->body($request);
-            $disk = (string) ($body['disk'] ?? '');
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (($this->diskManager->config($disk)['driver'] ?? '') !== 'sftp') {
-                throw new ApiException('Git deploy only works on an SFTP disk', 400, 'terminal_unsupported');
-            }
-            if ($claims->gitDeployPath === '') {
-                throw new ApiException('git_deploy_path claim is not configured for this token', 400, 'git_deploy_unconfigured');
-            }
-            [$conn, $root] = $this->diskManager->sftpConnection($disk);
-            $path = \FluxFiles\SshTerminal::resolveCwd($claims->gitDeployPath, $root);
-            $timeout = (int) (getenv('FLUXFILES_GIT_DEPLOY_TIMEOUT') ?: 120);
-            $result = \FluxFiles\GitDeploy::run($conn, $path, $claims->gitDeployBranch, $claims->gitDeployHooks, $timeout);
-            if (empty($result['shell_ok'])) {
-                throw new ApiException('This host does not allow a shell (SFTP-only)', 400, 'terminal_no_shell');
-            }
-            if (!empty($result['locked'])) {
-                throw new ApiException('A deploy is already in progress for this repo', 409, 'git_deploy_in_progress');
-            }
-            if (!empty($result['unsafe_config'])) {
-                throw new ApiException(
-                    'The repository\'s own git config contains a command-execution setting and was refused',
-                    409,
-                    'git_deploy_unsafe_repo'
-                );
-            }
-            $detail = $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '');
-            $this->logAudit($claims, 'git_deploy', $disk, '', $detail);
-            $this->dispatchWebhook($claims, 'git_deploy', ['disk' => $disk, 'path' => '', 'name' => '']);
-
-            return $this->ok($result);
-        } catch (ApiException $e) {
-            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
-        }
-    }
-
     // ── Gated media stream / on-demand image transform (free/core) ────────────
     //
-    // Both are ported from core's index.php handleMediaStream()/handleImageTransform()
-    // almost verbatim, using this plugin's own DiskManager/disk config instead of a
-    // fresh one built from core's config/disks.php file. Registered PUBLIC (see
-    // registerRoutes()'s `__return_true` block) — the <img>/<video> element carries
-    // its own short-lived, single-file StreamToken/ImageToken in the query string,
-    // not a WordPress session or the main JWT.
-    //
-    // Watermark-overlay resolution (ff_resolve_watermark() in index.php) is
-    // intentionally NOT ported: ImageToken::mint() only embeds a `wm` scope when
-    // `watermark_enabled` is truthy, and this plugin never forwards that claim
-    // (see docs/guides/FEATURES.md — overlay preview stays a core-standalone/embed-only
-    // feature), so a WordPress-minted ImageToken never carries one.
+    // Both are core's shared MediaEndpoint (the same class index.php serves them
+    // with), fed this plugin's DiskManager/secret/limiter — see mediaEndpoint(). It
+    // emits the whole response (status, headers, bytes), so these just exit after it.
+    // Registered PUBLIC (see registerRoutes()'s `__return_true` block) — the
+    // <img>/<video> element carries its own short-lived, single-file
+    // StreamToken/ImageToken in the query string, not a WordPress session or the
+    // main JWT. Direct header() calls from the rate limiter (Retry-After) and
+    // RangeStreamer are fine here: nothing has been output before we exit, and the
+    // REST server has not sent its own headers yet.
 
+    /** A request parameter as a string; a non-scalar (`?disk[]=x`) falls back to $default. */
     private function strParam(\WP_REST_Request $request, string $key, string $default = ''): string
     {
         $v = $request->get_param($key);
         return is_scalar($v) ? (string) $v : $default;
     }
 
-    /** Snap a requested quality to the nearest allowed step (bounds cache variants). */
-    private function snapQuality($raw): int
+    /** The `Range` / `Accept` request headers MediaEndpoint reads. */
+    private function mediaHeaders(\WP_REST_Request $request): array
     {
-        $allowedSteps = [60, 75, 80, 90];
-        $q = (int) $raw;
-        if ($q <= 0) {
-            return 80;
-        }
-        $best = 80;
-        $bestDiff = PHP_INT_MAX;
-        foreach ($allowedSteps as $allowed) {
-            $d = abs($allowed - $q);
-            if ($d < $bestDiff) {
-                $bestDiff = $d;
-                $best = $allowed;
-            }
-        }
-        return $best;
-    }
-
-    /** Emit image bytes with safe headers; $immutable adds a long-lived cache policy. */
-    private function serveBytes(string $data, string $mime, bool $immutable = false): void
-    {
-        header('Content-Type: ' . $mime);
-        header('X-Content-Type-Options: nosniff');
-        header('Content-Disposition: inline');
-        header('Vary: Accept');
-        header($immutable
-            ? 'Cache-Control: public, max-age=31536000, immutable'
-            : 'Cache-Control: private, no-store');
-        header('Content-Length: ' . strlen($data));
-        echo $data;
+        $range = $request->get_header('range');
+        return [
+            'range'  => $range !== null ? (string) $range : null,
+            'accept' => (string) ($request->get_header('accept') ?: ''),
+        ];
     }
 
     /**
-     * Serve one file on a gated (private) local disk, or any SFTP disk (no static
-     * URL exists for either), authenticated by a per-file stream token. Honours
-     * HTTP Range so a <video>/<audio> can seek. Emits raw bytes, not JSON.
+     * Serve one file on a gated (private) local disk, or any SFTP disk, authenticated
+     * by a per-file stream token. Honours HTTP Range so a <video>/<audio> can seek.
      */
     public function handleStream(\WP_REST_Request $request): void
     {
-        $secret = (string) get_option('fluxfiles_secret', '');
-        if ($secret === '') {
-            status_header(500);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'FLUXFILES_SECRET is not configured';
-            exit;
-        }
-        try {
-            $scope = \FluxFiles\StreamToken::verify($this->strParam($request, 'token'), $secret);
-        } catch (ApiException $e) {
-            status_header($e->getHttpCode());
-            header('Content-Type: text/plain; charset=utf-8');
-            echo $e->getMessage();
-            exit;
-        }
-
-        if (!$this->mediaRateLimit((string) ($scope['sub'] ?? ''), 'stream', 300)) {
-            exit;
-        }
-
-        $disk = $scope['disk'];
-        $path = $scope['path'];
-
-        if ($path === '' || strpos($path, "\0") !== false
-            || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
-            status_header(403);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Invalid path';
-            exit;
-        }
-
-        $config = $this->diskManager->config($disk);
-        $driver = $config['driver'] ?? '';
-        $isGatedLocal = $driver === 'local' && !empty($config['private']);
-        $isSftp = $driver === 'sftp';
-        if (!$isGatedLocal && !$isSftp) {
-            status_header(403);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Streaming not available for this disk';
-            exit;
-        }
-
-        $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
-            ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
-        $inlineOk = (bool) preg_match('#^(video/|audio/|image/(?!svg))|^application/pdf$#', $mime);
-        header('X-Content-Type-Options: nosniff');
-        header('Cache-Control: private, no-store');
-        header('Content-Disposition: ' . ($inlineOk ? 'inline' : 'attachment')
-            . '; filename="' . rawurlencode(basename($path)) . '"');
-
-        if ($isGatedLocal) {
-            $root = realpath((string) ($config['root'] ?? ''));
-            $abs = $root !== false ? realpath($root . '/' . $path) : false;
-            if ($root === false || $abs === false || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs)) {
-                status_header(404);
-                header('Content-Type: text/plain; charset=utf-8');
-                echo 'Not found';
-                exit;
-            }
-            $this->auditStreamRead($scope, $request);
-            // Production fast path: hand the bytes to nginx (native Range, no PHP copy).
-            $xaccel = (string) (getenv('FLUXFILES_XACCEL') ?: '');
-            if ($xaccel !== '') {
-                header('Content-Type: ' . $mime);
-                header('X-Accel-Buffering: no');
-                header('X-Accel-Redirect: ' . self::xaccelUri($xaccel, $path));
-                exit;
-            }
-            \FluxFiles\RangeStreamer::stream($abs, $mime, $request->get_header('range'));
-            exit;
-        }
-
-        // SFTP: read through Flysystem and stream the bytes — no byte-range support
-        // (SFTP can't do it natively), the whole file is sent.
-        try {
-            $fs = $this->diskManager->disk($disk);
-            if (!$fs->fileExists($path)) {
-                status_header(404);
-                header('Content-Type: text/plain; charset=utf-8');
-                echo 'Not found';
-                exit;
-            }
-            $this->auditStreamRead($scope, $request);
-            header('Content-Type: ' . $mime);
-            $stream = $fs->readStream($path);
-            while (!feof($stream)) {
-                echo fread($stream, 8192);
-                @flush();
-            }
-            if (is_resource($stream)) { fclose($stream); }
-        } catch (\Throwable $e) {
-            status_header(502);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Stream failed';
-        }
+        $this->mediaEndpoint()->stream($request->get_query_params(), $this->mediaHeaders($request));
         exit;
     }
 
     /**
-     * False when a verified /img token asks for something this proxy cannot honour —
-     * today the overlay watermark (ImageToken's `watermark`, embedded only when
-     * enabled). Kept separate so the fail-closed rule is testable without exit().
-     *
-     * @param array<string,mixed> $scope ImageToken::verify() output
-     */
-    public static function imgScopeServable(array $scope): bool
-    {
-        $wm = $scope['watermark'] ?? null;
-        return !(is_array($wm) && $wm !== []);
-    }
-
-    /**
-     * Serve an on-demand WebP/AVIF transform of one image, cached in the file's
+     * Serve an on-demand WebP/AVIF transform of one image (with the preview
+     * watermark overlay when the token carries one), cached in the file's
      * _variants/ directory. Authenticated by an image token (query string).
      */
     public function handleImg(\WP_REST_Request $request): void
     {
-        $secret = (string) get_option('fluxfiles_secret', '');
-        if ($secret === '') {
-            status_header(500);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'FLUXFILES_SECRET is not configured';
-            exit;
-        }
-        try {
-            $scope = \FluxFiles\ImageToken::verify($this->strParam($request, 'token'), $secret);
-        } catch (ApiException $e) {
-            status_header($e->getHttpCode());
-            header('Content-Type: text/plain; charset=utf-8');
-            echo $e->getMessage();
-            exit;
-        }
-
-        if (!$this->mediaRateLimit((string) ($scope['sub'] ?? ''), 'img', 120)) {
-            exit;
-        }
-
-        // This port does not composite the overlay watermark. A token that carries
-        // one (the `claims` escape hatch, or a Node/Python-minted token) must fail
-        // closed rather than hand out the clean pixels the watermark exists to withhold.
-        if (!self::imgScopeServable($scope)) {
-            status_header(415);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Watermarked previews are not supported by this proxy';
-            exit;
-        }
-
-        $disk = $scope['disk'];
-        $path = $scope['path'];
-        if ($path === '' || strpos($path, "\0") !== false
-            || preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path))) {
-            status_header(403);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Invalid path';
-            exit;
-        }
-
-        $optimizer = new \FluxFiles\ImageOptimizer();
-        if (!$optimizer->isImage($path)) {
-            status_header(403);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Not an image';
-            exit;
-        }
-
-        $dpr = (float) ($request->get_param('dpr') ?: 1);
-        $dpr = $dpr >= 2.5 ? 3.0 : ($dpr >= 1.5 ? 2.0 : 1.0);
-
-        $maxWidth = $scope['maxWidth'] > 0 ? $scope['maxWidth'] : 2000;
-        $reqWidth = (int) round(((int) ($request->get_param('width') ?: 0)) * $dpr);
-        $width = $reqWidth > 0 ? min($maxWidth, max(100, (int) round($reqWidth / 100) * 100)) : 0;
-        $reqHeight = (int) round(((int) ($request->get_param('height') ?: 0)) * $dpr);
-        $height = $reqHeight > 0 ? min($maxWidth, max(100, (int) round($reqHeight / 100) * 100)) : 0;
-        $fit = ($request->get_param('fit') === 'cover') ? 'cover' : 'contain';
-        $defaultQuality = $scope['defaultQuality'] > 0 ? $scope['defaultQuality'] : 80;
-        $quality = $this->snapQuality($request->get_param('quality') ?: $defaultQuality);
-
-        $reqFormat = strtolower($this->strParam($request, 'format', 'auto'));
-        $avifOk = $optimizer->avifSupported();
-        $accept = (string) ($request->get_header('accept') ?: '');
-        if ($reqFormat === 'avif') {
-            $format = $avifOk ? 'avif' : 'webp';
-        } elseif ($reqFormat === 'webp') {
-            $format = 'webp';
-        } elseif ($avifOk && strpos($accept, 'image/avif') !== false) {
-            $format = 'avif';
-        } elseif (strpos($accept, 'image/webp') !== false) {
-            $format = 'webp';
-        } else {
-            $format = ''; // negotiation: client accepts neither modern format
-        }
-
-        try {
-            $fs = $this->diskManager->disk($disk);
-        } catch (\Throwable $e) {
-            status_header(404);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Disk not available';
-            exit;
-        }
-
-        if (!$fs->fileExists($path)) {
-            status_header(404);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Not found';
-            exit;
-        }
-
-        $origMime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
-            ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
-
-        // A watermark scope was refused above (imgScopeServable()).
-        // allow_download DOES reach here: the token is minted by core's FileManager, which
-        // stamps `dl=0` for a preview-only tenant. Both of this handler's
-        // fall-throughs would otherwise return the untransformed source.
-        $noOriginal = !$scope['allowDownload'];
-        if ($format === '') {
-            if ($noOriginal) {
-                $format = 'webp';
-            } else {
-                $this->serveBytes((string) $fs->read($path), $origMime);
-                exit;
-            }
-        }
-
-        $ver = (string) (@$fs->lastModified($path) ?: '0');
-        $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, '', $format, $height, $fit);
-        $outMime = 'image/' . $format;
-
-        if ($fs->fileExists($cacheKey)) {
-            // S3/R2: redirect to a presigned URL of the cached image (no app egress).
-            if (($this->diskManager->config($disk)['driver'] ?? '') === 's3') {
-                $redirect = $this->diskManager->presignGetUrl($disk, $cacheKey, 3600);
-                if ($redirect !== null) {
-                    header('Cache-Control: private, max-age=600');
-                    header('Vary: Accept');
-                    status_header(302);
-                    header('Location: ' . $redirect);
-                    exit;
-                }
-            }
-            $this->serveBytes((string) $fs->read($cacheKey), $outMime, true);
-            exit;
-        }
-
-        $out = $optimizer->transform((string) $fs->read($path), $width, $quality, null, $format, $height, $fit);
-        if ($out === null) {
-            // Animated GIF / SVG / non-raster / bomb — serve the original
-            // untouched, unless the token is preview-only.
-            if ($noOriginal) {
-                status_header(415);
-                header('Content-Type: text/plain; charset=utf-8');
-                echo 'Cannot transform this image type';
-                exit;
-            }
-            $this->serveBytes((string) $fs->read($path), $origMime);
-            exit;
-        }
-
-        // Honor the format transform() actually produced (falls back to WebP if an
-        // AVIF encode isn't available at runtime) so cache key + Content-Type agree.
-        $outFormat = $out['format'] ?? $format;
-        if ($outFormat !== $format) {
-            $cacheKey = \FluxFiles\ImageOptimizer::transformCacheKey($path, $width, $quality, $ver, '', $outFormat, $height, $fit);
-            $outMime = 'image/' . $outFormat;
-        }
-        try { $fs->write($cacheKey, $out['data']); } catch (\Throwable $e) { /* best-effort cache */ }
-        $this->serveBytes($out['data'], $outMime, true);
+        $this->mediaEndpoint()->image($request->get_query_params(), $this->mediaHeaders($request));
         exit;
     }
 
@@ -3230,13 +2600,9 @@ class FluxFilesApi
             $disk = (string) ($request->get_param('disk') ?? 'local');
             // QuotaManager has no disk ACL of its own and DiskManager builds any
             // configured disk regardless of claims, so the allowlist is enforced
-            // here — same gate order as handleSearch()/handleGitDeploy().
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
-            if (!$claims->hasPerm('read')) {
-                throw new ApiException('Permission denied: read', 403, 'permission_denied');
-            }
+            // here — same gate order as handleSearch().
+            $claims->requireDisk($disk);
+            $claims->requirePerm('read');
             $quotaManager = new QuotaManager($this->diskManager);
 
             return $this->ok($quotaManager->getQuotaInfo(
@@ -3333,9 +2699,6 @@ class FluxFilesApi
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
             }
             $fm = $this->fileManager($claims);
-            if (!method_exists($fm, 'runRetention')) {
-                throw new ApiException('Retention rules need a newer FluxFiles core', 501, 'not_found');
-            }
             \FluxFiles\ModuleRegistry::require('legal-hold', FluxFilesPlugin::license(), $claims);
             $dryRun = filter_var($body['dry_run'] ?? true, FILTER_VALIDATE_BOOLEAN);
             $report = $fm->runRetention($disk, $dryRun);
@@ -3374,11 +2737,11 @@ class FluxFilesApi
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
             }
             $fm = $this->fileManager($claims);
-            if (!method_exists($fm, 'runFixityCheck')) {
-                throw new ApiException('The integrity check needs a newer FluxFiles core', 501, 'not_found');
-            }
             \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
-            $report = $fm->runFixityCheck($disk, $this->metaRepo->readAudit($disk));
+            // Only the audit rows since the oldest baseline, narrowed in SQL on the db backend.
+            $report = $fm->runFixityCheck($disk, fn (?int $since): array => $since !== null
+                ? $this->metaRepo->readAuditWindow($disk, $since)
+                : $this->metaRepo->readAudit($disk));
             foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
                 foreach ($report[$list] as $key) {
                     $this->logAuditQuiet($claims, 'fixity_mismatch', $disk, $claims->scopePath((string) $key), $what);
@@ -3649,9 +3012,7 @@ class FluxFilesApi
                 );
             }
 
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
+            $claims->requirePerm('write');
 
             $body = $this->body($request);
             $disk = $body['disk'] ?? null;
@@ -3660,9 +3021,7 @@ class FluxFilesApi
             if (!$disk || !$path) {
                 throw new ApiException('Missing required fields', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
+            $claims->requireDisk($disk);
 
             $fm = $this->fileManager($claims);
             $sizeBytes = (int) ($body['size'] ?? $body['size_bytes'] ?? 0);
@@ -3672,7 +3031,7 @@ class FluxFilesApi
             $scopedPath = $fm->validateUserPath($path);
             $scopedPath = $fm->validateChunkUpload($disk, $scopedPath, $sizeBytes, true);
             $chunker = new ChunkUploader($this->diskManager);
-            $result = $chunker->initiate($disk, $scopedPath, method_exists($fm, 'chunkInitMetadata') ? $fm->chunkInitMetadata($disk, $scopedPath) : []);
+            $result = $chunker->initiate($disk, $scopedPath, $fm->chunkInitMetadata($disk, $scopedPath));
             $this->logAudit($claims, 'chunk_upload', $disk, $scopedPath);
             $this->dispatchWebhook($claims, 'chunk_upload', ['disk' => $disk, 'path' => $scopedPath, 'name' => basename($scopedPath)]);
 
@@ -3703,9 +3062,7 @@ class FluxFilesApi
                 );
             }
 
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
+            $claims->requirePerm('write');
 
             $body       = $this->body($request);
             $disk       = $body['disk'] ?? null;
@@ -3716,9 +3073,7 @@ class FluxFilesApi
             if (!$disk || !$key || !$uploadId || !$partNumber) {
                 throw new ApiException('Missing required fields', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
+            $claims->requireDisk($disk);
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403, 'path_denied');
             }
@@ -3754,9 +3109,7 @@ class FluxFilesApi
                 );
             }
 
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
+            $claims->requirePerm('write');
 
             $body     = $this->body($request);
             $disk     = $body['disk'] ?? null;
@@ -3767,9 +3120,7 @@ class FluxFilesApi
             if (!$disk || !$key || !$uploadId || !$parts) {
                 throw new ApiException('Missing required fields', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
+            $claims->requireDisk($disk);
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403, 'path_denied');
             }
@@ -3824,9 +3175,7 @@ class FluxFilesApi
                 );
             }
 
-            if (!$claims->hasPerm('write')) {
-                throw new ApiException('Permission denied: write', 403, 'permission_denied');
-            }
+            $claims->requirePerm('write');
 
             $body     = $this->body($request);
             $disk     = $body['disk'] ?? null;
@@ -3836,9 +3185,7 @@ class FluxFilesApi
             if (!$disk || !$key || !$uploadId) {
                 throw new ApiException('Missing required fields', 400);
             }
-            if (!$claims->hasDisk($disk)) {
-                throw new ApiException("Access denied to disk: {$disk}", 403, 'disk_denied');
-            }
+            $claims->requireDisk($disk);
             if (!$claims->isPathInScope($key)) {
                 throw new ApiException('Access denied to path', 403, 'path_denied');
             }
@@ -3901,7 +3248,7 @@ class FluxFilesApi
         $debugUi = (defined('FLUXFILES_DEBUG') && FLUXFILES_DEBUG)
             || in_array(strtolower((string) ($dbg === false ? '' : $dbg)), ['1', 'true', 'yes', 'on'], true);
         // Prefer the pre-minified fm.min.js / fm.min.css when the bundled core ships
-        // them (older cores don't -> fall back to the sources); debug forces sources.
+        // them (fall back to the sources when absent); debug forces sources.
         $pick = static function (string $file) use ($assetsDir, $debugUi): string {
             $min = (string) preg_replace('/\.(js|css)$/', '.min.$1', $file);
             return (!$debugUi && $assetsDir && is_file("$assetsDir/$min")) ? $min : $file;
@@ -3914,7 +3261,7 @@ class FluxFilesApi
         $jsSep  = strpos($assetsBase, '?') !== false ? '&' : '?';
         $html = str_replace('"../assets/fm.css"', '"' . esc_url($assetsBase . '/' . $cssFile) . $jsSep . 'v=' . $hash($cssFile) . '"', $html);
         $html = str_replace('"../assets/fm.js"',  '"' . esc_url($assetsBase . '/' . $jsFile)  . $jsSep . 'v=' . $hash($jsFile)  . '"', $html);
-        // Vendored Alpine (core >= the release that stopped loading it from unpkg).
+        // Vendored Alpine (the page must not load it from a CDN: it runs in the JWT's origin).
         $alpine = 'vendor/alpine/alpine.min.js';
         $html = str_replace('"../assets/' . $alpine . '"', '"' . esc_url($assetsBase . '/' . $alpine) . $jsSep . 'v=' . $hash($alpine) . '"', $html);
 
@@ -4029,7 +3376,7 @@ class FluxFilesApi
      * safe to cache as immutable: a stale node mid-rolling-deploy, or a hand-typed
      * v, would otherwise pin the wrong bytes for a year. Accepts a prefix (>= 8
      * hex) of the file's md5 (fm.js / fm.css / Alpine, as the page links them), or
-     * - for the lazily loaded vendor/xterm and vendor/codemirror files - of that
+     * - for the lazily loaded vendor/codemirror files - of that
      * vendor tree's content hash (fm.js's FM_VENDOR_VER; same algorithm as
      * scripts/vendor-ver.mjs). Needs no newer core API: it only reads the files.
      */
@@ -4046,7 +3393,7 @@ class FluxFilesApi
         }
         $base = rtrim($assetsDir, '/');
         if (strncmp($filePath, $base . '/', strlen($base) + 1) === 0
-            && preg_match('#^vendor/(xterm|codemirror)/#', substr($filePath, strlen($base) + 1), $m)) {
+            && preg_match('#^vendor/(codemirror)/#', substr($filePath, strlen($base) + 1), $m)) {
             $dir = $base . '/vendor/' . $m[1];
             $files = [];
             $sig = '';

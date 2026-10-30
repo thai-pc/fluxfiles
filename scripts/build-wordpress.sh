@@ -70,10 +70,9 @@ for f in fm.min.js fm.min.css; do
 done
 
 # The vendored libraries: Alpine (loaded by the page itself) plus what fm.js
-# lazy-loads on demand (xterm for the SSH terminal, CodeMirror for the code
-# editor). Deliberately not on a CDN — they run in the
-# origin that holds the JWT — so they have to ship inside the plugin or those
-# two features silently fall back.
+# lazy-loads on demand (CodeMirror for the code editor). Deliberately not on a
+# CDN — they run in the origin that holds the JWT — so they have to ship inside
+# the plugin or the editor silently falls back.
 cp -r "$CORE_DIR/assets/vendor" "$PLUGIN_DIR/assets/vendor"
 
 echo "==> Bundling browser SDK as assets/fluxfiles.js..."

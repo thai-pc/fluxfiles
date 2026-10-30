@@ -58,6 +58,7 @@ if (!defined('ARRAY_A')) {
 $coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
 require_once $coreAutoload;
 require_once __DIR__ . '/../includes/WpDbMetadataHandler.php';
+require_once __DIR__ . '/../includes/WpRateLimiterStorage.php';
 
 use FluxFiles\DiskManager;
 
@@ -133,8 +134,9 @@ $tDirs = $prefix . 'fluxfiles_directories';
 $tTrash = $prefix . 'fluxfiles_trash';
 $tAudit = $prefix . 'fluxfiles_audit_log';
 $tHolds = $prefix . 'fluxfiles_legal_holds';
+$tRate = $prefix . 'fluxfiles_rate_limits';
 
-foreach ([$tFileMeta, $tDirs, $tTrash, $tAudit, $tHolds] as $t) {
+foreach ([$tFileMeta, $tDirs, $tTrash, $tAudit, $tHolds, $tRate] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS {$t}");
 }
 
@@ -224,6 +226,16 @@ $pdo->exec("CREATE TABLE {$tHolds} (
   placed_by_scope text NULL,
   PRIMARY KEY (disk,id),
   KEY disk_released_at (disk,released_at)
+) DEFAULT CHARSET=utf8mb4");
+
+// Matches FluxFilesDbSchema's fluxfiles_rate_limits (the db-mode rate limiter's table).
+$pdo->exec("CREATE TABLE {$tRate} (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  identifier varchar(191) NOT NULL,
+  bucket varchar(16) NOT NULL,
+  ts bigint(20) NOT NULL,
+  PRIMARY KEY (id),
+  KEY identifier_bucket_ts (identifier,bucket,ts)
 ) DEFAULT CHARSET=utf8mb4");
 
 global $wpdb;
@@ -687,11 +699,52 @@ test('allHolds() returns every hold on the disk, keyed by id', function () use (
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "{$yellow}► readAuditWindow() (MetadataRowLogic::auditWindowSql){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('readAuditWindow() narrows by actor, since and limit — and returns chronological order', function () use ($repo, $pdo, $tAudit) {
+    $d = 'win-disk';
+    $now = time();
+    foreach ([[$now - 300, 'a1', 'w-alice'], [$now - 200, 'b1', 'w-bob'], [$now - 100, 'a2', 'w-alice'], [$now - 10, 'a3', 'w-alice']] as [$ts, $act, $who]) {
+        $pdo->exec("INSERT INTO {$tAudit} (disk, owner, action, file_key, created_at) VALUES ('{$d}', '{$who}', '{$act}', 'k', {$ts})");
+    }
+    assertEqual(['a1', 'b1', 'a2', 'a3'], array_column($repo->readAuditWindow($d), 'action'), 'whole window, oldest first');
+    assertEqual(['a1', 'a2', 'a3'], array_column($repo->readAuditWindow($d, null, null, 'w-alice'), 'action'), 'actor filter');
+    assertEqual(['a2', 'a3'], array_column($repo->readAuditWindow($d, $now - 150), 'action'), 'since filter');
+    assertEqual(['a2', 'a3'], array_column($repo->readAuditWindow($d, null, 2), 'action'), 'newest 2, still oldest-first');
+    assertEqual($repo->readAudit($d, 'w-alice'), $repo->readAuditWindow($d, null, null, 'w-alice'), 'readAudit() is the unbounded window');
+    assertTrue(is_int($repo->readAuditWindow($d)[0]['created_at']), 'created_at is an int');
+});
+
+// ═══════════════════════════════════════════════════════════════
+echo "{$yellow}► WpRateLimiterStorage (db-mode rate limiter){$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+test('WpRateLimiterStorage allows up to the limit, then 429s; buckets and identifiers are independent', function () use ($pdo, $tRate) {
+    $lim = new WpRateLimiterStorage(3, 2, 60);
+    $lim->check('rl-u', 'write');
+    $lim->check('rl-u', 'write');
+    try { $lim->check('rl-u', 'write'); $code = null; }
+    catch (\FluxFiles\ApiException $e) { $code = [$e->getHttpCode(), $e->getErrorCode()]; }
+    assertEqual([429, 'rate_limited'], $code, 'third write refused');
+    $lim->check('rl-u', 'read');          // reads have their own limit (3)
+    $lim->check('rl-other', 'write');     // another identifier is untouched
+    assertEqual(2, (int) $pdo->query("SELECT COUNT(*) FROM {$tRate} WHERE identifier = 'rl-u' AND bucket = 'write'")->fetchColumn(), 'the refused hit is not recorded');
+});
+
+test('WpRateLimiterStorage forgets hits older than the window', function () use ($pdo, $tRate) {
+    $old = time() - 120;
+    $pdo->exec("INSERT INTO {$tRate} (identifier, bucket, ts) VALUES ('rl-old', 'write', {$old}), ('rl-old', 'write', {$old})");
+    (new WpRateLimiterStorage(5, 2, 60))->check('rl-old', 'write');   // would 429 if the stale hits counted
+    assertEqual(1, (int) $pdo->query("SELECT COUNT(*) FROM {$tRate} WHERE identifier = 'rl-old'")->fetchColumn(), 'stale rows swept, one fresh hit');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════
 
 exec('rm -rf ' . escapeshellarg($storageRoot));
-foreach ([$tFileMeta, $tDirs, $tTrash, $tAudit, $tHolds] as $t) {
+foreach ([$tFileMeta, $tDirs, $tTrash, $tAudit, $tHolds, $tRate] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS {$t}");
 }
 

@@ -1,3 +1,5 @@
+> Historical: feature removed in 1.0.0
+
 # SSH ControlMaster — Design Spec
 
 Status: **Implemented in core-v0.2.82, essentially as designed below.**

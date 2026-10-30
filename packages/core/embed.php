@@ -51,7 +51,7 @@ function fluxfiles_token(
     // as the first arg, e.g.
     //   fluxfiles_token(['user' => 'u', 'perms' => ['read','write'], 'disks' => ['sftp'],
     //                    'edition' => 'pro', 'role' => 'editor', 'webp' => [...], 'media' => [...],
-    //                    'claims' => ['allow_terminal' => true, 'terminal_pty_url' => '…',
+    //                    'claims' => ['terminal_pty_url' => '…',
     //                                 'allow_optimize' => true, 'upload_collision' => 'overwrite']]);
     // The `claims` map takes ANY of the JWT claims (snake_case) — the single escape
     // hatch so nothing is unsettable. See docs/reference/CONFIG.md for the full claim list.
@@ -463,8 +463,7 @@ function fluxfiles_apply_media_claims(array &$payload, array $media): void
  *        srcset_widths, srcset_sizes, allow_download, watermark_enabled,
  *        watermark_type, watermark_text, watermark_logo_path, watermark_position,
  *        watermark_opacity, watermark_font_size, share_brand_* / intake_brand_*
- *        (name/logo_url/color/link_url), intake_analytics, pro_hints,
- *        allow_git_deploy, git_deploy_path, git_deploy_branch, git_deploy_hooks
+ *        (name/logo_url/color/link_url), intake_analytics, pro_hints
  */
 function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
 {
@@ -565,9 +564,6 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (array_key_exists('allow_chmod', $webp)) {
         $payload['allow_chmod'] = (bool) $webp['allow_chmod'];
     }
-    if (array_key_exists('allow_terminal', $webp)) {
-        $payload['allow_terminal'] = (bool) $webp['allow_terminal'];
-    }
     if (!empty($webp['terminal_pty_url'])) {
         $payload['terminal_pty_url'] = (string) $webp['terminal_pty_url'];
     }
@@ -579,20 +575,6 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     }
     if (!empty($webp['esign_url'])) {
         $payload['esign_url'] = (string) $webp['esign_url'];
-    }
-    // One-click Git deploy (SFTP disks). Deliberately independent of allow_terminal:
-    // the repo path/branch/hooks flag are operator claims, never request-supplied.
-    if (array_key_exists('allow_git_deploy', $webp)) {
-        $payload['allow_git_deploy'] = (bool) $webp['allow_git_deploy'];
-    }
-    if (!empty($webp['git_deploy_path'])) {
-        $payload['git_deploy_path'] = (string) $webp['git_deploy_path'];
-    }
-    if (!empty($webp['git_deploy_branch'])) {
-        $payload['git_deploy_branch'] = (string) $webp['git_deploy_branch'];
-    }
-    if (array_key_exists('git_deploy_hooks', $webp)) {
-        $payload['git_deploy_hooks'] = (bool) $webp['git_deploy_hooks'];
     }
     if (array_key_exists('allow_code_edit', $webp)) {
         $payload['allow_code_edit'] = (bool) $webp['allow_code_edit'];

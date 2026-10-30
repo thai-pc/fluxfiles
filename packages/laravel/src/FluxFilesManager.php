@@ -176,8 +176,7 @@ class FluxFilesManager
             $payload['rate_write'] = (int) $overrides['rate_write'];
         }
         // Pass `variants` through as-is; the core re-sanitizes it on decode
-        // (Claims::sanitizeVariants). Done inline so the adapter never hard-depends
-        // on a specific core method — a version mismatch must never be fatal.
+        // (Claims::sanitizeVariants).
         if (is_array($overrides['variants'] ?? null) && $overrides['variants'] !== []) {
             $payload['variants'] = $overrides['variants'];
         }
@@ -246,34 +245,10 @@ class FluxFilesManager
         if (!empty($overrides['esign_url'])) {
             $payload['esign_url'] = (string) $overrides['esign_url'];
         }
-        // SSH terminal (SFTP disks) now has a proxy route too
-        // (FluxFilesController::terminal(), see routes/fluxfiles.php), so the gate
-        // claim forwards unconditionally, matching allow_versioning/allow_audit_export/
-        // allow_ai_vision above.
-        if (array_key_exists('allow_terminal', $overrides)) {
-            $payload['allow_terminal'] = (bool) $overrides['allow_terminal'];
-        }
         // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — pure UI config,
         // works in any mode like pdf_tools_url/office_url/esign_url above.
         if (!empty($overrides['terminal_pty_url'])) {
             $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
-        }
-        // Git deploy (SFTP disks) now has a proxy route too
-        // (FluxFilesController::gitDeploy(), see routes/fluxfiles.php), so the gate
-        // claim forwards unconditionally, matching allow_terminal above. The
-        // target path/branch/hooks are operator-set here — never accepted from a
-        // request body on either side — per docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1.
-        if (array_key_exists('allow_git_deploy', $overrides)) {
-            $payload['allow_git_deploy'] = (bool) $overrides['allow_git_deploy'];
-        }
-        if (!empty($overrides['git_deploy_path'])) {
-            $payload['git_deploy_path'] = (string) $overrides['git_deploy_path'];
-        }
-        if (!empty($overrides['git_deploy_branch'])) {
-            $payload['git_deploy_branch'] = (string) $overrides['git_deploy_branch'];
-        }
-        if (array_key_exists('git_deploy_hooks', $overrides)) {
-            $payload['git_deploy_hooks'] = (bool) $overrides['git_deploy_hooks'];
         }
         // Versioning now has routes in both modes (proxy: FluxFilesController's
         // versions()/versionsRestore() + the version-keeper hook wired in
@@ -315,8 +290,7 @@ class FluxFilesManager
         }
         // AI Vision now has a proxy route too (FluxFilesController::aiVision(), see
         // routes/fluxfiles.php), so the gate claim forwards unconditionally, matching
-        // allow_versioning/allow_audit_export above (allow_terminal is still the only
-        // standalone-only holdout).
+        // allow_versioning/allow_audit_export above.
         if (array_key_exists('allow_ai_vision', $overrides)) {
             $payload['allow_ai_vision'] = (bool) $overrides['allow_ai_vision'];
         }
@@ -464,18 +438,9 @@ class FluxFilesManager
                 $payload[$zipClaim] = (int) $overrides[$zipClaim];
             }
         }
-        // OVERLAY watermark (preview-time, served via /api/fm/img) is forwarded only
-        // in 'standalone' mode. /api/fm/img is proxied in BOTH modes now (see
-        // FluxFilesController::img()), but that port intentionally does NOT
-        // implement the watermark-compositing branch — it only ever serves the
-        // plain resized transform. Forwarding watermark_enabled in proxy mode
-        // would mint a token whose overlay the proxy's /img silently ignores,
-        // handing out an unwatermarked "preview" — worse than not forwarding it,
-        // since an overlay watermark also forces the token preview-only
-        // (allow_download off in core), so there'd be no clean URL either. For a
-        // watermark through the proxy, use the burn-in route (POST
-        // /api/fm/watermark) instead, which writes the mark into the file.
-        if (!empty($overrides['watermark_enabled']) && config('fluxfiles.mode') === 'standalone') {
+        // OVERLAY watermark (preview-time, served via /api/fm/img): the proxy's /img is
+        // the shared core MediaEndpoint, which composites it, so it forwards in both modes.
+        if (!empty($overrides['watermark_enabled'])) {
             $payload['watermark_enabled'] = true;
             foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $s) {
                 if (!empty($overrides[$s])) {

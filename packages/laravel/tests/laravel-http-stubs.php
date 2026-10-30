@@ -112,7 +112,8 @@ namespace Illuminate\Http {
                 array $headers = [],
                 $user = null,
                 private string $schemeAndHost = 'https://app.example.com',
-                private array $files = []
+                private array $files = [],
+                private ?string $path = null
             ) {
                 $this->headers = new StubHeaderBag($headers);
                 $this->userObj = $user;
@@ -160,9 +161,25 @@ namespace Illuminate\Http {
             }
 
             /** @param mixed $default @return mixed */
-            public function server(string $key, $default = null)
+            public function server(?string $key = null, $default = null)
             {
-                return $default;
+                return $key === null ? [] : $default;
+            }
+
+            /** Form fields ($_POST twin); the stub keeps one merged bag, so none. @return array<string,mixed> */
+            public function post(): array
+            {
+                return [];
+            }
+
+            /**
+             * The raw body: the input as JSON for a write, like a JSON request. A multipart
+             * upload has no JSON body (Laravel hands back '' / the raw form), so the
+             * controller must fall back to the request fields there.
+             */
+            public function getContent(): string
+            {
+                return $this->method === 'GET' || $this->files !== [] ? '' : (string) json_encode($this->input);
             }
 
             /** @return mixed */
@@ -181,9 +198,10 @@ namespace Illuminate\Http {
                 return $this->getMethod();
             }
 
+            /** The request path; give the route (e.g. 'api/fm/delete') when the audit action matters. */
             public function path(): string
             {
-                return 'api/fm';
+                return $this->path ?? 'api/fm';
             }
 
             public function getSchemeAndHttpHost(): string

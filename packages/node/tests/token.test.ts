@@ -108,9 +108,8 @@ describe('createToken', () => {
   it('claims escape hatch sets any raw snake_case claim; explicit wins', () => {
     const c = decodeToken(createToken({
       secret: SECRET, userId: 'u', edition: 'pro',
-      claims: { allow_terminal: true, terminal_pty_url: 'https://t.example.com/', upload_collision: 'overwrite', allow_optimize: false },
+      claims: { terminal_pty_url: 'https://t.example.com/', upload_collision: 'overwrite', allow_optimize: false },
     }));
-    expect(c.allow_terminal).toBe(true);
     expect(c.terminal_pty_url).toBe('https://t.example.com/');
     expect(c.upload_collision).toBe('overwrite');
     // explicit claim overrides the edition preset (pro defaults allow_optimize true)
@@ -216,13 +215,6 @@ describe('createToken', () => {
     expect(c.watermark_font_size).toBe(20);
   });
 
-  it('forwards allow_terminal (SSH terminal) when set, omits it otherwise', () => {
-    const on = decodeToken(createToken({ secret: SECRET, userId: 'u', allowTerminal: true })) as Record<string, unknown>;
-    expect(on.allow_terminal).toBe(true);
-    const off = decodeToken(createToken({ secret: SECRET, userId: 'u' })) as Record<string, unknown>;
-    expect(off.allow_terminal).toBeUndefined();
-  });
-
   it('forwards the four Share landing claims (PHP parity), omits them otherwise', () => {
     const c = decodeToken(
       createToken({
@@ -299,29 +291,6 @@ describe('createToken', () => {
     expect(off.share_brand_name).toBeUndefined();
     expect(off.intake_brand_name).toBeUndefined();
     expect(off.intake_analytics).toBeUndefined();
-  });
-
-  it('forwards the Git-deploy claims independently of allowTerminal', () => {
-    const c = decodeToken(
-      createToken({
-        secret: SECRET,
-        userId: 'u',
-        allowGitDeploy: true,
-        gitDeployPath: '/srv/www/app',
-        gitDeployBranch: 'main',
-        gitDeployHooks: true,
-      }),
-    ) as Record<string, unknown>;
-    expect(c.allow_git_deploy).toBe(true);
-    expect(c.git_deploy_path).toBe('/srv/www/app');
-    expect(c.git_deploy_branch).toBe('main');
-    expect(c.git_deploy_hooks).toBe(true);
-    // Git deploy must NOT imply shell access, and allowTerminal must not imply deploy.
-    expect(c.allow_terminal).toBeUndefined();
-    const term = decodeToken(
-      createToken({ secret: SECRET, userId: 'u', allowTerminal: true }),
-    ) as Record<string, unknown>;
-    expect(term.allow_git_deploy).toBeUndefined();
   });
 
   it('embeds proHints only when explicitly set (it defaults to true on decode)', () => {

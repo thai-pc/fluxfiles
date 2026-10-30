@@ -335,8 +335,6 @@
     "dlp_unscannable": "Chunked upload can't be scanned for personal data. Use the standard upload.",
     "dlp_failed": "The personal-data scan could not be completed.",
     "storage_not_writable": "Storage is not writable.",
-    "terminal_disabled": "The terminal is disabled on this server.",
-    "terminal_forbidden": "Terminal access isn't allowed.",
     "optimize_forbidden": "Optimization isn't allowed.",
     "webhook_not_configured": "No webhook URL is configured on this token.",
     "webhook_blocked": "The webhook URL points at a private or blocked address.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "PDF optimization requires Ghostscript on the server.",
     "perm_denied": "Permission denied.",
     "too_many": "Too many files in one request.",
-    "terminal_unsupported": "The terminal only works on an SFTP disk.",
-    "terminal_no_shell": "This host doesn't allow a shell (SFTP only).",
-    "terminal_confirm_required": "This command looks dangerous — confirm to run it.",
-    "git_deploy_disabled": "Git deploy is disabled on this server.",
-    "git_deploy_forbidden": "Git deploy is not allowed.",
-    "git_deploy_unconfigured": "Git deploy path is not configured for this token.",
-    "git_deploy_in_progress": "A deploy is already in progress for this repo.",
-    "git_deploy_unsafe_repo": "This repository's git config contains a command-execution setting. Deploy refused.",
     "watermark_overlay_active": "Burn-in isn't available on a preview/overlay-watermark token. Use a downloadable token.",
     "no_watermark_backup": "No watermark to remove.",
     "audit_purge_no_cutoff": "An explicit cutoff date (or account retention setting) is required to purge audit history.",
@@ -464,7 +454,6 @@
       "chunk_upload": "Chunked upload",
       "content_update": "Edit content",
       "unknown": "Other",
-      "terminal": "Terminal command",
       "virus_blocked": "Virus blocked",
       "dlp_blocked": "PII blocked",
       "watermark_remove": "Remove watermark",
@@ -683,13 +672,7 @@
     "removed": "Watermark removed"
   },
   "terminal": {
-    "title": "Terminal",
-    "placeholder": "Type a command, press Enter…",
-    "unsupported": "This host doesn't allow a terminal (SFTP only).",
-    "danger_confirm": "This command looks dangerous. Run it anyway?",
-    "run_anyway": "Run anyway",
-    "clear": "Clear",
-    "truncated": "Output truncated."
+    "title": "Terminal"
   },
   "pdf": {
     "title": "PDF tools"

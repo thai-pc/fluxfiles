@@ -601,7 +601,7 @@ body {
 }
 .ff-chmod-symbolic { font-family: var(--font-mono, monospace); font-size: 13px; color: var(--color-text-secondary); margin-right: auto; }
 
-/* SSH terminal modal — dark slate panel, FluxFiles purple chrome. */
+/* Terminal / embed modal (also reused by PDF tools, Office, e-sign) — dark slate panel, FluxFiles purple chrome. */
 .ff-term-modal {
     background: #1b1b22;
     border-radius: 12px;
@@ -624,20 +624,6 @@ body {
     background: var(--color-accent, #7c3aed); color: #fff; text-transform: uppercase; margin-inline-start: 8px;
 }
 .ff-term-host { flex: 1 1 auto; min-height: 0; padding: 8px 10px; overflow: hidden; }
-.ff-term-host .xterm { height: 100%; }
-.ff-term-unsupported {
-    flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
-    text-align: center; padding: 32px; color: #c9ccd3; font-size: 14px;
-}
-.ff-term-confirm {
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    padding: 10px 14px; background: #2a1f23; border-top: 1px solid #4b2630; color: #f4c7cd; font-size: 13px;
-}
-.ff-term-confirm code {
-    font-family: var(--font-mono, monospace); background: #1b1b22; color: #f87171;
-    padding: 2px 6px; border-radius: 5px; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.ff-term-confirm-actions { margin-inline-start: auto; display: flex; gap: 8px; }
 
 /* ══════════════════════════ Main area ══════════════════════════ */
 .ff-main {

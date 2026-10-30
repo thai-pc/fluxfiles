@@ -282,10 +282,8 @@ class DiskManager
 
     /**
      * THE single source for the modern-only KEX/hostkey/cipher/MAC allowlist.
-     * Every algorithm name is already OpenSSH's own IANA-registry naming (that's
-     * why the exact same strings work for both phpseclib's preferredAlgorithms
-     * AND OpenSSH's -o *Algorithms= flags, see modernSshOpensshFlags()) — only
-     * the packaging differs. Excludes everything phpseclib still offers for
+     * Every algorithm name is already OpenSSH's own IANA-registry naming (the same
+     * strings phpseclib's preferredAlgorithms takes). Excludes everything phpseclib still offers for
      * legacy-server compat: SHA-1 KEX (incl. group1/group14-sha1), RC4 (arcfour),
      * 3DES, Blowfish/Twofish, CBC-mode ciphers, ssh-dss, SHA-1-only ssh-rsa, and
      * MD5/SHA-1 MACs.
@@ -339,25 +337,6 @@ class DiskManager
     }
 
     /**
-     * OpenSSH -o flag pairs for the SAME allowlist, consumed by SshMultiplexer's
-     * proc_open argv (see docs/security/SFTP-CONTROLMASTER-SPEC.md §8/§11). Both this and
-     * modernSshAlgorithms() are pure reshapes of modernSshAlgorithmLists(), so
-     * there's structurally nothing to forget to update when the allowlist changes.
-     *
-     * @return string[] flat ['-o','KexAlgorithms=...', '-o','HostKeyAlgorithms=...', ...]
-     */
-    public static function modernSshOpensshFlags(): array
-    {
-        $l = self::modernSshAlgorithmLists();
-        return [
-            '-o', 'KexAlgorithms=' . implode(',', $l['kex']),
-            '-o', 'HostKeyAlgorithms=' . implode(',', $l['hostkey']),
-            '-o', 'Ciphers=' . implode(',', $l['ciphers']),
-            '-o', 'MACs=' . implode(',', $l['macs']),
-        ];
-    }
-
-    /**
      * The raw phpseclib SFTP connection for a disk + the disk root, so a caller
      * can read/set Unix file modes (chmod) — beyond Flysystem's public/private
      * visibility. Throws for a non-SFTP disk.
@@ -375,50 +354,5 @@ class DiskManager
         }
         $conn = self::buildSftpProvider($cfg)->provideConnection();
         return [$conn, rtrim((string) ($cfg['root'] ?? '/'), '/')];
-    }
-
-    /**
-     * True iff a disk is eligible for SshMultiplexer::acquire() — `ssh_multiplex`
-     * on, SFTP driver, and key-based auth ONLY (no passphrase). A
-     * passphrase-protected key falls back to phpseclib for the same reason a
-     * password-only config does: OpenSSH's `-i` has no non-interactive way to
-     * supply a passphrase (no TTY under proc_open, no local ssh-agent — see
-     * buildSftpProvider()'s useAgent comment), so shelling out to `ssh` would
-     * need SSH_ASKPASS/sshpass tricks that put the secret in argv/env — the
-     * exact exposure this gate exists to avoid. See
-     * docs/security/SFTP-CONTROLMASTER-SPEC.md §7 (extends the security review's F4).
-     */
-    private static function multiplexEligible(array $cfg): bool
-    {
-        if (($cfg['driver'] ?? '') !== 'sftp' || empty($cfg['ssh_multiplex'])) {
-            return false;
-        }
-        if (($cfg['private_key'] ?? '') === '') {
-            return false; // password-only → sshpass/argv exposure (F4). Fall back.
-        }
-        if (($cfg['private_key_passphrase'] ?? '') !== '') {
-            return false; // passphrase-protected key → same exposure, one level down.
-        }
-        return true;
-    }
-
-    /**
-     * SSH ControlMaster connection-reuse handle for `SshTerminal`'s
-     * `/api/fm/terminal` ONLY — see docs/security/SFTP-CONTROLMASTER-SPEC.md. Never call
-     * this from GitDeploy or the Flysystem SFTP adapter (out of scope, spec §19).
-     *
-     * @return array{0:SshMultiplexer,1:string}|null [handle, root], or null →
-     *         caller falls back to sftpConnection(). Also covers the
-     *         `require_host_key` + no `host_fingerprint` case for free: returning
-     *         null here just routes to sftpConnection(), which already throws
-     *         `sftp_host_key_required` at that point.
-     */
-    public function multiplexHandle(string $name): ?array
-    {
-        $cfg = $this->configs[$name] ?? [];
-        if (!self::multiplexEligible($cfg)) {
-            return null;
-        }
-        return [SshMultiplexer::acquire($cfg, $name, $this), rtrim((string) ($cfg['root'] ?? '/'), '/')];
     }
 }

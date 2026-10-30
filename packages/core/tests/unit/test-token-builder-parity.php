@@ -10,8 +10,7 @@
  * builders. A claim added to the core is mintable via `claims` from day one,
  * so nothing breaks and no test fails — it just never appears in anyone's
  * autocomplete, and the drift is invisible until an integrator asks why a
- * documented feature has no option. That happened: `allow_git_deploy`,
- * `git_deploy_*`, `share_brand_*`, `intake_brand_*`, `intake_analytics` and
+ * documented feature has no option. That happened: `share_brand_*`, `intake_brand_*`, `intake_analytics` and
  * `pro_hints` were shipped and documented, yet only reachable as raw strings.
  *
  * This guard is about *presence of the claim name* in each builder's source,

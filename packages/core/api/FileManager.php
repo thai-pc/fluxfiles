@@ -1797,6 +1797,11 @@ class FileManager
         // MIME, variants and the JWT allowedExt policy to the file). Renaming
         // may only change the base name — never the extension — so a token that
         // can only upload e.g. images cannot rename a.png → a.svg to bypass it.
+        // Clean 404 for a missing source (else the adapter's move throws a raw 500).
+        if (!$isDir && !$fs->fileExists($scoped)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
+
         if (!$isDir) {
             $oldExt = strtolower(pathinfo($scoped, PATHINFO_EXTENSION));
             $newExt = strtolower(pathinfo($newName, PATHINFO_EXTENSION));
@@ -1870,6 +1875,9 @@ class FileManager
             $this->moveDirectoryTree($disk, $fs, $scopedFrom, $scopedTo);
         } else {
             $this->assertRelocationExt($scopedFrom, $scopedTo);
+            if (!$fs->fileExists($scopedFrom)) {
+                throw new ApiException('File not found', 404, 'not_found');
+            }
             $fs->move($scopedFrom, $scopedTo);
         }
 
@@ -1917,6 +1925,10 @@ class FileManager
         }
 
         $this->assertRelocationExt($scopedFrom, $scopedTo);
+
+        if (!$fs->fileExists($scopedFrom)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
 
         // Quota/file-count check — same-disk copy() creates a new object just
         // like upload() does, so it must be bounded the same way (crossCopy()
@@ -4498,8 +4510,8 @@ class FileManager
     /**
      * $disk is optional and ADDITIVE: when given and the disk is SFTP, this also
      * refuses any path with a `.git` segment (see isGitInternalSegment() for why
-     * SFTP specifically, and GitDeploy's config audit for the RCE this closes at
-     * the root rather than only auditing the symptom). Pure-read call sites
+     * SFTP specifically: a writable `.git/config` is a code-execution vector for
+     * anything that later runs git there). Pure-read call sites
      * (list/getContent/fileMeta/presign/getMode) intentionally omit $disk —
      * this check targets writes, which is where the attack actually lands.
      */

@@ -113,19 +113,13 @@ class Claims
      *            disk? Default true (part of the SFTP file-manager toolkit). */
     public bool $allowChmod = true;
 
-    /** @var bool May this token open a shell terminal on an SFTP/SSH disk?
-     *            Default FALSE — this grants shell access as the SSH user, so it
-     *            must be opted in deliberately (and only makes sense on an SFTP
-     *            disk whose host actually allows a shell). */
-    public bool $allowTerminal = false;
-
     /** @var string Optional URL of a self-hosted PTY terminal server (ttyd / gotty /
      *            wetty, or any PTY-over-WebSocket service the operator runs on their
-     *            own box). When set (and `allow_terminal` is on), the UI embeds this
-     *            for a true interactive terminal (vim/top/htop) instead of the
-     *            built-in command-runner. Empty (default) → the stateless
-     *            command-runner. Free feature — opt-in config, never gated by a
-     *            license. Must be http(s) (rejected otherwise). */
+     *            own box). When set, the UI shows a terminal entry that embeds it for
+     *            a true interactive terminal (vim/top/htop). Empty (default) → no
+     *            terminal entry; FluxFiles ships no shell of its own. Free feature —
+     *            opt-in config, never gated by a license. Must be http(s) (rejected
+     *            otherwise). */
     public string $terminalPtyUrl = '';
 
     /** @var string Optional URL of a self-hosted PDF-tools server (Stirling-PDF, or any
@@ -154,30 +148,6 @@ class Claims
      *            Default FALSE — editing config/executable files (wp-config.php,
      *            .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
     public bool $allowCodeEdit = false;
-
-    // ── One-click Git deploy (SSH exec) ───────────────────────────────────
-    // See docs/security/GIT-DEPLOY-SECURITY-REVIEW.md. Deliberately narrower than
-    // allow_terminal: the repo path/branch are OPERATOR claims baked in at mint
-    // time, never accepted from the request body — a client can trigger a deploy,
-    // never redirect it. Never bundle this with allow_sftp/allow_terminal.
-    /** @var bool May this token trigger a Git deploy on an SFTP disk
-     *            (`POST /api/fm/git-deploy`)? Default FALSE — separate claim,
-     *            never implied by allow_sftp or allow_terminal. */
-    public bool $allowGitDeploy = false;
-    /** @var string Repo path on the SFTP disk (relative to the disk root, or
-     *            absolute) that a deploy syncs. Required when allow_git_deploy is
-     *            true — an empty path 400s the route rather than guessing. */
-    public string $gitDeployPath = '';
-    /** @var string Branch to force-sync to via `fetch --prune` + `reset --hard
-     *            origin/<branch>` (destructive but deterministic). Empty (default)
-     *            → `git pull --ff-only` on whatever branch is checked out instead
-     *            (safe: refuses on divergence, never rewrites history). */
-    public string $gitDeployBranch = '';
-    /** @var bool Let the deployed repo's Git hooks (post-merge, etc.) run.
-     *            Default FALSE: hooks are neutered (`core.hooksPath=/dev/null`)
-     *            because a hostile hook in the repo is otherwise arbitrary code
-     *            execution on the VPS, independent of any FluxFiles bug. */
-    public bool $gitDeployHooks = false;
 
     /** @var bool May this token use the (paid) Optimization module (/api/fm/optimize)?
      *            Default FALSE — opt-in. Even when true, the module's code must be
@@ -717,7 +687,6 @@ class Claims
         $c->zipMaxFiles = max(0, (int) ($payload->zip_max_files ?? 0));
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
         $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
-        $c->allowTerminal = isset($payload->allow_terminal) ? (bool) $payload->allow_terminal : false;
         // Only accept an http(s) PTY URL — anything else (javascript:, data:, …) is
         // dropped so it can never reach an iframe src.
         $ptyUrl = trim((string) ($payload->terminal_pty_url ?? ''));
@@ -732,14 +701,6 @@ class Claims
         $esignUrl = trim((string) ($payload->esign_url ?? ''));
         $c->esignUrl = preg_match('#^https?://#i', $esignUrl) ? $esignUrl : '';
         $c->allowCodeEdit = (bool) ($payload->allow_code_edit ?? false);
-        $c->allowGitDeploy = (bool) ($payload->allow_git_deploy ?? false);
-        $c->gitDeployPath = str_replace(["\0", "\x00"], '', trim((string) ($payload->git_deploy_path ?? '')));
-        // Only safe git-ref characters. escapeshellarg() already makes this shell-safe
-        // regardless, but rejecting a malformed "branch" before it ever reaches git
-        // is cheap defense in depth against a mis-minted claim.
-        $gdBranch = trim((string) ($payload->git_deploy_branch ?? ''));
-        $c->gitDeployBranch = preg_match('/^[A-Za-z0-9._\/-]+$/', $gdBranch) === 1 ? $gdBranch : '';
-        $c->gitDeployHooks = (bool) ($payload->git_deploy_hooks ?? false);
         $c->allowOptimize = (bool) ($payload->allow_optimize ?? false);
         $c->allowShare = (bool) ($payload->allow_share ?? false);
         // Share landing claims. The TTL clamps to [10, 300] (0/absent → 60); the base
@@ -910,8 +871,6 @@ class Claims
             case 'allow_zip':        return $this->allowZip;
             case 'allow_extract':    return $this->allowExtract;
             case 'allow_chmod':      return $this->allowChmod;
-            case 'allow_terminal':   return $this->allowTerminal;
-            case 'allow_git_deploy': return $this->allowGitDeploy;
             case 'allow_download':   return $this->allowDownload;
             // Paid-module claims — without these the ModuleRegistry 3-layer gate
             // (layer 3) would 403 every paid module regardless of the token.

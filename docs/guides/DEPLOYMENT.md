@@ -63,8 +63,7 @@ server {
     location ~* /_fluxfiles/ { deny all; }
 
     # Everything else under storage/ is server runtime state, not public content:
-    # ssh-sockets/ (multiplex index.json + ephemeral BYOB private keys), tus/
-    # (partial resumable uploads), locks, caches. `^~` stops the `\.php$` regex
+    # tus/ (partial resumable uploads), rate-limit state, locks, caches. `^~` stops the `\.php$` regex
     # from claiming a file in there.
     # /storage/uploads/ below is a longer prefix, so public uploads still serve.
     location ^~ /storage/ { deny all; }
@@ -140,8 +139,7 @@ RewriteRule (^|/)_fluxfiles/ - [F,L,NC]
 </FilesMatch>
 
 # Everything under storage/ except uploads/ is server runtime state
-# (rate_limit.json + rate_limit.d/, demo_ip.json, tus/ partial uploads, ssh-sockets/ with
-# ephemeral BYOB private keys).
+# (rate_limit.json + rate_limit.d/, demo_ip.json, tus/ partial uploads).
 RewriteRule ^storage/(?!uploads/) - [F,L,NC]
 # Dotfiles anywhere (.env, an uploaded .user.ini/.htaccess, .git/…).
 RewriteRule (^|/)\. - [F,L]
@@ -212,7 +210,7 @@ Apache (`mod_deflate`):
 
 Also cache `/assets/` for a year with `Cache-Control: public, max-age=31536000,
 immutable`: every asset URL carries a `?v=` content hash, and the lazily loaded
-vendor files (xterm, CodeMirror) reuse fm.js's hash. The HTML itself is sent
+vendor files (CodeMirror) reuse fm.js's hash. The HTML itself is sent
 with `no-cache` plus an `ETag` and answers `304` on revalidation (not in demo
 mode, whose page embeds a per-visitor token).
 

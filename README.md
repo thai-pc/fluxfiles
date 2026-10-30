@@ -30,7 +30,7 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Embedding in Your App](#embedding-in-your-app)
   - [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard) — internals: [`docs/guides/FEATURES.md`](docs/guides/FEATURES.md)
 - [Storage Disks](#storage-disks)
-  - [SFTP disk](#sftp-disk-vps--shared-hosting) · [SSH terminal](#ssh-terminal-sftp-disks) · [Git deploy](#one-click-git-deploy-sftp-disks) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
+  - [SFTP disk](#sftp-disk-vps--shared-hosting) · [Terminal (BYO ttyd)](#terminal-bring-your-own-ttyd) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
 - [JWT Token Structure](#jwt-token-structure)
   - [Import from URL](#import-from-url)
 - [Multi-tenant](#multi-tenant)
@@ -77,7 +77,7 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 | | **Optimize** — recompress to WebP at rest + PDF compression (free/core) | Shrink storage/bandwidth without a paid module |
 | | **`strip_exif`** (opt-in) — lossless removal of GPS/camera metadata on upload | Privacy for user-uploaded phone photos |
 | **Media** | Inline image/video/audio/PDF preview + gated private local streaming · opt-in PDF/video poster thumbnails | Course platforms, private media, document portals |
-| **Admin / hosting** | Code/config editor (CodeMirror), **SFTP chmod**, **SSH terminal** (opt-in), **one-click Git deploy** (opt-in) | cPanel-style tooling: edit `.env`/`nginx.conf`, set permissions, run `git`/`composer`, redeploy a repo |
+| **Admin / hosting** | Code/config editor (CodeMirror), **SFTP chmod**, optional **terminal embed** (your own ttyd via `terminal_pty_url`) | cPanel-style tooling: edit `.env`/`nginx.conf`, set permissions |
 | **Metadata** | Title/alt/caption/tags + full-text file & folder search · AI auto-tag (free, bring your own provider key) | Digital Asset Management, SEO, large media libraries |
 | | 🔒 Paid: **AI vision** (background removal/upscale/smart-crop, BYO key), **OCR** | Image clean-up, text extraction |
 | **Insights** | Storage usage dashboard (quota + by type/folder) + **duplicate finder** | Show tenants their consumption, reclaim wasted space |
@@ -700,43 +700,13 @@ How it differs from S3 (by design):
   URL) — and, like `/api/fm/stream` generally, **it is proxied by both the Laravel
   and WordPress adapters**, not just the core-standalone/Docker app.
 
-### SSH terminal (SFTP disks)
+### Terminal (bring your own ttyd)
 
-When the disk is SFTP, FluxFiles can open a built-in **terminal** (xterm.js) so
-you can run shell commands on the box — `git pull`, `composer install`,
-`php artisan migrate`, `chmod -R`, `tar`, … — without leaving the file manager.
-It runs over the same SSH connection the SFTP disk already uses.
-
-```php
-// opt-in: a trusted admin token for one tenant's site, with the terminal on
-$token = fluxfiles_token([
-    'user'   => 'admin-7',
-    'perms'  => ['read', 'write'],
-    'disks'  => ['sftp'],
-    'prefix' => 'sites/acme/',
-    'ttl'    => 1800,
-    'claims' => ['allow_terminal' => true],
-]);
-```
-
-- **`POST /api/fm/terminal`** `{disk, cmd, cwd?, confirm?}` runs **one command per
-  request** over `phpseclib`'s SSH `exec`, merges stdout+stderr, and threads the
-  resulting working directory back so `cd`/`pwd` persist across commands. It's a
-  stateless **command-runner**, not a PTY — perfect for build/deploy/maintenance
-  commands, but interactive TUIs (`vim`, `top`, `nano`) and mid-command stdin
-  don't work (run `nano`-free edits via the [code editor](#config--code-editor)).
-  With `SFTP_MULTIPLEX=true` (key auth) consecutive commands reuse one OpenSSH
-  ControlMaster session instead of a fresh handshake each.
-- **UI:** a terminal button appears on an SFTP disk; the panel uses the FluxFiles
-  palette (dark slate + brand purple). **xterm.js is vendored** in
-  `assets/vendor/xterm/` (no CDN) so it loads offline / when a CDN is blocked.
-
-#### Want a *real* interactive terminal (vim/top/htop)? — `terminal_pty_url` (free, opt-in)
-
-The command-runner can't do interactive TUIs. If you want a true PTY, run **any
-PTY-over-WebSocket server on your own box** — [ttyd](https://github.com/tsl0922/ttyd),
-[gotty](https://github.com/yudai/gotty), or [wetty](https://github.com/butlerx/wetty),
-all free/OSS — and point FluxFiles at it with the **`terminal_pty_url`** claim:
+FluxFiles has no built-in shell: it is a file manager, and free OSS already does
+terminals well. If you want one next to your files, run **any PTY-over-WebSocket
+server on your own box** — [ttyd](https://github.com/tsl0922/ttyd),
+[gotty](https://github.com/yudai/gotty) or [wetty](https://github.com/butlerx/wetty)
+— and point FluxFiles at it with the **`terminal_pty_url`** claim:
 
 ```php
 $token = fluxfiles_token([
@@ -745,85 +715,23 @@ $token = fluxfiles_token([
     'disks'  => ['sftp'],
     'prefix' => 'sites/acme/',
     'claims' => [
-        'allow_terminal'   => true,
         'terminal_pty_url' => 'https://term.acme.com/',   // your self-hosted ttyd/gotty/wetty
     ],
 ]);
 ```
 
-When set (and `allow_terminal` is on), the terminal panel **embeds that server** for a
-full interactive shell instead of the command-runner. Empty (default) → the
-command-runner. This is **free/core** — a config toggle, never a paid module. The PTY
-server runs on the customer's own VPS (the box they manage), so FluxFiles' stateless
-core hosts nothing; that server owns its own auth. Only `http(s)` URLs are accepted.
+The claim alone adds a terminal button to the toolbar that embeds that server in a
+modal. Empty (default) → no terminal entry. Only `http(s)` URLs are accepted. It is
+**free/core** — a config toggle, never a paid module. The PTY server runs on your
+own box and owns its own auth; FluxFiles hosts nothing.
 
-> 🔒 **This grants shell access as the SSH user — it is NOT confined to the
-> disk's `root`.** Use a **least-privilege SSH account**; a shared or `root`-level
-> one gives any `allow_terminal` token the whole server. Guardrails: opt-in claim
-> (default off), `write` perm required, per-command audit, a server kill-switch
-> (`FLUXFILES_TERMINAL_DISABLED`), and an *accident* guard (not a security
-> boundary) against catastrophic commands. Full threat model, why the
-> dangerous-command list is deliberately small, and the shared-hosting/no-shell
-> fallback: [`docs/guides/FEATURES.md#ssh-terminal--security-model`](docs/guides/FEATURES.md#ssh-terminal--security-model).
+> 🔒 The trust boundary is your PTY server: put it behind your own auth, run it as
+> a least-privilege OS user, and only mint `terminal_pty_url` into tokens of
+> operators you'd hand that shell to. See
+> [`docs/guides/FEATURES.md#terminal--bring-your-own-terminal_pty_url`](docs/guides/FEATURES.md#terminal--bring-your-own-terminal_pty_url).
 
-**Adapter support (terminal):** `/api/fm/terminal` **is proxied by both the
-Laravel and WordPress adapters** (`FluxFilesController::terminal()` /
-`FluxFilesApi::handleTerminal()`, requiring core ≥ 0.2.46) as well as by
-`embed.php`, `@fluxfiles/node`, and the standalone Laravel mode — so the
-`allow_terminal` claim works the same way regardless of which adapter mints the
-token. React/Vue inherit whatever core their host points at. Runs against the
-standalone PHP server or the Docker image, and against either proxy adapter.
-
-### One-click Git Deploy (SFTP disks)
-
-A narrower, safer sibling of the SSH terminal above: instead of an arbitrary
-command, `POST /api/fm/git-deploy` runs a **fixed-shape** deploy against a repo
-you (the operator) configure ahead of time — never from the request body.
-
-```php
-// opt-in: lets this token redeploy one pre-configured repo on the SFTP box
-$token = fluxfiles_token([
-    'user'   => 'admin-7',
-    'perms'  => ['read', 'write'],
-    'disks'  => ['sftp'],
-    'prefix' => 'sites/acme/',
-    'ttl'    => 1800,
-    'claims' => [
-        'allow_git_deploy'   => true,
-        'git_deploy_path'    => '/var/www/acme',   // operator-set — never from the request
-        'git_deploy_branch'  => 'main',            // optional — omit to `pull --ff-only` the current branch
-        'git_deploy_hooks'   => false,              // default false — hooks run with core.hooksPath=/dev/null
-    ],
-]);
-```
-
-- **`POST /api/fm/git-deploy`** `{disk}` deploys `git_deploy_path` on the SFTP
-  box: with `git_deploy_branch` set it runs a **destructive**
-  `fetch --prune` + `reset --hard origin/<branch>` (matches the pinned branch
-  exactly, discarding local changes); without it, a safer
-  `pull --ff-only` that **refuses** on a diverged history instead of merging.
-- **Hooks are neutered by default** (`core.hooksPath=/dev/null`) — set
-  `git_deploy_hooks => true` only if you trust the repo's hook scripts to run on
-  your server.
-- **The repo's own config is audited first.** A `.git/config` carrying any key outside
-  a known-safe allowlist (a planted `filter`/`credential`/`core.sshCommand`/`include`,
-  …) is refused with `409 git_deploy_unsafe_repo` before anything runs, and FluxFiles
-  never lets a token write into a `.git/` directory on an SFTP disk.
-- Dedicated `allow_git_deploy` claim (default off) — **never bundled** with
-  `allow_sftp`/`allow_terminal`, so granting SFTP or the command-runner doesn't
-  silently grant deploy too. A `mkdir`-based lock on the repo serializes
-  concurrent deploys, and requests are rate-limited on their own bucket
-  (`FLUXFILES_GIT_DEPLOY_RATE_LIMIT`, default 5/min).
-
-> 🔒 Git deploy is deliberately a **subset** of the SSH terminal, not a second
-> arbitrary-shell door — the repo path/branch/hooks-enabled are all
-> operator-controlled claims. It still lands a non-atomic deploy onto a
-> (possibly live) webroot — see
-> [`docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`](docs/security/GIT-DEPLOY-SECURITY-REVIEW.md) for
-> the full threat model, including what's documented-but-not-solved.
-
-**Adapter support:** proxied by both Laravel (`FluxFilesController::gitDeploy()`)
-and WordPress (`FluxFilesApi::handleGitDeploy()`), requiring core ≥ 0.2.81.
+Deploying from a Git repo? Use your CI (GitHub Actions, Deployer, a webhook) —
+FluxFiles' SFTP disk is for file operations (list/upload/download/`chmod`).
 
 ### Config / code editor
 
@@ -1372,7 +1280,7 @@ FLUXFILES_LOCALE=vi
 | **BYOB local blocked** | BYOB tokens cannot use the `local` driver — only S3-compatible storage or SFTP |
 | **BYOB SSRF guard** | BYOB endpoints must be http(s) and are rejected if they resolve to loopback, link-local, private/reserved ranges, or the cloud metadata IP (`169.254.169.254`); the validated IP is pinned to the connection |
 | **External tools** | Ghostscript, ffmpeg, ssh, tesseract, c2patool and ClamAV run with a minimal environment — they never inherit `FLUXFILES_SECRET` or cloud keys; Ghostscript < 10.05.0 is refused |
-| **Rate limiting** | Token bucket per user, file-locked (or DB-backed), configurable (default: 60 read, 10 write/min) with dedicated buckets for import, tus, terminal, git deploy, `/img`, `/stream` and public share/intake links |
+| **Rate limiting** | Token bucket per user, file-locked (or DB-backed), configurable (default: 60 read, 10 write/min) with dedicated buckets for import, tus, `/img`, `/stream` and public share/intake links |
 | **Quota enforcement** | Per-user storage limits checked before upload and cross-disk copy |
 | **Duplicate detection** | SHA-256 hash; `dedupe_uploads` refuses byte-identical re-uploads |
 | **Audit trail** | Every write (and every authenticated 403) logged with user ID, action, IP, user agent; entries are HMAC-chained so edits/deletions are detectable; rotated entries are archived, not dropped |
@@ -1473,7 +1381,7 @@ Only two are required — everything else has a working default:
 
 Storage-disk credentials (`AWS_*`, `R2_*`, `SFTP_*`) are covered in
 [Storage Disks](#storage-disks) above, next to the config that reads them. Everything
-else — rate limits, local-media privacy, URL import, terminal, AI tagging, and more —
+else — rate limits, local-media privacy, URL import, AI tagging, and more —
 is documented with its default in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md).
 
 ---
@@ -1542,9 +1450,8 @@ Local file-backed counter used by the rate limiter (per-user read/write quotas c
 - Safe to delete during development (it will be recreated), but it may reset rate-limit counters.
 - In production, **do not expose this file publicly** (deny access at your web server).
 
-`storage/tus/` holds partial resumable uploads (swept after 24 h). The terminal's
-ControlMaster sockets live in `ssh-sockets/` under `FLUXFILES_STORAGE_PATH` when set,
-otherwise the system temp dir — both server-local runtime state that must never be served.
+`storage/tus/` holds partial resumable uploads (swept after 24 h) — server-local runtime
+state that must never be served.
 
 > Everything above describes the **default `FLUXFILES_STORAGE_BACKEND=json`** mode. Set
 > `FLUXFILES_STORAGE_BACKEND=db` to move metadata, search/folder index, audit log, trash

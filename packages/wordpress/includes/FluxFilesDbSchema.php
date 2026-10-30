@@ -18,7 +18,7 @@ defined('ABSPATH') || exit;
 class FluxFilesDbSchema
 {
     /** Bump whenever the SQL below changes; drives the admin_init upgrade check. */
-    public const VERSION = '1.4.0';
+    public const VERSION = '1.5.0';
 
     public static function install(): void
     {
@@ -34,6 +34,8 @@ class FluxFilesDbSchema
         // Head of the tamper-evident audit chain, one row per disk (AuditChain).
         $tChainHead = $wpdb->prefix . 'fluxfiles_audit_chain_head';
         $tHolds = $wpdb->prefix . 'fluxfiles_legal_holds';
+        // Sliding-window hits for the rate limiter (WpRateLimiterStorage).
+        $tRate = $wpdb->prefix . 'fluxfiles_rate_limits';
 
         $sql = "CREATE TABLE {$tFileMeta} (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -131,6 +133,15 @@ CREATE TABLE {$tChainHead} (
   disk varchar(64) NOT NULL,
   head_hash char(64) NOT NULL,
   PRIMARY KEY  (disk)
+) {$charsetCollate};
+
+CREATE TABLE {$tRate} (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  identifier varchar(191) NOT NULL,
+  bucket varchar(16) NOT NULL,
+  ts bigint(20) NOT NULL,
+  PRIMARY KEY  (id),
+  KEY identifier_bucket_ts (identifier,bucket,ts)
 ) {$charsetCollate};";
 
         dbDelta($sql);

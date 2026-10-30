@@ -305,10 +305,6 @@ class FluxFilesAdmin
     /** Verified status, so pasting a key gives an answer instead of silence. */
     public function renderLicenseStatus(): void
     {
-        if (!class_exists('\\FluxFiles\\LicenseManager')) {
-            echo '<p>The FluxFiles core is not loaded, so the licence cannot be checked.</p>';
-            return;
-        }
         $key = FluxFilesPlugin::licenseKey();
         if ($key === '') {
             echo '<p>Running the free core. Paid modules stay inactive until a licence key is entered.</p>';
@@ -349,7 +345,7 @@ class FluxFilesAdmin
      */
     public function renderLicenseExpiryNotice(): void
     {
-        if (!current_user_can('manage_options') || !class_exists('\\FluxFiles\\LicenseManager')) {
+        if (!current_user_can('manage_options')) {
             return;
         }
         if (FluxFilesPlugin::licenseKey() === '') {

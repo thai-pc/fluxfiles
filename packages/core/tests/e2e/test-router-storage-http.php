@@ -18,8 +18,8 @@
  *   - the mixed-case spelling `/storage/uploads/_FLUXFILES/…` is 403 too, since
  *     on a case-insensitive filesystem it resolves to the same directory.
  *   - `_variants/` STAYS servable — variant URLs are public by design.
- *   - everything else under `/storage/` is 403 (ssh-sockets/ holds ephemeral
- *     BYOB SSH private keys at mode 0600).
+ *   - everything else under `/storage/` is 403 (runtime dirs may hold
+ *     ephemeral BYOB private keys at mode 0600).
  *
  * Usage: php tests/e2e/test-router-storage-http.php   (requires the curl extension)
  */
@@ -61,10 +61,10 @@ file_put_contents("{$fx}/audit/archive/audit-1-aa.jsonl", '{"archived":true}' . 
 file_put_contents("{$uploadRoot}/{$prefix}/_variants/pic-thumb.webp", 'variant bytes');
 file_put_contents("{$uploadRoot}/{$prefix}/pic.txt", 'ordinary upload');
 
-$sshDir = $coreDir . '/storage/ssh-sockets';
-$plantedSsh = !is_dir($sshDir);
-@mkdir($sshDir, 0777, true);
-file_put_contents($sshDir . '/router-e2e-key', "-----BEGIN OPENSSH PRIVATE KEY-----\n");
+$keyDir = $coreDir . '/storage/router-e2e-runtime';
+$plantedKeyDir = !is_dir($keyDir);
+@mkdir($keyDir, 0777, true);
+file_put_contents($keyDir . '/router-e2e-key', "-----BEGIN OPENSSH PRIVATE KEY-----\n");
 
 $envFile = $coreDir . '/.env';
 $envBackup = is_file($envFile) ? file_get_contents($envFile) : null;
@@ -122,8 +122,8 @@ try {
         assertEqual('ordinary upload', $body, 'upload body');
     });
 
-    test('everything else under /storage/ is 403 (incl. ephemeral SSH keys)', function () use ($BASE) {
-        foreach (['/storage/ssh-sockets/router-e2e-key', '/storage/rate_limit.json', '/storage/'] as $p) {
+    test('everything else under /storage/ is 403 (incl. ephemeral private keys)', function () use ($BASE) {
+        foreach (['/storage/router-e2e-runtime/router-e2e-key', '/storage/rate_limit.json', '/storage/'] as $p) {
             [$st, $body] = get("{$BASE}{$p}");
             assertEqual(403, $st, $p);
             assertTrue(strpos($body, 'PRIVATE KEY') === false, "{$p} leaked key material");
@@ -132,8 +132,8 @@ try {
 
 } finally {
     proc_terminate($proc); proc_close($proc);
-    @unlink($sshDir . '/router-e2e-key');
-    if ($plantedSsh) { @rmdir($sshDir); }
+    @unlink($keyDir . '/router-e2e-key');
+    if ($plantedKeyDir) { @rmdir($keyDir); }
     $dir = $uploadRoot . '/' . $prefix;
     if (is_dir($dir)) {
         $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);

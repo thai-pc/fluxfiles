@@ -41,10 +41,12 @@ final class FixityChecker
     private const SIBLING_TREE_ACTIONS = ['extract'];
 
     /**
-     * Opt-in shell access (SFTP disks only). A command or a deploy can touch any
-     * file and its entry carries no disk-relative key (the command / the remote
-     * repo path go in `detail`), so it explains every change on the disk in its
-     * window — the entry itself is the record of who did it.
+     * HISTORICAL: the SSH terminal and one-click Git deploy were removed in 1.0.0,
+     * but their chained entries stay in existing audit logs. A command or a deploy
+     * could touch any file and its entry carries no disk-relative key, so it keeps
+     * explaining every change on the disk in its window; otherwise the first
+     * fixity run after an upgrade would flag those changes as unexplained.
+     * Nothing writes these actions any more.
      */
     private const DISK_WIDE_ACTIONS = ['terminal', 'git_deploy'];
 

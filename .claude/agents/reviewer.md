@@ -35,7 +35,7 @@ Go through the diff (`git diff`, `git status`) and check each that applies:
   channels (embed / node / laravel / wordpress) *and so are its tuning claims*. Shipping the
   gate alone leaves the module enabled-but-inert — the real bug: Laravel/WP could switch
   Webhooks on with no `webhook_url`, so it POSTed nowhere. If a channel omits a claim on
-  purpose (WP skips the overlay watermark + SSH terminal), the omission carries a comment
+  purpose (WP skips the overlay watermark), the omission carries a comment
   saying why. Adapter smokes must assert the **raw JWT payload**, not `Claims::fromJwtPayload`
   — forwarding needs no core API, and using one breaks `check-adapter-core-floor.sh`.
 

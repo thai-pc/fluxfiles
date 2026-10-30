@@ -335,8 +335,6 @@
     "dlp_unscannable": "Chunk-upload kan niet worden gescand op persoonsgegevens. Gebruik de standaardupload.",
     "dlp_failed": "De controle op persoonsgegevens kon niet worden voltooid.",
     "storage_not_writable": "Opslag is niet beschrijfbaar.",
-    "terminal_disabled": "De terminal is uitgeschakeld op deze server.",
-    "terminal_forbidden": "Terminaltoegang is niet toegestaan.",
     "optimize_forbidden": "Optimaliseren is niet toegestaan.",
     "webhook_not_configured": "Er is geen webhook-URL geconfigureerd op dit token.",
     "webhook_blocked": "De webhook-URL wijst naar een privé- of geblokkeerd adres.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "PDF-optimalisatie vereist Ghostscript op de server.",
     "perm_denied": "Toegang geweigerd.",
     "too_many": "Te veel bestanden in één verzoek.",
-    "terminal_unsupported": "De terminal werkt alleen op een SFTP-schijf.",
-    "terminal_no_shell": "Deze host staat geen shell toe (alleen SFTP).",
-    "terminal_confirm_required": "Deze opdracht lijkt gevaarlijk — bevestig om uit te voeren.",
-    "git_deploy_disabled": "Git-deploy is uitgeschakeld op deze server.",
-    "git_deploy_forbidden": "Git-deploy is niet toegestaan.",
-    "git_deploy_unconfigured": "Het Git-deploypad is niet geconfigureerd voor dit token.",
-    "git_deploy_in_progress": "Er loopt al een deploy voor deze repository.",
-    "git_deploy_unsafe_repo": "De git-configuratie van deze repository bevat een instelling die commando's uitvoert. Deploy geweigerd.",
     "watermark_overlay_active": "Inbranden is niet beschikbaar op een preview-/overlay-watermerktoken. Gebruik een downloadbaar token.",
     "no_watermark_backup": "Geen watermerk om te verwijderen.",
     "audit_purge_no_cutoff": "Er is een expliciete afkapdatum (of een bewaarinstelling van het account) nodig om de auditgeschiedenis te wissen.",
@@ -464,7 +454,6 @@
       "chunk_upload": "Upload in delen",
       "content_update": "Inhoud bewerken",
       "unknown": "Overig",
-      "terminal": "Terminalopdracht",
       "virus_blocked": "Geblokkeerd door virusscanner",
       "dlp_blocked": "Geblokkeerd wegens persoonsgegevens",
       "watermark_remove": "Watermerk verwijderen",
@@ -683,13 +672,7 @@
     "removed": "Watermerk verwijderd"
   },
   "terminal": {
-    "title": "Terminal",
-    "placeholder": "Typ een opdracht en druk op Enter…",
-    "unsupported": "Deze host ondersteunt geen terminal (alleen SFTP).",
-    "danger_confirm": "Deze opdracht lijkt gevaarlijk. Toch uitvoeren?",
-    "run_anyway": "Toch uitvoeren",
-    "clear": "Wissen",
-    "truncated": "Uitvoer afgekapt."
+    "title": "Terminal"
   },
   "pdf": {
     "title": "PDF-hulpmiddelen"

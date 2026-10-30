@@ -31,7 +31,6 @@ $token = fluxfiles_token([
     'webp'   => ['webp_max_width' => 1500],
     'media'  => ['preview_url_ttl' => 7200],
     'claims' => [                       // ← any claim by its raw name
-        'allow_terminal'   => true,
         'terminal_pty_url' => 'https://term.acme.com/',
         'allow_optimize'   => true,
         'upload_collision' => 'overwrite',
@@ -93,12 +92,7 @@ and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/AP
 | `allow_extract` | bool | `true` | Allow `POST /api/fm/extract`. |
 | `zip_max_mb` | int (MB) | `1024` | Max total uncompressed size for a zip/extract (bomb cap). |
 | `zip_max_files` | int | `10000` | Max file count for a zip/extract. |
-| `allow_terminal` | bool | `false` | SSH command-runner on SFTP disks; needs `write`. Grants shell as the SSH user — opt-in. Gates `POST /api/fm/terminal`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.46). |
-| `terminal_pty_url` | string (http/s) | `""` | Embed a self-hosted PTY server (ttyd/gotty/wetty) for an interactive terminal; empty → command-runner. Free. |
-| `allow_git_deploy` | bool | `false` | One-click Git deploy on SFTP disks; needs `write`. Deliberately narrower than `allow_terminal` — no free-form command, fixed shell-safe shape only. Independent claim, never implied by `allow_sftp`/`allow_terminal`. Gates `POST /api/fm/git-deploy`. Proxied by the Laravel/WordPress adapters too (requires core ≥ 0.2.81). See `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`. |
-| `git_deploy_path` | string | `""` | Repo path on the SFTP disk that a deploy syncs — operator-set at mint time, never accepted from the request body. Required (empty → 400) when `allow_git_deploy` is true. |
-| `git_deploy_branch` | string | `""` | Branch to force-sync via `fetch --prune` + `reset --hard origin/<branch>` (destructive, deterministic). Empty → `pull --ff-only` on whatever branch is checked out instead (refuses on divergence). Restricted to `[A-Za-z0-9._/-]+`; anything else is dropped to empty. |
-| `git_deploy_hooks` | bool | `false` | Let the deployed repo's Git hooks (`post-merge`, etc.) run. Default off — hooks run with `core.hooksPath=/dev/null` since a hostile hook is otherwise arbitrary code execution on the VPS. When on, `core.hooksPath` is pinned to the repo's own `.git/hooks`; other config-driven exec paths stay neutered either way. |
+| `terminal_pty_url` | string (http/s) | `""` | Embed a self-hosted PTY server (ttyd/gotty/wetty) in a terminal modal. This claim alone enables the toolbar's terminal entry; empty → no terminal entry (FluxFiles ships no terminal of its own). Free. |
 | `pdf_tools_url` | string (http/s) | `""` | Embed a self-hosted PDF toolkit (Stirling-PDF) — shows a "PDF tools" button. Empty → no button. Free BYO-embed. |
 | `office_url` | string (http/s) | `""` | Embed a self-hosted office suite (Collabora/OnlyOffice) for .docx/.xlsx/.pptx…; may carry a `{url}` placeholder substituted with the selected file's URL. Empty → no action. Free BYO-embed. |
 | `esign_url` | string (http/s) | `""` | Embed a self-hosted e-signature tool (DocuSeal) for signing PDFs/docs; may carry a `{url}` placeholder substituted with the selected file's URL. Empty → no action. Free BYO-embed. |
@@ -265,7 +259,6 @@ fields, `CredentialEncryptor` doesn't allowlist config keys).
 | `host_fingerprint` | string | `""` | Colon-hex fingerprint(s) (comma-separated) pinning the expected host key. Empty = trust any host key. |
 | `require_host_key` | bool | `false` | Fail closed (`sftp_host_key_required`) if `host_fingerprint` isn't also set. |
 | `strict_algorithms` | bool | `false` | Modern-only KEX/cipher/MAC/host-key allowlist (`DiskManager::modernSshAlgorithmLists()`). |
-| `ssh_multiplex` | bool | `false` | Reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands. Key-based auth only, no passphrase. See `docs/security/SFTP-CONTROLMASTER-SPEC.md`. |
 
 ---
 
@@ -281,7 +274,7 @@ name through `disks` before a user can access it.
 | Local | `FLUXFILES_LOCAL_PRIVATE` | `false`. The local root is `storage/uploads`; private mode requires that root not be static-served. |
 | S3 / S3-compatible | `AWS_DEFAULT_REGION`, `AWS_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT`, `AWS_VISIBILITY`, `AWS_PUBLIC_URL`, `AWS_URL_TTL` | Region defaults to `ap-southeast-1`; visibility defaults to `private`; URL TTL defaults to 3600 seconds. Set `AWS_ENDPOINT` for MinIO/Spaces-compatible storage. |
 | Cloudflare R2 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_VISIBILITY`, `R2_PUBLIC_URL`, `R2_URL_TTL` | Uses R2's S3-compatible endpoint; visibility defaults to `private`; URL TTL defaults to 3600 seconds. |
-| SFTP | `SFTP_HOST`, `SFTP_PORT`, `SFTP_USERNAME`, `SFTP_PASSWORD`, `SFTP_PRIVATE_KEY`, `SFTP_PRIVATE_KEY_PASSPHRASE`, `SFTP_ROOT`, `SFTP_HOST_FINGERPRINT`, `SFTP_REQUIRE_HOST_KEY`, `SFTP_STRICT_ALGORITHMS`, `SFTP_MULTIPLEX` | The disk exists only when `SFTP_HOST` is set. Prefer a pinned host fingerprint and enable `SFTP_REQUIRE_HOST_KEY` once configured. Key auth wins if both key and password are supplied. |
+| SFTP | `SFTP_HOST`, `SFTP_PORT`, `SFTP_USERNAME`, `SFTP_PASSWORD`, `SFTP_PRIVATE_KEY`, `SFTP_PRIVATE_KEY_PASSPHRASE`, `SFTP_ROOT`, `SFTP_HOST_FINGERPRINT`, `SFTP_REQUIRE_HOST_KEY`, `SFTP_STRICT_ALGORITHMS` | The disk exists only when `SFTP_HOST` is set. Prefer a pinned host fingerprint and enable `SFTP_REQUIRE_HOST_KEY` once configured. Key auth wins if both key and password are supplied. |
 
 See [`DEPLOYMENT.md`](../guides/DEPLOYMENT.md) for web-server rules, especially the
 private-local-media requirement.
@@ -297,7 +290,7 @@ private-local-media requirement.
 | Env var | Default | Notes |
 |---|---|---|
 | `FLUXFILES_SECRET` | — | **Required.** HS256 signing secret (**≥ 32 bytes**) — also used for stream/img per-file tokens and (HKDF-derived) the audit-log HMAC chain. |
-| `FLUXFILES_STORAGE_PATH` | — | Runtime-state dir for server-local state that is NOT per-disk: the rate-limit counter (`rate_limit.json`), resumable-upload staging (`tus/`), the SFTP `ControlMaster` runtime dir (`ssh-sockets/` — socket index + ephemeral BYOB private keys) and the SSO OIDC discovery/JWKS cache (`fluxfiles-sso-cache/`). When **unset**, `rate_limit.json` and `tus/` default to `packages/core/storage/`, while `ssh-sockets/` and the SSO cache default to the system temp dir (`sys_get_temp_dir()`), because `packages/core/storage` sits inside the served document root. When set, all four live under it — keep it outside the web root and short (Unix socket paths are capped at ~100 bytes). **Not** the local disk root, which is a separate, hardcoded `config/disks.php` path (`storage/uploads/`). On a multi-node deployment, `tus/` must be shared (or use sticky sessions). |
+| `FLUXFILES_STORAGE_PATH` | — | Runtime-state dir for server-local state that is NOT per-disk: the rate-limit counter (`rate_limit.json`), resumable-upload staging (`tus/`), and the SSO OIDC discovery/JWKS cache (`fluxfiles-sso-cache/`). When **unset**, `rate_limit.json` and `tus/` default to `packages/core/storage/`, while the SSO cache defaults to the system temp dir (`sys_get_temp_dir()`), because `packages/core/storage` sits inside the served document root. When set, all three live under it — keep it outside the web root. **Not** the local disk root, which is a separate, hardcoded `config/disks.php` path (`storage/uploads/`). On a multi-node deployment, `tus/` must be shared (or use sticky sessions). |
 | `FLUXFILES_LOCAL_ROOT` | `<storage>/uploads` | Only read by core's demo-mode sandbox purge (where the local disk root lives); the Laravel adapter also uses it as its `local` disk root. |
 | `FLUXFILES_STORAGE_BACKEND` | `json` | `json` (unchanged default — metadata/search/folder-index/audit/trash live per-disk in `_fluxfiles/*.json`, which travels with user storage) or `db` (that per-disk data lives in the configured database instead — one switch drives `MetadataRepositoryInterface`). **Rate limits are the one exception**: they always live server-side in a single `rate_limit.json` at `FLUXFILES_STORAGE_PATH` (not per-disk, not under `_fluxfiles/`) when `json`, or via `RateLimiterStorageInterface`'s DB implementation when `db` — this switch affects both. Quota **enforcement** always uses a live storage scan regardless of this setting: one walk per write yields both the `max_storage` and `max_files` figures, and no cached value is ever consulted. Only the `/quota` storage meter may show a figure up to 120 s old (`<prefix>/_fluxfiles/quota.json`, refreshed by the meter and the usage dashboard walks; never read by enforcement, never touched by writes). |
 | `FLUXFILES_INDEX_WARN_MB` | `5` | JSON backend only: when the disk-wide metadata index (`_fluxfiles/index.json`) passes this size, the server logs a warning (at most once an hour per disk) and the standalone usage dashboard shows unscoped (operator) tokens a banner suggesting `FLUXFILES_STORAGE_BACKEND=db` (the Laravel/WordPress proxies log only). Every list page reads the whole index and every write rewrites it — see *Large libraries* in `docs/guides/DEPLOYMENT.md`. `0` turns the warning off. |
@@ -315,18 +308,6 @@ private-local-media requirement.
 | `FLUXFILES_STREAM_RATE_LIMIT` | `300` | `/api/fm/stream` requests/min, keyed on the stream token's `sub`. Higher than `/img` because a seeking `<video>` fires one Range request per seek. `0` disables the bucket. |
 | `FLUXFILES_LOCAL_PRIVATE` | `false` | Serve local media through `/api/fm/stream` (token-gated) instead of static URLs. |
 | `FLUXFILES_XACCEL` | — | nginx `X-Accel-Redirect` internal location for the stream fast-path. |
-| `FLUXFILES_TERMINAL_DISABLED` | `false` | Server kill-switch for the SSH terminal. |
-| `FLUXFILES_TERMINAL_CONFIRM` | `true` | `false` disables the dangerous-command double-confirm. |
-| `FLUXFILES_TERMINAL_TIMEOUT` | `30` | Per-command timeout (seconds). |
-| `FLUXFILES_GIT_DEPLOY_DISABLED` | `false` | Server kill-switch for Git deploy. |
-| `FLUXFILES_GIT_DEPLOY_TIMEOUT` | `120` | Per-deploy timeout (seconds) — longer than the terminal's, since a cold `fetch` (LFS/submodules) can take longer than an interactive command. |
-| `FLUXFILES_GIT_DEPLOY_RATE_LIMIT` | `5` | Deploy requests/min per user — tighter than the general write bucket, since resetting a live webroot repeatedly is never legitimate traffic. |
-| `FLUXFILES_TERMINAL_RATE_LIMIT` | `30` | Terminal requests/min per user — its own bucket, looser than git-deploy (interactive command-runner calls are more frequent than a deploy) but tighter than the general write bucket, since each call execs a real command on the remote server. |
-| `SFTP_MULTIPLEX` | `false` | Static-disk `ssh_multiplex` toggle — reuse an OpenSSH ControlMaster session across `/api/fm/terminal` commands instead of reconnecting per command. Key-based auth only (no passphrase); a password-only or passphrase-protected-key disk silently falls back to the existing per-request path. See `docs/security/SFTP-CONTROLMASTER-SPEC.md`. |
-| `FLUXFILES_SSH_MULTIPLEX_DISABLED` | `false` | Server kill-switch — forces every disk back to the phpseclib-only path regardless of `ssh_multiplex`. |
-| `FLUXFILES_SSH_MULTIPLEX_PERSIST` | `60` | `ControlPersist` seconds. Clamped `[10, 120]`. |
-| `FLUXFILES_SSH_MULTIPLEX_MAX_SOCKETS` | `20` | Server-wide LRU cap on concurrently-open multiplexed sockets. |
-| `FLUXFILES_SSH_MULTIPLEX_CONNECT_TIMEOUT` | `10` | Seconds a cold `ssh -M` connect gets before it's killed and the request falls back to phpseclib. |
 | `FLUXFILES_AI_PROVIDER` | — | AI vision/tagging provider (server-side; BYO key). `claude`/`anthropic`, `gemini`/`google`, `openai`, `openrouter`, `groq`, `mistral`, `xai`/`grok`, `ollama`, or `compatible` for any other OpenAI-compatible endpoint. Empty = disabled. |
 | `FLUXFILES_AI_API_KEY` | — | Key for that provider. Empty is fine for a keyless local endpoint (Ollama). |
 | `FLUXFILES_AI_MODEL` | provider default | Vision model override. Required with `compatible`. |

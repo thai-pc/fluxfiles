@@ -1,3 +1,5 @@
+> Historical: feature removed in 1.0.0
+
 # SSH ControlMaster (connection reuse) — Security + Performance Review
 
 Status: **Implemented and shipped in core-v0.2.82, scoped exactly as recommended below.**

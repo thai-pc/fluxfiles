@@ -73,12 +73,8 @@ test('successEntry: presign is split by method, key is tenant-scoped, disk falls
     assertEqual('tenant/x.png', $u['key'], 'multipart upload: key comes from the result');
 });
 
-test('detail: terminal logs the command, git_deploy the path@branch, share_revoke the jti', function () {
+test('detail: share_revoke logs the jti', function () {
     $c = claims();
-    assertEqual('ls -la', AuditPolicy::detail('terminal', ['cmd' => 'ls -la'], $c));
-    $c->gitDeployPath = '/srv/app';
-    $c->gitDeployBranch = 'main';
-    assertEqual('/srv/app@main', AuditPolicy::detail('git_deploy', [], $c));
     assertEqual('jti=abc', AuditPolicy::detail('share_revoke', ['jti' => 'abc'], $c));
     assertEqual('infected: EICAR', AuditPolicy::detail('virus_scan', [], $c, ['threat' => 'EICAR']));
     assertEqual('clean', AuditPolicy::detail('virus_scan', [], $c, ['clean' => true]));

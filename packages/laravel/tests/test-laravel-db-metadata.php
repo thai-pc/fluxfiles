@@ -27,12 +27,15 @@ function assertEqual($e, $a, string $m = ''): void { if ($e !== $a) throw new \R
 // ── Laravel-less bootstrap: vendor/autoload.php here already pulls in
 // illuminate/database + fluxfiles/fluxfiles (see packages/laravel/composer.json).
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../src/LaravelDbMetadataHandler.php';
-// The vendored core can predate AuditChain (it ships with core-v0.2.96+); load the
-// monorepo copy so the chain test below runs against the source of truth.
-if (!class_exists(\FluxFiles\AuditChain::class) && is_file(__DIR__ . '/../../core/api/AuditChain.php')) {
-    require_once __DIR__ . '/../../core/api/AuditChain.php';
+// Run against the monorepo core (the source of truth for the shared classes —
+// Db\MetadataRowLogic, RateLimiterFactory, AuditChain, ...): its autoloader is
+// registered last, so it wins over the composer-installed copy in vendor/.
+$coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
+if (is_file($coreAutoload)) {
+    require_once $coreAutoload;
 }
+require_once __DIR__ . '/../src/LaravelPdoConnection.php';
+require_once __DIR__ . '/../src/LaravelDbMetadataHandler.php';
 
 use FluxFiles\DiskManager;
 use FluxFiles\Laravel\LaravelDbMetadataHandler;
@@ -41,7 +44,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Facade;
 
 if (!function_exists('config')) {
-    function config($key, $default = null) { return $key === 'fluxfiles.db_connection' ? null : $default; }
+    function config($key, $default = null) { return $key === 'fluxfiles.db_connection' ? ($GLOBALS['FX_DB_CONN'] ?? null) : $default; }
 }
 
 $capsule = new Capsule();
@@ -674,6 +677,141 @@ test('audit(): entries are HMAC-chained and an edited row is detected', function
     } finally {
         \FluxFiles\AuditChain::configure('');
     }
+});
+
+test('readAuditWindow(): SQL-side limit/since/user window, oldest-first, same entry shape as readAudit()', function () use ($repo, $disk) {
+    $conn = Capsule::connection();
+    $win = 'window-disk';
+    $now = time();
+    foreach ([[$now - 300, 'a', 'old'], [$now - 200, 'b', 'mid1'], [$now - 100, 'a', 'mid2'], [$now - 10, 'b', 'new']] as $i => [$ts, $user, $key]) {
+        $conn->table('fluxfiles_audit_log')->insert([
+            'disk' => $win, 'owner' => $user, 'action' => 'upload', 'file_key' => $key,
+            'ip' => null, 'user_agent' => null, 'detail' => null, 'created_at' => $ts,
+        ]);
+    }
+    assertEqual(['old', 'mid1', 'mid2', 'new'], array_column($repo->readAuditWindow($win), 'file_key'), 'no window = everything, oldest first');
+    assertEqual($repo->readAudit($win), $repo->readAuditWindow($win), 'readAudit() is the unwindowed readAuditWindow()');
+    assertEqual(['mid2', 'new'], array_column($repo->readAuditWindow($win, null, 2), 'file_key'), 'limit = the NEWEST n, still chronological');
+    assertEqual(['mid1', 'mid2', 'new'], array_column($repo->readAuditWindow($win, $now - 250), 'file_key'), 'since');
+    assertEqual(['mid1', 'new'], array_column($repo->readAuditWindow($win, null, null, 'b'), 'file_key'), 'user filter');
+    assertEqual(['new'], array_column($repo->readAuditWindow($win, $now - 250, 1, 'b'), 'file_key'), 'all three combine');
+    $row = $repo->readAuditWindow($win, null, 1)[0];
+    foreach (['user_id', 'action', 'disk', 'file_key', 'ip', 'user_agent', 'detail', 'created_at', 'prev_hash', 'entry_hash'] as $k) {
+        assertTrue(array_key_exists($k, $row), "entry has {$k}");
+    }
+    // The page query never loads the table: only the LIMITed rows come back.
+    $conn->enableQueryLog();
+    $repo->readAuditWindow($win, null, 2);
+    $conn->disableQueryLog();
+    assertTrue(str_contains(strtolower(implode(' ', array_column($conn->getQueryLog(), 'query'))), 'limit 2'), 'LIMIT is applied in SQL');
+});
+
+test('the trait supplies the shared row logic; the handler no longer carries its own copies', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/LaravelDbMetadataHandler.php');
+    assertTrue(str_contains($src, 'use MetadataRowLogic;'), 'uses the core trait');
+    foreach (['function isReservedPath(', 'function highlight(', 'function rowToHoldEntry(', 'function matchOverlappingHold(', 'function holdsCoveringMany(', 'function countChildren(', 'function trackParents('] as $dup) {
+        assertTrue(!str_contains($src, $dup), "duplicate removed: {$dup}");
+    }
+    assertTrue(!str_contains($src, 'class_exists('), 'no old-core shim left');
+});
+
+test('DB-mode rate limiter: LaravelPdoConnection + RateLimiterFactory::makeDb() count in the app database and 429 over the limit', function () use ($schema) {
+    // The shipped migration creates the adapter's own `fluxfiles_rate_limits` table.
+    $migration = require __DIR__ . '/../database/migrations/2026_10_30_000000_create_fluxfiles_rate_limits_table.php';
+    $migration->up();
+    assertTrue($schema->hasTable('fluxfiles_rate_limits'), 'migration created fluxfiles_rate_limits');
+    assertTrue(!$schema->hasTable('rate_limits'), 'no generic rate_limits table');
+    $migration->up(); // idempotent when the table exists
+
+    $conn = new \FluxFiles\Laravel\LaravelPdoConnection(null);
+    assertEqual('sqlite', $conn->driver(), 'driver comes from Laravel\'s PDO');
+    $limiter = \FluxFiles\RateLimiterFactory::makeDb($conn, 5, 2, 60, 'fluxfiles_rate_limits');
+    $limiter->check('rl-user', 'write');
+    $limiter->check('rl-user', 'write');
+    $code = null;
+    try {
+        $limiter->check('rl-user', 'write');
+    } catch (\FluxFiles\ApiException $e) {
+        $code = $e->getHttpCode();
+    }
+    assertEqual(429, $code, 'third write in the window is refused');
+    $limiter->check('rl-user', 'read'); // separate bucket
+    assertEqual(2, Capsule::connection()->table('fluxfiles_rate_limits')->where('identifier', 'rl-user')->where('bucket', 'write')->count(), 'hits are rows in the app DB');
+});
+
+test('host app with its own `rate_limits` table: migrate and rollback leave it untouched', function () use ($capsule) {
+    $c = Capsule::connection();
+    $s = $capsule->schema();
+    $s->create('rate_limits', function (Blueprint $t) { $t->id(); $t->string('who'); $t->integer('n'); });
+    $c->table('rate_limits')->insert(['who' => 'host', 'n' => 7]);
+    $s->dropIfExists('fluxfiles_rate_limits');
+    $migration = require __DIR__ . '/../database/migrations/2026_10_30_000000_create_fluxfiles_rate_limits_table.php';
+    $migration->up();
+    assertTrue($s->hasTable('fluxfiles_rate_limits'), 'own table created even though rate_limits exists');
+    // The limiter targets the fluxfiles_ table, never the host's.
+    $lim = \FluxFiles\RateLimiterFactory::makeDb(new \FluxFiles\Laravel\LaravelPdoConnection(null), 5, 5, 60, 'fluxfiles_rate_limits');
+    $lim->check('h', 'read');
+    assertEqual(1, $c->table('rate_limits')->count(), 'host table has no new rows');
+    assertEqual(7, (int) $c->table('rate_limits')->value('n'), 'host row intact');
+    $migration->down();
+    assertTrue(!$s->hasTable('fluxfiles_rate_limits'), 'rollback drops the fluxfiles_ table');
+    assertTrue($s->hasTable('rate_limits') && $c->table('rate_limits')->count() === 1, 'rollback never touches the host rate_limits');
+    $s->dropIfExists('rate_limits');
+    $migration->up(); // restore for later tests
+});
+
+test('prefixed connection: DB limiter, audit reads (readAudit/window/verify) and the migration all honour the table prefix', function () use ($capsule) {
+    $capsule->addConnection(['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => 'pfx_'], 'pfx');
+    $s = $capsule->getConnection('pfx')->getSchemaBuilder();
+    $s->create('fluxfiles_audit_log', function (Blueprint $t) {
+        $t->id(); $t->string('disk', 64); $t->string('owner', 191)->nullable(); $t->string('action', 191);
+        $t->text('file_key')->nullable(); $t->string('ip', 64)->nullable(); $t->text('user_agent')->nullable();
+        $t->text('detail')->nullable(); $t->bigInteger('created_at');
+        $t->string('prev_hash', 64)->nullable(); $t->string('entry_hash', 64)->nullable();
+    });
+    $s->create('fluxfiles_audit_chain_head', function (Blueprint $t) { $t->string('disk', 64)->primary(); $t->string('head_hash', 64); });
+
+    $GLOBALS['FX_DB_CONN'] = 'pfx';
+    try {
+        // migration -> pfx_fluxfiles_rate_limits
+        $migration = require __DIR__ . '/../database/migrations/2026_10_30_000000_create_fluxfiles_rate_limits_table.php';
+        $migration->up();
+        assertTrue($s->hasTable('fluxfiles_rate_limits'), 'migration created the (prefixed) table');
+
+        // limiter, named like FluxFilesController::checkRate() does
+        $prefix = \Illuminate\Support\Facades\DB::connection('pfx')->getTablePrefix();
+        assertEqual('pfx_', $prefix);
+        $lim = \FluxFiles\RateLimiterFactory::makeDb(new \FluxFiles\Laravel\LaravelPdoConnection('pfx'), 5, 1, 60, $prefix . 'fluxfiles_rate_limits');
+        $lim->check('u1', 'write');
+        $code = null;
+        try { $lim->check('u1', 'write'); } catch (\FluxFiles\ApiException $e) { $code = $e->getHttpCode(); }
+        assertEqual(429, $code, 'limiter works on a prefixed connection');
+        assertEqual(1, Capsule::connection('pfx')->table('fluxfiles_rate_limits')->count(), 'hit stored in pfx_fluxfiles_rate_limits');
+
+        // audit read paths (raw SQL) with the chain on
+        \FluxFiles\AuditChain::configure(str_repeat('p', 40));
+        try {
+            $repo = new LaravelDbMetadataHandler(new DiskManager([]), 'pfx');
+            $repo->audit('local', 'upload', ['user_id' => 'u1', 'file_key' => 'a.txt']);
+            $repo->audit('local', 'delete', ['user_id' => 'u2', 'file_key' => 'b.txt']);
+            assertEqual(2, count($repo->readAudit('local')), 'readAudit');
+            assertEqual(['b.txt'], array_column($repo->readAuditWindow('local', null, 1), 'file_key'), 'readAuditWindow limit');
+            assertEqual(['a.txt'], array_column($repo->readAuditWindow('local', null, null, 'u1'), 'file_key'), 'readAuditWindow user');
+            assertEqual(2, count($repo->readAuditWindow('local', time() - 60)), 'readAuditWindow since');
+            $v = \FluxFiles\AuditChain::verify($repo->readAudit('local'));
+            assertTrue(($v['tampered'] ?? []) === [] && ($v['chained'] ?? 2) >= 0, 'verify path: ' . json_encode($v));
+            $repo->insertAuditEntries('local', []); // builder path stays prefixed too
+        } finally {
+            \FluxFiles\AuditChain::configure('');
+        }
+    } finally {
+        unset($GLOBALS['FX_DB_CONN']);
+    }
+});
+
+test('the controller names the limiter table with the connection prefix', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(str_contains($src, "getTablePrefix() . 'fluxfiles_rate_limits'"), 'checkRate passes prefix + fluxfiles_rate_limits');
 });
 
 exec('rm -rf ' . escapeshellarg($storageRoot));

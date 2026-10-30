@@ -61,7 +61,7 @@ test('no passphrase → provider passphrase is null (unencrypted key still works
 
 // The SSRF guard must be WIRED INTO the SFTP path (not just exist) — a loopback /
 // RFC1918 / cloud-metadata SFTP host (incl. a token-supplied BYOB one) is rejected
-// before any connection, so the terminal/chmod can't be aimed at internal services.
+// before any connection, so chmod can't be aimed at internal services.
 test('buildSftpProvider rejects an internal SFTP host (SSRF guard wired in)', function () {
     foreach (['127.0.0.1', 'localhost', '169.254.169.254', '10.0.0.5', '192.168.1.10'] as $host) {
         try {

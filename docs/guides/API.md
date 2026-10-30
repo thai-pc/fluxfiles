@@ -60,8 +60,6 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 | `POST` | `/chmod` | `{disk, path, mode}` | Set an SFTP file's mode (write + `allow_chmod`) |
 | `POST` | `/watermark` | `{disk, path, type, text?, logo_data?, x, y, scale, opacity, color?, dest?}` | Burn-in watermark editor (logo/text), permanent (**free/core**). Non-destructive: snapshots the original on first burn so it can be undone |
 | `POST` | `/watermark/remove` | `{disk, path}` | Restore the pre-watermark original (404 if none) |
-| `POST` | `/terminal` | `{disk, cmd, cwd?, confirm?}` | Stateless SSH command-runner, **SFTP disks only** (**free/core**). Opt-in via `allow_terminal` (default off) + `write`. Dangerous commands need `confirm` |
-| `POST` | `/git-deploy` | `{disk}` | One-click Git deploy, **SFTP disks only** (**free/core**). Fixed-shape subset of `/terminal` — repo path/branch/hooks come from operator claims (`git_deploy_path`/`git_deploy_branch`/`git_deploy_hooks`), never the request body. Opt-in via `allow_git_deploy` (default off) + `write`. A repo whose `.git/config` carries keys outside a known-safe allowlist is refused (`409 git_deploy_unsafe_repo`) |
 
 > **Tokened media endpoints** (query-string token, no `Authorization` header — for `<img>`/`<video>`): `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see [FEATURES.md](FEATURES.md#on-demand-webp--avif)) and `GET /stream?token=` (gated private media, SFTP serving). Proxied by core-standalone, Laravel, and WordPress alike.
 

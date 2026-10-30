@@ -68,13 +68,12 @@ The core then accepts `POST /api/fm/import-url` for that token (SSRF-guarded,
 sharing the quota/dedup/variants pipeline). Server-wide defaults come from
 `FLUXFILES_IMPORT_*` env vars on the core service.
 
-### SFTP disk: chmod & SSH terminal
+### SFTP disk: chmod
 
 When the token targets a FluxFiles server that has an **SFTP disk** configured
 (`SFTP_*` env on that server — see the
 [core README](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)),
-you can hand a token the SFTP file-manager tools. `chmod` is on by default for SFTP;
-the **SSH terminal** is opt-in (it grants shell access as the SSH user):
+you can hand a token the SFTP file-manager tools. `chmod` is on by default for SFTP:
 
 ```ts
 const token = createToken({
@@ -82,12 +81,11 @@ const token = createToken({
   perms: ['read', 'write'],
   disks: ['sftp'],          // an SFTP disk configured on the FluxFiles server
   allowChmod: true,         // cPanel-style permissions (default on for SFTP)
-  allowTerminal: true,      // SSH terminal — opt-in, off by default
 });
 ```
 
 The standalone core / Docker image serves these, and so do the Laravel and WordPress
-proxy adapters (`/chmod`, `/terminal` and `/git-deploy` are all proxied) whenever the
+proxy adapters (`/chmod` is proxied) whenever the
 token reaches an SFTP disk there.
 
 ### BYOB — encrypt a user's own bucket credentials

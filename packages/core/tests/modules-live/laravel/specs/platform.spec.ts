@@ -40,10 +40,10 @@ test('not proxied by design: SSO bridge, tus and metadata export/import are 404 
   }
 });
 
-test('config:cache (license + kill switch only in .env): modules stay licensed, FLUXFILES_TERMINAL_DISABLED still bites', async () => {
+test('config:cache (license only in .env): modules stay licensed', async () => {
   // fixtures/config-cache-probe.sh: a second Laravel server with an EMPTY process
   // environment after `php artisan config:cache`; prints one JSON line, no secrets.
   const out = execFileSync('docker', ['compose', '-p', 'ff-live-laravel', 'exec', '-T', 'laravel', 'bash', '/fixtures-laravel/config-cache-probe.sh']).toString().trim();
   const probe = JSON.parse(out.split('\n').pop()!);
-  expect(probe).toEqual({ edition: 'enterprise', status: 'active', terminal_error_code: 'terminal_disabled' });
+  expect(probe).toEqual({ edition: 'enterprise', status: 'active' });
 });

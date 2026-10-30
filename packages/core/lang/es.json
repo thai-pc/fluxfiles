@@ -335,8 +335,6 @@
     "dlp_unscannable": "La subida por bloques no se puede analizar en busca de datos personales. Usa la subida estándar.",
     "dlp_failed": "No se pudo completar el análisis de datos personales.",
     "storage_not_writable": "El almacenamiento no admite escritura.",
-    "terminal_disabled": "La terminal está deshabilitada en este servidor.",
-    "terminal_forbidden": "No se permite el acceso a la terminal.",
     "optimize_forbidden": "La optimización no está permitida.",
     "webhook_not_configured": "No hay una URL de webhook configurada en este token.",
     "webhook_blocked": "La URL del webhook apunta a una dirección privada o bloqueada.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "La optimización de PDF requiere Ghostscript en el servidor.",
     "perm_denied": "Permiso denegado.",
     "too_many": "Demasiados archivos en una sola solicitud.",
-    "terminal_unsupported": "La terminal solo funciona en un disco SFTP.",
-    "terminal_no_shell": "Este host no permite shell (solo SFTP).",
-    "terminal_confirm_required": "Este comando parece peligroso: confirme para ejecutarlo.",
-    "git_deploy_disabled": "El despliegue de Git está deshabilitado en este servidor.",
-    "git_deploy_forbidden": "El despliegue de Git no está permitido.",
-    "git_deploy_unconfigured": "La ruta de despliegue de Git no está configurada para este token.",
-    "git_deploy_in_progress": "Ya hay un despliegue en curso para este repositorio.",
-    "git_deploy_unsafe_repo": "La configuración de git de este repositorio contiene un ajuste de ejecución de comandos. Despliegue rechazado.",
     "watermark_overlay_active": "La marca permanente no está disponible en un token de vista previa/marca de agua superpuesta. Use un token descargable.",
     "no_watermark_backup": "No hay marca de agua para quitar.",
     "audit_purge_no_cutoff": "Se requiere una fecha límite explícita (o una configuración de retención de la cuenta) para purgar el historial de auditoría.",
@@ -464,7 +454,6 @@
       "chunk_upload": "Subida por fragmentos",
       "content_update": "Editar contenido",
       "unknown": "Otro",
-      "terminal": "Comando de terminal",
       "virus_blocked": "Bloqueado por antivirus",
       "dlp_blocked": "Bloqueado por datos personales",
       "watermark_remove": "Quitar marca de agua",
@@ -683,13 +672,7 @@
     "removed": "Marca de agua eliminada"
   },
   "terminal": {
-    "title": "Terminal",
-    "placeholder": "Escribe un comando y pulsa Enter…",
-    "unsupported": "Este host no admite terminal (solo SFTP).",
-    "danger_confirm": "Este comando parece peligroso. ¿Ejecutarlo de todos modos?",
-    "run_anyway": "Ejecutar de todos modos",
-    "clear": "Limpiar",
-    "truncated": "Salida truncada."
+    "title": "Terminal"
   },
   "pdf": {
     "title": "Herramientas PDF"

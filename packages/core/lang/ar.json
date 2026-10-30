@@ -335,8 +335,6 @@
     "dlp_unscannable": "لا يمكن فحص الرفع المُجزّأ بحثًا عن البيانات الشخصية. استخدم الرفع العادي.",
     "dlp_failed": "تعذر إكمال فحص البيانات الشخصية.",
     "storage_not_writable": "وحدة التخزين غير قابلة للكتابة.",
-    "terminal_disabled": "تم تعطيل الطرفية على هذا الخادم.",
-    "terminal_forbidden": "الوصول إلى الطرفية غير مسموح.",
     "optimize_forbidden": "التحسين غير مسموح به.",
     "webhook_not_configured": "لا يوجد عنوان webhook مُهيأ على هذا الرمز.",
     "webhook_blocked": "عنوان webhook يشير إلى عنوان خاص أو محظور.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "يتطلب تحسين PDF وجود Ghostscript على الخادم.",
     "perm_denied": "تم رفض الإذن.",
     "too_many": "عدد كبير جدًا من الملفات في طلب واحد.",
-    "terminal_unsupported": "تعمل الطرفية فقط على قرص SFTP.",
-    "terminal_no_shell": "هذا المضيف لا يسمح بالـ shell (SFTP فقط).",
-    "terminal_confirm_required": "يبدو هذا الأمر خطيرًا — أكّد لتشغيله.",
-    "git_deploy_disabled": "تم تعطيل نشر Git على هذا الخادم.",
-    "git_deploy_forbidden": "نشر Git غير مسموح به.",
-    "git_deploy_unconfigured": "مسار نشر Git غير مُهيأ لهذا الرمز.",
-    "git_deploy_in_progress": "يوجد نشر قيد التنفيذ بالفعل لهذا المستودع.",
-    "git_deploy_unsafe_repo": "يحتوي إعداد git لهذا المستودع على إعداد لتنفيذ الأوامر. تم رفض النشر.",
     "watermark_overlay_active": "الدمج الدائم غير متاح على رمز المعاينة/العلامة المائية بالتراكب. استخدم رمزًا قابلاً للتنزيل.",
     "no_watermark_backup": "لا توجد علامة مائية لإزالتها.",
     "audit_purge_no_cutoff": "يلزم تحديد تاريخ فاصل واضح (أو إعداد الاحتفاظ الخاص بالحساب) لحذف سجل التدقيق.",
@@ -464,7 +454,6 @@
       "chunk_upload": "رفع مجزأ",
       "content_update": "تعديل المحتوى",
       "unknown": "أخرى",
-      "terminal": "أمر طرفية",
       "virus_blocked": "حظر بسبب فيروس",
       "dlp_blocked": "حظر بسبب بيانات شخصية",
       "watermark_remove": "إزالة العلامة المائية",
@@ -683,13 +672,7 @@
     "removed": "تمت إزالة العلامة المائية"
   },
   "terminal": {
-    "title": "الطرفية",
-    "placeholder": "اكتب أمرًا ثم اضغط Enter…",
-    "unsupported": "هذا المضيف لا يدعم الطرفية (SFTP فقط).",
-    "danger_confirm": "يبدو هذا الأمر خطيرًا. هل تريد تشغيله على أي حال؟",
-    "run_anyway": "تشغيل على أي حال",
-    "clear": "مسح",
-    "truncated": "تم اقتطاع المخرجات."
+    "title": "الطرفية"
   },
   "pdf": {
     "title": "أدوات PDF"

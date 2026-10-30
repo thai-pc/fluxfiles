@@ -335,8 +335,6 @@
     "dlp_unscannable": "L'envoi par blocs ne peut pas être analysé pour des données personnelles. Utilisez l'envoi standard.",
     "dlp_failed": "L'analyse des données personnelles n'a pas pu être effectuée.",
     "storage_not_writable": "Le stockage n'est pas accessible en écriture.",
-    "terminal_disabled": "Le terminal est désactivé sur ce serveur.",
-    "terminal_forbidden": "L'accès au terminal n'est pas autorisé.",
     "optimize_forbidden": "L’optimisation n’est pas autorisée.",
     "webhook_not_configured": "Aucune URL de webhook n'est configurée sur ce jeton.",
     "webhook_blocked": "L'URL du webhook pointe vers une adresse privée ou bloquée.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "L’optimisation des PDF nécessite Ghostscript sur le serveur.",
     "perm_denied": "Autorisation refusée.",
     "too_many": "Trop de fichiers dans une seule requête.",
-    "terminal_unsupported": "Le terminal ne fonctionne que sur un disque SFTP.",
-    "terminal_no_shell": "Cet hôte n'autorise pas de shell (SFTP uniquement).",
-    "terminal_confirm_required": "Cette commande semble dangereuse — confirmez pour l'exécuter.",
-    "git_deploy_disabled": "Le déploiement Git est désactivé sur ce serveur.",
-    "git_deploy_forbidden": "Le déploiement Git n'est pas autorisé.",
-    "git_deploy_unconfigured": "Le chemin de déploiement Git n'est pas configuré pour ce jeton.",
-    "git_deploy_in_progress": "Un déploiement est déjà en cours pour ce dépôt.",
-    "git_deploy_unsafe_repo": "La configuration git de ce dépôt contient un réglage d'exécution de commande. Déploiement refusé.",
     "watermark_overlay_active": "Le marquage permanent n'est pas disponible sur un jeton aperçu/filigrane en superposition. Utilisez un jeton téléchargeable.",
     "no_watermark_backup": "Aucun filigrane à supprimer.",
     "audit_purge_no_cutoff": "Une date limite explicite (ou un paramètre de rétention du compte) est requise pour purger l'historique d'audit.",
@@ -464,7 +454,6 @@
       "chunk_upload": "Téléversement par morceaux",
       "content_update": "Modifier le contenu",
       "unknown": "Autre",
-      "terminal": "Commande terminal",
       "virus_blocked": "Bloqué par l'antivirus",
       "dlp_blocked": "Bloqué pour données personnelles",
       "watermark_remove": "Supprimer le filigrane",
@@ -683,13 +672,7 @@
     "removed": "Filigrane supprimé"
   },
   "terminal": {
-    "title": "Terminal",
-    "placeholder": "Tapez une commande, puis Entrée…",
-    "unsupported": "Cet hôte ne prend pas en charge le terminal (SFTP uniquement).",
-    "danger_confirm": "Cette commande semble dangereuse. L'exécuter quand même ?",
-    "run_anyway": "Exécuter quand même",
-    "clear": "Effacer",
-    "truncated": "Sortie tronquée."
+    "title": "Terminal"
   },
   "pdf": {
     "title": "Outils PDF"

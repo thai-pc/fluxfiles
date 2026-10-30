@@ -214,14 +214,12 @@ def test_claims_escape_hatch_sets_any_raw_claim_and_explicit_wins() -> None:
         user_id="u",
         edition="pro",
         claims={
-            "allow_terminal": True,
             "terminal_pty_url": "https://t.example.com/",
             "upload_collision": "overwrite",
             "allow_optimize": False,
         },
     )
     c = decode_token(token)
-    assert c["allow_terminal"] is True
     assert c["terminal_pty_url"] == "https://t.example.com/"
     assert c["upload_collision"] == "overwrite"
     # explicit claim overrides the edition preset (pro defaults allow_optimize True)
@@ -272,7 +270,6 @@ _TYPED_KWARG_CASES: list[tuple[dict[str, Any], dict[str, Any]]] = [
       "allow_zip": False, "allow_extract": False, "zip_max_mb": 50, "zip_max_files": 7,
       "watermark_enabled": True, "watermark_type": "text", "watermark_text": "© Acme",
       "watermark_position": "center", "watermark_opacity": 0.5, "watermark_font_size": 20}),
-    ({"allow_terminal": True}, {"allow_terminal": True}),
     ({"allow_share": True, "share_url_ttl": 120, "share_base_url": "https://files.acme.com/public/share.html",
       "share_preview": False, "share_analytics": True},
      {"allow_share": True, "share_url_ttl": 120, "share_base_url": "https://files.acme.com/public/share.html",
@@ -319,10 +316,6 @@ _TYPED_KWARG_CASES: list[tuple[dict[str, Any], dict[str, Any]]] = [
       "intake_analytics": True, "intake_brand_name": "Acme Intake",
       "intake_brand_logo_url": "https://cdn.acme.com/i.png", "intake_brand_color": "#112233",
       "intake_brand_link_url": "https://acme.com/upload"}),
-    ({"allow_git_deploy": True, "git_deploy_path": "/srv/www/app",
-      "git_deploy_branch": "main", "git_deploy_hooks": True},
-     {"allow_git_deploy": True, "git_deploy_path": "/srv/www/app",
-      "git_deploy_branch": "main", "git_deploy_hooks": True}),
     ({"terminal_pty_url": "https://ttyd.example.com/", "pdf_tools_url": "https://pdf.example.com/",
       "office_url": "https://office.example.com/?url={url}", "esign_url": "https://sign.example.com/?url={url}"},
      {"terminal_pty_url": "https://ttyd.example.com/", "pdf_tools_url": "https://pdf.example.com/",
@@ -338,16 +331,6 @@ def test_typed_kwargs_land_in_correspondingly_named_claims(
     for key, value in expected.items():
         assert c.get(key) == value
 
-
-def test_git_deploy_is_independent_of_allow_terminal() -> None:
-    """Git deploy is a fixed-command-shape subset, not a second shell door — neither
-    claim may imply the other, in either direction."""
-    deploy = decode_token(create_token(secret=SECRET, user_id="u", allow_git_deploy=True))
-    assert deploy["allow_git_deploy"] is True
-    assert "allow_terminal" not in deploy
-    term = decode_token(create_token(secret=SECRET, user_id="u", allow_terminal=True))
-    assert term["allow_terminal"] is True
-    assert "allow_git_deploy" not in term
 
 def test_pro_hints_is_embedded_only_when_explicitly_set() -> None:
     """pro_hints defaults to True on decode, so an absent kwarg must leave the claim

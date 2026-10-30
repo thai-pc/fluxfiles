@@ -93,7 +93,6 @@ final class DemoMode
             // but be loud about it — this token is handed to anonymous visitors).
             'claims'       => [
                 'allow_url_import' => false,
-                'allow_terminal'   => false,
                 'allow_optimize'   => false,
                 'byob'             => false,
                 // Anonymous visitors upload phone photos to a public demo — never

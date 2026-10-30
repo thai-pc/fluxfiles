@@ -82,7 +82,7 @@ Route::post('extract', [FluxFilesController::class, 'extract']);
 Route::post('zip', [FluxFilesController::class, 'zip']);
 
 // SFTP file permissions. SFTP reaches proxy mode via a BYOB sftp disk in the
-// token, the same reason terminal/git-deploy below are proxied.
+// token, so it is proxied.
 Route::get('chmod', [FluxFilesController::class, 'getChmod']);
 Route::post('chmod', [FluxFilesController::class, 'setChmod']);
 
@@ -121,13 +121,6 @@ Route::post('virus/scan', [FluxFilesController::class, 'virusScan']);
 Route::post('backup', [FluxFilesController::class, 'backup']);
 Route::post('c2pa', [FluxFilesController::class, 'c2pa']);
 Route::post('c2pa/sign', [FluxFilesController::class, 'c2paSign']);
-
-// SSH terminal (command-runner, SFTP disks only; free/core, not a paid module)
-Route::post('terminal', [FluxFilesController::class, 'terminal']);
-
-// One-click Git deploy (SFTP disks only; free/core, not a paid module) — target
-// path/branch/hooks come from claims, never the request body (docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1)
-Route::post('git-deploy', [FluxFilesController::class, 'gitDeploy']);
 
 // Share + Intake (paid module) — operator side: create/list/revoke/analytics.
 // The public recipient routes (share/info, share/unlock, share/file, intake/info,

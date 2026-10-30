@@ -140,9 +140,9 @@ test('QuotaManager excludes mixed-case reserved paths from usage/count', functio
 });
 
 // N1: a write-scoped token on an SFTP disk must not be able to overwrite
-// `.git/config` — the root cause every GitDeploy config-audit bypass (B2/B3/B4)
-// is downstream of. Scoped to SFTP only (where git-deploy applies); `.gitignore`/
-// `.gitattributes` are SIBLING files at the repo root, not a `.git` segment, and
+// `.git/config` — a code-execution vector for anything that later runs git in that
+// directory. Scoped to SFTP only;
+// `.gitignore`/`.gitattributes` are SIBLING files at the repo root, not a `.git` segment, and
 // must stay writable. No real SFTP connection is made: assertNotSystem() throws
 // before FileManager ever reaches the Flysystem adapter.
 function rpSftpEnv(): array {

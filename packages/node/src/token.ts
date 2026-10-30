@@ -227,16 +227,8 @@ function applyTenantOverrides(
   if (opts.allowDownload !== undefined) payload.allow_download = !!opts.allowDownload;
   if (opts.allowChmod !== undefined) payload.allow_chmod = !!opts.allowChmod;
   if (opts.allowCodeEdit !== undefined) payload.allow_code_edit = !!opts.allowCodeEdit;
-  // SSH terminal (SFTP disks). Served by core and proxied by the Laravel and
-  // WordPress adapters too, so the token works against any of the three.
-  if (opts.allowTerminal !== undefined) payload.allow_terminal = !!opts.allowTerminal;
+  // BYO-embed: the operator's own ttyd/gotty/wetty.
   if (opts.terminalPtyUrl) payload.terminal_pty_url = String(opts.terminalPtyUrl);
-  // One-click Git deploy (SFTP disks). Deliberately independent of allowTerminal:
-  // the repo path/branch/hooks flag are operator claims, never request-supplied.
-  if (opts.allowGitDeploy !== undefined) payload.allow_git_deploy = !!opts.allowGitDeploy;
-  if (opts.gitDeployPath) payload.git_deploy_path = String(opts.gitDeployPath);
-  if (opts.gitDeployBranch) payload.git_deploy_branch = String(opts.gitDeployBranch);
-  if (opts.gitDeployHooks !== undefined) payload.git_deploy_hooks = !!opts.gitDeployHooks;
   if (opts.pdfToolsUrl) payload.pdf_tools_url = String(opts.pdfToolsUrl);
   if (opts.officeUrl) payload.office_url = String(opts.officeUrl);
   if (opts.esignUrl) payload.esign_url = String(opts.esignUrl);

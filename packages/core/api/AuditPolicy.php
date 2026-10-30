@@ -71,8 +71,6 @@ final class AuditPolicy
         '/extract'    => 'extract',
         '/chmod'      => 'chmod',
         '/content'    => 'content_update',
-        '/terminal'   => 'terminal',
-        '/git-deploy' => 'git_deploy',
     ];
 
     /** Error code of a refused write → the audit action that records the attempt. */
@@ -170,12 +168,6 @@ final class AuditPolicy
             case 'virus_scan':
                 // The verdict IS the event.
                 return is_array($data) && !empty($data['clean']) ? 'clean' : 'infected: ' . (string) ($data['threat'] ?? 'unknown');
-            case 'terminal':
-                // The command itself IS the security-relevant fact.
-                return (string) ($body['cmd'] ?? '');
-            case 'git_deploy':
-                // No request-body path (path/branch are claims) — log what was deployed.
-                return $claims->gitDeployPath . ($claims->gitDeployBranch !== '' ? '@' . $claims->gitDeployBranch : '');
             case 'legal_hold_place':
             case 'legal_hold_release':
                 return (string) ($body['reason'] ?? '');

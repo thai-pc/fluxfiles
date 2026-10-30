@@ -2,6 +2,7 @@
 
 defined('ABSPATH') || exit;
 
+use FluxFiles\Db\MetadataRowLogic;
 use FluxFiles\Db\MigrationImportInterface;
 use FluxFiles\DiskManager;
 use FluxFiles\MetadataRepositoryInterface;
@@ -22,6 +23,10 @@ use FluxFiles\MetadataRepositoryInterface;
  */
 class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
 {
+    // The storage-agnostic half (path predicates, row mapping, hold matching,
+    // get(), trackParents(), audit-window shaping) is shared with core/Laravel.
+    use MetadataRowLogic;
+
     private $wpdb;
     private DiskManager $diskManager;
     private string $tFileMeta;
@@ -44,45 +49,10 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
         $this->tHolds = $wpdb->prefix . 'fluxfiles_legal_holds';
     }
 
-    private function pathHash(string $key): string
-    {
-        return hash('sha256', $key);
-    }
-
     /** Escape LIKE metacharacters in a bound value — never in the SQL string itself. */
     private function escapeLike(string $value): string
     {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
-    }
-
-    private function isReservedPath(string $key): bool
-    {
-        foreach (explode('/', trim($key, '/')) as $seg) {
-            if ($seg === '_fluxfiles' || $seg === '_variants') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function isHiddenPath(string $key): bool
-    {
-        foreach (explode('/', trim($key, '/')) as $seg) {
-            if ($seg !== '' && $seg[0] === '.') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function highlight(string $text, string $query): ?string
-    {
-        if ($text === '' || $query === '') {
-            return null;
-        }
-        $escaped = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $q = preg_quote(htmlspecialchars($query, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), '/');
-        return preg_replace('/(' . $q . ')/iu', '<mark>$1</mark>', $escaped) ?: null;
     }
 
     /**
@@ -171,21 +141,6 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
     // ---------------------------------------------------------------------
     // File metadata
     // ---------------------------------------------------------------------
-
-    public function get(string $disk, string $key): ?array
-    {
-        $row = $this->fetchRow($disk, $key);
-        if ($row === null || ($row['title'] === null && $row['owner'] === null)) {
-            return null;
-        }
-        return [
-            'title'       => $row['title'] ?? '',
-            'alt_text'    => $row['alt_text'] ?? '',
-            'caption'     => $row['caption'] ?? '',
-            'tags'        => $row['tags'] ?? '',
-            'uploaded_by' => $row['owner'],
-        ];
-    }
 
     public function save(string $disk, string $key, array $data): void
     {
@@ -480,23 +435,6 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
         return null;
     }
 
-    /** No-op: metadata already lives in the wp_fluxfiles_file_metadata table. */
-    public function syncToS3Tags(string $disk, string $key, array $data, DiskManager $diskManager): void
-    {
-    }
-
-    public function countChildren(string $disk, string $prefix): int
-    {
-        $fs = $this->diskManager->disk($disk);
-        $count = 0;
-        foreach ($fs->listContents($prefix, true) as $item) {
-            if ($item->isFile() && !str_ends_with($item->path(), '.meta.json')) {
-                $count++;
-            }
-        }
-        return $count;
-    }
-
     // ---------------------------------------------------------------------
     // Directory index (folder search)
     // ---------------------------------------------------------------------
@@ -519,34 +457,6 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
             "INSERT INTO {$this->tDirs} (disk, path, path_hash, created_at) VALUES (%s, %s, %s, %d)",
             [$disk, $dirKey, $hash, time()]
         );
-    }
-
-    public function trackParents(string $disk, string $key): void
-    {
-        $key = trim($key, '/');
-        if ($key === '' || $key === '.' || $this->isReservedPath($key)) {
-            return;
-        }
-        $dir = dirname($key);
-        if ($dir === '.' || $dir === '') {
-            return;
-        }
-        $dir = trim($dir, '/');
-        if ($dir === '') {
-            return;
-        }
-        $acc = [];
-        foreach (explode('/', $dir) as $p) {
-            if ($p === '' || $p === '.' || $p === '..') {
-                continue;
-            }
-            $acc[] = $p;
-            $d = implode('/', $acc);
-            if ($this->isReservedPath($d)) {
-                continue;
-            }
-            $this->trackDir($disk, $d);
-        }
     }
 
     public function dirsCreated(string $disk): array
@@ -694,31 +604,25 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
 
     public function readAudit(string $disk, ?string $userId = null): array
     {
-        $sql = "SELECT * FROM {$this->tAudit} WHERE disk = %s";
-        $bind = [$disk];
-        if ($userId !== null) {
-            $sql .= ' AND owner = %s';
-            $bind[] = $userId;
-        }
-        $sql .= ' ORDER BY id ASC';
-        $rows = $this->getResults($sql, $bind);
+        return $this->readAuditWindow($disk, null, null, $userId);
+    }
 
-        $entries = [];
-        foreach ($rows as $row) {
-            $entries[] = [
-                'user_id'    => $row['owner'] ?? '',
-                'action'     => $row['action'] ?? '',
-                'disk'       => $disk,
-                'file_key'   => $row['file_key'] ?? '',
-                'ip'         => $row['ip'],
-                'user_agent' => $row['user_agent'],
-                'detail'     => $row['detail'],
-                'created_at' => (int) $row['created_at'],
-                'prev_hash'  => $row['prev_hash'] ?? null,
-                'entry_hash' => $row['entry_hash'] ?? null,
-            ];
-        }
-        return $entries;
+    /**
+     * readAudit() narrowed in SQL (a page of /audit, a fixity window) — same
+     * contract as Db\DbMetadataHandler::readAuditWindow(); the SQL and row mapping
+     * come from MetadataRowLogic, only the `?` -> $wpdb placeholder swap is ours.
+     *
+     * @param ?int $since Only rows with created_at >= $since.
+     * @param ?int $limit Only the NEWEST $limit matching rows (still oldest-first).
+     */
+    public function readAuditWindow(string $disk, ?int $since = null, ?int $limit = null, ?string $userId = null): array
+    {
+        [$sql, $params] = $this->auditWindowSql($this->tAudit, $disk, $since, $limit, $userId);
+        $i = 0;
+        $sql = preg_replace_callback('/\?/', static function () use (&$i, $params): string {
+            return is_int($params[$i++]) ? '%d' : '%s';
+        }, $sql);
+        return $this->auditWindowEntries($this->getResults($sql, $params), $disk, $limit);
     }
 
     public function audit(string $disk, string $action, array $context = []): void
@@ -733,7 +637,7 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
             'detail' => $context['detail'] ?? null,
             'created_at' => time(),
         ];
-        $key = class_exists(\FluxFiles\AuditChain::class) ? \FluxFiles\AuditChain::key() : null;
+        $key = \FluxFiles\AuditChain::key();
         if ($key === null) {
             try {
                 [$colSql, $valSql, $bind] = $this->buildValueClause($cols);
@@ -776,12 +680,6 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
                 $this->wpdb->query('ROLLBACK');
             }
         }
-    }
-
-    /** Always empty: DB mode has no rotation/archive concept (no size cap to rotate against). */
-    public function readAuditArchive(string $disk): array
-    {
-        return [];
     }
 
     public function purgeAuditBefore(string $disk, int $beforeTs): array
@@ -836,23 +734,6 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
     // ---------------------------------------------------------------------
     // Trash index (soft-delete)
     // ---------------------------------------------------------------------
-
-    private function rowToTrashEntry(array $row): array
-    {
-        return [
-            'original_key' => $row['original_key'],
-            'disk'         => $row['disk'],
-            'basename'     => $row['basename'],
-            'is_dir'       => (bool) $row['is_dir'],
-            'size'         => $row['size'] !== null ? (int) $row['size'] : 0,
-            'deleted_at'   => $row['deleted_at'] !== null ? (int) $row['deleted_at'] : 0,
-            'deleted_by'   => $row['owner'],
-            'variants'     => $row['variants'] !== null ? (json_decode($row['variants'], true) ?: []) : [],
-            'meta'         => $row['meta'] !== null ? (json_decode($row['meta'], true) ?: []) : [],
-            'files'        => $row['files'] !== null ? (json_decode($row['files'], true) ?: []) : [],
-            'dirs'         => $row['dirs'] !== null ? (json_decode($row['dirs'], true) ?: []) : [],
-        ];
-    }
 
     public function allTrash(string $disk): array
     {
@@ -911,23 +792,6 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
     // enforcement lives in FileManager::assertNoActiveHold(), not here.
     // ---------------------------------------------------------------------
 
-    private function rowToHoldEntry(array $row): array
-    {
-        return [
-            'path'           => $row['path'],
-            'is_dir'         => (bool) $row['is_dir'],
-            'disk'           => $row['disk'],
-            'reason'         => $row['reason'],
-            'placed_by'      => $row['placed_by'],
-            'placed_at'      => $row['placed_at'] !== null ? (int) $row['placed_at'] : null,
-            'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
-            'released_by'    => $row['released_by'],
-            'release_reason' => $row['release_reason'],
-        ] + (isset($row['placed_by_scope']) && $row['placed_by_scope'] !== null
-            ? ['placed_by_scope' => (string) $row['placed_by_scope']]
-            : []);
-    }
-
     public function allHolds(string $disk): array
     {
         $rows = $this->getResults("SELECT * FROM {$this->tHolds} WHERE disk = %s", [$disk]);
@@ -983,96 +847,11 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
         return $this->query($sql, $bind);
     }
 
-    public function releaseHold(string $disk, string $id, array $releaseInfo): void
-    {
-        $existing = $this->getHold($disk, $id);
-        if ($existing === null) {
-            return; // caller already validated existence before calling
-        }
-        $this->addHold($disk, $id, array_merge($existing, $releaseInfo));
-    }
-
     public function countActiveHolds(string $disk): int
     {
         return (int) $this->getVar(
             "SELECT COUNT(*) FROM {$this->tHolds} WHERE disk = %s AND released_at IS NULL",
             [$disk]
         );
-    }
-
-    public function holdCovering(string $disk, string $scopedPath): ?array
-    {
-        return $this->findOverlappingHold($disk, $scopedPath, false);
-    }
-
-    public function holdBlocking(string $disk, string $scopedPath): ?array
-    {
-        return $this->findOverlappingHold($disk, $scopedPath, true);
-    }
-
-    /**
-     * Batch counterpart to holdCovering() — runs the holds query ONCE for the
-     * whole page instead of once per item (mirrors
-     * StorageMetadataHandler::holdsCoveringMany() in core; see its doc-comment
-     * for why).
-     *
-     * @param array<int,string> $scopedPaths
-     * @return array<string, array<string,mixed>|null> keyed by the given scoped path
-     */
-    public function holdsCoveringMany(string $disk, array $scopedPaths): array
-    {
-        $holds = $this->allHolds($disk);
-        $out = [];
-        foreach ($scopedPaths as $scopedPath) {
-            $out[$scopedPath] = self::matchOverlappingHold($holds, $scopedPath, false);
-        }
-        return $out;
-    }
-
-    /**
-     * Same prefix-overlap semantics as StorageMetadataHandler/Db\DbMetadataHandler's
-     * findOverlappingHold() — kept as a plain PHP scan (not SQL LIKE) so all
-     * backends can never silently diverge on this security-relevant comparison.
-     */
-    private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
-    {
-        return self::matchOverlappingHold($this->allHolds($disk), $scopedPath, $bidirectional);
-    }
-
-    /**
-     * Pure matcher shared by findOverlappingHold() (single lookup) and
-     * holdsCoveringMany() (batch lookup against an already-loaded result set).
-     *
-     * @param array<string,array> $holds id => entry, as returned by allHolds()
-     */
-    private static function matchOverlappingHold(array $holds, string $scopedPath, bool $bidirectional): ?array
-    {
-        $scopedPath = trim($scopedPath, '/');
-        if ($scopedPath === '') {
-            return null;
-        }
-        foreach ($holds as $id => $entry) {
-            if ($entry['released_at'] !== null) {
-                continue; // released holds never block/cover
-            }
-            // Case-insensitive like core's StorageMetadataHandler::holdPathOverlaps():
-            // on a case-insensitive filesystem "Contracts/x" and "contracts/x" are the
-            // same file, and over-blocking is the safe side for a legal hold. Inlined
-            // so the adapter still runs on a core that predates that helper.
-            $holdPath = mb_strtolower(trim((string) ($entry['path'] ?? ''), '/'), 'UTF-8');
-            if ($holdPath === '') {
-                continue;
-            }
-            $target = mb_strtolower(trim($scopedPath, '/'), 'UTF-8');
-            $overlaps = $holdPath === $target
-                || strpos($target, $holdPath . '/') === 0
-                || ($bidirectional && strpos($holdPath, $target . '/') === 0);
-            if ($overlaps) {
-                // $id is a PHP array key — an all-digit hold id string gets
-                // silently cast to int as an array key; cast back to string.
-                return ['hold_id' => (string) $id] + $entry;
-            }
-        }
-        return null;
     }
 }

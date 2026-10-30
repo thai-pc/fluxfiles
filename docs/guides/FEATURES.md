@@ -197,45 +197,17 @@ history**: it's a snapshot recomputed from the current tree, not a trend line.
   so changing a tenant's quota takes effect on their *next* minted token, exactly
   like every other claim — the dashboard visualizes that model, it doesn't change it.
 
-## SSH terminal — security model
+## Terminal — bring your own (`terminal_pty_url`)
 
-When the disk is SFTP, FluxFiles can open a built-in **terminal** (see the root
-README's *SSH terminal* section for the enabling claim and basic usage). This
-section covers the threat model behind its guardrails.
+FluxFiles has no built-in shell. If you want a terminal next to your files, run
+your own **ttyd / gotty / wetty** and set the `terminal_pty_url` claim: the toolbar
+then shows a terminal button that embeds that URL in a modal (an `https://` URL
+only; nothing else is accepted). The claim alone enables it; leave it empty and
+there is no terminal entry.
 
-> 🔒 **This grants shell access as the SSH user.** A shell can't be safely
-> sandboxed by filtering its input; the real boundary is the **SSH account's OS
-> permissions** — use a **least-privilege user**. FluxFiles adds:
-> - **`allow_terminal` claim, default `false`** — must be opted in deliberately.
-> - SFTP disks only, requires the **`write`** permission, **audited per command**.
-> - A server **kill-switch** `FLUXFILES_TERMINAL_DISABLED=true`, a per-command
->   timeout `FLUXFILES_TERMINAL_TIMEOUT` (default 30s), and a 2 MB output cap.
-> - A **catastrophic-command guardrail** (`rm -rf /`, `mkfs`, fork bomb,
->   `chmod -R 777 /`, …) → a two-step confirm in the UI. This is an *accident*
->   guard, not a security boundary; opt out with `FLUXFILES_TERMINAL_CONFIRM=false`.
->
-> ⚠️ **The terminal is NOT confined to the disk's `root`.** Unlike file operations
-> (which are sandboxed to the SFTP disk `root`), the terminal is a **real shell** —
-> the user can `cd /` and reach anything the SSH account can on the **whole server**
-> (`cat /etc/passwd`, other tenants' folders, …). The `root` is only the terminal's
-> *starting* directory, not a fence. **So if you enable `allow_terminal`, give that
-> SFTP disk a dedicated least-privilege SSH account** scoped at the OS level (or a
-> chroot/jailed user) — never a shared or `root`-level account.
->
-> 💡 **Why the dangerous-command list is intentionally small:** it's an *accident*
-> guard for a trusted operator (like a "Are you sure?" dialog), **not** a filter
-> against a malicious user. Text matching can't stop a determined shell user
-> (`r''m -rf /`, `$(echo rm) -rf /`, `RM=rm; $RM …` all evade any pattern), and
-> someone with shell access already has the SSH account's full rights anyway. A
-> broad list would just false-positive on normal commands (e.g. `rm -rf node_modules`),
-> training users to click through — so it flags only the few obvious catastrophes.
-> The actual defense is: terminal off by default + a least-privilege SSH account +
-> `write` perm + the server kill-switch.
->
-> **Shared hosting without a shell** (`internal-sftp` / a forced command) is
-> detected automatically and shown a clear "this host doesn't allow a terminal
-> (SFTP only)" message — the feature degrades instead of hanging. Note: FluxFiles
-> only ever uses the SFTP **subsystem** for file ops; the shell is opened *only*
-> for this opt-in terminal, so a shell-less SFTP account is otherwise unaffected.
-> The terminal is proxied by the Laravel/WordPress adapters too, on the same
-> gate and guardrails as core-standalone.
+> 🔒 **The trust boundary is your PTY server, not FluxFiles.** Whoever can open
+> that URL gets whatever the process behind it can do. Put it behind your own
+> auth (reverse-proxy basic auth / SSO / a VPN), run it as a least-privilege OS
+> user, and mint `terminal_pty_url` only into tokens of operators you would hand
+> that shell to. SFTP disks stay file-operations only (list/upload/download/
+> `chmod`); FluxFiles never opens an SSH shell.

@@ -81,35 +81,36 @@ FLUXFILES_MODE=standalone
 FLUXFILES_ENDPOINT=https://your-fluxfiles-server.com
 ```
 
-## SFTP disk & SSH terminal
+## SFTP disk
 
 Managing a **remote VPS / shared host** over SFTP is supported in both modes.
 
 - **`standalone` mode:** run the FluxFiles server (or the Docker image), give it the
   `SFTP_*` env vars (see the
-  [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)
-  and [SSH terminal](https://github.com/thai-pc/fluxfiles#ssh-terminal-sftp-disks)),
+  [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)),
   and point Laravel at it with `FLUXFILES_ENDPOINT`. Then mint tokens with the
-  `sftp` disk and, opt-in, the terminal:
+  `sftp` disk:
 
   ```php
   $token = $fluxFiles->tokenForUser([
-      'disks'          => ['sftp'],   // an SFTP disk configured on the FluxFiles server
-      'allow_chmod'    => true,       // cPanel-style permissions (default on for SFTP)
-      'allow_terminal' => true,       // SSH terminal — opt-in, off by default
+      'disks'       => ['sftp'],   // an SFTP disk configured on the FluxFiles server
+      'allow_chmod' => true,       // cPanel-style permissions (default on for SFTP)
   ]);
   ```
 
+  To give users an interactive terminal, run your own ttyd/gotty/wetty and pass its
+  URL as `'terminal_pty_url' => 'https://…'`; the UI embeds it.
+
   Standalone mode also gives large SFTP uploads resumable tus chunking.
 
-- **`proxy` mode:** chmod (`GET`/`POST /chmod`), the SSH terminal (`POST /terminal`)
-  and one-click Git deploy (`POST /git-deploy`) **are** proxied through Laravel
+- **`proxy` mode:** chmod (`GET`/`POST /chmod`) **is** proxied through Laravel
   routes — add an `sftp` entry to `config('fluxfiles.disks')` (same shape as the
   core standalone config, e.g. `driver`/`host`/`port`/`username`/`private_key` or
   `password`) or hand the user a BYOB `sftp` disk, and mint tokens with
-  `disks => ['sftp']` and, opt-in, `allow_terminal`/`allow_git_deploy`. Git deploy and
-  the terminal use the generic write rate bucket here (core has dedicated ones).
-  **Burn-in watermark** works in both modes.
+  `disks => ['sftp']`.
+  **Burn-in watermark** works in both modes, and so does the **preview overlay
+  watermark** (`watermark_enabled` + `watermark_type`/`_text`/`_logo_path`/…): `/img`
+  is the shared core endpoint, so a watermarked token gets the overlaid image.
 
 ## Usage
 
@@ -358,12 +359,12 @@ $licenseInfo = FluxFiles::licenseInfo();
 **Server env and `php artisan config:cache`.** Core and the paid modules read
 their server settings from the environment: `FLUXFILES_LICENSE_KEY`, the module
 engines (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_ENDPOINT`, `FLUXFILES_C2PA_MANIFEST`,
-`FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, …), and kill switches such as
-`FLUXFILES_TERMINAL_DISABLED`. Put them in `.env` like any other setting. The
+`FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, …), `FLUXFILES_XACCEL` and the other server-side
+switches. Put them in `.env` like any other setting. The
 adapter captures every `FLUXFILES_*` value into the `server_env` config key, so it
 ends up in the config cache, and restores it at boot. A value set in the real
 process environment always wins. Before this, a cached config dropped anything that
-was only in `.env`: every paid module answered 402 and the kill switches stopped
+was only in `.env`: every paid module answered 402 and the server-side switches stopped
 working.
 
 ## Configuration
@@ -472,7 +473,7 @@ connection). Two locations must be writable by the user PHP-FPM runs as (usually
 | Path | Holds | Created when |
 | --- | --- | --- |
 | `<local disk root>/_fluxfiles/` | search index, folder index, file locks, audit log, trash manifest, metadata sidecars | first write to that disk (upload / `mkdir` / …) |
-| `config('fluxfiles.storage_path')` (default `storage/fluxfiles/`) | proxy-mode rate-limiter counter (`rate_limit.json`) | first request |
+| `config('fluxfiles.storage_path')` (default `storage/fluxfiles/`) | proxy-mode rate-limiter counter (`rate_limit.json`; in `db` mode the counter lives in the `fluxfiles_rate_limits` table instead) | first request |
 
 ### `_fluxfiles/`
 
@@ -492,7 +493,12 @@ It holds FluxFiles' bookkeeping, and **none of it should ever be downloadable**:
 | `fixity.json`, `usage.json`, `optimize.json` | checksums, usage and optimisation stats |
 
 With `storage_backend = db` most of the above moves into your database, but
-`trash/` (the bytes) stays on the disk.
+`trash/` (the bytes) stays on the disk. The rate limiter moves too, into a
+`fluxfiles_rate_limits` table (named like the other adapter tables, honours your
+connection's table prefix, and never touches a table of your own called `rate_limits`;
+published by `vendor:publish --tag=fluxfiles-migrations`, so re-publish and
+`php artisan migrate` after upgrading). Until that table exists the adapter logs a
+warning (at most once a minute) and keeps using `rate_limit.json`.
 
 ```bash
 # Make the uploads tree writable by the web server user (adjust www-data to your
@@ -567,7 +573,7 @@ stale published `config/fluxfiles.php`.
 
 ### `rate_limit.json`
 
-In **proxy mode** the rate limiter keeps its counter in a JSON file at
+In **proxy mode** (with the default `json` storage backend) the rate limiter keeps its counter in a JSON file at
 `config('fluxfiles.storage_path')` — by default `storage/fluxfiles/rate_limit.json`
 (override with `FLUXFILES_STORAGE_PATH`). PHP creates the directory `0755` and the
 file **`0600`** automatically on the first request.

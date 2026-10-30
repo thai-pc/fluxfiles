@@ -251,6 +251,22 @@ PHP
     assertEqual($limit, $okCount, "expected exactly {$limit} accepted hits out of {$procCount} concurrent attempts, got {$okCount}");
 });
 
+test('custom table name: used for every statement, default table untouched, bad names refused', function () use ($dbFile) {
+    $conn = freshDb($dbFile);
+    $conn->pdo()->exec('CREATE TABLE pfx_fluxfiles_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, identifier TEXT, bucket TEXT, ts INTEGER)');
+    $rl = \FluxFiles\RateLimiterFactory::makeDb($conn, 2, 2, 60, 'pfx_fluxfiles_rate_limits');
+    $rl->check('u', 'read');
+    $rl->check('u', 'read');
+    $threw = false;
+    try { $rl->check('u', 'read'); } catch (\FluxFiles\ApiException $e) { $threw = $e->getErrorCode() === 'rate_limited'; }
+    assertEqual(true, $threw, 'limit enforced on the custom table');
+    assertEqual('2', (string) $conn->pdo()->query('SELECT COUNT(*) FROM pfx_fluxfiles_rate_limits')->fetchColumn());
+    assertEqual('0', (string) $conn->pdo()->query('SELECT COUNT(*) FROM rate_limits')->fetchColumn(), 'default table untouched');
+    $bad = false;
+    try { new RateLimiterDbStorage($conn, 1, 1, 60, 'x; DROP TABLE rate_limits'); } catch (\InvalidArgumentException $e) { $bad = true; }
+    assertEqual(true, $bad, 'invalid table name rejected');
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Cleanup
 // ═══════════════════════════════════════════════════════════════

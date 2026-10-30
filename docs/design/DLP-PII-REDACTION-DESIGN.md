@@ -2,7 +2,7 @@
 
 Status: **Implemented in core-v0.2.82** (CHANGELOG `[0.3.06]`, module `dlp` v1.0.0). Module id `dlp`, class `\FluxFiles\Dlp\DlpModule`
 (gitignored private package `packages/dlp/`, registered in `ModuleRegistry::$map`),
-claim `allow_dlp_scan` (parsed in `Claims.php`). Companion to `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`
+claim `allow_dlp_scan` (parsed in `Claims.php`). Companion to `docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md`
 (style/depth reference) and the shipped Virus module (closest analog — gitignored code,
 but its shape is fully visible from `ModuleRegistry.php`/`Claims.php`/`FileManager.php`/
 `index.php` and is what this spec mirrors throughout).
@@ -96,7 +96,7 @@ the binary garbage happens to contain no string that looks like an SSN, which is
 sense of security, not a working scanner.
 
 **Resolution (mirrors this project's existing pattern of narrowing v1 scope — see §2.2
-of `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md`'s "one fixed command shape" and the URL-import
+of `docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md`'s "one fixed command shape" and the URL-import
 "v1 is sync, no queue — by design" precedent in `.claude/CLAUDE.md`):** v1 only submits
 files whose **extension** is on a text-bearing allowlist (`dlp_scan_extensions`, §3) to
 the engine at all. Everything else (images, video, PDF, Office binary formats, archives)
@@ -121,7 +121,7 @@ shape they expose (`FLUXFILES_VIRUSTOTAL_TIMEOUT`, `FLUXFILES_AIVISION_TIMEOUT`,
 "circuit breaker" env anywhere in `docs/reference/CONFIG.md` §3) confirms the established pattern
 is a **plain bounded-timeout cURL call per request, no persistent failure-tracking
 state**. This project deliberately avoids new server-lifetime state (see
-`docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` F8: "flagged only so nobody 'fixes' it by adding a
+`docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md` F8: "flagged only so nobody 'fixes' it by adding a
 persistent connection pool"). A circuit breaker that remembers "the engine has been down
 for N requests, stop trying" is exactly that kind of new in-memory/stateful mechanism —
 **deliberately not built**. `packages/dlp/`'s `PresidioClient` follows the established

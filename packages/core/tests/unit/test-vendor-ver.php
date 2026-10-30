@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * fm.js's FM_VENDOR_VER (the ?v= of the lazily loaded xterm / CodeMirror files)
+ * fm.js's FM_VENDOR_VER (the ?v= of the lazily loaded CodeMirror files)
  * must equal the content hash of those vendor trees, so a vendor-only update
  * changes the URL and the long-lived immutable cache can't pin the old file.
  * Fix: `bash scripts/build-ui.sh` (runs scripts/vendor-ver.mjs).
@@ -39,8 +39,8 @@ function treeHash(string $dir): string
 
 echo "FM_VENDOR_VER matches vendor trees\n";
 $js = (string) file_get_contents($assets . '/fm.js');
-check('fm.js declares FM_VENDOR_VER', preg_match("/^const FM_VENDOR_VER = \\{ xterm: '([0-9a-f]{10})', codemirror: '([0-9a-f]{10})' \\}; \\/\\/ vendor-ver\$/m", $js, $m) === 1);
-foreach (['xterm' => 1, 'codemirror' => 2] as $name => $i) {
+check('fm.js declares FM_VENDOR_VER', preg_match("/^const FM_VENDOR_VER = \\{ codemirror: '([0-9a-f]{10})' \\}; \\/\\/ vendor-ver\$/m", $js, $m) === 1);
+foreach (['codemirror' => 1] as $name => $i) {
     $want = treeHash($assets . '/vendor/' . $name);
     check("{$name} hash is current", ($m[$i] ?? '') === $want, "(fm.js has " . ($m[$i] ?? 'none') . ", files hash to {$want} - run bash scripts/build-ui.sh)");
 }

@@ -335,8 +335,6 @@
     "dlp_unscannable": "Il caricamento a blocchi non può essere analizzato per dati personali. Usa il caricamento standard.",
     "dlp_failed": "Non è stato possibile completare la scansione dei dati personali.",
     "storage_not_writable": "Lo spazio di archiviazione non è scrivibile.",
-    "terminal_disabled": "Il terminale è disabilitato su questo server.",
-    "terminal_forbidden": "L'accesso al terminale non è consentito.",
     "optimize_forbidden": "L’ottimizzazione non è consentita.",
     "webhook_not_configured": "Nessun URL webhook configurato su questo token.",
     "webhook_blocked": "L'URL del webhook punta a un indirizzo privato o bloccato.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "L’ottimizzazione dei PDF richiede Ghostscript sul server.",
     "perm_denied": "Permesso negato.",
     "too_many": "Troppi file in una singola richiesta.",
-    "terminal_unsupported": "Il terminale funziona solo su un disco SFTP.",
-    "terminal_no_shell": "Questo host non consente una shell (solo SFTP).",
-    "terminal_confirm_required": "Questo comando sembra pericoloso — conferma per eseguirlo.",
-    "git_deploy_disabled": "Il deploy Git è disabilitato su questo server.",
-    "git_deploy_forbidden": "Il deploy Git non è consentito.",
-    "git_deploy_unconfigured": "Il percorso di deploy Git non è configurato per questo token.",
-    "git_deploy_in_progress": "È già in corso un deploy per questo repository.",
-    "git_deploy_unsafe_repo": "La configurazione git di questo repository contiene un'impostazione di esecuzione di comandi. Deploy rifiutato.",
     "watermark_overlay_active": "L'impressione permanente non è disponibile su un token anteprima/filigrana in sovrapposizione. Usa un token scaricabile.",
     "no_watermark_backup": "Nessuna filigrana da rimuovere.",
     "audit_purge_no_cutoff": "Per eliminare la cronologia di controllo è necessaria una data limite esplicita (o un'impostazione di conservazione dell'account).",
@@ -464,7 +454,6 @@
       "chunk_upload": "Caricamento a blocchi",
       "content_update": "Modifica contenuto",
       "unknown": "Altro",
-      "terminal": "Comando terminale",
       "virus_blocked": "Bloccato dall'antivirus",
       "dlp_blocked": "Bloccato per dati personali",
       "watermark_remove": "Rimuovi filigrana",
@@ -683,13 +672,7 @@
     "removed": "Filigrana rimossa"
   },
   "terminal": {
-    "title": "Terminale",
-    "placeholder": "Digita un comando e premi Invio…",
-    "unsupported": "Questo host non supporta il terminale (solo SFTP).",
-    "danger_confirm": "Questo comando sembra pericoloso. Eseguirlo comunque?",
-    "run_anyway": "Esegui comunque",
-    "clear": "Pulisci",
-    "truncated": "Output troncato."
+    "title": "Terminale"
   },
   "pdf": {
     "title": "Strumenti PDF"

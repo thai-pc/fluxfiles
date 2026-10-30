@@ -77,7 +77,7 @@ if (!function_exists('add_query_arg')) {
 if (!defined('HOUR_IN_SECONDS')) { define('HOUR_IN_SECONDS', 3600); }
 if (!defined('ARRAY_A')) { define('ARRAY_A', 'ARRAY_A'); }
 if (!defined('FLUXFILES_PLUGIN_FILE')) { define('FLUXFILES_PLUGIN_FILE', __DIR__ . '/../fluxfiles.php'); }
-if (!defined('FLUXFILES_VERSION')) { define('FLUXFILES_VERSION', '0.2.41'); }
+if (!defined('FLUXFILES_VERSION')) { define('FLUXFILES_VERSION', '1.0.0'); }
 if (!function_exists('plugins_url')) {
     function plugins_url($path = '', $plugin = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($path, '/'); }
 }
@@ -185,7 +185,7 @@ test('generateToken forwards webp claims', function () use ($secret) {
     assertEqual('100vw', $c->srcsetSizes, 'srcset_sizes');
 });
 
-test('generateToken forwards download/zip claims; overlay watermark is NOT forwarded (proxy-only)', function () use ($secret) {
+test('generateToken forwards download/zip claims and the overlay watermark config', function () use ($secret) {
     $token = FluxFilesPlugin::generateToken(43, [
         'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true, 'allow_optimize' => true,
         'allow_zip' => false, 'allow_extract' => false, 'zip_max_files' => 7,
@@ -200,10 +200,24 @@ test('generateToken forwards download/zip claims; overlay watermark is NOT forwa
     assertEqual(false, $c->allowZip, 'allow_zip');
     assertEqual(false, $c->allowExtract, 'allow_extract');
     assertEqual(7, $c->zipMaxFiles, 'zip_max_files');
-    // WordPress is proxy-only (no /api/fm/img), so the OVERLAY watermark claim is
-    // dropped — forwarding it would break images. Burn-in (POST /api/fm/watermark)
-    // is the WP-supported watermark and works through the proxy.
-    assertEqual(null, $c->watermark, 'overlay watermark NOT forwarded (proxy-only)');
+    // The proxy's /img is core's MediaEndpoint, which composites the overlay, so the
+    // watermark_* claims forward (Claims clamps them on decode).
+    assertTrue(is_array($c->watermark) && !empty($c->watermark['enabled']), 'overlay watermark forwarded');
+    assertEqual('logo', $c->watermark['type'] ?? null, 'watermark_type');
+    assertEqual('cfg/logo.png', $c->watermark['logo_path'] ?? null, 'watermark_logo_path');
+    assertEqual('top-right', $c->watermark['position'] ?? null, 'watermark_position');
+});
+
+test('watermark_* sub-claims without the gate are not forwarded', function () use ($secret) {
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(44, ['watermark_text' => 'X', 'watermark_opacity' => 0.4]), $secret);
+    assertTrue(!isset($p->watermark_enabled) && !isset($p->watermark_text) && !isset($p->watermark_opacity), 'only the enabled gate carries the config');
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(44, [
+        'watermark_enabled' => true, 'watermark_text' => 'CONFIDENTIAL', 'watermark_opacity' => 0.4, 'watermark_font_size' => 30,
+    ]), $secret);
+    assertEqual(true, $p->watermark_enabled ?? null, 'gate');
+    assertEqual('CONFIDENTIAL', $p->watermark_text ?? null, 'text');
+    assertEqual(0.4, $p->watermark_opacity ?? null, 'opacity');
+    assertEqual(30, $p->watermark_font_size ?? null, 'font size');
 });
 
 test('generateToken forwards usage-dashboard claims', function () use ($secret) {
@@ -279,30 +293,39 @@ test('generateToken forwards ai-vision gate', function () use ($secret) {
     assertEqual(true, ($p->allow_ai_vision ?? false), 'ai-vision gate forwarded');
 });
 
-// SSH terminal now has a proxy route too (/api/fm/terminal, see FluxFilesApi's
-// handleTerminal()), so the gate forwards unconditionally — it used to be a
-// comment-only "intentionally NOT forwarded" note with no code at all.
-test('generateToken forwards terminal gate', function () use ($secret) {
-    $token = FluxFilesPlugin::generateToken(59, ['allow_terminal' => true]);
-    $p = \FluxFiles\JwtCompat::decode($token, $secret);
-    assertEqual(true, ($p->allow_terminal ?? false), 'terminal gate forwarded');
-});
-
-// Git deploy now has a proxy route too (/api/fm/git-deploy, see FluxFilesApi's
-// handleGitDeploy()), so the gate + its target claims forward unconditionally,
-// matching allow_terminal above.
-test('generateToken forwards git-deploy gate + path/branch/hooks', function () use ($secret) {
-    $token = FluxFilesPlugin::generateToken(60, [
-        'allow_git_deploy'  => true,
-        'git_deploy_path'   => '/var/www/site',
-        'git_deploy_branch' => 'main',
-        'git_deploy_hooks'  => true,
+// The SSH command-runner terminal and one-click Git deploy are gone from the product:
+// their claims are no longer forwarded, and a token that still carries them (a stale
+// override, the raw `claims` map, a Node/Python-minted token) must decode without error
+// and simply have no effect. terminal_pty_url (embed the operator's own ttyd) stays.
+test('removed claims (allow_terminal / allow_git_deploy / git_deploy_*) are not forwarded', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(59, [
+        'allow_terminal' => true, 'allow_git_deploy' => true,
+        'git_deploy_path' => '/var/www/site', 'git_deploy_branch' => 'main', 'git_deploy_hooks' => true,
     ]);
     $p = \FluxFiles\JwtCompat::decode($token, $secret);
-    assertEqual(true, ($p->allow_git_deploy ?? false), 'git-deploy gate forwarded');
-    assertEqual('/var/www/site', $p->git_deploy_path ?? '', 'git_deploy_path forwarded');
-    assertEqual('main', $p->git_deploy_branch ?? '', 'git_deploy_branch forwarded');
-    assertEqual(true, ($p->git_deploy_hooks ?? false), 'git_deploy_hooks forwarded');
+    foreach (['allow_terminal', 'allow_git_deploy', 'git_deploy_path', 'git_deploy_branch', 'git_deploy_hooks'] as $k) {
+        assertTrue(!isset($p->$k), "{$k} is not forwarded");
+    }
+});
+
+test('a token that still carries removed claims (raw `claims` map) decodes without error and is ignored', function () use ($secret) {
+    $token = FluxFilesPlugin::generateToken(60, ['claims' => ['allow_terminal' => true, 'allow_git_deploy' => true, 'git_deploy_path' => '/x']]);
+    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
+    assertTrue($c->hasPerm('read'), 'still a normal token');
+    assertTrue(!property_exists($c, 'allowTerminal') && !property_exists($c, 'allowGitDeploy'), 'core no longer models them');
+});
+
+test('terminal_pty_url still forwards (the UI embeds the operator\'s own ttyd)', function () use ($secret) {
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(61, ['terminal_pty_url' => 'https://ttyd.example.com/']), $secret);
+    assertEqual('https://ttyd.example.com/', $p->terminal_pty_url ?? '', 'terminal_pty_url forwarded');
+});
+
+test('the terminal and git-deploy REST routes and handlers are gone', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    foreach (['handleTerminal', 'handleGitDeploy', "'/terminal'", "'/git-deploy'", 'SshTerminal', 'GitDeploy::'] as $needle) {
+        assertTrue(strpos($src, $needle) === false, "no {$needle} in the REST proxy");
+    }
+    assertTrue(!method_exists('FluxFilesApi', 'handleTerminal') && !method_exists('FluxFilesApi', 'handleGitDeploy'), 'handlers removed');
 });
 
 // DLP/PII redaction (docs/design/DLP-PII-REDACTION-DESIGN.md): the gate + its 4 tuning
@@ -330,8 +353,10 @@ test('allow_dlp_scan (+ its 4 tuning claims) forwards in proxy mode', function (
 // wires the hook. Assert the REAL wiring, not just that the claim round-trips.
 test('fileManager() actually WIRES setDlpScanner() (not just a decodable claim) — the inert-claims regression', function () {
     $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    assertTrue(strpos($apiSrc, 'setDlpScanner(') !== false, 'fileManager() wires setDlpScanner()');
-    assertTrue(strpos($apiSrc, "ModuleRegistry::require('dlp'") !== false, 'the callback resolves the dlp module gate lazily, like virus');
+    // Wired by core's FileManagerFactory (the module gate lives INSIDE its callbacks, so
+    // it stays fail-closed); the behavioural twin is "fileManager() wires …" below.
+    assertTrue(strpos($apiSrc, 'FileManagerFactory::wire(') !== false, 'fileManager() delegates the hook wiring to core\'s FileManagerFactory');
+    assertTrue(strpos($apiSrc, 'setDlpScanner(') === false && strpos($apiSrc, 'setVirusScanner(') === false, 'no hand-wired scanner copy left in the proxy');
     // 5 sites, not 4: the 4 chunk handlers plus presign(), where a
     // `method:"PUT"` mints a browser→S3 upload URL — the same unscannable side
     // door by another name, so it is refused with the same code.
@@ -381,9 +406,10 @@ test('compliance/scorecard route exists, maps to handleComplianceScorecard(), an
 
 test('gated media stream/img is wired (setStreamSecret + local disk private key)', function () {
     $apiSrc = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    assertTrue(strpos($apiSrc, 'setStreamSecret(') !== false, 'fileManager() wires setStreamSecret()');
-    assertTrue(strpos($apiSrc, 'StreamToken::verify(') !== false, 'handleStream() verifies a StreamToken');
-    assertTrue(strpos($apiSrc, 'ImageToken::verify(') !== false, 'handleImg() verifies an ImageToken');
+    assertTrue(strpos($apiSrc, 'FileManagerFactory::wire(') !== false, 'fileManager() wires setStreamSecret() via core\'s FileManagerFactory');
+    assertTrue(strpos($apiSrc, '->mediaEndpoint()->stream(') !== false, 'handleStream() runs core\'s MediaEndpoint::stream()');
+    assertTrue(strpos($apiSrc, '->mediaEndpoint()->image(') !== false, 'handleImg() runs core\'s MediaEndpoint::image()');
+    assertTrue(strpos($apiSrc, 'StreamToken::verify(') === false && strpos($apiSrc, 'ImageToken::verify(') === false, 'no hand-ported token handling left');
 
     $disks = FluxFilesPlugin::diskConfigs();
     assertTrue(array_key_exists('private', $disks['local']), "local disk config has a 'private' key");
@@ -1034,6 +1060,9 @@ if (!class_exists('WP_REST_Response')) {
     }
 }
 
+require_once __DIR__ . '/../includes/FluxFilesDbSchema.php';
+require_once __DIR__ . '/../includes/WpRateLimiterStorage.php';
+require_once __DIR__ . '/../includes/FluxFilesMediaEndpoint.php';
 require_once __DIR__ . '/../includes/FluxFilesApi.php';
 
 $GLOBALS['WP_OPTIONS']['fluxfiles_default_perms'] = ['read', 'write', 'delete'];
@@ -1154,10 +1183,11 @@ test('audit: a typed token refused at auth is never logged under a previous call
 test('audit: presign/zip/share/c2pa/webhook/stream/content are covered in the proxy', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     foreach (["'POST' => 'presign_post'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
-              "'c2pa_verify'", "'webhook_test'", "'content_read'", "'stream_read'"] as $needle) {
+              "'c2pa_verify'", "'webhook_test'", "'content_read'"] as $needle) {
         assertTrue(strpos($src, $needle) !== false, "proxy logs {$needle}");
     }
-    assertEqual(2, substr_count($src, '$this->auditStreamRead($scope, $request);'), 'both stream branches audited');
+    // stream_read (audit_reads) is MediaEndpoint's job now; the proxy must hand it the metadata repo.
+    assertTrue((bool) preg_match('/new FluxFilesMediaEndpoint\([^;]*\$this->metaRepo\s*\)/s', $src), 'the media endpoint is given the metadata repo for stream_read');
 });
 
 test('audit_reads forwards through the token builder', function () use ($secret) {
@@ -1232,9 +1262,6 @@ function makeWpDbHandler(WpdbSpy $spy): WpDbMetadataHandler
 }
 
 test('WpDbMetadataHandler::audit() chains under a locked head row and advances it', function () {
-    if (!class_exists(\FluxFiles\AuditChain::class)) {
-        return; // core older than the audit chain (the floor guard runs this smoke against it)
-    }
     \FluxFiles\AuditChain::configure(str_repeat('k', 40));
     try {
         $spy = new WpdbSpy();
@@ -1257,9 +1284,6 @@ test('WpDbMetadataHandler::audit() chains under a locked head row and advances i
 });
 
 test('WpDbMetadataHandler::audit() without a secret stays a plain insert', function () {
-    if (!class_exists(\FluxFiles\AuditChain::class)) {
-        return; // core older than the audit chain (the floor guard runs this smoke against it)
-    }
     \FluxFiles\AuditChain::configure('');
     $keep = $_ENV['FLUXFILES_SECRET'] ?? null;
     unset($_ENV['FLUXFILES_SECRET']);
@@ -1513,7 +1537,7 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
         'handleHold'            => 'legal_hold_place',
         'handleHoldRelease'     => 'legal_hold_release',
         'handleAuditPurge'      => 'audit_purge',
-        'handleVersionsRestore' => 'version_restore', // 2nd recurrence of this exact bug — see docs above
+        'handleVersionsRestore' => 'versions/restore', // 2nd recurrence of this exact bug — see docs above
         'handleDeleteMetadata'  => 'metadata_update',
         'handleOcr'             => 'ocr',
         'handleChunkComplete'   => 'chunk_upload',
@@ -1522,7 +1546,7 @@ test('every mutating route logs audit + dispatches webhook (regression: legal-ho
     ];
     foreach ($mustLog as $method => $action) {
         $body = $extractMethod($apiSrc, $method);
-        assertTrue(strpos($body, 'logAudit(') !== false, "{$method}() calls logAudit()");
+        assertTrue(strpos($body, 'logAudit(') !== false || strpos($body, 'auditOk(') !== false, "{$method}() records an audit entry");
         assertTrue(strpos($body, "'{$action}'") !== false, "{$method}() logs the '{$action}' action");
         assertTrue(strpos($body, 'dispatchWebhook(') !== false, "{$method}() calls dispatchWebhook()");
     }
@@ -2014,20 +2038,6 @@ test('A-N5: search / search-folders results are unscoped like core', function ()
     });
 });
 
-test('A-M1: /img fails closed on a token that carries an overlay watermark', function () use ($secret) {
-    assertTrue(method_exists('FluxFilesApi', 'imgScopeServable'), 'fail-closed rule exists');
-    $wm = \FluxFiles\ImageToken::verify(\FluxFiles\ImageToken::mint('local', 'a.jpg', 'u', 60, $secret, 2000, 80,
-        ['enabled' => true, 'type' => 'text', 'text' => 'CONFIDENTIAL']), $secret);
-    assertEqual(false, FluxFilesApi::imgScopeServable($wm), 'watermarked token refused');
-    $plain = \FluxFiles\ImageToken::verify(\FluxFiles\ImageToken::mint('local', 'a.jpg', 'u', 60, $secret, 2000), $secret);
-    assertEqual(true, FluxFilesApi::imgScopeServable($plain), 'plain token served');
-    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    $start = strpos($src, 'public function handleImg(');
-    $body = substr($src, $start, strpos($src, "\n    public function ", $start + 1) - $start);
-    $gate = strpos($body, 'self::imgScopeServable($scope)');
-    assertTrue($gate !== false && $gate < strpos($body, '$fs->read('), 'checked before any bytes are read');
-});
-
 test('A-N6: the iframe UI sends Referrer-Policy: no-referrer and frame-ancestors', function () {
     $h = FluxFilesApi::uiHtmlHeaders('en');
     assertTrue(in_array('Referrer-Policy: no-referrer', $h, true), 'no-referrer');
@@ -2042,23 +2052,15 @@ test('A-N6: the iframe UI sends Referrer-Policy: no-referrer and frame-ancestors
     assertTrue(strpos($src, "self::uiHtmlHeaders(\$locale)") !== false, 'serveUiHtml() uses them');
 });
 
-test('B2: version purger + mover are wired on installed+licensed, NOT behind the acting token\'s allow_versioning', function () {
+test('B2: version purger + mover + keeper wiring is core\'s FileManagerFactory (purger/mover NOT behind allow_versioning)', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    $start = strpos($src, 'private function fileManager(');
-    $body = substr($src, $start, strpos($src, "\n    private function ", $start + 1) - $start);
-    $claimGate = strpos($body, 'if ($claims->allowVersioning ?? false) {');
-    assertTrue($claimGate !== false, 'keeper still claim-gated');
-    // Brace-match the claim-gated block; the purger/mover must sit outside it.
-    $depth = 0; $end = null;
-    for ($i = strpos($body, '{', $claimGate); $i < strlen($body); $i++) {
-        if ($body[$i] === '{') { $depth++; }
-        if ($body[$i] === '}' && --$depth === 0) { $end = $i; break; }
-    }
-    $block = substr($body, $claimGate, $end - $claimGate);
-    assertTrue(strpos($block, 'setVersionKeeper') !== false, 'keeper inside the claim gate');
-    assertTrue(strpos($block, 'setVersionPurger') === false, 'purger NOT inside the claim gate');
-    assertTrue(strpos($block, 'setVersionMover') === false, 'mover NOT inside the claim gate');
-    assertTrue(strpos($body, "method_exists(\$versioning, 'move') && method_exists(\$fm, 'setVersionMover')") !== false, 'method_exists guards kept');
+    assertTrue(strpos($src, 'setVersionKeeper') === false && strpos($src, 'setVersionPurger') === false && strpos($src, 'setVersionMover') === false,
+        'the proxy keeps no hand-wired copy of the version hooks');
+    $fac = (string) file_get_contents(__DIR__ . '/../../core/api/FileManagerFactory.php');
+    $claimGate = strpos($fac, 'if ($claims->allowVersioning) {');
+    assertTrue($claimGate !== false, 'the factory keeps the keeper claim-gated');
+    $block = substr($fac, $claimGate, strpos($fac, 'setVersionPurger', $claimGate) - $claimGate);
+    assertTrue(strpos($block, 'setVersionKeeper') !== false, 'keeper inside the claim gate; purger/mover follow outside it');
 });
 
 test('A-H4: /attach resolves the key through the user\'s token — system path / missing file / foreign owner refused', function () use ($ffPut, $ffMetaRepo) {
@@ -2089,6 +2091,35 @@ test('A-H4: /attach resolves the key through the user\'s token — system path /
         $r = $api->handleAttach(new WP_REST_Request(['key' => $outside, 'disk' => 'local']));
         assertEqual(404, $r->get_status(), 'a key outside the tenant prefix resolves inside it (and is not there)');
         assertEqual(0, count($GLOBALS['WP_POSTS']), 'no attachment created by any refused call');
+    } finally {
+        $GLOBALS['WP_FILTERS'] = [];
+    }
+});
+
+test('N11: renaming a missing file is a 404 not_found envelope (core parity)', function () {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 9101;
+    $r = (new FluxFilesApi())->handleRename(new WP_REST_Request(['disk' => 'local', 'path' => 'ghost-' . uniqid() . '.txt', 'name' => 'x.txt']));
+    assertEqual(404, $r->get_status(), 'status');
+    assertEqual('not_found', $r->get_data()['error_code'] ?? null, 'code');
+});
+
+test('N1: /attach refuses with download_forbidden when the token cannot download originals (a watermark forces that)', function () use ($ffPut) {
+    $GLOBALS['WP_OPTIONS']['_test_user_id'] = 9101;
+    $GLOBALS['WP_POSTS'] = [];
+    $key = 'att-' . uniqid() . '/nodl.jpg';
+    $ffPut($key);
+    try {
+        foreach ([['allow_download' => false], ['watermark_enabled' => true]] as $over) {
+            $GLOBALS['WP_FILTERS'] = [];
+            add_filter('fluxfiles_token_overrides', function ($o) use ($over) { return $over + $o; });
+            $r = (new FluxFilesApi())->handleAttach(new WP_REST_Request(['key' => $key, 'disk' => 'local']));
+            assertEqual(403, $r->get_status(), json_encode($over) . ' status');
+            assertEqual('download_forbidden', $r->get_data()['error_code'] ?? null, json_encode($over) . ' code');
+        }
+        assertEqual(0, count($GLOBALS['WP_POSTS']), 'no attachment created');
+        $GLOBALS['WP_FILTERS'] = [];
+        $r = (new FluxFilesApi())->handleAttach(new WP_REST_Request(['key' => $key, 'disk' => 'local']));
+        assertEqual(200, $r->get_status(), 'a normal token still attaches: ' . json_encode($r->get_data()));
     } finally {
         $GLOBALS['WP_FILTERS'] = [];
     }
@@ -2604,14 +2635,6 @@ CHILD;
 });
 
 // ── 1.x proxy-parity fixes: X-Accel encoding, audit action names, 403 codes, asset caching ──
-test('xaccelUri(): percent-encodes each segment (%, ?, #, space) and keeps the / separators', function () {
-    assertEqual('/internal/a%20b/50%25%20off%3F%23.pdf', FluxFilesApi::xaccelUri('/internal/', 'a b/50% off?#.pdf'), 'segments encoded');
-    assertEqual('/internal/x/y.txt', FluxFilesApi::xaccelUri('/internal', '/x/y.txt'), 'plain key unchanged');
-    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    assertTrue(strpos($src, "'X-Accel-Redirect: ' . self::xaccelUri(") !== false, 'the header uses the encoder');
-    assertTrue(strpos($src, "rtrim(\$xaccel, '/') . '/' . \$path") === false, 'no raw concatenation left');
-});
-
 test('audit: a code-editor save is logged as content_update (the name the UI labels), not content_edit', function () {
     $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
     $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(7710, ['perms' => ['read', 'write'], 'allow_code_edit' => true, 'prefix' => 'cu-' . uniqid()]);
@@ -2702,6 +2725,268 @@ test('assetCaching(): ?v= is immutable; otherwise a cheap ETag with a real 304',
     } finally {
         @unlink($f);
     }
+});
+
+// ── 1.0.0: shared core classes (MediaEndpoint, FileManagerFactory, RateLimiterFactory …) ──
+if (!function_exists('status_header')) {
+    function status_header($code) { $GLOBALS['WP_STATUS'][] = (int) $code; }
+}
+
+/** Call a private method of a FluxFilesApi. */
+$ffPriv = function (FluxFilesApi $api, string $method, array $args = []) {
+    $m = new ReflectionMethod($api, $method);
+    $m->setAccessible(true);
+    return $m->invokeArgs($api, $args);
+};
+$ffProp = function (object $o, string $name) {
+    for ($c = new ReflectionClass($o); $c; $c = $c->getParentClass() ?: null) {   // private props live on the declaring class
+        if ($c->hasProperty($name) && $c->getProperty($name)->getDeclaringClass()->getName() === $c->getName()) {
+            $p = $c->getProperty($name);
+            $p->setAccessible(true);
+            return $p->getValue($o);
+        }
+    }
+    throw new RuntimeException("no property {$name}");
+};
+class FileManagerHolder { public function __construct(public FluxFilesApi $api, public \FluxFiles\FileManager $fm) {} }
+$ffFileManager = function (array $claims) use ($ffAsUser, $ffPriv): FileManagerHolder {
+    return $ffAsUser(9300, $claims, function () use ($ffPriv) {
+        $api = new FluxFilesApi();
+        $c = $ffPriv($api, 'claims');
+        return new FileManagerHolder($api, $ffPriv($api, 'fileManager', [$c]));
+    });
+};
+
+test('fileManager() wires core\'s hooks only on the claim, and virus/DLP stay fail-closed', function () use ($ffFileManager, $ffProp) {
+    $plain = $ffFileManager([])->fm;
+    foreach (['virusScanner', 'dlpScanner', 'uploadOptimizer', 'aiTagger', 'versionKeeper'] as $p) {
+        assertTrue($ffProp($plain, $p) === null, "{$p} not wired for a plain token");
+    }
+    assertTrue($ffProp($plain, 'quotaManager') !== null, 'quota always wired');
+    assertEqual((string) get_option('fluxfiles_secret'), $ffProp($plain, 'streamSecret'), 'stream secret always wired');
+    assertEqual('http://wp.test/wp-json/fluxfiles/v1/api/fm', $ffProp($plain, 'apiBasePath'), 'WordPress-only API base path');
+
+    $fm = $ffFileManager(['allow_virus_scan' => true, 'allow_dlp_scan' => true, 'auto_optimize' => true])->fm;
+    assertTrue($ffProp($fm, 'virusScanner') !== null && $ffProp($fm, 'dlpScanner') !== null, 'scanners wired on the claim');
+    assertTrue($ffProp($fm, 'uploadOptimizer') !== null, 'auto_optimize wires the optimizer');
+
+    // Fail-closed: no installed+licensed module -> the callback THROWS (501/402/403) rather than returning "clean".
+    foreach (['virusScanner' => ['/tmp/x'], 'dlpScanner' => ['/tmp/x', 'x.txt']] as $prop => $args) {
+        $threw = false;
+        try { ($ffProp($fm, $prop))(...$args); }
+        catch (\FluxFiles\ApiException $e) { $threw = in_array($e->getHttpCode(), [501, 402, 403], true); }
+        assertTrue($threw, "{$prop} refuses (module gate inside the callback) instead of passing the file");
+    }
+});
+
+test('fileManager(): the AI tagger is wired only for ai_auto_tag AND a configured provider', function () use ($ffFileManager, $ffProp) {
+    $keep = $GLOBALS['WP_OPTIONS']['fluxfiles_ai_provider'] ?? null;
+    try {
+        unset($GLOBALS['WP_OPTIONS']['fluxfiles_ai_provider']);
+        assertTrue($ffProp($ffFileManager(['ai_auto_tag' => true])->fm, 'aiTagger') === null, 'claim without a provider: none');
+        $GLOBALS['WP_OPTIONS']['fluxfiles_ai_provider'] = 'claude';
+        $GLOBALS['WP_OPTIONS']['fluxfiles_ai_api_key'] = 'k';
+        assertTrue($ffProp($ffFileManager([])->fm, 'aiTagger') === null, 'provider without the claim: none (stricter than core)');
+        assertTrue($ffProp($ffFileManager(['ai_auto_tag' => true])->fm, 'aiTagger') !== null, 'claim + provider: wired');
+    } finally {
+        if ($keep === null) { unset($GLOBALS['WP_OPTIONS']['fluxfiles_ai_provider']); } else { $GLOBALS['WP_OPTIONS']['fluxfiles_ai_provider'] = $keep; }
+    }
+});
+
+test('the media endpoint is core\'s MediaEndpoint with status_header() and X-Accel from the plugin\'s source', function () use ($ffPriv, $ffProp) {
+    $api = new FluxFilesApi();
+    $ep = $ffPriv($api, 'mediaEndpoint');
+    assertTrue($ep instanceof FluxFilesMediaEndpoint && $ep instanceof \FluxFiles\MediaEndpoint, 'subclass of the core class');
+    assertEqual('', $ffProp($ep, 'xaccelBase'), 'no X-Accel by default');
+    putenv('FLUXFILES_XACCEL=/protected/');
+    try {
+        assertEqual('/protected/', $ffProp($ffPriv($api, 'mediaEndpoint'), 'xaccelBase'), 'FLUXFILES_XACCEL reaches the endpoint');
+    } finally {
+        putenv('FLUXFILES_XACCEL');
+    }
+    $GLOBALS['WP_STATUS'] = [];
+    $m = new ReflectionMethod($ep, 'status');
+    $m->setAccessible(true);
+    $m->invoke($ep, 429);
+    assertEqual([429], $GLOBALS['WP_STATUS'], 'status() goes through status_header()');
+});
+
+test('media rate limits default to core\'s (stream 300/min, img 120/min); env and the plugin filter override', function () use ($ffPriv, $ffProp) {
+    $limit = $ffProp($ffPriv(new FluxFilesApi(), 'mediaEndpoint'), 'rateLimit');
+    $burn = function (string $bucket, int $n) use ($limit): int {
+        $sub = 'rl-' . $bucket . '-' . uniqid();
+        $ok = 0;
+        for ($i = 0; $i < $n; $i++) { if ($limit($sub, $bucket, $bucket === 'stream' ? 300 : 120)) { $ok++; } }
+        return $ok;
+    };
+    assertEqual(300, $burn('stream', 305), 'stream: 300 allowed, then limited');
+    assertEqual(120, $burn('img', 125), 'img: 120 allowed, then limited');
+
+    $_ENV['FLUXFILES_IMG_RATE_LIMIT'] = '3';
+    try {
+        assertEqual(3, $burn('img', 6), 'FLUXFILES_IMG_RATE_LIMIT overrides the default');
+        add_filter('fluxfiles_rate_limit_img', fn ($v) => 2);
+        assertEqual(2, $burn('img', 6), 'the plugin filter wins over the env');
+        $GLOBALS['WP_FILTERS'] = [];
+        add_filter('fluxfiles_rate_limit_img', fn ($v) => 0);
+        assertEqual(6, $burn('img', 6), '<= 0 disables');
+    } finally {
+        unset($_ENV['FLUXFILES_IMG_RATE_LIMIT']);
+        $GLOBALS['WP_FILTERS'] = [];
+    }
+});
+
+test('/img composites the preview watermark overlay through the proxy (and a preview-only token never gets the clean original)', function () use ($secret, $ffPut, $ffPriv) {
+    $dir = 'wm-' . uniqid();
+    $img = imagecreatetruecolor(400, 300);
+    imagefill($img, 0, 0, imagecolorallocate($img, 30, 120, 200));
+    ob_start(); imagepng($img); $png = (string) ob_get_clean();
+    $ffPut($dir . '/a.png', $png);
+
+    $ep = $ffPriv(new FluxFilesApi(), 'mediaEndpoint');
+    $serve = function (string $token, array $q = [], string $accept = 'image/webp') use ($ep): string {
+        // The test's own output already started, so header() warns — irrelevant to the bytes.
+        set_error_handler(static fn ($no, $str) => str_contains($str, 'headers already sent'));
+        ob_start();
+        try { $ep->image(['token' => $token] + $q, ['accept' => $accept]); }
+        finally { $out = (string) ob_get_clean(); restore_error_handler(); }
+        return $out;
+    };
+    $sub = 'wm-user-' . uniqid();
+    $plain = $serve(\FluxFiles\ImageToken::mint('local', $dir . '/a.png', $sub, 60, $secret, 2000, 80), ['format' => 'webp']);
+    $marked = $serve(\FluxFiles\ImageToken::mint('local', $dir . '/a.png', $sub, 60, $secret, 2000, 80,
+        ['enabled' => true, 'type' => 'text', 'text' => 'CONFIDENTIAL', 'position' => 'center', 'opacity' => 0.8, 'font_size' => 40], false), ['format' => 'webp']);
+    assertTrue(strncmp($plain, 'RIFF', 4) === 0 && strncmp($marked, 'RIFF', 4) === 0, 'both are WebP (no 415)');
+    assertTrue($plain !== $marked, 'the overlay changed the pixels');
+
+    // Accept: */* would be served the clean original by an unprotected endpoint; a watermarked token is forced to WebP.
+    $wild = $serve(\FluxFiles\ImageToken::mint('local', $dir . '/a.png', $sub, 60, $secret, 2000, 80,
+        ['enabled' => true, 'type' => 'text', 'text' => 'CONFIDENTIAL'], false), [], '*/*');
+    assertTrue(strncmp($wild, 'RIFF', 4) === 0 && $wild !== $png, 'wildcard Accept never returns the clean original to a watermarked token');
+    $dlOff = $serve(\FluxFiles\ImageToken::mint('local', $dir . '/a.png', $sub, 60, $secret, 2000, 80, null, false), [], '*/*');
+    assertTrue(strncmp($dlOff, 'RIFF', 4) === 0, 'a no-download token is forced to WebP too');
+});
+
+test('a watermark_enabled plugin token arrives as a watermark config and forces preview-only', function () use ($ffAsUser) {
+    $ffAsUser(9301, ['watermark_enabled' => true, 'watermark_text' => 'DRAFT'], function () {
+        $c = \FluxFiles\JwtMiddleware::handle(substr($_SERVER['HTTP_AUTHORIZATION'], 7), (string) get_option('fluxfiles_secret'));
+        assertTrue(is_array($c->watermark) && ($c->watermark['text'] ?? '') === 'DRAFT', 'watermark config arrives in Claims');
+        assertTrue($c->allowDownload === false, 'core forces a watermarked token preview-only');
+    });
+});
+
+test('db mode: the rate limiter lives in the database (START TRANSACTION … FOR UPDATE … COMMIT), json mode uses the file limiter', function () use ($ffPriv) {
+    global $wpdb;
+    $keepDb = $wpdb ?? null;
+    $api = new FluxFilesApi();
+    $json = $ffPriv($api, 'limiter', [5, 5]);
+    assertTrue($json instanceof \FluxFiles\RateLimiterFileStorage, 'json mode: core\'s file limiter via RateLimiterFactory');
+
+    $GLOBALS['WP_OPTIONS']['fluxfiles_storage_backend'] = 'db';
+    $GLOBALS['WP_OPTIONS']['fluxfiles_db_version'] = FluxFilesDbSchema::VERSION;
+    try {
+        $wpdb = new WpdbSpy();
+        $lim = $ffPriv($api, 'limiter', [5, 2]);
+        assertTrue($lim instanceof WpRateLimiterStorage, 'db mode: the DB-backed limiter');
+        $wpdb->varQueue[] = 0;
+        $lim->check('u1', 'write');
+        $q = $wpdb->queries;
+        assertEqual('START TRANSACTION', $q[0] ?? null, 'transaction opened');
+        assertTrue(str_contains($q[1] ?? '', 'DELETE FROM wp_fluxfiles_rate_limits'), 'expired hits swept');
+        assertTrue(str_contains($q[2] ?? '', 'FOR UPDATE'), 'count taken under lock');
+        assertTrue(str_contains($q[3] ?? '', 'INSERT INTO wp_fluxfiles_rate_limits'), 'hit recorded');
+        assertEqual('COMMIT', $q[4] ?? null, 'committed');
+
+        $wpdb->varQueue[] = 2;   // already at the write limit (2)
+        try { $lim->check('u1', 'write'); $threw = null; }
+        catch (\FluxFiles\ApiException $e) { $threw = [$e->getHttpCode(), $e->getErrorCode()]; }
+        assertEqual([429, 'rate_limited'], $threw, 'over the limit -> 429 rate_limited');
+        $wpdb->varQueue[] = 4;   // reads have their own, higher limit (5)
+        $lim->check('u1', 'read');
+    } finally {
+        $wpdb = $keepDb;
+        unset($GLOBALS['WP_OPTIONS']['fluxfiles_storage_backend'], $GLOBALS['WP_OPTIONS']['fluxfiles_db_version']);
+    }
+});
+
+test('db mode: a missing/unusable rate_limits table degrades to the file limiter (throttled log) instead of a 500 on every call', function () use ($ffPriv) {
+    global $wpdb;
+    $keepDb = $wpdb ?? null;
+    $heal = new \ReflectionProperty(WpRateLimiterStorage::class, 'healTried');
+    $heal->setValue(null, true); // skip the dbDelta self-heal (not available in the stub runtime)
+    $broken = new class extends WpdbSpy {
+        public function query(string $sql)
+        {
+            $this->queries[] = $sql;
+            return str_starts_with($sql, 'DELETE FROM wp_fluxfiles_rate_limits') ? false : 1;
+        }
+    };
+    $dir = sys_get_temp_dir() . '/ff-wp-rl-' . uniqid();
+    @mkdir($dir, 0777, true);
+    $errLog = ini_set('error_log', $dir . '/err.log');
+    try {
+        $wpdb = $broken;
+        $lim = new WpRateLimiterStorage(5, 1, 60, \FluxFiles\RateLimiterFactory::makeFile($dir, 5, 1, 60));
+        $lim->check('u-fb', 'write');                      // served by the file limiter, no exception
+        try { $lim->check('u-fb', 'write'); $threw = null; }
+        catch (\FluxFiles\ApiException $e) { $threw = $e->getHttpCode(); }
+        assertEqual(429, $threw, 'still rate limited through the fallback');
+        $log = (string) @file_get_contents($dir . '/err.log');
+        assertEqual(1, substr_count($log, 'DB rate limiter unavailable'), 'logged once, not per request');
+        $strict = new WpRateLimiterStorage(5, 1, 60);       // no fallback: fail closed as before
+        try { $strict->check('u-fb', 'write'); $code = null; }
+        catch (\FluxFiles\ApiException $e) { $code = $e->getHttpCode(); }
+        assertEqual(500, $code, 'without a fallback it still fails closed');
+    } finally {
+        $wpdb = $keepDb;
+        ini_set('error_log', (string) $errLog);
+        $heal->setValue(null, false);
+    }
+});
+
+test('the schema creates the rate_limits table', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesDbSchema.php');
+    assertTrue(strpos($src, 'fluxfiles_rate_limits') !== false && strpos($src, 'KEY identifier_bucket_ts (identifier,bucket,ts)') !== false, 'table + index');
+    assertEqual('1.5.0', FluxFilesDbSchema::VERSION, 'schema version bumped so existing installs dbDelta it');
+});
+
+test('WpDbMetadataHandler uses core\'s MetadataRowLogic trait and keeps none of its duplicated methods', function () {
+    assertTrue(in_array(\FluxFiles\Db\MetadataRowLogic::class, class_uses(WpDbMetadataHandler::class), true), 'trait used');
+    $own = [];
+    foreach ((new ReflectionClass(WpDbMetadataHandler::class))->getMethods() as $m) {
+        if ($m->getFileName() === (new ReflectionClass(WpDbMetadataHandler::class))->getFileName()) { $own[] = $m->getName(); }
+    }
+    foreach (['pathHash', 'isReservedPath', 'isHiddenPath', 'highlight', 'rowToTrashEntry', 'rowToHoldEntry', 'matchOverlappingHold',
+              'findOverlappingHold', 'holdCovering', 'holdBlocking', 'holdsCoveringMany', 'releaseHold', 'get', 'trackParents',
+              'countChildren', 'syncToS3Tags', 'readAuditArchive'] as $dup) {
+        assertTrue(!in_array($dup, $own, true), "{$dup}() comes from the trait, not a local copy");
+    }
+});
+
+test('readAuditWindow(): SQL narrowed by actor/since/limit through the trait, rows mapped and re-ordered', function () {
+    $spy = new WpdbSpy();
+    $spy->resultsQueue[] = [   // newest first, as ORDER BY id DESC returns them
+        ['owner' => 'u', 'action' => 'b', 'file_key' => 'k2', 'ip' => null, 'user_agent' => null, 'detail' => null, 'created_at' => '200', 'prev_hash' => null, 'entry_hash' => null],
+        ['owner' => 'u', 'action' => 'a', 'file_key' => 'k1', 'ip' => null, 'user_agent' => null, 'detail' => null, 'created_at' => '150', 'prev_hash' => null, 'entry_hash' => null],
+    ];
+    $h = makeWpDbHandler($spy);
+    $rows = $h->readAuditWindow('local', 100, 5, 'u');
+    $sql = $spy->queries[0];
+    assertTrue(str_contains($sql, "disk = 'local'") && str_contains($sql, "owner = 'u'") && str_contains($sql, 'created_at >= 100')
+        && str_contains($sql, 'ORDER BY id DESC LIMIT 5'), 'SQL: ' . $sql);
+    assertEqual(['a', 'b'], array_column($rows, 'action'), 'limit query is flipped back to chronological order');
+    assertEqual(150, $rows[0]['created_at'], 'created_at cast to int');
+
+    $spy2 = new WpdbSpy();
+    makeWpDbHandler($spy2)->readAudit('local');
+    assertTrue(str_contains($spy2->queries[0], 'ORDER BY id ASC') && !str_contains($spy2->queries[0], 'LIMIT'), 'readAudit() = the whole window, oldest first');
+});
+
+test('refused writes / 403s are audited through core\'s AuditPolicy and the plugin keeps no copy', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($src, 'AuditPolicy::recordRefusedWrite(') !== false && strpos($src, 'AuditPolicy::recordDenied(') !== false, 'delegates');
+    assertTrue(strpos($src, 'function auditDenied(') === false && strpos($src, 'function auditRefusedWrite(') === false, 'hand-written duplicates deleted');
+    assertTrue(strpos($src, 'AuditPolicy::successEntry(') !== false, 'success entries come from AuditPolicy too');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

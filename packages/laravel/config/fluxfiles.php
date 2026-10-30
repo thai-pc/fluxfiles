@@ -146,10 +146,10 @@ return [
     | Core and the paid modules read their server settings straight from the
     | process environment ($_ENV / getenv()): FLUXFILES_LICENSE_KEY, the module
     | engines (FLUXFILES_AIVISION_*, FLUXFILES_DLP_ENDPOINT, FLUXFILES_C2PA_MANIFEST,
-    | FLUXFILES_WEBHOOK_ALLOW_INTERNAL, …) and kill switches such as
-    | FLUXFILES_TERMINAL_DISABLED. After `php artisan config:cache` Laravel no
-    | longer loads .env at runtime, so values kept only in .env vanished: every
-    | paid module answered 402 (unlicensed) and a kill switch silently turned off.
+    | FLUXFILES_WEBHOOK_ALLOW_INTERNAL, …), the X-Accel base (FLUXFILES_XACCEL)
+    | and the other server-side switches. After `php artisan config:cache` Laravel
+    | no longer loads .env at runtime, so values kept only in .env vanished: every
+    | paid module answered 402 (unlicensed) and a switch silently turned off.
     | Every FLUXFILES_* value present when config is loaded is captured here (so it
     | lands in the config cache) and put back into $_ENV at boot for any key the
     | real environment doesn't already set — a real env var always wins.
