@@ -709,8 +709,8 @@ After seeding, both file and folder search work for the existing tree.
 (read/write/delete, `prefix ''`) for **any** logged-in session user, i.e. full access to
 the whole disk. Since 0.2.51 a token comes only from a `claims_resolver` or from the
 component's signed refresh ticket, and cookie-only writes return `401 token_missing`.
-See the GHSA advisory for fluxfiles/laravel < 0.2.51 on the
-[security advisories page](https://github.com/thai-pc/fluxfiles/security/advisories).
+See advisory
+[GHSA-m73q-w9rc-jcxh](https://github.com/thai-pc/fluxfiles/security/advisories/GHSA-m73q-w9rc-jcxh).
 Upgrade, and review the files your users could reach in the meantime.
 
 Without a `claims_resolver` the picker fails when its token expires

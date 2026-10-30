@@ -32,7 +32,7 @@ Hardening from issue #176: `_fluxfiles/` exposed under a public local disk root.
     - gives the nginx and Apache deny rules;
     - recommends a disk root outside `public/`;
     - shows `public_path('uploads')` only for files that already live there.
-- **Advisory for `fluxfiles/laravel` < 0.2.51.** Those releases gave every
+- **Advisory [GHSA-m73q-w9rc-jcxh](https://github.com/thai-pc/fluxfiles/security/advisories/GHSA-m73q-w9rc-jcxh) for `fluxfiles/laravel` < 0.2.51.** Those releases gave every
   session-authenticated user a full-access token (read/write/delete on the
   whole disk) built from the config `defaults`. The Laravel README now has an
   "Upgrading from < 0.2.51" section with a minimal `claims_resolver`.
