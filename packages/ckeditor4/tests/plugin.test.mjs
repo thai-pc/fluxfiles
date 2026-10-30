@@ -23,6 +23,7 @@ function loadPlugin(fluxfilesConfig) {
     plugins: { add: (_name, def) => { globalThis.__pluginDef = def; } },
     // Capture the global dialogDefinition listener the plugin registers once.
     on: (evt, handler) => { globalThis.__ckOn[evt] = handler; },
+    document: { appendStyleText: vi.fn() },
   };
   // eslint-disable-next-line no-eval
   (0, eval)(pluginCode);
@@ -34,7 +35,7 @@ function loadPlugin(fluxfilesConfig) {
     execCommand: (name) => commands[name].exec(),
   };
   globalThis.__pluginDef.init(editor);
-  return { editor, commands, buttons, open: globalThis.FluxFiles.open };
+  return { editor, commands, buttons, open: globalThis.FluxFiles.open, css: globalThis.CKEDITOR.document.appendStyleText };
 }
 
 describe('CKEditor 4 FluxFiles plugin', () => {
@@ -53,6 +54,16 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     expect(icon.startsWith('data:image/svg+xml,')).toBe(true);
     expect(decodeURIComponent(icon)).toContain('<svg');
     expect(icon).not.toContain('.png'); // the old icons/fluxfiles.png is gone
+    expect(decodeURIComponent(icon)).toContain('M10 16.5v-6h4.5M10 13.5h3.5'); // the "F" mark, not a plain folder
+  });
+
+  it('sets the icon through a stylesheet rule, since CKEDITOR.getUrl() prefixes a data: URI with basePath', () => {
+    const { css } = loadPlugin();
+    expect(css).toHaveBeenCalledTimes(1);
+    const rule = css.mock.calls[0][0];
+    expect(rule).toContain('.cke_button__fluxfiles_icon{');
+    expect(rule).toContain('url("data:image/svg+xml,');
+    expect(rule).toContain('!important');
   });
 
   it('running the command opens FluxFiles with the editor config', () => {

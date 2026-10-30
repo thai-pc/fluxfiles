@@ -39,6 +39,34 @@ function loadPlugin() {
 describe('TinyMCE FluxFiles plugin', () => {
   beforeEach(() => { delete globalThis.__tmceCb; });
 
+  it('TinyMCE 5+: registers the F-folder icon so it is not mistaken for a plain folder button', () => {
+    const { editor, buttons } = loadPlugin();
+    const [name, svg] = editor.ui.registry.addIcon.mock.calls[0];
+    expect(name).toBe('fluxfiles');
+    expect(svg).toContain('M10 16.5v-6h4.5M10 13.5h3.5');
+    expect(buttons.fluxfiles.icon).toBe('fluxfiles');
+  });
+
+  it('TinyMCE 4: uses its own F-folder image, not the native browse icon', () => {
+    globalThis.FluxFiles = { open: vi.fn() };
+    globalThis.tinymce = { majorVersion: '4', PluginManager: { add: (_n, cb) => { globalThis.__tmceCb = cb; } } };
+    (0, eval)(pluginCode);
+    const buttons = {}, items = {};
+    const editor = {
+      settings: {},
+      getParam: (k, d) => ({ fluxfiles_endpoint: 'x', fluxfiles_token: 'y' }[k] ?? d),
+      addButton: (n, def) => { buttons[n] = def; },
+      addMenuItem: (n, def) => { items[n] = def; },
+      insertContent: vi.fn(),
+    };
+    globalThis.__tmceCb(editor);
+    for (const def of [buttons.fluxfiles, items.fluxfiles]) {
+      expect(def.icon).toBeUndefined();
+      expect(def.image.startsWith('data:image/svg+xml,')).toBe(true);
+      expect(decodeURIComponent(def.image)).toContain('M10 16.5v-6h4.5M10 13.5h3.5');
+    }
+  });
+
   it('registers via PluginManager + a toolbar button', () => {
     const { buttons } = loadPlugin();
     expect(globalThis.__tmceCb).toBeTruthy();

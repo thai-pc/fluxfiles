@@ -30,6 +30,23 @@
 (function () {
     'use strict';
 
+    // Toolbar glyph: a folder with an "F", so it can't be mistaken for the editor's
+    // own folder/browse buttons. Same shape as the CKEditor 4 and Summernote plugins.
+    // fill="none" sits on each <path>: TinyMCE's toolbar CSS sets `fill` on the <svg>,
+    // which the paths would otherwise inherit (a solid black folder with no visible F).
+    function iconSvg(color) {
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">'
+            + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
+            + 'fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+            + '<path d="M10 16.5v-6h4.5M10 13.5h3.5" '
+            + 'fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+
+    // TinyMCE 4 shows a custom icon as an <img>, where currentColor doesn't resolve.
+    function iconDataUri() {
+        return 'data:image/svg+xml,' + encodeURIComponent(iconSvg('#595959'));
+    }
+
     // Encode a value for use inside an HTML ATTRIBUTE (src="...", alt="...", href="...").
     // The DOM textNode→innerHTML trick alone only encodes &/</>  (correct for text-node
     // context) but leaves `"` untouched, letting a quote in e.g. alt_text break out of the
@@ -190,12 +207,7 @@
 
         if (majorVersion >= 5) {
             // TinyMCE 5+ API — register custom icon (browse doesn't exist in v5)
-            editor.ui.registry.addIcon('fluxfiles',
-                '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">'
-                + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
-                + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
-                + '</svg>'
-            );
+            editor.ui.registry.addIcon('fluxfiles', iconSvg('currentColor'));
 
             editor.ui.registry.addButton('fluxfiles', {
                 icon: 'fluxfiles',
@@ -223,8 +235,10 @@
             };
         } else {
             // TinyMCE 4.x API
+            // Not the native 'browse' icon: that is the editor's own file-browser
+            // glyph, so the FluxFiles button looked identical to it.
             editor.addButton('fluxfiles', {
-                icon: 'browse',
+                image: iconDataUri(),
                 tooltip: 'FluxFiles',
                 onclick: function () {
                     openPicker(editor);
@@ -232,7 +246,7 @@
             });
 
             editor.addMenuItem('fluxfiles', {
-                icon: 'browse',
+                image: iconDataUri(),
                 text: 'FluxFiles',
                 onclick: function () {
                     openPicker(editor);
