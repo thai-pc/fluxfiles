@@ -17,6 +17,10 @@ Results of a code review of performance, correctness and core/proxy drift.
   `null`. This broke srcset, the duplicate finder, and date/size sorting. The
   whole entry is now carried to the new key: JSON backend, core DB backend,
   and the Laravel and WordPress DB handlers.
+- **Emptying the trash could stop with a TypeError** when a random trash id
+  happened to be all digits: PHP turns such an array key into an int, and
+  `removeTrash()` expects a string. The trash listing also returned that id
+  as a number. Both paths now cast it back to a string.
 - **Laravel/WordPress: X-Accel-Redirect paths were not percent-encoded.** A
   file name containing `%`, `?` or `#` returned 404 or was cut short behind
   nginx. Core fixed this in 0.2.101, but the proxies' copies never got it.

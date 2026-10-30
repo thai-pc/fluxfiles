@@ -1621,6 +1621,9 @@ class FileManager
         $this->assertPerm('delete');
         $out = [];
         foreach ($this->meta->allTrash($disk) as $id => $e) {
+            // An all-digit trash id comes back as an int array key; removeTrash() and
+            // the client both expect the string id.
+            $id = (string) $id;
             if (!$this->trashVisible($e)) {
                 continue;
             }
@@ -1682,6 +1685,7 @@ class FileManager
         $bulk = $this->bulkOpen($disk);
         try {
             foreach ($this->meta->allTrash($disk) as $id => $e) {
+                $id = (string) $id; // see listTrash(): all-digit ids arrive as int keys
                 if (!$this->trashVisible($e)) {
                     continue;
                 }

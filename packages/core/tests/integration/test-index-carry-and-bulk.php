@@ -262,6 +262,22 @@ test('emptyTrash of 20 items: trash.json <= 2 writes', function () {
     rmrf($root); rmrf($root . '-other');
 });
 
+test('an all-digit trash id (an int array key) lists as a string and empties without a TypeError', function () {
+    [$fm, , , $root] = env();
+    up($fm, '', 'num.txt', 'x');
+    $fm->trash('local', 'num.txt');
+    // Re-key the one entry to an all-digit id, as a random id occasionally is.
+    $manifest = json_decode((string) file_get_contents("$root/_fluxfiles/trash.json"), true);
+    $old = (string) array_key_first($manifest);
+    rename("$root/_fluxfiles/trash/$old", "$root/_fluxfiles/trash/12345678");
+    file_put_contents("$root/_fluxfiles/trash.json", json_encode(['12345678' => $manifest[$old]]));
+    $list = $fm->listTrash('local');
+    assertTrue(($list[0]['trash_id'] ?? null) === '12345678', 'trash_id is the string id');
+    $r = $fm->emptyTrash('local');
+    assertEq(1, $r['purged'], 'purged');
+    rmrf($root); rmrf($root . '-other');
+});
+
 test('retention run (trash) over 20 files: trash.json and index <= 2 writes each', function () {
     [$fm, $dm, , $root, $c] = env('u', false, ['retentionRules' => [['path' => '', 'days' => 1, 'action' => 'trash']]]);
     for ($i = 0; $i < 20; $i++) { up($fm, '', "r{$i}.txt", "x{$i}"); touch("$root/r{$i}.txt", time() - 5 * 86400); }
