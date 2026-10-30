@@ -86,8 +86,7 @@ function ff_public_meta_repo(DiskManager $dm, ?MetadataRepositoryInterface $inje
  */
 function ff_xaccel_uri(string $base, string $path): string
 {
-    $segments = array_map('rawurlencode', explode('/', ltrim($path, '/')));
-    return rtrim($base, '/') . '/' . implode('/', $segments);
+    return \FluxFiles\MediaEndpoint::xaccelUri($base, $path);
 }
 
 /**
@@ -360,7 +359,7 @@ function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm
             // Audit the bytes leaving (after they're out — best-effort). Only the
             // first request of a fetch: a Range continuation is the same download,
             // and a <video> seek would otherwise write a line per scrub (the same
-            // rule ff_audit_stream_read() applies to /stream).
+            // rule MediaEndpoint applies to /stream reads).
             $range = trim((string) ($_SERVER['HTTP_RANGE'] ?? ''));
             if ($range === '' || preg_match('/^bytes=0-/', $range)) {
                 $jti = (string) ($res['jti'] ?? '');
@@ -479,7 +478,7 @@ function ff_share_send_bytes(DiskManager $dm, array $diskConfigs, array $res, bo
         $mime = (new \League\MimeTypeDetection\ExtensionMimeTypeDetector())
             ->detectMimeTypeFromPath($path) ?? 'application/octet-stream';
     }
-    // Inline only for the same safe set as handleMediaStream; everything else (and
+    // Inline only for the same safe set as MediaEndpoint::stream; everything else (and
     // an explicit ?dl=1) is forced to attachment.
     $inline = !$forceDownload && (bool) preg_match('#^(video/|audio/|image/(?!svg))|^application/pdf$#', $mime);
     $disposition = ff_content_disposition($name, $inline);

@@ -20,6 +20,10 @@ use FluxFiles\StorageMetadataHandler;
  */
 class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
 {
+    // Storage-agnostic row/hold/path logic shared with the Laravel and WordPress
+    // handlers — see Db\MetadataRowLogic.
+    use MetadataRowLogic;
+
     private Connection $db;
     private DiskManager $diskManager;
 
@@ -27,11 +31,6 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
     {
         $this->db = $db;
         $this->diskManager = $diskManager;
-    }
-
-    private function pathHash(string $key): string
-    {
-        return hash('sha256', $key);
     }
 
     private function generateUuidV4(): string
@@ -133,54 +132,9 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         return $row === false ? null : $row;
     }
 
-    private function isReservedPath(string $key): bool
-    {
-        foreach (explode('/', trim($key, '/')) as $seg) {
-            if ($seg === '_fluxfiles' || $seg === '_variants') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function isHiddenPath(string $key): bool
-    {
-        foreach (explode('/', trim($key, '/')) as $seg) {
-            if ($seg !== '' && $seg[0] === '.') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function highlight(string $text, string $query): ?string
-    {
-        if ($text === '' || $query === '') {
-            return null;
-        }
-        $escaped = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $q = preg_quote(htmlspecialchars($query, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), '/');
-        return preg_replace('/(' . $q . ')/iu', '<mark>$1</mark>', $escaped) ?: null;
-    }
-
     // ---------------------------------------------------------------------
     // File metadata
     // ---------------------------------------------------------------------
-
-    public function get(string $disk, string $key): ?array
-    {
-        $row = $this->fetchRow($disk, $key);
-        if ($row === null || ($row['title'] === null && $row['owner'] === null)) {
-            return null;
-        }
-        return [
-            'title'       => $row['title'] ?? '',
-            'alt_text'    => $row['alt_text'] ?? '',
-            'caption'     => $row['caption'] ?? '',
-            'tags'        => $row['tags'] ?? '',
-            'uploaded_by' => $row['owner'],
-        ];
-    }
 
     public function save(string $disk, string $key, array $data): void
     {
@@ -482,23 +436,6 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         return null;
     }
 
-    /** No-op: metadata already lives in the `file_metadata` table. */
-    public function syncToS3Tags(string $disk, string $key, array $data, DiskManager $diskManager): void
-    {
-    }
-
-    public function countChildren(string $disk, string $prefix): int
-    {
-        $fs = $this->diskManager->disk($disk);
-        $count = 0;
-        foreach ($fs->listContents($prefix, true) as $item) {
-            if ($item->isFile() && !str_ends_with($item->path(), '.meta.json')) {
-                $count++;
-            }
-        }
-        return $count;
-    }
-
     // ---------------------------------------------------------------------
     // Directory index (folder search)
     // ---------------------------------------------------------------------
@@ -518,34 +455,6 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         }
         $ins = $pdo->prepare('INSERT INTO directories (disk, path, path_hash, created_at) VALUES (?, ?, ?, ?)');
         $ins->execute([$disk, $dirKey, $hash, time()]);
-    }
-
-    public function trackParents(string $disk, string $key): void
-    {
-        $key = trim($key, '/');
-        if ($key === '' || $key === '.' || $this->isReservedPath($key)) {
-            return;
-        }
-        $dir = dirname($key);
-        if ($dir === '.' || $dir === '') {
-            return;
-        }
-        $dir = trim($dir, '/');
-        if ($dir === '') {
-            return;
-        }
-        $acc = [];
-        foreach (explode('/', $dir) as $p) {
-            if ($p === '' || $p === '.' || $p === '..') {
-                continue;
-            }
-            $acc[] = $p;
-            $d = implode('/', $acc);
-            if ($this->isReservedPath($d)) {
-                continue;
-            }
-            $this->trackDir($disk, $d);
-        }
     }
 
     public function dirsCreated(string $disk): array
@@ -703,46 +612,10 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
      */
     public function readAuditWindow(string $disk, ?int $since = null, ?int $limit = null, ?string $userId = null): array
     {
-        $sql = 'SELECT * FROM audit_log WHERE disk = ?';
-        $params = [$disk];
-        if ($userId !== null) {
-            $sql .= ' AND owner = ?';
-            $params[] = $userId;
-        }
-        if ($since !== null) {
-            $sql .= ' AND created_at >= ?';
-            $params[] = $since;
-        }
-        if ($limit !== null) {
-            // Integer-cast, not bound: LIMIT placeholders aren't portable across
-            // the three drivers (MySQL emulated prepares quote them).
-            $sql .= ' ORDER BY id DESC LIMIT ' . max(0, $limit);
-        } else {
-            $sql .= ' ORDER BY id ASC';
-        }
+        [$sql, $params] = $this->auditWindowSql('audit_log', $disk, $since, $limit, $userId);
         $stmt = $this->db->pdo()->prepare($sql);
         $stmt->execute($params);
-        $rows = $stmt->fetchAll();
-        if ($limit !== null) {
-            $rows = array_reverse($rows);
-        }
-
-        $entries = [];
-        foreach ($rows as $row) {
-            $entries[] = [
-                'user_id'    => $row['owner'] ?? '',
-                'action'     => $row['action'] ?? '',
-                'disk'       => $disk,
-                'file_key'   => $row['file_key'] ?? '',
-                'ip'         => $row['ip'],
-                'user_agent' => $row['user_agent'],
-                'detail'     => $row['detail'],
-                'created_at' => (int) $row['created_at'],
-                'prev_hash'  => $row['prev_hash'] ?? null,
-                'entry_hash' => $row['entry_hash'] ?? null,
-            ];
-        }
-        return $entries;
+        return $this->auditWindowEntries($stmt->fetchAll(), $disk, $limit);
     }
 
     public function audit(string $disk, string $action, array $context = []): void
@@ -809,12 +682,6 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         // Silent fail after the retry — best-effort contract, as above.
     }
 
-    /** Always empty: DB mode has no rotation/archive concept (no size cap to rotate against). */
-    public function readAuditArchive(string $disk): array
-    {
-        return [];
-    }
-
     public function purgeAuditBefore(string $disk, int $beforeTs): array
     {
         $stmt = $this->db->pdo()->prepare('DELETE FROM audit_log WHERE disk = ? AND created_at < ?');
@@ -874,23 +741,6 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
     // Trash index (soft-delete)
     // ---------------------------------------------------------------------
 
-    private function rowToTrashEntry(array $row): array
-    {
-        return [
-            'original_key' => $row['original_key'],
-            'disk'         => $row['disk'],
-            'basename'     => $row['basename'],
-            'is_dir'       => (bool) $row['is_dir'],
-            'size'         => $row['size'] !== null ? (int) $row['size'] : 0,
-            'deleted_at'   => $row['deleted_at'] !== null ? (int) $row['deleted_at'] : 0,
-            'deleted_by'   => $row['owner'],
-            'variants'     => $row['variants'] !== null ? (json_decode($row['variants'], true) ?: []) : [],
-            'meta'         => $row['meta'] !== null ? (json_decode($row['meta'], true) ?: []) : [],
-            'files'        => $row['files'] !== null ? (json_decode($row['files'], true) ?: []) : [],
-            'dirs'         => $row['dirs'] !== null ? (json_decode($row['dirs'], true) ?: []) : [],
-        ];
-    }
-
     public function allTrash(string $disk): array
     {
         $stmt = $this->db->pdo()->prepare('SELECT * FROM trash WHERE disk = ?');
@@ -945,23 +795,6 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
     // "one row per disk+id" shape as trash above; StorageMetadataHandler's
     // _fluxfiles/holds.json is the reference implementation for field names.
     // ---------------------------------------------------------------------
-
-    private function rowToHoldEntry(array $row): array
-    {
-        return [
-            'path'           => $row['path'],
-            'is_dir'         => (bool) $row['is_dir'],
-            'disk'           => $row['disk'],
-            'reason'         => $row['reason'],
-            'placed_by'      => $row['placed_by'],
-            'placed_at'      => $row['placed_at'] !== null ? (int) $row['placed_at'] : null,
-            'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
-            'released_by'    => $row['released_by'],
-            'release_reason' => $row['release_reason'],
-        ] + (isset($row['placed_by_scope']) && $row['placed_by_scope'] !== null
-            ? ['placed_by_scope' => (string) $row['placed_by_scope']]
-            : []);
-    }
 
     public function allHolds(string $disk): array
     {
@@ -1025,15 +858,6 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         $stmt->execute(array_values($insertCols));
     }
 
-    public function releaseHold(string $disk, string $id, array $releaseInfo): void
-    {
-        $existing = $this->getHold($disk, $id);
-        if ($existing === null) {
-            return; // caller already validated existence before calling
-        }
-        $this->addHold($disk, $id, array_merge($existing, $releaseInfo));
-    }
-
     public function countActiveHolds(string $disk): int
     {
         $stmt = $this->db->pdo()->prepare('SELECT COUNT(*) AS n FROM legal_holds WHERE disk = ? AND released_at IS NULL');
@@ -1042,68 +866,4 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         return $row === false ? 0 : (int) $row['n'];
     }
 
-    public function holdCovering(string $disk, string $scopedPath): ?array
-    {
-        return $this->findOverlappingHold($disk, $scopedPath, false);
-    }
-
-    public function holdBlocking(string $disk, string $scopedPath): ?array
-    {
-        return $this->findOverlappingHold($disk, $scopedPath, true);
-    }
-
-    /**
-     * Batch counterpart to holdCovering() — runs the `SELECT * FROM legal_holds`
-     * query ONCE for the whole page instead of once per item (mirrors
-     * StorageMetadataHandler::holdsCoveringMany(); see its doc-comment for why).
-     *
-     * @param array<int,string> $scopedPaths
-     * @return array<string, array<string,mixed>|null> keyed by the given scoped path
-     */
-    public function holdsCoveringMany(string $disk, array $scopedPaths): array
-    {
-        $holds = $this->allHolds($disk);
-        $out = [];
-        foreach ($scopedPaths as $scopedPath) {
-            $out[$scopedPath] = self::matchOverlappingHold($holds, $scopedPath, false);
-        }
-        return $out;
-    }
-
-    /**
-     * Same prefix-overlap semantics as StorageMetadataHandler::findOverlappingHold()
-     * — kept as a plain PHP scan (not SQL LIKE) so the two backends can never
-     * silently diverge on this security-relevant comparison.
-     */
-    private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
-    {
-        return self::matchOverlappingHold($this->allHolds($disk), $scopedPath, $bidirectional);
-    }
-
-    /**
-     * Pure matcher shared by findOverlappingHold() (single lookup) and
-     * holdsCoveringMany() (batch lookup against an already-loaded result set) —
-     * decouples the query from the overlap logic so callers can choose how
-     * many times they pay for the former.
-     *
-     * @param array<string,array> $holds id => entry, as returned by allHolds()
-     */
-    private static function matchOverlappingHold(array $holds, string $scopedPath, bool $bidirectional): ?array
-    {
-        $scopedPath = trim($scopedPath, '/');
-        if ($scopedPath === '') {
-            return null;
-        }
-        foreach ($holds as $id => $entry) {
-            if ($entry['released_at'] !== null) {
-                continue; // released holds never block/cover
-            }
-            if (StorageMetadataHandler::holdPathOverlaps((string) ($entry['path'] ?? ''), $scopedPath, $bidirectional)) {
-                // $id is a PHP array key — an all-digit hold id string gets
-                // silently cast to int as an array key; cast back to string.
-                return ['hold_id' => (string) $id] + $entry;
-            }
-        }
-        return null;
-    }
 }

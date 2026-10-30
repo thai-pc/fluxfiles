@@ -35,12 +35,6 @@ $coreDir = realpath(__DIR__ . '/../..');
 echo "\n{$cyan}══ Audit coverage ══{$reset}\n\n";
 
 $indexSrc = (string) file_get_contents($coreDir . '/api/index.php');
-if (!preg_match('#\nfunction resolveAuditAction\(.*?\n\}\n#s', $indexSrc, $m)) {
-    fwrite(STDERR, "resolveAuditAction() not found in api/index.php\n");
-    exit(1);
-}
-eval('namespace AuditGuard; ' . $m[0]);
-
 test('every POST/PUT/DELETE route maps to a named audit action', function () use ($indexSrc) {
     preg_match_all("#\\\$method === '(?:POST|PUT|DELETE)' && \\\$uri === '(/api/fm/[a-z0-9/_-]+)'#", $indexSrc, $mm);
     $routes = array_unique($mm[1]);
@@ -49,7 +43,7 @@ test('every POST/PUT/DELETE route maps to a named audit action', function () use
     $preAuth = ['/api/fm/sso/exchange'];
     $unknown = [];
     foreach ($routes as $r) {
-        if (!in_array($r, $preAuth, true) && \AuditGuard\resolveAuditAction($r) === 'unknown') {
+        if (!in_array($r, $preAuth, true) && \FluxFiles\AuditPolicy::resolveAction($r) === 'unknown') {
             $unknown[] = $r;
         }
     }
@@ -66,7 +60,7 @@ test('longer routes win over their prefixes', function () {
         '/api/fm/versions/restore' => 'version_restore', '/api/fm/zip' => 'zip_download',
     ];
     foreach ($cases as $uri => $want) {
-        assertEqual($want, \AuditGuard\resolveAuditAction($uri), $uri);
+        assertEqual($want, \FluxFiles\AuditPolicy::resolveAction($uri), $uri);
     }
 });
 

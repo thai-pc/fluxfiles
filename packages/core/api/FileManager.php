@@ -4321,7 +4321,7 @@ class FileManager
     /**
      * Content-Disposition to sign into a presigned S3/R2 GET URL.
      *
-     * The same inline-safe set as handleMediaStream() and the Share route: media,
+     * The same inline-safe set as MediaEndpoint::stream() and the Share route: media,
      * raster images and PDF stay inline so <video>/<img>/pdf preview works, and
      * everything else — .svg and .html above all — is forced to attachment.
      *

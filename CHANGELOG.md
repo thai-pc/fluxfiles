@@ -3,6 +3,39 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.44] — 2026-10-30
+
+> Released: `core-v0.2.117`.
+
+Round 3, step 1: logic that core and the Laravel/WordPress proxies each
+implemented separately is extracted into shared core classes. Core's own
+behaviour is unchanged; the adapters move onto these classes in the next
+release.
+
+### Changed
+
+- **New shared core classes; `api/index.php` now uses them** (2,882 → 1,943
+  lines):
+  - `MediaEndpoint` for `/stream` and `/img`;
+  - `AuditPolicy` for audit actions, details, refused-write and
+    access-denied entries;
+  - `FileManagerFactory` for wiring quota, scanners (virus/DLP stay
+    fail-closed), versioning, AI and webhooks;
+  - `TerminalService` and `GitDeployService`;
+  - `Claims::requirePerm()` and `Claims::requireDisk()`;
+  - the `Db\MetadataRowLogic` trait for the methods the three DB metadata
+    handlers had copied verbatim;
+  - `RateLimiterFactory::makeDb()` and `makeFile()`.
+- **How equivalence was checked.** An independent review compared the old and
+  new code:
+  - all 17 self-booting e2e suites give identical results;
+  - 46 `/stream` and `/img` requests give byte-identical responses;
+  - 66 terminal and git-deploy requests behave the same;
+  - 40,000 randomised audit cases show no difference.
+- **One input now behaves differently.** A write route that received a scalar
+  JSON body (e.g. `"x"`) used to answer 500 after the write had succeeded,
+  and logged no audit line. It now answers 200 and logs it.
+
 ## [0.3.43] — 2026-10-30
 
 > Released: `core-v0.2.116`, `laravel-v0.2.58`, `wordpress-v0.2.74` (the plugin bundles core).
