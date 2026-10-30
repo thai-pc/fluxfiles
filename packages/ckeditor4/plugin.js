@@ -26,13 +26,31 @@
 (function () {
     'use strict';
 
-    // Shared toolbar glyph — the same folder icon TinyMCE registers, kept inline
+    // Shared toolbar glyph — the same F-folder icon TinyMCE registers, kept inline
     // (no separate image file) so both editor plugins stay visually in sync.
     // currentColor doesn't resolve inside an <img>, so use an explicit gray.
     var ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">'
         + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
-        + 'stroke="#575757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        + 'fill="none" stroke="#575757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+        // The "F" tells it apart from the editor's own folder/browse buttons.
+        + '<path d="M10 16.5v-6h4.5M10 13.5h3.5" '
+        + 'fill="none" stroke="#575757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     var ICON_URI = 'data:image/svg+xml,' + encodeURIComponent(ICON_SVG);
+
+    // CKEditor resolves a button `icon` through CKEDITOR.getUrl(), which only
+    // recognises http(s):// and /-rooted paths, so a data: URI came out as
+    // "<basePath>data:image/svg+xml,…" and the button showed no icon. Set the
+    // glyph with a stylesheet rule instead (once per page).
+    var iconCssAdded = false;
+    function addIconCss() {
+        if (iconCssAdded || !CKEDITOR.document || !CKEDITOR.document.appendStyleText) {
+            return;
+        }
+        iconCssAdded = true;
+        CKEDITOR.document.appendStyleText(
+            '.cke_button__fluxfiles_icon{background:url("' + ICON_URI + '") no-repeat 0 0 / 16px 16px !important}'
+        );
+    }
 
     // Normalize a selected file into the bits the insert / dialog paths need.
     function fileInfo(file) {
@@ -151,6 +169,7 @@
                 }
             });
 
+            addIconCss();
             editor.ui.addButton('FluxFiles', {
                 label: 'FluxFiles',
                 command: 'openFluxFiles',

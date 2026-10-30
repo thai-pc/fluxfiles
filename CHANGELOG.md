@@ -3,6 +3,29 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.40] — 2026-10-30
+
+> Released: `tinymce-v0.3.5`, `ckeditor4-v0.3.5`, `summernote-v0.1.5`.
+
+### Changed
+
+- **Editor toolbar icon now shows an "F" inside the folder** (TinyMCE,
+  CKEditor 4, Summernote). The plain folder looked like the editors' own
+  folder and browse buttons, so the FluxFiles button could only be told apart
+  by its tooltip.
+  - TinyMCE 4 now gets its own icon. It used the editor's built-in `browse`
+    icon, which made it identical to the native file-browser button.
+
+### Fixed
+
+- **CKEditor 4: the FluxFiles toolbar button had no icon.** CKEditor resolves
+  a button icon through `CKEDITOR.getUrl()`, which put the editor's base path
+  in front of the inline `data:` URI and produced a URL that doesn't exist.
+  The plugin now sets the icon with a stylesheet rule.
+- **TinyMCE 5+: the icon was drawn as a solid black folder.** TinyMCE's
+  toolbar CSS sets `fill` on the SVG, and the paths inherited it. Each path now
+  sets `fill="none"` itself.
+
 ## [0.3.39] — 2026-10-30
 
 > Released: `core-v0.2.113`, `laravel-v0.2.56`.

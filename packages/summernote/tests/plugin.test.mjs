@@ -57,6 +57,7 @@ describe('Summernote FluxFiles plugin', () => {
     expect(typeof memos['button.fluxfiles']).toBe('function');
     expect(buttonEl).toBeTruthy();
     expect(typeof buttonEl.__button.click).toBe('function');
+    expect(String(buttonEl.__button.contents)).toContain('M10 16.5v-6h4.5M10 13.5h3.5'); // F-folder icon
   });
 
   it('button click opens FluxFiles with the configured endpoint/token', () => {
