@@ -91,7 +91,17 @@ jobs:
             echo "Published."
           else
             if grep -qiE 'cannot publish over|previously published|EPUBLISHCONFLICT|You cannot publish over the previously published versions' /tmp/pub.log; then
-              echo "::notice::Version already published — skipping."
+              # A conflict also fires for a version number that was published once and then
+              # unpublished (npm never reuses one). That must fail, not skip: react-v1.0.0
+              # went green while npm served no 1.0.0 at all.
+              NAME=$(node -p "require('./package.json').name")
+              VER=$(node -p "require('./package.json').version")
+              if [ "$(npm view "$NAME@$VER" version 2>/dev/null)" = "$VER" ]; then
+                echo "::notice::Version already published — skipping."
+              else
+                echo "::error::npm refuses $NAME@$VER but does not serve it (a burned, unpublished version). Bump the version."
+                exit 1
+              fi
             else
               echo "::error::npm publish failed (not an already-published conflict). Check NPM_TOKEN validity/permissions."
               exit 1
