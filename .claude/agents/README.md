@@ -5,13 +5,17 @@ system prompt preloaded with FluxFiles' conventions (stateless/JWT-claims grain,
 paid-module gate, i18n/config-doc guards, security pitfalls). Claude Code auto-discovers
 these from `.claude/agents/`.
 
-| Agent | Role | Tools | Edits code? |
-|---|---|---|---|
-| **planner** | Decide *whether/what*: build-in-core vs paid module vs BYO-embed OSS vs don't-build, who pays, v1 scope. No API design. | Read/Grep/Glob/Write/Web | writes a plan doc |
-| **spec-writer** | Turn an idea into a concrete design/spec doc (API, claims, storage, security, test plan) that fits the grain — before coding. | Read/Grep/Glob/Write/Web | writes docs only |
-| **coder** | Implement a feature/fix following the exact repo patterns (module gate, claims, i18n, hooks). Also runs the post-review fix pass. | Read/Edit/Write/Bash/Grep/Glob | yes |
-| **reviewer** | Review a change for FluxFiles-specific security/correctness pitfalls + guard/leak checks. | Read/Grep/Glob/Bash | no (reports) |
-| **tester** | Write + run tests in the repo's patterns until the suite is green. | Read/Write/Edit/Bash/Grep/Glob | tests only |
+Deciding and reviewing (planner, spec-writer, reviewer) run on the session's model at
+high effort; following a spec (coder, tester) runs on Sonnet at medium effort. None of
+them re-read `.claude/CLAUDE.md`: it is already in every subagent's context.
+
+| Agent | Role | Tools | Model / effort | Edits code? |
+|---|---|---|---|---|
+| **planner** | Decide *whether/what*: build-in-core vs paid module vs BYO-embed OSS vs don't-build, who pays, v1 scope. No API design. | Read/Grep/Glob/Write/Web | inherit / high | writes a plan doc |
+| **spec-writer** | Turn an idea into a concrete design/spec doc (API, claims, storage, security, test plan) that fits the grain — before coding. | Read/Grep/Glob/Write/Web | inherit / high | writes docs only |
+| **coder** | Implement a feature/fix following the exact repo patterns (module gate, claims, i18n, hooks). Also runs the post-review fix pass. | Read/Edit/Write/Bash/Grep/Glob | sonnet / medium | yes |
+| **reviewer** | Review a change for FluxFiles-specific security/correctness pitfalls + guard/leak checks. | Read/Grep/Glob/Bash | inherit / high | no (reports) |
+| **tester** | Write + run tests in the repo's patterns until the suite is green. | Read/Write/Edit/Bash/Grep/Glob | sonnet / medium | tests only |
 
 ## Suggested workflow for a non-trivial feature
 
