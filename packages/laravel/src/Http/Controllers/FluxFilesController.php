@@ -1693,6 +1693,21 @@ class FluxFilesController
             $origin = $request->header('Origin') ?: $request->query('origin');
 
             $report = (new BucketDoctor($this->diskManager))->diagnose($disk, $origin ?: null);
+            // Host-app checks (no network, no absolute paths): is this disk's
+            // _fluxfiles/ inside the web root, and has the published config drifted.
+            $report['checks'] = array_merge(
+                $report['checks'] ?? [],
+                \FluxFiles\Laravel\Doctor::exposureChecks(
+                    (array) config('fluxfiles.disks', []),
+                    function_exists('public_path') ? public_path() : null,
+                    $disk
+                ),
+                \FluxFiles\Laravel\Doctor::driftChecks(
+                    (array) config('fluxfiles'),
+                    (array) require __DIR__ . '/../../../config/fluxfiles.php'
+                )
+            );
+            $report['summary'] = \FluxFiles\Laravel\Doctor::summarize($report['checks']);
             // It writes and deletes a probe object — logged like any other write.
             $this->logAuditQuiet($claims, 'disk_doctor', $disk, '');
 

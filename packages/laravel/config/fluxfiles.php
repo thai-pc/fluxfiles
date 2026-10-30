@@ -251,8 +251,12 @@ return [
     | Default Permissions
     |--------------------------------------------------------------------------
     |
-    | Default JWT claims applied when generating tokens via the facade.
-    | Can be overridden per-call.
+    | Fallback values for tokens built by FluxFiles::token() / tokenWithByob()
+    | when the caller (or the claims_resolver) leaves a key out. They apply to
+    | explicit FluxFiles::token() calls and to the keys a claims_resolver
+    | omits -- never to a session user who has no resolver: without one, the
+    | FluxFilesAuth middleware and GET {route_prefix}/token refuse to mint
+    | (these defaults are broad: read/write/delete on the whole disk).
     |
     */
     'defaults' => [

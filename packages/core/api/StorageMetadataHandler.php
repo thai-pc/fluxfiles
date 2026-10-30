@@ -1098,6 +1098,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
                 'storage_not_writable'
             );
         }
+        FluxDirGuard::ensureDir($root, '_fluxfiles');
         $lockFile = $lockDir . '/' . $lockFileName;
         $fp = @fopen($lockFile, 'c+');
         if ($fp === false) {

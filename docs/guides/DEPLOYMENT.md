@@ -147,6 +147,18 @@ RewriteRule ^storage/(?!uploads/) - [F,L,NC]
 RewriteRule (^|/)\. - [F,L]
 ```
 
+**Built-in guard on local disks.** Whenever core writes into a `_fluxfiles/`
+directory on a LOCAL disk (the disk root and every `<prefix>/_fluxfiles/`), it
+also drops a deny-all `.htaccess` (Apache 2.2 and 2.4) and an empty `index.html`
+(no autoindex) there, only when missing — an operator-edited file is never
+overwritten, and S3/R2/SFTP disks are never touched. Apache honours it when
+`AllowOverride` permits `.htaccess`; **nginx ignores it**, so keep the
+`location ~* /_fluxfiles/ { deny all; }` rule above. That directory holds the
+audit log (user ids, IPs, user agents), the file index, the trashed files
+themselves, metadata sidecars, and the fixity/usage/optimize state — never
+serve it. This matters most when the disk `root` sits inside the web root
+(e.g. Laravel's `public_path('uploads')`).
+
 And in `storage/uploads/.htaccess` (user content — never execute it, never let
 it render as same-origin active content):
 

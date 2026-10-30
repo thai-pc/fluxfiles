@@ -118,7 +118,7 @@ class DiskManager
             if (!is_dir($root)) {
                 mkdir($root, 0755, true);
             }
-            $adapter = new LocalFilesystemAdapter($root);
+            $adapter = new GuardedLocalAdapter(new LocalFilesystemAdapter($root), $root);
         } elseif ($driver === 's3') {
             $s3Params = [
                 'credentials' => [
