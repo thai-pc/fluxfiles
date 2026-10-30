@@ -476,9 +476,23 @@ connection). Two locations must be writable by the user PHP-FPM runs as (usually
 
 ### `_fluxfiles/`
 
-Lives **inside the disk root** you configure (e.g. `public_path('uploads')` →
-`public/uploads/_fluxfiles/`). PHP creates it on the first write, so the safest
+Lives **inside the disk root** you configure (e.g. a root of `storage/app/fluxfiles`
+→ `storage/app/fluxfiles/_fluxfiles/`), and again under **each tenant prefix**
+(`<root>/<prefix>/_fluxfiles/`). PHP creates it on the first write, so the safest
 rule is: **let PHP create it — don't pre-create it as `root` or your deploy user.**
+
+It holds FluxFiles' bookkeeping, and **none of it should ever be downloadable**:
+
+| Path | Why it is sensitive |
+| --- | --- |
+| `audit.jsonl`, `audit/archive/` | who did what: user ids, IP addresses, user agents, per operation |
+| `index.json`, `dirs.json` | every file and folder of every tenant on the disk |
+| `trash.json`, `trash/` | the manifest **and the trashed files themselves** (still downloadable) |
+| `meta/` | metadata sidecars: titles, alt text, tags |
+| `fixity.json`, `usage.json`, `optimize.json` | checksums, usage and optimisation stats |
+
+With `storage_backend = db` most of the above moves into your database, but
+`trash/` (the bytes) stays on the disk.
 
 ```bash
 # Make the uploads tree writable by the web server user (adjust www-data to your
@@ -498,12 +512,54 @@ sudo chmod -R u+rwX,g+rwX /path/to/public/uploads
 > sudo chown -R www-data:www-data /path/to/public/uploads/_fluxfiles
 > ```
 
-If the disk root is **inside `public/`**, make sure `_fluxfiles/` is not served:
-its contents are internal (the index can reveal file names). For nginx:
+#### Keep `_fluxfiles/` off the web
+
+Prefer a disk root **outside** the web root. Note that the package default,
+`storage_path('app/public/fluxfiles/uploads')`, is only "outside `public/`" until you
+run `php artisan storage:link`: that makes `public/storage` a symlink to
+`storage/app/public`, so the default root **is** web-served at
+`/storage/fluxfiles/uploads/` (which is also why previews work out of the box).
+Pick one of:
+
+1. **Truly private (recommended for anything sensitive).** Root
+   `storage_path('app/fluxfiles')` (not under `app/public`) and
+   `FLUXFILES_LOCAL_PRIVATE=true`. Files are then served through the gated,
+   token-checked `/api/fm/stream` route, never as static URLs.
+2. **Public files, private bookkeeping.** Keep the root under `public/` or
+   `storage/app/public` (so `url` previews work) **and** deny `_fluxfiles` at the
+   web server, as below.
+
+**nginx** — in the `server` block that serves the app, **before** any static
+`location` (a regex location earlier in the file wins over a later static one):
 
 ```nginx
 location ~* /_fluxfiles/ { deny all; }
 ```
+
+**Apache** — `public/.htaccess` (needs `AllowOverride` on), above the Laravel rewrite rules:
+
+```apache
+RewriteEngine On
+RewriteRule (^|/)_fluxfiles(/|$) - [F,NC]
+```
+
+or, in a vhost config where `.htaccess` is off:
+
+```apache
+<LocationMatch "(^|/)_fluxfiles(/|$)">
+    Require all denied
+</LocationMatch>
+```
+
+Core also drops its own `_fluxfiles/.htaccess` + `index.html` on local disks. That
+only helps Apache with `AllowOverride` enabled; it does nothing on nginx, so do not
+rely on it.
+
+**Verify it.** `php artisan fluxfiles:doctor` flags every local disk root that sits
+inside the web root and probes `/_fluxfiles/index.json` over HTTP (`--no-probe` to
+skip the probe; non-zero exit on a problem). The same static checks appear as
+warnings in `GET {route_prefix}/disk/doctor`. It also lists keys missing from a
+stale published `config/fluxfiles.php`.
 
 > On **S3 / R2** disks there is nothing to chmod — `_fluxfiles/` lives in the
 > bucket as regular objects, governed by your IAM policy (`s3:PutObject` etc.).
@@ -557,9 +613,16 @@ file **`0600`** automatically on the first request.
 
 If your app already has a directory tree like `public/uploads/user_1/`, `public/uploads/user_2/` (populated before FluxFiles was installed), you can point FluxFiles at it — existing files show up immediately, and a one-shot Artisan command makes them searchable.
 
+> **Security.** A root inside `public/` also exposes FluxFiles' `_fluxfiles/` bookkeeping
+> (audit log, file index, trash) unless you deny it. Only use this layout if your files
+> **already live there**, and add the deny rule from
+> [Keep `_fluxfiles/` off the web](#keep-_fluxfiles-off-the-web) at the same time:
+> `location ~* /_fluxfiles/ { deny all; }` (nginx) or the `.htaccess` rule (Apache).
+> Starting fresh? Use a root outside `public/` instead.
+
 ### 1. Point the `local` disk at your existing path
 
-In `config/fluxfiles.php`:
+If your files already live in `public/uploads`, in `config/fluxfiles.php`:
 
 ```php
 'disks' => [
@@ -634,10 +697,54 @@ After seeding, both file and folder search work for the existing tree.
 
 ### 5. Notes & gotchas
 
-- FluxFiles auto-creates `public/uploads/_fluxfiles/` (metadata index and audit log) and `public/uploads/_variants/` (image thumbnails). These are hidden from the UI — do not delete them. If you use FTP/rsync/backup tools, add them to your ignore list.
+- FluxFiles creates `_fluxfiles/` (metadata index, audit log, trash) and `_variants/` (image thumbnails) **inside the disk root** — e.g. `public/uploads/_fluxfiles/` with the example above, and again under each tenant prefix. They are hidden from the UI — do not delete them, and **do deny `_fluxfiles/` at the web server** (see [Keep `_fluxfiles/` off the web](#keep-_fluxfiles-off-the-web)). If you use FTP/rsync/backup tools, add both to your ignore list.
 - `url = '/uploads'` must match how your web server serves `public/`. Preview links are built as `{url}/{key}` — e.g. file key `user_1/avatar.jpg` → `/uploads/user_1/avatar.jpg`.
 - Files uploaded **before** seeding won't have an `uploaded_by` metadata field. If you later enable `owner_only`, legacy files fall through gracefully (all users can act on them) until the next time someone edits them through the UI.
 - For S3/R2 disks with an existing bucket, the same seed command works — pass `--disk=s3` (or `--disk=r2`). Listing is slower because it pages the bucket remotely.
+
+## Upgrading from < 0.2.51
+
+**Security change.** Before `laravel-v0.2.51`, the `FluxFilesAuth` middleware and
+`GET {route_prefix}/token` minted a token from `config('fluxfiles.defaults')`
+(read/write/delete, `prefix ''`) for **any** logged-in session user, i.e. full access to
+the whole disk. Since 0.2.51 a token comes only from a `claims_resolver` or from the
+component's signed refresh ticket, and cookie-only writes return `401 token_missing`.
+See the GHSA advisory for fluxfiles/laravel < 0.2.51 on the
+[security advisories page](https://github.com/thai-pc/fluxfiles/security/advisories).
+Upgrade, and review the files your users could reach in the meantime.
+
+Without a `claims_resolver` the picker fails when its token expires
+(`403 token_refresh_failed`) and session-only requests are refused. Add one:
+
+```php
+// app/FluxFiles/UserClaims.php
+namespace App\FluxFiles;
+
+use FluxFiles\Laravel\ClaimsResolver;
+use Illuminate\Contracts\Auth\Authenticatable;
+
+class UserClaims implements ClaimsResolver
+{
+    public function resolve(Authenticatable $user): array
+    {
+        return [
+            'prefix' => 'user_' . $user->getAuthIdentifier() . '/',   // one folder per user
+            'perms'  => ['read', 'write', 'delete'],
+            'disks'  => ['local'],
+        ];
+    }
+}
+```
+
+```php
+// config/fluxfiles.php
+'claims_resolver' => \App\FluxFiles\UserClaims::class,
+```
+
+If you published `config/fluxfiles.php` from an older version it silently lacks newer keys
+(`claims_resolver`, `storage_backend`, `allowed_origins`, `frame_ancestors`, `server_env`, …).
+`php artisan fluxfiles:doctor` lists them. Also check that `_fluxfiles/` is not web-served
+([details](#keep-_fluxfiles-off-the-web)).
 
 ## Features
 

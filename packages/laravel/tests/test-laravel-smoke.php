@@ -1400,6 +1400,93 @@ test('L7: audit/export errors use the standard envelope (error_code/error_params
     assertTrue(!array_key_exists('code', $body), 'legacy `code` key gone');
 });
 
+// ── Doctor: web exposure + config drift + fluxfiles:doctor ────────────────
+require_once __DIR__ . '/../src/Doctor.php';
+
+namespace_stub_console();
+function namespace_stub_console(): void
+{
+    if (class_exists('Illuminate\Console\Command', false)) {
+        return;
+    }
+    eval('namespace Illuminate\Console; class Command {
+        const SUCCESS = 0; const FAILURE = 1;
+        public static array $opts = []; public array $out = [];
+        public function option($k) { return static::$opts[$k] ?? false; }
+        public function line($m) { $this->out[] = $m; } public function warn($m) { $this->out[] = $m; }
+        public function error($m) { $this->out[] = $m; } public function info($m) { $this->out[] = $m; }
+    }');
+}
+if (!function_exists('public_path')) {
+    function public_path($p = '') { return $GLOBALS['SMOKE_PUBLIC'] . ($p !== '' ? '/' . $p : ''); }
+}
+$GLOBALS['SMOKE_PUBLIC'] = $ffTmp . '/site/public';
+@mkdir($GLOBALS['SMOKE_PUBLIC'] . '/uploads', 0775, true);
+@mkdir($ffTmp . '/site/storage/app/public/fx', 0775, true);
+@mkdir($ffTmp . '/site/storage/app/private', 0775, true);
+
+test('doctor: a local root inside public/ warns; one outside does not', function () use ($ffTmp) {
+    $pub = $GLOBALS['SMOKE_PUBLIC'];
+    $in  = \FluxFiles\Laravel\Doctor::exposureChecks(['local' => ['driver' => 'local', 'root' => $pub . '/uploads/missing-yet']], $pub);
+    assertEqual('warn', $in[0]['status'], 'inside public/ warns (even if the root is not created yet)');
+    assertTrue(str_contains($in[0]['fix'], '_fluxfiles') && str_contains($in[0]['message'], '/uploads/missing-yet'), 'fix + url path');
+    assertTrue(!str_contains($in[0]['message'], $pub), 'no absolute path unless showRoot');
+    $out = \FluxFiles\Laravel\Doctor::exposureChecks(['local' => ['driver' => 'local', 'root' => $ffTmp . '/site/storage/app/private']], $pub);
+    assertEqual('ok', $out[0]['status'], 'outside the web root is ok');
+    $s3 = \FluxFiles\Laravel\Doctor::exposureChecks(['s3' => ['driver' => 's3']], $pub);
+    assertEqual('ok', $s3[0]['status'], 's3 disks are ignored');
+});
+
+test('doctor: storage/app/public only counts when public/storage links to it', function () use ($ffTmp) {
+    $pub  = $GLOBALS['SMOKE_PUBLIC'];
+    $disk = ['local' => ['driver' => 'local', 'root' => $ffTmp . '/site/storage/app/public/fx']];
+    assertEqual('ok', \FluxFiles\Laravel\Doctor::exposureChecks($disk, $pub)[0]['status'], 'no storage:link yet -> not served');
+    symlink($ffTmp . '/site/storage/app/public', $pub . '/storage');
+    $w = \FluxFiles\Laravel\Doctor::exposureChecks($disk, $pub);
+    assertEqual('warn', $w[0]['status'], 'after storage:link it is served');
+    assertTrue(str_contains($w[0]['message'], '/storage/fx'), 'URL path goes through the symlink');
+    assertEqual(null, \FluxFiles\Laravel\Doctor::webPath($ffTmp . '/site/storage/app/private', $pub), 'private stays private');
+});
+
+test('doctor: config drift lists missing and unknown top-level keys', function () {
+    $d = \FluxFiles\Laravel\Doctor::configDrift(['secret' => 1, 'legacy' => 1], ['secret' => 1, 'claims_resolver' => null, 'storage_backend' => 'json']);
+    assertEqual(['claims_resolver', 'storage_backend'], $d['missing'], 'missing');
+    assertEqual(['legacy'], $d['unknown'], 'unknown');
+    $c = \FluxFiles\Laravel\Doctor::driftChecks(['secret' => 1, 'legacy' => 1], ['secret' => 1, 'claims_resolver' => null]);
+    assertEqual(['warn', 'info'], array_column($c, 'status'), 'missing warns, unknown is info');
+    assertTrue(str_contains($c[0]['message'], 'claims_resolver'), 'names the key');
+    assertEqual('ok', \FluxFiles\Laravel\Doctor::driftChecks(['a' => 1], ['a' => 1])[0]['status'], 'no drift is ok');
+    assertEqual('warn', \FluxFiles\Laravel\Doctor::summarize($c), 'summary');
+});
+
+test('doctor: diskDoctor endpoint keeps its shape and appends the host checks', function () use ($ffTmp) {
+    $r = withConfig(['fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $GLOBALS['SMOKE_PUBLIC'] . '/uploads', 'url' => '/uploads']]], function () {
+        return freshController()->diskDoctor(new Request('GET', ['disk' => 'local'], bearer(['perms' => ['read', 'write']])));
+    });
+    $d = $r->getData()['data'];
+    assertTrue(isset($d['disk'], $d['driver'], $d['summary'], $d['checks']), 'original keys');
+    $ids = array_column($d['checks'], 'id');
+    assertTrue(in_array('write', $ids, true), 'BucketDoctor checks kept');
+    assertTrue(in_array('web_exposure:local', $ids, true), 'exposure warning added');
+    assertEqual('warn', $d['summary'], 'summary reflects the warning');
+});
+
+test('doctor: fluxfiles:doctor is registered and exits non-zero on a problem', function () use ($ffTmp) {
+    $prov = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    assertTrue(str_contains($prov, 'Console\DoctorCommand::class'), 'registered in the provider');
+    require_once __DIR__ . '/../src/Console/DoctorCommand.php';
+    $cmd = new \FluxFiles\Laravel\Console\DoctorCommand();
+    assertTrue(str_contains((new ReflectionProperty($cmd, 'signature'))->getValue($cmd), 'fluxfiles:doctor'), 'signature');
+    \Illuminate\Console\Command::$opts = ['no-probe' => true];
+    $bad = withConfig(['fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $GLOBALS['SMOKE_PUBLIC'] . '/uploads']]], fn () => $cmd->handle());
+    assertEqual(1, $bad, 'exposed root -> FAILURE');
+    $cmd2 = new \FluxFiles\Laravel\Console\DoctorCommand();
+    // Clean disk, but the stubbed app config lacks most package keys -> still a (drift) problem.
+    $ok = withConfig(['fluxfiles.disks' => ['local' => ['driver' => 'local', 'root' => $ffTmp . '/site/storage/app/private']]], fn () => $cmd2->handle());
+    assertEqual(1, $ok, 'config drift also fails');
+    assertTrue(!empty(array_filter($cmd2->out, fn ($l) => str_contains($l, 'config_missing_keys'))), 'drift reported');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

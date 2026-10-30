@@ -3,6 +3,47 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.39] — 2026-10-30
+
+> Released: `core-v0.2.113`, `laravel-v0.2.56`.
+
+Hardening from issue #176: `_fluxfiles/` exposed under a public local disk root.
+
+### Security
+
+- **`_fluxfiles/` under a web-served local disk root was downloadable.** It
+  holds the audit log (user ids, IPs, user agents), the file and folder index
+  of every tenant, the metadata sidecars, and the trashed files themselves. It
+  exists at the disk root and under each tenant prefix.
+  - **Core:** every `_fluxfiles/` directory on a local disk now gets a
+    deny-all `.htaccess` (Apache 2.4 and 2.2) and an empty `index.html` as soon
+    as core writes into it. An existing `.htaccess` is never overwritten.
+    S3/R2/SFTP disks are untouched. This protects Apache with `AllowOverride`;
+    **nginx still needs `location ~* /_fluxfiles/ { deny all; }`**. Existing
+    directories get the files on their next write.
+  - **Laravel:** `GET {route_prefix}/disk/doctor` and the new
+    `php artisan fluxfiles:doctor` warn when a local disk root is web-served.
+    That includes the package default under `storage/app/public` once
+    `storage:link` exists. The artisan command can also check whether
+    `_fluxfiles/index.json` is actually reachable over HTTP; `--no-probe`
+    skips that check. It exits non-zero when it finds a problem.
+  - **Laravel README:**
+    - lists what `_fluxfiles/` holds;
+    - gives the nginx and Apache deny rules;
+    - recommends a disk root outside `public/`;
+    - shows `public_path('uploads')` only for files that already live there.
+- **Advisory for `fluxfiles/laravel` < 0.2.51.** Those releases gave every
+  session-authenticated user a full-access token (read/write/delete on the
+  whole disk) built from the config `defaults`. The Laravel README now has an
+  "Upgrading from < 0.2.51" section with a minimal `claims_resolver`.
+- **`SECURITY.md`:** how to report a vulnerability privately.
+
+### Added
+
+- Laravel: doctor checks for config drift. They list keys missing from a
+  published `config/fluxfiles.php`, and keys the current version doesn't
+  define.
+
 ## [0.3.38] — 2026-10-24
 
 > Released: `core-v0.2.112`.

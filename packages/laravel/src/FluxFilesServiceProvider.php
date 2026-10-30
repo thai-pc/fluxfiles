@@ -31,6 +31,7 @@ class FluxFilesServiceProvider extends ServiceProvider
             $this->commands([
                 Console\SeedMetadataCommand::class,
                 Console\MigrateJsonToDbCommand::class,
+                Console\DoctorCommand::class,
             ]);
         }
 
