@@ -845,5 +845,10 @@
       "deleted": "eliminato",
       "held": "saltato — blocco legale"
     }
+  },
+  "pdfview": {
+    "expand": "Espandi PDF",
+    "fullscreen": "Schermo intero",
+    "open_tab": "Apri in una nuova scheda"
   }
 }

@@ -845,5 +845,10 @@
       "deleted": "silindi",
       "held": "atlandı — yasal saklama"
     }
+  },
+  "pdfview": {
+    "expand": "PDF'yi genişlet",
+    "fullscreen": "Tam ekran",
+    "open_tab": "Yeni sekmede aç"
   }
 }

@@ -3,6 +3,29 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.41] — 2026-10-30
+
+> Released: `core-v0.2.114`, `wordpress-v0.2.72` (the plugin bundles core).
+
+### Added
+
+- **Full-window PDF viewer.** A PDF was only viewable in the detail panel's
+  thumbnail-sized preview. An expand button (⤢) on that preview now opens the
+  same PDF in an overlay that fills the window, using the browser's own viewer
+  (page thumbnails, zoom, search, rotate, print). The top bar has the file
+  name and four buttons: full screen, open in a new tab, download and close.
+  - **Full screen** uses the Fullscreen API on the viewer. In an embedded
+    iframe it needs the host page to allow fullscreen; otherwise it shows the
+    same notice as the app's fullscreen button.
+  - **Touch devices** open the PDF in a new tab instead, since mobile
+    browsers barely render a PDF inside `<embed>`.
+  - **Expiring URLs:** an S3/R2 presigned URL or a gated `/stream` link is
+    re-presigned before the viewer or the new tab opens.
+  - **Download:** the button is hidden when the token can't download. A token
+    with `allow_download=false` gets no PDF preview at all, as before, because
+    a browser PDF viewer can always save the file.
+  - New `pdfview.*` strings in all 16 languages.
+
 ## [0.3.40] — 2026-10-30
 
 > Released: `tinymce-v0.3.5`, `ckeditor4-v0.3.5`, `summernote-v0.1.5`.

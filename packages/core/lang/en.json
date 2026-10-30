@@ -845,5 +845,10 @@
       "deleted": "deleted",
       "held": "skipped — legal hold"
     }
+  },
+  "pdfview": {
+    "expand": "Expand PDF",
+    "fullscreen": "Full screen",
+    "open_tab": "Open in new tab"
   }
 }

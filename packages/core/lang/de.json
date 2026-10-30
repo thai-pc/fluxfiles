@@ -845,5 +845,10 @@
       "deleted": "gelöscht",
       "held": "übersprungen — Legal Hold"
     }
+  },
+  "pdfview": {
+    "expand": "PDF vergrößern",
+    "fullscreen": "Vollbild",
+    "open_tab": "In neuem Tab öffnen"
   }
 }

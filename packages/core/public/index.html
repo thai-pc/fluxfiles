@@ -951,7 +951,13 @@
                 </div>
             </template>
             <template x-if="detailFile && isPreviewable(detailFile, 'pdf') && detailFile.url">
-                <embed :src="detailFile.url" type="application/pdf" style="width:100%;height:100%;">
+                <div class="ff-pdf-thumb">
+                    <embed :src="detailFile.url" type="application/pdf" style="width:100%;height:100%;">
+                    <button type="button" class="ff-pdf-expand" @click.stop="openPdfViewer()"
+                            :title="t('pdfview.expand')" :aria-label="t('pdfview.expand')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                    </button>
+                </div>
             </template>
             <template x-if="detailFile && !isPreviewable(detailFile, 'image') && !isPreviewable(detailFile, 'video') && !isPreviewable(detailFile, 'audio') && !isPreviewable(detailFile, 'pdf')">
                 <div class="ff-detail-thumb-icon">
@@ -1276,6 +1282,31 @@
             </div>
         </div>
     </div>
+
+    <!-- Full-window PDF viewer (the browser's own PDF viewer, filling the window) -->
+    <template x-if="pdfViewer && detailFile && detailFile.url">
+        <div class="ff-pdf-viewer" x-ref="pdfViewer" role="dialog" aria-modal="true" :aria-label="detailFile.name"
+             @keydown.escape.window="closePdfViewer()" x-transition.opacity>
+            <div class="ff-pdf-viewer-bar">
+                <span class="ff-pdf-viewer-name" x-text="detailFile.name"></span>
+                <button type="button" class="ff-pdf-viewer-btn" @click="togglePdfFullscreen()"
+                        :title="t('pdfview.fullscreen')" :aria-label="t('pdfview.fullscreen')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>
+                </button>
+                <button type="button" class="ff-pdf-viewer-btn" @click="openPdfInTab()"
+                        :title="t('pdfview.open_tab')" :aria-label="t('pdfview.open_tab')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+                </button>
+                <button type="button" class="ff-pdf-viewer-btn" x-show="effAllowDownload" @click="downloadFile(detailFile)"
+                        :title="t('common.download')" :aria-label="t('common.download')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                </button>
+                <button type="button" class="ff-pdf-viewer-btn ff-pdf-viewer-close" @click="closePdfViewer()"
+                        :title="t('common.close')" :aria-label="t('common.close')">&times;</button>
+            </div>
+            <embed class="ff-pdf-viewer-doc" :src="detailFile.url" type="application/pdf">
+        </div>
+    </template>
 
     <!-- Preview lightbox (full-size image, zoomable) -->
     <div class="ff-preview-lightbox" x-show="previewFullscreen && detailFile && isPreviewable(detailFile, 'image')" x-transition.opacity
