@@ -845,5 +845,10 @@
       "deleted": "đã xóa",
       "held": "bỏ qua — phong tỏa pháp lý"
     }
+  },
+  "pdfview": {
+    "expand": "Mở rộng PDF",
+    "fullscreen": "Toàn màn hình",
+    "open_tab": "Mở trong tab mới"
   }
 }

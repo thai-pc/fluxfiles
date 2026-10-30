@@ -186,6 +186,7 @@ function fluxFilesApp() {
 
         // Preview lightbox
         previewFullscreen: false,
+        pdfViewer: false,
 
         // Upload state
         uploadProgress: 0,
@@ -301,7 +302,7 @@ function fluxFilesApp() {
             this.$watch('typeFilter', (v) => { try { localStorage.setItem('fluxfiles_type_filter', v); } catch (_) {} });
 
             // Close preview lightbox when detail file is cleared
-            this.$watch('detailFile', (v) => { if (!v) this.previewFullscreen = false; });
+            this.$watch('detailFile', (v) => { if (!v) { this.previewFullscreen = false; this.closePdfViewer(); } });
 
             // Detail panel resize (desktop)
             this._resizeDetailMove = (e) => {
@@ -4800,6 +4801,60 @@ function fluxFilesApp() {
         endPan() { this.zoom.dragging = false; },
         // Close the lightbox (and reset zoom for next time).
         closePreview() { this.previewFullscreen = false; this.resetZoom(); },
+
+        // ── Full-window PDF viewer ───────────────────────────────────────────
+        // The detail panel's <embed> is thumbnail-sized; this opens the same PDF
+        // in an overlay that fills the window, with the browser's own viewer
+        // (pages, zoom, search, print). Touch devices open a new tab instead:
+        // mobile browsers barely render a PDF inside <embed>.
+        async openPdfViewer() {
+            const f = this.detailFile;
+            if (!f || !f.url) return;
+            await this._freshPreviewUrl(f);
+            if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+                this.openPdfInTab();
+                return;
+            }
+            this.pdfViewer = true;
+        },
+        closePdfViewer() {
+            if (!this.pdfViewer) return;
+            if (this._fsElement() === this.$refs.pdfViewer) {
+                const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                if (exit) exit.call(document);
+            }
+            this.pdfViewer = false;
+        },
+        togglePdfFullscreen() {
+            const el = this.$refs.pdfViewer;
+            if (!el) return;
+            if (this._fsElement()) {
+                const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                if (exit) exit.call(document);
+                return;
+            }
+            const req = el.requestFullscreen || el.webkitRequestFullscreen;
+            if (!req) { this.showToast(this.t('toolbar.fullscreen_blocked') || 'Fullscreen is not available here', 'error'); return; }
+            const p = req.call(el);
+            // In an embedded iframe this rejects unless the host allows fullscreen.
+            if (p && p.catch) p.catch(() => this.showToast(this.t('toolbar.fullscreen_blocked') || 'Fullscreen is not available here', 'error'));
+        },
+        openPdfInTab() {
+            const f = this.detailFile;
+            if (f && f.url) window.open(f.url, '_blank', 'noopener');
+        },
+        // An S3/R2 presigned URL or a gated /stream?token= link may have expired
+        // since the listing loaded; re-presign it before opening it full-window.
+        async _freshPreviewUrl(file) {
+            const src = file.url || '';
+            if (!/[?&](X-Amz-|Signature=)/.test(src) && !/\/api\/fm\/stream\?.*\btoken=/.test(src)) return;
+            try {
+                const data = await this.api('POST', '/api/fm/presign', {
+                    disk: this.currentDisk, path: file.key, method: 'GET', ttl: this.previewUrlTtl,
+                });
+                if (data && data.url) file.url = data.url;
+            } catch (e) { /* keep the old URL; the viewer shows its own error */ }
+        },
 
         // ── Zip download / extract ──────────────────────────────────────────
         zipBusy: false,

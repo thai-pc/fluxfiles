@@ -845,5 +845,10 @@
       "deleted": "eliminado",
       "held": "omitido: retención legal"
     }
+  },
+  "pdfview": {
+    "expand": "Ampliar PDF",
+    "fullscreen": "Pantalla completa",
+    "open_tab": "Abrir en una pestaña nueva"
   }
 }

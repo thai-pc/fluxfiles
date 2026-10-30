@@ -845,5 +845,10 @@
       "deleted": "削除済み",
       "held": "スキップ — リーガルホールド"
     }
+  },
+  "pdfview": {
+    "expand": "PDF を拡大",
+    "fullscreen": "全画面",
+    "open_tab": "新しいタブで開く"
   }
 }

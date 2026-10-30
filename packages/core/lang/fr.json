@@ -845,5 +845,10 @@
       "deleted": "supprimé",
       "held": "ignoré — conservation légale"
     }
+  },
+  "pdfview": {
+    "expand": "Agrandir le PDF",
+    "fullscreen": "Plein écran",
+    "open_tab": "Ouvrir dans un nouvel onglet"
   }
 }

@@ -845,5 +845,10 @@
       "deleted": "已删除",
       "held": "已跳过——法律保留"
     }
+  },
+  "pdfview": {
+    "expand": "展开 PDF",
+    "fullscreen": "全屏",
+    "open_tab": "在新标签页中打开"
   }
 }

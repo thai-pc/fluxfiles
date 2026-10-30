@@ -845,5 +845,10 @@
       "deleted": "verwijderd",
       "held": "overgeslagen — juridische bewaring"
     }
+  },
+  "pdfview": {
+    "expand": "PDF vergroten",
+    "fullscreen": "Volledig scherm",
+    "open_tab": "Openen in nieuw tabblad"
   }
 }

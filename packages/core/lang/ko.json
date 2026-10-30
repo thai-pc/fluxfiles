@@ -845,5 +845,10 @@
       "deleted": "삭제됨",
       "held": "건너뜀 — 법적 보존"
     }
+  },
+  "pdfview": {
+    "expand": "PDF 확대",
+    "fullscreen": "전체 화면",
+    "open_tab": "새 탭에서 열기"
   }
 }
