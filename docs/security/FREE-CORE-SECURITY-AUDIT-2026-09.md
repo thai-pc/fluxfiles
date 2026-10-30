@@ -154,7 +154,7 @@ git -c core.hooksPath=/dev/null -c core.fsmonitor=false status → blocked
 `.git/config` is an ordinary file under the deploy path, extensionless (so
 `assertExt`/`assertSafeFilename` do not stop it), writable by any `write`-scoped
 token over that path. Escalates file-write-in-repo to RCE as the SSH user —
-the outcome `docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` §4.3 claims is closed
+the outcome `docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md` §4.3 claims is closed
 by default.
 
 **Fixed** (commit pending, 2026-09-26): `GitDeploy::buildCommand()` prefixes
@@ -162,7 +162,7 @@ every git invocation with `-c core.fsmonitor=false -c core.sshCommand=ssh
 -c protocol.ext.allow=never -c protocol.file.allow=never`, **unconditionally**
 — the `git_deploy_hooks` claim opts into *hooks*, not into arbitrary
 config-driven exec, so turning it on no longer re-opens this.
-`docs/security/GIT-DEPLOY-SECURITY-REVIEW.md` §4.3 carries an amendment noting
+`docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md` §4.3 carries an amendment noting
 that hook neutering alone did not close F2. `test-git-deploy.php` 10/10 (a new
 test loops both `git_deploy_hooks` states).
 

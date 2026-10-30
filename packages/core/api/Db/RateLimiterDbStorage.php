@@ -8,7 +8,7 @@ use FluxFiles\ApiException;
 use FluxFiles\RateLimiterStorageInterface;
 
 /**
- * Sliding-window-log rate limiter backed by a `rate_limits` hits table —
+ * Sliding-window-log rate limiter backed by a `rate_limits` hits table (name overridable for hosts with their own naming/prefix) —
  * behaviorally equivalent to RateLimiterFileStorage's per-key timestamp array,
  * just stored as rows instead of a JSON blob.
  */
@@ -18,13 +18,19 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
     private int $readLimit;
     private int $writeLimit;
     private int $windowSeconds;
+    private string $table;
 
     public function __construct(
         Connection $db,
         int $readLimit = 60,
         int $writeLimit = 10,
-        int $windowSeconds = 60
+        int $windowSeconds = 60,
+        string $table = 'rate_limits'
     ) {
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+            throw new \InvalidArgumentException('Invalid rate limiter table name.');
+        }
+        $this->table = $table;
         $this->db = $db;
         $this->readLimit = $readLimit;
         $this->writeLimit = $writeLimit;
@@ -41,17 +47,17 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
         $this->db->beginExclusive();
         $limited = false;
         try {
-            $del = $pdo->prepare('DELETE FROM rate_limits WHERE identifier = ? AND bucket = ? AND ts <= ?');
+            $del = $pdo->prepare("DELETE FROM {$this->table} WHERE identifier = ? AND bucket = ? AND ts <= ?");
             $del->execute([$identifier, $actionType, $windowStart]);
 
             $forUpdate = $this->db->dialect()->forUpdateSuffix();
-            $cnt = $pdo->prepare("SELECT COUNT(*) FROM rate_limits WHERE identifier = ? AND bucket = ?{$forUpdate}");
+            $cnt = $pdo->prepare("SELECT COUNT(*) FROM {$this->table} WHERE identifier = ? AND bucket = ?{$forUpdate}");
             $cnt->execute([$identifier, $actionType]);
 
             if ((int) $cnt->fetchColumn() >= $limit) {
                 $limited = true;
             } else {
-                $ins = $pdo->prepare('INSERT INTO rate_limits (identifier, bucket, ts) VALUES (?, ?, ?)');
+                $ins = $pdo->prepare("INSERT INTO {$this->table} (identifier, bucket, ts) VALUES (?, ?, ?)");
                 $ins->execute([$identifier, $actionType, $now]);
             }
 
@@ -71,7 +77,7 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
         // 1%-probabilistic global sweep, best-effort — never let a sweep failure break the request.
         if (random_int(1, 100) === 1) {
             try {
-                $pdo->prepare('DELETE FROM rate_limits WHERE ts < ?')->execute([$windowStart]);
+                $pdo->prepare("DELETE FROM {$this->table} WHERE ts < ?")->execute([$windowStart]);
             } catch (\Throwable $e) {
                 // cleanup only, ignore
             }

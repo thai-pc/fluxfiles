@@ -1,3 +1,5 @@
+> Historical: feature removed in 1.0.0
+
 # One-Click Git Deploy (SSH exec) — Security + Performance Review
 
 Status: **Implemented in core-v0.2.81 (2026-09-03)** — the first core both proxy

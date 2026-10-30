@@ -67,9 +67,8 @@ t('small caps: upload size + quota + file count', function () {
     truthy($c->maxFiles > 0 && $c->maxFiles <= 30, 'file cap ≤ 30');
 });
 
-t('dangerous claims are off (terminal / import / byob)', function () {
+t('dangerous claims are off (import / byob)', function () {
     $c = claimsFor('abcdef0123456789');
-    truthy(!$c->isAllowed('allow_terminal'), 'terminal off');
     truthy(!$c->isAllowed('allow_url_import'), 'url import off');
 });
 

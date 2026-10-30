@@ -254,33 +254,17 @@ def _apply_tenant_overrides(
     if srcset_sizes:
         payload["srcset_sizes"] = str(srcset_sizes)
 
-    # Download gate / SFTP chmod / code-edit / terminal / BYO-embed URLs.
+    # Download gate / SFTP chmod / code-edit / BYO-embed URLs.
     if extras.get("allow_download") is not None:
         payload["allow_download"] = bool(extras["allow_download"])
     if extras.get("allow_chmod") is not None:
         payload["allow_chmod"] = bool(extras["allow_chmod"])
     if extras.get("allow_code_edit") is not None:
         payload["allow_code_edit"] = bool(extras["allow_code_edit"])
-    # SSH terminal (SFTP disks). Served by core and proxied by the Laravel and
-    # WordPress adapters too, so the token works against any of the three.
-    if extras.get("allow_terminal") is not None:
-        payload["allow_terminal"] = bool(extras["allow_terminal"])
+    # BYO-embed: the operator's own ttyd/gotty/wetty.
     terminal_pty_url = extras.get("terminal_pty_url")
     if terminal_pty_url:
         payload["terminal_pty_url"] = str(terminal_pty_url)
-    # One-click Git deploy (SFTP disks). Deliberately independent of
-    # allow_terminal: the repo path/branch/hooks flag are operator claims,
-    # never accepted from the request body.
-    if extras.get("allow_git_deploy") is not None:
-        payload["allow_git_deploy"] = bool(extras["allow_git_deploy"])
-    git_deploy_path = extras.get("git_deploy_path")
-    if git_deploy_path:
-        payload["git_deploy_path"] = str(git_deploy_path)
-    git_deploy_branch = extras.get("git_deploy_branch")
-    if git_deploy_branch:
-        payload["git_deploy_branch"] = str(git_deploy_branch)
-    if extras.get("git_deploy_hooks") is not None:
-        payload["git_deploy_hooks"] = bool(extras["git_deploy_hooks"])
     pdf_tools_url = extras.get("pdf_tools_url")
     if pdf_tools_url:
         payload["pdf_tools_url"] = str(pdf_tools_url)
@@ -557,17 +541,11 @@ def create_token(
     webp_default_quality: int | None = None,
     srcset_widths: list[int] | None = None,
     srcset_sizes: str | None = None,
-    # --- download gate / SFTP chmod / code-edit / terminal / BYO-embed URLs ---
+    # --- download gate / SFTP chmod / code-edit / BYO-embed URLs ---
     allow_download: bool | None = None,
     allow_chmod: bool | None = None,
     allow_code_edit: bool | None = None,
-    allow_terminal: bool | None = None,
     terminal_pty_url: str | None = None,
-    # --- one-click Git deploy (SFTP disks); independent of allow_terminal ---
-    allow_git_deploy: bool | None = None,
-    git_deploy_path: str | None = None,
-    git_deploy_branch: str | None = None,
-    git_deploy_hooks: bool | None = None,
     pdf_tools_url: str | None = None,
     office_url: str | None = None,
     esign_url: str | None = None,
@@ -710,12 +688,7 @@ def create_token(
         allow_download=allow_download,
         allow_chmod=allow_chmod,
         allow_code_edit=allow_code_edit,
-        allow_terminal=allow_terminal,
         terminal_pty_url=terminal_pty_url,
-        allow_git_deploy=allow_git_deploy,
-        git_deploy_path=git_deploy_path,
-        git_deploy_branch=git_deploy_branch,
-        git_deploy_hooks=git_deploy_hooks,
         pdf_tools_url=pdf_tools_url,
         office_url=office_url,
         esign_url=esign_url,
@@ -828,13 +801,7 @@ def create_byob_token(
     allow_download: bool | None = None,
     allow_chmod: bool | None = None,
     allow_code_edit: bool | None = None,
-    allow_terminal: bool | None = None,
     terminal_pty_url: str | None = None,
-    # --- one-click Git deploy (SFTP disks); independent of allow_terminal ---
-    allow_git_deploy: bool | None = None,
-    git_deploy_path: str | None = None,
-    git_deploy_branch: str | None = None,
-    git_deploy_hooks: bool | None = None,
     pdf_tools_url: str | None = None,
     office_url: str | None = None,
     esign_url: str | None = None,
@@ -994,12 +961,7 @@ def create_byob_token(
         allow_download=allow_download,
         allow_chmod=allow_chmod,
         allow_code_edit=allow_code_edit,
-        allow_terminal=allow_terminal,
         terminal_pty_url=terminal_pty_url,
-        allow_git_deploy=allow_git_deploy,
-        git_deploy_path=git_deploy_path,
-        git_deploy_branch=git_deploy_branch,
-        git_deploy_hooks=git_deploy_hooks,
         pdf_tools_url=pdf_tools_url,
         office_url=office_url,
         esign_url=esign_url,

@@ -356,6 +356,21 @@ HTACCESS;
     }
 
     /**
+     * Make the stored licence visible to core's own gates. Core resolves a module's
+     * licence through LicenseManager::fromEnv() ($_ENV['FLUXFILES_LICENSE_KEY']) —
+     * FileManagerFactory's virus/DLP/versioning/webhooks wiring and the public
+     * share/intake handlers all do — while a WordPress licence normally lives in an
+     * option. The option wins (as in licenseKey()); a real env var is the fallback.
+     */
+    public static function seedLicenseEnv(): void
+    {
+        $key = self::licenseKey();
+        if ($key !== '') {
+            $_ENV['FLUXFILES_LICENSE_KEY'] = $key;
+        }
+    }
+
+    /**
      * Get the FluxFiles base installation path (project root).
      */
     public static function basePath(): string
@@ -764,31 +779,11 @@ HTACCESS;
         if (array_key_exists('allow_code_edit', $overrides)) {
             $payload['allow_code_edit'] = (bool) $overrides['allow_code_edit'];
         }
-        // SSH terminal now proxies too (see FluxFilesApi's handleTerminal()), so the
-        // gate forwards like any other, same as allow_versioning/allow_audit_export above.
-        if (array_key_exists('allow_terminal', $overrides)) {
-            $payload['allow_terminal'] = (bool) $overrides['allow_terminal'];
-        }
-        // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — pure UI config,
-        // works in any mode like pdf_tools_url/office_url/esign_url below.
+        // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — pure UI config:
+        // the UI embeds the operator's own instance, works in any mode like
+        // pdf_tools_url/office_url/esign_url below.
         if (!empty($overrides['terminal_pty_url'])) {
             $payload['terminal_pty_url'] = (string) $overrides['terminal_pty_url'];
-        }
-        // Git deploy now proxies too (see FluxFilesApi's handleGitDeploy()), so the
-        // gate forwards like any other, same as allow_terminal above. The target
-        // path/branch/hooks are operator-set here — never accepted from a request
-        // body on either side — per docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.1.
-        if (array_key_exists('allow_git_deploy', $overrides)) {
-            $payload['allow_git_deploy'] = (bool) $overrides['allow_git_deploy'];
-        }
-        if (!empty($overrides['git_deploy_path'])) {
-            $payload['git_deploy_path'] = (string) $overrides['git_deploy_path'];
-        }
-        if (!empty($overrides['git_deploy_branch'])) {
-            $payload['git_deploy_branch'] = (string) $overrides['git_deploy_branch'];
-        }
-        if (array_key_exists('git_deploy_hooks', $overrides)) {
-            $payload['git_deploy_hooks'] = (bool) $overrides['git_deploy_hooks'];
         }
         // PDF-tools + office embeds are pure UI (no core endpoint) → work in any mode.
         if (!empty($overrides['pdf_tools_url'])) {
@@ -981,15 +976,23 @@ HTACCESS;
                 $payload[$zipClaim] = (int) $overrides[$zipClaim];
             }
         }
-        // NOTE: the OVERLAY watermark (preview-time, served via /api/fm/img) is
-        // intentionally NOT forwarded. The WordPress plugin is proxy-only, and its
-        // /api/fm/img port (FluxFilesApi) serves only the plain resized transform —
-        // it doesn't implement overlay compositing. Forwarding the claim would mint
-        // a token whose watermark the proxy silently drops, and an overlay
-        // watermark also forces the token preview-only (allow_download off in
-        // core), so there'd be no clean URL either. Use the burn-in watermark
-        // instead (POST .../api/fm/watermark, handled by handleWatermark), which
-        // writes the mark into the file and is fully proxied.
+        // OVERLAY watermark (preview-time, served via /api/fm/img): the proxy's /img is
+        // the shared core MediaEndpoint, which composites it. The config claims travel
+        // with the gate, and Claims clamps them on decode.
+        if (!empty($overrides['watermark_enabled'])) {
+            $payload['watermark_enabled'] = true;
+            foreach (['watermark_type', 'watermark_text', 'watermark_logo_path', 'watermark_position'] as $wmClaim) {
+                if (!empty($overrides[$wmClaim])) {
+                    $payload[$wmClaim] = (string) $overrides[$wmClaim];
+                }
+            }
+            if (isset($overrides['watermark_opacity'])) {
+                $payload['watermark_opacity'] = (float) $overrides['watermark_opacity'];
+            }
+            if (!empty($overrides['watermark_font_size'])) {
+                $payload['watermark_font_size'] = (int) $overrides['watermark_font_size'];
+            }
+        }
         // Usage-dashboard claims.
         foreach ([
             'usage_cache_ttl', 'usage_warning_threshold', 'usage_critical_threshold',

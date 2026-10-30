@@ -95,7 +95,7 @@ class FluxFilesServiceProvider extends ServiceProvider
         Route::get('fluxfiles.js', [FluxFilesController::class, 'sdkJs']);
         Route::get('public/index.html', [FluxFilesController::class, 'publicIndex']);
         // `{file}` spans slashes so the vendored lazy-loaded libraries under
-        // assets/vendor/ (xterm, CodeMirror) are reachable too — fm.js derives
+        // assets/vendor/ (CodeMirror) are reachable too — fm.js derives
         // its base from its own <script src>, which is this route. The pattern
         // still admits no '..' segment, and the controller re-checks containment
         // with realpath().
@@ -120,8 +120,7 @@ class FluxFilesServiceProvider extends ServiceProvider
         // Gated media stream/img — reached with a per-file signed token in the
         // query string (an <img>/<video> element can't send an Authorization
         // header), same public posture as the share/intake routes above. See
-        // FluxFilesController::stream()/img() (ported from index.php's
-        // handleMediaStream()/handleImageTransform()).
+        // FluxFilesController::stream()/img() (the shared core MediaEndpoint).
         Route::prefix($prefix)->get('stream', [FluxFilesController::class, 'stream']);
         Route::prefix($prefix)->get('img', [FluxFilesController::class, 'img']);
 

@@ -3,6 +3,117 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] — 2026-10-30
+
+> Released: `core-v1.0.0`, `laravel-v1.0.0`, `wordpress-v1.0.0`, `sdk-v1.0.0`,
+> `react-v1.0.0`, `vue-v1.0.0`, `node-v1.0.0`, `mcp-v1.0.0`, `ckeditor4-v1.0.0`,
+> `tinymce-v1.0.0`, `summernote-v1.0.0`, `python-v1.0.0`.
+> Paid modules accept core `^0.2.N || ^1.0` in these patch releases:
+> `share v1.3.2`, `intake v1.4.2`, `versioning v1.3.3`, `webhooks v1.1.6`,
+> `ai v1.2.4`, `ocr v1.2.2`, `virus v1.2.3`, `backup v1.3.3`, `c2pa v1.2.2`,
+> `audit-export v1.0.5`, `sso v2.1.3`, `dlp v1.0.6`, `legal-hold v1.1.3`.
+
+The first stable release. Every package moves to 1.0.0. Two features that
+were outside an embeddable file manager's job are removed, and the Laravel and
+WordPress proxies now run on the same core code as the standalone app instead
+of their own copies.
+
+### Removed (breaking)
+
+- **The built-in SSH command-runner terminal**: `POST /api/fm/terminal`, the
+  `allow_terminal` claim, the `FLUXFILES_TERMINAL_*` env vars and the xterm
+  modal.
+- **One-click Git deploy**: `POST /api/fm/git-deploy`, the `allow_git_deploy`
+  claim, the `git_deploy_path`, `git_deploy_branch` and `git_deploy_hooks`
+  claims, and the `FLUXFILES_GIT_DEPLOY_*` env vars.
+- **The OpenSSH ControlMaster multiplexer**: `SFTP_MULTIPLEX` and
+  `FLUXFILES_SSH_MULTIPLEX_*`.
+- Both routes now return 404. Tokens that still carry the removed claims keep
+  working, and those claims are ignored. The SFTP storage driver (file
+  operations and `chmod`) is unchanged.
+- The security reviews for these features moved to `docs/archive/`.
+
+### Upgrading from 0.x
+
+- **Terminal:** run your own ttyd, gotty or wetty and set the
+  `terminal_pty_url` claim. That claim alone now shows the toolbar terminal
+  button, which embeds your server.
+- **Deploys:** use CI (GitHub Actions, Deployer) or a webhook-triggered script.
+- **Environment:** you can delete `SFTP_MULTIPLEX`, `FLUXFILES_TERMINAL_*`,
+  `FLUXFILES_GIT_DEPLOY_*` and `FLUXFILES_SSH_MULTIPLEX_*`.
+- **Laravel:**
+  - the package now requires `fluxfiles/fluxfiles ^1.0.0`;
+  - with `storage_backend = db`, publish and run the new migration, because
+    the rate limiter now lives in its own `fluxfiles_rate_limits` table (the
+    connection's table prefix applies):
+    `php artisan vendor:publish --tag=fluxfiles-migrations` then
+    `php artisan migrate`.
+  - The migration creates and drops only `fluxfiles_rate_limits`; an app's
+    own `rate_limits` table is never touched.
+  - Until the migration runs, the adapter uses the file limiter and logs that
+    at most once a minute.
+- **WordPress:**
+  - the plugin creates its `fluxfiles_rate_limits` table itself (schema
+    1.5.0) in db mode;
+  - the licence entered under Settings → FluxFiles keeps unlocking every paid
+    module.
+- **Paid modules:** update to the patch releases listed above. Older module
+  releases only accept core 0.2.x.
+
+### Changed
+
+- **Laravel and WordPress use the shared core classes** (`MediaEndpoint`,
+  `AuditPolicy`, `FileManagerFactory`, `Claims::requirePerm()`/
+  `requireDisk()`, `Db\MetadataRowLogic`) instead of their own ports of core
+  code. About 2,100 duplicated adapter lines are gone. The bugs that came from
+  that duplication can't come back: the X-Accel encoding, the audit/webhook
+  event names, the audit key of refused writes, and 403s without an error
+  code.
+  - Response codes are unchanged. On every remaining route, old and new
+    adapter code gave identical status and `error_code`: 93 controller calls
+    on Laravel, 1,400 REST cases on WordPress.
+- **Watermark overlay works through the proxies.** Laravel and WordPress now
+  forward `watermark_enabled`, and `/img` composites the watermark as the
+  standalone app does. Before, the proxy refused a watermarked token with a
+  415.
+- **Rate limits follow `storage_backend = db` in the proxies too.** Media
+  buckets use core's defaults and env vars: `FLUXFILES_STREAM_RATE_LIMIT`
+  (300/min) and `FLUXFILES_IMG_RATE_LIMIT` (120/min).
+- **Activity log in DB mode:** `/audit` pages and fixity checks read a window
+  of the audit log instead of loading the whole table.
+- **Audit detail now matches core** in the proxies:
+  - the `chmod` and `audit_purge` lines no longer carry an extra detail;
+  - `version_restore` records `version=<id>`;
+  - the webhook `name` on rename is the new name.
+- **Laravel webhooks and audit detail now match core:**
+  - `chunk/presign` emits a `chunk_upload` event per call, i.e. one per part;
+  - `restore` and `purge` report the path from the request body, not the
+    trash id;
+  - `presign` and `webhook_test` report the disk from the request body
+    (default `local`), not the first allowed disk.
+- **WordPress rate-limit table:** if it is missing or unusable, the plugin
+  tries once to recreate it and otherwise uses the file limiter. It no longer
+  answers 500 on every call.
+- **`@fluxfiles/sdk` 1.0.0:** the minified bundle now includes the check that
+  a message really comes from the FluxFiles iframe
+  (`e.source !== iframe.contentWindow`). `fluxfiles.js` already had it, but
+  the shipped min file didn't.
+- **Core:** `RateLimiterDbStorage` and `RateLimiterFactory::makeDb()` accept an
+  optional table name (default `rate_limits`, so nothing changes).
+
+### Fixed
+
+- **Laravel DB mode with a table prefix:** the Activity panel, fixity check,
+  audit export and audit verify no longer fail with
+  "no such table: fluxfiles_audit_log".
+- **WordPress `/attach` refuses with `403 download_forbidden`** when the token
+  can't download originals: `allow_download=false`, which a watermark forces.
+- **Renaming, moving or copying a missing file returns `404 not_found`**
+  instead of 500 (core, Laravel, WordPress).
+- **Fixity:** audit entries written by the removed terminal and git-deploy
+  features still explain the changes they made, so upgrading doesn't raise
+  false `fixity_mismatch` entries.
+
 ## [0.3.44] — 2026-10-30
 
 > Released: `core-v0.2.117`.

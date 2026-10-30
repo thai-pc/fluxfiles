@@ -318,6 +318,23 @@ test('copy of a folder fails with a clean API error, not a raw adapter throw', f
     assertTrue($fs->fileExists('src/a.txt'), 'source untouched');
 });
 
+test('renaming / moving / copying a missing file is a clean 404 not_found', function () {
+    [$fm] = makeFM();
+    foreach ([
+        fn () => $fm->rename('local', 'nope.txt', 'x.txt'),
+        fn () => $fm->move('local', 'nope.txt', 'x.txt'),
+        fn () => $fm->copy('local', 'nope.txt', 'x.txt'),
+    ] as $i => $call) {
+        try {
+            $call();
+            throw new \RuntimeException("op {$i} should throw");
+        } catch (ApiException $e) {
+            assertEqual('not_found', $e->getErrorCode(), "op {$i} code");
+            assertEqual(404, $e->getCode(), "op {$i} status");
+        }
+    }
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

@@ -100,27 +100,10 @@ export interface BaseTokenOptions {
   /** Allow editing a file's text content (GET/PUT /api/fm/content). Default **false** — editing
    *  config/executable files (wp-config.php, .env, nginx.conf, deploy.sh) is powerful, so it's opt-in. */
   allowCodeEdit?: boolean;
-  /** Allow the SSH terminal (POST /api/fm/terminal) on an SFTP disk. Default **false** — grants shell
-   *  access as the SSH user, so it's opt-in. Served by core and proxied by the Laravel and
-   *  WordPress adapters too. */
-  allowTerminal?: boolean;
   /** Optional self-hosted PTY terminal URL (ttyd / gotty / wetty, or any PTY-over-WebSocket
-   *  server the operator runs). When set (and `allowTerminal` is true), the UI embeds it for a
-   *  true interactive terminal instead of the built-in command-runner. Free; must be http(s).
-   *  Honored wherever `allowTerminal` is (core + the Laravel/WordPress proxies). */
+   *  server the operator runs). When set, the UI embeds it for a true interactive terminal.
+   *  Free; must be http(s). */
   terminalPtyUrl?: string;
-  /** Allow one-click Git deploy (POST /api/fm/git-deploy) on an SFTP disk. Default **false**.
-   *  Deliberately independent of `allowTerminal`: it's a fixed-command-shape subset, not a
-   *  second arbitrary-shell door. Core-standalone + the Laravel/WordPress proxies. */
-  allowGitDeploy?: boolean;
-  /** Repository path on the SFTP host to deploy. An operator claim — never accepted from the
-   *  request body, so the client can't point the deploy at another directory. */
-  gitDeployPath?: string;
-  /** Branch to deploy. Operator claim, like `gitDeployPath`. Empty = the repo's current branch. */
-  gitDeployBranch?: string;
-  /** Allow the repo's own git hooks to run during deploy. Default **false** — hooks are
-   *  neutered via `core.hooksPath=/dev/null`, since a hook is arbitrary code. */
-  gitDeployHooks?: boolean;
   /** Optional self-hosted PDF-tools URL (Stirling-PDF, or any web PDF toolkit). When set, the
    *  UI shows a "PDF tools" action that embeds it (merge/split/OCR/convert/…). Free; http(s). */
   pdfToolsUrl?: string;

@@ -139,7 +139,7 @@ test('token() forwards webp claims', function () use ($secret) {
     assertEqual('100vw', $c->srcsetSizes, 'srcset_sizes');
 });
 
-test('token() forwards download/zip claims; overlay watermark only in standalone mode', function () use ($secret) {
+test('token() forwards download/zip claims and the overlay watermark in BOTH modes', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $overrides = [
         'allow_download' => false, 'allow_chmod' => false, 'allow_code_edit' => true, 'allow_optimize' => true,
@@ -147,7 +147,6 @@ test('token() forwards download/zip claims; overlay watermark only in standalone
         'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => '© Acme',
         'watermark_position' => 'center', 'watermark_opacity' => 0.5,
     ];
-    // Non-overlay claims always forward.
     $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($mgr->token(41, $overrides), $secret));
     assertEqual(false, $c->allowDownload, 'allow_download');
     assertEqual(false, $c->allowChmod, 'allow_chmod');
@@ -156,19 +155,18 @@ test('token() forwards download/zip claims; overlay watermark only in standalone
     assertEqual(false, $c->allowZip, 'allow_zip');
     assertEqual(50, $c->zipMaxMb, 'zip_max_mb');
 
-    // Proxy mode (default): the OVERLAY watermark is dropped — /api/fm/img isn't
-    // proxied, so a watermark token would break (no clean URL, no servable preview).
-    assertEqual(null, $c->watermark, 'overlay watermark NOT forwarded in proxy mode');
-
-    // Standalone mode: the token targets a real core that serves /img → forward it.
-    $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
-    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = 'standalone';
-    try {
-        $sc = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($mgr->token(41, $overrides), $secret));
-        assertEqual('© Acme', $sc->watermark['text'], 'watermark text (standalone)');
-        assertEqual('center', $sc->watermark['position'], 'watermark position (standalone)');
-    } finally {
-        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
+    // /api/fm/img is the shared core MediaEndpoint in proxy mode too, which composites
+    // the overlay, so the claim forwards whatever the mode.
+    foreach (['direct', 'standalone'] as $mode) {
+        $prev = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'];
+        $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $mode;
+        try {
+            $wc = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($mgr->token(41, $overrides), $secret));
+            assertEqual('© Acme', $wc->watermark['text'] ?? null, "watermark text ({$mode})");
+            assertEqual('center', $wc->watermark['position'] ?? null, "watermark position ({$mode})");
+        } finally {
+            $GLOBALS['LARAVEL_CONFIG']['fluxfiles.mode'] = $prev;
+        }
     }
 });
 
@@ -443,32 +441,32 @@ test('token-refresh recovery wiring is present (controller + route + blade)', fu
     assertTrue(strpos($bladeSrc, '$tokenUrl') !== false, 'blade fetches the token-refresh URL');
 });
 
-test('allow_terminal (SSH terminal) forwards in proxy mode', function () use ($secret) {
+test('the removed terminal/git-deploy claims are no longer minted, and an old token that carries them still decodes', function () use ($secret) {
     $mgr = new FluxFilesManager();
-    // SSH terminal now has a route in both modes (proxy: terminal(); standalone:
-    // index.php), so the gate forwards unconditionally — proxy mode (default)
-    // included. This used to be the last standalone-only holdout.
-    $p = \FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_terminal' => true]), $secret);
-    assertEqual(true, ($p->allow_terminal ?? false), 'terminal claim forwarded in proxy mode');
+    $p = (array) \FluxFiles\JwtCompat::decode($mgr->token(7, [
+        'allow_terminal' => true, 'allow_git_deploy' => true, 'git_deploy_path' => '/var/www/site',
+        'git_deploy_branch' => 'main', 'git_deploy_hooks' => true, 'terminal_pty_url' => 'https://tty.example.com',
+    ]), $secret);
+    foreach (['allow_terminal', 'allow_git_deploy', 'git_deploy_path', 'git_deploy_branch', 'git_deploy_hooks'] as $gone) {
+        assertTrue(!array_key_exists($gone, $p), "{$gone} is not forwarded any more");
+    }
+    assertEqual('https://tty.example.com', $p['terminal_pty_url'] ?? null, 'terminal_pty_url still forwards (UI embeds the operator\'s ttyd)');
+
+    // A token minted by an older adapter / SDK that still carries them must be ignored, not rejected.
+    $legacy = \FluxFiles\JwtCompat::decode(\FluxFiles\JwtCompat::encode([
+        'sub' => 'old', 'iat' => time(), 'exp' => time() + 600, 'perms' => ['read'], 'disks' => ['local'], 'prefix' => '',
+        'allow_terminal' => true, 'allow_git_deploy' => true, 'git_deploy_path' => '/x', 'git_deploy_hooks' => true,
+    ], $secret), $secret);
+    $c = \FluxFiles\Claims::fromJwtPayload($legacy, $secret);
+    assertEqual('old', $c->userId, 'a legacy token with the removed claims still yields Claims');
 });
 
-test('allow_git_deploy (+ path/branch/hooks) forwards in proxy mode', function () use ($secret) {
-    $mgr = new FluxFilesManager();
-    $overrides = [
-        'allow_git_deploy'  => true,
-        'git_deploy_path'   => '/var/www/site',
-        'git_deploy_branch' => 'main',
-        'git_deploy_hooks'  => true,
-    ];
-
-    // Git deploy now has a route in both modes (proxy: gitDeploy(); standalone:
-    // index.php), so the gate + its target claims forward unconditionally —
-    // proxy mode (default) included, matching allow_terminal above.
-    $p = \FluxFiles\JwtCompat::decode($mgr->token(7, $overrides), $secret);
-    assertEqual(true, ($p->allow_git_deploy ?? false), 'git-deploy gate forwarded in proxy mode');
-    assertEqual('/var/www/site', $p->git_deploy_path ?? '', 'git_deploy_path forwarded in proxy mode');
-    assertEqual('main', $p->git_deploy_branch ?? '', 'git_deploy_branch forwarded in proxy mode');
-    assertEqual(true, ($p->git_deploy_hooks ?? false), 'git_deploy_hooks forwarded in proxy mode');
+test('the terminal and git-deploy proxy routes are gone', function () {
+    $routes = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
+    $ctrl = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(!preg_match("#'(terminal|git-deploy)'#", $routes), 'no terminal / git-deploy route');
+    assertTrue(!preg_match('#function\s+(terminal|gitDeploy)\s*\(#', $ctrl), 'no terminal() / gitDeploy() action');
+    assertTrue(!str_contains($ctrl, 'SshTerminal') && !str_contains($ctrl, 'GitDeploy::'), 'no SshTerminal / GitDeploy reference');
 });
 
 test('allow_versioning (+ its tuning claims) forwards in proxy mode', function () use ($secret) {
@@ -508,16 +506,20 @@ test('audit_reads forwards in proxy mode', function () use ($secret) {
     assertEqual(true, $p->audit_reads ?? null, 'audit_reads forwarded');
 });
 
-test('audit: the proxy logs denials, presign, zip, share/intake, c2pa verify, webhook test and reads', function () {
+test('audit: the proxy routes success/denial auditing through core AuditPolicy, with no copy of its tables', function () {
     $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    $err = substr($src, strpos($src, 'private function error('), 400);
-    assertTrue(strpos($err, '$status === 403 && $this->lastClaims !== null') !== false, 'error() audits 403s');
-    assertTrue(strpos($src, 'return $this->lastClaims = JwtMiddleware::handle(') !== false, 'claims() remembers the caller');
-    foreach (["'POST' => 'presign_post'", "'zip_download'", "\$module . '_create'", "\$module . '_revoke'",
-              "'c2pa_verify'", "'webhook_test'", "'content_read'", "'stream_read'", "'access_denied'"] as $needle) {
-        assertTrue(strpos($src, $needle) !== false, "proxy logs {$needle}");
+    foreach (['AuditPolicy::successEntry(', 'AuditPolicy::recordRefusedWrite(', 'AuditPolicy::recordDenied(', 'FileManagerFactory::webhookDispatcher('] as $needle) {
+        assertTrue(strpos($src, $needle) !== false, "uses {$needle}");
     }
-    assertEqual(2, substr_count($src, '$this->auditStreamRead($scope, $request);'), 'both stream branches audited');
+    foreach (['function auditKey(', 'function auditDenied(', 'function auditRefusedWrite(', 'function dispatchWebhook(', 'function logAudit(',
+              "'virus_detected'    =>", "'presign_post'", "\$module . '_create'", "'c2pa_verify'", "'webhook_test'"] as $gone) {
+        assertTrue(strpos($src, $gone) === false, "no hand-written copy: {$gone}");
+    }
+    foreach (["'zip_download'", "'content_read'", "'disk_doctor'", "'stream_read'" ] as $kept) {
+        // stream_read now lives in MediaEndpoint; the other three are read/GET-side entries core also writes by hand.
+        if ($kept === "'stream_read'") { continue; }
+        assertTrue(strpos($src, $kept) !== false, "still logs {$kept}");
+    }
 });
 
 test('allow_ai_vision forwards in proxy mode', function () use ($secret) {
@@ -611,68 +613,34 @@ test('compliance/scorecard route exists, maps to complianceScorecard(), and is g
     assertTrue(strpos($routesSrc, "'compliance/scorecard'") !== false, 'GET compliance/scorecard route registered');
 });
 
-test('fileManager() actually WIRES setDlpScanner() (not just a decodable claim) — the inert-claims regression', function () {
-    // The webhooks/auto_optimize/ai_auto_tag history: a claim can decode fine while
-    // the proxy's fileManager() builder never calls the hook that makes it DO
-    // anything. Assert the actual wiring call is present, mirroring the virus-scan
-    // wiring immediately above it in the same builder.
+test('fileManager() wires every hook through the shared core factory (the inert-claims regression)', function () {
     $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    assertTrue(strpos($ctrlSrc, 'setDlpScanner(') !== false, 'fileManager() wires setDlpScanner()');
-    assertTrue(strpos($ctrlSrc, "ModuleRegistry::require('dlp'") !== false, 'the callback resolves the dlp module gate lazily, like virus');
-
-    // All 4 chunk-route handlers must independently refuse with 409 dlp_unscannable
-    // while allow_dlp_scan is on — S3-multipart bytes never reach this server, so
-    // they can never be scanned (same unscannable-side-door fix as virus).
-    // 5 sites, not 4: the 4 chunk handlers plus presign(), where a
-    // `method:"PUT"` mints a browser→S3 upload URL — the same unscannable side
-    // door by another name, so it is refused with the same code.
-    $count = substr_count($ctrlSrc, "'dlp_unscannable'");
-    assertEqual(5, $count, 'the 4 chunk handlers AND presign(PUT) each check dlp_unscannable independently');
+    assertTrue(strpos($ctrlSrc, 'FileManagerFactory::wire(') !== false, 'fileManager() delegates to FileManagerFactory::wire()');
+    foreach (['setDlpScanner(', 'setVirusScanner(', 'setVersionMover(', 'setStreamSecret('] as $own) {
+        assertTrue(strpos($ctrlSrc, $own) === false, "the adapter no longer wires {$own} itself");
+    }
+    // The chunk handlers + presign(PUT) still refuse with 409 while a scan claim is on.
+    assertEqual(5, substr_count($ctrlSrc, "'dlp_unscannable'"), 'the 4 chunk handlers AND presign(PUT) each check dlp_unscannable');
     assertEqual(5, substr_count($ctrlSrc, "'virus_unscannable'"), 'and the same 5 sites for virus_unscannable');
 });
 
-test('gated media stream/img is wired (setStreamSecret + local disk private key)', function () {
-    // Unlike every other phase, stream/img has no claim to de-gate — media-preview/
-    // webp claims already forwarded fine, only the *serving* endpoints were missing.
-    // What must be true instead: setStreamSecret() is called unconditionally (so
-    // list() actually emits img_base/gatedLocal URLs), and the local disk config
-    // has a 'private' switch for FileManager::isGatedLocal() to read.
+test('gated media stream/img is the shared MediaEndpoint and exits after it (no Laravel default Response)', function () {
     $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    assertTrue(strpos($ctrlSrc, 'setStreamSecret(') !== false, 'fileManager() wires setStreamSecret()');
-    assertTrue(strpos($ctrlSrc, 'StreamToken::verify(') !== false, 'stream() verifies a StreamToken');
-    assertTrue(strpos($ctrlSrc, 'ImageToken::verify(') !== false, 'img() verifies an ImageToken');
-
+    assertTrue(strpos($ctrlSrc, 'new \\FluxFiles\\MediaEndpoint(') !== false, 'builds core MediaEndpoint');
+    assertTrue(strpos($ctrlSrc, '->stream($request->query()') !== false && strpos($ctrlSrc, '->image($request->query()') !== false, 'both routes delegate');
+    // The old hand-ported copies are gone.
+    foreach (['StreamToken::verify(', 'ImageToken::verify(', 'function serveBytes', 'function snapQuality', 'function xaccelUri', 'function mediaRateLimit'] as $gone) {
+        assertTrue(strpos($ctrlSrc, $gone) === false, "port removed: {$gone}");
+    }
+    // A void action lets Laravel's kernel send its own Response over the raw headers -> must exit.
+    foreach (['stream', 'img'] as $m) {
+        $start = strpos($ctrlSrc, "public function {$m}(");
+        $body = substr($ctrlSrc, $start, strpos($ctrlSrc, "\n    }\n", $start) - $start);
+        assertTrue(strpos($body, 'exit;') !== false, "{$m}() exits");
+        assertTrue(!preg_match('/\breturn;/', $body), "{$m}() has no bare return");
+    }
     $cfg = require __DIR__ . '/../config/fluxfiles.php';
     assertTrue(array_key_exists('private', $cfg['disks']['local']), "local disk config has a 'private' key");
-});
-
-test('stream/img raw-byte responses exit instead of returning (no Laravel default Response)', function () {
-    // A controller action with a void/null return lets Laravel's kernel build and
-    // send its OWN default Response, and Symfony's Response::sendHeaders() always
-    // re-asserts Content-Type with $replace=true — silently clobbering any raw
-    // header('Content-Type: ...') this code already sent (e.g. back to
-    // text/html), which breaks every <img>/<video> hitting these endpoints
-    // (a real bug found + fixed once — see FluxFilesController::publicLink()'s
-    // pre-existing `exit;` for the established correct pattern this must match).
-    $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-
-    $extractMethod = function (string $src, string $name): string {
-        $start = strpos($src, "function {$name}(");
-        assertTrue($start !== false, "method {$name}() exists");
-        $end = strpos($src, "\n    public function ", $start + 1);
-        if ($end === false) {
-            $end = strpos($src, "\n    private function ", $start + 1);
-        }
-        return $end !== false ? substr($src, $start, $end - $start) : substr($src, $start);
-    };
-
-    $streamBody = $extractMethod($ctrlSrc, 'stream');
-    $imgBody = $extractMethod($ctrlSrc, 'img');
-    $serveBytesBody = $extractMethod($ctrlSrc, 'serveBytes');
-
-    assertTrue(strpos($serveBytesBody, 'exit;') !== false, 'serveBytes() exits after emitting raw bytes');
-    assertTrue(!preg_match('/\breturn;/', $streamBody), 'stream() has no bare return; (must exit)');
-    assertTrue(!preg_match('/\breturn;/', $imgBody), 'img() has no bare return; (must exit)');
 });
 
 test('controller branches metadata backend on fluxfiles.storage_backend', function () {
@@ -764,54 +732,21 @@ test('licenseInfo() picks up FLUXFILES_LICENSE_KEY from the environment, still m
     }
 });
 
-test('every mutating route logs audit + dispatches webhook (regression: legal-hold/audit-purge/version-restore/metadata-delete/ocr/chunk-lifecycle silently skipped both, twice for version-restore)', function () {
-    // Unlike core's index.php (one centralized post-response hook), this proxy has
-    // NO central hook — every write route must call logAudit()/dispatchWebhook()
-    // itself. A security audit found 6 routes that silently didn't. Guard each one
-    // by name so a 3rd recurrence (this is version_restore's SECOND time) fails CI
-    // instead of shipping silently again.
+test('every successful write is audited + webhooked centrally, through AuditPolicy (not per-route)', function () {
+    // Like core's index.php: ONE hook in ok(). A route can no longer forget to log
+    // (legal-hold / audit-purge / version-restore / metadata-delete / ocr / chunk-lifecycle
+    // each did, once, when every route called logAudit() by hand).
     $ctrlSrc = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-
-    $extractMethod = function (string $src, string $name): string {
-        $start = strpos($src, "function {$name}(");
-        assertTrue($start !== false, "method {$name}() exists");
-        $end = strpos($src, "\n    public function ", $start + 1);
-        if ($end === false) {
-            $end = strpos($src, "\n    private function ", $start + 1);
-        }
-        return $end !== false ? substr($src, $start, $end - $start) : substr($src, $start);
-    };
-
-    $mustLog = [
-        'hold'             => 'legal_hold_place',
-        'holdRelease'      => 'legal_hold_release',
-        'auditPurge'       => 'audit_purge',
-        'versionsRestore'  => 'version_restore', // 2nd recurrence of this exact bug — see docs above
-        'deleteMetadata'   => 'metadata_update',
-        'ocr'              => 'ocr',
-        'chunkComplete'    => 'chunk_upload',
-        'chunkAbort'       => 'chunk_upload',
-        'setChmod'         => 'chmod',
-        // 2026-10 audit coverage — these used to be absent from the log entirely.
-        'presign'          => 'presign_get',
-        'c2pa'             => 'c2pa_verify',
-        'webhooksTest'     => 'webhook_test',
-        'virusScan'        => 'virus_scan',
-        'fixityCheck'      => 'fixity_check',
-    ];
-    foreach ($mustLog as $method => $action) {
-        $body = $extractMethod($ctrlSrc, $method);
-        assertTrue(strpos($body, 'logAudit(') !== false || strpos($body, 'logAuditQuiet(') !== false, "{$method}() calls logAudit()");
-        assertTrue(strpos($body, "'{$action}'") !== false, "{$method}() logs the '{$action}' action");
-        assertTrue(strpos($body, 'dispatchWebhook(') !== false, "{$method}() calls dispatchWebhook()");
+    $ok = substr($ctrlSrc, strpos($ctrlSrc, 'private function ok('), 500);
+    assertTrue(strpos($ok, 'recordWrite(') !== false, 'ok() records the write');
+    assertEqual(0, preg_match('/\$this->(logAudit|dispatchWebhook)\(/', $ctrlSrc), 'no route logs or dispatches by hand');
+    // Every mutating route in the route file resolves to a named action (not "unknown").
+    $routes = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
+    preg_match_all("#Route::(?:post|put|delete)\\('([a-z0-9/_-]+)'#", $routes, $m);
+    foreach ($m[1] as $route) {
+        $action = \FluxFiles\AuditPolicy::resolveAction('/api/fm/' . $route);
+        assertTrue($action !== 'unknown', "POST/PUT/DELETE /{$route} maps to an audit action");
     }
-
-    // chunkInit() logging at INIT (before any bytes exist) is intentional here — it
-    // mirrors core's own behavior (index.php's central hook fires on every successful
-    // POST /api/fm/chunk/* substep, not only completion). Assert it's still present so
-    // a future edit doesn't silently remove it while "fixing" this test.
-    $chunkInitBody = $extractMethod($ctrlSrc, 'chunkInit');
-    assertTrue(strpos($chunkInitBody, 'logAudit(') !== false, 'chunkInit() still logs too, matching core');
 });
 
 // ══ 2026-10-23 adapter audit ══════════════════════════════════════════════
@@ -1061,24 +996,21 @@ test('A-H3: lang routes skip FluxFilesAuth (the UI fetches them without a Bearer
 });
 
 // ── A-M3: audit (and webhook) keys are scoped ──────────────────────────────
-test('A-M3: audit entries are logged under the scoped key, so the tenant sees its own', function () {
+test('A-M3: audit entries are logged under the scoped key, so the tenant sees its own', function () use ($ffTmp) {
     $secret = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
-    $claims = \FluxFiles\JwtMiddleware::handle((new FluxFilesManager())->token('t1', ['prefix' => 'tenant-a', 'perms' => ['read', 'write', 'audit']]), $secret);
     $ctrl = freshController();
-    $log = new \ReflectionMethod($ctrl, 'logAudit');
-    $log->invoke($ctrl, $claims, 'upload', 'local', 'docs/a.txt');
-    $log->invoke($ctrl, $claims, 'upload', 'local', 'tenant-a/docs/b.txt'); // already scoped: idempotent
+    $hdr = bearer(['prefix' => 'tenant-a', 'perms' => ['read', 'write', 'audit']], 't1');
+    // A write whose body names the key RELATIVE to the tenant, and one already scoped (idempotent).
+    $ctrl->mkdir(new Request('POST', ['disk' => 'local', 'path' => 'docs/a'], $hdr, null, 'https://app.example.com', [], 'api/fm/mkdir'));
+    $ctrl->mkdir(new Request('POST', ['disk' => 'local', 'path' => 'tenant-a/docs/b'], $hdr, null, 'https://app.example.com', [], 'api/fm/mkdir'));
+    $claims = \FluxFiles\JwtMiddleware::handle(substr($hdr['Authorization'], 7), $secret);
     $repoProp = new \ReflectionProperty($ctrl, 'metaRepo');
-    $keys = array_column($repoProp->getValue($ctrl)->readAudit('local'), 'file_key');
-    assertTrue(in_array('tenant-a/docs/a.txt', $keys, true), 'relative key scoped: ' . json_encode($keys));
-    assertTrue(in_array('tenant-a/docs/b.txt', $keys, true), 'scoped key not double-prefixed');
+    $keys = array_column(array_filter($repoProp->getValue($ctrl)->readAudit('local'), fn ($r) => $r['action'] === 'mkdir' && $r['user_id'] === 't1'), 'file_key');
+    assertTrue(in_array('tenant-a/docs/a', $keys, true), 'relative key scoped: ' . json_encode($keys));
+    assertTrue(in_array('tenant-a/docs/b', $keys, true), 'scoped key not double-prefixed');
     $listed = (new \FluxFiles\AuditLogStorage($repoProp->getValue($ctrl), ['local']))->list(100, 0, null, $claims);
     $rows = $listed['entries'] ?? $listed['data'] ?? $listed;
-    assertEqual(2, count(array_filter((array) $rows, fn ($r) => is_array($r) && str_starts_with((string) ($r['file_key'] ?? ''), 'tenant-a/'))), "the tenant's own audit view shows both");
-
-    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    $wh = substr($src, strpos($src, 'private function dispatchWebhook('), 1200);
-    assertTrue(strpos($wh, "\$context['path'] = \$this->auditKey(\$claims, \$context['path'])") !== false, 'webhook path scoped too');
+    assertEqual(2, count(array_filter((array) $rows, fn ($r) => is_array($r) && ($r['action'] ?? '') === 'mkdir' && str_starts_with((string) ($r['file_key'] ?? ''), 'tenant-a/'))), "the tenant's own audit view shows both");
 });
 
 // ── A-N5: search results are tenant-relative ───────────────────────────────
@@ -1168,28 +1100,41 @@ test('A-N3: presign PUT/POST and c2pa verify count against the WRITE bucket', fu
     assertEqual(429, $c2pa(), 'c2pa verify is a write (POST), as in core');
 });
 
-// ── A-M1: proxy /img fails closed on a watermark scope ─────────────────────
-test('A-M1: /img refuses (415) an image token that carries a watermark instead of serving it unmarked', function () use ($ffTmp) {
+// ── A-M1 (retired): the proxy /img used to 415 a watermark scope; it now overlays ──
+test('A-M1: /img composites the overlay watermark for a watermarked token instead of refusing it', function () use ($ffTmp) {
     $root = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.disks']['local']['root'];
     $png = $root . '/wm.png';
-    $im = imagecreatetruecolor(4, 4);
+    $im = imagecreatetruecolor(200, 120);
+    imagefill($im, 0, 0, imagecolorallocate($im, 40, 40, 40));
     imagepng($im, $png);
-    $token = \FluxFiles\ImageToken::mint('local', 'wm.png', 'u1', 300, $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'], 2000, 80,
-        ['enabled' => true, 'type' => 'text', 'text' => 'CONFIDENTIAL']);
+    $secretKey = $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret'];
+    // Mint exactly as the adapter does: watermark_enabled forwarded -> the scope carries `wm`.
+    $claims = \FluxFiles\JwtMiddleware::handle((new FluxFilesManager())->token('u1', [
+        'watermark_enabled' => true, 'watermark_type' => 'text', 'watermark_text' => 'CONFIDENTIAL',
+    ]), $secretKey);
+    assertTrue($claims->watermark !== null, 'the minted token carries the watermark claim');
+    $mint = static fn (?array $wm) => \FluxFiles\ImageToken::mint('local', 'wm.png', 'u1', 300, $secretKey, 2000, 80, $wm, false);
     // img() emits raw bytes and exit()s, so run it in a child process.
-    $script = $ffTmp . '/img-child.php';
-    file_put_contents($script, '<?php
-        $GLOBALS["LARAVEL_CONFIG"] = ' . var_export($GLOBALS['LARAVEL_CONFIG'], true) . ';
-        function config($k, $d = null) { return $GLOBALS["LARAVEL_CONFIG"][$k] ?? $d; }
-        function env($k, $d = null) { return $d; }
-        require ' . var_export(getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php', true) . ';
-        require ' . var_export(__DIR__ . '/laravel-http-stubs.php', true) . ';
-        require ' . var_export(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php', true) . ';
-        (new FluxFiles\Laravel\Http\Controllers\FluxFilesController())->img(
-            new Illuminate\Http\Request("GET", ["token" => ' . var_export($token, true) . ', "format" => "webp", "width" => 100], ["Accept" => "image/webp"])
-        );');
-    $out = (string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script) . ' 2>&1');
-    assertTrue(strpos($out, 'Watermarked previews are not available') !== false, 'refused, got (hex): ' . bin2hex(substr($out, 0, 24)));
+    $run = function (string $token) use ($ffTmp): string {
+        $script = $ffTmp . '/img-child.php';
+        file_put_contents($script, '<?php
+            $GLOBALS["LARAVEL_CONFIG"] = ' . var_export($GLOBALS['LARAVEL_CONFIG'], true) . ';
+            function config($k, $d = null) { return $GLOBALS["LARAVEL_CONFIG"][$k] ?? $d; }
+            function env($k, $d = null) { return $d; }
+            require ' . var_export(getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php', true) . ';
+            require ' . var_export(__DIR__ . '/laravel-http-stubs.php', true) . ';
+            require ' . var_export(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php', true) . ';
+            (new FluxFiles\Laravel\Http\Controllers\FluxFilesController())->img(
+                new Illuminate\Http\Request("GET", ["token" => ' . var_export($token, true) . ', "format" => "webp", "width" => 100], ["Accept" => "image/webp"])
+            );');
+        return (string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script) . ' 2>&1');
+    };
+    $wmOut = $run($mint(['enabled' => true, 'type' => 'text', 'text' => 'CONFIDENTIAL']));
+    assertTrue(strpos($wmOut, 'Watermarked previews are not available') === false, '415 branch is gone');
+    assertTrue(substr($wmOut, 0, 4) === 'RIFF' && substr($wmOut, 8, 4) === 'WEBP', 'an image is served, got (hex): ' . bin2hex(substr($wmOut, 0, 24)));
+    $plainOut = $run($mint(null));
+    assertTrue(substr($plainOut, 0, 4) === 'RIFF', 'control: unwatermarked token also served');
+    assertTrue($wmOut !== $plainOut, 'the watermarked bytes differ from the plain transform (the overlay was composited)');
 });
 
 // ── A-N6: UI page headers ──────────────────────────────────────────────────
@@ -1204,18 +1149,18 @@ test('A-N6: /public/index.html sends Referrer-Policy no-referrer and frame-ances
 });
 
 // ── B2: version purger/mover independent of the acting token's claim ──────
-test('B2: version purger + mover are wired whenever versioning is installed+licensed; only the keeper is claim-gated', function () {
-    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    $start = strpos($src, "if (\\FluxFiles\\ModuleRegistry::installed('versioning')");
-    assertTrue($start !== false, 'outer gate is installed+licensed only (no allowVersioning in it)');
+test('B2: version purger + mover are wired whenever versioning is installed+licensed (shared factory); only the keeper is claim-gated', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../../core/api/FileManagerFactory.php');
+    $start = strpos($src, "if (ModuleRegistry::installed('versioning')");
+    assertTrue($start !== false, 'outer gate is installed+licensed only');
     $block = substr($src, $start, strpos($src, '// Virus scan (paid module)', $start) - $start);
     $cond = substr($block, 0, strpos($block, '{'));
     assertTrue(strpos($cond, 'allowVersioning') === false, 'outer condition does not test the claim');
-    $keeperGate = strpos($block, 'if ($claims->allowVersioning ?? false) {');
+    $keeperGate = strpos($block, 'if ($claims->allowVersioning) {');
     assertTrue($keeperGate !== false && strpos($block, 'setVersionKeeper(') > $keeperGate, 'keeper stays claim-gated');
     $keeperEnd = strpos($block, '}', strpos($block, '});', $keeperGate) + 3);
     assertTrue(strpos($block, 'setVersionPurger(') > $keeperEnd, 'purger is outside the claim gate');
-    assertTrue(strpos($block, "method_exists(\$fm, 'setVersionMover')") > $keeperEnd, 'mover is outside the claim gate (method_exists-guarded)');
+    assertTrue(strpos($block, 'setVersionMover(') > $keeperEnd, 'mover is outside the claim gate');
 });
 
 // ── N3: audit purge gets the repository the controller already has ─────────
@@ -1354,12 +1299,21 @@ test('L5: an upload is audited under the uploaded FILE key, not its destination 
         public function getError(): int { return UPLOAD_ERR_OK; }
         public function getSize(): int { return (int) filesize($this->tmp); }
     };
-    $res = $ctrl->upload(new Request('POST', ['disk' => 'local', 'path' => ''], $hdr, null, 'https://app.example.com', ['file' => $file]))->getData();
+    $res = $ctrl->upload(new Request('POST', ['disk' => 'local', 'path' => ''], $hdr, null, 'https://app.example.com', ['file' => $file], 'api/fm/upload'))->getData();
     assertTrue(empty($res['error']), 'upload ok: ' . json_encode($res));
     $rows = array_values(array_filter(smokeAuditRows($ffTmp . '/disk'), static fn ($r) => ($r['action'] ?? '') === 'upload' && ($r['user_id'] ?? '') === 'u1'));
     $keys = array_column($rows, 'file_key');
     assertTrue(in_array('aud-up/evidence.txt', $keys, true), 'file key logged, got ' . json_encode($keys));
     assertTrue(!in_array('aud-up', $keys, true) && !in_array('', $keys, true), 'never the bare folder');
+});
+
+test('N11: renaming a missing file is a 404 not_found envelope, not a 500 (core parity)', function () {
+    $ctrl = freshController();
+    $hdr = bearer(['perms' => ['read', 'write'], 'prefix' => 'rn-missing', 'rate_write' => 50]);
+    $res = $ctrl->rename(new Request('POST', ['disk' => 'local', 'path' => 'ghost.txt', 'name' => 'x.txt'], $hdr, null, 'https://app.example.com', [], 'api/fm/rename'));
+    assertEqual(404, $res->getStatusCode(), 'status');
+    $d = $res->getData();
+    assertEqual('not_found', $d['error_code'] ?? null, 'error_code: ' . json_encode($d));
 });
 
 test('L6: refused writes leave virus_blocked / dlp_blocked / legal_hold_blocked audit lines (core parity)', function () use ($ffTmp) {
@@ -1369,6 +1323,7 @@ test('L6: refused writes leave virus_blocked / dlp_blocked / legal_hold_blocked 
         $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret']
     );
     (new \ReflectionProperty(FluxFilesController::class, 'lastClaims'))->setValue($ctrl, $claims);
+    (new \ReflectionProperty(FluxFilesController::class, 'lastRequest'))->setValue($ctrl, new Request('POST', []));
     $error = new \ReflectionMethod(FluxFilesController::class, 'error');
     $error->invoke($ctrl, 'virus', 422, 'virus_detected', ['name' => 'eicar.txt', 'threat' => 'Eicar-Signature']);
     $error->invoke($ctrl, 'pii', 422, 'pii_detected', ['name' => 'card.txt', 'entities' => ['CREDIT_CARD']]);
@@ -1406,12 +1361,11 @@ if (!function_exists('request')) {
     function request() { return $GLOBALS['SMOKE_REQ'] ?? null; }
 }
 
-test('L8: xaccelUri() percent-encodes each segment (%, ?, #, space) and keeps the / separators', function () {
-    assertEqual('/internal/a%20b/50%25%20off%3F%23.pdf', FluxFilesController::xaccelUri('/internal/', 'a b/50% off?#.pdf'), 'segments encoded');
-    assertEqual('/internal/x/y.txt', FluxFilesController::xaccelUri('/internal', '/x/y.txt'), 'plain key unchanged');
+test('L8: the X-Accel target is percent-encoded per segment by the shared endpoint', function () {
+    assertEqual('/internal/a%20b/50%25%20off%3F%23.pdf', \FluxFiles\MediaEndpoint::xaccelUri('/internal/', 'a b/50% off?#.pdf'), 'segments encoded');
     $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    assertTrue(str_contains($src, "'X-Accel-Redirect: ' . self::xaccelUri("), 'the header uses the encoder');
-    assertTrue(!str_contains($src, "rtrim(\$xaccel, '/') . '/' . \$path"), 'no raw concatenation left');
+    assertTrue(!str_contains($src, 'X-Accel-Redirect'), 'the adapter no longer builds the header itself');
+    assertTrue(str_contains($src, "FLUXFILES_XACCEL"), 'the X-Accel base still comes from FLUXFILES_XACCEL');
 });
 
 test('L9: a code-editor save is audited and webhooked as content_update (the name the UI labels)', function () use ($ffTmp) {
@@ -1420,30 +1374,34 @@ test('L9: a code-editor save is audited and webhooked as content_update (the nam
     $hdr = bearer(['perms' => ['read', 'write'], 'allow_code_edit' => true, 'prefix' => $prefix], 'cu-user');
     @mkdir($ffTmp . '/disk/' . $prefix, 0775, true);
     file_put_contents($ffTmp . '/disk/' . $prefix . '/conf.txt', 'old');
-    $res = $ctrl->putContent(new Request('PUT', ['disk' => 'local', 'path' => 'conf.txt', 'content' => 'new'], $hdr))->getData();
+    $res = $ctrl->putContent(new Request('PUT', ['disk' => 'local', 'path' => 'conf.txt', 'content' => 'new'], $hdr, null, 'https://app.example.com', [], 'api/fm/content'))->getData();
     assertTrue(empty($res['error']), 'save ok: ' . json_encode($res));
     $actions = array_column(array_filter(smokeAuditRows($ffTmp . '/disk'), static fn ($r) => ($r['user_id'] ?? '') === 'cu-user'), 'action');
     assertTrue(in_array('content_update', $actions, true), 'content_update logged: ' . json_encode($actions));
     assertTrue(!in_array('content_edit', $actions, true), 'legacy name gone');
     $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    assertTrue(!str_contains($src, "'content_edit'"), 'webhook event renamed too');
+    assertTrue(!str_contains($src, "'content_edit'"), 'legacy name not in the adapter either');
 });
 
-test('L10: a blocked upload into a subfolder is audited under folder/name (core ff_blocked_write_key)', function () use ($ffTmp) {
+/** A multipart-style request: the fields are form data ($_POST), the body is not JSON. */
+class SmokeFormRequest extends Request
+{
+    public function getContent(): string { return ''; }
+    /** @return array<string,mixed> */
+    public function post(): array { return $this->all(); }
+}
+
+test('L10: a blocked upload into a subfolder is audited under folder/name (core blockedWriteKey)', function () use ($ffTmp) {
     $ctrl = freshController();
     $claims = \FluxFiles\JwtMiddleware::handle(
         (new FluxFilesManager())->token('bw-user', ['perms' => ['read', 'write'], 'prefix' => 'bw']),
         $GLOBALS['LARAVEL_CONFIG']['fluxfiles.secret']
     );
     (new \ReflectionProperty(FluxFilesController::class, 'lastClaims'))->setValue($ctrl, $claims);
+    (new \ReflectionProperty(FluxFilesController::class, 'lastRequest'))->setValue($ctrl, new SmokeFormRequest('POST', ['disk' => 'local', 'path' => '/docs/in/']));
     $error = new \ReflectionMethod(FluxFilesController::class, 'error');
-    $GLOBALS['SMOKE_REQ'] = new Request('POST', ['disk' => 'local', 'path' => '/docs/in/']);
-    try {
-        $error->invoke($ctrl, 'virus', 422, 'virus_detected', ['name' => 'eicar.txt', 'threat' => 'X']);
-        $error->invoke($ctrl, 'virus', 422, 'virus_detected', ['entry' => 'inner/zip.txt']);   // extract entry stays relative
-    } finally {
-        unset($GLOBALS['SMOKE_REQ']);
-    }
+    $error->invoke($ctrl, 'virus', 422, 'virus_detected', ['name' => 'eicar.txt', 'threat' => 'X']);
+    $error->invoke($ctrl, 'virus', 422, 'virus_detected', ['entry' => 'inner/zip.txt']);   // extract entry stays relative
     $keys = array_column(array_filter(smokeAuditRows($ffTmp . '/disk'), static fn ($r) => ($r['user_id'] ?? '') === 'bw-user' && ($r['action'] ?? '') === 'virus_blocked'), 'file_key');
     assertTrue(in_array('bw/docs/in/eicar.txt', $keys, true), 'folder + name, scoped: ' . json_encode($keys));
     assertTrue(in_array('bw/inner/zip.txt', $keys, true), 'extract entry relative: ' . json_encode($keys));
@@ -1472,11 +1430,11 @@ test('L12: assets are immutable when versioned (?v=), else ETag + a real 304', f
     assertEqual('public, max-age=300, must-revalidate', $get(['v' => 'abc12345ef'])->headers['cache-control'] ?? null, 'mismatched v is not immutable');
     assertEqual('public, max-age=300, must-revalidate', $get(['v' => 'abc123'])->headers['cache-control'] ?? null, 'junk v is not immutable');
     // Lazy vendor files carry their vendor tree's hash (fm.js FM_VENDOR_VER).
-    @mkdir($ffTmp . '/core-assets/assets/vendor/xterm', 0775, true);
-    file_put_contents($ffTmp . '/core-assets/assets/vendor/xterm/a.js', 'A');
-    file_put_contents($ffTmp . '/core-assets/assets/vendor/xterm/b.css', 'B');
+    @mkdir($ffTmp . '/core-assets/assets/vendor/codemirror', 0775, true);
+    file_put_contents($ffTmp . '/core-assets/assets/vendor/codemirror/a.js', 'A');
+    file_put_contents($ffTmp . '/core-assets/assets/vendor/codemirror/b.css', 'B');
     $tree = substr(md5("a.js\0A\0b.css\0B\0"), 0, 10);
-    $vget = fn (string $q) => withConfig(['fluxfiles.base_path' => $ffTmp . '/core-assets'], fn () => (new FluxFilesController())->asset('vendor/xterm/a.js', new Request('GET', ['v' => $q])));
+    $vget = fn (string $q) => withConfig(['fluxfiles.base_path' => $ffTmp . '/core-assets'], fn () => (new FluxFilesController())->asset('vendor/codemirror/a.js', new Request('GET', ['v' => $q])));
     assertEqual('public, max-age=31536000, immutable', $vget($tree)->headers['cache-control'] ?? null, 'vendor tree hash is immutable');
     assertEqual('public, max-age=300, must-revalidate', $vget(substr($tree, 1) . '0')->headers['cache-control'] ?? null, 'wrong tree hash is not');
     $plain = $get([]);
@@ -1507,6 +1465,112 @@ test('L13: UI html points at fm.min.* when the core ships them, else (or in debu
     assertTrue(str_contains($new, 'alpine.min.js?v='), 'alpine versioned');
     $dbg = FluxFilesController::rewriteUiAssets($html, $dir, true);
     assertTrue(str_contains($dbg, '../assets/fm.js?v=') && !str_contains($dbg, 'fm.min'), 'debug -> sources');
+});
+
+test('fileManager() really wires the hooks per claim: fail-closed scanners only on the claim, AI tagger only on ai_auto_tag', function () use ($secret) {
+    $ctrl = new \FluxFiles\Laravel\Http\Controllers\FluxFilesController();
+    $build = new \ReflectionMethod($ctrl, 'fileManager');
+    $prop = static fn (object $fm, string $name) => (new \ReflectionProperty(\FluxFiles\FileManager::class, $name))->getValue($fm);
+    $claimsFor = static fn (array $o) => \FluxFiles\JwtMiddleware::handle((new FluxFilesManager())->token('wire', $o), $secret);
+
+    $plain = $build->invoke($ctrl, $claimsFor([]));
+    assertTrue($prop($plain, 'virusScanner') === null && $prop($plain, 'dlpScanner') === null, 'no scanner without the claim');
+    assertTrue($prop($plain, 'quotaManager') !== null, 'quota manager wired');
+    assertEqual($secret, $prop($plain, 'streamSecret'), 'stream secret wired (gated-local / img_base URLs)');
+    assertTrue($prop($plain, 'aiTagger') === null, 'no AI tagger without ai_auto_tag');
+
+    $scanned = $build->invoke($ctrl, $claimsFor(['allow_virus_scan' => true, 'allow_dlp_scan' => true]));
+    assertTrue($prop($scanned, 'virusScanner') instanceof \Closure, 'virus scanner wired on the claim');
+    assertTrue($prop($scanned, 'dlpScanner') instanceof \Closure, 'dlp scanner wired on the claim');
+    // Fail-closed: the module gate runs INSIDE the callback, so an uninstalled/unlicensed
+    // module surfaces as an ApiException on the write, never as an unscanned file.
+    $threw = null;
+    try {
+        ($prop($scanned, 'virusScanner'))('/dev/null');
+    } catch (\FluxFiles\ApiException $e) {
+        $threw = $e->getHttpCode();
+    }
+    assertTrue(in_array($threw, [501, 402, 403], true), 'virus gate resolves inside the callback (got ' . json_encode($threw) . ')');
+
+    // ai_auto_tag + a provider -> tagger wired; ai_auto_tag alone (no provider) -> still none.
+    $GLOBALS['LARAVEL_CONFIG']['fluxfiles.ai_provider'] = 'openai';
+    try {
+        assertTrue($prop($build->invoke($ctrl, $claimsFor(['ai_auto_tag' => true])), 'aiTagger') !== null, 'tagger wired for ai_auto_tag + provider');
+        assertTrue($prop($build->invoke($ctrl, $claimsFor([])), 'aiTagger') === null, 'provider alone does NOT wire the tagger (adapter policy)');
+    } finally {
+        unset($GLOBALS['LARAVEL_CONFIG']['fluxfiles.ai_provider']);
+    }
+});
+
+// ── round 3: shared core services (rate limiter backend, media limits, audit URI) ──
+test('rate limiter: db mode selects the DB limiter; a missing/unusable DB falls back to the file limiter instead of 500ing', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(str_contains($src, 'RateLimiterFactory::makeDb(') && str_contains($src, 'RateLimiterFactory::makeFile('), 'both backends come from the core factory');
+    assertTrue(!str_contains($src, 'new RateLimiterFileStorage('), 'no hand-built file limiter');
+
+    // No Illuminate DB in this smoke, so the DB limiter cannot run: it must degrade, still enforce the limit.
+    require_once __DIR__ . '/../src/LaravelPdoConnection.php';
+    require_once __DIR__ . '/../src/LaravelDbMetadataHandler.php';
+    $prevLog = ini_set('error_log', '/dev/null');
+    try {
+        withConfig(['fluxfiles.storage_backend' => 'db'], function () {
+            $ctrl = freshController();
+            $hdr = bearer(['perms' => ['read', 'write'], 'rate_write' => 1], 'rl-db');
+            $codes = [];
+            for ($i = 0; $i < 2; $i++) {
+                // Missing `path`: a 400 after the limiter ran, without touching the (absent) DB metadata store.
+                $codes[] = $ctrl->mkdir(new Request('POST', ['disk' => 'local'], $hdr, null, 'https://app.example.com', [], 'api/fm/mkdir'))->getStatusCode();
+            }
+            assertEqual(400, $codes[0], 'first call reaches the handler');
+            assertEqual(429, $codes[1], 'the fallback limiter still enforces rate_write=1: ' . json_encode($codes));
+        });
+    } finally {
+        ini_set('error_log', (string) $prevLog);
+    }
+});
+
+test('media rate limits use core defaults (stream 300 / img 120) unless the adapter config overrides them', function () {
+    // Unset in the smoke config: the callable falls back to the core defaults it is handed.
+    $ctrl = freshController();
+    $rl = (new \ReflectionProperty(\FluxFiles\MediaEndpoint::class, 'rateLimit'))->getValue((new \ReflectionMethod($ctrl, 'mediaEndpoint'))->invoke($ctrl));
+    $hits = 0;
+    while ($rl('rl-default', 'stream', 300) && $hits < 400) { $hits++; }
+    assertEqual(300, $hits, 'stream allows 300/min by default');
+    $hits = 0;
+    while ($rl('rl-default', 'img', 120) && $hits < 400) { $hits++; }
+    assertEqual(120, $hits, 'img allows 120/min by default');
+    $cfg = require __DIR__ . '/../config/fluxfiles.php';
+    assertEqual(300, $cfg['rate_limit_stream'], 'published config default = core default (stream)');
+    assertEqual(120, $cfg['rate_limit_img'], 'published config default = core default (img)');
+
+    // A tight override is honoured, 0 disables.
+    withConfig(['fluxfiles.rate_limit_img' => 1], function () {
+        $ctrl = freshController();
+        $rl = (new \ReflectionProperty(\FluxFiles\MediaEndpoint::class, 'rateLimit'))->getValue((new \ReflectionMethod($ctrl, 'mediaEndpoint'))->invoke($ctrl));
+        assertTrue($rl('rl-img-sub', 'img', 120) === true, 'first request passes');
+        assertTrue($rl('rl-img-sub', 'img', 120) === false, 'second is limited by the adapter override');
+    });
+    withConfig(['fluxfiles.rate_limit_img' => 0], function () {
+        $ctrl = freshController();
+        $rl = (new \ReflectionProperty(\FluxFiles\MediaEndpoint::class, 'rateLimit'))->getValue((new \ReflectionMethod($ctrl, 'mediaEndpoint'))->invoke($ctrl));
+        for ($i = 0; $i < 5; $i++) {
+            assertTrue($rl('rl-off', 'img', 120) === true, 'disabled bucket never limits');
+        }
+    });
+});
+
+test('the audit route is derived from the request path relative to route_prefix (a custom prefix cannot change the action)', function () {
+    $ctrl = new FluxFilesController();
+    $uri = new \ReflectionMethod($ctrl, 'coreUri');
+    assertEqual('/api/fm/delete', $uri->invoke($ctrl, new Request('DELETE', [], [], null, 'https://x', [], 'api/fm/delete')), 'default prefix');
+    assertEqual('/api/fm/delete', withConfig(['fluxfiles.route_prefix' => 'upload/files'], fn () => $uri->invoke($ctrl, new Request('DELETE', [], [], null, 'https://x', [], 'upload/files/delete'))), 'a prefix that contains "upload" does not turn a delete into an upload');
+});
+
+test('a gated-local disk without a root falls back to core\'s default root, not the filesystem root', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../../core/api/MediaEndpoint.php');
+    assertTrue(str_contains($src, "storage/uploads"), 'MediaEndpoint owns the default root');
+    $ctrl = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(!str_contains($ctrl, "realpath((string) (\$config['root']"), 'the adapter no longer resolves the root itself');
 });
 
 // ── Doctor: web exposure + config drift + fluxfiles:doctor ────────────────

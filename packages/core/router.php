@@ -142,7 +142,7 @@ if (strncmp($uri, '/storage/uploads/', 17) === 0) {
 }
 
 // Everything else under storage/ is server runtime state, not public content
-// (ssh-sockets/ holds the multiplex index and ephemeral BYOB private keys).
+// (ephemeral BYOB private keys, rate-limit state, locks).
 // Without this the built-in server would happily serve it verbatim.
 // Mirrors docker/nginx.conf's `location ^~ /storage/ { deny all; }`.
 if (strncmp($uri, '/storage/', 9) === 0) {

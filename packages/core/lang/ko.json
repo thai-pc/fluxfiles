@@ -335,8 +335,6 @@
     "dlp_unscannable": "청크 업로드는 개인정보 검사를 할 수 없습니다. 일반 업로드를 사용하세요.",
     "dlp_failed": "개인정보 검사를 완료하지 못했습니다.",
     "storage_not_writable": "저장소에 쓸 수 없습니다.",
-    "terminal_disabled": "이 서버에서는 터미널이 비활성화되어 있습니다.",
-    "terminal_forbidden": "터미널 사용이 허용되지 않습니다.",
     "optimize_forbidden": "최적화가 허용되지 않습니다.",
     "webhook_not_configured": "이 토큰에 webhook URL이 설정되지 않았습니다.",
     "webhook_blocked": "webhook URL이 비공개 또는 차단된 주소를 가리킵니다.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "PDF 최적화에는 서버에 Ghostscript가 필요합니다.",
     "perm_denied": "권한이 없습니다.",
     "too_many": "한 요청에 파일이 너무 많습니다.",
-    "terminal_unsupported": "터미널은 SFTP 디스크에서만 작동합니다.",
-    "terminal_no_shell": "이 호스트는 셸을 허용하지 않습니다(SFTP 전용).",
-    "terminal_confirm_required": "이 명령은 위험해 보입니다 — 실행하려면 확인하세요.",
-    "git_deploy_disabled": "이 서버에서는 Git 배포가 비활성화되어 있습니다.",
-    "git_deploy_forbidden": "Git 배포가 허용되지 않습니다.",
-    "git_deploy_unconfigured": "이 토큰에는 Git 배포 경로가 구성되어 있지 않습니다.",
-    "git_deploy_in_progress": "이 저장소에 대한 배포가 이미 진행 중입니다.",
-    "git_deploy_unsafe_repo": "이 저장소의 git 설정에 명령 실행 설정이 포함되어 있습니다. 배포가 거부되었습니다.",
     "watermark_overlay_active": "미리보기/오버레이 워터마크 토큰에서는 굽기를 사용할 수 없습니다. 다운로드 가능한 토큰을 사용하세요.",
     "no_watermark_backup": "제거할 워터마크가 없습니다.",
     "audit_purge_no_cutoff": "감사 기록을 삭제하려면 명시적인 기준 날짜(또는 계정 보존 설정)가 필요합니다.",
@@ -464,7 +454,6 @@
       "chunk_upload": "청크 업로드",
       "content_update": "내용 편집",
       "unknown": "기타",
-      "terminal": "터미널 명령",
       "virus_blocked": "바이러스 차단",
       "dlp_blocked": "개인정보 차단",
       "watermark_remove": "워터마크 제거",
@@ -683,13 +672,7 @@
     "removed": "워터마크가 제거되었습니다"
   },
   "terminal": {
-    "title": "터미널",
-    "placeholder": "명령을 입력하고 Enter…",
-    "unsupported": "이 호스트는 터미널을 지원하지 않습니다(SFTP 전용).",
-    "danger_confirm": "이 명령은 위험해 보입니다. 그래도 실행할까요?",
-    "run_anyway": "그래도 실행",
-    "clear": "지우기",
-    "truncated": "출력이 잘렸습니다."
+    "title": "터미널"
   },
   "pdf": {
     "title": "PDF 도구"

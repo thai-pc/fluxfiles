@@ -3,7 +3,7 @@
  * Plugin Name: FluxFiles
  * Plugin URI:  https://github.com/thai-pc/fluxfiles
  * Description: Multi-storage file manager with Local/S3/R2 support, image optimization, and full-text search.
- * Version:     0.2.74
+ * Version:     1.0.0
  * Author:      thai-pc
  * Author URI:  https://github.com/thai-pc
  * License:     MIT
@@ -16,7 +16,7 @@
 
 defined('ABSPATH') || exit;
 
-define('FLUXFILES_VERSION', '0.2.74');
+define('FLUXFILES_VERSION', '1.0.0');
 define('FLUXFILES_PLUGIN_FILE', __FILE__);
 define('FLUXFILES_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FLUXFILES_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -71,6 +71,8 @@ require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesDbSchema.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesPlugin.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesAdmin.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/WpDbMetadataHandler.php';
+require_once FLUXFILES_PLUGIN_DIR . 'includes/WpRateLimiterStorage.php';
+require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesMediaEndpoint.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesApi.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesShortcode.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesMediaButton.php';

@@ -144,7 +144,7 @@ test('B7: a genuine chained entry still explains the change', function () {
     assertEqual(['t/a.txt'], $r['changed_explained'], json_encode($r));
 });
 
-test('N3: retention_trash / terminal / extract (sibling tree) explain their changes', function () {
+test('N3: retention_trash / extract (sibling tree) explain their changes', function () {
     [$root, $dm, $meta, $skip] = chainedEnv();
     unlink("{$root}/t/d.txt");
     file_put_contents("{$root}/t/docs/x/c.txt", 'overwritten by extract');
@@ -153,12 +153,6 @@ test('N3: retention_trash / terminal / extract (sibling tree) explain their chan
     $r = FixityChecker::run($dm->disk('local'), 't', $skip, $meta->readAudit('local'));
     assertEqual(['t/d.txt'], $r['missing_explained'], 'retention ' . json_encode($r));
     assertEqual(['t/docs/x/c.txt'], $r['changed_explained'], 'extract ' . json_encode($r));
-
-    file_put_contents("{$root}/t/b.txt", 'edited over ssh');
-    sleep(1); // the change must postdate the previous pass's checked_at
-    $meta->audit('local', 'terminal', ['user_id' => 'u', 'file_key' => '', 'detail' => 'sed -i s/a/b/ b.txt']);
-    $r = FixityChecker::run($dm->disk('local'), 't', $skip, $meta->readAudit('local'));
-    assertEqual(['t/b.txt'], $r['changed_explained'], 'terminal ' . json_encode($r));
 });
 
 test('an unchained log (no secret ever configured) is still trusted as before', function () {

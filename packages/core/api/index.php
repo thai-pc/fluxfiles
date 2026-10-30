@@ -412,25 +412,6 @@ try {
             ->check($claims->userId, 'usage_refresh');
     }
 
-    // Git deploy runs `fetch`/`reset --hard` against a live webroot — its own
-    // tight bucket (default 5/min), tighter than the general write limit, since
-    // repeatedly resetting a live site is never legitimate traffic.
-    if ($uri === '/api/fm/git-deploy') {
-        $deployLimit = (int) ($_ENV['FLUXFILES_GIT_DEPLOY_RATE_LIMIT'] ?? 5);
-        \FluxFiles\RateLimiterFactory::make($deployLimit, $deployLimit, 60, $dbConn)
-            ->check($claims->userId, 'git_deploy');
-    }
-
-    // The terminal execs a real command on the remote SFTP server per request —
-    // its own bucket (default 30/min), looser than git-deploy (interactive
-    // command-runner calls are more frequent than a deploy) but still tighter
-    // than the general write limit, since it can run arbitrary commands.
-    if ($uri === '/api/fm/terminal') {
-        $terminalLimit = (int) ($_ENV['FLUXFILES_TERMINAL_RATE_LIMIT'] ?? 30);
-        \FluxFiles\RateLimiterFactory::make($terminalLimit, $terminalLimit, 60, $dbConn)
-            ->check($claims->userId, 'terminal');
-    }
-
     // Audit log (lưu trong user storage)
     $auditLog = new AuditLogStorage($metaRepo, $claims->allowedDisks);
     $chunker = new \FluxFiles\ChunkUploader($diskManager);
@@ -482,10 +463,6 @@ try {
     if ($isWriteAction && $data !== null) {
         $raw = file_get_contents('php://input');
         $body = \FluxFiles\AuditPolicy::decodeBody((string) $raw);
-        // Terminal has no path/key — the command itself IS the security-relevant
-        // fact, so it goes in as free-form detail instead of leaving the entry blank.
-        // Git deploy has no request-body path/key either (path/branch are claims,
-        // not request fields) — log what was actually deployed instead.
         $audit = \FluxFiles\AuditPolicy::successEntry($uri, $body, $_POST, $claims, $data);
         $auditAction = $audit['action'];
         $auditDisk = $audit['disk'];
@@ -1035,21 +1012,6 @@ function routeRequest(
         }
         [$disk, $path, $mode] = jsonBody('disk', 'path', 'mode');
         return $fm->setMode((string) $disk, (string) $path, (string) $mode);
-    }
-
-    // SSH terminal (command-runner) — SFTP disks only. Stateless: one command per
-    // request; the cwd is threaded back to the client. Hard-gated: a server
-    // kill-switch, the allow_terminal claim, write perm, an SFTP disk that
-    // actually grants a shell, and a double-confirm for catastrophic commands.
-    if ($method === 'POST' && $uri === '/api/fm/terminal') {
-        return \FluxFiles\TerminalService::run($claims, $diskManager, jsonBodyAll(...), $_ENV);
-    }
-
-    // One-click Git deploy — a fixed-command-shape subset of the terminal above.
-    // The repo path/branch are OPERATOR claims (minted into the JWT), never read
-    // from the request body — see docs/security/GIT-DEPLOY-SECURITY-REVIEW.md §4.
-    if ($method === 'POST' && $uri === '/api/fm/git-deploy') {
-        return \FluxFiles\GitDeployService::run($claims, $diskManager, jsonBodyAll(...), $_ENV);
     }
 
     // Search

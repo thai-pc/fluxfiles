@@ -36,7 +36,7 @@ class AuditLogStorage
             'ip'        => $ip ?? ($_SERVER['REMOTE_ADDR'] ?? ''),
             'user_agent' => $userAgent ?? ($_SERVER['HTTP_USER_AGENT'] ?? ''),
         ];
-        // Free-form extra context (e.g. the SSH command a `terminal` entry ran) —
+        // Free-form extra context (e.g. the `jti` of a revoked share link) —
         // the audit file_key convention doesn't fit every action.
         if ($detail !== null && $detail !== '') {
             $context['detail'] = $detail;

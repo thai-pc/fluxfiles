@@ -68,6 +68,16 @@ test('changes/deletions are split into explained (audited) and unexplained', fun
     assertTrue($r['ok'] && $r['unchanged'] === 3, 'second run clean: ' . json_encode($r));
 });
 
+test('legacy terminal/git_deploy audit entries (removed in 1.0.0) still explain disk-wide changes', function () {
+    [$fm, $base] = fxEnv();
+    $fm->runFixityCheck('local', []);
+    sleep(1);
+    file_put_contents("{$base}/t/a.txt", 'changed by a shell command');
+    unlink("{$base}/t/d.txt");
+    $r = $fm->runFixityCheck('local', [['action' => 'terminal', 'file_key' => '', 'created_at' => time()]]);
+    assertTrue($r['changed_explained'] === ['a.txt'] && $r['missing_explained'] === ['d.txt'] && $r['ok'], json_encode($r));
+});
+
 test('a byte budget spreads one round over several calls via the cursor', function () {
     [$fm] = fxEnv();
     $r1 = $fm->runFixityCheck('local', [], 6);   // ~one 5-byte file per call

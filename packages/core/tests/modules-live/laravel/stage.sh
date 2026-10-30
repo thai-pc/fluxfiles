@@ -21,6 +21,11 @@ done
 # floor above what core has actually released fails `composer require` here.
 CORE_V="$(git -C "$REPO" tag | grep '^core-v' | sort -V | tail -1 | sed 's/^core-v//')"
 LARAVEL_V="$(git -C "$REPO" tag | grep '^laravel-v' | sort -V | tail -1 | sed 's/^laravel-v//')"
+# While a release is being prepared the adapter may require a core newer than
+# the newest core tag (e.g. ^1.0.0 before core-v1.0.0 exists): advertise the
+# staged core as that floor so the path repo satisfies the adapter.
+FLOOR="$(php -r '$c=json_decode(file_get_contents($argv[1]),true)["require"]["fluxfiles/fluxfiles"]??""; if(preg_match("/(\d+\.\d+\.\d+)/",$c,$m)) echo $m[1];' "$REPO/packages/laravel/composer.json")"
+if [ -n "$FLOOR" ] && php -r 'exit(version_compare($argv[1],$argv[2],">")?0:1);' "$FLOOR" "$CORE_V"; then CORE_V="$FLOOR"; fi
 printf 'CORE_V=%s\nLARAVEL_V=%s\n' "$CORE_V" "$LARAVEL_V" > "$ST/src/versions.env"
 php "$LIVE/mint-license.php" "$REPO" "$ST/license.txt"   # never echoes the key or the license
 SECRET="$(cat "$ST/secret.txt" 2>/dev/null || true)"

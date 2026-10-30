@@ -204,8 +204,14 @@ FluxFiles JWT server-side; the signing secret never reaches the browser.
   cache, `usage_cache_ttl`, default 900 s); `presign` and `c2pa` verify count as
   writes.
 - **Audit/webhooks** record tenant-scoped keys, as core does.
-- **`/img`** refuses (415) an image token that carries an overlay watermark — the
-  proxy does not composite one, and must not serve the clean image instead.
+- **`/stream` and `/img`** are core's shared `MediaEndpoint`, so they behave exactly
+  like standalone: Range requests, the nginx `FLUXFILES_XACCEL` fast path, AVIF/WebP
+  negotiation and the preview **watermark overlay**. Mint a token with
+  `watermark_enabled` (plus `watermark_type`/`_text`/`_logo_path`/`_position`/
+  `_opacity`/`_font_size`) and `/img` composites the mark; a preview-only token is
+  never handed the clean original. Their per-sub rate limits default to core's
+  (stream 300/min, img 120/min; `FLUXFILES_STREAM_RATE_LIMIT` / `FLUXFILES_IMG_RATE_LIMIT`,
+  or the `fluxfiles_rate_limit_stream` / `fluxfiles_rate_limit_img` filters; `0` disables).
 - **The UI page** (`/public/index.html`) sends `Referrer-Policy: no-referrer` and
   `Content-Security-Policy: frame-ancestors 'self' <site origins>`. A headless
   front-end on another origin widens it with
@@ -268,20 +274,19 @@ creates metadata per file (title from the filename) and tracks folders in
 `_fluxfiles/dirs.json`. No WP-CLI? Re-upload through the UI — new uploads register
 metadata automatically.
 
-## SFTP disk & SSH terminal
+## SFTP disk & PTY terminal
 
 The WordPress plugin runs FluxFiles **through the WP REST API (proxy mode)**, whose
 admin settings page only exposes **Local / S3 / R2** storage — there's no settings
-field (or filter) to register an SFTP disk, even though the underlying `/terminal`
-and `/git-deploy` REST routes are proxied and would work against one if it existed.
-Managing a **remote VPS** over SFTP — the SFTP disk, `chmod`, and the SSH
-**terminal** — is therefore **not available through the WordPress plugin** in
-practice.
+field (or filter) to register an SFTP disk. Managing a **remote VPS** over SFTP is
+therefore not available through the WordPress plugin in practice; run the
+**standalone FluxFiles server** (or the Docker image) for that — see the
+[core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting).
 
-For those, run the **standalone FluxFiles server** (or the Docker image) — see the
-[core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting)
-and [SSH terminal](https://github.com/thai-pc/fluxfiles#ssh-terminal-sftp-disks).
-(The **burn-in watermark** does work in WordPress.)
+FluxFiles no longer ships an SSH command-runner terminal or one-click Git deploy. If you
+run your own [ttyd / gotty / wetty](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md),
+pass its URL as the `terminal_pty_url` token override and the UI embeds it.
+(The **burn-in watermark** works in WordPress too.)
 
 ## Features
 

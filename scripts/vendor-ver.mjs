@@ -1,5 +1,5 @@
 // Stamp the content hashes of the lazily loaded vendor trees into fm.js's
-// FM_VENDOR_VER (the ?v= of xterm / CodeMirror files). Run by scripts/build-ui.sh.
+// FM_VENDOR_VER (the ?v= of CodeMirror files). Run by scripts/build-ui.sh.
 // Hash = first 10 hex of md5 over, per file sorted by relative path:
 //   <relpath> NUL <bytes> NUL
 // tests/unit/test-vendor-ver.php recomputes the same value and fails when stale.
@@ -31,7 +31,7 @@ function treeHash(name) {
 
 const p = join(assets, 'fm.js');
 const src = readFileSync(p, 'utf8');
-const line = `const FM_VENDOR_VER = { xterm: '${treeHash('xterm')}', codemirror: '${treeHash('codemirror')}' }; // vendor-ver`;
+const line = `const FM_VENDOR_VER = { codemirror: '${treeHash('codemirror')}' }; // vendor-ver`;
 const out = src.replace(/^const FM_VENDOR_VER = .*\/\/ vendor-ver$/m, line);
 if (out === src && !src.includes(line)) {
     console.error('FM_VENDOR_VER marker not found in fm.js');

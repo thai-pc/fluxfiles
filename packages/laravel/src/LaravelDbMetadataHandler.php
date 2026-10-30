@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles\Laravel;
 
 use FluxFiles\DiskManager;
+use FluxFiles\Db\MetadataRowLogic;
 use FluxFiles\Db\MigrationImportInterface;
 use FluxFiles\MetadataRepositoryInterface;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,10 @@ use Illuminate\Support\Facades\DB;
  */
 class LaravelDbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
 {
+    // Path predicates, row mapping, hold overlap matching and the audit-window
+    // shape are shared with core's DbMetadataHandler (and WordPress's).
+    use MetadataRowLogic;
+
     private DiskManager $diskManager;
     private ?string $connection;
 
@@ -38,11 +43,6 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
     private function table(string $name)
     {
         return $this->db()->table($name);
-    }
-
-    private function pathHash(string $key): string
-    {
-        return hash('sha256', $key);
     }
 
     /**
@@ -71,54 +71,9 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         return $row === null ? null : (array) $row;
     }
 
-    private function isReservedPath(string $key): bool
-    {
-        foreach (explode('/', trim($key, '/')) as $seg) {
-            if ($seg === '_fluxfiles' || $seg === '_variants') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function isHiddenPath(string $key): bool
-    {
-        foreach (explode('/', trim($key, '/')) as $seg) {
-            if ($seg !== '' && $seg[0] === '.') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function highlight(string $text, string $query): ?string
-    {
-        if ($text === '' || $query === '') {
-            return null;
-        }
-        $escaped = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $q = preg_quote(htmlspecialchars($query, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), '/');
-        return preg_replace('/(' . $q . ')/iu', '<mark>$1</mark>', $escaped) ?: null;
-    }
-
     // ---------------------------------------------------------------------
     // File metadata
     // ---------------------------------------------------------------------
-
-    public function get(string $disk, string $key): ?array
-    {
-        $row = $this->fetchRow($disk, $key);
-        if ($row === null || ($row['title'] === null && $row['owner'] === null)) {
-            return null;
-        }
-        return [
-            'title'       => $row['title'] ?? '',
-            'alt_text'    => $row['alt_text'] ?? '',
-            'caption'     => $row['caption'] ?? '',
-            'tags'        => $row['tags'] ?? '',
-            'uploaded_by' => $row['owner'],
-        ];
-    }
 
     public function save(string $disk, string $key, array $data): void
     {
@@ -424,23 +379,6 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         return null;
     }
 
-    /** No-op: metadata already lives in the fluxfiles_file_metadata table. */
-    public function syncToS3Tags(string $disk, string $key, array $data, DiskManager $diskManager): void
-    {
-    }
-
-    public function countChildren(string $disk, string $prefix): int
-    {
-        $fs = $this->diskManager->disk($disk);
-        $count = 0;
-        foreach ($fs->listContents($prefix, true) as $item) {
-            if ($item->isFile() && !str_ends_with($item->path(), '.meta.json')) {
-                $count++;
-            }
-        }
-        return $count;
-    }
-
     // ---------------------------------------------------------------------
     // Directory index (folder search)
     // ---------------------------------------------------------------------
@@ -460,34 +398,6 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         $this->table('fluxfiles_directories')->insert([
             'disk' => $disk, 'path' => $dirKey, 'path_hash' => $hash, 'created_at' => time(),
         ]);
-    }
-
-    public function trackParents(string $disk, string $key): void
-    {
-        $key = trim($key, '/');
-        if ($key === '' || $key === '.' || $this->isReservedPath($key)) {
-            return;
-        }
-        $dir = dirname($key);
-        if ($dir === '.' || $dir === '') {
-            return;
-        }
-        $dir = trim($dir, '/');
-        if ($dir === '') {
-            return;
-        }
-        $acc = [];
-        foreach (explode('/', $dir) as $p) {
-            if ($p === '' || $p === '.' || $p === '..') {
-                continue;
-            }
-            $acc[] = $p;
-            $d = implode('/', $acc);
-            if ($this->isReservedPath($d)) {
-                continue;
-            }
-            $this->trackDir($disk, $d);
-        }
     }
 
     public function dirsCreated(string $disk): array
@@ -623,29 +533,24 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
 
     public function readAudit(string $disk, ?string $userId = null): array
     {
-        $q = $this->table('fluxfiles_audit_log')->where('disk', $disk);
-        if ($userId !== null) {
-            $q->where('owner', $userId);
-        }
-        $rows = $q->orderBy('id', 'asc')->get();
+        return $this->readAuditWindow($disk, null, null, $userId);
+    }
 
-        $entries = [];
-        foreach ($rows as $row) {
-            $row = (array) $row;
-            $entries[] = [
-                'user_id'    => $row['owner'] ?? '',
-                'action'     => $row['action'] ?? '',
-                'disk'       => $disk,
-                'file_key'   => $row['file_key'] ?? '',
-                'ip'         => $row['ip'],
-                'user_agent' => $row['user_agent'],
-                'detail'     => $row['detail'],
-                'created_at' => (int) $row['created_at'],
-                'prev_hash'  => $row['prev_hash'] ?? null,
-                'entry_hash' => $row['entry_hash'] ?? null,
-            ];
-        }
-        return $entries;
+    /**
+     * readAudit() narrowed in SQL — the audit table has no rotation cap, so a
+     * caller that only needs a window (a page of /audit, a fixity window) must not
+     * load the whole table. Twin of core's Db\DbMetadataHandler::readAuditWindow().
+     *
+     * @param ?int $since Only rows with created_at >= $since.
+     * @param ?int $limit Only the NEWEST $limit matching rows (still oldest-first).
+     */
+    public function readAuditWindow(string $disk, ?int $since = null, ?int $limit = null, ?string $userId = null): array
+    {
+        // Raw SQL bypasses the query builder, so add the connection's table prefix (and quoting) by hand.
+        $auditTable = $this->db()->getQueryGrammar()->wrapTable('fluxfiles_audit_log');
+        [$sql, $params] = $this->auditWindowSql($auditTable, $disk, $since, $limit, $userId);
+        $rows = array_map(static fn ($r) => (array) $r, $this->db()->select($sql, $params));
+        return $this->auditWindowEntries($rows, $disk, $limit);
     }
 
     public function audit(string $disk, string $action, array $context = []): void
@@ -660,9 +565,7 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
             'detail'     => $context['detail'] ?? null,
             'created_at' => time(),
         ];
-        // `class_exists` keeps the adapter working against a core older than the
-        // audit chain (its declared floor).
-        $key = class_exists(\FluxFiles\AuditChain::class) ? \FluxFiles\AuditChain::key() : null;
+        $key = \FluxFiles\AuditChain::key();
         if ($key === null) {
             try {
                 $this->table('fluxfiles_audit_log')->insert($row);
@@ -702,12 +605,6 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
                 // retry once, then give up silently (best-effort contract)
             }
         }
-    }
-
-    /** Always empty: DB mode has no rotation/archive concept (no size cap to rotate against). */
-    public function readAuditArchive(string $disk): array
-    {
-        return [];
     }
 
     public function purgeAuditBefore(string $disk, int $beforeTs): array
@@ -761,23 +658,6 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
     // Trash index (soft-delete)
     // ---------------------------------------------------------------------
 
-    private function rowToTrashEntry(array $row): array
-    {
-        return [
-            'original_key' => $row['original_key'],
-            'disk'         => $row['disk'],
-            'basename'     => $row['basename'],
-            'is_dir'       => (bool) $row['is_dir'],
-            'size'         => $row['size'] !== null ? (int) $row['size'] : 0,
-            'deleted_at'   => $row['deleted_at'] !== null ? (int) $row['deleted_at'] : 0,
-            'deleted_by'   => $row['owner'],
-            'variants'     => $row['variants'] !== null ? (json_decode($row['variants'], true) ?: []) : [],
-            'meta'         => $row['meta'] !== null ? (json_decode($row['meta'], true) ?: []) : [],
-            'files'        => $row['files'] !== null ? (json_decode($row['files'], true) ?: []) : [],
-            'dirs'         => $row['dirs'] !== null ? (json_decode($row['dirs'], true) ?: []) : [],
-        ];
-    }
-
     public function allTrash(string $disk): array
     {
         $rows = $this->table('fluxfiles_trash')->where('disk', $disk)->get();
@@ -829,23 +709,6 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
     // enforcement lives in FileManager::assertNoActiveHold(), not here.
     // ---------------------------------------------------------------------
 
-    private function rowToHoldEntry(array $row): array
-    {
-        return [
-            'path'           => $row['path'],
-            'is_dir'         => (bool) $row['is_dir'],
-            'disk'           => $row['disk'],
-            'reason'         => $row['reason'],
-            'placed_by'      => $row['placed_by'],
-            'placed_at'      => $row['placed_at'] !== null ? (int) $row['placed_at'] : null,
-            'released_at'    => $row['released_at'] !== null ? (int) $row['released_at'] : null,
-            'released_by'    => $row['released_by'],
-            'release_reason' => $row['release_reason'],
-        ] + (isset($row['placed_by_scope']) && $row['placed_by_scope'] !== null
-            ? ['placed_by_scope' => (string) $row['placed_by_scope']]
-            : []);
-    }
-
     public function allHolds(string $disk): array
     {
         $rows = $this->table('fluxfiles_legal_holds')->where('disk', $disk)->get();
@@ -895,94 +758,10 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
         }
     }
 
-    public function releaseHold(string $disk, string $id, array $releaseInfo): void
-    {
-        $existing = $this->getHold($disk, $id);
-        if ($existing === null) {
-            return; // caller already validated existence before calling
-        }
-        $this->addHold($disk, $id, array_merge($existing, $releaseInfo));
-    }
-
     public function countActiveHolds(string $disk): int
     {
         return $this->table('fluxfiles_legal_holds')
             ->where('disk', $disk)->whereNull('released_at')->count();
     }
 
-    public function holdCovering(string $disk, string $scopedPath): ?array
-    {
-        return $this->findOverlappingHold($disk, $scopedPath, false);
-    }
-
-    public function holdBlocking(string $disk, string $scopedPath): ?array
-    {
-        return $this->findOverlappingHold($disk, $scopedPath, true);
-    }
-
-    /**
-     * Batch counterpart to holdCovering() — runs the holds query ONCE for the
-     * whole page instead of once per item (mirrors
-     * StorageMetadataHandler::holdsCoveringMany() in core; see its doc-comment
-     * for why).
-     *
-     * @param array<int,string> $scopedPaths
-     * @return array<string, array<string,mixed>|null> keyed by the given scoped path
-     */
-    public function holdsCoveringMany(string $disk, array $scopedPaths): array
-    {
-        $holds = $this->allHolds($disk);
-        $out = [];
-        foreach ($scopedPaths as $scopedPath) {
-            $out[$scopedPath] = self::matchOverlappingHold($holds, $scopedPath, false);
-        }
-        return $out;
-    }
-
-    /**
-     * Same prefix-overlap semantics as StorageMetadataHandler/Db\DbMetadataHandler's
-     * findOverlappingHold() — kept as a plain PHP scan (not SQL LIKE) so all three
-     * backends can never silently diverge on this security-relevant comparison.
-     */
-    private function findOverlappingHold(string $disk, string $scopedPath, bool $bidirectional): ?array
-    {
-        return self::matchOverlappingHold($this->allHolds($disk), $scopedPath, $bidirectional);
-    }
-
-    /**
-     * Pure matcher shared by findOverlappingHold() (single lookup) and
-     * holdsCoveringMany() (batch lookup against an already-loaded result set).
-     *
-     * @param array<string,array> $holds id => entry, as returned by allHolds()
-     */
-    private static function matchOverlappingHold(array $holds, string $scopedPath, bool $bidirectional): ?array
-    {
-        $scopedPath = trim($scopedPath, '/');
-        if ($scopedPath === '') {
-            return null;
-        }
-        foreach ($holds as $id => $entry) {
-            if ($entry['released_at'] !== null) {
-                continue; // released holds never block/cover
-            }
-            // Case-insensitive like core's StorageMetadataHandler::holdPathOverlaps():
-            // on a case-insensitive filesystem "Contracts/x" and "contracts/x" are the
-            // same file, and over-blocking is the safe side for a legal hold. Inlined
-            // so the adapter still runs on a core that predates that helper.
-            $holdPath = mb_strtolower(trim((string) ($entry['path'] ?? ''), '/'), 'UTF-8');
-            if ($holdPath === '') {
-                continue;
-            }
-            $target = mb_strtolower(trim($scopedPath, '/'), 'UTF-8');
-            $overlaps = $holdPath === $target
-                || strpos($target, $holdPath . '/') === 0
-                || ($bidirectional && strpos($holdPath, $target . '/') === 0);
-            if ($overlaps) {
-                // $id is a PHP array key — an all-digit hold id string gets
-                // silently cast to int as an array key; cast back to string.
-                return ['hold_id' => (string) $id] + $entry;
-            }
-        }
-        return null;
-    }
 }

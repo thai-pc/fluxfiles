@@ -129,9 +129,9 @@ The host's existing auth maps to a FluxFiles JWT.
   `/metadata/import`) and the SSO bridge (`/sso/*`, a standalone-UI login). Each proxy's
   smoke test keeps those in an explicit "intentionally unproxied" allowlist. `/zip`,
   SFTP-only `/chmod`, `/stream` and `/img` were ported directly into both proxy
-  controllers (mirroring the SSH-terminal port). Core's logic now lives in reusable
+  controllers (the same pattern as the other ported routes). Core's logic now lives in reusable
   classes — `MediaEndpoint` (`/stream` + `/img`), `AuditPolicy`, `FileManagerFactory`,
-  `TerminalService`/`GitDeployService`, `Db\MetadataRowLogic` — which the proxies can
+  `Db\MetadataRowLogic` — which the proxies can
   call instead of keeping their own copies.
 
 ### (B) Browser embed — `sdk`, `react`, `vue`, `ckeditor4`, `tinymce`, `summernote`

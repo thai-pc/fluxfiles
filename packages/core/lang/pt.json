@@ -335,8 +335,6 @@
     "dlp_unscannable": "O envio em partes não pode ser verificado quanto a dados pessoais. Use o envio padrão.",
     "dlp_failed": "Não foi possível concluir a verificação de dados pessoais.",
     "storage_not_writable": "O armazenamento não permite gravação.",
-    "terminal_disabled": "O terminal está desativado neste servidor.",
-    "terminal_forbidden": "O acesso ao terminal não é permitido.",
     "optimize_forbidden": "A otimização não é permitida.",
     "webhook_not_configured": "Nenhuma URL de webhook configurada neste token.",
     "webhook_blocked": "A URL do webhook aponta para um endereço privado ou bloqueado.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "A otimização de PDF requer o Ghostscript no servidor.",
     "perm_denied": "Permissão negada.",
     "too_many": "Muitos arquivos em uma única solicitação.",
-    "terminal_unsupported": "O terminal só funciona em um disco SFTP.",
-    "terminal_no_shell": "Este host não permite shell (apenas SFTP).",
-    "terminal_confirm_required": "Este comando parece perigoso — confirme para executá-lo.",
-    "git_deploy_disabled": "A implantação via Git está desativada neste servidor.",
-    "git_deploy_forbidden": "A implantação via Git não é permitida.",
-    "git_deploy_unconfigured": "O caminho de implantação Git não está configurado para este token.",
-    "git_deploy_in_progress": "Já há uma implantação em andamento para este repositório.",
-    "git_deploy_unsafe_repo": "A configuração git deste repositório contém uma definição de execução de comandos. Implantação recusada.",
     "watermark_overlay_active": "A marca permanente não está disponível em um token de pré-visualização/marca d'água sobreposta. Use um token com download.",
     "no_watermark_backup": "Nenhuma marca d'água para remover.",
     "audit_purge_no_cutoff": "É necessária uma data limite explícita (ou uma configuração de retenção da conta) para eliminar o histórico de auditoria.",
@@ -464,7 +454,6 @@
       "chunk_upload": "Envio em partes",
       "content_update": "Editar conteúdo",
       "unknown": "Outro",
-      "terminal": "Comando de terminal",
       "virus_blocked": "Bloqueado por vírus",
       "dlp_blocked": "Bloqueado por dados pessoais",
       "watermark_remove": "Remover marca d'água",
@@ -683,13 +672,7 @@
     "removed": "Marca d'água removida"
   },
   "terminal": {
-    "title": "Terminal",
-    "placeholder": "Digite um comando e pressione Enter…",
-    "unsupported": "Este host não suporta terminal (apenas SFTP).",
-    "danger_confirm": "Este comando parece perigoso. Executar mesmo assim?",
-    "run_anyway": "Executar mesmo assim",
-    "clear": "Limpar",
-    "truncated": "Saída truncada."
+    "title": "Terminal"
   },
   "pdf": {
     "title": "Ferramentas PDF"

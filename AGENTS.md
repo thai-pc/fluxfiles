@@ -78,7 +78,7 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
 - **Security-first**: SSRF guard on BYOB endpoints, XSS-neutralized uploads
   (CSP sandbox + attachment for html/svg), extension immutability on
   rename/move/copy, `_fluxfiles/`/`_variants/` blocked from list/search/ops,
-  external tools (gs/ffmpeg/ssh/tesseract/c2patool/clamdscan) run with
+  external tools (gs/ffmpeg/tesseract/c2patool/clamdscan) run with
   `ProcessEnv::minimal()` so they never inherit secrets.
 - Prefer turning a request into a **variant of an existing pattern** over adding a
   new category (DB, public endpoint, realtime server). New storage = a Flysystem

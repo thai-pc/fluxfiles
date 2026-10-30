@@ -146,8 +146,8 @@ the Studio-tier claims explicitly via the `claims` map anyway, since it also nar
 ## 5. Hosting panel / VPS management agency
 
 **For:** agencies offering a cPanel-style file manager over their clients' VPS
-boxes. **Free core** — SFTP is a built-in disk driver, terminal/chmod/editor are
-free config toggles.
+boxes. **Free core** — SFTP is a built-in disk driver, chmod/editor are free
+config toggles, and a real terminal is a BYO ttyd embed (`terminal_pty_url`).
 
 ```php
 $token = fluxfiles_token([
@@ -157,7 +157,6 @@ $token = fluxfiles_token([
     'prefix' => '/home/client/',
     'ttl'    => 1800,                             // short TTL — re-mint per admin session
     'claims' => [
-        'allow_terminal'   => true,
         'terminal_pty_url' => 'https://term.acme.com/', // BYO ttyd/gotty for a real interactive shell
         'allow_chmod'      => true,
         'allow_code_edit'  => true,                // .env / nginx.conf / wp-config.php

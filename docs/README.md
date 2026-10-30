@@ -9,7 +9,7 @@ every new document to the matching section below.
 - [Configuration reference](reference/CONFIG.md) — every JWT claim and server env var (the single source of truth; CI-guarded against `Claims.php`).
 - [Deployment](guides/DEPLOYMENT.md) — self-hosting, web-server configuration, upload limits.
 - [API reference](guides/API.md) — standalone HTTP routes, incl. tus resumable upload and the paid-module routes.
-- [Feature deep dives](guides/FEATURES.md) — on-demand WebP/AVIF, srcset, watermark, usage dashboard, terminal security model.
+- [Feature deep dives](guides/FEATURES.md) — on-demand WebP/AVIF, srcset, watermark, usage dashboard, the BYO terminal embed.
 - [Industry presets](guides/INDUSTRY-PRESETS.md) — copy-paste token configs per vertical.
 
 ## Operators and sellers
@@ -45,12 +45,11 @@ top says whether it shipped and in which core release. They are not setup guides
 
 ## Security records (`security/`)
 
-- [Git deploy security review](security/GIT-DEPLOY-SECURITY-REVIEW.md) — threat model behind `/api/fm/git-deploy`.
-- [SFTP ControlMaster spec](security/SFTP-CONTROLMASTER-SPEC.md) and [review](security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md) — terminal connection reuse.
 - Point-in-time audits (historical; fixes are in `CHANGELOG.md`):
   [free-core audit 2026-09](security/FREE-CORE-SECURITY-AUDIT-2026-09.md),
   [code audit 2026-09-21](reference/AUDIT-2026-09-21.md),
   [second-pass audit 2026-10-14](security/SECURITY-AUDIT-2026-10.md).
+- Archived (features removed in 1.0.0): [Git deploy review](archive/GIT-DEPLOY-SECURITY-REVIEW.md), [SFTP ControlMaster spec](archive/SFTP-CONTROLMASTER-SPEC.md) and [review](archive/SFTP-CONTROLMASTER-SECURITY-REVIEW.md).
 
 ## Not in git
 

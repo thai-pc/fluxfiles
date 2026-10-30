@@ -335,8 +335,6 @@
     "dlp_unscannable": "Chunk-Upload kann nicht auf personenbezogene Daten geprüft werden. Bitte den normalen Upload verwenden.",
     "dlp_failed": "Die Prüfung auf personenbezogene Daten konnte nicht abgeschlossen werden.",
     "storage_not_writable": "Der Speicher ist nicht beschreibbar.",
-    "terminal_disabled": "Das Terminal ist auf diesem Server deaktiviert.",
-    "terminal_forbidden": "Terminalzugriff ist nicht erlaubt.",
     "optimize_forbidden": "Optimierung ist nicht erlaubt.",
     "webhook_not_configured": "Für dieses Token ist keine Webhook-URL konfiguriert.",
     "webhook_blocked": "Die Webhook-URL verweist auf eine private oder blockierte Adresse.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "Die PDF-Optimierung erfordert Ghostscript auf dem Server.",
     "perm_denied": "Zugriff verweigert.",
     "too_many": "Zu viele Dateien in einer Anfrage.",
-    "terminal_unsupported": "Das Terminal funktioniert nur auf einem SFTP-Datenträger.",
-    "terminal_no_shell": "Dieser Host erlaubt keine Shell (nur SFTP).",
-    "terminal_confirm_required": "Dieser Befehl sieht gefährlich aus — zum Ausführen bestätigen.",
-    "git_deploy_disabled": "Git-Deploy ist auf diesem Server deaktiviert.",
-    "git_deploy_forbidden": "Git-Deploy ist nicht erlaubt.",
-    "git_deploy_unconfigured": "Der Git-Deploy-Pfad ist für dieses Token nicht konfiguriert.",
-    "git_deploy_in_progress": "Für dieses Repository läuft bereits ein Deploy.",
-    "git_deploy_unsafe_repo": "Die git-Konfiguration dieses Repositorys enthält eine Einstellung zur Befehlsausführung. Deploy abgelehnt.",
     "watermark_overlay_active": "Einbrennen ist mit einem Vorschau-/Overlay-Wasserzeichen-Token nicht möglich. Verwenden Sie ein herunterladbares Token.",
     "no_watermark_backup": "Kein Wasserzeichen zum Entfernen.",
     "audit_purge_no_cutoff": "Zum Löschen des Audit-Verlaufs ist ein explizites Stichdatum (oder eine Aufbewahrungseinstellung des Kontos) erforderlich.",
@@ -464,7 +454,6 @@
       "chunk_upload": "Chunk-Upload",
       "content_update": "Inhalt bearbeiten",
       "unknown": "Sonstiges",
-      "terminal": "Terminal-Befehl",
       "virus_blocked": "Vom Virenscanner blockiert",
       "dlp_blocked": "Wegen personenbezogener Daten blockiert",
       "watermark_remove": "Wasserzeichen entfernen",
@@ -683,13 +672,7 @@
     "removed": "Wasserzeichen entfernt"
   },
   "terminal": {
-    "title": "Terminal",
-    "placeholder": "Befehl eingeben, Enter drücken…",
-    "unsupported": "Dieser Host unterstützt kein Terminal (nur SFTP).",
-    "danger_confirm": "Dieser Befehl sieht gefährlich aus. Trotzdem ausführen?",
-    "run_anyway": "Trotzdem ausführen",
-    "clear": "Leeren",
-    "truncated": "Ausgabe gekürzt."
+    "title": "Terminal"
   },
   "pdf": {
     "title": "PDF-Werkzeuge"

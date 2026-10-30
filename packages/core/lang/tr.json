@@ -335,8 +335,6 @@
     "dlp_unscannable": "Parçalı yükleme kişisel veri taramasından geçirilemez. Standart yüklemeyi kullanın.",
     "dlp_failed": "Kişisel veri taraması tamamlanamadı.",
     "storage_not_writable": "Depolama yazılabilir değil.",
-    "terminal_disabled": "Bu sunucuda terminal devre dışı.",
-    "terminal_forbidden": "Terminal erişimine izin verilmiyor.",
     "optimize_forbidden": "Optimizasyona izin verilmiyor.",
     "webhook_not_configured": "Bu belirteçte yapılandırılmış bir webhook URL'si yok.",
     "webhook_blocked": "Webhook URL'si özel veya engellenmiş bir adrese işaret ediyor.",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "PDF optimizasyonu sunucuda Ghostscript gerektirir.",
     "perm_denied": "İzin reddedildi.",
     "too_many": "Tek bir istekte çok fazla dosya var.",
-    "terminal_unsupported": "Terminal yalnızca SFTP diskinde çalışır.",
-    "terminal_no_shell": "Bu ana makine shell'e izin vermiyor (yalnızca SFTP).",
-    "terminal_confirm_required": "Bu komut tehlikeli görünüyor — çalıştırmak için onaylayın.",
-    "git_deploy_disabled": "Bu sunucuda Git dağıtımı devre dışı.",
-    "git_deploy_forbidden": "Git dağıtımına izin verilmiyor.",
-    "git_deploy_unconfigured": "Bu belirteç için Git dağıtım yolu yapılandırılmamış.",
-    "git_deploy_in_progress": "Bu depo için zaten devam eden bir dağıtım var.",
-    "git_deploy_unsafe_repo": "Bu deponun git yapılandırması komut çalıştıran bir ayar içeriyor. Dağıtım reddedildi.",
     "watermark_overlay_active": "Önizleme/yer paylaşımlı filigran belirtecinde kalıcı damga kullanılamaz. İndirilebilir bir belirteç kullanın.",
     "no_watermark_backup": "Kaldırılacak filigran yok.",
     "audit_purge_no_cutoff": "Denetim geçmişini temizlemek için belirli bir kesim tarihi (veya hesap saklama ayarı) gereklidir.",
@@ -464,7 +454,6 @@
       "chunk_upload": "Parçalı yükleme",
       "content_update": "İçeriği düzenle",
       "unknown": "Diğer",
-      "terminal": "Terminal komutu",
       "virus_blocked": "Virüs nedeniyle engellendi",
       "dlp_blocked": "Kişisel veri nedeniyle engellendi",
       "watermark_remove": "Filigranı kaldır",
@@ -683,13 +672,7 @@
     "removed": "Filigran kaldırıldı"
   },
   "terminal": {
-    "title": "Terminal",
-    "placeholder": "Bir komut yazıp Enter'a basın…",
-    "unsupported": "Bu ana makine terminali desteklemiyor (yalnızca SFTP).",
-    "danger_confirm": "Bu komut tehlikeli görünüyor. Yine de çalıştırılsın mı?",
-    "run_anyway": "Yine de çalıştır",
-    "clear": "Temizle",
-    "truncated": "Çıktı kısaltıldı."
+    "title": "Terminal"
   },
   "pdf": {
     "title": "PDF araçları"

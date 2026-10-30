@@ -35,9 +35,10 @@ final class RateLimiterFactory
         \FluxFiles\Db\Connection $dbConn,
         int $readLimit,
         int $writeLimit,
-        int $windowSeconds = 60
+        int $windowSeconds = 60,
+        string $table = 'rate_limits'
     ): RateLimiterStorageInterface {
-        return new \FluxFiles\Db\RateLimiterDbStorage($dbConn, $readLimit, $writeLimit, $windowSeconds);
+        return new \FluxFiles\Db\RateLimiterDbStorage($dbConn, $readLimit, $writeLimit, $windowSeconds, $table);
     }
 
     /** The JSON-file limiter under $storagePath (its `rate_limit.json` + shard dir). */

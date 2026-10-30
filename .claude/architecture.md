@@ -28,7 +28,7 @@
 - `api/Claims.php`
   - Decodes the product-specific JWT payload into typed-ish public properties.
   - Important fields: `sub`, `perms` (`read`/`write`/`delete`/`audit`), `disks`, `prefix`, `max_upload`, `allowed_ext`, `max_storage`, `max_files`, `owner_only`, `byob_disks`.
-  - Per-tenant feature claims (set on the instance after construct, so the constructor signature stays stable for positional callers/adapters): rate limits, variants, URL import, media preview, on-demand images, watermark overlay, zip/extract, terminal/git-deploy/BYO-embed URLs, optimize, `strip_exif`, `media_posters`, `allow_presign_put`, `audit_reads`, usage thresholds, and every paid-module gate (`allow_<x>` + tuning claims, `retention_rules`). The full list is `docs/reference/CONFIG.md` (CI-guarded against this file).
+  - Per-tenant feature claims (set on the instance after construct, so the constructor signature stays stable for positional callers/adapters): rate limits, variants, URL import, media preview, on-demand images, watermark overlay, zip/extract, BYO-embed URLs (terminal/PDF/office/e-sign), optimize, `strip_exif`, `media_posters`, `allow_presign_put`, `audit_reads`, usage thresholds, and every paid-module gate (`allow_<x>` + tuning claims, `retention_rules`). The full list is `docs/reference/CONFIG.md` (CI-guarded against this file).
   - `scopePath()` sanitizes `.` and `..`, strips null bytes, and prepends the user's prefix.
   - `isPathInScope()` checks already-scoped keys.
 
@@ -43,7 +43,7 @@
 - `api/DiskManager.php`
   - Builds Flysystem local, S3-compatible, and **SFTP** disks.
   - R2/MinIO-style endpoints are treated as S3 with path-style endpoint and `retain_visibility` disabled.
-  - **SFTP** (`SFTP_*` env, or BYOB): a 3rd driver for VPS/hosting. Connect/disconnect per request (no pool, no DB); password OR private key; host is `SsrfGuard::assertHostSafe`-checked (allowlist via `FLUXFILES_SSRF_ALLOW_HOSTS`); optional host-key pinning / strict algorithms / ControlMaster multiplexing for the terminal. SFTP has no static/presigned URL, so `fileUrl()` returns a tokened `/api/fm/stream` link and `MediaEndpoint::stream()` reads it via Flysystem (no Range). Chunk upload + presign reject SFTP (S3-only); large SFTP uploads use tus instead. Serving is proxied by the Laravel/WordPress adapters too (they port `/stream`).
+  - **SFTP** (`SFTP_*` env, or BYOB): a 3rd driver for VPS/hosting. Connect/disconnect per request (no pool, no DB); password OR private key; host is `SsrfGuard::assertHostSafe`-checked (allowlist via `FLUXFILES_SSRF_ALLOW_HOSTS`); optional host-key pinning / strict algorithms. SFTP has no static/presigned URL, so `fileUrl()` returns a tokened `/api/fm/stream` link and `MediaEndpoint::stream()` reads it via Flysystem (no Range). Chunk upload + presign reject SFTP (S3-only); large SFTP uploads use tus instead. Serving is proxied by the Laravel/WordPress adapters too (they port `/stream`).
   - BYOB disks can be registered at runtime (s3 or sftp), but local BYOB disks are rejected.
 
 - `api/StorageMetadataHandler.php`
@@ -73,7 +73,7 @@
   - Upload-time privacy and media helpers: lossless EXIF/XMP/IPTC/MPF stripping (`strip_exif`), PDF/video poster thumbnails (`media_posters`, opt-in; Ghostscript ≥ 10.05.0 / ffmpeg), and the free optimize pipeline (WebP at rest + Ghostscript PDF compression).
 
 - `api/ProcessEnv.php`
-  - `ProcessEnv::minimal()` — the only environment external tools (gs, ffmpeg, ssh, tesseract, c2patool, clamdscan) receive. Use it for any new `proc_open`.
+  - `ProcessEnv::minimal()` — the only environment external tools (gs, ffmpeg, tesseract, c2patool, clamdscan) receive. Use it for any new `proc_open`.
 
 - `api/AiTagger.php`
   - Optional AI metadata generation. Controlled by `FLUXFILES_AI_PROVIDER`, `FLUXFILES_AI_API_KEY`, `FLUXFILES_AI_MODEL`, `FLUXFILES_AI_BASE_URL`.

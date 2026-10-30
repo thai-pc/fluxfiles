@@ -1,6 +1,6 @@
 {
   "name": "@fluxfiles/mcp",
-  "version": "0.1.2",
+  "version": "1.0.0",
   "description": "Model Context Protocol server for FluxFiles — let AI agents browse, search and read (and optionally write) files through a scoped FluxFiles JWT",
   "license": "MIT",
   "type": "module",

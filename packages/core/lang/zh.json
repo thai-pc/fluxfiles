@@ -335,8 +335,6 @@
     "dlp_unscannable": "分块上传无法进行个人信息扫描。请使用标准上传。",
     "dlp_failed": "个人信息扫描未能完成。",
     "storage_not_writable": "存储不可写。",
-    "terminal_disabled": "此服务器已禁用终端。",
-    "terminal_forbidden": "不允许使用终端。",
     "optimize_forbidden": "不允许优化。",
     "webhook_not_configured": "此令牌未配置 webhook URL。",
     "webhook_blocked": "webhook URL 指向私有或被阻止的地址。",
@@ -361,14 +359,6 @@
     "pdf_unavailable": "PDF 优化需要服务器安装 Ghostscript。",
     "perm_denied": "权限被拒绝。",
     "too_many": "单次请求的文件过多。",
-    "terminal_unsupported": "终端仅适用于 SFTP 磁盘。",
-    "terminal_no_shell": "此主机不允许 shell（仅 SFTP）。",
-    "terminal_confirm_required": "此命令看起来很危险——请确认后运行。",
-    "git_deploy_disabled": "此服务器已禁用 Git 部署。",
-    "git_deploy_forbidden": "不允许进行 Git 部署。",
-    "git_deploy_unconfigured": "此令牌未配置 Git 部署路径。",
-    "git_deploy_in_progress": "该仓库已有一个部署正在进行中。",
-    "git_deploy_unsafe_repo": "该仓库的 git 配置包含可执行命令的设置，已拒绝部署。",
     "watermark_overlay_active": "预览/叠加水印令牌不支持烧录水印。请使用可下载的令牌。",
     "no_watermark_backup": "没有可移除的水印。",
     "audit_purge_no_cutoff": "清除审计历史记录需要明确的截止日期（或账户保留设置）。",
@@ -464,7 +454,6 @@
       "chunk_upload": "分块上传",
       "content_update": "编辑内容",
       "unknown": "其他",
-      "terminal": "终端命令",
       "virus_blocked": "病毒拦截",
       "dlp_blocked": "个人信息拦截",
       "watermark_remove": "移除水印",
@@ -683,13 +672,7 @@
     "removed": "已移除水印"
   },
   "terminal": {
-    "title": "终端",
-    "placeholder": "输入命令并按回车…",
-    "unsupported": "此主机不支持终端（仅 SFTP）。",
-    "danger_confirm": "此命令看起来很危险。仍要运行吗？",
-    "run_anyway": "仍然运行",
-    "clear": "清屏",
-    "truncated": "输出已截断。"
+    "title": "终端"
   },
   "pdf": {
     "title": "PDF 工具"

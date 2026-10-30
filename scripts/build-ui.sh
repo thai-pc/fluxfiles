@@ -28,7 +28,7 @@ run_esbuild() {
     fi
 }
 
-# Stamp the vendor trees' content hashes into fm.js (the ?v= of the lazy xterm/CodeMirror files).
+# Stamp the vendor trees' content hashes into fm.js (the ?v= of the lazy CodeMirror files).
 node "$ROOT_DIR/scripts/vendor-ver.mjs"
 
 cd "$ASSETS"
