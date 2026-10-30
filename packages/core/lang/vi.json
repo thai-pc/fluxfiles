@@ -244,6 +244,7 @@
     "forbidden": "Bạn không có quyền thực hiện hành động này",
     "not_found": "Không tìm thấy",
     "quota_exceeded": "Đã vượt quá dung lượng ({used} / {max})",
+    "metadata_object_too_large": "Đối tượng này lớn hơn 5 GiB nên không thể thay đổi siêu dữ liệu trên S3.",
     "upload_too_large": "File quá lớn (tối đa {max})",
     "too_many_files": "Đã đạt giới hạn số tệp (tối đa {max})",
     "ext_not_allowed": "Loại file .{ext} không được phép",

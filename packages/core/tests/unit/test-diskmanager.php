@@ -336,6 +336,29 @@ foreach ($tempDirs as $dir) {
     }
 }
 
+// A public local disk is served by the web server, which often runs as a different
+// user than PHP: folders FluxFiles creates must be 0755 there. A private disk
+// (served only through /api/fm/stream) keeps Flysystem's 0700.
+test('local disk: new folders are 0755 on a public disk, 0700 on a private one', function () {
+    $old = umask(022);
+    try {
+        foreach ([false => 0755, true => 0700] as $private => $want) {
+            $root = sys_get_temp_dir() . '/ff-dirperm-' . uniqid();
+            $dm = new \FluxFiles\DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'private' => (bool) $private]]);
+            $dm->disk('local')->write('new/sub/x.png', 'x');
+            foreach (['new', 'new/sub'] as $dir) {
+                $got = fileperms("$root/$dir") & 0777;
+                if ($got !== $want) {
+                    throw new \RuntimeException(sprintf('%s disk: %s is %o, want %o', $private ? 'private' : 'public', $dir, $got, $want));
+                }
+            }
+            exec('rm -rf ' . escapeshellarg($root));
+        }
+    } finally {
+        umask($old);
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════

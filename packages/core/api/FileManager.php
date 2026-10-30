@@ -98,6 +98,18 @@ class FileManager
         $this->quotaManager = $qm;
     }
 
+    /**
+     * Quota + max_files check for a write of $bytes / $files: ONE live storage walk
+     * at most, never a cached figure (see QuotaManager::check() for the guarantee).
+     */
+    private function quotaCheck(string $disk, int $bytes, int $files): void
+    {
+        $this->quotaManager?->check(
+            $disk, $this->claims->pathPrefix, $bytes, $files,
+            $this->claims->maxStorageMb, $this->claims->maxFiles
+        );
+    }
+
     public function setAiTagger(AiTagger $ai): void
     {
         $this->aiTagger = $ai;
@@ -580,6 +592,9 @@ class FileManager
         return 'other';
     }
 
+    /** dirs.json as sortListing() read it, for attachMetadata() of the same list() call. */
+    private ?array $listDirsMemo = null;
+
     /**
      * Folders first, then files, in the requested order — the same order the UI's
      * comparators (_compareItems / filteredFolders in assets/fm.js) produce:
@@ -597,9 +612,6 @@ class FileManager
      * @param array<int,array<string,mixed>> $all
      * @return array<int,array<string,mixed>>
      */
-    /** dirs.json as sortListing() read it, for attachMetadata() of the same list() call. */
-    private ?array $listDirsMemo = null;
-
     private function sortListing(string $disk, array $all, string $sort, string $order): array
     {
         $dir = $order === 'desc' ? -1 : 1;
@@ -888,25 +900,8 @@ class FileManager
         $sizeMb = ($file['size'] ?? 0) / (1024 * 1024);
         $this->assertUploadSize($sizeMb);
 
-        // Quota check
-        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
-            $this->quotaManager->assertQuota(
-                $disk,
-                $this->claims->pathPrefix,
-                (int) ($file['size'] ?? 0),
-                $this->claims->maxStorageMb
-            );
-        }
-
-        // File-count limit (total files under the prefix)
-        if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
-            $this->quotaManager->assertFileCount(
-                $disk,
-                $this->claims->pathPrefix,
-                1,
-                $this->claims->maxFiles
-            );
-        }
+        // Quota + file-count limit (total files under the prefix): one live walk.
+        $this->quotaCheck($disk, (int) ($file['size'] ?? 0), 1);
 
         // Virus scan (paid Virus module) — BEFORE anything reads or rewrites the
         // bytes, so an infected upload costs only the cheap guards above and no
@@ -1041,7 +1036,7 @@ class FileManager
         }
 
         try {
-            $fs->writeStream($scoped, $stream);
+            $fs->writeStream($scoped, $stream, $this->s3WriteConfig($disk, $scoped, ['uploaded_by' => $this->claims->userId]));
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
@@ -1606,12 +1601,11 @@ class FileManager
         if (trim($this->claims->pathPrefix, '/') === '') {
             $bytes = 0;
         }
-        if ($this->claims->maxStorageMb > 0 && $bytes > 0) {
-            $this->quotaManager->assertQuota($disk, $this->claims->pathPrefix, $bytes, $this->claims->maxStorageMb);
-        }
-        if ($this->claims->maxFiles > 0 && $files > 0) {
-            $this->quotaManager->assertFileCount($disk, $this->claims->pathPrefix, $files, $this->claims->maxFiles);
-        }
+        $this->quotaManager->check(
+            $disk, $this->claims->pathPrefix, $bytes, $files,
+            $bytes > 0 ? $this->claims->maxStorageMb : 0,
+            $files > 0 ? $this->claims->maxFiles : 0
+        );
     }
 
     /** List trash entries the caller may see (scoped to prefix + owner). */
@@ -1928,27 +1922,12 @@ class FileManager
         // like upload() does, so it must be bounded the same way (crossCopy()
         // already checked this on the destination disk; this closed the gap
         // where repeatedly copying one file in-place bypassed both limits).
-        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
-            $fileSize = (int) ($fs->fileSize($scopedFrom) ?: 0);
-            $this->quotaManager->assertQuota(
-                $disk,
-                $this->claims->pathPrefix,
-                $fileSize,
-                $this->claims->maxStorageMb
-            );
-        }
-        if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
-            $this->quotaManager->assertFileCount(
-                $disk,
-                $this->claims->pathPrefix,
-                1,
-                $this->claims->maxFiles
-            );
-        }
+        $fileSize = (int) ($fs->fileSize($scopedFrom) ?: 0);
+        $this->quotaCheck($disk, $fileSize, 1);
 
         $fs->copy($scopedFrom, $scopedTo);
 
-        $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo);
+        $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo, true, null, true);
         $this->copyVariants($disk, $scopedFrom, $disk, $scopedTo);
         $this->meta->trackParents($disk, $scopedTo);
 
@@ -1987,31 +1966,21 @@ class FileManager
         $this->assertTargetAvailable($dstFs, $scopedDst);
 
         // Quota check on destination
-        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
-            $fileSize = $srcFs->fileSize($scopedSrc);
-            $this->quotaManager->assertQuota(
-                $dstDisk,
-                $this->claims->pathPrefix,
-                $fileSize,
-                $this->claims->maxStorageMb
-            );
-        }
+        $fileSize = (int) $srcFs->fileSize($scopedSrc);
+        $this->quotaCheck($dstDisk, $fileSize, 1);
 
-        if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
-            $this->quotaManager->assertFileCount($dstDisk, $this->claims->pathPrefix, 1, $this->claims->maxFiles);
-        }
-
-        // Stream the file across disks
+        // Stream the file across disks; an S3 destination gets the source's headers in the PUT.
+        $srcMeta = $this->meta->get($srcDisk, $scopedSrc) ?: [];
         $stream = $srcFs->readStream($scopedSrc);
         try {
-            $dstFs->writeStream($scopedDst, $stream);
+            $dstFs->writeStream($scopedDst, $stream, $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta));
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
             }
         }
 
-        $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+        $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst, true, $srcMeta, true);
         $this->copyVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $this->meta->trackParents($dstDisk, $scopedDst);
 
@@ -2059,30 +2028,20 @@ class FileManager
         // same way, since QuotaManager enforces maxStorageMb per-disk, not
         // globally, so moving in from an unconstrained disk must still respect
         // the destination's cap.
-        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
-            $fileSize = $srcFs->fileSize($scopedSrc);
-            $this->quotaManager->assertQuota(
-                $dstDisk,
-                $this->claims->pathPrefix,
-                $fileSize,
-                $this->claims->maxStorageMb
-            );
-        }
+        $fileSize = (int) $srcFs->fileSize($scopedSrc);
+        $this->quotaCheck($dstDisk, $fileSize, 1);
 
-        if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
-            $this->quotaManager->assertFileCount($dstDisk, $this->claims->pathPrefix, 1, $this->claims->maxFiles);
-        }
-
+        $srcMeta = $this->meta->get($srcDisk, $scopedSrc) ?: [];
         $stream = $srcFs->readStream($scopedSrc);
         try {
-            $dstFs->writeStream($scopedDst, $stream);
+            $dstFs->writeStream($scopedDst, $stream, $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta));
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
             }
         }
 
-        $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
+        $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst, $srcMeta);
         $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $srcFs->delete($scopedSrc);
         // Version history is per-disk (it lives under the SOURCE disk's
@@ -2188,10 +2147,14 @@ class FileManager
      *        bytes (copy/move/rename/backup), so the index entry — hash, mime, size,
      *        dimensions, dates — is carried over whole. False for "save as copy" of
      *        an EDITED image, where those describe the old bytes and must not leak.
+     * @param bool $fresh true for a user-facing copy: the new file's created/modified
+     *        are "now" (a move/rename keeps the original dates).
+     * @param bool $moved true for move/rename: the source's owner is the owner
+     *        (a leftover destination entry never decides).
      */
-    private function copyMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey, bool $sameBytes = true): void
+    private function copyMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey, bool $sameBytes = true, ?array $srcMeta = null, bool $fresh = false, bool $moved = false): void
     {
-        $existing = $this->meta->get($srcDisk, $srcKey);
+        $existing = $srcMeta ?? $this->meta->get($srcDisk, $srcKey);
         if ($existing) {
             $this->meta->save($dstDisk, $dstKey, $existing);
         }
@@ -2199,19 +2162,75 @@ class FileManager
         // index entry without file_hash/mime/size/dims and turned null text into "".
         // Duck-typed: adapter-supplied handlers without the method keep today's behaviour.
         if ($sameBytes && method_exists($this->meta, 'copyIndexEntry')) {
-            $this->meta->copyIndexEntry($srcDisk, $srcKey, $dstDisk, $dstKey);
+            $this->meta->copyIndexEntry($srcDisk, $srcKey, $dstDisk, $dstKey, $moved, $fresh);
         }
     }
 
-    private function moveMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    /**
+     * `Metadata` for the write that creates an S3 object, from the metadata backend
+     * (header fields, or the DB backend's breadcrumb) — so the object is born with
+     * its headers rather than being rewritten by a self-copy right after. [] when
+     * the disk or backend has nothing to add.
+     */
+    private function s3WriteConfig(string $disk, string $key, array $data): array
     {
+        if (!method_exists($this->meta, 's3WriteMetadata')
+            || ($this->disks->config($disk)['driver'] ?? '') !== 's3') {
+            return [];
+        }
+        $m = $this->meta->s3WriteMetadata($disk, $key, $data);
+        return $m ? ['Metadata' => $m] : [];
+    }
+
+    /**
+     * S3 `Metadata` for an in-place write: the object's current headers carry over
+     * (a PutObject replaces ALL of them, which used to drop `fm-uploaded-by` and with
+     * it owner_only on S3); a NEW object is born owned by the writer. [] off S3.
+     */
+    private function s3WriteConfigFor(string $disk, string $key, bool $exists): array
+    {
+        if (($this->disks->config($disk)['driver'] ?? '') !== 's3') {
+            return [];
+        }
+        $data = $exists ? ($this->meta->get($disk, $key) ?: []) : ['uploaded_by' => $this->claims->userId];
+        return $this->s3WriteConfig($disk, $key, $data);
+    }
+
+    /**
+     * Owner header for a multipart upload's initiate (S3, JSON backend: the DB
+     * backend keeps the owner in its row). The completion's save() then finds the
+     * header already right and skips the self-copy — which a >5 GiB object couldn't
+     * take anyway.
+     *
+     * @return array<string,string>
+     */
+    public function chunkInitMetadata(string $disk, string $key): array
+    {
+        if (!($this->meta instanceof StorageMetadataHandler)) {
+            return [];
+        }
+        return $this->s3WriteConfig($disk, $key, ['uploaded_by' => $this->claims->userId])['Metadata'] ?? [];
+    }
+
+    private function moveMetadata(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey, ?array $srcMeta = null): void
+    {
+        // Same-disk S3: the adapter's move is a server-side copy with
+        // MetadataDirective=COPY, so the headers (owner, breadcrumb, …) already
+        // travelled with the bytes. Rewriting them would copy the object a second
+        // time — only the index entry follows.
+        if ($srcDisk === $dstDisk && method_exists($this->meta, 'copyIndexEntry')
+            && ($this->disks->config($srcDisk)['driver'] ?? '') === 's3') {
+            $this->meta->copyIndexEntry($srcDisk, $srcKey, $dstDisk, $dstKey, true);
+            $this->meta->delete($srcDisk, $srcKey);
+            return;
+        }
         // Same disk: the save + delete become one index write.
         $batch = $srcDisk === $dstDisk;
         if ($batch) {
             $this->beginIndexBatch($srcDisk);
         }
         try {
-            $this->copyMetadata($srcDisk, $srcKey, $dstDisk, $dstKey);
+            $this->copyMetadata($srcDisk, $srcKey, $dstDisk, $dstKey, true, $srcMeta, false, true);
             $this->meta->delete($srcDisk, $srcKey);
         } finally {
             if ($batch) {
@@ -2268,6 +2287,30 @@ class FileManager
         $this->endIndexBatch($disk);
         $b = $this->bulkOpen($disk);
     }
+
+    /**
+     * Hand the batch (and its index lock) back before slow per-entry work — scans,
+     * inflating a big entry, variant generation — so one heavy entry can't block
+     * every other writer on the disk for its whole duration. The held changes are
+     * written; bulkResume() re-opens a window for the next metadata writes.
+     */
+    private function bulkPause(string $disk, array &$b): void
+    {
+        if ($b['open']) {
+            $b['open'] = false;
+            $this->endIndexBatch($disk);
+        }
+    }
+
+    private function bulkResume(string $disk, array &$b): void
+    {
+        if (!$b['open']) {
+            $b = $this->bulkOpen($disk);
+        }
+    }
+
+    /** Entries above this are treated as slow (inflate/scan/variants) and run outside the index lock. */
+    private const BULK_SLOW_BYTES = 2097152;
 
     /** Ends the batch (flushing what landed) — call from a `finally`. */
     private function bulkClose(string $disk, array &$b): void
@@ -2639,7 +2682,7 @@ class FileManager
             throw new ApiException('No watermark to remove', 404, 'no_watermark_backup');
         }
         $original = (string) $fs->read($backupKey);
-        $fs->write($scoped, $original);
+        $fs->write($scoped, $original, $this->s3WriteConfigFor($disk, $scoped, true));
         $fs->delete($backupKey);
         $this->meta->save($disk, $scoped, ['watermarked' => false]);
 
@@ -2828,14 +2871,8 @@ class FileManager
         if (!$fs->fileExists($scoped)) {
             throw new ApiException('File not found (the editor edits existing files only)', 404, 'not_found');
         }
-        if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
-            $this->quotaManager->assertQuota(
-                $disk,
-                $this->claims->pathPrefix,
-                strlen($content) - (int) $fs->fileSize($scoped),
-                $this->claims->maxStorageMb
-            );
-        }
+        $oldSize = (int) $fs->fileSize($scoped);
+        $this->quotaCheck($disk, strlen($content) - $oldSize, 0);
         // Virus scan (paid Virus module). The editor writes attacker-influenced bytes
         // to an existing path — a webshell pasted into a .php is exactly what ClamAV
         // catches — so this path is scanned like an upload. The content is already
@@ -2864,7 +2901,7 @@ class FileManager
         // Snapshot the current content before overwriting it (Versioning module) —
         // the editor's repeated saves are the prime "give me the old one back" case.
         $this->keepVersion($disk, $scoped, $fs);
-        $fs->write($scoped, $content);
+        $fs->write($scoped, $content, $this->s3WriteConfigFor($disk, $scoped, true));
         $this->meta->save($disk, $scoped, ['size' => strlen($content), 'modified' => time()]);
         $this->meta->saveHash($disk, $scoped, hash('sha256', $content));
         return ['path' => $path, 'size' => strlen($content)];
@@ -2987,13 +3024,8 @@ class FileManager
                 throw new ApiException('Missing required field: size', 400, 'missing_param');
             }
             $this->validateUploadName(basename($scoped), $sizeBytes);
-            if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0 && $sizeBytes > 0) {
-                $this->quotaManager->assertQuota(
-                    $disk,
-                    $this->claims->pathPrefix,
-                    $sizeBytes,
-                    $this->claims->maxStorageMb
-                );
+            if ($this->claims->maxStorageMb > 0 && $sizeBytes > 0) {
+                $this->quotaCheck($disk, $sizeBytes, 0);
             }
 
             $fs = $this->disks->disk($disk);
@@ -3991,17 +4023,16 @@ class FileManager
                 throw new ApiException('The archive has no extractable files', 400, 'zip_empty');
             }
             // Quota on the total uncompressed size.
-            if ($this->quotaManager !== null && $this->claims->maxStorageMb > 0) {
-                $this->quotaManager->assertQuota($disk, $this->claims->pathPrefix, $total, $this->claims->maxStorageMb);
-            }
-            if ($this->quotaManager !== null && $this->claims->maxFiles > 0) {
+            if ($this->quotaManager !== null) {
                 $newTargets = [];
-                foreach ($plan as $entry) {
-                    if (!$fs->fileExists($entry['target'])) {
-                        $newTargets[$entry['target']] = true;
+                if ($this->claims->maxFiles > 0) {
+                    foreach ($plan as $entry) {
+                        if (!$fs->fileExists($entry['target'])) {
+                            $newTargets[$entry['target']] = true;
+                        }
                     }
                 }
-                $this->quotaManager->assertFileCount($disk, $this->claims->pathPrefix, count($newTargets), $this->claims->maxFiles);
+                $this->quotaCheck($disk, $total, count($newTargets));
             }
 
             // ── Pass 2: write each entry + register it in the same pipeline as an
@@ -4009,8 +4040,14 @@ class FileManager
             // files get thumbnails and show up in search — not just on disk. ──
             $written = 0;
             // One index + dirs.json write per batch window instead of ~3 per entry.
-            $bulk = $this->bulkOpen($disk);
+            // Slow entries (scanner configured, or large) run their inflate/scan/
+            // variant work with the window paused, i.e. without the index lock.
+            $anyScanner = $this->virusScanner !== null || $this->dlpScanner !== null;
             foreach ($plan as $e) {
+                $slow = $anyScanner || $this->claims->stripExif || $e['size'] > self::BULK_SLOW_BYTES;
+                if ($slow) {
+                    $this->bulkPause($disk, $bulk);
+                }
                 $stream = $za->getStream($e['orig']);
                 if (!is_resource($stream)) {
                     continue;
@@ -4083,11 +4120,12 @@ class FileManager
                         $this->keepVersion($disk, $e['target'], $fs);
                     }
                     $in = fopen($entryTmp, 'rb');
-                    $fs->writeStream($e['target'], $in);
+                    $fs->writeStream($e['target'], $in, $this->s3WriteConfigFor($disk, $e['target'], (bool) $e['overwrite']));
                     if (is_resource($in)) {
                         fclose($in);
                     }
-                    $this->registerExtractedFile($disk, $fs, $e['target'], $entryTmp);
+                    $this->bulkResume($disk, $bulk);
+                    $this->registerExtractedFile($disk, $fs, $e['target'], $entryTmp, $bulk, $e['size'] > self::BULK_SLOW_BYTES);
                 } finally {
                     @unlink($entryTmp);
                 }
@@ -4113,7 +4151,7 @@ class FileManager
      * @param string $key       scoped destination key (already written to $fs)
      * @param string $localPath local copy of the file's bytes (for dims/mime/variants)
      */
-    private function registerExtractedFile(string $disk, $fs, string $key, string $localPath): void
+    private function registerExtractedFile(string $disk, $fs, string $key, string $localPath, array &$bulk, bool $slow = false): void
     {
         $this->meta->trackParents($disk, $key); // folder search index
         $name = basename($key);
@@ -4142,6 +4180,9 @@ class FileManager
             $this->meta->saveHash($disk, $key, $hash);
         }
         if ($isImage) {
+            if ($slow) {
+                $this->bulkPause($disk, $bulk); // variant generation of a big image: not under the index lock
+            }
             try {
                 $this->imageOptimizer->process($fs, $key, $localPath); // thumb/medium/large WebP
             } catch (\Throwable $e) {
@@ -4377,19 +4418,39 @@ class FileManager
                 }
                 $keys[] = $key;
             }
-            // Owners from ONE bulk read instead of a get() per file. A key the bulk
-            // result doesn't answer with an owner (not indexed, or no owner on the
-            // entry) is looked up exactly as before, so this check never gets laxer.
-            $owners = $keys === [] ? [] : $this->meta->getBulk($disk, $keys);
-            foreach ($keys as $key) {
-                $meta = $owners[$key] ?? null;
-                $owner = is_array($meta) ? ($meta['uploaded_by'] ?? null) : null;
-                if ($owner === null) {
-                    $meta = $this->meta->get($disk, $key);
-                    $owner = $meta['uploaded_by'] ?? null;
+            // JSON backend: the index owner may only DENY early (one index read). It can
+            // disagree with the sidecar/S3 header that assertOwner() trusts, so anything
+            // it doesn't deny is confirmed with the per-key get() exactly as before — the
+            // check is never laxer. DB backends keep metadata and index in the same row,
+            // so the bulk read already is the answer (no second query per row).
+            if ($keys === []) {
+                return;
+            }
+            if ($this->meta instanceof StorageMetadataHandler) {
+                $idxOwners = $this->meta->indexOwners($disk, $keys);
+                foreach ($keys as $key) {
+                    $idx = $idxOwners[$key] ?? null;
+                    if ($idx !== null && $idx !== $this->claims->userId) {
+                        throw new ApiException('This folder contains files you do not own', 403, 'owner_only');
+                    }
                 }
-                if ($owner !== null && $owner !== $this->claims->userId) {
-                    throw new ApiException('This folder contains files you do not own', 403, 'owner_only');
+                foreach ($keys as $key) {
+                    $owner = ($this->meta->get($disk, $key) ?? [])['uploaded_by'] ?? null;
+                    if ($owner !== null && $owner !== $this->claims->userId) {
+                        throw new ApiException('This folder contains files you do not own', 403, 'owner_only');
+                    }
+                }
+            } else {
+                foreach ($this->meta->getBulk($disk, $keys) as $key => $meta) {
+                    // A handler whose bulk rows omit uploaded_by altogether (third-party
+                    // MetadataRepositoryInterface) must not read as "no owner".
+                    if (is_array($meta) && !array_key_exists('uploaded_by', $meta)) {
+                        $meta = $this->meta->get($disk, (string) $key);
+                    }
+                    $owner = is_array($meta) ? ($meta['uploaded_by'] ?? null) : null;
+                    if ($owner !== null && $owner !== $this->claims->userId) {
+                        throw new ApiException('This folder contains files you do not own', 403, 'owner_only');
+                    }
                 }
             }
         } catch (ApiException $e) {
@@ -4850,8 +4911,7 @@ class FileManager
         }
         if ($this->quotaManager !== null) {
             $delta = $size - ($exists ? (int) $fs->fileSize($key) : 0);
-            $this->quotaManager->assertQuota($disk, $this->claims->pathPrefix, $delta, $this->claims->maxStorageMb);
-            $this->quotaManager->assertFileCount($disk, $this->claims->pathPrefix, $exists ? 0 : 1, $this->claims->maxFiles);
+            $this->quotaCheck($disk, $delta, $exists ? 0 : 1);
         }
         return $key;
     }
@@ -4919,7 +4979,7 @@ class FileManager
         if ($existing !== null) {
             $this->keepVersion($disk, $scopedPath, $fs);
         }
-        $fs->write($scopedPath, $content);
+        $fs->write($scopedPath, $content, $this->s3WriteConfigFor($disk, $scopedPath, $existing !== null));
 
         $mime = null;
         if (class_exists(\finfo::class)) {
@@ -4985,20 +5045,7 @@ class FileManager
      */
     private function assertWriteFits(string $disk, int $newBytes, ?int $existingBytes): void
     {
-        if ($this->quotaManager === null) {
-            return;
-        }
-        if ($this->claims->maxStorageMb > 0) {
-            $this->quotaManager->assertQuota(
-                $disk,
-                $this->claims->pathPrefix,
-                $newBytes - (int) $existingBytes,
-                $this->claims->maxStorageMb
-            );
-        }
-        if ($this->claims->maxFiles > 0 && $existingBytes === null) {
-            $this->quotaManager->assertFileCount($disk, $this->claims->pathPrefix, 1, $this->claims->maxFiles);
-        }
+        $this->quotaCheck($disk, $newBytes - (int) $existingBytes, $existingBytes === null ? 1 : 0);
     }
 
     /**
@@ -5109,7 +5156,7 @@ class FileManager
                 $this->keepVersion($disk, $scopedPath, $fs);
             }
             $isNew = !$fs->fileExists($scopedPath);
-            $fs->writeStream($scopedPath, $in);
+            $fs->writeStream($scopedPath, $in, $this->s3WriteConfigFor($disk, $scopedPath, !$isNew));
             if (is_resource($in)) { fclose($in); }
 
             $mime = @mime_content_type($tmp);

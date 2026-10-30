@@ -103,6 +103,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | UI debug (serve the readable fm.js / fm.css)
+    |--------------------------------------------------------------------------
+    |
+    | The UI is served from the pre-minified fm.min.js / fm.min.css when the core
+    | ships them. Set FLUXFILES_DEBUG=true to serve the unminified sources instead.
+    |
+    */
+    'debug' => env('FLUXFILES_DEBUG', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Per-user claims resolver
     |--------------------------------------------------------------------------
     |

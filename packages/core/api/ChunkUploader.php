@@ -18,7 +18,12 @@ class ChunkUploader
         $this->diskManager = $diskManager;
     }
 
-    public function initiate(string $disk, string $key): array
+    /**
+     * @param array<string,string> $metadata S3 object metadata the finished object is born
+     *        with (the owner header — see FileManager::chunkInitMetadata()); it is set here
+     *        because a >5 GiB object can never be rewritten by a self-copy afterwards.
+     */
+    public function initiate(string $disk, string $key, array $metadata = []): array
     {
         $client = $this->diskManager->s3Client($disk);
         $config = $this->diskManager->config($disk);
@@ -27,7 +32,7 @@ class ChunkUploader
         $result = $client->createMultipartUpload([
             'Bucket' => $bucket,
             'Key'    => $key,
-        ]);
+        ] + ($metadata !== [] ? ['Metadata' => $metadata] : []));
 
         return [
             'upload_id'  => $result['UploadId'],

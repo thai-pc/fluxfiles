@@ -22,11 +22,11 @@ test('UI assets are cache-busted with a content-hash ?v= and the HTML is no-cach
   expect((resp?.headers()['cache-control'] || '')).toContain('no-cache');
   // fm.js / fm.css are referenced with a version query so a core update invalidates them.
   const versioned = await page.evaluate(() => ({
-    js: document.querySelector('script[src*="fm.js"]')?.getAttribute('src') || '',
-    css: document.querySelector('link[href*="fm.css"]')?.getAttribute('href') || '',
+    js: document.querySelector('script[src*="/fm."]')?.getAttribute('src') || '',
+    css: document.querySelector('link[href*="/fm."]')?.getAttribute('href') || '',
   }));
-  expect(versioned.js).toMatch(/fm\.js\?v=[a-f0-9]+/);
-  expect(versioned.css).toMatch(/fm\.css\?v=[a-f0-9]+/);
+  expect(versioned.js).toMatch(/fm(\.min)?\.js\?v=[a-f0-9]+/);
+  expect(versioned.css).toMatch(/fm(\.min)?\.css\?v=[a-f0-9]+/);
 });
 
 test('valid token → file manager UI renders (no auth screen)', async ({ page }) => {
@@ -48,4 +48,18 @@ test('the server sets <html lang/dir> for the requested locale (and keeps transl
   await expect(html).toHaveAttribute('lang', 'ar');
   await expect(html).toHaveAttribute('dir', 'rtl');
   await expect(html).toHaveAttribute('translate', 'no');
+});
+
+test('page loads the minified bundle + vendored Alpine, with no third-party script', async ({ page }) => {
+  const hosts = new Set<string>();
+  page.on('request', (r) => hosts.add(new URL(r.url()).host));
+  const token = mintToken();
+  await page.goto(`/public/index.html?token=${token}&disk=local`);
+  await expect(page.locator('.ff-app')).toBeVisible({ timeout: 10_000 });
+  const srcs = await page.evaluate(() => Array.from(document.scripts).map((s) => s.getAttribute('src') || ''));
+  expect(srcs.some((s) => /assets\/fm\.min\.js\?v=/.test(s))).toBe(true);
+  expect(srcs.some((s) => /assets\/vendor\/alpine\/alpine\.min\.js\?v=/.test(s))).toBe(true);
+  // fm.js is defined before Alpine starts (both deferred, in order).
+  expect(srcs.findIndex((s) => /fm\.min\.js/.test(s))).toBeLessThan(srcs.findIndex((s) => /alpine/.test(s)));
+  expect([...hosts].filter((h) => !h.startsWith('127.0.0.1'))).toEqual([]);
 });

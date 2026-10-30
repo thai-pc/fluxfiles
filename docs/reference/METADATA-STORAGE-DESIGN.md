@@ -26,6 +26,8 @@ BYOB disk configured with the `s3` driver) get true object-metadata storage.
 
 **Saving metadata:** `CopyObject` (copy to self) with the new Metadata — S3 has no direct metadata-update API.
 
+**Objects over 5 GiB:** a single `CopyObject` is capped at 5 GiB, so a header-backed field (title/alt/caption/tags, owner) of a bigger object cannot be rewritten. The save is refused with `422 metadata_object_too_large` rather than leaving the headers stale (the metadata panel and `owner_only` read only the headers). Saves that change no header (size, modified time, mime) still succeed. Multipart uploads set the owner header at `CreateMultipartUpload`, so a huge upload is owned from the start; in-place rewrites (editor save, module/watermark writes) hand the object's existing headers back on the `PutObject`.
+
 **Reading metadata:** `HeadObject` or `GetObject` — the response contains the Metadata.
 
 ### 2. Local & SFTP disks — Sidecar file

@@ -15,6 +15,9 @@ language; **code and comments in English**.
 Match the surrounding file's style, comment density, and naming.
 
 ## Hard rules (these override defaults)
+- **The worktree is shared with other agents.** Never run `git stash`, `git checkout -- <file>`,
+  `git reset` or anything else that rewrites tracked files: it silently drops their uncommitted
+  edits. To compare with the old code, use a throwaway `git worktree add <scratch-dir> HEAD`.
 - **Stateless / no DB.** State goes in JWT claims or `_fluxfiles/` (locked JSON /
   sidecars). No new stateful server deps.
 - **Every user-facing error code needs i18n across all 16 langs** (`packages/core/lang/*.json`).

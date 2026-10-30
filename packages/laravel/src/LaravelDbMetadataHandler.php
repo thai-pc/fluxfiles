@@ -108,7 +108,7 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
     public function get(string $disk, string $key): ?array
     {
         $row = $this->fetchRow($disk, $key);
-        if ($row === null || $row['title'] === null) {
+        if ($row === null || ($row['title'] === null && $row['owner'] === null)) {
             return null;
         }
         return [
@@ -189,19 +189,24 @@ class LaravelDbMetadataHandler implements MetadataRepositoryInterface, Migration
      * Carry the whole index row (owner, mime/size/dims, created/modified, hash and
      * the exact null-vs-"" of the text columns) after a rename/move/copy. Called by
      * core's FileManager::copyMetadata() when present; no-op without a source row.
-     * (No S3 breadcrumb here — this adapter has none.)
+     * (No S3 breadcrumb here — this adapter has none; $objectMoved is accepted for
+     * signature parity with core's DB handler.) A COPY keeps the destination's owner
+     * (as save() just decided); a MOVE ($objectMoved) carries the source's, so a
+     * leftover destination row never decides. $fresh (a copy) stamps created/modified now.
      */
-    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey): void
+    public function copyIndexEntry(string $srcDisk, string $srcKey, string $dstDisk, string $dstKey, bool $objectMoved = false, bool $fresh = false): void
     {
         $src = $this->fetchRow($srcDisk, $srcKey);
         if ($src === null) {
             return;
         }
+        $dst = $this->fetchRow($dstDisk, $dstKey);
+        $now = time();
         $row = [
-            'disk' => $dstDisk, 'owner' => $src['owner'], 'path' => $dstKey, 'path_hash' => $this->pathHash($dstKey),
+            'disk' => $dstDisk, 'owner' => $dst !== null && !$objectMoved ? $dst['owner'] : $src['owner'], 'path' => $dstKey, 'path_hash' => $this->pathHash($dstKey),
             'title' => $src['title'], 'alt_text' => $src['alt_text'], 'caption' => $src['caption'], 'tags' => $src['tags'],
             'mime' => $src['mime'], 'size' => $src['size'], 'width' => $src['width'], 'height' => $src['height'],
-            'created_at' => $src['created_at'], 'modified_at' => $src['modified_at'], 'file_hash' => $src['file_hash'],
+            'created_at' => $fresh ? $now : $src['created_at'], 'modified_at' => $fresh ? $now : $src['modified_at'], 'file_hash' => $src['file_hash'],
         ];
 
         $this->table('fluxfiles_file_metadata')->updateOrInsert(

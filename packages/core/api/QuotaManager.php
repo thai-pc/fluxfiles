@@ -13,11 +13,6 @@ class QuotaManager
     /** @var DiskManager */
     private $diskManager;
 
-    public function __construct(DiskManager $diskManager)
-    {
-        $this->diskManager = $diskManager;
-    }
-
     /**
      * True for disks where a full RECURSIVE listing is prohibitively slow —
      * namely SFTP, where each directory is a separate round-trip (≈ a handful of
@@ -33,35 +28,148 @@ class QuotaManager
         return ($this->diskManager->config($disk)['driver'] ?? '') === 'sftp';
     }
 
-    public function getUsage(string $disk, string $prefix): int
+    // ---------------------------------------------------------------------
+    // Enforcement = a LIVE walk; the meter = an optional cached figure
+    //
+    //   * ONE walk yields both bytes and file count (walk()), so an upload that
+    //     carries both limits scans the prefix once, not twice.
+    //   * check()/assertQuota()/assertFileCount() ALWAYS walk. The decision never
+    //     reads a cache, so nothing a cache could miss (a walk racing a write, a
+    //     sibling prefix's write, an operator edit, bytes that arrive straight at
+    //     the bucket) can make a limit fail open. GUARANTEE: at the moment of the
+    //     check, used + incoming <= limit. There is no reservation, so two
+    //     requests whose checks overlap in time can both pass near the limit —
+    //     the same window as before the cache existed.
+    //   * The `/quota` meter and the usage dashboard may be a little stale and
+    //     are the only readers of `<prefix>/_fluxfiles/quota.json`: figures()
+    //     serves it for $meterTtl seconds and refreshes it with one walk when
+    //     stale; getUsageBreakdown() refreshes it from its own walk. No write
+    //     path touches it, so it costs no per-write I/O.
+    // ---------------------------------------------------------------------
+
+    /** @var int full walks performed (observability / tests) */
+    public int $walks = 0;
+    private int $meterTtl;
+
+    /** The meter always walks when $meterTtl is 0. */
+    public function __construct(DiskManager $diskManager, int $meterTtl = 120)
     {
-        $fs = $this->diskManager->disk($disk);
-        $total = 0;
-
-        /** @var StorageAttributes $item */
-        foreach ($fs->listContents($prefix, true) as $item) {
-            if ($item instanceof FileAttributes) {
-                $total += $item->fileSize() ?? 0;
-            }
-        }
-
-        return $total;
+        $this->diskManager = $diskManager;
+        $this->meterTtl = max(0, $meterTtl);
     }
 
     /**
-     * @throws ApiException if quota would be exceeded
+     * One recursive pass: raw bytes of EVERY file (internal ones included — the
+     * quota meter's figure) and the count of user-visible files.
+     *
+     * @return array{bytes:int,files:int}
      */
-    public function assertQuota(string $disk, string $prefix, int $fileSizeBytes, int $maxStorageMb): void
+    public function walk(string $disk, string $prefix): array
     {
-        if ($maxStorageMb <= 0) {
+        $this->walks++;
+        $fs = $this->diskManager->disk($disk);
+        $bytes = 0;
+        $files = 0;
+
+        /** @var StorageAttributes $item */
+        foreach ($fs->listContents($prefix, true) as $item) {
+            if (!($item instanceof FileAttributes)) {
+                continue;
+            }
+            $bytes += $item->fileSize() ?? 0;
+            // FileManager::isReservedKey() is the single, case-insensitive rule —
+            // a case-sensitive substring test here let `_FLUXFILES/` files count
+            // against the user's quota (and, worse, diverge from what every other
+            // caller considers reserved).
+            if (!FileManager::isReservedKey($item->path())) {
+                $files++;
+            }
+        }
+
+        return ['bytes' => $bytes, 'files' => $files];
+    }
+
+    /** Live byte usage. */
+    public function getUsage(string $disk, string $prefix): int
+    {
+        return $this->walk($disk, $prefix)['bytes'];
+    }
+
+    // --- meter cache (display only) -------------------------------------
+
+    private function cachePath(string $prefix): string
+    {
+        $pt = trim($prefix, '/');
+        return ($pt !== '' ? $pt . '/' : '') . '_fluxfiles/quota.json';
+    }
+
+    /** Record a walk's figures for the meter. Best-effort: a missing cache only costs a walk. */
+    private function storeWalk(string $disk, string $prefix, int $bytes, int $files): void
+    {
+        if ($this->meterTtl <= 0) {
+            return;
+        }
+        try {
+            $this->diskManager->disk($disk)->write(
+                $this->cachePath($prefix),
+                (string) json_encode(['bytes' => $bytes, 'files' => $files, 'computed_at' => time()]),
+                StorageMetadataHandler::INTERNAL_WRITE
+            );
+        } catch (\Throwable $e) {
+            // ignored
+        }
+    }
+
+    /**
+     * Figures for the METER: the cached walk while younger than the TTL, else one
+     * walk (which refreshes the cache). Never use this to enforce a limit.
+     *
+     * @return array{bytes:int,files:int,cached:bool}
+     */
+    public function figures(string $disk, string $prefix): array
+    {
+        if ($this->meterTtl > 0) {
+            try {
+                $c = json_decode((string) $this->diskManager->disk($disk)->read($this->cachePath($prefix)), true);
+            } catch (\Throwable $e) {
+                $c = null;
+            }
+            if (is_array($c) && isset($c['bytes'], $c['files'], $c['computed_at'])) {
+                $age = time() - (int) $c['computed_at'];
+                if ($age >= 0 && $age <= $this->meterTtl) {
+                    return ['bytes' => (int) $c['bytes'], 'files' => (int) $c['files'], 'cached' => true];
+                }
+            }
+        }
+        $w = $this->walk($disk, $prefix);
+        $this->storeWalk($disk, $prefix, $w['bytes'], $w['files']);
+        return $w + ['cached' => false];
+    }
+
+    // --- enforcement (always live) --------------------------------------
+
+    /**
+     * Bound a write of $addBytes / $addFiles by the limits with ONE live walk
+     * (bytes are checked first, so the error code matches the old two-step order).
+     * A limit <= 0 is off; with both off nothing is walked. A write that adds no
+     * file ($addFiles <= 0) can't breach the file cap and skips that check.
+     *
+     * @throws ApiException quota_exceeded / too_many_files
+     */
+    public function check(string $disk, string $prefix, int $addBytes, int $addFiles, int $maxStorageMb, int $maxFiles): void
+    {
+        $maxBytes = $maxStorageMb > 0 ? $maxStorageMb * 1024 * 1024 : 0;
+        if ($addFiles <= 0) {
+            $maxFiles = 0;
+        }
+        if ($maxBytes <= 0 && $maxFiles <= 0) {
             return;
         }
 
-        $maxBytes = $maxStorageMb * 1024 * 1024;
-        $currentUsage = $this->getUsage($disk, $prefix);
+        $w = $this->walk($disk, $prefix);
 
-        if (($currentUsage + $fileSizeBytes) > $maxBytes) {
-            $usedMb = round($currentUsage / (1024 * 1024), 2);
+        if ($maxBytes > 0 && ($w['bytes'] + $addBytes) > $maxBytes) {
+            $usedMb = round($w['bytes'] / (1024 * 1024), 2);
             throw new ApiException(
                 "Storage quota exceeded: {$usedMb}MB used of {$maxStorageMb}MB limit",
                 413,
@@ -69,35 +177,32 @@ class QuotaManager
                 ['used' => $usedMb . 'MB', 'max' => $maxStorageMb . 'MB']
             );
         }
+        if ($maxFiles > 0 && ($w['files'] + $addFiles) > $maxFiles) {
+            throw new ApiException(
+                "File limit reached: {$w['files']} of {$maxFiles} files used",
+                413,
+                'too_many_files',
+                ['used' => $w['files'], 'max' => $maxFiles]
+            );
+        }
     }
 
     /**
-     * Count user-visible files under a prefix. Internal FluxFiles paths
+     * @throws ApiException if quota would be exceeded
+     */
+    public function assertQuota(string $disk, string $prefix, int $fileSizeBytes, int $maxStorageMb): void
+    {
+        $this->check($disk, $prefix, $fileSizeBytes, 0, $maxStorageMb, 0);
+    }
+
+    /**
+     * Count user-visible files under a prefix (live walk). Internal FluxFiles paths
      * (`_fluxfiles/`, `_variants/`) are excluded so the count matches what the
      * user actually sees and uploads.
      */
     public function getFileCount(string $disk, string $prefix): int
     {
-        $fs = $this->diskManager->disk($disk);
-        $count = 0;
-
-        /** @var StorageAttributes $item */
-        foreach ($fs->listContents($prefix, true) as $item) {
-            if (!($item instanceof FileAttributes)) {
-                continue;
-            }
-            $path = $item->path();
-            // FileManager::isReservedKey() is the single, case-insensitive rule —
-            // a case-sensitive substring test here let `_FLUXFILES/` files count
-            // against the user's quota (and, worse, diverge from what every other
-            // caller considers reserved).
-            if (FileManager::isReservedKey($path)) {
-                continue;
-            }
-            $count++;
-        }
-
-        return $count;
+        return $this->walk($disk, $prefix)['files'];
     }
 
     /**
@@ -105,19 +210,7 @@ class QuotaManager
      */
     public function assertFileCount(string $disk, string $prefix, int $addCount, int $maxFiles): void
     {
-        if ($maxFiles <= 0) {
-            return;
-        }
-
-        $current = $this->getFileCount($disk, $prefix);
-        if (($current + $addCount) > $maxFiles) {
-            throw new ApiException(
-                "File limit reached: {$current} of {$maxFiles} files used",
-                413,
-                'too_many_files',
-                ['used' => $current, 'max' => $maxFiles]
-            );
-        }
+        $this->check($disk, $prefix, 0, $addCount, 0, $maxFiles);
     }
 
     /** Extension → type group. Anything not listed falls into "other". */
@@ -212,6 +305,9 @@ class QuotaManager
             $byFolder[$folder]['count'] = ($byFolder[$folder]['count'] ?? 0) + 1;
         }
 
+        // The same pass is what the meter's cache wants — refresh it (display only).
+        $this->storeWalk($disk, $prefix, $rawTotal, $count);
+
         // by_folder → list sorted by size desc, top N.
         $folders = [];
         foreach ($byFolder as $fpath => $agg) {
@@ -302,7 +398,8 @@ class QuotaManager
             ];
         }
 
-        $currentUsage = $this->getUsage($disk, $prefix);
+        $fig = $this->figures($disk, $prefix);
+        $currentUsage = $fig['bytes'];
 
         return [
             'used_bytes'    => $currentUsage,
@@ -312,6 +409,7 @@ class QuotaManager
             'remaining_mb'  => $maxBytes !== null ? round(($maxBytes - $currentUsage) / (1024 * 1024), 2) : null,
             'percentage'    => $maxBytes !== null ? round(($currentUsage / $maxBytes) * 100, 1) : null,
             'supported'     => true,
+            'cached'        => $fig['cached'],
         ];
     }
 }

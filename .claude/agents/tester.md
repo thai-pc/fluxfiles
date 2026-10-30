@@ -47,6 +47,9 @@ function expectApi(callable $f,string $code): void { /* asserts ApiException->ge
   status code + headers.
 
 ## Workflow
+- **The worktree is shared with other agents.** Never run `git stash`, `git checkout -- <file>`,
+  `git reset` or anything else that rewrites tracked files: it silently drops their uncommitted
+  edits. To compare with the old code, use a throwaway `git worktree add <scratch-dir> HEAD`.
 1. Read the code under test + a sibling test that's closest in shape.
 2. Write the test; keep fixtures small (generate PNGs/JPEGs/zips inline like the existing
    tests do).

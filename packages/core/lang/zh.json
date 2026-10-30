@@ -244,6 +244,7 @@
     "forbidden": "您没有执行此操作的权限",
     "not_found": "未找到",
     "quota_exceeded": "存储配额已超出（{used} / {max}）",
+    "metadata_object_too_large": "该对象超过 5 GiB，无法在 S3 上修改其元数据。",
     "upload_too_large": "文件太大（最大 {max}）",
     "too_many_files": "已达到文件数量上限（最多 {max}）",
     "ext_not_allowed": "不允许 .{ext} 文件类型",

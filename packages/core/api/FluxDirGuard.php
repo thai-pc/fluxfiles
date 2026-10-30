@@ -62,6 +62,12 @@ HTACCESS;
         }
         self::$done[$key] = true;
         try {
+            // Only PHP reads _fluxfiles/ (audit log, index, trash bytes, versions), so
+            // keep the whole subtree closed to other users even on a public disk, whose
+            // folders are otherwise 0755 so the web server can serve uploads.
+            if ((@fileperms($dir) & 0077) !== 0) {
+                @chmod($dir, 0700);
+            }
             if (!file_exists($dir . '/.htaccess')) {
                 @file_put_contents($dir . '/.htaccess', self::HTACCESS);
             }

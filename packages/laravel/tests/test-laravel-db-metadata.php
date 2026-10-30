@@ -269,6 +269,33 @@ test('copyIndexEntry() carries every index field (same disk and cross-disk), kee
     assertEqual(null, $repo->getBulk($disk, ['cp-never.jpg'])['cp-never.jpg']);
 });
 
+test('copyIndexEntry() keeps the destination owner and stamps fresh dates for a copy; get() sees an owned row with a NULL title', function () use ($repo, $disk) {
+    $repo->indexFile($disk, 'n9/src.jpg', ['uploaded_by' => 'src', 'mime' => 'image/jpeg', 'size' => 5, 'created' => 100, 'modified' => 200], true);
+    $repo->save($disk, 'n9/dst.jpg', ['uploaded_by' => 'copier']);
+    $repo->copyIndexEntry($disk, 'n9/src.jpg', $disk, 'n9/dst.jpg', false, true);
+    $r = $repo->getBulk($disk, ['n9/dst.jpg'])['n9/dst.jpg'];
+    assertEqual('copier', $r['uploaded_by'], 'a copy belongs to the copier');
+    assertTrue((int) $r['created'] >= time() - 10 && (int) $r['modified'] >= time() - 10, 'fresh dates on copy');
+    assertEqual('image/jpeg', $r['mime']);
+    $repo->copyIndexEntry($disk, 'n9/src.jpg', $disk, 'n9/moved.jpg');           // move/rename form
+    $m = $repo->getBulk($disk, ['n9/moved.jpg'])['n9/moved.jpg'];
+    assertEqual(100, (int) $m['created'], 'move keeps created');
+    assertEqual('src', $m['uploaded_by'], 'no destination row: source owner');
+    // N8: a row with an owner but a NULL title is NOT "no metadata" (core: null only when both are null).
+    $g = $repo->get($disk, 'n9/src.jpg');
+    assertTrue($g !== null && $g['uploaded_by'] === 'src', 'owned row with NULL title is returned by get()');
+});
+
+test('copyIndexEntry() on a MOVE carries the source owner; a leftover destination row never decides (a copy keeps the destination)', function () use ($repo, $disk) {
+    $repo->indexFile($disk, 'n10/src.jpg', ['uploaded_by' => 'alice', 'mime' => 'image/jpeg', 'size' => 5], true);
+    $repo->save($disk, 'n10/leftover.jpg', ['uploaded_by' => 'mallory']);       // stale row from an out-of-band delete
+    $repo->copyIndexEntry($disk, 'n10/src.jpg', $disk, 'n10/leftover.jpg', true);
+    assertEqual('alice', $repo->getBulk($disk, ['n10/leftover.jpg'])['n10/leftover.jpg']['uploaded_by'], 'a move keeps the source owner');
+    $repo->save($disk, 'n10/copy.jpg', ['uploaded_by' => 'bob']);
+    $repo->copyIndexEntry($disk, 'n10/src.jpg', $disk, 'n10/copy.jpg', false, true);
+    assertEqual('bob', $repo->getBulk($disk, ['n10/copy.jpg'])['n10/copy.jpg']['uploaded_by'], 'a copy keeps what save() decided');
+});
+
 // ═══════════════════════════════════════════════════════════════
 echo "\n{$yellow}► saveHash() before save() (real upload ordering){$reset}\n";
 // ═══════════════════════════════════════════════════════════════

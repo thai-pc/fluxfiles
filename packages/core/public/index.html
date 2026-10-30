@@ -18,10 +18,11 @@
     </script>
     <link rel="stylesheet" href="../assets/fm.css">
     <script>window.__FM_LOCALE__ = window.__FM_LOCALE__ || { locale: 'en', dir: 'ltr', messages: {} };</script>
-    <script defer src="https://unpkg.com/alpinejs@3.15.12/dist/cdn.min.js"
-            integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L"
-            crossorigin="anonymous"></script>
-    <script src="../assets/fm.js"></script>
+    <!-- fm.js must define fluxFilesApp() before Alpine starts: both are `defer`, which
+         runs them in document order, so fm.js stays first. Alpine 3.15.12 is vendored
+         (no third-party DNS/TLS on the critical path; works air-gapped). -->
+    <script defer src="../assets/fm.js"></script>
+    <script defer src="../assets/vendor/alpine/alpine.min.js"></script>
 </head>
 <body>
 <!-- Alpine 3 auto-calls the component's init() method — do NOT add x-init="init()"

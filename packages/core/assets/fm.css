@@ -436,8 +436,6 @@ body {
     font-weight: 500;
 }
 
-.tree-item-child { padding-inline-start: 32px; }
-
 /* ── Lazy folder tree ─────────────────────────────────────────────────── */
 /* Expand/collapse chevron — its own hit target, doesn't navigate. */
 .tree-node .tree-toggle {
@@ -913,34 +911,6 @@ body {
         display: none;
     }
 }
-
-/* Theme toggle */
-.ff-theme-toggle {
-    padding: 6px 10px;
-    min-width: 36px;
-    border: 1px solid var(--color-border-secondary);
-    border-radius: 8px;
-    background: transparent;
-    cursor: pointer;
-    color: var(--color-text-tertiary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--ff-transition);
-}
-
-.ff-theme-toggle:hover {
-    color: var(--color-text-primary);
-    background: var(--ff-bg-hover);
-}
-
-.ff-theme-toggle .ff-theme-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.ff-theme-toggle .ff-theme-icon svg { width: 16px; height: 16px; }
 
 /* ══════════════════════════ Content area ══════════════════════════ */
 .ff-content {
@@ -1593,14 +1563,6 @@ body {
     user-select: none;
 }
 
-.detail-fname {
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--color-text-primary);
-    word-break: break-all;
-    letter-spacing: -0.01em;
-}
-
 .detail-tags {
     display: flex;
     gap: 5px;
@@ -1756,29 +1718,6 @@ body {
     margin-bottom: 8px;
 }
 
-.ff-bulk-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.ff-select-all {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    user-select: none;
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-.ff-select-all input[type="checkbox"] {
-    cursor: pointer;
-    width: 20px;
-    height: 20px;
-}
-
 .ff-bulk-progress-bar {
     background: var(--ff-primary);
     color: white;
@@ -1819,22 +1758,6 @@ body {
 .ff-aivision-ops { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .ff-aivision-ops .ff-btn { border-color: var(--color-border-secondary); }
 .ff-aivision-ops .ff-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
-
-/* ══════════════════════════ Preview ══════════════════════════ */
-.ff-preview {
-    border-bottom: 0.5px solid var(--color-border-tertiary);
-    background: var(--color-background-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100px;
-    margin: 0 -20px;
-    padding: 0 20px;
-}
-
-.ff-preview img,
-.ff-preview video,
-.ff-preview embed { display: block; max-width: 100%; }
 
 /* ══════════════════════════ Meta form ══════════════════════════ */
 .ff-meta-accordion { border: 1px solid var(--color-border-secondary); border-radius: 10px; overflow: hidden; }
@@ -2772,13 +2695,6 @@ body {
 .ff-tag button:hover { opacity: 1; }
 
 /* ══════════════════════════ Loading ══════════════════════════ */
-.ff-loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 48px;
-}
-
 .ff-spinner {
     width: 24px;
     height: 24px;
@@ -3208,7 +3124,7 @@ body {
 .dark .ff-detail-resize-handle:active { background: rgba(77, 142, 248, 0.25); }
 
 /* ══════════════════════════ RTL support ══════════════════════════ */
-.ff-breadcrumb button, .fname, .detail-fname, .ff-file-path, code {
+.ff-breadcrumb button, .fname, code {
     direction: ltr;
     unicode-bidi: embed;
 }
