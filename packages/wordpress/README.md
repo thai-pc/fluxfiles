@@ -1,7 +1,7 @@
 # FluxFiles for WordPress
 
 WordPress plugin that embeds [FluxFiles](https://github.com/thai-pc/fluxfiles) — a
-multi-storage file manager (Local, AWS S3, Cloudflare R2, SFTP) — directly in your site
+multi-storage file manager (Local, AWS S3, Cloudflare R2, plus SFTP through BYOB tokens) — directly in your site
 via a shortcode, an editor media button, and a JWT-bridged REST proxy.
 
 Unlike the JS/framework wrappers, this plugin **bundles the FluxFiles core**, so it
@@ -290,7 +290,7 @@ pass its URL as the `terminal_pty_url` token override and the UI embeds it.
 
 ## Features
 
-- Multi-storage — Local disk, AWS S3, Cloudflare R2, SFTP (cursor-based pagination)
+- Multi-storage — Local disk, AWS S3, Cloudflare R2; SFTP through BYOB tokens (cursor-based pagination)
 - Image optimization — automatic WebP variants (thumb / medium / large)
 - AI tagging — Claude / OpenAI vision API
 - Full-text search across file names + metadata; folder search

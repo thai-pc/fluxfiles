@@ -2,7 +2,7 @@
 /**
  * Plugin Name: FluxFiles
  * Plugin URI:  https://github.com/thai-pc/fluxfiles
- * Description: Multi-storage file manager with Local/S3/R2/SFTP support, image optimization, and full-text search.
+ * Description: Multi-storage file manager with Local/S3/R2 support (SFTP through BYOB tokens), image optimization, and full-text search.
  * Version:     1.0.0
  * Author:      thai-pc
  * Author URI:  https://github.com/thai-pc
