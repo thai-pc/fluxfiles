@@ -107,7 +107,9 @@ Managing a **remote VPS / shared host** over SFTP is supported in both modes.
   routes — add an `sftp` entry to `config('fluxfiles.disks')` (same shape as the
   core standalone config, e.g. `driver`/`host`/`port`/`username`/`private_key` or
   `password`) or hand the user a BYOB `sftp` disk, and mint tokens with
-  `disks => ['sftp']`.
+  `disks => ['sftp']`. A host on your own private network must be listed in
+  `FLUXFILES_SSRF_ALLOW_HOSTS` (comma-separated). On a BYOB disk, download and preview
+  links carry the disk config encrypted and last at most 30 minutes.
   **Burn-in watermark** works in both modes, and so does the **preview overlay
   watermark** (`watermark_enabled` + `watermark_type`/`_text`/`_logo_path`/…): `/img`
   is the shared core endpoint, so a watermarked token gets the overlaid image.

@@ -16,6 +16,13 @@ response there is mocked. This rig runs the **real** modules instead: core with 
 | c2pa | c2patool + the c2pa-rs ES256 test certificate |
 | sso | `ff-idp` — a real OIDC provider (PKCE, RS256 id_tokens) |
 
+## SFTP through the adapters
+
+`sftp/run.sh` builds the real Laravel and WordPress rigs from this tree, starts a real
+`atmoz/sftp` server, and drives every SFTP route through each adapter's HTTP API,
+checking results directly on the server (Laravel operator disk + BYOB, WordPress BYOB).
+Needs `ff-modules-live:latest`; no Playwright. Containers are removed afterwards.
+
 ## Run
 
 ```bash

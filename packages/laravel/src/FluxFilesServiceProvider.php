@@ -22,6 +22,7 @@ class FluxFilesServiceProvider extends ServiceProvider
         // Core + the paid modules read FLUXFILES_* from $_ENV; restore what
         // `config:cache` dropped (see `server_env` in config/fluxfiles.php).
         FluxFilesManager::seedServerEnv((array) config('fluxfiles.server_env', []));
+        \FluxFiles\SsrfGuard::setAllowHosts((string) ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? getenv('FLUXFILES_SSRF_ALLOW_HOSTS') ?: ''));
     }
 
     public function boot(): void

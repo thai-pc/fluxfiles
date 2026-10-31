@@ -320,6 +320,24 @@ test('terminal_pty_url still forwards (the UI embeds the operator\'s own ttyd)',
     assertEqual('https://ttyd.example.com/', $p->terminal_pty_url ?? '', 'terminal_pty_url forwarded');
 });
 
+test('BYOB disks register for every route; the SSRF allow-list is applied', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    preg_match('/private function claims\(.*?\n    }\n/s', $src, $claims);
+    assertTrue(str_contains($claims[0] ?? '', 'registerByobDisk'), 'claims() registers BYOB disks (search, quota, usage never build a FileManager)');
+    $plugin = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
+    assertTrue(str_contains($plugin, 'self::seedSsrfAllowHosts();'), 'applied at plugin boot, before any token is decoded');
+    assertTrue(str_contains($plugin, "defined('FLUXFILES_SSRF_ALLOW_HOSTS')"), 'wp-config constant honoured');
+    preg_match('/public function handleAttach\(.*?\n    }\n/s', $src, $attach);
+    assertTrue(str_contains($attach[0] ?? '', 'registerByobDisks'), 'handleAttach mints its own claims, so it registers too');
+    // Actually called, so the adapter-core floor guard fails if composer.json allows a core without it.
+    putenv('FLUXFILES_SSRF_ALLOW_HOSTS=Sftp.Example:22');
+    FluxFilesPlugin::seedSsrfAllowHosts();
+    assertEqual(['sftp.example:22'], \FluxFiles\SsrfGuard::$allowHosts, 'env var applied');
+    putenv('FLUXFILES_SSRF_ALLOW_HOSTS');
+    FluxFilesPlugin::seedSsrfAllowHosts();
+    assertEqual([], \FluxFiles\SsrfGuard::$allowHosts, 'cleared');
+});
+
 test('the terminal and git-deploy REST routes and handlers are gone', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     foreach (['handleTerminal', 'handleGitDeploy', "'/terminal'", "'/git-deploy'", 'SshTerminal', 'GitDeploy::'] as $needle) {

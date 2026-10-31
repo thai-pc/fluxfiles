@@ -60,7 +60,14 @@ class FluxFilesController
         }
 
         // Remembered so error() can audit a refused (403) request — see auditDenied().
-        return $this->lastClaims = JwtMiddleware::handle($token, $secret);
+        $claims = $this->lastClaims = JwtMiddleware::handle($token, $secret);
+
+        // Here rather than in fileManager(): search, quota and usage never build one.
+        foreach ($claims->byobDisks as $byobName => $byobConfig) {
+            $this->diskManager->registerByobDisk($byobName, $byobConfig);
+        }
+
+        return $claims;
     }
 
     /** Claims of the current request once authenticated (null before / on 401). */
@@ -78,15 +85,16 @@ class FluxFilesController
      */
     private function fileManager(\FluxFiles\Claims $claims): FileManager
     {
-        foreach ($claims->byobDisks as $byobName => $byobConfig) {
-            $this->diskManager->registerByobDisk($byobName, $byobConfig);
-        }
         // The AI tagger is wired only for `ai_auto_tag` (and only when a provider is
         // configured) — unlike core, which wires it whenever a provider is set.
         $aiTagger = $claims->aiAutoTag ? $this->aiTagger() : null;
 
+        $fm = new FileManager($this->diskManager, $claims, $this->metaRepo);
+        // Minted /stream and /img links must follow a custom route_prefix.
+        $fm->setApiBasePath('/' . trim((string) config('fluxfiles.route_prefix', 'api/fm'), '/'));
+
         return \FluxFiles\FileManagerFactory::wire(
-            new FileManager($this->diskManager, $claims, $this->metaRepo),
+            $fm,
             $claims,
             $this->diskManager,
             $this->metaRepo,
@@ -1193,6 +1201,20 @@ class FluxFilesController
     }
 
     /**
+     * The file text exactly as sent. A Laravel app's global TrimStrings middleware
+     * rewrites input() and json() alike, which would strip the first line's indent and
+     * the trailing newline from every saved file, so read the raw body.
+     */
+    private function rawContent(Request $request): string
+    {
+        $body = json_decode($request->getContent(), true);
+        if (is_array($body) && is_string($body['content'] ?? null)) {
+            return $body['content'];
+        }
+        return (string) $request->input('content', '');
+    }
+
+    /**
      * Config / code editor — overwrite a file's text content. The allow_code_edit
      * claim gate, write perm, allowed_ext, file-must-exist, and size cap are all
      * enforced inside FileManager::putContent.
@@ -1207,7 +1229,7 @@ class FluxFilesController
             $result = $fm->putContent(
                 (string) $request->input('disk', 'local'),
                 (string) $request->input('path', ''),
-                (string) $request->input('content', '')
+                $this->rawContent($request)
             );
 
             return $this->ok($result);
@@ -1292,7 +1314,7 @@ class FluxFilesController
 
     /**
      * Read the Unix mode of one file on an SFTP disk. SFTP is reachable in proxy
-     * mode via a BYOB sftp disk in the token (registered in fileManager()), which
+     * mode via a BYOB sftp disk in the token (registered in claims()), which
      * is how chmod is reachable here.
      */
     public function getChmod(Request $request): JsonResponse
@@ -1442,10 +1464,6 @@ class FluxFilesController
         try {
             $claims = $this->claims($request);
             $this->rateLimit($claims, true);
-            // Build the FileManager so any BYOB disks in the token are registered
-            // on the DiskManager before BucketDoctor probes them.
-            $this->fileManager($claims);
-
             $disk = (string) $request->query('disk', 'local');
             if (!$claims->hasDisk($disk)) {
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');

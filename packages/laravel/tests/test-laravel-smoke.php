@@ -469,6 +469,20 @@ test('the terminal and git-deploy proxy routes are gone', function () {
     assertTrue(!str_contains($ctrl, 'SshTerminal') && !str_contains($ctrl, 'GitDeploy::'), 'no SshTerminal / GitDeploy reference');
 });
 
+test('BYOB disks register for every route, and file text is read untrimmed', function () {
+    $ctrl = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    preg_match('/private function claims\(.*?\n    }\n/s', $ctrl, $claims);
+    assertTrue(str_contains($claims[0] ?? '', 'registerByobDisk'), 'claims() registers BYOB disks (search, quota, usage never build a FileManager)');
+    preg_match('/public function putContent\(.*?\n    }\n/s', $ctrl, $put);
+    assertTrue(str_contains($put[0] ?? '', '$this->rawContent($request)'), 'putContent bypasses TrimStrings');
+    assertTrue(str_contains($ctrl, '$request->getContent()'), 'rawContent reads the raw body');
+    assertTrue(str_contains((string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php'), 'SsrfGuard::setAllowHosts('), 'the provider applies FLUXFILES_SSRF_ALLOW_HOSTS');
+    // Actually called, so the adapter-core floor guard fails if composer.json allows a core without it.
+    \FluxFiles\SsrfGuard::setAllowHosts('Sftp.Example:22');
+    assertEqual(['sftp.example:22'], \FluxFiles\SsrfGuard::$allowHosts, 'parsed');
+    \FluxFiles\SsrfGuard::setAllowHosts('');
+});
+
 test('allow_versioning (+ its tuning claims) forwards in proxy mode', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $overrides = [
