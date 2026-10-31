@@ -1,6 +1,6 @@
 {
     "name": "fluxfiles/fluxfiles",
-    "description": "Standalone PHP file manager with multi-storage support (Local/S3/R2)",
+    "description": "Standalone PHP file manager with multi-storage support (Local/S3/R2/SFTP)",
     "type": "library",
     "license": "MIT",
     "keywords": ["file-manager", "s3", "r2", "flysystem", "upload", "media", "storage", "jwt"],

@@ -15,7 +15,7 @@
 [![PHP](https://img.shields.io/packagist/php-v/fluxfiles/fluxfiles?color=777bb4)](https://packagist.org/packages/fluxfiles/fluxfiles)
 [![License](https://img.shields.io/github/license/thai-pc/fluxfiles)](LICENSE)
 
-Standalone, embeddable file manager built with PHP 8.1+. Multi-storage support (Local, AWS S3, Cloudflare R2, SFTP), JWT authentication, and a zero-build-step frontend powered by Alpine.js.
+Standalone, embeddable PHP 8.1+ file manager. Files stay on your own storage: Local, AWS S3, Cloudflare R2 or SFTP. JWT-scoped access, with adapters for Laravel, WordPress, React and Vue.
 
 Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, **TinyMCE**, and **Summernote**.
 
@@ -1279,7 +1279,7 @@ FLUXFILES_LOCALE=vi
 | **BYOB encryption** | AES-256-GCM with HKDF-derived key (separate from signing key) |
 | **BYOB local blocked** | BYOB tokens cannot use the `local` driver — only S3-compatible storage or SFTP |
 | **BYOB SSRF guard** | BYOB endpoints must be http(s) and are rejected if they resolve to loopback, link-local, private/reserved ranges, or the cloud metadata IP (`169.254.169.254`); the validated IP is pinned to the connection |
-| **External tools** | Ghostscript, ffmpeg, ssh, tesseract, c2patool and ClamAV run with a minimal environment — they never inherit `FLUXFILES_SECRET` or cloud keys; Ghostscript < 10.05.0 is refused |
+| **External tools** | Ghostscript, ffmpeg, tesseract, c2patool and ClamAV run with a minimal environment — they never inherit `FLUXFILES_SECRET` or cloud keys; Ghostscript < 10.05.0 is refused |
 | **Rate limiting** | Token bucket per user, file-locked (or DB-backed), configurable (default: 60 read, 10 write/min) with dedicated buckets for import, tus, `/img`, `/stream` and public share/intake links |
 | **Quota enforcement** | Per-user storage limits checked before upload and cross-disk copy |
 | **Duplicate detection** | SHA-256 hash; `dedupe_uploads` refuses byte-identical re-uploads |
@@ -1327,7 +1327,7 @@ Mitigations regardless of delivery:
 - [ ] Set `FLUXFILES_ALLOWED_ORIGINS` to your production domain(s)
 - [ ] Use HTTPS everywhere
 - [ ] Deliver tokens via the SDK/`postMessage` (not `?token=` URLs) in production; keep `ttl` short
-- [ ] Block public access to `.env`, `vendor/`, `storage/` runtime state (`rate_limit.json`, `tus/`, `ssh-sockets/`) and `_fluxfiles/`
+- [ ] Block public access to `.env`, `vendor/`, `storage/` runtime state (`rate_limit.json`, `tus/`) and `_fluxfiles/`
 - [ ] Set `storage/` directory permissions to 755, `.env` to 600
 - [ ] Never commit `.env` with real credentials to git
 - [ ] Review and rotate API keys periodically

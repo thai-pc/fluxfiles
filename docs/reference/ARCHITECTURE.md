@@ -82,7 +82,7 @@ core/
 │         UrlImporter, BucketDoctor, ChunkUploader, Jwt/ImageCompat shims, …
 ├── embed.php           PHP token helpers: fluxfiles_token() / fluxfiles_byob_token()
 ├── router.php          dev server; also serves /fluxfiles.js from packages/sdk
-├── assets/             fm.js + fm.css — Alpine.js + htmx UI, NO build step (vendored xterm/CodeMirror under assets/vendor/)
+├── assets/             fm.js + fm.css — Alpine.js UI, served as the committed fm.min.js/fm.min.css from scripts/build-ui.sh (vendored Alpine/CodeMirror under assets/vendor/)
 ├── public/             index.html (the iframe entry document), share.html, intake.html
 ├── lang/               16 locale JSON files
 ├── config/disks.php    disk definitions (env-driven)
