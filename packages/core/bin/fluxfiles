@@ -177,6 +177,7 @@ $envDirs = [
 ];
 
 \FluxFiles\EnvBootstrap::load($envDirs);
+\FluxFiles\SsrfGuard::setAllowHosts((string) ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
 
 $diskConfigs = require __DIR__ . '/../config/disks.php';
 $disk = (string) ($opts['disk'] ?? 'local');

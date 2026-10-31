@@ -93,7 +93,8 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
 - **Never put the main JWT in a URL** — adapters use `postMessage`, API uses
   `Authorization: Bearer`. `?token=` is dev-only (stripped on boot + `Referrer-Policy:
   no-referrer`). Per-file `/img`/`/stream` query tokens are fine (1-file scope, short
-  TTL, distinct type). CSRF uses `Origin`, not `Referer`.
+  TTL, distinct type; a BYOB disk's token also carries its config, AES-GCM encrypted,
+  TTL ≤ 1800 s). CSRF uses `Origin`, not `Referer`.
 - **BYO-embed over build-and-sell**: where great free OSS self-host exists, embed it via
   a free config toggle, don't build a competitor. All four shipped: terminal →
   `terminal_pty_url` (ttyd), PDF → `pdf_tools_url` (Stirling), office → `office_url`

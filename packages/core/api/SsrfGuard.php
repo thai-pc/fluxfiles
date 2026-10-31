@@ -50,6 +50,15 @@ final class SsrfGuard
     public static array $allowHosts = [];
 
     /**
+     * Apply the operator's FLUXFILES_SSRF_ALLOW_HOSTS value (comma-separated
+     * host[:port]). Called by core's index.php and CLI, and by both adapters.
+     */
+    public static function setAllowHosts(string $raw): void
+    {
+        self::$allowHosts = array_values(array_map('strtolower', array_filter(array_map('trim', explode(',', $raw)))));
+    }
+
+    /**
      * Both allowlists as one lowercase list.
      *
      * @return string[]
@@ -329,11 +338,17 @@ final class SsrfGuard
      *
      * @return list<string>
      */
-    public static function assertHostSafe(string $host): array
+    public static function assertHostSafe(string $host, ?int $port = null): array
     {
         $host = strtolower(trim($host, " \t[]"));
         if ($host === '') {
             throw new ApiException('SFTP host is required', 422, 'ssrf_blocked');
+        }
+        // Allowlisted (shared with assertSafeUrl): before the name checks, since a
+        // private-network server is exactly what an operator lists (`nas.local`).
+        if (self::isAllowlistedHost($host, $port)) {
+            $resolved = self::resolveHostIps($host);
+            return $resolved !== [] ? $resolved : [$host];
         }
         if ($host === 'localhost'
             || self::hasSuffix($host, '.localhost')
@@ -341,11 +356,6 @@ final class SsrfGuard
             || self::hasSuffix($host, '.internal')
         ) {
             throw new ApiException('This SFTP host is not allowed', 422, 'ssrf_blocked');
-        }
-        // Allowlisted host (shared with assertSafeUrl) — see allowedHosts().
-        if (in_array($host, self::allowedHosts(), true)) {
-            $resolved = self::resolveHostIps($host);
-            return $resolved !== [] ? $resolved : [$host];
         }
         $ips = self::resolveHostIps($host);
         if ($ips === []) {

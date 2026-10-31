@@ -3,6 +3,42 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] — 2026-10-31
+
+> Released: `core-v1.0.1`, `laravel-v1.0.1`, `wordpress-v1.0.1`.
+
+Found by running SFTP for real through both adapters
+(`packages/core/tests/modules-live/sftp/run.sh`).
+
+### Fixed
+
+- **Laravel: saving a file in the code editor stripped its leading and trailing
+  whitespace, on every disk.** Laravel's global `TrimStrings` middleware rewrote the text,
+  removing the first line's indentation and the final newline. The text is now read from
+  the raw request body. Files saved with an earlier version may need checking if they are
+  sensitive to indentation, such as YAML or Python.
+- **BYOB SFTP: downloads and previews failed with a 403** in core and both adapters. `/stream`
+  and `/img` have no access JWT, so the disk was unknown to them. Per-file tokens now carry
+  the disk config AES-GCM encrypted, never as plaintext, with their lifetime capped at 30
+  minutes. `/img` on BYOB S3 disks is fixed the same way.
+- **BYOB disks: search, folder search, quota and usage failed** on both adapters with
+  `Disk is not configured`.
+- **`FLUXFILES_SSRF_ALLOW_HOSTS` had no effect on the adapters or the core CLI**, so a server
+  on a private network was always refused.
+- **`FLUXFILES_SSRF_ALLOW_HOSTS` did not do what its documentation said.** A `host:port`
+  entry never matched an SFTP host, a listed `.local`/`.internal` name was still refused,
+  and BYOB S3 endpoints ignored the list. All three now work; a `host:port` entry matches
+  that port only.
+- **Laravel: `/stream` and `/img` links ignored a custom `route_prefix`.**
+- **`/img`: a disk failure during a transform returned an unhandled error** that could
+  include an absolute path. It now returns a plain 502.
+
+### Security note
+
+A BYOB disk's download and preview URLs now contain its encrypted config, so copies in
+access logs can be decrypted by anyone who later obtains `FLUXFILES_SECRET`. Rotate the
+secret if it is exposed. BYOB `/img` responses are no longer publicly cacheable.
+
 ## [1.0.1] — 2026-10-30
 
 > Released: `react-v1.0.1`. Nothing else changed.

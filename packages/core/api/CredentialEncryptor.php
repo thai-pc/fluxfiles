@@ -51,6 +51,25 @@ class CredentialEncryptor
     }
 
     /**
+     * Decrypt one BYOB disk's blob and validate it, ready for
+     * DiskManager::registerByobDisk(). Used for the access JWT and for the per-file
+     * media tokens, so both apply the same SSRF checks.
+     *
+     * @throws ApiException If the blob is bad or the config is refused
+     */
+    public static function openForDisk(string $diskName, string $blob, #[\SensitiveParameter] string $secret): array
+    {
+        $config = self::decrypt($blob, $secret);
+        $pinnedIp = self::validate($diskName, $config);
+        if ($pinnedIp !== null) {
+            // See validate() — closes the DNS-rebinding TOCTOU between this check and
+            // DiskManager's actual S3 connect.
+            $config['_pinned_ip'] = $pinnedIp;
+        }
+        return $config;
+    }
+
+    /**
      * Decrypt a base64-encoded blob back into a disk config array.
      *
      * @param string $blob Base64-encoded encrypted blob
@@ -131,7 +150,7 @@ class CredentialEncryptor
                 throw new ApiException("BYOB disk '{$diskName}' needs a 'password' or 'private_key'", 400);
             }
             if (\class_exists('\\FluxFiles\\SsrfGuard')) {
-                SsrfGuard::assertHostSafe((string) $config['host']);
+                SsrfGuard::assertHostSafe((string) $config['host'], (int) ($config['port'] ?? 22));
             }
             return null;
         }
@@ -187,6 +206,17 @@ class CredentialEncryptor
         }
 
         $host = strtolower(trim($parts['host'], '[]')); // strip IPv6 brackets
+
+        // Listed in FLUXFILES_SSRF_ALLOW_HOSTS: waive the public-IP requirement for
+        // this host only. Still fails closed unresolved, so the connection stays pinned.
+        $port = (int) ($parts['port'] ?? (strtolower($parts['scheme']) === 'http' ? 80 : 443));
+        if (SsrfGuard::isAllowlistedHost($host, $port)) {
+            $ips = SsrfGuard::resolveHostIps($host);
+            if ($ips === []) {
+                throw new ApiException("BYOB disk '{$diskName}' endpoint host could not be resolved", 403, 'endpoint_unresolved');
+            }
+            return $ips[0];
+        }
 
         // Obvious internal names.
         if ($host === 'localhost' || substr($host, -10) === '.localhost' || substr($host, -6) === '.local') {

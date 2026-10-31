@@ -237,7 +237,7 @@ class DiskManager
         // letting phpseclib re-resolve the host moments later) closes the same
         // DNS-rebinding TOCTOU window the BYOB S3 endpoint pin closes.
         if (\class_exists('\\FluxFiles\\SsrfGuard')) {
-            $safeIps = SsrfGuard::assertHostSafe($host);
+            $safeIps = SsrfGuard::assertHostSafe($host, (int) ($cfg['port'] ?? 22));
             if ($safeIps !== [] && !filter_var($host, FILTER_VALIDATE_IP)) {
                 $host = $safeIps[0];
             }

@@ -110,6 +110,52 @@ try {
         assertEqual(404, $st);
     });
 
+    // A BYOB SFTP disk has no static config, so the per-file tokens must carry it.
+    $byobTok = \FluxFiles\JwtCompat::encode([
+        'sub' => 'byob-user', 'perms' => ['read', 'write', 'delete'], 'disks' => ['mine'], 'prefix' => $prefix,
+        'max_upload' => 50, 'webp_enabled' => true, 'exp' => time() + 900,
+        'byob_disks' => ['mine' => \FluxFiles\CredentialEncryptor::encrypt([
+            'driver' => 'sftp', 'host' => $host, 'port' => (int) (getenv('FXTEST_SFTP_PORT') ?: 22),
+            'username' => getenv('FXTEST_SFTP_USERNAME') ?: '', 'password' => getenv('FXTEST_SFTP_PASSWORD') ?: '',
+            'root' => getenv('FXTEST_SFTP_ROOT') ?: '.',
+        ], $SECRET)],
+    ], $SECRET);
+
+    test('BYOB SFTP: the stream URL from list serves the bytes, with no plaintext credentials', function () use ($BASE, $byobTok, $name, $content) {
+        [$st, $body] = http("{$BASE}/api/fm/list?disk=mine&path=", ["Authorization: Bearer {$byobTok}"]);
+        assertEqual(200, $st, 'list: ' . $body);
+        $url = '';
+        foreach ((json_decode($body, true)['data'] ?? []) as $it) {
+            if (($it['name'] ?? '') === $name) { $url = $it['url'] ?? ''; }
+        }
+        assertTrue($url !== '', 'no stream url');
+        $payload = (string) base64_decode(strtr(explode('.', rawurldecode($url))[1] ?? '', '-_', '+/'));
+        assertTrue(!str_contains($payload, (string) getenv('FXTEST_SFTP_PASSWORD')), 'password in the token');
+        [$st, $bytes] = http($BASE . $url);
+        assertEqual(200, $st, 'stream');
+        assertEqual($content, $bytes, 'streamed bytes match');
+    });
+
+    test('BYOB SFTP: /img transforms an image through the token-carried disk', function () use ($BASE, $byobTok) {
+        $im = imagecreatetruecolor(300, 200);
+        $tmp = tempnam(sys_get_temp_dir(), 'ffimg'); imagepng($im, $tmp);
+        $ch = curl_init("{$BASE}/api/fm/upload");
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer {$byobTok}"],
+            CURLOPT_POSTFIELDS => ['disk' => 'mine', 'path' => '', 'file' => new CURLFile($tmp, 'image/png', 'pic.png')]]);
+        $b = curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); @unlink($tmp);
+        assertEqual(200, $st, 'upload: ' . $b);
+        [, $body] = http("{$BASE}/api/fm/list?disk=mine&path=", ["Authorization: Bearer {$byobTok}"]);
+        $img = '';
+        foreach ((json_decode($body, true)['data'] ?? []) as $it) {
+            if (($it['name'] ?? '') === 'pic.png') { $img = $it['img_base'] ?? ''; }
+        }
+        assertTrue($img !== '', 'no img_base');
+        [$st, $bytes] = http("{$BASE}{$img}&width=100&format=webp");
+        assertEqual(200, $st, 'img');
+        assertEqual('WEBP', substr($bytes, 8, 4), 'a WebP came back');
+    });
+
     test('chmod: GET reads the mode, POST sets it (cPanel-style)', function () use ($BASE, $tok, $name) {
         [$st, $body] = http("{$BASE}/api/fm/chmod?disk=sftp&path=" . rawurlencode($name), ["Authorization: Bearer {$tok}"]);
         assertEqual(200, $st, 'get mode: ' . $body);

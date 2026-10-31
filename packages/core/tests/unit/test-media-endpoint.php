@@ -290,5 +290,74 @@ test('resolveWatermark: disabled -> not enabled; text fallback uses the sub', fu
     assertEqual('bottom-right', $sig['position']);
 });
 
+// ── BYOB disks: the per-file token carries the encrypted config ──────────
+$sftpCfg = ['driver' => 'sftp', 'host' => '127.0.0.1', 'port' => 1, 'username' => 'u', 'password' => 'top-secret-pass', 'root' => 'r'];
+
+test('tokens without a BYOB blob verify with byob=null (older tokens keep working)', function () use ($SECRET) {
+    assertEqual(null, StreamToken::verify(StreamToken::mint('d', 'a.mp4', 'u', 60, $SECRET), $SECRET)['byob']);
+    assertEqual(null, ImageToken::verify(ImageToken::mint('d', 'a.png', 'u', 60, $SECRET, 100), $SECRET)['byob']);
+});
+
+test('a BYOB token carries only ciphertext, and round-trips it', function () use ($SECRET, $sftpCfg) {
+    $blob = \FluxFiles\CredentialEncryptor::encrypt($sftpCfg, $SECRET);
+    $t = StreamToken::mint('b', 'a.mp4', 'u', 60, $SECRET, false, $blob);
+    assertEqual($blob, StreamToken::verify($t, $SECRET)['byob']);
+    assertEqual($blob, ImageToken::verify(ImageToken::mint('b', 'a.png', 'u', 60, $SECRET, 100, 0, null, true, $blob), $SECRET)['byob']);
+    $payload = (string) base64_decode(strtr(explode('.', $t)[1], '-_', '+/'));
+    assertTrue(!str_contains($payload, 'top-secret-pass') && !str_contains($payload, '127.0.0.1'), 'plaintext config in the token');
+});
+
+test('a BYOB token pointing at a private host is refused (SSRF), 403 with no details', function () use ($dm, $SECRET, $allow, $sftpCfg) {
+    $blob = \FluxFiles\CredentialEncryptor::encrypt($sftpCfg, $SECRET);
+    foreach ([
+        ['stream', StreamToken::mint('byobx', 'a.mp4', 'u', 60, $SECRET, false, $blob)],
+        ['image', ImageToken::mint('byobx', 'a.png', 'u', 60, $SECRET, 100, 0, null, true, $blob)],
+    ] as [$method, $tok]) {
+        $e = ep($dm, $SECRET, $allow);
+        $e->$method(['token' => $tok]);
+        assertEqual(403, $e->code, $method);
+        assertTrue(!str_contains($e->body, '127.0.0.1'), 'host leaked');
+    }
+    assertEqual([], $dm->config('byobx'), 'not registered');
+});
+
+test('a BYOB token cannot shadow a statically configured disk', function () use ($dm, $SECRET, $allow, $sftpCfg) {
+    \FluxFiles\SsrfGuard::$allowTestHosts[] = '127.0.0.1';
+    try {
+        $blob = \FluxFiles\CredentialEncryptor::encrypt($sftpCfg, $SECRET);
+        $e = ep($dm, $SECRET, $allow);
+        $e->stream(['token' => StreamToken::mint('priv', 'sub/x.mp4', 'u', 60, $SECRET, false, $blob)]);
+        assertEqual(403, $e->code);
+        assertEqual('local', $dm->config('priv')['driver'] ?? '', 'static disk untouched');
+    } finally {
+        \FluxFiles\SsrfGuard::$allowTestHosts = [];
+    }
+});
+
+test('a blob sealed with another secret is refused', function () use ($dm, $SECRET, $allow, $sftpCfg) {
+    $blob = \FluxFiles\CredentialEncryptor::encrypt($sftpCfg, str_repeat('z', 40));
+    $e = ep($dm, $SECRET, $allow);
+    $e->stream(['token' => StreamToken::mint('byoby', 'a.mp4', 'u', 60, $SECRET, false, $blob)]);
+    assertEqual(403, $e->code);
+});
+
+test('an unreachable BYOB server answers 502 without the connection error', function () use ($dm, $SECRET, $allow, $sftpCfg) {
+    \FluxFiles\SsrfGuard::$allowTestHosts[] = '127.0.0.1';
+    try {
+        $blob = \FluxFiles\CredentialEncryptor::encrypt($sftpCfg, $SECRET);
+        foreach ([
+            ['stream', StreamToken::mint('byobz', 'a.mp4', 'u', 60, $SECRET, false, $blob)],
+            ['image', ImageToken::mint('byobz', 'a.png', 'u', 60, $SECRET, 100, 0, null, true, $blob)],
+        ] as [$method, $tok]) {
+            $e = ep($dm, $SECRET, $allow);
+            $e->$method(['token' => $tok]);
+            assertEqual(502, $e->code, $method);
+            assertTrue(!str_contains($e->body, 'top-secret-pass') && !str_contains($e->body, '127.0.0.1'), 'leak: ' . $e->body);
+        }
+    } finally {
+        \FluxFiles\SsrfGuard::$allowTestHosts = [];
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

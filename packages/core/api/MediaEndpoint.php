@@ -232,6 +232,30 @@ class MediaEndpoint
             || (bool) preg_match('#(^|/)\.\.(/|$)#', str_replace('\\', '/', $path));
     }
 
+    /**
+     * Register the BYOB disk a per-file token carries. The blob is checked as strictly
+     * as the access JWT's (SSRF, driver, no shadowing a static disk). False means the
+     * request was refused and already answered.
+     *
+     * @param array{disk:string,byob?:?string} $scope
+     */
+    private function openTokenDisk(array $scope): bool
+    {
+        if (empty($scope['byob'])) {
+            return true;
+        }
+        try {
+            $this->diskManager->registerByobDisk(
+                $scope['disk'],
+                CredentialEncryptor::openForDisk($scope['disk'], $scope['byob'], $this->secret)
+            );
+            return true;
+        } catch (\Throwable $e) {
+            $this->fail(403, 'Disk not available');
+            return false;
+        }
+    }
+
     // ── /api/fm/stream ──────────────────────────────────────────────────
 
     /**
@@ -264,6 +288,10 @@ class MediaEndpoint
         // Reject any traversal in the (signed) path defensively.
         if (self::unsafePath($path)) {
             $this->fail(403, 'Invalid path');
+            return;
+        }
+
+        if (!$this->openTokenDisk($scope)) {
             return;
         }
 
@@ -376,6 +404,20 @@ class MediaEndpoint
      */
     public function image(array $query, array $headers = []): void
     {
+        try {
+            $this->serveImage($query, $headers);
+        } catch (\Throwable $e) {
+            // A disk failure mid-transform: Flysystem's message can name absolute paths.
+            $this->fail(502, 'Image unavailable');
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $query
+     * @param array{range?:?string,accept?:string} $headers
+     */
+    private function serveImage(array $query, array $headers): void
+    {
         if (!$this->secretConfigured()) {
             return;
         }
@@ -437,6 +479,10 @@ class MediaEndpoint
             $format = 'webp';
         } else {
             $format = ''; // negotiation: client accepts neither modern format
+        }
+
+        if (!$this->openTokenDisk($scope)) {
+            return;
         }
 
         try {
@@ -585,7 +631,8 @@ class MediaEndpoint
         // Output format is content-negotiated from Accept (format=auto → avif/webp),
         // so caches must key on it to avoid serving the wrong format to a client.
         $this->header('Vary: Accept');
-        $this->header($immutable
+        // A BYOB token's URL carries the encrypted disk config: never into a shared cache.
+        $this->header($immutable && empty($scope['byob'])
             ? 'Cache-Control: public, max-age=31536000, immutable'
             : 'Cache-Control: private, no-store');
         $this->header('Content-Length: ' . strlen($data));
