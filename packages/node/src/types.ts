@@ -280,7 +280,7 @@ export interface BaseTokenOptions {
    *  hide every "Pro" affordance from this tenant. */
   proHints?: boolean;
   /** Generic escape hatch: any JWT claim by its raw snake_case name (e.g.
-   *  `{ allow_terminal: true, terminal_pty_url: '…', upload_collision: 'overwrite' }`).
+   *  `{ terminal_pty_url: '…', upload_collision: 'overwrite' }`).
    *  Merged last so explicit claims win; the server sanitizes on decode. The single
    *  place to set claims that don't have a typed option here. See docs/reference/CONFIG.md. */
   claims?: Record<string, unknown>;

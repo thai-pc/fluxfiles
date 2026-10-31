@@ -8,17 +8,17 @@ Stable tag: 1.0.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-Multi-storage file manager with Local/S3/R2 support. Optional paid add-ons: branded Share links and client Upload Portals.
+Multi-storage file manager with Local/S3/R2/SFTP support. Optional paid add-ons: branded Share links and client Upload Portals.
 
 == Description ==
 
 FluxFiles is a standalone, embeddable file manager. Drop it into WordPress via this plugin
-to get multi-storage support (Local disk, AWS S3, Cloudflare R2), JWT authentication,
+to get multi-storage support (Local disk, AWS S3, Cloudflare R2, SFTP), JWT authentication,
 image optimization with WebP variants, AI auto-tagging, and full-text search.
 
 **Features:**
 
-* Multi-storage — Local disk, AWS S3, Cloudflare R2
+* Multi-storage — Local disk, AWS S3, Cloudflare R2, SFTP
 * Image optimization — Auto WebP variants (thumb, medium, large)
 * AI tagging — Claude / OpenAI vision API
 * Full-text search across file names + metadata
@@ -80,7 +80,7 @@ If you cannot use WP-CLI, trigger the same indexing by re-uploading files throug
 
 = What storage backends are supported? =
 
-Local disk, AWS S3, and Cloudflare R2. You can configure multiple disks and allow users to switch between them.
+Local disk, AWS S3, Cloudflare R2, and SFTP. You can configure multiple disks and allow users to switch between them.
 
 = How do I configure the paid modules' engines (AI Vision, DLP, C2PA, VirusTotal...) without environment variables? =
 

@@ -163,7 +163,7 @@ and [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/AP
 | `optimize_max_mb` | int | MB | `0` | Skip files larger than this. `0` = no limit. |
 | `pdf_level` | enum | — | `ebook` | Ghostscript preset: `screen`/`ebook`/`printer`/`prepress`/`default`. Needs `gs` ≥ 10.05.0 on the server — absent or older → `501 pdf_unavailable`. |
 
-> **External tools run with a minimal environment.** Ghostscript, ffmpeg, ssh,
+> **External tools run with a minimal environment.** Ghostscript, ffmpeg,
 > tesseract, c2patool and clamdscan are started with only `PATH`/`HOME`/`TMPDIR`/`LANG`
 > (`ProcessEnv::minimal()`), never the PHP process's full environment — so
 > `FLUXFILES_SECRET`, cloud keys and DB passwords are not visible to a tool that parses
