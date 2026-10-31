@@ -3,10 +3,21 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-10-30
+
+> Released: `react-v1.0.1`. Nothing else changed.
+
+### Fixed
+
+- **`@fluxfiles/react` ships as 1.0.1, not 1.0.0.** npm refused the 1.0.0
+  publish: an earlier, since-removed package under that name had already used
+  the version number, and npm never lets a version number be published twice. The code is
+  identical to the `react-v1.0.0` tag; only the version number changed.
+
 ## [1.0.0] — 2026-10-30
 
 > Released: `core-v1.0.0`, `laravel-v1.0.0`, `wordpress-v1.0.0`, `sdk-v1.0.0`,
-> `react-v1.0.0`, `vue-v1.0.0`, `node-v1.0.0`, `mcp-v1.0.0`, `ckeditor4-v1.0.0`,
+> `react-v1.0.0` (npm: published as 1.0.1, see above), `vue-v1.0.0`, `node-v1.0.0`, `mcp-v1.0.0`, `ckeditor4-v1.0.0`,
 > `tinymce-v1.0.0`, `summernote-v1.0.0`, `python-v1.0.0`.
 > Paid modules accept core `^0.2.N || ^1.0` in these patch releases:
 > `share v1.3.2`, `intake v1.4.2`, `versioning v1.3.3`, `webhooks v1.1.6`,
