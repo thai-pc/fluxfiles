@@ -278,10 +278,16 @@ metadata automatically.
 
 The WordPress plugin runs FluxFiles **through the WP REST API (proxy mode)**, whose
 admin settings page only exposes **Local / S3 / R2** storage — there's no settings
-field (or filter) to register an SFTP disk. Managing a **remote VPS** over SFTP is
-therefore not available through the WordPress plugin in practice; run the
-**standalone FluxFiles server** (or the Docker image) for that — see the
-[core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting).
+field to register an SFTP disk. SFTP works through a **BYOB token** that carries the
+server details: mint one in your own code with `FluxFilesPlugin::generateByobToken()`.
+
+The host must resolve to a public address. For a server on your own private network,
+list it in `define('FLUXFILES_SSRF_ALLOW_HOSTS', 'sftp.internal.example');` in
+`wp-config.php` (or as a real env var, comma-separated). Downloads and previews use a
+short-lived per-file link that carries the disk config encrypted, capped at 30 minutes.
+
+Without custom code, use the **standalone FluxFiles server** (or the Docker image) —
+see the [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting).
 
 FluxFiles no longer ships an SSH command-runner terminal or one-click Git deploy. If you
 run your own [ttyd / gotty / wetty](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md),

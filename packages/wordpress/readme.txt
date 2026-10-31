@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1.0
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -121,6 +121,12 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 
 == Changelog ==
 
+= 1.0.1 =
+* Downloads and previews now work on BYOB SFTP disks. Their per-file links carry the disk config encrypted and last at most 30 minutes.
+* Search, folder search, quota, usage and attachments now work on BYOB disks.
+* `FLUXFILES_SSRF_ALLOW_HOSTS` now applies to the plugin, as a real env var or a `wp-config.php` constant, so an SFTP or S3 server on a private network can be reached.
+* An image transform that hits a storage error now returns a plain 502.
+
 = 1.0.0 =
 * The SSH command-runner terminal and one-click Git deploy are removed (REST routes `/terminal` and `/git-deploy`, and the `allow_terminal` / `allow_git_deploy` / `git_deploy_*` token overrides). Tokens that still carry those claims are ignored. `terminal_pty_url` (embed your own ttyd) is kept.
 * `/stream` and `/img` now run on core's shared media endpoint: the preview watermark overlay (`watermark_enabled`) works, X-Accel paths are encoded, and the rate limits default to core's (stream 300/min, img 120/min).
@@ -146,6 +152,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.0.1 =
+Fixes BYOB SFTP downloads and previews, BYOB search and quota, and the private-network allow-list.
 
 = 1.0.0 =
 Removes the SSH terminal and Git deploy. Preview watermarks now work through the plugin. Database-mode sites get a new rate-limit table on update.

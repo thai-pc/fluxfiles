@@ -19,6 +19,8 @@ class FluxFilesPlugin
 
     private function __construct()
     {
+        self::seedSsrfAllowHosts();
+
         register_activation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'activate']);
         register_deactivation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'deactivate']);
         add_action('admin_init', [FluxFilesDbSchema::class, 'maybeUpgrade']);
@@ -353,6 +355,19 @@ HTACCESS;
             $filled++;
         }
         return $filled;
+    }
+
+    /**
+     * FLUXFILES_SSRF_ALLOW_HOSTS for a server on the operator's private network, as a
+     * wp-config.php constant or a real env var. Deliberately no Settings field: it
+     * loosens the SSRF guard, so it stays with whoever controls the server.
+     */
+    public static function seedSsrfAllowHosts(): void
+    {
+        $raw = defined('FLUXFILES_SSRF_ALLOW_HOSTS')
+            ? constant('FLUXFILES_SSRF_ALLOW_HOSTS')
+            : (getenv('FLUXFILES_SSRF_ALLOW_HOSTS') ?: ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
+        \FluxFiles\SsrfGuard::setAllowHosts((string) $raw);
     }
 
     /**

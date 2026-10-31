@@ -252,8 +252,8 @@ class FluxFilesApi
             'callback' => [$api, 'handleZip'],
         ]));
 
-        // SFTP file permissions. SFTP reaches proxy mode two ways: a BYOB sftp disk
-        // in the token (registered in fileManager()) and an operator-configured one.
+        // SFTP file permissions. WordPress has no operator-configured SFTP disk, so
+        // this is reached through a BYOB sftp disk in the token (registered in claims()).
         register_rest_route($ns, $p . '/chmod', [
             [
                 'methods'             => 'GET',
@@ -622,6 +622,7 @@ class FluxFilesApi
                 FluxFilesPlugin::tokenForCurrentUser(),
                 (string) get_option('fluxfiles_secret', '')
             );
+            $this->registerByobDisks($claims);
             $this->rateLimit($claims, true);
             // The attachment hands out the file's clean, stable URL, i.e. the original.
             // A token that may not download originals (allow_download=false, which a
@@ -746,6 +747,7 @@ class FluxFilesApi
             if (FluxFilesAttachments::isUnsafeKey($key)) {
                 throw new ApiException('Access denied: system path', 403, 'system_path');
             }
+            $this->registerByobDisks($claims);
             $claims->requireDisk($disk);
             $scoped = $claims->scopePath($key);
             if (!$this->diskManager->disk($disk)->fileExists($scoped)) {
@@ -802,10 +804,20 @@ class FluxFilesApi
         $secret = get_option('fluxfiles_secret', '');
         $auth   = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
         // Remembered so error() can audit a refused (403) request — see auditRefusal().
-        if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
-            return $this->lastClaims = JwtMiddleware::handle($m[1], $secret);
+        $token = preg_match('/^Bearer\s+(.+)$/i', $auth, $m) ? $m[1] : FluxFilesPlugin::tokenForCurrentUser();
+        $claims = $this->lastClaims = JwtMiddleware::handle($token, $secret);
+
+        // Here rather than in fileManager(): search, quota and usage never build one.
+        $this->registerByobDisks($claims);
+
+        return $claims;
+    }
+
+    private function registerByobDisks(\FluxFiles\Claims $claims): void
+    {
+        foreach ($claims->byobDisks as $byobName => $byobConfig) {
+            $this->diskManager->registerByobDisk($byobName, $byobConfig);
         }
-        return $this->lastClaims = JwtMiddleware::handle(FluxFilesPlugin::tokenForCurrentUser(), $secret);
     }
 
     /** Claims of the current request once authenticated (null before / on 401). */
@@ -813,9 +825,6 @@ class FluxFilesApi
 
     private function fileManager(\FluxFiles\Claims $claims): FileManager
     {
-        foreach ($claims->byobDisks as $byobName => $byobConfig) {
-            $this->diskManager->registerByobDisk($byobName, $byobConfig);
-        }
         $fm = new FileManager($this->diskManager, $claims, $this->metaRepo);
 
         // Quota, stream secret (turns on gated-local / img_base URLs in list()),
@@ -1880,7 +1889,7 @@ class FluxFilesApi
 
     /**
      * Read the Unix mode of one file on an SFTP disk. SFTP is reachable in proxy
-     * mode via a BYOB sftp disk in the token (see fileManager()).
+     * mode via a BYOB sftp disk in the token (see claims()).
      */
     public function handleGetChmod(\WP_REST_Request $request): \WP_REST_Response
     {
@@ -2048,10 +2057,6 @@ class FluxFilesApi
         try {
             $claims = $this->claims();
             $this->rateLimit($claims, true);
-            // Build the FileManager so any BYOB disks in the token are registered
-            // on the DiskManager before BucketDoctor probes them.
-            $this->fileManager($claims);
-
             $disk = (string) ($request->get_param('disk') ?: 'local');
             if (!$claims->hasDisk($disk)) {
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');

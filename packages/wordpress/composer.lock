@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7032fbdcd3df83c6f9c273a691aacaf6",
+    "content-hash": "7a6b53afd5dfdb40c190a98266d20ab8",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -233,16 +233,16 @@
         },
         {
             "name": "fluxfiles/fluxfiles",
-            "version": "v1.0.0",
+            "version": "v1.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thai-pc/fluxfiles-core.git",
-                "reference": "b328f1ff6aaa8d43958ed83d6dfb124d70194af6"
+                "reference": "eb11836d636fbf33bf15422a1ad45d573d376168"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/b328f1ff6aaa8d43958ed83d6dfb124d70194af6",
-                "reference": "b328f1ff6aaa8d43958ed83d6dfb124d70194af6",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/eb11836d636fbf33bf15422a1ad45d573d376168",
+                "reference": "eb11836d636fbf33bf15422a1ad45d573d376168",
                 "shasum": ""
             },
             "require": {
@@ -289,7 +289,7 @@
                     "homepage": "https://github.com/thai-pc"
                 }
             ],
-            "description": "Standalone PHP file manager with multi-storage support (Local/S3/R2)",
+            "description": "Standalone PHP file manager with multi-storage support (Local/S3/R2/SFTP)",
             "homepage": "https://github.com/thai-pc/fluxfiles",
             "keywords": [
                 "Flysystem",
@@ -305,7 +305,7 @@
                 "issues": "https://github.com/thai-pc/fluxfiles/issues",
                 "source": "https://github.com/thai-pc/fluxfiles"
             },
-            "time": "2026-10-30T15:57:28+00:00"
+            "time": "2026-10-31T02:54:25+00:00"
         },
         {
             "name": "graham-campbell/result-type",
