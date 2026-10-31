@@ -163,6 +163,38 @@ test('an allowlisted host does not switch the backstop off for other addresses',
     }
 });
 
+test('setAllowHosts parses the operator value; empty clears it', function () {
+    SsrfGuard::setAllowHosts(' Sftp.Example.COM , 10.0.0.5:2222,,');
+    if (SsrfGuard::$allowHosts !== ['sftp.example.com', '10.0.0.5:2222']) { throw new \RuntimeException(json_encode(SsrfGuard::$allowHosts)); }
+    SsrfGuard::setAllowHosts('');
+    if (SsrfGuard::$allowHosts !== []) { throw new \RuntimeException('not cleared'); }
+});
+
+test('the allow-list reaches every SFTP and S3 check, honouring the port', function () {
+    $ok = static function (callable $f, string $label): void { $f(); };
+    $refused = static function (callable $f, string $label): void {
+        try { $f(); } catch (ApiException $e) { return; }
+        throw new \RuntimeException("{$label}: expected a refusal");
+    };
+    SsrfGuard::setAllowHosts('10.0.0.5:2222,nas.local,10.0.0.6:9000');
+    try {
+        $ok(fn () => SsrfGuard::assertHostSafe('10.0.0.5', 2222), 'host:port match');
+        $refused(fn () => SsrfGuard::assertHostSafe('10.0.0.5', 22), 'other port');
+        $refused(fn () => SsrfGuard::assertHostSafe('10.0.0.7', 2222), 'other host');
+        $refused(fn () => SsrfGuard::assertHostSafe('printer.local', 22), 'unlisted .local');
+        \FluxFiles\CredentialEncryptor::validate('s', ['driver' => 'sftp', 'host' => '10.0.0.5', 'port' => 2222, 'username' => 'u', 'password' => 'p']);
+        $refused(fn () => \FluxFiles\CredentialEncryptor::validate('s', ['driver' => 'sftp', 'host' => '10.0.0.5', 'username' => 'u', 'password' => 'p']), 'default port 22');
+        $s3 = ['driver' => 's3', 'region' => 'r', 'bucket' => 'b', 'key' => 'k', 'secret' => 's'];
+        if (\FluxFiles\CredentialEncryptor::validate('b', $s3 + ['endpoint' => 'http://10.0.0.6:9000']) !== '10.0.0.6') {
+            throw new \RuntimeException('listed S3 endpoint should pin to its IP');
+        }
+        $refused(fn () => \FluxFiles\CredentialEncryptor::validate('b', $s3 + ['endpoint' => 'http://10.0.0.6:80']), 'S3 other port');
+        $refused(fn () => \FluxFiles\CredentialEncryptor::validate('b', $s3 + ['endpoint' => 'http://10.0.0.8:9000']), 'S3 other host');
+    } finally {
+        SsrfGuard::setAllowHosts('');
+    }
+});
+
 echo "{$cyan}──────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

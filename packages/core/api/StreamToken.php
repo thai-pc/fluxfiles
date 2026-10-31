@@ -30,8 +30,10 @@ final class StreamToken
      * @param string $sub    Subject (the access token's user id) — for audit parity
      * @param int    $ttl    Seconds until expiry (clamped to [1, MAX_TTL])
      * @param string $secret FLUXFILES_SECRET
+     * @param string|null $byob A BYOB disk's encrypted config (CredentialEncryptor). The
+     *        endpoint has no access JWT to read it from. Never the plaintext.
      */
-    public static function mint(string $disk, string $path, string $sub, int $ttl, #[\SensitiveParameter] string $secret, bool $auditRead = false): string
+    public static function mint(string $disk, string $path, string $sub, int $ttl, #[\SensitiveParameter] string $secret, bool $auditRead = false, ?string $byob = null): string
     {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
@@ -48,6 +50,9 @@ final class StreamToken
         if ($auditRead) {
             $payload['ar'] = 1;
         }
+        if ($byob !== null && $byob !== '') {
+            $payload['bd'] = $byob;
+        }
         return JwtCompat::encode($payload, $secret);
     }
 
@@ -55,7 +60,7 @@ final class StreamToken
      * Verify a stream token and return its scoped {disk, path, sub}.
      * Throws ApiException(403) on any failure (bad signature, expired, wrong type).
      *
-     * @return array{disk:string,path:string,sub:string,auditRead:bool}
+     * @return array{disk:string,path:string,sub:string,auditRead:bool,byob:?string}
      */
     public static function verify(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): array
     {
@@ -82,6 +87,7 @@ final class StreamToken
             'path'      => $path,
             'sub'       => (string) ($p->sub ?? ''),
             'auditRead' => !empty($p->ar),
+            'byob'      => isset($p->bd) ? (string) $p->bd : null,
         ];
     }
 }

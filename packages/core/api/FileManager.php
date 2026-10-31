@@ -35,6 +35,9 @@ class FileManager
     /** @var string Secret for minting per-file stream tokens (gated local media). '' = feature off. */
     private $streamSecret = '';
 
+    /** @var array<string,string> See mediaTokenByob(). */
+    private array $mediaByobBlobs = [];
+
     /** @var string Base path prepended to minted stream/img URLs. Default matches standalone's
      *            and Laravel's real route mount (`/api/fm`, root-relative to the iframe's own
      *            origin). WordPress overrides this to its REST-namespaced absolute URL
@@ -3667,9 +3670,34 @@ class FileManager
     /** Mint the /api/fm/stream?token=… URL for one file on a gated local disk. */
     private function gatedLocalUrl(string $disk, string $path): string
     {
-        $ttl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
-        $token = StreamToken::mint($disk, $path, $this->claims->userId, $ttl, $this->streamSecret, $this->claims->auditReads);
+        $byob = $this->mediaTokenByob($disk);
+        $token = StreamToken::mint($disk, $path, $this->claims->userId, $this->mediaTokenTtl($disk), $this->streamSecret, $this->claims->auditReads, $byob);
         return $this->apiBasePath . '/stream?token=' . rawurlencode($token);
+    }
+
+    /**
+     * Lifetime of a per-file media token. One for a BYOB disk carries (encrypted)
+     * credentials in a URL, so it gets the same ceiling as a BYOB access JWT.
+     */
+    private function mediaTokenTtl(string $disk): int
+    {
+        $ttl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
+        return $this->claims->isByobDisk($disk) ? min($ttl, 1800) : $ttl;
+    }
+
+    /**
+     * A BYOB disk's config, encrypted for a per-file media token: /stream and /img are
+     * authenticated by that token alone, so they have no access JWT to read it from.
+     * One blob per request, since a listing mints a token per file.
+     */
+    private function mediaTokenByob(string $disk): ?string
+    {
+        $config = $this->claims->getByobConfig($disk);
+        if ($config === null) {
+            return null;
+        }
+        unset($config['_pinned_ip']); // re-resolved when the endpoint opens the blob
+        return $this->mediaByobBlobs[$disk] ??= CredentialEncryptor::encrypt($config, $this->streamSecret);
     }
 
     /**
@@ -3683,7 +3711,7 @@ class FileManager
             || !$this->imageOptimizer->isImage($path)) {
             return null;
         }
-        $ttl = $this->claims->streamTokenTtl > 0 ? $this->claims->streamTokenTtl : 3600;
+        $ttl = $this->mediaTokenTtl($disk);
         $maxWidth = $this->claims->webpMaxWidth > 0 ? $this->claims->webpMaxWidth : 2000;
         $token = ImageToken::mint(
             $disk,
@@ -3696,7 +3724,8 @@ class FileManager
             $this->claims->watermark,
             // A preview-only token must not get the clean original out of /img's
             // fall-through paths either — presign/getContent/zip all refuse it.
-            $this->claims->allowDownload
+            $this->claims->allowDownload,
+            $this->mediaTokenByob($disk)
         );
         return $this->apiBasePath . '/img?token=' . rawurlencode($token);
     }
@@ -3710,6 +3739,11 @@ class FileManager
      */
     private function buildSrcset(string $imgBase, int $naturalWidth): string
     {
+        // A BYOB disk with key auth makes each URL several KB; one per width would bloat
+        // every listing. img_base still works, so the image just isn't responsive.
+        if (strlen($imgBase) > 3000) {
+            return '';
+        }
         // Too small to bother with responsive variants.
         if ($naturalWidth > 0 && $naturalWidth < 100) {
             return '';

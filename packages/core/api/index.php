@@ -32,10 +32,7 @@ $envDirs = [
 // Trusted SFTP/import hosts allowed past the SSRF public-IP requirement. Legit
 // use: an operator whose SFTP server lives on their own private/reserved network
 // (a VPS behind a VPN). Comma-separated host[:port]; empty = full SSRF protection.
-$ssrfAllow = array_filter(array_map('trim', explode(',', $_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? '')));
-if ($ssrfAllow !== []) {
-    \FluxFiles\SsrfGuard::$allowHosts = array_map('strtolower', $ssrfAllow);
-}
+\FluxFiles\SsrfGuard::setAllowHosts((string) ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
 
 // CORS
 $allowedOrigins = array_filter(

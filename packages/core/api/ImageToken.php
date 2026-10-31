@@ -38,6 +38,8 @@ final class ImageToken
      * @param bool $allowDownload Mirror of the tenant's allow_download claim. False
      *        means the endpoint must never fall through to the untransformed
      *        original — see the `dl` note below.
+     * @param string|null $byob A BYOB disk's encrypted config (CredentialEncryptor), for
+     *        the same reason as StreamToken. Never the plaintext.
      */
     public static function mint(
         string $disk,
@@ -48,7 +50,8 @@ final class ImageToken
         int $maxWidth,
         int $defaultQuality = 0,
         ?array $watermark = null,
-        bool $allowDownload = true
+        bool $allowDownload = true,
+        ?string $byob = null
     ): string {
         $ttl = max(1, min($ttl, self::MAX_TTL));
         $now = time();
@@ -71,11 +74,14 @@ final class ImageToken
         if ($watermark !== null && !empty($watermark['enabled'])) {
             $payload['wm'] = $watermark;
         }
+        if ($byob !== null && $byob !== '') {
+            $payload['bd'] = $byob;
+        }
         return JwtCompat::encode($payload, $secret);
     }
 
     /**
-     * @return array{disk:string,path:string,maxWidth:int,defaultQuality:int,sub:string,watermark:array|null,allowDownload:bool}
+     * @return array{disk:string,path:string,maxWidth:int,defaultQuality:int,sub:string,watermark:array|null,allowDownload:bool,byob:?string}
      */
     public static function verify(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): array
     {
@@ -103,6 +109,7 @@ final class ImageToken
             'sub'            => (string) ($p->sub ?? ''),
             'watermark'      => isset($p->wm) ? (array) json_decode(json_encode($p->wm), true) : null,
             'allowDownload'  => !isset($p->dl) || (bool) $p->dl,
+            'byob'           => isset($p->bd) ? (string) $p->bd : null,
         ];
     }
 }
