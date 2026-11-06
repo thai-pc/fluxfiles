@@ -294,6 +294,7 @@
     "bad_zip": "Bu dosya geçerli bir ZIP arşivi değil.",
     "chmod_failed": "İzinler değiştirilemedi.",
     "chmod_forbidden": "İzinleri değiştirmeye izin verilmiyor.",
+    "chmod_root_forbidden": "Kök klasörün izinleri değiştirilemez.",
     "disk_not_allowed": "Bu diske erişime izin verilmiyor.",
     "download_forbidden": "İndirmeye izin verilmiyor.",
     "edit_forbidden": "Düzenlemeye izin verilmiyor.",

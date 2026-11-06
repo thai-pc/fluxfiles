@@ -294,6 +294,7 @@
     "bad_zip": "Dit bestand is geen geldig ZIP-archief.",
     "chmod_failed": "Kan rechten niet wijzigen.",
     "chmod_forbidden": "Rechten wijzigen is niet toegestaan.",
+    "chmod_root_forbidden": "De rechten van de hoofdmap kunnen niet worden gewijzigd.",
     "disk_not_allowed": "Toegang tot deze schijf is niet toegestaan.",
     "download_forbidden": "Downloaden is niet toegestaan.",
     "edit_forbidden": "Bewerken is niet toegestaan.",

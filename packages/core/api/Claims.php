@@ -679,7 +679,10 @@ class Claims
         $c->zipMaxMb = max(0, (int) ($payload->zip_max_mb ?? 0));
         $c->zipMaxFiles = max(0, (int) ($payload->zip_max_files ?? 0));
         $c->allowDownload = isset($payload->allow_download) ? (bool) $payload->allow_download : true;
-        $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : true;
+        // Default-on, EXCEPT under owner_only: chmod acts on whole folders, so a
+        // tenant that is restricted to its own uploads gets it only by asking
+        // (an explicit allow_chmod:true still wins).
+        $c->allowChmod = isset($payload->allow_chmod) ? (bool) $payload->allow_chmod : !$c->ownerOnly;
         // Only accept an http(s) PTY URL — anything else (javascript:, data:, …) is
         // dropped so it can never reach an iframe src.
         $ptyUrl = trim((string) ($payload->terminal_pty_url ?? ''));

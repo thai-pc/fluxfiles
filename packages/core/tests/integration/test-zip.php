@@ -215,6 +215,15 @@ test('custom dest folder', function () {
     assertEqual('X', file_get_contents($root . '/unpacked/here/x.txt'));
 });
 
+test('dest in the result is the normalised, client-relative destination (not the raw input)', function () {
+    [$fm, $root] = makeExtractFM();
+    putZip($root, 'a.zip', ['x.txt' => 'X']);
+    $r = $fm->extractZip('local', 'a.zip', '../tenantB');
+    assertEqual('tenantB', $r['dest'], 'no ../ echoed back');
+    assertEqual('X', file_get_contents($root . '/tenantB/x.txt'), 'written inside the sandbox');
+    assertTrue(!file_exists(dirname($root) . '/tenantB/x.txt'), 'nothing written outside the root');
+});
+
 test('zip-slip entry (../) → 403 zip_slip, nothing written (atomic pass-1 validation)', function () {
     [$fm, $root] = makeExtractFM();
     putZip($root, 'evil.zip', ['../escape.txt' => 'bad', 'ok.txt' => 'good']);

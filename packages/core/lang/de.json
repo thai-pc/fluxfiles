@@ -294,6 +294,7 @@
     "bad_zip": "Diese Datei ist kein gültiges ZIP-Archiv.",
     "chmod_failed": "Berechtigungen konnten nicht geändert werden.",
     "chmod_forbidden": "Das Ändern der Berechtigungen ist nicht erlaubt.",
+    "chmod_root_forbidden": "Die Berechtigungen des Stammordners können nicht geändert werden.",
     "disk_not_allowed": "Der Zugriff auf diesen Datenträger ist nicht erlaubt.",
     "download_forbidden": "Herunterladen ist nicht erlaubt.",
     "edit_forbidden": "Bearbeiten ist nicht erlaubt.",

@@ -4430,7 +4430,7 @@ function fluxFilesApp() {
 
         // chmod is offered only on an SFTP disk and the token allows it.
         get canChmod() {
-            return this.diskDriver === 'sftp' && this.tokenAllows('allow_chmod', true);
+            return this.diskDriver === 'sftp' && this.tokenAllows('allow_chmod', !this.tokenAllows('owner_only', false));
         },
         // Read a tri-state boolean claim from the token (default when unset).
         tokenAllows(claim, dflt) {

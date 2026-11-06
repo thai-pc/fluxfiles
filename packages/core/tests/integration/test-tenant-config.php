@@ -235,6 +235,11 @@ test('fromJwtPayload parses webp claims (and defaults)', function () {
     assertEqual(false, Claims::fromJwtPayload((object) ['allow_download' => false])->allowDownload, 'allow_download parsed');
     assertEqual(true, $def->allowChmod, 'allow_chmod defaults true');
     assertEqual(false, Claims::fromJwtPayload((object) ['allow_chmod' => false])->allowChmod, 'allow_chmod parsed');
+    // owner_only flips the absent-claim default to OFF; an explicit value always wins.
+    assertEqual(false, Claims::fromJwtPayload((object) ['owner_only' => true])->allowChmod, 'owner_only + absent allow_chmod -> off');
+    assertEqual(true, Claims::fromJwtPayload((object) ['owner_only' => true, 'allow_chmod' => true])->allowChmod, 'owner_only + explicit true -> on');
+    assertEqual(false, Claims::fromJwtPayload((object) ['owner_only' => true, 'allow_chmod' => false])->allowChmod, 'owner_only + explicit false -> off');
+    assertEqual(true, Claims::fromJwtPayload((object) ['owner_only' => false])->allowChmod, 'owner_only=false keeps default on');
     assertEqual(false, $def->allowCodeEdit, 'allow_code_edit defaults FALSE (opt-in)');
     assertEqual(true, Claims::fromJwtPayload((object) ['allow_code_edit' => true])->allowCodeEdit, 'allow_code_edit parsed');
     assertEqual(false, $def->allowOptimize, 'allow_optimize defaults FALSE (opt-in)');
