@@ -114,10 +114,10 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 
 == Screenshots ==
 
-1. File manager — grid view with image previews
-2. File manager — list view with metadata
-3. Settings page — storage configuration
-4. Dark mode — automatic theme detection
+1. The file manager: folders, image thumbnails and PDF/video previews, with one-click switching between storage disks (local, S3-compatible, SFTP).
+2. Image details panel with the built-in crop editor: free or fixed aspect ratios, then replace the original or save a copy.
+3. Upload several files at once by drag and drop or the Upload button, with overall progress per batch.
+4. Insert images from FluxFiles straight into the block editor with the "FluxFiles Image" block.
 
 == Changelog ==
 
