@@ -83,6 +83,11 @@
       // Keep this comment brand-free: the shell is deliberately unbranded so an
       // operator can white-label it, and a test asserts the served HTML says nothing.
       var API = String(window.__FM_API_BASE__ || '/api/fm').replace(/\/+$/, '');
+// A WordPress site on plain permalinks has a base like index.php?rest_route=/…,
+// so a query string must be joined with & there, not a second ?.
+function apiUrl(path, query) {
+  return API + path + (API.indexOf('?') === -1 ? '?' : '&') + query;
+}
 
       function fail(text) {
         lock.classList.add('hidden'); view.classList.add('hidden');
@@ -222,7 +227,7 @@
 
       if (!token) { fail('This link is missing its token.'); return; }
 
-      fetch(API + '/share/info?token=' + encodeURIComponent(token))
+      fetch(apiUrl('/share/info', 'token=' + encodeURIComponent(token)))
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok || !res.j || res.j.error) { fail((res.j && res.j.error) || 'This link is invalid or has expired.'); return; }
@@ -290,7 +295,7 @@
             requireReauth('Your unlock expired — please enter the password again.');
             return;
           }
-          var url = API + '/share/file?token=' + encodeURIComponent(token) + '&dl=1';
+          var url = apiUrl('/share/file', 'token=' + encodeURIComponent(token) + '&dl=1');
           if (grant) { url += '&g=' + encodeURIComponent(grant); }
           startDownload(url);
         };
