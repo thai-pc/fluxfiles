@@ -193,8 +193,8 @@ live under the site's root; the DB backend was already per-site (`$wpdb->prefix`
 On nginx the admin notice shows the matching `sites/<id>/uploads/` rule.
 Upgrading an existing network: see the next section.
 
-Public Share and Intake links are served from the network-wide plugin URL, so on
-multisite (1.0.4+) they also carry the minting site's blog id (`&blog=N`). The recipient
+Public Share and Intake links are served from the plugin URL of the site that was active
+when they were minted, so on multisite (1.0.4+) they also carry the minting site's blog id (`&blog=N`). The recipient
 page then calls that site's own REST API, which verifies the token against that site's
 secret and storage. An unknown, deleted, archived or malformed blog id gets a 404, and a
 forged id only reaches a site whose signature check rejects the token. Links minted on a

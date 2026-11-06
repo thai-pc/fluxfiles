@@ -122,7 +122,8 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 == Changelog ==
 
 = 1.0.4 =
-* Fix: on a multisite network, Share and Intake links created on a sub-site now work. They used to open the main site, so the token was checked against the wrong site's secret and storage. New links carry the site's blog id; the recipient page then talks to that site's own REST API. Links already handed out on single sites keep working.
+* Fix: on a multisite network, a Share or Intake link created while another site was active (inside `switch_to_blog()`) opened the wrong site and failed. Links now carry the creating site's id and always open that site.
+* Fix: Share and Intake links now work on sites that use plain permalinks.
 
 = 1.0.3 =
 * Security: on a multisite network every site now has its own storage root, `wp-content/fluxfiles/sites/<blog_id>/`. Before, all sites shared one root with an empty token prefix, so a sub-site administrator or author could reach the other sites' files, index, audit log and trash. Single-site installs are unchanged.
@@ -167,7 +168,7 @@ First public release. WordPress adapter for the FluxFiles file manager:
 == Upgrade Notice ==
 
 = 1.0.4 =
-Multisite: Share and Intake links from sub-sites now work. Links minted on a sub-site before this version were broken and must be re-created. Single sites: no action.
+Share and Intake links now open the site that created them on multisite, and work with plain permalinks. No action needed.
 
 = 1.0.3 =
 Security release. Multisite: files now live in wp-content/fluxfiles/sites/<blog_id>/uploads/ and existing ones must be moved. Follow "Upgrading to 1.0.3 on multisite" in the plugin README (and the 1.0.3 changelog entry). Single sites: no action.

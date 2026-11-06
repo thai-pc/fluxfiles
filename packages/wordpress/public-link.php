@@ -58,7 +58,7 @@ $html = (string) file_get_contents($file);
 // resolved from the link's `blog` id to the site that minted it. The REST route there
 // verifies the token against that site's own secret and storage: an id that was
 // forged or swapped simply points the page at a site whose signature check fails.
-$blogParam = isset($_GET['blog']) && is_string($_GET['blog']) ? $_GET['blog'] : null;
+$blogParam = $_GET['blog'] ?? null; // a non-string (e.g. blog[]=) is refused below
 $apiBase = FluxFilesPlugin::publicLinkRestBase($blogParam);
 if ($apiBase === null) {
     status_header(404);

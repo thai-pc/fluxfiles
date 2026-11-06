@@ -485,7 +485,7 @@ HTACCESS;
         }
         if ($blogParam === null || $blogParam === '') {
             $id = (int) get_current_blog_id();
-        } elseif (is_string($blogParam) && preg_match('/^[1-9][0-9]{0,9}$/', $blogParam) === 1) {
+        } elseif (is_string($blogParam) && preg_match('/^[1-9][0-9]{0,9}\z/', $blogParam) === 1) {
             $id = (int) $blogParam;
         } else {
             return null;

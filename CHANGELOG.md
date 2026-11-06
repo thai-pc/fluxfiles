@@ -9,14 +9,17 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ### Fixed
 
-- **WordPress multisite: Share and Intake links minted on a sub-site did not work.** The links
-  point at `public-link.php` through `plugins_url()`, which is network-wide, so WordPress booted
-  the main site and the sub-site's token was checked against the main site's secret and storage
-  root. Links now carry the minting site's blog id and the recipient page is pointed at that
-  site's own REST API, which verifies the token with that site's secret. An invalid, deleted or
-  archived blog id is a 404; a forged id fails the signature check. Not a data leak. Both
-  subdirectory and subdomain networks were affected. Single-site and pre-1.0.4 single-site links
-  are unchanged; sub-site links minted earlier must be re-created.
+- **WordPress multisite: Share and Intake links could open the wrong site.** A link minted
+  while another blog was active (code running inside `switch_to_blog()`, e.g. a network-level
+  integration) pointed at the request's site, so its token was checked against that site's
+  secret and storage root and the link failed. Links minted in a site's own admin were already
+  correct. Links now carry the minting site's blog id on multisite (`&blog=N`); it must be a
+  canonical id of a live site (anything else is a 404) and only selects that site's REST API,
+  where the token is verified with that site's own secret. A swapped id fails that check. Not a
+  data leak. Single-site links are unchanged.
+- **WordPress: Share and Intake links did not work on sites using plain permalinks.** The REST
+  base there is `index.php?rest_route=…`, and the landing pages appended `?token=…` as a second
+  query string. They now join with `&` when the base already has one.
 
 ## [1.0.4] — 2026-11-06
 
