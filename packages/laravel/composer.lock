@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "10c4b973f29d5abef485bdbbcefa3188",
+    "content-hash": "88b04ed702d99992a15eacded2a3dc3c",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -452,16 +452,16 @@
         },
         {
             "name": "fluxfiles/fluxfiles",
-            "version": "v1.0.1",
+            "version": "v1.0.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thai-pc/fluxfiles-core.git",
-                "reference": "eb11836d636fbf33bf15422a1ad45d573d376168"
+                "reference": "9ae2f8407cfaba4fd7f2fd90c4d2d61e2629f7b3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/eb11836d636fbf33bf15422a1ad45d573d376168",
-                "reference": "eb11836d636fbf33bf15422a1ad45d573d376168",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/9ae2f8407cfaba4fd7f2fd90c4d2d61e2629f7b3",
+                "reference": "9ae2f8407cfaba4fd7f2fd90c4d2d61e2629f7b3",
                 "shasum": ""
             },
             "require": {
@@ -490,6 +490,12 @@
                 "bin/fluxfiles"
             ],
             "type": "library",
+            "extra": {
+                "aws/aws-sdk-php": [
+                    "S3",
+                    "Sts"
+                ]
+            },
             "autoload": {
                 "files": [
                     "modules-autoload.php"
@@ -524,7 +530,7 @@
                 "issues": "https://github.com/thai-pc/fluxfiles/issues",
                 "source": "https://github.com/thai-pc/fluxfiles"
             },
-            "time": "2026-10-31T02:54:25+00:00"
+            "time": "2026-11-06T14:01:37+00:00"
         },
         {
             "name": "fruitcake/php-cors",

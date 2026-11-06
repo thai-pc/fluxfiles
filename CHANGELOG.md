@@ -3,6 +3,23 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Laravel adapter dispatches Share/Intake and the compliance routes through the modules.**
+  The public `share/*` and `intake/*` routes now go through `PublicRoutes::dispatch()` with a
+  `PublicContext` built from the app's own disks, metadata repo, secret and `ModuleRegistry::license()`,
+  instead of requiring core's legacy `api/PublicLinks.php`. The recipient pages are
+  served by `PublicRoutes::page()` behind the same gate, and `{prefix}/share/page` and
+  `{prefix}/intake/page` are now proxied (`public/share.html` and `public/intake.html` keep
+  working). `/retention/run`, `/fixity/check` and `/audit/verify` use the module's
+  `RetentionProviderInterface` / `FixityProviderInterface` / `AuditVerifierInterface` when
+  present and fall back to core's built-in code on older modules; a module too old for either
+  answers `501 module_update_required`. Without the module installed, status codes and error
+  codes are unchanged. Floor raised to `fluxfiles/fluxfiles ^1.0.4` (lock refreshed to v1.0.7).
+  Ships as `laravel-v1.0.3`.
+
 ## [1.0.12] — 2026-11-06
 
 ### Added

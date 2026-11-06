@@ -1582,9 +1582,15 @@ class FluxFilesController
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
             }
             $fm = $this->fileManager($claims);
-            \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $m = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\ModuleRegistry::license(), $claims);
             $dryRun = filter_var($request->input('dry_run', true), FILTER_VALIDATE_BOOLEAN);
-            $report = $fm->runRetention($disk, $dryRun);
+            if ($m instanceof \FluxFiles\RetentionProviderInterface) {
+                $report = $m->runRetention($fm, $disk, $dryRun);
+            } elseif (method_exists($fm, 'runRetention')) {
+                $report = $fm->runRetention($disk, $dryRun);
+            } else {
+                throw new ApiException("The 'legal-hold' module must be updated", 501, 'module_update_required', ['module' => 'legal-hold']);
+            }
             $this->auditRetention($claims, $disk, $report);
             return $this->ok($report);
         } catch (ApiException $e) {
@@ -1619,12 +1625,19 @@ class FluxFilesController
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
             }
             $fm = $this->fileManager($claims);
-            \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
+            $m = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
             // Only the audit rows since the oldest baseline, narrowed in SQL on the db backend.
-            $report = $fm->runFixityCheck($disk, fn (?int $since): array =>
+            $entries = fn (?int $since): array =>
                 $since !== null && method_exists($this->metaRepo, 'readAuditWindow')
                     ? $this->metaRepo->readAuditWindow($disk, $since)
-                    : $this->metaRepo->readAudit($disk));
+                    : $this->metaRepo->readAudit($disk);
+            if ($m instanceof \FluxFiles\FixityProviderInterface) {
+                $report = $m->runFixityCheck($fm, $disk, $entries);
+            } elseif (method_exists($fm, 'runFixityCheck')) {
+                $report = $fm->runFixityCheck($disk, $entries);
+            } else {
+                throw new ApiException("The 'audit-export' module must be updated", 501, 'module_update_required', ['module' => 'audit-export']);
+            }
             foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
                 foreach ($report[$list] as $key) {
                     $this->logAuditQuiet($claims, 'fixity_mismatch', $disk, $claims->scopePath((string) $key), $what);
@@ -1651,11 +1664,18 @@ class FluxFilesController
             if (!$claims->hasDisk($disk)) {
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
             }
-            \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
-            return $this->ok(\FluxFiles\AuditChain::verify(array_merge(
+            $m = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
+            $entries = array_merge(
                 $this->metaRepo->readAuditArchive($disk),
                 $this->metaRepo->readAudit($disk)
-            )));
+            );
+            if ($m instanceof \FluxFiles\AuditVerifierInterface) {
+                return $this->ok($m->verifyChain($entries));
+            }
+            if (method_exists(\FluxFiles\AuditChain::class, 'verify')) {
+                return $this->ok(\FluxFiles\AuditChain::verify($entries));
+            }
+            throw new ApiException("The 'audit-export' module must be updated", 501, 'module_update_required', ['module' => 'audit-export']);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }
@@ -2143,7 +2163,7 @@ class FluxFilesController
 
     /**
      * The PUBLIC recipient routes, delegated to the SAME core handlers standalone
-     * uses (PublicLinks.php). Nothing about tokens, expiry, passwords, download
+     * uses (PublicRoutes::dispatch() -> the module). Nothing about tokens, expiry, passwords, download
      * caps or byte-sending is reimplemented here — a second copy of that is how a
      * hole appears on one platform only. This supplies Laravel's DiskManager and
      * then gets out of the way.
@@ -2157,28 +2177,33 @@ class FluxFilesController
      */
     private function publicLink(string $which, string $uri): void
     {
-        $core = $this->fluxfilesBasePath() . '/api/PublicLinks.php';
-        if (!is_file($core)) {
+        if (!class_exists(\FluxFiles\PublicRoutes::class)) {
             http_response_code(501);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['data' => null, 'error' => 'The FluxFiles core is not available', 'error_code' => 'core_missing']);
             exit;
         }
-        require_once $core;
 
-        // The core handler reads the signing secret and the storage path from $_ENV.
+        // Core reads the signing secret and the storage path from $_ENV.
         $_ENV['FLUXFILES_SECRET'] = (string) config('fluxfiles.secret');
         $_ENV['FLUXFILES_STORAGE_PATH'] = (string) config('fluxfiles.storage_path');
 
-        $method = request()->method();
-        $diskConfigs = config('fluxfiles.disks');
+        // The gate (secret / module installed / licence) and the route itself live in core
+        // and the module; hostInjected=true makes them use OUR disks and metadata repo.
+        \FluxFiles\PublicRoutes::dispatch($which, request()->method(), $uri, $this->publicContext());
+        exit; // dispatch() has already sent status, headers and body
+    }
 
-        if ($which === 'share') {
-            \handleSharePublic($method, $uri, $this->diskManager, $diskConfigs, $this->metaRepo);
-        } else {
-            \handleIntakePublic($method, $uri, $this->diskManager, $diskConfigs, $this->metaRepo);
-        }
-        exit; // the core handler has already sent status, headers and body
+    private function publicContext(): \FluxFiles\PublicContext
+    {
+        return new \FluxFiles\PublicContext(
+            $this->diskManager,
+            config('fluxfiles.disks'),
+            $this->metaRepo,
+            (string) config('fluxfiles.secret'),
+            \FluxFiles\ModuleRegistry::license(),
+            true
+        );
     }
 
     public function shareInfo(): void { $this->publicLink('share', '/api/fm/share/info'); }
@@ -2196,30 +2221,45 @@ class FluxFilesController
      * carries the recipient token, so it must never leak in a Referer or be
      * cached by a shared proxy.
      */
-    private function publicPage(string $file): \Illuminate\Http\Response
+    private function publicPage(string $id): \Symfony\Component\HttpFoundation\Response
     {
-        $path = $this->fluxfilesBasePath() . '/public/' . $file;
-
-        if (!file_exists($path)) {
-            abort(404, "FluxFiles {$file} not found");
+        if (!class_exists(\FluxFiles\PublicRoutes::class)) {
+            return $this->error('The FluxFiles core is not available', 501, 'core_missing');
         }
 
-        $html = (string) file_get_contents($path);
-        $apiBase = rtrim((string) config('app.url'), '/') . '/' . trim((string) config('fluxfiles.route_prefix', 'api/fm'), '/');
-        $inject = '<script>window.__FM_API_BASE__=' . json_encode($apiBase) . ';</script>';
-        $html = str_contains($html, '</head>')
-            ? str_replace('</head>', $inject . '</head>', $html)
-            : $inject . $html;
+        try {
+            // Same gate order as PublicRoutes::dispatch(): secret, installed, licence.
+            $ctx = $this->publicContext();
+            if (!$ctx->secretConfigured()) {
+                throw new ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
+            }
+            \FluxFiles\ModuleRegistry::requireServer($id, $ctx->license);
+        } catch (ApiException $e) {
+            return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
+        }
 
-        return response($html, 200)
+        // Not dispatch(): it hard-codes '/api/fm' as the API base, ours follows route_prefix.
+        $apiBase = rtrim((string) config('app.url'), '/') . '/' . trim((string) config('fluxfiles.route_prefix', 'api/fm'), '/');
+        $html = \FluxFiles\PublicRoutes::page($id, $apiBase);
+        if ($html === null) {
+            // Installed but ships no page: a module from before PublicModuleInterface that
+            // core no longer carries a copy for.
+            return \FluxFiles\ModuleRegistry::classFor($id) !== null
+                ? $this->error("The '{$id}' module must be updated", 501, 'module_update_required', ['module' => $id])
+                : $this->error('Not found', 404, 'not_found');
+        }
+
+        $response = response($html, 200)
             ->header('Content-Type', 'text/html; charset=utf-8')
             ->header('Referrer-Policy', 'no-referrer')
             ->header('X-Content-Type-Options', 'nosniff')
             ->header('Cache-Control', 'private, no-store');
+        $csp = class_exists(\FluxFiles\FrameAncestors::class) ? \FluxFiles\FrameAncestors::policy() : null;
+        return $csp !== null ? $response->header('Content-Security-Policy', $csp) : $response;
     }
 
-    public function sharePage(): \Illuminate\Http\Response { return $this->publicPage('share.html'); }
-    public function intakePage(): \Illuminate\Http\Response { return $this->publicPage('intake.html'); }
+    public function sharePage(): \Symfony\Component\HttpFoundation\Response { return $this->publicPage('share'); }
+    public function intakePage(): \Symfony\Component\HttpFoundation\Response { return $this->publicPage('intake'); }
 
     // Chunk upload routes
 

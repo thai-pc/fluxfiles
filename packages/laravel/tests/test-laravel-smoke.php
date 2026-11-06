@@ -421,10 +421,6 @@ test('proxy route surface covers every core /api/fm route', function () {
         //   implementation, not a passthrough. No such port exists yet.
         'sso/login', 'sso/callback', 'sso/exchange',
         'metadata/export', 'metadata/import',
-        // - share/page, intake/page (PublicRoutes): the recipient HTML pages. The adapters
-        //   serve the bundled public/*.html themselves (Laravel publicPage(), WordPress
-        //   public-link.php), injecting the API base, so they don't expose /page.
-        'share/page', 'intake/page',
         // - tus (resumable uploads): stages partial bytes in core's own
         //   <FLUXFILES_STORAGE_PATH>/tus/ and speaks raw tus (PATCH/HEAD, no JSON
         //   envelope). The embedded UI falls back to a plain upload when /tus
@@ -434,6 +430,18 @@ test('proxy route surface covers every core /api/fm route', function () {
 
     $missing = array_values(array_diff($coreRoutes, $proxyRoutes, $intentionallyUnproxied));
     assertTrue($missing === [], 'core routes not proxied by Laravel: ' . implode(', ', $missing));
+});
+
+test('public share/intake routes dispatch through PublicRoutes (no legacy PublicLinks.php)', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    assertTrue(!str_contains($src, 'PublicLinks.php'), 'no PublicLinks.php include');
+    assertTrue(!str_contains($src, 'handleSharePublic') && !str_contains($src, 'handleIntakePublic'), 'no legacy handlers');
+    assertTrue(str_contains($src, 'PublicRoutes::dispatch(') && str_contains($src, 'new \FluxFiles\PublicContext('), 'dispatches via PublicRoutes/PublicContext');
+    foreach (['RetentionProviderInterface', 'FixityProviderInterface', 'AuditVerifierInterface'] as $i) {
+        assertTrue(str_contains($src, 'instanceof \FluxFiles\\' . $i), "instanceof {$i}");
+    }
+    $prov = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    assertTrue(str_contains($prov, "'share/page'") && str_contains($prov, "'intake/page'"), 'page routes registered');
 });
 
 test('every proxy route maps to an existing controller method', function () {
@@ -1291,7 +1299,7 @@ test('L4: FLUXFILES_* server env survives config:cache — captured into config,
     assertEqual('real-env', $_ENV['FLUXFILES_ZZ_PRESENT'], 'a real value always wins');
     assertTrue(!isset($_ENV['APP_KEY']) || $_ENV['APP_KEY'] !== 'must-not-leak', 'only FLUXFILES_* keys');
     unset($_ENV['FLUXFILES_ZZ_SEEDED'], $_ENV['FLUXFILES_ZZ_PRESENT']);
-    // What this is for: the license gate reads $_ENV, in the adapter AND in core's PublicLinks.php.
+    // What this is for: the license gate reads $_ENV, in the adapter AND in the module's public handler.
     assertTrue(!\FluxFiles\LicenseManager::fromEnv(['FLUXFILES_LICENSE_KEY' => null])->licensed('share'), 'sanity: no key → unlicensed');
     $prov = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
     assertTrue(str_contains($prov, "FluxFilesManager::seedServerEnv((array) config('fluxfiles.server_env', []))"), 'provider seeds at register()');
@@ -1316,6 +1324,22 @@ test('L5: an upload is audited under the uploaded FILE key, not its destination 
     $keys = array_column($rows, 'file_key');
     assertTrue(in_array('aud-up/evidence.txt', $keys, true), 'file key logged, got ' . json_encode($keys));
     assertTrue(!in_array('aud-up', $keys, true) && !in_array('', $keys, true), 'never the bare folder');
+});
+
+test('share/intake pages: 501 module_not_installed when the module is absent', function () {
+    if (!class_exists(\FluxFiles\PublicRoutes::class)) {
+        return; // core older than PublicRoutes: the adapter answers 501 core_missing
+    }
+    foreach (['share' => 'sharePage', 'intake' => 'intakePage'] as $id => $method) {
+        if (\FluxFiles\ModuleRegistry::classFor($id) !== null) {
+            continue; // module installed here: the not-installed path is not reachable
+        }
+        $res = freshController()->$method();
+        assertEqual(501, $res->getStatusCode(), "{$id} page status");
+        $d = $res->getData();
+        assertEqual('module_not_installed', $d['error_code'] ?? null, "{$id} error_code: " . json_encode($d));
+        assertEqual($id, $d['error_params']['module'] ?? null, "{$id} module param");
+    }
 });
 
 test('N11: renaming a missing file is a 404 not_found envelope, not a 500 (core parity)', function () {
