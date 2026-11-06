@@ -22,6 +22,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - **Extension API v1** (`FLUXFILES_EXT_API = 1`, documented in `packages/wordpress/HOOKS.md`):
   `fluxfiles_loaded`, `fluxfiles_module_paths`, `fluxfiles_license`, `fluxfiles_api_boot`,
   `fluxfiles_admin_sections`, `fluxfiles_edition_presets`, `fluxfiles_rest_routes`.
+### Fixed (WordPress plugin)
+
+- **Picker opened only once per page.** The FluxFiles Image block and the media-modal button initialised the SDK once and kept the first caller's callback; since the SDK removes its iframe after a pick, a second open showed an empty modal and a pick could land in the first block. Each open now builds a fresh picker bound to the block that opened it, and closing tears down the iframe and message listener. Test: `packages/wordpress/tests/block-picker.test.js`.
 
 ### Changed (WordPress plugin, preparation for the WordPress.org split)
 
@@ -36,6 +39,18 @@ All notable changes to FluxFiles are documented here. This project adheres to
   keeps serving links issued earlier. On multisite the REST page route honours a `?blog=N`
   hint with a validated `302` to that site's own page (unknown, deleted, archived or spam
   blog: `404`).
+- **`public-link.php` is now a WordPress-free redirect shim.** It no longer loads WordPress: it
+  whitelists `page` (`share`/`intake`, else `404`), keeps `token` and a numeric `blog`, and answers
+  a relative `302` to `<site root>/?rest_route=/fluxfiles/v1/api/fm/<page>/page` (root and
+  subdirectory installs) with `Referrer-Policy: no-referrer` and `Cache-Control: no-store`. To be
+  deleted once old links have expired.
+- **WordPress HTTP API for core's outbound calls.** New `WpHttpTransport`
+  (`HttpTransportInterface` over `wp_remote_request`, no redirects, never throws) is injected into
+  `AiTagger` and `BucketDoctor`, so they honour the host's proxy and SSL settings. URL import and
+  the bucket doctor's DNS-pinned probe keep cURL.
+- **Diagnostics respect `WP_DEBUG`.** `FluxFilesPlugin::debugLog()` replaces the plugin's raw
+  `error_log()` calls and is installed as core's `Log` sink; nothing is written unless `WP_DEBUG`
+  is on.
 - **Bundled core version.** `build-wordpress.sh` stamps `FLUXFILES_CORE_VERSION` (latest
   `core-v*` tag) into the built plugin (`scripts/stamp-wp-version.py` takes it as a third
   argument); Site Health shows "Bundled core" and About reports it.

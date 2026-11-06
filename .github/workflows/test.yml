@@ -51,7 +51,7 @@ jobs:
       - name: Lint all PHP sources
         run: |
           find packages/core/api packages/core/embed.php packages/core/router.php \
-               packages/laravel/src packages/wordpress/includes packages/wordpress/fluxfiles.php \
+               packages/laravel/src packages/wordpress/includes packages/wordpress/fluxfiles.php packages/wordpress/public-link.php \
                -name '*.php' -print0 2>/dev/null | xargs -0 -n1 php -l
 
       - name: Run unit/integration test suite
@@ -69,6 +69,9 @@ jobs:
 
       - name: Laravel adapter smoke (stubbed Laravel, uses core autoload)
         run: php packages/laravel/tests/test-laravel-smoke.php
+
+      - name: WordPress block / media picker re-open (Node, stubbed SDK)
+        run: node packages/wordpress/tests/block-picker.test.js
 
   # Lock files that drift from their composer.json slip by every other job (they
   # all run `composer update` or load core's autoload): the Laravel lock once

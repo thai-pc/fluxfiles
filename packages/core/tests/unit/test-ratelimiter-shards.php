@@ -118,13 +118,25 @@ test('sweep removes shard files whose window is long gone, keeps fresh ones', fu
 });
 
 test('cost per request is independent of how many other callers exist', function () {
-    $p = tmpPath();
-    $rl = new RateLimiterFileStorage($p, 100000, 100000, 60);
-    for ($u = 0; $u < 300; $u++) { $rl->check("user$u", 'read'); }
-    $t = hrtime(true);
-    for ($i = 0; $i < 50; $i++) { $rl->check('me', 'read'); }
-    $ms = (hrtime(true) - $t) / 1e6 / 50;
-    assertTrue($ms < 5, sprintf('%.2f ms/request with 300 other callers', $ms));
+    // Compare against a baseline measured on the same machine, not a fixed
+    // millisecond budget: shared CI runners vary several-fold in disk speed,
+    // and a 5 ms ceiling failed there while the ratio stayed flat. A design
+    // that rewrote one shared file per request would cost ~300x here.
+    $perRequest = static function (int $others): float {
+        $rl = new RateLimiterFileStorage(tmpPath(), 100000, 100000, 60);
+        for ($u = 0; $u < $others; $u++) { $rl->check("user$u", 'read'); }
+        $best = INF;
+        for ($round = 0; $round < 3; $round++) {
+            $t = hrtime(true);
+            for ($i = 0; $i < 50; $i++) { $rl->check('me', 'read'); }
+            $best = min($best, (hrtime(true) - $t) / 1e6 / 50);
+        }
+        return $best;
+    };
+    $base = $perRequest(0);
+    $ms   = $perRequest(300);
+    assertTrue($ms <= $base * 4 + 1.0,
+        sprintf('%.2f ms/request with 300 other callers vs %.2f ms with none', $ms, $base));
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

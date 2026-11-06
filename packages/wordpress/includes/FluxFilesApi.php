@@ -573,14 +573,14 @@ class FluxFilesApi
         if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
             $secret = get_option('fluxfiles_secret', '');
             if ($secret === '') {
-                error_log('FluxFiles: rejecting Bearer token — fluxfiles_secret option is empty');
+                FluxFilesPlugin::debugLog('FluxFiles: rejecting Bearer token — fluxfiles_secret option is empty');
                 return false;
             }
             try {
                 JwtMiddleware::handle($m[1], $secret);
                 return true;
             } catch (\Throwable $e) {
-                error_log('FluxFiles: Bearer rejected — ' . $e->getMessage());
+                FluxFilesPlugin::debugLog('FluxFiles: Bearer rejected — ' . $e->getMessage());
                 return false;
             }
         }
@@ -877,8 +877,15 @@ class FluxFilesApi
             $aiProvider,
             get_option('fluxfiles_ai_api_key', ''),
             get_option('fluxfiles_ai_model', '') ?: null,
-            get_option('fluxfiles_ai_base_url', '') ?: null
+            get_option('fluxfiles_ai_base_url', '') ?: null,
+            self::httpTransport()
         );
+    }
+
+    /** WordPress' HTTP API for core's outbound calls. */
+    private static function httpTransport(): ?\FluxFiles\HttpTransportInterface
+    {
+        return new \WpHttpTransport();
     }
 
     /**
@@ -1502,7 +1509,8 @@ class FluxFilesApi
                 // 4th arg — cores older than this plugin's floor ignore it (PHP drops
                 // extra arguments to a userland function), so the base-URL override is
                 // additive and needs no constraint bump.
-                get_option('fluxfiles_ai_base_url', '') ?: null
+                get_option('fluxfiles_ai_base_url', '') ?: null,
+                self::httpTransport()
             );
             $fm->setAiTagger($aiTagger);
 
@@ -2078,7 +2086,7 @@ class FluxFilesApi
 
             $origin = $request->get_header('origin') ?: $request->get_param('origin');
 
-            $report = (new BucketDoctor($this->diskManager))->diagnose($disk, $origin ?: null);
+            $report = (new BucketDoctor($this->diskManager, self::httpTransport()))->diagnose($disk, $origin ?: null);
             // It writes and deletes a probe object — logged like any other write.
             $this->logAuditQuiet($claims, 'disk_doctor', $disk, '');
 
@@ -2264,8 +2272,7 @@ class FluxFilesApi
      *
      * The `<module>/page` routes do NOT go through PublicRoutes::dispatch(): its page
      * branch hard-codes the standalone API base (`/api/fm`), which is wrong under
-     * /wp-json/fluxfiles/v1/. They use FluxFilesPlugin::servePublicPage(), shared with
-     * public-link.php.
+     * /wp-json/fluxfiles/v1/. They use FluxFilesPlugin::servePublicPage().
      */
     private function publicLink(string $which, \WP_REST_Request $request): void
     {
