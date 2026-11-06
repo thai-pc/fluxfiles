@@ -375,7 +375,7 @@ Compliance tab a standalone-core user sees. Concretely:
   next to the existing `audit`/`audit-export`/`license` routes. Needs a
   composer floor bump to whatever core tag ships `ComplianceScorecard.php`
   (same "floor = first release the proxy *calls* it" rule as every other
-  ported route; git-deploy, since removed in 1.0.0, and AI vision were the earlier cases).
+  ported route).
 - `packages/wordpress/includes/FluxFilesApi.php` — add a
   `handleComplianceScorecard()` REST callback under
   `/wp-json/fluxfiles/v1/compliance/scorecard`, same pattern as

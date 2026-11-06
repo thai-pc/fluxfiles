@@ -78,7 +78,7 @@ of their own copies.
 - Both routes now return 404. Tokens that still carry the removed claims keep
   working, and those claims are ignored. The SFTP storage driver (file
   operations and `chmod`) is unchanged.
-- The security reviews for these features moved to `docs/archive/`.
+- The security reviews for these features were deleted with them (they remain in git history).
 
 ### Upgrading from 0.x
 

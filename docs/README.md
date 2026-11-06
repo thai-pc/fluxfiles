@@ -26,9 +26,6 @@ every new document to the matching section below.
 
 Each records the decisions and trade-offs behind a feature; the status line at the
 top says whether it shipped and in which core release. They are not setup guides.
-They describe the code as it was when written, so they still mention the SSH terminal,
-Git deploy and ControlMaster features that 1.0.0 removed. `CHANGELOG.md` `[1.0.0]` is
-the current state.
 
 - [ACL role presets](design/ACL-ROLE-PRESETS-DESIGN.md) — implemented in core-v0.2.80.
 - [Compliance scorecard](design/COMPLIANCE-SCORECARD-DESIGN.md) — implemented in core-v0.2.82.
@@ -52,7 +49,6 @@ the current state.
   [free-core audit 2026-09](security/FREE-CORE-SECURITY-AUDIT-2026-09.md),
   [code audit 2026-09-21](reference/AUDIT-2026-09-21.md),
   [second-pass audit 2026-10-14](security/SECURITY-AUDIT-2026-10.md).
-- Archived (features removed in 1.0.0): [Git deploy review](archive/GIT-DEPLOY-SECURITY-REVIEW.md), [SFTP ControlMaster spec](archive/SFTP-CONTROLMASTER-SPEC.md) and [review](archive/SFTP-CONTROLMASTER-SECURITY-REVIEW.md).
 
 ## Not in git
 

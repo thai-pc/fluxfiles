@@ -535,8 +535,7 @@ operator dashboard table, which is out of scope for this spec.
   Not fixed here; flagging in case a future pass wants a lazy "delete on next
   resolveToken() 410" hook for both artifacts together.
 - **No server-wide kill switch** (e.g. a `FLUXFILES_SHARE_ANALYTICS_DISABLED` env
-  var) was considered, mirroring `FLUXFILES_TERMINAL_DISABLED`. Not proposed
-  here because unlike the terminal (which grants a shell), a mis-set
+  var) was considered. Not proposed here because a mis-set
   `share_analytics` claim has a bounded, storage-local blast radius (an extra
   JSONL file with IP/UA in the operator's own bucket) — the per-token claim is
   judged sufficient. Worth revisiting if a multi-tenant SaaS operator ever asks

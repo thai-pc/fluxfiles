@@ -160,11 +160,10 @@ def create_token(
     srcset_widths: list[int] | None = None,
     srcset_sizes: str | None = None,
 
-    # --- download gate / SFTP chmod / code-edit / terminal / BYO-embed URLs ---
+    # --- download gate / SFTP chmod / code-edit / BYO-embed URLs ---
     allow_download: bool | None = None,
     allow_chmod: bool | None = None,
     allow_code_edit: bool | None = None,
-    allow_terminal: bool | None = None,
     terminal_pty_url: str | None = None,
     pdf_tools_url: str | None = None,
     office_url: str | None = None,
@@ -258,7 +257,7 @@ def create_byob_token(
     role: str | None = None,
 
     # ... every other group above (ai_auto_tag, rate_read/write, import,
-    # media, webp/srcset, download/chmod/code_edit/terminal/embed-URLs,
+    # media, webp/srcset, download/chmod/code_edit/embed-URLs,
     # optimize, upload_collision/show_hidden/dedupe, zip/extract, all
     # paid-module claims, watermark, usage-dashboard) — identical typed
     # kwargs as create_token(), omitted here for brevity but present 1:1.
@@ -642,7 +641,7 @@ operator minted the equivalent BYOB+role token today.
 
 **Claims a role preset never touches, still true for BYOB tokens too:**
 `prefix`/`disks`/`user_id`/quota claims, and — critically — no role preset
-ever sets any paid-module `allow_<x>` claim or `allow_terminal` (those come
+ever sets any paid-module `allow_<x>` claim (those come
 only from `edition` or explicit kwargs/`claims`), per
 `docs/design/ACL-ROLE-PRESETS-DESIGN.md` §2's closing notes. This is unchanged by
 including role/edition on BYOB — the presets' *content* doesn't change
@@ -988,7 +987,7 @@ addition. Concretely:
   - **Not migrated** (stay inline, matching §6.1's scoping note): the
     per-claim-group forwarding tests (`aiAutoTag`/rate-limit/variants
     around line 75, media-preview at 102, usage-dashboard at 119,
-    watermark/download/chmod at 138, terminal at 174, Share/Intake claims
+    watermark/download/chmod at 138, Share/Intake claims
     at 181/206, WebP/srcset at 227, URL-import at 246, the secret-length
     rejection at 267) and the `describe('createByobToken', ...)`/
     `describe('verifyToken', ...)`/`describe('BYOB encrypt/decrypt

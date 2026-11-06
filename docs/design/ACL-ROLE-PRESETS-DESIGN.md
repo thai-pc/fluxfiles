@@ -181,12 +181,6 @@ per-tenant business config, unrelated to "who is this person on the team"):
 - `watermark_*`, `usage_*` — display/branding/dashboard config.
 - `terminal_pty_url`, `pdf_tools_url`, `office_url`, `esign_url` — BYO-embed
   URLs (operator infra, not a per-person capability).
-- `allow_terminal` — deliberately **not** touched by any role. Shell access
-  as the SSH user is high-consequence enough (grants a real remote shell,
-  not just file operations) that this spec treats it as its own opt-in
-  decision an operator must make explicitly per token, never implied by
-  "this person is an admin of the file manager." (Flagged in Open Questions
-  below in case that call is wrong.)
 - **All thirteen paid-module claims** — `allow_share`, `allow_intake`,
   `allow_versioning`, `allow_webhooks`, `allow_ai_vision`, `allow_ocr`,
   `allow_virus_scan`, `allow_backup`, `allow_c2pa`, `allow_audit_export`,
@@ -198,8 +192,7 @@ per-tenant business config, unrelated to "who is this person on the team"):
   (`edition` already owns "which paid features does this tier get"; `role`
   owns "how much can this person do within the features already enabled").
   `allow_optimize` is likewise free/core but replaces/deletes originals in
-  place — the same "opt-in per token, not implied by role" reasoning as
-  `allow_terminal` applies, so it's also left untouched.
+  place, so it stays an explicit opt-in per token, never implied by role.
 
 ## 3. Interaction with the existing `edition` preset
 
@@ -542,16 +535,7 @@ No `tests/unit/test-config-doc.php` changes needed — it only checks
 
 ## 7. Open questions
 
-1. **Should `allow_terminal` scale with role after all?** This spec
-   deliberately excludes it (§2) on the theory that shell access is
-   high-consequence enough to always be its own explicit opt-in, never
-   implied by "this person is an admin of the file manager." An operator
-   building an internal ops/hosting-panel tool (the SFTP/VPS persona in
-   `docs/guides/INDUSTRY-PRESETS.md` §5) might reasonably want `superadmin` to
-   include it. Left out for now; easy to add later without a breaking
-   change (just add a key to the `superadmin` preset map) if real usage asks
-   for it.
-2. **Is `perms: ['read','write','delete','audit']` the right default for
+1. **Is `perms: ['read','write','delete','audit']` the right default for
    `admin` (not just `superadmin`)?** The task's spec draws no distinction
    between `admin` and `superadmin` on the raw `perms`/`owner_only` axis —
    both get identical capability, differing only in the prefix-scoping
@@ -560,8 +544,8 @@ No `tests/unit/test-config-doc.php` changes needed — it only checks
    spec keeps them identical on purpose (§2's table shows one column for
    admin, superadmin repeats it) rather than inventing an artificial
    difference — flagging in case the intent was for `superadmin` to carry
-   something `admin` doesn't (e.g. `allow_terminal`, per Q1).
-3. **Naming: `role` vs. something more specific** (e.g. `acl_role`,
+   something `admin` doesn't.
+2. **Naming: `role` vs. something more specific** (e.g. `acl_role`,
    `access_role`) to avoid any future collision with an unrelated concept
    named "role" in an adapter (Laravel's own `Role` model, WordPress's own
    role strings). Not expected to collide today (the option name lives in
@@ -696,7 +680,7 @@ alongside `'edition' => 'pro'`, with a short explanatory paragraph — `role`
 is not itself a claim, so no `docs/reference/CONFIG.md` claim-table entry or
 `test-config-doc.php` change was needed.
 
-The §7 open questions (scaling `allow_terminal` with role, whether
+The §7 open questions (whether
 `admin`==`superadmin` is the right call, and the `role` naming-collision risk
 against app-specific "role" concepts) remain deliberately unresolved, as the
 spec allows.

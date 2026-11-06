@@ -2,8 +2,7 @@
 
 Status: **Implemented in core-v0.2.82** (CHANGELOG `[0.3.06]`, module `dlp` v1.0.0). Module id `dlp`, class `\FluxFiles\Dlp\DlpModule`
 (gitignored private package `packages/dlp/`, registered in `ModuleRegistry::$map`),
-claim `allow_dlp_scan` (parsed in `Claims.php`). Companion to `docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md`
-(style/depth reference) and the shipped Virus module (closest analog — gitignored code,
+claim `allow_dlp_scan` (parsed in `Claims.php`). Modelled on the shipped Virus module (closest analog — gitignored code,
 but its shape is fully visible from `ModuleRegistry.php`/`Claims.php`/`FileManager.php`/
 `index.php` and is what this spec mirrors throughout).
 Later additions not described below: presigned PUT/POST are refused with
@@ -95,8 +94,7 @@ raw bytes to `/analyze` would either error or (worse) silently return "clean" be
 the binary garbage happens to contain no string that looks like an SSN, which is a false
 sense of security, not a working scanner.
 
-**Resolution (mirrors this project's existing pattern of narrowing v1 scope — see §2.2
-of `docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md`'s "one fixed command shape" and the URL-import
+**Resolution (mirrors this project's existing pattern of narrowing v1 scope — see the URL-import
 "v1 is sync, no queue — by design" precedent in `.claude/CLAUDE.md`):** v1 only submits
 files whose **extension** is on a text-bearing allowlist (`dlp_scan_extensions`, §3) to
 the engine at all. Everything else (images, video, PDF, Office binary formats, archives)
@@ -120,9 +118,8 @@ all gitignored private packages — their HTTP calls aren't visible here, but th
 shape they expose (`FLUXFILES_VIRUSTOTAL_TIMEOUT`, `FLUXFILES_AIVISION_TIMEOUT`, no
 "circuit breaker" env anywhere in `docs/reference/CONFIG.md` §3) confirms the established pattern
 is a **plain bounded-timeout cURL call per request, no persistent failure-tracking
-state**. This project deliberately avoids new server-lifetime state (see
-`docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md` F8: "flagged only so nobody 'fixes' it by adding a
-persistent connection pool"). A circuit breaker that remembers "the engine has been down
+state**. This project deliberately avoids new server-lifetime state, such as a
+persistent connection pool. A circuit breaker that remembers "the engine has been down
 for N requests, stop trying" is exactly that kind of new in-memory/stateful mechanism —
 **deliberately not built**. `packages/dlp/`'s `PresidioClient` follows the established
 plain-timeout pattern: `FLUXFILES_DLP_TIMEOUT` bounds one HTTP call; a sustained outage
@@ -268,8 +265,7 @@ information beyond what the write operation itself already exposed.
 - `dlp_max_scan_kb` bounds the per-file payload sent to the engine (§3).
 - `FLUXFILES_DLP_TIMEOUT` (default 10s, suggested) bounds worst-case added latency per
   eligible write.
-- **No new dedicated rate-limit bucket.** Unlike git-deploy (which introduced a brand
-  new route worth its own bucket, per `GIT-DEPLOY-SECURITY-REVIEW.md` §4.9), DLP adds no
+- **No new dedicated rate-limit bucket.** DLP adds no
   route — it rides the existing `upload`/`content`/`extract` write-rate limits
   (`rate_write`/`FLUXFILES_RATE_LIMIT_WRITE`). Flagged as an open question (§9.7):
   an attacker who can trigger many small eligible uploads under the existing write quota
@@ -387,7 +383,7 @@ must not repeat this. Both proxy controllers build their **own** `FileManager` i
     2389/2430/2473/2553).
 - `packages/laravel/src/FluxFilesManager.php` / `packages/wordpress/includes/
   FluxFilesPlugin.php` — forward all 5 new claims **unconditionally** from token-builder
-  option overrides, matching exactly how `allow_virus_scan`/`allow_git_deploy` are
+  option overrides, matching exactly how `allow_virus_scan` is
   forwarded today (no conditional "only if provided" logic that could silently drop a
   claim — see the `d880b98`/`fb7c8a2` role-preset lesson in `.claude/CLAUDE.md` about
   claims silently defaulting to something unintended).
@@ -521,7 +517,7 @@ just remembering to bump the number by hand (gitignored packages aren't CI-visib
    default would be a support surprise ("why did it flag PERSON when I set nothing?").
    Worth revisiting if early Enterprise feedback says otherwise — flagged, not settled.
 7. **No dedicated rate-limit bucket for this feature** (§6.5) — reuses the existing
-   write bucket rather than getting its own the way `git-deploy` did. Revisit if the
+   write bucket rather than getting its own. Revisit if the
    added per-request HTTP hop to Presidio proves to be an operational bottleneck in
    practice; not pre-built speculatively.
 8. **Naming split, intentional:** module id `dlp` (the term Enterprise/compliance buyers
