@@ -46,11 +46,29 @@ rsync -a \
 
 # The core release this plugin build bundles: the nearest core-vX.Y.Z tag, without the
 # prefix. Shown in Site Health / About so a support report names the bundled core.
-CORE_VERSION="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 --match 'core-v*' 2>/dev/null | sed 's/^core-v//' || true)"
-case "$CORE_VERSION" in
-    [0-9]*.[0-9]*.[0-9]*) ;;
-    *) CORE_VERSION="" ;;
-esac
+# A release build (version argument) must resolve it: the checkout needs the tags
+# (fetch-depth: 0), and a silent 'unknown' would ship in every official ZIP.
+CORE_TAG="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 --match 'core-v[0-9]*' 2>/dev/null || true)"
+CORE_VERSION="${CORE_TAG#core-v}"
+if ! printf '%s' "$CORE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    CORE_VERSION=""
+fi
+if [ -z "$CORE_VERSION" ]; then
+    if [ -n "$PLUGIN_VERSION" ]; then
+        echo "ERROR: no core-vX.Y.Z release tag is reachable, so the bundled core version cannot be stamped." >&2
+        echo "       Fetch the tags (actions/checkout fetch-depth: 0 / git fetch --tags) and retry." >&2
+        exit 1
+    fi
+    echo "WARN: no core-vX.Y.Z tag reachable; FLUXFILES_CORE_VERSION stays 'unknown' (dev build)." >&2
+elif ! git -C "$ROOT_DIR" diff --quiet "$CORE_TAG"..HEAD -- \
+        packages/core/api packages/core/public packages/core/assets packages/core/lang packages/core/composer.json; then
+    # The bundled core differs from the tagged release, so the stamp would be a lie.
+    if [ -n "$PLUGIN_VERSION" ]; then
+        echo "ERROR: packages/core changed since $CORE_TAG; tag core first, then release the plugin." >&2
+        exit 1
+    fi
+    echo "WARN: packages/core changed since $CORE_TAG; the stamped core version is approximate (dev build)." >&2
+fi
 
 if [ -n "$PLUGIN_VERSION" ]; then
     echo "==> Stamping version $PLUGIN_VERSION into the built plugin..."

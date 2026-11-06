@@ -45,8 +45,8 @@ designs within them.
 >    Its job (serving `share.html` and `intake.html` with the API base injected) becomes a REST
 >    page route stub in the free plugin. The stub calls core `PublicRoutes::page()`, which reads
 >    the page out of the module, so the HTML and handlers live in the modules as decided. For
->    **one transition cycle** (at least 90 days after 1.0.5), the free plugin keeps
->    `public-link.php` as a WordPress-free, 20-line redirect, so that links minted before 1.0.5
+>    **one transition cycle** (at least 90 days after 1.1.0), the free plugin keeps
+>    `public-link.php` as a WordPress-free, 20-line redirect, so that links minted before 1.1.0
 >    still open (§5.4). It never loads `wp-load.php`.
 > 3. **Core removal takes two core releases.** Release X adds the seams and keeps a legacy
 >    fallback. Release Y deletes the code. Without the gap, a standalone operator who updates
@@ -327,7 +327,7 @@ of the free plugin (the old updater included) deletes that folder, which is the 
 - Share links are capped at 30 days (`ShareModule::MAX_TTL`) and Intake links at 90 days
   (`IntakeModule::MAX_TTL`). Tokens are signed with `fluxfiles_secret`, which is unchanged,
   and records stay in storage, so only the **URL path** is at risk.
-- **New-form links** (from 1.0.5 on) hit REST and keep working on every version.
+- **New-form links** (from 1.1.0 on) hit REST and keep working on every version.
 - **Old-form links** (`/wp-content/plugins/fluxfiles/public-link.php?page=…&token=…&blog=…`):
   1.1.0 ships `public-link.php` as a **WordPress-free redirect**. It loads nothing, reads only
   `page` (whitelist `share|intake`), `token` and `blog`. It answers `302` to
@@ -338,7 +338,7 @@ of the free plugin (the old updater included) deletes that folder, which is the 
   `publicLinkRestBase()` and answers a `302` to that blog's own `<id>/page` URL (bad, deleted,
   archived or spam blog: `404`); the shim itself stays WordPress-free.
 - **Removal.** The redirect is deleted in the first free release at least 90 days after
-  1.0.5 (tracked in §10, phase 8).
+  1.1.0 (tracked in §10, phase 8).
 - **Known gap.** A site whose `WP_CONTENT_URL` is on another host would mis-resolve the
   relative redirect. Its old links break, which is no worse than not having the shim.
 
@@ -405,7 +405,7 @@ The free plugin's storage root gets a fix for the hard-coded `WP_CONTENT_DIR/flu
   (`wp-includes/js/codemirror/`, guideline 13) and does not ship `assets/vendor/codemirror/`
   (open question 2).
 - **Stamp** `FLUXFILES_CORE_VERSION` from `git describe --tags --abbrev=0 --match 'core-v*'`
-  (prefix stripped). **Done** (phase 4 prep): `stamp-wp-version.py` 3rd argument.
+  (prefix stripped). **Done** (phase 4 prep): `stamp-wp-version.py` 3rd argument; release builds fail without a reachable core tag (the workflow checks out with `fetch-depth: 0`) or when `packages/core` changed since it.
 
 ### 8.2 CI guard: `scripts/check-wp-dist.php`
 
@@ -527,7 +527,7 @@ The short description is 145 characters. The sections:
 | 2 | **Module moves** (§4.1-4.4): legal-hold `runRetention`; audit-export `FixityChecker`, `runFixityCheck`, `verifyChain`, `trustedEntries`; share/intake public handlers and pages (meta API base) | **private ×4** | share, intake, legal-hold, audit-export (each a new tag, floor `^X`; check by hand per CLAUDE.md rule 1); then `pack-modules.php` | 1 | the moved core tests, now in each repo; modules-live e2e (`tests/modules-live/**/share-intake.spec.ts`, `records.spec.ts`) against core X plus the new modules on standalone, Laravel and WP |
 | 3 | **DONE (core-v1.1.0)**: adapters switched to module dispatch first (laravel-v1.0.3, WP `servePublicPage`), then core removal. **Core removal** (§4.5 step 3): delete the legacy code, `PublicLinks.php` → `api/helpers.php`, redirect-stub `public/*.html`, stubs for old modules → `module_update_required`, test oracle `tests/support/chain-verify.php`; Laravel controller/routes and floor `^Y`; docs (`.claude/rules/audit-log.md`, `.claude/api-map.md`, `.claude/CLAUDE.md` paid-module and PHP-floor lines, `ACTIVATE.md`, `RETENTION-LEGAL-HOLD-DESIGN.md`) | public | **core-vY**, laravel-v… | 2 released | core suite with no modules: 501 everywhere; with an old-module fixture: `module_update_required`; Laravel smoke; `adapter-core-floor`; browser `share-landing`/`intake-landing` through the redirect stub |
 | 4 | **FOLDED INTO 5 (owner decision, no existing paid WP users): no bridge 1.0.5, no hold/handover, no update-server bridge.** Preparation done in the 1.1.0 work: licence seam, new-form links (+ REST `?blog=` redirect), `FLUXFILES_CORE_VERSION` stamp. ~~**WP bridge 1.0.5** (§5.2): new-form links, `legacyModules()`, updater hold on `handover`, pro standby detection; update-server `bridge` and `$ANY_LICENSE_MODULES`~~ | public | ~~wordpress-v1.0.5~~ (none) | core X | wp-smoke: link URL form (single site, multisite, plain permalinks), `?blog=` redirect incl. bad blogs, the licence seam, the core-version stamp; the old shim still serves. `$ANY_LICENSE_MODULES` is deferred to phase 7 |
-| 5 | **WP free 1.1.0, functional** (§2.3, §5.3-5.4): delete `FluxFilesUpdater`, the `Update URI`, the licence/Module engines/expiry code, `public-link.php` → redirect shim, `modules-autoload` usage; add the hooks and `FLUXFILES_EXT_API`/`FLUXFILES_CORE_VERSION`; thin REST stubs; page routes; `pro_hints=false` default; `fluxfiles_storage_base`; `uninstall.php` | public | (tagged with 6) | core Y | wp-smoke: invert test `:954` (no `Update URI`); remove the updater tests `:631-940` and `:1748-1759` (they move to pro); hooks fire in order; default `NoLicense` → a paid route gives 501, and fake module plus fake provider → 200; page route emits the meta tag, not `<script>`; shim redirect math (subdir, multisite `blog`, a bad `page` → 404); every `register_setting` option is in `uninstall.php` and none of pro's are; storage base keeps an existing dir |
+| 5 | **WP free 1.1.0, functional** (§2.3, §5.3-5.4): delete `FluxFilesUpdater`, the `Update URI`, the licence/Module engines/expiry code, `public-link.php` → redirect shim, `modules-autoload` usage; add the hooks and `FLUXFILES_EXT_API` (`FLUXFILES_CORE_VERSION` is already done, §8.1); thin REST stubs; page routes; `pro_hints=false` default; `fluxfiles_storage_base`; `uninstall.php` | public | (tagged with 6) | core Y | wp-smoke: invert test `:954` (no `Update URI`); remove the updater tests `:631-940` and `:1748-1759` (they move to pro); hooks fire in order; default `NoLicense` → a paid route gives 501, and fake module plus fake provider → 200; page route emits the meta tag, not `<script>`; shim redirect math (subdir, multisite `blog`, a bad `page` → 404); every `register_setting` option is in `uninstall.php` and none of pro's are; storage base keeps an existing dir |
 | 6 | **WP hygiene, build and CI** (§8.1-8.4, §9, the list below): readme, `.distignore`, `check-wp-dist.php`, Plugin Check job, 10up deploy (flagged off), assets | public | **wordpress-v1.1.0** | 5 | `wp-dist-guard` (CI), `wp-plugin-check` (CI), `tests/apps` WP e2e (`npm run e2e:wp`) against the trimmed zip |
 | 7 | **fluxfiles-pro v1.0.0** (§2.4, §8.5), 12 modules, + `pack-wordpress-pro.php` + catalogue | **private (new repo)** + public script | pro `v1.0.0` | 5, 2 | pro smoke (moved updater and licence-notice tests from `test-wp-smoke.php`/`test-wp-license-notice.php`; boot guard on 1.0.5/1.1.0; module autoload from `modules/`; `sso` absent); modules-live WP spec with pro instead of `vendor/` |
 | 8 | **Launch**: submit the 1.1.0 zip to WP.org; on approval set `WPORG_DEPLOY=true` and redeploy; then flip the old channel to 1.1.0 (`handover`). Later, the first free release ≥ 90 days after 1.0.5 deletes the `public-link.php` shim and the `check-wp-dist.php` exemption | public | — | 6, 7 | manual: 1.0.4 → 1.0.5 → 1.1.0 on a staging site with and without modules; a share link minted on 1.0.4 opens after 1.1.0 |
@@ -599,7 +599,7 @@ because the packages are gitignored, so check them by hand. A tag isn't a releas
    - `proc_open` (gs, ffmpeg).
    - The UrlImporter cURL.
    - The transitional redirect `public-link.php`. If it's rejected, drop it and accept that
-     links minted before 1.0.5 break, which affects at most 90 days.
+     links minted before 1.1.0 break, which affects at most 90 days.
 4. **AWS trim.** Does `["S3"]` alone break any credential provider core's `S3Client` config
    reaches (Sts or SSO for assume-role)? Test on LocalStack and with web identity before
    dropping `Sts`.
@@ -615,7 +615,7 @@ because the packages are gitignored, so check them by hand. A tag isn't a releas
      routes. Moving them into `sso` would apply decision 2's principle consistently; that's a
      separate small PR, not needed for WP.org.
 8. **Handover timing.** The old channel may flip to 1.1.0 only after the WP.org listing is
-   live. Until then 1.1.0 ships on GitHub only, and bridge sites stay on 1.0.5.
+   live. Until then 1.1.0 ships on GitHub only, and existing sites stay on their current release.
 9. **Standalone operators on old modules after core Y** get `module_update_required` until
    they run `fluxfiles update <id>`. This needs a loud CHANGELOG entry plus an `OPERATIONS.md` note.
 

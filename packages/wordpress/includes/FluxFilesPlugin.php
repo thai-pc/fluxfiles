@@ -279,6 +279,7 @@ HTACCESS;
      * Test seam: the verifier class used when no filter supplies one. Null = autodetect
      * (LicenseManager if it is shipped, else NoLicense).
      *
+     * @internal Test seam only; production code must not set it.
      * @var class-string<\FluxFiles\LicenseCheckInterface>|null
      */
     public static ?string $licenseClass = null;
@@ -294,7 +295,15 @@ HTACCESS;
      */
     public static function license(): \FluxFiles\LicenseCheckInterface
     {
-        $custom = apply_filters('fluxfiles_license', null);
+        try {
+            $custom = apply_filters('fluxfiles_license', null);
+        } catch (\Throwable $e) {
+            // A throwing filter must fail closed (no licence), not 500 the caller.
+            if (defined('WP_DEBUG') && WP_DEBUG && function_exists('error_log')) {
+                error_log('FluxFiles: fluxfiles_license filter threw ' . get_class($e));
+            }
+            return new \FluxFiles\NoLicense();
+        }
         if ($custom instanceof \FluxFiles\LicenseCheckInterface) {
             return $custom;
         }
@@ -602,7 +611,7 @@ HTACCESS;
         // Token omitted = the BASE url, which is what the *_base_url claims carry: the
         // module appends the token itself, so a base that already had one would
         // produce two and resolve the wrong (first) value.
-        return $token !== '' ? add_query_arg(['token' => $token], $url) : $url;
+        return $token !== '' ? add_query_arg(['token' => rawurlencode($token)], $url) : $url;
     }
 
     public static function isMultisite(): bool
@@ -632,7 +641,7 @@ HTACCESS;
             return [200, null];
         }
         $target = $base . '/' . ($which === 'intake' ? 'intake' : 'share') . '/page';
-        return [302, $token !== '' ? add_query_arg(['token' => $token], $target) : $target];
+        return [302, $token !== '' ? add_query_arg(['token' => rawurlencode($token)], $target) : $target];
     }
 
     /**

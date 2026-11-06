@@ -2284,8 +2284,8 @@ class FluxFilesApi
             }
             // A link minted on another blog (the public-link.php shim passes `blog` through):
             // hop to that blog's own REST page, where its secret and licence apply.
-            $token = isset($_GET['token']) && is_string($_GET['token']) ? $_GET['token'] : '';
-            [$code, $location] = FluxFilesPlugin::publicPageRedirect($which, $_GET['blog'] ?? null, $token);
+            $token = isset($_GET['token']) && is_string($_GET['token']) ? wp_unslash($_GET['token']) : '';
+            [$code, $location] = FluxFilesPlugin::publicPageRedirect($which, isset($_GET['blog']) ? wp_unslash($_GET['blog']) : null, $token);
             if ($code === 404) {
                 status_header(404);
                 header('Referrer-Policy: no-referrer');

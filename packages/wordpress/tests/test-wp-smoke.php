@@ -71,8 +71,9 @@ if (!function_exists('plugin_basename')) {
     function plugin_basename($f) { return 'fluxfiles/fluxfiles.php'; }
 }
 if (!function_exists('get_bloginfo')) { function get_bloginfo($k = '') { return '6.5'; } }
+if (!function_exists('wp_unslash')) { function wp_unslash($v) { return $v; } }
 if (!function_exists('add_query_arg')) {
-    function add_query_arg($args, $url) { return $url . (strpos($url, '?') === false ? '?' : '&') . http_build_query($args); }
+    function add_query_arg($args, $url) { return $url . (strpos($url, '?') === false ? '?' : '&') . implode('&', array_map(fn($k, $v) => $k . '=' . $v, array_keys($args), $args)); }
 }
 if (!defined('HOUR_IN_SECONDS')) { define('HOUR_IN_SECONDS', 3600); }
 if (!defined('ARRAY_A')) { define('ARRAY_A', 'ARRAY_A'); }
@@ -2442,6 +2443,7 @@ function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, 
 function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
 function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
 function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function wp_unslash($v) { return $v; }
 function status_header($c) {}
 function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
 function add_action(...$a) {} function add_filter(...$a) {}
@@ -2529,6 +2531,7 @@ function get_rest_url($id, $p = '') { return 'http://wp.test/' . ((int) $id === 
 function home_url($p = '') { return 'http://wp.test' . $p; }
 function site_url($p = '') { return 'http://wp.test' . $p; }
 function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function wp_unslash($v) { return $v; }
 function status_header($c) { http_response_code($c); }
 function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
 function wp_json_encode($d, $f = 0) { return json_encode($d, $f); }
@@ -2825,6 +2828,7 @@ function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, 
 function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
 function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
 function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function wp_unslash($v) { return $v; }
 function status_header($c) {}
 function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
 function add_action(...$a) {} function add_filter(...$a) {}
@@ -3385,35 +3389,6 @@ test('licence seam: core resolves the plugin licence, the filter overrides it, N
     }
 });
 
-test('bundled core version: the stamped constant feeds Site Health, and the build script stamps it', function () {
-    assertEqual(null, FluxFilesPlugin::bundledCoreVersion(), 'undefined -> null');
-    define('FLUXFILES_CORE_VERSION', '1.1.0');
-    assertEqual('1.1.0', FluxFilesPlugin::bundledCoreVersion(), 'stamped value');
-    $fields = FluxFilesPlugin::siteHealthInfo([])['fluxfiles']['fields'];
-    assertEqual('1.1.0', $fields['bundled_core']['value'] ?? null, 'Site Health shows the bundled core');
-    if (class_exists(\FluxFiles\AboutInfo::class)) {
-        assertTrue(strpos((string) json_encode(array_column($fields, 'value')), '1.1.0 (env)') !== false, 'AboutInfo reports the stamped core version');
-    }
-
-    $main = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
-    assertTrue(preg_match("/define\('FLUXFILES_CORE_VERSION', '[^']*'\);/", $main) === 1, 'placeholder defined in fluxfiles.php');
-    $dir = sys_get_temp_dir() . '/ffstamp-' . uniqid();
-    mkdir($dir);
-    file_put_contents($dir . '/fluxfiles.php', $main);
-    file_put_contents($dir . '/readme.txt', "Stable tag: 0.0.0\n");
-    $p = proc_open(['python3', '-I', __DIR__ . '/../../../scripts/stamp-wp-version.py', $dir, '9.9.9', '7.8.9'],
-        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    stream_get_contents($pipes[1]);
-    stream_get_contents($pipes[2]);
-    $rc = proc_close($p);
-    $out = (string) file_get_contents($dir . '/fluxfiles.php');
-    array_map('unlink', glob($dir . '/*'));
-    rmdir($dir);
-    assertEqual(0, $rc, 'stamp script succeeds');
-    assertTrue(strpos($out, "define('FLUXFILES_CORE_VERSION', '7.8.9');") !== false, 'core version stamped');
-    assertTrue(strpos($out, "define('FLUXFILES_VERSION', '9.9.9');") !== false, 'plugin version stamped');
-});
-
 test('first request on a site that never ran activation: uploads/ is created before protectStorage()', function () {
     // The API constructor must create <storagePath>/uploads itself: protectStorage()
     // returns early without it, so the deny files would only appear after the first write.
@@ -3475,6 +3450,37 @@ test('Site Health adds a FluxFiles section, escaped, with sensitive rows private
 test('the plugin hooks Site Health debug_information', function () {
     $src = file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
     assertTrue(strpos($src, "add_filter('debug_information', [self::class, 'siteHealthInfo'])") !== false, 'filter registered');
+});
+
+// Keep LAST: this defines FLUXFILES_CORE_VERSION process-wide (a constant cannot be
+// undefined), and the 'undefined -> null' assertion needs no earlier test to have set it.
+test('bundled core version: the stamped constant feeds Site Health, and the build script stamps it', function () {
+    assertEqual(null, FluxFilesPlugin::bundledCoreVersion(), 'undefined -> null');
+    define('FLUXFILES_CORE_VERSION', '1.1.0');
+    assertEqual('1.1.0', FluxFilesPlugin::bundledCoreVersion(), 'stamped value');
+    $fields = FluxFilesPlugin::siteHealthInfo([])['fluxfiles']['fields'];
+    assertEqual('1.1.0', $fields['bundled_core']['value'] ?? null, 'Site Health shows the bundled core');
+    if (class_exists(\FluxFiles\AboutInfo::class)) {
+        assertTrue(strpos((string) json_encode(array_column($fields, 'value')), '1.1.0 (env)') !== false, 'AboutInfo reports the stamped core version');
+    }
+
+    $main = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
+    assertTrue(preg_match("/define\('FLUXFILES_CORE_VERSION', '[^']*'\);/", $main) === 1, 'placeholder defined in fluxfiles.php');
+    $dir = sys_get_temp_dir() . '/ffstamp-' . uniqid();
+    mkdir($dir);
+    file_put_contents($dir . '/fluxfiles.php', $main);
+    file_put_contents($dir . '/readme.txt', "Stable tag: 0.0.0\n");
+    $p = proc_open(['python3', '-I', __DIR__ . '/../../../scripts/stamp-wp-version.py', $dir, '9.9.9', '7.8.9'],
+        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    stream_get_contents($pipes[1]);
+    stream_get_contents($pipes[2]);
+    $rc = proc_close($p);
+    $out = (string) file_get_contents($dir . '/fluxfiles.php');
+    array_map('unlink', glob($dir . '/*'));
+    rmdir($dir);
+    assertEqual(0, $rc, 'stamp script succeeds');
+    assertTrue(strpos($out, "define('FLUXFILES_CORE_VERSION', '7.8.9');") !== false, 'core version stamped');
+    assertTrue(strpos($out, "define('FLUXFILES_VERSION', '9.9.9');") !== false, 'plugin version stamped');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
