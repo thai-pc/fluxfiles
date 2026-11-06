@@ -13,7 +13,6 @@
     if (!cfg.token || !window.wp || !window.wp.media) { return; }
 
     // ---- shared FluxFiles picker modal (appended once) ----
-    var pickerOpened = false;
     function ensurePicker() {
         var m = document.getElementById('fluxfiles-native-modal');
         if (m) { return m; }
@@ -36,11 +35,13 @@
     function hidePicker() {
         var m = document.getElementById('fluxfiles-native-modal');
         if (m) { m.style.display = 'none'; }
+        // Drop the iframe + message listener; each open() builds a fresh one.
+        if (window.FluxFiles && window.FluxFiles.close) { window.FluxFiles.close(); }
     }
     function openPicker(onSelect) {
         var m = ensurePicker();
         m.style.display = 'flex';
-        if (!pickerOpened) {
+        {
             window.FluxFiles.open({
                 endpoint: cfg.endpoint, token: cfg.token, disk: cfg.disk, mode: 'picker', locale: cfg.locale,
                 container: '#fluxfiles-native-body',
@@ -52,7 +53,6 @@
                 },
                 onSelect: function (file) { hidePicker(); onSelect(Array.isArray(file) ? file[0] : file); }
             });
-            pickerOpened = true;
         }
     }
 

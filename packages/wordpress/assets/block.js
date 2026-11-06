@@ -40,9 +40,10 @@
     function hideModal() {
         var m = document.getElementById('fluxfiles-block-modal');
         if (m) m.style.display = 'none';
+        // Tear the iframe + message listener down; the next open() builds a fresh one.
+        if (window.FluxFiles && window.FluxFiles.close) window.FluxFiles.close();
     }
 
-    var opened = false;
     function openPicker(onPick) {
         if (!cfg.token || !window.FluxFiles) {
             window.alert(__('FluxFiles is not configured. Set it up in Settings → FluxFiles.', 'fluxfiles'));
@@ -50,7 +51,9 @@
         }
         var m = ensureModal();
         m.style.display = 'flex';
-        if (!opened) {
+        // Every open builds a fresh iframe bound to THIS block's onPick (the SDK closes
+        // itself after a pick, and open() drops any previous listener first).
+        {
             window.FluxFiles.open({
                 endpoint: cfg.endpoint,
                 token: cfg.token,
@@ -72,7 +75,6 @@
                     attach(f, onPick);
                 }
             });
-            opened = true;
         }
     }
 
