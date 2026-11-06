@@ -188,7 +188,7 @@ class FluxFilesPlugin
 
     /** Bump when the generated rules change, so existing installs get rewritten. */
     private const PROTECT_VERSION = 1;
-    private const PROTECT_MARKER  = '# FluxFiles storage protection v';
+    private const PROTECT_MARKER  = FluxFilesStorage::PROTECT_MARKER;
 
     /**
      * Write web-server rules into the storage dir, which lives under the publicly
@@ -218,7 +218,7 @@ class FluxFilesPlugin
         self::writeProtectFile($uploads . '/.htaccess', self::uploadsHtaccess());
         foreach ([$root, $uploads] as $dir) {
             if (!file_exists($dir . '/index.php')) {
-                @file_put_contents($dir . '/index.php', "<?php\n// Silence is golden.\n");
+                @file_put_contents($dir . '/index.php', FluxFilesStorage::INDEX_STUB);
             }
         }
     }

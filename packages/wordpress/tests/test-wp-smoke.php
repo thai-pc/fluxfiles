@@ -2233,7 +2233,7 @@ test('A-H4: /attach derives the URL (and srcset) server-side; client url/variant
     $dir = 'att-' . uniqid();
     $ffPut($dir . '/pic.jpg');
     $ffPut($dir . '/_variants/pic.jpg_thumb.webp');
-    $base = content_url('fluxfiles/uploads');
+    $base = content_url('uploads/fluxfiles/uploads');
     $r = (new FluxFilesApi())->handleAttach(new WP_REST_Request([
         'url' => 'https://evil.example/x.jpg', 'key' => $dir . '/pic.jpg', 'disk' => 'local', 'width' => 1000, 'height' => 800,
         'variants' => [
@@ -2414,7 +2414,7 @@ test('A-M7: nginx sites get an admin notice that the uploads dir must not run PH
         $admin->renderNginxStorageNotice();
         $out = (string) ob_get_clean();
         assertTrue(strpos($out, 'nginx') !== false && strpos($out, 'deny all') !== false, 'notice + rules shown on nginx');
-        assertTrue(strpos($out, '/wp-content/fluxfiles/uploads/') !== false, 'names the uploads location');
+        assertTrue(strpos($out, '/wp-content/uploads/fluxfiles/uploads/') !== false, 'names the uploads location');
 
         $_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4';
         ob_start();
@@ -3038,9 +3038,9 @@ test('refused writes / 403s are audited through core\'s AuditPolicy and the plug
 test('multisite: each blog gets its own storage root + url; blog 1 cannot address blog 2', function () {
     // Single site: layout unchanged.
     $single = FluxFilesPlugin::diskConfigs()['local'];
-    assertEqual(WP_CONTENT_DIR . '/fluxfiles/uploads', $single['root'], 'single-site root unchanged');
-    assertEqual('http://wp.test/wp-content/fluxfiles/uploads', $single['url'], 'single-site url unchanged');
-    assertEqual(WP_CONTENT_DIR . '/fluxfiles', FluxFilesPlugin::storagePath(), 'single-site storage path unchanged');
+    assertEqual(WP_CONTENT_DIR . '/uploads/fluxfiles/uploads', $single['root'], 'single-site root unchanged');
+    assertEqual('http://wp.test/wp-content/uploads/fluxfiles/uploads', $single['url'], 'single-site url unchanged');
+    assertEqual(WP_CONTENT_DIR . '/uploads/fluxfiles', FluxFilesPlugin::storagePath(), 'single-site storage path unchanged');
 
     $GLOBALS['WP_MULTISITE'] = true;
     try {
@@ -3048,9 +3048,9 @@ test('multisite: each blog gets its own storage root + url; blog 1 cannot addres
         foreach ([1, 2] as $b) {
             $GLOBALS['WP_BLOG_ID'] = $b;
             $cfg[$b] = FluxFilesPlugin::diskConfigs()['local'];
-            assertEqual(WP_CONTENT_DIR . "/fluxfiles/sites/{$b}", FluxFilesPlugin::storagePath(), "blog {$b} storage path");
-            assertEqual(WP_CONTENT_DIR . "/fluxfiles/sites/{$b}/uploads", $cfg[$b]['root'], "blog {$b} root");
-            assertEqual("http://wp.test/wp-content/fluxfiles/sites/{$b}/uploads", $cfg[$b]['url'], "blog {$b} url");
+            assertEqual(WP_CONTENT_DIR . "/uploads/fluxfiles/sites/{$b}", FluxFilesPlugin::storagePath(), "blog {$b} storage path");
+            assertEqual(WP_CONTENT_DIR . "/uploads/fluxfiles/sites/{$b}/uploads", $cfg[$b]['root'], "blog {$b} root");
+            assertEqual("http://wp.test/wp-content/uploads/fluxfiles/sites/{$b}/uploads", $cfg[$b]['url'], "blog {$b} url");
         }
         assertTrue($cfg[1]['root'] !== $cfg[2]['root'], 'roots differ');
         assertTrue(strpos($cfg[2]['root'] . '/', $cfg[1]['root'] . '/') !== 0, 'blog 2 root is not inside blog 1 root');

@@ -71,6 +71,17 @@ test('visible-file walk, duplicate finder and quota count skip them', function (
     assertTrue((new QuotaManager($dm))->walk('local', '')['files'] === 3, 'a.txt + 2 subfolder files');
 });
 
+test('search never returns a guard key, but keeps the subfolder namesake', function () {
+    [$fm, $dm] = guardEnv(['.htaccess', 'index.php']);
+    $h = new StorageMetadataHandler($dm);
+    foreach (['.htaccess', 'index.php', 'sub/index.php', 'a.txt'] as $k) {
+        $h->save('local', $k, ['title' => 'findme ' . $k]);
+    }
+    $keys = array_column($h->search('local', 'findme', 50, '', true), 'file_key');
+    assertTrue(!in_array('.htaccess', $keys, true) && !in_array('index.php', $keys, true), json_encode($keys));
+    assertTrue(in_array('sub/index.php', $keys, true) && in_array('a.txt', $keys, true), json_encode($keys));
+});
+
 test('isGuardKey is exact and case-sensitive', function () {
     $cfg = ['hidden_files' => ['.htaccess']];
     assertTrue(FileManager::isGuardKey($cfg, '.htaccess'), 'exact');

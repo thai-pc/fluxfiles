@@ -295,7 +295,14 @@ class FluxFilesAdmin
         // this site's actual content path.
         $baseUrl = FluxFilesStorage::url(FluxFilesStorage::base());
         if ($baseUrl === '') {
-            return; // storage outside uploads/ and wp-content/: nothing is web-served
+            // No URL mapping (e.g. uploads/wp-content moved elsewhere), but a base
+            // under ABSPATH is still served by nginx from the document root.
+            $abs = rtrim(str_replace('\\', '/', (string) (defined('ABSPATH') ? ABSPATH : '')), '/');
+            $base = FluxFilesStorage::base();
+            if ($abs === '' || strpos($base . '/', $abs . '/') !== 0) {
+                return; // outside the web root: nothing is web-served
+            }
+            $baseUrl = rtrim((string) (function_exists('site_url') ? site_url() : ''), '/') . substr($base, strlen($abs));
         }
         $root = '/' . trim((string) wp_parse_url($baseUrl, PHP_URL_PATH), '/') . '/';
         // Multisite keeps each site's uploads under sites/<blog_id>/uploads/.
@@ -445,9 +452,9 @@ class FluxFilesAdmin
             . '<label><input type="checkbox" name="fluxfiles_delete_data_on_uninstall" value="1" %s /> %s</label>'
             . '<p class="description"><strong>%s</strong> %s</p>',
             $on ? 'checked' : '',
-            esc_html__('Delete the files stored on the local disk when FluxFiles is deleted', 'fluxfiles'),
+            esc_html__('Delete all FluxFiles data when the plugin is deleted', 'fluxfiles'),
             esc_html__('Warning:', 'fluxfiles'),
-            esc_html__('Off by default. When on, deleting the plugin from the Plugins screen permanently removes every file in the local FluxFiles storage folder, including the trash. Settings and database tables are always removed. Files on S3, R2 or SFTP are never touched.', 'fluxfiles')
+            esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables and the secret key (the audit log key), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash; of the folder only the files FluxFiles wrote are deleted. Nothing is deleted from a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter, nor from S3, R2 or SFTP.', 'fluxfiles')
         );
     }
 
