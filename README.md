@@ -26,22 +26,31 @@ Drop it into any web app via iframe + SDK, or use the provided adapters for **La
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
+  - [Run with Docker](#run-with-docker-fastest) · [1. Install](#1-install) · [2. Configure](#2-configure) · [3. Run](#3-run) · [URL parameters](#url-parameters-standalone-mode) · [4. Generate a Token](#4-generate-a-token)
 - [Production Deployment](#production-deployment) — full nginx/Apache configs: [`docs/guides/DEPLOYMENT.md`](docs/guides/DEPLOYMENT.md)
+  - [Upload size limits](#upload-size-limits-three-layers)
 - [Embedding in Your App](#embedding-in-your-app)
-  - [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard) — internals: [`docs/guides/FEATURES.md`](docs/guides/FEATURES.md)
+  - [JavaScript SDK](#javascript-sdk-vanilla) · [`permanent_url` vs `url`](#embedding-selected-files-permanent_url-vs-url) · [On-demand WebP & AVIF](#on-demand-webp--avif) · [Responsive `srcset`](#responsive-srcset) · [Watermark](#watermark) · [Usage dashboard](#usage-dashboard) · [Uploading multiple files](#uploading-multiple-files) — internals: [`docs/guides/FEATURES.md`](docs/guides/FEATURES.md)
+  - [SDK Commands](#sdk-commands) · [SDK Events](#sdk-events) · [Token Refresh](#token-refresh) · [PHP Embed Helper](#php-embed-helper) · [TypeScript Support](#typescript-support)
 - [Storage Disks](#storage-disks)
-  - [SFTP disk](#sftp-disk-vps--shared-hosting) · [Terminal (BYO ttyd)](#terminal-bring-your-own-ttyd) · [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
+  - [Configuration](#configuration) · [SFTP disk](#sftp-disk-vps--shared-hosting) · [Adding a Custom Disk](#adding-a-custom-disk) · [S3-compatible providers](#s3-compatible-providers-no-extra-code) · [BYOB](#byob-bring-your-own-bucket) · [Cross-disk operations](#cross-disk-operations)
+- [File Operations](#file-operations)
+  - [Config / code editor](#config--code-editor) · [Zip / Extract](#zip--extract) · [Import from URL](#import-from-url)
+- [Admin Tools](#admin-tools)
+  - [Terminal (BYO ttyd)](#terminal-bring-your-own-ttyd) · [PDF tools, office and e-sign](#pdf-tools-office-and-e-sign-bring-your-own) · [Import Existing Files (indexer CLI)](#import-existing-files)
 - [JWT Token Structure](#jwt-token-structure)
-  - [Import from URL](#import-from-url)
+  - [Permissions explained](#permissions-explained)
 - [Multi-tenant](#multi-tenant)
+  - [User isolation](#user-isolation)
 - [API Reference](#api-reference) — full route tables: [`docs/guides/API.md`](docs/guides/API.md)
 - [Framework Adapters](#framework-adapters)
 - [Internationalization](#internationalization)
 - [Security](#security)
+  - [Built-in Protections](#built-in-protections) · [Token handling](#token-handling) · [Production Checklist](#production-checklist)
 - [Testing](#testing)
 - [Environment Variables](#environment-variables)
 - [Project Structure](#project-structure)
-- [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson)
+- [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson) — details: [`docs/reference/METADATA-STORAGE-DESIGN.md`](docs/reference/METADATA-STORAGE-DESIGN.md#runtime-files-on-disk-_fluxfiles-rate_limitjson)
 - [Customization](#customization)
 - [Troubleshooting / FAQ](#troubleshooting--faq)
 - [Attribution](#attribution)
@@ -89,6 +98,8 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 | **Adapters** | Laravel · WordPress · React · Vue/Nuxt · CKEditor 4 · TinyMCE · Summernote · `@fluxfiles/node` · `fluxfiles-token` (Python) · `@fluxfiles/mcp` (AI agents) | Drop into your stack, skip the plumbing |
 | | 🔒 Paid: **Webhooks** | Event-driven integrations (at-most-once delivery) |
 
+---
+
 ## Requirements
 
 - **PHP** >= 8.1 — tested with 8.1 – 8.5 (keep PHP on a security-patched release; that part is up to the host)
@@ -130,13 +141,12 @@ variable it was given into `/app/packages/core/.env` — but only if that file d
 not exist yet. The file lives in the **container's own filesystem layer**, not on
 the `/app/packages/core/storage` volume, so:
 
-- `docker restart` (same container) keeps the `.env` written on its first start;
-  editing `-e` values needs a new container anyway.
+- `docker restart` (same container) keeps the `.env` written on its first start.
 - `docker rm` + a new `docker run -e …` writes a fresh `.env` from the new values,
   even when you keep the volume — the volume holds uploads and runtime state, never
   the config.
-- A `.env` you mount yourself (`-v ./fluxfiles.env:/app/packages/core/.env:ro`) is
-  never overwritten.
+- A `.env` you mount yourself (`-v "$PWD/fluxfiles.env:/app/packages/core/.env:ro"`)
+  is never overwritten.
 
 Core loads config through `EnvBootstrap`, where a real env var that PHP can see
 wins over the same key in `.env` (the entrypoint's note relies on this). The image
@@ -237,13 +247,9 @@ When opening FluxFiles directly via `/public/index.html`, configure it with URL 
 | `theme` | No | auto | `light`, `dark`, or auto-detect |
 | `multiple` | No | `false` | `1` or `true` to enable multi-select |
 
-> **Security — `?token=` is for dev/standalone only.** A full-privilege JWT in the
-> URL can leak via browser history, server/proxy access logs, the copy buffer, and the
-> `Referer` header. FluxFiles hardens this case: the page sends **`Referrer-Policy:
-> no-referrer`** (+ a `<meta referrer>` backup) and the app **strips `token` from the
-> URL on boot** via `history.replaceState` (it lives in memory after). Still, for
-> **production embed via the SDK / React / Vue** — the token goes over **`postMessage`,
-> never in the URL** — and keep `ttl` short. See [Token handling](#token-handling).
+> **Security — `?token=` is for dev/standalone only.** In production, embed via the
+> SDK / React / Vue so the token travels over `postMessage`, never in a URL. Why, and
+> how the standalone page limits the damage: [Token handling](#token-handling).
 
 ### 4. Generate a Token
 
@@ -311,7 +317,7 @@ upload_max_filesize = 100M
 post_max_size       = 110M     ; a little above upload_max_filesize
 ```
 
-> Files **larger than 10 MB on S3/R2 disks** use chunked (multipart) upload, which
+> **Large uploads (chunk / tus thresholds).** Files **larger than 10 MB on S3/R2 disks** use chunked (multipart) upload, which
 > sends 5 MB parts directly to the bucket — so those bypass `post_max_size`. On
 > **local/SFTP disks**, the standalone core uploads files larger than 8 MB with
 > resumable **tus** chunks, so only each chunk has to fit the PHP/nginx limits. Behind
@@ -421,10 +427,9 @@ snapped to a bounded set of sizes so cache growth can't run away. Full mechanics
 [`docs/guides/FEATURES.md#on-demand-webp--avif`](docs/guides/FEATURES.md#on-demand-webp--avif).
 
 > `img_base` carries a short-lived per-file token in the query string (an `<img>`
-> can't send an `Authorization` header) — the same tradeoff as the media stream
-> token: single-file scope + short TTL. It mints only when the disk config wires a
-> stream secret; the standalone/Docker app and the Laravel and WordPress proxy
-> adapters all do, so `/api/fm/img` is fully proxied.
+> can't send an `Authorization` header). How that token is scoped, and which
+> deployments mint it: [Tokened media endpoints](#tokened-media-endpoints) in the API
+> Reference.
 
 #### Responsive `srcset`
 
@@ -524,8 +529,8 @@ with a one-click "move extra copies to trash").
 ### Uploading multiple files
 
 Always on — drag-drop several files, or pick multiple in the Upload dialog. They
-upload sequentially (one request each; big S3/R2 files use chunk upload, big
-local/SFTP files use resumable tus upload on the standalone core) with a
+upload sequentially (big files go in chunks — see the
+[thresholds](#upload-size-limits-three-layers)) with a
 combined progress bar; each is checked independently (size/ext/quota/dup) so one
 rejection doesn't abort the rest. Caps: **`max_upload`** (MB per file),
 **`max_files`** (total under the prefix, server-side `413`), and the SDK
@@ -715,12 +720,14 @@ How it differs from S3 (by design):
   per action (SSH handshake); the UI shows a loading state.
 - **No static or presigned URL** — every download/preview is **streamed through
   the app** via a tokened `/api/fm/stream` link (the same mechanism gated local
-  media uses). So uploads/downloads use app-server bandwidth; **keep per-file size
-  modest** with the token's `max_upload` claim (e.g. 100–200 MB). HTTP Range isn't
-  advertised for SFTP (browse/edit, not media seeking).
-- **Chunk upload and presign are rejected** for an SFTP disk (S3-only). Files over
-  8 MB use resumable tus upload on the standalone core; behind the Laravel/WordPress
-  proxies they upload in one request.
+  media uses; proxied by the Laravel and WordPress adapters too — see
+  [Tokened media endpoints](#tokened-media-endpoints)). So uploads/downloads use
+  app-server bandwidth; **keep per-file size modest** with the token's `max_upload`
+  claim (e.g. 100–200 MB). HTTP Range isn't advertised for SFTP (browse/edit, not
+  media seeking).
+- **Chunk upload and presign are rejected** for an SFTP disk (S3-only); large files
+  use tus on the standalone core instead — see the
+  [thresholds](#upload-size-limits-three-layers).
 - **File permissions (chmod)**: SFTP has native Unix permissions (S3 doesn't), so
   the UI offers a cPanel-style permissions dialog (Owner/Group/World × rwx) on
   SFTP files. `GET /api/fm/chmod?disk=&path=` reads the octal mode; `POST` with
@@ -734,71 +741,118 @@ How it differs from S3 (by design):
 - **Per-tenant (BYOB)**: mint a token with the user's own SFTP credentials —
   `fluxfiles_byob_token($u, ['my-vps' => ['driver' => 'sftp', 'host' => …,
   'username' => …, 'password' => …]])`, or use `'private_key' => …` (RSA/ED25519)
-  with an optional `'private_key_passphrase' => …`. Credentials are
-  AES-256-GCM-encrypted into the JWT and SSRF-checked on decode, never stored.
-- SFTP serving goes through the same tokened `/api/fm/stream` route that gated
-  local media uses (it streams bytes through the app rather than a static/presigned
-  URL) — and, like `/api/fm/stream` generally, **it is proxied by both the Laravel
-  and WordPress adapters**, not just the core-standalone/Docker app.
+  with an optional `'private_key_passphrase' => …`. See [BYOB](#byob-bring-your-own-bucket).
 
-### Terminal (bring your own ttyd)
+### Adding a Custom Disk
 
-FluxFiles has no built-in shell: it is a file manager, and free OSS already does
-terminals well. If you want one next to your files, run **any PTY-over-WebSocket
-server on your own box** — [ttyd](https://github.com/tsl0922/ttyd),
-[gotty](https://github.com/yudai/gotty) or [wetty](https://github.com/butlerx/wetty)
-— and point FluxFiles at it with the **`terminal_pty_url`** claim:
+FluxFiles has no separate override file for disks; pick the route that matches
+your install:
 
-```php
-$token = fluxfiles_token([
-    'user'   => 'admin-7',
-    'perms'  => ['read', 'write'],
-    'disks'  => ['sftp'],
-    'prefix' => 'sites/acme/',
-    'claims' => [
-        'terminal_pty_url' => 'https://term.acme.com/',   // your self-hosted ttyd/gotty/wetty
-    ],
-]);
-```
+- **Just one S3-compatible store?** No new disk needed — point the built-in `s3`
+  disk at it with `AWS_ENDPOINT` (+ `AWS_DEFAULT_REGION`, credentials).
+- **Monorepo clone, or your own Docker image:** add an entry to
+  `packages/core/config/disks.php` (keep it in your fork, or `COPY` your version over
+  it in a Dockerfile `FROM ghcr.io/thai-pc/fluxfiles`):
 
-The claim alone adds a terminal button to the toolbar that embeds that server in a
-modal. Empty (default) → no terminal entry. Only `http(s)` URLs are accepted. It is
-**free/core** — a config toggle, never a paid module. The PTY server runs on your
-own box and owns its own auth; FluxFiles hosts nothing.
+  ```php
+  $disks['minio'] = [
+      'driver'   => 's3',
+      'endpoint' => 'http://minio.local:9000',
+      'region'   => 'us-east-1',
+      'bucket'   => $_ENV['MINIO_BUCKET'] ?? '',
+      'key'      => $_ENV['MINIO_KEY'] ?? '',
+      'secret'   => $_ENV['MINIO_SECRET'] ?? '',
+  ];
+  ```
 
-> 🔒 The trust boundary is your PTY server: put it behind your own auth, run it as
-> a least-privilege OS user, and only mint `terminal_pty_url` into tokens of
-> operators you'd hand that shell to. See
-> [`docs/guides/FEATURES.md#terminal--bring-your-own-terminal_pty_url`](docs/guides/FEATURES.md#terminal--bring-your-own-terminal_pty_url).
+  Then include `'minio'` in the JWT `disks` claim. Only the `FLUXFILES_*`, `AWS_*`,
+  `R2_*` and `SFTP_*` prefixes are copied from real env vars, so any other variable
+  name (like `MINIO_*` above) must come from `.env`.
+- **Composer install:** don't edit `vendor/` — it is overwritten on update. Add
+  extra buckets / SFTP servers per token with [BYOB](#byob-bring-your-own-bucket)
+  instead (no file to edit; a private-network endpoint must be listed in
+  `FLUXFILES_SSRF_ALLOW_HOSTS`).
+- **Laravel adapter:** disks live in your published `config/fluxfiles.php`
+  (`disks` key) — see [`packages/laravel/README.md`](packages/laravel/README.md).
 
-Deploying from a Git repo? Use your CI (GitHub Actions, Deployer, a webhook) —
-FluxFiles' SFTP disk is for file operations (list/upload/download/`chmod`).
+### S3-compatible providers (no extra code)
 
-### PDF tools, office and e-sign (bring your own)
+Any S3-compatible object store works **today** through the `s3` driver — just set
+`endpoint` (and `region`). No new dependency or driver is needed; the same
+chunked-upload / presign / visibility logic applies.
 
-The same pattern covers three more tools that excellent free OSS already does. Each
-is a free, `http(s)`-validated claim that makes the UI embed **your own** instance
-in a modal; empty (default) → no button or action.
-
-| Claim | Embed | What appears |
-|---|---|---|
-| `pdf_tools_url` | [Stirling-PDF](https://github.com/Stirling-Tools/Stirling-PDF) | A **PDF tools** button (merge/split/convert on your server) |
-| `office_url` | [Collabora Online](https://www.collaboraonline.com/) / [OnlyOffice](https://www.onlyoffice.com/) | An **Open in Office** action on `.doc(x)`/`.xls(x)`/`.ppt(x)`/`.odt`/`.ods`/`.odp`/`.rtf` files |
-| `esign_url` | [DocuSeal](https://github.com/docusealco/docuseal) | A **Sign** action on `.pdf`/`.doc(x)`/`.odt` files |
-
-`office_url` and `esign_url` may carry a `{url}` placeholder, which the UI replaces
-with the selected file's (URL-encoded) URL; without one, your server is embedded
-as-is. Your page on that server does the editor / signing wiring.
+| Provider | `endpoint` example | Notes |
+|----------|--------------------|-------|
+| **DigitalOcean Spaces** | `https://nyc3.digitaloceanspaces.com` | `region` = the Space's region (e.g. `nyc3`) |
+| **Backblaze B2** | `https://s3.us-west-004.backblazeb2.com` | Use the S3-compatible endpoint from the bucket page |
+| **Wasabi** | `https://s3.us-east-1.wasabisys.com` | Region-specific endpoint |
+| **MinIO (self-hosted)** | `http://minio.local:9000` | `region` can be any value (e.g. `us-east-1`) |
+| **Cloudflare R2** | `https://<account>.r2.cloudflarestorage.com` | First-class — see above (no presigned POST: use PUT or chunked upload) |
 
 ```php
-'claims' => [
-    'pdf_tools_url' => 'https://pdf.acme.com/',
-    'office_url'    => 'https://office.acme.com/open?file={url}',
-    'esign_url'     => 'https://sign.acme.com/new?doc={url}',
+'spaces' => [
+    'driver'   => 's3',
+    'endpoint' => 'https://nyc3.digitaloceanspaces.com',
+    'region'   => 'nyc3',
+    'bucket'   => $_ENV['DO_SPACES_BUCKET'],
+    'key'      => $_ENV['DO_SPACES_KEY'],
+    'secret'   => $_ENV['DO_SPACES_SECRET'],
 ],
 ```
 
-See [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) §2.2 for the claim details.
+> Like R2, endpoint-based disks have ACL operations disabled automatically
+> (`retain_visibility` off). For native **Google Cloud Storage** or **Azure Blob**
+> (non-S3 APIs), a dedicated Flysystem adapter + `DiskManager` driver would be
+> needed — not currently bundled.
+
+### BYOB (Bring Your Own Bucket)
+
+The strongest tenant isolation: each user connects their own S3/R2 bucket (or SFTP
+server — see [SFTP disk](#sftp-disk-vps--shared-hosting)), so you never store the
+tenant's data or their keys. The credentials travel in the token's `byob_disks`
+claim, AES-256-GCM encrypted (key derived via HKDF, separate from the signing key)
+and decrypted only at runtime, never stored:
+
+```php
+$token = fluxfiles_byob_token(
+    userId:    'user-123',
+    byobDisks: [
+        'my-bucket' => [
+            'driver'   => 's3',
+            'region'   => 'us-west-2',
+            'bucket'   => 'user-personal-bucket',
+            'key'      => 'AKIAIOSFODNN7EXAMPLE',
+            'secret'   => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        ],
+    ],
+    perms: ['read', 'write', 'delete'],
+    ttl:   1800  // SECONDS — shorter lifetime recommended for BYOB tokens (1800 = 30 min)
+);
+```
+
+Security: BYOB allows the `s3` and `sftp` drivers only — the `local` driver is blocked to prevent path traversal. Custom endpoints and SFTP hosts are SSRF-checked on every decode.
+
+### Cross-Disk Operations
+
+Copy or move files between any two disks (e.g., local to R2):
+
+```bash
+# API
+POST /api/fm/cross-copy
+{"src_disk":"local","src_path":"photo.jpg","dst_disk":"r2","dst_path":"backups/photo.jpg"}
+
+# SDK
+FluxFiles.crossCopy('r2', 'backups/');
+FluxFiles.crossMove('s3', 'archive/');
+```
+
+Metadata and image variants are transferred together. Quota is checked on the destination disk.
+
+---
+
+## File Operations
+
+Beyond everyday upload / move / rename / trash, the core ships these file operations. Each is gated by its own JWT claim.
 
 ### Config / code editor
 
@@ -865,155 +919,6 @@ In the UI, a **Download ZIP** button appears in the selection toolbar (and on a
 folder), and an **Extract** action on `.zip` files. Claims: `allow_zip` /
 `allow_extract` (default true), `zip_max_mb` (1024), `zip_max_files` (10000).
 
-### Adding a Custom Disk
-
-FluxFiles has no separate override file for disks; pick the route that matches
-your install:
-
-- **Just one S3-compatible store?** No new disk needed — point the built-in `s3`
-  disk at it with `AWS_ENDPOINT` (+ `AWS_DEFAULT_REGION`, credentials).
-- **Monorepo clone, or your own Docker image:** add an entry to
-  `packages/core/config/disks.php` (keep it in your fork, or `COPY` your version over
-  it in a Dockerfile `FROM ghcr.io/thai-pc/fluxfiles`):
-
-  ```php
-  $disks['minio'] = [
-      'driver'   => 's3',
-      'endpoint' => 'http://minio.local:9000',
-      'region'   => 'us-east-1',
-      'bucket'   => $_ENV['MINIO_BUCKET'] ?? '',
-      'key'      => $_ENV['MINIO_KEY'] ?? '',
-      'secret'   => $_ENV['MINIO_SECRET'] ?? '',
-  ];
-  ```
-
-  Then include `'minio'` in the JWT `disks` claim. Only the `FLUXFILES_*`, `AWS_*`,
-  `R2_*` and `SFTP_*` prefixes are copied from real env vars, so any other variable
-  name (like `MINIO_*` above) must come from `.env`.
-- **Composer install:** don't edit `vendor/` — it is overwritten on update. Add
-  extra buckets / SFTP servers per token with [BYOB](#byob-bring-your-own-bucket)
-  instead (no file to edit; a private-network endpoint must be listed in
-  `FLUXFILES_SSRF_ALLOW_HOSTS`).
-- **Laravel adapter:** disks live in your published `config/fluxfiles.php`
-  (`disks` key) — see [`packages/laravel/README.md`](packages/laravel/README.md).
-
-### S3-compatible providers (no extra code)
-
-Any S3-compatible object store works **today** through the `s3` driver — just set
-`endpoint` (and `region`). No new dependency or driver is needed; the same
-chunked-upload / presign / visibility logic applies.
-
-| Provider | `endpoint` example | Notes |
-|----------|--------------------|-------|
-| **DigitalOcean Spaces** | `https://nyc3.digitaloceanspaces.com` | `region` = the Space's region (e.g. `nyc3`) |
-| **Backblaze B2** | `https://s3.us-west-004.backblazeb2.com` | Use the S3-compatible endpoint from the bucket page |
-| **Wasabi** | `https://s3.us-east-1.wasabisys.com` | Region-specific endpoint |
-| **MinIO (self-hosted)** | `http://minio.local:9000` | `region` can be any value (e.g. `us-east-1`) |
-| **Cloudflare R2** | `https://<account>.r2.cloudflarestorage.com` | First-class — see above (no presigned POST: use PUT or chunked upload) |
-
-```php
-'spaces' => [
-    'driver'   => 's3',
-    'endpoint' => 'https://nyc3.digitaloceanspaces.com',
-    'region'   => 'nyc3',
-    'bucket'   => $_ENV['DO_SPACES_BUCKET'],
-    'key'      => $_ENV['DO_SPACES_KEY'],
-    'secret'   => $_ENV['DO_SPACES_SECRET'],
-],
-```
-
-> Like R2, endpoint-based disks have ACL operations disabled automatically
-> (`retain_visibility` off). For native **Google Cloud Storage** or **Azure Blob**
-> (non-S3 APIs), a dedicated Flysystem adapter + `DiskManager` driver would be
-> needed — not currently bundled.
-
-### BYOB (Bring Your Own Bucket)
-
-Users can connect their own S3/R2 buckets (or SFTP servers — see [SFTP disk](#sftp-disk-vps--shared-hosting)). Credentials are AES-256-GCM encrypted inside the JWT (derived key via HKDF, separate from signing key):
-
-```php
-$token = fluxfiles_byob_token(
-    userId:    'user-123',
-    byobDisks: [
-        'my-bucket' => [
-            'driver'   => 's3',
-            'region'   => 'us-west-2',
-            'bucket'   => 'user-personal-bucket',
-            'key'      => 'AKIAIOSFODNN7EXAMPLE',
-            'secret'   => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-        ],
-    ],
-    perms: ['read', 'write', 'delete'],
-    ttl:   1800  // SECONDS — shorter lifetime recommended for BYOB tokens (1800 = 30 min)
-);
-```
-
-Security: BYOB allows the `s3` and `sftp` drivers only — the `local` driver is blocked to prevent path traversal. Custom endpoints and SFTP hosts are SSRF-checked on every decode.
-
-### Cross-Disk Operations
-
-Copy or move files between any two disks (e.g., local to R2):
-
-```bash
-# API
-POST /api/fm/cross-copy
-{"src_disk":"local","src_path":"photo.jpg","dst_disk":"r2","dst_path":"backups/photo.jpg"}
-
-# SDK
-FluxFiles.crossCopy('r2', 'backups/');
-FluxFiles.crossMove('s3', 'archive/');
-```
-
-Metadata and image variants are transferred together. Quota is checked on the destination disk.
-
----
-
-## JWT Token Structure
-
-> 📖 **Full config reference:** [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) is the single source
-> of truth for **all** JWT claims (with types/defaults) **and** server env vars.
-> Bought a paid edition? [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md) covers installing the
-> module, where the licence key goes on each platform, and which of the three gates a
-> given error is telling you about. Self-hosting? See
-> [`docs/guides/DEPLOYMENT.md`](docs/guides/DEPLOYMENT.md) for web-server config. Selling FluxFiles
-> rather than using it? [`docs/guides/OPERATIONS.md`](docs/guides/OPERATIONS.md) is the "going live"
-> runbook (Polar, licence server, module hosting). The
-> tables below cover the common ones; mint everything in one options object —
-> `fluxfiles_token(['user' => …, 'claims' => […]])` — where `claims` is the escape
-> hatch for any claim by its raw name. Want a ready-made config for a specific
-> vertical (agency client sites, photo studio delivery, SaaS multi-tenant, ...)
-> instead of assembling claims from scratch? See
-> [`docs/guides/INDUSTRY-PRESETS.md`](docs/guides/INDUSTRY-PRESETS.md). Want a quick permission bundle
-> instead of picking claims one by one? The mint-time `role` claim
-> (`viewer`/`editor`/`admin`/`superadmin`) expands to a preset set of claims — see
-> [`docs/design/ACL-ROLE-PRESETS-DESIGN.md`](docs/design/ACL-ROLE-PRESETS-DESIGN.md).
-
-```json
-{
-    "sub":          "user-123",
-    "iat":          1710500000,
-    "exp":          1710503600,     // Unix seconds
-    "jti":          "a1b2c3d4e5f6",
-    "perms":        ["read", "write", "delete"],
-    "disks":        ["local", "s3", "r2"],
-    "prefix":       "user-123/",
-    "max_upload":   10,             // MB per file
-    "allowed_ext":  ["jpg", "png", "pdf"],
-    "max_storage":  1000,           // MB total (0 = unlimited)
-    "max_files":    0               // files under the prefix (0 = unlimited)
-}
-```
-
-That is what `fluxfiles_token()` always emits; optional claims (`owner_only`,
-`allow_*`, …) are added only when set. `byob_disks` (encrypted credentials) appears
-only in tokens from `fluxfiles_byob_token()`.
-
-The full claim list (100+, with types/defaults/units) and every `fluxfiles_token()`
-parameter live in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) — kept as the single copy so it
-can't drift from what the code actually reads. The handful used in every app:
-`sub`, `perms`, `disks`, `prefix`, `max_upload`, `allowed_ext`, `ttl` (a
-`fluxfiles_token()` parameter, not a claim — it sets `exp = iat + ttl`, in seconds).
-
 ### Import from URL
 
 `POST /api/fm/import-url` fetches a **public** URL server-side and saves it like a
@@ -1079,56 +984,77 @@ optional env vars — see [`.env.example`](.env.example):
 > streamed with a hard size cap. `import_url_allowlist` further restricts which
 > hosts may be fetched.
 
-### Permissions explained
+---
 
-| Permission | Allows |
-|-----------|--------|
-| `read` | List files, view metadata, search, download (presign), get quota |
-| `write` | Upload, rename, copy, move, mkdir, save metadata, crop, AI-tag |
-| `delete` | Delete files and directories (incl. trash, purge, restore) |
-| `audit` | Activity log, compliance scorecard, and — with the matching paid module — audit export/verify, integrity check, legal hold, retention runs |
+## Admin Tools
 
-### User isolation
+Tooling for operators who use FluxFiles to manage a site or server. FluxFiles hosts none of the embeds itself: they point at services you run, and the indexer is a CLI.
 
-FluxFiles provides two layers of user isolation that can be used independently or combined:
+### Terminal (bring your own ttyd)
 
-**Layer 1: Path prefix (recommended)** — Each user gets a unique `prefix` so they physically cannot see or touch other users' files:
-
-```php
-$token = fluxfiles_token(
-    userId:   $user->id,
-    perms:    ['read', 'write', 'delete'],
-    prefix:   'users/' . $user->id . '/',  // user 42 → users/42/*
-);
-```
-
-**Layer 2: Owner-only mode** — When multiple users share the same prefix (e.g., a shared team folder), `owner_only` restricts destructive operations (delete, rename, move, crop) to the user who uploaded the file:
+FluxFiles has no built-in shell: it is a file manager, and free OSS already does
+terminals well. If you want one next to your files, run **any PTY-over-WebSocket
+server on your own box** — [ttyd](https://github.com/tsl0922/ttyd),
+[gotty](https://github.com/yudai/gotty) or [wetty](https://github.com/butlerx/wetty)
+— and point FluxFiles at it with the **`terminal_pty_url`** claim:
 
 ```php
-$token = fluxfiles_token(
-    userId:    $user->id,
-    perms:     ['read', 'write', 'delete'],
-    prefix:    'team/shared/',
-    ownerOnly: true,  // can only delete/rename own files
-);
+$token = fluxfiles_token([
+    'user'   => 'admin-7',
+    'perms'  => ['read', 'write'],
+    'disks'  => ['sftp'],
+    'prefix' => 'sites/acme/',
+    'claims' => [
+        'terminal_pty_url' => 'https://term.acme.com/',   // your self-hosted ttyd/gotty/wetty
+    ],
+]);
 ```
 
-| Scenario | Use |
-|----------|-----|
-| Each user has their own space | `prefix: 'users/{id}/'` |
-| Shared folder, users can only manage own files | `prefix: 'shared/'` + `owner_only: true` |
-| Admin with full access | `prefix: ''` (no prefix, no owner_only) |
-| Shared folder, everyone can manage all files | `prefix: 'shared/'` (no owner_only) |
+The claim alone adds a terminal button to the toolbar that embeds that server in a
+modal. Empty (default) → no terminal entry. Only `http(s)` URLs are accepted. It is
+**free/core** — a config toggle, never a paid module. The PTY server runs on your
+own box and owns its own auth; FluxFiles hosts nothing.
 
-> **Warning:** `owner_only` is a safety layer, NOT a replacement for `prefix` isolation. Always use `prefix` to scope users to their own directory. `owner_only` only protects against delete/rename/move — it does NOT prevent users from reading or downloading each other's files.
+> 🔒 The trust boundary is your PTY server: put it behind your own auth, run it as
+> a least-privilege OS user, and only mint `terminal_pty_url` into tokens of
+> operators you'd hand that shell to. See
+> [`docs/guides/FEATURES.md#terminal--bring-your-own-terminal_pty_url`](docs/guides/FEATURES.md#terminal--bring-your-own-terminal_pty_url).
 
-> **Note:** Files uploaded before `owner_only` was enabled lack ownership metadata and will be accessible to all users unless you import them with owner assignment or readonly mode.
+Deploying from a Git repo? Use your CI (GitHub Actions, Deployer, a webhook) —
+FluxFiles' SFTP disk is for file operations (list/upload/download/`chmod`).
+
+### PDF tools, office and e-sign (bring your own)
+
+The same pattern covers three more tools that excellent free OSS already does. Each
+is a free, `http(s)`-validated claim that makes the UI embed **your own** instance
+in a modal; empty (default) → no button or action.
+
+| Claim | Embed | What appears |
+|---|---|---|
+| `pdf_tools_url` | [Stirling-PDF](https://github.com/Stirling-Tools/Stirling-PDF) | A **PDF tools** button (merge/split/convert on your server) |
+| `office_url` | [Collabora Online](https://www.collaboraonline.com/) / [OnlyOffice](https://www.onlyoffice.com/) | An **Open in Office** action on `.doc(x)`/`.xls(x)`/`.ppt(x)`/`.odt`/`.ods`/`.odp`/`.rtf` files |
+| `esign_url` | [DocuSeal](https://github.com/docusealco/docuseal) | A **Sign** action on `.pdf`/`.doc(x)`/`.odt` files |
+
+`office_url` and `esign_url` may carry a `{url}` placeholder, which the UI replaces
+with the selected file's (URL-encoded) URL; without one, your server is embedded
+as-is. Your page on that server does the editor / signing wiring.
+
+```php
+'claims' => [
+    'pdf_tools_url' => 'https://pdf.acme.com/',
+    'office_url'    => 'https://office.acme.com/open?file={url}',
+    'esign_url'     => 'https://sign.acme.com/new?doc={url}',
+],
+```
+
+See [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) §2.2 for the claim details.
 
 ### Import Existing Files
 
 If a disk or bucket already contains files before FluxFiles is installed, run the indexer so existing content becomes searchable and folder search works. The default mode is **index-only**: it writes FluxFiles index files under `_fluxfiles/` but does not modify source files/objects.
 
 ```bash
+# Monorepo clone (from packages/core); in a Composer install use `php vendor/bin/fluxfiles`
 cd packages/core
 bin/fluxfiles index --disk=local --path=users/42 --dry-run
 bin/fluxfiles index --disk=local --path=users/42
@@ -1151,6 +1077,63 @@ Laravel proxy mode also exposes the same workflow:
 php artisan fluxfiles:seed --disk=local --path=users/42 --dry-run
 php artisan fluxfiles:seed --disk=local --path=users/42 --owner=user-123
 ```
+
+---
+
+## JWT Token Structure
+
+Mint everything in one options object — `fluxfiles_token(['user' => …, 'claims' => […]])`
+— where `claims` is the escape hatch for any claim by its raw name. Related docs:
+
+- [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) — the single source of truth for
+  **all** JWT claims (types/defaults) **and** server env vars.
+- [`docs/guides/INDUSTRY-PRESETS.md`](docs/guides/INDUSTRY-PRESETS.md) — ready-made configs
+  per vertical (agency client sites, photo studio delivery, SaaS multi-tenant, …).
+- [`docs/design/ACL-ROLE-PRESETS-DESIGN.md`](docs/design/ACL-ROLE-PRESETS-DESIGN.md) — the
+  mint-time `role` claim (`viewer`/`editor`/`admin`/`superadmin`) that expands to a
+  preset bundle of claims.
+- [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md) — bought a paid edition: installing
+  a module, where the licence key goes, which of the three gates an error comes from.
+- [`docs/guides/DEPLOYMENT.md`](docs/guides/DEPLOYMENT.md) — web-server config for self-hosting.
+- [`docs/guides/OPERATIONS.md`](docs/guides/OPERATIONS.md) — selling FluxFiles: the
+  "going live" runbook (Polar, licence server, module hosting).
+
+A token minted by `fluxfiles_token()` looks like this:
+
+```json
+{
+    "sub":          "user-123",
+    "iat":          1710500000,
+    "exp":          1710503600,     // Unix seconds
+    "jti":          "a1b2c3d4e5f6",
+    "perms":        ["read", "write", "delete"],
+    "disks":        ["local", "s3", "r2"],
+    "prefix":       "user-123/",
+    "max_upload":   10,             // MB per file
+    "allowed_ext":  ["jpg", "png", "pdf"],
+    "max_storage":  1000,           // MB total (0 = unlimited)
+    "max_files":    0               // files under the prefix (0 = unlimited)
+}
+```
+
+That is what `fluxfiles_token()` always emits; optional claims (`owner_only`,
+`allow_*`, …) are added only when set. `byob_disks` (encrypted credentials) appears
+only in tokens from `fluxfiles_byob_token()`.
+
+The full claim list (100+, with types/defaults/units) and every `fluxfiles_token()`
+parameter live in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) — kept as the single copy so it
+can't drift from what the code actually reads. The handful used in every app:
+`sub`, `perms`, `disks`, `prefix`, `max_upload`, `allowed_ext`, `ttl` (a
+`fluxfiles_token()` parameter, not a claim — it sets `exp = iat + ttl`, in seconds).
+
+### Permissions explained
+
+| Permission | Allows |
+|-----------|--------|
+| `read` | List files, view metadata, search, download (presign), get quota |
+| `write` | Upload, rename, copy, move, mkdir, save metadata, crop, AI-tag |
+| `delete` | Delete files and directories (incl. trash, purge, restore) |
+| `audit` | Activity log, compliance scorecard, and — with the matching paid module — audit export/verify, integrity check, legal hold, retention runs |
 
 ---
 
@@ -1212,15 +1195,49 @@ $token = fluxfiles_token(
 > wraps this as `FluxFiles::tokenForUser([...])` — see its README's *Per-tenant
 > configuration*.
 
-**Bring Your Own Bucket (BYOB)** is the strongest isolation: give each tenant
-their own S3/R2 bucket. The credentials are AES-256-GCM encrypted **inside** the
-token (`byob_disks`) and decrypted only at runtime, so you never store the
-tenant's data or their keys. See [Storage Disks](#storage-disks).
+For the strongest isolation, give each tenant their own bucket or SFTP server with
+[BYOB](#byob-bring-your-own-bucket) (`byob_disks`).
 
 > **Still global (not per-token):** the AI provider + API key (security — keys
 > stay server-side; only the on/off `ai_auto_tag` is per tenant) and the
 > always-blocked dangerous-extension list. Everything else above — including
 > image variant sizes, AI auto-tag and rate limits — is now per tenant.
+
+### User isolation
+
+FluxFiles provides two layers of user isolation that can be used independently or combined:
+
+**Layer 1: Path prefix (recommended)** — Each user gets a unique `prefix` so they physically cannot see or touch other users' files:
+
+```php
+$token = fluxfiles_token(
+    userId:   $user->id,
+    perms:    ['read', 'write', 'delete'],
+    prefix:   'users/' . $user->id . '/',  // user 42 → users/42/*
+);
+```
+
+**Layer 2: Owner-only mode** — When multiple users share the same prefix (e.g., a shared team folder), `owner_only` restricts destructive operations (delete, rename, move, crop) to the user who uploaded the file:
+
+```php
+$token = fluxfiles_token(
+    userId:    $user->id,
+    perms:     ['read', 'write', 'delete'],
+    prefix:    'team/shared/',
+    ownerOnly: true,  // can only delete/rename own files
+);
+```
+
+| Scenario | Use |
+|----------|-----|
+| Each user has their own space | `prefix: 'users/{id}/'` |
+| Shared folder, users can only manage own files | `prefix: 'shared/'` + `owner_only: true` |
+| Admin with full access | `prefix: ''` (no prefix, no owner_only) |
+| Shared folder, everyone can manage all files | `prefix: 'shared/'` (no owner_only) |
+
+> **Warning:** `owner_only` is a safety layer, NOT a replacement for `prefix` isolation. Always use `prefix` to scope users to their own directory. `owner_only` only protects against delete/rename/move — it does NOT prevent users from reading or downloading each other's files.
+
+> **Note:** Files uploaded before `owner_only` was enabled lack ownership metadata and will be accessible to all users unless you import them with owner assignment or readonly mode.
 
 ---
 
@@ -1245,12 +1262,20 @@ metadata, search, quota, audit, Bucket Doctor, chunk upload, tus, paid modules),
 request/response bodies, and the upload/duplicate-detection JSON shapes:
 [`docs/guides/API.md`](docs/guides/API.md).
 
-> **Tokened media endpoints** (query-string token, for `<img>`/`<video>`):
-> `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see
-> [On-demand WebP](#on-demand-webp--avif)) and `GET /stream?token=` (gated
-> private media, including SFTP-disk serving). Both mint only when a stream
-> secret is wired — true for core-standalone/Docker and for both the Laravel and
-> WordPress proxy adapters, so both routes are fully proxied, not core-only.
+### Tokened media endpoints
+
+Two routes take a **per-file token in the query string** instead of a Bearer
+header, because an `<img>`/`<video>`/`<audio>` element can't send an
+`Authorization` header:
+
+- `GET /img?token=&width=&quality=&format=` — on-demand WebP/AVIF (the `img_base` /
+  `img_srcset` URLs; see [On-demand WebP & AVIF](#on-demand-webp--avif)).
+- `GET /stream?token=` — gated private local media and SFTP-disk serving.
+
+Each token is scoped to a single file with a short TTL (see
+[Token handling](#token-handling)). Both are minted only when a stream secret is
+wired — true for core-standalone/Docker and for both the Laravel and WordPress proxy
+adapters, so both routes are fully proxied, not core-only.
 
 ---
 
@@ -1383,9 +1408,12 @@ How you deliver it to the file manager matters:
 - **Embedding (recommended):** the SDK and framework wrappers pass the token over
   `postMessage` (`FM_CONFIG`), so it never appears in a URL. Use this for production.
 - **Standalone mode** opens `/public/index.html?token=<JWT>`. A token in the URL
-  can leak through **browser history, server access logs, and the `Referer`
-  header** of any outbound request the page makes. Treat standalone URLs as
-  sensitive and prefer it for local dev / short-lived links only.
+  can leak through **browser history, server/proxy access logs, the copy buffer and
+  the `Referer` header**. FluxFiles limits this: the page sends
+  **`Referrer-Policy: no-referrer`** (+ a `<meta referrer>` backup) and the app
+  **strips `token` from the URL on boot** via `history.replaceState` (it lives in
+  memory after). Still treat standalone URLs as sensitive and use them for local
+  dev / short-lived links only.
 
 Mitigations regardless of delivery:
 
@@ -1511,47 +1539,12 @@ FluxFiles/
 
 ## Storage Internals (`_fluxfiles/`, `rate_limit.json`)
 
-FluxFiles creates a few internal runtime files under your storage root (for local disk: `packages/core/storage/uploads/`).
-These files are **not user content** and are **not meant to be edited by hand**.
-
-### `_fluxfiles/` directory
-
-Hidden internal folder used for indexes and logs (one per disk root, or per tenant prefix for prefix-scoped bookkeeping). The API/UI blocks system paths (`_fluxfiles/`, `_variants/`) from normal list/rename/move/delete operations.
-
-- **`_fluxfiles/index.json`**: Metadata index for files (title/alt/caption/tags) stored alongside objects. Used by `GET /api/fm/search` to perform fast search across the disk.
-- **`_fluxfiles/dirs.json`**: Directory index (list of folder paths). Used by `GET /api/fm/search-folders` so searches like `test2` can match folder names without scanning the whole storage.
-- **`_fluxfiles/meta/`** (local/SFTP disks): per-file metadata sidecars. S3/R2 keep this in object metadata instead.
-- **`_fluxfiles/audit.jsonl`**: Append-only, HMAC-chained audit log (JSON Lines). When it grows too large the oldest lines are moved to **`_fluxfiles/audit/archive/`** (never silently dropped).
-- **`_fluxfiles/trash.json`** + **`_fluxfiles/trash/`**: soft-deleted files and their manifest.
-- **`_fluxfiles/originals/`**: pre-watermark originals (so a burn-in can be undone).
-- **`_fluxfiles/usage.json`**: cached usage-dashboard breakdown.
-- Paid-module state, when used: `shares.json`, `intakes.json`, `versions/`, `holds.json`, `fixity.json`.
-- **`_fluxfiles/index.lock`** (local disks only): Lock file for safely updating indexes on local filesystem. Not used for S3/R2.
-
-If you delete `_fluxfiles/`, FluxFiles will generally recreate it as needed, but you may temporarily lose search results / audit history until indexes are rebuilt by new operations — and you lose trash, version history and legal holds outright.
-
-### `storage/rate_limit.json` (and other server-local state)
-
-File-backed state of the rate limiter (per-user read/write limits set by
-`FLUXFILES_RATE_LIMIT_READ` / `FLUXFILES_RATE_LIMIT_WRITE`). The counters are
-sharded one small file per user + action under **`storage/rate_limit.d/`**;
-`storage/rate_limit.json` is only an epoch marker that every shard records.
-
-- Deleting `rate_limit.json` resets every limit at once (it is recreated); handy in
-  development and tests.
-- In production, **do not expose `rate_limit.json` or `rate_limit.d/` publicly**
-  (deny access at your web server).
-
-`storage/tus/` holds partial resumable uploads (swept after 24 h) — server-local runtime
-state that must never be served.
-
-> Everything above describes the **default `FLUXFILES_STORAGE_BACKEND=json`** mode. Set
-> `FLUXFILES_STORAGE_BACKEND=db` to move metadata, search/folder index, audit log, trash
-> manifest, legal holds, quota, and the rate limiter into your own self-hosted
-> MySQL/PostgreSQL/SQLite instead — none of those `_fluxfiles/*.json` files,
-> `rate_limit.json` or `rate_limit.d/` are created or used in that mode. File bytes always stay on your
-> configured disk either way. See
-> [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](docs/design/DB-STORAGE-MIGRATION-DESIGN.md).
+FluxFiles keeps its bookkeeping next to your files: a hidden `_fluxfiles/` folder
+(search/folder index, metadata sidecars, audit log, trash, usage cache) on each disk,
+plus server-local state under `storage/` (`rate_limit.json` + `rate_limit.d/`,
+`tus/`). None of it is user content, none of it should be edited by hand, and none
+of it may be web-served. What each file is, and what deleting it costs:
+[`docs/reference/METADATA-STORAGE-DESIGN.md` → Runtime files on disk](docs/reference/METADATA-STORAGE-DESIGN.md#runtime-files-on-disk-_fluxfiles-rate_limitjson).
 
 ---
 
@@ -1585,7 +1578,7 @@ state that must never be served.
 | `402` on a paid-module endpoint | Module is installed but the license didn't validate — check [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md) and your license server config. |
 | Every upload fails after enabling `allow_virus_scan` / `allow_dlp_scan` | Both are **fail-closed**: a missing module, licence or unreachable scanner refuses the write. Configure the engine or drop the claim. |
 | Uploaded/renamed files "disappear" or don't show up where expected | Check `prefix`/`disks` claims scoping the token, and whether you're looking at the composer-install vs monorepo storage root — see [`packages/core/README.md`](packages/core/README.md#where-the-files-land--git-clone-vs-composer-require). |
-| Search or folder search returns stale/missing results after manually touching files on disk | You edited storage outside the API. Delete `_fluxfiles/index.json` / `dirs.json` to force a rebuild — see [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson). |
+| Search or folder search returns stale/missing results after manually touching files on disk | You edited storage outside the API. Delete `_fluxfiles/index.json` / `dirs.json` to force a rebuild — see [Storage Internals](#storage-internals-_fluxfiles-rate_limitjson), or re-run the [indexer](#import-existing-files). |
 | Rate-limit errors under normal use | Tune `FLUXFILES_RATE_LIMIT_READ` / `FLUXFILES_RATE_LIMIT_WRITE` in `.env`, or switch to `FLUXFILES_STORAGE_BACKEND=db` for DB-backed limits at scale. |
 | Large uploads stall or 404 on `/api/fm/tus` behind a load balancer | Partial tus uploads live on one node's disk — share `storage/tus/` between nodes or use sticky sessions. |
 | Token works standalone but not embedded via iframe/SDK | Never pass the JWT in a URL query string — adapters send it over `postMessage`; check `FLUXFILES_ALLOWED_ORIGINS` and browser console for `postMessage` origin mismatches. See [Security](#security). |

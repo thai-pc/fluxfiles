@@ -20,7 +20,7 @@ every new document to the matching section below.
 ## Reference
 
 - [Architecture](reference/ARCHITECTURE.md) — monorepo layout, integration patterns, publish topology, CI map.
-- [Metadata storage](reference/METADATA-STORAGE-DESIGN.md) — how metadata, trash and audit travel with user storage (the default `json` backend).
+- [Metadata storage](reference/METADATA-STORAGE-DESIGN.md) — how metadata, trash and audit travel with user storage (the default `json` backend), and what each runtime file under `_fluxfiles/` and `storage/` is.
 
 ## Design records (`design/`)
 
