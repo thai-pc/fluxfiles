@@ -6,9 +6,7 @@
 > [`CHANGELOG.md`](../../CHANGELOG.md) and the follow-up
 > [`SECURITY-AUDIT-2026-10.md`](SECURITY-AUDIT-2026-10.md) — notably, H-6's WordPress
 > capability map (`delete_posts` → admin) was itself found too generous there (H-1) and
-> tightened to `manage_options`/`delete_others_posts`. Findings about the SSH terminal,
-> Git deploy and SSH multiplexing were dropped from this record when 1.0.0 removed
-> those features.
+> tightened to `manage_options`/`delete_others_posts`.
 
 Scope: the MIT free/core surface only (`packages/core/`, plus the Laravel and
 WordPress proxy adapters and the browser SDK). Gitignored paid modules were out

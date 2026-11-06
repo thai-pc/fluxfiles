@@ -40,16 +40,6 @@ final class FixityChecker
      */
     private const SIBLING_TREE_ACTIONS = ['extract'];
 
-    /**
-     * HISTORICAL: the SSH terminal and one-click Git deploy were removed in 1.0.0,
-     * but their chained entries stay in existing audit logs. A command or a deploy
-     * could touch any file and its entry carries no disk-relative key, so it keeps
-     * explaining every change on the disk in its window; otherwise the first
-     * fixity run after an upgrade would flag those changes as unexplained.
-     * Nothing writes these actions any more.
-     */
-    private const DISK_WIDE_ACTIONS = ['terminal', 'git_deploy'];
-
     public const MANIFEST = '_fluxfiles/fixity.json';
 
     /**
@@ -103,7 +93,6 @@ final class FixityChecker
         // int array key, which strict_types then refuses in readStream()/strcmp().
         $lastWrite = [];
         $lastTreeWrite = [];
-        $lastDiskWrite = 0;
         foreach (AuditChain::trustedEntries($auditEntries) as $e) {
             $action = (string) ($e['action'] ?? '');
             $k = trim((string) ($e['file_key'] ?? ''), '/');
@@ -115,12 +104,9 @@ final class FixityChecker
                 $dir = $k !== '' && strpos($k, '/') !== false ? dirname($k) : '';
                 $lastTreeWrite[$dir] = max($lastTreeWrite[$dir] ?? 0, $ts);
             }
-            if (in_array($action, self::DISK_WIDE_ACTIONS, true)) {
-                $lastDiskWrite = max($lastDiskWrite, $ts);
-            }
         }
-        $explained = static function (string $key, int $since) use ($lastWrite, $lastTreeWrite, $lastDiskWrite): bool {
-            if ($lastDiskWrite >= $since || ($lastWrite[$key] ?? 0) >= $since) {
+        $explained = static function (string $key, int $since) use ($lastWrite, $lastTreeWrite): bool {
+            if (($lastWrite[$key] ?? 0) >= $since) {
                 return true;
             }
             foreach ($lastTreeWrite as $dir => $ts) {

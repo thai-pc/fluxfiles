@@ -293,28 +293,6 @@ test('generateToken forwards ai-vision gate', function () use ($secret) {
     assertEqual(true, ($p->allow_ai_vision ?? false), 'ai-vision gate forwarded');
 });
 
-// The SSH command-runner terminal and one-click Git deploy are gone from the product:
-// their claims are no longer forwarded, and a token that still carries them (a stale
-// override, the raw `claims` map, a Node/Python-minted token) must decode without error
-// and simply have no effect. terminal_pty_url (embed the operator's own ttyd) stays.
-test('removed claims (allow_terminal / allow_git_deploy / git_deploy_*) are not forwarded', function () use ($secret) {
-    $token = FluxFilesPlugin::generateToken(59, [
-        'allow_terminal' => true, 'allow_git_deploy' => true,
-        'git_deploy_path' => '/var/www/site', 'git_deploy_branch' => 'main', 'git_deploy_hooks' => true,
-    ]);
-    $p = \FluxFiles\JwtCompat::decode($token, $secret);
-    foreach (['allow_terminal', 'allow_git_deploy', 'git_deploy_path', 'git_deploy_branch', 'git_deploy_hooks'] as $k) {
-        assertTrue(!isset($p->$k), "{$k} is not forwarded");
-    }
-});
-
-test('a token that still carries removed claims (raw `claims` map) decodes without error and is ignored', function () use ($secret) {
-    $token = FluxFilesPlugin::generateToken(60, ['claims' => ['allow_terminal' => true, 'allow_git_deploy' => true, 'git_deploy_path' => '/x']]);
-    $c = \FluxFiles\Claims::fromJwtPayload(\FluxFiles\JwtCompat::decode($token, $secret));
-    assertTrue($c->hasPerm('read'), 'still a normal token');
-    assertTrue(!property_exists($c, 'allowTerminal') && !property_exists($c, 'allowGitDeploy'), 'core no longer models them');
-});
-
 test('terminal_pty_url still forwards (the UI embeds the operator\'s own ttyd)', function () use ($secret) {
     $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(61, ['terminal_pty_url' => 'https://ttyd.example.com/']), $secret);
     assertEqual('https://ttyd.example.com/', $p->terminal_pty_url ?? '', 'terminal_pty_url forwarded');
@@ -336,14 +314,6 @@ test('BYOB disks register for every route; the SSRF allow-list is applied', func
     putenv('FLUXFILES_SSRF_ALLOW_HOSTS');
     FluxFilesPlugin::seedSsrfAllowHosts();
     assertEqual([], \FluxFiles\SsrfGuard::$allowHosts, 'cleared');
-});
-
-test('the terminal and git-deploy REST routes and handlers are gone', function () {
-    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    foreach (['handleTerminal', 'handleGitDeploy', "'/terminal'", "'/git-deploy'", 'SshTerminal', 'GitDeploy::'] as $needle) {
-        assertTrue(strpos($src, $needle) === false, "no {$needle} in the REST proxy");
-    }
-    assertTrue(!method_exists('FluxFilesApi', 'handleTerminal') && !method_exists('FluxFilesApi', 'handleGitDeploy'), 'handlers removed');
 });
 
 // DLP/PII redaction (docs/design/DLP-PII-REDACTION-DESIGN.md): the gate + its 4 tuning
@@ -1454,9 +1424,8 @@ test('proxy route surface covers every core /api/fm route', function () {
     // allowlist minus share/intake, which WordPress already proxies in full —
     // CRUD, the public landing routes, AND analytics.
     // chmod and zip USED to be listed here. Both rationales had gone stale:
-    // chmod's ("the proxy doesn't expose SFTP") is contradicted by /terminal and
-    // /git-deploy, which are proxied and are themselves SFTP-only, plus a BYOB
-    // sftp disk in the token reaches proxy mode via fileManager(); zip's ("REST
+    // chmod's ("the proxy doesn't expose SFTP") is contradicted by a BYOB
+    // sftp disk in the token reaching proxy mode; zip's ("REST
     // handlers don't do raw streaming") is contradicted by handleStream()/
     // handleImg()/handleAuditExport(). allow_zip defaults TRUE, so the UI's
     // "Download ZIP" button rendered in proxy mode and 404'd. Both are proxied now.
@@ -1464,10 +1433,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     //   the standalone /public UI's own login screen. A WordPress site already
     //   authenticates via the plugin's own token minting, so there's nothing to
     //   proxy here.
-    // AI Vision/OCR/Backup Bridge/C2PA, the SSH terminal, and gated media
+    // AI Vision/OCR/Backup Bridge/C2PA and gated media
     // stream/img are now fully proxied too — see FluxFilesApi's
     // handleAiVision()/handleOcr()/handleBackup()/handleC2pa()/handleC2paSign()/
-    // handleTerminal()/handleStream()/handleImg().
+    // handleStream()/handleImg().
     // - metadata/export, metadata/import (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7):
     //   MetadataExporter/MetadataImporter work directly against core's own
     //   \FluxFiles\Db\Connection SQL layer. WordPress's `db` backend option (§6)

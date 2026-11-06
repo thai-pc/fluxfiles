@@ -371,9 +371,8 @@ test('proxy route surface covers every core /api/fm route', function () {
 
     // Core routes that are intentionally NOT proxied (keep empty unless justified).
     // chmod and zip USED to be listed here. Both rationales had gone stale:
-    // chmod's ("the proxy doesn't expose SFTP") is contradicted by terminal() and
-    // gitDeploy(), which are proxied and are themselves SFTP-only, plus a BYOB
-    // sftp disk in the token reaches proxy mode via fileManager(); zip's ("the
+    // chmod's ("the proxy doesn't expose SFTP") is contradicted by a BYOB
+    // sftp disk in the token reaching proxy mode; zip's ("the
     // JSON-returning controllers don't do streaming") is contradicted by
     // auditExport()'s response()->stream() and stream(). allow_zip defaults TRUE,
     // so the UI's "Download ZIP" button rendered in proxy mode and 404'd. Both
@@ -439,34 +438,6 @@ test('token-refresh recovery wiring is present (controller + route + blade)', fu
     assertTrue(strpos($provSrc, "'token', [FluxFilesController::class, 'token']") !== false, 'ServiceProvider registers GET token route');
     assertTrue(strpos($bladeSrc, 'onTokenRefresh') !== false, 'blade wires onTokenRefresh');
     assertTrue(strpos($bladeSrc, '$tokenUrl') !== false, 'blade fetches the token-refresh URL');
-});
-
-test('the removed terminal/git-deploy claims are no longer minted, and an old token that carries them still decodes', function () use ($secret) {
-    $mgr = new FluxFilesManager();
-    $p = (array) \FluxFiles\JwtCompat::decode($mgr->token(7, [
-        'allow_terminal' => true, 'allow_git_deploy' => true, 'git_deploy_path' => '/var/www/site',
-        'git_deploy_branch' => 'main', 'git_deploy_hooks' => true, 'terminal_pty_url' => 'https://tty.example.com',
-    ]), $secret);
-    foreach (['allow_terminal', 'allow_git_deploy', 'git_deploy_path', 'git_deploy_branch', 'git_deploy_hooks'] as $gone) {
-        assertTrue(!array_key_exists($gone, $p), "{$gone} is not forwarded any more");
-    }
-    assertEqual('https://tty.example.com', $p['terminal_pty_url'] ?? null, 'terminal_pty_url still forwards (UI embeds the operator\'s ttyd)');
-
-    // A token minted by an older adapter / SDK that still carries them must be ignored, not rejected.
-    $legacy = \FluxFiles\JwtCompat::decode(\FluxFiles\JwtCompat::encode([
-        'sub' => 'old', 'iat' => time(), 'exp' => time() + 600, 'perms' => ['read'], 'disks' => ['local'], 'prefix' => '',
-        'allow_terminal' => true, 'allow_git_deploy' => true, 'git_deploy_path' => '/x', 'git_deploy_hooks' => true,
-    ], $secret), $secret);
-    $c = \FluxFiles\Claims::fromJwtPayload($legacy, $secret);
-    assertEqual('old', $c->userId, 'a legacy token with the removed claims still yields Claims');
-});
-
-test('the terminal and git-deploy proxy routes are gone', function () {
-    $routes = (string) file_get_contents(__DIR__ . '/../routes/fluxfiles.php');
-    $ctrl = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
-    assertTrue(!preg_match("#'(terminal|git-deploy)'#", $routes), 'no terminal / git-deploy route');
-    assertTrue(!preg_match('#function\s+(terminal|gitDeploy)\s*\(#', $ctrl), 'no terminal() / gitDeploy() action');
-    assertTrue(!str_contains($ctrl, 'SshTerminal') && !str_contains($ctrl, 'GitDeploy::'), 'no SshTerminal / GitDeploy reference');
 });
 
 test('BYOB disks register for every route, and file text is read untrimmed', function () {
@@ -541,8 +512,7 @@ test('allow_ai_vision forwards in proxy mode', function () use ($secret) {
 
     // AI Vision now has a route in both modes (proxy: aiVision(); standalone:
     // index.php), so the gate forwards unconditionally — proxy mode (default)
-    // included. Previously this was standalone-only (see allow_terminal above
-    // for the pattern this test replaces).
+    // included. Previously this was standalone-only.
     $p = \FluxFiles\JwtCompat::decode($mgr->token(7, ['allow_ai_vision' => true]), $secret);
     assertEqual(true, ($p->allow_ai_vision ?? false), 'ai-vision gate forwarded in proxy mode');
 });

@@ -60,34 +60,12 @@ secret if it is exposed. BYOB `/img` responses are no longer publicly cacheable.
 > `ai v1.2.4`, `ocr v1.2.2`, `virus v1.2.3`, `backup v1.3.3`, `c2pa v1.2.2`,
 > `audit-export v1.0.5`, `sso v2.1.3`, `dlp v1.0.6`, `legal-hold v1.1.3`.
 
-The first stable release. Every package moves to 1.0.0. Two features that
-were outside an embeddable file manager's job are removed, and the Laravel and
+The first stable release. Every package moves to 1.0.0. The Laravel and
 WordPress proxies now run on the same core code as the standalone app instead
 of their own copies.
 
-### Removed (breaking)
-
-- **The built-in SSH command-runner terminal**: `POST /api/fm/terminal`, the
-  `allow_terminal` claim, the `FLUXFILES_TERMINAL_*` env vars and the xterm
-  modal.
-- **One-click Git deploy**: `POST /api/fm/git-deploy`, the `allow_git_deploy`
-  claim, the `git_deploy_path`, `git_deploy_branch` and `git_deploy_hooks`
-  claims, and the `FLUXFILES_GIT_DEPLOY_*` env vars.
-- **The OpenSSH ControlMaster multiplexer**: `SFTP_MULTIPLEX` and
-  `FLUXFILES_SSH_MULTIPLEX_*`.
-- Both routes now return 404. Tokens that still carry the removed claims keep
-  working, and those claims are ignored. The SFTP storage driver (file
-  operations and `chmod`) is unchanged.
-- The security reviews for these features were deleted with them (they remain in git history).
-
 ### Upgrading from 0.x
 
-- **Terminal:** run your own ttyd, gotty or wetty and set the
-  `terminal_pty_url` claim. That claim alone now shows the toolbar terminal
-  button, which embeds your server.
-- **Deploys:** use CI (GitHub Actions, Deployer) or a webhook-triggered script.
-- **Environment:** you can delete `SFTP_MULTIPLEX`, `FLUXFILES_TERMINAL_*`,
-  `FLUXFILES_GIT_DEPLOY_*` and `FLUXFILES_SSH_MULTIPLEX_*`.
 - **Laravel:**
   - the package now requires `fluxfiles/fluxfiles ^1.0.0`;
   - with `storage_backend = db`, publish and run the new migration, because
@@ -157,9 +135,6 @@ of their own copies.
   can't download originals: `allow_download=false`, which a watermark forces.
 - **Renaming, moving or copying a missing file returns `404 not_found`**
   instead of 500 (core, Laravel, WordPress).
-- **Fixity:** audit entries written by the removed terminal and git-deploy
-  features still explain the changes they made, so upgrading doesn't raise
-  false `fixity_mismatch` entries.
 
 ## [0.3.44] — 2026-10-30
 

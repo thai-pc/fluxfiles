@@ -128,7 +128,6 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 * An image transform that hits a storage error now returns a plain 502.
 
 = 1.0.0 =
-* The SSH command-runner terminal and one-click Git deploy are removed (REST routes `/terminal` and `/git-deploy`, and the `allow_terminal` / `allow_git_deploy` / `git_deploy_*` token overrides). Tokens that still carry those claims are ignored. `terminal_pty_url` (embed your own ttyd) is kept.
 * `/stream` and `/img` now run on core's shared media endpoint: the preview watermark overlay (`watermark_enabled`) works, X-Accel paths are encoded, and the rate limits default to core's (stream 300/min, img 120/min).
 * In database storage mode the rate limiter now lives in the database too (new `fluxfiles_rate_limits` table, created on update).
 * Audit entries for refused writes and 403s, the FileManager hook wiring and the database metadata handler now share code with core.
@@ -157,7 +156,7 @@ First public release. WordPress adapter for the FluxFiles file manager:
 Fixes BYOB SFTP downloads and previews, BYOB search and quota, and the private-network allow-list.
 
 = 1.0.0 =
-Removes the SSH terminal and Git deploy. Preview watermarks now work through the plugin. Database-mode sites get a new rate-limit table on update.
+Preview watermarks now work through the plugin. Database-mode sites get a new rate-limit table on update.
 
 = 0.2.2 =
 Bundles FluxFiles core 0.2.5 — deletes now go to a restorable Trash (files and folders). Install from the release ZIP that includes `vendor/`.
