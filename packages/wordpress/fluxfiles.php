@@ -17,6 +17,8 @@
 defined('ABSPATH') || exit;
 
 define('FLUXFILES_VERSION', '1.0.4');
+// Release of the core bundled in this build; build-wordpress.sh stamps it from the latest core-v* tag.
+define('FLUXFILES_CORE_VERSION', 'unknown');
 define('FLUXFILES_PLUGIN_FILE', __FILE__);
 define('FLUXFILES_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FLUXFILES_PLUGIN_URL', plugin_dir_url(__FILE__));

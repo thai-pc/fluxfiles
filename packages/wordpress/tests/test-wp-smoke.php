@@ -71,8 +71,9 @@ if (!function_exists('plugin_basename')) {
     function plugin_basename($f) { return 'fluxfiles/fluxfiles.php'; }
 }
 if (!function_exists('get_bloginfo')) { function get_bloginfo($k = '') { return '6.5'; } }
+if (!function_exists('wp_unslash')) { function wp_unslash($v) { return $v; } }
 if (!function_exists('add_query_arg')) {
-    function add_query_arg($args, $url) { return $url . '?' . http_build_query($args); }
+    function add_query_arg($args, $url) { return $url . (strpos($url, '?') === false ? '?' : '&') . implode('&', array_map(fn($k, $v) => $k . '=' . $v, array_keys($args), $args)); }
 }
 if (!defined('HOUR_IN_SECONDS')) { define('HOUR_IN_SECONDS', 3600); }
 if (!defined('ARRAY_A')) { define('ARRAY_A', 'ARRAY_A'); }
@@ -82,7 +83,12 @@ if (!function_exists('plugins_url')) {
     function plugins_url($path = '', $plugin = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($path, '/'); }
 }
 if (!function_exists('rest_url')) {
-    function rest_url($path = '') { return 'http://wp.test/wp-json/' . ltrim($path, '/'); }
+    // $GLOBALS['WP_PLAIN_PERMALINKS'] switches to the ?rest_route= form WordPress uses without pretty permalinks.
+    function rest_url($path = '') {
+        return empty($GLOBALS['WP_PLAIN_PERMALINKS'])
+            ? 'http://wp.test/wp-json/' . ltrim($path, '/')
+            : 'http://wp.test/?rest_route=/' . ltrim($path, '/');
+    }
 }
 if (!function_exists('get_current_user_id')) {
     function get_current_user_id() { return (int) ($GLOBALS['WP_OPTIONS']['_test_user_id'] ?? 0); }
@@ -986,8 +992,7 @@ test('share/intake: base URLs point at this site, not a path WordPress lacks', f
     $tok = FluxFilesPlugin::generateToken(1, ['allow_share' => true]);
     $p = \FluxFiles\JwtCompat::decode($tok, $GLOBALS['WP_OPTIONS']['fluxfiles_secret']);
     $base = (string) ($p->share_base_url ?? '');
-    assertTrue(strpos($base, 'public-link.php') !== false, 'points at the plugin shim');
-    assertTrue(strpos($base, 'page=share') !== false, 'names which page');
+    assertEqual('http://wp.test/wp-json/fluxfiles/v1/api/fm/share/page', $base, 'points at this site\'s REST page route');
     // The module appends `&token=…` itself. A base that already carried one would
     // produce two, and the first (empty) one wins.
     assertTrue(strpos($base, 'token=') === false, 'the base carries NO token');
@@ -2438,6 +2443,7 @@ function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, 
 function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
 function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
 function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function wp_unslash($v) { return $v; }
 function status_header($c) {}
 function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
 function add_action(...$a) {} function add_filter(...$a) {}
@@ -2521,10 +2527,11 @@ function wp_mkdir_p($d) { return is_dir($d) || mkdir($d, 0777, true); }
 function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, '/'); }
 function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
 function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
-function get_rest_url($id, $p = '') { return 'http://wp.test/two/wp-json/' . ltrim($p, '/'); }
+function get_rest_url($id, $p = '') { return 'http://wp.test/' . ((int) $id === 2 ? 'two/' : '') . 'wp-json/' . ltrim($p, '/'); }
 function home_url($p = '') { return 'http://wp.test' . $p; }
 function site_url($p = '') { return 'http://wp.test' . $p; }
 function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function wp_unslash($v) { return $v; }
 function status_header($c) { http_response_code($c); }
 function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
 function wp_json_encode($d, $f = 0) { return json_encode($d, $f); }
@@ -2566,6 +2573,7 @@ require $wpDir . '/includes/FluxFilesPlugin.php';
 require $wpDir . '/includes/FluxFilesApi.php';
 register_shutdown_function(static function () { echo "\nSTATUS=" . http_response_code() . "\nHEADERS=" . json_encode(headers_list()); });
 if ($entry === 'rest') {
+    $_GET = ['token' => 'x'] + ($blog !== '' ? ['blog' => $blog] : []);
     $m = new ReflectionMethod('FluxFilesApi', 'publicLink');
     $m->invoke(new FluxFilesApi(), 'share', new WP_REST_Request($method, '/fluxfiles/v1/api/fm/share/page'));
 } else {
@@ -2633,6 +2641,18 @@ CHILD;
         // A forged blog id still 404s before any gate.
         $out = $run('shim', '1', $good, '1,2', '99');
         assertTrue(strpos($out, 'STATUS=404') !== false, 'multisite: unknown blog id -> 404');
+        // The REST page route resolves the hint itself: another blog -> 302 (no page served),
+        // a bad blog -> 404 envelope, the booted blog or no hint -> the page.
+        $out = $run('rest', '1', $good, '1,2', '2');
+        assertTrue(strpos($out, 'STATUS=302') !== false && strpos($out, 'fm-api-base') === false, 'REST page: blog 2 hint from blog 1 -> 302: ' . substr($out, 0, 300));
+        $out = $run('rest', '1', $good, '1,2', '99');
+        assertTrue(strpos($out, 'STATUS=404') !== false && strpos($out, '"error_code":"not_found"') !== false && strpos($out, 'fm-api-base') === false, 'REST page: unknown blog -> 404');
+        $out = $run('rest', '1', $good, '1,2', '1');
+        assertTrue(strpos($out, 'STATUS=200') !== false && strpos($out, 'fm-api-base') !== false, 'REST page: own blog hint -> page');
+        $out = $run('rest', '1', $good, '1,2', '');
+        assertTrue(strpos($out, 'STATUS=200') !== false, 'REST page: no hint -> page');
+        $out = $run('rest', '0', $good, '1', '2');
+        assertTrue(strpos($out, 'STATUS=200') !== false, 'REST page: single site ignores the hint');
     } finally {
         @unlink($file);
     }
@@ -2808,6 +2828,7 @@ function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, 
 function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
 function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
 function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function wp_unslash($v) { return $v; }
 function status_header($c) {}
 function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
 function add_action(...$a) {} function add_filter(...$a) {}
@@ -3248,6 +3269,7 @@ test('multisite: each blog gets its own storage root + url; blog 1 cannot addres
 test('multisite public links: a link resolves to the blog that minted it', function () {
     // Single site: no blog id in the URL, REST base is this site's, old links keep working.
     $u = FluxFilesPlugin::publicLinkUrl('share.html', 'tok');
+    assertEqual('http://wp.test/wp-json/fluxfiles/v1/api/fm/share/page?token=tok', $u, 'single-site link is the REST page route');
     assertTrue(strpos($u, 'blog=') === false, 'single-site link carries no blog id');
     assertEqual('http://wp.test/wp-json/fluxfiles/v1/api/fm', FluxFilesPlugin::publicLinkRestBase(null), 'single-site base');
     assertEqual('http://wp.test/wp-json/fluxfiles/v1/api/fm', FluxFilesPlugin::publicLinkRestBase('2'), 'single-site ignores a blog param');
@@ -3257,15 +3279,13 @@ test('multisite public links: a link resolves to the blog that minted it', funct
         $GLOBALS['WP_BLOG_ID'] = 2;
         foreach (['share.html' => 'share', 'intake.html' => 'intake'] as $page => $w) {
             $link = FluxFilesPlugin::publicLinkUrl($page, 'tok');
-            parse_str((string) parse_url($link, PHP_URL_QUERY), $q);
-            assertEqual('2', $q['blog'] ?? null, "{$w} link minted on blog 2 names blog 2");
-            // The page then calls blog 2's REST namespace, where blog 2's secret and
-            // storagePath() (sites/2) apply.
-            assertEqual('http://wp.test/two/wp-json/fluxfiles/v1/api/fm', FluxFilesPlugin::publicLinkRestBase($q['blog']), "{$w} resolves blog 2's REST base");
+            // The REST URL is per blog, so the link needs no blog hint: it lands on blog
+            // 2's own namespace, where blog 2's secret and storagePath() (sites/2) apply.
+            assertEqual("http://wp.test/two/wp-json/fluxfiles/v1/api/fm/{$w}/page?token=tok", $link, "{$w} link minted on blog 2 is blog 2's REST page");
         }
         // The base-URL claim is the same link without a token.
         $base = FluxFilesPlugin::publicLinkUrl('share.html');
-        assertTrue(strpos($base, 'blog=2') !== false && strpos($base, 'token=') === false, 'base claim names blog, no token');
+        assertEqual('http://wp.test/two/wp-json/fluxfiles/v1/api/fm/share/page', $base, 'base claim: blog 2 page, no token');
 
         // Request arrives at the main site (blog 1) for a blog-2 link: still blog 2.
         $GLOBALS['WP_BLOG_ID'] = 1;
@@ -3291,6 +3311,81 @@ test('multisite public links: a link resolves to the blog that minted it', funct
         $_GET = [];
         $GLOBALS['WP_MULTISITE'] = false;
         $GLOBALS['WP_BLOG_ID'] = 1;
+    }
+});
+
+test('public links: plain permalinks use ?rest_route= and the token is appended with &', function () {
+    // rest_url() already carries a query string on plain permalinks; a naive "?token="
+    // would corrupt the URL, so the token must be added with add_query_arg semantics.
+    $GLOBALS['WP_PLAIN_PERMALINKS'] = true;
+    try {
+        $u = FluxFilesPlugin::publicLinkUrl('intake.html', 'tok');
+        assertEqual('http://wp.test/?rest_route=/fluxfiles/v1/api/fm/intake/page&token=tok', $u, 'plain-permalink link');
+        assertEqual('http://wp.test/?rest_route=/fluxfiles/v1/api/fm/share/page', FluxFilesPlugin::publicLinkUrl('share.html'), 'plain-permalink base has no token');
+        assertEqual(1, substr_count($u, '?'), 'exactly one query string');
+    } finally {
+        unset($GLOBALS['WP_PLAIN_PERMALINKS']);
+    }
+});
+
+test('public-link redirect: a validated other blog -> 302 to its own REST page, bad blogs -> 404', function () {
+    assertEqual([200, null], FluxFilesPlugin::publicPageRedirect('share', '2', 'tok'), 'single site ignores the hint');
+    $GLOBALS['WP_MULTISITE'] = true;
+    try {
+        $GLOBALS['WP_BLOG_ID'] = 1;
+        assertEqual([200, null], FluxFilesPlugin::publicPageRedirect('share', null, 'tok'), 'no hint serves here');
+        assertEqual([200, null], FluxFilesPlugin::publicPageRedirect('share', '', 'tok'), 'empty hint serves here');
+        assertEqual([200, null], FluxFilesPlugin::publicPageRedirect('share', '1', 'tok'), 'own blog serves here (no loop)');
+        assertEqual([302, 'http://wp.test/two/wp-json/fluxfiles/v1/api/fm/share/page?token=a%2Bb'],
+            FluxFilesPlugin::publicPageRedirect('share', '2', 'a+b'), 'other blog -> its REST page, token re-encoded');
+        assertEqual([302, 'http://wp.test/two/wp-json/fluxfiles/v1/api/fm/intake/page'],
+            FluxFilesPlugin::publicPageRedirect('intake', '2', ''), 'no token, intake');
+        foreach (['99', '0', '-1', 'abc', '3' /* archived */, '2;3'] as $bad) {
+            assertEqual([404, null], FluxFilesPlugin::publicPageRedirect('share', $bad, 'tok'), "bad blog '{$bad}' -> 404");
+        }
+        assertEqual([404, null], FluxFilesPlugin::publicPageRedirect('share', ['2'], 'tok'), 'array hint -> 404');
+    } finally {
+        $GLOBALS['WP_MULTISITE'] = false;
+        $GLOBALS['WP_BLOG_ID'] = 1;
+    }
+});
+
+test('licence seam: core resolves the plugin licence, the filter overrides it, NoLicense is the fallback', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
+    $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($src, 'seedLicenseEnv') === false && strpos($api, 'seedLicenseEnv') === false, 'the env seed is gone');
+    assertTrue(strpos($src, "ModuleRegistry::setLicenseResolver([self::class, 'license'])") !== false, 'resolver installed in the constructor');
+
+    \FluxFiles\ModuleRegistry::setLicenseResolver([FluxFilesPlugin::class, 'license']);
+    $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [];
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'not-a-real-key';
+        $lic = \FluxFiles\ModuleRegistry::license();
+        assertTrue($lic instanceof \FluxFiles\LicenseCheckInterface, 'resolver returns a licence checker');
+        assertTrue($lic instanceof \FluxFiles\LicenseManager, 'the bundled LicenseManager when it is shipped');
+        assertTrue(!$lic->licensed('share'), 'a key that does not verify entitles nothing');
+
+        // The filter wins, but only for a real LicenseCheckInterface.
+        $none = new \FluxFiles\NoLicense();
+        add_filter('fluxfiles_license', fn ($v) => $none);
+        assertTrue(FluxFilesPlugin::license() === $none, 'filter result is used');
+        assertTrue(\FluxFiles\ModuleRegistry::license() === $none, 'and core sees it through the resolver');
+        $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [fn ($v) => 'nope'];
+        assertTrue(FluxFilesPlugin::license() instanceof \FluxFiles\LicenseManager, 'a non-checker filter value is ignored');
+        $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [];
+
+        // Fallback: LicenseManager not shipped (the WordPress.org build).
+        FluxFilesPlugin::$licenseClass = 'FluxFiles\\DoesNotExist';
+        try {
+            assertTrue(FluxFilesPlugin::license() instanceof \FluxFiles\NoLicense, 'NoLicense when the manager is absent');
+            assertTrue(!FluxFilesPlugin::license()->licensed('share'), 'NoLicense entitles nothing');
+        } finally {
+            FluxFilesPlugin::$licenseClass = null;
+        }
+    } finally {
+        $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [];
+        unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
+        \FluxFiles\ModuleRegistry::setLicenseResolver(null);
     }
 });
 
@@ -3355,6 +3450,37 @@ test('Site Health adds a FluxFiles section, escaped, with sensitive rows private
 test('the plugin hooks Site Health debug_information', function () {
     $src = file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
     assertTrue(strpos($src, "add_filter('debug_information', [self::class, 'siteHealthInfo'])") !== false, 'filter registered');
+});
+
+// Keep LAST: this defines FLUXFILES_CORE_VERSION process-wide (a constant cannot be
+// undefined), and the 'undefined -> null' assertion needs no earlier test to have set it.
+test('bundled core version: the stamped constant feeds Site Health, and the build script stamps it', function () {
+    assertEqual(null, FluxFilesPlugin::bundledCoreVersion(), 'undefined -> null');
+    define('FLUXFILES_CORE_VERSION', '1.1.0');
+    assertEqual('1.1.0', FluxFilesPlugin::bundledCoreVersion(), 'stamped value');
+    $fields = FluxFilesPlugin::siteHealthInfo([])['fluxfiles']['fields'];
+    assertEqual('1.1.0', $fields['bundled_core']['value'] ?? null, 'Site Health shows the bundled core');
+    if (class_exists(\FluxFiles\AboutInfo::class)) {
+        assertTrue(strpos((string) json_encode(array_column($fields, 'value')), '1.1.0 (env)') !== false, 'AboutInfo reports the stamped core version');
+    }
+
+    $main = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
+    assertTrue(preg_match("/define\('FLUXFILES_CORE_VERSION', '[^']*'\);/", $main) === 1, 'placeholder defined in fluxfiles.php');
+    $dir = sys_get_temp_dir() . '/ffstamp-' . uniqid();
+    mkdir($dir);
+    file_put_contents($dir . '/fluxfiles.php', $main);
+    file_put_contents($dir . '/readme.txt', "Stable tag: 0.0.0\n");
+    $p = proc_open(['python3', '-I', __DIR__ . '/../../../scripts/stamp-wp-version.py', $dir, '9.9.9', '7.8.9'],
+        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    stream_get_contents($pipes[1]);
+    stream_get_contents($pipes[2]);
+    $rc = proc_close($p);
+    $out = (string) file_get_contents($dir . '/fluxfiles.php');
+    array_map('unlink', glob($dir . '/*'));
+    rmdir($dir);
+    assertEqual(0, $rc, 'stamp script succeeds');
+    assertTrue(strpos($out, "define('FLUXFILES_CORE_VERSION', '7.8.9');") !== false, 'core version stamped');
+    assertTrue(strpos($out, "define('FLUXFILES_VERSION', '9.9.9');") !== false, 'plugin version stamped');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

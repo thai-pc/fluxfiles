@@ -49,10 +49,6 @@ class FluxFilesApi
         // option; the paid modules read $_ENV. Seeded here so every REST handler —
         // scan, webhooks, AI, … — sees them before any module runs.
         FluxFilesPlugin::seedModuleEnv();
-        // Core's remaining env-based module gates (FileManagerFactory's virus/DLP/
-        // versioning/webhooks wiring) read the licence from $_ENV; a WordPress licence
-        // normally lives in an option. The public share/intake routes use license().
-        FluxFilesPlugin::seedLicenseEnv();
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
         $this->metaRepo = get_option('fluxfiles_storage_backend', 'json') === 'db'
@@ -2286,7 +2282,25 @@ class FluxFilesApi
                 status_header(404);
                 wp_send_json(['data' => null, 'error' => 'Not found', 'error_code' => 'not_found'], 404);
             }
-            FluxFilesPlugin::servePublicPage($which, rtrim(rest_url('fluxfiles/v1/api/fm'), '/'));
+            // A link minted on another blog (the public-link.php shim passes `blog` through):
+            // hop to that blog's own REST page, where its secret and licence apply.
+            $token = isset($_GET['token']) && is_string($_GET['token']) ? wp_unslash($_GET['token']) : '';
+            [$code, $location] = FluxFilesPlugin::publicPageRedirect($which, isset($_GET['blog']) ? wp_unslash($_GET['blog']) : null, $token);
+            if ($code === 404) {
+                status_header(404);
+                header('Referrer-Policy: no-referrer');
+                header('Cache-Control: private, no-store');
+                wp_send_json(['data' => null, 'error' => 'Not found', 'error_code' => 'not_found'], 404);
+            }
+            if ($code === 302 && $location !== null) {
+                status_header(302);
+                header('Referrer-Policy: no-referrer');
+                header('Cache-Control: private, no-store');
+                header('Location: ' . $location);
+                exit;
+            }
+            $here = rtrim(rest_url('fluxfiles/v1/api/fm'), '/');
+            FluxFilesPlugin::servePublicPage($which, $here);
             exit;
         }
 
@@ -2295,9 +2309,6 @@ class FluxFilesApi
         // same way by the module's own storage helpers.
         $_ENV['FLUXFILES_SECRET'] = (string) get_option('fluxfiles_secret', '');
         $_ENV['FLUXFILES_STORAGE_PATH'] = FluxFilesPlugin::storagePath();
-        // Kept for core paths that still resolve the licence from $_ENV; this route's own
-        // gate uses license() below. Unused here until phase 5 removes the seed.
-        FluxFilesPlugin::seedLicenseEnv();
         FluxFilesPlugin::seedModuleEnv();
 
         // Core's PublicRoutes is the gate (secret -> installed -> licensed) and hands the

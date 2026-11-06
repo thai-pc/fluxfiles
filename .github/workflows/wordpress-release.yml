@@ -20,6 +20,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history + tags: the build stamps the bundled core version from
+          # `git describe --match 'core-v*'` and fails without a reachable core tag.
+          fetch-depth: 0
 
       - uses: shivammathur/setup-php@v2
         with:
