@@ -159,17 +159,35 @@ if (!in_array($command, ['index', 'seed'], true)) {
     exit(1);
 }
 
-$opts = getopt('', [
-    'disk::',
-    'path::',
-    'owner::',
-    'readonly',
-    'overwrite',
-    'dry-run',
-    'hash',
-    'variants',
-    'persist-metadata',
-]);
+// Parse the flags by hand: getopt() stops at the first non-option arg ("index"),
+// so it would return [] and silently drop every flag (including --dry-run).
+$valueOpts = ['disk', 'path', 'owner'];
+$flagOpts = ['readonly', 'overwrite', 'dry-run', 'hash', 'variants', 'persist-metadata'];
+$opts = [];
+foreach (array_slice($argv, 2) as $arg) {
+    if (!preg_match('/^--([a-z-]+)(?:=(.*))?$/s', $arg, $m)) {
+        fwrite(STDERR, "Unexpected argument '{$arg}'. Options look like --name=value or --flag.\n");
+        exit(1);
+    }
+    $name = $m[1];
+    $hasValue = isset($m[2]);
+    if (in_array($name, $valueOpts, true)) {
+        if (!$hasValue) {
+            fwrite(STDERR, "Option --{$name} needs a value: --{$name}=<value>.\n");
+            exit(1);
+        }
+        $opts[$name] = $m[2];
+    } elseif (in_array($name, $flagOpts, true)) {
+        if ($hasValue) {
+            fwrite(STDERR, "Option --{$name} does not take a value.\n");
+            exit(1);
+        }
+        $opts[$name] = false;
+    } else {
+        fwrite(STDERR, "Unknown option --{$name}.\n");
+        exit(1);
+    }
+}
 
 $envDirs = [
     realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'),
