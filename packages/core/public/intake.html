@@ -74,6 +74,11 @@
       // Keep this comment brand-free: the shell is deliberately unbranded so an
       // operator can white-label it, and a test asserts the served HTML says nothing.
       var API = String(window.__FM_API_BASE__ || '/api/fm').replace(/\/+$/, '');
+// A WordPress site on plain permalinks has a base like index.php?rest_route=/…,
+// so a query string must be joined with & there, not a second ?.
+function apiUrl(path, query) {
+  return API + path + (API.indexOf('?') === -1 ? '?' : '&') + query;
+}
       var $ = function (id) { return document.getElementById(id); };
       var gate = $('gate'), form = $('form');
       // Closed until /intake/info has answered: a file picked before that would be
@@ -135,7 +140,7 @@
       if (!token) { fail('This upload link is missing its token.'); return; }
 
       var info = null;
-      fetch(API + '/intake/info?token=' + encodeURIComponent(token))
+      fetch(apiUrl('/intake/info', 'token=' + encodeURIComponent(token)))
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok || !res.j || res.j.error) { fail((res.j && res.j.error) || 'This upload link is invalid or has expired.'); return; }

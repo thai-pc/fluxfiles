@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1.0
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -121,6 +121,10 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 
 == Changelog ==
 
+= 1.0.4 =
+* Fix: on a multisite network, a Share or Intake link created while another site was active (inside `switch_to_blog()`) opened the wrong site and failed. Links now carry the creating site's id and always open that site.
+* Fix: Share and Intake links now work on sites that use plain permalinks.
+
 = 1.0.3 =
 * Security: on a multisite network every site now has its own storage root, `wp-content/fluxfiles/sites/<blog_id>/`. Before, all sites shared one root with an empty token prefix, so a sub-site administrator or author could reach the other sites' files, index, audit log and trash. Single-site installs are unchanged.
 * Security: `chmod` on an SFTP disk now respects `owner_only` for folders and refuses the root folder; `owner_only` tokens no longer get `allow_chmod` by default.
@@ -162,6 +166,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.0.4 =
+Share and Intake links now open the site that created them on multisite, and work with plain permalinks. No action needed.
 
 = 1.0.3 =
 Security release. Multisite: files now live in wp-content/fluxfiles/sites/<blog_id>/uploads/ and existing ones must be moved. Follow "Upgrading to 1.0.3 on multisite" in the plugin README (and the 1.0.3 changelog entry). Single sites: no action.
