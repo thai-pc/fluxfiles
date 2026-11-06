@@ -146,6 +146,38 @@ test('a mapped/6to4 wrapper around a PUBLIC v4 is still public', function () {
     assertTrue(SsrfGuard::isPublicIp('64:ff9b::808:808'), 'NAT64 of 8.8.8.8');
 });
 
+echo "{$yellow}► isPublicIp — special-purpose ranges (explicit CIDR denylist){$reset}\n";
+$specialBlocked = [
+    'IETF protocol 192.0.0/24'  => '192.0.0.8',
+    'TEST-NET-1'                => '192.0.2.10',
+    '6to4 relay anycast'        => '192.88.99.1',
+    'benchmarking 198.18/15 lo' => '198.18.0.1',
+    'benchmarking 198.18/15 hi' => '198.19.255.254',
+    'TEST-NET-2'                => '198.51.100.7',
+    'TEST-NET-3'                => '203.0.113.9',
+    'multicast low'             => '224.0.0.1',
+    'multicast high'            => '239.255.255.250',
+    'reserved 240/4'            => '240.0.0.1',
+    'broadcast'                 => '255.255.255.255',
+    'v6 local-use NAT64'        => '64:ff9b:1::1',
+    'v6 local-use NAT64 edge'   => '64:ff9b:1:ffff::1',
+    'v6 SIIT ::ffff:0:0:0/96'   => '::ffff:0:0:1',
+    'v6 site-local fec0'        => 'fec0::1',
+    'v6 site-local febf'        => 'feff::1',
+    'v6 discard 100::/64'       => '100::1',
+    'v6 multicast ff02'         => 'ff02::1',
+    'v6 multicast ff00'         => 'ff00::1',
+];
+foreach ($specialBlocked as $label => $ip) {
+    test("special blocked: {$label} ({$ip})", function () use ($ip) { assertFalse(SsrfGuard::isPublicIp($ip), $ip); });
+}
+test('addresses just outside the special-purpose ranges stay public', function () {
+    foreach (['192.0.1.1', '192.0.3.1', '198.17.255.255', '198.20.0.1', '198.51.101.1', '203.0.114.1', '223.255.255.255',
+              '64:ff9b:2::1', '100:0:0:1::1', '2606:4700::1'] as $ip) {
+        assertTrue(SsrfGuard::isPublicIp($ip), $ip);
+    }
+});
+
 echo "{$yellow}► assertConnectedIpSafe — allowlist narrows, never disables{$reset}\n";
 test('an allowlisted host does not switch the backstop off for other addresses', function () {
     // The bug: any non-empty allowlist made assertConnectedIpSafe() return
