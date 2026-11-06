@@ -8,12 +8,14 @@
  * Kept unless the site opted in (Settings > FluxFiles > "Delete data on
  * uninstall"): everything that belongs to the stored files, i.e. the metadata,
  * directories, trash, audit log (+ chain head) and legal-hold tables, the
- * `fluxfiles_secret` (it is the audit chain's HMAC key) and the files
- * themselves. With the opt-in, all of it goes, and the files only when the
- * storage base is the plugin's own location (never a FLUXFILES_STORAGE_DIR /
- * `fluxfiles_storage_base` filter override, never a folder that contains the
- * WordPress install, wp-content, uploads or the plugins dir) and only the
- * files the plugin wrote.
+ * options that decide how that data is read and protected (`fluxfiles_secret`
+ * = the audit chain's HMAC key, `fluxfiles_storage_backend`,
+ * `fluxfiles_storage_base`, `fluxfiles_local_private`, `fluxfiles_db_version`)
+ * and the files themselves. With the opt-in, all of it goes, and the files only
+ * when the storage base is the plugin's own location token (never a
+ * FLUXFILES_STORAGE_DIR / `fluxfiles_storage_base` filter override, never a
+ * legacy absolute path, never a folder that contains the WordPress install,
+ * wp-content, uploads or the plugins dir) and only the files the plugin wrote.
  *
  * Add-on plugins (FluxFiles Pro) keep their own options, transients and user
  * meta in their own namespace; none of those names may appear here.
@@ -31,20 +33,24 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
     // reads/writes without a form field. A test asserts registered ⊆ this list.
     $options = [
         'fluxfiles_max_upload', 'fluxfiles_max_storage', 'fluxfiles_ttl',
-        'fluxfiles_storage_backend', 'fluxfiles_default_perms', 'fluxfiles_disks',
+        'fluxfiles_default_perms', 'fluxfiles_disks',
         'fluxfiles_offload', 'fluxfiles_replace_picker', 'fluxfiles_delete_storage',
         'fluxfiles_delete_data_on_uninstall',
         'fluxfiles_s3_bucket', 'fluxfiles_s3_region', 'fluxfiles_s3_key', 'fluxfiles_s3_secret',
         'fluxfiles_s3_endpoint', 'fluxfiles_s3_visibility', 'fluxfiles_s3_public_url', 'fluxfiles_s3_url_ttl',
         'fluxfiles_r2_bucket', 'fluxfiles_r2_account_id', 'fluxfiles_r2_key', 'fluxfiles_r2_secret',
         'fluxfiles_r2_visibility', 'fluxfiles_r2_public_url', 'fluxfiles_r2_url_ttl',
-        'fluxfiles_local_private', 'fluxfiles_picker_multiple', 'fluxfiles_max_files',
+        'fluxfiles_picker_multiple', 'fluxfiles_max_files',
         'fluxfiles_ai_provider', 'fluxfiles_ai_api_key', 'fluxfiles_ai_model', 'fluxfiles_ai_base_url',
-        'fluxfiles_db_version', 'fluxfiles_storage_base',
     ];
 
-    // Options that belong to the stored data: removed only with the opt-in.
-    $dataOptions = ['fluxfiles_secret'];
+    // Options tied to the stored data: removed only with the opt-in, otherwise a
+    // reinstall would read kept tables/files with the wrong backend, location,
+    // protection mode or HMAC key.
+    $dataOptions = [
+        'fluxfiles_secret', 'fluxfiles_storage_backend', 'fluxfiles_storage_base',
+        'fluxfiles_local_private', 'fluxfiles_db_version',
+    ];
 
     // Local files of ONE site's storage root, only inside the plugin's own
     // `uploads/` disk root plus its known state; a custom FLUXFILES_STORAGE_DIR
@@ -151,7 +157,7 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
         $rmdirIfEmpty($root); // only if nothing else lives there
     };
 
-    $cleanSite = static function (?int $blogId, string $base, bool $ownBase) use ($options, $dataOptions, $deleteFiles): void {
+    $cleanSite = static function (?int $blogId, string $base, bool $ownBase) use ($options, $dataOptions, $deleteFiles): bool {
         global $wpdb;
 
         // Read the opt-in BEFORE the options go.
@@ -186,10 +192,12 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
                 $wpdb->query('DROP TABLE IF EXISTS `' . $table . '`'); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
             }
         }
+        return $wipe;
     };
 
     $base = FluxFilesStorage::base();
-    // Files are deleted only at the plugin's own location, never at an operator override.
+    // Files are deleted only at the plugin's own location token, never at an
+    // operator override ('const'/'filter') nor a legacy absolute path ('legacy').
     $ownBase = FluxFilesStorage::source() === 'option';
     FluxFilesStorage::uploadsBase(); // resolve (and cache) the main-site uploads dir once, before the per-site loop
 
@@ -197,18 +205,20 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
         $offset = 0;
         $batch = 100;
         $network = function_exists('get_current_network_id') ? (int) get_current_network_id() : 1;
+        $allWiped = true;
         do {
             $ids = (array) get_sites(['fields' => 'ids', 'number' => $batch, 'offset' => $offset, 'network_id' => $network]);
             foreach ($ids as $id) {
                 switch_to_blog((int) $id);
-                $cleanSite((int) $id, $base, $ownBase);
+                $allWiped = $cleanSite((int) $id, $base, $ownBase) && $allWiped;
                 restore_current_blog();
             }
             $offset += $batch;
         } while (count($ids) === $batch);
 
         // Network-level copies (the storage base is a site option of THIS network).
-        foreach ($options as $name) {
+        // The data-tied ones only when no site kept its data.
+        foreach ($allWiped ? array_merge($options, $dataOptions) : $options as $name) {
             delete_site_option($name);
         }
         // Drop the now-empty shared folders; non-empty ones are left alone.
@@ -219,6 +229,7 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
         return;
     }
 
-    $cleanSite(null, $base, $ownBase);
-    delete_site_option('fluxfiles_storage_base');
+    if ($cleanSite(null, $base, $ownBase)) {
+        delete_site_option('fluxfiles_storage_base');
+    }
 })();

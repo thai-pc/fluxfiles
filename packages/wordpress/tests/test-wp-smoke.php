@@ -3038,9 +3038,9 @@ test('refused writes / 403s are audited through core\'s AuditPolicy and the plug
 test('multisite: each blog gets its own storage root + url; blog 1 cannot address blog 2', function () {
     // Single site: layout unchanged.
     $single = FluxFilesPlugin::diskConfigs()['local'];
-    assertEqual(WP_CONTENT_DIR . '/uploads/fluxfiles/uploads', $single['root'], 'single-site root unchanged');
-    assertEqual('http://wp.test/wp-content/uploads/fluxfiles/uploads', $single['url'], 'single-site url unchanged');
-    assertEqual(WP_CONTENT_DIR . '/uploads/fluxfiles', FluxFilesPlugin::storagePath(), 'single-site storage path unchanged');
+    assertEqual(WP_CONTENT_DIR . '/uploads/fluxfiles/uploads', $single['root'], 'single-site root');
+    assertEqual('http://wp.test/wp-content/uploads/fluxfiles/uploads', $single['url'], 'single-site url');
+    assertEqual(WP_CONTENT_DIR . '/uploads/fluxfiles', FluxFilesPlugin::storagePath(), 'single-site storage path');
 
     $GLOBALS['WP_MULTISITE'] = true;
     try {

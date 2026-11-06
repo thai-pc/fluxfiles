@@ -104,13 +104,15 @@ class FluxFilesPlugin
         FluxFilesStorage::decide();
         $storagePath = self::storagePath();
 
-        if (!is_dir($storagePath)) {
-            wp_mkdir_p($storagePath);
+        if (!FluxFilesStorage::onFallback()) {
+            if (!is_dir($storagePath)) {
+                wp_mkdir_p($storagePath);
+            }
+            if (!is_dir($storagePath . '/uploads')) {
+                wp_mkdir_p($storagePath . '/uploads');
+            }
+            self::protectStorage();
         }
-        if (!is_dir($storagePath . '/uploads')) {
-            wp_mkdir_p($storagePath . '/uploads');
-        }
-        self::protectStorage();
 
         // Set default options if not already set
         if (get_option('fluxfiles_secret') === false) {

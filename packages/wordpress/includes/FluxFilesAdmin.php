@@ -454,7 +454,7 @@ class FluxFilesAdmin
             $on ? 'checked' : '',
             esc_html__('Delete all FluxFiles data when the plugin is deleted', 'fluxfiles'),
             esc_html__('Warning:', 'fluxfiles'),
-            esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables and the secret key (the audit log key), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash; of the folder only the files FluxFiles wrote are deleted. Nothing is deleted from a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter, nor from S3, R2 or SFTP.', 'fluxfiles')
+            esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables, the secret key (the audit log key) and the settings that decide where and how that data is read (storage backend, storage location, private mode), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash; of the folder only the files FluxFiles wrote are deleted. Nothing is deleted from a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter, nor from S3, R2 or SFTP.', 'fluxfiles')
         );
     }
 

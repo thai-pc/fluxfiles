@@ -16,7 +16,9 @@ defined('ABSPATH') || exit;
  *   'content' => WP_CONTENT_DIR/fluxfiles   (installs that already had that folder)
  *   'uploads' => <main-site uploads>/fluxfiles (fresh installs; managed hosts back it up)
  * The token is decided ONCE (activation, or the first request that needs it).
- * A pre-release build stored an absolute path; that value is still honoured as-is.
+ * A pre-release build stored an absolute path; a real absolute path (`/...` or
+ * `C:\...`) is still honoured as-is as source 'legacy', but uninstall never
+ * deletes files there. Any other string is junk and is decided again.
  * The constant and the filter are code, so they stay absolute.
  */
 final class FluxFilesStorage
@@ -29,8 +31,8 @@ final class FluxFilesStorage
     /** Exact body of the index.php the plugin writes next to the .htaccess files. */
     public const INDEX_STUB = "<?php\n// Silence is golden.\n";
 
-    /** @var string|null per-request cache of the option-derived base */
-    private static ?string $decided = null;
+    /** @var array{0:string,1:string,2:string}|null per-request cache of the option-derived [path, source ('option'|'legacy'), token] */
+    private static ?array $decided = null;
 
     /** @var array{0:string,1:string}|null|false per-request cache of uploadsInfo() (false = not yet computed) */
     private static $uploads = false;
@@ -63,8 +65,9 @@ final class FluxFilesStorage
 
     /**
      * Where the base came from: 'const' (FLUXFILES_STORAGE_DIR), 'filter'
-     * (`fluxfiles_storage_base`) or 'option'. Code-chosen locations ('const',
-     * 'filter') are the operator's, not ours: uninstall never deletes files there.
+     * (`fluxfiles_storage_base`), 'legacy' (an absolute path stored by a
+     * pre-release build) or 'option' (a location token). Only 'option' is the
+     * plugin's own location; uninstall never deletes files anywhere else.
      */
     public static function source(): string
     {
@@ -84,9 +87,20 @@ final class FluxFilesStorage
         $filtered = apply_filters('fluxfiles_storage_base', $decided);
         if (is_string($filtered) && trim($filtered) !== '') {
             $filtered = self::normalize($filtered);
-            return [$filtered, $filtered === $decided ? 'option' : 'filter'];
+            return [$filtered, $filtered === $decided ? self::$decided[1] : 'filter'];
         }
-        return [$decided, 'option'];
+        return [$decided, self::$decided[1]];
+    }
+
+    /**
+     * True while the base is the uploads-shaped guess made without a usable
+     * uploads API (nothing is persisted then). Callers must not create
+     * directories there: the real location may differ once the API is back.
+     */
+    public static function onFallback(): bool
+    {
+        [, $source] = self::resolve();
+        return $source === 'option' && self::$decided !== null && self::$decided[2] === 'uploads' && self::uploadsInfo() === null;
     }
 
     /**
@@ -97,23 +111,36 @@ final class FluxFilesStorage
     public static function decide(): string
     {
         if (self::$decided !== null) {
-            return self::$decided;
+            return self::$decided[0];
         }
         $stored = self::getOption();
-        if (is_string($stored) && trim($stored) !== '') {
-            return self::$decided = self::fromToken(trim($stored));
+        $stored = is_string($stored) ? trim($stored) : '';
+        if ($stored === 'content' || $stored === 'uploads') {
+            return (self::$decided = [self::fromToken($stored), 'option', $stored])[0];
         }
+        if ($stored !== '' && preg_match('#^(/|[A-Za-z]:[\\\\/])#', $stored) === 1) {
+            return (self::$decided = [self::normalize($stored), 'legacy', ''])[0];
+        }
+        // Unset or junk: decide again.
         if (is_dir(self::contentBase())) {
             self::saveOption('content');
-            return self::$decided = self::contentBase();
+            return (self::$decided = [self::contentBase(), 'option', 'content'])[0];
+        }
+        // A stream-wrapper basedir (S3 Uploads, WP-Stateless: s3://bucket/...) is
+        // not a local directory the disk can live in.
+        $up = self::uploadsInfo();
+        if ($up !== null && strpos($up[0], '://') !== false) {
+            self::saveOption('content');
+            return (self::$decided = [self::contentBase(), 'option', 'content'])[0];
         }
         // Persist only when the uploads API answered: a failed early load must not
-        // pin a guess. The fallback path below is the one 'uploads' resolves to
-        // without the API, so the decision cannot flip when it comes back.
-        if (self::uploadsInfo() !== null) {
+        // pin a guess. Without it the token resolves to the uploads-shaped fallback
+        // path, and onFallback() keeps callers from creating directories there; the
+        // next request with a working API decides for real.
+        if ($up !== null) {
             self::saveOption('uploads');
         }
-        return self::$decided = self::fromToken('uploads');
+        return (self::$decided = [self::fromToken('uploads'), 'option', 'uploads'])[0];
     }
 
     private static function contentBase(): string
@@ -130,7 +157,7 @@ final class FluxFilesStorage
             $up = self::uploadsInfo();
             return $up !== null ? $up[0] . '/fluxfiles' : self::normalize(WP_CONTENT_DIR) . '/uploads/fluxfiles';
         }
-        return self::normalize($token); // legacy: absolute path stored by a pre-release build
+        return self::normalize($token);
     }
 
     /** Main-site uploads basedir (no trailing slash), or null without a usable uploads API. */
