@@ -61,5 +61,14 @@ plant vendor-phar      vendor/foo/tool.phar 'x'
 plant root-markdown    CHANGES.md '# x'
 plant public-link      public-link.php '<?php'
 
+# Strip the ABSPATH guard line from the UI template: the page would become directly openable.
+dir="$WORK/strip-guard"; mkdir -p "$dir"
+(cd "$dir" && unzip -q "$ZIP" && sed '1d' fluxfiles/templates/ui-index.php > x && mv x fluxfiles/templates/ui-index.php && zip -qr bad.zip fluxfiles)
+if php "$ROOT/scripts/check-wp-dist.php" "$dir/bad.zip" >/dev/null 2>&1; then
+    echo "FAIL strip-guard: the guard accepted a template without the ABSPATH line"; fails=$((fails + 1))
+else
+    echo "ok   strip-guard rejected"
+fi
+
 [ "$fails" -eq 0 ] || { echo "$fails planted violation(s) slipped through"; exit 1; }
 echo "OK: every planted violation was rejected"

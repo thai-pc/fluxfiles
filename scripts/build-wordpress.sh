@@ -100,8 +100,9 @@ rm -f "$PLUGIN_DIR/public/share.html" "$PLUGIN_DIR/public/intake.html"
 # .html file stays under public/. index.php answers a request for the directory itself.
 python3 - "$PLUGIN_DIR/public/index.html" "$PLUGIN_DIR/templates/ui-index.php" <<'PY'
 import sys
-html = open(sys.argv[1]).read()
-open(sys.argv[2], 'w').write("<?php defined('ABSPATH') || exit; // phpcs:disable WordPress.WP.EnqueuedResources -- standalone iframe document served by the REST route (own CSP), not a WordPress page ?>\n" + html)
+# Binary in and out: no newline translation or re-encoding, the page stays byte-identical.
+html = open(sys.argv[1], 'rb').read()
+open(sys.argv[2], 'wb').write(b"<?php defined('ABSPATH') || exit; // phpcs:disable WordPress.WP.EnqueuedResources -- standalone iframe document served by the REST route (own CSP), not a WordPress page ?>\n" + html)
 PY
 rm -f "$PLUGIN_DIR"/public/*.html
 cat > "$PLUGIN_DIR/public/index.php" <<'PHP'

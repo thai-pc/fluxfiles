@@ -73,7 +73,7 @@ Only when a developer sets `terminal_pty_url`, `pdf_tools_url`, `office_url` or 
 * `assets/fm.js` and `assets/fm.css` are the readable sources of `assets/fm.min.js` and `assets/fm.min.css`, which are produced by `bash scripts/build-ui.sh` (esbuild, minify only).
 * [Alpine.js](https://github.com/alpinejs/alpine) 3.15.12 ships unmodified as `assets/vendor/alpine/alpine.min.js`.
 * The code editor uses the CodeMirror that WordPress itself ships (`wp-includes/js/codemirror/`); no CodeMirror copy is bundled. File types its build has no syntax mode for open as plain text.
-* PHP dependencies in `vendor/` are installed from `packages/core/composer.lock`; their licences ship in their folders. See `THIRD-PARTY-NOTICES.md`.
+* PHP dependencies in `vendor/` are installed from `packages/core/composer.lock`; their licences ship in their folders. See `docs/THIRD-PARTY-NOTICES.md`.
 
 == Using an existing upload directory ==
 

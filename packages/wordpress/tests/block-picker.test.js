@@ -6,6 +6,7 @@ const fs = require('fs'), vm = require('vm'), path = require('path'), assert = r
 
 const read = f => fs.readFileSync(path.join(__dirname, '../assets', f), 'utf8');
 assert(!/\bopened\b/.test(read('block.js')), 'stale single-open flag in block.js');
+assert(!/\bopened\b/.test(read('media-button.js')), 'stale single-open flag in media-button.js');
 assert(!/pickerOpened/.test(read('media-integration.js')), 'stale single-open flag in media-integration.js');
 
 // FluxFiles SDK stub: one live "iframe" at a time, closed after a pick, like the real one.
@@ -55,5 +56,28 @@ const tick = () => new Promise(r => setTimeout(r, 10));
     assert.strictEqual(sdk.opens, 2, 'each open re-initialises the SDK');
     assert.strictEqual(sets[0].length, 1, 'block 1 got exactly one pick');
     assert.strictEqual(sets[1].length, 1, 'block 2 got its own pick');
+
+    // media-button.js: same contract through the classic-editor modal.
+    const mel = { style: {}, querySelector: () => ({ addEventListener() {} }) };
+    let click;
+    const mctx = vm.createContext({
+        console, Promise, setTimeout,
+        document: {
+            getElementById: id => id === 'fluxfiles-media-btn' ? { addEventListener: (e, f) => { click = f; } } : mel,
+            addEventListener() {}
+        },
+        fetch: () => Promise.resolve({ ok: true, json: () => ({ data: { id: 1 } }) })
+    });
+    mctx.window = mctx;
+    mctx.FluxFiles = sdk;
+    mctx.fluxfilesMediaButton = { config: { disk: 'd' }, tokenUrl: '/t', nonce: 'n', attachUrl: '/a' };
+    vm.runInContext(read('media-button.js'), mctx);
+    sdk.opens = 0;
+    const picks = [];
+    mctx.send_to_editor = h => picks.push(h);
+    click({ preventDefault() {} }); sdk.pick({ url: 'http://x/a.png', name: 'a.png' }); await tick();
+    click({ preventDefault() {} }); sdk.pick({ url: 'http://x/b.png', name: 'b.png' }); await tick();
+    assert.strictEqual(sdk.opens, 2, 'media button re-initialises the SDK on each open');
+    assert.strictEqual(picks.length, 2, 'media button inserted both picks');
     console.log('block-picker OK');
 })().catch(e => { console.error(e); process.exit(1); });

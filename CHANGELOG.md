@@ -11,8 +11,8 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 - **`public-link.php` is removed.** The paid WordPress modules had no users, so no old-form share/intake links exist
   to redirect; the REST page route is the only entry point. The `?blog=` hint on that route is kept for multisite.
-- **Requires WordPress 6.5** (was 6.0): core uses `array_is_list()`, and `$wpdb->prepare()` gets `%i` identifier
-  placeholders. The readme, plugin header and design doc follow.
+- **Requires WordPress 6.5** (was 6.0): `$wpdb->prepare()` uses `%i` identifier
+  placeholders (WordPress 6.2+) and Plugin Check's requires-WordPress check flags anything lower. The readme, plugin header and design doc follow.
 - No hidden or executable files in the zip: `public/.htaccess` is no longer shipped (`public/index.php` answers a
   direct hit with 403 and carries the `ABSPATH` guard), and the build prunes `*.sh`, `*.phar`, `bin/` launchers, the
   `paragonie/random_compat` build helpers and every dot-file from `vendor/`. `HOOKS.md` and

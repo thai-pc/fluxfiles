@@ -88,6 +88,21 @@ foreach ([
     }
 }
 
+// ---- UI template guard -----------------------------------------------------
+// templates/ui-index.php must open with the exact line FluxFilesApi::UI_TEMPLATE_GUARD
+// strips when serving; without it the page is openable directly under wp-content/plugins/.
+if (isset($files['templates/ui-index.php']) && isset($files['includes/FluxFilesApi.php'])) {
+    $api = (string) file_get_contents($files['includes/FluxFilesApi.php']);
+    if (preg_match('/const UI_TEMPLATE_GUARD = "(.*)\\\\n";/', $api, $m) !== 1) {
+        $fail('includes/FluxFilesApi.php: UI_TEMPLATE_GUARD constant not found');
+    } else {
+        $guard = $m[1] . "\n";
+        if (!str_starts_with((string) file_get_contents($files['templates/ui-index.php']), $guard)) {
+            $fail('templates/ui-index.php does not start with the exact UI_TEMPLATE_GUARD line');
+        }
+    }
+}
+
 // ---- forbidden paths -------------------------------------------------------
 foreach ($files as $rel => $_) {
     foreach ([

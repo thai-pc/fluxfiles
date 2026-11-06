@@ -8,36 +8,34 @@
     var closeBtn = modal.querySelector('.fluxfiles-modal-close');
     var body = document.getElementById('fluxfiles-modal-body');
     var config = boot.config;
-    var opened = false;
 
     function openModal() {
         modal.style.display = 'flex';
-        if (!opened) {
-            config.container = '#fluxfiles-modal-body';
-            config.onTokenRefresh = function () {
-                return fetch(boot.tokenUrl, {
-                    credentials: 'same-origin',
-                    headers: { 'X-WP-Nonce': boot.nonce, 'Accept': 'application/json' }
-                })
-                    .then(function (r) { return r.ok ? r.json() : null; })
-                    .then(function (j) { return (j && j.data && j.data.token) ? j.data.token : null; })
-                    .catch(function () { return null; });
-            };
-            config.onSelect = function(file) {
-                if (Array.isArray(file)) {
-                    file.forEach(function(f) { insertFile(f); });
-                } else {
-                    insertFile(file);
-                }
-                closeModal();
-            };
-            FluxFiles.open(config);
-            opened = true;
-        }
+        config.container = '#fluxfiles-modal-body';
+        config.onTokenRefresh = function () {
+            return fetch(boot.tokenUrl, {
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': boot.nonce, 'Accept': 'application/json' }
+            })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (j) { return (j && j.data && j.data.token) ? j.data.token : null; })
+                .catch(function () { return null; });
+        };
+        config.onSelect = function(file) {
+            if (Array.isArray(file)) {
+                file.forEach(function(f) { insertFile(f); });
+            } else {
+                insertFile(file);
+            }
+            closeModal();
+        };
+        FluxFiles.open(config);
     }
 
     function closeModal() {
         modal.style.display = 'none';
+        // The SDK keeps one live iframe; close it so the next open starts fresh with its own callback.
+        if (typeof FluxFiles !== 'undefined' && FluxFiles.close) FluxFiles.close();
     }
 
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

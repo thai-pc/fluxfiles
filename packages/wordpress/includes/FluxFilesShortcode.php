@@ -73,8 +73,10 @@ class FluxFilesShortcode
 
         // The loader is attached to the SDK script (enqueued above, in the footer) and
         // runs right after it, so the page itself carries only the container div.
+        // A render whose output is discarded (excerpt, SEO scan) still queues this script, so
+        // it no-ops unless its container is really in the page, else it would tear down the real embed.
         $js = "document.addEventListener('DOMContentLoaded', function () {\n"
-            . "    if (typeof FluxFiles === 'undefined') { return; }\n"
+            . '    if (!document.querySelector(' . wp_json_encode("#{$containerId}") . ") || typeof FluxFiles === 'undefined') { return; }\n"
             . '    FluxFiles.open(Object.assign(' . $configJson . ", {\n"
             . "        onTokenRefresh: function () {\n"
             . '            return fetch(' . $tokenUrlJs . ", {\n"
