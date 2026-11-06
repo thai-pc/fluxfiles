@@ -214,11 +214,11 @@ Notes:
 
 ---
 
-## 6. CI map (`.github/workflows/test.yml`, 16 jobs)
+## 6. CI map (`.github/workflows/test.yml`, 17 jobs)
 
 `core-php` (unit+integration, PHP 8.1–8.5) · `lockfiles-and-laravel-db` (every
 `composer.lock` agrees with its `composer.json`; Laravel DB adapter test) ·
-**`adapter-core-floor`** (PHP floors are honest) · `iframe-allow` · `api-e2e` ·
+**`adapter-core-floor`** (PHP floors are honest) · `ui-min-fresh` (committed UI min assets match the source) · `iframe-allow` · `api-e2e` ·
 `selfboot-e2e` (every `tests/e2e/*-http.php` + `test-sftp-live.php`, boots its own
 `php -S` + an `atmoz/sftp` container) · `s3-localstack` (live S3 via LocalStack) ·
 `db-mysql` / `db-postgres` (the `FLUXFILES_STORAGE_BACKEND=db` suite run against real

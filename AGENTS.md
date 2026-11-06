@@ -151,8 +151,8 @@ php packages/wordpress/tests/test-wp-smoke.php
 php packages/laravel/tests/test-laravel-smoke.php
 ```
 
-CI is `.github/workflows/test.yml` (16 jobs: core-php, lockfiles-and-laravel-db,
-adapter-core-floor, iframe-allow, api-e2e, selfboot-e2e, s3-localstack, db-mysql,
+CI is `.github/workflows/test.yml` (17 jobs: core-php, lockfiles-and-laravel-db,
+adapter-core-floor, ui-min-fresh, iframe-allow, api-e2e, selfboot-e2e, s3-localstack, db-mysql,
 db-postgres, wrappers, node-sdk (also builds/tests `@fluxfiles/mcp`), python-token,
 browser-e2e, editor-e2e, pack-smoke, docker-build), on a PHP 8.1–8.5 matrix where it
 matters. `selfboot-e2e` runs every `tests/e2e/*-http.php` (each boots its own `php -S`)

@@ -195,5 +195,5 @@ MIT — see [LICENSE](LICENSE) for details.
 ## Links
 
 - [FluxFiles](https://github.com/thai-pc/fluxfiles) — Main repository
-- [Documentation](https://github.com/thai-pc/fluxfiles#react) — Full docs
+- [Documentation](https://github.com/thai-pc/fluxfiles#framework-adapters) — Full docs
 - [Issues](https://github.com/thai-pc/fluxfiles/issues) — Bug reports

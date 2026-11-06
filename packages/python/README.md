@@ -208,5 +208,5 @@ MIT — see [LICENSE](LICENSE) for details.
 ## Links
 
 - Main repository: `https://github.com/thai-pc/fluxfiles`
-- Documentation: `https://github.com/thai-pc/fluxfiles#python-server-side-token-sdk`
+- Documentation: `https://github.com/thai-pc/fluxfiles#framework-adapters`
 - Issues: `https://github.com/thai-pc/fluxfiles/issues`

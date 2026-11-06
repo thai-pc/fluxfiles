@@ -13,7 +13,7 @@ dependencies = ["PyJWT>=2.8,<3", "cryptography>=42"]
 dev = ["pytest>=8", "mypy>=1.10", "ruff"]
 
 [project.urls]
-Homepage = "https://github.com/thai-pc/fluxfiles#python-server-side-token-sdk"
+Homepage = "https://github.com/thai-pc/fluxfiles#framework-adapters"
 Repository = "https://github.com/thai-pc/fluxfiles"
 Issues = "https://github.com/thai-pc/fluxfiles/issues"
 

@@ -36,7 +36,7 @@
     "vitest": "^2.1.8"
   },
   "author": "thai-pc",
-  "homepage": "https://github.com/thai-pc/fluxfiles#node-server-side-token-sdk",
+  "homepage": "https://github.com/thai-pc/fluxfiles#framework-adapters",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/thai-pc/fluxfiles.git",

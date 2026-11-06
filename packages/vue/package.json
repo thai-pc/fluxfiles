@@ -44,7 +44,7 @@
     "vitest": "^3.0.0"
   },
   "author": "thai-pc",
-  "homepage": "https://github.com/thai-pc/fluxfiles#vue--nuxt",
+  "homepage": "https://github.com/thai-pc/fluxfiles#framework-adapters",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/thai-pc/fluxfiles.git",
