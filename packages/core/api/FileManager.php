@@ -3255,6 +3255,17 @@ class FileManager
     }
 
     /**
+     * The token's sanitised `retention_rules` ({path,days,action}), for a module
+     * that drives the sweep through the removeKeys()/listing seams.
+     *
+     * @return array<int,array{path:string,days:int,action:string}>
+     */
+    public function retentionRules(): array
+    {
+        return $this->claims->retentionRules;
+    }
+
+    /**
      * Apply the token's `retention_rules`: files under each rule's path not
      * modified for `days` days go to trash (or are deleted). Dry-run lists what
      * would happen and changes nothing. Every action goes through trash()/delete()'s

@@ -5,8 +5,15 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `FileManager::retentionRules()` returns the token's sanitised `retention_rules`, so a
+  module can drive the retention sweep through the `removeKeys()`/`isHeld()` seams.
+
 ### Changed
 
+- Test-only: the audit-chain tests verify through `tests/support/chain-verify.php`, a
+  verbatim copy of `AuditChain::verify()`, instead of the shipped method. No behaviour change.
 - **Laravel adapter dispatches Share/Intake and the compliance routes through the modules.**
   The public `share/*` and `intake/*` routes now go through `PublicRoutes::dispatch()` with a
   `PublicContext` built from the app's own disks, metadata repo, secret and `ModuleRegistry::license()`,

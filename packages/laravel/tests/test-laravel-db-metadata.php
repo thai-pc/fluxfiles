@@ -34,6 +34,7 @@ $coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vend
 if (is_file($coreAutoload)) {
     require_once $coreAutoload;
 }
+require_once __DIR__ . '/../../core/tests/support/chain-verify.php';
 require_once __DIR__ . '/../src/LaravelPdoConnection.php';
 require_once __DIR__ . '/../src/LaravelDbMetadataHandler.php';
 
@@ -668,12 +669,12 @@ test('audit(): entries are HMAC-chained and an edited row is detected', function
         for ($i = 0; $i < 4; $i++) {
             $repo->audit($disk, 'upload', ['user_id' => 'u', 'file_key' => "chain/{$i}.txt", 'ip' => '1.2.3.4', 'user_agent' => 'ua']);
         }
-        $r = \FluxFiles\AuditChain::verify($repo->readAudit($disk));
+        $r = fxChainVerify($repo->readAudit($disk));
         assertTrue($r['ok'] && $r['chained'] >= 4 && $r['gaps'] === 0, 'clean chain: ' . json_encode($r));
         $head = Capsule::connection()->table('fluxfiles_audit_chain_head')->where('disk', $disk)->value('head_hash');
         assertTrue($head === $r['head'], 'head row tracks the newest entry');
         Capsule::connection()->table('fluxfiles_audit_log')->where('file_key', 'chain/1.txt')->update(['owner' => 'nobody']);
-        assertTrue(count(\FluxFiles\AuditChain::verify($repo->readAudit($disk))['tampered']) === 1, 'edit detected');
+        assertTrue(count(fxChainVerify($repo->readAudit($disk))['tampered']) === 1, 'edit detected');
     } finally {
         \FluxFiles\AuditChain::configure('');
     }
@@ -798,7 +799,7 @@ test('prefixed connection: DB limiter, audit reads (readAudit/window/verify) and
             assertEqual(['b.txt'], array_column($repo->readAuditWindow('local', null, 1), 'file_key'), 'readAuditWindow limit');
             assertEqual(['a.txt'], array_column($repo->readAuditWindow('local', null, null, 'u1'), 'file_key'), 'readAuditWindow user');
             assertEqual(2, count($repo->readAuditWindow('local', time() - 60)), 'readAuditWindow since');
-            $v = \FluxFiles\AuditChain::verify($repo->readAudit('local'));
+            $v = fxChainVerify($repo->readAudit('local'));
             assertTrue(($v['tampered'] ?? []) === [] && ($v['chained'] ?? 2) >= 0, 'verify path: ' . json_encode($v));
             $repo->insertAuditEntries('local', []); // builder path stays prefixed too
         } finally {

@@ -15,6 +15,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../support/chain-verify.php';
 
 use FluxFiles\AuditChain;
 use FluxFiles\Db\Connection;
@@ -48,7 +49,7 @@ function writeN($repo, int $n, string $tag = 'e'): void {
     }
 }
 function verifyRepo($repo): array {
-    return AuditChain::verify(array_merge($repo->readAuditArchive('local'), $repo->readAudit('local')));
+    return fxChainVerify(array_merge($repo->readAuditArchive('local'), $repo->readAudit('local')));
 }
 function liveLines(string $root): array {
     return array_values(array_filter(explode("\n", (string) file_get_contents($root . '/_fluxfiles/audit.jsonl'))));
