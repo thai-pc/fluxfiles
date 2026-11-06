@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TinyMCE x FluxFiles (real picker)</title>
+  <script src="/packages/core/tests/editors/node_modules/tinymce/tinymce.min.js"></script>
+  <script src="/packages/sdk/fluxfiles.js"></script>
+  <script src="/packages/tinymce/plugin.min.js"></script>
+</head>
+<body>
+  <textarea id="ed"></textarea>
+  <script>
+    var q = new URLSearchParams(location.search);
+    tinymce.init({
+      selector: '#ed',
+      plugins: 'fluxfiles link image',
+      toolbar: 'fluxfiles',
+      menubar: false,
+      license_key: 'gpl',
+      fluxfiles_endpoint: q.get('endpoint') || '',
+      fluxfiles_token: q.get('token') || '',
+      setup: function (editor) { editor.on('init', function () { window.__edReady = true; }); }
+    });
+  </script>
+</body>
+</html>

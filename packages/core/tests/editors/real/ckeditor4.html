@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CKEditor 4 x FluxFiles (real picker)</title>
+  <script src="/packages/core/tests/editors/node_modules/ckeditor4/ckeditor.js"></script>
+  <script src="/packages/sdk/fluxfiles.js"></script>
+</head>
+<body>
+  <textarea id="ed"></textarea>
+  <script>
+    var q = new URLSearchParams(location.search);
+    CKEDITOR.plugins.addExternal('fluxfiles', '/packages/ckeditor4/', 'plugin.min.js');
+    var editor = CKEDITOR.replace('ed', {
+      extraPlugins: 'fluxfiles',
+      toolbar: [['FluxFiles']],
+      // No image/link plugins in this minimal build, so ACF would strip <img>/<a>.
+      allowedContent: true,
+      fluxfiles: { endpoint: q.get('endpoint') || '', token: q.get('token') || '' }
+    });
+    editor.on('instanceReady', function () { window.__edReady = true; });
+  </script>
+</body>
+</html>

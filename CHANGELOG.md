@@ -3,6 +3,25 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.7] — 2026-11-06
+
+> Released: `ckeditor5-v1.0.1`.
+
+### Fixed
+
+- **CKEditor 5: the "Insert image via FluxFiles" entry never appeared in the image insert
+  dropdown with the default configuration.** CKEditor 5 renders only the integrations named
+  in `image.insert.integrations`, and the plugin registered itself without being listed. It
+  now adds `fluxfiles` to the default list; a list you set yourself is left alone (add
+  `'fluxfiles'` to it to show the entry). The dropdown entry is also labelled "Insert image
+  via FluxFiles" instead of "FluxFiles".
+
+### Tests
+
+- Real-browser end-to-end specs for the CKEditor 5, CKEditor 4, TinyMCE and Summernote
+  adapters against a live core and the real picker iframe
+  (`packages/core/tests/editors/real-picker.spec.ts`), run by the `editor-e2e` CI job.
+
 ## [1.0.6] — 2026-11-06
 
 > Released: `ckeditor5-v1.0.0`.

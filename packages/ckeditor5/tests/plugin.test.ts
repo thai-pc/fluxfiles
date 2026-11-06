@@ -63,6 +63,8 @@ describe('registration', () => {
     const withUi = await make();
     const ui = withUi.plugins.get('ImageInsertUI') as unknown as { _integrations: Map<string, unknown> };
     expect(ui._integrations.has('fluxfiles')).toBe(true);
+    // Registered alone is invisible: ImageInsertUI renders only listed integrations.
+    expect(withUi.config.get('image.insert.integrations')).toContain('fluxfiles');
     await withUi.destroy();
     editors.pop();
 
