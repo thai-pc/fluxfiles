@@ -443,11 +443,17 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/share/file', array_merge($public, [
             'methods' => 'GET', 'callback' => [$api, 'handleSharePublicRoute'],
         ]));
+        register_rest_route($ns, $p . '/share/page', array_merge($public, [
+            'methods' => 'GET', 'callback' => [$api, 'handleSharePublicRoute'],
+        ]));
         register_rest_route($ns, $p . '/intake/info', array_merge($public, [
             'methods' => 'GET', 'callback' => [$api, 'handleIntakePublicRoute'],
         ]));
         register_rest_route($ns, $p . '/intake/upload', array_merge($public, [
             'methods' => 'POST', 'callback' => [$api, 'handleIntakePublicRoute'],
+        ]));
+        register_rest_route($ns, $p . '/intake/page', array_merge($public, [
+            'methods' => 'GET', 'callback' => [$api, 'handleIntakePublicRoute'],
         ]));
 
         // Gated media stream/img — reached with a per-file signed token in the
@@ -2259,38 +2265,36 @@ class FluxFilesApi
      */
     private function publicLink(string $which, \WP_REST_Request $request): void
     {
-        $apiDir = FluxFilesPlugin::corePath('api');
-        if ($apiDir === null || !is_file($apiDir . '/PublicLinks.php')) {
-            // Bundled core missing — say so rather than fataling on a require.
+        if (!class_exists(\FluxFiles\PublicRoutes::class)) {
+            // Bundled core missing — say so rather than fataling.
             status_header(501);
             wp_send_json(['data' => null, 'error' => 'The FluxFiles core is not available',
                 'error_code' => 'core_missing'], 501);
         }
-        require_once $apiDir . '/PublicLinks.php';
         $method = $request->get_method();
         $uri = '/api/fm/' . $which . '/' . basename((string) $request->get_route());
 
-        // The core handler reads the signing secret and the storage path from $_ENV.
+        // Module engines (virus/DLP scan on portal uploads, webhooks) read their settings
+        // from the environment; a real env var still wins. The storage path is read the
+        // same way by the module's own storage helpers.
         $_ENV['FLUXFILES_SECRET'] = (string) get_option('fluxfiles_secret', '');
         $_ENV['FLUXFILES_STORAGE_PATH'] = FluxFilesPlugin::storagePath();
-        // …and gates on the licence via core's env-only `fromEnv()` helper (it reads
-        // $_ENV, never a WP option) — which the "no fromEnv() in the proxy" smoke guard
-        // can't see, because the call lives in the core file required above. A WordPress
-        // licence normally lives in the plugin OPTION (Settings → FluxFiles → Licence —
-        // shared hosting has no env to put it in), so without this every recipient of a
-        // share link / upload portal got `402 license_required` on a fully licensed
-        // site, and a portal upload's virus/DLP scan (also fromEnv) refused the file.
         FluxFilesPlugin::seedLicenseEnv();
-        // Same for the module engine settings (portal uploads run virus/DLP scans,
-        // share/intake dispatch webhooks): a real env var still wins.
         FluxFilesPlugin::seedModuleEnv();
 
-        if ($which === 'share') {
-            handleSharePublic($method, $uri, $this->diskManager, FluxFilesPlugin::diskConfigs(), $this->metaRepo);
-        } else {
-            handleIntakePublic($method, $uri, $this->diskManager, FluxFilesPlugin::diskConfigs(), $this->metaRepo);
-        }
-        exit;   // the core handler has already sent status, headers and body
+        // Core's PublicRoutes is the gate (secret → installed → licensed) and hands the
+        // request to the module. The licence comes from the plugin option via license(),
+        // never from core's env-only helper. hostInjected = WordPress supplies
+        // its own disks and metadata.
+        \FluxFiles\PublicRoutes::dispatch($which, $method, $uri, new \FluxFiles\PublicContext(
+            $this->diskManager,
+            FluxFilesPlugin::diskConfigs(),
+            $this->metaRepo,
+            (string) get_option('fluxfiles_secret', ''),
+            FluxFilesPlugin::license(),
+            true
+        ));
+        exit;   // the module has already sent status, headers and body
     }
 
     public function handleSharePublicRoute(\WP_REST_Request $r): void { $this->publicLink('share', $r); }
@@ -2710,9 +2714,15 @@ class FluxFilesApi
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
             }
             $fm = $this->fileManager($claims);
-            \FluxFiles\ModuleRegistry::require('legal-hold', FluxFilesPlugin::license(), $claims);
+            $module = \FluxFiles\ModuleRegistry::require('legal-hold', FluxFilesPlugin::license(), $claims);
             $dryRun = filter_var($body['dry_run'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $report = $fm->runRetention($disk, $dryRun);
+            if ($module instanceof \FluxFiles\RetentionProviderInterface) {
+                $report = $module->runRetention($fm, $disk, $dryRun);
+            } elseif (method_exists($fm, 'runRetention')) {
+                $report = $fm->runRetention($disk, $dryRun);   // core before the module seam
+            } else {
+                throw new ApiException('The legal-hold module needs an update', 501, 'module_update_required', ['module' => 'legal-hold']);
+            }
             $this->auditRetention($claims, $disk, $report);
             return $this->ok($report);
         } catch (ApiException $e) {
@@ -2748,11 +2758,18 @@ class FluxFilesApi
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
             }
             $fm = $this->fileManager($claims);
-            \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
+            $module = \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
             // Only the audit rows since the oldest baseline, narrowed in SQL on the db backend.
-            $report = $fm->runFixityCheck($disk, fn (?int $since): array => $since !== null
+            $auditRows = fn (?int $since): array => $since !== null
                 ? $this->metaRepo->readAuditWindow($disk, $since)
-                : $this->metaRepo->readAudit($disk));
+                : $this->metaRepo->readAudit($disk);
+            if ($module instanceof \FluxFiles\FixityProviderInterface) {
+                $report = $module->runFixityCheck($fm, $disk, $auditRows);
+            } elseif (method_exists($fm, 'runFixityCheck')) {
+                $report = $fm->runFixityCheck($disk, $auditRows);   // core before the module seam
+            } else {
+                throw new ApiException('The audit-export module needs an update', 501, 'module_update_required', ['module' => 'audit-export']);
+            }
             foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
                 foreach ($report[$list] as $key) {
                     $this->logAuditQuiet($claims, 'fixity_mismatch', $disk, $claims->scopePath((string) $key), $what);
@@ -2782,11 +2799,18 @@ class FluxFilesApi
             if (!$claims->hasDisk($disk)) {
                 throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
             }
-            \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
-            return $this->ok(\FluxFiles\AuditChain::verify(array_merge(
+            $module = \FluxFiles\ModuleRegistry::require('audit-export', FluxFilesPlugin::license(), $claims);
+            $entries = array_merge(
                 $this->metaRepo->readAuditArchive($disk),
                 $this->metaRepo->readAudit($disk)
-            )));
+            );
+            if ($module instanceof \FluxFiles\AuditVerifierInterface) {
+                return $this->ok($module->verifyChain($entries));
+            }
+            if (method_exists(\FluxFiles\AuditChain::class, 'verify')) {
+                return $this->ok(\FluxFiles\AuditChain::verify($entries));   // core before the module seam
+            }
+            throw new ApiException('The audit-export module needs an update', 501, 'module_update_required', ['module' => 'audit-export']);
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         }

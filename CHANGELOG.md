@@ -3,6 +3,21 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **WordPress dispatches the public Share/Intake routes and the retention / fixity /
+  audit-verify handlers to the installed module** instead of calling legacy code inside
+  core. Public routes go through `PublicRoutes::dispatch()` with a host-injected
+  `PublicContext` built from the plugin's own licence option; `public-link.php` serves
+  the module's page through the same install + licence gate; REST `share/page` and
+  `intake/page` routes are added. A module that predates the seams answers
+  `501 module_update_required`. Behaviour with no module installed is unchanged (501
+  `module_not_installed`, 402 `license_required`), except that the recipient page URL now
+  returns the gate's JSON envelope instead of a bare page. The WordPress adapter now
+  requires core `^1.0.4`.
+
 ## [1.0.12] — 2026-11-06
 
 ### Added
