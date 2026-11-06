@@ -54,7 +54,16 @@ $html = (string) file_get_contents($file);
 
 // The REST base the page should call. rest_url() honours whatever permalink structure
 // the site uses, including the ?rest_route= form on plain permalinks.
-$apiBase = rtrim(rest_url('fluxfiles/v1/api/fm'), '/');
+// On multisite the shim boots whichever blog the plugin URL maps to, so the API base is
+// resolved from the link's `blog` id to the site that minted it. The REST route there
+// verifies the token against that site's own secret and storage: an id that was
+// forged or swapped simply points the page at a site whose signature check fails.
+$blogParam = isset($_GET['blog']) && is_string($_GET['blog']) ? $_GET['blog'] : null;
+$apiBase = FluxFilesPlugin::publicLinkRestBase($blogParam);
+if ($apiBase === null) {
+    status_header(404);
+    exit('Not found');
+}
 $inject = '<script>window.__FM_API_BASE__=' . wp_json_encode($apiBase) . ';</script>';
 
 // Ahead of the page's own script, which reads the value on load. Falls back to

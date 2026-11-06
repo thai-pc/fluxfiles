@@ -93,6 +93,21 @@ $GLOBALS['WP_MULTISITE'] = false;
 $GLOBALS['WP_BLOG_ID'] = 1;
 if (!function_exists('is_multisite')) { function is_multisite() { return (bool) $GLOBALS['WP_MULTISITE']; } }
 if (!function_exists('get_current_blog_id')) { function get_current_blog_id() { return (int) $GLOBALS['WP_BLOG_ID']; } }
+// Site registry for the public-link tests: blog id => [url, flags].
+$GLOBALS['WP_SITES'] = [
+    1 => ['url' => 'http://wp.test/'],
+    2 => ['url' => 'http://wp.test/two/'],
+    3 => ['url' => 'http://wp.test/three/', 'archived' => true],
+];
+if (!function_exists('get_site')) {
+    function get_site($id) {
+        $d = $GLOBALS['WP_SITES'][(int) $id] ?? null;
+        return $d === null ? null : (object) ($d + ['blog_id' => (string) (int) $id, 'deleted' => 0, 'archived' => 0, 'spam' => 0]);
+    }
+}
+if (!function_exists('get_rest_url')) {
+    function get_rest_url($id, $path = '') { return $GLOBALS['WP_SITES'][(int) $id]['url'] . 'wp-json/' . ltrim($path, '/'); }
+}
 
 // Capability stub — $GLOBALS['WP_CAPS'] is the current user's capability set.
 // Defaults to a full-capability administrator so every pre-existing test keeps
@@ -3016,6 +3031,55 @@ test('multisite: each blog gets its own storage root + url; blog 1 cannot addres
         try { $reachable = $d1->fileExists('../../2/uploads/secret.txt'); } catch (\Throwable $e) { $reachable = false; }
         assertTrue(!$reachable, 'traversal into blog 2 is refused');
     } finally {
+        $GLOBALS['WP_MULTISITE'] = false;
+        $GLOBALS['WP_BLOG_ID'] = 1;
+    }
+});
+
+test('multisite public links: a link resolves to the blog that minted it', function () {
+    // Single site: no blog id in the URL, REST base is this site's, old links keep working.
+    $u = FluxFilesPlugin::publicLinkUrl('share.html', 'tok');
+    assertTrue(strpos($u, 'blog=') === false, 'single-site link carries no blog id');
+    assertEqual('http://wp.test/wp-json/fluxfiles/v1/api/fm', FluxFilesPlugin::publicLinkRestBase(null), 'single-site base');
+    assertEqual('http://wp.test/wp-json/fluxfiles/v1/api/fm', FluxFilesPlugin::publicLinkRestBase('2'), 'single-site ignores a blog param');
+
+    $GLOBALS['WP_MULTISITE'] = true;
+    try {
+        $GLOBALS['WP_BLOG_ID'] = 2;
+        foreach (['share.html' => 'share', 'intake.html' => 'intake'] as $page => $w) {
+            $link = FluxFilesPlugin::publicLinkUrl($page, 'tok');
+            parse_str((string) parse_url($link, PHP_URL_QUERY), $q);
+            assertEqual('2', $q['blog'] ?? null, "{$w} link minted on blog 2 names blog 2");
+            // The page then calls blog 2's REST namespace, where blog 2's secret and
+            // storagePath() (sites/2) apply.
+            assertEqual('http://wp.test/two/wp-json/fluxfiles/v1/api/fm', FluxFilesPlugin::publicLinkRestBase($q['blog']), "{$w} resolves blog 2's REST base");
+        }
+        // The base-URL claim is the same link without a token.
+        $base = FluxFilesPlugin::publicLinkUrl('share.html');
+        assertTrue(strpos($base, 'blog=2') !== false && strpos($base, 'token=') === false, 'base claim names blog, no token');
+
+        // Request arrives at the main site (blog 1) for a blog-2 link: still blog 2.
+        $GLOBALS['WP_BLOG_ID'] = 1;
+        assertEqual('http://wp.test/two/wp-json/fluxfiles/v1/api/fm', FluxFilesPlugin::publicLinkRestBase('2'), 'resolved from the id, not the booted blog');
+        // No blog param (a pre-1.0.4 link): the booted blog, as before.
+        assertEqual('http://wp.test/wp-json/fluxfiles/v1/api/fm', FluxFilesPlugin::publicLinkRestBase(null), 'missing id = current blog');
+
+        // Tampered / forged ids fail closed.
+        foreach (['99', '0', '-1', '2 ', '2.0', '02', '2;3', 'abc', '1e1', '99999999999', '3' /* archived */] as $bad) {
+            assertTrue(FluxFilesPlugin::publicLinkRestBase($bad) === null, "refused blog id '{$bad}'");
+        }
+        assertTrue(FluxFilesPlugin::publicLinkRestBase(['2']) === null, 'array id refused');
+        // A host in the URL is never consulted: the base is derived from the site record.
+        $_GET = ['blog' => '2', 'host' => 'evil.test'];
+        assertTrue(strpos((string) FluxFilesPlugin::publicLinkRestBase('2'), 'evil.test') === false, 'host param has no effect');
+        // Forging blog 1 on a blog-2 link only points the page at blog 1, whose own
+        // secret rejects the signature; storage stays per site.
+        $GLOBALS['WP_BLOG_ID'] = 2;
+        $s2 = FluxFilesPlugin::storagePath();
+        $GLOBALS['WP_BLOG_ID'] = 1;
+        assertTrue($s2 !== FluxFilesPlugin::storagePath(), 'storage roots stay per-site');
+    } finally {
+        $_GET = [];
         $GLOBALS['WP_MULTISITE'] = false;
         $GLOBALS['WP_BLOG_ID'] = 1;
     }

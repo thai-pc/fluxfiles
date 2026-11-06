@@ -3,6 +3,21 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.5] — 2026-11-06
+
+> Released: `wordpress-v1.0.4`.
+
+### Fixed
+
+- **WordPress multisite: Share and Intake links minted on a sub-site did not work.** The links
+  point at `public-link.php` through `plugins_url()`, which is network-wide, so WordPress booted
+  the main site and the sub-site's token was checked against the main site's secret and storage
+  root. Links now carry the minting site's blog id and the recipient page is pointed at that
+  site's own REST API, which verifies the token with that site's secret. An invalid, deleted or
+  archived blog id is a 404; a forged id fails the signature check. Not a data leak. Both
+  subdirectory and subdomain networks were affected. Single-site and pre-1.0.4 single-site links
+  are unchanged; sub-site links minted earlier must be re-created.
+
 ## [1.0.4] — 2026-11-06
 
 > Released: `core-v1.0.3`, `wordpress-v1.0.3`.
