@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Summernote x FluxFiles (real picker)</title>
+  <link rel="stylesheet" href="/packages/core/tests/editors/node_modules/summernote/dist/summernote-lite.min.css">
+  <script src="/packages/core/tests/editors/node_modules/jquery/dist/jquery.min.js"></script>
+  <script src="/packages/core/tests/editors/node_modules/summernote/dist/summernote-lite.min.js"></script>
+  <script src="/packages/sdk/fluxfiles.js"></script>
+  <script src="/packages/summernote/plugin.min.js"></script>
+</head>
+<body>
+  <div id="ed"></div>
+  <script>
+    var q = new URLSearchParams(location.search);
+    jQuery(function ($) {
+      $('#ed').summernote({
+        toolbar: [['fluxfiles', ['fluxfiles']]],
+        fluxfiles: { endpoint: q.get('endpoint') || '', token: q.get('token') || '' },
+        callbacks: { onInit: function () { window.__edReady = true; } }
+      });
+    });
+  </script>
+</body>
+</html>
