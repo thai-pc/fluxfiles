@@ -39,6 +39,11 @@ From a security audit of core-v1.0.2.
 
 ### Fixed
 
+- `chmod` on a folder fails closed under `owner_only`: if the folder's contents cannot be
+  listed to check ownership, the request is refused with 403 instead of being applied.
+- WordPress: a site that never ran activation (every multisite sub-site) now gets its
+  `uploads/` folder, with the deny `.htaccess` and `index.php`, on the first request, before
+  the first upload is written.
 - `POST /api/fm/extract` returned the raw `dest` it was given (for example `../tenantB`) even
   though the write was sandboxed. It now returns the normalised destination relative to the
   caller's root. The bundled UI does not read this field.
@@ -47,13 +52,27 @@ From a security audit of core-v1.0.2.
 
 ### Upgrading
 
-- **WordPress multisite only.** Files used to live in `wp-content/fluxfiles/`; each site now
-  reads `wp-content/fluxfiles/sites/<blog_id>/`. Move the old contents into the site that owns
-  them (run from `wp-content/`, replace `1` with that site's blog id):
-  `mkdir -p fluxfiles/sites/1 && find fluxfiles -mindepth 1 -maxdepth 1 ! -name sites -exec mv {} fluxfiles/sites/1/ \;`
-  Files of other sites that were mixed into the shared folder must be sorted by hand. Media
-  attachments created from FluxFiles store their URL, so rewrite it per site, for example
-  `wp --url=<site> search-replace '/fluxfiles/uploads/' '/fluxfiles/sites/<blog_id>/uploads/'`.
+- **WordPress multisite only.** Files used to live in `wp-content/fluxfiles/uploads/`; each
+  site now reads `wp-content/fluxfiles/sites/<id>/uploads/`. The first request after the update
+  already creates that folder (with a generated `.htaccess`, `index.php` and `_fluxfiles/`), so
+  a plain `mv` of the old folder fails. Do this, in order, from `wp-content/`
+  (full text: `packages/wordpress/README.md`, "Upgrading to 1.0.3 on multisite"):
+  1. `<id>` is the blog id of the site that owned the files, normally `1`
+     (`wp site list --fields=blog_id,url`). If other sites' files are in the shared folder,
+     move their subfolders into those sites' own `uploads/` first.
+  2. Enable maintenance mode and back up `wp-content/fluxfiles/`.
+  3. `rm -rf fluxfiles/sites/<id>/uploads/_fluxfiles`: the freshly generated bookkeeping is
+     discarded, so the legacy index, audit log and trash win.
+  4. `rsync -a fluxfiles/uploads/ fluxfiles/sites/<id>/uploads/`, then check that
+     `rsync -ain --checksum fluxfiles/uploads/ fluxfiles/sites/<id>/uploads/` prints nothing
+     and the new folder holds at least as many files. Only then `rm -rf fluxfiles/uploads`.
+  5. For each site you moved files to, rewrite the URLs stored in its attachments: run
+     `wp search-replace '/wp-content/fluxfiles/uploads/' '/wp-content/fluxfiles/sites/<id>/uploads/' --url=<site-url> --dry-run`
+     first, then without `--dry-run` once the files are confirmed at the new path. Use `--url`,
+     not `--network` or `--all-tables`.
+  6. `wp fluxfiles seed --url=<site-url>` (keeps existing index entries, adds missing files),
+     then leave maintenance mode.
+
   On nginx the notice in Settings → FluxFiles shows the matching `sites/<id>/uploads/` rule.
 - **`owner_only` tokens that relied on the default `allow_chmod`** now need `allow_chmod: true`
   to chmod on an SFTP disk.

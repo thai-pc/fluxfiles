@@ -33,6 +33,12 @@ class FluxFilesApi
         if (!is_dir($storagePath)) {
             wp_mkdir_p($storagePath);
         }
+        // A site that never ran activation (a multisite sub-site, an install that
+        // predates the uploads dir) has no uploads/ yet, and protectStorage() skips
+        // a missing one — so the deny files would only appear after the first write.
+        if (!is_dir($storagePath . '/uploads')) {
+            wp_mkdir_p($storagePath . '/uploads');
+        }
         // Existing installs never re-run activate(), so (re)apply the storage
         // web-server rules here too — this is the path every upload goes through.
         FluxFilesPlugin::protectStorage();

@@ -127,6 +127,7 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 * Security: BYOB image URLs are no longer cacheable by shared caches; the SSRF guard also refuses documentation, benchmarking, multicast and reserved address ranges.
 * Security: the bundled UI pages in `public/` can no longer be opened directly (deny `.htaccess` + 403 `index.php`; on nginx add a `deny all` location for that folder).
 * `extract` returns the normalised destination folder instead of echoing the raw input.
+* Multisite upgrade, in order (details in the plugin README, "Upgrading to 1.0.3 on multisite"): (1) pick the blog id that owned the files, usually 1; (2) enable maintenance mode and back up `wp-content/fluxfiles/`; (3) delete the freshly generated `fluxfiles/sites/<id>/uploads/_fluxfiles` so the legacy index and audit log win; (4) run `rsync -a fluxfiles/uploads/ fluxfiles/sites/<id>/uploads/`, check that `rsync -ain --checksum fluxfiles/uploads/ fluxfiles/sites/<id>/uploads/` prints nothing, then `rm -rf fluxfiles/uploads`; (5) per site, run `wp search-replace '/wp-content/fluxfiles/uploads/' '/wp-content/fluxfiles/sites/<id>/uploads/' --url=<site-url>` with `--dry-run` first (no `--network`); (6) run `wp fluxfiles seed --url=<site-url>` and leave maintenance mode. Do not `mv` the whole folder: the new one already exists.
 
 = 1.0.2 =
 * The `onSelect` payload now includes `created` and `modified` (unix seconds), as documented.
@@ -163,7 +164,7 @@ First public release. WordPress adapter for the FluxFiles file manager:
 == Upgrade Notice ==
 
 = 1.0.3 =
-Security release. MULTISITE: each site's files now live under `wp-content/fluxfiles/sites/<blog_id>/` (blog 1 included), so existing files must be moved or they will look missing. From `wp-content/`, with `1` replaced by the blog id that owns the files: `mkdir -p fluxfiles/sites/1 && find fluxfiles -mindepth 1 -maxdepth 1 ! -name sites -exec mv {} fluxfiles/sites/1/ \;` Then rewrite stored attachment URLs per site: `wp --url=<site> search-replace '/fluxfiles/uploads/' '/fluxfiles/sites/<blog_id>/uploads/'`. Single-site installs need no action.
+Security release. Multisite: files now live in wp-content/fluxfiles/sites/<blog_id>/uploads/ and existing ones must be moved. Follow "Upgrading to 1.0.3 on multisite" in the plugin README (and the 1.0.3 changelog entry). Single sites: no action.
 
 = 1.0.2 =
 Adds `created`/`modified` to the file-select payload.

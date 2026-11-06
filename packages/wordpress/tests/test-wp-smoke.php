@@ -3021,6 +3021,30 @@ test('multisite: each blog gets its own storage root + url; blog 1 cannot addres
     }
 });
 
+test('first request on a site that never ran activation: uploads/ is created before protectStorage()', function () {
+    // The API constructor must create <storagePath>/uploads itself: protectStorage()
+    // returns early without it, so the deny files would only appear after the first write.
+    $src = file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    $mk = strpos($src, "wp_mkdir_p(\$storagePath . '/uploads')");
+    $pr = strpos($src, 'FluxFilesPlugin::protectStorage()');
+    assertTrue($mk !== false && $pr !== false && $mk < $pr, 'uploads/ is created before protectStorage()');
+
+    // And with uploads/ present, a fresh sub-site root gets its deny files at once.
+    $GLOBALS['WP_MULTISITE'] = true;
+    $GLOBALS['WP_BLOG_ID'] = 7;
+    try {
+        $root = FluxFilesPlugin::storagePath();
+        assertTrue(!is_dir($root . '/uploads'), 'fresh site: nothing yet');
+        wp_mkdir_p($root . '/uploads');
+        FluxFilesPlugin::protectStorage();
+        assertTrue(is_file($root . '/.htaccess') && is_file($root . '/uploads/.htaccess'), 'deny .htaccess written');
+        assertTrue(is_file($root . '/uploads/index.php'), 'index.php written');
+    } finally {
+        $GLOBALS['WP_MULTISITE'] = false;
+        $GLOBALS['WP_BLOG_ID'] = 1;
+    }
+});
+
 test('the plugin build denies direct web access to the bundled public/ pages', function () {
     $build = file_get_contents(__DIR__ . '/../../../scripts/build-wordpress.sh');
     assertTrue(strpos($build, '"$PLUGIN_DIR/public/.htaccess"') !== false, 'deny .htaccess written into public/');
