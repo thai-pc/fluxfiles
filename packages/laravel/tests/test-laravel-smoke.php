@@ -1660,6 +1660,35 @@ test('doctor: fluxfiles:doctor is registered and exits non-zero on a problem', f
     assertTrue(!empty(array_filter($cmd2->out, fn ($l) => str_contains($l, 'config_missing_keys'))), 'drift reported');
 });
 
+// ── `artisan about` section ──────────────────────────────────────────────
+require_once __DIR__ . '/../src/About.php';
+
+test('About::data() lists the report by driver and leaks no secrets', function () {
+    $data = withConfig([
+        'fluxfiles.storage_backend' => 'db',
+        'fluxfiles.disks' => ['media' => ['driver' => 's3', 'bucket' => 'leaky-bucket', 'key' => 'AKIALEAKY', 'secret' => 'LEAKY-SECRET', 'endpoint' => 'https://u:p@minio.internal']],
+    ], fn () => \FluxFiles\Laravel\About::data());
+    assertTrue(is_array($data) && $data !== [], 'non-empty');
+    foreach ($data as $k => $v) {
+        assertTrue(is_string($k) && is_string($v), 'label => string');
+    }
+    if (class_exists(\FluxFiles\AboutInfo::class)) {
+        assertEqual('db', $data['Storage backend']);
+        assertEqual('media (s3)', $data['Disks']);
+    }
+    $blob = json_encode($data);
+    foreach (['leaky-bucket', 'AKIALEAKY', 'LEAKY-SECRET', 'minio.internal'] as $needle) {
+        assertTrue(strpos($blob, $needle) === false, "leaked {$needle}");
+    }
+});
+
+test('About::register() is a no-op without AboutCommand and the provider calls it', function () {
+    \FluxFiles\Laravel\About::register();   // must not throw on any Laravel
+    $provider = file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    assertTrue(strpos($provider, 'About::register();') !== false, 'provider registers the about section');
+    assertTrue(strpos(file_get_contents(__DIR__ . '/../src/About.php'), 'class_exists(\\Illuminate\\Foundation\\Console\\AboutCommand::class)') !== false, 'guarded by class_exists');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

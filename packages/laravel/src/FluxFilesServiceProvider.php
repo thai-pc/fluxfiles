@@ -36,6 +36,9 @@ class FluxFilesServiceProvider extends ServiceProvider
             ]);
         }
 
+        // `php artisan about` section (no-op on Laravel versions without AboutCommand)
+        About::register();
+
         // Publish config
         $this->publishes([
             __DIR__ . '/../config/fluxfiles.php' => config_path('fluxfiles.php'),

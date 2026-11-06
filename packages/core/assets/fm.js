@@ -25,7 +25,7 @@ const FM_ASSETS_BASE = (function () {
 // file is unchanged (the long-lived `immutable` cache can't pin an old
 // CodeMirror). Rewritten by scripts/build-ui.sh; tests/unit/test-vendor-ver.php
 // fails when they no longer match the files.
-const FM_VENDOR_VER = { codemirror: '37088e0200' }; // vendor-ver
+const FM_VENDOR_VER = { codemirror: 'c85a77bda6' }; // vendor-ver
 
 // One collator for every name sort. `a.localeCompare(b, undefined, {numeric:true})`
 // builds a fresh collator per call, which made a 2,000-row sort ~15x slower.

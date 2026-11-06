@@ -109,6 +109,12 @@ final class ModuleRegistry
         }
     }
 
+    /** Every known module id, installed or not (the operator About report). @return list<string> */
+    public static function ids(): array
+    {
+        return array_keys(self::$map);
+    }
+
     /** The module's class name when it is known AND installed, else null (no instance, no gate). */
     public static function classFor(string $id): ?string
     {

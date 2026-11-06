@@ -3134,6 +3134,36 @@ test('the plugin build denies direct web access to the bundled public/ pages', f
     assertTrue(strpos($api, "corePath('public')") !== false, 'the REST route still reads public/ from disk');
 });
 
+test('Site Health adds a FluxFiles section, escaped, with sensitive rows private and no secrets', function () use ($secret) {
+    $GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'] = 'leaky-bucket-name';
+    $GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'] = 'LEAKY-S3-SECRET';
+    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'LEAKY-LICENCE-KEY';
+    $info = FluxFilesPlugin::siteHealthInfo(['wp-core' => ['label' => 'WordPress', 'fields' => []]]);
+    assertTrue(isset($info['wp-core'], $info['fluxfiles']), 'existing sections kept, ours added');
+    assertEqual('FluxFiles', $info['fluxfiles']['label']);
+    $fields = $info['fluxfiles']['fields'];
+    assertTrue(isset($fields['plugin_version']), 'plugin version row');
+    foreach ($fields as $f) {
+        assertTrue(isset($f['label'], $f['value']) && is_bool($f['private']), 'field shape');
+        assertTrue(strpos($f['value'], '<') === false, 'values are escaped');
+    }
+    if (class_exists(\FluxFiles\AboutInfo::class)) {
+        $private = array_filter($fields, static fn ($f) => $f['private']);
+        $labels = array_column($private, 'label');
+        assertTrue(in_array('Disks', $labels, true) && in_array('SSRF allow-hosts', $labels, true), 'disks + SSRF rows are private');
+    }
+    $blob = json_encode($info);
+    foreach ([$secret, 'leaky-bucket-name', 'LEAKY-S3-SECRET', 'LEAKY-LICENCE-KEY'] as $needle) {
+        assertTrue(strpos($blob, $needle) === false, "leaked {$needle}");
+    }
+    unset($GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'], $GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
+});
+
+test('the plugin hooks Site Health debug_information', function () {
+    $src = file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
+    assertTrue(strpos($src, "add_filter('debug_information', [self::class, 'siteHealthInfo'])") !== false, 'filter registered');
+});
+
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";
 echo "  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 echo "{$cyan}──────────────────────────────────────────────────{$reset}\n\n";

@@ -108,6 +108,8 @@ cp "$CORE_DIR/embed.php" "$PLUGIN_DIR/embed.php"
 # the licence verifies, and every paid gate still answers 501.
 cp "$CORE_DIR/modules-autoload.php" "$PLUGIN_DIR/modules-autoload.php"
 [ -f "$ROOT_DIR/LICENSE" ] && cp "$ROOT_DIR/LICENSE" "$PLUGIN_DIR/LICENSE" || true
+# Licences of the vendored front-end libraries (assets/vendor/*/LICENSE ship with them).
+cp "$CORE_DIR/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/THIRD-PARTY-NOTICES.md"
 
 # The plugin's own composer.json declares its WP-side deps. We install with the
 # core deps too so the plugin's vendor/ has firebase/php-jwt, league/flysystem,

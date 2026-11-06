@@ -3,6 +3,23 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Operator "About" report.** `fluxfiles about [--json]` (new `AboutInfo` provider in
+  core) shows the exact core version and its source, PHP, storage backend, disks by
+  driver only, each paid module (installed, version, licensed, enabled, required core),
+  virus/DLP state, and external tools (GD/Imagick, ffmpeg, Ghostscript vs its 10.05.0
+  floor, Tesseract, ClamAV reachability). It never includes keys, credentials, endpoints
+  or paths. WordPress gets a Site Health > Info section (sensitive rows `private`);
+  Laravel registers it in `php artisan about` when available. Both degrade gracefully
+  against an older core, so no adapter floor change.
+- **`THIRD-PARTY-NOTICES.md`** in core (and the WordPress plugin zip), plus the missing
+  licence texts for the vendored CodeMirror 5.65.16 and the bundled DejaVu Sans font.
+
+> Released: not yet released.
+
 ## [1.0.11] — 2026-11-06
 
 > Released: `core-v1.0.6`.
