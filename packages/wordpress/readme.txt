@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1.0
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -121,6 +121,13 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 
 == Changelog ==
 
+= 1.0.3 =
+* Security: on a multisite network every site now has its own storage root, `wp-content/fluxfiles/sites/<blog_id>/`. Before, all sites shared one root with an empty token prefix, so a sub-site administrator or author could reach the other sites' files, index, audit log and trash. Single-site installs are unchanged.
+* Security: `chmod` on an SFTP disk now respects `owner_only` for folders and refuses the root folder; `owner_only` tokens no longer get `allow_chmod` by default.
+* Security: BYOB image URLs are no longer cacheable by shared caches; the SSRF guard also refuses documentation, benchmarking, multicast and reserved address ranges.
+* Security: the bundled UI pages in `public/` can no longer be opened directly (deny `.htaccess` + 403 `index.php`; on nginx add a `deny all` location for that folder).
+* `extract` returns the normalised destination folder instead of echoing the raw input.
+
 = 1.0.2 =
 * The `onSelect` payload now includes `created` and `modified` (unix seconds), as documented.
 
@@ -154,6 +161,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.0.3 =
+Security release. MULTISITE: each site's files now live under `wp-content/fluxfiles/sites/<blog_id>/` (blog 1 included), so existing files must be moved or they will look missing. From `wp-content/`, with `1` replaced by the blog id that owns the files: `mkdir -p fluxfiles/sites/1 && find fluxfiles -mindepth 1 -maxdepth 1 ! -name sites -exec mv {} fluxfiles/sites/1/ \;` Then rewrite stored attachment URLs per site: `wp --url=<site> search-replace '/fluxfiles/uploads/' '/fluxfiles/sites/<blog_id>/uploads/'`. Single-site installs need no action.
 
 = 1.0.2 =
 Adds `created`/`modified` to the file-select payload.

@@ -88,6 +88,12 @@ if (!function_exists('get_current_user_id')) {
     function get_current_user_id() { return (int) ($GLOBALS['WP_OPTIONS']['_test_user_id'] ?? 0); }
 }
 
+// Multisite stubs — $GLOBALS['WP_MULTISITE'] / ['WP_BLOG_ID'] drive them; single-site by default.
+$GLOBALS['WP_MULTISITE'] = false;
+$GLOBALS['WP_BLOG_ID'] = 1;
+if (!function_exists('is_multisite')) { function is_multisite() { return (bool) $GLOBALS['WP_MULTISITE']; } }
+if (!function_exists('get_current_blog_id')) { function get_current_blog_id() { return (int) $GLOBALS['WP_BLOG_ID']; } }
+
 // Capability stub — $GLOBALS['WP_CAPS'] is the current user's capability set.
 // Defaults to a full-capability administrator so every pre-existing test keeps
 // the behaviour it was written against; the H-6 tests set it explicitly.
@@ -2974,6 +2980,54 @@ test('refused writes / 403s are audited through core\'s AuditPolicy and the plug
     assertTrue(strpos($src, 'AuditPolicy::recordRefusedWrite(') !== false && strpos($src, 'AuditPolicy::recordDenied(') !== false, 'delegates');
     assertTrue(strpos($src, 'function auditDenied(') === false && strpos($src, 'function auditRefusedWrite(') === false, 'hand-written duplicates deleted');
     assertTrue(strpos($src, 'AuditPolicy::successEntry(') !== false, 'success entries come from AuditPolicy too');
+});
+
+test('multisite: each blog gets its own storage root + url; blog 1 cannot address blog 2', function () {
+    // Single site: layout unchanged.
+    $single = FluxFilesPlugin::diskConfigs()['local'];
+    assertEqual(WP_CONTENT_DIR . '/fluxfiles/uploads', $single['root'], 'single-site root unchanged');
+    assertEqual('http://wp.test/wp-content/fluxfiles/uploads', $single['url'], 'single-site url unchanged');
+    assertEqual(WP_CONTENT_DIR . '/fluxfiles', FluxFilesPlugin::storagePath(), 'single-site storage path unchanged');
+
+    $GLOBALS['WP_MULTISITE'] = true;
+    try {
+        $cfg = [];
+        foreach ([1, 2] as $b) {
+            $GLOBALS['WP_BLOG_ID'] = $b;
+            $cfg[$b] = FluxFilesPlugin::diskConfigs()['local'];
+            assertEqual(WP_CONTENT_DIR . "/fluxfiles/sites/{$b}", FluxFilesPlugin::storagePath(), "blog {$b} storage path");
+            assertEqual(WP_CONTENT_DIR . "/fluxfiles/sites/{$b}/uploads", $cfg[$b]['root'], "blog {$b} root");
+            assertEqual("http://wp.test/wp-content/fluxfiles/sites/{$b}/uploads", $cfg[$b]['url'], "blog {$b} url");
+        }
+        assertTrue($cfg[1]['root'] !== $cfg[2]['root'], 'roots differ');
+        assertTrue(strpos($cfg[2]['root'] . '/', $cfg[1]['root'] . '/') !== 0, 'blog 2 root is not inside blog 1 root');
+        assertTrue(strpos($cfg[1]['root'] . '/', $cfg[2]['root'] . '/') !== 0, 'blog 1 root is not inside blog 2 root');
+
+        // Address blog 2's file through blog 1's disk: not reachable.
+        $tmp = sys_get_temp_dir() . '/ffms-' . uniqid();
+        $c1 = $cfg[1];
+        $c1['root'] = $tmp . '/sites/1/uploads';
+        mkdir($c1['root'], 0777, true);
+        mkdir($tmp . '/sites/2/uploads', 0777, true);
+        file_put_contents($tmp . '/sites/2/uploads/secret.txt', 'blog2');
+        $d1 = (new \FluxFiles\DiskManager(['local' => $c1]))->disk('local');
+        assertTrue(!$d1->fileExists('secret.txt'), 'blog 1 cannot see blog 2 file');
+        $reachable = false;
+        try { $reachable = $d1->fileExists('../../2/uploads/secret.txt'); } catch (\Throwable $e) { $reachable = false; }
+        assertTrue(!$reachable, 'traversal into blog 2 is refused');
+    } finally {
+        $GLOBALS['WP_MULTISITE'] = false;
+        $GLOBALS['WP_BLOG_ID'] = 1;
+    }
+});
+
+test('the plugin build denies direct web access to the bundled public/ pages', function () {
+    $build = file_get_contents(__DIR__ . '/../../../scripts/build-wordpress.sh');
+    assertTrue(strpos($build, '"$PLUGIN_DIR/public/.htaccess"') !== false, 'deny .htaccess written into public/');
+    assertTrue(strpos($build, '"$PLUGIN_DIR/public/index.php"') !== false && strpos($build, 'http_response_code(403)') !== false, '403 index.php');
+    // The REST route / public-link.php still read the pages from disk.
+    $api = file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    assertTrue(strpos($api, "corePath('public')") !== false, 'the REST route still reads public/ from disk');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

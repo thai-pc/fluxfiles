@@ -177,6 +177,23 @@ location ^~ /wp-content/fluxfiles/ {
 }
 ```
 
+### Multisite layout
+
+On a multisite network every site gets its **own** storage root, so one site's
+users can never reach another site's files, index, audit log or trash:
+
+| | Single site | Multisite (blog id `N`) |
+|---|---|---|
+| Storage root | `wp-content/fluxfiles/` | `wp-content/fluxfiles/sites/N/` |
+| Local disk | `wp-content/fluxfiles/uploads/` | `wp-content/fluxfiles/sites/N/uploads/` |
+| Disk URL | `…/wp-content/fluxfiles/uploads/` | `…/wp-content/fluxfiles/sites/N/uploads/` |
+
+Blog 1 uses `sites/1/` too. Rate-limit state and the `_fluxfiles/` bookkeeping
+live under the site's root; the DB backend was already per-site (`$wpdb->prefix`).
+Upgrading a network from an older release: move the old shared directory into the
+site that owns those files (see the upgrade notice in `readme.txt`). On nginx the
+admin notice shows the matching `sites/<id>/uploads/` rule.
+
 …or enable **private local storage** in the settings, which stops serving the
 directory statically at all (files stream through the signed REST route).
 

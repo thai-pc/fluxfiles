@@ -59,6 +59,27 @@ cp -r "$CORE_DIR/public" "$PLUGIN_DIR/public"
 cp -r "$CORE_DIR/lang"   "$PLUGIN_DIR/lang"
 cp -r "$CORE_DIR/config" "$PLUGIN_DIR/config"
 
+# public/*.html are read from disk by the REST route and public-link.php and
+# served through them with a CSP + frame protection; they must never be reachable
+# DIRECTLY under wp-content/plugins/fluxfiles/public/ (unframed-protected, and
+# fm.js lets the first framing parent pick the endpoint). Deny direct access;
+# nginx ignores .htaccess, so the index.php also answers the directory itself.
+cat > "$PLUGIN_DIR/public/.htaccess" <<'HTACCESS'
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
+HTACCESS
+cat > "$PLUGIN_DIR/public/index.php" <<'PHP'
+<?php
+// The bundled UI pages are served through the plugin's REST route, never directly.
+http_response_code(403);
+exit;
+PHP
+
 echo "==> Bundling core UI assets (fm.js, fm.css) into plugin assets/..."
 mkdir -p "$PLUGIN_DIR/assets"
 cp "$CORE_DIR/assets/fm.js"  "$PLUGIN_DIR/assets/fm.js"
