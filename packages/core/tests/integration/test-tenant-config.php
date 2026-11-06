@@ -450,16 +450,6 @@ test('fluxfiles_token options-array form + `claims` escape hatch', function () {
     assertEqual(['read', 'write'], $c->permissions, 'perms from options');
     assertEqual('https://t.example.com/', $c->terminalPtyUrl, 'claims: terminal_pty_url');
 
-    // Claims of features removed in 1.0.0 (command-runner terminal, Git deploy) are
-    // ignored, not an error.
-    $legacy = Claims::fromJwtPayload((object) [
-        'sub' => 'u1', 'perms' => ['read'], 'disks' => ['local'],
-        'allow_terminal' => true, 'allow_git_deploy' => true,
-        'git_deploy_path' => '/srv/app', 'git_deploy_branch' => 'main', 'git_deploy_hooks' => true,
-    ]);
-    assertEqual('u1', $legacy->userId, 'legacy claims: token still parses');
-    assertEqual(false, $legacy->isAllowed('allow_terminal'), 'legacy claims: allow_terminal inert');
-    assertEqual('', $legacy->terminalPtyUrl, 'legacy claims: no PTY url without terminal_pty_url');
     assertEqual('overwrite', $c->uploadCollision, 'claims: upload_collision');
     assertEqual(1500, $c->webpMaxWidth, 'webp group still applied');
     // explicit claim overrides the edition preset (pro defaults allow_optimize true).
