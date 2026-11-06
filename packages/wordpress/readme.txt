@@ -40,10 +40,9 @@ into the same JWT token your site already issues:
   They drop files in from a browser, no account, no plugin install on their end — the files
   land straight in your configured disk (Local/S3/R2).
 
-Both are separate paid modules (see [fluxfiles.io/pricing](https://fluxfiles.io/pricing)) that
-drop into `wp-content/plugins/fluxfiles/vendor/fluxfiles/` alongside a license key — the free
-plugin works fully without them, and nothing about your site's media library changes if you
-never install them.
+Both are separate paid modules (see [fluxfiles.io/pricing](https://fluxfiles.io/pricing)) delivered by a
+separate add-on plugin (FluxFiles Pro) — the free plugin works fully without them, and nothing about your
+site's media library changes if you never install it.
 
 == Installation ==
 
@@ -81,10 +80,6 @@ If you cannot use WP-CLI, trigger the same indexing by re-uploading files throug
 = What storage backends are supported? =
 
 Local disk, AWS S3, and Cloudflare R2, configured in Settings. You can configure multiple disks and allow users to switch between them. SFTP has no Settings screen: a developer mints a BYOB token that carries the server details.
-
-= How do I configure the paid modules' engines (AI Vision, DLP, C2PA, VirusTotal...) without environment variables? =
-
-Under Settings > FluxFiles > Module engines. API keys are write-only; a real environment variable of the same name always wins.
 
 = Does it require an external server? =
 

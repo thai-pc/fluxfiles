@@ -45,10 +45,9 @@ class FluxFilesApi
         // Key for the tamper-evident audit chain (an option, not the env).
         \FluxFiles\AuditChain::configure((string) get_option('fluxfiles_secret', ''));
 
-        // Module engine settings (Settings → FluxFiles → Module engines) live in an
-        // option; the paid modules read $_ENV. Seeded here so every REST handler —
-        // scan, webhooks, AI, … — sees them before any module runs.
-        FluxFilesPlugin::seedModuleEnv();
+        // Extension point (e.g. the FluxFiles Pro plugin seeding module engine
+        // settings): fires once per request, before any handler runs.
+        do_action('fluxfiles_api_boot', $this);
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
         $this->metaRepo = get_option('fluxfiles_storage_backend', 'json') === 'db'
@@ -522,6 +521,9 @@ class FluxFilesApi
         register_rest_route($ns, $p . '/lang/(?P<locale>[a-z]{2,5})', array_merge($publicArgs, [
             'callback' => [$api, 'serveLangMessages'],
         ]));
+
+        // Extension point: add routes under the same namespace (e.g. the FluxFiles Pro plugin).
+        do_action('fluxfiles_rest_routes', $ns, $api);
     }
 
     /**
@@ -2267,12 +2269,6 @@ class FluxFilesApi
      */
     private function publicLink(string $which, \WP_REST_Request $request): void
     {
-        if (!class_exists(\FluxFiles\PublicRoutes::class)) {
-            // Bundled core missing — say so rather than fataling.
-            status_header(501);
-            wp_send_json(['data' => null, 'error' => 'The FluxFiles core is not available',
-                'error_code' => 'core_missing'], 501);
-        }
         $method = $request->get_method();
         $uri = '/api/fm/' . $which . '/' . basename((string) $request->get_route());
 
@@ -2304,12 +2300,10 @@ class FluxFilesApi
             exit;
         }
 
-        // Module engines (virus/DLP scan on portal uploads, webhooks) read their settings
-        // from the environment; a real env var still wins. The storage path is read the
-        // same way by the module's own storage helpers.
+        // Module engines read the secret and storage path from the environment; the
+        // fluxfiles_api_boot action (constructor) already ran for this request.
         $_ENV['FLUXFILES_SECRET'] = (string) get_option('fluxfiles_secret', '');
         $_ENV['FLUXFILES_STORAGE_PATH'] = FluxFilesPlugin::storagePath();
-        FluxFilesPlugin::seedModuleEnv();
 
         // Core's PublicRoutes is the gate (secret -> installed -> licensed) and hands the
         // request to the module. The licence comes from the plugin option via license(),
@@ -2747,8 +2741,6 @@ class FluxFilesApi
             $dryRun = filter_var($body['dry_run'] ?? true, FILTER_VALIDATE_BOOLEAN);
             if ($module instanceof \FluxFiles\RetentionProviderInterface) {
                 $report = $module->runRetention($fm, $disk, $dryRun);
-            } elseif (method_exists($fm, 'runRetention')) {
-                $report = $fm->runRetention($disk, $dryRun);   // core before the module seam
             } else {
                 throw new ApiException('The legal-hold module needs an update', 501, 'module_update_required', ['module' => 'legal-hold']);
             }
@@ -2794,8 +2786,6 @@ class FluxFilesApi
                 : $this->metaRepo->readAudit($disk);
             if ($module instanceof \FluxFiles\FixityProviderInterface) {
                 $report = $module->runFixityCheck($fm, $disk, $auditRows);
-            } elseif (method_exists($fm, 'runFixityCheck')) {
-                $report = $fm->runFixityCheck($disk, $auditRows);   // core before the module seam
             } else {
                 throw new ApiException('The audit-export module needs an update', 501, 'module_update_required', ['module' => 'audit-export']);
             }
@@ -2835,9 +2825,6 @@ class FluxFilesApi
             );
             if ($module instanceof \FluxFiles\AuditVerifierInterface) {
                 return $this->ok($module->verifyChain($entries));
-            }
-            if (method_exists(\FluxFiles\AuditChain::class, 'verify')) {
-                return $this->ok(\FluxFiles\AuditChain::verify($entries));   // core before the module seam
             }
             throw new ApiException('The audit-export module needs an update', 501, 'module_update_required', ['module' => 'audit-export']);
         } catch (ApiException $e) {
