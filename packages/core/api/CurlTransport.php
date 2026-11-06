@@ -51,7 +51,6 @@ final class CurlTransport implements HttpTransportInterface
         $resp = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
 
         if ($resp === false) {
             return ['status' => 0, 'headers' => [], 'body' => '', 'error' => $error !== '' ? $error : 'request failed'];

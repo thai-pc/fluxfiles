@@ -1432,6 +1432,18 @@ test('proxy route surface covers every core /api/fm route', function () {
 
     preg_match_all("#\\\$uri === '/api/fm/([a-z0-9/_-]+)'#", $coreSrc, $cm);
     $coreRoutes = array_unique($cm[1]);
+    // Share/Intake's public routes are no longer literal `$uri === …` checks in index.php:
+    // PublicRoutes::dispatch() owns them, so read the table it routes from.
+    // Guarded: the adapter-core floor guard runs this smoke against older cores that
+    // predate PublicRoutes and still check these routes literally in index.php.
+    if (class_exists(\FluxFiles\PublicRoutes::class)) {
+        foreach (\FluxFiles\PublicRoutes::ROUTES as $publicPaths) {
+            foreach ($publicPaths as $publicPath) {
+                $coreRoutes[] = substr($publicPath, strlen('/api/fm/'));
+            }
+        }
+    }
+    $coreRoutes = array_values(array_unique($coreRoutes));
     sort($coreRoutes);
 
     preg_match_all("#register_rest_route\\(\\s*\\\$ns,\\s*\\\$p\\s*\\.\\s*'([^']+)'#", $apiSrc, $wm);
@@ -1467,6 +1479,10 @@ test('proxy route surface covers every core /api/fm route', function () {
     $intentionallyUnproxied = [
         'sso/login', 'sso/callback', 'sso/exchange',
         'metadata/export', 'metadata/import',
+        // - share/page, intake/page (PublicRoutes): the recipient HTML pages. The adapters
+        //   serve the bundled public/*.html themselves (Laravel publicPage(), WordPress
+        //   public-link.php), injecting the API base, so they don't expose /page.
+        'share/page', 'intake/page',
         // - tus (resumable uploads): stages partial bytes in core's own
         //   <FLUXFILES_STORAGE_PATH>/tus/ and speaks raw tus (PATCH/HEAD, no JSON
         //   envelope). The embedded UI falls back to a plain upload when /tus

@@ -217,11 +217,14 @@ test('page(): meta goes after <head>, the base is attribute-escaped, a headless 
 
 test('LEGACY module (no PublicModuleInterface): falls back to the in-core handler, same envelope', function () {
     ModuleRegistry::register('share', LegacyShare::class);
-    ModuleRegistry::setLicenseResolver(fn () => new AllLicense());   // the in-core handler gates on the registry licence
+    // NO registry resolver: the in-core handler must use the CONTEXT's licence and secret
+    // (a host-injected context cannot disagree with the gate that just passed).
+    $prevSecret = $_ENV['FLUXFILES_SECRET'];
+    $_ENV['FLUXFILES_SECRET'] = PublicContext::DEFAULT_SECRET;   // env says "unconfigured"; the ctx secret is valid
     $_GET = ['token' => 'x'];
     [$code, $body] = run('share', 'GET', '/api/fm/share/info', ctx());
     $_GET = [];
-    ModuleRegistry::setLicenseResolver(null);
+    $_ENV['FLUXFILES_SECRET'] = $prevSecret;
     assertEqual(418, $code, json_encode($body));
     assertEqual('legacy_hit', $body['error_code'], 'reached the legacy handler → ShareModule::shareInfo');
     ModuleRegistry::reset();
@@ -240,6 +243,32 @@ test('LEGACY module page: core public/share.html is served with the meta tag', f
     assertTrue(is_string($h) && str_contains($h, '<meta name="fm-api-base"') && str_contains($h, 'fm-api-base'), 'meta injected');
     assertTrue(str_contains($h, "querySelector('meta[name=\"fm-api-base\"]')"), 'the page reads it');
     ModuleRegistry::reset();
+});
+
+test('injectApiBase: `$0`, `\\1` and `$1` in the base are data, not backreferences', function () {
+    foreach (['$0', '\\1', '$1x', '${0}'] as $base) {
+        $out = PublicRoutes::injectApiBase('<html><head></head></html>', $base);
+        assertTrue(str_contains($out, 'content="' . htmlspecialchars($base, ENT_QUOTES) . '"'), $out);
+        assertTrue(!str_contains($out, 'content="<head>'), 'no backreference expansion');
+    }
+});
+
+test('FrameAncestors::policy: explicit list, else allowed origins, else none; junk is dropped', function () {
+    $keep = [$_ENV['FLUXFILES_FRAME_ANCESTORS'] ?? null, $_ENV['FLUXFILES_ALLOWED_ORIGINS'] ?? null];
+    unset($_ENV['FLUXFILES_FRAME_ANCESTORS'], $_ENV['FLUXFILES_ALLOWED_ORIGINS']);
+    try {
+        assertEqual(null, \FluxFiles\FrameAncestors::policy());
+        $_ENV['FLUXFILES_ALLOWED_ORIGINS'] = 'https://a.test, https://b.test';
+        assertEqual("frame-ancestors 'self' https://a.test https://b.test", \FluxFiles\FrameAncestors::policy());
+        $_ENV['FLUXFILES_FRAME_ANCESTORS'] = 'https://only.test';
+        assertEqual('frame-ancestors https://only.test', \FluxFiles\FrameAncestors::policy());
+        $_ENV['FLUXFILES_FRAME_ANCESTORS'] = "https://x.test; script-src *";
+        assertEqual(null, \FluxFiles\FrameAncestors::policy(), 'a value that could smuggle another directive is refused');
+    } finally {
+        foreach (['FLUXFILES_FRAME_ANCESTORS', 'FLUXFILES_ALLOWED_ORIGINS'] as $i => $k) {
+            if ($keep[$i] === null) { unset($_ENV[$k]); } else { $_ENV[$k] = $keep[$i]; }
+        }
+    }
 });
 
 test('PublicContext: param() collapses array-shaped input; tokenBucket() is per-jti when signed, per-IP otherwise', function () {

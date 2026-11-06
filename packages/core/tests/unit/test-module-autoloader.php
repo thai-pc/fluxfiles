@@ -112,5 +112,22 @@ test('a module is only found under a registered base (an unregistered sibling is
     assertTrue(!class_exists('FluxFiles\\Ffalstray\\Nope', true));
 });
 
+test('modules-autoload.php survives a SECOND copy of core in the same process (no redeclare fatal)', function () {
+    // A copy of the class under another path is loaded first, as when two plugins each
+    // bundle core; then this core's modules-autoload.php runs. Without the class_exists
+    // guard its require_once of a different path would fatal on "cannot redeclare".
+    $dir = sys_get_temp_dir() . '/ff-modal-copy-' . uniqid();
+    mkdir($dir . '/api', 0777, true);
+    copy(__DIR__ . '/../../api/ModuleAutoloader.php', $dir . '/api/ModuleAutoloader.php');
+    $php = "require " . var_export($dir . '/api/ModuleAutoloader.php', true) . ";\n"
+         . "require " . var_export(realpath(__DIR__ . '/../../modules-autoload.php'), true) . ";\n"
+         . "echo count(\\FluxFiles\\ModuleAutoloader::bases());";
+    $tmp = tempnam(sys_get_temp_dir(), 'ffal') . '.php';
+    file_put_contents($tmp, "<?php\n" . $php);
+    $out = trim((string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($tmp) . ' 2>&1'));
+    @unlink($tmp);
+    assertEqual('2', $out, 'both stock layouts registered on the first copy, no fatal: ' . $out);
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

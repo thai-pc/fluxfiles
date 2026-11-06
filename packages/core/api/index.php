@@ -116,12 +116,9 @@ if ($method === 'GET' && ($uri === '/public/index.html' || $uri === '/public' ||
     //      operator should fix; docs/reference/CONFIG.md says so.
     // X-Frame-Options is deliberately NOT sent alongside: it has no multi-origin
     // form, so it would contradict an allow-list that CSP is expressing correctly.
-    $frameAncestors = trim((string) ($_ENV['FLUXFILES_FRAME_ANCESTORS'] ?? ''));
-    if ($frameAncestors === '' && $allowedOrigins !== []) {
-        $frameAncestors = "'self' " . implode(' ', $allowedOrigins);
-    }
-    if ($frameAncestors !== '' && preg_match('/^[A-Za-z0-9 :\/\.\*\-\']+$/', $frameAncestors)) {
-        header('Content-Security-Policy: frame-ancestors ' . $frameAncestors);
+    $frameAncestors = \FluxFiles\FrameAncestors::policy($allowedOrigins);
+    if ($frameAncestors !== null) {
+        header('Content-Security-Policy: ' . $frameAncestors);
     }
     $localeJson = $i18n->toJson();
     $locale = $i18n->locale();
@@ -1142,7 +1139,7 @@ function routeRequest(
         $dryRun = filter_var($body['dry_run'] ?? true, FILTER_VALIDATE_BOOLEAN);
         // The module owns the sweep; a legal-hold release from before that API falls back
         // to the in-core copy (removed one core release after the modules ship it).
-        $report = method_exists($module, 'runRetention')
+        $report = $module instanceof \FluxFiles\RetentionProviderInterface
             ? $module->runRetention($fm, $disk, $dryRun)
             : $fm->runRetention($disk, $dryRun);
         if (!$dryRun) {
@@ -1178,7 +1175,7 @@ function routeRequest(
                 ? $metaRepo->readAuditWindow($disk, $since)
                 : $metaRepo->readAudit($disk);
         // Module-owned sweep, with the in-core copy as the fallback for an older module.
-        $report = method_exists($module, 'runFixityCheck')
+        $report = $module instanceof \FluxFiles\FixityProviderInterface
             ? $module->runFixityCheck($fm, $disk, $auditRows, 1024 * 1024 * 1024)
             : $fm->runFixityCheck($disk, $auditRows);
         foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
@@ -1211,7 +1208,7 @@ function routeRequest(
         $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
         $entries = array_merge($metaRepo->readAuditArchive($disk), $metaRepo->readAudit($disk));
         // Module-owned verifier, with the in-core one as the fallback for an older module.
-        return method_exists($module, 'verifyChain')
+        return $module instanceof \FluxFiles\AuditVerifierInterface
             ? $module->verifyChain($entries)
             : \FluxFiles\AuditChain::verify($entries);
     }

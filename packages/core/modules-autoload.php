@@ -29,7 +29,11 @@ declare(strict_types=1);
 
 // Required by path, not through Composer: this file runs from inside vendor/autoload.php's
 // own `autoload.files` pass (and from autoload.php), so it must not depend on the class map.
-require_once __DIR__ . '/api/ModuleAutoloader.php';
+// Guarded: when a second copy of core is loaded into the same process (two plugins that each
+// bundle one), the first copy's class wins instead of a fatal "cannot redeclare".
+if (!class_exists(\FluxFiles\ModuleAutoloader::class, false)) {
+    require_once __DIR__ . '/api/ModuleAutoloader.php';
+}
 
 // Only the layouts a real install produces (see ModuleAutoloader). Registering again, from
 // here or from a host that adds its own bases, never installs a second autoloader.

@@ -111,14 +111,17 @@ function ff_public_audit(callable $repo, string $actor, string $action, string $
  * @param DiskManager|null      $injectedDm     a host whose storage is not laid out
  *                                              like the standalone app's (WordPress)
  * @param array<string,mixed>|null $injectedCfg the matching disk config
+ * @param \FluxFiles\LicenseCheckInterface|null $injectedLicense the gate's licence (null = the registry's)
+ * @param string|null           $injectedSecret  the gate's signing secret (null = FLUXFILES_SECRET)
  * @param MetadataRepositoryInterface|null $injectedMeta the host's metadata backend
  *                                              (see ff_public_meta_repo())
  */
-function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedDm = null, ?array $injectedCfg = null, ?MetadataRepositoryInterface $injectedMeta = null): void
+function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedDm = null, ?array $injectedCfg = null, ?MetadataRepositoryInterface $injectedMeta = null, ?\FluxFiles\LicenseCheckInterface $injectedLicense = null, ?string $injectedSecret = null): void
 {
     header('Content-Type: application/json; charset=utf-8');
     try {
-        $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+        $license = $injectedLicense ?? \FluxFiles\ModuleRegistry::license();
+        $secret = $injectedSecret ?? $_ENV['FLUXFILES_SECRET'] ?? '';
         if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
             throw new ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
         }
@@ -127,7 +130,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
         if (!\FluxFiles\ModuleRegistry::installed('intake')) {
             throw new ApiException("The 'intake' module is not installed on this server", 501, 'module_not_installed', ['module' => 'intake']);
         }
-        if (!\FluxFiles\ModuleRegistry::license()->licensed('intake')) {
+        if (!$license->licensed('intake')) {
             throw new ApiException("The 'intake' module requires a valid license", 402, 'license_required', ['module' => 'intake']);
         }
         $module = new \FluxFiles\Intake\IntakeModule();
@@ -184,7 +187,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             if ($portalClaims->allowVirusScan) {
                 $portalFm->setVirusScanner(static function (string $localPath) use ($portalClaims): array {
                     /** @var \FluxFiles\Virus\VirusScanModule $virus */
-                    $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\ModuleRegistry::license(), $portalClaims);
+                    $virus = \FluxFiles\ModuleRegistry::require('virus', $license, $portalClaims);
                     return $virus->scanPath($localPath);
                 });
             }
@@ -197,7 +200,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             if ($portalClaims->allowDlpScan) {
                 $portalFm->setDlpScanner(static function (string $localPath, string $name) use ($portalClaims): array {
                     /** @var \FluxFiles\Dlp\DlpModule $dlp */
-                    $dlp = \FluxFiles\ModuleRegistry::require('dlp', \FluxFiles\ModuleRegistry::license(), $portalClaims);
+                    $dlp = \FluxFiles\ModuleRegistry::require('dlp', $license, $portalClaims);
                     return $dlp->scanPath($localPath, $portalClaims->dlpEntityTypes, $portalClaims->dlpMinScore);
                 });
             }
@@ -242,7 +245,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             }
             try {
                 if (\FluxFiles\ModuleRegistry::installed('webhooks')
-                    && \FluxFiles\ModuleRegistry::license()->licensed('webhooks')) {
+                    && $license->licensed('webhooks')) {
                     $jti = (string) ($payload->jti ?? '');
                     $store = (string) ($payload->store ?? '');
                     // A portal token is minted for exactly one disk (see
@@ -300,20 +303,21 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
  * @param array<string,mixed>|null $injectedCfg the matching disk config
  * @param MetadataRepositoryInterface|null $injectedMeta see handleIntakePublic
  */
-function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm = null, ?array $injectedCfg = null, ?MetadataRepositoryInterface $injectedMeta = null): void
+function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm = null, ?array $injectedCfg = null, ?MetadataRepositoryInterface $injectedMeta = null, ?\FluxFiles\LicenseCheckInterface $injectedLicense = null, ?string $injectedSecret = null): void
 {
     // Set per branch, not up front: the info/unlock branches emit JSON, while
     // `file` emits bytes (or a 302) and picks its own type. The error paths below
     // set it themselves, so an early throw is still a JSON envelope.
     try {
-        $secret = $_ENV['FLUXFILES_SECRET'] ?? '';
+        $license = $injectedLicense ?? \FluxFiles\ModuleRegistry::license();
+        $secret = $injectedSecret ?? $_ENV['FLUXFILES_SECRET'] ?? '';
         if ($secret === '' || $secret === 'change-me-to-random-32-char-string') {
             throw new ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
         }
         if (!\FluxFiles\ModuleRegistry::installed('share')) {
             throw new ApiException("The 'share' module is not installed on this server", 501, 'module_not_installed', ['module' => 'share']);
         }
-        if (!\FluxFiles\ModuleRegistry::license()->licensed('share')) {
+        if (!$license->licensed('share')) {
             throw new ApiException("The 'share' module requires a valid license", 402, 'license_required', ['module' => 'share']);
         }
         $module = new \FluxFiles\Share\ShareModule();

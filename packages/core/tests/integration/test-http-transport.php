@@ -20,6 +20,12 @@ use FluxFiles\DiskManager;
 use FluxFiles\HttpTransportInterface;
 use FluxFiles\OidcDiscovery;
 
+// Any warning, notice or DEPRECATION (e.g. curl_close() on PHP 8.5) fails the run.
+set_error_handler(function (int $no, string $str, string $file, int $line): bool {
+    if (!(error_reporting() & $no)) { return false; }   // an @-silenced call stays silent
+    throw new \ErrorException($str, 0, $no, $file, $line);
+});
+
 $green = "\033[32m"; $red = "\033[31m"; $cyan = "\033[36m"; $reset = "\033[0m";
 $passed = 0; $failed = 0;
 function test(string $n, callable $f): void {

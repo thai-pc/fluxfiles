@@ -116,6 +116,28 @@ test('the gate takes any LicenseCheckInterface: NoLicense â†’ 402, FakeLicense â
     }
 });
 
+test('a resolver that THROWS fails closed to NoLicense, logs it, and does not propagate', function () {
+    $logged = [];
+    Log::setSink(function (string $m) use (&$logged) { $logged[] = $m; });
+    ModuleRegistry::setLicenseResolver(function () { throw new \RuntimeException('option table gone'); });
+    try {
+        $l = ModuleRegistry::license();
+        assertTrue($l instanceof NoLicense, get_class($l));
+        assertEqual(false, $l->licensed('share'));
+        assertTrue(count($logged) === 1 && str_contains($logged[0], 'option table gone'), json_encode($logged));
+    } finally {
+        Log::setSink(null);
+        ModuleRegistry::setLicenseResolver(null);
+    }
+});
+
+test('reset() clears the licence resolver along with the module map', function () {
+    ModuleRegistry::setLicenseResolver(fn () => new FakeLicense(['share']));
+    assertTrue(ModuleRegistry::license()->licensed('share'));
+    ModuleRegistry::reset();
+    assertTrue(!ModuleRegistry::license()->licensed('share'), 'resolver gone after reset()');
+});
+
 test('ComplianceScorecard::build accepts a NoLicense (every paid row locked)', function () {
     $r = ComplianceScorecard::build(Claims::fromJwtPayload((object) ['sub' => 'u']), new NoLicense());
     assertEqual(0, $r['summary']['available_count']);
