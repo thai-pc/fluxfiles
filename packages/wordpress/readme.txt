@@ -1,61 +1,83 @@
 === FluxFiles ===
 Contributors: thaipc
-Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
+Tags: file manager, amazon s3, cloudflare r2, media library, file upload
 Requires at least: 6.0
-Tested up to: 6.7
+Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.0.4
+Stable tag: 1.1.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-Multi-storage file manager with Local/S3/R2 support, plus SFTP through BYOB tokens. Optional paid add-ons: branded Share links and client Upload Portals.
+Multi-storage file manager for WordPress: local disk, Amazon S3 and Cloudflare R2, with image optimization, search and media library integration.
 
 == Description ==
 
-FluxFiles is a standalone, embeddable file manager. Drop it into WordPress via this plugin
-to get multi-storage support (Local disk, AWS S3, Cloudflare R2, and SFTP through a BYOB token), JWT authentication,
-image optimization with WebP variants, AI auto-tagging, and full-text search.
+FluxFiles is a file manager for WordPress with a modern browser UI. It manages files on your local disk, Amazon S3 or Cloudflare R2 (and SFTP through a developer-minted token), and registers what you pick as real WordPress attachments.
 
-**Features:**
+**Features**
 
-* Multi-storage — Local disk, AWS S3, Cloudflare R2; SFTP through a BYOB token
-* Image optimization — Auto WebP variants (thumb, medium, large)
-* AI tagging — Claude / OpenAI vision API
-* Full-text search across file names + metadata
-* 16 languages with RTL support
-* Shortcode: `[fluxfiles]`
-* Classic editor media button integration
-* Dark mode with auto-detection
-* WordPress attachment bridge — files picked in FluxFiles register as real WP attachments, with a Gutenberg block
+* Multi-storage: local disk, Amazon S3, Cloudflare R2; SFTP through a BYOB token
+* Folders, drag and drop and chunked uploads, rename, move, copy, a restorable Trash, and a built-in crop editor
+* Image optimization with WebP variants (thumb, medium, large)
+* Optional AI tagging and alt text with the provider of your choice (see External services)
+* Full-text search across file names and metadata
+* Duplicate finder, usage dashboard and quota
+* 16 languages with right-to-left support, dark mode with auto-detection
+* Shortcode `[fluxfiles]`, a "FluxFiles Image" block and a classic editor media button
+* WordPress attachment bridge: files picked in FluxFiles appear in the media library
+* WP-CLI: `wp fluxfiles seed` indexes files that already exist on a disk
 
-= File portals (paid add-on) =
-
-The plugin itself is 100% free (MIT), but if you need to *exchange* files with clients — not
-just manage your own media library — FluxFiles also sells two optional Pro modules that plug
-into the same JWT token your site already issues:
-
-* **Branded Share** — turn any file or folder into a shareable link with an expiry, a
-  password, a download cap, and view analytics. No account needed on the recipient's side.
-* **Upload Portals** — the reverse: a branded "send us your files" link you hand to a client.
-  They drop files in from a browser, no account, no plugin install on their end — the files
-  land straight in your configured disk (Local/S3/R2).
-
-Both are separate paid modules (see [fluxfiles.io/pricing](https://fluxfiles.io/pricing)) delivered by a
-separate add-on plugin (FluxFiles Pro) — the free plugin works fully without them, and nothing about your
-site's media library changes if you never install it.
+The plugin is free and open source (MIT). Optional paid modules, such as share links, upload portals and compliance tools, come with FluxFiles Pro, sold separately on [fluxfiles.dev](https://fluxfiles.dev).
 
 == Installation ==
 
-1. Download a release ZIP that includes the `vendor/` folder (WordPress.org or GitHub Releases)
-2. In WordPress go to **Plugins → Add New → Upload Plugin**, choose the ZIP, install, and activate — or unzip into `wp-content/plugins/fluxfiles/` and activate from **Plugins**
-3. Go to **Settings > FluxFiles** to configure your JWT secret and storage options
-4. Use the shortcode `[fluxfiles]` in any page or post
+1. In WordPress go to **Plugins > Add New**, search for FluxFiles, then install and activate it. Or upload the ZIP under **Plugins > Add New > Upload Plugin**, or unzip it into `wp-content/plugins/fluxfiles/`.
+2. Go to **Settings > FluxFiles** to choose your storage options and review the defaults.
+3. Add the shortcode `[fluxfiles]` to a page or post, or use the "FluxFiles Image" block.
 
-*(Developers building from Git: run `composer install --no-dev --optimize-autoloader` in the plugin directory before zipping, or use a monorepo checkout with `composer install -d packages/core` next to `packages/wordpress`.)*
+== External services ==
+
+FluxFiles has no telemetry, and it makes no update or licence calls. It contacts an outside service only when an administrator or developer configures one, as listed here.
+
+= Amazon S3 =
+When an administrator configures an S3 disk, FluxFiles sends the files you upload, their object keys and metadata tags to the S3 endpoint you set (and reads them back). The Bucket Doctor tool, run from the UI, sends small probe objects, a CORS check and a presign test to the same bucket. Amazon Web Services: [Service Terms](https://aws.amazon.com/service-terms/), [Privacy Notice](https://aws.amazon.com/privacy/).
+
+= Cloudflare R2 =
+When an administrator configures an R2 disk, the same data as for S3 goes to the R2 endpoint you set. Cloudflare: [Terms](https://www.cloudflare.com/terms/), [Privacy Policy](https://www.cloudflare.com/privacypolicy/).
+
+= Your SFTP server =
+Only when a developer mints a BYOB token for an SFTP server. File bytes and paths go to that server, which you operate.
+
+= AI tagging providers =
+Only when an administrator selects a provider and enters its API key, and the token has AI tagging enabled. FluxFiles sends a downscaled copy of the image (at most 1024 px), the prompt and your API key to the provider, and receives tags and alt text back. Supported providers, each under its own terms:
+
+* Anthropic: [Commercial Terms](https://www.anthropic.com/legal/commercial-terms), [Privacy Policy](https://www.anthropic.com/legal/privacy)
+* OpenAI: [Terms](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/)
+* Google Gemini: [API Terms](https://ai.google.dev/gemini-api/terms), [Privacy Policy](https://policies.google.com/privacy)
+* OpenRouter: [Terms](https://openrouter.ai/terms), [Privacy Policy](https://openrouter.ai/privacy)
+* Groq: [Terms](https://groq.com/terms-of-use/), [Privacy Policy](https://groq.com/privacy-policy/)
+* Mistral AI: [Terms](https://mistral.ai/terms), [Privacy Policy](https://mistral.ai/terms#privacy-policy)
+* xAI: [Terms](https://x.ai/legal/terms-of-service), [Privacy Policy](https://x.ai/legal/privacy-policy)
+* A compatible or local endpoint that you run: your own terms.
+
+= URL import =
+Only when the token allows it: FluxFiles makes an HTTP GET to the URL a user asks it to import. Requests to private and reserved addresses are refused.
+
+= Operator-run embeds =
+Only when a developer sets `terminal_pty_url`, `pdf_tools_url`, `office_url` or `esign_url`: the UI loads your own instance (ttyd, Stirling-PDF, Collabora/OnlyOffice, DocuSeal) in an iframe. `office_url` and `esign_url` may receive the selected file's URL.
+
+== Source & build ==
+
+* Source code and issue tracker: https://github.com/thai-pc/fluxfiles (this plugin is `packages/wordpress`, the bundled file manager is `packages/core`, the browser SDK is `packages/sdk`).
+* Build the plugin ZIP from a checkout with `bash scripts/build-wordpress.sh`. It needs PHP 8.1+, Composer, rsync and zip.
+* `assets/fm.js` and `assets/fm.css` are the readable sources of `assets/fm.min.js` and `assets/fm.min.css`, which are produced by `bash scripts/build-ui.sh` (esbuild, minify only).
+* [Alpine.js](https://github.com/alpinejs/alpine) 3.15.12 ships unmodified as `assets/vendor/alpine/alpine.min.js`.
+* The code editor uses the CodeMirror that WordPress itself ships (`wp-includes/js/codemirror/`); no CodeMirror copy is bundled. File types its build has no syntax mode for open as plain text.
+* PHP dependencies in `vendor/` are installed from `packages/core/composer.lock`; their licences ship in their folders. See `THIRD-PARTY-NOTICES.md`.
 
 == Using an existing upload directory ==
 
-If you already have files under `wp-content/fluxfiles/uploads/` (or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (`_fluxfiles/index.json`) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
+If you already have files in the local storage folder (`wp-content/uploads/fluxfiles/uploads/` on new installs, `wp-content/fluxfiles/uploads/` on older ones, or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (`_fluxfiles/index.json`) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
 
 To make pre-existing files and folders searchable, use the bundled WP-CLI command:
 
@@ -71,7 +93,7 @@ wp fluxfiles seed --disk=local --path=user_1
 # Force re-index (overwrite any existing metadata)
 wp fluxfiles seed --disk=local --overwrite`
 
-The command walks the disk recursively (skipping `_fluxfiles/`, `_variants/`, and `*.meta.json`). For each file it creates a metadata record with `title` derived from the filename. For each folder it updates `_fluxfiles/dirs.json` so folder search works. For S3/R2 disks with an existing bucket, pass `--disk=s3` or `--disk=r2`.
+The command walks the disk recursively (skipping the internal `_fluxfiles/` and `_variants/` folders). For each file it creates a metadata record with `title` derived from the filename. For each folder it updates `_fluxfiles/dirs.json` so folder search works. For S3/R2 disks with an existing bucket, pass `--disk=s3` or `--disk=r2`.
 
 If you cannot use WP-CLI, trigger the same indexing by re-uploading files through the FluxFiles UI — new uploads register metadata automatically.
 
@@ -89,19 +111,17 @@ No. The plugin bundles the full FluxFiles backend. Everything runs within your W
 
 PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfiles`). Anything below 8.1 is not supported on the current release line.
 
-= Do I need to pay for Share links or Upload Portals? =
-
-Only if you want them. The plugin you're installing here is the free MIT core and covers the
-full file manager (multi-storage, image optimization, search, AI tagging, media library
-integration). Branded Share links and client Upload Portals are separate paid modules — see
-[fluxfiles.io/pricing](https://fluxfiles.io/pricing) for details. Without them the plugin still
-works exactly as described above, minus those two features.
-
 = Can I use FluxFiles for my WordPress media library? =
 
 Yes. Files picked through the FluxFiles UI register as real WordPress attachments — the media
 library, `wp_get_attachment_url()`, and the Gutenberg block all see them, even though the bytes
-live on S3/R2/local storage FluxFiles manages, not `wp-content/uploads/`.
+live on S3/R2 or in FluxFiles' own local storage folder, not in WordPress's dated `uploads/YYYY/MM/` folders.
+
+= Where does FluxFiles store my files? =
+New installs use the "fluxfiles" folder inside your WordPress uploads folder (usually wp-content/uploads/fluxfiles/), which most hosts back up and keep across deployments. Sites that already had wp-content/fluxfiles/ keep it; nothing is moved when you update. You can choose another location with the FLUXFILES_STORAGE_DIR constant in wp-config.php or the fluxfiles_storage_base filter. Because FluxFiles stores the location, not a full path, a moved or cloned site follows its own folders. Some media-cleaner plugins may list the files under uploads/fluxfiles as unused media; exclude that folder from them.
+
+= What happens to my data when I delete the plugin? =
+By default deleting FluxFiles removes only its settings and rate-limit counters. Your files, their metadata, trash, audit log and legal-hold tables, and the secret key (it signs the audit log) are kept, so reinstalling picks everything up again. To remove everything, tick "Delete all FluxFiles data when the plugin is deleted" in Settings > FluxFiles before deleting the plugin. Then the database tables, the secret and the files FluxFiles wrote in its own storage folder are permanently removed. Nothing is deleted at a custom location set with FLUXFILES_STORAGE_DIR or the fluxfiles_storage_base filter, and files on S3, R2 or SFTP are never touched.
 
 = Where are warnings logged? =
 
@@ -109,7 +129,7 @@ Operational warnings are written to the PHP error log only when `WP_DEBUG` / `WP
 
 = My site runs on nginx. Is the uploads folder protected? =
 
-Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. While the local disk is public, the Plugins screen and Settings → FluxFiles show the nginx rules to add (no PHP execution, HTML/SVG/XML served inert, `_fluxfiles/` denied) — or turn on private local storage. Independently of the server, users without the `unfiltered_html` capability can never upload HTML, SVG, XML, JavaScript or PHP files through FluxFiles.
+Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The storage folder is `/wp-content/uploads/fluxfiles/` on new installs and `/wp-content/fluxfiles/` on older ones. While the local disk is public, the Plugins screen and Settings → FluxFiles show the nginx rules to add (no PHP execution, HTML/SVG/XML served inert, `_fluxfiles/` denied) — or turn on private local storage. Independently of the server, users without the `unfiltered_html` capability can never upload HTML, SVG, XML, JavaScript or PHP files through FluxFiles.
 
 == Screenshots ==
 
@@ -119,6 +139,14 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 4. Insert images from FluxFiles straight into the block editor with the "FluxFiles Image" block.
 
 == Changelog ==
+
+= 1.1.0 =
+* FluxFiles is now listed on WordPress.org. The plugin no longer checks for updates itself: WordPress.org delivers them.
+* The paid modules (Share, Intake, versioning, webhooks, compliance tools) moved to the separate FluxFiles Pro add-on. This plugin keeps every free feature and provides hooks for the add-on.
+* Share and Intake links now use the site's REST URL; old `public-link.php` links still redirect to it.
+* The code editor uses the CodeMirror bundled with WordPress instead of shipping its own copy.
+* The ZIP is smaller: standalone-only files (entry point, licence and SSO code, tus server) and the AWS SDK services FluxFiles does not use are no longer included.
+* Admin messages are translatable (text domain `fluxfiles`).
 
 = 1.0.4 =
 * Fix: on a multisite network, a Share or Intake link created while another site was active (inside `switch_to_blog()`) opened the wrong site and failed. Links now carry the creating site's id and always open that site.
@@ -165,6 +193,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.0 =
+Share, Intake and the compliance tools now come from the separate FluxFiles Pro add-on. The free file manager is unchanged.
 
 = 1.0.4 =
 Share and Intake links now open the site that created them on multisite, and work with plain permalinks. No action needed.

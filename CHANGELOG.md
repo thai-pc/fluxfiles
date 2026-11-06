@@ -42,6 +42,26 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - **Extension API v1** (`FLUXFILES_EXT_API = 1`, documented in `packages/wordpress/HOOKS.md`):
   `fluxfiles_loaded`, `fluxfiles_module_paths`, `fluxfiles_license`, `fluxfiles_api_boot`,
   `fluxfiles_admin_sections`, `fluxfiles_edition_presets`, `fluxfiles_rest_routes`.
+### Changed (WordPress plugin): clean WordPress.org build
+
+- `scripts/build-wordpress.sh` now ships a trimmed zip: no `embed.php`, `modules-autoload.php`
+  (so the plugin no longer auto-registers `<plugin>/vendor/fluxfiles/`; add-ons use
+  `fluxfiles_module_paths`), `config/`, `public/share.html`/`intake.html`, nor the core files
+  the plugin never runs (`api/index.php`, `LicenseManager`, `UpdateClient`, `OidcDiscovery`,
+  `SsoStateToken`, `SsoBootToken`, `DemoMode`, `TusServer`). `autoload.files` is dropped from
+  the temp `composer.json`, `packages/wordpress/.distignore` drives the plugin copy, and the
+  vendor clean also removes docs, examples, `.github` and Markdown (licences kept).
+- The WordPress build uses WordPress's bundled CodeMirror (`wp-includes/js/codemirror/`) and no
+  longer ships `assets/vendor/codemirror/`. The UI page carries a `fluxfiles-codemirror` meta tag
+  that `fm.js` prefers over its vendored copy; standalone core and Laravel are unchanged, and a
+  mode WordPress's build lacks falls back to plain text.
+- New `scripts/check-wp-dist.php` guard (CI job `wp-dist-guard`, and the `wordpress-release`
+  workflow before publishing): self-update hooks, `Update URI`, `wp-load.php`, forbidden paths,
+  stray `curl_init`/`eval(`, CDN scripts, zip over 8 MB and the readme rules.
+- Plugin header gains `Text Domain: fluxfiles` and `License URI`; the version is 1.1.0.
+  The remaining admin notice strings in `fluxfiles.php` are translatable. `readme.txt` is
+  rewritten for WordPress.org (free features only, External services, Source & build).
+
 ### Fixed (WordPress plugin)
 
 - **Picker opened only once per page.** The FluxFiles Image block and the media-modal button initialised the SDK once and kept the first caller's callback; since the SDK removes its iframe after a pick, a second open showed an empty modal and a pick could land in the first block. Each open now builds a fresh picker bound to the block that opened it, and closing tears down the iframe and message listener. Test: `packages/wordpress/tests/block-picker.test.js`.

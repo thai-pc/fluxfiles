@@ -512,10 +512,10 @@ class FluxFilesApi
             'callback' => [$api, 'serveUiHtml'],
         ]));
         // fm.js/fm.css plus the vendored lazy-loaded libraries under
-        // assets/vendor/ (CodeMirror) — fm.js derives its base from its
+        // assets/vendor/ (Alpine) — fm.js derives its base from its
         // own <script src>, which is this route. No '..' can match, and
         // serveUiAsset() re-checks containment with realpath().
-        register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
+        register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|codemirror-theme-material-darker\.css|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
             'callback' => [$api, 'serveUiAsset'],
         ]));
         register_rest_route($ns, $p . '/lang', array_merge($publicArgs, [
@@ -3326,9 +3326,35 @@ class FluxFilesApi
         $alpine = 'vendor/alpine/alpine.min.js';
         $html = str_replace('"../assets/' . $alpine . '"', '"' . esc_url($assetsBase . '/' . $alpine) . $jsSep . 'v=' . $hash($alpine) . '"', $html);
 
+        $html = str_replace('</head>', self::codeMirrorMeta($assetsBase, $jsSep, $hash) . "\n</head>", $html);
+
         // Bypass REST JSON serialization — the browser iframe must receive raw HTML
         // with the right content type, not a JSON-wrapped string.
         $this->sendRaw($html, 'text/html; charset=utf-8', self::uiHtmlHeaders($locale));
+    }
+
+    /**
+     * The <meta name="fluxfiles-codemirror"> tag fm.js reads. The code editor uses
+     * WordPress's own CodeMirror (wp-includes/js/codemirror/, exposed as wp.CodeMirror)
+     * instead of a vendored copy; WordPress ships no dark theme, so the plugin adds
+     * the MIT material-darker one next to fm.js. Modes WordPress's build lacks fall
+     * back to plain text.
+     *
+     * @param callable(string):string $hash content-hash of an assets/ file
+     */
+    public static function codeMirrorMeta(string $assetsBase, string $sep, callable $hash): string
+    {
+        $cmVer = isset($GLOBALS['wp_version']) ? (string) $GLOBALS['wp_version'] : '';
+        $ver   = $cmVer !== '' ? '?ver=' . rawurlencode($cmVer) : '';
+        $theme = 'codemirror-theme-material-darker.css';
+        $cfg = [
+            'css' => [
+                includes_url('js/codemirror/codemirror.min.css') . $ver,
+                $assetsBase . '/' . $theme . $sep . 'v=' . $hash($theme),
+            ],
+            'js'  => [includes_url('js/codemirror/codemirror.min.js') . $ver],
+        ];
+        return '<meta name="fluxfiles-codemirror" content="' . esc_attr((string) wp_json_encode($cfg)) . '">';
     }
 
     /**
@@ -3373,7 +3399,7 @@ class FluxFilesApi
     public function serveUiAsset(\WP_REST_Request $request)
     {
         $file = (string) $request->get_param('file');
-        // Regex on the route already restricts to fm[.min].js / fm[.min].css / vendor/*.{js,css}.
+        // Regex on the route already restricts to fm[.min].js / fm[.min].css / the CodeMirror theme / vendor/*.{js,css}.
         $assetsDir = FluxFilesPlugin::corePath('assets');
         if ($assetsDir === null) {
             return $this->error('Assets not bundled', 500);

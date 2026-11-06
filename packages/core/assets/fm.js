@@ -4975,9 +4975,48 @@ function fluxFilesApp() {
         // these ~25 scripts execute in the origin that holds the main JWT in
         // memory, and the CDN tags carried no `integrity`, so a compromised or
         // MITM'd cdnjs response was arbitrary code next to the token.
+        //
+        // A host that already ships CodeMirror (WordPress bundles it under
+        // wp-includes/js/codemirror/) can point the page at that copy instead with
+        // <meta name="fluxfiles-codemirror" content='{"css":[...],"js":[...]}'>.
+        // Modes that copy lacks simply fall back to plain text.
+        _hostCodeMirror() {
+            try {
+                const el = document.head.querySelector('meta[name="fluxfiles-codemirror"]');
+                const cfg = el ? JSON.parse(el.getAttribute('content') || '') : null;
+                const ok = (a) => Array.isArray(a) && a.every((u) => typeof u === 'string' && /^(https?:\/\/|\/(?!\/))/.test(u));
+                if (cfg && ok(cfg.js || []) && ok(cfg.css || []) && (cfg.js || []).length) return cfg;
+            } catch (e) { /* ignore: use the vendored copy */ }
+            return null;
+        },
         _ensureCodeMirror() {
-            if (window.CodeMirror) return Promise.resolve();
+            if (window.CodeMirror && window.CodeMirror.fromTextArea) return Promise.resolve();
             if (this._cmLoading) return this._cmLoading;
+            const host = this._hostCodeMirror();
+            if (host) {
+                this._cmLoading = (async () => {
+                    for (const href of (host.css || [])) {
+                        await new Promise((res) => {
+                            const l = document.createElement('link');
+                            l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = res;
+                            document.head.appendChild(l);
+                        });
+                    }
+                    for (const src of host.js) {
+                        // A script that fails to load is not fatal: the caller falls back to the textarea.
+                        await new Promise((res) => {
+                            const s = document.createElement('script');
+                            s.src = src; s.onload = res; s.onerror = res;
+                            document.head.appendChild(s);
+                        });
+                    }
+                    // WordPress exposes its copy as wp.CodeMirror.
+                    // (WordPress also defines a window.CodeMirror stub without fromTextArea, so test for that.)
+                    if (!(window.CodeMirror && window.CodeMirror.fromTextArea) && window.wp && window.wp.CodeMirror) window.CodeMirror = window.wp.CodeMirror;
+                    return true;
+                })();
+                return this._cmLoading;
+            }
             const base = FM_ASSETS_BASE + '/vendor/codemirror';
             const css = (href) => new Promise((res) => {
                 const l = document.createElement('link');
@@ -5015,7 +5054,7 @@ function fluxFilesApp() {
 
         _mountCM() {
             const ta = document.getElementById('ff-editor-ta');
-            if (!ta || !window.CodeMirror) return;   // textarea fallback already works
+            if (!ta || !window.CodeMirror || !window.CodeMirror.fromTextArea) return;   // textarea fallback already works
             const mode = this._cmMode(this._fileExt(this.editorFile));
             const dark = document.documentElement.classList.contains('dark');
             if (this._cm) {

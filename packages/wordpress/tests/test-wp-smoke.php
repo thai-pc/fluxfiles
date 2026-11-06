@@ -2140,6 +2140,18 @@ test('A-N5: search / search-folders results are unscoped like core', function ()
     });
 });
 
+test('the UI page carries the escaped fluxfiles-codemirror meta (WordPress CodeMirror + dark theme)', function () {
+    if (!function_exists('includes_url')) { function includes_url($p = '') { return 'http://wp.test/wp-includes/' . ltrim($p, '/'); } }
+    if (!function_exists('esc_attr')) { function esc_attr($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
+    $meta = FluxFilesApi::codeMirrorMeta('http://wp.test/wp-json/fluxfiles/v1/assets', '?', fn ($f) => 'abc12345');
+    assertTrue(strpos($meta, '<meta name="fluxfiles-codemirror" content="') === 0, 'meta tag');
+    assertTrue(strpos($meta, '"') !== false && substr_count($meta, '"') === 4, 'JSON quotes are escaped inside the attribute');
+    $json = json_decode(html_entity_decode(preg_replace('/^.*content="(.*)">$/', '$1', $meta)), true);
+    assertEqual(['http://wp.test/wp-includes/js/codemirror/codemirror.min.js'], $json['js'], 'WordPress codemirror.min.js');
+    assertEqual(2, count($json['css']), 'core css + dark theme');
+    assertTrue(strpos($json['css'][1], 'codemirror-theme-material-darker.css?v=abc12345') !== false, 'theme linked with a content hash');
+});
+
 test('A-N6: the iframe UI sends Referrer-Policy: no-referrer and frame-ancestors', function () {
     $h = FluxFilesApi::uiHtmlHeaders('en');
     assertTrue(in_array('Referrer-Policy: no-referrer', $h, true), 'no-referrer');
