@@ -3,6 +3,21 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.6] — 2026-11-06
+
+> Released: `ckeditor5-v1.0.0`.
+
+### Added
+
+- **CKEditor 5 adapter (`@fluxfiles/ckeditor5`).** A `FluxFiles` plugin (TypeScript, ESM, peer
+  dependency `ckeditor5` >= 42) registers the `fluxfiles` toolbar item and command. It opens the
+  picker through the SDK and inserts the selection: images as image elements (`src`, `alt` from the
+  metadata, `srcset` when the payload carries `img_srcset` and the image plugin allows it), other
+  files as links, every file of a multiple selection. Configured under `config.fluxfiles` with the
+  CKEditor 4 option names plus `token` as a getter and `onTokenRefresh`. When `ImageInsert` is
+  loaded it also adds "Insert image via FluxFiles" to the image insert dropdown. The plugin embeds
+  no CKEditor licence key; the editor's own `licenseKey` is set by the host app.
+
 ## [1.0.4] — 2026-11-06
 
 > Released: `core-v1.0.3`, `wordpress-v1.0.3`.

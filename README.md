@@ -6,6 +6,7 @@
 [![npm](https://img.shields.io/npm/v/@fluxfiles/react?label=react&color=61dafb)](https://www.npmjs.com/package/@fluxfiles/react)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/vue?label=vue&color=42b883)](https://www.npmjs.com/package/@fluxfiles/vue)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor4?label=ckeditor4&color=1eb5ff)](https://www.npmjs.com/package/@fluxfiles/ckeditor4)
+[![npm](https://img.shields.io/npm/v/@fluxfiles/ckeditor5?label=ckeditor5&color=0ae)](https://www.npmjs.com/package/@fluxfiles/ckeditor5)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/tinymce?label=tinymce&color=2dc26b)](https://www.npmjs.com/package/@fluxfiles/tinymce)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/summernote?label=summernote&color=73a839)](https://www.npmjs.com/package/@fluxfiles/summernote)
 [![npm](https://img.shields.io/npm/v/@fluxfiles/node?label=node&color=339933)](https://www.npmjs.com/package/@fluxfiles/node)
@@ -17,7 +18,7 @@
 
 Standalone, embeddable PHP 8.1+ file manager. Files stay on your own storage: Local, AWS S3, Cloudflare R2 or SFTP. JWT-scoped access, with adapters for Laravel, WordPress, React and Vue.
 
-Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, **TinyMCE**, and **Summernote**.
+Drop it into any web app via iframe + SDK, or use the provided adapters for **Laravel**, **WordPress**, **React**, **Vue / Nuxt**, **CKEditor 4**, **CKEditor 5**, **TinyMCE**, and **Summernote**.
 
 ---
 
@@ -95,7 +96,7 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 | | 🔒 Paid: **Audit export/verify/purge** + **integrity (fixity) check**, **DLP**, **Legal hold** + **retention rules**, **Virus scan**, **C2PA** | Compliance and content-authenticity requirements |
 | **Storage backend** | Bookkeeping (metadata/index/audit/trash/quota/rate-limit) in JSON files (default) or your own MySQL/PostgreSQL/SQLite | See [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](docs/design/DB-STORAGE-MIGRATION-DESIGN.md) |
 | **UI** | Dark mode (auto/manual), 16 languages + RTL, responsive | Global, white-label, mobile |
-| **Adapters** | Laravel · WordPress · React · Vue/Nuxt · CKEditor 4 · TinyMCE · Summernote · `@fluxfiles/node` · `fluxfiles-token` (Python) · `@fluxfiles/mcp` (AI agents) | Drop into your stack, skip the plumbing |
+| **Adapters** | Laravel · WordPress · React · Vue/Nuxt · CKEditor 4 · CKEditor 5 · TinyMCE · Summernote · `@fluxfiles/node` · `fluxfiles-token` (Python) · `@fluxfiles/mcp` (AI agents) | Drop into your stack, skip the plumbing |
 | | 🔒 Paid: **Webhooks** | Event-driven integrations (at-most-once delivery) |
 
 ---
@@ -1316,6 +1317,7 @@ install + the gist; follow the package link for details.
 | **React** | `npm i @fluxfiles/react` | `<FluxFiles>` / `<FluxFilesModal>` + `useFluxFiles()` hook (TypeScript) | [`packages/react`](packages/react) |
 | **Vue 3 / Nuxt 3** | `npm i @fluxfiles/vue` | `<FluxFiles>` / `<FluxFilesModal>` + composable; Nuxt auto-import plugin | [`packages/vue`](packages/vue) |
 | **CKEditor 4** | `npm i @fluxfiles/ckeditor4` | Toolbar button + native Image-Properties "Browse" | [`packages/ckeditor4`](packages/ckeditor4) |
+| **CKEditor 5** | `npm i @fluxfiles/ckeditor5` | Toolbar button (`fluxfiles`) + entry in the image insert dropdown; TypeScript, ESM, CKEditor 5 ≥ 42 | [`packages/ckeditor5`](packages/ckeditor5) |
 | **TinyMCE 4/5** | `npm i @fluxfiles/tinymce` | Toolbar button + native image-dialog file picker | [`packages/tinymce`](packages/tinymce) |
 | **Summernote** | `npm i @fluxfiles/summernote` | Toolbar button (inserts `<img>`/`<a>` at the cursor) | [`packages/summernote`](packages/summernote) |
 
@@ -1549,6 +1551,7 @@ FluxFiles/
 │   ├── react/                        # npm: @fluxfiles/react (TypeScript)
 │   ├── vue/                          # npm: @fluxfiles/vue (TypeScript)
 │   ├── ckeditor4/                    # CKEditor 4 plugin
+│   ├── ckeditor5/                    # npm: @fluxfiles/ckeditor5 (CKEditor 5 plugin, TypeScript)
 │   ├── tinymce/                      # TinyMCE 4/5 plugin
 │   ├── summernote/                   # Summernote plugin
 │   ├── node/                         # npm: @fluxfiles/node (JWT minting from Node)
