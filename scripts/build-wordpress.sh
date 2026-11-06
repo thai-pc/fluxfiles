@@ -96,6 +96,10 @@ done
 # the plugin or the editor silently falls back.
 cp -r "$CORE_DIR/assets/vendor" "$PLUGIN_DIR/assets/vendor"
 
+# The watermark font: ImageOptimizer resolves api/../assets/fonts/DejaVuSans.ttf,
+# so without this a text watermark has no font in the plugin build.
+cp -r "$CORE_DIR/assets/fonts" "$PLUGIN_DIR/assets/fonts"
+
 echo "==> Bundling browser SDK as assets/fluxfiles.js..."
 cp "$SDK_DIR/fluxfiles.js" "$PLUGIN_DIR/assets/fluxfiles.js"
 

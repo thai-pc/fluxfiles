@@ -837,5 +837,13 @@
     "expand": "PDF'yi genişlet",
     "fullscreen": "Tam ekran",
     "open_tab": "Yeni sekmede aç"
+  },
+  "about": {
+    "link": "Hakkında",
+    "tagline": "Gömülebilir dosya yöneticisi",
+    "built_on": "FluxFiles üzerine kurulu",
+    "license_label": "Lisans",
+    "notices": "Üçüncü taraf bildirimleri",
+    "docs": "Belgeler"
   }
 }

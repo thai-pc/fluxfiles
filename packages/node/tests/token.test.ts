@@ -179,6 +179,23 @@ describe('createToken', () => {
     expect(c.usage_folder_depth).toBe(2);
   });
 
+  it('forwards about + white-label claims', () => {
+    const c = decodeToken(
+      createToken({
+        secret: SECRET,
+        userId: 'u',
+        about: false,
+        brandName: 'Acme Files',
+        brandLogoUrl: 'https://acme.test/l.png',
+        accentColor: '#0a7f5a',
+      }),
+    );
+    expect(c.about).toBe(false);
+    expect(c.brand_name).toBe('Acme Files');
+    expect(c.brand_logo_url).toBe('https://acme.test/l.png');
+    expect(c.accent_color).toBe('#0a7f5a');
+  });
+
   it('forwards watermark + allow_download claims (PHP parity)', () => {
     const c = decodeToken(
       createToken({

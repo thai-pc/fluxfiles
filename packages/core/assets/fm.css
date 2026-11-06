@@ -4129,3 +4129,27 @@ body {
 .ff-pdf-viewer-btn svg { width: 18px; height: 18px; }
 .ff-pdf-viewer-close { font-size: 26px; line-height: 1; }
 .ff-pdf-viewer-doc { flex: 1; width: 100%; border: 0; }
+
+/* White-label accent (`accent_color` claim): fm.js sets --ff-primary inline on <html>
+   (beats .dark); the hover shade is derived here so no colour is ever built into CSS text. */
+html.ff-branded { --ff-primary-hover: color-mix(in srgb, var(--ff-primary) 82%, #000); }
+.ff-brand-logo { object-fit: contain; border-radius: 4px; }
+
+/* About dialog + its quiet sidebar entry */
+.ff-about-foot { margin-top: auto; padding: 6px 10px 2px; }
+.ff-about-foot.ff-about-tight { margin-top: 0; }
+.ff-about-link {
+    background: none; border: 0; padding: 2px 0; cursor: pointer;
+    font: inherit; font-size: 12px; color: var(--color-text-tertiary);
+}
+.ff-about-link:hover, .ff-about-link:focus-visible { color: var(--ff-primary); text-decoration: underline; }
+.ff-about-modal { max-width: 400px; }
+.ff-about-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.ff-about-head h3 { margin: 0; font-size: 18px; color: var(--color-text-primary); overflow-wrap: anywhere; }
+.ff-about-logo { object-fit: contain; border-radius: 6px; }
+.ff-about-line { margin: 0 0 6px; font-size: 13px; color: var(--color-text-secondary); }
+.ff-about-muted { font-size: 12px; color: var(--color-text-tertiary); }
+.ff-about-links { list-style: none; margin: 14px 0 0; padding: 0; font-size: 13px; color: var(--color-text-secondary); }
+.ff-about-links li { margin-bottom: 6px; }
+.ff-about-links a { color: var(--ff-primary); }
+.ff-about-actions { display: flex; justify-content: flex-end; margin-top: 18px; }

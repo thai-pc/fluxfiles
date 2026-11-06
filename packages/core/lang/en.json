@@ -837,5 +837,13 @@
     "expand": "Expand PDF",
     "fullscreen": "Full screen",
     "open_tab": "Open in new tab"
+  },
+  "about": {
+    "link": "About",
+    "tagline": "Embeddable file manager",
+    "built_on": "Built on FluxFiles",
+    "license_label": "Licence",
+    "notices": "Third-party notices",
+    "docs": "Documentation"
   }
 }

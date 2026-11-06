@@ -18,6 +18,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - **`THIRD-PARTY-NOTICES.md`** in core (and the WordPress plugin zip), plus the missing
   licence texts for the vendored CodeMirror 5.65.16 and the bundled DejaVu Sans font.
 
+- **About dialog and light white-label (free, core).** A quiet "About" link in the sidebar
+  footer opens a dialog with the MIT licence, a third-party-notices link and a docs link (no
+  version number is shown). New optional claims: `about` (false hides it), `brand_name`
+  (plain text, <= 60 chars), `brand_logo_url` (http(s) only) and `accent_color` (strict hex,
+  applied as the `--ff-primary` custom property). Invalid values are dropped on decode;
+  default look is unchanged. Adapters pass them through the existing `claims` map. New
+  strings under `about.*` in all 16 languages.
+
 > Released: not yet released.
 
 ## [1.0.11] — 2026-11-06
