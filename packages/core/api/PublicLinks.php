@@ -185,7 +185,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             // behind it. IntakeModule::createPortal() forwards the claim into the
             // portal JWT precisely so this check can see it here.
             if ($portalClaims->allowVirusScan) {
-                $portalFm->setVirusScanner(static function (string $localPath) use ($portalClaims): array {
+                $portalFm->setVirusScanner(static function (string $localPath) use ($portalClaims, $license): array {
                     /** @var \FluxFiles\Virus\VirusScanModule $virus */
                     $virus = \FluxFiles\ModuleRegistry::require('virus', $license, $portalClaims);
                     return $virus->scanPath($localPath);
@@ -198,7 +198,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             // `allow_dlp_scan` + the entity/threshold/extension/size tuning claims so
             // FileManager::assertNoPii() sees the operator's exact policy here.
             if ($portalClaims->allowDlpScan) {
-                $portalFm->setDlpScanner(static function (string $localPath, string $name) use ($portalClaims): array {
+                $portalFm->setDlpScanner(static function (string $localPath, string $name) use ($portalClaims, $license): array {
                     /** @var \FluxFiles\Dlp\DlpModule $dlp */
                     $dlp = \FluxFiles\ModuleRegistry::require('dlp', $license, $portalClaims);
                     return $dlp->scanPath($localPath, $portalClaims->dlpEntityTypes, $portalClaims->dlpMinScore);

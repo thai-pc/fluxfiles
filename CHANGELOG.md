@@ -23,6 +23,20 @@ All notable changes to FluxFiles are documented here. This project adheres to
   server treats them as 1.0.3 and never offers a floor above `^1.0.3`. New error code
   `core_update_required` (16 languages).
 
+## [1.0.10] — 2026-11-06
+
+> Released: `core-v1.0.5`.
+
+### Fixed
+
+- **Intake portal uploads with virus or DLP scanning failed with a 500 on Laravel and
+  WordPress (regression in core-v1.0.4).** The scanner closures in the legacy intake handler
+  read `$license` without capturing it, so every scanned anonymous upload hit a `TypeError`.
+  It failed closed (nothing unscanned was stored), but scanned portals were unusable. Both
+  closures now capture it, and a new unit test checks every closure in `PublicLinks.php`
+  for uncaptured variables. Laravel picks this up through `fluxfiles/fluxfiles ^1.0.1`; the
+  WordPress plugin was not affected (1.0.4 bundles an earlier core).
+
 ## [1.0.9] — 2026-11-06
 
 > Released: `ckeditor4-v1.0.1`, `tinymce-v1.0.1`, `summernote-v1.0.1`, `ckeditor5-v1.0.2`.
