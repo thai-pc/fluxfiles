@@ -3,7 +3,9 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.13] — 2026-11-06
+
+> Released: `laravel-v1.0.3`, `core-v1.1.0` (BREAKING). The WordPress changes ship with the next WordPress release, which bundles core 1.1.0.
 
 ### Removed
 
