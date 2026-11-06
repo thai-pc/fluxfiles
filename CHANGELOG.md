@@ -154,7 +154,6 @@ release.
     access-denied entries;
   - `FileManagerFactory` for wiring quota, scanners (virus/DLP stay
     fail-closed), versioning, AI and webhooks;
-  - `TerminalService` and `GitDeployService`;
   - `Claims::requirePerm()` and `Claims::requireDisk()`;
   - the `Db\MetadataRowLogic` trait for the methods the three DB metadata
     handlers had copied verbatim;
@@ -163,7 +162,6 @@ release.
   new code:
   - all 17 self-booting e2e suites give identical results;
   - 46 `/stream` and `/img` requests give byte-identical responses;
-  - 66 terminal and git-deploy requests behave the same;
   - 40,000 randomised audit cases show no difference.
 - **One input now behaves differently.** A write route that received a scalar
   JSON body (e.g. `"x"`) used to answer 500 after the write had succeeded,
@@ -298,7 +296,7 @@ Results of a code review of performance, correctness and core/proxy drift.
 - **Caching and compression:**
   - `index.html` now has an ETag and returns 304. Demo mode, which puts a
     per-visitor token in the page, does not.
-  - Lazily loaded editor/terminal libraries carry a version query, so a
+  - Lazily loaded editor libraries carry a version query, so a
     long-cached old copy isn't used after an upgrade.
   - The Docker image's nginx turns on gzip (fm.js goes from 236 KB to 57 KB)
     and caches versioned assets for a year.
@@ -1169,22 +1167,8 @@ All new claims are named in the five token builders (`mediaPosters`,
 
 > Released: `core-v0.2.93`, `laravel-v0.2.45`, `wordpress-v0.2.53`.
 
-### Fixed — security audit: GitDeploy RCE, case-sensitive reserved paths, unauthenticated storage, presign/quota gaps
+### Fixed — security audit: case-sensitive reserved paths, unauthenticated storage, presign/quota gaps
 
-- **GitDeploy RCE.** The pre-deploy `.git/config` audit was a denylist
-  (`git config --local --list --name-only` against a fixed set of dangerous
-  keys). Three confirmed bypasses, each reproduced with real git execution:
-  `include.path` (`--local --list` never expands includes, so a hidden
-  `filter.*.smudge` was invisible to the audit while git still ran it),
-  `extensions.worktreeConfig` (`--local` never reads `.git/config.worktree`),
-  and `core.askPass`/unset `core.hooksPath` (never denylisted at all). A
-  `write` + `allow_git_deploy` token could reach arbitrary command execution
-  as the SSH user, without `allow_terminal`. Inverted denylist → allowlist:
-  the audit now runs `git config --list --show-scope --name-only`, scoped to
-  `local`+`worktree`, and rejects any key not in the known-safe set `git
-  init`/clone/checkout produce. `core.hooksPath` is now pinned
-  unconditionally (not only when hooks are disabled) and `core.askPass`
-  joins the always-cleared flags. New error code `error.git_deploy_unsafe_repo`.
 - **Case-sensitive reserved-path check.** `isReservedSystemPath()` matched
   `_fluxfiles/` with a case-sensitive `strpos`/`===`, so on a
   case-insensitive filesystem (macOS APFS default, Windows, SMB/NFS)
@@ -1194,9 +1178,7 @@ All new claims are named in the five token builders (`mediaPosters`,
   (forgery), `trash.json`, and per-file metadata (`uploaded_by` hijack).
   Deduplicated four case-sensitive copies of the same rule into one
   `FileManager::isReservedKey()`. Also blocks writes into any `.git`
-  segment on SFTP disks — the root cause the GitDeploy RCE above depended
-  on (a write-scoped token could overwrite a deployed repo's own
-  `.git/config`). New error code `error.git_internal_path`.
+  segment on SFTP disks. New error code `error.git_internal_path`.
 - **Unauthenticated storage bookkeeping.** `router.php` (the release-ZIP /
   `bin/fluxfiles serve` path) served `_fluxfiles/` — including audit logs,
   the search index, trash, and pre-watermark originals — with no auth,
@@ -1204,7 +1186,7 @@ All new claims are named in the five token builders (`mediaPosters`,
   claimed `/storage/uploads/…` URIs. Same nesting gap existed in
   `docker/nginx.conf` and `docs/guides/DEPLOYMENT.md`'s hand-written nginx
   block; fixed in all three, plus added the blanket `/storage/` deny to
-  DEPLOYMENT.md that protects `ssh-sockets/`'s ephemeral BYOB SSH keys.
+  DEPLOYMENT.md.
 - **Presign PUT bypassed the virus/DLP scan guard.** Chunked uploads already
   refuse with `409 virus_unscannable`/`dlp_unscannable` when the matching
   claim is on, because browser→S3 bytes can never be scanned — but
@@ -1259,19 +1241,18 @@ each fix — not taken on report alone.
 > `laravel-v0.2.44`, `wordpress-v0.2.52` (pushed in two batches — the
 > ≤3-tags-per-push rule).
 
-### Added — 14 shipped claims finally have a named option in every token builder
+### Added — 10 shipped claims finally have a named option in every token builder
 
 - `share_brand_name` / `_logo_url` / `_color` / `_link_url`,
-  `intake_brand_*` (the same four), `intake_analytics`, `allow_git_deploy`,
-  `git_deploy_path` / `_branch` / `_hooks`, and `pro_hints` were all implemented,
-  enforced and documented in `docs/reference/CONFIG.md`, but none of the five
+  `intake_brand_*` (the same four), `intake_analytics`, and `pro_hints` were
+  all implemented, enforced and documented in `docs/reference/CONFIG.md`, but none of the five
   token builders named them — they were reachable only by typing the raw
   snake_case key into the generic `claims` map. Every builder now exposes them
   as a first-class option: `fluxfiles_token()`'s `webp` array, Node's
-  `createToken`/`createByobToken` (plus typed `ShareBrand*`/`GitDeploy*`
+  `createToken`/`createByobToken` (plus typed `ShareBrand*`
   entries in `types.ts`), Python's `create_token`/`create_byob_token` kwargs,
   and the Laravel/WordPress override maps. Nothing about what a token *can*
-  carry changes — the escape hatch already minted all fourteen — so no core,
+  carry changes — the escape hatch already minted all ten — so no core,
   adapter or module behaviour moves; this is the autocomplete and the type
   error that were missing.
 - `pro_hints` is written only when explicitly set, in all five builders:
@@ -1406,7 +1387,7 @@ reference server, neither of which is distributed.
 A security release. `docs/security/FREE-CORE-SECURITY-AUDIT-2026-09.md` is the
 full audit of the MIT free/core surface (core, both PHP proxy adapters, the
 browser SDK) behind it: six parallel review agents, every finding re-verified
-by hand against running code, all 16 now closed.
+by hand against running code, every one now closed.
 
 ### Fixed — path traversal escaped the tenant prefix (CRITICAL)
 
@@ -1431,19 +1412,6 @@ by hand against running code, all 16 now closed.
   outbound fetch by every tenant. `assertConnectedIpSafe()` now takes an
   allowance (the addresses this fetch's pre-connect layer already vetted), not
   a bypass.
-
-### Fixed — git deploy could still reach arbitrary exec, and could be wedged
-
-- Only `core.hooksPath` was neutered, but `git pull`/`fetch` also execute
-  commands from the repo's own `.git/config` via `core.fsmonitor` and
-  `core.sshCommand` — an extensionless file any `write`-scoped token could
-  write. Every git invocation is now prefixed with `-c core.fsmonitor=false -c
-  core.sshCommand=ssh -c protocol.ext.allow=never -c protocol.file.allow=never`,
-  unconditionally: the `git_deploy_hooks` claim opts into hooks, not into
-  arbitrary config-driven exec.
-- The deploy lock read its PID from an attacker-writable file and passed it
-  straight to `kill -0`, where `-1` means "every process you may signal" and so
-  read as held forever. The PID is cleared unless it is digits-only.
 
 ### Fixed — two ways to read bytes a token was not entitled to
 
@@ -1488,11 +1456,11 @@ by hand against running code, all 16 now closed.
 ### Fixed — CodeMirror was loaded from a CDN with no SRI
 
 - ~25 `<script>` tags from cdnjs executed in the origin that holds the main
-  JWT. CodeMirror 5.65.16 is now vendored at `assets/vendor/codemirror/`, the
-  way xterm already was. fm.js derives its asset base from its own
+  JWT. CodeMirror 5.65.16 is now vendored at `assets/vendor/codemirror/`.
+  fm.js derives its asset base from its own
   `document.currentScript.src` rather than a page-relative `../assets`, both
   proxy adapters' asset routes now reach `assets/vendor/**`, and the WordPress
-  plugin build bundles the directory — without which the terminal and code
+  plugin build bundles the directory — without which the code
   editor silently fell back in every WordPress install.
 
 ### Fixed — framing and `postMessage` targeting
@@ -1506,13 +1474,10 @@ by hand against running code, all 16 now closed.
   `FLUXFILES_FRAME_ANCESTORS` or else `'self'` plus
   `FLUXFILES_ALLOWED_ORIGINS`.
 
-### Fixed — SSH multiplex state and media endpoints
+### Fixed — served `/storage/` and media endpoints
 
-- `SshMultiplexer::runtimeDir()` defaulted to `packages/core/storage/ssh-sockets`,
-  inside the served root in both shipped configs — disclosing an `index.json`
-  of disks and SSH hosts, and briefly holding ephemeral BYOB private keys. It
-  now defaults to `sys_get_temp_dir()`, and `docker/nginx.conf` plus
-  `router.php` deny `/storage/` (leaving `/storage/uploads/` served).
+- `docker/nginx.conf` and `router.php` now deny `/storage/` (leaving
+  `/storage/uploads/` served).
 - `/img` and `/stream` dispatched before the rate limiter, with no ceiling on
   cache writes into a `_variants/` the tenant cannot see or purge. Both now run
   a per-`sub` bucket — `FLUXFILES_IMG_RATE_LIMIT` (120/min) and
@@ -1616,9 +1581,8 @@ or published to npm, so no installed adapter actually had them.
   404'd — a visibly dead control in both Laravel and WordPress embeds. Verified
   live against the real WordPress plugin before fixing.
 - `GET`/`POST /api/fm/chmod` had the same gap, latent until an SFTP disk is in
-  play. Both proxies already register BYOB disks (which may be `sftp`) and
-  already proxy `/terminal` and `/git-deploy`, which are themselves SFTP-only —
-  chmod is the same class of route and was simply never ported.
+  play. Both proxies already register BYOB disks (which may be `sftp`), so
+  chmod was reachable in principle and was simply never ported.
 - Both are now proxied: `FluxFilesApi::handleZip()`/`handleGetChmod()`/
   `handleSetChmod()` (WordPress) and `FluxFilesController::zip()`/`getChmod()`/
   `setChmod()` plus three routes in `routes/fluxfiles.php` (Laravel). The zip
@@ -1630,7 +1594,7 @@ or published to npm, so no installed adapter actually had them.
   dispatches a webhook like every other proxied write.
 - Both smoke suites had these on their `$intentionallyUnproxied` allowlist with
   rationales that had gone stale: chmod's ("the proxy doesn't expose SFTP") is
-  contradicted by the proxied SFTP-only `/terminal` + `/git-deploy`, and zip's
+  contradicted by the proxies' own BYOB `sftp` disk registration, and zip's
   ("REST handlers don't do raw streaming") by `handleStream()`/`handleImg()`/
   `handleAuditExport()`. Both entries are removed, so the existing route-parity
   guard now enforces the fix. `sso/*` and `metadata/export|import` stay
@@ -1872,10 +1836,10 @@ No new JWT claims — `docs/reference/CONFIG.md` is unaffected.
 ## [0.3.06] — 2026-09-06
 
 > Released: `core-v0.2.82`, `laravel-v0.2.39`, `wordpress-v0.2.46`,
-> `node-v0.1.27`. This core tag also carries the five entries below
-> (`0.3.01`–`0.3.05`), none of which shipped their own separate tag —
+> `node-v0.1.27`. This core tag also carries the four entries below
+> (`0.3.01`, `0.3.03`–`0.3.05`), none of which shipped their own separate tag —
 > nothing was released between `core-v0.2.81` and this tag. The adapter
-> tags also carry their portions of `0.3.03` (five-gaps fix) and `0.3.05`
+> tags also carry their portions of `0.3.03` (four-gaps fix) and `0.3.05`
 > (studio/enterprise preset).
 
 ### Added — DLP/PII redaction, Legal Hold, and a free Compliance Readiness Scorecard
@@ -1893,8 +1857,7 @@ Three features from the same design pass (`docs/design/DLP-PII-REDACTION-DESIGN.
   `POST/GET /api/fm/hold`, `/hold/release`, `/hold/list`, `/hold/status`.
   Enforcement itself (`FileManager::assertNoActiveHold()`) needs no
   claim/license check and is unconditional on delete/trash/rename/move/
-  crossMove — only the management endpoints are module-gated, the same
-  PTY-vs-command-runner split already used for the SSH terminal.
+  crossMove — only the management endpoints are module-gated.
   `holdCovering()` (exact+descendant match) is used for the status/list
   read path; `holdBlocking()` is bidirectional — a hold on a descendant
   also blocks mutating its ancestor folder — and is what enforcement
@@ -1948,7 +1911,7 @@ security review.)
 > WordPress also carry their portion of this fix (chunk-complete and
 > optimize-claim parity).
 
-### Fixed — Five security/correctness gaps found in review
+### Fixed — Four security/correctness gaps found in review
 
 - **BYOB SSRF**: an S3 disk endpoint host that failed to resolve at decode
   time used to be let through unpinned (a DNS-rebinding TOCTOU window);
@@ -1959,10 +1922,6 @@ security review.)
   since parts are PUT straight to S3 with no size condition; a violation
   now deletes the object instead of leaving it stored. Laravel/WordPress
   proxy controllers mirror this.
-- **Git deploy**: lock staleness is now liveness-checked (`kill -0` on the
-  recorded PID) before falling back to the mtime heuristic, so a
-  still-running slow deploy can't have its lock stolen by a concurrent
-  trigger.
 - **Metadata sidecar**: `*.meta.json` is now a reserved, write-blocked
   filename shape (`FileManager::assertNotSystem`), closing an
   ownership-hijack path where a forged legacy sidecar was trusted on read.
@@ -1971,27 +1930,6 @@ security review.)
 - **fm.js**: `postMessage` sender identity (`e.source === window.parent`) is
   now validated before the origin-lock check, so a same-page sibling can't
   win the `FM_CONFIG` handshake race.
-
-## [0.3.02] — 2026-09-04
-
-> Released: `core-v0.2.82` — same core tag as `0.3.06` above.
-
-### Added — SSH ControlMaster connection reuse for the terminal
-
-`/api/fm/terminal` reuses an OpenSSH ControlMaster session across commands on
-eligible SFTP disks instead of reconnecting via phpseclib per command, per
-`docs/security/SFTP-CONTROLMASTER-SPEC.md` (the mitigation plan for the 7 findings in
-`docs/security/SFTP-CONTROLMASTER-SECURITY-REVIEW.md`). `SshMultiplexer` shells to the
-real `ssh` binary via `proc_open` (array argv, no shell) for cold-connect and
-reuse, with a credential-hash cache key, a `0700` hash-named socket dir, a
-clamped `ControlPersist` + LRU-capped socket count, and `known_hosts`
-materialized via TOFU or piggybacked off an already-verified phpseclib
-host-key check. Eligibility is key-based-auth only — password/passphrase
-disks always fall back to phpseclib — and scoped to `SshTerminal` only, never
-`GitDeploy` or the Flysystem SFTP adapter used for browsing/upload/download.
-`FLUXFILES_SSH_MULTIPLEX_DISABLED` is a server kill-switch. Unit-tested pure
-logic (cache-key collisions, socket hygiene, LRU eviction, algorithm-list
-sync); the live-SSH integration test is env-gated and skips cleanly in CI.
 
 ## [0.3.01] — 2026-09-03
 
@@ -2244,7 +2182,7 @@ Share/Intake.
 - **Fixed alongside**: Laravel and WordPress forwarded
   `allow_versioning`/`versioning_max`/`versioning_max_mb` unconditionally,
   but `/api/fm/versions*` isn't proxied by either adapter — the same class of
-  bug already fixed for `allow_terminal`/`allow_share`/`allow_intake`.
+  bug already fixed for `allow_share`/`allow_intake`.
   Laravel now mode-gates the claim behind `standalone` mode; WordPress drops
   it entirely.
 
@@ -2726,8 +2664,8 @@ gets a `501` and the panel is an empty shell — core supplies only the chrome.
   (top-level `/public/`, i.e. the Docker evaluation) **and** `pro_hints` is on → a small
   Pro affordance that issues no API calls.
 
-This departs from the optimize/terminal precedent (claim-gated, invisible when off) on
-purpose: those are capability toggles whose absence is meant to be invisible, whereas
+This departs from the optimize precedent (claim-gated, invisible when off) on
+purpose: that is a capability toggle whose absence is meant to be invisible, whereas
 Share/Intake *is* the SKU and an unlicensed server has no paying operator to embarrass.
 The departure is bounded to the unlicensed, unframed case. The order short-circuits, so
 the only context paying an extra `GET /api/fm/license` is that evaluation case.
@@ -2911,9 +2849,8 @@ the index.
   `allow_share`/`allow_intake` unconditionally even though none of those endpoints are
   proxied, so a Laravel/WordPress host would render controls for routes that 404. Laravel
   now forwards them (and `share_url_ttl`/`share_base_url`/`share_preview`/
-  `intake_base_url`) only in `standalone` mode, mirroring the rule `allow_terminal` has
-  followed since it shipped; WordPress drops them entirely. This also covers the
-  `edition: pro|agency|enterprise` presets, which seed those claims straight into the
+  `intake_base_url`) only in `standalone` mode; WordPress drops them entirely. This also
+  covers the `edition: pro|agency|enterprise` presets, which seed those claims straight into the
   payload and would otherwise have slipped past the gate.
 
 ### Added
@@ -3042,9 +2979,6 @@ the index.
 
 - `.claude/CLAUDE.md` + `AGENTS.md` listed the PDF/office/e-sign BYO-embeds as *planned*;
   all four (`terminal_pty_url`, `pdf_tools_url`, `office_url`, `esign_url`) have shipped.
-- The WordPress plugin now records *why* the SSH terminal claims are not forwarded
-  (proxy-only, no `/api/fm/terminal` endpoint), matching the existing note on the overlay
-  watermark — the remaining forwarding gaps are all deliberate and now all explained.
 
 ## [0.2.76] — 2026-07-05
 
@@ -3153,7 +3087,7 @@ the index.
   "try it live" instance that a marketing site embeds by iframe and lets anonymous
   visitors upload for real. `/public/` mints a hardened per-visitor token — its own
   `demo/<id>/` sandbox on local, images only, small size/quota/file caps, owner-only,
-  rate-limited, dangerous claims (terminal/import/byob) off — and injects it as
+  rate-limited, dangerous claims (import/byob) off — and injects it as
   `window.__FM_BOOT__`, so the token never reaches the embedding page. Old sandboxes
   auto-purge after `FLUXFILES_DEMO_TTL_HOURS`. (`DemoMode`, off by default.)
 - **`window.__FM_BOOT__` server-injected boot config.** The UI can boot from a
@@ -3339,12 +3273,6 @@ the index.
   (matching same-disk `copy`) and a clean `404 not_found` for a missing source —
   closing a path where they could overwrite another user's file across disks.
 
-### Docs
-
-- README: clarified the SSH terminal is a **real shell not confined to the SFTP
-  `root`** (use a least-privilege SSH account), and why the dangerous-command list is
-  a small accident-guard, not a security filter.
-
 ## [0.2.60] — 2026-06-28
 
 > Released: core `core-v0.2.52`; adapters react `0.2.8`, vue `0.2.7`, sdk `0.2.6`,
@@ -3387,7 +3315,7 @@ the index.
 
 - **Free PTY terminal toggle.** The `terminal_pty_url` claim makes the UI embed a
   self-hosted PTY server (ttyd / gotty / wetty, on the operator's own box) for a true
-  interactive terminal; empty (default) → the stateless command-runner. Free/core, no
+  interactive terminal; empty (default) → no terminal entry. Free/core, no
   custom sidecar — only `http(s)` URLs accepted. Forwarded by embed + laravel
   (standalone) + node SDK.
 
@@ -3434,14 +3362,6 @@ the index.
 
 ### Fixed
 
-- **SSH terminal: "directory not found on every command" + slowness.** The client
-  tracks cwd relative to the disk root, but the route ran `cd <relative>` from the
-  SSH login home (`/root`), not the SFTP root — so opening the terminal inside a
-  subfolder broke every command. New `SshTerminal::resolveCwd()` anchors a relative
-  cwd under the SFTP root. Also dropped the per-command shell-availability probe (a
-  second SSH round-trip on every command) — `run()` now reports `shell_ok` from its
-  cwd marker, halving the exec round-trips. (Remaining latency is the per-request
-  SSH reconnect, inherent to the stateless model.)
 - **Watermark: the two modes can no longer collide on one image.** With a preview-
   only **overlay** token the Crop and Watermark **editor tabs were still shown but
   their canvas used the (withheld) clean `url`** → a broken image; and burning in
@@ -3460,20 +3380,11 @@ the index.
 > Released: Laravel `fluxfiles/laravel` `laravel-v0.2.25`, Node `@fluxfiles/node`
 > `node-v0.1.17`. Core + WordPress unchanged.
 
-### Added
-
-- **`allow_terminal` is now forwardable by the standalone-targeting adapters.**
-  The SSH terminal is core-standalone (`/api/fm/terminal` isn't proxied), so the
-  claim was only mintable via `embed.php`. Now the **Laravel adapter (standalone
-  mode)** and **`@fluxfiles/node`** forward it too (Laravel proxy mode + WordPress
-  still drop it — the endpoint 404s there), making terminal support consistent
-  with the overlay watermark.
-
 ### Docs
 
-- **README spells out adapter support for watermark and terminal.** Burn-in
+- **README spells out adapter support for watermark.** Burn-in
   watermark works on **every** adapter (proxied `POST /api/fm/watermark`); the
-  overlay watermark and the SSH terminal are core-standalone and forwarded only by
+  overlay watermark is core-standalone and forwarded only by
   `embed.php` / `@fluxfiles/node` / Laravel `standalone` mode (not WordPress or
   Laravel proxy).
 
@@ -3546,32 +3457,7 @@ the index.
 ## [0.2.51] — 2026-06-27
 
 > Released: core `core-v0.2.46` (Packagist + Docker).
-> (Adapters unchanged — terminal is core-standalone, like stream/img; adapter
-> core floor stays `^0.2.39`.)
-
-### Added
-
-- **SSH terminal for SFTP disks (opt-in).** A built-in terminal (xterm.js) on an
-  SFTP disk: `POST /api/fm/terminal` runs one command per request over the
-  existing SSH connection (phpseclib `exec`), threading the working directory
-  back so `cd`/`pwd` persist. It's a stateless command-runner — great for
-  `git pull` / `composer install` / `chmod -R` / `tar`, but not a PTY (no
-  vim/top/nano, no mid-command stdin). UI uses the FluxFiles palette (dark slate
-  + brand purple). xterm.js is **vendored** in `assets/vendor/xterm/` (no CDN) so
-  it works offline / when a CDN is blocked. Security model:
-  - `allow_terminal` claim, **default OFF** — must be opted in deliberately.
-  - SFTP disks only, requires the `write` permission, audited per command.
-  - Server kill-switch `FLUXFILES_TERMINAL_DISABLED=true`; per-command timeout
-    `FLUXFILES_TERMINAL_TIMEOUT` (default 30s); output capped at 2 MB.
-  - Catastrophic-command guardrail (`rm -rf /`, `mkfs`, fork bomb, `chmod -R 777
-    /`, …) → a two-step confirm in the UI. Opt out with
-    `FLUXFILES_TERMINAL_CONFIRM=false`. This is an ACCIDENT guard, not a sandbox —
-    the real boundary is the SSH user's OS permissions (use a least-privilege user).
-  - **Shared hosting without a shell** (`internal-sftp`/`ForceCommand`) is detected
-    (an `echo` probe) and shown a clear "this host doesn't allow a terminal (SFTP
-    only)" message; the feature degrades instead of hanging.
-- i18n: `terminal.*` UI strings + `error.terminal_*` + `audit.action.terminal`
-  across all 16 locales.
+> (Adapters unchanged; adapter core floor stays `^0.2.39`.)
 
 ### Changed
 
@@ -3613,7 +3499,7 @@ the index.
   and the real cause is unwrapped from the Flysystem wrapper (e.g. "Unable to
   authenticate using a password" instead of a generic listing error). Note: FluxFiles
   uses only the SFTP **subsystem** (file transfer) — it never opens a shell, so an
-  SFTP-only account with no terminal access works fine.
+  SFTP-only account with no shell access works fine.
 - **Audit log: no more "unknown" actions, and actions are localised.** Write routes
   for watermark, optimize, extract, chmod and content-edit weren't in the audit
   action map, so they logged as `unknown`. They're mapped now, and the activity
