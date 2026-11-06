@@ -161,7 +161,12 @@ test('copy within a disk keeps hash/mime/size on the copy (source untouched)', f
     $fm->copy('local', 'a.txt', 'sub/a.txt');
     $idx = index($root);
     assertEq($before, $idx['a.txt'], 'source entry unchanged');
-    assertEq($before, $idx['sub/a.txt'], 'copy entry equals source entry');
+    // A copy is a new file: its timestamps are "now", which may be a second later
+    // than the source's. Everything else must carry over.
+    $copy = $idx['sub/a.txt'];
+    assertTrue($copy['created'] >= $before['created'] && $copy['modified'] >= $before['modified'], 'copy timestamps not older');
+    unset($before['created'], $before['modified'], $copy['created'], $copy['modified']);
+    assertEq($before, $copy, 'copy entry equals source entry (apart from timestamps)');
     rmrf($root); rmrf($root . '-other');
 });
 
