@@ -9,6 +9,15 @@
     var __ = i18n.__;
     var cfg = window.FluxFilesBlockCfg || {};
 
+    // Block / placeholder icon: the FluxFiles logo's square folder with an "F", as a
+    // monochrome line icon, the same glyph as the editor adapters' toolbar buttons. currentColor follows the
+    // inserter and placeholder colours.
+    var stroke = { stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+    var fluxIcon = el('svg', { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', width: 24, height: 24, fill: 'none', 'aria-hidden': true, focusable: false },
+        el('path', Object.assign({ d: 'M3 5a2 2 0 012-2h5l2 2h7a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5z' }, stroke)),
+        el('path', Object.assign({ d: 'M10 16.5v-7h4.5M10 13h3.5' }, stroke))
+    );
+
     // A single shared modal container appended to <body> for the FluxFiles picker.
     function ensureModal() {
         var m = document.getElementById('fluxfiles-block-modal');
@@ -97,7 +106,7 @@
         apiVersion: 2,
         title: __('FluxFiles Image', 'fluxfiles'),
         description: __('Insert an image from FluxFiles, served from your bucket.', 'fluxfiles'),
-        icon: 'format-image',
+        icon: fluxIcon,
         category: 'media',
         attributes: {
             url: { type: 'string', default: '' },
@@ -139,7 +148,7 @@
                     blockProps,
                     el(
                         components.Placeholder,
-                        { icon: 'format-image', label: __('FluxFiles Image', 'fluxfiles'),
+                        { icon: fluxIcon, label: __('FluxFiles Image', 'fluxfiles'),
                           instructions: __('Pick an image from your FluxFiles storage.', 'fluxfiles') },
                         el(components.Button, { variant: 'primary', onClick: function () { openPicker(onPick); } },
                            __('Choose from FluxFiles', 'fluxfiles'))
