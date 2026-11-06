@@ -74,6 +74,7 @@ require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesPlugin.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesAdmin.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/WpDbMetadataHandler.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/WpRateLimiterStorage.php';
+require_once FLUXFILES_PLUGIN_DIR . 'includes/WpHttpTransport.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesMediaEndpoint.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesApi.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesShortcode.php';

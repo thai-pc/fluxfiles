@@ -27,6 +27,9 @@ function assertEqual($e, $a, string $m = ''): void { if ($e !== $a) throw new \R
 $GLOBALS['WP_OPTIONS'] = [
     'fluxfiles_secret' => 'wp-smoke-secret-key-0123456789abcdef',   // ≥32 bytes for jwt v7
 ];
+if (!defined('WP_DEBUG')) {
+    define('WP_DEBUG', true);   // FluxFilesPlugin::debugLog() only writes under WP_DEBUG
+}
 if (!defined('ABSPATH')) {
     define('ABSPATH', sys_get_temp_dir() . '/');   // plugin file guards with `defined('ABSPATH') || exit`
 }
@@ -664,7 +667,9 @@ if (!class_exists('WP_Error')) {
     // Enough of WP_Error for the REST-auth filter and the updater to inspect codes.
     class WP_Error {
         private array $codes = [];
-        public function __construct($code = '', $message = '', $data = '') { if ($code !== '') { $this->codes[] = (string) $code; } }
+        private string $message;
+        public function __construct($code = '', $message = '', $data = '') { $this->message = (string) $message; if ($code !== '') { $this->codes[] = (string) $code; } }
+        public function get_error_message(): string { return $this->message; }
         public function get_error_codes(): array { return $this->codes; }
         public function get_error_code() { return $this->codes[0] ?? ''; }
     }
@@ -1043,17 +1048,126 @@ test('public routes delegate to the module dispatcher rather than reimplementing
         'the option-aware licence is passed and the context is host-injected');
 });
 
-test('the recipient page shim only serves the two known pages, through the module gate', function () {
-    $src = (string) file_get_contents(__DIR__ . '/../public-link.php');
-    assertTrue(strpos($src, "\$pages = ['share' => true, 'intake' => true]") !== false,
-        'whitelist, not a sanitiser');
-    assertTrue(strpos($src, 'file_get_contents') === false, 'no longer reads core\'s HTML from disk');
-    assertTrue(strpos($src, 'FluxFilesPlugin::servePublicPage($which, $apiBase)') !== false, 'uses the shared page helper');
-    $plug = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
-    assertTrue(strpos($plug, 'ModuleRegistry::requireServer($which, self::license())') !== false, 'gated on install + option-aware licence');
-    assertTrue(strpos($plug, 'PublicRoutes::page($which, $apiBase)') !== false, 'the page comes from the module via PublicRoutes');
-    assertTrue(strpos($plug, "header('Referrer-Policy: no-referrer')") !== false,
-        'the URL carries the token, so it must not leak in a Referer');
+test('public-link.php is a WordPress-free redirect shim to the REST page route', function () {
+    $file = __DIR__ . '/../public-link.php';
+    $src = (string) file_get_contents($file);
+    assertTrue(preg_match('/\b(require|include)(_once)?\b|wp-load|wp_|FluxFilesPlugin/', preg_replace('#^\s*//.*$#m', '', $src)) !== 1,
+        'no require/include/wp-load/WordPress call outside comments');
+    assertTrue(strpos($src, 'TODO(phase 8)') !== false, 'carries its removal TODO');
+    // header() is a no-op under the CLI SAPI, so run the shim under php-cgi (which prints
+    // the headers) with a fake SCRIPT_NAME; skipped where php-cgi is not installed.
+    $cgi = trim((string) @shell_exec('command -v php-cgi 2>/dev/null'));
+    if ($cgi === '') {
+        echo "    (php-cgi not installed: redirect targets not executed)\n";
+        return;
+    }
+    $run = static function (string $script, array $get) use ($file, $cgi): array {
+        $wrapper = tempnam(sys_get_temp_dir(), 'ffpl') . '.php';
+        file_put_contents($wrapper, '<?php $_GET = json_decode(getenv("FX_GET"), true); $_SERVER["SCRIPT_NAME"] = getenv("FX_SCRIPT"); require ' . var_export($file, true) . ';');
+        $p = proc_open([$cgi], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null,
+            ['REQUEST_METHOD' => 'GET', 'REDIRECT_STATUS' => '1', 'SCRIPT_FILENAME' => $wrapper, 'FX_GET' => json_encode($get), 'FX_SCRIPT' => $script, 'PATH' => (string) getenv('PATH')]);
+        $out = stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+        proc_close($p);
+        @unlink($wrapper);
+        [$head] = explode("\r\n\r\n", $out, 2) + [''];
+        $lines = array_values(array_filter(explode("\r\n", $head)));
+        $code = 200;
+        foreach ($lines as $l) {
+            if (stripos($l, 'Status:') === 0) { $code = (int) trim(substr($l, 7)); }
+            if (stripos($l, 'Location:') === 0 && $code === 200) { $code = 302; }
+        }
+        return [$code, $lines];
+    };
+    $loc = static fn (array $h) => array_values(array_filter($h, static fn ($x) => stripos($x, 'Location:') === 0))[0] ?? '';
+    $root = '/wp-content/plugins/fluxfiles/public-link.php';
+
+    [$code, $h] = $run($root, ['page' => 'share', 'token' => 'a.b c/d+e&f']);
+    assertEqual(302, $code, 'root install: 302');
+    assertEqual('Location: /?rest_route=/fluxfiles/v1/api/fm/share/page&token=a.b%20c%2Fd%2Be%26f', $loc($h), 'root install target, token encoded');
+    assertTrue(in_array('Referrer-Policy: no-referrer', $h, true) && in_array('Cache-Control: no-store', $h, true), 'no-referrer + no-store');
+
+    [, $h] = $run('/blog/wp-content/plugins/fluxfiles/public-link.php', ['page' => 'intake', 'token' => 't', 'blog' => '12']);
+    assertEqual('Location: /blog/?rest_route=/fluxfiles/v1/api/fm/intake/page&token=t&blog=12', $loc($h), 'subdirectory install + blog pass-through');
+
+    [, $h] = $run($root, ['page' => 'share', 'token' => 't', 'blog' => '1;evil']);
+    assertTrue(strpos($loc($h), 'blog') === false, 'a non-numeric blog is dropped');
+    [, $h] = $run($root, ['page' => 'share', 'token' => ['x'], 'blog' => ['1']]);
+    assertTrue(strpos($loc($h), 'token') === false && strpos($loc($h), 'blog') === false, 'array params are dropped');
+
+    foreach ([['page' => 'evil'], ['page' => '../share'], [], ['page' => ['share']]] as $get) {
+        [$code, $h] = $run($root, $get);
+        assertEqual(404, $code, 'bad page -> 404: ' . json_encode($get));
+        assertEqual('', $loc($h), 'no redirect on a bad page');
+    }
+});
+
+test('WpHttpTransport maps core requests onto wp_remote_request and never throws', function () {
+    require_once __DIR__ . '/../includes/WpHttpTransport.php';
+    $GLOBALS['WP_REMOTE'] = null;
+    $GLOBALS['WP_REMOTE_CALL'] = null;
+    if (!function_exists('wp_remote_request')) {
+        function wp_remote_request($url, $args = []) {
+            $GLOBALS['WP_REMOTE_CALL'] = [$url, $args];
+            $r = $GLOBALS['WP_REMOTE'];
+            if ($r instanceof Throwable) { throw $r; }
+            return $r;
+        }
+    }
+    if (!function_exists('is_wp_error')) { function is_wp_error($v) { return $v instanceof WP_Error; } }
+    if (!function_exists('wp_remote_retrieve_headers')) { function wp_remote_retrieve_headers($r) { return $r['headers'] ?? []; } }
+    if (!function_exists('wp_remote_retrieve_response_code')) { function wp_remote_retrieve_response_code($r) { return $r['response']['code'] ?? ''; } }
+    if (!function_exists('wp_remote_retrieve_body')) { function wp_remote_retrieve_body($r) { return $r['body'] ?? ''; } }
+
+    $t = new WpHttpTransport();
+    assertTrue($t instanceof \FluxFiles\HttpTransportInterface, 'implements core\'s interface');
+
+    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 201], 'body' => 'ok', 'headers' => ['Content-Type' => 'text/x', 'X-Multi' => ['a', 'b']]];
+    $r = $t->request('post', 'https://example.test/x', ['Authorization: Bearer k', 'Content-Type' => 'application/json'], '{}', 7);
+    [$url, $args] = $GLOBALS['WP_REMOTE_CALL'];
+    assertEqual('https://example.test/x', $url, 'url passed through');
+    assertTrue($args['redirection'] === 0, 'redirects are never followed');
+    assertEqual('POST', $args['method'], 'method upper-cased');
+    assertEqual(7, $args['timeout'], 'timeout');
+    assertEqual('{}', $args['body'], 'body');
+    assertEqual(['Authorization' => 'Bearer k', 'Content-Type' => 'application/json'], $args['headers'], 'both header shapes accepted');
+    assertEqual(201, $r['status'], 'status');
+    assertEqual('ok', $r['body'], 'body returned');
+    assertEqual(['content-type' => 'text/x', 'x-multi' => 'a, b'], $r['headers'], 'response headers lower-cased');
+
+    $GLOBALS['WP_REMOTE'] = new WP_Error('http_request_failed', 'cURL error 28');
+    $r = $t->request('GET', 'https://example.test/x');
+    assertEqual(0, $r['status'], 'WP_Error -> status 0');
+    assertEqual('', $r['body'], 'empty body');
+    assertTrue(strpos((string) ($r['error'] ?? ''), 'cURL error 28') !== false, 'error message carried');
+    assertTrue(!array_key_exists('body', $GLOBALS['WP_REMOTE_CALL'][1]), 'no body key without a body');
+
+    $GLOBALS['WP_REMOTE'] = new RuntimeException('boom');
+    $r = $t->request('GET', 'https://example.test/x');
+    assertEqual(0, $r['status'], 'a throwing HTTP API is contained');
+});
+
+test('debugLog is silent without WP_DEBUG and writes with it', function () {
+    $run = static function (string $define): string {
+        $f = tempnam(sys_get_temp_dir(), 'ffdl') . '.php';
+        $log = $f . '.log';
+        file_put_contents($f, '<?php define("ABSPATH", "/"); ' . $define . ' ini_set("error_log", $argv[2]); ini_set("log_errors", "1");'
+            . 'require $argv[1]; FluxFilesPlugin::debugLog("fx-debug-marker");');
+        $p = proc_open([PHP_BINARY, $f, __DIR__ . '/../includes/FluxFilesPlugin.php', $log], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+        proc_close($p);
+        $out = (string) @file_get_contents($log);
+        @unlink($f);
+        @unlink($log);
+        return $out;
+    };
+    assertTrue(strpos($run(''), 'fx-debug-marker') === false, 'silent without WP_DEBUG');
+    assertTrue(strpos($run('define("WP_DEBUG", false);'), 'fx-debug-marker') === false, 'silent with WP_DEBUG false');
+    assertTrue(strpos($run('define("WP_DEBUG", true);'), 'fx-debug-marker') !== false, 'logs with WP_DEBUG');
+    $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php')
+        . (string) file_get_contents(__DIR__ . '/../includes/WpRateLimiterStorage.php');
+    assertTrue(strpos($api, 'error_log(') === false, 'no raw error_log in the API / limiter');
 });
 
 test('REST share/page + intake/page are registered as public routes', function () {
@@ -1114,6 +1228,7 @@ if (!class_exists('WP_REST_Response')) {
 
 require_once __DIR__ . '/../includes/FluxFilesDbSchema.php';
 require_once __DIR__ . '/../includes/WpRateLimiterStorage.php';
+require_once __DIR__ . '/../includes/WpHttpTransport.php';
 require_once __DIR__ . '/../includes/FluxFilesMediaEndpoint.php';
 require_once __DIR__ . '/../includes/FluxFilesApi.php';
 
@@ -2505,7 +2620,7 @@ CHILD;
     }
 });
 
-test('public recipient page: REST page routes + public-link.php inject the WP REST base, with the gate and headers', function () {
+test('public recipient page: the REST page routes inject the WP REST base, with the gate and headers', function () {
     // PublicRoutes::dispatch() hard-codes `/api/fm` for pages (right for standalone), so a
     // page served through it would call the wrong API under /wp-json/. Run both entry
     // points (REST route, public-link.php) in a child with a fake page module and a fake
@@ -2576,14 +2691,6 @@ if ($entry === 'rest') {
     $_GET = ['token' => 'x'] + ($blog !== '' ? ['blog' => $blog] : []);
     $m = new ReflectionMethod('FluxFilesApi', 'publicLink');
     $m->invoke(new FluxFilesApi(), 'share', new WP_REST_Request($method, '/fluxfiles/v1/api/fm/share/page'));
-} else {
-    // public-link.php finds wp-load.php above itself: stage it in a fake tree.
-    $dir = $tree . '/wp-content/plugins/fluxfiles';
-    mkdir($dir, 0777, true);
-    copy($wpDir . '/public-link.php', $dir . '/public-link.php');
-    file_put_contents($tree . '/wp-load.php', '<?php');
-    $_GET = ['page' => 'share', 'token' => 'x'] + ($blog !== '' ? ['blog' => $blog] : []);
-    require $dir . '/public-link.php';
 }
 CHILD;
     $file = tempnam(sys_get_temp_dir(), 'ffwppage') . '.php';
@@ -2610,7 +2717,7 @@ CHILD;
     $csp = array_values(array_filter(FluxFilesApi::uiHtmlHeaders('en'), static fn ($h) => stripos($h, 'Content-Security-Policy:') === 0));
     assertTrue(count($csp) === 1 && strpos($csp[0], "frame-ancestors 'self'") !== false, 'the UI policy yields a frame-ancestors CSP');
     try {
-        foreach (['rest', 'shim'] as $entry) {
+        foreach (['rest'] as $entry) {
             $out = $run($entry, '0', $good, '1');
             assertTrue(strpos($out, '<meta name="fm-api-base" content="' . $base . '">') !== false, "{$entry}: page carries the WP REST api base: " . substr($out, 0, 300));
             assertTrue(strpos($out, 'content="/api/fm"') === false, "{$entry}: not the standalone base");
@@ -2631,16 +2738,6 @@ CHILD;
         $out = $run('rest', '0', $good, '1', '', 'POST');
         assertTrue(strpos($out, 'STATUS=404') !== false && strpos($out, 'fm-api-base') === false, 'POST is not a page');
 
-        // Multisite: the link's blog (2) is licensed, the booted main blog (1) is not.
-        $out = $run('shim', '1', $good, '2', '2');
-        assertTrue(strpos($out, 'STATUS=200') !== false, 'multisite: the sub-site licence applies, not the main blog\'s: ' . substr($out, 0, 300));
-        assertTrue(strpos($out, 'content="http://wp.test/two/wp-json/fluxfiles/v1/api/fm"') !== false, 'multisite: the sub-site REST base is injected');
-        // And the reverse: main licensed, sub-site not -> refused, even though the booted blog would pass.
-        $out = $run('shim', '1', $good, '1', '2');
-        assertTrue(strpos($out, 'STATUS=402') !== false, 'multisite: an unlicensed sub-site is refused');
-        // A forged blog id still 404s before any gate.
-        $out = $run('shim', '1', $good, '1,2', '99');
-        assertTrue(strpos($out, 'STATUS=404') !== false, 'multisite: unknown blog id -> 404');
         // The REST page route resolves the hint itself: another blog -> 302 (no page served),
         // a bad blog -> 404 envelope, the booted blog or no hint -> the page.
         $out = $run('rest', '1', $good, '1,2', '2');
