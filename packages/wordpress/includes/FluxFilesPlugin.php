@@ -104,7 +104,32 @@ class FluxFilesPlugin
      */
     public static function storagePath(): string
     {
-        return WP_CONTENT_DIR . '/fluxfiles';
+        $base = WP_CONTENT_DIR . '/fluxfiles';
+        $site = self::multisiteSegment();
+        return $site === '' ? $base : $base . '/' . $site;
+    }
+
+    /**
+     * `sites/<blog_id>` on a multisite network, '' on a single site. Every blog
+     * gets its OWN storage root (uploads, `_fluxfiles/` index/audit/trash, rate
+     * limits): the token `prefix` is empty by default, so a shared root would let
+     * any sub-site user address every other site's files. Blog 1 is included on
+     * purpose — its root must not be the parent of `sites/2`.
+     */
+    private static function multisiteSegment(): string
+    {
+        if (!function_exists('is_multisite') || !is_multisite()) {
+            return '';
+        }
+        $id = function_exists('get_current_blog_id') ? (int) get_current_blog_id() : 1;
+        return 'sites/' . max(1, $id);
+    }
+
+    /** `fluxfiles[/sites/<id>]/uploads`, relative to the content URL/dir. */
+    public static function uploadsRelPath(): string
+    {
+        $site = self::multisiteSegment();
+        return 'fluxfiles/' . ($site === '' ? '' : $site . '/') . 'uploads';
     }
 
     /** Bump when the generated rules change, so existing installs get rewritten. */
@@ -443,7 +468,7 @@ HTACCESS;
             'local' => [
                 'driver' => 'local',
                 'root'   => $storagePath . '/uploads',
-                'url'    => content_url('fluxfiles/uploads'),
+                'url'    => content_url(self::uploadsRelPath()),
                 // true = files are NOT served from the public 'url' above; the UI's
                 // list() marks them gated and the embedded client fetches bytes via
                 // the signed `/api/fm/stream` route instead. Off by default (the WP

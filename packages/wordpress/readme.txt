@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1.0
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -121,6 +121,14 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 
 == Changelog ==
 
+= 1.0.3 =
+* Security: on a multisite network every site now has its own storage root, `wp-content/fluxfiles/sites/<blog_id>/`. Before, all sites shared one root with an empty token prefix, so a sub-site administrator or author could reach the other sites' files, index, audit log and trash. Single-site installs are unchanged.
+* Security: `chmod` on an SFTP disk now respects `owner_only` for folders and refuses the root folder; `owner_only` tokens no longer get `allow_chmod` by default.
+* Security: BYOB image URLs are no longer cacheable by shared caches; the SSRF guard also refuses documentation, benchmarking, multicast and reserved address ranges.
+* Security: the bundled UI pages in `public/` can no longer be opened directly (deny `.htaccess` + 403 `index.php`; on nginx add a `deny all` location for that folder).
+* `extract` returns the normalised destination folder instead of echoing the raw input.
+* Multisite upgrade, in order (details in the plugin README, "Upgrading to 1.0.3 on multisite"): (1) pick the blog id that owned the files, usually 1; (2) enable maintenance mode and back up `wp-content/fluxfiles/`; (3) delete the freshly generated `fluxfiles/sites/<id>/uploads/_fluxfiles` so the legacy index and audit log win; (4) run `rsync -a fluxfiles/uploads/ fluxfiles/sites/<id>/uploads/`, check that `rsync -ain --checksum fluxfiles/uploads/ fluxfiles/sites/<id>/uploads/` prints nothing, then `rm -rf fluxfiles/uploads`; (5) per site, run `wp search-replace '/wp-content/fluxfiles/uploads/' '/wp-content/fluxfiles/sites/<id>/uploads/' --url=<site-url>` with `--dry-run` first (no `--network`); (6) run `wp fluxfiles seed --url=<site-url>` and leave maintenance mode. Do not `mv` the whole folder: the new one already exists.
+
 = 1.0.2 =
 * The `onSelect` payload now includes `created` and `modified` (unix seconds), as documented.
 
@@ -154,6 +162,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.0.3 =
+Security release. Multisite: files now live in wp-content/fluxfiles/sites/<blog_id>/uploads/ and existing ones must be moved. Follow "Upgrading to 1.0.3 on multisite" in the plugin README (and the 1.0.3 changelog entry). Single sites: no action.
 
 = 1.0.2 =
 Adds `created`/`modified` to the file-select payload.

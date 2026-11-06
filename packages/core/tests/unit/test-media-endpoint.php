@@ -359,5 +359,46 @@ test('an unreachable BYOB server answers 502 without the connection error', func
     }
 });
 
+if ($hasGd) {
+    // serveBytes() read an undefined $scope, so a BYOB /img got the public+immutable
+    // header although its URL carries the encrypted disk config.
+    test('img: a BYOB token response is private, no-store; a normal one stays public+immutable', function () use ($SECRET, $allow, $sftpCfg, $root) {
+        // Swap the (unreachable) SFTP config for the local test dir once the blob
+        // has passed the real SSRF/decrypt checks, so the full serve path runs.
+        $byobDm = new class(['priv' => ['driver' => 'local', 'root' => $root . '/priv', 'private' => true]], $root . '/priv') extends DiskManager {
+            public function __construct(array $c, private string $dir) { parent::__construct($c); }
+            public function disk(string $name): \League\Flysystem\Filesystem
+            {
+                return $name === 'byobl'
+                    ? new \League\Flysystem\Filesystem(new \League\Flysystem\Local\LocalFilesystemAdapter($this->dir))
+                    : parent::disk($name);
+            }
+        };
+        \FluxFiles\SsrfGuard::$allowTestHosts[] = '127.0.0.1';
+        try {
+            $blob = \FluxFiles\CredentialEncryptor::encrypt($sftpCfg, $SECRET);
+            $tok = ImageToken::mint('byobl', 'pic.png', 'u1', 300, $SECRET, 2000, 0, null, true, $blob);
+            // Fresh width so the transform cache is cold for this one too.
+            $e = ep($byobDm, $SECRET, $allow);
+            $e->image(['token' => $tok, 'width' => 150], ['accept' => 'image/webp,*/*']);
+            assertEqual(200, $e->code, $e->body);
+            assertEqual('image/webp', $e->hdr('Content-Type'));
+            assertEqual('private, no-store', $e->hdr('Cache-Control'));
+
+            // Same request again hits the cached variant: still private.
+            $e = ep($byobDm, $SECRET, $allow);
+            $e->image(['token' => $tok, 'width' => 150], ['accept' => 'image/webp,*/*']);
+            assertEqual('private, no-store', $e->hdr('Cache-Control'));
+        } finally {
+            \FluxFiles\SsrfGuard::$allowTestHosts = [];
+        }
+
+        $dm2 = new DiskManager(['priv' => ['driver' => 'local', 'root' => $root . '/priv', 'private' => true]]);
+        $e = ep($dm2, $SECRET, $allow);
+        $e->image(it('priv', 'pic.png', $SECRET) + ['width' => 150], ['accept' => 'image/webp,*/*']);
+        assertEqual('public, max-age=31536000, immutable', $e->hdr('Cache-Control'));
+    });
+}
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

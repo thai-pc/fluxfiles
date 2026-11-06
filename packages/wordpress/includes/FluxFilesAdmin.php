@@ -439,9 +439,11 @@ class FluxFilesAdmin
         // Same rules as README.md "Storage protection (Apache / nginx)", rooted at
         // this site's actual content path.
         $root = '/' . trim((string) wp_parse_url(content_url('fluxfiles'), PHP_URL_PATH), '/') . '/';
-        $dir = $root . 'uploads/';
+        // Multisite keeps each site's uploads under sites/<blog_id>/uploads/.
+        $multisite = function_exists('is_multisite') && is_multisite();
+        $dir = $multisite ? $root . 'sites/[0-9]+/uploads/' : $root . 'uploads/';
         $snippet = "location ^~ {$root} {\n"
-            . "    location ^~ {$dir} {\n"
+            . '    location ' . ($multisite ? '~ ^' : '^~ ') . $dir . " {\n"
             . "        allow all;\n"
             . "        add_header X-Content-Type-Options \"nosniff\" always;\n"
             . "        add_header Content-Security-Policy \"sandbox\" always;\n"

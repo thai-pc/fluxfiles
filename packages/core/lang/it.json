@@ -294,6 +294,7 @@
     "bad_zip": "Questo file non è un archivio ZIP valido.",
     "chmod_failed": "Impossibile modificare le autorizzazioni.",
     "chmod_forbidden": "La modifica delle autorizzazioni non è consentita.",
+    "chmod_root_forbidden": "Le autorizzazioni della cartella radice non possono essere modificate.",
     "disk_not_allowed": "L'accesso a questo disco non è consentito.",
     "download_forbidden": "Il download non è consentito.",
     "edit_forbidden": "La modifica non è consentita.",

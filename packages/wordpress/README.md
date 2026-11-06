@@ -177,6 +177,75 @@ location ^~ /wp-content/fluxfiles/ {
 }
 ```
 
+### Multisite layout
+
+On a multisite network every site gets its **own** storage root, so one site's
+users can never reach another site's files, index, audit log or trash:
+
+| | Single site | Multisite (blog id `N`) |
+|---|---|---|
+| Storage root | `wp-content/fluxfiles/` | `wp-content/fluxfiles/sites/N/` |
+| Local disk | `wp-content/fluxfiles/uploads/` | `wp-content/fluxfiles/sites/N/uploads/` |
+| Disk URL | `…/wp-content/fluxfiles/uploads/` | `…/wp-content/fluxfiles/sites/N/uploads/` |
+
+Blog 1 uses `sites/1/` too. Rate-limit state and the `_fluxfiles/` bookkeeping
+live under the site's root; the DB backend was already per-site (`$wpdb->prefix`).
+On nginx the admin notice shows the matching `sites/<id>/uploads/` rule.
+Upgrading an existing network: see the next section.
+
+### Upgrading to 1.0.3 on multisite
+
+Up to 1.0.2 every site of a network shared `wp-content/fluxfiles/uploads/`. From
+1.0.3 each site reads `wp-content/fluxfiles/sites/<id>/uploads/`, so files that were
+not moved will look missing. Single-site installs need nothing.
+
+Do **not** simply `mv fluxfiles/uploads fluxfiles/sites/<id>/`: the first request after
+the update has already created `sites/<id>/uploads/` (with a generated `.htaccess`,
+`index.php` and an empty `_fluxfiles/`), so that `mv` fails with "Directory not empty".
+Follow these steps in order, from `wp-content/`:
+
+1. **Pick `<id>`.** It is the blog id of the site that owned the files, normally the
+   main site (`1`). `wp site list --fields=blog_id,url` shows the ids. If the shared
+   folder held several sites' files, before step 4 move
+   each other site's subfolders out of the shared folder into that site's own
+   (`rsync -a --remove-source-files fluxfiles/uploads/<subfolder>/ fluxfiles/sites/<other-id>/uploads/<subfolder>/`,
+   then clear the emptied source folders), and run step 5 once per site you moved files to.
+2. **Maintenance mode.** Put the network in maintenance mode (`wp maintenance-mode activate`
+   or your host's maintenance page) so nobody writes while you copy. Take a backup of
+   `wp-content/fluxfiles/`.
+3. **Discard the freshly generated bookkeeping, keep the legacy one.** The new root may
+   already contain a `_fluxfiles/` created after the update. The legacy index, audit
+   log and trash win, so look at it, then remove it:
+   `ls -la fluxfiles/sites/<id>/uploads/_fluxfiles`, then
+   `rm -rf fluxfiles/sites/<id>/uploads/_fluxfiles`.
+   (Anything written to it since the update is only a fresh, empty index; if you let
+   users upload before this step, `wp fluxfiles seed` in step 7 re-indexes those files.)
+4. **Copy, verify, then delete.**
+   ```bash
+   rsync -a fluxfiles/uploads/ fluxfiles/sites/<id>/uploads/
+   rsync -ain --checksum fluxfiles/uploads/ fluxfiles/sites/<id>/uploads/   # must print nothing
+   find fluxfiles/uploads -type f | wc -l; find fluxfiles/sites/<id>/uploads -type f | wc -l  # new >= old
+   rm -rf fluxfiles/uploads
+   ```
+   Only run the last line when the dry run printed nothing and the new count is at
+   least the old one. The generated `.htaccess`/`index.php` in the new folder may be
+   replaced by the legacy copies; they carry the same protection.
+5. **Fix stored attachment URLs, per site.** Media-library attachments created from
+   FluxFiles store their URL. Run a dry run first, and only run it for real once the
+   files are confirmed at the new path (step 4):
+   ```bash
+   wp search-replace '/wp-content/fluxfiles/uploads/' '/wp-content/fluxfiles/sites/<id>/uploads/' --url=<site-url> --dry-run
+   wp search-replace '/wp-content/fluxfiles/uploads/' '/wp-content/fluxfiles/sites/<id>/uploads/' --url=<site-url>
+   ```
+   `--url` selects that site's tables (`wp_<id>_posts`, `wp_<id>_postmeta`); do not use
+   `--network` or `--all-tables`, which would rewrite other sites' content to the wrong
+   folder. Serialized data is handled by WP-CLI.
+6. **Check** a few files in Settings → FluxFiles / the media modal of that site, and
+   open one attachment URL in a browser.
+7. **Re-index and reopen.** `wp fluxfiles seed --url=<site-url>` (existing entries are
+   skipped, so the legacy index is kept and only missing files are added), then
+   `wp maintenance-mode deactivate`.
+
 …or enable **private local storage** in the settings, which stops serving the
 directory statically at all (files stream through the signed REST route).
 

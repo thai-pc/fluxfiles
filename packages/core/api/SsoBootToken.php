@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace FluxFiles;
 
 /**
- * One-time bootstrap token handed to the browser after a successful SSO login,
+ * Short-lived (60 s, replayable within it, NOT single-use) bootstrap token handed to the browser after a successful SSO login,
  * via the URL *fragment* (`#boot=<this>`) — never the query string, so it never
  * reaches server access logs or the `Referer` header. It nests the fully-signed
  * main access JWT (already minted via fluxfiles_token()) inside a `t=sso_boot`

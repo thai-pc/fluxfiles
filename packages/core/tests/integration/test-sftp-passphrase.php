@@ -41,8 +41,9 @@ function prop($obj, string $name) {
 
 echo "\n{$cyan}══ SFTP private-key passphrase (RSA / ED25519) ══{$reset}\n\n";
 
-// A public documentation-range IP (TEST-NET-2) passes the SSRF guard with no DNS.
-$HOST = '198.51.100.10';
+// A public literal IP passes the SSRF guard with no DNS. (Documentation ranges such as
+// TEST-NET-2 are refused by the guard now, so they cannot stand in for "public".)
+$HOST = '93.184.216.34';
 
 test('buildSftpProvider forwards private_key_passphrase to the connection provider', function () use ($HOST, $PASS) {
     $p = buildProvider([
@@ -78,7 +79,7 @@ test('buildSftpProvider rejects an internal SFTP host (SSRF guard wired in)', fu
 test('BYOB: validate accepts a passphrase config + encrypt/decrypt round-trips it', function () use ($PASS) {
     $secret = str_repeat('s', 40);
     $cfg = [
-        'driver' => 'sftp', 'host' => '198.51.100.10', 'username' => 'deploy',
+        'driver' => 'sftp', 'host' => '93.184.216.34', 'username' => 'deploy',
         'private_key' => 'KEYPEM', 'private_key_passphrase' => $PASS, 'root' => '/srv',
     ];
     CredentialEncryptor::validate('my-vps', $cfg);            // must not throw

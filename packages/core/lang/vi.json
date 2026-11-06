@@ -294,6 +294,7 @@
     "bad_zip": "Tệp này không phải là tệp ZIP hợp lệ.",
     "chmod_failed": "Không thể đổi quyền.",
     "chmod_forbidden": "Không được phép đổi quyền.",
+    "chmod_root_forbidden": "Không thể đổi quyền của thư mục gốc.",
     "disk_not_allowed": "Không được phép truy cập ổ đĩa này.",
     "download_forbidden": "Không được phép tải xuống.",
     "edit_forbidden": "Không được phép chỉnh sửa.",

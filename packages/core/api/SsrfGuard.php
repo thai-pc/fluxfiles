@@ -87,7 +87,9 @@ final class SsrfGuard
     /**
      * True only for a genuinely public, routable address. Rejects loopback,
      * link-local, private (RFC1918 / ULA), CGNAT, the "this" network, cloud
-     * metadata, and IPv4-mapped IPv6 wrappers around any of those.
+     * metadata, the special-purpose / documentation / benchmarking / multicast /
+     * reserved ranges in DENY_V4 / DENY_V6, and IPv4-mapped IPv6 wrappers around
+     * any of those.
      */
     public static function isPublicIp(string $ip): bool
     {
@@ -98,7 +100,9 @@ final class SsrfGuard
             if ($ip === '169.254.169.254' || $ip === '0.0.0.0') {
                 return false;
             }
-            // RFC1918 + reserved (0.0.0.0/8, 127/8, 169.254/16, 192.0.2/24, …).
+            // RFC1918 + PHP's reserved set (0/8, 127/8, 169.254/16, …). Which other
+            // special-purpose ranges that filter covers differs by PHP version, so
+            // DENY_V4 below lists them explicitly instead of relying on it.
             if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                 return false;
             }
@@ -107,7 +111,7 @@ final class SsrfGuard
             if ($long !== false && ($long & 0xFFC00000) === (ip2long('100.64.0.0') & 0xFFC00000)) {
                 return false;
             }
-            return true;
+            return !self::inAnyCidr(inet_pton($ip), self::DENY_V4);
         }
 
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
@@ -123,6 +127,12 @@ final class SsrfGuard
 
             // Loopback (::1) and the unspecified address (::).
             if ($bin === str_repeat("\0", 15) . "\1" || $bin === str_repeat("\0", 16)) {
+                return false;
+            }
+
+            // Special-purpose IPv6 ranges, explicit rather than left to PHP's reserved
+            // filter. None of them overlaps the wrappers unwrapped below.
+            if (self::inAnyCidr($bin, self::DENY_V6)) {
                 return false;
             }
 
@@ -151,6 +161,51 @@ final class SsrfGuard
         }
 
         return false; // not an IP at all
+    }
+
+    /** IPv4 special-purpose ranges (IANA registry) that are never a public destination. */
+    private const DENY_V4 = [
+        '0.0.0.0/8', '192.0.0.0/24', '192.0.2.0/24', '192.88.99.0/24', '198.18.0.0/15',
+        '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4',
+    ];
+
+    /** IPv6 special-purpose ranges: local-use NAT64, SIIT, site-local, discard-only, multicast. */
+    private const DENY_V6 = [
+        '64:ff9b:1::/48', '::ffff:0:0:0/96', 'fec0::/10', '100::/64', 'ff00::/8',
+    ];
+
+    /**
+     * Is the packed address inside any of the CIDRs? Address and CIDR must be the
+     * same family (4 or 16 bytes); unparseable input counts as non-public.
+     *
+     * @param string[] $cidrs
+     */
+    private static function inAnyCidr(string|false $bin, array $cidrs): bool
+    {
+        if ($bin === false) {
+            return true;
+        }
+        foreach ($cidrs as $cidr) {
+            [$net, $bits] = explode('/', $cidr);
+            $netBin = inet_pton($net);
+            if ($netBin === false || strlen($netBin) !== strlen($bin)) {
+                continue;
+            }
+            $bits = (int) $bits;
+            $full = intdiv($bits, 8);
+            if ($full > 0 && strncmp($bin, $netBin, $full) !== 0) {
+                continue;
+            }
+            $rem = $bits % 8;
+            if ($rem === 0) {
+                return true;
+            }
+            $mask = (0xFF << (8 - $rem)) & 0xFF;
+            if ((ord($bin[$full]) & $mask) === (ord($netBin[$full]) & $mask)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

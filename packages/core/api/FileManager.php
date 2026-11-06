@@ -2964,13 +2964,26 @@ class FileManager
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped, $disk);
         $this->assertNotHidden($scoped);
+        // assertOwner() skips directories and an empty path resolves to the tenant
+        // root, so under owner_only a directory chmod would otherwise reach a folder
+        // of other people's files. The root itself is never a chmod target.
+        if (trim($this->outKey($scoped), '/') === '') {
+            throw new ApiException('The root folder permissions cannot be changed', 403, 'chmod_root_forbidden');
+        }
         $this->assertOwner($disk, $scoped);
         $this->assertNoActiveHold($disk, $scoped);
 
         [$conn, $root] = $this->disks->sftpConnection($disk);
         $location = ($root !== '' ? $root . '/' : '') . $scoped;
-        if ($conn->stat($location) === false) {
+        $stat = $conn->stat($location);
+        if ($stat === false) {
             throw new ApiException('File not found', 404, 'not_found');
+        }
+        // Directory (SSH_FILEXFER type 2 / S_IFDIR): assertOwner() above skips it, so
+        // confirm the caller owns everything inside before changing its mode.
+        if (is_array($stat) && (($stat['type'] ?? 0) === 2 || ((int) ($stat['mode'] ?? 0) & 0170000) === 0040000)) {
+            // Fail closed: an unlistable tree must not read as "all yours".
+            $this->assertOwnsTree($disk, $scoped, true);
         }
         if (!$conn->chmod(octdec($mode), $location, false)) {
             throw new ApiException('Failed to set permissions', 500, 'chmod_failed');
@@ -4184,7 +4197,7 @@ class FileManager
             $this->bulkClose($disk, $bulk);
         }
 
-        return ['extracted' => $written, 'dest' => $destUser, 'bytes' => $total];
+        return ['extracted' => $written, 'dest' => $this->outKey($destScoped), 'bytes' => $total];
     }
 
     /**
@@ -4445,7 +4458,7 @@ class FileManager
      * full of other people's files. Files with no owner (legacy / pre-existing) are
      * allowed; enumeration failures fall through (best-effort, like elsewhere).
      */
-    private function assertOwnsTree(string $disk, string $scopedDir): void
+    private function assertOwnsTree(string $disk, string $scopedDir, bool $failClosed = false): void
     {
         if (!$this->claims->ownerOnly) {
             return;
@@ -4503,7 +4516,11 @@ class FileManager
             throw $e;
         } catch (\Throwable $e) {
             // Could not enumerate the tree — fall through; the operation itself will
-            // surface any real storage error.
+            // surface any real storage error. chmod has no storage error to surface
+            // (it would just apply), so it asks for fail-closed instead.
+            if ($failClosed) {
+                throw new ApiException('Folder ownership could not be verified', 403, 'owner_only');
+            }
         }
     }
 

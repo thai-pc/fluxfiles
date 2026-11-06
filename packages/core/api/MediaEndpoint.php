@@ -543,7 +543,7 @@ class MediaEndpoint
                     return;
                 }
             }
-            $this->serveBytes((string) $fs->read($cacheKey), $outMime, true);
+            $this->serveBytes((string) $fs->read($cacheKey), $outMime, true, !empty($scope['byob']));
             return;
         }
 
@@ -577,7 +577,7 @@ class MediaEndpoint
             $outMime = 'image/' . $outFormat;
         }
         try { $fs->write($cacheKey, $out['data']); } catch (\Throwable $e) { /* best-effort cache */ }
-        $this->serveBytes($out['data'], $outMime, true);
+        $this->serveBytes($out['data'], $outMime, true, !empty($scope['byob']));
     }
 
     /**
@@ -623,7 +623,7 @@ class MediaEndpoint
     }
 
     /** Emit image bytes with safe headers; $immutable adds a long-lived cache policy. */
-    private function serveBytes(string $data, string $mime, bool $immutable = false): void
+    private function serveBytes(string $data, string $mime, bool $immutable = false, bool $byob = false): void
     {
         $this->header('Content-Type: ' . $mime);
         $this->header('X-Content-Type-Options: nosniff');
@@ -632,7 +632,7 @@ class MediaEndpoint
         // so caches must key on it to avoid serving the wrong format to a client.
         $this->header('Vary: Accept');
         // A BYOB token's URL carries the encrypted disk config: never into a shared cache.
-        $this->header($immutable && empty($scope['byob'])
+        $this->header($immutable && !$byob
             ? 'Cache-Control: public, max-age=31536000, immutable'
             : 'Cache-Control: private, no-store');
         $this->header('Content-Length: ' . strlen($data));
