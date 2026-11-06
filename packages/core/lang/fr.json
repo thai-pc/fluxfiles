@@ -322,6 +322,7 @@
     "update_corrupt": "Le paquet de mise à jour est corrompu.",
     "update_failed": "La mise à jour a échoué.",
     "update_unsafe": "Le paquet de mise à jour n'est pas sûr.",
+    "core_update_required": "Cette version nécessite un noyau FluxFiles plus récent. Mettez d'abord le noyau à jour, puis réessayez.",
     "zip_empty": "Rien à compresser.",
     "zip_forbidden": "La création de fichiers ZIP n'est pas autorisée.",
     "zip_slip": "L'archive contient des chemins non sûrs.",

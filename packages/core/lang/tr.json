@@ -322,6 +322,7 @@
     "update_corrupt": "Güncelleme paketi bozuk.",
     "update_failed": "Güncelleme başarısız oldu.",
     "update_unsafe": "Güncelleme paketi güvenli değil.",
+    "core_update_required": "Bu sürüm daha yeni bir FluxFiles çekirdeği gerektirir. Önce çekirdeği güncelleyin, sonra tekrar deneyin.",
     "zip_empty": "Sıkıştırılacak bir şey yok.",
     "zip_forbidden": "ZIP dosyası oluşturmaya izin verilmiyor.",
     "zip_slip": "Arşiv güvenli olmayan yollar içeriyor.",

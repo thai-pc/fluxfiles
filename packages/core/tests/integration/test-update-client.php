@@ -144,5 +144,171 @@ test('install: Zip Slip (../) is refused', function () {
     }
 });
 
+// ── core-version gate ────────────────────────────────────────────────────────
+
+test('CoreVersion::satisfies covers ^, ~, >=, ||, wildcard, AND', function () {
+    $C = \FluxFiles\CoreVersion::class;
+    assertTrue($C::satisfies('1.0.4', '^1.0.4'), '^1.0.4 accepts 1.0.4');
+    assertTrue($C::satisfies('1.3.0', '^1.0.4'), '^1.0.4 accepts 1.3.0');
+    assertTrue(!$C::satisfies('1.0.3', '^1.0.4'), '^1.0.4 refuses 1.0.3');
+    assertTrue(!$C::satisfies('2.0.0', '^1.0.4'), '^1.0.4 refuses 2.0.0');
+    assertTrue($C::satisfies('2.1.0', '^1.0.4 || ^2.0'), '|| alternative');
+    assertTrue($C::satisfies('1.0.4', '>=1.0.3'), '>=');
+    assertTrue($C::satisfies('1.0.4', '>= 1.0.3, <2.0'), 'AND with spaced op');
+    assertTrue(!$C::satisfies('1.0.3', '~1.0.4'), '~1.0.4 refuses 1.0.3');
+    assertTrue($C::satisfies('1.0.9', '~1.0.4'), '~1.0.4 accepts 1.0.9');
+    assertTrue(!$C::satisfies('1.1.0', '~1.0.4'), '~1.0.4 refuses 1.1.0');
+    assertTrue($C::satisfies('1.0.9', '1.0.*'), 'wildcard');
+    assertTrue(!$C::satisfies('1.1.0', '1.0.*'), 'wildcard upper bound');
+    assertTrue($C::satisfies('v1.0.4', '^1.0.4'), 'leading v tolerated');
+    assertTrue(!$C::satisfies('1.0.4', 'banana'), 'unparseable constraint fails closed');
+    assertTrue(!$C::satisfies('dev-master', '^1.0.4'), 'dev version never satisfies');
+    assertTrue($C::satisfies('0.2.5', '^0.2.1') && !$C::satisfies('0.3.0', '^0.2.1'), '0.x caret');
+});
+
+test('CoreVersion::normalize rejects dev versions', function () {
+    assertEqual('1.0.4', \FluxFiles\CoreVersion::normalize('v1.0.4'));
+    assertEqual('1.0.4', \FluxFiles\CoreVersion::normalize('core-v1.0.4'));
+    assertEqual(null, \FluxFiles\CoreVersion::normalize('dev-master'));
+    assertEqual(null, \FluxFiles\CoreVersion::normalize('1.0.x-dev'));
+    $cur = \FluxFiles\CoreVersion::current();
+    assertTrue($cur === null || preg_match('/^\d/', $cur) === 1, 'current() is null or numeric');
+});
+
+test('CoreVersion::satisfies fails closed (review B3/N6 repros)', function () {
+    $C = \FluxFiles\CoreVersion::class;
+    assertTrue(!$C::satisfies('2.0.0-rc1', '^1.0.4'), 'next-major prerelease is outside ^1.0.4');
+    assertTrue(!$C::satisfies('2.0.0-beta', '^1.0'), 'next-major prerelease is outside ^1.0');
+    assertTrue($C::satisfies('1.9.9', '^1.0'), '1.9.9 stays inside ^1.0');
+    assertTrue(!$C::satisfies('2.0.0-rc1', '<2.0'), '< bound excludes the prerelease too');
+    assertTrue(!$C::satisfies('1.0.4', '1.*.3'), 'number after wildcard is malformed');
+    assertTrue(!$C::satisfies('1.2.5', '<1.2.*'), 'wildcard with an operator is malformed');
+    assertTrue(!$C::satisfies('1.2.5', '^1.*'), 'caret wildcard is malformed');
+    assertTrue(!$C::satisfies('1.0.4', '^1.0.4 || garbage'), 'bad trailing alternative rejects the lot');
+    assertTrue(!$C::satisfies('1.0.4', '^1.0.4 ||'), 'empty trailing alternative rejects the lot');
+    assertTrue(!$C::satisfies('1.0.4', 'garbage || ^1.0.4'), 'bad leading alternative rejects the lot');
+    assertTrue(!$C::satisfies('1.0.4', '^1.0.4 garbage'), 'bad AND term rejects the term list');
+    assertTrue($C::satisfies('1.0', '^1.0.0') && $C::satisfies('1', '^1.0'), 'short versions are padded');
+    assertTrue($C::satisfies('1.2.5', '1.2.*') && $C::satisfies('1.9.0', '1.*'), 'valid wildcards');
+    assertTrue($C::isValid('^0.2.75 || ^1.0') && !$C::isValid('nope') && !$C::isValid('^1.0 ||'), 'isValid mirrors the parser');
+});
+
+test('CoreVersion::current honours the FLUXFILES_CORE_VERSION env override', function () {
+    $old = $_ENV['FLUXFILES_CORE_VERSION'] ?? null;
+    $_ENV['FLUXFILES_CORE_VERSION'] = 'v1.0.6';
+    assertEqual('1.0.6', \FluxFiles\CoreVersion::current());
+    $_ENV['FLUXFILES_CORE_VERSION'] = 'dev-master';
+    $cur = \FluxFiles\CoreVersion::current();
+    assertTrue($cur !== 'dev-master', 'invalid override is ignored');
+    if ($old === null) { unset($_ENV['FLUXFILES_CORE_VERSION']); } else { $_ENV['FLUXFILES_CORE_VERSION'] = $old; }
+});
+
+$packLib = __DIR__ . '/../../../../scripts/pack-modules-lib.php';
+if (is_file($packLib)) {
+    require_once $packLib;
+
+    test('pack-modules: requires_core must be present and parseable', function () {
+        assertEqual('^1.0.4', fluxfiles_pack_requires_core('{"require":{"fluxfiles/fluxfiles":"^1.0.4"}}'));
+        assertEqual(null, fluxfiles_pack_requires_core(null), 'unreadable');
+        assertEqual(null, fluxfiles_pack_requires_core('not json'), 'invalid json');
+        assertEqual(null, fluxfiles_pack_requires_core('{"require":{"php":"^8.1"}}'), 'missing key');
+        assertEqual(null, fluxfiles_pack_requires_core('{"require":{"fluxfiles/fluxfiles":"banana"}}'), 'unparseable');
+    });
+
+    test('pack-modules: history backfills missing floors and drops what it cannot', function () {
+        $entry = ['version' => '1.4.0', 'zip' => 'share-1.4.0.zip', 'sha256' => 'a', 'requires_core' => '^1.0.4'];
+        $prior = ['version' => '1.3.1', 'zip' => 'share-1.3.1.zip', 'sha256' => 'b', 'releases' => [
+            ['version' => '1.3.0', 'zip' => 'share-1.3.0.zip', 'sha256' => 'c', 'requires_core' => '^1.0'],
+            ['version' => '1.2.0', 'zip' => 'share-1.2.0.zip', 'sha256' => 'd'],           // backfill fails -> dropped
+            ['version' => '1.1.0', 'sha256' => 'e'],                                         // no zip -> dropped
+            ['version' => '1.4.0', 'zip' => 'dup.zip', 'sha256' => 'f', 'requires_core' => '^1.0'], // same as entry -> dropped
+        ]];
+        $asked = [];
+        $h = fluxfiles_pack_history($entry, $prior, function (string $v) use (&$asked): ?string {
+            $asked[] = $v;
+            return $v === '1.3.1' ? '{"require":{"fluxfiles/fluxfiles":"^0.2.75"}}' : null;
+        });
+        assertEqual(['1.3.1', '1.3.0'], array_column($h, 'version'), 'order + survivors');
+        assertEqual('^0.2.75', $h[0]['requires_core'], 'backfilled from the release composer.json');
+        assertEqual('^1.0', $h[1]['requires_core'], 'recorded floor kept');
+        assertTrue(!in_array('1.3.0', $asked, true), 'no backfill needed when the floor is recorded');
+        assertEqual([], fluxfiles_pack_history($entry, null, fn () => null), 'no prior -> no history');
+    });
+}
+
+$shareManifest = ['module' => 'share', 'version' => '1.4.0', 'requires_core' => '^1.0.4'];
+
+test('assertCoreCompatible: refuses a core below the floor', function () use ($shareManifest) {
+    try {
+        UpdateClient::assertCoreCompatible($shareManifest, '1.0.3');
+        throw new \RuntimeException('expected refusal');
+    } catch (ApiException $e) {
+        assertEqual('core_update_required', $e->getErrorCode());
+        assertTrue(str_contains($e->getMessage(), 'Update core first'), 'message tells the operator what to do');
+    }
+    // --force must NOT override a known mismatch.
+    try {
+        UpdateClient::assertCoreCompatible($shareManifest, '1.0.3', true);
+        throw new \RuntimeException('expected refusal even with force');
+    } catch (ApiException $e) {
+        assertEqual('core_update_required', $e->getErrorCode());
+    }
+});
+
+test('assertCoreCompatible: accepts at or above the floor, and when no floor is declared', function () use ($shareManifest) {
+    assertEqual(null, UpdateClient::assertCoreCompatible($shareManifest, '1.0.4'));
+    assertEqual(null, UpdateClient::assertCoreCompatible($shareManifest, '1.2.0'));
+    assertEqual(null, UpdateClient::assertCoreCompatible(['module' => 'share', 'version' => '1.0.0'], '0.0.1'), 'legacy catalogue entry');
+});
+
+test('assertCoreCompatible: unknown core version warns, and only --force proceeds', function () use ($shareManifest) {
+    try {
+        UpdateClient::assertCoreCompatible($shareManifest, null);
+        throw new \RuntimeException('expected refusal');
+    } catch (ApiException $e) {
+        assertEqual('core_update_required', $e->getErrorCode());
+    }
+    $w = UpdateClient::assertCoreCompatible($shareManifest, null, true);
+    assertTrue(is_string($w) && str_contains($w, '--force'), 'warning returned');
+    assertTrue(is_string(UpdateClient::assertCoreCompatible($shareManifest, 'dev-master', true)), 'dev-* is unknown too');
+});
+
+test('requires_core survives the signed manifest round trip', function () use ($mintManifest, $KEYS) {
+    $c = new UpdateClient($KEYS);
+    $p = $c->verifyManifest($mintManifest(['module' => 'share', 'version' => '1.4.0', 'url' => 'u', 'sha256' => 'h', 'requires_core' => '^1.0.4']));
+    assertEqual('^1.0.4', $p['requires_core'] ?? null);
+});
+
+// ── update server example: release selection ────────────────────────────────
+
+define('FLUXFILES_UPDATE_SERVER_FUNCTIONS_ONLY', true);
+require_once __DIR__ . '/../../../../docs/update-server.example.php';
+
+$rel = static fn (string $v, ?string $core): array => array_filter(['version' => $v, 'zip' => "share-$v.zip", 'sha256' => str_repeat('a', 64), 'requires_core' => $core]);
+$entry = $rel('1.4.0', '^1.0.4') + ['releases' => [$rel('1.3.0', '^1.0.3'), $rel('1.2.0', null)]];
+
+test('server: old client (no core_version) is never offered a floor above ^1.0.3', function () use ($entry) {
+    assertEqual('1.3.0', fluxfiles_pick_release($entry, null)['version'] ?? null);
+    $onlyNew = ['version' => '1.4.0', 'sha256' => 'x', 'requires_core' => '^1.0.4'];
+    assertEqual(null, fluxfiles_pick_release($onlyNew, null), 'nothing compatible -> null');
+});
+
+test('server: proven core gets the newest compatible release', function () use ($entry) {
+    assertEqual('1.4.0', fluxfiles_pick_release($entry, '1.0.4')['version'] ?? null);
+    assertEqual('1.3.0', fluxfiles_pick_release($entry, '1.0.3')['version'] ?? null);
+    assertEqual('1.4.0', fluxfiles_pick_release($entry, '1.5.0')['version'] ?? null);
+    assertEqual('1.3.0', fluxfiles_pick_release($entry, 'dev-master')['version'] ?? null, 'unparseable = unproven');
+});
+
+// ── pack-modules: the catalogue carries requires_core ───────────────────────
+
+test('pack-modules reads require[fluxfiles/fluxfiles] from the tagged composer.json into the catalogue', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../../../../scripts/pack-modules.php');
+    assertTrue(str_contains($src, '"{$tag}:composer.json"'), 'reads composer.json at the tag, not the worktree');
+    assertTrue(str_contains($src, 'fluxfiles_pack_requires_core('), 'parses the core constraint via the tested helper');
+    assertTrue(str_contains($src, 'fluxfiles_pack_history('), 'history goes through the tested helper');
+    assertTrue(str_contains($src, "\$entry['requires_core']"), 'writes requires_core into the entry');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

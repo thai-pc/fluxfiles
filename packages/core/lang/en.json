@@ -322,6 +322,7 @@
     "update_corrupt": "The update package is corrupt.",
     "update_failed": "The update failed.",
     "update_unsafe": "The update package is unsafe.",
+    "core_update_required": "This release needs a newer FluxFiles core. Update core first, then retry.",
     "zip_empty": "Nothing to add to the ZIP.",
     "zip_forbidden": "Creating ZIP files isn't allowed.",
     "zip_slip": "The archive contains unsafe paths.",

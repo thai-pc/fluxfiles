@@ -322,6 +322,7 @@
     "update_corrupt": "Gói cập nhật bị hỏng.",
     "update_failed": "Cập nhật thất bại.",
     "update_unsafe": "Gói cập nhật không an toàn.",
+    "core_update_required": "Bản phát hành này cần FluxFiles core mới hơn. Hãy cập nhật core trước rồi thử lại.",
     "zip_empty": "Không có gì để nén ZIP.",
     "zip_forbidden": "Không được phép tạo tệp ZIP.",
     "zip_slip": "Tệp nén chứa đường dẫn không an toàn.",
