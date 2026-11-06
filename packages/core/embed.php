@@ -576,6 +576,15 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (!empty($webp['esign_url'])) {
         $payload['esign_url'] = (string) $webp['esign_url'];
     }
+    // About dialog + light white-label (pure UI; the core sanitizes on decode).
+    if (array_key_exists('about', $webp)) {
+        $payload['about'] = (bool) $webp['about'];
+    }
+    foreach (['brand_name', 'brand_logo_url', 'accent_color'] as $brandClaim) {
+        if (!empty($webp[$brandClaim])) {
+            $payload[$brandClaim] = (string) $webp[$brandClaim];
+        }
+    }
     if (array_key_exists('allow_code_edit', $webp)) {
         $payload['allow_code_edit'] = (bool) $webp['allow_code_edit'];
     }

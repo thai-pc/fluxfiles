@@ -675,6 +675,16 @@ test('backslash segments are traversal, not filename characters', function () {
     assertEqual('user_1/a/b', claimsWith([])->normalizeKey('user_1/a\\..\\b'), 'normalizeKey drops backslash ..');
 });
 
+test('brand sanitizers match the shared PHP/JS vectors; http logo is rejected', function () {
+    $v = json_decode((string) file_get_contents(__DIR__ . '/../fixtures/brand-vectors.json'), true);
+    foreach ($v['brand_name'] as [$in, $out]) {
+        assertEqual($out, FluxFiles\Claims::sanitizeBrandName($in), 'brand_name ' . json_encode($in));
+    }
+    foreach ($v['brand_logo_url'] as [$in, $out]) {
+        assertEqual($out, FluxFiles\Claims::sanitizeLogoUrl($in), 'brand_logo_url ' . json_encode($in));
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════

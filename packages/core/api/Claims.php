@@ -129,6 +129,22 @@ class Claims
      *            Free feature — opt-in config, never gated by a license. Must be http(s). */
     public string $pdfToolsUrl = '';
 
+    /** @var bool `about` claim — false hides the UI's About entry. Default true. */
+    public bool $about = true;
+
+    /** @var string `brand_name` claim — white-label product name shown where the UI
+     *            says "FluxFiles". Plain text only (tags/control chars stripped, ≤ 60
+     *            chars); the UI renders it with textContent. Empty → "FluxFiles". */
+    public string $brandName = '';
+
+    /** @var string `brand_logo_url` claim — http(s) logo replacing the header icon.
+     *            Anything else (javascript:, data:, …) is dropped. Empty → default icon. */
+    public string $brandLogoUrl = '';
+
+    /** @var string `accent_color` claim — strict #RGB / #RRGGBB, applied by the UI as
+     *            the `--ff-primary` custom property. Anything else is dropped. */
+    public string $accentColor = '';
+
     /** @var string Optional URL of a self-hosted office suite (Collabora / OnlyOffice)
      *            for opening .docx/.xlsx/.pptx… An office suite opens a SPECIFIC
      *            document, so this may carry a `{url}` placeholder that the UI
@@ -616,6 +632,45 @@ class Claims
         return $out === [] ? self::DLP_DEFAULT_SCAN_EXTENSIONS : array_keys($out);
     }
 
+    /** Plain-text product name: tags and control chars removed, trimmed, ≤ 60 chars. */
+    public static function sanitizeBrandName($v): string
+    {
+        if (!is_string($v)) {
+            return '';
+        }
+        // Identical rules to the UI's brandName getter (fm.js): keep both in sync.
+        if (preg_match('//u', $v) !== 1) {
+            return '';
+        }
+        $v = (string) preg_replace('/<[^>]*>/u', '', $v);
+        $v = str_replace(['<', '>'], '', $v);
+        $v = (string) preg_replace('/[\x00-\x1F\x7F\s\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+/u', ' ', $v);
+        return mb_substr(trim($v, " "), 0, 60);
+    }
+
+    /** https-only logo URL (http would be mixed content in the UI), ≤ 2048 chars, no whitespace/control chars. Same rules as fm.js brandLogoUrl. */
+    public static function sanitizeLogoUrl($v): string
+    {
+        if (!is_string($v)) {
+            return '';
+        }
+        $v = (string) preg_replace('/^[\s\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+|[\s\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+$/u', '', $v);
+        if ($v === '' || strlen($v) > 2048 || preg_match('#^https://[^\s\x00-\x1F\x7F\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}"\'<>\\\\]+$#iDu', $v) !== 1) {
+            return '';
+        }
+        return $v;
+    }
+
+    /** Strict #RGB / #RRGGBB, else ''. */
+    public static function sanitizeAccentColor($v): string
+    {
+        if (!is_string($v)) {
+            return '';
+        }
+        $v = trim($v);
+        return preg_match('/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i', $v) ? $v : '';
+    }
+
     /**
      * @param object $payload JWT payload
      * @param string $secret  FLUXFILES_SECRET (needed to decrypt BYOB credentials)
@@ -690,6 +745,12 @@ class Claims
         // PDF-tools embed URL — http(s) only (so it can never reach a non-HTTP scheme).
         $pdfUrl = trim((string) ($payload->pdf_tools_url ?? ''));
         $c->pdfToolsUrl = preg_match('#^https?://#i', $pdfUrl) ? $pdfUrl : '';
+        // About dialog + light white-label (all free, pure UI). The UI reads the same
+        // claims from the token and re-applies these exact rules (see fm.js brand*).
+        $c->about = isset($payload->about) ? (bool) $payload->about : true;
+        $c->brandName = self::sanitizeBrandName($payload->brand_name ?? '');
+        $c->brandLogoUrl = self::sanitizeLogoUrl($payload->brand_logo_url ?? '');
+        $c->accentColor = self::sanitizeAccentColor($payload->accent_color ?? '');
         // Office suite embed URL (Collabora/OnlyOffice) — http(s) only.
         $officeUrl = trim((string) ($payload->office_url ?? ''));
         $c->officeUrl = preg_match('#^https?://#i', $officeUrl) ? $officeUrl : '';

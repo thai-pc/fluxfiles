@@ -837,5 +837,13 @@
     "expand": "PDF を拡大",
     "fullscreen": "全画面",
     "open_tab": "新しいタブで開く"
+  },
+  "about": {
+    "link": "このアプリについて",
+    "tagline": "組み込み可能なファイルマネージャー",
+    "built_on": "FluxFiles をベースに構築",
+    "license_label": "ライセンス",
+    "notices": "サードパーティ通知",
+    "docs": "ドキュメント"
   }
 }

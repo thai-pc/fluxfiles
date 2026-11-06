@@ -25,7 +25,7 @@ const FM_ASSETS_BASE = (function () {
 // file is unchanged (the long-lived `immutable` cache can't pin an old
 // CodeMirror). Rewritten by scripts/build-ui.sh; tests/unit/test-vendor-ver.php
 // fails when they no longer match the files.
-const FM_VENDOR_VER = { codemirror: '37088e0200' }; // vendor-ver
+const FM_VENDOR_VER = { codemirror: 'c85a77bda6' }; // vendor-ver
 
 // One collator for every name sort. `a.localeCompare(b, undefined, {numeric:true})`
 // builds a fresh collator per call, which made a 2,000-row sort ~15x slower.
@@ -323,6 +323,10 @@ function fluxFilesApp() {
             this.$watch('sortBy', (v) => { try { localStorage.setItem('fluxfiles_sort_by', v); } catch (_) {} });
             this.$watch('sortDir', (v) => { try { localStorage.setItem('fluxfiles_sort_dir', v); } catch (_) {} });
             this.$watch('typeFilter', (v) => { try { localStorage.setItem('fluxfiles_type_filter', v); } catch (_) {} });
+
+            // White-label: title + accent follow the token (also on refresh).
+            this.applyBranding();
+            this.$watch('token', () => this.applyBranding());
 
             // Close preview lightbox when detail file is cleared
             this.$watch('detailFile', (v) => { if (!v) { this.previewFullscreen = false; this.closePdfViewer(); } });
@@ -2824,7 +2828,10 @@ function fluxFilesApp() {
                 const seg = (this.token || '').split('.')[1] || '';
                 const b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
                 const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
-                return JSON.parse(atob(b64 + pad)) || {};
+                // atob() yields one char per byte; decode as UTF-8 (Node/jose emit raw UTF-8).
+                const bin = atob(b64 + pad);
+                const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+                return JSON.parse(new TextDecoder().decode(bytes)) || {};
             } catch (_) {
                 return {};
             }
@@ -4451,6 +4458,76 @@ function fluxFilesApp() {
         },
         get canTerminal() {
             return this.termPtyUrl !== '';
+        },
+
+        // ── About dialog + light white-label (free, pure UI) ─────────────────
+        // Claims `about`, `brand_name`, `brand_logo_url`, `accent_color` come from the
+        // token (same pattern as terminal_pty_url). The rules below mirror
+        // Claims::sanitize{BrandName,LogoUrl,AccentColor} — keep them in sync. The name
+        // is only ever rendered via x-text (textContent), never as HTML; the accent is
+        // applied as a CSS custom property value, never concatenated into CSS text.
+        showAbout: false,
+        _aboutOpener: null,
+        // Third-party notices: no route serves the file next to /public, so link the repo copy.
+        aboutNoticesUrl: 'https://github.com/thai-pc/fluxfiles/blob/master/packages/core/THIRD-PARTY-NOTICES.md',
+        aboutDocsUrl: 'https://github.com/thai-pc/fluxfiles/tree/master/docs',
+
+        get aboutEnabled() {
+            const v = (this._tokenPayload() || {}).about;
+            return v === undefined || v === null ? true : !!v;
+        },
+        get brandName() {
+            let v = (this._tokenPayload() || {}).brand_name;
+            if (typeof v !== 'string') return '';
+            v = v.replace(/<[^>]*>/g, '').replace(/[<>]/g, '').replace(/[\u0000-\u001F\u007F\s]+/g, ' ').trim();
+            return Array.from(v).slice(0, 60).join('');
+        },
+        get brandTitle() { return this.brandName || 'FluxFiles'; },
+        get brandLogoUrl() {
+            const v = (this._tokenPayload() || {}).brand_logo_url;
+            if (typeof v !== 'string') return '';
+            const u = v.trim();
+            return new TextEncoder().encode(u).length <= 2048 && /^https:\/\/[^\s\u0000-\u001F\u007F"'<>\\]+$/i.test(u) ? u : '';
+        },
+        get brandAccent() {
+            const v = (this._tokenPayload() || {}).accent_color;
+            return typeof v === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim()) ? v.trim() : '';
+        },
+        // Re-run whenever the token changes (refresh / FM_CONFIG): title + accent.
+        applyBranding() {
+            document.title = this.brandTitle;
+            const root = document.documentElement;
+            const accent = this.brandAccent;
+            if (accent) {
+                root.style.setProperty('--ff-primary', accent);
+                root.classList.add('ff-branded');
+            } else {
+                root.style.removeProperty('--ff-primary');
+                root.classList.remove('ff-branded');
+            }
+        },
+        openAbout(ev) {
+            if (!this.aboutEnabled) return;
+            this._aboutOpener = (ev && ev.currentTarget) || document.activeElement;
+            this.showAbout = true;
+            this.$nextTick(() => { const b = this.$refs.aboutClose; if (b) b.focus(); });
+        },
+        closeAbout() {
+            this.showAbout = false;
+            const o = this._aboutOpener;
+            this._aboutOpener = null;
+            if (o && typeof o.focus === 'function') o.focus();
+        },
+        // Keep Tab/Shift+Tab inside the dialog while it is open.
+        trapAboutFocus(ev) {
+            const box = this.$refs.aboutDialog;
+            if (!box) return;
+            const f = Array.from(box.querySelectorAll('a[href], button:not([disabled])')).filter((el) => el.offsetParent !== null);
+            if (!f.length) return;
+            const first = f[0], last = f[f.length - 1];
+            if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+            else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+            else if (!box.contains(document.activeElement)) { ev.preventDefault(); first.focus(); }
         },
 
         // Optional self-hosted PDF-tools URL (Stirling-PDF) from the token. When set, a

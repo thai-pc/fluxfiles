@@ -837,5 +837,13 @@
     "expand": "Mở rộng PDF",
     "fullscreen": "Toàn màn hình",
     "open_tab": "Mở trong tab mới"
+  },
+  "about": {
+    "link": "Giới thiệu",
+    "tagline": "Trình quản lý tệp nhúng được",
+    "built_on": "Xây dựng trên FluxFiles",
+    "license_label": "Giấy phép",
+    "notices": "Thông báo bên thứ ba",
+    "docs": "Tài liệu"
   }
 }

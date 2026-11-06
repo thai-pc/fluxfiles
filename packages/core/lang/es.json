@@ -837,5 +837,13 @@
     "expand": "Ampliar PDF",
     "fullscreen": "Pantalla completa",
     "open_tab": "Abrir en una pestaña nueva"
+  },
+  "about": {
+    "link": "Acerca de",
+    "tagline": "Gestor de archivos integrable",
+    "built_on": "Creado sobre FluxFiles",
+    "license_label": "Licencia",
+    "notices": "Avisos de terceros",
+    "docs": "Documentación"
   }
 }

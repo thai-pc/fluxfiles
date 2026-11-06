@@ -25,6 +25,9 @@ class FluxFilesPlugin
         register_deactivation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'deactivate']);
         add_action('admin_init', [FluxFilesDbSchema::class, 'maybeUpgrade']);
 
+        // Tools > Site Health > Info: the operator's "About" (versions, modules, tools).
+        add_filter('debug_information', [self::class, 'siteHealthInfo']);
+
         // Admin
         if (is_admin()) {
             new FluxFilesAdmin();
@@ -380,6 +383,51 @@ HTACCESS;
             $filled++;
         }
         return $filled;
+    }
+
+    /**
+     * `debug_information` filter: a "FluxFiles" section in Site Health > Info, built from
+     * core's AboutInfo (the same report as `fluxfiles about` / `artisan about`). Never
+     * carries a key, credential or endpoint. Rows that name disks, the licence or the
+     * SSRF allow-list are `private`, so "Copy site info to clipboard" leaves them out of
+     * a support ticket. Every value is escaped here, not trusted to the renderer.
+     * Against an older core without AboutInfo it degrades to the plugin version alone.
+     *
+     * @param array<string,mixed> $info
+     * @return array<string,mixed>
+     */
+    public static function siteHealthInfo(array $info): array
+    {
+        $esc = static fn ($v): string => function_exists('esc_html') ? esc_html((string) $v) : htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+        $fields = [
+            'plugin_version' => ['label' => 'Plugin version', 'value' => $esc(defined('FLUXFILES_VERSION') ? FLUXFILES_VERSION : 'unknown'), 'private' => false],
+        ];
+        if (class_exists(\FluxFiles\AboutInfo::class)) {
+            try {
+                self::seedLicenseEnv();
+                $ssrf = defined('FLUXFILES_SSRF_ALLOW_HOSTS')
+                    ? constant('FLUXFILES_SSRF_ALLOW_HOSTS')
+                    : (getenv('FLUXFILES_SSRF_ALLOW_HOSTS') ?: ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
+                $about = \FluxFiles\AboutInfo::collect([
+                    'env' => array_merge($_ENV, [
+                        'FLUXFILES_STORAGE_BACKEND' => (string) get_option('fluxfiles_storage_backend', 'json'),
+                        'FLUXFILES_SSRF_ALLOW_HOSTS' => (string) $ssrf,
+                    ]),
+                    'disks' => self::diskConfigs(),
+                    // core ships inside the plugin zip: don't tell a WP admin to set an env var
+                    'bundled_with' => defined('FLUXFILES_VERSION') ? 'plugin ' . FLUXFILES_VERSION : null,
+                ]);
+                foreach (\FluxFiles\AboutInfo::rows($about) as $i => $row) {
+                    $fields['about_' . $i] = ['label' => $esc($row['label']), 'value' => $esc($row['value']), 'private' => $row['private']];
+                }
+            } catch (\Throwable $e) {
+                $fields['about_error'] = ['label' => 'Report', 'value' => 'unavailable', 'private' => false];
+            }
+        } else {
+            $fields['about_unavailable'] = ['label' => 'Report', 'value' => 'update the bundled FluxFiles core for the full report', 'private' => false];
+        }
+        $info['fluxfiles'] = ['label' => 'FluxFiles', 'fields' => $fields];
+        return $info;
     }
 
     /**
@@ -882,6 +930,15 @@ HTACCESS;
         }
         if (!empty($overrides['esign_url'])) {
             $payload['esign_url'] = (string) $overrides['esign_url'];
+        }
+        // About dialog + light white-label (pure UI; the core sanitizes on decode).
+        if (array_key_exists('about', $overrides)) {
+            $payload['about'] = (bool) $overrides['about'];
+        }
+        foreach (['brand_name', 'brand_logo_url', 'accent_color'] as $brandClaim) {
+            if (!empty($overrides[$brandClaim])) {
+                $payload[$brandClaim] = (string) $overrides[$brandClaim];
+            }
         }
         // Share and Intake. These used to be stripped here, because the REST API
         // exposed none of their endpoints and a forwarded claim would have rendered a

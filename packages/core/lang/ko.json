@@ -837,5 +837,13 @@
     "expand": "PDF 확대",
     "fullscreen": "전체 화면",
     "open_tab": "새 탭에서 열기"
+  },
+  "about": {
+    "link": "정보",
+    "tagline": "임베드 가능한 파일 관리자",
+    "built_on": "FluxFiles 기반",
+    "license_label": "라이선스",
+    "notices": "서드파티 고지",
+    "docs": "문서"
   }
 }

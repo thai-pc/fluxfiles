@@ -113,6 +113,14 @@ export interface BaseTokenOptions {
   /** Optional self-hosted e-signature URL (DocuSeal) for signing PDFs/docs. May carry a `{url}`
    *  placeholder the UI substitutes with the selected file's URL. Free; http(s). */
   esignUrl?: string;
+  /** `false` hides the UI's About entry (default true). Free. */
+  about?: boolean;
+  /** White-label product name shown instead of "FluxFiles" (plain text, <= 60 chars). Free. */
+  brandName?: string;
+  /** White-label logo (http/https only). Free. */
+  brandLogoUrl?: string;
+  /** Accent colour, strict `#RGB` / `#RRGGBB`. Free. */
+  accentColor?: string;
   /** Allow the Optimization feature (POST /api/fm/optimize) — recompress images to WebP +
    *  compress PDFs. **Free/core**; default **false** because it replaces/deletes originals, so
    *  it's an opt-in capability. */

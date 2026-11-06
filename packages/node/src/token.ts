@@ -232,6 +232,11 @@ function applyTenantOverrides(
   if (opts.pdfToolsUrl) payload.pdf_tools_url = String(opts.pdfToolsUrl);
   if (opts.officeUrl) payload.office_url = String(opts.officeUrl);
   if (opts.esignUrl) payload.esign_url = String(opts.esignUrl);
+  // About dialog + light white-label (the core sanitizes on decode).
+  if (opts.about !== undefined) payload.about = !!opts.about;
+  if (opts.brandName) payload.brand_name = String(opts.brandName);
+  if (opts.brandLogoUrl) payload.brand_logo_url = String(opts.brandLogoUrl);
+  if (opts.accentColor) payload.accent_color = String(opts.accentColor);
   if (opts.allowOptimize !== undefined) payload.allow_optimize = !!opts.allowOptimize;
   // Other paid-module claims (inert unless the module is installed + licensed).
   if (opts.allowShare !== undefined) payload.allow_share = !!opts.allowShare;

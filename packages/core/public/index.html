@@ -52,7 +52,7 @@
                 </svg>
             </div>
 
-            <h2 class="ff-auth-title">FluxFiles</h2>
+            <h2 class="ff-auth-title" x-text="brandTitle">FluxFiles</h2>
 
             <!-- State: refreshing — spinner while waiting for new token -->
             <template x-if="authState === 'refreshing'">
@@ -141,12 +141,13 @@
             <span></span><span></span><span></span>
         </button>
         <span class="ff-logo">
-            <svg class="ff-logo-icon" width="20" height="20" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <img class="ff-logo-icon ff-brand-logo" x-show="brandLogoUrl" :src="brandLogoUrl || null" alt="" width="20" height="20" referrerpolicy="no-referrer" decoding="async" x-cloak>
+            <svg class="ff-logo-icon" x-show="!brandLogoUrl" width="20" height="20" viewBox="0 0 32 32" fill="none" aria-hidden="true">
                 <rect width="32" height="32" rx="7" fill="#8957E5"/>
                 <path d="M8 10a2 2 0 012-2h4l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H10a2 2 0 01-2-2V10z" fill="#fff" fill-opacity="0.92"/>
                 <path d="M12 17l2.5-3 2 2 3.5-4" stroke="#8957E5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span class="ff-logo-text">FluxFiles</span>
+            <span class="ff-logo-text" x-text="brandTitle">FluxFiles</span>
         </span>
         <div class="ff-sep ff-sep-desktop"></div>
 
@@ -345,6 +346,11 @@
             <div class="meter-bar">
                 <div class="meter-fill" :style="'width:' + quotaPercent + '%'"></div>
             </div>
+        </div>
+
+        <!-- About (help entry, deliberately not in the toolbar). Hidden by the `about` claim. -->
+        <div class="ff-about-foot" :class="{ 'ff-about-tight': quotaInfo && quotaSupported }" x-show="aboutEnabled">
+            <button type="button" class="ff-about-link" @click="openAbout($event)" aria-haspopup="dialog" x-text="t('about.link')"></button>
         </div>
     </div>
 
@@ -2009,6 +2015,27 @@
                         sandbox="allow-scripts allow-same-origin allow-forms"
                         referrerpolicy="no-referrer" style="border:0;width:100%;"></iframe>
             </template>
+        </div>
+    </div>
+
+    <!-- ═══ About — product name, licence, notices, docs. No version number on purpose. ═══ -->
+    <div class="ff-modal-overlay" x-show="showAbout" x-transition.opacity @click.self="closeAbout()" style="z-index:66;" x-cloak>
+        <div class="ff-new-folder-modal ff-about-modal" x-ref="aboutDialog" role="dialog" aria-modal="true" aria-labelledby="ff-about-title" aria-describedby="ff-about-desc"
+             @keydown.escape.window="showAbout && closeAbout()" @keydown.tab="trapAboutFocus($event)">
+            <div class="ff-about-head">
+                <img class="ff-about-logo" x-show="brandLogoUrl" :src="brandLogoUrl || null" alt="" width="40" height="40" referrerpolicy="no-referrer" x-cloak>
+                <h3 id="ff-about-title" x-text="brandTitle">FluxFiles</h3>
+            </div>
+            <p id="ff-about-desc" class="ff-about-line" x-text="t('about.tagline')"></p>
+            <p class="ff-about-line ff-about-muted" x-show="brandName" x-text="t('about.built_on')"></p>
+            <ul class="ff-about-links">
+                <li><span x-text="t('about.license_label')"></span>: <strong>MIT</strong></li>
+                <li><a :href="aboutNoticesUrl" target="_blank" rel="noopener noreferrer" x-text="t('about.notices')"></a></li>
+                <li><a :href="aboutDocsUrl" target="_blank" rel="noopener noreferrer" x-text="t('about.docs')"></a></li>
+            </ul>
+            <div class="ff-about-actions">
+                <button type="button" class="ff-btn ff-btn-primary" x-ref="aboutClose" @click="closeAbout()" x-text="t('common.close')"></button>
+            </div>
         </div>
     </div>
 

@@ -319,6 +319,16 @@ test('terminal_pty_url still forwards (the UI embeds the operator\'s own ttyd)',
     assertEqual('https://ttyd.example.com/', $p->terminal_pty_url ?? '', 'terminal_pty_url forwarded');
 });
 
+test('about / brand_name / brand_logo_url / accent_color are forwarded in the raw payload', function () use ($secret) {
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(62, [
+        'about' => false, 'brand_name' => 'Tệp Acme', 'brand_logo_url' => 'https://acme.example/l.png', 'accent_color' => '#0a7f5a',
+    ]), $secret);
+    assertEqual(false, $p->about ?? null, 'about forwarded (false kept)');
+    assertEqual('Tệp Acme', $p->brand_name ?? '', 'brand_name forwarded');
+    assertEqual('https://acme.example/l.png', $p->brand_logo_url ?? '', 'brand_logo_url forwarded');
+    assertEqual('#0a7f5a', $p->accent_color ?? '', 'accent_color forwarded');
+});
+
 test('BYOB disks register for every route; the SSRF allow-list is applied', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     preg_match('/private function claims\(.*?\n    }\n/s', $src, $claims);
@@ -3132,6 +3142,36 @@ test('the plugin build denies direct web access to the bundled public/ pages', f
     // The REST route / public-link.php still read the pages from disk.
     $api = file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(strpos($api, "corePath('public')") !== false, 'the REST route still reads public/ from disk');
+});
+
+test('Site Health adds a FluxFiles section, escaped, with sensitive rows private and no secrets', function () use ($secret) {
+    $GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'] = 'leaky-bucket-name';
+    $GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'] = 'LEAKY-S3-SECRET';
+    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'LEAKY-LICENCE-KEY';
+    $info = FluxFilesPlugin::siteHealthInfo(['wp-core' => ['label' => 'WordPress', 'fields' => []]]);
+    assertTrue(isset($info['wp-core'], $info['fluxfiles']), 'existing sections kept, ours added');
+    assertEqual('FluxFiles', $info['fluxfiles']['label']);
+    $fields = $info['fluxfiles']['fields'];
+    assertTrue(isset($fields['plugin_version']), 'plugin version row');
+    foreach ($fields as $f) {
+        assertTrue(isset($f['label'], $f['value']) && is_bool($f['private']), 'field shape');
+        assertTrue(strpos($f['value'], '<') === false, 'values are escaped');
+    }
+    if (class_exists(\FluxFiles\AboutInfo::class)) {
+        $private = array_filter($fields, static fn ($f) => $f['private']);
+        $labels = array_column($private, 'label');
+        assertTrue(in_array('Disks', $labels, true) && in_array('SSRF allow-hosts', $labels, true), 'disks + SSRF rows are private');
+    }
+    $blob = json_encode($info);
+    foreach ([$secret, 'leaky-bucket-name', 'LEAKY-S3-SECRET', 'LEAKY-LICENCE-KEY'] as $needle) {
+        assertTrue(strpos($blob, $needle) === false, "leaked {$needle}");
+    }
+    unset($GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'], $GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
+});
+
+test('the plugin hooks Site Health debug_information', function () {
+    $src = file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
+    assertTrue(strpos($src, "add_filter('debug_information', [self::class, 'siteHealthInfo'])") !== false, 'filter registered');
 });
 
 echo "\n{$cyan}──────────────────────────────────────────────────{$reset}\n";

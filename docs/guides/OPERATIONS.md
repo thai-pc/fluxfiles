@@ -251,6 +251,20 @@ README) — regenerate them after UI changes.
 
 ---
 
+## 7. Check what a server is actually running
+
+`fluxfiles about` (`--json` for scripts) prints the exact core version and where it
+was read from (`env` = `FLUXFILES_CORE_VERSION`, `composer`, or `unknown`; this is the
+value `fluxfiles update` sends), PHP, the storage backend, each configured disk by
+driver only, every paid module (installed / version / licensed / enabled / the core it
+needs and whether this core satisfies it), virus and DLP on/off, GD/Imagick, ffmpeg,
+Ghostscript (and whether it meets the 10.05.0 floor), Tesseract, ClamAV reachability and
+how many SSRF allow-hosts are set. It never prints a licence key, credential, endpoint,
+token or path. The same report appears in WordPress under Tools > Site Health > Info
+(disks, licence and SSRF rows are marked private so they stay out of "copy to
+clipboard") and in `php artisan about` on Laravel versions that have it. Ask a customer
+for this output first when debugging a module that "does nothing".
+
 ## Before announcing
 
 Buy something. Not a smoke test — a real purchase on the real store, refunded

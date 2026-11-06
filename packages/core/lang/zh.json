@@ -837,5 +837,13 @@
     "expand": "展开 PDF",
     "fullscreen": "全屏",
     "open_tab": "在新标签页中打开"
+  },
+  "about": {
+    "link": "关于",
+    "tagline": "可嵌入的文件管理器",
+    "built_on": "基于 FluxFiles 构建",
+    "license_label": "许可证",
+    "notices": "第三方声明",
+    "docs": "文档"
   }
 }

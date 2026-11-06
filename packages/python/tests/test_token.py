@@ -320,6 +320,10 @@ _TYPED_KWARG_CASES: list[tuple[dict[str, Any], dict[str, Any]]] = [
       "office_url": "https://office.example.com/?url={url}", "esign_url": "https://sign.example.com/?url={url}"},
      {"terminal_pty_url": "https://ttyd.example.com/", "pdf_tools_url": "https://pdf.example.com/",
       "office_url": "https://office.example.com/?url={url}", "esign_url": "https://sign.example.com/?url={url}"}),
+    ({"about": False, "brand_name": "Acme Files", "brand_logo_url": "https://acme.test/l.png",
+      "accent_color": "#0a7f5a"},
+     {"about": False, "brand_name": "Acme Files", "brand_logo_url": "https://acme.test/l.png",
+      "accent_color": "#0a7f5a"}),
 ]
 
 

@@ -44,6 +44,27 @@ if ($command === 'serve') {
     exit($code);
 }
 
+// `about` — what is running here: core version (and where it was read from),
+// PHP, modules (installed / licensed / enabled), storage backend, disk drivers,
+// external tools. Never prints a key, credential, endpoint or path.
+//   fluxfiles about [--json]
+if ($command === 'about') {
+    $json = false;
+    foreach (array_slice($argv, 2) as $arg) {
+        if ($arg === '--json') { $json = true; }
+        else {
+            fwrite(STDERR, "Usage: fluxfiles about [--json]\n");
+            exit(1);
+        }
+    }
+    \FluxFiles\EnvBootstrap::load([realpath(__DIR__ . '/..'), realpath(__DIR__ . '/../../..')]);
+    $about = \FluxFiles\AboutInfo::collect();
+    fwrite(STDOUT, $json
+        ? json_encode($about, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+        : \FluxFiles\AboutInfo::renderText($about));
+    exit(0);
+}
+
 // `update` — self-hosted module updates. Asks the vendor update server (env
 // FLUXFILES_UPDATE_URL) for a SIGNED manifest using the license key (env
 // FLUXFILES_LICENSE_KEY), verifies the manifest + the zip's sha256, and installs
@@ -203,6 +224,7 @@ if ($command === 'update') {
 if (!in_array($command, ['index', 'seed'], true)) {
     fwrite(STDERR, "Usage:\n"
         . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
+        . "  fluxfiles about [--json]\n"
         . "  fluxfiles update <module> [--check] [--force]\n"
         . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);

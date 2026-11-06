@@ -274,6 +274,12 @@ def _apply_tenant_overrides(
     esign_url = extras.get("esign_url")
     if esign_url:
         payload["esign_url"] = str(esign_url)
+    # About dialog + light white-label (the core sanitizes on decode).
+    if extras.get("about") is not None:
+        payload["about"] = bool(extras["about"])
+    for _brand_claim in ("brand_name", "brand_logo_url", "accent_color"):
+        if extras.get(_brand_claim):
+            payload[_brand_claim] = str(extras[_brand_claim])
 
     # Optimization (free/core).
     if extras.get("allow_optimize") is not None:
@@ -549,6 +555,10 @@ def create_token(
     pdf_tools_url: str | None = None,
     office_url: str | None = None,
     esign_url: str | None = None,
+    about: bool | None = None,
+    brand_name: str | None = None,
+    brand_logo_url: str | None = None,
+    accent_color: str | None = None,
     # --- optimization (free/core) ---
     allow_optimize: bool | None = None,
     auto_optimize: bool | None = None,
@@ -692,6 +702,10 @@ def create_token(
         pdf_tools_url=pdf_tools_url,
         office_url=office_url,
         esign_url=esign_url,
+        about=about,
+        brand_name=brand_name,
+        brand_logo_url=brand_logo_url,
+        accent_color=accent_color,
         allow_optimize=allow_optimize,
         auto_optimize=auto_optimize,
         optimize_quality=optimize_quality,
@@ -805,6 +819,10 @@ def create_byob_token(
     pdf_tools_url: str | None = None,
     office_url: str | None = None,
     esign_url: str | None = None,
+    about: bool | None = None,
+    brand_name: str | None = None,
+    brand_logo_url: str | None = None,
+    accent_color: str | None = None,
     allow_optimize: bool | None = None,
     auto_optimize: bool | None = None,
     optimize_quality: int | None = None,
@@ -965,6 +983,10 @@ def create_byob_token(
         pdf_tools_url=pdf_tools_url,
         office_url=office_url,
         esign_url=esign_url,
+        about=about,
+        brand_name=brand_name,
+        brand_logo_url=brand_logo_url,
+        accent_color=accent_color,
         allow_optimize=allow_optimize,
         auto_optimize=auto_optimize,
         optimize_quality=optimize_quality,

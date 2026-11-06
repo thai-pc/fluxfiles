@@ -245,6 +245,15 @@ class FluxFilesManager
         if (!empty($overrides['esign_url'])) {
             $payload['esign_url'] = (string) $overrides['esign_url'];
         }
+        // About dialog + light white-label (pure UI; the core sanitizes on decode).
+        if (array_key_exists('about', $overrides)) {
+            $payload['about'] = (bool) $overrides['about'];
+        }
+        foreach (['brand_name', 'brand_logo_url', 'accent_color'] as $brandClaim) {
+            if (!empty($overrides[$brandClaim])) {
+                $payload[$brandClaim] = (string) $overrides[$brandClaim];
+            }
+        }
         // Optional self-hosted PTY terminal URL (ttyd/gotty/wetty) — pure UI config,
         // works in any mode like pdf_tools_url/office_url/esign_url above.
         if (!empty($overrides['terminal_pty_url'])) {
