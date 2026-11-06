@@ -1,0 +1,52 @@
+{
+  "name": "@fluxfiles/ckeditor5",
+  "version": "1.0.0",
+  "description": "CKEditor 5 plugin for FluxFiles",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "fluxfiles": "^1.0.1"
+  },
+  "peerDependencies": {
+    "ckeditor5": ">=42.0.0"
+  },
+  "devDependencies": {
+    "ckeditor5": "^49.1.0",
+    "jsdom": "^25.0.1",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.1.8"
+  },
+  "publishConfig": { "access": "public" },
+  "author": "thai-pc",
+  "homepage": "https://github.com/thai-pc/fluxfiles#framework-adapters",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thai-pc/fluxfiles.git",
+    "directory": "packages/ckeditor5"
+  },
+  "bugs": { "url": "https://github.com/thai-pc/fluxfiles/issues" },
+  "keywords": ["fluxfiles", "file-manager", "ckeditor", "ckeditor5", "plugin", "s3", "r2", "upload", "media"]
+}

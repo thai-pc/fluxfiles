@@ -80,6 +80,8 @@ docs/ROADMAP.md
 # npm optional-dep resolution (npm/cli#4828). CI does a fresh install.
 packages/sdk/package-lock.json
 packages/ckeditor4/package-lock.json
+packages/ckeditor5/package-lock.json
+packages/ckeditor5/dist/
 packages/tinymce/package-lock.json
 docs/PHASE2-OPTIMIZATION-PLAN.md
 docs/COMMERCIAL-STRATEGY.md

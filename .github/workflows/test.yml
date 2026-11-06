@@ -522,7 +522,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [sdk, react, vue, ckeditor4, tinymce, summernote]
+        pkg: [sdk, react, vue, ckeditor4, ckeditor5, tinymce, summernote]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -692,7 +692,7 @@ jobs:
           node-version: '22'
       - name: Build, pack, install each wrapper into a throwaway consumer
         run: |
-          for p in sdk react vue; do bash scripts/ci-retry.sh npm install --prefix packages/$p --no-audit --no-fund; done
+          for p in sdk react vue ckeditor5; do bash scripts/ci-retry.sh npm install --prefix packages/$p --no-audit --no-fund; done
           bash scripts/pack-smoke.sh all
 
   docker-build:

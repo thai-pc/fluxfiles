@@ -7,6 +7,7 @@ on:
       - "react-v*"
       - "vue-v*"
       - "ckeditor4-v*"
+      - "ckeditor5-v*"
       - "tinymce-v*"
       - "summernote-v*"
       - "node-v*"
@@ -26,6 +27,9 @@ jobs:
           - pkg: ckeditor4
             tag_prefix: "ckeditor4-"
             build: "false"
+          - pkg: ckeditor5
+            tag_prefix: "ckeditor5-"
+            build: "true"   # builds dist/ via tsup (also runs on prepublishOnly)
           - pkg: tinymce
             tag_prefix: "tinymce-"
             build: "false"

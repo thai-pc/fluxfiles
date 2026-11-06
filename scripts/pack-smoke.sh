@@ -3,7 +3,7 @@
 # typecheck/import it — verifies the PUBLISHED dist + types actually resolve
 # (the per-package vitest suites import from src/, not the built package).
 #
-#   scripts/pack-smoke.sh [react|vue|sdk]   # default: all
+#   scripts/pack-smoke.sh [react|vue|sdk|ckeditor5]   # default: all
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
@@ -57,11 +57,25 @@ smoke_sdk() {
   echo "  ✓ fluxfiles published package installs + typechecks"
 }
 
+smoke_ckeditor5() {
+  echo "── ckeditor5 ──"
+  ( cd "$ROOT/packages/ckeditor5" && npm run build >/dev/null 2>&1 && npm pack --silent >/tmp/.tb )
+  local tb; tb="$ROOT/packages/ckeditor5/$(cat /tmp/.tb)"
+  local C="$TMP/ckeditor5"; mkdir -p "$C"; cd "$C"; npm init -y >/dev/null 2>&1
+  npm install --silent --no-audit --no-fund "$tb" ckeditor5 typescript >/dev/null 2>&1
+  rm -f "$tb"
+  printf "import { ClassicEditor } from 'ckeditor5';\nimport { FluxFiles } from '@fluxfiles/ckeditor5';\nexport const create = (el: HTMLElement) => ClassicEditor.create(el, { licenseKey: 'GPL', plugins: [FluxFiles], toolbar: ['fluxfiles'], fluxfiles: { endpoint: 'x', token: 't' } });\n" > consume.ts
+  base_tsconfig
+  npx --no-install tsc
+  echo "  ✓ @fluxfiles/ckeditor5 published package installs + typechecks"
+}
+
 case "${1:-all}" in
   react) smoke_react ;;
   vue)   smoke_vue ;;
   sdk)   smoke_sdk ;;
-  all)   smoke_sdk; smoke_react; smoke_vue ;;
-  *) echo "usage: $0 [react|vue|sdk|all]"; exit 1 ;;
+  ckeditor5) smoke_ckeditor5 ;;
+  all)   smoke_sdk; smoke_react; smoke_vue; smoke_ckeditor5 ;;
+  *) echo "usage: $0 [react|vue|sdk|ckeditor5|all]"; exit 1 ;;
 esac
 echo "pack-smoke OK"

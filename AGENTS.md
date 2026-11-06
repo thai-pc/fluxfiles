@@ -11,7 +11,7 @@ three integration patterns, the publish topology), see [`docs/reference/ARCHITEC
 
 A standalone, embeddable PHP file manager (PHP **≥ 8.1**). The core exposes a PHP
 API + a zero-build (Alpine.js + htmx) frontend that hosts embed by iframe/SDK.
-Adapters ship for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, TinyMCE,
+Adapters ship for Laravel, WordPress, React, Vue/Nuxt, CKEditor 4, CKEditor 5, TinyMCE,
 Summernote, plus a vanilla SDK, server-side token SDKs for Node and Python, and an
 MCP server for AI agents.
 
