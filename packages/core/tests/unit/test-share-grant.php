@@ -66,7 +66,11 @@ test('a grant for share A is rejected on share B', function () use ($secret, $jt
 test('wrong secret / tampered signature → rejected', function () use ($secret, $jti) {
     $g = ShareGrant::mint($jti, 0, $secret);
     expectInvalid(fn () => ShareGrant::verify($g, $jti, str_repeat('x', 40)));
-    expectInvalid(fn () => ShareGrant::verify(substr($g, 0, -2) . 'xy', $jti, $secret));
+    // Flip the signature's FIRST character: its last one carries unused bits, so
+    // replacing it can decode to the same bytes and the check passes by chance.
+    $dot = strrpos($g, '.') + 1;
+    $tampered = substr($g, 0, $dot) . ($g[$dot] === 'A' ? 'B' : 'A') . substr($g, $dot + 1);
+    expectInvalid(fn () => ShareGrant::verify($tampered, $jti, $secret));
 });
 
 test('expired grant → rejected', function () use ($secret, $jti) {
