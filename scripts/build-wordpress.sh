@@ -84,10 +84,10 @@ cp -r "$CORE_DIR/public" "$PLUGIN_DIR/public"
 cp -r "$CORE_DIR/lang"   "$PLUGIN_DIR/lang"
 
 # Core files the plugin never runs. The standalone entry point and the code behind
-# it (licence/update client, SSO, demo mode, tus) are left out rather than guarded
+# it (helpers.php is only required by index.php; licence/update client, SSO, demo mode, tus) are left out rather than guarded
 # with ABSPATH checks. api/Db/ stays: WpDbMetadataHandler and FluxFilesCli use it.
 # The share/intake pages are redirect stubs in core and are served by the paid modules.
-for f in index LicenseManager UpdateClient OidcDiscovery SsoStateToken SsoBootToken DemoMode TusServer; do
+for f in index helpers LicenseManager UpdateClient OidcDiscovery SsoStateToken SsoBootToken DemoMode TusServer; do
     rm -f "$PLUGIN_DIR/api/$f.php"
 done
 rm -f "$PLUGIN_DIR/public/share.html" "$PLUGIN_DIR/public/intake.html"
@@ -129,6 +129,10 @@ done
 # plugin does not duplicate a core library.
 mkdir -p "$PLUGIN_DIR/assets/vendor"
 cp -r "$CORE_DIR/assets/vendor/alpine" "$PLUGIN_DIR/assets/vendor/alpine"
+# WordPress ships CodeMirror but no dark theme, so the one theme fm.js uses in dark
+# mode (MIT, credited in THIRD-PARTY-NOTICES.md) ships next to fm.js, not under
+# assets/vendor/codemirror/.
+cp "$CORE_DIR/assets/vendor/codemirror/theme/material-darker.min.css" "$PLUGIN_DIR/assets/codemirror-theme-material-darker.css"
 
 # The watermark font: ImageOptimizer resolves api/../assets/fonts/DejaVuSans.ttf,
 # so without this a text watermark has no font in the plugin build.
@@ -151,6 +155,15 @@ txt = '\n'.join(out).replace(
     '## Not bundled',
     '## Not bundled\n\nThe code editor loads the CodeMirror copy that WordPress itself ships\n(`wp-includes/js/codemirror/`); no CodeMirror files are part of this plugin.',
     1)
+txt = txt.rstrip('\n') + """
+
+## CodeMirror dark theme
+
+`assets/codemirror-theme-material-darker.css` is the `material-darker` theme from
+CodeMirror 5 (MIT, Copyright (C) 2017 Marijn Haverbeke and others, based on the
+Material Theme by Mattia Astorino). It styles the code editor that runs on
+WordPress's own CodeMirror in dark mode.
+"""
 open(sys.argv[2], 'w').write(txt)
 PY
 
@@ -160,19 +173,25 @@ PY
 echo "==> Installing Composer dependencies (production only)..."
 # Use the core composer.json (it has every runtime dep the plugin actually uses)
 # but install into the plugin folder so we ship one vendor/ tree.
-# (.distignore keeps the WP package's own composer.json/lock out of the copy.)
-# autoload.files lists modules-autoload.php, which this build does not ship, so it is
-# dropped from the temp composer.json; otherwise vendor/autoload.php would require a
-# missing file.
+# The generated manifest SHIPS with the zip (WordPress.org review expects a
+# composer.json + composer.lock describing the bundled vendor/). It is core's own
+# manifest minus what does not exist in this build: autoload.files (modules-autoload.php),
+# bin (bin/fluxfiles) and require-dev/autoload-dev. `composer update --lock` only
+# refreshes the lock's content-hash for that edit; it does not change any version.
+# (.distignore keeps the WP package's own composer.json/lock out of the rsync copy.)
 php -r '
 $j = json_decode(file_get_contents($argv[1]), true);
-unset($j["autoload"]["files"]);
+unset($j["autoload"]["files"], $j["bin"], $j["require-dev"], $j["autoload-dev"]);
 if (empty($j["autoload"])) { unset($j["autoload"]); }
-file_put_contents($argv[2], json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+$j["name"] = "fluxfiles/wordpress-plugin-bundle";
+$j["description"] = "Dependencies bundled in vendor/ of the FluxFiles WordPress plugin (generated from the FluxFiles core manifest).";
+$j["type"] = "project";
+file_put_contents($argv[2], json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 ' "$CORE_DIR/composer.json" "$PLUGIN_DIR/composer.json"
-cp "$CORE_DIR/composer.lock" "$PLUGIN_DIR/composer.lock" 2>/dev/null || true
+cp "$CORE_DIR/composer.lock" "$PLUGIN_DIR/composer.lock"
 (
     cd "$PLUGIN_DIR"
+    composer update --lock --no-interaction --no-scripts >/dev/null 2>&1 || true
     composer install --no-dev --optimize-autoloader --no-interaction
 )
 
@@ -203,7 +222,6 @@ fi
 
 echo "==> Removing unnecessary files..."
 rm -rf "$PLUGIN_DIR/vendor/bin"
-rm -f  "$PLUGIN_DIR/composer.lock" "$PLUGIN_DIR/composer.json"
 find "$PLUGIN_DIR/vendor" -name ".git"   -type d -exec rm -rf {} + 2>/dev/null || true
 find "$PLUGIN_DIR/vendor" -name "tests"  -type d -exec rm -rf {} + 2>/dev/null || true
 find "$PLUGIN_DIR/vendor" -name "Tests"  -type d -exec rm -rf {} + 2>/dev/null || true

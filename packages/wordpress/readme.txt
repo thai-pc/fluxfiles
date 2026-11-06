@@ -93,7 +93,7 @@ wp fluxfiles seed --disk=local --path=user_1
 # Force re-index (overwrite any existing metadata)
 wp fluxfiles seed --disk=local --overwrite`
 
-The command walks the disk recursively (skipping `_fluxfiles/`, `_variants/`, and `*.meta.json`). For each file it creates a metadata record with `title` derived from the filename. For each folder it updates `_fluxfiles/dirs.json` so folder search works. For S3/R2 disks with an existing bucket, pass `--disk=s3` or `--disk=r2`.
+The command walks the disk recursively (skipping the internal `_fluxfiles/` and `_variants/` folders). For each file it creates a metadata record with `title` derived from the filename. For each folder it updates `_fluxfiles/dirs.json` so folder search works. For S3/R2 disks with an existing bucket, pass `--disk=s3` or `--disk=r2`.
 
 If you cannot use WP-CLI, trigger the same indexing by re-uploading files through the FluxFiles UI — new uploads register metadata automatically.
 
@@ -110,10 +110,6 @@ No. The plugin bundles the full FluxFiles backend. Everything runs within your W
 = What PHP version is required? =
 
 PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfiles`). Anything below 8.1 is not supported on the current release line.
-
-= Does FluxFiles Pro have to be installed? =
-
-No. This plugin is complete on its own. FluxFiles Pro is a separate add-on, sold on fluxfiles.dev, for share links, upload portals and compliance tools.
 
 = Can I use FluxFiles for my WordPress media library? =
 
@@ -193,7 +189,7 @@ First public release. WordPress adapter for the FluxFiles file manager:
 == Upgrade Notice ==
 
 = 1.1.0 =
-Paid modules moved to the FluxFiles Pro add-on; install it before updating if you use Share, Intake or compliance features. The free file manager is unchanged.
+Share, Intake and the compliance tools now come from the separate FluxFiles Pro add-on. The free file manager is unchanged.
 
 = 1.0.4 =
 Share and Intake links now open the site that created them on multisite, and work with plain permalinks. No action needed.

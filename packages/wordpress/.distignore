@@ -1,20 +1,22 @@
 # Files that live in the repo but never ship in the WordPress.org / release zip.
 # Consumed by scripts/build-wordpress.sh via `rsync --exclude-from`.
-# (readme.txt and LICENSE are kept; every other *.md is dropped.)
-vendor/
-node_modules/
-build/
+# Anchored (leading /) so only the top level is matched. readme.txt, LICENSE and
+# HOOKS.md are kept (the include rule must precede *.md); every other *.md is dropped.
+/vendor/
+/node_modules/
+/build/
+/tests/
+/composer.json
+/composer.lock
+/.distignore
+/.wordpress-org/
 .DS_Store
-tests/
-composer.json
-composer.lock
 .gitignore
 .gitattributes
++ HOOKS.md
 *.md
-.wordpress-org/
 phpcs.xml*
 .phpcs*
 .plugin-check-ignore
-.distignore
 phpunit*
 .git*

@@ -248,3 +248,24 @@ test('wordpress free build: the UI page points the editor at wp-includes CodeMir
   const vendored = await page.request.get(`${BASE}/?rest_route=/fluxfiles/v1/assets/vendor/codemirror/codemirror.min.js`);
   expect(vendored.status()).toBe(404);
 });
+
+// The editor really mounts WordPress's CodeMirror (loaded from wp-includes via the meta tag).
+test('wordpress free build: opening a .js file mounts a CodeMirror editor', async ({ page }) => {
+  await loginAdmin(page);
+  await page.goto(`${BASE}/files/`);
+  const fm = page.frameLocator('iframe');
+  await expect(fm.locator('.ff-app')).toBeVisible({ timeout: 25_000 });
+
+  const name = `cm-${Date.now()}.js`;
+  await uploadFile(fm, { name, mimeType: 'text/javascript', buffer: Buffer.from('const a = 1;\n') });
+  const card = cardByName(fm, name);
+  await expect(card).toBeVisible({ timeout: 15_000 });
+
+  await card.click();
+  await fm.locator('.ff-app').evaluate(async (el, n) => {
+    const c = (window as any).Alpine.$data(el);
+    const f = (c.files || c.items || []).find((x: any) => x.name === n);
+    await c.openEditor(f);
+  }, name);
+  await expect(fm.locator('.ff-editor-modal .CodeMirror')).toBeVisible({ timeout: 15_000 });
+});

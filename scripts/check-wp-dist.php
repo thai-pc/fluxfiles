@@ -80,7 +80,8 @@ foreach ([
     'fluxfiles.php', 'readme.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md',
     'api/FileManager.php', 'public/index.html', 'assets/fm.js', 'assets/fm.min.js',
     'assets/fluxfiles.js', 'assets/vendor/alpine/alpine.min.js',
-    'assets/fonts/DejaVuSans.ttf', 'vendor/autoload.php',
+    'assets/fonts/DejaVuSans.ttf', 'assets/codemirror-theme-material-darker.css',
+    'vendor/autoload.php', 'composer.json', 'composer.lock', 'HOOKS.md',
 ] as $req) {
     if (!isset($files[$req])) {
         $fail("required file missing: $req");
@@ -96,6 +97,7 @@ foreach ($files as $rel => $_) {
         '#^embed\.php$#' => 'standalone token helper',
         '#^config/#' => 'standalone disk config',
         '#^public/(share|intake)\.html$#' => 'recipient pages belong to the paid modules',
+        '#^api/helpers\.php$#' => 'only the standalone api/index.php requires it',
         '#^api/(LicenseManager|UpdateClient|OidcDiscovery|SsoStateToken|SsoBootToken|DemoMode|TusServer)\.php$#' => 'core file the plugin never runs',
         '#^assets/vendor/codemirror/#' => 'WordPress ships CodeMirror (guideline 13)',
         '#(^|/)tests?/#i' => 'tests',
@@ -130,6 +132,7 @@ $movedFunctions = [
     'handleIntakePublic' => 'intake',
 ];
 $curlOk = ['api/UrlImporter.php', 'api/CurlTransport.php', 'api/BucketDoctor.php'];
+$socketOk = ['api/SsrfGuard.php', 'api/UrlImporter.php', 'api/CurlTransport.php', 'api/BucketDoctor.php'];
 
 foreach ($files as $rel => $abs) {
     if (str_starts_with($rel, 'vendor/') || preg_match($binary, $rel) === 1) {
@@ -156,15 +159,40 @@ foreach ($files as $rel => $abs) {
         $fail("$rel: defines class LicenseManager");
     }
     if (str_ends_with($rel, '.php')) {
-        if (preg_match('/\bcurl_init\s*\(/', $src) === 1 && !in_array($rel, $curlOk, true)) {
-            $fail("$rel: curl_init outside " . implode(', ', $curlOk));
+        if (preg_match('/\bcurl_(?:exec|multi_init|init)\s*\(/', $src) === 1 && !in_array($rel, $curlOk, true)) {
+            $fail("$rel: curl_* call outside " . implode(', ', $curlOk));
+        }
+        if (preg_match('/\b(?:fsockopen|pfsockopen|stream_socket_client)\s*\(/', $src) === 1 && !in_array($rel, $socketOk, true)) {
+            $fail("$rel: raw socket call outside " . implode(', ', $socketOk));
         }
         if (preg_match('/\beval\s*\(/', $src) === 1) {
             $fail("$rel: eval(");
         }
+        if (preg_match('/\b(?:assert|create_function)\s*\(\s*["\'$]/', $src) === 1) {
+            $fail("$rel: assert()/create_function() with a string argument (code execution)");
+        }
+        foreach (preg_split('/\R/', $src) ?: [] as $line) {
+            if (stripos($line, 'base64_decode') !== false && preg_match('/\b(?:eval|assert|create_function|preg_replace)\s*\(/', $line) === 1) {
+                $fail("$rel: base64_decode combined with eval on one line");
+                break;
+            }
+        }
+        // wp-load assembled from pieces ('wp-' . 'load'), which the plain wp-load scan misses.
+        if (preg_match('/["\']wp-?["\']\s*\.\s*["\']-?load|wp-["\']\s*\.\s*["\']load|["\']wp["\']\s*\.\s*["\']-["\']\s*\.\s*["\']load/i', $src) === 1) {
+            $fail("$rel: builds a wp-load.php path by concatenation");
+        }
     }
-    if (preg_match('#<script[^>]+src\s*=\s*["\']?https?:#i', $src) === 1) {
+    if (preg_match('#<script[^>]+src\s*=\s*["\']?(?:https?:)?//#i', $src) === 1) {
         $fail("$rel: <script src=\"http...\"> loads external code");
+    }
+    if (preg_match('#<link[^>]+href\s*=\s*["\']?(?:https?:)?//#i', $src) === 1) {
+        $fail("$rel: <link href=\"http...\"> loads an external stylesheet");
+    }
+    if (preg_match('#@import\s+(?:url\()?["\']?(?:https?:)?//#i', $src) === 1) {
+        $fail("$rel: CSS @import of an external URL");
+    }
+    if (str_ends_with($rel, '.js') && preg_match('#\.src\s*=\s*["\'](?:https?:)?//#', $src) === 1) {
+        $fail("$rel: script .src assigned an external URL");
     }
     if ($rel === 'api/AuditChain.php' && str_contains($src, 'function verify(')) {
         $fail("$rel: function verify( moved to the audit-export module");

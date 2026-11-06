@@ -47,27 +47,16 @@ if (version_compare(PHP_VERSION, FLUXFILES_MIN_PHP, '<')) {
     return;
 }
 
-// Require the FluxFiles core autoloader (plugin-local vendor, monorepo packages/core, or legacy repo root)
-$fluxfilesAutoloadCandidates = [
-    __DIR__ . '/vendor/autoload.php',
-    dirname(__DIR__, 1) . '/core/vendor/autoload.php',
-    dirname(__DIR__, 2) . '/packages/core/vendor/autoload.php',
-    dirname(__DIR__, 2) . '/vendor/autoload.php',
-];
-$autoloader = null;
-foreach ($fluxfilesAutoloadCandidates as $candidate) {
-    if (is_file($candidate)) {
-        $autoloader = $candidate;
-        break;
-    }
-}
+// Only the plugin's own bundled dependencies (vendor/) are loaded, never another
+// plugin's or wp-content's autoloader.
+$autoloader = is_file(__DIR__ . '/vendor/autoload.php') ? __DIR__ . '/vendor/autoload.php' : null;
 if ($autoloader === null) {
     add_action('admin_notices', function () {
         echo '<div class="notice notice-error"><p>';
         echo '<strong>FluxFiles:</strong> ';
         echo esc_html__('The bundled dependencies (vendor/) are missing. Install the release ZIP from WordPress.org or GitHub, which includes them.', 'fluxfiles');
         echo ' ';
-        echo esc_html__('Maintainers: run composer install --no-dev in this plugin folder, or use a monorepo checkout with composer install -d packages/core next to packages/wordpress.', 'fluxfiles');
+        echo esc_html__('Maintainers: build the plugin with scripts/build-wordpress.sh, or run composer install --no-dev in this plugin folder.', 'fluxfiles');
         echo '</p></div>';
     });
     return;

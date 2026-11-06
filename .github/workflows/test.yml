@@ -723,6 +723,9 @@ jobs:
       - name: Check the zip against the WordPress.org rules
         run: php scripts/check-wp-dist.php build/fluxfiles.zip
 
+      - name: Self-test the guard (planted violations must fail)
+        run: bash scripts/check-wp-dist-selftest.sh build/fluxfiles.zip
+
   docker-build:
     name: Docker production image
     runs-on: ubuntu-latest
