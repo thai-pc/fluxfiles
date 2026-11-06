@@ -454,7 +454,55 @@ HTACCESS;
         if ($token !== '') {
             $args['token'] = $token;
         }
+        // plugins_url() is network-wide, so on multisite the shim boots whichever blog
+        // the plugin URL's host/path maps to (the main site), not the one that minted
+        // the link. Name the minting blog; publicLinkRestBase() turns it into that
+        // site's REST base. The id is only a routing hint: the token is verified by
+        // THAT site's REST route against its own secret, so a forged id fails closed.
+        if (self::isMultisite()) {
+            $args['blog'] = (int) get_current_blog_id();
+        }
         return add_query_arg($args, plugins_url('public-link.php', FLUXFILES_PLUGIN_FILE));
+    }
+
+    private static function isMultisite(): bool
+    {
+        return function_exists('is_multisite') && is_multisite();
+    }
+
+    /**
+     * The REST base the recipient page must call, for the site a public link belongs to.
+     * Returns null when the link names a blog that is not a live, public site (the caller
+     * answers 404). Single site: always this site's base, `$blogParam` is ignored.
+     * Multisite: a missing `blog` means the current site (pre-1.0.4 behaviour).
+     *
+     * @param mixed $blogParam raw `?blog=` value
+     */
+    public static function publicLinkRestBase($blogParam): ?string
+    {
+        if (!self::isMultisite()) {
+            return rtrim(rest_url('fluxfiles/v1/api/fm'), '/');
+        }
+        if ($blogParam === null || $blogParam === '') {
+            $id = (int) get_current_blog_id();
+        } elseif (is_string($blogParam) && preg_match('/^[1-9][0-9]{0,9}\z/', $blogParam) === 1) {
+            $id = (int) $blogParam;
+        } else {
+            return null;
+        }
+        if (!function_exists('get_site') || !function_exists('get_rest_url')) {
+            return null;
+        }
+        $site = get_site($id);
+        if (!$site || (int) $site->blog_id !== $id) {
+            return null;
+        }
+        foreach (['deleted', 'archived', 'spam'] as $flag) {
+            if (!empty($site->$flag)) {
+                return null;
+            }
+        }
+        return rtrim(get_rest_url($id, 'fluxfiles/v1/api/fm'), '/');
     }
 
     /**
