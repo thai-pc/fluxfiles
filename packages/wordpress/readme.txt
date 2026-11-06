@@ -77,7 +77,7 @@ Only when a developer sets `terminal_pty_url`, `pdf_tools_url`, `office_url` or 
 
 == Using an existing upload directory ==
 
-If you already have files under `wp-content/fluxfiles/uploads/` (or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (`_fluxfiles/index.json`) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
+If you already have files in the local storage folder (`wp-content/uploads/fluxfiles/uploads/` on new installs, `wp-content/fluxfiles/uploads/` on older ones, or any other local-disk path configured in Settings → FluxFiles) from before the plugin was installed, listing and preview work out of the box. **Search** however relies on the FluxFiles metadata index (`_fluxfiles/index.json`) and the directory index (`_fluxfiles/dirs.json`), which are only written when content is created through the API.
 
 To make pre-existing files and folders searchable, use the bundled WP-CLI command:
 
@@ -115,7 +115,13 @@ PHP **8.1 or higher** (Intervention Image v3 and the rest of `fluxfiles/fluxfile
 
 Yes. Files picked through the FluxFiles UI register as real WordPress attachments — the media
 library, `wp_get_attachment_url()`, and the Gutenberg block all see them, even though the bytes
-live on S3/R2/local storage FluxFiles manages, not `wp-content/uploads/`.
+live on S3/R2 or in FluxFiles' own local storage folder, not in WordPress's dated `uploads/YYYY/MM/` folders.
+
+= Where does FluxFiles store my files? =
+New installs use the "fluxfiles" folder inside your WordPress uploads folder (usually wp-content/uploads/fluxfiles/), which most hosts back up and keep across deployments. Sites that already had wp-content/fluxfiles/ keep it; nothing is moved when you update. You can choose another location with the FLUXFILES_STORAGE_DIR constant in wp-config.php or the fluxfiles_storage_base filter. Because FluxFiles stores the location, not a full path, a moved or cloned site follows its own folders. Some media-cleaner plugins may list the files under uploads/fluxfiles as unused media; exclude that folder from them.
+
+= What happens to my data when I delete the plugin? =
+By default deleting FluxFiles removes only its settings and rate-limit counters. Your files, their metadata, trash, audit log and legal-hold tables, and the secret key (it signs the audit log) are kept, so reinstalling picks everything up again. To remove everything, tick "Delete all FluxFiles data when the plugin is deleted" in Settings > FluxFiles before deleting the plugin. Then the database tables, the secret and the files FluxFiles wrote in its own storage folder are permanently removed. Nothing is deleted at a custom location set with FLUXFILES_STORAGE_DIR or the fluxfiles_storage_base filter, and files on S3, R2 or SFTP are never touched.
 
 = Where are warnings logged? =
 
@@ -123,7 +129,7 @@ Operational warnings are written to the PHP error log only when `WP_DEBUG` / `WP
 
 = My site runs on nginx. Is the uploads folder protected? =
 
-Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. While the local disk is public, the Plugins screen and Settings → FluxFiles show the nginx rules to add (no PHP execution, HTML/SVG/XML served inert, `_fluxfiles/` denied) — or turn on private local storage. Independently of the server, users without the `unfiltered_html` capability can never upload HTML, SVG, XML, JavaScript or PHP files through FluxFiles.
+Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The storage folder is `/wp-content/uploads/fluxfiles/` on new installs and `/wp-content/fluxfiles/` on older ones. While the local disk is public, the Plugins screen and Settings → FluxFiles show the nginx rules to add (no PHP execution, HTML/SVG/XML served inert, `_fluxfiles/` denied) — or turn on private local storage. Independently of the server, users without the `unfiltered_html` capability can never upload HTML, SVG, XML, JavaScript or PHP files through FluxFiles.
 
 == Screenshots ==
 
