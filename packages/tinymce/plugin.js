@@ -30,15 +30,16 @@
 (function () {
     'use strict';
 
-    // Toolbar glyph: a folder with an "F", so it can't be mistaken for the editor's
-    // own folder/browse buttons. Same shape as the CKEditor 4 and Summernote plugins.
+    // Toolbar glyph: the FluxFiles logo's square folder silhouette with an "F", as a
+    // line icon, so it can't be mistaken for the editor's own folder/browse buttons.
+    // Identical in the CKEditor 4, CKEditor 5 and Summernote plugins.
     // fill="none" sits on each <path>: TinyMCE's toolbar CSS sets `fill` on the <svg>,
     // which the paths would otherwise inherit (a solid black folder with no visible F).
     function iconSvg(color) {
         return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">'
-            + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
+            + '<path d="M3 5a2 2 0 012-2h5l2 2h7a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" '
             + 'fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
-            + '<path d="M10 16.5v-6h4.5M10 13.5h3.5" '
+            + '<path d="M10 16.5v-7h4.5M10 13h3.5" '
             + 'fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     }
 

@@ -3,6 +3,19 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.9] — 2026-11-06
+
+> Released: `ckeditor4-v1.0.1`, `tinymce-v1.0.1`, `summernote-v1.0.1`, `ckeditor5-v1.0.2`.
+> The WordPress icon change ships with the next WordPress release.
+
+### Changed
+
+- **One toolbar glyph for every editor adapter, drawn from the logo.** CKEditor 4,
+  CKEditor 5, TinyMCE and Summernote (and the WordPress block and media button) now use the
+  same icon: the logo's square folder with an "F", which still tells it apart from the
+  editor's own folder/browse buttons. It is monochrome `currentColor`, so it follows each
+  editor's theme. Previously the editors used a wider generic folder.
+
 ## [1.0.8] — 2026-11-06
 
 > Released: `core-v1.0.4`.

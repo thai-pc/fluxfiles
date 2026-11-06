@@ -3,13 +3,14 @@ import type { Locale } from 'ckeditor5';
 import type { FluxFilesConfig } from './config';
 import { FluxFilesCommand } from './fluxfilescommand';
 
-// The same F-folder glyph the TinyMCE and CKEditor 4 plugins use. currentColor
+// The FluxFiles logo's square folder silhouette with an "F", as a line icon, identical
+// in the TinyMCE, CKEditor 4 and Summernote plugins. currentColor
 // lets CKEditor 5 recolour it for hover / disabled / dark themes.
 const ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">' +
-  '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" ' +
+  '<path d="M3 5a2 2 0 012-2h5l2 2h7a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<path d="M10 16.5v-6h4.5M10 13.5h3.5" ' +
+  '<path d="M10 16.5v-7h4.5M10 13h3.5" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 /** Minimal shape of the optional ImageInsertUI plugin (CKEditor's image package). */

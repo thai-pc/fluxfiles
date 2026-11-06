@@ -43,7 +43,7 @@ describe('TinyMCE FluxFiles plugin', () => {
     const { editor, buttons } = loadPlugin();
     const [name, svg] = editor.ui.registry.addIcon.mock.calls[0];
     expect(name).toBe('fluxfiles');
-    expect(svg).toContain('M10 16.5v-6h4.5M10 13.5h3.5');
+    expect(svg).toContain('M10 16.5v-7h4.5M10 13h3.5');
     expect(buttons.fluxfiles.icon).toBe('fluxfiles');
   });
 
@@ -63,7 +63,7 @@ describe('TinyMCE FluxFiles plugin', () => {
     for (const def of [buttons.fluxfiles, items.fluxfiles]) {
       expect(def.icon).toBeUndefined();
       expect(def.image.startsWith('data:image/svg+xml,')).toBe(true);
-      expect(decodeURIComponent(def.image)).toContain('M10 16.5v-6h4.5M10 13.5h3.5');
+      expect(decodeURIComponent(def.image)).toContain('M10 16.5v-7h4.5M10 13h3.5');
     }
   });
 

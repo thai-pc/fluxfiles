@@ -39,14 +39,15 @@
         return;
     }
 
-    // Same folder glyph the CKEditor 4 / TinyMCE plugins use, kept inline so the
-    // three editor plugins stay visually in sync. currentColor matches the
+    // The FluxFiles logo's square folder silhouette with an "F", as a line icon, identical
+    // in the CKEditor 4, CKEditor 5 and TinyMCE plugins, kept inline so they stay
+    // visually in sync. currentColor matches the
     // Summernote toolbar text colour.
     var ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:text-bottom">'
-        + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
+        + '<path d="M3 5a2 2 0 012-2h5l2 2h7a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" '
         + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
         // The "F" tells it apart from the editor's own folder/browse buttons.
-        + '<path d="M10 16.5v-6h4.5M10 13.5h3.5" '
+        + '<path d="M10 16.5v-7h4.5M10 13h3.5" '
         + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
     // Encode a value for use inside an HTML ATTRIBUTE (src="...", alt="...", href="...").
