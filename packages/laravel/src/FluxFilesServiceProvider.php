@@ -120,6 +120,8 @@ class FluxFilesServiceProvider extends ServiceProvider
         Route::prefix($prefix)->get('share/file', [FluxFilesController::class, 'shareFile']);
         Route::prefix($prefix)->get('intake/info', [FluxFilesController::class, 'intakeInfo']);
         Route::prefix($prefix)->post('intake/upload', [FluxFilesController::class, 'intakeUpload']);
+        Route::prefix($prefix)->get('share/page', [FluxFilesController::class, 'sharePage']);
+        Route::prefix($prefix)->get('intake/page', [FluxFilesController::class, 'intakePage']);
 
         // Gated media stream/img — reached with a per-file signed token in the
         // query string (an <img>/<video> element can't send an Authorization

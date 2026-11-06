@@ -5,8 +5,31 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `FileManager::retentionRules()` returns the token's sanitised `retention_rules`, so a
+  module can drive the retention sweep through the `removeKeys()`/`isHeld()` seams.
+
 ### Changed
 
+- Test-only: the audit-chain tests verify through `tests/support/chain-verify.php`, a
+  verbatim copy of `AuditChain::verify()`, instead of the shipped method. No behaviour change.
+- **Laravel adapter dispatches Share/Intake and the compliance routes through the modules.**
+  The public `share/*` and `intake/*` routes now go through `PublicRoutes::dispatch()` with a
+  `PublicContext` built from the app's own disks, metadata repo, secret and `ModuleRegistry::license()`,
+  instead of requiring core's legacy `api/PublicLinks.php`. The recipient pages are
+  served by `PublicRoutes::page()` behind the same gate, and `{prefix}/share/page` and
+  `{prefix}/intake/page` are now proxied (`public/share.html` and `public/intake.html` keep
+  working). `/retention/run`, `/fixity/check` and `/audit/verify` use the module's
+  `RetentionProviderInterface` / `FixityProviderInterface` / `AuditVerifierInterface` when
+  present and fall back to core's built-in code on older modules; a module too old for either
+  answers `501 module_update_required`. Without the module installed, status codes and error
+  codes are unchanged. Floor raised to `fluxfiles/fluxfiles ^1.0.4` (lock refreshed to v1.0.7).
+  `public/share.html` and `public/intake.html` now return the gate's JSON envelope
+  (500 / 501 / 402) instead of always answering 200 HTML when the module is missing or
+  unlicensed; the 402 may now carry `license_expired`. The landing pages now come from the
+  module, so a customised `share.html` under a custom `FLUXFILES_BASE_PATH` is no longer used.
+  Ships as `laravel-v1.0.3`.
 - **WordPress dispatches the public Share/Intake routes and the retention / fixity /
   audit-verify handlers to the installed module** instead of calling legacy code inside
   core. Public JSON/bytes routes go through `PublicRoutes::dispatch()` with a host-injected
