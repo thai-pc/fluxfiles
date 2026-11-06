@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- JSON API exceptions: the message travels in the JSON error envelope and is never rendered as HTML
+
 class Claims
 {
     /** @var string */

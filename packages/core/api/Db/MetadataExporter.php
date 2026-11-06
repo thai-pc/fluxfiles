@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles\Db;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+
 /**
  * Streams file_metadata rows for backup/restore of the DB storage backend
  * (docs/design/DB-STORAGE-MIGRATION-DESIGN.md §7). Reads directly against the SQL

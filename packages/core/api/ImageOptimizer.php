@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.unlink_unlink -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+
 use League\Flysystem\Filesystem;
 
 class ImageOptimizer

@@ -54,7 +54,7 @@ class FluxFilesAttachments
         }
         $key  = (string) ($file['key'] ?? ($file['path'] ?? $url));
         $disk = (string) ($file['disk'] ?? 'local');
-        $name = (string) ($file['basename'] ?? ($file['name'] ?? basename(parse_url($url, PHP_URL_PATH) ?: $key)));
+        $name = (string) ($file['basename'] ?? ($file['name'] ?? basename(wp_parse_url($url, PHP_URL_PATH) ?: $key)));
         $mime = (string) ($file['mime'] ?? (wp_check_filetype($name)['type'] ?: 'application/octet-stream'));
         $alt  = trim((string) ($file['alt'] ?? ''));
         $caption = trim((string) ($file['caption'] ?? ''));
@@ -148,6 +148,7 @@ class FluxFilesAttachments
             'posts_per_page' => 1,
             'fields'         => 'ids',
             'no_found_rows'  => true,
+            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- lookup of attachments FluxFiles itself tagged (_fluxfiles_url), run on a user action or in WP-CLI, never on a front-end page view
             'meta_query'     => [
                 'relation' => 'AND',
                 ['key' => self::META_KEY, 'value' => $key],

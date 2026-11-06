@@ -24,6 +24,7 @@ final class Log
     public static function warn(string $msg): void
     {
         if (self::$sink === null) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- default log sink of a WordPress-independent library, replaceable with Log::setSink() (the plugin routes it to its own debug log)
             error_log($msg);
             return;
         }

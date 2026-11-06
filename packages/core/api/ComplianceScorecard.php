@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 /**
  * Compliance Readiness Scorecard — a read-only, stateless capability checklist
  * over features a compliance program commonly cares about (virus scanning,

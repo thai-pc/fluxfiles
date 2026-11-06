@@ -1,7 +1,8 @@
 # Files that live in the repo but never ship in the WordPress.org / release zip.
 # Consumed by scripts/build-wordpress.sh via `rsync --exclude-from`.
-# Anchored (leading /) so only the top level is matched. readme.txt, LICENSE and
-# HOOKS.md are kept (the include rule must precede *.md); every other *.md is dropped.
+# Anchored (leading /) so only the top level is matched. readme.txt and LICENSE are
+# kept; every *.md is dropped (WordPress.org allows no other markdown in the plugin
+# root). build-wordpress.sh ships HOOKS.md and THIRD-PARTY-NOTICES.md under docs/.
 /vendor/
 /node_modules/
 /build/
@@ -13,7 +14,6 @@
 .DS_Store
 .gitignore
 .gitattributes
-+ HOOKS.md
 *.md
 phpcs.xml*
 .phpcs*

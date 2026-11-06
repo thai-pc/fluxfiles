@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 /**
  * Tamper-evident audit log: every entry carries `prev` (the previous entry's
  * hash) and `hash` = HMAC-SHA256(key, prev + "\n" + canonical(entry)).

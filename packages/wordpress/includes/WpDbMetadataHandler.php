@@ -16,10 +16,10 @@ use FluxFiles\MetadataRepositoryInterface;
  * implementation for exact field names and edge-case behavior. WordPress is
  * always MySQL/MariaDB, so unlike core/Laravel there is no dialect branching.
  *
- * The plugin's floor is WP 6.0, but $wpdb->prepare() only correctly
- * substitutes SQL NULL for a PHP null bound to a %s/%d placeholder as of
- * WP 6.2+. buildValueClause() below works around this by emitting the
- * literal NULL token for null columns instead of relying on prepare().
+ * $wpdb->prepare() only substitutes SQL NULL for a PHP null bound to a
+ * %s/%d placeholder as of WP 6.2+. buildValueClause() below emits the
+ * literal NULL token for null columns instead of relying on prepare(), so
+ * the behaviour does not depend on the WordPress version.
  */
 class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImportInterface
 {
@@ -94,30 +94,51 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
         return [implode(', ', $parts), $bind];
     }
 
+    // Query wrappers. Every statement is a string built in this class from fixed table
+    // properties ($this->t*, "{$wpdb->prefix}fluxfiles_*"), fixed column names and literal
+    // SQL; user-controlled values only ever travel as %s/%d placeholders, so the bound
+    // branch always goes through $wpdb->prepare(). The no-bind branch runs statements that
+    // have no value to bind at all (identifiers only), hence the targeted ignores below.
+
     private function query(string $sql, array $bind = [])
     {
         if ($bind !== []) {
-            $sql = $this->wpdb->prepare($sql, $bind);
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery -- $sql is class-built with %s/%d placeholders for every value
+            return $this->wpdb->query($this->wpdb->prepare($sql, $bind));
         }
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery -- no values to bind: fixed table and column identifiers only
         return $this->wpdb->query($sql);
     }
 
     private function getRow(string $sql, array $bind = []): ?array
     {
-        $sql = $bind !== [] ? $this->wpdb->prepare($sql, $bind) : $sql;
-        $row = $this->wpdb->get_row($sql, ARRAY_A);
+        if ($bind !== []) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery -- $sql is class-built with %s/%d placeholders for every value
+            $row = $this->wpdb->get_row($this->wpdb->prepare($sql, $bind), ARRAY_A);
+        } else {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery -- no values to bind: fixed table and column identifiers only
+            $row = $this->wpdb->get_row($sql, ARRAY_A);
+        }
         return $row === null ? null : $row;
     }
 
     private function getResults(string $sql, array $bind = []): array
     {
-        $sql = $bind !== [] ? $this->wpdb->prepare($sql, $bind) : $sql;
+        if ($bind !== []) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery -- $sql is class-built with %s/%d placeholders for every value
+            return $this->wpdb->get_results($this->wpdb->prepare($sql, $bind), ARRAY_A) ?: [];
+        }
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery -- no values to bind: fixed table and column identifiers only
         return $this->wpdb->get_results($sql, ARRAY_A) ?: [];
     }
 
     private function getVar(string $sql, array $bind = [])
     {
-        $sql = $bind !== [] ? $this->wpdb->prepare($sql, $bind) : $sql;
+        if ($bind !== []) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery -- $sql is class-built with %s/%d placeholders for every value
+            return $this->wpdb->get_var($this->wpdb->prepare($sql, $bind));
+        }
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery -- no values to bind: fixed table and column identifiers only
         return $this->wpdb->get_var($sql);
     }
 

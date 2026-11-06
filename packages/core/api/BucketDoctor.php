@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_exec, WordPress.WP.AlternativeFunctions.curl_curl_getinfo, WordPress.WP.AlternativeFunctions.curl_curl_init, WordPress.WP.AlternativeFunctions.curl_curl_setopt_array -- SSRF-guarded outbound fetch: cURL pins the validated IP (CURLOPT_RESOLVE) and caps size and redirects, which wp_remote_* cannot do; core also runs outside WordPress
+// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- core is a WordPress-independent library; wp_parse_url() does not exist outside WordPress
+
 /**
  * Bucket Doctor — diagnoses a disk's storage backend so BYOB tenants can verify
  * credentials, permissions, CORS and presigning before (or after) wiring it up.

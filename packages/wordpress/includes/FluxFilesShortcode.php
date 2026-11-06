@@ -71,25 +71,29 @@ class FluxFilesShortcode
         $tokenUrlJs = wp_json_encode($tokenUrl);
         $nonceJs    = wp_json_encode(wp_create_nonce('wp_rest'));
 
-        return <<<HTML
-<div id="{$containerId}" style="width:{$width};height:{$height}"></div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof FluxFiles !== 'undefined') {
-        FluxFiles.open(Object.assign({$configJson}, {
-            onTokenRefresh: function () {
-                return fetch({$tokenUrlJs}, {
-                    credentials: 'same-origin',
-                    headers: { 'X-WP-Nonce': {$nonceJs}, 'Accept': 'application/json' }
-                })
-                    .then(function (r) { return r.ok ? r.json() : null; })
-                    .then(function (j) { return (j && j.data && j.data.token) ? j.data.token : null; })
-                    .catch(function () { return null; });
-            }
-        }));
-    }
-});
-</script>
-HTML;
+        // The loader is attached to the SDK script (enqueued above, in the footer) and
+        // runs right after it, so the page itself carries only the container div.
+        $js = "document.addEventListener('DOMContentLoaded', function () {\n"
+            . "    if (typeof FluxFiles === 'undefined') { return; }\n"
+            . '    FluxFiles.open(Object.assign(' . $configJson . ", {\n"
+            . "        onTokenRefresh: function () {\n"
+            . '            return fetch(' . $tokenUrlJs . ", {\n"
+            . "                credentials: 'same-origin',\n"
+            . "                headers: { 'X-WP-Nonce': " . $nonceJs . ", 'Accept': 'application/json' }\n"
+            . "            })\n"
+            . "                .then(function (r) { return r.ok ? r.json() : null; })\n"
+            . "                .then(function (j) { return (j && j.data && j.data.token) ? j.data.token : null; })\n"
+            . "                .catch(function () { return null; });\n"
+            . "        }\n"
+            . "    }));\n"
+            . '});';
+        wp_add_inline_script('fluxfiles-sdk', $js, 'after');
+
+        return sprintf(
+            '<div id="%s" style="width:%s;height:%s"></div>',
+            esc_attr($containerId),
+            $width,
+            $height
+        );
     }
 }

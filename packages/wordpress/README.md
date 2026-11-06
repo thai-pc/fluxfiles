@@ -9,7 +9,7 @@ runs entirely inside your WordPress install — no separate backend to host.
 
 ## Requirements
 
-- WordPress 6.0+
+- WordPress 6.5+
 - PHP 8.1+ (matches `fluxfiles/fluxfiles`; 8.1–8.5 tested)
 - A build that includes the Composer `vendor/` directory (release ZIP, or run
   `composer install --no-dev --optimize-autoloader` in the plugin dir before zipping)

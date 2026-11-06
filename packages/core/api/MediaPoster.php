@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.unlink_unlink -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+
 /**
  * Poster images for non-image files, so the grid can show what a PDF or video
  * looks like instead of a generic icon: page 1 of a PDF (Ghostscript) or a frame
@@ -102,6 +104,7 @@ final class MediaPoster
     private static function exec(array $args): bool
     {
         $desc = [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']];
+        // phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- argument-array proc_open (no shell) with ProcessEnv::minimal(): no environment or secrets reach the tool; there is no WordPress API for running a binary
         $proc = @proc_open($args, $desc, $pipes, null, ProcessEnv::minimal());
         if (!is_resource($proc)) {
             return false;

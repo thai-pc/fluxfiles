@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fclose, WordPress.WP.AlternativeFunctions.unlink_unlink -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+
 /**
  * PDF compression via Ghostscript (downsamples embedded images). Availability-gated:
  * when the `gs` binary is absent the optimize endpoint reports the feature
@@ -72,6 +74,7 @@ final class PdfOptimizer
     /** `gs --version` → "10.07.1", or null when it can't be read. */
     private static function version(string $gs): ?string
     {
+        // phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- argument-array proc_open (no shell) with ProcessEnv::minimal(): no environment or secrets reach the tool; there is no WordPress API for running a binary
         $proc = @proc_open([$gs, '--version'], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, null, ProcessEnv::minimal());
         if (!is_resource($proc)) {
             return null;
@@ -141,6 +144,7 @@ final class PdfOptimizer
                 1 => ['file', '/dev/null', 'w'],
                 2 => ['file', '/dev/null', 'w'],
             ];
+            // phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- argument-array proc_open (no shell) with ProcessEnv::minimal(): no environment or secrets reach the tool; there is no WordPress API for running a binary
             $proc = @proc_open($args, $desc, $pipes, null, ProcessEnv::minimal());
             if (!is_resource($proc)) {
                 return null;

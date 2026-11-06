@@ -42,6 +42,10 @@ designs within them.
 >    (`FluxFilesPlugin::MODULE_ENV` deliberately omits `FLUXFILES_SSO_*`), so shipping it would
 >    be dead code.
 > 2. **The WP `public-link.php` is replaced by a REST page route, with a 90-day redirect shim.**
+>    **UPDATE (owner decision, after Plugin Check 2.2.0): the shim is REMOVED, never shipped.**
+>    The paid WordPress modules had no users, so no old-form links exist; `public-link.php`, its
+>    tests, its CI lint entry and its dist-guard special case are deleted. The paragraphs below
+>    describe the superseded plan.
 >    Its job (serving `share.html` and `intake.html` with the API base injected) becomes a REST
 >    page route stub in the free plugin. The stub calls core `PublicRoutes::page()`, which reads
 >    the page out of the module, so the HTML and handlers live in the modules as decided. For
@@ -337,7 +341,8 @@ of the free plugin (the old updater included) deletes that folder, which is the 
   (`IntakeModule::MAX_TTL`). Tokens are signed with `fluxfiles_secret`, which is unchanged,
   and records stay in storage, so only the **URL path** is at risk.
 - **New-form links** (from 1.1.0 on) hit REST and keep working on every version.
-- **Old-form links** (`/wp-content/plugins/fluxfiles/public-link.php?page=…&token=…&blog=…`):
+- **Old-form links** (`/wp-content/plugins/fluxfiles/public-link.php?page=…&token=…&blog=…`) —
+  **REMOVED, see decision 2: the shim does not ship and no such links exist.** Superseded plan:
   1.1.0 ships `public-link.php` as a **WordPress-free redirect**. It loads nothing, reads only
   `page` (whitelist `share|intake`), `token` and `blog`. It answers `302` to
   `dirname(REQUEST_URI path, 4) . '/?rest_route=/fluxfiles/v1/api/fm/<page>/page&…'`, with
@@ -440,8 +445,7 @@ the ZIP contents" step. It unzips `build/fluxfiles.zip` and **fails** on any of 
   header `Version`; or missing `== External services ==` / `== Source & build ==` sections.
 
 It also asserts the required paths the release workflow checks today, minus `modules-autoload.php`.
-While the transition shim exists, `public-link.php` is allowed only if it contains no
-`wp-load`, `require` or `include`.
+`public-link.php` (removed) is a forbidden path.
 
 ### 8.3 Plugin Check in CI
 
@@ -491,7 +495,7 @@ extending `scripts/landing-screenshots/`.
 === FluxFiles ===
 Contributors: thaipc   (the WP.org account `thaipc` now exists and its profile is live)
 Tags: file manager, amazon s3, cloudflare r2, media library, file upload
-Requires at least: 6.0
+Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1
 Stable tag: 1.1.0
@@ -610,8 +614,7 @@ because the packages are gitignored, so check them by hand. A tag isn't a releas
    - The inert paid-module UI shells in `fm.js` behind `proGate` (hidden when framed, as in WP).
    - `proc_open` (gs, ffmpeg).
    - The UrlImporter cURL.
-   - The transitional redirect `public-link.php`. If it's rejected, drop it and accept that
-     links minted before 1.1.0 break, which affects at most 90 days.
+   - ~~The transitional redirect `public-link.php`.~~ Removed before submission.
 4. **AWS trim.** Does `["S3"]` alone break any credential provider core's `S3Client` config
    reaches (Sts or SSO for assume-role)? Test on LocalStack and with web identity before
    dropping `Sts`.

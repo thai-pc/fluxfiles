@@ -99,6 +99,7 @@ final class PublicRoutes
                 if ($csp !== null) {
                     header('Content-Security-Policy: ' . $csp);
                 }
+                // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- raw bytes/HTML of a stored file or a module page, sent with its real Content-Type and nosniff; escaping would corrupt it
                 echo $html;
                 return;
             }

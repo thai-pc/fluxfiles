@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fclose, WordPress.WP.AlternativeFunctions.file_system_operations_fread -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+
 /**
  * The operator's "About" report: what version is running, which modules are
  * installed/licensed, which external tools exist. One provider shared by
@@ -312,6 +314,7 @@ final class AboutInfo
     /** @param list<string> $cmd */
     private static function runUnsafe(array $cmd): ?string
     {
+        // phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- argument-array proc_open (no shell) with ProcessEnv::minimal(): no environment or secrets reach the tool; there is no WordPress API for running a binary
         $proc = @proc_open($cmd, [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['redirect', 1]], $pipes, null, ProcessEnv::minimal());
         if (!is_resource($proc)) {
             return null;

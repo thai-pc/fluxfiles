@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fclose, WordPress.WP.AlternativeFunctions.file_system_operations_fread -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 /**
  * The two token-authenticated media routes — `GET /api/fm/stream` (gated local /
  * SFTP bytes, Range-capable) and `GET /api/fm/img` (on-demand WebP/AVIF with the
@@ -179,6 +182,7 @@ class MediaEndpoint
 
     protected function write(string $bytes): void
     {
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- raw bytes/HTML of a stored file or a module page, sent with its real Content-Type and nosniff; escaping would corrupt it
         echo $bytes;
     }
 

@@ -92,24 +92,25 @@ for f in index helpers LicenseManager UpdateClient OidcDiscovery SsoStateToken S
 done
 rm -f "$PLUGIN_DIR/public/share.html" "$PLUGIN_DIR/public/intake.html"
 
-# public/*.html are read from disk by the REST route and public-link.php and
-# served through them with a CSP + frame protection; they must never be reachable
-# DIRECTLY under wp-content/plugins/fluxfiles/public/ (unframed-protected, and
-# fm.js lets the first framing parent pick the endpoint). Deny direct access;
-# nginx ignores .htaccess, so the index.php also answers the directory itself.
-cat > "$PLUGIN_DIR/public/.htaccess" <<'HTACCESS'
-<IfModule mod_authz_core.c>
-    Require all denied
-</IfModule>
-<IfModule !mod_authz_core.c>
-    Order deny,allow
-    Deny from all
-</IfModule>
-HTACCESS
+# The UI page is read from disk by the REST route and served through it with a CSP +
+# frame protection; it must never be openable directly under wp-content/plugins/. No
+# .htaccess can ship (WordPress.org rejects hidden files) and nginx ignores it anyway,
+# so the page is converted into a PHP template that exits unless WordPress loaded it
+# (FluxFilesApi::serveUiHtml strips the guard line and serves the rest), and no
+# .html file stays under public/. index.php answers a request for the directory itself.
+python3 - "$PLUGIN_DIR/public/index.html" "$PLUGIN_DIR/templates/ui-index.php" <<'PY'
+import sys
+html = open(sys.argv[1]).read()
+open(sys.argv[2], 'w').write("<?php defined('ABSPATH') || exit; // phpcs:disable WordPress.WP.EnqueuedResources -- standalone iframe document served by the REST route (own CSP), not a WordPress page ?>\n" + html)
+PY
+rm -f "$PLUGIN_DIR"/public/*.html
 cat > "$PLUGIN_DIR/public/index.php" <<'PHP'
 <?php
 // The bundled UI pages are served through the plugin's REST route, never directly.
-http_response_code(403);
+if (!defined('ABSPATH')) {
+    http_response_code(403);
+    exit;
+}
 exit;
 PHP
 
@@ -145,9 +146,13 @@ echo "==> Copying license + third-party notices..."
 # No embed.php / modules-autoload.php: the plugin mints its own tokens, and paid
 # modules are loaded by the separate FluxFiles Pro add-on (fluxfiles_module_paths).
 [ -f "$ROOT_DIR/LICENSE" ] && cp "$ROOT_DIR/LICENSE" "$PLUGIN_DIR/LICENSE" || true
+# WordPress.org allows only readme.txt/LICENSE-style files in the plugin root, so the
+# extension-API reference and the notices live under docs/.
+mkdir -p "$PLUGIN_DIR/docs"
+cp "$WP_DIR/HOOKS.md" "$PLUGIN_DIR/docs/HOOKS.md"
 # Licences of the shipped front-end libraries (assets/vendor/*/LICENSE ship with them).
 # This build uses WordPress's CodeMirror, so that row is dropped from the notice.
-python3 - "$CORE_DIR/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/THIRD-PARTY-NOTICES.md" <<'PY'
+python3 - "$CORE_DIR/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/docs/THIRD-PARTY-NOTICES.md" <<'PY'
 import sys
 lines = open(sys.argv[1]).read().split('\n')
 out = [l for l in lines if not l.startswith('| [CodeMirror 5]')]
@@ -231,6 +236,17 @@ find "$PLUGIN_DIR/vendor" \( -name "docs" -o -name "doc" -o -name "examples" -o 
 find "$PLUGIN_DIR/vendor" -type f -iname "*.md" ! -iname "LICENSE*" ! -iname "NOTICE*" -delete 2>/dev/null || true
 find "$PLUGIN_DIR/api" -type f -iname "*.md" -delete 2>/dev/null || true
 find "$PLUGIN_DIR/vendor" -type f \( -name ".git*" -o -name "phpunit*" -o -name ".editorconfig" -o -name ".php-cs-fixer*" -o -name "phpcs.xml*" -o -name "psalm*.xml*" -o -name "phpstan*" \) -delete 2>/dev/null || true
+# WordPress.org rejects executables/archives and hidden files anywhere in the plugin
+# (application_detected, hidden_files). Library helper scripts and bin/ launchers are never
+# run by the plugin. paragonie/random_compat v9.99.x is an empty polyfill stub for PHP < 7
+# (this build needs PHP >= 8.1): its other/ build helpers and psalm-autoload.php go; the
+# stub's own lib/random.php (which composer still autoloads) stays.
+find "$PLUGIN_DIR/vendor" -type d -name bin -prune -exec rm -rf {} + 2>/dev/null || true
+find "$PLUGIN_DIR/vendor" -type f \( -name "*.sh" -o -name "*.phar" -o -name "*.exe" -o -name "*.bat" \) -delete 2>/dev/null || true
+rm -rf "$PLUGIN_DIR/vendor/paragonie/random_compat/other"
+rm -f  "$PLUGIN_DIR/vendor/paragonie/random_compat/psalm-autoload.php"
+# Any leftover dot-file or dot-directory (.travis.yml, .gitkeep, .github, ...).
+find "$PLUGIN_DIR" -mindepth 1 -name ".*" -prune -exec rm -rf {} + 2>/dev/null || true
 
 echo "==> Creating ZIP archive..."
 cd "$BUILD_DIR"

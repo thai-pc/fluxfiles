@@ -76,7 +76,8 @@ class WpRateLimiterStorage implements RateLimiterStorageInterface
         }
         // 1%-probabilistic global sweep, best-effort.
         if (random_int(1, 100) === 1) {
-            $this->wpdb->query($this->wpdb->prepare("DELETE FROM {$this->table} WHERE ts < %d", time() - $this->windowSeconds));
+            $db = $this->wpdb;
+            $db->query($db->prepare('DELETE FROM %i WHERE ts < %d', $this->table, time() - $this->windowSeconds));
         }
     }
 

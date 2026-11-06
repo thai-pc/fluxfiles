@@ -51,7 +51,7 @@ jobs:
       - name: Lint all PHP sources
         run: |
           find packages/core/api packages/core/embed.php packages/core/router.php \
-               packages/laravel/src packages/wordpress/includes packages/wordpress/fluxfiles.php packages/wordpress/public-link.php \
+               packages/laravel/src packages/wordpress/includes packages/wordpress/fluxfiles.php \
                -name '*.php' -print0 2>/dev/null | xargs -0 -n1 php -l
 
       - name: Run unit/integration test suite
