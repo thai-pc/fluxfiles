@@ -78,6 +78,7 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 | | **`strip_exif`** (opt-in) — lossless removal of GPS/camera metadata on upload | Privacy for user-uploaded phone photos |
 | **Media** | Inline image/video/audio/PDF preview + gated private local streaming · opt-in PDF/video poster thumbnails | Course platforms, private media, document portals |
 | **Admin / hosting** | Code/config editor (CodeMirror), **SFTP chmod**, optional **terminal embed** (your own ttyd via `terminal_pty_url`) | cPanel-style tooling: edit `.env`/`nginx.conf`, set permissions |
+| **BYO embeds** | Your own **PDF tools** (Stirling-PDF, `pdf_tools_url`), **office suite** (Collabora/OnlyOffice, `office_url`) and **e-signature** (DocuSeal, `esign_url`) in a modal — free config toggles | PDF merge/split, editing office files, signing contracts without a paid add-on |
 | **Metadata** | Title/alt/caption/tags + full-text file & folder search · AI auto-tag (free, bring your own provider key) | Digital Asset Management, SEO, large media libraries |
 | | 🔒 Paid: **AI vision** (background removal/upscale/smart-crop, BYO key), **OCR** | Image clean-up, text extraction |
 | **Insights** | Storage usage dashboard (quota + by type/folder) + **duplicate finder** | Show tenants their consumption, reclaim wasted space |
@@ -92,6 +93,8 @@ separate, gitignored modules gated by license — see [`docs/guides/ACTIVATE.md`
 
 - **PHP** >= 8.1 — tested with 8.1 – 8.5 (keep PHP on a security-patched release; that part is up to the host)
 - **Extensions:** `gd`, `curl`, `json`, `openssl`, `mbstring`, `fileinfo`
+- **`zip`** extension for zip **Extract** — without it `POST /api/fm/extract` answers
+  `501 zip_unavailable` (zip *download* streams without it)
 - **Composer** >= 2.0
 - Optional: Ghostscript **≥ 10.05.0** (PDF optimize / PDF posters — older versions are treated as absent), ffmpeg (video posters)
 
@@ -110,10 +113,8 @@ docker run -p 8080:80 \
   ghcr.io/thai-pc/fluxfiles:latest
 ```
 
-Open **http://localhost:8080/public/index.html**. On its first boot the container
-materializes `FLUXFILES_*`, `AWS_*`, `R2_*`, and `SFTP_*` variables into
-`/app/packages/core/.env`; that file remains authoritative on later boots. Persist
-uploads + runtime state with a volume, and add cloud creds as needed:
+Open **http://localhost:8080/public/index.html**. Persist uploads + runtime state
+with a volume, and add cloud creds as needed:
 
 ```bash
 docker run -p 8080:80 \
@@ -123,16 +124,32 @@ docker run -p 8080:80 \
   ghcr.io/thai-pc/fluxfiles:latest
 ```
 
-When that volume is retained, changing `docker run -e …` does **not** rotate an
-existing setting: update the persisted `.env` deliberately (or replace it from
-your secret manager), then restart the container. Back up the entire `storage`
-volume, including hidden `_fluxfiles/` bookkeeping. The production image includes
+**How the container's `.env` works.** On a container's first start,
+`docker/entrypoint.sh` writes every `FLUXFILES_*`, `AWS_*`, `R2_*` and `SFTP_*`
+variable it was given into `/app/packages/core/.env` — but only if that file does
+not exist yet. The file lives in the **container's own filesystem layer**, not on
+the `/app/packages/core/storage` volume, so:
+
+- `docker restart` (same container) keeps the `.env` written on its first start;
+  editing `-e` values needs a new container anyway.
+- `docker rm` + a new `docker run -e …` writes a fresh `.env` from the new values,
+  even when you keep the volume — the volume holds uploads and runtime state, never
+  the config.
+- A `.env` you mount yourself (`-v ./fluxfiles.env:/app/packages/core/.env:ro`) is
+  never overwritten.
+
+Core loads config through `EnvBootstrap`, where a real env var that PHP can see
+wins over the same key in `.env` (the entrypoint's note relies on this). The image
+leaves php-fpm's own pool settings (`clear_env`) at their defaults, so don't count
+on a container env var reaching the web workers of a running container: to change
+a setting, recreate the container or update the mounted `.env`. Back up the entire
+`storage` volume, including hidden `_fluxfiles/` bookkeeping. The production image includes
 the extensions needed by the JSON and SQLite/MySQL/PostgreSQL DB backends; use
 [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](docs/design/DB-STORAGE-MIGRATION-DESIGN.md) for
 the migration procedure.
 
 Every tagged core release publishes three Docker tags: `latest`, the exact
-release version (e.g. `0.2.100`), and its minor line (e.g. `0.2`), for
+release version (e.g. `1.0.1`), and its minor line (e.g. `1.0`), for
 `linux/amd64` and `linux/arm64` — pin to the minor or exact tag in production
 instead of `latest` if you want reproducible deploys; check
 [the package page](https://github.com/thai-pc/fluxfiles/pkgs/container/fluxfiles)
@@ -165,16 +182,21 @@ for the full breakdown.
 
 ### 2. Configure
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` — at minimum, set these two:
+At minimum FluxFiles needs these two settings:
 
 ```env
 FLUXFILES_SECRET=your-random-secret-key-min-32-chars
 FLUXFILES_ALLOWED_ORIGINS=http://localhost:3000,https://yourapp.com
 ```
+
+A real environment variable always wins over `.env`. Where the `.env` file goes
+depends on how you installed:
+
+| Install | Where to put the settings |
+|---|---|
+| **Monorepo clone** | `cp packages/core/.env.example packages/core/.env` (the API also reads a `.env` at the repo root) |
+| **`composer require`** | Prefer real env vars (php-fpm `env[...]`, systemd, your host's panel). A `.env` file works only inside the package: `cp vendor/fluxfiles/fluxfiles/.env.example vendor/fluxfiles/fluxfiles/.env` — `vendor/` is not your project root, so a `.env` in your project root is **not** read, and Composer may remove the file when it updates or reinstalls the package. `vendor/bin/fluxfiles serve` prints the path it expects. |
+| **Docker** | Pass `-e` variables (see [Run with Docker](#run-with-docker-fastest)) |
 
 ### 3. Run
 
@@ -188,7 +210,13 @@ cd packages/core && php -S localhost:8080 router.php
 
 Open in browser:
 - **UI:** http://localhost:8080/public/index.html
-- **API:** http://localhost:8080/api/fm/list?disk=local&path=
+- **API:** http://localhost:8080/api/fm/list?disk=local&path= — opened directly in a
+  browser this answers `401`, because every API call needs an
+  `Authorization: Bearer <JWT>` header (see [Generate a Token](#4-generate-a-token)):
+
+  ```bash
+  curl -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/fm/list?disk=local&path="
+  ```
 
 ### URL Parameters (Standalone Mode)
 
@@ -257,7 +285,7 @@ php packages/core/tests/generate-token.php
 Deploying behind nginx or Apache needs three things: routing `/public/` through
 PHP (for server-side locale injection — a static `try_files` would skip it),
 blocking a handful of sensitive paths (`.env`, `_fluxfiles/`, `storage/` runtime
-state such as `rate_limit.json` and `tus/`), and neutralizing uploaded HTML/SVG so
+state such as `rate_limit.json`, the `rate_limit.d/` counter shards and `tus/`), and neutralizing uploaded HTML/SVG so
 they can't run as same-origin XSS.
 
 **Full nginx server block, Apache `.htaccess`, and directory-permissions
@@ -297,7 +325,7 @@ post_max_size       = 110M     ; a little above upload_max_filesize
 ### JavaScript SDK (Vanilla)
 
 Include `fluxfiles.js` on your page — zero dependencies, works with any framework
-(use the minified `fluxfiles.min.js`, ~5 KB, in production):
+(use the minified `fluxfiles.min.js` — about 6 KB, about 2.5 KB gzipped — in production):
 
 ```html
 <script src="https://fm.yourdomain.com/fluxfiles.js"></script>
@@ -395,10 +423,8 @@ snapped to a bounded set of sizes so cache growth can't run away. Full mechanics
 > `img_base` carries a short-lived per-file token in the query string (an `<img>`
 > can't send an `Authorization` header) — the same tradeoff as the media stream
 > token: single-file scope + short TTL. It mints only when the disk config wires a
-> stream secret; the standalone/Docker app always does this, and **the Laravel and
-> WordPress proxy adapters now do too**, so `/api/fm/img` is fully proxied (Laravel
-> needs core ≥ 0.2.77, WordPress needs core ≥ 0.2.79 — see the `webp_enabled` entry
-> in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md)).
+> stream secret; the standalone/Docker app and the Laravel and WordPress proxy
+> adapters all do, so `/api/fm/img` is fully proxied.
 
 #### Responsive `srcset`
 
@@ -598,10 +624,10 @@ echo fluxfiles_embed(
 
 ### TypeScript Support
 
-TypeScript declarations are included in `fluxfiles.d.ts`:
+TypeScript declarations ship with the `fluxfiles` npm package (`fluxfiles.d.ts`):
 
 ```ts
-import type { FluxFilesInstance, FluxFilesOpenOptions, FluxFile } from './fluxfiles';
+import type { FluxFilesSDK, FluxFilesOpenOptions, FluxFile } from 'fluxfiles';
 ```
 
 ---
@@ -610,38 +636,53 @@ import type { FluxFilesInstance, FluxFilesOpenOptions, FluxFile } from './fluxfi
 
 ### Configuration
 
-Disks are defined in `config/disks.php`:
+The built-in disks are defined in `packages/core/config/disks.php` and read
+everything from env vars, so you normally configure them without touching the
+file. Abridged:
 
 ```php
-return [
-    // Local filesystem
+$disks = [
     'local' => [
-        'driver' => 'local',
-        'root'   => __DIR__ . '/../storage/uploads',
-        'url'    => '/storage/uploads',  // public URL prefix
+        'driver'  => 'local',
+        'root'    => __DIR__ . '/../storage/uploads',
+        'url'     => '/storage/uploads',                               // public URL prefix
+        'private' => ($_ENV['FLUXFILES_LOCAL_PRIVATE'] ?? '') === 'true', // gated /stream serving
     ],
-
-    // AWS S3 (or any S3-compatible — set AWS_ENDPOINT for MinIO / DO Spaces)
-    's3' => [
-        'driver'   => 's3',
-        'region'   => $_ENV['AWS_DEFAULT_REGION'],
-        'bucket'   => $_ENV['AWS_BUCKET'],
-        'key'      => $_ENV['AWS_ACCESS_KEY_ID'],
-        'secret'   => $_ENV['AWS_SECRET_ACCESS_KEY'],
-        'endpoint' => $_ENV['AWS_ENDPOINT'] ?? '',  // empty = native AWS S3
+    's3' => [   // AWS S3, or any S3-compatible store via AWS_ENDPOINT
+        'driver'     => 's3',
+        'region'     => $_ENV['AWS_DEFAULT_REGION'] ?? 'ap-southeast-1',
+        'bucket'     => $_ENV['AWS_BUCKET'] ?? '',
+        'key'        => $_ENV['AWS_ACCESS_KEY_ID'] ?? '',
+        'secret'     => $_ENV['AWS_SECRET_ACCESS_KEY'] ?? '',
+        'endpoint'   => $_ENV['AWS_ENDPOINT'] ?? '',            // empty = native AWS S3
+        'visibility' => $_ENV['AWS_VISIBILITY'] ?? 'private',   // private = presigned GET URLs
+        'public_url' => $_ENV['AWS_PUBLIC_URL'] ?? '',          // CDN / custom domain
+        'url_ttl'    => (int) ($_ENV['AWS_URL_TTL'] ?? 3600),   // presigned GET lifetime (s)
     ],
-
-    // Cloudflare R2 (S3-compatible)
-    'r2' => [
-        'driver'   => 's3',
-        'endpoint' => 'https://' . $_ENV['R2_ACCOUNT_ID'] . '.r2.cloudflarestorage.com',
-        'region'   => 'auto',
-        'bucket'   => $_ENV['R2_BUCKET'],
-        'key'      => $_ENV['R2_ACCESS_KEY_ID'],
-        'secret'   => $_ENV['R2_SECRET_ACCESS_KEY'],
+    'r2' => [   // Cloudflare R2 — same keys with the R2_ prefix
+        'driver'     => 's3',
+        'endpoint'   => 'https://' . ($_ENV['R2_ACCOUNT_ID'] ?? '') . '.r2.cloudflarestorage.com',
+        'region'     => 'auto',
+        'bucket'     => $_ENV['R2_BUCKET'] ?? '',
+        // key / secret / visibility / public_url / url_ttl from R2_* …
     ],
 ];
+
+// The sftp disk exists only when SFTP_HOST is set.
+if (($_ENV['SFTP_HOST'] ?? '') !== '') {
+    $disks['sftp'] = ['driver' => 'sftp', 'host' => $_ENV['SFTP_HOST'], /* SFTP_* … */];
+}
+
+return $disks;
 ```
+
+Every variable these read, with its default, is listed in
+[`docs/reference/CONFIG.md` §3 — Static disk environment](docs/reference/CONFIG.md#3-static-disk-environment).
+
+> ⚠️ **Composer installs:** this file is `vendor/fluxfiles/fluxfiles/config/disks.php`,
+> and Composer overwrites it on every update. Configure the built-in disks through
+> env vars instead, and see [Adding a Custom Disk](#adding-a-custom-disk) for the
+> ways to add more.
 
 > **Note:** R2 uses the S3-compatible API. ACL operations are not supported — FluxFiles automatically disables `retain_visibility` for endpoint-based disks.
 
@@ -649,7 +690,7 @@ return [
 
 A 3rd disk driver (after local and S3/R2) that turns FluxFiles into a file
 manager for an SFTP server — a VPS, shared host, or anything behind SSH. Set the
-`SFTP_*` env vars (see [Environment Variables](#environment-variables)) and an
+`SFTP_*` env vars (full list in [`docs/reference/CONFIG.md` §3](docs/reference/CONFIG.md#3-static-disk-environment)) and an
 `sftp` disk is registered automatically; the tree UI is disk-agnostic, so listing,
 upload, rename, move and delete just work.
 
@@ -733,14 +774,40 @@ own box and owns its own auth; FluxFiles hosts nothing.
 Deploying from a Git repo? Use your CI (GitHub Actions, Deployer, a webhook) —
 FluxFiles' SFTP disk is for file operations (list/upload/download/`chmod`).
 
+### PDF tools, office and e-sign (bring your own)
+
+The same pattern covers three more tools that excellent free OSS already does. Each
+is a free, `http(s)`-validated claim that makes the UI embed **your own** instance
+in a modal; empty (default) → no button or action.
+
+| Claim | Embed | What appears |
+|---|---|---|
+| `pdf_tools_url` | [Stirling-PDF](https://github.com/Stirling-Tools/Stirling-PDF) | A **PDF tools** button (merge/split/convert on your server) |
+| `office_url` | [Collabora Online](https://www.collaboraonline.com/) / [OnlyOffice](https://www.onlyoffice.com/) | An **Open in Office** action on `.doc(x)`/`.xls(x)`/`.ppt(x)`/`.odt`/`.ods`/`.odp`/`.rtf` files |
+| `esign_url` | [DocuSeal](https://github.com/docusealco/docuseal) | A **Sign** action on `.pdf`/`.doc(x)`/`.odt` files |
+
+`office_url` and `esign_url` may carry a `{url}` placeholder, which the UI replaces
+with the selected file's (URL-encoded) URL; without one, your server is embedded
+as-is. Your page on that server does the editor / signing wiring.
+
+```php
+'claims' => [
+    'pdf_tools_url' => 'https://pdf.acme.com/',
+    'office_url'    => 'https://office.acme.com/open?file={url}',
+    'esign_url'     => 'https://sign.acme.com/new?doc={url}',
+],
+```
+
+See [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) §2.2 for the claim details.
+
 ### Config / code editor
 
 Edit a file's **text** content in place — the cPanel "Edit" use case for
 `wp-config.php`, `.env`, `nginx.conf`, `deploy.sh`, etc. Works on **any** disk
 (local / S3 / R2 / SFTP) and is proxied by Laravel/WordPress.
 
-- `GET /api/fm/content?disk=&path=` → `{ path, content, size }` (read perm;
-  binary file → 415, file > 5 MB → 413).
+- `GET /api/fm/content?disk=&path=` → `{ path, content, size }` (read perm **and**
+  `allow_download`, else `403 download_forbidden`; binary file → 415, file > 5 MB → 413).
 - `PUT /api/fm/content {disk, path, content}` overwrites an **existing** file
   (write perm; missing file → 404, oversize → 413).
 - In the UI, an **Edit** button appears in the file detail panel for text files,
@@ -776,11 +843,12 @@ both synchronous (no queue/worker — FluxFiles keeps no server-side job state).
 - **`POST /api/fm/zip`** `{disk, paths[], name?}` streams a `.zip` of the selected
   files **and folders** (recursive), constant-memory via ZipStream (each entry
   piped through Flysystem, so it works on local/S3/R2/SFTP). Needs read perm +
-  `allow_download`; a pre-flight rejects (`413`) anything over `zip_max_mb` /
+  `allow_zip` + `allow_download`; a pre-flight rejects (`413`) anything over `zip_max_mb` /
   `zip_max_files` **before** a byte is streamed. Proxied by the Laravel and
   WordPress adapters too.
 - **`POST /api/fm/extract`** `{disk, path, dest?}` extracts a `.zip` in place
-  (default dest: a folder named after the archive). Returns JSON and is proxied by
+  (default dest: a folder named after the archive). Needs write perm +
+  `allow_extract` and PHP's `zip` extension (else `501 zip_unavailable`). Returns JSON and is proxied by
   Laravel/WordPress. Two passes: every entry is validated before the first write;
   then entries are scanned and written one by one — so a virus/DLP hit or storage
   error mid-way can leave the earlier entries written (it is **not** a transaction).
@@ -799,20 +867,35 @@ folder), and an **Extract** action on `.zip` files. Claims: `allow_zip` /
 
 ### Adding a Custom Disk
 
-Add a new entry to `config/disks.php`:
+FluxFiles has no separate override file for disks; pick the route that matches
+your install:
 
-```php
-'minio' => [
-    'driver'   => 's3',
-    'endpoint' => 'http://minio.local:9000',
-    'region'   => 'us-east-1',
-    'bucket'   => 'my-bucket',
-    'key'      => 'minioadmin',
-    'secret'   => 'minioadmin',
-],
-```
+- **Just one S3-compatible store?** No new disk needed — point the built-in `s3`
+  disk at it with `AWS_ENDPOINT` (+ `AWS_DEFAULT_REGION`, credentials).
+- **Monorepo clone, or your own Docker image:** add an entry to
+  `packages/core/config/disks.php` (keep it in your fork, or `COPY` your version over
+  it in a Dockerfile `FROM ghcr.io/thai-pc/fluxfiles`):
 
-Then include `'minio'` in the JWT `disks` claim.
+  ```php
+  $disks['minio'] = [
+      'driver'   => 's3',
+      'endpoint' => 'http://minio.local:9000',
+      'region'   => 'us-east-1',
+      'bucket'   => $_ENV['MINIO_BUCKET'] ?? '',
+      'key'      => $_ENV['MINIO_KEY'] ?? '',
+      'secret'   => $_ENV['MINIO_SECRET'] ?? '',
+  ];
+  ```
+
+  Then include `'minio'` in the JWT `disks` claim. Only the `FLUXFILES_*`, `AWS_*`,
+  `R2_*` and `SFTP_*` prefixes are copied from real env vars, so any other variable
+  name (like `MINIO_*` above) must come from `.env`.
+- **Composer install:** don't edit `vendor/` — it is overwritten on update. Add
+  extra buckets / SFTP servers per token with [BYOB](#byob-bring-your-own-bucket)
+  instead (no file to edit; a private-network endpoint must be listed in
+  `FLUXFILES_SSRF_ALLOW_HOSTS`).
+- **Laravel adapter:** disks live in your published `config/fluxfiles.php`
+  (`disks` key) — see [`packages/laravel/README.md`](packages/laravel/README.md).
 
 ### S3-compatible providers (no extra code)
 
@@ -917,9 +1000,13 @@ Metadata and image variants are transferred together. Quota is checked on the de
     "max_upload":   10,             // MB per file
     "allowed_ext":  ["jpg", "png", "pdf"],
     "max_storage":  1000,           // MB total (0 = unlimited)
-    "byob_disks":   {}
+    "max_files":    0               // files under the prefix (0 = unlimited)
 }
 ```
+
+That is what `fluxfiles_token()` always emits; optional claims (`owner_only`,
+`allow_*`, …) are added only when set. `byob_disks` (encrypted credentials) appears
+only in tokens from `fluxfiles_byob_token()`.
 
 The full claim list (100+, with types/defaults/units) and every `fluxfiles_token()`
 parameter live in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md) — kept as the single copy so it
@@ -1162,9 +1249,8 @@ request/response bodies, and the upload/duplicate-detection JSON shapes:
 > `GET /img?token=&width=&quality=&format=` (on-demand WebP/AVIF, see
 > [On-demand WebP](#on-demand-webp--avif)) and `GET /stream?token=` (gated
 > private media, including SFTP-disk serving). Both mint only when a stream
-> secret is wired — true for core-standalone/Docker always, and now for **both
-> the Laravel and WordPress proxy adapters too**, so both routes are fully
-> proxied, not core-only.
+> secret is wired — true for core-standalone/Docker and for both the Laravel and
+> WordPress proxy adapters, so both routes are fully proxied, not core-only.
 
 ---
 
@@ -1215,7 +1301,7 @@ $token = FluxFiles\Laravel\FluxFilesFacade::token((string) auth()->id(), [
 
 ## Internationalization
 
-16 languages built in. Translation files in `lang/*.json`.
+16 languages built in. Translation files live in [`packages/core/lang/`](packages/core/lang/).
 
 | Code | Language | Dir | | Code | Language | Dir |
 |------|----------|-----|-|------|----------|-----|
@@ -1327,7 +1413,7 @@ Mitigations regardless of delivery:
 - [ ] Set `FLUXFILES_ALLOWED_ORIGINS` to your production domain(s)
 - [ ] Use HTTPS everywhere
 - [ ] Deliver tokens via the SDK/`postMessage` (not `?token=` URLs) in production; keep `ttl` short
-- [ ] Block public access to `.env`, `vendor/`, `storage/` runtime state (`rate_limit.json`, `tus/`) and `_fluxfiles/`
+- [ ] Block public access to `.env`, `vendor/`, `storage/` runtime state (`rate_limit.json`, `rate_limit.d/`, `tus/`) and `_fluxfiles/`
 - [ ] Set `storage/` directory permissions to 755, `.env` to 600
 - [ ] Never commit `.env` with real credentials to git
 - [ ] Review and rotate API keys periodically
@@ -1362,7 +1448,7 @@ bash scripts/pack-smoke.sh all                       # verifies the published di
 make test PHP=8.5   # one version  ·  make test-all  # 8.1–8.5  ·  make up  # app:8080 + S3:4566
 ```
 
-`.github/workflows/test.yml` runs all of this (16 jobs, including dedicated
+`.github/workflows/test.yml` runs all of this (including dedicated
 `db-mysql`/`db-postgres` jobs for the opt-in `FLUXFILES_STORAGE_BACKEND=db` mode and a
 lock-file consistency check).
 For the CI map, the adapter↔core floor guard, and the tag→registry release flow, see
@@ -1379,9 +1465,10 @@ Only two are required — everything else has a working default:
 | `FLUXFILES_SECRET` | **Yes** | — | JWT signing secret (min 32 chars) |
 | `FLUXFILES_ALLOWED_ORIGINS` | **Yes** | — | Comma-separated CORS origins |
 
-Storage-disk credentials (`AWS_*`, `R2_*`, `SFTP_*`) are covered in
-[Storage Disks](#storage-disks) above, next to the config that reads them. Everything
-else — rate limits, local-media privacy, URL import, AI tagging, and more —
+Storage-disk variables (`AWS_*`, `R2_*`, `SFTP_*`, `FLUXFILES_LOCAL_PRIVATE`) are
+listed with their defaults in
+[`docs/reference/CONFIG.md` §3 — Static disk environment](docs/reference/CONFIG.md#3-static-disk-environment).
+Everything else — rate limits, local-media privacy, URL import, AI tagging, and more —
 is documented with its default in [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md).
 
 ---
@@ -1445,10 +1532,15 @@ If you delete `_fluxfiles/`, FluxFiles will generally recreate it as needed, but
 
 ### `storage/rate_limit.json` (and other server-local state)
 
-Local file-backed counter used by the rate limiter (per-user read/write quotas controlled by `.env`: `FLUXFILES_RATE_LIMIT_READ`, `FLUXFILES_RATE_LIMIT_WRITE`).
+File-backed state of the rate limiter (per-user read/write limits set by
+`FLUXFILES_RATE_LIMIT_READ` / `FLUXFILES_RATE_LIMIT_WRITE`). The counters are
+sharded one small file per user + action under **`storage/rate_limit.d/`**;
+`storage/rate_limit.json` is only an epoch marker that every shard records.
 
-- Safe to delete during development (it will be recreated), but it may reset rate-limit counters.
-- In production, **do not expose this file publicly** (deny access at your web server).
+- Deleting `rate_limit.json` resets every limit at once (it is recreated); handy in
+  development and tests.
+- In production, **do not expose `rate_limit.json` or `rate_limit.d/` publicly**
+  (deny access at your web server).
 
 `storage/tus/` holds partial resumable uploads (swept after 24 h) — server-local runtime
 state that must never be served.
@@ -1456,8 +1548,8 @@ state that must never be served.
 > Everything above describes the **default `FLUXFILES_STORAGE_BACKEND=json`** mode. Set
 > `FLUXFILES_STORAGE_BACKEND=db` to move metadata, search/folder index, audit log, trash
 > manifest, legal holds, quota, and the rate limiter into your own self-hosted
-> MySQL/PostgreSQL/SQLite instead — none of those `_fluxfiles/*.json` files or
-> `rate_limit.json` are created or used in that mode. File bytes always stay on your
+> MySQL/PostgreSQL/SQLite instead — none of those `_fluxfiles/*.json` files,
+> `rate_limit.json` or `rate_limit.d/` are created or used in that mode. File bytes always stay on your
 > configured disk either way. See
 > [`docs/design/DB-STORAGE-MIGRATION-DESIGN.md`](docs/design/DB-STORAGE-MIGRATION-DESIGN.md).
 
@@ -1468,7 +1560,7 @@ state that must never be served.
 | What | Where | Notes |
 |------|-------|-------|
 | **Secrets & CORS** | `.env` | `FLUXFILES_SECRET`, `FLUXFILES_ALLOWED_ORIGINS` |
-| **Storage disks** | `packages/core/config/disks.php` | Add/remove disk definitions |
+| **Storage disks** | `packages/core/config/disks.php` | Add/remove disk definitions (clone / own image only — in a Composer install it is in `vendor/`; see [Adding a Custom Disk](#adding-a-custom-disk)) |
 | **Cloud credentials** | `.env` | `AWS_*`, `R2_*`, `SFTP_*` variables |
 | **AI tagging** | `.env` | Provider, API key, model, auto-tag on upload |
 | **Branding / colors** | `packages/core/assets/fm.css` | CSS custom properties (`--ff-primary`, `--ff-bg`, etc.) |
@@ -1489,7 +1581,7 @@ state that must never be served.
 |---|---|
 | `403` on an otherwise-valid request | A JWT claim is scoping you out — check `perms`, `disk`, `prefix`, `owner_only`, `show_hidden` (dotfiles), or an `allow_*` feature claim. See [`docs/reference/CONFIG.md`](docs/reference/CONFIG.md). |
 | `403 legal_hold_active` | The file (or a folder above/below it) is under legal hold — release the hold first. Enforcement works even without the paid module installed. |
-| `501` calling a feature endpoint (share, versioning, webhooks, AI vision, OCR, virus scan, backup, SSO, audit export, DLP, legal hold, C2PA) | That's a **paid module** and isn't installed — see [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md). Everything in the [Features](#features) table above not marked Paid is free/core; these are separate add-ons. |
+| `501` calling a feature endpoint (share, intake, versioning, webhooks, AI vision, OCR, virus scan, backup, SSO, audit export, DLP, legal hold, C2PA) | That's a **paid module** and isn't installed — see [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md). Everything in the [Features](#features) table above not marked Paid is free/core; these are separate add-ons. |
 | `402` on a paid-module endpoint | Module is installed but the license didn't validate — check [`docs/guides/ACTIVATE.md`](docs/guides/ACTIVATE.md) and your license server config. |
 | Every upload fails after enabling `allow_virus_scan` / `allow_dlp_scan` | Both are **fail-closed**: a missing module, licence or unreachable scanner refuses the write. Configure the engine or drop the claim. |
 | Uploaded/renamed files "disappear" or don't show up where expected | Check `prefix`/`disks` claims scoping the token, and whether you're looking at the composer-install vs monorepo storage root — see [`packages/core/README.md`](packages/core/README.md#where-the-files-land--git-clone-vs-composer-require). |
