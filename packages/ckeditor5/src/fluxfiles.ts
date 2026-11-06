@@ -58,9 +58,25 @@ export class FluxFiles extends Plugin {
         button.tooltip = true;
         return button;
       },
-      formViewCreator: () => this._createButton(editor.locale, false),
+      formViewCreator: () => {
+        const button = this._createButton(editor.locale, false);
+        button.label = editor.locale.t('Insert image via FluxFiles');
+        return button;
+      },
       requiresForm: false,
     });
+
+    // ImageInsertUI renders only the integrations named in image.insert.integrations,
+    // so a registered entry stays invisible unless it is listed there. Add it to the
+    // default list; a list the integrator set themselves is left alone.
+    const config = editor.config as unknown as { get(k: string): unknown; set(k: string, v: unknown): void };
+    const listed = config.get('image.insert.integrations') as string[] | undefined;
+    const defaults = ['upload', 'assetManager', 'url'];
+    const isDefault = !listed
+      || (listed.length === defaults.length && defaults.every((name, i) => listed[i] === name));
+    if (isDefault) {
+      config.set('image.insert.integrations', [...defaults, 'fluxfiles']);
+    }
   }
 
   private _createButton(locale: Locale, withTooltip: boolean): ButtonView {
