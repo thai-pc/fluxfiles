@@ -3,6 +3,27 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] — 2026-11-06
+
+> Released: `core-v1.0.2`, `sdk-v1.0.1`, `wordpress-v1.0.2`.
+
+Found by reviewing the README against the code.
+
+### Fixed
+
+- **`fluxfiles index` ignored every flag.** PHP's `getopt()` stops at the first non-option
+  argument, which is `index`, so `--dry-run` was dropped and the indexer wrote `_fluxfiles/`
+  index files for real, while `--disk`, `--path` and `--owner` were dropped too and it always
+  indexed the whole `local` disk. The flags are now parsed by hand, as `serve` already did, and
+  an unknown option or a missing value is rejected with an error.
+- **The `onSelect` payload was missing `created` and `modified`.** The README documents both
+  (unix seconds: the stable upload time and the live storage mtime), but the UI never sent them.
+- **SDK: `import type { FluxFile, FluxFilesOpenOptions, FluxFilesSDK } from 'fluxfiles'` failed.**
+  `fluxfiles.d.ts` declared its interfaces at module level without exporting them. They now live
+  in a `FluxFiles` namespace merged with the existing `export =` value, so named type imports,
+  the default import and the UMD global all work. `FluxFile.modified` was typed `string` but is a
+  number of unix seconds; `FluxFile.created` was missing.
+
 ## [1.0.2] — 2026-10-31
 
 > Released: `core-v1.0.1`, `laravel-v1.0.1`, `wordpress-v1.0.1`.
