@@ -354,9 +354,10 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
         $stmt->execute($params);
 
         $results = [];
+        $diskConfig = $this->diskManager->config($disk);
         foreach ($stmt->fetchAll() as $row) {
             $fileKey = $row['path'];
-            if ($this->isReservedPath($fileKey)) {
+            if ($this->isReservedPath($fileKey) || \FluxFiles\FileManager::isGuardKey($diskConfig, $fileKey)) {
                 continue;
             }
             if (!$includeHidden && $this->isHiddenPath($fileKey)) {

@@ -353,9 +353,10 @@ class WpDbMetadataHandler implements MetadataRepositoryInterface, MigrationImpor
         $rows = $this->getResults($sql, $bind);
 
         $results = [];
+        $diskConfig = $this->diskManager->config($disk);
         foreach ($rows as $row) {
             $fileKey = $row['path'];
-            if ($this->isReservedPath($fileKey)) {
+            if ($this->isReservedPath($fileKey) || \FluxFiles\FileManager::isGuardKey($diskConfig, $fileKey)) {
                 continue;
             }
             if (!$includeHidden && $this->isHiddenPath($fileKey)) {

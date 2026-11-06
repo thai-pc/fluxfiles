@@ -81,7 +81,8 @@ class QuotaManager
             // a case-sensitive substring test here let `_FLUXFILES/` files count
             // against the user's quota (and, worse, diverge from what every other
             // caller considers reserved).
-            if (!FileManager::isReservedKey($item->path())) {
+            if (!FileManager::isReservedKey($item->path())
+                && !FileManager::isGuardKey($this->diskManager->config($disk), $item->path())) {
                 $files++;
             }
         }
@@ -282,7 +283,8 @@ class QuotaManager
             // a case-sensitive substring test here let `_FLUXFILES/` files count
             // against the user's quota (and, worse, diverge from what every other
             // caller considers reserved).
-            if (FileManager::isReservedKey($path)) {
+            if (FileManager::isReservedKey($path)
+                || FileManager::isGuardKey($this->diskManager->config($disk), $path)) {
                 continue;
             }
             $total += $size;

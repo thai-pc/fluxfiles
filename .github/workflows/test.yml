@@ -67,6 +67,9 @@ jobs:
       - name: WordPress plugin smoke (stubbed WP, uses core autoload)
         run: php packages/wordpress/tests/test-wp-smoke.php
 
+      - name: WordPress storage base + uninstall (stubbed WP, uses core autoload)
+        run: php packages/wordpress/tests/test-wp-storage-uninstall.php
+
       - name: Laravel adapter smoke (stubbed Laravel, uses core autoload)
         run: php packages/laravel/tests/test-laravel-smoke.php
 

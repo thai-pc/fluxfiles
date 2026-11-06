@@ -30,18 +30,21 @@ class FluxFilesApi
     {
         $storagePath = FluxFilesPlugin::storagePath();
 
-        if (!is_dir($storagePath)) {
-            wp_mkdir_p($storagePath);
+        // Not on the no-uploads-API fallback path: the real location may differ later.
+        if (!FluxFilesStorage::onFallback()) {
+            if (!is_dir($storagePath)) {
+                wp_mkdir_p($storagePath);
+            }
+            // A site that never ran activation (a multisite sub-site, an install that
+            // predates the uploads dir) has no uploads/ yet, and protectStorage() skips
+            // a missing one — so the deny files would only appear after the first write.
+            if (!is_dir($storagePath . '/uploads')) {
+                wp_mkdir_p($storagePath . '/uploads');
+            }
+            // Existing installs never re-run activate(), so (re)apply the storage
+            // web-server rules here too — this is the path every upload goes through.
+            FluxFilesPlugin::protectStorage();
         }
-        // A site that never ran activation (a multisite sub-site, an install that
-        // predates the uploads dir) has no uploads/ yet, and protectStorage() skips
-        // a missing one — so the deny files would only appear after the first write.
-        if (!is_dir($storagePath . '/uploads')) {
-            wp_mkdir_p($storagePath . '/uploads');
-        }
-        // Existing installs never re-run activate(), so (re)apply the storage
-        // web-server rules here too — this is the path every upload goes through.
-        FluxFilesPlugin::protectStorage();
         // Key for the tamper-evident audit chain (an option, not the env).
         \FluxFiles\AuditChain::configure((string) get_option('fluxfiles_secret', ''));
 

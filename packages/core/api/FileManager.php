@@ -505,7 +505,7 @@ class FileManager
         /** @var StorageAttributes $item */
         foreach ($fs->listContents($scoped, false) as $item) {
             $name = basename($item->path());
-            if ($this->hiddenFromListing($name, $item->isFile(), $item->path(), $fs)) {
+            if ($this->hiddenFromListing($name, $item->isFile(), $item->path(), $fs, $disk)) {
                 continue;
             }
 
@@ -694,8 +694,12 @@ class FileManager
     }
 
     /** Entries list() never shows: system folders, dotfiles (unless show_hidden), legacy sidecars. */
-    private function hiddenFromListing(string $name, bool $isFile, string $path, $fs): bool
+    private function hiddenFromListing(string $name, bool $isFile, string $path, $fs, string $disk = ''): bool
     {
+        // Adapter-written guard files (disk config `hidden_files`), disk-root only.
+        if ($isFile && $disk !== '' && self::isGuardKey($this->disks->config($disk), $path)) {
+            return true;
+        }
         // Hide internal system directories.
         if ($name === '_fluxfiles' || $name === '_variants') {
             return true;
@@ -759,7 +763,7 @@ class FileManager
                     if ($key === '' || substr($key, -1) === '/') {
                         continue; // folder marker object
                     }
-                    if ($this->hiddenFromListing(basename($key), true, $key, $fs)) {
+                    if ($this->hiddenFromListing(basename($key), true, $key, $fs, $disk)) {
                         continue;
                     }
                     if ($type !== 'all' && self::listKind(basename($key)) !== $type) {
@@ -3191,7 +3195,8 @@ class FileManager
                 continue;
             }
             $key = $item->path();
-            if ($this->isReservedSystemPath($key) || $this->isHiddenForToken($key)) {
+            if ($this->isReservedSystemPath($key) || $this->isHiddenForToken($key)
+                || self::isGuardKey($this->disks->config($disk), $key)) {
                 continue;
             }
             $size = (int) ($item->fileSize() ?? 0);
@@ -3320,10 +3325,10 @@ class FileManager
     {
         $fs = $this->filesystemFor($disk, $perm);
         $root = $this->scopedPath($relRoot);
-        return $this->walkVisibleFiles($fs, $root);
+        return $this->walkVisibleFiles($fs, $root, $this->disks->config($disk));
     }
 
-    private function walkVisibleFiles(\League\Flysystem\FilesystemOperator $fs, string $root): \Generator
+    private function walkVisibleFiles(\League\Flysystem\FilesystemOperator $fs, string $root, array $diskConfig = []): \Generator
     {
         if ($this->isReservedSystemPath($root)) {
             return;
@@ -3335,7 +3340,7 @@ class FileManager
                     continue;
                 }
                 $key = $item->path();
-                if (!$this->isVisibleKey($key)) {
+                if (!$this->isVisibleKey($key) || self::isGuardKey($diskConfig, $key)) {
                     continue;
                 }
                 $size = 0;
@@ -4694,6 +4699,21 @@ class FileManager
             }
         }
         return false;
+    }
+
+    /**
+     * True when $key is one of the files a host adapter wrote into the disk root
+     * to protect it (disk config `hidden_files`, e.g. the WordPress plugin's
+     * `.htaccess` / `index.php`). Exact, case-sensitive match on the DISK-relative
+     * key, so a same-named file in any subfolder (or under a tenant prefix) is a
+     * normal user file and stays visible.
+     *
+     * @param array<string,mixed> $diskConfig
+     */
+    public static function isGuardKey(array $diskConfig, string $key): bool
+    {
+        $names = $diskConfig['hidden_files'] ?? null;
+        return is_array($names) && $names !== [] && in_array(trim($key, '/'), $names, true);
     }
 
     private function assertDisk(string $disk): void

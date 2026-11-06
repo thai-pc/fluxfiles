@@ -333,6 +333,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
         $q = mb_strtolower($query);
         $qAscii = preg_match('/[\x80-\xFF]/', $q) !== 1;
         $results = [];
+        $diskConfig = $this->diskManager->config($disk);
 
         foreach ($index as $fileKey => $meta) {
             // loadIndex() can hand back an int key for a decimal-integer-looking
@@ -340,6 +341,10 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $fileKey = (string) $fileKey;
             // Never surface metadata sidecars or image variants as search hits.
             if ($this->isReservedPath($fileKey)) {
+                continue;
+            }
+            // Adapter-written guard files (disk config `hidden_files`) are never hits.
+            if (FileManager::isGuardKey($diskConfig, $fileKey)) {
                 continue;
             }
             // Dotfiles (.env, .gitignore, …) are hidden from search unless opted in.
