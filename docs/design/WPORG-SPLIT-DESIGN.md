@@ -341,6 +341,9 @@ of the free plugin (the old updater included) deletes that folder, which is the 
   1.1.0 (tracked in §10, phase 8).
 - **Known gap.** A site whose `WP_CONTENT_URL` is on another host would mis-resolve the
   relative redirect. Its old links break, which is no worse than not having the shim.
+  The same holds for a plugin dir that is not two levels below the site root (custom
+  `WP_PLUGIN_DIR`/`WP_PLUGIN_URL`) and for a server that leaves `PATH_INFO` in `SCRIPT_NAME`:
+  the same-origin target is wrong (a broken link, not a security issue).
 
 ## 6. Storage layout
 

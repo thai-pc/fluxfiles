@@ -880,10 +880,10 @@ class FluxFilesApi
         );
     }
 
-    /** WordPress' HTTP API for core's outbound calls (null on a core without the seam). */
+    /** WordPress' HTTP API for core's outbound calls. */
     private static function httpTransport(): ?\FluxFiles\HttpTransportInterface
     {
-        return interface_exists(\FluxFiles\HttpTransportInterface::class) ? new \WpHttpTransport() : null;
+        return new \WpHttpTransport();
     }
 
     /**
@@ -2270,8 +2270,7 @@ class FluxFilesApi
      *
      * The `<module>/page` routes do NOT go through PublicRoutes::dispatch(): its page
      * branch hard-codes the standalone API base (`/api/fm`), which is wrong under
-     * /wp-json/fluxfiles/v1/. They use FluxFilesPlugin::servePublicPage(), shared with
-     * public-link.php.
+     * /wp-json/fluxfiles/v1/. They use FluxFilesPlugin::servePublicPage().
      */
     private function publicLink(string $which, \WP_REST_Request $request): void
     {

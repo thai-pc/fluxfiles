@@ -1058,6 +1058,9 @@ test('public-link.php is a WordPress-free redirect shim to the REST page route',
     // the headers) with a fake SCRIPT_NAME; skipped where php-cgi is not installed.
     $cgi = trim((string) @shell_exec('command -v php-cgi 2>/dev/null'));
     if ($cgi === '') {
+        if (getenv('GITHUB_ACTIONS')) {
+            throw new RuntimeException('php-cgi is required in CI to execute the public-link.php redirect targets');
+        }
         echo "    (php-cgi not installed: redirect targets not executed)\n";
         return;
     }
@@ -1130,7 +1133,7 @@ test('WpHttpTransport maps core requests onto wp_remote_request and never throws
     assertEqual('POST', $args['method'], 'method upper-cased');
     assertEqual(7, $args['timeout'], 'timeout');
     assertEqual('{}', $args['body'], 'body');
-    assertEqual(['Authorization' => 'Bearer k', 'Content-Type' => 'application/json'], $args['headers'], 'both header shapes accepted');
+    assertEqual(['Authorization' => 'Bearer k', 'Content-Type' => 'application/json', 'user-agent' => 'FluxFiles'], $args['headers'], 'both header shapes accepted');
     assertEqual(201, $r['status'], 'status');
     assertEqual('ok', $r['body'], 'body returned');
     assertEqual(['content-type' => 'text/x', 'x-multi' => 'a, b'], $r['headers'], 'response headers lower-cased');
@@ -1141,6 +1144,17 @@ test('WpHttpTransport maps core requests onto wp_remote_request and never throws
     assertEqual('', $r['body'], 'empty body');
     assertTrue(strpos((string) ($r['error'] ?? ''), 'cURL error 28') !== false, 'error message carried');
     assertTrue(!array_key_exists('body', $GLOBALS['WP_REMOTE_CALL'][1]), 'no body key without a body');
+
+    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => ''], 'body' => 'x', 'headers' => []];
+    $r = $t->request('GET', 'https://example.test/x');
+    assertTrue($r['status'] === 0 && ($r['error'] ?? '') !== '', 'status 0 always carries an error message');
+
+    $GLOBALS['WP_REMOTE'] = ['response' => ['code' => 200], 'body' => '', 'headers' => new class { public function getAll() { return ['Content-Type' => 'a/b', 'X-Two' => ['1', '2']]; } }];
+    $r = $t->request('GET', 'https://example.test/x');
+    assertEqual(['content-type' => 'a/b', 'x-two' => '1, 2'], $r['headers'], 'a getAll() header object is flattened');
+    assertEqual('FluxFiles', $GLOBALS['WP_REMOTE_CALL'][1]['headers']['user-agent'], 'default user-agent is sent');
+    $t->request('GET', 'https://example.test/x', ['User-Agent' => 'Custom/1']);
+    assertEqual(['User-Agent' => 'Custom/1'], $GLOBALS['WP_REMOTE_CALL'][1]['headers'], 'a caller-set user-agent is kept');
 
     $GLOBALS['WP_REMOTE'] = new RuntimeException('boom');
     $r = $t->request('GET', 'https://example.test/x');
@@ -2687,11 +2701,9 @@ file_put_contents($tree . '/share.html', "<!doctype html><html><head><title>t</t
 require $wpDir . '/includes/FluxFilesPlugin.php';
 require $wpDir . '/includes/FluxFilesApi.php';
 register_shutdown_function(static function () { echo "\nSTATUS=" . http_response_code() . "\nHEADERS=" . json_encode(headers_list()); });
-if ($entry === 'rest') {
-    $_GET = ['token' => 'x'] + ($blog !== '' ? ['blog' => $blog] : []);
-    $m = new ReflectionMethod('FluxFilesApi', 'publicLink');
-    $m->invoke(new FluxFilesApi(), 'share', new WP_REST_Request($method, '/fluxfiles/v1/api/fm/share/page'));
-}
+$_GET = ['token' => 'x'] + ($blog !== '' ? ['blog' => $blog] : []);
+$m = new ReflectionMethod('FluxFilesApi', 'publicLink');
+$m->invoke(new FluxFilesApi(), 'share', new WP_REST_Request($method, '/fluxfiles/v1/api/fm/share/page'));
 CHILD;
     $file = tempnam(sys_get_temp_dir(), 'ffwppage') . '.php';
     file_put_contents($file, $child);
@@ -2717,21 +2729,19 @@ CHILD;
     $csp = array_values(array_filter(FluxFilesApi::uiHtmlHeaders('en'), static fn ($h) => stripos($h, 'Content-Security-Policy:') === 0));
     assertTrue(count($csp) === 1 && strpos($csp[0], "frame-ancestors 'self'") !== false, 'the UI policy yields a frame-ancestors CSP');
     try {
-        foreach (['rest'] as $entry) {
-            $out = $run($entry, '0', $good, '1');
-            assertTrue(strpos($out, '<meta name="fm-api-base" content="' . $base . '">') !== false, "{$entry}: page carries the WP REST api base: " . substr($out, 0, 300));
-            assertTrue(strpos($out, 'content="/api/fm"') === false, "{$entry}: not the standalone base");
-            assertTrue(strpos($out, 'STATUS=200') !== false, "{$entry}: 200");
-            // Gate failures: JSON envelope + hardening headers, no page.
-            $out = $run($entry, '0', $good, '-');
-            assertTrue(strpos($out, '"error_code":"license_required"') !== false && strpos($out, 'STATUS=402') !== false, "{$entry}: unlicensed -> 402 envelope: " . substr($out, 0, 300));
-            assertTrue(strpos($out, 'fm-api-base') === false, "{$entry}: no page when unlicensed");
-            // The placeholder secret counts as "not configured" (as in PublicContext).
-            $out = $run($entry, '0', \FluxFiles\PublicContext::DEFAULT_SECRET, '1');
-            assertTrue(strpos($out, 'STATUS=500') !== false && strpos($out, '"error_code":"server_error"') !== false, "{$entry}: default secret refused");
-            $out = $run($entry, '0', '', '1');
-            assertTrue(strpos($out, 'STATUS=500') !== false, "{$entry}: empty secret refused");
-        }
+        $out = $run('rest', '0', $good, '1');
+        assertTrue(strpos($out, '<meta name="fm-api-base" content="' . $base . '">') !== false, "page carries the WP REST api base: " . substr($out, 0, 300));
+        assertTrue(strpos($out, 'content="/api/fm"') === false, "not the standalone base");
+        assertTrue(strpos($out, 'STATUS=200') !== false, "200");
+        // Gate failures: JSON envelope + hardening headers, no page.
+        $out = $run('rest', '0', $good, '-');
+        assertTrue(strpos($out, '"error_code":"license_required"') !== false && strpos($out, 'STATUS=402') !== false, "unlicensed -> 402 envelope: " . substr($out, 0, 300));
+        assertTrue(strpos($out, 'fm-api-base') === false, "no page when unlicensed");
+        // The placeholder secret counts as "not configured" (as in PublicContext).
+        $out = $run('rest', '0', \FluxFiles\PublicContext::DEFAULT_SECRET, '1');
+        assertTrue(strpos($out, 'STATUS=500') !== false && strpos($out, '"error_code":"server_error"') !== false, "default secret refused");
+        $out = $run('rest', '0', '', '1');
+        assertTrue(strpos($out, 'STATUS=500') !== false, "empty secret refused");
         // HEAD is answered like GET; other verbs are not a page.
         $out = $run('rest', '0', $good, '1', '', 'HEAD');
         assertTrue(strpos($out, 'STATUS=200') !== false && strpos($out, 'fm-api-base') !== false, 'HEAD served like GET');

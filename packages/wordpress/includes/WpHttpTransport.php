@@ -27,6 +27,15 @@ class WpHttpTransport implements HttpTransportInterface
             }
             $out[trim((string) $name)] = trim((string) $value);
         }
+        $hasUa = false;
+        foreach (array_keys($out) as $k) {
+            if (strtolower($k) === 'user-agent') {
+                $hasUa = true;
+            }
+        }
+        if (!$hasUa) {
+            $out['user-agent'] = 'FluxFiles';
+        }
         $args = [
             'method'      => strtoupper($method),
             'timeout'     => max(1, $timeout),
@@ -55,8 +64,12 @@ class WpHttpTransport implements HttpTransportInterface
         foreach (is_array($raw) ? $raw : [] as $k => $v) {
             $respHeaders[strtolower((string) $k)] = is_array($v) ? implode(', ', $v) : (string) $v;
         }
+        $status = (int) wp_remote_retrieve_response_code($res);
+        if ($status === 0) {
+            return ['status' => 0, 'headers' => [], 'body' => '', 'error' => 'no HTTP status in response'];
+        }
         return [
-            'status'  => (int) wp_remote_retrieve_response_code($res),
+            'status'  => $status,
             'headers' => $respHeaders,
             'body'    => (string) wp_remote_retrieve_body($res),
         ];

@@ -505,8 +505,8 @@ HTACCESS;
 
     /**
      * Gate and send a module's recipient page (share / intake) with the API base pointed
-     * at this site's REST namespace. ONE implementation for the REST `<module>/page`
-     * routes and public-link.php, so the two cannot drift.
+     * at this site's REST namespace. Used by the REST `<module>/page`
+     * routes.
      *
      * Core's PublicRoutes::dispatch() cannot be used for pages: it hard-codes
      * `/api/fm` as the base (right for standalone, wrong here), so the gate is repeated
@@ -609,7 +609,7 @@ HTACCESS;
      * the REST base the static page cannot know. get_rest_url() is per blog, so on
      * multisite the link already names the minting site and needs no `blog` hint; and on
      * plain permalinks it is the `?rest_route=` form (the token is appended with `&`).
-     * public-link.php keeps serving links minted before this form existed.
+     * public-link.php only redirects links minted before this form existed.
      */
     public static function publicLinkUrl(string $page, string $token = ''): string
     {
