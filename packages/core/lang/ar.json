@@ -837,5 +837,13 @@
     "expand": "توسيع PDF",
     "fullscreen": "ملء الشاشة",
     "open_tab": "فتح في علامة تبويب جديدة"
+  },
+  "about": {
+    "link": "حول",
+    "tagline": "مدير ملفات قابل للتضمين",
+    "built_on": "مبني على FluxFiles",
+    "license_label": "الترخيص",
+    "notices": "إشعارات الجهات الخارجية",
+    "docs": "التوثيق"
   }
 }

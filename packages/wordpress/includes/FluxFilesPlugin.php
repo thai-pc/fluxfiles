@@ -883,6 +883,15 @@ HTACCESS;
         if (!empty($overrides['esign_url'])) {
             $payload['esign_url'] = (string) $overrides['esign_url'];
         }
+        // About dialog + light white-label (pure UI; the core sanitizes on decode).
+        if (array_key_exists('about', $overrides)) {
+            $payload['about'] = (bool) $overrides['about'];
+        }
+        foreach (['brand_name', 'brand_logo_url', 'accent_color'] as $brandClaim) {
+            if (!empty($overrides[$brandClaim])) {
+                $payload[$brandClaim] = (string) $overrides[$brandClaim];
+            }
+        }
         // Share and Intake. These used to be stripped here, because the REST API
         // exposed none of their endpoints and a forwarded claim would have rendered a
         // button that 404s. It now proxies all eleven — the six operator routes and the

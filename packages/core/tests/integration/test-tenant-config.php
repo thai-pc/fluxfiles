@@ -484,6 +484,42 @@ test('fluxfiles_token forwards optimize tuning claims (keep_original, max_mb, pd
     assertEqual('ebook', $mk(['pdf_level' => 'bogus'])->pdfLevel, 'invalid pdf_level → ebook');
 });
 
+test('about + brand claims: defaults, validation, and sanitising', function () {
+    $_ENV['FLUXFILES_SECRET'] = str_repeat('k', 40);
+    $dec = fn (array $cl) => Claims::fromJwtPayload(JwtCompat::decode(
+        fluxfiles_token(['user' => 'u', 'claims' => $cl]), $_ENV['FLUXFILES_SECRET']));
+    $d = $dec([]);
+    assertEqual(true, $d->about, 'about defaults on');
+    assertEqual('', $d->brandName, 'no brand name');
+    assertEqual('', $d->brandLogoUrl, 'no logo');
+    assertEqual('', $d->accentColor, 'no accent');
+    assertEqual(false, $dec(['about' => false])->about, 'about:false hides');
+
+    // brand_name: tags stripped, trimmed, capped at 60, non-strings dropped
+    assertEqual('Acme Files', $dec(['brand_name' => '  Acme Files  '])->brandName, 'trimmed');
+    $n = $dec(['brand_name' => '<script>alert(1)</script>Acme <b>Co</b><img src=x onerror=1>'])->brandName;
+    assertTrue(strpos($n, '<') === false && strpos($n, '>') === false, 'no angle brackets: ' . $n);
+    assertEqual(60, mb_strlen($dec(['brand_name' => str_repeat('é', 200)])->brandName), 'capped at 60 chars');
+    assertEqual('', $dec(['brand_name' => ['x']])->brandName, 'array dropped');
+    assertEqual('A B', $dec(["brand_name" => "A\n\t B\x00"])->brandName, 'control chars collapsed');
+
+    // brand_logo_url: http(s) only
+    assertEqual('https://acme.test/l.png?x=1', $dec(['brand_logo_url' => 'https://acme.test/l.png?x=1'])->brandLogoUrl, 'https kept');
+    assertEqual('http://acme.test/l.png', $dec(['brand_logo_url' => 'http://acme.test/l.png'])->brandLogoUrl, 'http kept');
+    foreach (['javascript:alert(1)', 'data:image/svg+xml,<svg/>', 'ftp://x/y.png', '//acme.test/l.png',
+              'https://a.test/x" onerror="1', 'https://a.test/ x.png', "https://a.test/\x01", 'not a url',
+              'https://a.test/' . str_repeat('a', 2100)] as $bad) {
+        assertEqual('', $dec(['brand_logo_url' => $bad])->brandLogoUrl, 'logo dropped: ' . substr($bad, 0, 30));
+    }
+
+    // accent_color: strict hex only
+    assertEqual('#0a7', $dec(['accent_color' => '#0a7'])->accentColor, '#RGB');
+    assertEqual('#0A7F5A', $dec(['accent_color' => ' #0A7F5A '])->accentColor, '#RRGGBB trimmed');
+    foreach (['red', '#12', '#1234', '#12345g', 'rgb(0,0,0)', '#fff;}body{x:y', 'url(x)', '0a7f5a', '#fffffff', 12] as $bad) {
+        assertEqual('', $dec(['accent_color' => $bad])->accentColor, 'accent dropped: ' . json_encode($bad));
+    }
+});
+
 test('Claims::isMediaPath detects video/audio extensions only', function () {
     foreach (['a/b/clip.mp4', 'song.MP3', 'x.webm', 'y.mov', 'z.flac', 'w.ogg'] as $p) {
         assertTrue(Claims::isMediaPath($p), "media: $p");

@@ -837,5 +837,13 @@
     "expand": "PDF vergrößern",
     "fullscreen": "Vollbild",
     "open_tab": "In neuem Tab öffnen"
+  },
+  "about": {
+    "link": "Über",
+    "tagline": "Einbettbarer Dateimanager",
+    "built_on": "Basiert auf FluxFiles",
+    "license_label": "Lizenz",
+    "notices": "Hinweise zu Drittanbietern",
+    "docs": "Dokumentation"
   }
 }

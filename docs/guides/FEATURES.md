@@ -211,3 +211,32 @@ there is no terminal entry.
 > user, and mint `terminal_pty_url` only into tokens of operators you would hand
 > that shell to. SFTP disks stay file-operations only (list/upload/download/
 > `chmod`); FluxFiles never opens an SSH shell.
+
+## About dialog and light white-label
+
+The sidebar footer has a quiet **About** link that opens a small dialog: product
+name, the MIT licence, a link to the third-party notices and a link to the docs. It
+shows no version number on purpose. Four optional claims (all free, all pure UI)
+adjust it:
+
+| Claim | Effect |
+| --- | --- |
+| `about` | `false` hides the About entry entirely (default `true`). |
+| `brand_name` | Replaces "FluxFiles" in the page title, header, sign-in screen and About. Plain text, ≤ 60 chars; tags are stripped and it is rendered with `textContent`. The About dialog then adds a muted "Built on FluxFiles" line. |
+| `brand_logo_url` | `http(s)` image shown instead of the header icon (and in About). |
+| `accent_color` | `#RGB` / `#RRGGBB`; becomes the UI's `--ff-primary` custom property. |
+
+```php
+fluxfiles_token(['user' => 'u1', 'claims' => [
+    'brand_name' => 'Acme Files', 'brand_logo_url' => 'https://acme.test/logo.svg',
+    'accent_color' => '#0a7f5a', 'about' => true,
+]]);
+```
+
+Invalid values are dropped on decode and the default look stays. The UI document
+sends no `img-src` restriction, so an external logo loads as-is; if you add your own
+CSP at the proxy, allow the logo's origin in `img-src`. The logo is fetched by the
+visitor's browser with `referrerpolicy="no-referrer"`. Pick an accent with enough
+contrast against white button text. The third-party notices link points at the
+repository copy of `THIRD-PARTY-NOTICES.md`, because no route serves that file next
+to `/public`.

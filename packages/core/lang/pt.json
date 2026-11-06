@@ -837,5 +837,13 @@
     "expand": "Expandir PDF",
     "fullscreen": "Tela cheia",
     "open_tab": "Abrir em uma nova aba"
+  },
+  "about": {
+    "link": "Sobre",
+    "tagline": "Gerenciador de arquivos incorporável",
+    "built_on": "Baseado no FluxFiles",
+    "license_label": "Licença",
+    "notices": "Avisos de terceiros",
+    "docs": "Documentação"
   }
 }
