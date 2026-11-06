@@ -20,6 +20,18 @@ class FluxFilesDbSchema
     /** Bump whenever the SQL below changes; drives the admin_init upgrade check. */
     public const VERSION = '1.5.0';
 
+    /**
+     * Every table this schema creates for the CURRENT blog (uninstall drops them).
+     *
+     * @return string[]
+     */
+    public static function tableNames(): array
+    {
+        global $wpdb;
+        $names = ['file_metadata', 'directories', 'trash', 'audit_log', 'audit_chain_head', 'legal_holds', 'rate_limits'];
+        return array_map(static fn (string $n): string => $wpdb->prefix . 'fluxfiles_' . $n, $names);
+    }
+
     public static function install(): void
     {
         global $wpdb;

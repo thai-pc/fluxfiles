@@ -72,6 +72,7 @@ require_once $autoloader;
 
 // Load plugin classes
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesDbSchema.php';
+require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesStorage.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesPlugin.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesAdmin.php';
 require_once FLUXFILES_PLUGIN_DIR . 'includes/WpDbMetadataHandler.php';

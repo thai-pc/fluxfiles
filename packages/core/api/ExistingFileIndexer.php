@@ -64,7 +64,7 @@ class ExistingFileIndexer
             $key = $item->path();
             $name = basename($key);
 
-            if ($this->isInternalPath($key) || str_ends_with($name, '.meta.json')) {
+            if ($this->isInternalPath($key) || FileManager::isGuardKey($this->diskManager->config($disk), $key) || str_ends_with($name, '.meta.json')) {
                 continue;
             }
 

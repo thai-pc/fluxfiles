@@ -17,6 +17,7 @@ release, or `'unknown'` in a dev checkout. Design: `docs/design/WPORG-SPLIT-DESI
 | `fluxfiles_admin_sections` | action, `string $page` (`fluxfiles`), `string $group` (`fluxfiles`) | end of `FluxFilesAdmin::registerSettings()` (on `admin_init`) | `add_settings_section()` / `register_setting()` for the add-on's own settings on Settings > FluxFiles |
 | `fluxfiles_edition_presets` | filter, `array<string, array<string, mixed>>` (edition => claim defaults), default `[]` | `FluxFilesPlugin::applyEditionPreset()` while minting a token with an `edition` override | supply the edition bundles. An edition that is not in the map is ignored (never throws); under `WP_DEBUG` it raises `_doing_it_wrong()`. Edition names (the map keys and the requested edition) match in lowercase; keys are normalised for you. Explicit claims always beat a preset |
 | `fluxfiles_token_overrides` | filter (pre-existing) | when a token is minted | unchanged. The free plugin mints `pro_hints=false` by default; an override can set `pro_hints => true` |
+| `fluxfiles_storage_base` | filter, `string` absolute dir, default the stored `fluxfiles_storage_base` option | every `FluxFilesStorage::base()` | relocate the local disk (the `FLUXFILES_STORAGE_DIR` constant wins over it; multisite adds `sites/<id>/` below it) |
 
 Reference edition map (the one that used to be built in) lives in
 `packages/wordpress/tests/fixtures/edition-presets.php`.
