@@ -175,13 +175,17 @@ test('removeKeys: system and out-of-scope keys are refused, not acted on', funct
     assertTrue(is_file("{$base}/t/_fluxfiles/x.json") && is_file("{$base}/other/z.txt"));
 });
 
-test('the built-in runRetention still behaves the same on top of the same helpers', function () {
+test('retentionRules() exposes the sanitised rules and the seams can act on them', function () {
     [$fm, $meta, $base] = seamEnv(['read', 'write', 'delete']);
+    assertEqual([], $fm->retentionRules(), 'none by default');
     $c = new Claims('u', ['read', 'write', 'delete'], ['local'], 't', 50, null, 0, false);
-    $c->retentionRules = Claims::sanitizeRetentionRules([['path' => '', 'days' => 30, 'action' => 'trash']]);
+    $c->retentionRules = Claims::sanitizeRetentionRules([['path' => 'sub', 'days' => 30, 'action' => 'trash'], ['days' => 0]]);
     $fm2 = new FileManager(new DiskManager(['local' => ['driver' => 'local', 'root' => $base, 'url' => '/s']]), $c, $meta);
-    $r = $fm2->runRetention('local', true);
-    assertEqual(['a.txt'], array_column($r['items'], 'path'), 'only the old, visible file would be trashed');
+    assertEqual([['path' => 'sub', 'days' => 30, 'action' => 'trash']], $fm2->retentionRules(), 'sanitised, bad rule dropped');
+    $meta->addHold('local', 'h1', ['path' => 't/sub', 'placed_at' => time(), 'released_at' => null]);
+    assertTrue($fm2->isHeld('local', 't/sub/b.txt'), 'hold visible to the sweep');
+    $fm2->removeKeys('local', ['t/a.txt'], 'trash', function () {});
+    assertTrue(!is_file("{$base}/t/a.txt"), 'sweep action via the seam');
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

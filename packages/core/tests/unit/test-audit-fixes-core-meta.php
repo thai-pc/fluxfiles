@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../../embed.php';
+require_once __DIR__ . '/../support/chain-verify.php';
 
 use Aws\CommandInterface;
 use Aws\Result;
@@ -119,7 +120,7 @@ test('B7: an unchained line appended after the chain started is tampering in ver
     [$root, , $meta] = chainedEnv();
     file_put_contents("{$root}/_fluxfiles/audit.jsonl",
         json_encode(['ts' => time() + 5, 'action' => 'upload', 'context' => ['file_key' => 't/a.txt']]) . "\n", FILE_APPEND);
-    $r = AuditChain::verify($meta->readAudit('local'));
+    $r = fxChainVerify($meta->readAudit('local'));
     assertTrue($r['ok'] === false && count($r['tampered']) === 1, json_encode($r));
 });
 
