@@ -26,14 +26,15 @@
 (function () {
     'use strict';
 
-    // Shared toolbar glyph — the same F-folder icon TinyMCE registers, kept inline
-    // (no separate image file) so both editor plugins stay visually in sync.
+    // Shared toolbar glyph: the FluxFiles logo's square folder silhouette with an
+    // "F", as a monochrome line icon, identical in the CKEditor 4, CKEditor 5,
+    // TinyMCE and Summernote plugins. Kept inline (no separate image file).
     // currentColor doesn't resolve inside an <img>, so use an explicit gray.
     var ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">'
-        + '<path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" '
+        + '<path d="M3 5a2 2 0 012-2h5l2 2h7a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" '
         + 'fill="none" stroke="#575757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
         // The "F" tells it apart from the editor's own folder/browse buttons.
-        + '<path d="M10 16.5v-6h4.5M10 13.5h3.5" '
+        + '<path d="M10 16.5v-7h4.5M10 13h3.5" '
         + 'fill="none" stroke="#575757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     var ICON_URI = 'data:image/svg+xml,' + encodeURIComponent(ICON_SVG);
 

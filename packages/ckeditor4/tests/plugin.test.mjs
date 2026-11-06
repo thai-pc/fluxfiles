@@ -54,7 +54,7 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     expect(icon.startsWith('data:image/svg+xml,')).toBe(true);
     expect(decodeURIComponent(icon)).toContain('<svg');
     expect(icon).not.toContain('.png'); // the old icons/fluxfiles.png is gone
-    expect(decodeURIComponent(icon)).toContain('M10 16.5v-6h4.5M10 13.5h3.5'); // the "F" mark, not a plain folder
+    expect(decodeURIComponent(icon)).toContain('M10 16.5v-7h4.5M10 13h3.5'); // the "F" mark, not a plain folder
   });
 
   it('sets the icon through a stylesheet rule, since CKEDITOR.getUrl() prefixes a data: URI with basePath', () => {

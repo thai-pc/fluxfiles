@@ -32,7 +32,12 @@ class FluxFilesMediaButton
 
         printf(
             '<button type="button" class="button fluxfiles-media-btn" id="fluxfiles-media-btn">'
-            . '<span class="dashicons dashicons-open-folder" style="vertical-align:text-bottom;margin-right:3px;"></span>'
+            // The FluxFiles logo's square folder with an "F", as a monochrome line icon
+            // (the same glyph as the editor adapters' toolbar buttons), sized like the
+            // 20px dashicon it replaces.
+            . '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" style="vertical-align:text-bottom;margin:0 4px 1px 0;">'
+            . '<path d="M3 5a2 2 0 012-2h5l2 2h7a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+            . '<path d="M10 16.5v-7h4.5M10 13h3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
             . '%s</button>',
             esc_html__('FluxFiles', 'fluxfiles')
         );

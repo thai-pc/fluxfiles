@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="772" height="250" viewBox="0 0 772 250" fill="none" role="img" aria-labelledby="title description">
+  <title id="title">FluxFiles — Your files, your storage</title>
+  <desc id="description">The FluxFiles logo and wordmark beside an abstract file grid connected to Local, S3, R2 and SFTP storage.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="125" x2="772" y2="125" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F1115"/>
+      <stop offset="0.52" stop-color="#151821"/>
+      <stop offset="1" stop-color="#1C2130"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(665 117) scale(326 239)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8957E5" stop-opacity="0.19"/>
+      <stop offset="0.5" stop-color="#8957E5" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#8957E5" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="landscape-clip"><rect x="445" y="64" width="82" height="58" rx="8"/></clipPath>
+    <clipPath id="abstract-clip"><rect x="539" y="134" width="82" height="58" rx="8"/></clipPath>
+  </defs>
+
+  <rect width="772" height="250" fill="url(#background)"/>
+  <rect width="772" height="250" fill="url(#glow)"/>
+
+  <!-- Original logo geometry and colours, scaled uniformly from its 32-unit viewBox. -->
+  <svg x="40" y="68" width="72" height="72" viewBox="0 0 32 32" fill="none">
+    <rect width="32" height="32" rx="7" fill="#8957E5"/>
+    <path d="M8 10a2 2 0 012-2h4l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H10a2 2 0 01-2-2V10z" fill="#fff" fill-opacity="0.92"/>
+    <path d="M12 17l2.5-3 2 2 3.5-4" stroke="#8957E5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <g font-family="'Avenir Next', Avenir, Arial, sans-serif">
+    <text x="130" y="103" fill="#FFFFFF" font-size="38" font-weight="600" letter-spacing="-1.3">FluxFiles</text>
+    <text x="131" y="131" fill="#A98AEC" font-size="15.5" font-weight="500">Your files, your storage</text>
+  </g>
+
+  <!-- Storage connections sit behind the grid and badges. -->
+  <g stroke="#8957E5" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M635 123H658M658 60V186M658 60H678M658 102H678M658 144H678M658 186H678"/>
+  </g>
+  <circle cx="658" cy="123" r="3" fill="#A98AEC"/>
+
+  <!-- Flat file grid: two image thumbnails and two document tiles. -->
+  <rect x="431" y="38" width="204" height="170" rx="13" fill="#151821"/>
+  <g fill="#A98AEC" opacity="0.45">
+    <circle cx="448" cy="51" r="2"/>
+    <circle cx="456" cy="51" r="2"/>
+    <circle cx="464" cy="51" r="2"/>
+    <rect x="596" y="49" width="24" height="4" rx="2"/>
+  </g>
+
+  <g clip-path="url(#landscape-clip)">
+    <rect x="445" y="64" width="82" height="58" fill="#36304E"/>
+    <circle cx="506" cy="79" r="7" fill="#A98AEC"/>
+    <path d="M439 122L467 84L494 122Z" fill="#7745D3"/>
+    <path d="M470 122L502 94L535 122Z" fill="#A98AEC"/>
+  </g>
+
+  <rect x="539" y="64" width="82" height="58" rx="8" fill="#1C2130"/>
+  <path d="M570 76H583L591 84V108C591 109.105 590.105 110 589 110H571C569.895 110 569 109.105 569 108V78C569 76.895 569.895 76 571 76Z" fill="#A98AEC"/>
+  <path d="M583 76V84H591" fill="#8957E5"/>
+  <g fill="#7745D3">
+    <rect x="574" y="91" width="12" height="2" rx="1"/>
+    <rect x="574" y="97" width="12" height="2" rx="1"/>
+    <rect x="574" y="103" width="8" height="2" rx="1"/>
+  </g>
+
+  <rect x="445" y="134" width="82" height="58" rx="8" fill="#1C2130"/>
+  <path d="M475 146H488L496 154V178C496 179.105 495.105 180 494 180H476C474.895 180 474 179.105 474 178V148C474 146.895 474.895 146 476 146Z" fill="#8957E5"/>
+  <path d="M488 146V154H496" fill="#A98AEC"/>
+  <path d="M481 160L490 165L481 170Z" fill="#FFFFFF" fill-opacity="0.92"/>
+
+  <g clip-path="url(#abstract-clip)">
+    <rect x="539" y="134" width="82" height="58" fill="#36304E"/>
+    <circle cx="583" cy="163" r="19" fill="#7745D3"/>
+    <circle cx="600" cy="151" r="12" fill="#A98AEC"/>
+    <path d="M532 184C551 156 575 169 590 183C604 196 618 179 627 174V199H532Z" fill="#8957E5"/>
+  </g>
+
+  <!-- Plain labels only; no third-party brand marks. -->
+  <g font-family="'Avenir Next', Avenir, Arial, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">
+    <rect x="678" y="45" width="62" height="30" rx="9" fill="#36304E"/>
+    <text x="709" y="65">Local</text>
+    <rect x="678" y="87" width="62" height="30" rx="9" fill="#36304E"/>
+    <text x="709" y="107">S3</text>
+    <rect x="678" y="129" width="62" height="30" rx="9" fill="#36304E"/>
+    <text x="709" y="149">R2</text>
+    <rect x="678" y="171" width="62" height="30" rx="9" fill="#36304E"/>
+    <text x="709" y="191">SFTP</text>
+  </g>
+</svg>
