@@ -6,9 +6,9 @@
 > [`CHANGELOG.md`](../../CHANGELOG.md) and the follow-up
 > [`SECURITY-AUDIT-2026-10.md`](SECURITY-AUDIT-2026-10.md) — notably, H-6's WordPress
 > capability map (`delete_posts` → admin) was itself found too generous there (H-1) and
-> tightened to `manage_options`/`delete_others_posts`, and git deploy (H-4) later gained
-> a pre-deploy `.git/config` audit whose first, denylist version was bypassable and was
-> replaced by an allowlist in core-v0.2.92.
+> tightened to `manage_options`/`delete_others_posts`. Findings about the SSH terminal,
+> Git deploy and SSH multiplexing were dropped from this record when 1.0.0 removed
+> those features.
 
 Scope: the MIT free/core surface only (`packages/core/`, plus the Laravel and
 WordPress proxy adapters and the browser SDK). Gitignored paid modules were out
@@ -139,33 +139,6 @@ the allowlist waives only the pre-connect requirement.
 Tests: `test-ssrf-guard.php` 59/59, `test-url-import-fetch.php` 9/9,
 `test-bucket-doctor-ssrf.php` 4/4.
 
-### [x] H-4 — git-deploy hook neutering bypassable via other config-driven exec hooks
-**Where:** `packages/core/api/GitDeploy.php:76`
-
-Only `core.hooksPath` is neutered. `git pull`/`fetch` also execute commands
-taken from the repo's **own `.git/config`** via `core.fsmonitor` and
-`core.sshCommand`. Reproduced locally (git 2.45.2):
-
-```
-git -c core.hooksPath=/dev/null status              → payload ran
-git -c core.hooksPath=/dev/null -c core.fsmonitor=false status → blocked
-```
-
-`.git/config` is an ordinary file under the deploy path, extensionless (so
-`assertExt`/`assertSafeFilename` do not stop it), writable by any `write`-scoped
-token over that path. Escalates file-write-in-repo to RCE as the SSH user —
-the outcome `docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md` §4.3 claims is closed
-by default.
-
-**Fixed** (commit pending, 2026-09-26): `GitDeploy::buildCommand()` prefixes
-every git invocation with `-c core.fsmonitor=false -c core.sshCommand=ssh
--c protocol.ext.allow=never -c protocol.file.allow=never`, **unconditionally**
-— the `git_deploy_hooks` claim opts into *hooks*, not into arbitrary
-config-driven exec, so turning it on no longer re-opens this.
-`docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md` §4.3 carries an amendment noting
-that hook neutering alone did not close F2. `test-git-deploy.php` 10/10 (a new
-test loops both `git_deploy_hooks` states).
-
 ### [x] H-5 — `restore()` skips extension immutability
 **Where:** `FileManager.php:896-948`
 
@@ -268,11 +241,9 @@ undecodable path.
 main JWT in memory.
 
 The repo already knows better in both directions: Alpine carries an
-`integrity="sha384-…"` hash (`public/index.html:21-22`), and xterm is
-deliberately vendored at `assets/vendor/xterm/` with the comment "from
-FluxFiles' OWN vendored copy … no third-party CDN" (`fm.js:3889`).
+`integrity="sha384-…"` hash (`public/index.html:21-22`).
 
-**Fixed** (commit pending, 2026-09-26): vendored, the way xterm already is —
+**Fixed** (commit pending, 2026-09-26): vendored —
 26 files (core JS/CSS, the material-darker theme, the simple-mode addon and all
 22 modes) at `packages/core/assets/vendor/codemirror/`, 420 KB, all lazy-loaded
 exactly as before. SRI was the weaker option: it pins the bytes but still
@@ -281,13 +252,12 @@ leaves the editor broken wherever cdnjs is blocked.
 Two things had to follow. fm.js now derives its asset base from its own
 `document.currentScript.src` (`FM_ASSETS_BASE`) instead of a hardcoded
 `'../assets'`, because under both proxies fm.js is served from an absolute
-route where a page-relative `../` resolves elsewhere — this fixes the same
-latent breakage for xterm. And both proxies' asset routes only ever matched
+route where a page-relative `../` resolves elsewhere. And both proxies' asset routes only ever matched
 `fm.js`/`fm.css`, so `assets/vendor/*` 404'd there: the Laravel route pattern
 now spans slashes and the WordPress route admits `vendor/**.{js,css}`, with the
 containment check in each handler tightened to compare against the base plus a
 trailing separator. `scripts/build-wordpress.sh` copies `assets/vendor/` into
-the plugin, without which the terminal and the code editor silently fell back
+the plugin, without which the code editor silently fell back
 in every WordPress install.
 
 ---
@@ -385,51 +355,6 @@ cannot be the default when the entire product is an iframe embed. `X-Frame-
 Options` is deliberately *not* sent alongside — it has no multi-origin form, so
 it would contradict any allow-list.
 
-### [x] M-6 — git-deploy lock permanently wedgeable
-**Where:** `GitDeploy.php:97-111`
-
-The PID is read from a file inside the repo (attacker-writable, same
-reachability as H-4) and passed to `kill -0` with no numeric validation.
-Verified: `kill -0 -1` returns rc=0 (it means "every process you may signal"),
-so writing `-1` makes the lock read as held forever and short-circuits the
-`-mmin` staleness reclaim. Every later deploy returns `409
-git_deploy_in_progress` with no server-side recovery.
-
-**Fixed** (commit pending, 2026-09-26): the lock script clears the PID unless
-it is digits-only (`case "$P" in (*[!0-9]*|"") P="";; esac`) before `kill -0`,
-so a hostile `-1` falls through to the existing `-mmin` staleness reclaim.
-Verified in a real shell (`-1`, `abc`, `12x`, empty → cleared; `1234` kept).
-`test-git-deploy.php` asserts the guard is present *and* ordered before
-`kill -0`; `test-git-deploy-lock.php` 6/6.
-
-### [x] M-7 — SSH multiplex runtime state lives under the document root
-**Where:** `packages/core/api/SshMultiplexer.php:124-128`, `:206-217`
-
-`runtimeDir()` defaults to `packages/core/storage/ssh-sockets` when
-`FLUXFILES_STORAGE_PATH` is unset — the shipped default (commented out in
-`.env.example`). That directory is inside the served root in both shipped
-configs: `docker/nginx.conf` has `root /app/packages/core` and denies only
-`/storage/uploads/_fluxfiles/`, `/_fluxfiles/`, dotfiles and
-`\.env|composer\.|vendor/`; `router.php` special-cases `/storage/uploads/` and
-otherwise `return false`, letting the built-in server serve the file verbatim.
-
-`index.json` (disk names, SSH hostnames, socket paths) is disclosed.
-The `keys/<hex>.pem` BYOB private key is written there too — unguessable name
-and unlinked in `execCold()`'s `finally`, so theft needs a name leak or a crash
-between write and unlink (**suspected**, not demonstrated), but a private key
-under a public root is the wrong default either way.
-
-**Fixed** (commit pending, 2026-09-26): both halves, because either alone
-leaves a real case open. `SshMultiplexer::runtimeDir()` now defaults to
-`sys_get_temp_dir()` — the same choice `SsoModule::cacheDir()` already makes —
-so a new install never writes this state under a served root. And
-`docker/nginx.conf` plus `router.php` deny `/storage/` outright, for the
-operator who has pointed `FLUXFILES_STORAGE_PATH` there deliberately. nginx
-uses `location ^~ /storage/` so the prefix match beats the `\.php$` regex;
-`/storage/uploads/` is a longer prefix, so public uploads still serve.
-
----
-
 ## LOW
 
 ### [x] L-1 — `/img` variant cache collision between same-named files
@@ -487,11 +412,6 @@ re-litigate them.
 - **`UrlImporter`.** Fresh `assertSafeUrl()` per hop, `FOLLOWLOCATION=false`,
   redirect cap enforced, streaming size cap, magic-byte MIME. H-2/H-3 are
   guard-layer bugs, not importer bugs.
-- **`SshTerminal` / `SshMultiplexer` argv.** Array-argv exec, `$cwd` correctly
-  `escapeshellarg`'d outside quotes, no secrets in argv or env, password and
-  passphrase auth correctly refused for multiplexing.
-- **git-deploy target selection.** Path, branch and hooks-enabled come only
-  from claims; the request body supplies nothing but `disk`.
 - **Claim gates and kill-switches.** All enforced server-side, mutually
   independent, none implicitly bundled; the Laravel and WordPress proxies
   mirror core's gate order.

@@ -289,8 +289,7 @@ short-lived per-file link that carries the disk config encrypted, capped at 30 m
 Without custom code, use the **standalone FluxFiles server** (or the Docker image) —
 see the [core README → SFTP disk](https://github.com/thai-pc/fluxfiles#sftp-disk-vps--shared-hosting).
 
-FluxFiles no longer ships an SSH command-runner terminal or one-click Git deploy. If you
-run your own [ttyd / gotty / wetty](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md),
+If you run your own [ttyd / gotty / wetty](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md),
 pass its URL as the `terminal_pty_url` token override and the UI embeds it.
 (The **burn-in watermark** works in WordPress too.)
 

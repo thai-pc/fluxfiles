@@ -7,9 +7,8 @@ and not designed in §0–§10). Paid capability, Enterprise-only
 add-on (never a standalone SKU). Module id `legal-hold`, class
 `\FluxFiles\LegalHold\LegalHoldModule` (gitignored private package
 `packages/legal-hold/`, registered in `ModuleRegistry::$map`), claim
-`allow_legal_hold` (parsed in `Claims.php`). Written using
-`docs/archive/GIT-DEPLOY-SECURITY-REVIEW.md` as the style/depth reference (explicit
-"solved" vs "documented, not solved" framing) and `_fluxfiles/trash.json` /
+`allow_legal_hold` (parsed in `Claims.php`). Written with explicit
+"solved" vs "documented, not solved" framing, and `_fluxfiles/trash.json` /
 `_fluxfiles/audit.jsonl` as the storage precedent
 (`packages/core/api/StorageMetadataHandler.php`).
 
@@ -205,8 +204,7 @@ order:
 '/hold/release' => 'legal_hold_release',
 '/hold'         => 'legal_hold_place',
 ```
-And special-case the audit `detail` field (mirroring the existing
-`terminal`/`git_deploy` special cases at `index.php` ~L441) to carry the
+And special-case the audit `detail` field to carry the
 `reason` from the request body, since the generic "log the touched path"
 default would otherwise leave the single most important compliance fact —
 *why* — out of the audit trail:
@@ -404,7 +402,7 @@ matching `^allow_[a-z0-9_]+_forbidden$` → `error.module_forbidden` with a
 
 **Rate limiting / caps.** No dedicated rate bucket — place/release are POST
 routes, so they already hit the generic write bucket like the rest of the
-non-terminal/non-git-deploy surface. `reason`/`release_reason` capped at
+write surface. `reason`/`release_reason` capped at
 1000 chars (bounds `holds.json` and audit-log size). `countActiveHolds()`
 cap (`FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`, default 1000) bounds both the
 manifest's growth and the per-`list()` enforcement/enrichment cost (see §4.2's
@@ -434,9 +432,8 @@ silently implied away:**
    FluxFiles legal hold with the storage provider's own protection (S3
    Object Lock + Versioning + MFA Delete, R2's equivalent, or `chattr +i` /
    filesystem ACLs for local disks) — document this in the eventual
-   user-facing docs for the feature, worded as plainly as the git-deploy
-   review's "non-atomic deploy onto a live webroot is documented, not
-   solved" (§4.8 there). The paid `audit-export` module's fixity check
+   user-facing docs for the feature, worded plainly as "documented, not
+   solved". The paid `audit-export` module's fixity check
    (`POST /api/fm/fixity/check`, core-v0.2.97) can at least *detect* such an
    out-of-band change after the fact.
 2. **In-place content mutation — closed in the 2026-10 security pass (core-v0.2.94).** Every
@@ -532,10 +529,8 @@ silently implied away:**
   `trash()`/`delete()`/`rename()`/`move()`/`crossMove()`/`trashPurge()`/
   `emptyTrash()` methods already call the shared core `FileManager` class
   (`composer require`'d, not duplicated) — once those gain
-  `assertNoActiveHold()`, Laravel inherits the block automatically. This is
-  a deliberate contrast with terminal/git-deploy, which needed full
-  proxy-side duplication because those live outside `FileManager` entirely;
-  legal hold's enforcement piggybacks on methods the proxy already calls.
+  `assertNoActiveHold()`, Laravel inherits the block automatically: legal hold's
+  enforcement piggybacks on methods the proxy already calls.
 - **Management needs 4 new thin controller methods** (`hold`/`holdRelease`/
   `holdList`/`holdStatus`), built exactly like `auditExport`/`auditPurge`
   were: own `Claims` object from the Laravel request, `ModuleRegistry::require('legal-hold', …)`,
