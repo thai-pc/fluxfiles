@@ -1342,6 +1342,54 @@ test('share/intake pages: 501 module_not_installed when the module is absent', f
     }
 });
 
+test('share/intake JSON info routes: 501 module_not_installed through PublicRoutes::dispatch', function () {
+    if (!class_exists(\FluxFiles\PublicRoutes::class)) {
+        return; // core older than PublicRoutes
+    }
+    $ctx = (new \ReflectionMethod(FluxFilesController::class, 'publicContext'))->invoke(freshController());
+    foreach (['share' => '/api/fm/share/info', 'intake' => '/api/fm/intake/info'] as $id => $uri) {
+        if (\FluxFiles\ModuleRegistry::classFor($id) !== null) {
+            continue; // module installed here
+        }
+        ob_start();
+        @\FluxFiles\PublicRoutes::dispatch($id, 'GET', $uri, $ctx); // returns, does not exit; @ = CLI headers-already-sent
+        $body = json_decode((string) ob_get_clean(), true);
+        assertEqual('module_not_installed', $body['error_code'] ?? null, "{$id} error_code: " . json_encode($body));
+    }
+});
+
+test('retention/fixity/verify gate order without modules: perm, disk, scope, then 501', function () {
+    $ctrl = freshController();
+    $cases = [
+        'retentionRun' => ['POST', 'legal-hold'],
+        'fixityCheck' => ['POST', 'audit-export'],
+        'auditVerify' => ['GET', 'audit-export'],
+    ];
+    foreach ($cases as $method => [$verb, $module]) {
+        $req = static fn (array $q, array $claims) => new Request($verb, $q, bearer($claims), null, 'https://app.example.com', [], 'api/fm/x');
+        $res = $ctrl->$method($req([], ['perms' => ['read']]));
+        assertEqual(403, $res->getStatusCode(), "{$method} no audit perm status");
+        assertEqual('forbidden', $res->getData()['error_code'] ?? null, "{$method} no audit perm code");
+
+        $res = $ctrl->$method($req(['disk' => 'nope'], ['perms' => ['read', 'audit']]));
+        assertEqual(403, $res->getStatusCode(), "{$method} disk status");
+        assertEqual('disk_not_allowed', $res->getData()['error_code'] ?? null, "{$method} disk code");
+
+        if ($method === 'auditVerify') {
+            $res = $ctrl->$method($req([], ['perms' => ['read', 'audit'], 'prefix' => 'scoped']));
+            assertEqual(403, $res->getStatusCode(), 'verify scoped token status');
+            assertEqual('forbidden', $res->getData()['error_code'] ?? null, 'verify scoped token code');
+        }
+
+        if (\FluxFiles\ModuleRegistry::classFor($module) !== null) {
+            continue; // module installed here: the not-installed path is not reachable
+        }
+        $res = $ctrl->$method($req([], ['perms' => ['read', 'audit']]));
+        assertEqual(501, $res->getStatusCode(), "{$method} status");
+        assertEqual('module_not_installed', $res->getData()['error_code'] ?? null, "{$method} code");
+    }
+});
+
 test('N11: renaming a missing file is a 404 not_found envelope, not a 500 (core parity)', function () {
     $ctrl = freshController();
     $hdr = bearer(['perms' => ['read', 'write'], 'prefix' => 'rn-missing', 'rate_write' => 50]);

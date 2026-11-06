@@ -2214,10 +2214,9 @@ class FluxFilesController
 
     /**
      * Recipient landing pages (share.html / intake.html), bundled with core and
-     * served from this adapter's own site root. A static page cannot know where
-     * this app's API lives (a custom `fluxfiles.route_prefix` changes it), so
-     * `window.__FM_API_BASE__` is injected the same way WordPress's
-     * public-link.php does it. Headers match standalone/WordPress: the URL
+     * served from this adapter's own site root. The page comes from the module
+     * (PublicRoutes::page()) with `<meta name="fm-api-base">` pointing at this app's
+     * API, since a custom `fluxfiles.route_prefix` changes where that lives. Headers match standalone/WordPress: the URL
      * carries the recipient token, so it must never leak in a Referer or be
      * cached by a shared proxy.
      */
@@ -2254,8 +2253,12 @@ class FluxFilesController
             ->header('Referrer-Policy', 'no-referrer')
             ->header('X-Content-Type-Options', 'nosniff')
             ->header('Cache-Control', 'private, no-store');
-        $csp = class_exists(\FluxFiles\FrameAncestors::class) ? \FluxFiles\FrameAncestors::policy() : null;
-        return $csp !== null ? $response->header('Content-Security-Policy', $csp) : $response;
+        // Same source as the UI page (fluxfiles.frame_ancestors / allowed_origins), not core's
+        // FrameAncestors::policy(), which only reads $_ENV.
+        $frameAncestors = self::frameAncestors();
+        return $frameAncestors !== ''
+            ? $response->header('Content-Security-Policy', 'frame-ancestors ' . $frameAncestors)
+            : $response;
     }
 
     public function sharePage(): \Symfony\Component\HttpFoundation\Response { return $this->publicPage('share'); }
