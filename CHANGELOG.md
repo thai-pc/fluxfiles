@@ -3,7 +3,7 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.12] — 2026-11-06
 
 ### Added
 
@@ -26,7 +26,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
   default look is unchanged. The Node, Python, Laravel and WordPress adapters take them as typed options and also via the `claims` map. New
   strings under `about.*` in all 16 languages.
 
-> Released: not yet released.
+> Released: `core-v1.0.7`, `laravel-v1.0.2`. The WordPress Site Health section and the watermark-font fix ship with the next WordPress release.
 
 ## [1.0.11] — 2026-11-06
 
