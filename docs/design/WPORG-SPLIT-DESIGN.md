@@ -12,6 +12,27 @@
 > `fluxfiles/laravel <1.0.3`, `share <1.4.0`, `intake <1.5.0`, `legal-hold <1.2.0`,
 > `audit-export <1.1.0`.
 
+> **Owner decision (2026-11-06): nobody uses the paid WordPress modules yet, so there is no
+> migration to protect.** This supersedes §5.2, §5.3 and phase 4 of §10 below:
+> - **No bridge release `wordpress-v1.0.5`.** No `legacyModules()` hold, no `handover` flag, no
+>   "your modules were removed" notices, no `bridge` block or `$ANY_LICENSE_MODULES` branch in the
+>   update server. An old-channel install (if any exists) is simply offered 1.1.0 directly.
+> - **Phase 4 is folded into phase 5.** Its preparatory parts ship in the 1.1.0 work and are
+>   already in the tree: the `FluxFilesPlugin::license()` seam (`fluxfiles_license` filter,
+>   `LicenseManager` if present else `NoLicense`, installed with
+>   `ModuleRegistry::setLicenseResolver()`; `seedLicenseEnv()` is gone), new-form public links
+>   (`publicLinkUrl()` mints the per-blog REST `<id>/page` URL), and the `FLUXFILES_CORE_VERSION`
+>   stamp (placeholder in `fluxfiles.php`, 3rd argument of `scripts/stamp-wp-version.py`, passed
+>   by `build-wordpress.sh` from the latest `core-v*` tag; shown in Site Health / About).
+>   The updater and `Update URI` stay until phase 5 removes them (§10 step 5).
+> - The `wordpress-pro` update-server product (`$ANY_LICENSE_MODULES`) is deferred to phase 7
+>   with `fluxfiles-pro`.
+> - Later phase-5 choices: the WP build uses **WordPress's bundled CodeMirror** instead of the
+>   vendored copy (plugin guideline 13: no duplicating core libraries; resolves open question 2),
+>   and **new installs store files under `wp-content/uploads/fluxfiles`** while an existing
+>   `wp-content/fluxfiles` is kept (§6).
+> - **`Requires PHP` stays `8.1.0`** everywhere (the readme outline's `8.1` is the same floor).
+
 Status: design, not implemented. Date: 2026-11-06. Owner decisions (two plugins; the four
 licence-locked features move into their modules on every host) are **settled**; this doc
 designs within them.
@@ -260,6 +281,10 @@ pass unchanged, so stubs must keep that literal form.
 
 ## 5. Migration for existing installs
 
+> **Superseded by the owner decision at the top:** there are no existing paid WordPress users,
+> so §5.2 (bridge 1.0.5) and the update-server parts of §5.3 are not built. They are kept as
+> the record of the option that was rejected. §5.4 (links already issued) still applies.
+
 ### 5.1 Who is affected
 
 These are GitHub-zip sites on 1.0.x, polling the update server for `module=wordpress`. A
@@ -308,7 +333,10 @@ of the free plugin (the old updater included) deletes that folder, which is the 
   `page` (whitelist `share|intake`), `token` and `blog`. It answers `302` to
   `dirname(REQUEST_URI path, 4) . '/?rest_route=/fluxfiles/v1/api/fm/<page>/page&…'`, with
   `Referrer-Policy: no-referrer` and `Cache-Control: no-store`. `?rest_route=` works under any
-  permalink setting. On multisite, `blog` routes through the existing `publicLinkRestBase()`.
+  permalink setting. On multisite the shim passes `blog` through unchanged (`&blog=N`) and the
+  REST page route resolves it: for a blog other than the current one it validates the id with
+  `publicLinkRestBase()` and answers a `302` to that blog's own `<id>/page` URL (bad, deleted,
+  archived or spam blog: `404`); the shim itself stays WordPress-free.
 - **Removal.** The redirect is deleted in the first free release at least 90 days after
   1.0.5 (tracked in §10, phase 8).
 - **Known gap.** A site whose `WP_CONTENT_URL` is on another host would mis-resolve the
@@ -321,7 +349,9 @@ Unchanged: `_fluxfiles/fixity.json`, share/intake records, `_fluxfiles/audit*`.
 The free plugin's storage root gets a fix for the hard-coded `WP_CONTENT_DIR/fluxfiles`
 (`FluxFilesPlugin.php:107`):
 - A new site option `fluxfiles_storage_base` is set once on activation: `WP_CONTENT_DIR/fluxfiles`
-  if that directory already exists, otherwise `wp_upload_dir()['basedir'].'/fluxfiles'` (main site).
+  if that directory already exists (owner decision: an existing install keeps it), otherwise
+  `wp_upload_dir()['basedir'].'/fluxfiles'`, i.e. new installs store under
+  `wp-content/uploads/fluxfiles` (main site).
 - A `FLUXFILES_STORAGE_DIR` constant and a `fluxfiles_storage_base` filter override it.
 - `multisiteSegment()` still appends `sites/<id>`.
 - Existing installs keep their path.
@@ -371,9 +401,11 @@ The free plugin's storage root gets a fix for the hard-coded `WP_CONTENT_DIR/flu
   credential chains (open question 4). Measure the result; target ≤ 5 MB zipped.
 - **Vendor clean.** Extend the existing find/rm with `docs`, `examples`, `.github` and `*.md`,
   but keep every `LICENSE*`/`NOTICE*`.
-- **CodeMirror.** Either load WP's own copy (open question 2), or add its MIT `LICENSE` to
-  `assets/vendor/codemirror/`.
-- **Stamp** `FLUXFILES_CORE_VERSION` from `git describe --tags --match 'core-v*'`.
+- **CodeMirror.** Owner decision: the WP build loads **WordPress's bundled CodeMirror**
+  (`wp-includes/js/codemirror/`, guideline 13) and does not ship `assets/vendor/codemirror/`
+  (open question 2).
+- **Stamp** `FLUXFILES_CORE_VERSION` from `git describe --tags --abbrev=0 --match 'core-v*'`
+  (prefix stripped). **Done** (phase 4 prep): `stamp-wp-version.py` 3rd argument.
 
 ### 8.2 CI guard: `scripts/check-wp-dist.php`
 
@@ -410,7 +442,7 @@ the UrlImporter cURL, vendor/). It runs on PRs touching `packages/wordpress/**` 
 
 In `wordpress-release.yml`, after the GitHub release:
 - Use `10up/action-wordpress-plugin-deploy@stable` with `SLUG: fluxfiles`,
-  `BUILD_DIR: build/fluxfiles`, `ASSETS_DIR: packages/wordpress/.wordpress-org`, `VERSION` from
+  `BUILD_DIR: build/fluxfiles`, `ASSETS_DIR: .wordpress-org` (repo root), `VERSION` from
   the tag, and secrets `SVN_USERNAME`/`SVN_PASSWORD`.
 - Gate it with `if: vars.WPORG_DEPLOY == 'true'` until the listing is approved.
 - Add `10up/action-wordpress-plugin-asset-update@stable` on master for readme- or asset-only changes.
@@ -434,10 +466,11 @@ In `wordpress-release.yml`, after the GitHub release:
 - **Pro repo CI.** Pro's own smoke checks that the `lib/` copies are byte-identical to the
   pinned core tag, that `REQUIRES_PHP` matches the header, and that the boot guard works.
 
-### 8.6 Assets: `packages/wordpress/.wordpress-org/`
+### 8.6 Assets: `.wordpress-org/` (repo root, not `packages/wordpress/`)
 
-`banner-772x250.png`, `banner-1544x500.png`, `icon-128x128.png`, `icon-256x256.png` and
-`screenshot-1..4.png`. The screenshots follow the readme captions and are generated by
+`banner-772x250.png`, `banner-1544x500.png`, `icon-128x128.png` and `icon-256x256.png` exist
+already (`banner.svg` and `icon.svg` are sources; WP.org does not use SVG banners). Still
+missing: `screenshot-1..4.png`, which follow the readme captions and are generated by
 extending `scripts/landing-screenshots/`.
 
 ## 9. readme.txt rewrite outline
@@ -493,7 +526,7 @@ The short description is 145 characters. The sections:
 | 1 | **Core seams and fallbacks** (§2.2, §4.5 step 1): interfaces, `ModuleRegistry::license()`, `ModuleAutoloader`, `PublicContext`/`PublicRoutes`, `HttpTransportInterface`, `Log`, FileManager seams; `/api/fm/<id>/page` routes; `module_update_required` ×16; `pack-modules.php` `public` path and the `UpdateClient` layout; AWS trim in `composer.json` | public | **core-vX** (with laravel-v… if touched; ≤ 3 tags per push) | — | unit: `NoLicense`, resolver, `ModuleAutoloader` (kebab cases), `removeKeys` (holds, owner_only, perm), `visibleFiles` (hidden, reserved); integration: `dispatch` with a fake `PublicModuleInterface` module (gate order 501→402→handler) and with a legacy module (fallback); unchanged: `test-audit-coverage-http`, `test-config-doc`, the free-core e2e (501s), DB suites |
 | 2 | **Module moves** (§4.1-4.4): legal-hold `runRetention`; audit-export `FixityChecker`, `runFixityCheck`, `verifyChain`, `trustedEntries`; share/intake public handlers and pages (meta API base) | **private ×4** | share, intake, legal-hold, audit-export (each a new tag, floor `^X`; check by hand per CLAUDE.md rule 1); then `pack-modules.php` | 1 | the moved core tests, now in each repo; modules-live e2e (`tests/modules-live/**/share-intake.spec.ts`, `records.spec.ts`) against core X plus the new modules on standalone, Laravel and WP |
 | 3 | **DONE (core-v1.1.0)**: adapters switched to module dispatch first (laravel-v1.0.3, WP `servePublicPage`), then core removal. **Core removal** (§4.5 step 3): delete the legacy code, `PublicLinks.php` → `api/helpers.php`, redirect-stub `public/*.html`, stubs for old modules → `module_update_required`, test oracle `tests/support/chain-verify.php`; Laravel controller/routes and floor `^Y`; docs (`.claude/rules/audit-log.md`, `.claude/api-map.md`, `.claude/CLAUDE.md` paid-module and PHP-floor lines, `ACTIVATE.md`, `RETENTION-LEGAL-HOLD-DESIGN.md`) | public | **core-vY**, laravel-v… | 2 released | core suite with no modules: 501 everywhere; with an old-module fixture: `module_update_required`; Laravel smoke; `adapter-core-floor`; browser `share-landing`/`intake-landing` through the redirect stub |
-| 4 | **WP bridge 1.0.5** (§5.2): new-form links, `legacyModules()`, updater hold on `handover`, pro standby detection; update-server `bridge` and `$ANY_LICENSE_MODULES` | public | **wordpress-v1.0.5** | core X | wp-smoke: link URL form (single site and multisite), the hold logic (modules present/absent × pro active/inactive), the old shim still serves; update-server example: bridge selection by `current` |
+| 4 | **FOLDED INTO 5 (owner decision, no existing paid WP users): no bridge 1.0.5, no hold/handover, no update-server bridge.** Preparation done in the 1.1.0 work: licence seam, new-form links (+ REST `?blog=` redirect), `FLUXFILES_CORE_VERSION` stamp. ~~**WP bridge 1.0.5** (§5.2): new-form links, `legacyModules()`, updater hold on `handover`, pro standby detection; update-server `bridge` and `$ANY_LICENSE_MODULES`~~ | public | ~~wordpress-v1.0.5~~ (none) | core X | wp-smoke: link URL form (single site, multisite, plain permalinks), `?blog=` redirect incl. bad blogs, the licence seam, the core-version stamp; the old shim still serves. `$ANY_LICENSE_MODULES` is deferred to phase 7 |
 | 5 | **WP free 1.1.0, functional** (§2.3, §5.3-5.4): delete `FluxFilesUpdater`, the `Update URI`, the licence/Module engines/expiry code, `public-link.php` → redirect shim, `modules-autoload` usage; add the hooks and `FLUXFILES_EXT_API`/`FLUXFILES_CORE_VERSION`; thin REST stubs; page routes; `pro_hints=false` default; `fluxfiles_storage_base`; `uninstall.php` | public | (tagged with 6) | core Y | wp-smoke: invert test `:954` (no `Update URI`); remove the updater tests `:631-940` and `:1748-1759` (they move to pro); hooks fire in order; default `NoLicense` → a paid route gives 501, and fake module plus fake provider → 200; page route emits the meta tag, not `<script>`; shim redirect math (subdir, multisite `blog`, a bad `page` → 404); every `register_setting` option is in `uninstall.php` and none of pro's are; storage base keeps an existing dir |
 | 6 | **WP hygiene, build and CI** (§8.1-8.4, §9, the list below): readme, `.distignore`, `check-wp-dist.php`, Plugin Check job, 10up deploy (flagged off), assets | public | **wordpress-v1.1.0** | 5 | `wp-dist-guard` (CI), `wp-plugin-check` (CI), `tests/apps` WP e2e (`npm run e2e:wp`) against the trimmed zip |
 | 7 | **fluxfiles-pro v1.0.0** (§2.4, §8.5), 12 modules, + `pack-wordpress-pro.php` + catalogue | **private (new repo)** + public script | pro `v1.0.0` | 5, 2 | pro smoke (moved updater and licence-notice tests from `test-wp-smoke.php`/`test-wp-license-notice.php`; boot guard on 1.0.5/1.1.0; module autoload from `modules/`; `sso` absent); modules-live WP spec with pro instead of `vendor/` |
@@ -554,7 +587,7 @@ because the packages are gitignored, so check them by hand. A tag isn't a releas
    one WP-native update and they can't drift from the gate. The cost is that every buyer gets
    every module's code, which is already true of anyone patching a licence check.
    Alternative: per-edition pro zips chosen by the update server from `modules[]`.
-2. **Bundled CodeMirror vs WP's.** WP ships CodeMirror 5 at `wp-includes/js/codemirror/`, and
+2. **Bundled CodeMirror vs WP's.** *Decided (owner, 2026-11-06): the WP build uses WP's.* WP ships CodeMirror 5 at `wp-includes/js/codemirror/`, and
    reviewers dislike duplicating core libraries. The proposal is a `<meta name="fm-codemirror-base">`
    that the WP host sets to `includes_url('js/codemirror/')`; modes WP's bundle lacks fall back
    to plain text. Verify the mode list against fm.js's 23 modes before deciding.

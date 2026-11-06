@@ -3,6 +3,28 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed (WordPress plugin, preparation for the WordPress.org split)
+
+- **Licence seam.** `FluxFilesPlugin::license()` now returns a `LicenseCheckInterface`: the
+  `fluxfiles_license` filter if it supplies one, else the bundled `LicenseManager`, else
+  `NoLicense`. The plugin installs it with `ModuleRegistry::setLicenseResolver()`, so core's own
+  wiring (versioning, virus/DLP scanning, webhooks, About) sees the key pasted into Settings.
+  `FluxFilesPlugin::seedLicenseEnv()` is removed.
+- **New-form public links.** Share and Intake links minted by the plugin are now the site's REST
+  page URL (`/wp-json/fluxfiles/v1/api/fm/<share|intake>/page?token=...`, the `?rest_route=`
+  form on plain permalinks) instead of `public-link.php?page=...&blog=...`. `public-link.php`
+  keeps serving links issued earlier. On multisite the REST page route honours a `?blog=N`
+  hint with a validated `302` to that site's own page (unknown, deleted, archived or spam
+  blog: `404`).
+- **Bundled core version.** `build-wordpress.sh` stamps `FLUXFILES_CORE_VERSION` (latest
+  `core-v*` tag) into the built plugin (`scripts/stamp-wp-version.py` takes it as a third
+  argument); Site Health shows "Bundled core" and About reports it.
+- `docs/design/WPORG-SPLIT-DESIGN.md`: records that there are no existing paid WordPress users,
+  so the 1.0.5 bridge, the updater hold and the update-server bridge are dropped (phase 4 is
+  folded into phase 5).
+
 ## [1.0.13] — 2026-11-06
 
 > Released: `laravel-v1.0.3`, `core-v1.1.0` (BREAKING). The WordPress changes ship with the next WordPress release, which bundles core 1.1.0.

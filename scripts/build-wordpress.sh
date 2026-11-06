@@ -44,13 +44,23 @@ rsync -a \
     --exclude='build/' \
     "$WP_DIR/" "$PLUGIN_DIR/"
 
+# The core release this plugin build bundles: the nearest core-vX.Y.Z tag, without the
+# prefix. Shown in Site Health / About so a support report names the bundled core.
+CORE_VERSION="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 --match 'core-v*' 2>/dev/null | sed 's/^core-v//' || true)"
+case "$CORE_VERSION" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) CORE_VERSION="" ;;
+esac
+
 if [ -n "$PLUGIN_VERSION" ]; then
     echo "==> Stamping version $PLUGIN_VERSION into the built plugin..."
     case "$PLUGIN_VERSION" in
         [0-9]*.[0-9]*.[0-9]*) ;;
         *) echo "ERROR: expected X.Y.Z, got '$PLUGIN_VERSION'" >&2; exit 1 ;;
     esac
-    python3 "$SCRIPT_DIR/stamp-wp-version.py" "$PLUGIN_DIR" "$PLUGIN_VERSION"
+fi
+if [ -n "$PLUGIN_VERSION" ] || [ -n "$CORE_VERSION" ]; then
+    python3 "$SCRIPT_DIR/stamp-wp-version.py" "$PLUGIN_DIR" "$PLUGIN_VERSION" "$CORE_VERSION"
 fi
 
 echo "==> Bundling FluxFiles core (api/, public/, lang/) into plugin..."

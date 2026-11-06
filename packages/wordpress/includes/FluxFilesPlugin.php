@@ -20,6 +20,10 @@ class FluxFilesPlugin
     private function __construct()
     {
         self::seedSsrfAllowHosts();
+        // Core resolves the licence for its own module wiring (FileManagerFactory,
+        // AboutInfo) through this; without it core would read the env only and never
+        // see a key pasted into Settings.
+        \FluxFiles\ModuleRegistry::setLicenseResolver([self::class, 'license']);
 
         register_activation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'activate']);
         register_deactivation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'deactivate']);
@@ -272,15 +276,35 @@ HTACCESS;
     }
 
     /**
+     * Test seam: the verifier class used when no filter supplies one. Null = autodetect
+     * (LicenseManager if it is shipped, else NoLicense).
+     *
+     * @var class-string<\FluxFiles\LicenseCheckInterface>|null
+     */
+    public static ?string $licenseClass = null;
+
+    /**
      * The licence verifier, built from wherever the key actually lives.
      *
      * Every paid-module gate in the plugin must go through this rather than
      * LicenseManager::fromEnv(), or a customer who pasted a perfectly good key into the
-     * settings screen is told they have no licence.
+     * settings screen is told they have no licence. A `fluxfiles_license` filter may
+     * return any LicenseCheckInterface (anything else is ignored); otherwise the
+     * bundled LicenseManager is used when present, and NoLicense when it is not.
      */
-    public static function license(): \FluxFiles\LicenseManager
+    public static function license(): \FluxFiles\LicenseCheckInterface
     {
-        return new \FluxFiles\LicenseManager(self::licenseKey() ?: null);
+        $custom = apply_filters('fluxfiles_license', null);
+        if ($custom instanceof \FluxFiles\LicenseCheckInterface) {
+            return $custom;
+        }
+        $class = self::$licenseClass ?? \FluxFiles\LicenseManager::class;
+        if (is_a($class, \FluxFiles\LicenseCheckInterface::class, true) && class_exists($class)) {
+            return $class === \FluxFiles\LicenseManager::class
+                ? new \FluxFiles\LicenseManager(self::licenseKey() ?: null)
+                : new $class();
+        }
+        return new \FluxFiles\NoLicense();
     }
 
     /**
@@ -402,14 +426,17 @@ HTACCESS;
         $fields = [
             'plugin_version' => ['label' => 'Plugin version', 'value' => $esc(defined('FLUXFILES_VERSION') ? FLUXFILES_VERSION : 'unknown'), 'private' => false],
         ];
+        $bundledCore = self::bundledCoreVersion();
+        if ($bundledCore !== null) {
+            $fields['bundled_core'] = ['label' => 'Bundled core', 'value' => $esc($bundledCore), 'private' => false];
+        }
         if (class_exists(\FluxFiles\AboutInfo::class)) {
             try {
-                self::seedLicenseEnv();
                 $ssrf = defined('FLUXFILES_SSRF_ALLOW_HOSTS')
                     ? constant('FLUXFILES_SSRF_ALLOW_HOSTS')
                     : (getenv('FLUXFILES_SSRF_ALLOW_HOSTS') ?: ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
                 $about = \FluxFiles\AboutInfo::collect([
-                    'env' => array_merge($_ENV, [
+                    'env' => array_merge($_ENV, $bundledCore !== null ? ['FLUXFILES_CORE_VERSION' => $bundledCore] : [], [
                         'FLUXFILES_STORAGE_BACKEND' => (string) get_option('fluxfiles_storage_backend', 'json'),
                         'FLUXFILES_SSRF_ALLOW_HOSTS' => (string) $ssrf,
                     ]),
@@ -431,6 +458,20 @@ HTACCESS;
     }
 
     /**
+     * The release of the core bundled in this build, as stamped by build-wordpress.sh from
+     * the latest core-v* tag; null in an unstamped (dev checkout) copy. The bundled core
+     * has no Composer metadata, so AboutInfo cannot discover its version by itself.
+     */
+    public static function bundledCoreVersion(): ?string
+    {
+        if (!defined('FLUXFILES_CORE_VERSION')) {
+            return null;
+        }
+        $v = (string) constant('FLUXFILES_CORE_VERSION');
+        return preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/', $v) === 1 ? $v : null;
+    }
+
+    /**
      * FLUXFILES_SSRF_ALLOW_HOSTS for a server on the operator's private network, as a
      * wp-config.php constant or a real env var. Deliberately no Settings field: it
      * loosens the SSRF guard, so it stays with whoever controls the server.
@@ -441,23 +482,6 @@ HTACCESS;
             ? constant('FLUXFILES_SSRF_ALLOW_HOSTS')
             : (getenv('FLUXFILES_SSRF_ALLOW_HOSTS') ?: ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
         \FluxFiles\SsrfGuard::setAllowHosts((string) $raw);
-    }
-
-    /**
-     * Make the stored licence visible to core's LEGACY env-based gates
-     * (LicenseManager::fromEnv() reads $_ENV['FLUXFILES_LICENSE_KEY']). Since the public
-     * Share/Intake routes and the retention / fixity / verify handlers moved to the
-     * module seams, the plugin's own gates go through license() instead; this seed is
-     * kept for core paths that still resolve the licence from the environment (the
-     * FileManagerFactory-style wiring) and is slated for removal once phase 5 drops the
-     * last of them. The option wins (as in licenseKey()); a real env var is the fallback.
-     */
-    public static function seedLicenseEnv(): void
-    {
-        $key = self::licenseKey();
-        if ($key !== '') {
-            $_ENV['FLUXFILES_LICENSE_KEY'] = $key;
-        }
     }
 
     /**
@@ -562,33 +586,53 @@ HTACCESS;
      * one-shot token attached.
      *
      * Standalone serves these from /public/ at the site root; a WordPress site has no
-     * such path. They go through public-link.php, which injects the REST base the
-     * static page cannot know — see that file.
+     * such path, so the link is this site's own REST `<module>/page` route, which injects
+     * the REST base the static page cannot know. get_rest_url() is per blog, so on
+     * multisite the link already names the minting site and needs no `blog` hint; and on
+     * plain permalinks it is the `?rest_route=` form (the token is appended with `&`).
+     * public-link.php keeps serving links minted before this form existed.
      */
     public static function publicLinkUrl(string $page, string $token = ''): string
     {
         $which = $page === 'intake.html' ? 'intake' : 'share';
-        $args = ['page' => $which];
+        $path = 'fluxfiles/v1/api/fm/' . $which . '/page';
+        $url = self::isMultisite() && function_exists('get_rest_url')
+            ? get_rest_url((int) get_current_blog_id(), $path)
+            : rest_url($path);
         // Token omitted = the BASE url, which is what the *_base_url claims carry: the
-        // module appends `&token=…` itself, so a base that already had one would
+        // module appends the token itself, so a base that already had one would
         // produce two and resolve the wrong (first) value.
-        if ($token !== '') {
-            $args['token'] = $token;
-        }
-        // plugins_url() is network-wide, so on multisite the shim boots whichever blog
-        // the plugin URL's host/path maps to (the main site), not the one that minted
-        // the link. Name the minting blog; publicLinkRestBase() turns it into that
-        // site's REST base. The id is only a routing hint: the token is verified by
-        // THAT site's REST route against its own secret, so a forged id fails closed.
-        if (self::isMultisite()) {
-            $args['blog'] = (int) get_current_blog_id();
-        }
-        return add_query_arg($args, plugins_url('public-link.php', FLUXFILES_PLUGIN_FILE));
+        return $token !== '' ? add_query_arg(['token' => $token], $url) : $url;
     }
 
-    private static function isMultisite(): bool
+    public static function isMultisite(): bool
     {
         return function_exists('is_multisite') && is_multisite();
+    }
+
+    /**
+     * What the REST `<module>/page` route does with a `?blog=` hint (set by the
+     * public-link.php shim, or by an old link). The target is built from the validated
+     * site record, never from the request, so it cannot be steered to another host.
+     *
+     * @param mixed $blogParam raw `?blog=` value
+     * @return array{0:int,1:?string} [200, null] serve here; [404, null] bad blog;
+     *                                [302, url] redirect to that blog's own page route
+     */
+    public static function publicPageRedirect(string $which, $blogParam, string $token): array
+    {
+        if (!self::isMultisite() || $blogParam === null || $blogParam === '') {
+            return [200, null];
+        }
+        $base = self::publicLinkRestBase($blogParam);
+        if ($base === null) {
+            return [404, null];
+        }
+        if ($base === rtrim(rest_url('fluxfiles/v1/api/fm'), '/')) {
+            return [200, null];
+        }
+        $target = $base . '/' . ($which === 'intake' ? 'intake' : 'share') . '/page';
+        return [302, $token !== '' ? add_query_arg(['token' => $token], $target) : $target];
     }
 
     /**
