@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed (WordPress plugin)
+
+- **Picker opened only once per page.** The FluxFiles Image block and the media-modal button initialised the SDK once and kept the first caller's callback; since the SDK removes its iframe after a pick, a second open showed an empty modal and a pick could land in the first block. Each open now builds a fresh picker bound to the block that opened it, and closing tears down the iframe and message listener. Test: `packages/wordpress/tests/block-picker.test.js`.
+
 ### Changed (WordPress plugin, preparation for the WordPress.org split)
 
 - **Licence seam.** `FluxFilesPlugin::license()` now returns a `LicenseCheckInterface`: the

@@ -73,6 +73,9 @@ jobs:
       - name: Laravel adapter smoke (stubbed Laravel, uses core autoload)
         run: php packages/laravel/tests/test-laravel-smoke.php
 
+      - name: WordPress block / media picker re-open (Node, stubbed SDK)
+        run: node packages/wordpress/tests/block-picker.test.js
+
   # Lock files that drift from their composer.json slip by every other job (they
   # all run `composer update` or load core's autoload): the Laravel lock once
   # pinned core 0.2.79 and the WordPress lock 0.2.36 against a ^0.2.88 floor, and
