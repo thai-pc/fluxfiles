@@ -205,7 +205,7 @@ depends on how you installed:
 | Install | Where to put the settings |
 |---|---|
 | **Monorepo clone** | `cp packages/core/.env.example packages/core/.env` (the API also reads a `.env` at the repo root) |
-| **`composer require`** | Prefer real env vars (php-fpm `env[...]`, systemd, your host's panel). A `.env` file works only inside the package: `cp vendor/fluxfiles/fluxfiles/.env.example vendor/fluxfiles/fluxfiles/.env` — `vendor/` is not your project root, so a `.env` in your project root is **not** read, and Composer may remove the file when it updates or reinstalls the package. `vendor/bin/fluxfiles serve` prints the path it expects. |
+| **`composer require`** | Prefer real env vars (php-fpm `env[...]`, systemd, your host's panel). A `.env` file works only inside the package: `cp vendor/fluxfiles/fluxfiles/.env.example vendor/fluxfiles/fluxfiles/.env` — `vendor/` is not your project root, so a `.env` in your project root is **not** read, and Composer may remove the file when it updates or reinstalls the package. `vendor/bin/fluxfiles serve` prints the path it expects. Disks beyond the env-configured built-ins go in your own file outside `vendor/`, named by `FLUXFILES_DISKS_CONFIG` — see [Adding a Custom Disk](#adding-a-custom-disk). |
 | **Docker** | Pass `-e` variables (see [Run with Docker](#run-with-docker-fastest)) |
 
 ### 3. Run
@@ -686,8 +686,8 @@ Every variable these read, with its default, is listed in
 
 > ⚠️ **Composer installs:** this file is `vendor/fluxfiles/fluxfiles/config/disks.php`,
 > and Composer overwrites it on every update. Configure the built-in disks through
-> env vars instead, and see [Adding a Custom Disk](#adding-a-custom-disk) for the
-> ways to add more.
+> env vars, and for anything more put your own disks file outside `vendor/` and point
+> `FLUXFILES_DISKS_CONFIG` at it — see [Adding a Custom Disk](#adding-a-custom-disk).
 
 > **Note:** R2 uses the S3-compatible API. ACL operations are not supported — FluxFiles automatically disables `retain_visibility` for endpoint-based disks.
 
@@ -745,35 +745,56 @@ How it differs from S3 (by design):
 
 ### Adding a Custom Disk
 
-FluxFiles has no separate override file for disks; pick the route that matches
-your install:
+**Recommended: your own disks file via `FLUXFILES_DISKS_CONFIG`.** Point this
+server env var at an **absolute path** to a PHP file that returns the disks array.
+Keep the file outside `vendor/`, and it survives `composer update`. It **replaces**
+the package's `config/disks.php` entirely rather than merging with it, so `require`
+the package's file from yours if you want the built-in disks too:
+
+```php
+<?php
+// /home/web/fluxfiles-config/disks.php
+$disks = require '/home/web/app/vendor/fluxfiles/fluxfiles/config/disks.php'; // keep local/s3/r2/sftp
+
+$disks['minio'] = [
+    'driver'   => 's3',
+    'endpoint' => 'http://minio.local:9000',
+    'region'   => 'us-east-1',
+    'bucket'   => $_ENV['MINIO_BUCKET'] ?? '',
+    'key'      => $_ENV['MINIO_KEY'] ?? '',
+    'secret'   => $_ENV['MINIO_SECRET'] ?? '',
+];
+
+return $disks;
+```
+
+```env
+FLUXFILES_DISKS_CONFIG=/home/web/fluxfiles-config/disks.php
+```
+
+Then include `'minio'` in the JWT `disks` claim. Only the `FLUXFILES_*`, `AWS_*`,
+`R2_*` and `SFTP_*` prefixes are copied from real env vars into `$_ENV`, so other
+names (like `MINIO_*` above) must come from `.env`. A path that is missing or
+unreadable, or a file that doesn't return an array, is an **error** (API `500`, CLI
+exit 1), never a silent fallback to the default disks. Only the server environment
+sets it; no token or request can. Details:
+[`docs/reference/CONFIG.md` §3](docs/reference/CONFIG.md#3-static-disk-environment).
+This works for every install type: Composer, monorepo clone, and Docker (mount the
+file and pass `-e FLUXFILES_DISKS_CONFIG=…`).
+
+Alternatives, where they fit better:
 
 - **Just one S3-compatible store?** No new disk needed — point the built-in `s3`
   disk at it with `AWS_ENDPOINT` (+ `AWS_DEFAULT_REGION`, credentials).
-- **Monorepo clone, or your own Docker image:** add an entry to
-  `packages/core/config/disks.php` (keep it in your fork, or `COPY` your version over
-  it in a Dockerfile `FROM ghcr.io/thai-pc/fluxfiles`):
+- **Per-tenant buckets / SFTP servers:** mint them into the token with
+  [BYOB](#byob-bring-your-own-bucket) — no server file at all (a private-network
+  endpoint must be listed in `FLUXFILES_SSRF_ALLOW_HOSTS`).
+- **Laravel / WordPress adapters** keep their own disk config: for Laravel that is
+  the `disks` key of your published `config/fluxfiles.php` — see
+  [`packages/laravel/README.md`](packages/laravel/README.md).
 
-  ```php
-  $disks['minio'] = [
-      'driver'   => 's3',
-      'endpoint' => 'http://minio.local:9000',
-      'region'   => 'us-east-1',
-      'bucket'   => $_ENV['MINIO_BUCKET'] ?? '',
-      'key'      => $_ENV['MINIO_KEY'] ?? '',
-      'secret'   => $_ENV['MINIO_SECRET'] ?? '',
-  ];
-  ```
-
-  Then include `'minio'` in the JWT `disks` claim. Only the `FLUXFILES_*`, `AWS_*`,
-  `R2_*` and `SFTP_*` prefixes are copied from real env vars, so any other variable
-  name (like `MINIO_*` above) must come from `.env`.
-- **Composer install:** don't edit `vendor/` — it is overwritten on update. Add
-  extra buckets / SFTP servers per token with [BYOB](#byob-bring-your-own-bucket)
-  instead (no file to edit; a private-network endpoint must be listed in
-  `FLUXFILES_SSRF_ALLOW_HOSTS`).
-- **Laravel adapter:** disks live in your published `config/fluxfiles.php`
-  (`disks` key) — see [`packages/laravel/README.md`](packages/laravel/README.md).
+Don't edit `vendor/fluxfiles/fluxfiles/config/disks.php` in place — Composer
+overwrites it on update.
 
 ### S3-compatible providers (no extra code)
 
@@ -1553,7 +1574,7 @@ of it may be web-served. What each file is, and what deleting it costs:
 | What | Where | Notes |
 |------|-------|-------|
 | **Secrets & CORS** | `.env` | `FLUXFILES_SECRET`, `FLUXFILES_ALLOWED_ORIGINS` |
-| **Storage disks** | `packages/core/config/disks.php` | Add/remove disk definitions (clone / own image only — in a Composer install it is in `vendor/`; see [Adding a Custom Disk](#adding-a-custom-disk)) |
+| **Storage disks** | `packages/core/config/disks.php` | Add/remove disk definitions — or keep your own file elsewhere and point `FLUXFILES_DISKS_CONFIG` at it (the way to go for Composer installs; see [Adding a Custom Disk](#adding-a-custom-disk)) |
 | **Cloud credentials** | `.env` | `AWS_*`, `R2_*`, `SFTP_*` variables |
 | **AI tagging** | `.env` | Provider, API key, model, auto-tag on upload |
 | **Branding / colors** | `packages/core/assets/fm.css` | CSS custom properties (`--ff-primary`, `--ff-bg`, etc.) |
