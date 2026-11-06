@@ -2982,7 +2982,8 @@ class FileManager
         // Directory (SSH_FILEXFER type 2 / S_IFDIR): assertOwner() above skips it, so
         // confirm the caller owns everything inside before changing its mode.
         if (is_array($stat) && (($stat['type'] ?? 0) === 2 || ((int) ($stat['mode'] ?? 0) & 0170000) === 0040000)) {
-            $this->assertOwnsTree($disk, $scoped);
+            // Fail closed: an unlistable tree must not read as "all yours".
+            $this->assertOwnsTree($disk, $scoped, true);
         }
         if (!$conn->chmod(octdec($mode), $location, false)) {
             throw new ApiException('Failed to set permissions', 500, 'chmod_failed');
@@ -4457,7 +4458,7 @@ class FileManager
      * full of other people's files. Files with no owner (legacy / pre-existing) are
      * allowed; enumeration failures fall through (best-effort, like elsewhere).
      */
-    private function assertOwnsTree(string $disk, string $scopedDir): void
+    private function assertOwnsTree(string $disk, string $scopedDir, bool $failClosed = false): void
     {
         if (!$this->claims->ownerOnly) {
             return;
@@ -4515,7 +4516,11 @@ class FileManager
             throw $e;
         } catch (\Throwable $e) {
             // Could not enumerate the tree — fall through; the operation itself will
-            // surface any real storage error.
+            // surface any real storage error. chmod has no storage error to surface
+            // (it would just apply), so it asks for fail-closed instead.
+            if ($failClosed) {
+                throw new ApiException('Folder ownership could not be verified', 403, 'owner_only');
+            }
         }
     }
 

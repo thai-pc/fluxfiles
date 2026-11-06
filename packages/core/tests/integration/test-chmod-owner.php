@@ -56,6 +56,17 @@ final class FakeSftp
     public function chmod(int $mode, string $path, bool $recursive): bool { $this->chmods[] = [$mode, $path]; return true; }
 }
 
+/** A local adapter whose directory listing can be made to fail. */
+final class FlakyAdapter extends LocalFilesystemAdapter
+{
+    public static bool $failList = false;
+    public function listContents(string $path, bool $deep): iterable
+    {
+        if (self::$failList) { throw new \RuntimeException('listing failed'); }
+        return parent::listContents($path, $deep);
+    }
+}
+
 final class Disks extends DiskManager
 {
     private Filesystem $fs;
@@ -63,7 +74,7 @@ final class Disks extends DiskManager
     public function __construct(string $root)
     {
         parent::__construct(['x' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
-        $this->fs = new Filesystem(new LocalFilesystemAdapter($root));
+        $this->fs = new Filesystem(new FlakyAdapter($root));
         $this->sftp = new FakeSftp($root);
     }
     public function disk(string $name): Filesystem { return $this->fs; }
@@ -123,6 +134,19 @@ test("owner_only: mallory's own folder and file still work", function () {
 test("owner_only: alice's file is refused for mallory (file path unchanged)", function () {
     [$fm, $dm, $root] = env('mallory');
     assertEq([403, 'owner_only'], code(fn () => $fm->setMode('x', 'alice/docs/a.txt', '777')), 'file');
+    rmrf($root);
+});
+
+test('owner_only: a folder whose tree cannot be listed is refused (fail closed), own file unaffected', function () {
+    [$fm, $dm, $root] = env('mallory');
+    FlakyAdapter::$failList = true;
+    try {
+        assertEq([403, 'owner_only'], code(fn () => $fm->setMode('x', 'mallory', '755')), 'unlistable folder');
+        assertEq([], $dm->sftp->chmods, 'no chmod issued');
+        assertEq('644', $fm->setMode('x', 'mallory/m.txt', '644')['mode'], 'a file needs no listing');
+    } finally {
+        FlakyAdapter::$failList = false;
+    }
     rmrf($root);
 });
 
