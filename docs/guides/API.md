@@ -21,8 +21,8 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 |--------|------|-------------|
 | `GET` | `/api/fm/lang` | List available locales → `[{code, name, dir}]` |
 | `GET` | `/api/fm/lang/{code}` | Get translation messages for a locale |
-| `GET` | `/api/fm/share/info?token=` · `POST /api/fm/share/unlock` · `GET /api/fm/share/file?token=` | Share recipient landing (`/public/share.html`), authenticated by the share link itself — `share` module installed + licensed |
-| `GET` | `/api/fm/intake/info?token=` · `POST /api/fm/intake/upload` | Upload-portal recipient page (`/public/intake.html`) — `intake` module installed + licensed |
+| `GET` | `/api/fm/share/info?token=` · `POST /api/fm/share/unlock` · `GET /api/fm/share/file?token=` | Share recipient landing, authenticated by the share link itself; page at `GET /api/fm/share/page` (`/public/share.html` is a redirect stub) — `share` module installed + licensed |
+| `GET` | `/api/fm/intake/info?token=` · `POST /api/fm/intake/upload` | Upload-portal recipient page at `GET /api/fm/intake/page` (`/public/intake.html` is a redirect stub) — `intake` module installed + licensed |
 
 ## File Operations (JWT required)
 

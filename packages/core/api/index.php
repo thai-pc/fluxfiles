@@ -1550,7 +1550,7 @@ function handleSsoCallback(): void
  * SSO bridge, step 3: the browser's boot script trades the fragment's one-time
  * SsoBootToken for the real access JWT, via a POST body — the only way the real
  * JWT is ever transmitted. Standard JSON envelope (this IS a fetch(), unlike
- * login/callback above), same try/catch shape as handleIntakePublic/handleSharePublic.
+ * login/callback above), same try/catch shape as the Share/Intake module handlers.
  */
 function handleSsoExchange(): void
 {

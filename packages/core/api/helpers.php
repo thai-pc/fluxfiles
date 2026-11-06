@@ -57,8 +57,8 @@ function ff_public_meta_repo(DiskManager $dm, ?MetadataRepositoryInterface $inje
 
 /**
  * Per-client-IP rate limit for the SSO bridge's three pre-auth routes
- * (`login`/`callback`/`exchange`), mirroring ff_share_rate_limit()'s JSON-file
- * limiter. Unlike share/intake, there is no token/id to bucket by until AFTER
+ * (`login`/`callback`/`exchange`), using the same JSON-file limiter as the
+ * Share/Intake modules' public routes. Unlike share/intake, there is no token/id to bucket by until AFTER
  * `callback` verifies `state` — so `REMOTE_ADDR` is the only key available,
  * same rotation caveat as the IP half of `share_unlock`/`intake_upload`
  * (not a safe-ONLY limit on its own, but there is no better key pre-auth).

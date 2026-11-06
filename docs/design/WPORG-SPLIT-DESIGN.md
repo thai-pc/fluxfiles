@@ -166,7 +166,7 @@ and a pro update replaces them together with the plugin that gates them.
   - `publicLink()` becomes `PublicRoutes::dispatch($which, …, new PublicContext($this->diskManager, $diskConfigs, $this->metaRepo, …, ModuleRegistry::license()))`.
   - `publicPage()` becomes `PublicRoutes::page()`, plus two new `…/page` routes in `FluxFilesServiceProvider`.
   - `retentionRun`, `fixityCheck` and `auditVerify` become the same thin stubs as core (§4).
-  - `composer.json` floor goes to `^Y`; `adapter-core-floor` CI enforces it.
+  - `composer.json` floor shipped as `^1.0.4`; `adapter-core-floor` CI enforces it.
 
 ## 3. JWT claims
 
