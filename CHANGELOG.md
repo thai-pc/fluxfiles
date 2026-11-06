@@ -3,6 +3,18 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `FileManager::retentionRules()` returns the token's sanitised `retention_rules`, so a
+  module can drive the retention sweep through the `removeKeys()`/`isHeld()` seams.
+
+### Changed
+
+- Test-only: the audit-chain tests verify through `tests/support/chain-verify.php`, a
+  verbatim copy of `AuditChain::verify()`, instead of the shipped method. No behaviour change.
+
 ## [1.0.12] — 2026-11-06
 
 ### Added

@@ -52,6 +52,13 @@ test('sanitize: drops bad rules, defaults action, strips traversal, caps at 20',
     assertTrue(Claims::fromJwtPayload((object) ['sub' => 'u'])->retentionRules === [], 'default none');
 });
 
+test('retentionRules() returns the token\'s sanitised rules', function () {
+    [$fm] = rtEnv(RULES);
+    assertTrue($fm->retentionRules() === Claims::sanitizeRetentionRules(RULES), json_encode($fm->retentionRules()));
+    [$none] = rtEnv([]);
+    assertTrue($none->retentionRules() === [], 'empty');
+});
+
 test('dry run reports exactly the expired files and changes nothing', function () {
     [$fm, , $base] = rtEnv(RULES);
     $r = $fm->runRetention('local', true);
