@@ -18,12 +18,15 @@ final class CoreVersion
 {
     /**
      * The installed core version as a plain `x.y.z`, or null when it cannot be
-     * known (a git checkout, `dev-*`, or no Composer metadata).
+     * known. Order: the `FLUXFILES_CORE_VERSION` env var (the operator's override for
+     * git / release-zip / Docker installs, where Composer's root package is `dev-*`),
+     * then Composer's metadata for a `composer require fluxfiles/fluxfiles` install.
      */
     public static function current(): ?string
     {
-        if (defined('FLUXFILES_CORE_VERSION')) {
-            $v = self::normalize((string) constant('FLUXFILES_CORE_VERSION'));
+        $env = $_ENV['FLUXFILES_CORE_VERSION'] ?? getenv('FLUXFILES_CORE_VERSION');
+        if (is_string($env) && $env !== '') {
+            $v = self::normalize($env);
             if ($v !== null) {
                 return $v;
             }
@@ -35,19 +38,25 @@ final class CoreVersion
         return null;
     }
 
-    /** `v1.0.4`, `core-v1.0.4`, `1.0.4-rc1` -> a comparable string; `dev-master` -> null. */
+    /**
+     * `v1.0.4`, `core-v1.0.4`, `1.0.4-rc1` -> a comparable string, padded to three
+     * numeric segments (`1.0` -> `1.0.0`, since PHP orders `1.0 < 1.0.0`);
+     * `dev-master` -> null.
+     */
     public static function normalize(string $v): ?string
     {
         $v = trim($v);
-        if (preg_match('/^(?:core-)?v?(\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.]+)?)$/', $v, $m) !== 1) {
+        if (preg_match('/^(?:core-)?v?(\d+(?:\.\d+){0,2})(-[0-9A-Za-z.]+)?$/', $v, $m) !== 1) {
             return null;
         }
-        return $m[1];
+        return implode('.', array_pad(explode('.', $m[1]), 3, '0')) . ($m[2] ?? '');
     }
 
     /**
-     * True when $version satisfies $constraint. An unparseable constraint is
-     * treated as unsatisfied: a release we cannot reason about is not installed.
+     * True when $version satisfies $constraint. Fails closed: any part of the
+     * constraint that cannot be parsed makes the whole constraint unsatisfied,
+     * regardless of where it sits (`^1.0 || garbage` is false, not "true via the
+     * first alternative"). A release we cannot reason about is not installed.
      */
     public static function satisfies(string $version, string $constraint): bool
     {
@@ -59,19 +68,16 @@ final class CoreVersion
         if ($constraint === '' || $constraint === '*') {
             return true;
         }
-        foreach (preg_split('/\s*\|\|?\s*/', $constraint) ?: [] as $alt) {
-            // Re-join "op version" pairs split by whitespace (">= 1.0.3").
-            $alt = preg_replace('/([<>=~^]+)\s+/', '$1', trim($alt));
-            $terms = preg_split('/[\s,]+/', (string) $alt) ?: [];
-            $ok = $terms !== [];
-            foreach ($terms as $t) {
-                $r = self::term($version, $t);
-                if ($r === null) {
-                    return false; // unparseable
-                }
-                if (!$r) {
-                    $ok = false;
-                }
+        $alts = self::parseConstraint($constraint);
+        if ($alts === null) {
+            return false;
+        }
+        foreach ($alts as $terms) {
+            $ok = true;
+            foreach ($terms as [$lo, $loOp, $hi]) {
+                // Upper bounds are exclusive of "$hi-dev", as in Composer: 2.0.0-rc1 is NOT below ^1.0.
+                if ($lo !== null && !version_compare($version, $lo, $loOp)) { $ok = false; break; }
+                if ($hi !== null && !version_compare($version, $hi . '-dev', '<')) { $ok = false; break; }
             }
             if ($ok) {
                 return true;
@@ -80,29 +86,80 @@ final class CoreVersion
         return false;
     }
 
-    /** @return bool|null null = could not parse the term */
-    private static function term(string $v, string $t): ?bool
+    /** True when every alternative and term of $constraint parses (used at pack time). */
+    public static function isValid(string $constraint): bool
+    {
+        $constraint = trim($constraint);
+        return $constraint === '*' || ($constraint !== '' && self::parseConstraint($constraint) !== null);
+    }
+
+    /**
+     * Parse EVERYTHING up front; one bad alternative or term rejects the lot.
+     *
+     * @return list<list<array{0:?string,1:string,2:?string}>>|null
+     */
+    private static function parseConstraint(string $constraint): ?array
+    {
+        $alts = [];
+        foreach (preg_split('/\s*\|\|?\s*/', $constraint) ?: [] as $alt) {
+            // Re-join "op version" pairs split by whitespace (">= 1.0.3").
+            $alt = preg_replace('/([<>=~^]+)\s+/', '$1', trim($alt));
+            $terms = preg_split('/[\s,]+/', (string) $alt, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            if ($terms === []) {
+                return null; // empty alternative ("^1.0 ||")
+            }
+            $parsed = [];
+            foreach ($terms as $t) {
+                $range = self::parseTerm($t);
+                if ($range === null) {
+                    return null;
+                }
+                $parsed[] = $range;
+            }
+            $alts[] = $parsed;
+        }
+        return $alts === [] ? null : $alts;
+    }
+
+    /**
+     * One term as a range [lower|null, lowerOp, upper|null] (upper is exclusive, compared
+     * against "$upper-dev"; a single-version `=` term is [v, '==', null]).
+     *
+     * @return array{0:?string,1:string,2:?string}|null null = could not parse the term
+     */
+    private static function parseTerm(string $t): ?array
     {
         if ($t === '*') {
-            return true;
+            return [null, '>=', null];
         }
-        if (preg_match('/^(\^|~|>=|<=|>|<|==|=)?v?(\d+(?:\.(?:\d+|\*)){0,2}(?:\.\*)?)(?:-[0-9A-Za-z.]+)?$/', $t, $m) !== 1) {
+        if (preg_match('/^(\^|~|>=|<=|>|<|==|=)?v?(\d+)(?:\.(\d+|\*))?(?:\.(\d+|\*))?(?:-[0-9A-Za-z.]+)?$/', $t, $m) !== 1) {
             return null;
         }
         $op = $m[1];
-        $raw = $m[2];
-        if (str_contains($raw, '*')) {
-            $p = array_map('intval', explode('.', rtrim(str_replace('.*', '', $raw), '.')));
-            $lo = implode('.', array_pad($p, 3, 0));
-            $hi = $p[0] . '.' . (isset($p[1]) ? $p[1] + 1 : 0) . '.0';
-            if (!isset($p[1])) {
-                $hi = ($p[0] + 1) . '.0.0';
+        $parts = [(int) $m[2]];
+        $wild = false;
+        foreach ([$m[3] ?? null, $m[4] ?? null] as $seg) {
+            if ($seg === null) {
+                continue;
             }
-            return version_compare($v, $lo, '>=') && version_compare($v, $hi, '<');
+            if ($seg === '*') {
+                $wild = true;
+            } elseif ($wild) {
+                return null; // "1.*.3": a number after a wildcard
+            } else {
+                $parts[] = (int) $seg;
+            }
         }
-        $parts = array_map('intval', explode('.', $raw));
+        if ($wild && $op !== '') {
+            return null; // a wildcard takes no operator ("<1.2.*", "^1.*")
+        }
         $n = count($parts);
         $base = implode('.', array_pad($parts, 3, 0));
+        if ($wild) {
+            // "1.*" / "1.2.*": [base, next) -- n is the count of fixed segments.
+            $hi = $n === 1 ? ($parts[0] + 1) . '.0.0' : $parts[0] . '.' . ($parts[1] + 1) . '.0';
+            return [$base, '>=', $hi];
+        }
         switch ($op) {
             case '^':
                 if ($parts[0] > 0 || $n === 1) {
@@ -112,21 +169,30 @@ final class CoreVersion
                 } else {
                     $hi = '0.0.' . (($parts[2] ?? 0) + 1);
                 }
-                return version_compare($v, $base, '>=') && version_compare($v, $hi, '<');
+                return [$base, '>=', $hi];
             case '~':
-                $hi = $n === 1 ? ($parts[0] + 1) . '.0.0'
-                    : ($n === 2 ? ($parts[0] + 1) . '.0.0' : $parts[0] . '.' . ($parts[1] + 1) . '.0');
-                return version_compare($v, $base, '>=') && version_compare($v, $hi, '<');
+                $hi = $n <= 2 ? ($parts[0] + 1) . '.0.0' : $parts[0] . '.' . ($parts[1] + 1) . '.0';
+                return [$base, '>=', $hi];
             case '>=':
-                return version_compare($v, $base, '>=');
-            case '<=':
-                return version_compare($v, $base, '<=');
+                return [$base, '>=', null];
             case '>':
-                return version_compare($v, $base, '>');
+                // ">1.2" means "from 1.3.0-dev" in Composer; ">1.2.3" is plain.
+                if ($n < 3) {
+                    $next = $n === 1 ? ($parts[0] + 1) . '.0.0' : $parts[0] . '.' . ($parts[1] + 1) . '.0';
+                    return [$next . '-dev', '>=', null];
+                }
+                return [$base, '>', null];
             case '<':
-                return version_compare($v, $base, '<');
+                return [null, '>=', $base];
+            case '<=':
+                if ($n < 3) {
+                    $next = $n === 1 ? ($parts[0] + 1) . '.0.0' : $parts[0] . '.' . ($parts[1] + 1) . '.0';
+                    return [null, '>=', $next];
+                }
+                // "<=1.2.3" == below the next patch's -dev.
+                return [null, '>=', $parts[0] . '.' . $parts[1] . '.' . ($parts[2] + 1)];
             default:
-                return version_compare($v, $base, '==');
+                return [$base, '==', null];
         }
     }
 }

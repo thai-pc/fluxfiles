@@ -109,13 +109,16 @@ A module declares the core it needs in its `composer.json`
   first) so a site on an older core can still be offered the newest build it can host.
 - The server signs `requires_core` into the manifest. The client sends its core version as
   `?core_version=` (from `Composer\InstalledVersions`, or the `FLUXFILES_CORE_VERSION`
-  constant) and `UpdateClient::assertCoreCompatible()` refuses a release the running core
+  env var, which git / release-zip / Docker installs must set since Composer reports `dev-*` there) and `UpdateClient::assertCoreCompatible()` refuses a release the running core
   does not satisfy, telling the operator to update core first.
 - A client that cannot determine its core (a git checkout, `dev-*`) is refused with a
-  warning; `fluxfiles update <module> --force` proceeds. `--force` never overrides a known
-  mismatch.
-- **Clients that predate this (core <= 1.0.4) send no `core_version`.** The server treats
-  them as core `1.0.3` and never offers a release whose floor is above `^1.0.3`; they get
+  warning; `fluxfiles update <module> --force` proceeds, but since the core is unreported the
+  server hands it the 1.0.3-compatible build, not the newest. Set `FLUXFILES_CORE_VERSION`
+  to get the right one. `--force` never overrides a known mismatch. After download, the
+  zip's own `composer.json` constraint is checked too.
+- **Clients that predate this (core <= 1.0.5, and every pre-1.0 `0.2.x` core) send no
+  `core_version`.** The server treats them as core `1.0.3` (so a `0.2.x` client is also
+  assumed to be 1.0.3 and can be offered a build it cannot host) and never offers a release whose floor is above `^1.0.3`; they get
   the newest older build, or `409` when none is compatible. Only a client that reports its
   version can be offered a release with a higher floor.
 - The WordPress plugin updater only updates the plugin itself (no `requires_core`), so it is

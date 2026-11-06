@@ -40,10 +40,12 @@ use FluxFiles\LicenseManager;
  * the module's composer constraint on fluxfiles/fluxfiles. A module built for a newer
  * core fatals on load against an older one (missing interface), so we must not offer it.
  *
- *   - Client sent `core_version` (core >= 1.0.5): serve the newest release whose
+ *   - Client sent `core_version` (core >= 1.0.6): serve the newest release whose
  *     `requires_core` that version satisfies; null when none does.
- *   - Client sent none (core <= 1.0.4 cannot): it has not proven its version, so it is
- *     treated as core 1.0.3 — the oldest core still in the field. A release whose floor is
+ *   - Client sent none (core <= 1.0.5 cannot, nor can any 0.2.x core): it has not
+ *     proven its version, so it is treated as core 1.0.3. That is a floor, not a claim:
+ *     a 0.2.x client is also treated as 1.0.3 and may be offered a build it
+ *     cannot host. A release whose floor is
  *     above `^1.0.3` (e.g. share 1.4.0 needing `^1.0.4`) is NEVER offered to it.
  *   - A release with no `requires_core` is compatible with everyone.
  *
@@ -58,7 +60,7 @@ function fluxfiles_pick_release(array $entry, ?string $coreVersion): ?array
     $candidates = array_merge([array_diff_key($entry, ['releases' => 1])], array_values($entry['releases'] ?? []));
     $best = null;
     foreach ($candidates as $c) {
-        if (!is_array($c) || ($c['version'] ?? '') === '' || ($c['sha256'] ?? '') === '') {
+        if (!is_array($c) || ($c['version'] ?? '') === '' || ($c['sha256'] ?? '') === '' || ($c['zip'] ?? '') === '') {
             continue;
         }
         $need = (string) ($c['requires_core'] ?? '');
@@ -167,7 +169,7 @@ if (!in_array($module, $FREE_MODULES, true)) {
 
 // 3. Pick a release this client's core can host, then build + sign the manifest.
 //    `core_version` is advisory (the client reports it); it only narrows what we offer.
-$coreVersion = isset($_GET['core_version']) ? CoreVersion::normalize((string) $_GET['core_version']) : null;
+$coreVersion = is_string($_GET['core_version'] ?? null) ? CoreVersion::normalize($_GET['core_version']) : null;
 $entry = fluxfiles_pick_release($CATALOGUE[$module], $coreVersion);
 if ($entry === null) {
     http_response_code(409);
@@ -180,13 +182,13 @@ $payload = [
     'sha256'  => $entry['sha256'],
     'expires' => time() + 3600, // short replay window; the client re-checks each run
 ];
-// Optional PHP floor for this release (the WordPress catalogue entry carries one), so
-// the plugin's updater can hold the update back on an older PHP.
 // The core this release needs. UpdateClient re-checks it before installing (the manifest is
 // signed, so it can't be stripped in transit).
 if (!empty($entry['requires_core'])) {
     $payload['requires_core'] = (string) $entry['requires_core'];
 }
+// Optional PHP floor for this release (the WordPress catalogue entry carries one), so
+// the plugin's updater can hold the update back on an older PHP.
 if (!empty($entry['requires_php'])) {
     $payload['requires_php'] = (string) $entry['requires_php'];
 }

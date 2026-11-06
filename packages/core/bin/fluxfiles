@@ -112,6 +112,12 @@ if ($command === 'update') {
     $body = curl_exec($ch);
     $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+    if ($status === 409 && is_string($body)) {
+        // The server found no release this core can host: say so, not "licence invalid".
+        $msg = trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', substr($body, 0, 300)));
+        fwrite(STDERR, ($msg !== '' ? $msg : "No release of {$module} is compatible with this core - update core first.") . "\n");
+        exit(1);
+    }
     if ($body === false || $status !== 200) {
         fwrite(STDERR, "Update check failed (HTTP {$status}). License invalid/expired, or server unreachable.\n");
         exit(1);
@@ -151,6 +157,34 @@ if ($command === 'update') {
     if ($zip === false || $zstatus !== 200 || !\FluxFiles\UpdateClient::verifyZip((string) $zip, (string) $manifest['sha256'])) {
         fwrite(STDERR, "Download failed or checksum mismatch — refusing to install.\n");
         exit(1);
+    }
+
+    // Defense in depth: the zip's own composer.json (bytes bound to the signed sha256)
+    // must also accept this core, whatever the catalogue said.
+    $zipNeed = null;
+    $za = new \ZipArchive();
+    $tmpZip = tempnam(sys_get_temp_dir(), 'ffz');
+    if ($tmpZip !== false) {
+        if (@file_put_contents($tmpZip, (string) $zip) !== false && $za->open($tmpZip) === true) {
+            $cj = $za->getFromName('composer.json');
+            $za->close();
+            $pkg = is_string($cj) ? json_decode($cj, true) : null;
+            $rc = is_array($pkg) ? ($pkg['require']['fluxfiles/fluxfiles'] ?? null) : null;
+            $zipNeed = is_string($rc) && trim($rc) !== '' ? trim($rc) : null;
+        }
+        @unlink($tmpZip);
+    }
+    if ($zipNeed !== null) {
+        try {
+            \FluxFiles\UpdateClient::assertCoreCompatible(
+                ['module' => $module, 'version' => $version, 'requires_core' => $zipNeed],
+                $coreVersion,
+                $force
+            );
+        } catch (\FluxFiles\ApiException $e) {
+            fwrite(STDERR, $e->getMessage() . "\n");
+            exit(1);
+        }
     }
 
     try {

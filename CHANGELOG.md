@@ -19,7 +19,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
   release the client's core can host; `UpdateClient::assertCoreCompatible()` refuses the
   rest with a message to update core first. New `CoreVersion::current()` /
   `CoreVersion::satisfies()`. An unknown core version (git checkout) is refused unless
-  `fluxfiles update <module> --force`. Old clients (<= 1.0.4) send no `core_version`, so the
+  `fluxfiles update <module> --force`. Old clients (<= 1.0.5) send no `core_version`, so the
   server treats them as 1.0.3 and never offers a floor above `^1.0.3`. New error code
   `core_update_required` (16 languages).
 

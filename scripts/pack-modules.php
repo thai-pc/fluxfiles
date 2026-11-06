@@ -35,6 +35,8 @@ require_once __DIR__ . '/../packages/core/vendor/autoload.php';
 
 use FluxFiles\ModuleRegistry;
 
+require_once __DIR__ . '/pack-modules-lib.php';
+
 $green = "\033[32m"; $red = "\033[31m"; $yellow = "\033[33m"; $cyan = "\033[36m"; $reset = "\033[0m";
 
 $root = dirname(__DIR__);
@@ -190,17 +192,16 @@ foreach ($ids as $id) {
     // Composer enforces it at `composer require`; the self-hosted update channel does
     // not go through Composer, so the catalogue carries it for the server and client.
     [$cj, $composerJson] = run(['git', 'show', "{$tag}:composer.json"], $dir);
-    $requiresCore = null;
-    if ($cj === 0) {
-        $decoded = json_decode($composerJson, true);
-        $rc = is_array($decoded) ? ($decoded['require']['fluxfiles/fluxfiles'] ?? null) : null;
-        $requiresCore = is_string($rc) && trim($rc) !== '' ? trim($rc) : null;
-    }
+    $requiresCore = fluxfiles_pack_requires_core($cj === 0 ? $composerJson : null);
     if ($requiresCore === null) {
-        echo "  {$yellow}WARN{$reset} {$id}: composer.json has no require[\"fluxfiles/fluxfiles\"] — catalogue entry gets no requires_core\n";
+        // Every registered module needs core, so a missing/unparseable floor would ship
+        // an entry that every core is offered. Refuse rather than fail open.
+        echo "  {$red}FAIL{$reset} {$id}: {$tag}:composer.json has no parseable require[\"fluxfiles/fluxfiles\"]\n";
+        $failed++;
+        continue;
     }
     $entry = ['version' => $version, 'zip' => $zipName, 'sha256' => $sha];
-    if ($requiresCore !== null) { $entry['requires_core'] = $requiresCore; }
+    $entry['requires_core'] = $requiresCore;
     $catalogue[$id] = $entry;
     printf("  {$green}OK{$reset}   %-11s %-7s %2d files  %6.1f KB  %s…\n",
         $id, $version, $count, strlen($bytes) / 1024, substr($sha, 0, 12));
@@ -225,17 +226,23 @@ foreach (EXTERNALLY_BUILT as $extId => $extWhere) {
 }
 // Keep earlier releases of a module in `releases` (newest first), so the update server
 // can serve the newest build a given core can host instead of 'nothing' when the latest
-// one needs a newer core. Only entries carrying a sha256 are kept.
+// one needs a newer core. Entries without a recorded core floor are backfilled from that
+// release's tagged composer.json, or dropped (see fluxfiles_pack_history()).
 foreach ($catalogue as $id => $entry) {
     if (isset(EXTERNALLY_BUILT[$id])) { continue; }
-    $prior = $existing[$id] ?? null;
-    $history = is_array($prior) ? array_values($prior['releases'] ?? []) : [];
-    if (is_array($prior) && ($prior['version'] ?? $entry['version']) !== $entry['version']) {
-        unset($prior['releases']);
-        array_unshift($history, $prior);
-    }
-    $history = array_values(array_filter($history, static fn ($r) => is_array($r) && ($r['version'] ?? '') !== $entry['version'] && ($r['sha256'] ?? '') !== ''));
-    if ($history !== []) { $catalogue[$id]['releases'] = array_slice($history, 0, 10); }
+    $modDir = $root . '/packages/' . $id;
+    $history = fluxfiles_pack_history(
+        $entry,
+        is_array($existing[$id] ?? null) ? $existing[$id] : null,
+        static function (string $version) use ($modDir): ?string {
+            foreach (['v', ''] as $prefix) {
+                [$c, $out] = run(['git', 'show', "{$prefix}{$version}:composer.json"], $modDir);
+                if ($c === 0) { return $out; }
+            }
+            return null;
+        }
+    );
+    if ($history !== []) { $catalogue[$id]['releases'] = $history; }
 }
 ksort($catalogue);
 file_put_contents($cataloguePath, json_encode($catalogue, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
