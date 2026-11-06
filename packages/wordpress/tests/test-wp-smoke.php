@@ -1001,12 +1001,12 @@ test('share/intake: an explicit base_url override still wins', function () {
     assertEqual('https://files.acme.com/s', $p->share_base_url ?? null);
 });
 
-test('the five PUBLIC routes are deliberately unauthenticated', function () {
+test('the seven PUBLIC share/intake routes are deliberately unauthenticated', function () {
     // A recipient has no WordPress account and no JWT — the share token in the query
     // string is the whole gate. If someone "tightens" these to checkAuth, every share
     // link 401s for exactly the people it is for, so the intent is asserted here.
     $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    foreach (['/share/info', '/share/unlock', '/share/file', '/intake/info', '/intake/upload'] as $r) {
+    foreach (['/share/info', '/share/unlock', '/share/file', '/share/page', '/intake/info', '/intake/upload', '/intake/page'] as $r) {
         assertTrue(strpos($api, "\$p . '{$r}'") !== false, "public route registered: {$r}");
     }
     assertTrue(strpos($api, "'permission_callback' => '__return_true'") !== false,
@@ -1043,9 +1043,11 @@ test('the recipient page shim only serves the two known pages, through the modul
     assertTrue(strpos($src, "\$pages = ['share' => true, 'intake' => true]") !== false,
         'whitelist, not a sanitiser');
     assertTrue(strpos($src, 'file_get_contents') === false, 'no longer reads core\'s HTML from disk');
-    assertTrue(strpos($src, 'ModuleRegistry::requireServer($which, FluxFilesPlugin::license())') !== false, 'gated on install + option-aware licence');
-    assertTrue(strpos($src, 'PublicRoutes::page($which, $apiBase)') !== false, 'the page comes from the module via PublicRoutes');
-    assertTrue(strpos($src, 'Referrer-Policy: no-referrer') !== false,
+    assertTrue(strpos($src, 'FluxFilesPlugin::servePublicPage($which, $apiBase)') !== false, 'uses the shared page helper');
+    $plug = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
+    assertTrue(strpos($plug, 'ModuleRegistry::requireServer($which, self::license())') !== false, 'gated on install + option-aware licence');
+    assertTrue(strpos($plug, 'PublicRoutes::page($which, $apiBase)') !== false, 'the page comes from the module via PublicRoutes');
+    assertTrue(strpos($plug, "header('Referrer-Policy: no-referrer')") !== false,
         'the URL carries the token, so it must not leak in a Referer');
 });
 
@@ -1054,7 +1056,7 @@ test('REST share/page + intake/page are registered as public routes', function (
     foreach (['/share/page', '/intake/page'] as $r) {
         $pos = strpos($api, "\$p . '{$r}'");
         assertTrue($pos !== false, "route registered: {$r}");
-        assertTrue(strpos(substr($api, $pos, 200), '$public') !== false || strpos(substr($api, $pos - 60, 260), '__return_true') !== false, "{$r} uses the public args");
+        assertTrue(strpos(substr($api, $pos, 200), '$public') !== false, "{$r} uses the public args");
     }
 });
 
@@ -2489,6 +2491,148 @@ CHILD;
         // No option → an env-provided key (Docker/VPS installs) still reaches the context.
         $out = $run('', 'key-from-env');
         assertTrue(strpos($out, '"licence_key":"key-from-env"') !== false, 'env licence used when the option is empty: ' . substr($out, 0, 300));
+        // No licence anywhere → the context carries none; nothing is invented.
+        $out = $run('', '');
+        assertTrue(strpos($out, '"licence_key":null') !== false, 'no licence anywhere -> licence_key null: ' . substr($out, 0, 300));
+    } finally {
+        @unlink($file);
+    }
+});
+
+test('public recipient page: REST page routes + public-link.php inject the WP REST base, with the gate and headers', function () {
+    // PublicRoutes::dispatch() hard-codes `/api/fm` for pages (right for standalone), so a
+    // page served through it would call the wrong API under /wp-json/. Run both entry
+    // points (REST route, public-link.php) in a child with a fake page module and a fake
+    // verifier, and read the served HTML. Args: autoload wpDir entry mode secret licensed
+    // (comma list of blog ids licensed; "-" none) blog.
+    $child = <<<'CHILD'
+<?php
+[$self, $autoload, $wpDir, $entry, $multi, $secret, $licensed, $blog, $method] = $argv;
+$tree = sys_get_temp_dir() . '/ff-wp-page-' . getmypid();
+define('ABSPATH', $tree . '/');
+define('WP_CONTENT_DIR', $tree . '/wp-content');
+define('FLUXFILES_PLUGIN_FILE', $wpDir . '/fluxfiles.php');
+define('FLUXFILES_PLUGIN_DIR', $wpDir . '/');
+$GLOBALS['CUR'] = 1;
+$GLOBALS['LIC'] = $licensed === '-' ? [] : array_map('intval', explode(',', $licensed));
+$GLOBALS['OPT'] = [1 => ['fluxfiles_secret' => $secret], 2 => ['fluxfiles_secret' => $secret . '-two']];
+function get_option($k, $d = false) { return $GLOBALS['OPT'][$GLOBALS['CUR']][$k] ?? $d; }
+function wp_mkdir_p($d) { return is_dir($d) || mkdir($d, 0777, true); }
+function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, '/'); }
+function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
+function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
+function get_rest_url($id, $p = '') { return 'http://wp.test/two/wp-json/' . ltrim($p, '/'); }
+function home_url($p = '') { return 'http://wp.test' . $p; }
+function site_url($p = '') { return 'http://wp.test' . $p; }
+function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
+function status_header($c) { http_response_code($c); }
+function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
+function wp_json_encode($d, $f = 0) { return json_encode($d, $f); }
+function add_action(...$a) {} function add_filter(...$a) {}
+function apply_filters($t, $v, ...$a) { return $v; }
+function is_multisite() { return $GLOBALS['MULTI']; }
+function get_current_blog_id() { return $GLOBALS['CUR']; }
+function get_site($id) { return in_array((int) $id, [1, 2], true) ? (object) ['blog_id' => (string) $id, 'deleted' => 0, 'archived' => 0, 'spam' => 0] : null; }
+function switch_to_blog($id) { $GLOBALS['STACK'][] = $GLOBALS['CUR']; $GLOBALS['CUR'] = (int) $id; return true; }
+function restore_current_blog() { $GLOBALS['CUR'] = array_pop($GLOBALS['STACK']); return true; }
+$GLOBALS['MULTI'] = $multi === '1';
+$GLOBALS['STACK'] = [];
+class WP_REST_Request {
+    public function __construct(public string $m = 'GET', public string $r = '') {}
+    public function get_method() { return $this->m; }
+    public function get_route() { return $this->r; }
+}
+require $autoload;
+class_exists(\FluxFiles\LicenseCheckInterface::class);
+eval('namespace FluxFiles; class LicenseManager implements LicenseCheckInterface {
+    public ?string $key;
+    public function __construct(?string $key = null) { $this->key = $key; }
+    public static function fromEnv(): self { return new self(); }
+    public function licensed(string $module): bool { return in_array($GLOBALS["CUR"], $GLOBALS["LIC"], true); }
+    public function status(): string { return "active"; }
+    public function info(): array { return []; }
+}');
+file_put_contents($tree . '/share.html', "<!doctype html><html><head><title>t</title></head><body>page</body></html>");
+eval('namespace FluxFiles; class WpSmokePageShare implements ModuleInterface, PublicModuleInterface {
+    public static function id(): string { return "share"; }
+    public static function claim(): string { return "allow_share"; }
+    public function handlePublic(string $method, string $uri, PublicContext $ctx): void {}
+    public static function pages(): array { return ["share" => ABSPATH . "share.html"]; }
+}');
+@mkdir($tree, 0777, true);
+file_put_contents($tree . '/share.html', "<!doctype html><html><head><title>t</title></head><body>page</body></html>");
+\FluxFiles\ModuleRegistry::register('share', \FluxFiles\WpSmokePageShare::class);
+require $wpDir . '/includes/FluxFilesPlugin.php';
+require $wpDir . '/includes/FluxFilesApi.php';
+register_shutdown_function(static function () { echo "\nSTATUS=" . http_response_code() . "\nHEADERS=" . json_encode(headers_list()); });
+if ($entry === 'rest') {
+    $m = new ReflectionMethod('FluxFilesApi', 'publicLink');
+    $m->invoke(new FluxFilesApi(), 'share', new WP_REST_Request($method, '/fluxfiles/v1/api/fm/share/page'));
+} else {
+    // public-link.php finds wp-load.php above itself: stage it in a fake tree.
+    $dir = $tree . '/wp-content/plugins/fluxfiles';
+    mkdir($dir, 0777, true);
+    copy($wpDir . '/public-link.php', $dir . '/public-link.php');
+    file_put_contents($tree . '/wp-load.php', '<?php');
+    $_GET = ['page' => 'share', 'token' => 'x'] + ($blog !== '' ? ['blog' => $blog] : []);
+    require $dir . '/public-link.php';
+}
+CHILD;
+    $file = tempnam(sys_get_temp_dir(), 'ffwppage') . '.php';
+    file_put_contents($file, $child);
+    $autoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
+    $run = static function (string $entry, string $multi, string $secret, string $licensed, string $blog = '', string $method = 'GET') use ($file, $autoload): string {
+        $cmd = [PHP_BINARY, $file, realpath($autoload), realpath(__DIR__ . '/..'), $entry, $multi, $secret, $licensed, $blog, $method];
+        $p = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $out = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+        proc_close($p);
+        return (string) $out;
+    };
+    $good = 'wp-smoke-secret-key-0123456789abcdef';
+    $base = 'http://wp.test/wp-json/fluxfiles/v1/api/fm';
+    // header() is a no-op under the CLI SAPI (headers_list() stays empty), so the header
+    // set is asserted on the shared helper's source: one implementation serves both entries.
+    $plug = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
+    $helper = substr($plug, (int) strpos($plug, 'function servePublicPage('));
+    $helper = substr($helper, 0, (int) strpos($helper, 'Get the FluxFiles base installation path'));
+    assertEqual(2, substr_count($helper, "header('Referrer-Policy: no-referrer')"), 'page and error path both send no-referrer');
+    assertEqual(2, substr_count($helper, "header('X-Content-Type-Options: nosniff')"), 'page and error path both send nosniff');
+    assertTrue(strpos($helper, "header('Cache-Control: private, no-store')") !== false, 'never cached by a shared proxy');
+    assertTrue(strpos($helper, 'FluxFilesApi::uiHtmlHeaders(') !== false && strpos($helper, 'FrameAncestors::policy') === false, 'frame-ancestors comes from the WP UI policy, not core\'s env-only one');
+    $csp = array_values(array_filter(FluxFilesApi::uiHtmlHeaders('en'), static fn ($h) => stripos($h, 'Content-Security-Policy:') === 0));
+    assertTrue(count($csp) === 1 && strpos($csp[0], "frame-ancestors 'self'") !== false, 'the UI policy yields a frame-ancestors CSP');
+    try {
+        foreach (['rest', 'shim'] as $entry) {
+            $out = $run($entry, '0', $good, '1');
+            assertTrue(strpos($out, '<meta name="fm-api-base" content="' . $base . '">') !== false, "{$entry}: page carries the WP REST api base: " . substr($out, 0, 300));
+            assertTrue(strpos($out, 'content="/api/fm"') === false, "{$entry}: not the standalone base");
+            assertTrue(strpos($out, 'STATUS=200') !== false, "{$entry}: 200");
+            // Gate failures: JSON envelope + hardening headers, no page.
+            $out = $run($entry, '0', $good, '-');
+            assertTrue(strpos($out, '"error_code":"license_required"') !== false && strpos($out, 'STATUS=402') !== false, "{$entry}: unlicensed -> 402 envelope: " . substr($out, 0, 300));
+            assertTrue(strpos($out, 'fm-api-base') === false, "{$entry}: no page when unlicensed");
+            // The placeholder secret counts as "not configured" (as in PublicContext).
+            $out = $run($entry, '0', \FluxFiles\PublicContext::DEFAULT_SECRET, '1');
+            assertTrue(strpos($out, 'STATUS=500') !== false && strpos($out, '"error_code":"server_error"') !== false, "{$entry}: default secret refused");
+            $out = $run($entry, '0', '', '1');
+            assertTrue(strpos($out, 'STATUS=500') !== false, "{$entry}: empty secret refused");
+        }
+        // HEAD is answered like GET; other verbs are not a page.
+        $out = $run('rest', '0', $good, '1', '', 'HEAD');
+        assertTrue(strpos($out, 'STATUS=200') !== false && strpos($out, 'fm-api-base') !== false, 'HEAD served like GET');
+        $out = $run('rest', '0', $good, '1', '', 'POST');
+        assertTrue(strpos($out, 'STATUS=404') !== false && strpos($out, 'fm-api-base') === false, 'POST is not a page');
+
+        // Multisite: the link's blog (2) is licensed, the booted main blog (1) is not.
+        $out = $run('shim', '1', $good, '2', '2');
+        assertTrue(strpos($out, 'STATUS=200') !== false, 'multisite: the sub-site licence applies, not the main blog\'s: ' . substr($out, 0, 300));
+        assertTrue(strpos($out, 'content="http://wp.test/two/wp-json/fluxfiles/v1/api/fm"') !== false, 'multisite: the sub-site REST base is injected');
+        // And the reverse: main licensed, sub-site not -> refused, even though the booted blog would pass.
+        $out = $run('shim', '1', $good, '1', '2');
+        assertTrue(strpos($out, 'STATUS=402') !== false, 'multisite: an unlicensed sub-site is refused');
+        // A forged blog id still 404s before any gate.
+        $out = $run('shim', '1', $good, '1,2', '99');
+        assertTrue(strpos($out, 'STATUS=404') !== false, 'multisite: unknown blog id -> 404');
     } finally {
         @unlink($file);
     }

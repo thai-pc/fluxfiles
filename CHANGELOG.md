@@ -9,13 +9,18 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 - **WordPress dispatches the public Share/Intake routes and the retention / fixity /
   audit-verify handlers to the installed module** instead of calling legacy code inside
-  core. Public routes go through `PublicRoutes::dispatch()` with a host-injected
-  `PublicContext` built from the plugin's own licence option; `public-link.php` serves
-  the module's page through the same install + licence gate; REST `share/page` and
-  `intake/page` routes are added. A module that predates the seams answers
-  `501 module_update_required`. Behaviour with no module installed is unchanged (501
-  `module_not_installed`, 402 `license_required`), except that the recipient page URL now
-  returns the gate's JSON envelope instead of a bare page. The WordPress adapter now
+  core. Public JSON/bytes routes go through `PublicRoutes::dispatch()` with a host-injected
+  `PublicContext` built from the plugin's own licence option. The recipient pages
+  (`public-link.php` and the new REST `share/page` / `intake/page` routes) share one helper,
+  `FluxFilesPlugin::servePublicPage()`, which repeats the gate (secret configured -> module
+  installed -> licensed) and injects the WordPress REST base into the page (core's
+  `dispatch()` would hard-code the standalone `/api/fm`); on multisite it reads the secret
+  and licence of the link's own blog. A gate failure answers core's JSON envelope
+  (`500 server_error`, `501 module_not_installed` / `module_update_required`, `402
+  license_required` or `license_expired`) instead of a bare page. Frame-ancestors follows
+  the WordPress UI policy (`fluxfiles_frame_ancestors`). A module that predates the seams
+  answers `501 module_update_required`. Behaviour with no module installed is unchanged
+  (501 `module_not_installed`, 402 `license_required`). The WordPress adapter now
   requires core `^1.0.4`.
 
 ## [1.0.12] — 2026-11-06

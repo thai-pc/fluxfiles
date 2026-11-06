@@ -59,48 +59,21 @@ if ($apiBase === null) {
     exit('Not found');
 }
 
-// The same gate the REST routes apply (secret configured -> module installed ->
-// licensed), so a page is never served for a module the site cannot run. A failure is
-// core's standard JSON envelope, exactly as the REST routes answer it.
+// Multisite: the link's blog owns the secret, licence and frame-ancestors, so read them
+// from THAT site (the id was validated above), not from whichever blog booted.
+$switched = false;
+if (function_exists('is_multisite') && is_multisite() && function_exists('switch_to_blog')) {
+    $blogId = ($blogParam === null || $blogParam === '') ? (int) get_current_blog_id() : (int) $blogParam;
+    if ($blogId !== (int) get_current_blog_id()) {
+        switch_to_blog($blogId);
+        $switched = true;
+    }
+}
 try {
-    if ((string) get_option('fluxfiles_secret', '') === '') {
-        throw new \FluxFiles\ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
+    // The same gate and headers as the REST `<module>/page` routes: one shared helper.
+    FluxFilesPlugin::servePublicPage($which, $apiBase);
+} finally {
+    if ($switched) {
+        restore_current_blog();
     }
-    \FluxFiles\ModuleRegistry::requireServer($which, FluxFilesPlugin::license());
-    $html = \FluxFiles\PublicRoutes::page($which, $apiBase);
-    if ($html === null) {
-        // Installed, but too old to ship its page (or core cannot find it).
-        throw new \FluxFiles\ApiException(
-            "The '{$which}' module needs an update",
-            501,
-            'module_update_required',
-            ['module' => $which]
-        );
-    }
-} catch (\FluxFiles\ApiException $e) {
-    $body = ['data' => null, 'error' => $e->getMessage()];
-    if ($e->getErrorCode() !== null) {
-        $body['error_code'] = $e->getErrorCode();
-    }
-    if ($e->getErrorParams()) {
-        $body['error_params'] = $e->getErrorParams();
-    }
-    status_header($e->getHttpCode());
-    header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: private, no-store');
-    echo wp_json_encode($body);
-    exit;
 }
-
-// Same headers standalone sends: the URL carries the token, so it must not leak in a
-// Referer, and nothing here should be cached by a shared proxy.
-header('Content-Type: text/html; charset=utf-8');
-header('Referrer-Policy: no-referrer');
-header('X-Content-Type-Options: nosniff');
-header('Cache-Control: private, no-store');
-$csp = \FluxFiles\FrameAncestors::policy();
-if ($csp !== null) {
-    header('Content-Security-Policy: ' . $csp);
-}
-// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- a complete static HTML page from the module/core; the only dynamic value (the API base) is attribute-escaped by PublicRoutes::injectApiBase().
-echo $html;

@@ -49,9 +49,9 @@ class FluxFilesApi
         // option; the paid modules read $_ENV. Seeded here so every REST handler —
         // scan, webhooks, AI, … — sees them before any module runs.
         FluxFilesPlugin::seedModuleEnv();
-        // Core's module gates (FileManagerFactory's virus/DLP/versioning/webhooks wiring,
-        // the public share/intake handlers) read the licence from $_ENV; a WordPress
-        // licence normally lives in an option.
+        // Core's remaining env-based module gates (FileManagerFactory's virus/DLP/
+        // versioning/webhooks wiring) read the licence from $_ENV; a WordPress licence
+        // normally lives in an option. The public share/intake routes use license().
         FluxFilesPlugin::seedLicenseEnv();
 
         $this->diskManager = new DiskManager(FluxFilesPlugin::diskConfigs());
@@ -428,7 +428,8 @@ class FluxFilesApi
         // RECIPIENT hits, someone with no WordPress account and no JWT. They are
         // authenticated by the share/portal token in the query string — the same
         // posture as /img and /stream — and every check (signature, expiry, password,
-        // download cap, revocation) happens inside the shared core handler.
+        // download cap, revocation) happens inside the shared core handler (the /page
+        // routes only serve the HTML shell, via FluxFilesPlugin::servePublicPage()).
         //
         // What that means in practice: an unauthenticated caller reaches core code, so
         // the gate is the token, not this callback. Do not "tighten" this to checkAuth
@@ -2262,6 +2263,11 @@ class FluxFilesApi
      * The core handler writes its own response and exits, which is why this returns
      * nothing meaningful: WP's REST envelope must not wrap a 302 redirect or a byte
      * stream. `$_GET`/`$_POST` are already populated by PHP for these requests.
+     *
+     * The `<module>/page` routes do NOT go through PublicRoutes::dispatch(): its page
+     * branch hard-codes the standalone API base (`/api/fm`), which is wrong under
+     * /wp-json/fluxfiles/v1/. They use FluxFilesPlugin::servePublicPage(), shared with
+     * public-link.php.
      */
     private function publicLink(string $which, \WP_REST_Request $request): void
     {
@@ -2274,15 +2280,27 @@ class FluxFilesApi
         $method = $request->get_method();
         $uri = '/api/fm/' . $which . '/' . basename((string) $request->get_route());
 
+        if (\FluxFiles\PublicRoutes::isPage($which, $uri)) {
+            // HEAD is answered like GET (WP maps it onto the GET route); anything else 404s.
+            if ($method !== 'GET' && $method !== 'HEAD') {
+                status_header(404);
+                wp_send_json(['data' => null, 'error' => 'Not found', 'error_code' => 'not_found'], 404);
+            }
+            FluxFilesPlugin::servePublicPage($which, rtrim(rest_url('fluxfiles/v1/api/fm'), '/'));
+            exit;
+        }
+
         // Module engines (virus/DLP scan on portal uploads, webhooks) read their settings
         // from the environment; a real env var still wins. The storage path is read the
         // same way by the module's own storage helpers.
         $_ENV['FLUXFILES_SECRET'] = (string) get_option('fluxfiles_secret', '');
         $_ENV['FLUXFILES_STORAGE_PATH'] = FluxFilesPlugin::storagePath();
+        // Kept for core paths that still resolve the licence from $_ENV; this route's own
+        // gate uses license() below. Unused here until phase 5 removes the seed.
         FluxFilesPlugin::seedLicenseEnv();
         FluxFilesPlugin::seedModuleEnv();
 
-        // Core's PublicRoutes is the gate (secret → installed → licensed) and hands the
+        // Core's PublicRoutes is the gate (secret -> installed -> licensed) and hands the
         // request to the module. The licence comes from the plugin option via license(),
         // never from core's env-only helper. hostInjected = WordPress supplies
         // its own disks and metadata.
