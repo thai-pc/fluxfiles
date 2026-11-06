@@ -63,7 +63,7 @@ class WpRateLimiterStorage implements RateLimiterStorageInterface
             }
             if (time() - self::$lastLogged >= 60) {
                 self::$lastLogged = time();
-                error_log('FluxFiles: DB rate limiter unavailable (' . $this->table . '), using the file limiter: ' . $this->wpdb->last_error);
+                FluxFilesPlugin::debugLog('FluxFiles: DB rate limiter unavailable (' . $this->table . '), using the file limiter: ' . $this->wpdb->last_error);
             }
             $this->fallback->check($identifier, $actionType);
             return;

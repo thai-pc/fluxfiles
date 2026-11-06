@@ -4,7 +4,7 @@ import { loginAdmin, openFiles, uploadAndSee, cardByName, pngFile, textFile, api
 
 // Share + Intake through the WordPress proxy: links minted by the real modules via
 // /wp-json/fluxfiles/v1/api/fm/{share,intake}, opened as an anonymous recipient on the
-// plugin's public-link.php page, which talks to the PUBLIC proxied recipient routes.
+// REST `<module>/page` route, which talks to the PUBLIC proxied recipient routes.
 
 test('share: create via the WP embed → anonymous recipient downloads → revoke kills it', async ({ page, browser }) => {
   await loginAdmin(page);
@@ -15,7 +15,7 @@ test('share: create via the WP embed → anonymous recipient downloads → revok
   await m.fm.getByRole('button', { name: 'Share link', exact: true }).click();
   await m.fm.getByRole('button', { name: 'Create share link' }).click();
   const field = m.fm.locator('[x-ref="linkUrl"]');
-  await expect(field).toHaveValue(/\/wp-content\/plugins\/fluxfiles\/public-link\.php\?page=share&token=/);
+  await expect(field).toHaveValue(/\/wp-json\/fluxfiles\/v1\/api\/fm\/share\/page\?(?:.*&)?token=/);
   const url = await field.inputValue();
 
   const anon = await browser.newContext();
@@ -51,7 +51,7 @@ test('intake: portal on a folder → anonymous upload lands there → revoke', a
   await m.fm.getByRole('button', { name: 'Upload portal', exact: true }).click();
   await m.fm.getByRole('button', { name: 'Create upload portal' }).click();
   const url = await m.fm.locator('[x-ref="linkUrl"]').inputValue();
-  expect(url).toMatch(/\/wp-content\/plugins\/fluxfiles\/public-link\.php\?page=intake&token=/);
+  expect(url).toMatch(/\/wp-json\/fluxfiles\/v1\/api\/fm\/intake\/page\?(?:.*&)?token=/);
 
   const anon = await browser.newContext();
   const p = await anon.newPage();
@@ -84,7 +84,7 @@ test('share: a password-protected link unlocks through the proxied /share/unlock
   const file = pngFile(`locked-${Date.now()}.png`);
   await uploadAndSee(m, file);
   const res = await api(m, 'POST', '/api/fm/share', { disk: 'local', path: file.name, password: 'open-sesame-42' });
-  expect(String(res.url)).toContain('/wp-content/plugins/fluxfiles/public-link.php?page=share&token=');
+  expect(String(res.url)).toContain('/api/fm/share/page');
 
   const anon = await browser.newContext();
   const p = await anon.newPage();

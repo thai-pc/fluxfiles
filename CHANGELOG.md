@@ -22,6 +22,18 @@ All notable changes to FluxFiles are documented here. This project adheres to
   keeps serving links issued earlier. On multisite the REST page route honours a `?blog=N`
   hint with a validated `302` to that site's own page (unknown, deleted, archived or spam
   blog: `404`).
+- **`public-link.php` is now a WordPress-free redirect shim.** It no longer loads WordPress: it
+  whitelists `page` (`share`/`intake`, else `404`), keeps `token` and a numeric `blog`, and answers
+  a relative `302` to `<site root>/?rest_route=/fluxfiles/v1/api/fm/<page>/page` (root and
+  subdirectory installs) with `Referrer-Policy: no-referrer` and `Cache-Control: no-store`. To be
+  deleted once old links have expired.
+- **WordPress HTTP API for core's outbound calls.** New `WpHttpTransport`
+  (`HttpTransportInterface` over `wp_remote_request`, no redirects, never throws) is injected into
+  `AiTagger` and `BucketDoctor`, so they honour the host's proxy and SSL settings. URL import and
+  the bucket doctor's DNS-pinned probe keep cURL.
+- **Diagnostics respect `WP_DEBUG`.** `FluxFilesPlugin::debugLog()` replaces the plugin's raw
+  `error_log()` calls and is installed as core's `Log` sink; nothing is written unless `WP_DEBUG`
+  is on.
 - **Bundled core version.** `build-wordpress.sh` stamps `FLUXFILES_CORE_VERSION` (latest
   `core-v*` tag) into the built plugin (`scripts/stamp-wp-version.py` takes it as a third
   argument); Site Health shows "Bundled core" and About reports it.

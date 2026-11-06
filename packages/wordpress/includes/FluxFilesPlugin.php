@@ -24,6 +24,10 @@ class FluxFilesPlugin
         // AboutInfo) through this; without it core would read the env only and never
         // see a key pasted into Settings.
         \FluxFiles\ModuleRegistry::setLicenseResolver([self::class, 'license']);
+        // Core's warnings (Log::warn) go to the same WP_DEBUG-gated log as the plugin's own.
+        if (class_exists(\FluxFiles\Log::class)) {
+            \FluxFiles\Log::setSink([self::class, 'debugLog']);
+        }
 
         register_activation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'activate']);
         register_deactivation_hook(FLUXFILES_PLUGIN_FILE, [$this, 'deactivate']);
@@ -284,6 +288,14 @@ HTACCESS;
      */
     public static ?string $licenseClass = null;
 
+    /** Diagnostics go to the PHP error log only when the site runs with WP_DEBUG. */
+    public static function debugLog(string $msg): void
+    {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log($msg); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- gated on WP_DEBUG
+        }
+    }
+
     /**
      * The licence verifier, built from wherever the key actually lives.
      *
@@ -299,9 +311,7 @@ HTACCESS;
             $custom = apply_filters('fluxfiles_license', null);
         } catch (\Throwable $e) {
             // A throwing filter must fail closed (no licence), not 500 the caller.
-            if (defined('WP_DEBUG') && WP_DEBUG && function_exists('error_log')) {
-                error_log('FluxFiles: fluxfiles_license filter threw ' . get_class($e));
-            }
+            self::debugLog('FluxFiles: fluxfiles_license filter threw ' . get_class($e));
             return new \FluxFiles\NoLicense();
         }
         if ($custom instanceof \FluxFiles\LicenseCheckInterface) {
@@ -495,8 +505,8 @@ HTACCESS;
 
     /**
      * Gate and send a module's recipient page (share / intake) with the API base pointed
-     * at this site's REST namespace. ONE implementation for the REST `<module>/page`
-     * routes and public-link.php, so the two cannot drift.
+     * at this site's REST namespace. Used by the REST `<module>/page`
+     * routes.
      *
      * Core's PublicRoutes::dispatch() cannot be used for pages: it hard-codes
      * `/api/fm` as the base (right for standalone, wrong here), so the gate is repeated
@@ -599,7 +609,7 @@ HTACCESS;
      * the REST base the static page cannot know. get_rest_url() is per blog, so on
      * multisite the link already names the minting site and needs no `blog` hint; and on
      * plain permalinks it is the `?rest_route=` form (the token is appended with `&`).
-     * public-link.php keeps serving links minted before this form existed.
+     * public-link.php only redirects links minted before this form existed.
      */
     public static function publicLinkUrl(string $page, string $token = ''): string
     {
