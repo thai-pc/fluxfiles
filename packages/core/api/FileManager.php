@@ -3403,6 +3403,7 @@ class FileManager
     /** Is a legal hold blocking this storage key? (Enforcement is license-independent.) */
     public function isHeld(string $disk, string $key): bool
     {
+        $this->assertDisk($disk);
         return $this->meta->holdBlocking($disk, $key) !== null;
     }
 
@@ -3410,7 +3411,9 @@ class FileManager
      * Every visible file under a tenant-relative root, recursively. The disk and
      * permission gates run when this is called, not on first iteration. Reserved and
      * hidden keys are skipped; a listing failure ends the sequence quietly (a sweep
-     * is best-effort per root, as runRetention() always was). Collect before acting:
+     * is best-effort per root, as runRetention() always was). It does NOT filter by
+     * `owner_only`: a listing never did. Ownership is enforced when a key is acted on
+     * ({@see removeKeys()} refuses another user's file). Collect before acting:
      * trashing while a lazy listing is still being iterated skips entries.
      *
      * @return iterable<int,array{key:string,rel:string,mtime:int,size:int}> `key` is the storage key

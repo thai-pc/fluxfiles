@@ -486,6 +486,15 @@ The short description is 145 characters. The sections:
 | 7 | **fluxfiles-pro v1.0.0** (§2.4, §8.5), 12 modules, + `pack-wordpress-pro.php` + catalogue | **private (new repo)** + public script | pro `v1.0.0` | 5, 2 | pro smoke (moved updater and licence-notice tests from `test-wp-smoke.php`/`test-wp-license-notice.php`; boot guard on 1.0.5/1.1.0; module autoload from `modules/`; `sso` absent); modules-live WP spec with pro instead of `vendor/` |
 | 8 | **Launch**: submit the 1.1.0 zip to WP.org; on approval set `WPORG_DEPLOY=true` and redeploy; then flip the old channel to 1.1.0 (`handover`). Later, the first free release ≥ 90 days after 1.0.5 deletes the `public-link.php` shim and the `check-wp-dist.php` exemption | public | — | 6, 7 | manual: 1.0.4 → 1.0.5 → 1.1.0 on a staging site with and without modules; a share link minted on 1.0.4 opens after 1.1.0 |
 
+**Phase-5 notes (from the phase-1 review).**
+- `WpHttpTransport::request()` must pass `redirection => 0`. `HttpTransportInterface` promises
+  that redirects are not followed (`CurlTransport` does the same); `wp_remote_request` follows
+  up to 5 by default.
+- The dist guard's rule "no `curl_init` outside `api/UrlImporter.php`" (§8.2) must also allow
+  `api/CurlTransport.php` (the default transport, which a host may leave in place) and the
+  DNS-pinned BYOB path in `api/BucketDoctor.php` (`httpGet()` with a pinned IP), which needs the
+  cURL handle for `CURLOPT_RESOLVE` and `assertConnectedIpSafe()`.
+
 Private-repo phases (2 and 7) need their own releases. Their core floor is **X** (rule 1:
 X is the first core whose `index.php` calls the new methods). Floors can't be CI-guarded,
 because the packages are gitignored, so check them by hand. A tag isn't a release:

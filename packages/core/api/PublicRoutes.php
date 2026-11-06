@@ -91,6 +91,11 @@ final class PublicRoutes
                 header('Referrer-Policy: no-referrer');
                 header('Cache-Control: no-store');
                 header('X-Content-Type-Options: nosniff');
+                // Same clickjacking policy as /public/index.html.
+                $csp = FrameAncestors::policy();
+                if ($csp !== null) {
+                    header('Content-Security-Policy: ' . $csp);
+                }
                 echo $html;
                 return;
             }
@@ -155,7 +160,9 @@ final class PublicRoutes
     {
         $meta = '<meta name="fm-api-base" content="' . htmlspecialchars($apiBase, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
         $count = 0;
-        $out = preg_replace('/<head(\s[^>]*)?>/i', '$0' . "\n" . $meta, $html, 1, $count);
+        // A callback, not a replacement string: the base is data, and `$0` / `\1` in it must
+        // not be read as backreferences.
+        $out = preg_replace_callback('/<head(\s[^>]*)?>/i', static fn (array $m): string => $m[0] . "\n" . $meta, $html, 1, $count);
         if (!is_string($out) || $count === 0) {
             return $meta . "\n" . $html;
         }
@@ -169,9 +176,9 @@ final class PublicRoutes
         $dm = $ctx->hostInjected ? $ctx->dm() : null;
         $cfg = $ctx->hostInjected ? $ctx->diskConfigs() : null;
         if ($id === 'intake') {
-            \handleIntakePublic($method, $uri, $dm, $cfg, $ctx->injectedMeta());
+            \handleIntakePublic($method, $uri, $dm, $cfg, $ctx->injectedMeta(), $ctx->license, $ctx->secret);
         } else {
-            \handleSharePublic($method, $uri, $dm, $cfg, $ctx->injectedMeta());
+            \handleSharePublic($method, $uri, $dm, $cfg, $ctx->injectedMeta(), $ctx->license, $ctx->secret);
         }
     }
 

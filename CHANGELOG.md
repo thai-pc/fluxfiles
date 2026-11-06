@@ -33,11 +33,18 @@ fallback. This is the first core a module that implements the new hooks can requ
 - **`Log::warn()` / `Log::setSink()`** replaces `error_log()` in the shipped core files (default
   output is unchanged).
 - **`FileManager` sweep helpers for modules:** `filesystemFor`, `scopedKey`, `relativeKey`,
-  `isVisibleKey`, `isHeld`, `visibleFiles` and `removeKeys`. They wrap the existing private logic
-  and apply the same disk, permission, `owner_only` and legal-hold checks.
-- `/retention/run`, `/fixity/check` and `/audit/verify` call the `legal-hold` / `audit-export`
-  module's `runRetention` / `runFixityCheck` / `verifyChain` when it has them, and fall back to
-  core's own copy when it does not.
+  `isVisibleKey`, `isHeld`, `visibleFiles` and `removeKeys`. They wrap the existing private logic:
+  all of them check the disk, `filesystemFor`/`visibleFiles`/`removeKeys` also check the
+  permission, `visibleFiles` hides reserved and hidden keys (it does not filter by `owner_only`,
+  as listings never did), and `removeKeys` enforces `owner_only`, the `delete` permission,
+  scope and legal holds per key.
+- `/retention/run`, `/fixity/check` and `/audit/verify` hand the work to the `legal-hold` /
+  `audit-export` module when it implements the new `RetentionProviderInterface`,
+  `FixityProviderInterface` or `AuditVerifierInterface`, and fall back to core's own copy when
+  it does not.
+- The recipient page routes send the same `frame-ancestors` policy as `/public/index.html`
+  (`FLUXFILES_FRAME_ANCESTORS` / `FLUXFILES_ALLOWED_ORIGINS`).
+- A licence resolver that throws is logged and treated as unlicensed.
 - New error code `module_update_required` (501, translated in all 16 languages). Nothing returns
   it yet; it is reserved for the release that removes the fallbacks.
 - `scripts/pack-modules.php` packages a module's top-level `public/` beside `src/`.

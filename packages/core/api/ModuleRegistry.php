@@ -60,7 +60,14 @@ final class ModuleRegistry
     public static function license(): LicenseCheckInterface
     {
         if (self::$licenseResolver !== null) {
-            $resolved = (self::$licenseResolver)();
+            try {
+                $resolved = (self::$licenseResolver)();
+            } catch (\Throwable $e) {
+                // Fail closed: a resolver that breaks must not take the app down (500) and
+                // must not hand out a licence. Nothing is entitled until it works again.
+                Log::warn('FluxFiles: licence resolver failed, treating the server as unlicensed: ' . $e->getMessage());
+                return new NoLicense();
+            }
             if ($resolved instanceof LicenseCheckInterface) {
                 return $resolved;
             }
@@ -92,9 +99,10 @@ final class ModuleRegistry
         self::$map[$id] = $class;
     }
 
-    /** Restore the built-in map (tests). */
+    /** Restore the built-in map and drop any licence resolver (tests). */
     public static function reset(): void
     {
+        self::$licenseResolver = null;
         if (self::$builtin !== []) {
             self::$map = self::$builtin;
             self::$builtin = [];
