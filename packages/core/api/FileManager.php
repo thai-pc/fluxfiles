@@ -269,7 +269,7 @@ class FileManager
         try {
             ($this->versionKeeper)($disk, $scopedKey, $fs);
         } catch (\Throwable $e) {
-            error_log('FluxFiles: version snapshot failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: version snapshot failed — ' . $e->getMessage());
         }
     }
 
@@ -282,7 +282,7 @@ class FileManager
         try {
             ($this->versionPurger)($disk, $scopedKey, $fs);
         } catch (\Throwable $e) {
-            error_log('FluxFiles: version purge failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: version purge failed — ' . $e->getMessage());
         }
     }
 
@@ -295,7 +295,7 @@ class FileManager
         try {
             ($this->versionMover)($disk, $fromKey, $toKey, $fs);
         } catch (\Throwable $e) {
-            error_log('FluxFiles: version move failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: version move failed — ' . $e->getMessage());
         }
     }
 
@@ -324,7 +324,7 @@ class FileManager
                 $this->moveVersions($disk, $fromDir . '/' . $rel, $toDir . '/' . $rel, $fs);
             }
         } catch (\Throwable $e) {
-            error_log('FluxFiles: version move (directory) failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: version move (directory) failed — ' . $e->getMessage());
         }
     }
 
@@ -345,7 +345,7 @@ class FileManager
                 }
             }
         } catch (\Throwable $e) {
-            error_log('FluxFiles: version purge (directory) failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: version purge (directory) failed — ' . $e->getMessage());
         }
     }
 
@@ -1110,7 +1110,7 @@ class FileManager
                 $variants = $this->imageOptimizer->process($fs, $scoped, $file['tmp_name']);
                 $result['variants'] = $this->variantUrls($disk, $variants);
             } catch (\Throwable $e) {
-                error_log('FluxFiles: Image optimization failed — ' . $e->getMessage());
+                \FluxFiles\Log::warn('FluxFiles: Image optimization failed — ' . $e->getMessage());
             }
         } elseif ($this->claims->mediaPosters && MediaPoster::kindFor($name) !== null) {
             // PDF page 1 / video frame → the same `_thumb.webp` variant an image gets.
@@ -1145,7 +1145,7 @@ class FileManager
                     $result['ai_tags'] = $aiResult;
                 }
             } catch (\Throwable $e) {
-                error_log('FluxFiles: AI auto-tag failed — ' . $e->getMessage());
+                \FluxFiles\Log::warn('FluxFiles: AI auto-tag failed — ' . $e->getMessage());
             }
         }
 
@@ -1252,7 +1252,7 @@ class FileManager
                 }
             }
         } catch (\Throwable $e) {
-            error_log('FluxFiles: trash visibility change failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: trash visibility change failed — ' . $e->getMessage());
         }
     }
 
@@ -2402,7 +2402,7 @@ class FileManager
                     $srcFs->delete($srcVariant);
                 }
             } catch (\Throwable $e) {
-                error_log("FluxFiles: Variant transfer failed ({$size}) — " . $e->getMessage());
+                \FluxFiles\Log::warn("FluxFiles: Variant transfer failed ({$size}) — " . $e->getMessage());
             }
         }
     }
@@ -2549,7 +2549,7 @@ class FileManager
         try {
             $variants = $this->variantUrls($disk, $this->imageOptimizer->process($fs, $scopedDst, $tmpFile));
         } catch (\Throwable $e) {
-            error_log('FluxFiles: Variant regeneration after crop failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: Variant regeneration after crop failed — ' . $e->getMessage());
         } finally {
             @unlink($tmpFile);
         }
@@ -2652,7 +2652,7 @@ class FileManager
             file_put_contents($tmpFile, $result['data']);
             $variants = $this->variantUrls($disk, $this->imageOptimizer->process($fs, $scopedDst, $tmpFile));
         } catch (\Throwable $e) {
-            error_log('FluxFiles: Variant regen after watermark failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: Variant regen after watermark failed — ' . $e->getMessage());
         } finally {
             @unlink($tmpFile);
         }
@@ -2708,7 +2708,7 @@ class FileManager
             file_put_contents($tmpFile, $original);
             $variants = $this->variantUrls($disk, $this->imageOptimizer->process($fs, $scoped, $tmpFile));
         } catch (\Throwable $e) {
-            error_log('FluxFiles: Variant regen after watermark removal failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: Variant regen after watermark removal failed — ' . $e->getMessage());
         } finally {
             @unlink($tmpFile);
         }
@@ -3365,6 +3365,128 @@ class FileManager
             $report[$list] = array_map(fn (string $k) => $this->outKey($k), $report[$list]);
         }
         return $report;
+    }
+
+    // ── Sweep seams for modules ─────────────────────────────────────────────
+    // Thin, public wrappers over the private helpers runRetention() and
+    // runFixityCheck() use, so a module (legal-hold, audit-export) can run the same
+    // sweep without core exposing its internals. None of them relaxes a check: the
+    // disk/perm gates, reserved + hidden filtering, owner_only and legal holds are the
+    // exact ones the built-in sweeps apply.
+
+    /** The disk's filesystem, after the disk and permission gates for `$perm`. */
+    public function filesystemFor(string $disk, string $perm = 'read'): \League\Flysystem\FilesystemOperator
+    {
+        $this->assertDisk($disk);
+        $this->assertPerm($perm);
+        return $this->disks->disk($disk);
+    }
+
+    /** A tenant-relative path as its real storage key (prefix applied, dot segments removed). */
+    public function scopedKey(string $rel): string
+    {
+        return $this->scopedPath($rel);
+    }
+
+    /** A real storage key as the tenant-relative path the client sees (prefix stripped). */
+    public function relativeKey(string $key): string
+    {
+        return $this->outKey($key);
+    }
+
+    /** Is this storage key one the token may see: not reserved/internal and not hidden for it? */
+    public function isVisibleKey(string $key): bool
+    {
+        return !$this->isReservedSystemPath($key) && !$this->isHiddenForToken($key);
+    }
+
+    /** Is a legal hold blocking this storage key? (Enforcement is license-independent.) */
+    public function isHeld(string $disk, string $key): bool
+    {
+        return $this->meta->holdBlocking($disk, $key) !== null;
+    }
+
+    /**
+     * Every visible file under a tenant-relative root, recursively. The disk and
+     * permission gates run when this is called, not on first iteration. Reserved and
+     * hidden keys are skipped; a listing failure ends the sequence quietly (a sweep
+     * is best-effort per root, as runRetention() always was). Collect before acting:
+     * trashing while a lazy listing is still being iterated skips entries.
+     *
+     * @return iterable<int,array{key:string,rel:string,mtime:int,size:int}> `key` is the storage key
+     */
+    public function visibleFiles(string $disk, string $relRoot = '', string $perm = 'read'): iterable
+    {
+        $fs = $this->filesystemFor($disk, $perm);
+        $root = $this->scopedPath($relRoot);
+        return $this->walkVisibleFiles($fs, $root);
+    }
+
+    private function walkVisibleFiles(\League\Flysystem\FilesystemOperator $fs, string $root): \Generator
+    {
+        if ($this->isReservedSystemPath($root)) {
+            return;
+        }
+        $now = time();
+        try {
+            foreach ($fs->listContents($root, true) as $item) {
+                if (!$item->isFile()) {
+                    continue;
+                }
+                $key = $item->path();
+                if (!$this->isVisibleKey($key)) {
+                    continue;
+                }
+                $size = 0;
+                try {
+                    $size = $item instanceof \League\Flysystem\FileAttributes ? (int) ($item->fileSize() ?? 0) : 0;
+                } catch (\Throwable $e) {
+                    // size is advisory
+                }
+                yield ['key' => $key, 'rel' => $this->outKey($key), 'mtime' => (int) ($item->lastModified() ?? $now), 'size' => $size];
+            }
+        } catch (\Throwable $e) {
+            return;
+        }
+    }
+
+    /**
+     * Trash or permanently delete a list of storage keys inside one index batch.
+     * Each key goes through the same scoped core as delete()/trash() — the `delete`
+     * perm, scope, system-path, owner_only and legal-hold checks all apply — so a held
+     * or foreign-owned key is refused, never touched.
+     *
+     * `$each` is called once per key, after its attempt, with the storage key, its
+     * tenant-relative path and the ApiException that refused or failed it (null on
+     * success). Anything other than an ApiException still propagates.
+     *
+     * @param string[] $keys storage keys (as returned by visibleFiles())
+     * @param 'trash'|'delete' $mode
+     * @param callable(string,string,?ApiException):void $each
+     */
+    public function removeKeys(string $disk, array $keys, string $mode, callable $each): void
+    {
+        if ($mode !== 'trash' && $mode !== 'delete') {
+            throw new \InvalidArgumentException("removeKeys mode must be 'trash' or 'delete'");
+        }
+        $this->assertDisk($disk);
+        $this->assertPerm('delete');
+        $bulk = $this->bulkOpen($disk);
+        try {
+            foreach ($keys as $key) {
+                $key = (string) $key;
+                $error = null;
+                try {
+                    $mode === 'delete' ? $this->deleteScoped($disk, $key) : $this->trashScoped($disk, $key);
+                } catch (ApiException $e) {
+                    $error = $e;
+                }
+                $each($key, $this->outKey($key), $error);
+                $this->bulkTick($disk, $bulk);
+            }
+        } finally {
+            $this->bulkClose($disk, $bulk);
+        }
     }
 
     /**
@@ -4245,7 +4367,7 @@ class FileManager
             try {
                 $this->imageOptimizer->process($fs, $key, $localPath); // thumb/medium/large WebP
             } catch (\Throwable $e) {
-                error_log('FluxFiles: variant gen for extracted file failed — ' . $e->getMessage());
+                \FluxFiles\Log::warn('FluxFiles: variant gen for extracted file failed — ' . $e->getMessage());
             }
         }
     }
@@ -4372,7 +4494,7 @@ class FileManager
             $request = $client->createPresignedRequest($cmd, "+{$ttl} seconds");
             return (string) $request->getUri();
         } catch (\Throwable $e) {
-            error_log('FluxFiles: presign GET URL failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: presign GET URL failed — ' . $e->getMessage());
             return null;
         }
     }

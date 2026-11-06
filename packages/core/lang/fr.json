@@ -308,6 +308,7 @@
     "invalid_mode": "Mode invalide — utilisez 3 chiffres octaux (ex. 644).",
     "invalid_trash_id": "Élément de la corbeille invalide.",
     "module_not_installed": "Cette fonctionnalité n'est pas installée.",
+    "module_update_required": "Le module de cette fonctionnalité est obsolète. Mettez-le à jour pour continuer.",
     "not_a_zip": "Ce fichier n'est pas une archive ZIP.",
     "not_image": "Ce fichier n'est pas une image.",
     "not_sftp": "Cette action ne fonctionne que sur un disque SFTP.",

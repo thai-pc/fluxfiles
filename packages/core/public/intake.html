@@ -73,7 +73,9 @@
       // runs. Trailing slash trimmed so the paths below stay readable.
       // Keep this comment brand-free: the shell is deliberately unbranded so an
       // operator can white-label it, and a test asserts the served HTML says nothing.
-      var API = String(window.__FM_API_BASE__ || '/api/fm').replace(/\/+$/, '');
+      // A <meta name="fm-api-base"> (injected by the page route) wins over the window variable.
+      var apiMeta = document.querySelector('meta[name="fm-api-base"]');
+      var API = String((apiMeta && apiMeta.getAttribute('content')) || window.__FM_API_BASE__ || '/api/fm').replace(/\/+$/, '');
 // A WordPress site on plain permalinks has a base like index.php?rest_route=/…,
 // so a query string must be joined with & there, not a second ?.
 function apiUrl(path, query) {

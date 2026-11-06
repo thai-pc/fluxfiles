@@ -308,6 +308,7 @@
     "invalid_mode": "잘못된 모드입니다 — 3자리 8진수를 사용하세요 (예: 644).",
     "invalid_trash_id": "휴지통 항목이 잘못되었습니다.",
     "module_not_installed": "이 기능이 설치되어 있지 않습니다.",
+    "module_update_required": "이 기능의 모듈이 오래되었습니다. 계속하려면 업데이트하세요.",
     "not_a_zip": "이 파일은 ZIP 파일이 아닙니다.",
     "not_image": "이 파일은 이미지가 아닙니다.",
     "not_sftp": "이 작업은 SFTP 디스크에서만 가능합니다.",

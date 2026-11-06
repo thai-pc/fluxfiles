@@ -59,7 +59,7 @@ final class DiskConfig
     /** Log the detail for the operator; HTTP callers only ever see the generic message. */
     private static function fail(string $detail): DiskConfigException
     {
-        error_log('[fluxfiles] ' . $detail);
+        \FluxFiles\Log::warn('[fluxfiles] ' . $detail);
         return new DiskConfigException($detail);
     }
 }

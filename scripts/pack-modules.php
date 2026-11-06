@@ -58,8 +58,13 @@ function run(array $cmd, ?string $cwd = null): array
  * is installed into a customer's tree, so shipping them would ship something that looks
  * broken. Listing paths explicitly (rather than adding .gitattributes export-ignore to
  * nine repos) keeps the already-published tags untouched.
+ *
+ * `public/` is the module's recipient pages (share.html, intake.html), which
+ * PublicRoutes::page() reads out of the installed module. UpdateClient::install() extracts
+ * the whole zip, so a top-level `public/` beside `src/` installs as-is; a module without
+ * one simply has nothing to add (the path check below skips absent entries).
  */
-const PACKAGED_PATHS = ['composer.json', 'LICENSE', 'README.md', 'src'];
+const PACKAGED_PATHS = ['composer.json', 'LICENSE', 'README.md', 'src', 'public'];
 
 $ids = array_slice($argv, 1);
 if ($ids === []) {
@@ -159,6 +164,12 @@ foreach ($ids as $id) {
         $name = (string) $za->getNameIndex($i);
         if ($name === '' || str_contains($name, '..') || str_starts_with($name, '/')) {
             $layoutError = "unsafe entry '{$name}'";
+            break;
+        }
+        // Only the packaged top-level entries (src/, public/ …) belong beside src/; a wrapper
+        // directory would install as packages/<id>/<id>/src.
+        if (!in_array(explode('/', $name)[0], PACKAGED_PATHS, true)) {
+            $layoutError = "unexpected top-level entry '{$name}'";
             break;
         }
         if (str_starts_with($name, 'src/')) { $sawSrc = true; }

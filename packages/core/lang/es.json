@@ -308,6 +308,7 @@
     "invalid_mode": "Modo no válido: use 3 dígitos octales (p. ej. 644).",
     "invalid_trash_id": "Elemento de la papelera no válido.",
     "module_not_installed": "Esta función no está instalada.",
+    "module_update_required": "El módulo de esta función está desactualizado. Actualízalo para continuar.",
     "not_a_zip": "Este archivo no es un ZIP.",
     "not_image": "Este archivo no es una imagen.",
     "not_sftp": "Esta acción solo funciona en un disco SFTP.",

@@ -308,6 +308,7 @@
     "invalid_mode": "Chế độ không hợp lệ — dùng 3 chữ số bát phân (vd: 644).",
     "invalid_trash_id": "Mục trong thùng rác không hợp lệ.",
     "module_not_installed": "Tính năng này chưa được cài đặt.",
+    "module_update_required": "Mô-đun của tính năng này đã cũ. Hãy cập nhật để tiếp tục.",
     "not_a_zip": "Tệp này không phải là tệp ZIP.",
     "not_image": "Tệp này không phải là hình ảnh.",
     "not_sftp": "Thao tác này chỉ áp dụng cho ổ đĩa SFTP.",

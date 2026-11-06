@@ -188,6 +188,14 @@ try {
         assertTrue(($h['content-disposition'] ?? '') === '', 'no download offered');
     });
 
+    test('GET /share/page → 501 JSON envelope too (the recipient page is gated like the rest), never HTML', function () use ($B1, $fakeShare) {
+        [$st, $h, $body] = req('GET', "{$B1}/api/fm/share/page?token=" . rawurlencode($fakeShare));
+        assertEqual(501, $st);
+        assertEqual('module_not_installed', json_decode($body, true)['error_code'] ?? null);
+        assertTrue(stripos($h['content-type'] ?? '', 'application/json') === 0, 'json, not the page');
+        assertTrue(stripos($body, '<html') === false, 'no HTML served without the module');
+    });
+
     test('the public routes are truly pre-auth: a garbage Bearer changes nothing', function () use ($B1, $fakeShare) {
         // If these routes were behind JwtMiddleware, a bad token would 401 first.
         foreach (['Authorization: Bearer not-a-jwt', 'Authorization: Bearer ' . str_repeat('a.', 3)] as $auth) {

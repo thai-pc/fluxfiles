@@ -61,7 +61,7 @@ final class PdfOptimizer
         if ($found !== null) {
             $version = self::version($found);
             if ($version === null || version_compare($version, self::MIN_GS_VERSION, '<')) {
-                error_log('FluxFiles: Ghostscript ' . ($version ?? '(unknown version)') . ' is older than '
+                \FluxFiles\Log::warn('FluxFiles: Ghostscript ' . ($version ?? '(unknown version)') . ' is older than '
                     . self::MIN_GS_VERSION . ' — PDF optimize/posters are disabled until it is upgraded.');
                 $found = null;
             }

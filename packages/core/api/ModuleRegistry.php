@@ -48,6 +48,38 @@ final class ModuleRegistry
     /** Snapshot of the built-in map, for reset() in tests. @var array<string,string> */
     private static array $builtin = [];
 
+    /** @var (callable():?LicenseCheckInterface)|null */
+    private static $licenseResolver = null;
+
+    /**
+     * The licence every gate consults. Default: the offline verifier reading
+     * `FLUXFILES_LICENSE_KEY` from the environment (`LicenseManager::fromEnv()`), or
+     * {@see NoLicense} when that class isn't shipped (the WordPress.org build). Resolved
+     * per call, never cached: the env can change between requests in a long-lived host.
+     */
+    public static function license(): LicenseCheckInterface
+    {
+        if (self::$licenseResolver !== null) {
+            $resolved = (self::$licenseResolver)();
+            if ($resolved instanceof LicenseCheckInterface) {
+                return $resolved;
+            }
+            // null (or garbage) from a resolver means "no opinion": fall through to the default.
+        }
+        return class_exists(LicenseManager::class) ? LicenseManager::fromEnv() : new NoLicense();
+    }
+
+    /**
+     * Install a licence resolver (an add-on that holds the key elsewhere, e.g. a WP option).
+     * Return null from it to fall back to the default. Pass null to remove it (tests).
+     *
+     * @param (callable():?LicenseCheckInterface)|null $resolver
+     */
+    public static function setLicenseResolver(?callable $resolver): void
+    {
+        self::$licenseResolver = $resolver;
+    }
+
     /**
      * Register or override a module id → class mapping. Used by a proprietary
      * package that wants to self-register a non-canonical class, and by tests.
@@ -69,6 +101,13 @@ final class ModuleRegistry
         }
     }
 
+    /** The module's class name when it is known AND installed, else null (no instance, no gate). */
+    public static function classFor(string $id): ?string
+    {
+        $class = self::$map[$id] ?? null;
+        return $class !== null && class_exists($class) ? ltrim($class, '\\') : null;
+    }
+
     /** Is a module known AND its code installed (its package present)? */
     public static function installed(string $id): bool
     {
@@ -84,7 +123,7 @@ final class ModuleRegistry
      *
      * @return ModuleInterface
      */
-    public static function require(string $id, LicenseManager $license, Claims $claims): ModuleInterface
+    public static function require(string $id, LicenseCheckInterface $license, Claims $claims): ModuleInterface
     {
         $class = self::$map[$id] ?? null;
         if ($class === null || !class_exists($class)) {
@@ -112,7 +151,7 @@ final class ModuleRegistry
      * are pre-auth: there is no JWT yet to build Claims from). Layer 3 for those
      * routes is an explicit server env-flag check done by the caller, not here.
      */
-    public static function requireServer(string $id, LicenseManager $license): ModuleInterface
+    public static function requireServer(string $id, LicenseCheckInterface $license): ModuleInterface
     {
         $class = self::$map[$id] ?? null;
         if ($class === null || !class_exists($class)) {

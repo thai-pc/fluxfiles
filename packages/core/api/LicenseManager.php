@@ -23,7 +23,7 @@ namespace FluxFiles;
  * Absent / malformed / bad-signature / unknown-kid → treated as the free edition
  * (no modules), never an error: the MIT core must run fine with no license at all.
  */
-class LicenseManager
+class LicenseManager implements LicenseCheckInterface
 {
     /**
      * Embedded Ed25519 PUBLIC keys (base64), keyed by `kid`, for signature

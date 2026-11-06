@@ -11,7 +11,7 @@ class JwtMiddleware
         try {
             $payload = JwtCompat::decode($token, $secret);
         } catch (\Exception $e) {
-            error_log('FluxFiles JWT error: ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles JWT error: ' . $e->getMessage());
             throw new ApiException('Invalid or expired token', 401, 'token_invalid');
         }
 

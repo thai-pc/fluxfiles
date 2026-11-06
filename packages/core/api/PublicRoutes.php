@@ -1,0 +1,191 @@
+<?php
+
+declare(strict_types=1);
+
+namespace FluxFiles;
+
+/**
+ * Routing + gate for the PUBLIC (no main JWT) routes of the Share and Intake modules.
+ *
+ * Every host (standalone index.php, the WordPress and Laravel proxies) asks
+ * {@see moduleFor()} whether a path is one of these routes and, if so, hands it to
+ * {@see dispatch()}. The dispatcher is the gate, in a fixed order:
+ *
+ *   1. the signing secret is configured                       (500 server_error)
+ *   2. the module's code is installed                         (501 module_not_installed)
+ *   3. the licence entitles it                                (402 license_required / license_expired)
+ *   4. the module serves the route                            (its own enforcement)
+ *
+ * The recipient presents a share/intake token, not a main JWT, so there is no claim
+ * layer: the token IS the per-request authorisation, and the module verifies it.
+ *
+ * A module that does not implement {@see PublicModuleInterface} (a release from before
+ * the interface existed) is served by the legacy in-core handlers in `PublicLinks.php`,
+ * so updating core never breaks Share/Intake links on an install whose modules lag.
+ */
+final class PublicRoutes
+{
+    /**
+     * module id → route name → path. `page` is the HTML recipient page; the rest are the
+     * JSON/bytes routes.
+     *
+     * @var array<string,array<string,string>>
+     */
+    public const ROUTES = [
+        'share' => [
+            'info'   => '/api/fm/share/info',
+            'unlock' => '/api/fm/share/unlock',
+            'file'   => '/api/fm/share/file',
+            'page'   => '/api/fm/share/page',
+        ],
+        'intake' => [
+            'info'   => '/api/fm/intake/info',
+            'upload' => '/api/fm/intake/upload',
+            'page'   => '/api/fm/intake/page',
+        ],
+    ];
+
+    /** The module id that owns this request path, or null when it isn't a public module route. */
+    public static function moduleFor(string $uri): ?string
+    {
+        foreach (self::ROUTES as $id => $routes) {
+            if (in_array($uri, $routes, true)) {
+                return $id;
+            }
+        }
+        return null;
+    }
+
+    /** Is this the module's HTML page route (as opposed to a JSON/bytes route)? */
+    public static function isPage(string $id, string $uri): bool
+    {
+        return (self::ROUTES[$id]['page'] ?? null) === $uri;
+    }
+
+    /**
+     * Gate and serve one public request, then return. Any {@see ApiException} (the gate's
+     * or the module's) becomes the standard `{data,error,error_code}` envelope; anything
+     * else is a 500 `server_error` with no detail.
+     */
+    public static function dispatch(string $id, string $method, string $uri, PublicContext $ctx): void
+    {
+        try {
+            if (!isset(self::ROUTES[$id]) || !in_array($uri, self::ROUTES[$id], true)) {
+                throw new ApiException('Not found', 404, 'not_found');
+            }
+            if (!$ctx->secretConfigured()) {
+                throw new ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
+            }
+            $module = ModuleRegistry::requireServer($id, $ctx->license);
+
+            if (self::isPage($id, $uri)) {
+                if ($method !== 'GET') {
+                    throw new ApiException('Not found', 404, 'not_found');
+                }
+                $html = self::page($id, '/api/fm');
+                if ($html === null) {
+                    throw new ApiException('Not found', 404, 'not_found');
+                }
+                header('Content-Type: text/html; charset=utf-8');
+                // The page carries the token in its query string: never leak it onward.
+                header('Referrer-Policy: no-referrer');
+                header('Cache-Control: no-store');
+                header('X-Content-Type-Options: nosniff');
+                echo $html;
+                return;
+            }
+
+            if ($module instanceof PublicModuleInterface) {
+                $module->handlePublic($method, $uri, $ctx);
+                return;
+            }
+
+            self::legacy($id, $method, $uri, $ctx);
+        } catch (ApiException $e) {
+            self::emitError($e);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['data' => null, 'error' => 'Internal server error', 'error_code' => 'server_error']);
+        }
+    }
+
+    /**
+     * The module's recipient page with the API base injected as
+     * `<meta name="fm-api-base">` (no inline script, so a strict CSP host stays happy).
+     * Null when the module is not installed or ships no such page. Does NOT gate: callers
+     * reach it through {@see dispatch()}, or have already passed the gate themselves.
+     *
+     * A module that predates {@see PublicModuleInterface} has no `pages()`, so core's own
+     * copy of the page is served instead.
+     */
+    public static function page(string $id, string $apiBase): ?string
+    {
+        if (!isset(self::ROUTES[$id])) {
+            return null;
+        }
+        $class = ModuleRegistry::classFor($id);
+        if ($class === null) {
+            return null;
+        }
+        $file = null;
+        if (is_subclass_of($class, PublicModuleInterface::class)) {
+            $declared = $class::pages()[$id] ?? null;
+            if (is_string($declared) && is_file($declared)) {
+                $file = $declared;
+            }
+        } else {
+            $core = __DIR__ . '/../public/' . $id . '.html';
+            if (is_file($core)) {
+                $file = $core;
+            }
+        }
+        if ($file === null) {
+            return null;
+        }
+        $html = @file_get_contents($file);
+        if ($html === false) {
+            return null;
+        }
+        return self::injectApiBase($html, $apiBase);
+    }
+
+    /** Insert `<meta name="fm-api-base" content="…">` right after `<head>` (or at the top). */
+    public static function injectApiBase(string $html, string $apiBase): string
+    {
+        $meta = '<meta name="fm-api-base" content="' . htmlspecialchars($apiBase, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
+        $count = 0;
+        $out = preg_replace('/<head(\s[^>]*)?>/i', '$0' . "\n" . $meta, $html, 1, $count);
+        if (!is_string($out) || $count === 0) {
+            return $meta . "\n" . $html;
+        }
+        return $out;
+    }
+
+    /** The in-core handlers, for a module that predates PublicModuleInterface. */
+    private static function legacy(string $id, string $method, string $uri, PublicContext $ctx): void
+    {
+        require_once __DIR__ . '/PublicLinks.php';
+        $dm = $ctx->hostInjected ? $ctx->dm() : null;
+        $cfg = $ctx->hostInjected ? $ctx->diskConfigs() : null;
+        if ($id === 'intake') {
+            \handleIntakePublic($method, $uri, $dm, $cfg, $ctx->injectedMeta());
+        } else {
+            \handleSharePublic($method, $uri, $dm, $cfg, $ctx->injectedMeta());
+        }
+    }
+
+    private static function emitError(ApiException $e): void
+    {
+        http_response_code($e->getHttpCode());
+        header('Content-Type: application/json; charset=utf-8');
+        $r = ['data' => null, 'error' => $e->getMessage()];
+        if ($e->getErrorCode() !== null) {
+            $r['error_code'] = $e->getErrorCode();
+        }
+        if ($e->getErrorParams()) {
+            $r['error_params'] = $e->getErrorParams();
+        }
+        echo json_encode($r);
+    }
+}

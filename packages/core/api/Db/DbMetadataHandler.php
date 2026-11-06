@@ -842,7 +842,7 @@ class DbMetadataHandler implements MetadataRepositoryInterface, MigrationImportI
             if (!array_key_exists('placed_by_scope', $insertCols)) {
                 throw $e;
             }
-            error_log('FluxFiles: legal_holds.placed_by_scope is missing — run DB migration 0009 (' . $e->getMessage() . ')');
+            \FluxFiles\Log::warn('FluxFiles: legal_holds.placed_by_scope is missing — run DB migration 0009 (' . $e->getMessage() . ')');
             unset($insertCols['placed_by_scope']);
             $this->upsertHold($insertCols);
         }

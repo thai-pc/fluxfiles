@@ -308,6 +308,7 @@
     "invalid_mode": "Geçersiz mod — 3 sekizlik basamak kullanın (örn. 644).",
     "invalid_trash_id": "Geçersiz çöp öğesi.",
     "module_not_installed": "Bu özellik yüklü değil.",
+    "module_update_required": "Bu özelliğin modülü güncel değil. Devam etmek için güncelleyin.",
     "not_a_zip": "Bu dosya bir ZIP arşivi değil.",
     "not_image": "Bu dosya bir görsel değil.",
     "not_sftp": "Bu işlem yalnızca SFTP diskinde çalışır.",
