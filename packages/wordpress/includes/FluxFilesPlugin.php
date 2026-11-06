@@ -65,7 +65,22 @@ class FluxFilesPlugin
     {
         $paths = apply_filters('fluxfiles_module_paths', []);
         if (is_array($paths)) {
-            $paths = array_values(array_filter($paths, static fn ($p) => is_string($p) && $p !== '' && is_dir($p)));
+            // Absolute, existing directories only (a relative path would resolve against
+            // whatever the cwd happens to be); realpath() so the autoloader sees one form.
+            $abs = static fn (string $p): bool => function_exists('path_is_absolute')
+                ? path_is_absolute($p)
+                : preg_match('#^(/|[A-Za-z]:[\\\\/]|\\\\\\\\)#', $p) === 1;
+            $clean = [];
+            foreach ($paths as $p) {
+                if (!is_string($p) || $p === '' || !$abs($p) || !is_dir($p)) {
+                    continue;
+                }
+                $real = realpath($p);
+                if ($real !== false) {
+                    $clean[] = $real;
+                }
+            }
+            $paths = array_values(array_unique($clean));
             if ($paths !== [] && class_exists(\FluxFiles\ModuleAutoloader::class)) {
                 \FluxFiles\ModuleAutoloader::register($paths);
             }
@@ -745,6 +760,10 @@ HTACCESS;
         // The free plugin ships no editions: an add-on (FluxFiles Pro) registers them.
         // Shape: ['<edition>' => ['allow_x' => true, ...]]; anything malformed is skipped.
         $presets = apply_filters('fluxfiles_edition_presets', []);
+        // Match case-insensitively: normalise the map's keys the same way $key is.
+        if (is_array($presets)) {
+            $presets = array_change_key_case($presets, CASE_LOWER);
+        }
         $key = strtolower($edition);
         if (!is_array($presets) || !isset($presets[$key]) || !is_array($presets[$key])) {
             // A typo or an edition whose add-on is not installed: ignore (mint stays

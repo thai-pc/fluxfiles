@@ -860,7 +860,8 @@ test('no licence / updater / module-engine plumbing remains in the plugin', func
     }
     assertTrue(count($files) > 5, 'scanned the plugin sources');
     $banned = ['fluxfiles_license_key', 'upgrader_pre_download', 'plugins_api', 'pre_set_site_transient_update_plugins',
-               'fluxfiles_module_env', 'seedModuleEnv', 'FluxFilesUpdater', 'LicenseManager'];
+               'fluxfiles_module_env', 'seedModuleEnv', 'FluxFilesUpdater', 'LicenseManager',
+               'site_transient_update_plugins', 'upgrader_post_install', 'http_request_args'];
     foreach ($files as $f) {
         $src = (string) file_get_contents($f);
         foreach ($banned as $needle) {
@@ -2210,6 +2211,9 @@ test('A-N2: an unknown role refuses to mint; an unknown edition is ignored (and 
         assertEqual(true, $p->allow_share ?? null, 'a registered edition applies');
         $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['edition' => 'enterprize']), $secret);
         assertTrue(!isset($p->allow_virus_scan), 'a typo is still ignored when presets exist');
+        $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => ['PRO' => ['allow_share' => true]]];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['edition' => 'pro']), $secret);
+        assertEqual(true, $p->allow_share ?? null, 'map keys match case-insensitively');
         $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => 'garbage'];
         FluxFilesPlugin::generateToken(1, ['edition' => 'pro']);   // a malformed map never throws
     } finally {
@@ -3156,6 +3160,7 @@ test('extension API: level constant, documented hooks and boot order', function 
     // Order: fluxfiles_module_paths (filter) -> autoloader registered -> fluxfiles_loaded (action).
     $dir = sys_get_temp_dir() . '/ffext-order-' . uniqid();
     mkdir($dir . '/ocr/src', 0777, true);
+    $dir = (string) realpath($dir);   // module paths are canonicalised (macOS /var -> /private/var)
     $log = [];
     $ffInstance = new ReflectionProperty(FluxFilesPlugin::class, 'instance');
     $ffKeep = $ffInstance->getValue();
@@ -3172,6 +3177,13 @@ test('extension API: level constant, documented hooks and boot order', function 
         $bases = \FluxFiles\ModuleAutoloader::bases();
         assertTrue(in_array($dir . '/', $bases, true), 'a valid path is registered with the module autoloader');
         assertTrue(!in_array('/no/such/dir/', $bases, true), 'a missing directory is dropped');
+        // Relative paths are refused; real paths are canonicalised.
+        $rel = 'tests/../' . basename($dir);
+        $GLOBALS['WP_FILTERS']['fluxfiles_module_paths'] = [fn () => [$rel, 'relative/dir', $dir . '/../' . basename($dir)]];
+        \FluxFiles\ModuleAutoloader::reset();
+        FluxFilesPlugin::loaded();
+        $b = \FluxFiles\ModuleAutoloader::bases();
+        assertEqual([rtrim((string) realpath($dir), '/') . '/'], $b, 'only the absolute path is registered, canonicalised');
         // No add-on: nothing registered, the action still fires.
         $GLOBALS['WP_FILTERS']['fluxfiles_module_paths'] = [];
         \FluxFiles\ModuleAutoloader::reset();

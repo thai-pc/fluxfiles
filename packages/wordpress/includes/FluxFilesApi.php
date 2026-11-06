@@ -2300,8 +2300,8 @@ class FluxFilesApi
             exit;
         }
 
-        // Module engines read the secret and storage path from the environment; the
-        // fluxfiles_api_boot action (constructor) already ran for this request.
+        // Module engines read the secret and storage path from the environment; an
+        // add-on's fluxfiles_api_boot callback may have seeded other engine vars already.
         $_ENV['FLUXFILES_SECRET'] = (string) get_option('fluxfiles_secret', '');
         $_ENV['FLUXFILES_STORAGE_PATH'] = FluxFilesPlugin::storagePath();
 
