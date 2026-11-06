@@ -41,15 +41,10 @@ is not in `composer.json`.
 
 ### WordPress
 
-WordPress sites usually have no shell, so unpack it by hand:
-
-1. Download the module zip from your purchase email.
-2. Unzip it into `wp-content/plugins/fluxfiles/vendor/fluxfiles/<module>/`, so that
-   `…/vendor/fluxfiles/share/src/ShareModule.php` exists.
-3. Reload any FluxFiles admin page.
-
-If your host has WP-CLI, `wp plugin install` is not involved — this is a module inside
-the plugin, not a plugin of its own.
+The free WordPress plugin ships no paid modules and has no module installer. Paid modules
+come with the separate **FluxFiles Pro** add-on plugin (not yet released). Until it is
+installed, paid routes answer `501 module_not_installed` (or `402 license_required` if a
+module is present but unlicensed).
 
 ---
 
@@ -62,7 +57,7 @@ server works exactly like a connected one.
 |---|---|
 | **Standalone / Docker** | `FLUXFILES_LICENSE_KEY=…` in `.env`, or a real environment variable |
 | **Laravel** | the same, in your app's `.env` |
-| **WordPress** | **Settings → FluxFiles → Licence**. Shared hosting gives you no way to set an environment variable, so the plugin stores it as an option; the screen shows the edition and expiry it verified, and says so plainly if the key was not accepted |
+| **WordPress** | The free plugin has no licence setting. The licence is handled by the FluxFiles Pro add-on (not yet released) |
 
 Paste the key whole. It is long and contains dots — a line break in the middle is the
 usual cause of "not accepted".
@@ -110,14 +105,13 @@ $token = fluxfiles_token(['user' => 'user-42', 'edition' => 'pro']);
 > installed, licence missing, or the engine (ClamAV/VirusTotal, Presidio) unreachable.
 > Only grant them where the engine is configured.
 
-WordPress mints tokens for you. Paste the licence under **Settings → FluxFiles →
-Licence**; turn modules on per token with the `fluxfiles_token_overrides` filter
-(`edition`, or individual `allow_*` claims) — there is no settings field for them.
-Engine settings (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_*`, `FLUXFILES_C2PA_MANIFEST`,
+WordPress mints tokens for you. The free plugin has no licence or module-engine settings
+(the FluxFiles Pro add-on, not yet released, provides them); turn modules on per token with
+the `fluxfiles_token_overrides` filter (individual `allow_*` claims; `edition` once an add-on
+registers editions). Engine settings (`FLUXFILES_AIVISION_*`, `FLUXFILES_DLP_*`, `FLUXFILES_C2PA_MANIFEST`,
 `FLUXFILES_VIRUSTOTAL_*`, `FLUXFILES_CLAMSCAN_TIMEOUT`, `FLUXFILES_OCR_MAX_MEGAPIXELS`,
-`FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) can be set under
-**Settings → FluxFiles → Module engines** when you have no environment. API keys there are
-write-only (never shown again); a real environment variable of the same name always wins.
+`FLUXFILES_WEBHOOK_ALLOW_INTERNAL`, `FLUXFILES_LEGAL_HOLD_MAX_ACTIVE`) are set as
+real environment variables on WordPress; the Pro add-on will add a settings screen for them.
 
 The claim names are in [`CONFIG.md`](../reference/CONFIG.md) — one row per claim, with defaults.
 
@@ -185,9 +179,8 @@ php vendor/bin/fluxfiles update share --check    # is there a newer build?
 php vendor/bin/fluxfiles update share            # install it
 ```
 
-WordPress checks for plugin updates itself and offers them in **Dashboard → Updates**
-like any other plugin. An update that needs a newer PHP than the site runs is held
-back by WordPress rather than installed.
+The free WordPress plugin has no updater of its own (updates come from WordPress.org);
+paid-module updates will come with the FluxFiles Pro add-on.
 
 Updates are gated by the support window on your key, not by whether the software runs.
 Annual/perpetual terms keep every installed module running indefinitely when the term

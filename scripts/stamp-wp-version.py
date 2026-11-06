@@ -9,7 +9,7 @@ offered the same one forever.
 
 Rewrites three places that all have to agree:
   - the `Version:` plugin header WordPress reads,
-  - the FLUXFILES_VERSION constant the code (and FluxFilesUpdater) compares,
+  - the FLUXFILES_VERSION constant the code reads,
   - readme.txt's `Stable tag:`, which wordpress.org reads.
 
 An optional third argument stamps FLUXFILES_CORE_VERSION, the release of the core

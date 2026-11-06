@@ -183,9 +183,9 @@ Laravel DB adapter test.
   `scripts/build-wordpress.sh`; a `wordpress-v*` tag runs `wordpress-release.yml`,
   which attaches the ZIP (+ sha256 and a catalogue entry carrying `requires_php`) to a
   GitHub Release.
-- **PHP floor** (`^8.1.0`; CI covers 8.1–8.5) is stated in five places that must agree — every
-  `composer.json` `require.php` + `config.platform.php`, the WP plugin header/`readme.txt`
-  `Requires PHP`, `FLUXFILES_MIN_PHP` and `FluxFilesUpdater::REQUIRES_PHP`;
+- **PHP floor** (`^8.1.0`; CI covers 8.1–8.5) is stated in four places that must agree — every
+  `composer.json` `require.php` + `config.platform.php`, the WP plugin header,
+  `readme.txt` `Requires PHP` and `FLUXFILES_MIN_PHP`;
   `test-wp-smoke.php` guards the WordPress side.
 
 ## Conventions

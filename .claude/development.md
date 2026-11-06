@@ -2,7 +2,7 @@
 
 ## Environment
 
-- PHP requirement: `>= 8.1` (8.1–8.5 tested in CI; keeping PHP patched is the operator's job). Five places must agree — every `composer.json` `require.php` + `config.platform.php`, the WP plugin header/`readme.txt` `Requires PHP`, `FLUXFILES_MIN_PHP` and `FluxFilesUpdater::REQUIRES_PHP`; `test-wp-smoke.php` guards the WP side. Raising it again = same edits + `composer update --lock`.
+- PHP requirement: `>= 8.1` (8.1–8.5 tested in CI; keeping PHP patched is the operator's job). Four places must agree — every `composer.json` `require.php` + `config.platform.php`, the WP plugin header, `readme.txt` `Requires PHP` and `FLUXFILES_MIN_PHP`; `test-wp-smoke.php` guards the WP side. Raising it again = same edits + `composer update --lock`.
 - Core PHP dependencies live in `packages/core/composer.json`.
 - Root `vendor/` exists in this checkout, but core package commands should usually run with `-d packages/core` or from `packages/core`.
 - Node packages:

@@ -118,13 +118,22 @@ sits right after `requireServer()`, before the page branch, so the page route an
 | `FLUXFILES_EXT_API` | const int, `1` | `fluxfiles.php` | refuse to boot when it's below what pro needs |
 | `FLUXFILES_CORE_VERSION` | const string (the bundled core tag, stamped at build by `stamp-wp-version.py`) | `fluxfiles.php` | check the max core floor of its bundled modules |
 | `fluxfiles_loaded` | action (`FluxFilesPlugin $p`) | `plugins_loaded` priority 1, after the core autoload | boot (§3.1) |
-| `fluxfiles_module_paths` | filter `string[]` of base dirs | on `fluxfiles_loaded`; when non-empty the free plugin calls `ModuleAutoloader::register()` | add `fluxfiles-pro/modules/` |
-| `fluxfiles_license` | filter `?LicenseCheckInterface` | `FluxFilesPlugin::license()` (default `new NoLicense()`), wired into `ModuleRegistry::setLicenseResolver()` | return `new LicenseManager($key)` |
-| `fluxfiles_api_boot` | action (`FluxFilesApi $api`) | `FluxFilesApi::__construct`, where `seedModuleEnv()`/`seedLicenseEnv()` are called today | seed the module-engine `$_ENV` |
+| `fluxfiles_module_paths` | filter `string[]` of absolute base dirs (relative/missing dropped, `realpath()`ed) | applied in `plugins_loaded` priority 1 just BEFORE `fluxfiles_loaded`, so add the filter at file load; when non-empty the free plugin calls `ModuleAutoloader::register()` | add `fluxfiles-pro/modules/` |
+| `fluxfiles_license` | filter `?LicenseCheckInterface` (a returned licence whose methods throw fails closed: 500, never entitled) | `FluxFilesPlugin::license()` (default `new NoLicense()`), wired into `ModuleRegistry::setLicenseResolver()` | return `new LicenseManager($key)` |
+| `fluxfiles_api_boot` | action (`FluxFilesApi $api`; fires on every construction: any REST namespace + attachment deletion, possibly more than once per request, so callbacks must be idempotent; instance not fully initialised) | `FluxFilesApi::__construct`, where `seedModuleEnv()`/`seedLicenseEnv()` are called today | seed the module-engine `$_ENV` |
 | `fluxfiles_admin_sections` | action (`string $page='fluxfiles'`, `string $group='fluxfiles'`) | end of `FluxFilesAdmin::registerSettings()` | add the Licence and Module engines sections |
 | `fluxfiles_edition_presets` | filter `array<string,array<string,bool>>` | `FluxFilesPlugin::applyEditionPreset()`, default `[]` | supply the `pro/agency/studio/enterprise` map (moved out of free). With no map, an `edition` is ignored, and the plugin calls `_doing_it_wrong()` under `WP_DEBUG` instead of throwing |
-| `fluxfiles_rest_routes` | action (`string $ns`, `FluxFilesApi $api`) | end of route registration | nothing in v1; it's the fallback if a reviewer objects to the paid-route stubs (§11) |
+| `fluxfiles_rest_routes` | action (`string $ns`, `FluxFilesApi $api`; add-on routes must use `[FluxFilesApi::class, 'checkAuth']` as `permission_callback`, `$api` helpers are private for now) | end of route registration | nothing in v1; it's the fallback if a reviewer objects to the paid-route stubs (§11) |
 | `fluxfiles_token_overrides` | filter (exists, `FluxFilesPlugin.php:1238`) | — | unchanged |
+
+Load order: WP loads `fluxfiles-pro/` before `fluxfiles/`, so `FLUXFILES_EXT_API` and
+`FLUXFILES_CORE_VERSION` are undefined while Pro's main file loads. Pro does its version guard in
+`plugins_loaded` priority 0 or in `fluxfiles_loaded`, and adds `fluxfiles_module_paths` at file load.
+`fluxfiles_edition_presets` keys are normalised with `array_change_key_case` (lowercase matching).
+
+Phase-5 tracking (not implemented here): N5, the bundled `modules-autoload.php` still auto-registers
+`<plugin>/vendor/fluxfiles/`; remove it in 5.7. N7, the `EXT_API`-mismatch admin notice (§2.5) is
+deferred to phase 7.
 
 The free plugin also mints `pro_hints=false` by default. A `fluxfiles_token_overrides` filter
 can flip it back.

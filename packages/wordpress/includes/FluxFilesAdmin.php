@@ -15,9 +15,7 @@ class FluxFilesAdmin
         add_action('admin_menu', [$this, 'addMenuPage']);
         add_action('admin_init', [$this, 'registerSettings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
-        add_action('admin_notices', [$this, 'renderLicenseExpiryNotice']);
         add_action('admin_notices', [$this, 'renderNginxStorageNotice']);
-        add_action('wp_ajax_fluxfiles_dismiss_license_notice', [$this, 'handleDismissLicenseNotice']);
     }
 
     public function addMenuPage(): void
@@ -99,58 +97,6 @@ class FluxFilesAdmin
             'fluxfiles',
             'fluxfiles_storage'
         );
-
-        // ── Licence ─────────────────────────────────────────────────────────
-        // Without this a WordPress customer has no way to activate what they bought:
-        // the core reads the key from the environment, which shared hosting does not
-        // give them. The section shows the verified status back, because a key field
-        // that swallows input and says nothing is indistinguishable from a broken one.
-        add_settings_section(
-            'fluxfiles_license',
-            'Licence',
-            [$this, 'renderLicenseStatus'],
-            'fluxfiles'
-        );
-        register_setting('fluxfiles', 'fluxfiles_license_key', [
-            'type' => 'string',
-            'sanitize_callback' => [$this, 'sanitizeLicenseKey'],
-        ]);
-        add_settings_field(
-            'fluxfiles_license_key',
-            'Licence key',
-            [$this, 'renderLicenseField'],
-            'fluxfiles',
-            'fluxfiles_license'
-        );
-
-        // ── Module engines ──────────────────────────────────────────────────
-        // The paid modules read their engine settings (AI provider, DLP endpoint, …)
-        // from the process environment, which shared hosting does not have — so they
-        // live in one option and FluxFilesPlugin::seedModuleEnv() hands them over.
-        add_settings_section(
-            'fluxfiles_module_env',
-            'Module engines',
-            function () {
-                echo '<p>Engine settings for the paid modules, for hosts without environment variables. '
-                   . 'Leave a field empty for the module default. A real environment variable of the same name always wins.</p>';
-            },
-            'fluxfiles'
-        );
-        register_setting('fluxfiles', FluxFilesPlugin::MODULE_ENV_OPTION, [
-            'type' => 'array',
-            'sanitize_callback' => [$this, 'sanitizeModuleEnv'],
-        ]);
-        foreach (FluxFilesPlugin::MODULE_ENV as $key => $def) {
-            add_settings_field(
-                'fluxfiles_module_env_' . $key,
-                $def['module'] . ' — ' . $def['label'],
-                function () use ($key) {
-                    $this->renderModuleEnvField($key);
-                },
-                'fluxfiles',
-                'fluxfiles_module_env'
-            );
-        }
 
         // Permissions section
         add_settings_section(
@@ -281,6 +227,10 @@ class FluxFilesAdmin
                 'sanitize_callback' => 'sanitize_text_field',
             ]);
         }
+
+        // Extension point: add-ons (FluxFiles Pro) register their own sections and
+        // settings on this page; $group is the settings_fields()/register_setting group.
+        do_action('fluxfiles_admin_sections', 'fluxfiles', 'fluxfiles');
     }
 
     public function renderSettingsPage(): void
@@ -291,114 +241,6 @@ class FluxFilesAdmin
     // -------------------------------------------------------------------------
     // Field renderers
     // -------------------------------------------------------------------------
-
-    /**
-     * A licence key is a long signed token, so it is stored verbatim — no
-     * sanitize_text_field, which would strip characters and turn a valid key into a
-     * silently invalid one. Only surrounding whitespace (from copy-paste) is removed.
-     */
-    public function sanitizeLicenseKey($value): string
-    {
-        return trim((string) $value);
-    }
-
-    /** Verified status, so pasting a key gives an answer instead of silence. */
-    public function renderLicenseStatus(): void
-    {
-        $key = FluxFilesPlugin::licenseKey();
-        if ($key === '') {
-            echo '<p>Running the free core. Paid modules stay inactive until a licence key is entered.</p>';
-            return;
-        }
-
-        $lm = FluxFilesPlugin::license();
-        $info = $lm->info();
-        $status = (string) ($info['status'] ?? 'free');
-        $edition = (string) ($info['edition'] ?? 'free');
-
-        // 'free' with a key present means the key did not verify — say so plainly
-        // rather than showing a reassuring edition name the customer does not have.
-        if ($edition === 'free' || $status === 'free') {
-            echo '<div class="notice notice-error inline"><p><strong>This licence key was not accepted.</strong> '
-               . 'Check it was pasted whole, with no line breaks.</p></div>';
-            return;
-        }
-
-        $modules = (array) ($info['modules'] ?? []);
-        $expires = $info['expires'] ?? null;
-        $class = in_array($status, ['expired', 'grace'], true) ? 'notice-warning' : 'notice-success';
-
-        printf(
-            '<div class="notice %s inline"><p><strong>%s</strong> — %s.%s%s</p></div>',
-            esc_attr($class),
-            esc_html(ucfirst($edition)),
-            esc_html($status),
-            $modules ? ' Unlocked: ' . esc_html(implode(', ', $modules)) . '.' : '',
-            $expires ? ' Valid until ' . esc_html(gmdate('Y-m-d', (int) $expires)) . '.' : ''
-        );
-    }
-
-    /**
-     * Site-wide warning for an expiring/expired/perpetual licence — renderLicenseStatus()
-     * above only shows on Settings → FluxFiles, so an operator who never opens that page
-     * would otherwise find out the paid modules stopped working the hard way (a 402).
-     */
-    public function renderLicenseExpiryNotice(): void
-    {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
-        if (FluxFilesPlugin::licenseKey() === '') {
-            return; // a pure free install has nothing to renew
-        }
-
-        $info = FluxFilesPlugin::license()->info();
-        $status = (string) ($info['status'] ?? 'free');
-        $daysLeft = $info['days_left'] ?? null;
-
-        if (in_array($status, ['grace', 'expired', 'perpetual'], true)) {
-            $bucket = $status;
-        } elseif ($status === 'active' && $daysLeft !== null) {
-            // The smallest configured threshold days_left has crossed, so the bucket
-            // agrees with the vendor license-server's own reminder-bucket scheme
-            // (e.g. days_left=25 -> active:30, days_left=6 -> active:7).
-            $bucket = null;
-            foreach ([30, 14, 7, 1] as $threshold) {
-                if ($daysLeft <= $threshold) {
-                    $bucket = 'active:' . $threshold;
-                }
-            }
-            if ($bucket === null) {
-                return; // more than 30 days left — nothing to warn about yet
-            }
-        } else {
-            return; // 'free' (key did not verify) — renderLicenseStatus() already covers that
-        }
-
-        // Dismissal is keyed by bucket, not a boolean: dismissing "renews in 25 days"
-        // must not silently swallow "expired" three weeks later.
-        $dismissed = get_user_meta(get_current_user_id(), 'fluxfiles_license_notice_dismissed', true);
-        if ($dismissed === $bucket) {
-            return;
-        }
-
-        $edition = (string) ($info['edition'] ?? 'free');
-        printf(
-            '<div class="notice notice-warning is-dismissible fluxfiles-license-notice" data-bucket="%s" data-nonce="%s"><p>%s <a href="%s">%s</a></p></div>',
-            esc_attr($bucket),
-            esc_attr(wp_create_nonce('fluxfiles_dismiss_license_notice')),
-            esc_html(sprintf(
-                /* translators: 1: edition name, 2: licence status (active/grace/expired/perpetual) */
-                __('Your FluxFiles %1$s licence is %2$s.', 'fluxfiles'),
-                ucfirst($edition),
-                $status
-            )),
-            esc_url(admin_url('options-general.php?page=fluxfiles')),
-            esc_html__('View details', 'fluxfiles')
-        );
-
-        $this->enqueueDismissScript();
-    }
 
     /**
      * True when this site runs on nginx, which never reads the .htaccess that
@@ -466,159 +308,6 @@ class FluxFilesAdmin
         );
     }
 
-    /**
-     * WordPress's built-in `is-dismissible` handler (wp-admin/js/common.js) only fades
-     * the notice out client-side — it never tells the server, so a worse status would
-     * stay silently suppressed forever without this. A virtual (no-src) script handle
-     * keeps the fix inline instead of shipping a whole new asset file for a few lines
-     * of JS that only ever run when this specific notice is on screen.
-     */
-    private function enqueueDismissScript(): void
-    {
-        if (wp_script_is('fluxfiles-license-notice', 'enqueued')) {
-            return;
-        }
-        wp_register_script('fluxfiles-license-notice', '', [], FLUXFILES_VERSION, true);
-        wp_enqueue_script('fluxfiles-license-notice');
-        wp_add_inline_script('fluxfiles-license-notice', <<<'JS'
-document.addEventListener('click', function (e) {
-    var btn = e.target.closest('.fluxfiles-license-notice .notice-dismiss');
-    if (!btn) {
-        return;
-    }
-    var notice = btn.closest('.fluxfiles-license-notice');
-    var body = new FormData();
-    body.append('action', 'fluxfiles_dismiss_license_notice');
-    body.append('bucket', notice.getAttribute('data-bucket') || '');
-    body.append('nonce', notice.getAttribute('data-nonce') || '');
-    fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: body });
-});
-JS);
-    }
-
-    /** AJAX target for the inline dismiss script above — persists the dismissed bucket. */
-    public function handleDismissLicenseNotice(): void
-    {
-        check_ajax_referer('fluxfiles_dismiss_license_notice', 'nonce');
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('forbidden', 403);
-        }
-        $bucket = sanitize_text_field((string) ($_POST['bucket'] ?? ''));
-        if (preg_match('/^(active:(?:30|14|7|1)|grace|expired|perpetual)$/', $bucket) !== 1) {
-            wp_send_json_error('invalid_bucket', 400);
-        }
-        update_user_meta(get_current_user_id(), 'fluxfiles_license_notice_dismissed', $bucket);
-        wp_send_json_success();
-    }
-
-    /**
-     * The key input. An env-provided key is shown as read-only rather than hidden:
-     * an operator who set one and then sees an empty box will paste a second key and
-     * wonder why nothing changes.
-     */
-    public function renderLicenseField(): void
-    {
-        $stored = (string) get_option('fluxfiles_license_key', '');
-        $env = (string) (getenv('FLUXFILES_LICENSE_KEY') ?: ($_ENV['FLUXFILES_LICENSE_KEY'] ?? ''));
-
-        if ($stored === '' && $env !== '') {
-            printf(
-                '<input type="text" class="large-text code" value="%s" readonly disabled />'
-                . '<p class="description">Set by the FLUXFILES_LICENSE_KEY environment variable. '
-                . 'Entering a key here would override it.</p>',
-                esc_attr(substr($env, 0, 24) . '…')
-            );
-        }
-        printf(
-            '<textarea name="fluxfiles_license_key" rows="3" class="large-text code" '
-            . 'placeholder="Paste the key from your purchase email">%s</textarea>'
-            . '<p class="description">Verified offline — nothing is sent to us.</p>',
-            esc_textarea($stored)
-        );
-    }
-
-    /**
-     * One engine setting. A real env var is shown read-only (the stored value would
-     * be ignored). Secrets are never echoed: only a "saved" state, an empty box keeps
-     * the stored value, and a checkbox clears it.
-     */
-    public function renderModuleEnvField(string $key): void
-    {
-        $def = FluxFilesPlugin::MODULE_ENV[$key] ?? null;
-        if ($def === null) {
-            return;
-        }
-        $stored = get_option(FluxFilesPlugin::MODULE_ENV_OPTION, []);
-        $stored = is_array($stored) ? $stored : [];
-        $value = (string) ($stored[$key] ?? '');
-        $name = FluxFilesPlugin::MODULE_ENV_OPTION . '[' . $key . ']';
-
-        if (FluxFilesPlugin::moduleEnvFromEnvironment($key)) {
-            printf(
-                '<input type="text" class="regular-text" value="%s" readonly disabled />'
-                . '<p class="description">Set by the %s environment variable, which wins — this field is ignored.</p>',
-                esc_attr($def['type'] === 'secret' ? '(set in the environment)' : (string) (getenv($key) ?: ($_ENV[$key] ?? ''))),
-                esc_html($key)
-            );
-            return;
-        }
-
-        switch ($def['type']) {
-            case 'secret':
-                printf(
-                    '<input type="password" name="%s" value="" autocomplete="new-password" class="regular-text" placeholder="%s" />',
-                    esc_attr($name),
-                    esc_attr($value !== '' ? 'Saved — leave empty to keep' : 'Not set')
-                );
-                if ($value !== '') {
-                    printf(
-                        '<label style="margin-left:10px"><input type="checkbox" name="%s[%s__clear]" value="1" /> Remove the saved key</label>',
-                        esc_attr(FluxFilesPlugin::MODULE_ENV_OPTION),
-                        esc_attr($key)
-                    );
-                }
-                break;
-            case 'bool':
-                printf(
-                    '<input type="hidden" name="%1$s" value="" /><label><input type="checkbox" name="%1$s" value="true" %2$s /> Enabled</label>',
-                    esc_attr($name),
-                    $value === 'true' ? 'checked' : ''
-                );
-                break;
-            case 'enum':
-                echo '<select name="' . esc_attr($name) . '">';
-                foreach ($def['options'] as $opt) {
-                    printf(
-                        '<option value="%1$s" %2$s>%1$s</option>',
-                        esc_attr($opt),
-                        selected($value !== '' ? $value : (string) $def['default'], $opt, false)
-                    );
-                }
-                echo '</select>';
-                break;
-            case 'int':
-                printf(
-                    '<input type="number" name="%s" value="%s" min="%d" max="%d" class="small-text" placeholder="%s" />',
-                    esc_attr($name),
-                    esc_attr($value),
-                    (int) $def['min'],
-                    (int) $def['max'],
-                    esc_attr((string) ($def['default'] ?? ''))
-                );
-                break;
-            default: // url, text, path
-                printf(
-                    '<input type="text" name="%s" value="%s" class="regular-text" placeholder="%s" />',
-                    esc_attr($name),
-                    esc_attr($value),
-                    esc_attr($def['type'] === 'url' ? 'https://' : (string) ($def['default'] ?? ''))
-                );
-                if ($def['type'] === 'path' && $value !== '' && !is_readable($value)) {
-                    echo '<p class="description" style="color:#b32d2e">This file is not readable by PHP.</p>';
-                }
-        }
-        echo '<p class="description"><code>' . esc_html($key) . '</code></p>';
-    }
 
     private function addField(string $name, string $label, string $section, string $type = 'text'): void
     {
@@ -734,44 +423,6 @@ JS);
     // -------------------------------------------------------------------------
     // Sanitizers
     // -------------------------------------------------------------------------
-
-    /**
-     * Per-type clean-up of the module engine settings (FluxFilesPlugin::cleanModuleEnvValue).
-     * Only whitelisted keys survive. Secrets: empty input keeps the stored value, the
-     * `<KEY>__clear` flag removes it. A bad URL is dropped, an unreadable C2PA path is
-     * kept with a warning.
-     *
-     * @param mixed $input
-     */
-    public function sanitizeModuleEnv($input): array
-    {
-        $input = is_array($input) ? $input : [];
-        $prev = get_option(FluxFilesPlugin::MODULE_ENV_OPTION, []);
-        $prev = is_array($prev) ? $prev : [];
-        $out = [];
-        foreach (FluxFilesPlugin::MODULE_ENV as $key => $def) {
-            $raw = $input[$key] ?? '';
-            $value = FluxFilesPlugin::cleanModuleEnvValue($key, $raw);
-            if ($def['type'] === 'secret') {
-                if (!empty($input[$key . '__clear'])) {
-                    $value = '';
-                } elseif ($value === '') {
-                    $value = FluxFilesPlugin::cleanModuleEnvValue($key, $prev[$key] ?? '');
-                }
-            } elseif ($value === '' && is_scalar($raw) && trim((string) $raw) !== '' && function_exists('add_settings_error')) {
-                add_settings_error(FluxFilesPlugin::MODULE_ENV_OPTION, 'fluxfiles_module_env_' . $key,
-                    $def['label'] . ': the value was not valid and was not saved.');
-            }
-            if ($value !== '' && $def['type'] === 'path' && !is_readable($value) && function_exists('add_settings_error')) {
-                add_settings_error(FluxFilesPlugin::MODULE_ENV_OPTION, 'fluxfiles_module_env_' . $key,
-                    $def['label'] . ': ' . $value . ' is not readable by PHP (saved anyway).', 'warning');
-            }
-            if ($value !== '') {
-                $out[$key] = $value;
-            }
-        }
-        return $out;
-    }
 
     /**
      * @param mixed $input

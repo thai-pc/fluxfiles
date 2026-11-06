@@ -5,6 +5,23 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### BREAKING (WordPress plugin): paid plumbing moves to the future FluxFiles Pro plugin
+
+- The free WordPress plugin no longer contains the self-updater (`FluxFilesUpdater`, the
+  `Update URI` header, `FLUXFILES_UPDATE_URL`), the Licence and Module engines settings sections,
+  the licence-expiry notice and its dismiss AJAX, `FluxFilesPlugin::licenseKey()`,
+  `MODULE_ENV`/`seedModuleEnv()`/`cleanModuleEnvValue()`, nor any reference to `LicenseManager`.
+  `license()` answers `NoLicense` unless an add-on returns a verifier from the `fluxfiles_license`
+  filter, so paid routes answer `501 module_not_installed` (or `402` with a module but no licence).
+- The edition presets (`pro`/`agency`/`studio`/`enterprise`) are no longer built in: they come
+  from the `fluxfiles_edition_presets` filter, and an unknown `edition` is now ignored
+  (`_doing_it_wrong()` under `WP_DEBUG`) instead of throwing. Tokens are minted with
+  `pro_hints=false` by default.
+- Core floor raised to `fluxfiles/fluxfiles ^1.1.0`; the pre-module-seam fallbacks for
+  retention, fixity and audit verification and the `PublicRoutes` guard are removed.
+- **Extension API v1** (`FLUXFILES_EXT_API = 1`, documented in `packages/wordpress/HOOKS.md`):
+  `fluxfiles_loaded`, `fluxfiles_module_paths`, `fluxfiles_license`, `fluxfiles_api_boot`,
+  `fluxfiles_admin_sections`, `fluxfiles_edition_presets`, `fluxfiles_rest_routes`.
 ### Fixed (WordPress plugin)
 
 - **Picker opened only once per page.** The FluxFiles Image block and the media-modal button initialised the SDK once and kept the first caller's callback; since the SDK removes its iframe after a pick, a second open showed an empty modal and a pick could land in the first block. Each open now builds a fresh picker bound to the block that opened it, and closing tears down the iframe and message listener. Test: `packages/wordpress/tests/block-picker.test.js`.

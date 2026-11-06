@@ -21,9 +21,11 @@ class FluxFilesPlugin
     {
         self::seedSsrfAllowHosts();
         // Core resolves the licence for its own module wiring (FileManagerFactory,
-        // AboutInfo) through this; without it core would read the env only and never
-        // see a key pasted into Settings.
+        // AboutInfo) through this; the free plugin answers NoLicense unless an add-on
+        // supplies one via the `fluxfiles_license` filter.
         \FluxFiles\ModuleRegistry::setLicenseResolver([self::class, 'license']);
+        // Add-ons boot here: after every plugin file is loaded, before anything else.
+        add_action('plugins_loaded', [self::class, 'loaded'], 1);
         // Core's warnings (Log::warn) go to the same WP_DEBUG-gated log as the plugin's own.
         if (class_exists(\FluxFiles\Log::class)) {
             \FluxFiles\Log::setSink([self::class, 'debugLog']);
@@ -56,6 +58,38 @@ class FluxFilesPlugin
         // load early; the block registers on init.
         add_action('plugins_loaded', ['FluxFilesAttachments', 'register']);
         new FluxFilesBlock();
+    }
+
+    /**
+     * `plugins_loaded` priority 1: let add-ons register module directories, then hand
+     * them the plugin. Order matters: the module paths are registered with core's
+     * autoloader BEFORE `fluxfiles_loaded` fires, so a listener can already use them.
+     */
+    public static function loaded(): void
+    {
+        $paths = apply_filters('fluxfiles_module_paths', []);
+        if (is_array($paths)) {
+            // Absolute, existing directories only (a relative path would resolve against
+            // whatever the cwd happens to be); realpath() so the autoloader sees one form.
+            $abs = static fn (string $p): bool => function_exists('path_is_absolute')
+                ? path_is_absolute($p)
+                : preg_match('#^(/|[A-Za-z]:[\\\\/]|\\\\\\\\)#', $p) === 1;
+            $clean = [];
+            foreach ($paths as $p) {
+                if (!is_string($p) || $p === '' || !$abs($p) || !is_dir($p)) {
+                    continue;
+                }
+                $real = realpath($p);
+                if ($real !== false) {
+                    $clean[] = $real;
+                }
+            }
+            $paths = array_values(array_unique($clean));
+            if ($paths !== [] && class_exists(\FluxFiles\ModuleAutoloader::class)) {
+                \FluxFiles\ModuleAutoloader::register($paths);
+            }
+        }
+        do_action('fluxfiles_loaded', self::instance());
     }
 
     /**
@@ -261,33 +295,6 @@ RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .pht .phtml .phar .cgi .pl .py 
 HTACCESS;
     }
 
-    /**
-     * The licence key for this install.
-     *
-     * The core reads `FLUXFILES_LICENSE_KEY` from the environment, which is fine for a
-     * Docker or Laravel deploy and useless on the shared hosting most WordPress sites
-     * run on — there is no shell to export it from. So the plugin stores it as an
-     * option and prefers that, falling back to the environment for the minority who
-     * can set one (and so an existing env-based install keeps working untouched).
-     */
-    public static function licenseKey(): string
-    {
-        $opt = trim((string) get_option('fluxfiles_license_key', ''));
-        if ($opt !== '') {
-            return $opt;
-        }
-        return (string) (getenv('FLUXFILES_LICENSE_KEY') ?: ($_ENV['FLUXFILES_LICENSE_KEY'] ?? ''));
-    }
-
-    /**
-     * Test seam: the verifier class used when no filter supplies one. Null = autodetect
-     * (LicenseManager if it is shipped, else NoLicense).
-     *
-     * @internal Test seam only; production code must not set it.
-     * @var class-string<\FluxFiles\LicenseCheckInterface>|null
-     */
-    public static ?string $licenseClass = null;
-
     /** Diagnostics go to the PHP error log only when the site runs with WP_DEBUG. */
     public static function debugLog(string $msg): void
     {
@@ -297,13 +304,10 @@ HTACCESS;
     }
 
     /**
-     * The licence verifier, built from wherever the key actually lives.
-     *
-     * Every paid-module gate in the plugin must go through this rather than
-     * LicenseManager::fromEnv(), or a customer who pasted a perfectly good key into the
-     * settings screen is told they have no licence. A `fluxfiles_license` filter may
-     * return any LicenseCheckInterface (anything else is ignored); otherwise the
-     * bundled LicenseManager is used when present, and NoLicense when it is not.
+     * The licence verifier. The free plugin has no licence of its own: it is NoLicense
+     * unless an add-on (FluxFiles Pro) returns a LicenseCheckInterface from the
+     * `fluxfiles_license` filter (anything else is ignored). Every paid-module gate in
+     * the plugin goes through this, and core reads it via ModuleRegistry::license().
      */
     public static function license(): \FluxFiles\LicenseCheckInterface
     {
@@ -314,118 +318,7 @@ HTACCESS;
             self::debugLog('FluxFiles: fluxfiles_license filter threw ' . get_class($e));
             return new \FluxFiles\NoLicense();
         }
-        if ($custom instanceof \FluxFiles\LicenseCheckInterface) {
-            return $custom;
-        }
-        $class = self::$licenseClass ?? \FluxFiles\LicenseManager::class;
-        if (is_a($class, \FluxFiles\LicenseCheckInterface::class, true) && class_exists($class)) {
-            return $class === \FluxFiles\LicenseManager::class
-                ? new \FluxFiles\LicenseManager(self::licenseKey() ?: null)
-                : new $class();
-        }
-        return new \FluxFiles\NoLicense();
-    }
-
-    /**
-     * Engine settings of the paid modules. The modules read them from the process
-     * environment only (getenv() then $_ENV) — shared hosting has none — so they are
-     * kept in ONE option (`fluxfiles_module_env`, keyed by env name) and seeded into
-     * $_ENV by seedModuleEnv(). This list is the whitelist: nothing else is ever
-     * stored or seeded. Types: enum, int (min/max clamp), url (http/https), bool
-     * ('true' or empty), text (pattern), path (server file), secret (never echoed).
-     * SSO (FLUXFILES_SSO_*) is deliberately absent: it does not apply to WordPress.
-     */
-    public const MODULE_ENV_OPTION = 'fluxfiles_module_env';
-    public const MODULE_ENV = [
-        'FLUXFILES_AIVISION_PROVIDER'      => ['module' => 'AI Vision', 'label' => 'Provider', 'type' => 'enum', 'options' => ['removebg', 'http'], 'default' => 'removebg'],
-        'FLUXFILES_AIVISION_ENDPOINT'      => ['module' => 'AI Vision', 'label' => 'Endpoint (provider = http)', 'type' => 'url'],
-        'FLUXFILES_AIVISION_KEY'           => ['module' => 'AI Vision', 'label' => 'API key', 'type' => 'secret'],
-        'FLUXFILES_AIVISION_TIMEOUT'       => ['module' => 'AI Vision', 'label' => 'Timeout (seconds)', 'type' => 'int', 'min' => 1, 'max' => 600, 'default' => 60],
-        'FLUXFILES_OCR_MAX_MEGAPIXELS'     => ['module' => 'OCR', 'label' => 'Max image size (megapixels)', 'type' => 'int', 'min' => 1, 'max' => 1000, 'default' => 40],
-        'FLUXFILES_CLAMSCAN_TIMEOUT'       => ['module' => 'Virus scan', 'label' => 'ClamAV timeout (seconds)', 'type' => 'int', 'min' => 1, 'max' => 600, 'default' => 60],
-        'FLUXFILES_VIRUSTOTAL_KEY'         => ['module' => 'Virus scan', 'label' => 'VirusTotal API key', 'type' => 'secret'],
-        'FLUXFILES_VIRUSTOTAL_TIMEOUT'     => ['module' => 'Virus scan', 'label' => 'VirusTotal timeout (seconds)', 'type' => 'int', 'min' => 1, 'max' => 300, 'default' => 20],
-        'FLUXFILES_C2PA_MANIFEST'          => ['module' => 'C2PA', 'label' => 'Signing manifest (server file path)', 'type' => 'path'],
-        'FLUXFILES_DLP_ENDPOINT'           => ['module' => 'DLP', 'label' => 'Scanner endpoint', 'type' => 'url'],
-        'FLUXFILES_DLP_LANGUAGE'           => ['module' => 'DLP', 'label' => 'Language', 'type' => 'text', 'default' => 'en'],
-        'FLUXFILES_DLP_TIMEOUT'            => ['module' => 'DLP', 'label' => 'Timeout (seconds)', 'type' => 'int', 'min' => 1, 'max' => 300, 'default' => 10],
-        'FLUXFILES_WEBHOOK_ALLOW_INTERNAL' => ['module' => 'Webhooks', 'label' => 'Allow internal / private-network targets', 'type' => 'bool'],
-        'FLUXFILES_LEGAL_HOLD_MAX_ACTIVE'  => ['module' => 'Legal hold', 'label' => 'Max active holds (0 = no cap)', 'type' => 'int', 'min' => 0, 'max' => 1000000, 'default' => 1000],
-    ];
-
-    /** Keys seedModuleEnv() put into $_ENV in this process (so the settings screen can tell them from a real env var). */
-    private static array $seededModuleEnv = [];
-
-    /**
-     * Normalise one stored value to its type; '' means "unset / use the module default".
-     * Shared by the settings sanitiser and the seeder, so a value written behind the
-     * screen's back (wp option update) is held to the same rules.
-     *
-     * @param mixed $raw
-     */
-    public static function cleanModuleEnvValue(string $key, $raw): string
-    {
-        $def = self::MODULE_ENV[$key] ?? null;
-        if ($def === null || !is_scalar($raw)) {
-            return '';
-        }
-        $v = trim(preg_replace('/[\x00-\x1F\x7F]/', '', (string) $raw) ?? '');
-        if ($v === '') {
-            return '';
-        }
-        switch ($def['type']) {
-            case 'enum':
-                $v = strtolower($v);
-                return in_array($v, $def['options'], true) ? $v : '';
-            case 'int':
-                if (preg_match('/^-?\d+$/', $v) !== 1) {
-                    return '';
-                }
-                return (string) max($def['min'], min($def['max'], (int) $v));
-            case 'url':
-                $scheme = strtolower((string) parse_url($v, PHP_URL_SCHEME));
-                return (($scheme === 'http' || $scheme === 'https') && filter_var($v, FILTER_VALIDATE_URL) !== false) ? $v : '';
-            case 'bool':
-                return in_array(strtolower($v), ['1', 'true', 'on', 'yes'], true) ? 'true' : '';
-            case 'text':
-                return substr(preg_replace('/[^A-Za-z_-]/', '', $v) ?? '', 0, 12);
-            default: // path, secret: verbatim (control chars already removed)
-                return $v;
-        }
-    }
-
-    /** True when a REAL environment variable (not one we seeded) provides $key. */
-    public static function moduleEnvFromEnvironment(string $key): bool
-    {
-        if ((string) getenv($key) !== '') {
-            return true;
-        }
-        return !isset(self::$seededModuleEnv[$key]) && (string) ($_ENV[$key] ?? '') !== '';
-    }
-
-    /**
-     * Copy the stored module engine settings into $_ENV, where the paid modules read
-     * them. A real env var always wins (same shape as the Laravel adapter's
-     * FluxFilesManager::seedServerEnv()); only whitelisted keys, never putenv().
-     * Called wherever the plugin runs core/module code — see FluxFilesApi.
-     */
-    public static function seedModuleEnv(): int
-    {
-        $stored = get_option(self::MODULE_ENV_OPTION, []);
-        if (!is_array($stored)) {
-            return 0;
-        }
-        $filled = 0;
-        foreach (self::MODULE_ENV as $key => $_def) {
-            $value = self::cleanModuleEnvValue($key, $stored[$key] ?? '');
-            if ($value === '' || array_key_exists($key, $_ENV) || getenv($key) !== false) {
-                continue;
-            }
-            $_ENV[$key] = $value;
-            self::$seededModuleEnv[$key] = true;
-            $filled++;
-        }
-        return $filled;
+        return $custom instanceof \FluxFiles\LicenseCheckInterface ? $custom : new \FluxFiles\NoLicense();
     }
 
     /**
@@ -871,23 +764,31 @@ HTACCESS;
     /** @param array<string,mixed> $payload */
     private static function applyEditionPreset(array &$payload, ?string $edition): void
     {
-        $presets = [
-            'pro'        => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
-            'agency'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true],
-            'studio'     => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true],
-            'enterprise' => ['allow_optimize' => true, 'allow_share' => true, 'allow_intake' => true, 'allow_versioning' => true, 'allow_webhooks' => true, 'allow_ai_vision' => true, 'allow_ocr' => true, 'allow_virus_scan' => true, 'allow_c2pa' => true, 'allow_backup' => true, 'allow_audit_export' => true, 'allow_dlp_scan' => true, 'allow_legal_hold' => true],
-        ];
         if ($edition === null || $edition === '') {
             return;
         }
+        // The free plugin ships no editions: an add-on (FluxFiles Pro) registers them.
+        // Shape: ['<edition>' => ['allow_x' => true, ...]]; anything malformed is skipped.
+        $presets = apply_filters('fluxfiles_edition_presets', []);
+        // Match case-insensitively: normalise the map's keys the same way $key is.
+        if (is_array($presets)) {
+            $presets = array_change_key_case($presets, CASE_LOWER);
+        }
         $key = strtolower($edition);
-        if (!isset($presets[$key])) {
-            // A typo (`'enterprize'`) used to mint a token silently WITHOUT the tier the
-            // operator meant — fail loudly at mint time instead.
-            throw new \InvalidArgumentException('Unknown FluxFiles edition "' . $edition . '" (expected: ' . implode(', ', array_keys($presets)) . ')');
+        if (!is_array($presets) || !isset($presets[$key]) || !is_array($presets[$key])) {
+            // A typo or an edition whose add-on is not installed: ignore (mint stays
+            // valid, just without the extra claims) and tell the developer under WP_DEBUG.
+            if (defined('WP_DEBUG') && WP_DEBUG && function_exists('_doing_it_wrong')) {
+                _doing_it_wrong(
+                    'fluxfiles_token',
+                    sprintf('Unknown FluxFiles edition "%s" ignored (registered: %s).', $edition, is_array($presets) && $presets ? implode(', ', array_keys($presets)) : 'none'),
+                    '1.1.0'
+                );
+            }
+            return;
         }
         foreach ($presets[$key] as $k => $v) {
-            if (!array_key_exists($k, $payload)) {
+            if (is_string($k) && !array_key_exists($k, $payload)) {
                 $payload[$k] = $v;
             }
         }
@@ -1284,11 +1185,10 @@ HTACCESS;
             }
         }
 
-        // UI upsell hints for paid modules. Defaults to TRUE on decode, so only embed
-        // it when explicitly set — an absent claim must keep inheriting that default.
-        if (array_key_exists('pro_hints', $overrides)) {
-            $payload['pro_hints'] = (bool) $overrides['pro_hints'];
-        }
+        // UI upsell hints for paid modules. Core decodes an absent claim as TRUE, so the
+        // free plugin always embeds it: false unless the caller (or an add-on that
+        // sells modules) explicitly turns it on.
+        $payload['pro_hints'] = array_key_exists('pro_hints', $overrides) ? (bool) $overrides['pro_hints'] : false;
 
         // Generic escape hatch: any JWT claim by its raw snake_case name, e.g.
         // ['claims' => ['allow_optimize' => true, 'upload_collision' => 'overwrite']].

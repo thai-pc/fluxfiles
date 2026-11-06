@@ -49,6 +49,17 @@ if (!function_exists('wp_generate_password')) {
     function wp_generate_password($len = 12, $special = true) { return substr(bin2hex(random_bytes($len)), 0, $len); }
 }
 if (!function_exists('add_action')) { function add_action(...$a) {} }
+// Action registry for the extension-API tests: $GLOBALS['WP_ACTIONS'][tag][] = callable.
+$GLOBALS['WP_ACTIONS'] = [];
+if (!function_exists('do_action')) {
+    function do_action($tag, ...$args) { foreach ($GLOBALS['WP_ACTIONS'][$tag] ?? [] as $cb) { $cb(...$args); } }
+}
+// WP_DEBUG on so the "unknown edition" _doing_it_wrong() notice is observable.
+if (!defined('WP_DEBUG')) { define('WP_DEBUG', true); }
+$GLOBALS['WP_DOING_IT_WRONG'] = [];
+if (!function_exists('_doing_it_wrong')) {
+    function _doing_it_wrong($fn, $msg, $ver) { $GLOBALS['WP_DOING_IT_WRONG'][] = [$fn, $msg, $ver]; }
+}
 // Minimal filter registry so we can exercise the fluxfiles_token_overrides hook.
 $GLOBALS['WP_FILTERS'] = [];
 if (!function_exists('add_filter')) {
@@ -483,11 +494,13 @@ test('generateToken forwards the share/intake gates and their config', function 
     assertEqual('https://files.acme.com/public/intake.html', $p->intake_base_url ?? null);
     assertEqual(true, $p->intake_analytics ?? null, 'intake_analytics forwarded');
 
-    // The edition preset lights both gates up, as it always intended to.
+    // The edition preset (registered by an add-on via fluxfiles_edition_presets) enables both gates.
+    $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => require __DIR__ . '/fixtures/edition-presets.php'];
     $pro = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(57, ['edition' => 'pro']), $secret);
     assertEqual(true, $pro->allow_share ?? null, 'edition preset enables share');
     assertEqual(true, $pro->allow_intake ?? null, 'edition preset enables intake');
     assertEqual(true, $pro->allow_optimize ?? null, 'the rest of the preset is unaffected');
+    unset($GLOBALS['WP_FILTERS']['fluxfiles_edition_presets']);
 });
 
 test('role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim bundle', function () use ($secret) {
@@ -525,7 +538,9 @@ test('role preset (docs/design/ACL-ROLE-PRESETS-DESIGN.md) sets the exact claim 
     assertEqual(false, $overridden->owner_only ?? false, 'explicit owner_only=false overrides role default of true');
 
     // edition + role compose without clobbering each other.
+    $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => require __DIR__ . '/fixtures/edition-presets.php'];
     $both = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(64, ['edition' => 'pro', 'role' => 'admin']), $secret);
+    unset($GLOBALS['WP_FILTERS']['fluxfiles_edition_presets']);
     assertEqual(true, $both->allow_share ?? null, 'edition claim present alongside role');
     assertEqual(['read', 'write', 'delete', 'audit'], (array) $both->perms, 'role claim present alongside edition');
 
@@ -647,9 +662,7 @@ if (!function_exists('wp_update_attachment_metadata')) {
     function wp_update_attachment_metadata($id, $meta) { $GLOBALS['WP_POSTS'][$id]['attmeta'] = $meta; return true; }
 }
 if (!function_exists('is_wp_error')) { function is_wp_error($x) { return $x instanceof \WP_Error; } }
-// HTTP stubs for FluxFilesUpdater. $GLOBALS['WP_HTTP_LAST'] records the request so a
-// test can assert WHERE the licence key was put, and the canned reply is a plain
-// failure so no test accidentally depends on a signed manifest.
+// HTTP stubs. $GLOBALS['WP_HTTP_LAST'] records the request; the canned reply is a plain failure.
 $GLOBALS['WP_HTTP_LAST'] = null;
 if (!function_exists('wp_remote_get')) {
     function wp_remote_get($url, $args = []) {
@@ -664,7 +677,7 @@ if (!function_exists('wp_remote_retrieve_body')) {
     function wp_remote_retrieve_body($r) { return $r['body'] ?? ''; }
 }
 if (!class_exists('WP_Error')) {
-    // Enough of WP_Error for the REST-auth filter and the updater to inspect codes.
+    // Enough of WP_Error for the REST-auth filter to inspect codes.
     class WP_Error {
         private array $codes = [];
         private string $message;
@@ -830,135 +843,37 @@ test('media parity: featured image + native-picker integration wired', function 
     assertTrue(strpos($intSrc, 'wp_enqueue_media') !== false, 'integration loads the native media JS');
 });
 
-// ── Licence key + updates ────────────────────────────────────────────────────
-// A WordPress customer cannot set an environment variable on shared hosting, so
-// without the option they have no way to activate what they bought — and the plugin
-// is distributed as a zip, so without an update check a site never learns a new
-// version exists, including a security release.
+// ── No paid plumbing in the free plugin ──────────────────────────────────────
+// The licence key, the module-engine settings and the self-updater moved to the
+// separate FluxFiles Pro plugin; the free (WordPress.org) build must carry none of it.
 
-test('licence key: the option is used, and the environment is the fallback', function () {
-    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = '  key-from-settings  ';
-    assertEqual('key-from-settings', FluxFilesPlugin::licenseKey(), 'option wins, whitespace trimmed');
-
-    unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
-    putenv('FLUXFILES_LICENSE_KEY=key-from-env');
-    assertEqual('key-from-env', FluxFilesPlugin::licenseKey(), 'falls back to the environment');
-
-    // An operator who CAN set an env var must not be broken by this feature existing.
-    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'key-from-settings';
-    assertEqual('key-from-settings', FluxFilesPlugin::licenseKey(), 'the option overrides the env');
-    putenv('FLUXFILES_LICENSE_KEY');
-    unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
-    assertEqual('', FluxFilesPlugin::licenseKey(), 'neither set → empty, i.e. free core');
-});
-
-test('licence key: gates read it through the plugin, never straight from the env', function () {
-    // LicenseManager::fromEnv() ignores the WP option entirely, so a customer who
-    // pasted a good key into the settings screen would be told they have no licence.
+test('gates read the licence through the plugin, never straight from the env', function () {
+    // LicenseManager::fromEnv() ignores the extension filter entirely.
     $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     assertTrue(strpos($api, 'LicenseManager::fromEnv()') === false, 'no fromEnv() left in the REST proxy');
     assertTrue(substr_count($api, 'FluxFilesPlugin::license()') >= 3, 'gates go through the plugin helper');
 });
 
-test('licence key is stored verbatim, not through sanitize_text_field', function () {
-    // A signed key is long and punctuation-heavy; sanitising it would quietly corrupt
-    // a valid key into an invalid one.
-    $admin = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesAdmin.php');
-    assertTrue(strpos($admin, "'sanitize_callback' => [\$this, 'sanitizeLicenseKey']") !== false,
-        'the key has its own sanitiser');
-    assertTrue(strpos($admin, 'renderLicenseStatus') !== false, 'the screen reports verified status back');
-});
-
-test('updater: a manifest for a DIFFERENT module is refused', function () {
-    // The signature would be perfectly valid — it just describes another artifact.
-    // Without the module check, a valid `share` release could be installed as the
-    // plugin.
-    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesUpdater.php');
-    assertTrue(strpos($src, "=== self::MODULE") !== false, 'manifest module is checked');
-    assertTrue(strpos($src, 'verifyManifest') !== false, 'the manifest signature is verified');
-});
-
-test('updater: does nothing at all when no endpoint is configured', function () {
-    $GLOBALS['WP_FILTERS'] = [];
-    putenv('FLUXFILES_UPDATE_URL');
-    unset($GLOBALS['WP_OPTIONS']['fluxfiles_update_url']);
-    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
-    FluxFilesUpdater::boot();
-    assertTrue(empty($GLOBALS['WP_FILTERS']['pre_set_site_transient_update_plugins']),
-        'a self-hosted install with no update server registers no hooks');
-});
-
-test('updater: registers the update hooks once an endpoint exists', function () {
-    $GLOBALS['WP_FILTERS'] = [];
-    putenv('FLUXFILES_UPDATE_URL=https://updates.example/update');
-    FluxFilesUpdater::boot();
-    assertTrue(!empty($GLOBALS['WP_FILTERS']['pre_set_site_transient_update_plugins']),
-        'the update transient filter is registered');
-    assertTrue(!empty($GLOBALS['WP_FILTERS']['plugins_api']),
-        'plugins_api is filtered so "View details" does not hit wordpress.org');
-    putenv('FLUXFILES_UPDATE_URL');
-});
-
-test('updater: offers an update only when the manifest is genuinely newer', function () {
-    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
-    $slug = 'fluxfiles/fluxfiles.php';
-
-    // Seed the cache so inject() runs its real logic with no network.
-    $seed = function (array $m) { $GLOBALS['WP_TRANSIENTS']['fluxfiles_update_manifest'] = $m; };
-
-    // Newer → offered, carrying the signed URL as the package.
-    $seed(['version' => '9.9.9', 'url' => 'https://cdn.example/fluxfiles-9.9.9.zip', 'sha256' => 'x']);
-    $t = FluxFilesUpdater::inject((object) ['response' => []]);
-    assertTrue(isset($t->response[$slug]), 'a newer version is offered');
-    assertEqual('9.9.9', $t->response[$slug]->new_version);
-    assertEqual('https://cdn.example/fluxfiles-9.9.9.zip', $t->response[$slug]->package);
-
-    // Same version → nothing. An update notice that reinstalls the current build is
-    // an infinite nag.
-    $seed(['version' => FLUXFILES_VERSION, 'url' => 'https://cdn.example/x.zip', 'sha256' => 'x']);
-    $t = FluxFilesUpdater::inject((object) ['response' => []]);
-    assertTrue(!isset($t->response[$slug]), 'the current version is not offered');
-
-    // OLDER → nothing. A rolled-back server must never downgrade a site.
-    $seed(['version' => '0.0.1', 'url' => 'https://cdn.example/old.zip', 'sha256' => 'x']);
-    $t = FluxFilesUpdater::inject((object) ['response' => []]);
-    assertTrue(!isset($t->response[$slug]), 'an older version is never offered');
-
-    // A cached failure ('' — server down) must not crash or offer anything.
-    $GLOBALS['WP_TRANSIENTS']['fluxfiles_update_manifest'] = '';
-    $t = FluxFilesUpdater::inject((object) ['response' => []]);
-    assertTrue(!isset($t->response[$slug]), 'a failed check offers nothing');
-    delete_transient('fluxfiles_update_manifest');
-});
-
-test('updater: the licence key travels in the Authorization header, never the URL', function () {
-    // Two reasons, and both are load-bearing. It is a bearer credential, so a URL
-    // puts it in access logs, proxy logs and the Referer of the redirected download
-    // — the same rule the rest of FluxFiles applies to the main JWT. And it is where
-    // the server looks: docs/update-server.example.php parses `Authorization: Bearer`
-    // only, exactly as `bin/fluxfiles update` sends it, so a key in the query string
-    // reads as no key at all and every check answers 402.
-    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
-    delete_transient('fluxfiles_update_manifest');
-    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'test-licence-key-abc';
-    putenv('FLUXFILES_UPDATE_URL=https://updates.example/update');
-    $GLOBALS['WP_HTTP_LAST'] = null;
-
-    FluxFilesUpdater::inject((object) ['response' => []]);
-
-    $req = $GLOBALS['WP_HTTP_LAST'];
-    assertTrue(is_array($req), 'the updater actually made a request');
-    assertTrue(strpos($req['url'], 'test-licence-key-abc') === false,
-        'the key is NOT in the query string');
-    assertTrue(strpos($req['url'], 'license=') === false, 'no license query parameter at all');
-    assertEqual('Bearer test-licence-key-abc', $req['args']['headers']['Authorization'] ?? '');
-    // The non-secret parameters stay in the URL — the server routes on them.
-    assertTrue(strpos($req['url'], 'module=wordpress') !== false, 'module still identified');
-    assertTrue(strpos($req['url'], 'current=') !== false, 'current version still sent');
-
-    putenv('FLUXFILES_UPDATE_URL');
-    unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
-    delete_transient('fluxfiles_update_manifest');
+test('no licence / updater / module-engine plumbing remains in the plugin', function () {
+    $root = realpath(__DIR__ . '/..');
+    $files = [];
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        $path = $f->getPathname();
+        if (strpos($path, '/vendor/') !== false || strpos($path, '/tests/') !== false) { continue; }
+        if (preg_match('/\.(php|js)$/', $path) === 1) { $files[] = $path; }
+    }
+    assertTrue(count($files) > 5, 'scanned the plugin sources');
+    $banned = ['fluxfiles_license_key', 'upgrader_pre_download', 'plugins_api', 'pre_set_site_transient_update_plugins',
+               'fluxfiles_module_env', 'seedModuleEnv', 'FluxFilesUpdater', 'LicenseManager',
+               'site_transient_update_plugins', 'upgrader_post_install', 'http_request_args'];
+    foreach ($files as $f) {
+        $src = (string) file_get_contents($f);
+        foreach ($banned as $needle) {
+            assertTrue(strpos($src, $needle) === false, basename($f) . ' must not contain ' . $needle);
+        }
+    }
+    assertTrue(!is_file(__DIR__ . '/../includes/FluxFilesUpdater.php'), 'the updater file is gone');
 });
 
 test('the reference update server reads the licence from the header, both spellings', function () {
@@ -972,11 +887,9 @@ test('the reference update server reads the licence from the header, both spelli
         'the server never accepts the licence from the query string');
 });
 
-test('plugin declares Update URI so wordpress.org cannot hijack the slug', function () {
-    // Without this header, a plugin published on wordpress.org under the same slug
-    // would be served to our users as an update.
+test('plugin no longer declares Update URI (updates come from wordpress.org)', function () {
     $head = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
-    assertTrue(strpos($head, 'Update URI:') !== false, 'Update URI header present');
+    assertTrue(strpos($head, 'Update URI:') === false, 'Update URI header absent');
 });
 
 // ── Share + Intake over the WordPress proxy ──────────────────────────────────
@@ -1198,9 +1111,9 @@ test('retention / fixity / verify prefer the module seam and 501 module_update_r
     foreach (['RetentionProviderInterface', 'FixityProviderInterface', 'AuditVerifierInterface'] as $i) {
         assertTrue(strpos($api, 'instanceof \\FluxFiles\\' . $i) !== false, "dispatches to {$i}");
     }
-    assertTrue(strpos($api, "method_exists(\$fm, 'runRetention')") !== false, 'retention falls back to a core that still has it');
-    assertTrue(strpos($api, "method_exists(\$fm, 'runFixityCheck')") !== false, 'fixity falls back to a core that still has it');
-    assertTrue(strpos($api, "method_exists(\\FluxFiles\\AuditChain::class, 'verify')") !== false, 'verify falls back to a core that still has it');
+    // Floor is core ^1.1.0, which carries only the module seam: no pre-seam fallbacks.
+    assertTrue(strpos($api, 'method_exists(') === false, 'no method_exists() fallbacks to a pre-seam core');
+    assertTrue(strpos($api, 'class_exists(\\FluxFiles\\PublicRoutes::class)') === false, 'no PublicRoutes existence guard');
     assertTrue(substr_count($api, "'module_update_required'") >= 3, 'otherwise 501 module_update_required');
 });
 
@@ -1925,22 +1838,19 @@ test('plugin version agrees across header, constant and readme.txt', function ()
 // The PHP floor lives in four places WordPress and Composer each read separately;
 // one left behind lets a site update into a release its PHP can't run, or keeps
 // advertising an end-of-life PHP.
-test('Requires PHP agrees across header, readme.txt, composer.json and the updater', function () {
+test('Requires PHP agrees across header, readme.txt, composer.json and FLUXFILES_MIN_PHP', function () {
     $main     = file_get_contents(__DIR__ . '/../fluxfiles.php');
     $readme   = file_get_contents(__DIR__ . '/../readme.txt');
     $composer = json_decode((string) file_get_contents(__DIR__ . '/../composer.json'), true);
-    $updater  = file_get_contents(__DIR__ . '/../includes/FluxFilesUpdater.php');
 
     preg_match('/^ \* Requires PHP: *(.+)$/m', $main, $h);
     preg_match('/^Requires PHP: *(.+)$/m', $readme, $r);
-    preg_match("/const REQUIRES_PHP = '([^']*)';/", $updater, $u);
     $header = trim($h[1] ?? '');
 
     assertTrue(preg_match('/^\d+\.\d+\.\d+$/', $header) === 1, "header Requires PHP is X.Y.Z (got '{$header}')");
     assertEqual($header, trim($r[1] ?? ''), 'readme.txt Requires PHP matches the plugin header');
     assertEqual('^' . $header, $composer['require']['php'] ?? null, 'composer.json php floor matches');
     assertEqual($header, $composer['config']['platform']['php'] ?? null, 'composer platform pin matches');
-    assertEqual($header, $u[1] ?? null, 'FluxFilesUpdater::REQUIRES_PHP matches');
     preg_match("/define\('FLUXFILES_MIN_PHP', '([^']*)'\);/", $main, $m);
     assertEqual($header, $m[1] ?? null, 'FLUXFILES_MIN_PHP (the runtime guard) matches');
 });
@@ -2404,81 +2314,51 @@ test('A-H4: onDelete refuses system/hidden paths and legal holds, and audits a r
     }
 });
 
-test('A-M6: the update endpoint must be https (http only for localhost) before the licence key is sent', function () {
-    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
-    assertTrue(FluxFilesUpdater::isSecureUrl('https://updates.example/u'), 'https ok');
-    assertTrue(FluxFilesUpdater::isSecureUrl('http://localhost:8080/u'), 'http localhost ok');
-    assertTrue(FluxFilesUpdater::isSecureUrl('http://127.0.0.1/u'), 'http loopback ok');
-    assertTrue(!FluxFilesUpdater::isSecureUrl('http://updates.example/u'), 'http elsewhere refused');
-    assertTrue(!FluxFilesUpdater::isSecureUrl('http://localhost.evil.example/u'), 'no suffix trick');
+test('A-N2: an unknown role refuses to mint; an unknown edition is ignored (and noted under WP_DEBUG)', function () {
+    $threw = false;
+    try { FluxFilesPlugin::generateToken(1, ['role' => 'veiwer']); } catch (\InvalidArgumentException $e) { $threw = true; }
+    assertTrue($threw, 'generateToken refuses an unknown role');
+    $threw = false;
+    try { FluxFilesPlugin::generateByobToken(1, [], ['role' => 'veiwer']); } catch (\InvalidArgumentException $e) { $threw = true; }
+    assertTrue($threw, 'generateByobToken refuses an unknown role');
 
-    $GLOBALS['WP_FILTERS'] = [];
-    putenv('FLUXFILES_UPDATE_URL=http://updates.example/update');
-    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'k-123';
+    // No add-on registered any edition: the free plugin ignores the name, never throws.
+    $GLOBALS['WP_DOING_IT_WRONG'] = [];
+    $secret = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
+    foreach (['enterprize', 'pro'] as $ed) {
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['edition' => $ed]), $secret);
+        assertTrue(!isset($p->allow_share), "edition '{$ed}' without an add-on grants nothing");
+        FluxFilesPlugin::generateByobToken(1, [], ['edition' => $ed]);   // no throw
+    }
+    assertTrue(count($GLOBALS['WP_DOING_IT_WRONG']) >= 2, 'each ignored edition is reported via _doing_it_wrong under WP_DEBUG');
+
+    // Registered by an add-on: applied; a name still absent from the map stays ignored.
+    $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => require __DIR__ . '/fixtures/edition-presets.php'];
     try {
-        FluxFilesUpdater::boot();
-        assertTrue(empty($GLOBALS['WP_FILTERS']['pre_set_site_transient_update_plugins']), 'no update hooks on http');
-        delete_transient('fluxfiles_update_manifest');
-        $GLOBALS['WP_HTTP_LAST'] = null;
-        FluxFilesUpdater::inject((object) ['response' => []]);
-        assertEqual(null, $GLOBALS['WP_HTTP_LAST'], 'the licence key is never sent over http');
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['role' => 'Viewer', 'edition' => 'PRO']), $secret);
+        assertEqual(['read'], (array) $p->perms, 'known names still work, case-insensitively');
+        assertEqual(true, $p->allow_share ?? null, 'a registered edition applies');
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['edition' => 'enterprize']), $secret);
+        assertTrue(!isset($p->allow_virus_scan), 'a typo is still ignored when presets exist');
+        $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => ['PRO' => ['allow_share' => true]]];
+        $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['edition' => 'pro']), $secret);
+        assertEqual(true, $p->allow_share ?? null, 'map keys match case-insensitively');
+        $GLOBALS['WP_FILTERS']['fluxfiles_edition_presets'] = [fn () => 'garbage'];
+        FluxFilesPlugin::generateToken(1, ['edition' => 'pro']);   // a malformed map never throws
     } finally {
-        putenv('FLUXFILES_UPDATE_URL');
-        unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
-        delete_transient('fluxfiles_update_manifest');
-        $GLOBALS['WP_FILTERS'] = [];
+        unset($GLOBALS['WP_FILTERS']['fluxfiles_edition_presets']);
     }
-});
-
-test('A-M6: the downloaded zip is held to the signed manifest sha256', function () {
-    require_once __DIR__ . '/../includes/FluxFilesUpdater.php';
-    if (!function_exists('download_url')) {
-        function download_url($url) {
-            $tmp = tempnam(sys_get_temp_dir(), 'ffdl');
-            file_put_contents($tmp, $GLOBALS['FF_DL_BYTES'] ?? '');
-            return $tmp;
-        }
-    }
-    $url = 'https://cdn.example/fluxfiles-9.9.9.zip';
-    $slug = ['plugin' => 'fluxfiles/fluxfiles.php'];
-    $GLOBALS['WP_TRANSIENTS']['fluxfiles_update_manifest'] = ['version' => '9.9.9', 'url' => $url, 'sha256' => hash('sha256', 'GOOD-ZIP')];
-    putenv('FLUXFILES_UPDATE_URL=https://updates.example/update');
-    try {
-        $GLOBALS['FF_DL_BYTES'] = 'TAMPERED';
-        $r = FluxFilesUpdater::verifyDownload(false, $url, null, $slug);
-        assertTrue($r instanceof WP_Error && $r->get_error_code() === 'fluxfiles_update_checksum', 'mismatch → update fails');
-
-        $GLOBALS['FF_DL_BYTES'] = 'GOOD-ZIP';
-        $r = FluxFilesUpdater::verifyDownload(false, $url, null, $slug);
-        assertTrue(is_string($r) && hash_file('sha256', $r) === hash('sha256', 'GOOD-ZIP'), 'match → WP installs exactly those bytes');
-        @unlink($r);
-
-        $r = FluxFilesUpdater::verifyDownload(false, 'https://elsewhere.example/other.zip', null, $slug);
-        assertTrue($r instanceof WP_Error, 'our plugin from a URL the manifest did not sign → refused');
-
-        assertEqual(false, FluxFilesUpdater::verifyDownload(false, 'https://w.org/other-plugin.zip', null, ['plugin' => 'other/other.php']),
-            "another plugin's package passes through untouched");
-
-        $GLOBALS['WP_TRANSIENTS']['fluxfiles_update_manifest'] = ['version' => '9.9.9', 'url' => $url, 'sha256' => ''];
-        assertTrue(FluxFilesUpdater::verifyDownload(false, $url, null, $slug) instanceof WP_Error, 'no checksum → refused');
-    } finally {
-        putenv('FLUXFILES_UPDATE_URL');
-        delete_transient('fluxfiles_update_manifest');
-    }
-});
-
-test('A-N2: an unknown role or edition refuses to mint instead of failing open', function () {
-    foreach ([['role' => 'veiwer'], ['edition' => 'enterprize']] as $bad) {
-        $threw = false;
-        try { FluxFilesPlugin::generateToken(1, $bad); } catch (\InvalidArgumentException $e) { $threw = true; }
-        assertTrue($threw, 'generateToken refuses ' . json_encode($bad));
-        $threw = false;
-        try { FluxFilesPlugin::generateByobToken(1, [], $bad); } catch (\InvalidArgumentException $e) { $threw = true; }
-        assertTrue($threw, 'generateByobToken refuses ' . json_encode($bad));
-    }
-    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['role' => 'Viewer', 'edition' => 'PRO']), $GLOBALS['WP_OPTIONS']['fluxfiles_secret']);
-    assertEqual(['read'], (array) $p->perms, 'known names still work, case-insensitively');
     FluxFilesPlugin::generateToken(1, ['role' => '', 'edition' => '']);   // empty = unset, no throw
+});
+
+test('pro_hints is false by default and an explicit override still wins', function () {
+    $secret = $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1), $secret);
+    assertEqual(false, $p->pro_hints ?? null, 'minted with pro_hints=false (core would decode an absent claim as true)');
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(1, ['pro_hints' => true]), $secret);
+    assertEqual(true, $p->pro_hints ?? null, 'an add-on / override can turn it back on');
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateByobToken(1, [], []), $secret);
+    assertEqual(false, $p->pro_hints ?? null, 'BYOB tokens too');
 });
 
 // A-M7 needs WordPress's capability + MIME APIs; defined last so every earlier
@@ -2549,7 +2429,7 @@ test('A-M7: nginx sites get an admin notice that the uploads dir must not run PH
 // The LIVE WordPress rig (real plugin + 13 real modules + a licence pasted into the
 // Settings screen) turned up two plugin bugs; these lock both without Docker.
 
-test('public share/intake routes: the option-stored licence reaches the module via PublicContext', function () {
+test('public share/intake routes: the filter-supplied licence reaches the module via PublicContext', function () {
     // The gate in PublicRoutes::dispatch() and the module both consult $ctx->license, so
     // it must be built from the plugin OPTION (FluxFilesPlugin::license()), never from
     // env-only LicenseManager::fromEnv() — else every recipient of a share link / portal
@@ -2559,13 +2439,12 @@ test('public share/intake routes: the option-stored licence reaches the module v
     // share module that reports what its context carried.
     $child = <<<'CHILD'
 <?php
-[$self, $autoload, $wpDir, $optKey, $envKey] = $argv;
-if ($envKey !== '') { $_ENV['FLUXFILES_LICENSE_KEY'] = $envKey; }
+[$self, $autoload, $wpDir, $optKey] = $argv;
 define('ABSPATH', sys_get_temp_dir() . '/');
 define('WP_CONTENT_DIR', sys_get_temp_dir() . '/ff-wp-lic-' . getmypid());
 define('FLUXFILES_PLUGIN_FILE', $wpDir . '/fluxfiles.php');
 define('FLUXFILES_PLUGIN_DIR', $wpDir . '/');
-$GLOBALS['WP_OPTIONS'] = ['fluxfiles_secret' => 'wp-smoke-secret-key-0123456789abcdef', 'fluxfiles_license_key' => $optKey];
+$GLOBALS['WP_OPTIONS'] = ['fluxfiles_secret' => 'wp-smoke-secret-key-0123456789abcdef'];
 function get_option($k, $d = false) { return $GLOBALS['WP_OPTIONS'][$k] ?? $d; }
 function wp_mkdir_p($d) { return is_dir($d) || mkdir($d, 0777, true); }
 function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, '/'); }
@@ -2575,20 +2454,19 @@ function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
 function wp_unslash($v) { return $v; }
 function status_header($c) {}
 function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
-function add_action(...$a) {} function add_filter(...$a) {}
-function apply_filters($t, $v, ...$a) { return $v; }
+function add_action(...$a) {} function add_filter(...$a) {} function do_action(...$a) {}
+// An add-on supplies the licence through the filter; no key given -> no filter value (NoLicense).
+function apply_filters($t, $v, ...$a) { return $t === 'fluxfiles_license' && $GLOBALS['optKey'] !== '' ? new \FluxFiles\WpSmokeLicense($GLOBALS['optKey']) : $v; }
+$GLOBALS['optKey'] = $optKey;
 class WP_REST_Request {
     public function get_method() { return 'GET'; }
     public function get_route() { return '/fluxfiles/v1/api/fm/share/info'; }
 }
 require $autoload;
-if (!class_exists(\FluxFiles\PublicRoutes::class)) { echo 'NO_PUBLIC_ROUTES'; exit; }
-// Defined BEFORE anything autoloads the real verifier.
 class_exists(\FluxFiles\LicenseCheckInterface::class);
-eval('namespace FluxFiles; class LicenseManager implements LicenseCheckInterface {
+eval('namespace FluxFiles; class WpSmokeLicense implements LicenseCheckInterface {
     public ?string $key;
     public function __construct(?string $key = null) { $this->key = $key; }
-    public static function fromEnv(): self { return new self($_ENV["FLUXFILES_LICENSE_KEY"] ?? null); }
     public function licensed(string $module): bool { return true; }
     public function status(): string { return "active"; }
     public function info(): array { return []; }
@@ -2610,25 +2488,22 @@ CHILD;
     $file = tempnam(sys_get_temp_dir(), 'ffwplic') . '.php';
     file_put_contents($file, $child);
     $autoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
-    $run = static function (string $opt, string $env) use ($file, $autoload): string {
-        $cmd = [PHP_BINARY, $file, realpath($autoload), realpath(__DIR__ . '/..'), $opt, $env];
+    $run = static function (string $opt) use ($file, $autoload): string {
+        $cmd = [PHP_BINARY, $file, realpath($autoload), realpath(__DIR__ . '/..'), $opt];
         $p = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         $out = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
         proc_close($p);
         return (string) $out;
     };
     try {
-        $out = $run('key-from-settings', '');
+        $out = $run('key-from-filter');
         assertTrue(strpos($out, '"uri":"\/api\/fm\/share\/info"') !== false, 'the module was dispatched: ' . substr($out, 0, 300));
-        assertTrue(strpos($out, '"licence_key":"key-from-settings"') !== false,
-            'the context licence was built from the option: ' . substr($out, 0, 300));
+        assertTrue(strpos($out, '"licence_key":"key-from-filter"') !== false,
+            'the context licence came from the fluxfiles_license filter: ' . substr($out, 0, 300));
         assertTrue(strpos($out, '"host":true') !== false && strpos($out, '"secret_ok":true') !== false, 'host-injected context with the WP secret');
-        // No option → an env-provided key (Docker/VPS installs) still reaches the context.
-        $out = $run('', 'key-from-env');
-        assertTrue(strpos($out, '"licence_key":"key-from-env"') !== false, 'env licence used when the option is empty: ' . substr($out, 0, 300));
         // No licence anywhere → the context carries none; nothing is invented.
-        $out = $run('', '');
-        assertTrue(strpos($out, '"licence_key":null') !== false, 'no licence anywhere -> licence_key null: ' . substr($out, 0, 300));
+        $out = $run('');
+        assertTrue(strpos($out, '"error_code":"license_required"') !== false, 'no add-on licence -> NoLicense -> 402 license_required: ' . substr($out, 0, 300));
     } finally {
         @unlink($file);
     }
@@ -2664,8 +2539,8 @@ function wp_unslash($v) { return $v; }
 function status_header($c) { http_response_code($c); }
 function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
 function wp_json_encode($d, $f = 0) { return json_encode($d, $f); }
-function add_action(...$a) {} function add_filter(...$a) {}
-function apply_filters($t, $v, ...$a) { return $v; }
+function add_action(...$a) {} function add_filter(...$a) {} function do_action(...$a) {}
+function apply_filters($t, $v, ...$a) { return $t === 'fluxfiles_license' ? new \FluxFiles\WpSmokeLicense() : $v; }
 function is_multisite() { return $GLOBALS['MULTI']; }
 function get_current_blog_id() { return $GLOBALS['CUR']; }
 function get_site($id) { return in_array((int) $id, [1, 2], true) ? (object) ['blog_id' => (string) $id, 'deleted' => 0, 'archived' => 0, 'spam' => 0] : null; }
@@ -2680,10 +2555,9 @@ class WP_REST_Request {
 }
 require $autoload;
 class_exists(\FluxFiles\LicenseCheckInterface::class);
-eval('namespace FluxFiles; class LicenseManager implements LicenseCheckInterface {
+eval('namespace FluxFiles; class WpSmokeLicense implements LicenseCheckInterface {
     public ?string $key;
     public function __construct(?string $key = null) { $this->key = $key; }
-    public static function fromEnv(): self { return new self(); }
     public function licensed(string $module): bool { return in_array($GLOBALS["CUR"], $GLOBALS["LIC"], true); }
     public function status(): string { return "active"; }
     public function info(): array { return []; }
@@ -2804,180 +2678,7 @@ test('settings: `audit` can be granted as a default permission (else no embed to
     }
 });
 
-// ── Module engine settings (Settings → FluxFiles → Module engines) ─────────────
-
-test('module engines: values are sanitised per type, junk keys dropped', function () {
-    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
-    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
-    $keep = $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] ?? null;
-    unset($GLOBALS['WP_OPTIONS']['fluxfiles_module_env']);
-    try {
-        $out = $admin->sanitizeModuleEnv([
-            'FLUXFILES_AIVISION_PROVIDER' => 'HTTP',
-            'FLUXFILES_AIVISION_ENDPOINT' => 'https://rembg.test/run',
-            'FLUXFILES_AIVISION_TIMEOUT' => '99999',
-            'FLUXFILES_OCR_MAX_MEGAPIXELS' => '-5',
-            'FLUXFILES_DLP_ENDPOINT' => 'javascript:alert(1)',
-            'FLUXFILES_DLP_LANGUAGE' => 'en<script>',
-            'FLUXFILES_WEBHOOK_ALLOW_INTERNAL' => '1',
-            'FLUXFILES_LEGAL_HOLD_MAX_ACTIVE' => '0',
-            'FLUXFILES_C2PA_MANIFEST' => '/no/such/manifest.json',
-            'FLUXFILES_SECRET' => 'must-not-be-stored',
-            'FLUXFILES_SSO_OIDC_ISSUER' => 'https://idp.test',
-        ]);
-        assertEqual('http', $out['FLUXFILES_AIVISION_PROVIDER'], 'enum lower-cased');
-        assertEqual('https://rembg.test/run', $out['FLUXFILES_AIVISION_ENDPOINT']);
-        assertEqual('600', $out['FLUXFILES_AIVISION_TIMEOUT'], 'int clamped to max');
-        assertEqual('1', $out['FLUXFILES_OCR_MAX_MEGAPIXELS'], 'int clamped to min');
-        assertTrue(!isset($out['FLUXFILES_DLP_ENDPOINT']), 'non-http(s) URL rejected');
-        assertEqual('enscript', $out['FLUXFILES_DLP_LANGUAGE'], 'language stripped to letters');
-        assertEqual('true', $out['FLUXFILES_WEBHOOK_ALLOW_INTERNAL'], 'bool normalised');
-        assertEqual('0', $out['FLUXFILES_LEGAL_HOLD_MAX_ACTIVE'], '0 is a legal value (no cap)');
-        assertEqual('/no/such/manifest.json', $out['FLUXFILES_C2PA_MANIFEST'], 'unreadable path kept (warned, not rejected)');
-        assertTrue(!isset($out['FLUXFILES_SECRET']) && !isset($out['FLUXFILES_SSO_OIDC_ISSUER']), 'non-whitelisted keys dropped');
-        $bad = $admin->sanitizeModuleEnv(['FLUXFILES_AIVISION_PROVIDER' => 'evil', 'FLUXFILES_AIVISION_TIMEOUT' => 'abc']);
-        assertEqual([], $bad, 'bad enum / non-numeric int are unset');
-    } finally {
-        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = $keep;
-        if ($keep === null) { unset($GLOBALS['WP_OPTIONS']['fluxfiles_module_env']); }
-    }
-});
-
-test('module engines: secrets are never echoed; empty keeps, the clear flag removes', function () {
-    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
-    if (!function_exists('esc_attr')) { function esc_attr($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
-    if (!function_exists('esc_html')) { function esc_html($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
-    if (!function_exists('selected')) { function selected($a, $b, $e = true) { return (string) $a === (string) $b ? 'selected' : ''; } }
-    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
-    $keep = $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] ?? null;
-    try {
-        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = ['FLUXFILES_VIRUSTOTAL_KEY' => 'vt-secret-123'];
-        assertEqual('vt-secret-123', $admin->sanitizeModuleEnv(['FLUXFILES_VIRUSTOTAL_KEY' => ''])['FLUXFILES_VIRUSTOTAL_KEY'], 'empty keeps');
-        assertEqual('vt-new', $admin->sanitizeModuleEnv(['FLUXFILES_VIRUSTOTAL_KEY' => ' vt-new '])['FLUXFILES_VIRUSTOTAL_KEY'], 'non-empty replaces');
-        assertTrue(!isset($admin->sanitizeModuleEnv(['FLUXFILES_VIRUSTOTAL_KEY' => '', 'FLUXFILES_VIRUSTOTAL_KEY__clear' => '1'])['FLUXFILES_VIRUSTOTAL_KEY']), 'clear removes');
-        assertTrue(!isset($admin->sanitizeModuleEnv(['FLUXFILES_VIRUSTOTAL_KEY' => 'x', 'FLUXFILES_VIRUSTOTAL_KEY__clear' => '1'])['FLUXFILES_VIRUSTOTAL_KEY']), 'clear wins over a typed value');
-
-        ob_start();
-        try { $admin->renderModuleEnvField('FLUXFILES_VIRUSTOTAL_KEY'); } finally { $html = (string) ob_get_clean(); }
-        assertTrue(strpos($html, 'vt-secret-123') === false, 'secret not echoed into the page');
-        assertTrue(strpos($html, 'Saved') !== false && strpos($html, 'type="password"') !== false, 'shows saved state in a password input');
-    } finally {
-        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = $keep;
-        if ($keep === null) { unset($GLOBALS['WP_OPTIONS']['fluxfiles_module_env']); }
-    }
-});
-
-test('module engines: a real env var is shown as winning on the settings screen', function () {
-    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
-    if (!function_exists('esc_attr')) { function esc_attr($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
-    if (!function_exists('esc_html')) { function esc_html($v) { return htmlspecialchars((string) $v, ENT_QUOTES); } }
-    $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
-    putenv('FLUXFILES_DLP_TIMEOUT=33');
-    try {
-        ob_start();
-        try { $admin->renderModuleEnvField('FLUXFILES_DLP_TIMEOUT'); } finally { $html = (string) ob_get_clean(); }
-        assertTrue(strpos($html, 'environment variable') !== false && strpos($html, 'disabled') !== false && strpos($html, 'name=') === false,
-            'read-only, no submittable input: ' . $html);
-    } finally {
-        putenv('FLUXFILES_DLP_TIMEOUT');
-    }
-});
-
-test('module engines: seedModuleEnv fills $_ENV, a real env var wins, junk keys are ignored', function () {
-    $keepOpt = $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] ?? null;
-    $keys = ['FLUXFILES_AIVISION_ENDPOINT', 'FLUXFILES_DLP_ENDPOINT', 'FLUXFILES_DLP_TIMEOUT', 'FLUXFILES_OCR_MAX_MEGAPIXELS', 'FLUXFILES_SECRET_X', 'FLUXFILES_WEBHOOK_ALLOW_INTERNAL'];
-    $keepEnv = [];
-    foreach ($keys as $k) { $keepEnv[$k] = $_ENV[$k] ?? null; unset($_ENV[$k]); }
-    try {
-        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = [
-            'FLUXFILES_AIVISION_ENDPOINT' => 'https://rembg.test/run',
-            'FLUXFILES_DLP_ENDPOINT' => 'javascript:evil',          // invalid -> not seeded
-            'FLUXFILES_DLP_TIMEOUT' => '15',                         // real env var set below
-            'FLUXFILES_OCR_MAX_MEGAPIXELS' => '25',                  // $_ENV already set below
-            'FLUXFILES_WEBHOOK_ALLOW_INTERNAL' => 'true',
-            'FLUXFILES_SECRET_X' => 'nope',
-        ];
-        putenv('FLUXFILES_DLP_TIMEOUT=99');
-        $_ENV['FLUXFILES_OCR_MAX_MEGAPIXELS'] = '7';
-        $n = FluxFilesPlugin::seedModuleEnv();
-        assertEqual(2, $n, 'two keys seeded');
-        assertEqual('https://rembg.test/run', $_ENV['FLUXFILES_AIVISION_ENDPOINT'] ?? null);
-        assertEqual('true', $_ENV['FLUXFILES_WEBHOOK_ALLOW_INTERNAL'] ?? null);
-        assertTrue(!isset($_ENV['FLUXFILES_DLP_TIMEOUT']), 'getenv() value wins, nothing seeded over it');
-        assertEqual('7', $_ENV['FLUXFILES_OCR_MAX_MEGAPIXELS'], '$_ENV value wins');
-        assertTrue(!isset($_ENV['FLUXFILES_DLP_ENDPOINT']), 'invalid stored value not seeded');
-        assertTrue(!isset($_ENV['FLUXFILES_SECRET_X']), 'non-whitelisted key never seeded');
-        assertEqual(false, getenv('FLUXFILES_AIVISION_ENDPOINT'), 'never putenv()');
-        assertTrue(!FluxFilesPlugin::moduleEnvFromEnvironment('FLUXFILES_AIVISION_ENDPOINT'), 'a seeded key is not mistaken for a real env var');
-        assertTrue(FluxFilesPlugin::moduleEnvFromEnvironment('FLUXFILES_DLP_TIMEOUT'), 'a real env var is recognised');
-    } finally {
-        putenv('FLUXFILES_DLP_TIMEOUT');
-        foreach ($keepEnv as $k => $v) { if ($v === null) { unset($_ENV[$k]); } else { $_ENV[$k] = $v; } }
-        $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = $keepOpt;
-        if ($keepOpt === null) { unset($GLOBALS['WP_OPTIONS']['fluxfiles_module_env']); }
-    }
-});
-
-test('module engines: the REST API path and publicLink() both seed before any module runs', function () {
-    // Child process: FluxFilesApi's constructor (every REST handler) must seed; then the
-    // option changes and publicLink() must seed again by itself (it exits afterwards).
-    $child = <<<'CHILD'
-<?php
-[$self, $autoload, $wpDir, $mode] = $argv;
-define('ABSPATH', sys_get_temp_dir() . '/');
-define('WP_CONTENT_DIR', sys_get_temp_dir() . '/ff-wp-menv-' . getmypid());
-define('FLUXFILES_PLUGIN_FILE', $wpDir . '/fluxfiles.php');
-define('FLUXFILES_PLUGIN_DIR', $wpDir . '/');
-$GLOBALS['WP_OPTIONS'] = ['fluxfiles_secret' => 'wp-smoke-secret-key-0123456789abcdef'];
-function get_option($k, $d = false) { return $GLOBALS['WP_OPTIONS'][$k] ?? $d; }
-function wp_mkdir_p($d) { return is_dir($d) || mkdir($d, 0777, true); }
-function content_url($p = '') { return 'http://wp.test/wp-content/' . ltrim($p, '/'); }
-function plugins_url($p = '', $f = '') { return 'http://wp.test/wp-content/plugins/fluxfiles/' . ltrim($p, '/'); }
-function rest_url($p = '') { return 'http://wp.test/wp-json/' . ltrim($p, '/'); }
-function add_query_arg($a, $u) { return $u . '?' . http_build_query($a); }
-function wp_unslash($v) { return $v; }
-function status_header($c) {}
-function wp_send_json($d, $c = 200) { echo json_encode($d); exit; }
-function add_action(...$a) {} function add_filter(...$a) {}
-function apply_filters($t, $v, ...$a) { return $v; }
-class WP_REST_Request {
-    public function get_method() { return 'GET'; }
-    public function get_route() { return '/fluxfiles/v1/api/fm/share/info'; }
-}
-require $autoload;
-require $wpDir . '/includes/FluxFilesPlugin.php';
-require $wpDir . '/includes/FluxFilesApi.php';
-register_shutdown_function(static function () {
-    echo "\nENV=" . json_encode([$_ENV['FLUXFILES_AIVISION_ENDPOINT'] ?? null, $_ENV['FLUXFILES_DLP_ENDPOINT'] ?? null]);
-});
-$GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = ['FLUXFILES_AIVISION_ENDPOINT' => 'https://a.test/x'];
-$api = new FluxFilesApi();
-if ($mode === 'public') {
-    $GLOBALS['WP_OPTIONS']['fluxfiles_module_env'] = ['FLUXFILES_DLP_ENDPOINT' => 'https://d.test/x'];
-    $_GET = ['token' => 'not-a-share-token'];
-    (new ReflectionMethod('FluxFilesApi', 'publicLink'))->invoke($api, 'share', new WP_REST_Request());
-}
-CHILD;
-    $file = tempnam(sys_get_temp_dir(), 'ffwpmenv') . '.php';
-    file_put_contents($file, $child);
-    $autoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
-    $run = static function (string $mode) use ($file, $autoload): string {
-        $p = proc_open([PHP_BINARY, $file, realpath($autoload), realpath(__DIR__ . '/..'), $mode], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-        $out = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
-        proc_close($p);
-        return (string) $out;
-    };
-    try {
-        $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-        assertTrue(substr_count($src, 'FluxFilesPlugin::seedModuleEnv()') >= 2, 'API constructor and publicLink() both call the seeder');
-        $out = $run('public');
-        // a.test = seeded by the constructor (option set before `new`); d.test = set
-        // afterwards, so only publicLink()'s own call can have seeded it.
-        assertTrue(strpos($out, 'ENV=["https:\/\/a.test\/x","https:\/\/d.test\/x"]') !== false, 'constructor and publicLink() both seed: ' . substr($out, -300));
-    } finally {
-        @unlink($file);
-    }
-});
+// (module-engine settings moved to the FluxFiles Pro plugin; see the extension-API tests below)
 
 // ── 1.x proxy-parity fixes: X-Accel encoding, audit action names, 403 codes, asset caching ──
 test('audit: a code-editor save is logged as content_update (the name the UI labels), not content_edit', function () {
@@ -3457,41 +3158,33 @@ test('public-link redirect: a validated other blog -> 302 to its own REST page, 
     }
 });
 
-test('licence seam: core resolves the plugin licence, the filter overrides it, NoLicense is the fallback', function () {
+test('licence seam: core resolves the plugin licence, NoLicense unless the filter supplies one', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
-    $api = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
-    assertTrue(strpos($src, 'seedLicenseEnv') === false && strpos($api, 'seedLicenseEnv') === false, 'the env seed is gone');
     assertTrue(strpos($src, "ModuleRegistry::setLicenseResolver([self::class, 'license'])") !== false, 'resolver installed in the constructor');
 
     \FluxFiles\ModuleRegistry::setLicenseResolver([FluxFilesPlugin::class, 'license']);
     $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [];
     try {
-        $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'not-a-real-key';
         $lic = \FluxFiles\ModuleRegistry::license();
-        assertTrue($lic instanceof \FluxFiles\LicenseCheckInterface, 'resolver returns a licence checker');
-        assertTrue($lic instanceof \FluxFiles\LicenseManager, 'the bundled LicenseManager when it is shipped');
-        assertTrue(!$lic->licensed('share'), 'a key that does not verify entitles nothing');
+        assertTrue($lic instanceof \FluxFiles\NoLicense, 'no add-on -> NoLicense, even with a stray key option or env');
+        assertTrue(!$lic->licensed('share'), 'NoLicense entitles nothing');
+        assertTrue(FluxFilesPlugin::license()->info() === (new \FluxFiles\NoLicense())->info(), 'info() is the NoLicense report');
 
         // The filter wins, but only for a real LicenseCheckInterface.
-        $none = new \FluxFiles\NoLicense();
-        add_filter('fluxfiles_license', fn ($v) => $none);
-        assertTrue(FluxFilesPlugin::license() === $none, 'filter result is used');
-        assertTrue(\FluxFiles\ModuleRegistry::license() === $none, 'and core sees it through the resolver');
+        $fake = new class implements \FluxFiles\LicenseCheckInterface {
+            public function licensed(string $module): bool { return true; }
+            public function status(): string { return 'active'; }
+            public function info(): array { return ['status' => 'active', 'edition' => 'pro']; }
+        };
+        add_filter('fluxfiles_license', fn ($v) => $fake);
+        assertTrue(FluxFilesPlugin::license() === $fake, 'filter result is used');
+        assertTrue(\FluxFiles\ModuleRegistry::license() === $fake, 'and core sees it through the resolver');
         $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [fn ($v) => 'nope'];
-        assertTrue(FluxFilesPlugin::license() instanceof \FluxFiles\LicenseManager, 'a non-checker filter value is ignored');
-        $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [];
-
-        // Fallback: LicenseManager not shipped (the WordPress.org build).
-        FluxFilesPlugin::$licenseClass = 'FluxFiles\\DoesNotExist';
-        try {
-            assertTrue(FluxFilesPlugin::license() instanceof \FluxFiles\NoLicense, 'NoLicense when the manager is absent');
-            assertTrue(!FluxFilesPlugin::license()->licensed('share'), 'NoLicense entitles nothing');
-        } finally {
-            FluxFilesPlugin::$licenseClass = null;
-        }
+        assertTrue(FluxFilesPlugin::license() instanceof \FluxFiles\NoLicense, 'a non-checker filter value is ignored');
+        $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [function ($v) { throw new \RuntimeException('boom'); }];
+        assertTrue(FluxFilesPlugin::license() instanceof \FluxFiles\NoLicense, 'a throwing filter fails closed');
     } finally {
         $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [];
-        unset($GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
         \FluxFiles\ModuleRegistry::setLicenseResolver(null);
     }
 });
@@ -3532,7 +3225,6 @@ test('the plugin build denies direct web access to the bundled public/ pages', f
 test('Site Health adds a FluxFiles section, escaped, with sensitive rows private and no secrets', function () use ($secret) {
     $GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'] = 'leaky-bucket-name';
     $GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'] = 'LEAKY-S3-SECRET';
-    $GLOBALS['WP_OPTIONS']['fluxfiles_license_key'] = 'LEAKY-LICENCE-KEY';
     $info = FluxFilesPlugin::siteHealthInfo(['wp-core' => ['label' => 'WordPress', 'fields' => []]]);
     assertTrue(isset($info['wp-core'], $info['fluxfiles']), 'existing sections kept, ours added');
     assertEqual('FluxFiles', $info['fluxfiles']['label']);
@@ -3548,15 +3240,149 @@ test('Site Health adds a FluxFiles section, escaped, with sensitive rows private
         assertTrue(in_array('Disks', $labels, true) && in_array('SSRF allow-hosts', $labels, true), 'disks + SSRF rows are private');
     }
     $blob = json_encode($info);
-    foreach ([$secret, 'leaky-bucket-name', 'LEAKY-S3-SECRET', 'LEAKY-LICENCE-KEY'] as $needle) {
+    foreach ([$secret, 'leaky-bucket-name', 'LEAKY-S3-SECRET'] as $needle) {
         assertTrue(strpos($blob, $needle) === false, "leaked {$needle}");
     }
-    unset($GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'], $GLOBALS['WP_OPTIONS']['fluxfiles_license_key']);
+    unset($GLOBALS['WP_OPTIONS']['fluxfiles_s3_bucket'], $GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret']);
 });
 
 test('the plugin hooks Site Health debug_information', function () {
     $src = file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
     assertTrue(strpos($src, "add_filter('debug_information', [self::class, 'siteHealthInfo'])") !== false, 'filter registered');
+});
+
+// ── Extension API (FLUXFILES_EXT_API = 1, packages/wordpress/HOOKS.md) ───────────
+
+test('extension API: level constant, documented hooks and boot order', function () {
+    $main = (string) file_get_contents(__DIR__ . '/../fluxfiles.php');
+    assertTrue(preg_match("/define\('FLUXFILES_EXT_API', 1\);/", $main) === 1, 'FLUXFILES_EXT_API = 1 defined by fluxfiles.php');
+    $hooks = (string) file_get_contents(__DIR__ . '/../HOOKS.md');
+    foreach (['FLUXFILES_EXT_API', 'fluxfiles_loaded', 'fluxfiles_module_paths', 'fluxfiles_license', 'fluxfiles_api_boot',
+              'fluxfiles_admin_sections', 'fluxfiles_edition_presets', 'fluxfiles_rest_routes'] as $h) {
+        assertTrue(strpos($hooks, $h) !== false, "HOOKS.md documents {$h}");
+    }
+    $plug = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesPlugin.php');
+    assertTrue(strpos($plug, "add_action('plugins_loaded', [self::class, 'loaded'], 1)") !== false, 'booted at plugins_loaded priority 1');
+
+    // Order: fluxfiles_module_paths (filter) -> autoloader registered -> fluxfiles_loaded (action).
+    $dir = sys_get_temp_dir() . '/ffext-order-' . uniqid();
+    mkdir($dir . '/ocr/src', 0777, true);
+    $dir = (string) realpath($dir);   // module paths are canonicalised (macOS /var -> /private/var)
+    $log = [];
+    $ffInstance = new ReflectionProperty(FluxFilesPlugin::class, 'instance');
+    $ffKeep = $ffInstance->getValue();
+    $ffInstance->setValue(null, (new ReflectionClass(FluxFilesPlugin::class))->newInstanceWithoutConstructor());
+    $GLOBALS['ffext_dir'] = $dir;
+    $GLOBALS['WP_FILTERS']['fluxfiles_module_paths'] = [function ($paths) use (&$log, $dir) { $log[] = 'paths'; $paths[] = $dir; $paths[] = '/no/such/dir'; $paths[] = 42; return $paths; }];
+    $GLOBALS['WP_ACTIONS']['fluxfiles_loaded'] = [function ($plugin) use (&$log) {
+        $log[] = 'loaded:' . get_class($plugin);
+        $log[] = in_array($GLOBALS['ffext_dir'] . '/', \FluxFiles\ModuleAutoloader::bases(), true) ? 'registered' : 'NOT-registered';
+    }];
+    try {
+        FluxFilesPlugin::loaded();
+        assertEqual(['paths', 'loaded:FluxFilesPlugin', 'registered'], $log, 'filter first, autoloader registered, then the action with the plugin instance');
+        $bases = \FluxFiles\ModuleAutoloader::bases();
+        assertTrue(in_array($dir . '/', $bases, true), 'a valid path is registered with the module autoloader');
+        assertTrue(!in_array('/no/such/dir/', $bases, true), 'a missing directory is dropped');
+        // Relative paths are refused; real paths are canonicalised.
+        $rel = 'tests/../' . basename($dir);
+        $GLOBALS['WP_FILTERS']['fluxfiles_module_paths'] = [fn () => [$rel, 'relative/dir', $dir . '/../' . basename($dir)]];
+        \FluxFiles\ModuleAutoloader::reset();
+        FluxFilesPlugin::loaded();
+        $b = \FluxFiles\ModuleAutoloader::bases();
+        assertEqual([rtrim((string) realpath($dir), '/') . '/'], $b, 'only the absolute path is registered, canonicalised');
+        // No add-on: nothing registered, the action still fires.
+        $GLOBALS['WP_FILTERS']['fluxfiles_module_paths'] = [];
+        \FluxFiles\ModuleAutoloader::reset();
+        $log = [];
+        FluxFilesPlugin::loaded();
+        assertEqual([], \FluxFiles\ModuleAutoloader::bases(), 'no add-on -> no module bases');
+    } finally {
+        $ffInstance->setValue(null, $ffKeep);
+        $GLOBALS['WP_FILTERS']['fluxfiles_module_paths'] = [];
+        $GLOBALS['WP_ACTIONS']['fluxfiles_loaded'] = [];
+        \FluxFiles\ModuleAutoloader::reset();
+        @rmdir($dir . '/ocr/src'); @rmdir($dir . '/ocr'); @rmdir($dir);
+    }
+});
+
+test('extension API: fluxfiles_api_boot and fluxfiles_rest_routes fire with the documented arguments', function () {
+    $seen = [];
+    $GLOBALS['WP_ACTIONS']['fluxfiles_api_boot'] = [function ($api) use (&$seen) { $seen['boot'] = get_class($api); }];
+    $GLOBALS['WP_ACTIONS']['fluxfiles_rest_routes'] = [function ($ns, $api) use (&$seen) { $seen['routes'] = [$ns, get_class($api)]; }];
+    try {
+        new FluxFilesApi();
+        assertEqual('FluxFilesApi', $seen['boot'] ?? null, 'api_boot receives the API instance');
+        if (!function_exists('register_rest_route')) { function register_rest_route(...$a) { return true; } }
+        if (!function_exists('add_filter')) { function add_filter(...$a) { return true; } }
+        FluxFilesApi::registerRoutes();
+        assertEqual(['fluxfiles/v1', 'FluxFilesApi'], $seen['routes'] ?? null, 'rest_routes receives (namespace, api)');
+    } finally {
+        $GLOBALS['WP_ACTIONS']['fluxfiles_api_boot'] = [];
+        $GLOBALS['WP_ACTIONS']['fluxfiles_rest_routes'] = [];
+    }
+    // The admin sections hook is the LAST thing registerSettings() does.
+    $admin = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesAdmin.php');
+    assertTrue(strpos($admin, "do_action('fluxfiles_admin_sections', 'fluxfiles', 'fluxfiles');") !== false, 'admin sections hook present');
+    assertTrue(strpos($admin, 'fluxfiles_license_key') === false && strpos($admin, 'MODULE_ENV') === false, 'no licence / engine settings in the free admin');
+});
+
+test('extension API: with no add-on a paid route answers 501 module_not_installed', function () {
+    $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
+    \FluxFiles\ModuleRegistry::setLicenseResolver([FluxFilesPlugin::class, 'license']);
+    \FluxFiles\ModuleRegistry::register('ocr', 'FluxFiles\\Ocr\\DefinitelyMissingModule');
+    try {
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(8801, ['claims' => ['allow_ocr' => true]]);
+        $r = (new FluxFilesApi())->handleOcr(new WP_REST_Request(['disk' => 'local', 'path' => 'a.png']));
+        assertEqual(501, $r->get_status(), 'paid route without the module -> 501');
+        assertEqual('module_not_installed', $r->get_data()['error_code'] ?? null, 'module_not_installed');
+    } finally {
+        $_SERVER['HTTP_AUTHORIZATION'] = $keepAuth;
+        \FluxFiles\ModuleRegistry::reset();
+    }
+});
+
+test('extension API: a fake module via fluxfiles_module_paths + a fake licence via fluxfiles_license -> the paid route works', function () {
+    $keepAuth = $_SERVER['HTTP_AUTHORIZATION'];
+    $dir = sys_get_temp_dir() . '/ffext-mod-' . uniqid();
+    mkdir($dir . '/ocr/src', 0777, true);
+    file_put_contents($dir . '/ocr/src/OcrModule.php', '<?php
+namespace FluxFiles\Ocr;
+final class OcrModule implements \FluxFiles\ModuleInterface {
+    public static function id(): string { return "ocr"; }
+    public static function claim(): string { return "allow_ocr"; }
+    public function run($fm, $dm, $claims, array $body): array { return ["text" => "hello from the add-on"]; }
+}');
+    $fake = new class implements \FluxFiles\LicenseCheckInterface {
+        public function licensed(string $module): bool { return $module === 'ocr'; }
+        public function status(): string { return 'active'; }
+        public function info(): array { return ['status' => 'active']; }
+    };
+    \FluxFiles\ModuleRegistry::setLicenseResolver([FluxFilesPlugin::class, 'license']);
+    $GLOBALS['WP_FILTERS']['fluxfiles_module_paths'] = [fn ($p) => array_merge($p, [$dir])];
+    $ffInstance = new ReflectionProperty(FluxFilesPlugin::class, 'instance');
+    $ffKeep = $ffInstance->getValue();
+    try {
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . FluxFilesPlugin::generateToken(8802, ['claims' => ['allow_ocr' => true]]);
+        // Module present, but no licence yet -> 402 (the licence gate is the add-on's to open).
+        $ffInstance->setValue(null, (new ReflectionClass(FluxFilesPlugin::class))->newInstanceWithoutConstructor());
+        FluxFilesPlugin::loaded();
+        assertTrue(\FluxFiles\ModuleRegistry::installed('ocr'), 'the module is autoloaded from the add-on path');
+        $r = (new FluxFilesApi())->handleOcr(new WP_REST_Request(['disk' => 'local', 'path' => 'a.png']));
+        assertEqual(402, $r->get_status(), 'installed but unlicensed -> 402');
+        $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [fn ($v) => $fake];
+        $r = (new FluxFilesApi())->handleOcr(new WP_REST_Request(['disk' => 'local', 'path' => 'a.png']));
+        assertEqual(200, $r->get_status(), 'module + licence from the add-on -> 200: ' . json_encode($r->get_data()));
+        assertEqual('hello from the add-on', $r->get_data()['data']['text'] ?? null, 'the add-on module ran');
+    } finally {
+        $ffInstance->setValue(null, $ffKeep);
+        $_SERVER['HTTP_AUTHORIZATION'] = $keepAuth;
+        $GLOBALS['WP_FILTERS']['fluxfiles_module_paths'] = [];
+        $GLOBALS['WP_FILTERS']['fluxfiles_license'] = [];
+        \FluxFiles\ModuleAutoloader::reset();
+        \FluxFiles\ModuleRegistry::reset();
+        @unlink($dir . '/ocr/src/OcrModule.php'); @rmdir($dir . '/ocr/src'); @rmdir($dir . '/ocr'); @rmdir($dir);
+    }
 });
 
 // Keep LAST: this defines FLUXFILES_CORE_VERSION process-wide (a constant cannot be

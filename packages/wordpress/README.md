@@ -147,8 +147,10 @@ grants that user, and never includes `html`/`htm`/`xhtml`/`svg`/`svgz`/`xml`/`js
 or the raw `claims` map says. Those files would otherwise render as active content
 in the same origin as wp-admin. An empty result means *nothing* may be uploaded.
 
-An unknown `role` or `edition` override (e.g. a typo like `'veiwer'`) throws
+An unknown `role` override (e.g. a typo like `'veiwer'`) throws
 `InvalidArgumentException` instead of silently minting the site-wide default perms.
+An unknown `edition` is ignored (the token mints without the extra claims) and raises
+`_doing_it_wrong()` under `WP_DEBUG`; editions come from an add-on.
 
 ## Storage protection (Apache / nginx)
 
@@ -295,16 +297,13 @@ FluxFiles JWT server-side; the signing secret never reaches the browser.
   `add_filter('fluxfiles_frame_ancestors', fn ($v) => $v . ' https://app.example.com');`
   (`''` drops the header).
 
-## Updates
+## Updates and add-ons
 
-Set `FLUXFILES_UPDATE_URL` (or the `fluxfiles_update_url` option/filter) to an
-update server and wp-admin offers new versions. The URL must be **https** — plain
-http is accepted for `localhost`/`127.0.0.1`/`::1` only — because the licence key
-travels as a Bearer header; otherwise update checks are disabled and an admin
-notice says why. The server's manifest is signature-checked, and the downloaded
-zip is re-hashed against the manifest's signed `sha256` before WordPress installs
-it: a mismatch, a missing checksum, or a package URL the manifest did not sign
-fails the update.
+The plugin updates through WordPress.org like any other. It has no licence key, update
+server or module-engine settings of its own: those belong to the separate FluxFiles Pro
+plugin, which plugs in through the hooks documented in [HOOKS.md](HOOKS.md)
+(`fluxfiles_license`, `fluxfiles_module_paths`, `fluxfiles_admin_sections`, ...).
+Without it, paid-module routes answer `501 module_not_installed`.
 
 ## Enable Import from URL
 
