@@ -30,6 +30,21 @@ All notable changes to FluxFiles are documented here. This project adheres to
   unlicensed; the 402 may now carry `license_expired`. The landing pages now come from the
   module, so a customised `share.html` under a custom `FLUXFILES_BASE_PATH` is no longer used.
   Ships as `laravel-v1.0.3`.
+- **WordPress dispatches the public Share/Intake routes and the retention / fixity /
+  audit-verify handlers to the installed module** instead of calling legacy code inside
+  core. Public JSON/bytes routes go through `PublicRoutes::dispatch()` with a host-injected
+  `PublicContext` built from the plugin's own licence option. The recipient pages
+  (`public-link.php` and the new REST `share/page` / `intake/page` routes) share one helper,
+  `FluxFilesPlugin::servePublicPage()`, which repeats the gate (secret configured -> module
+  installed -> licensed) and injects the WordPress REST base into the page (core's
+  `dispatch()` would hard-code the standalone `/api/fm`); on multisite it reads the secret
+  and licence of the link's own blog. A gate failure answers core's JSON envelope
+  (`500 server_error`, `501 module_not_installed` / `module_update_required`, `402
+  license_required` or `license_expired`) instead of a bare page. Frame-ancestors follows
+  the WordPress UI policy (`fluxfiles_frame_ancestors`). A module that predates the seams
+  answers `501 module_update_required`. Behaviour with no module installed is unchanged
+  (501 `module_not_installed`, 402 `license_required`). The WordPress adapter now
+  requires core `^1.0.4`.
 
 ## [1.0.12] — 2026-11-06
 

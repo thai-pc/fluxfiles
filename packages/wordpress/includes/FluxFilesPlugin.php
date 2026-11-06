@@ -444,11 +444,13 @@ HTACCESS;
     }
 
     /**
-     * Make the stored licence visible to core's own gates. Core resolves a module's
-     * licence through LicenseManager::fromEnv() ($_ENV['FLUXFILES_LICENSE_KEY']) —
-     * FileManagerFactory's virus/DLP/versioning/webhooks wiring and the public
-     * share/intake handlers all do — while a WordPress licence normally lives in an
-     * option. The option wins (as in licenseKey()); a real env var is the fallback.
+     * Make the stored licence visible to core's LEGACY env-based gates
+     * (LicenseManager::fromEnv() reads $_ENV['FLUXFILES_LICENSE_KEY']). Since the public
+     * Share/Intake routes and the retention / fixity / verify handlers moved to the
+     * module seams, the plugin's own gates go through license() instead; this seed is
+     * kept for core paths that still resolve the licence from the environment (the
+     * FileManagerFactory-style wiring) and is slated for removal once phase 5 drops the
+     * last of them. The option wins (as in licenseKey()); a real env var is the fallback.
      */
     public static function seedLicenseEnv(): void
     {
@@ -456,6 +458,77 @@ HTACCESS;
         if ($key !== '') {
             $_ENV['FLUXFILES_LICENSE_KEY'] = $key;
         }
+    }
+
+    /**
+     * Gate and send a module's recipient page (share / intake) with the API base pointed
+     * at this site's REST namespace. ONE implementation for the REST `<module>/page`
+     * routes and public-link.php, so the two cannot drift.
+     *
+     * Core's PublicRoutes::dispatch() cannot be used for pages: it hard-codes
+     * `/api/fm` as the base (right for standalone, wrong here), so the gate is repeated
+     * in the same order (secret configured -> module installed -> licensed) and the page
+     * is rendered via PublicRoutes::page(). A gate failure is core's standard
+     * `{data,error,error_code}` envelope. Sends headers and body; the caller exits.
+     *
+     * On multisite the caller must already have switched to the link's blog, so the
+     * secret, licence and frame-ancestors read here are that site's.
+     *
+     * @param string $apiBase REST base the page calls, no trailing slash
+     */
+    public static function servePublicPage(string $which, string $apiBase): void
+    {
+        try {
+            if (!in_array($which, ['share', 'intake'], true)) {
+                throw new \FluxFiles\ApiException('Not found', 404, 'not_found');
+            }
+            $secret = (string) get_option('fluxfiles_secret', '');
+            if ($secret === '' || $secret === \FluxFiles\PublicContext::DEFAULT_SECRET) {
+                throw new \FluxFiles\ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
+            }
+            \FluxFiles\ModuleRegistry::requireServer($which, self::license());
+            $html = \FluxFiles\PublicRoutes::page($which, $apiBase);
+            if ($html === null) {
+                // Installed, but too old to ship its page (or core cannot find it).
+                throw new \FluxFiles\ApiException(
+                    "The '{$which}' module needs an update",
+                    501,
+                    'module_update_required',
+                    ['module' => $which]
+                );
+            }
+        } catch (\FluxFiles\ApiException $e) {
+            $body = ['data' => null, 'error' => $e->getMessage()];
+            if ($e->getErrorCode() !== null) {
+                $body['error_code'] = $e->getErrorCode();
+            }
+            if ($e->getErrorParams()) {
+                $body['error_params'] = $e->getErrorParams();
+            }
+            status_header($e->getHttpCode());
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: private, no-store');
+            header('Referrer-Policy: no-referrer');
+            header('X-Content-Type-Options: nosniff');
+            echo wp_json_encode($body);
+            return;
+        }
+
+        // The URL carries the token: no Referer leak, no shared-proxy caching.
+        status_header(200);
+        header('Content-Type: text/html; charset=utf-8');
+        header('Referrer-Policy: no-referrer');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: private, no-store');
+        // Same frame-ancestors policy as the WP UI (self + site origins, filterable) —
+        // core's FrameAncestors helper reads only $_ENV, which WordPress never fills.
+        foreach (FluxFilesApi::uiHtmlHeaders('en') as $h) {
+            if (stripos($h, 'Content-Security-Policy:') === 0) {
+                header($h);
+            }
+        }
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- a complete static HTML page from the module; the only dynamic value (the API base) is attribute-escaped by PublicRoutes::injectApiBase().
+        echo $html;
     }
 
     /**

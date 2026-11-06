@@ -4,10 +4,10 @@
  * Serves the bundled recipient pages (share.html / intake.html) to someone who has a
  * link, with the API base pointed at this site's REST namespace.
  *
- * The pages themselves are static and shipped inside the plugin, but a static file
- * cannot know where the API lives: standalone answers at `/api/fm/…` from the site
+ * The pages themselves are static and shipped by the Share/Intake modules, but a static
+ * file cannot know where the API lives: standalone answers at `/api/fm/…` from the site
  * root, WordPress at `/wp-json/fluxfiles/v1/api/fm/…`. So they are served through this
- * shim, which injects `window.__FM_API_BASE__` and changes nothing else.
+ * shim, which asks core's PublicRoutes::page() to inject the API base and changes nothing else.
  *
  * It loads WordPress because it needs `rest_url()` and the plugin's own paths — but it
  * is reached by a RECIPIENT with no account, so it must never assume a logged-in user
@@ -33,24 +33,18 @@ if ($wpLoad === null) {
 }
 require_once $wpLoad;
 
-// Only the two known pages, matched exactly. This value reaches a filesystem read, so
-// it is compared against a whitelist rather than sanitised — a sanitiser is a filter
-// someone eventually finds a way through.
-$pages = ['share' => 'share.html', 'intake' => 'intake.html'];
+// Only the two known pages, matched exactly (core's PublicRoutes also whitelists the id).
+$pages = ['share' => true, 'intake' => true];
 $which = isset($_GET['page']) && is_string($_GET['page']) ? $_GET['page'] : '';
 if (!isset($pages[$which])) {
     status_header(404);
     exit('Not found');
 }
 
-$publicDir = class_exists('FluxFilesPlugin') ? FluxFilesPlugin::corePath('public') : null;
-$file = $publicDir === null ? null : $publicDir . '/' . $pages[$which];
-if ($file === null || !is_file($file)) {
+if (!class_exists('FluxFilesPlugin') || !class_exists('FluxFiles\\PublicRoutes')) {
     status_header(500);
     exit('The FluxFiles core is not available');
 }
-
-$html = (string) file_get_contents($file);
 
 // The REST base the page should call. rest_url() honours whatever permalink structure
 // the site uses, including the ?rest_route= form on plain permalinks.
@@ -64,18 +58,22 @@ if ($apiBase === null) {
     status_header(404);
     exit('Not found');
 }
-$inject = '<script>window.__FM_API_BASE__=' . wp_json_encode($apiBase) . ';</script>';
 
-// Ahead of the page's own script, which reads the value on load. Falls back to
-// prepending so a page without <head> still works rather than silently losing the base.
-$html = strpos($html, '</head>') !== false
-    ? str_replace('</head>', $inject . '</head>', $html)
-    : $inject . $html;
-
-// Same headers standalone sends: the URL carries the token, so it must not leak in a
-// Referer, and nothing here should be cached by a shared proxy.
-header('Content-Type: text/html; charset=utf-8');
-header('Referrer-Policy: no-referrer');
-header('X-Content-Type-Options: nosniff');
-header('Cache-Control: private, no-store');
-echo $html;
+// Multisite: the link's blog owns the secret, licence and frame-ancestors, so read them
+// from THAT site (the id was validated above), not from whichever blog booted.
+$switched = false;
+if (function_exists('is_multisite') && is_multisite() && function_exists('switch_to_blog')) {
+    $blogId = ($blogParam === null || $blogParam === '') ? (int) get_current_blog_id() : (int) $blogParam;
+    if ($blogId !== (int) get_current_blog_id()) {
+        switch_to_blog($blogId);
+        $switched = true;
+    }
+}
+try {
+    // The same gate and headers as the REST `<module>/page` routes: one shared helper.
+    FluxFilesPlugin::servePublicPage($which, $apiBase);
+} finally {
+    if ($switched) {
+        restore_current_blog();
+    }
+}
