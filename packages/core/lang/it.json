@@ -308,6 +308,7 @@
     "invalid_mode": "Modalità non valida — usa 3 cifre ottali (es. 644).",
     "invalid_trash_id": "Elemento del cestino non valido.",
     "module_not_installed": "Questa funzione non è installata.",
+    "module_update_required": "Il modulo di questa funzione è obsoleto. Aggiornalo per continuare.",
     "not_a_zip": "Questo file non è un archivio ZIP.",
     "not_image": "Questo file non è un'immagine.",
     "not_sftp": "Questa azione funziona solo su un disco SFTP.",

@@ -22,9 +22,12 @@ class BucketDoctor
 
     private DiskManager $disks;
 
-    public function __construct(DiskManager $disks)
+    private HttpTransportInterface $transport;
+
+    public function __construct(DiskManager $disks, ?HttpTransportInterface $transport = null)
     {
         $this->disks = $disks;
+        $this->transport = $transport ?? new CurlTransport();
     }
 
     /**
@@ -317,6 +320,14 @@ class BucketDoctor
      */
     private function httpGet(string $url, ?string $pinnedIp = null): array
     {
+        // Unpinned (operator-configured) disks go through the injected transport. A pinned
+        // BYOB fetch keeps its own cURL handle below: CURLOPT_RESOLVE plus the post-connect
+        // IP check need the handle, which an abstract transport cannot hand back.
+        if ($pinnedIp === null || $pinnedIp === '') {
+            $res = $this->transport->request('GET', $url, [], null, 15);
+            return [$res['status'], $res['body']];
+        }
+
         $ch = curl_init($url);
         try {
             $opts = [

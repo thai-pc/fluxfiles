@@ -277,21 +277,17 @@ if ($method === 'GET' && $uri === '/api/fm/img') {
     exit;
 }
 
-// Intake / Upload Portals — PUBLIC endpoints (no main JWT; authenticated by the
-// portal token itself, like /img and /stream). `info` = the landing page's data;
-// `upload` = an anonymous visitor dropping a file into the operator's storage.
-// The create/manage side is authed + gated under the main routes below.
-if ($uri === '/api/fm/intake/info' || $uri === '/api/fm/intake/upload') {
-    handleIntakePublic($method, $uri);
-    exit;
-}
-
-// Share landing — PUBLIC endpoints (no main JWT; authenticated by the share token
-// itself, like intake/img/stream). `info` = the landing card, `unlock` = exchange a
-// password for a short-lived grant, `file` = the bytes (or a presigned redirect).
-// The create/manage side is authed + gated under the main routes below.
-if ($uri === '/api/fm/share/info' || $uri === '/api/fm/share/unlock' || $uri === '/api/fm/share/file') {
-    handleSharePublic($method, $uri);
+// Share landing + Intake / Upload Portals — PUBLIC endpoints (no main JWT; authenticated
+// by the share/portal token itself, like /img and /stream). Share: `info` = the landing
+// card, `unlock` = exchange a password for a short-lived grant, `file` = the bytes (or a
+// presigned redirect). Intake: `info` = the landing page's data, `upload` = an anonymous
+// visitor dropping a file into the operator's storage. `page` (both) = the recipient HTML.
+// PublicRoutes is the gate (secret → 501 not installed → 402 not licensed) and serves the
+// route from the module, or from the in-core handlers for a module that predates the
+// PublicModuleInterface. The create/manage side is authed + gated under the main routes below.
+$publicModule = \FluxFiles\PublicRoutes::moduleFor($uri);
+if ($publicModule !== null) {
+    \FluxFiles\PublicRoutes::dispatch($publicModule, $method, $uri, \FluxFiles\PublicContext::standalone());
     exit;
 }
 
@@ -800,7 +796,7 @@ function routeRequest(
     // License — the server's commercial edition/status (non-sensitive summary),
     // so a dashboard can show edition + expiry. Free core → {edition:'free'}.
     if ($method === 'GET' && $uri === '/api/fm/license') {
-        return \FluxFiles\LicenseManager::fromEnv()->info();
+        return \FluxFiles\ModuleRegistry::license()->info();
     }
 
     // Optimization (FREE/core) — recompress images to WebP + compress PDFs. Opt-in
@@ -818,7 +814,7 @@ function routeRequest(
     // ── Other paid modules — same 3-layer gate (501/402/403). Free core ships none
     // of these packages → class_exists false → 501 module_not_installed. ───────────
     if ($method === 'POST' && $uri === '/api/fm/share') {
-        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         $res = $module->createShare($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
         // The recipient URL. The module builds it from `share_base_url` when the
@@ -833,11 +829,11 @@ function routeRequest(
     // Share list/revoke — revocation is the only kill switch for a link that is
     // genuinely public, so it ships with the landing. Same 3-layer gate.
     if ($method === 'GET' && $uri === '/api/fm/share/list') {
-        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->listShares($diskManager, $claims, ff_str_param($_GET, 'disk', 'local'));
     }
     if ($method === 'POST' && $uri === '/api/fm/share/revoke') {
-        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->revokeShare($diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['jti'] ?? ''));
     }
@@ -845,7 +841,7 @@ function routeRequest(
     // share_analytics (baked into the share record at create time). Same 3-layer
     // gate; owner_only enforced inside analytics() like revokeShare().
     if ($method === 'GET' && $uri === '/api/fm/share/analytics') {
-        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('share', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->analytics(
             $diskManager,
             $claims,
@@ -859,7 +855,7 @@ function routeRequest(
     // Intake / Upload Portals — operator create + manage (public info/upload are
     // handled before auth). Same 3-layer gate (501/402/403).
     if ($method === 'POST' && $uri === '/api/fm/intake') {
-        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         $res = $module->createPortal($fm, $diskManager, $claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''), $body);
         // The recipient URL, exactly like Share above: the module builds it from
@@ -872,11 +868,11 @@ function routeRequest(
         return $res;
     }
     if ($method === 'GET' && $uri === '/api/fm/intake/list') {
-        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->listPortals($diskManager, $claims, ff_str_param($_GET, 'disk', 'local'));
     }
     if ($method === 'POST' && $uri === '/api/fm/intake/revoke') {
-        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->revokePortal($diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['jti'] ?? ''));
     }
@@ -884,7 +880,7 @@ function routeRequest(
     // (baked into the portal record at create time). Same 3-layer gate; owner_only
     // enforced inside analytics() like revokePortal().
     if ($method === 'GET' && $uri === '/api/fm/intake/analytics') {
-        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('intake', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->analytics(
             $diskManager,
             $claims,
@@ -897,28 +893,28 @@ function routeRequest(
     }
     // File versioning — list prior versions of a file / restore one. Same 3-layer gate.
     if ($method === 'GET' && $uri === '/api/fm/versions') {
-        $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->listVersions($fm, $diskManager, $claims, ff_str_param($_GET, 'disk', 'local'), ff_str_param($_GET, 'path'), $metaRepo);
     }
     if ($method === 'POST' && $uri === '/api/fm/versions/restore') {
-        $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('versioning', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->restore($fm, $diskManager, $claims, (string) ($body['disk'] ?? 'local'), (string) ($body['path'] ?? ''), (string) ($body['version_id'] ?? ''), $metaRepo);
     }
     // Webhooks — send a test ping to the configured endpoint so operators can verify it.
     if ($method === 'POST' && $uri === '/api/fm/webhooks/test') {
-        $module = \FluxFiles\ModuleRegistry::require('webhooks', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('webhooks', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->test($claims, (string) ($_ENV['FLUXFILES_SECRET'] ?? ''));
     }
     if ($method === 'POST' && $uri === '/api/fm/ai-vision') {
-        $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('ai', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->run($fm, $diskManager, new \FluxFiles\ImageOptimizer(), $claims, $body);
     }
     // On-demand scan of an already-stored file (paid `virus` module, 3-layer gate).
     if ($method === 'POST' && $uri === '/api/fm/virus/scan') {
         /** @var \FluxFiles\Virus\VirusScanModule $virus */
-        $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = jsonBodyAll();
         return $fm->scanForViruses(
             (string) ($body['disk'] ?? 'local'),
@@ -927,22 +923,22 @@ function routeRequest(
         );
     }
     if ($method === 'POST' && $uri === '/api/fm/ocr') {
-        $module = \FluxFiles\ModuleRegistry::require('ocr', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('ocr', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->run($fm, $diskManager, $claims, $body);
     }
     if ($method === 'POST' && $uri === '/api/fm/backup') {
-        $module = \FluxFiles\ModuleRegistry::require('backup', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('backup', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->run($fm, $diskManager, $claims, $body);
     }
     if ($method === 'POST' && $uri === '/api/fm/c2pa') {
-        $module = \FluxFiles\ModuleRegistry::require('c2pa', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('c2pa', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->verify($fm, $diskManager, $claims, $body);
     }
     if ($method === 'POST' && $uri === '/api/fm/c2pa/sign') {
-        $module = \FluxFiles\ModuleRegistry::require('c2pa', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('c2pa', \FluxFiles\ModuleRegistry::license(), $claims);
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         return $module->sign($fm, $diskManager, $claims, $body);
     }
@@ -1108,7 +1104,7 @@ function routeRequest(
         if (!$claims->hasPerm('audit')) {
             throw new ApiException('Permission denied', 403, 'forbidden');
         }
-        return \FluxFiles\ComplianceScorecard::build($claims, \FluxFiles\LicenseManager::fromEnv());
+        return \FluxFiles\ComplianceScorecard::build($claims, \FluxFiles\ModuleRegistry::license());
     }
 
     // Audit export (paid module) — a full, unpaginated download of the tenant's
@@ -1119,7 +1115,7 @@ function routeRequest(
             throw new ApiException('Permission denied', 403, 'forbidden');
         }
         /** @var \FluxFiles\AuditExport\AuditExportModule $module */
-        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
         $module->export($auditLog, $claims, [
             'action' => $_GET['action'] ?? null,
             'from'   => $_GET['from'] ?? null,
@@ -1142,9 +1138,13 @@ function routeRequest(
         if (!$claims->hasDisk($disk)) {
             throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
         }
-        \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\ModuleRegistry::license(), $claims);
         $dryRun = filter_var($body['dry_run'] ?? true, FILTER_VALIDATE_BOOLEAN);
-        $report = $fm->runRetention($disk, $dryRun);
+        // The module owns the sweep; a legal-hold release from before that API falls back
+        // to the in-core copy (removed one core release after the modules ship it).
+        $report = method_exists($module, 'runRetention')
+            ? $module->runRetention($fm, $disk, $dryRun)
+            : $fm->runRetention($disk, $dryRun);
         if (!$dryRun) {
             foreach ($report['items'] as $it) {
                 if (in_array($it['result'], ['trashed', 'deleted'], true)) {
@@ -1172,11 +1172,15 @@ function routeRequest(
         if (!$claims->hasDisk($disk)) {
             throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
         }
-        \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
-        $report = $fm->runFixityCheck($disk, static fn (?int $since): array =>
+        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
+        $auditRows = static fn (?int $since): array =>
             $since !== null && method_exists($metaRepo, 'readAuditWindow')
                 ? $metaRepo->readAuditWindow($disk, $since)
-                : $metaRepo->readAudit($disk));
+                : $metaRepo->readAudit($disk);
+        // Module-owned sweep, with the in-core copy as the fallback for an older module.
+        $report = method_exists($module, 'runFixityCheck')
+            ? $module->runFixityCheck($fm, $disk, $auditRows, 1024 * 1024 * 1024)
+            : $fm->runFixityCheck($disk, $auditRows);
         foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
             foreach ($report[$list] as $key) {
                 try {
@@ -1204,8 +1208,12 @@ function routeRequest(
         if (!$claims->hasDisk($disk)) {
             throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
         }
-        \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
-        return \FluxFiles\AuditChain::verify(array_merge($metaRepo->readAuditArchive($disk), $metaRepo->readAudit($disk)));
+        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
+        $entries = array_merge($metaRepo->readAuditArchive($disk), $metaRepo->readAudit($disk));
+        // Module-owned verifier, with the in-core one as the fallback for an older module.
+        return method_exists($module, 'verifyChain')
+            ? $module->verifyChain($entries)
+            : \FluxFiles\AuditChain::verify($entries);
     }
 
     // Audit purge (paid module) — destructive, so admin-only: the audit log is
@@ -1233,7 +1241,7 @@ function routeRequest(
             throw new ApiException('An explicit `before` cutoff (or a token audit_retention_days) is required', 400, 'audit_purge_no_cutoff');
         }
         /** @var \FluxFiles\AuditExport\AuditExportModule $module */
-        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->purge($metaRepo, $claims, $disk, $before);
     }
 
@@ -1281,7 +1289,7 @@ function routeRequest(
             throw new ApiException('Missing required field: path', 400, 'missing_param');
         }
         /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
-        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->place($metaRepo, $diskManager, $claims, $disk, (string) $b['path'], (string) ($b['reason'] ?? ''));
     }
 
@@ -1298,7 +1306,7 @@ function routeRequest(
             throw new ApiException('Missing required field: hold_id', 400, 'missing_param');
         }
         /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
-        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->release($metaRepo, $claims, $disk, (string) $b['hold_id'], (string) ($b['reason'] ?? ''));
     }
 
@@ -1312,7 +1320,7 @@ function routeRequest(
         }
         $includeReleased = filter_var($_GET['include_released'] ?? false, FILTER_VALIDATE_BOOLEAN);
         /** @var \FluxFiles\LegalHold\LegalHoldModule $module */
-        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\LicenseManager::fromEnv(), $claims);
+        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\ModuleRegistry::license(), $claims);
         return $module->list($metaRepo, $claims, $disk, $includeReleased);
     }
 
@@ -1501,7 +1509,7 @@ function handleSsoLogin(): void
         }
         ff_sso_rate_limit('login');
         /** @var \FluxFiles\Sso\SsoModule $module */
-        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
+        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\ModuleRegistry::license());
 
         // Open-redirect guard lives entirely in SsoModule::login() (via its
         // private sanitizeRedirect()) — passing the raw value through here
@@ -1536,7 +1544,7 @@ function handleSsoCallback(): void
         }
         ff_sso_rate_limit('callback');
         /** @var \FluxFiles\Sso\SsoModule $module */
-        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
+        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\ModuleRegistry::license());
 
         $module->callback(ff_str_param($_GET, 'code'), ff_str_param($_GET, 'state'));
     } catch (ApiException $e) {
@@ -1564,7 +1572,7 @@ function handleSsoExchange(): void
         }
         ff_sso_rate_limit('exchange');
         /** @var \FluxFiles\Sso\SsoModule $module */
-        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\LicenseManager::fromEnv());
+        $module = \FluxFiles\ModuleRegistry::requireServer('sso', \FluxFiles\ModuleRegistry::license());
 
         $body = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
         $result = $module->exchange(ff_str_param($body, 'token'));

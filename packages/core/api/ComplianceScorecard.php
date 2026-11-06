@@ -99,7 +99,7 @@ final class ComplianceScorecard
      *
      * @return array{generated_at:int, disclaimer:string, summary:array{enabled_count:int,available_count:int,total_count:int}, categories:string[], items:array<int,array<string,mixed>>}
      */
-    public static function build(Claims $claims, LicenseManager $license): array
+    public static function build(Claims $claims, LicenseCheckInterface $license): array
     {
         $items = [];
         $enabledCount = 0;

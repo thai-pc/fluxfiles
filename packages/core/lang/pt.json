@@ -308,6 +308,7 @@
     "invalid_mode": "Modo inválido — use 3 dígitos octais (ex.: 644).",
     "invalid_trash_id": "Item da lixeira inválido.",
     "module_not_installed": "Este recurso não está instalado.",
+    "module_update_required": "O módulo deste recurso está desatualizado. Atualize-o para continuar.",
     "not_a_zip": "Este arquivo não é um ZIP.",
     "not_image": "Este arquivo não é uma imagem.",
     "not_sftp": "Esta ação só funciona em um disco SFTP.",

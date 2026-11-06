@@ -75,7 +75,7 @@ HTACCESS;
                 @file_put_contents($dir . '/index.html', '');
             }
         } catch (\Throwable $e) {
-            error_log('FluxFiles: could not write _fluxfiles guard files: ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: could not write _fluxfiles guard files: ' . $e->getMessage());
         }
     }
 

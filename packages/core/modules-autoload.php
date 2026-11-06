@@ -27,66 +27,13 @@ declare(strict_types=1);
  * `vendor/autoload.php` itself).
  */
 
-(static function (): void {
-    // Registering twice would make every miss cost two filesystem probes.
-    static $registered = false;
-    if ($registered) {
-        return;
-    }
-    $registered = true;
+// Required by path, not through Composer: this file runs from inside vendor/autoload.php's
+// own `autoload.files` pass (and from autoload.php), so it must not depend on the class map.
+require_once __DIR__ . '/api/ModuleAutoloader.php';
 
-    /**
-     * Resolution is lazy and cheap: the closure only touches the filesystem when a
-     * `FluxFiles\<Something>\` class is actually requested, which happens only when a
-     * paid gate runs. `class_exists()` on a free-core install stays a no-op that ends
-     * in a single is_file() miss.
-     */
-    spl_autoload_register(static function (string $class): void {
-        if (strncmp($class, 'FluxFiles\\', 10) !== 0) {
-            return;
-        }
-        $rest = substr($class, 10);
-        $slash = strpos($rest, '\\');
-        if ($slash === false) {
-            return;   // FluxFiles\Foo is core's own namespace, already mapped
-        }
-        // FluxFiles\Share\ShareModule → module dir "share", relative path ShareModule
-        $segment = substr($rest, 0, $slash);
-        if (!preg_match('/^[A-Za-z0-9]+$/', $segment)) {
-            return;   // never let a crafted class name walk the filesystem
-        }
-        $relative = str_replace('\\', '/', substr($rest, $slash + 1)) . '.php';
-
-        // Module dirs are kebab-case ("audit-export", "legal-hold") but their PHP
-        // namespace segment is PascalCase with no separator ("AuditExport",
-        // "LegalHold") — plain strtolower() collapses to "auditexport"/"legalhold",
-        // which never matches the real install dir, so those two modules could never
-        // autoload from a real `vendor/fluxfiles/<module>/` install. Try both: the
-        // plain lowercase (covers "Share" -> "share", "Ocr" -> "ocr", "C2pa" -> "c2pa")
-        // and a kebab-cased form (hyphen before each interior capital) for multi-word
-        // namespaces.
-        $plain = strtolower($segment);
-        $kebab = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $segment));
-        $modules = $plain === $kebab ? [$plain] : [$plain, $kebab];
-
-        // Only the layouts a real install produces. A monorepo sibling
-        // (packages/share next to packages/core) is deliberately NOT searched: it
-        // exists only in this repository, and treating it as installed would make the
-        // free-core path untestable on the one machine that has the private packages —
-        // every "module absent → 501" test would see the module. The suites that DO
-        // want a module loaded require its source explicitly, which is the honest way
-        // to say "this run has it".
-        foreach ($modules as $module) {
-            foreach ([
-                __DIR__ . '/vendor/fluxfiles/' . $module . '/src/',   // standalone / monorepo / WP plugin bundle
-                __DIR__ . '/../../fluxfiles/' . $module . '/src/',    // installed as a dependency → host vendor/
-            ] as $base) {
-                $file = $base . $relative;
-                if (is_file($file)) {
-                    require_once $file;
-                    return;
-                }
-            }
-        }
-    });
-})();
+// Only the layouts a real install produces (see ModuleAutoloader). Registering again, from
+// here or from a host that adds its own bases, never installs a second autoloader.
+\FluxFiles\ModuleAutoloader::register([
+    __DIR__ . '/vendor/fluxfiles/',    // standalone / monorepo / WP plugin bundle
+    __DIR__ . '/../../fluxfiles/',     // installed as a dependency → host vendor/
+]);

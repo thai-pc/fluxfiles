@@ -79,7 +79,7 @@ final class FileManagerFactory
         // owner from the configured backend (DB mode included) — that owner is the
         // identity version history is bound to (see VersioningModule::lineage()).
         if (ModuleRegistry::installed('versioning')
-            && LicenseManager::fromEnv()->licensed('versioning')) {
+            && ModuleRegistry::license()->licensed('versioning')) {
             $versioning = new \FluxFiles\Versioning\VersioningModule();
             if ($claims->allowVersioning) {
                 $fm->setVersionKeeper(static function (string $d, string $key, $fs) use ($versioning, $claims, $diskManager, $metaRepo) {
@@ -110,7 +110,7 @@ final class FileManagerFactory
         if ($claims->allowVirusScan) {
             $fm->setVirusScanner(static function (string $localPath) use ($claims): array {
                 /** @var \FluxFiles\Virus\VirusScanModule $virus */
-                $virus = ModuleRegistry::require('virus', LicenseManager::fromEnv(), $claims);
+                $virus = ModuleRegistry::require('virus', ModuleRegistry::license(), $claims);
                 return $virus->scanPath($localPath);
             });
         }
@@ -123,7 +123,7 @@ final class FileManagerFactory
         if ($claims->allowDlpScan) {
             $fm->setDlpScanner(static function (string $localPath, string $name) use ($claims): array {
                 /** @var \FluxFiles\Dlp\DlpModule $dlp */
-                $dlp = ModuleRegistry::require('dlp', LicenseManager::fromEnv(), $claims);
+                $dlp = ModuleRegistry::require('dlp', ModuleRegistry::license(), $claims);
                 return $dlp->scanPath($localPath, $claims->dlpEntityTypes, $claims->dlpMinScore);
             });
         }
@@ -145,7 +145,7 @@ final class FileManagerFactory
     {
         if (!$claims->allowWebhooks || $claims->webhookUrl === ''
             || !ModuleRegistry::installed('webhooks')
-            || !LicenseManager::fromEnv()->licensed('webhooks')) {
+            || !ModuleRegistry::license()->licensed('webhooks')) {
             return null;
         }
         $webhooks = new \FluxFiles\Webhooks\WebhooksModule();

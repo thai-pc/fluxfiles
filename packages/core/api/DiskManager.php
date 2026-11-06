@@ -81,7 +81,7 @@ class DiskManager
             $cmd = $client->getCommand('GetObject', $params);
             return (string) $client->createPresignedRequest($cmd, '+' . max(1, $ttl) . ' seconds')->getUri();
         } catch (\Throwable $e) {
-            error_log('FluxFiles: presign GET failed — ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles: presign GET failed — ' . $e->getMessage());
             return null;
         }
     }

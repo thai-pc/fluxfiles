@@ -308,6 +308,7 @@
     "invalid_mode": "Invalid mode — use 3 octal digits (e.g. 644).",
     "invalid_trash_id": "Invalid trash item.",
     "module_not_installed": "This feature isn't installed.",
+    "module_update_required": "This feature's module is out of date. Update it to continue.",
     "not_a_zip": "This file isn't a ZIP archive.",
     "not_image": "This file isn't an image.",
     "not_sftp": "This action only works on an SFTP disk.",
