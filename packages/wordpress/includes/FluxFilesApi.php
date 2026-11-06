@@ -129,8 +129,7 @@ class FluxFilesApi
         }
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only: this picks which REST route is being dispatched; the route's own permission callback authenticates (Bearer JWT or cookie + nonce)
         if (isset($_GET['rest_route']) && is_string($_GET['rest_route'])) {
-            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- same routing read as above
-            return '/' . ltrim(wp_unslash($_GET['rest_route']), '/'); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- compared against fixed route patterns only, never stored or output; sanitize_text_field would mangle %xx and whitespace in the route
+            return '/' . ltrim(wp_unslash($_GET['rest_route']), '/'); // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- routing read compared against fixed route patterns only, never stored or output; sanitize_text_field would mangle %xx and whitespace in the route
         }
         $uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
         $path = (string) (wp_parse_url($uri, PHP_URL_PATH) ?: '');
