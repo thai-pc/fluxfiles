@@ -29,6 +29,32 @@ node scripts/landing-screenshots/capture.mjs --copy-to=../fluxfiles-landing/publ
 Options: `--only=a,b` · `--copy-to=DIR` (copies each successful shot) · `--port=N`
 (default 8140) · `--keep` (keep the temp work dir for debugging).
 
+### WordPress.org plugin page (`--set=wporg`)
+
+`--set=wporg` writes the free plugin's `.wordpress-org/screenshot-1..3.png`
+(1280×800) instead: no paid module installed, no licence, `pro_hints=false`.
+1 = grid at the root, 2 = crop editor in the details panel, 3 = a throttled
+four-file upload mid-way. `--only=dark` adds a dark-mode alternative (`dark.png`).
+Real extra disks for the disk switcher (optional, both on loopback, allow-listed
+through `FLUXFILES_SSRF_ALLOW_HOSTS` on the throwaway server):
+
+```bash
+docker run -d --name ff-wporg-sftp -p 127.0.0.1:2222:22 atmoz/sftp ff:ffpass:::upload
+docker run -d --name ff-wporg-s3 -p 127.0.0.1:4566:4566 -e SERVICES=s3 localstack/localstack:4
+curl -X PUT http://127.0.0.1:4566/website-assets           # the bucket the s3 disk uses
+node scripts/landing-screenshots/capture.mjs --set=wporg --s3-endpoint=http://127.0.0.1:4566 --sftp-port=2222
+docker rm -f ff-wporg-sftp ff-wporg-s3
+```
+
+Screenshot 4 (the block editor) comes from `wporg-editor.mjs`, which drives the
+real plugin in the WordPress e2e's wp-env site:
+
+```bash
+bash packages/core/tests/apps/wordpress-e2e/setup.sh        # Docker
+node scripts/landing-screenshots/wporg-editor.mjs           # → .wordpress-org/screenshot-4.png
+(cd packages/core/tests/apps/wordpress-e2e && npx @wordpress/env stop)
+```
+
 Look at every PNG before you publish it. A shot that fails is saved as
 `out/FAILED-<name>.png` and the script exits non-zero.
 
