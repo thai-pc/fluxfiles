@@ -1943,7 +1943,7 @@ body {
     height: 48px;
     border-radius: 12px;
     background: linear-gradient(135deg, #ede9fb 0%, #ddd3f6 100%);
-    color: #8957e5;
+    color: var(--ff-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1992,6 +1992,7 @@ body {
     outline: none;
     border-color: var(--ff-primary);
     box-shadow: 0 0 0 3px rgba(137, 87, 229, 0.15);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ff-primary) 15%, transparent);
 }
 
 .dark .ff-new-folder-input:focus { box-shadow: 0 0 0 3px rgba(77, 142, 248, 0.15); }
@@ -4132,7 +4133,10 @@ body {
 
 /* White-label accent (`accent_color` claim): fm.js sets --ff-primary inline on <html>
    (beats .dark); the hover shade is derived here so no colour is ever built into CSS text. */
-html.ff-branded { --ff-primary-hover: color-mix(in srgb, var(--ff-primary) 82%, #000); }
+html.ff-branded { --ff-primary-hover: var(--ff-primary); }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+    html.ff-branded { --ff-primary-hover: color-mix(in srgb, var(--ff-primary) 82%, #000); }
+}
 .ff-brand-logo { object-fit: contain; border-radius: 4px; }
 
 /* About dialog + its quiet sidebar entry */

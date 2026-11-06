@@ -2828,7 +2828,10 @@ function fluxFilesApp() {
                 const seg = (this.token || '').split('.')[1] || '';
                 const b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
                 const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
-                return JSON.parse(atob(b64 + pad)) || {};
+                // atob() yields one char per byte; decode as UTF-8 (Node/jose emit raw UTF-8).
+                const bin = atob(b64 + pad);
+                const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+                return JSON.parse(new TextDecoder().decode(bytes)) || {};
             } catch (_) {
                 return {};
             }
@@ -4476,7 +4479,7 @@ function fluxFilesApp() {
         get brandName() {
             let v = (this._tokenPayload() || {}).brand_name;
             if (typeof v !== 'string') return '';
-            v = v.replace(/<[^>]*>?/g, '').replace(/[<>]/g, '').replace(/[\u0000-\u001F\u007F\s]+/g, ' ').trim();
+            v = v.replace(/<[^>]*>/g, '').replace(/[<>]/g, '').replace(/[\u0000-\u001F\u007F\s]+/g, ' ').trim();
             return Array.from(v).slice(0, 60).join('');
         },
         get brandTitle() { return this.brandName || 'FluxFiles'; },
@@ -4484,7 +4487,7 @@ function fluxFilesApp() {
             const v = (this._tokenPayload() || {}).brand_logo_url;
             if (typeof v !== 'string') return '';
             const u = v.trim();
-            return u.length <= 2048 && /^https?:\/\/[^\s\u0000-\u001F\u007F"'<>\\]+$/i.test(u) ? u : '';
+            return new TextEncoder().encode(u).length <= 2048 && /^https:\/\/[^\s\u0000-\u001F\u007F"'<>\\]+$/i.test(u) ? u : '';
         },
         get brandAccent() {
             const v = (this._tokenPayload() || {}).accent_color;

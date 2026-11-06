@@ -638,24 +638,27 @@ class Claims
         if (!is_string($v)) {
             return '';
         }
-        $v = strip_tags($v);
+        // Identical rules to the UI's brandName getter (fm.js): keep both in sync.
+        if (preg_match('//u', $v) !== 1) {
+            return '';
+        }
+        $v = (string) preg_replace('/<[^>]*>/u', '', $v);
         $v = str_replace(['<', '>'], '', $v);
-        $v = (string) preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $v);
-        $v = trim((string) preg_replace('/\s+/u', ' ', $v));
-        return mb_substr($v, 0, 60);
+        $v = (string) preg_replace('/[\x00-\x1F\x7F\s\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+/u', ' ', $v);
+        return mb_substr(trim($v, " "), 0, 60);
     }
 
-    /** http(s)-only logo URL, ≤ 2048 chars, no whitespace/control chars. */
+    /** https-only logo URL (http would be mixed content in the UI), ≤ 2048 chars, no whitespace/control chars. Same rules as fm.js brandLogoUrl. */
     public static function sanitizeLogoUrl($v): string
     {
         if (!is_string($v)) {
             return '';
         }
-        $v = trim($v);
-        if ($v === '' || strlen($v) > 2048 || !preg_match('#^https?://[^\s\x00-\x1F\x7F"\'<>\\\\]+$#i', $v)) {
+        $v = (string) preg_replace('/^[\s\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+|[\s\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+$/u', '', $v);
+        if ($v === '' || strlen($v) > 2048 || preg_match('#^https://[^\s\x00-\x1F\x7F\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}"\'<>\\\\]+$#iDu', $v) !== 1) {
             return '';
         }
-        return filter_var($v, FILTER_VALIDATE_URL) !== false ? $v : '';
+        return $v;
     }
 
     /** Strict #RGB / #RRGGBB, else ''. */

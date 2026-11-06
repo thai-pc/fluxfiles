@@ -34,10 +34,10 @@ class FluxFilesServiceProvider extends ServiceProvider
                 Console\MigrateJsonToDbCommand::class,
                 Console\DoctorCommand::class,
             ]);
-        }
 
-        // `php artisan about` section (no-op on Laravel versions without AboutCommand)
-        About::register();
+            // `php artisan about` section (no-op on Laravel versions without AboutCommand)
+            About::register();
+        }
 
         // Publish config
         $this->publishes([

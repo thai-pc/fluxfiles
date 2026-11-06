@@ -11,8 +11,9 @@ namespace FluxFiles;
  *
  * Operator-side only: it is never routed over HTTP, and it is deliberately
  * boring about secrets. It reports booleans, versions, counts and disk DRIVERS;
- * never a licence key, a disk credential/endpoint/bucket/root path, a token, or an
- * environment value (SSRF allow-hosts are reported as a count). Everything
+ * never a licence key, a disk credential/endpoint/bucket/root path or a token, and
+ * no raw environment value (the only env-derived output is the normalized
+ * FLUXFILES_CORE_VERSION; SSRF allow-hosts are reported as a count). Everything
  * external is probed cheaply (a binary lookup + `--version`, 3 s cap) and through
  * {@see ProcessEnv::minimal()}, so a probed tool never sees FLUXFILES_SECRET.
  */
@@ -25,9 +26,14 @@ final class AboutInfo
      *   env?: array<string,mixed>,
      *   disks?: array<string,array<string,mixed>>|null,
      *   license?: LicenseCheckInterface|null,
-     *   probe_tools?: bool
+     *   probe_tools?: bool,
+     *   proc_available?: bool|null,
+     *   bundled_with?: string|null
      * } $opts  env: defaults to $_ENV · disks: the configured disks (null = DiskConfig::load()) ·
-     *          license: defaults to ModuleRegistry::license() · probe_tools: false skips all subprocesses
+     *          license: defaults to ModuleRegistry::license() · probe_tools: false skips all subprocesses ·
+     *          proc_available: null = detect (proc_open & co. present and not disabled), tests may force false ·
+     *          bundled_with: label (e.g. "plugin 1.0.4") for an embedder that ships core inside itself;
+     *          used instead of the FLUXFILES_CORE_VERSION hint when the core version is unknown
      * @return array<string,mixed>
      */
     public static function collect(array $opts = []): array
@@ -37,6 +43,11 @@ final class AboutInfo
         $probe = $opts['probe_tools'] ?? true;
 
         [$coreVersion, $coreSource] = self::coreVersion($env);
+        $bundledWith = null;
+        if ($coreVersion === null && isset($opts['bundled_with']) && is_string($opts['bundled_with']) && preg_match('/^[0-9A-Za-z.+_ -]{1,40}$/', $opts['bundled_with']) === 1) {
+            $coreSource = 'bundled';
+            $bundledWith = $opts['bundled_with'];
+        }
 
         $disks = $opts['disks'] ?? null;
         if ($disks === null) {
@@ -63,7 +74,7 @@ final class AboutInfo
         $info = $license->info();
 
         return [
-            'core' => ['version' => $coreVersion, 'source' => $coreSource],
+            'core' => ['version' => $coreVersion, 'source' => $coreSource, 'bundled_with' => $bundledWith],
             'php' => ['version' => PHP_VERSION],
             'storage_backend' => $backend,
             'disks' => $diskList,
@@ -73,7 +84,7 @@ final class AboutInfo
                 'virus' => (bool) ($modules['virus']['enabled'] ?? false),
                 'dlp' => (bool) ($modules['dlp']['enabled'] ?? false),
             ],
-            'tools' => self::tools($probe, (bool) ($modules['virus']['installed'] ?? false)),
+            'tools' => self::tools($probe, (bool) ($modules['virus']['installed'] ?? false), $opts['proc_available'] ?? null),
             'ssrf_allow_hosts' => count($allow),
         ];
     }
@@ -94,7 +105,8 @@ final class AboutInfo
         };
 
         $core = $info['core'];
-        $add('Core version', $core['version'] === null ? 'unknown (set FLUXFILES_CORE_VERSION)' : $core['version'] . ' (' . $core['source'] . ')');
+        $add('Core version', $core['version'] !== null ? $core['version'] . ' (' . $core['source'] . ')'
+            : (($core['bundled_with'] ?? null) !== null ? 'bundled with ' . $core['bundled_with'] : 'unknown (set FLUXFILES_CORE_VERSION)'));
         $add('PHP', (string) $info['php']['version']);
         $add('Storage backend', (string) $info['storage_backend']);
         $disks = array_map(static fn ($d) => $d['name'] . ' (' . $d['driver'] . ')', $info['disks']);
@@ -114,6 +126,9 @@ final class AboutInfo
         $add('Virus scanning', $yn($info['scanning']['virus']));
         $add('DLP scanning', $yn($info['scanning']['dlp']));
         $t = $info['tools'];
+        if (($t['probe_skipped'] ?? null) !== null) {
+            $add('External tools', 'unavailable: ' . $t['probe_skipped']);
+        }
         $add('Image library', implode(' + ', array_keys(array_filter(['GD' => $t['gd'], 'Imagick' => $t['imagick']]))) ?: 'none');
         foreach (['ffmpeg' => 'ffmpeg', 'ghostscript' => 'Ghostscript', 'tesseract' => 'Tesseract'] as $k => $label) {
             $tool = $t[$k];
@@ -205,7 +220,7 @@ final class AboutInfo
     }
 
     /** @return array<string,mixed> */
-    private static function tools(bool $probe, bool $virusInstalled): array
+    private static function tools(bool $probe, bool $virusInstalled, ?bool $procAvailable = null): array
     {
         $tools = [
             'gd' => extension_loaded('gd'),
@@ -214,8 +229,14 @@ final class AboutInfo
             'ghostscript' => ['available' => false, 'version' => null, 'meets_minimum' => null],
             'tesseract' => ['available' => false, 'version' => null],
             'clamd' => ['available' => false, 'reachable' => null],
+            'probe_skipped' => null,
         ];
         if (!$probe) {
+            return $tools;
+        }
+        if (!($procAvailable ?? self::procAvailable())) {
+            // A function in disable_functions throws an Error on PHP 8 (@ does not help).
+            $tools['probe_skipped'] = 'proc_open disabled';
             return $tools;
         }
         if (($bin = self::locate('ffmpeg')) !== null) {
@@ -240,6 +261,17 @@ final class AboutInfo
             }
         }
         return $tools;
+    }
+
+    /** True when every process function the probes need exists and is not disabled. */
+    private static function procAvailable(): bool
+    {
+        foreach (['proc_open', 'proc_get_status', 'proc_terminate', 'proc_close'] as $fn) {
+            if (!function_exists($fn)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Version strings end up in a UI/clipboard: allow only a conservative charset. */
@@ -269,6 +301,16 @@ final class AboutInfo
      * @param list<string> $cmd
      */
     private static function run(array $cmd): ?string
+    {
+        try {
+            return self::runUnsafe($cmd);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /** @param list<string> $cmd */
+    private static function runUnsafe(array $cmd): ?string
     {
         $proc = @proc_open($cmd, [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['redirect', 1]], $pipes, null, ProcessEnv::minimal());
         if (!is_resource($proc)) {

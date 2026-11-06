@@ -414,6 +414,8 @@ HTACCESS;
                         'FLUXFILES_SSRF_ALLOW_HOSTS' => (string) $ssrf,
                     ]),
                     'disks' => self::diskConfigs(),
+                    // core ships inside the plugin zip: don't tell a WP admin to set an env var
+                    'bundled_with' => defined('FLUXFILES_VERSION') ? 'plugin ' . FLUXFILES_VERSION : null,
                 ]);
                 foreach (\FluxFiles\AboutInfo::rows($about) as $i => $row) {
                     $fields['about_' . $i] = ['label' => $esc($row['label']), 'value' => $esc($row['value']), 'private' => $row['private']];

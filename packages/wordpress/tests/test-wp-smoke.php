@@ -319,6 +319,16 @@ test('terminal_pty_url still forwards (the UI embeds the operator\'s own ttyd)',
     assertEqual('https://ttyd.example.com/', $p->terminal_pty_url ?? '', 'terminal_pty_url forwarded');
 });
 
+test('about / brand_name / brand_logo_url / accent_color are forwarded in the raw payload', function () use ($secret) {
+    $p = \FluxFiles\JwtCompat::decode(FluxFilesPlugin::generateToken(62, [
+        'about' => false, 'brand_name' => 'Tệp Acme', 'brand_logo_url' => 'https://acme.example/l.png', 'accent_color' => '#0a7f5a',
+    ]), $secret);
+    assertEqual(false, $p->about ?? null, 'about forwarded (false kept)');
+    assertEqual('Tệp Acme', $p->brand_name ?? '', 'brand_name forwarded');
+    assertEqual('https://acme.example/l.png', $p->brand_logo_url ?? '', 'brand_logo_url forwarded');
+    assertEqual('#0a7f5a', $p->accent_color ?? '', 'accent_color forwarded');
+});
+
 test('BYOB disks register for every route; the SSRF allow-list is applied', function () {
     $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
     preg_match('/private function claims\(.*?\n    }\n/s', $src, $claims);

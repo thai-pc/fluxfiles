@@ -61,7 +61,7 @@ $info = AboutInfo::collect(['env' => $env, 'disks' => $disks, 'license' => $lice
 ModuleRegistry::reset();
 
 test('core version comes from the env override and says so', function () use ($info) {
-    assertEqual(['version' => '1.2.3', 'source' => 'env'], $info['core']);
+    assertEqual(['version' => '1.2.3', 'source' => 'env', 'bundled_with' => null], $info['core']);
 });
 
 test('PHP version and storage backend are reported', function () use ($info) {
@@ -116,6 +116,26 @@ test('tool probing returns the documented shape', function () {
     }
     if ($i['tools']['ghostscript']['version'] !== null) {
         assertEqual(version_compare($i['tools']['ghostscript']['version'], '10.05.0', '>='), $i['tools']['ghostscript']['meets_minimum']);
+    }
+});
+
+test('proc functions unavailable: probes skipped with a reason, never throws', function () {
+    $i = AboutInfo::collect(['env' => [], 'disks' => [], 'license' => new \FluxFiles\NoLicense(), 'probe_tools' => true, 'proc_available' => false]);
+    assertEqual('proc_open disabled', $i['tools']['probe_skipped']);
+    assertEqual(false, $i['tools']['ffmpeg']['available']);
+    $row = array_values(array_filter(AboutInfo::rows($i), static fn ($r) => $r['label'] === 'External tools'));
+    assertEqual('unavailable: proc_open disabled', $row[0]['value'] ?? null);
+});
+
+test('unknown core version: CLI hint by default, "bundled with" for an embedder', function () {
+    $mk = static fn (array $o) => AboutInfo::collect($o + ['env' => [], 'disks' => [], 'license' => new \FluxFiles\NoLicense(), 'probe_tools' => false]);
+    $cv = static fn (array $i) => array_values(array_filter(AboutInfo::rows($i), static fn ($r) => $r['label'] === 'Core version'))[0]['value'];
+    $a = $mk([]);
+    if ($a['core']['version'] === null) {
+        assertTrue(str_contains($cv($a), 'FLUXFILES_CORE_VERSION'));
+        $b = $mk(['bundled_with' => 'plugin 1.0.4']);
+        assertEqual('bundled with plugin 1.0.4', $cv($b));
+        assertTrue(!str_contains($cv($b), 'FLUXFILES_CORE_VERSION'));
     }
 });
 

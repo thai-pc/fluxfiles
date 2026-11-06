@@ -1,0 +1,19 @@
+{
+  "_note": "Shared by tests/unit/test-claims.php (Claims::sanitize*) and tests/browser/about-brand.spec.ts (fm.js getters). Keep PHP and JS rules identical.",
+  "brand_name": [
+    ["Acme", "Acme"],
+    ["Acme <b>Files</b>", "Acme Files"],
+    ["a < b", "a b"],
+    ["a <b", "a b"],
+    ["  Tệp \n Acme ", "Tệp Acme"],
+    ["<<>>", ""]
+  ],
+  "brand_logo_url": [
+    ["https://example.com/logo.png", "https://example.com/logo.png"],
+    ["http://example.com/logo.png", ""],
+    ["javascript:alert(1)", ""],
+    ["https://example.com/a b.png", ""],
+    ["https://bücher.de/x.png", "https://bücher.de/x.png"],
+    ["data:image/png;base64,AAAA", ""]
+  ]
+}

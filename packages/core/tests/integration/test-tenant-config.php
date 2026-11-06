@@ -503,9 +503,9 @@ test('about + brand claims: defaults, validation, and sanitising', function () {
     assertEqual('', $dec(['brand_name' => ['x']])->brandName, 'array dropped');
     assertEqual('A B', $dec(["brand_name" => "A\n\t B\x00"])->brandName, 'control chars collapsed');
 
-    // brand_logo_url: http(s) only
+    // brand_logo_url: https only (http is mixed content in the UI)
     assertEqual('https://acme.test/l.png?x=1', $dec(['brand_logo_url' => 'https://acme.test/l.png?x=1'])->brandLogoUrl, 'https kept');
-    assertEqual('http://acme.test/l.png', $dec(['brand_logo_url' => 'http://acme.test/l.png'])->brandLogoUrl, 'http kept');
+    assertEqual('', $dec(['brand_logo_url' => 'http://acme.test/l.png'])->brandLogoUrl, 'http rejected');
     foreach (['javascript:alert(1)', 'data:image/svg+xml,<svg/>', 'ftp://x/y.png', '//acme.test/l.png',
               'https://a.test/x" onerror="1', 'https://a.test/ x.png', "https://a.test/\x01", 'not a url',
               'https://a.test/' . str_repeat('a', 2100)] as $bad) {

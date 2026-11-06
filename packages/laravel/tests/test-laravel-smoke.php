@@ -95,6 +95,17 @@ test('token() emits per-tenant overrides without depending on a core method', fu
     assertEqual(['large' => 2560], (array) ($claims->variants ?? null), 'variants passed through (core sanitizes on decode)');
 });
 
+test('token() forwards about / brand_name / brand_logo_url / accent_color in the raw payload', function () use ($secret) {
+    $mgr = new FluxFilesManager();
+    $claims = \FluxFiles\JwtCompat::decode($mgr->token(12, [
+        'about' => false, 'brand_name' => 'Tệp Acme', 'brand_logo_url' => 'https://acme.example/l.png', 'accent_color' => '#0a7f5a',
+    ]), $secret);
+    assertEqual(false, $claims->about ?? null, 'about forwarded (false kept)');
+    assertEqual('Tệp Acme', $claims->brand_name ?? '', 'brand_name forwarded');
+    assertEqual('https://acme.example/l.png', $claims->brand_logo_url ?? '', 'brand_logo_url forwarded');
+    assertEqual('#0a7f5a', $claims->accent_color ?? '', 'accent_color forwarded');
+});
+
 test('token() forwards URL-import claims so the feature can be enabled', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $token = $mgr->token(11, [
