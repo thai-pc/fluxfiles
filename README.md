@@ -1324,6 +1324,11 @@ the PHP `fluxfiles_token()` helper — identical claims + BYOB encryption. The
 **browser** adapters (React, Vue, the editor plugins) embed the core UI over the
 same iframe + `postMessage` SDK, so anything the standalone UI does, they do too.
 
+> **Replacing an unmaintained file manager** (Responsive FileManager, KCFinder, Roxy
+> Fileman, RichFilemanager, Tiny File Manager, File Browser)? See
+> [`docs/guides/MIGRATING.md`](docs/guides/MIGRATING.md) for a concept mapping and
+> before/after snippets per product.
+
 **Minimal example** — mint a scoped token server-side, then embed/pick:
 
 ```php

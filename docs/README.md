@@ -11,6 +11,7 @@ every new document to the matching section below.
 - [API reference](guides/API.md) — standalone HTTP routes, incl. tus resumable upload and the paid-module routes.
 - [Feature deep dives](guides/FEATURES.md) — on-demand WebP/AVIF, srcset, watermark, usage dashboard, the BYO terminal embed.
 - [Industry presets](guides/INDUSTRY-PRESETS.md) — copy-paste token configs per vertical.
+- [Migrating from an unmaintained file manager](guides/MIGRATING.md) — Responsive FileManager, KCFinder, Roxy Fileman, RichFilemanager, Tiny File Manager, File Browser: concept mapping, before/after snippets, indexing existing files.
 
 ## Operators and sellers
 
