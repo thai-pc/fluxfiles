@@ -78,8 +78,11 @@ class AiTagger
     /** Media types every provider accepts; anything else is re-encoded as JPEG. */
     private const SUPPORTED_MEDIA = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-    public function __construct(string $provider, string $apiKey, ?string $model = null, ?string $baseUrl = null)
+    private HttpTransportInterface $transport;
+
+    public function __construct(string $provider, string $apiKey, ?string $model = null, ?string $baseUrl = null, ?HttpTransportInterface $transport = null)
     {
+        $this->transport = $transport ?? new CurlTransport(10);
         $this->provider = strtolower(trim($provider));
         $this->apiKey = $apiKey;
 
@@ -354,30 +357,20 @@ PROMPT;
     /** Protected, not private, so tests can substitute a transport instead of the network. */
     protected function httpPost(string $url, array $headers, array $body): array
     {
-        $ch = curl_init($url);
-
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => json_encode($body),
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 60,
-            CURLOPT_CONNECTTIMEOUT => 10,
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
+        $res = $this->transport->request('POST', $url, $headers, (string) json_encode($body), 60);
+        $response = $res['status'] === 0 ? false : $res['body'];
+        $httpCode = $res['status'];
+        $error = (string) ($res['error'] ?? '');
 
         if ($response === false) {
-            error_log("FluxFiles AI API request failed: {$error}");
+            \FluxFiles\Log::warn("FluxFiles AI API request failed: {$error}");
             throw new ApiException('AI service temporarily unavailable', 502);
         }
 
         if ($httpCode >= 400) {
             $decoded = json_decode($response, true);
             $errMsg = $decoded['error']['message'] ?? $decoded['error']['type'] ?? "HTTP {$httpCode}";
-            error_log("FluxFiles AI API error ({$httpCode}): {$errMsg}");
+            \FluxFiles\Log::warn("FluxFiles AI API error ({$httpCode}): {$errMsg}");
             throw new ApiException('AI service returned an error', 502);
         }
 

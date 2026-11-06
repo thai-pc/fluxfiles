@@ -308,6 +308,7 @@
     "invalid_mode": "模式无效——请使用 3 位八进制数字（例如 644）。",
     "invalid_trash_id": "回收站项目无效。",
     "module_not_installed": "此功能未安装。",
+    "module_update_required": "此功能的模块已过期，请更新后继续。",
     "not_a_zip": "此文件不是 ZIP 压缩包。",
     "not_image": "此文件不是图片。",
     "not_sftp": "此操作仅适用于 SFTP 磁盘。",

@@ -112,6 +112,20 @@ test('install: extracts a real zip into dest (atomic swap)', function () {
     @unlink($zipPath);
 });
 
+test('install: a top-level public/ (the module recipient pages) lands beside src/', function () {
+    $c = new UpdateClient();
+    $zipPath = tempnam(sys_get_temp_dir(), 'ffz') . '.zip';
+    $z = new ZipArchive();
+    $z->open($zipPath, ZipArchive::CREATE);
+    $z->addFromString('src/ShareModule.php', '<?php // module');
+    $z->addFromString('public/share.html', '<html></html>');
+    $z->close();
+    $dest = sys_get_temp_dir() . '/ff-upd-pub-' . uniqid() . '/share';
+    $c->install((string) file_get_contents($zipPath), $dest);
+    assertTrue(is_file("$dest/src/ShareModule.php") && is_file("$dest/public/share.html"), 'src/ and public/ both installed at the module root');
+    @unlink($zipPath);
+});
+
 test('install: Zip Slip (../) is refused', function () {
     $c = new UpdateClient();
     $zipPath = tempnam(sys_get_temp_dir(), 'ffz') . '.zip';

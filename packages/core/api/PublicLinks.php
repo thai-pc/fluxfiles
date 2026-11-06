@@ -69,13 +69,7 @@ function ff_str_param(array $src, string $key, string $default = ''): string
  */
 function ff_public_meta_repo(DiskManager $dm, ?MetadataRepositoryInterface $injected = null, bool $hostInjectedDisks = false): MetadataRepositoryInterface
 {
-    if ($injected !== null) {
-        return $injected;
-    }
-    if (!$hostInjectedDisks && ($_ENV['FLUXFILES_STORAGE_BACKEND'] ?? 'json') === 'db') {
-        return new \FluxFiles\Db\DbMetadataHandler(\FluxFiles\Db\Connection::fromEnv(), $dm);
-    }
-    return new StorageMetadataHandler($dm);
+    return \FluxFiles\PublicContext::resolveMeta($dm, $injected, $hostInjectedDisks);
 }
 
 /**
@@ -103,7 +97,7 @@ function ff_public_audit(callable $repo, string $actor, string $action, string $
         // inside the try too — this runs after the bytes are on the wire.
         (new AuditLogStorage($repo(), [$disk]))->log($actor, $action, $disk, $key, null, null, $detail);
     } catch (\Throwable $e) {
-        error_log('[fluxfiles] public ' . $action . ' audit failed: ' . $e->getMessage());
+        \FluxFiles\Log::warn('[fluxfiles] public ' . $action . ' audit failed: ' . $e->getMessage());
     }
 }
 
@@ -133,7 +127,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
         if (!\FluxFiles\ModuleRegistry::installed('intake')) {
             throw new ApiException("The 'intake' module is not installed on this server", 501, 'module_not_installed', ['module' => 'intake']);
         }
-        if (!\FluxFiles\LicenseManager::fromEnv()->licensed('intake')) {
+        if (!\FluxFiles\ModuleRegistry::license()->licensed('intake')) {
             throw new ApiException("The 'intake' module requires a valid license", 402, 'license_required', ['module' => 'intake']);
         }
         $module = new \FluxFiles\Intake\IntakeModule();
@@ -190,7 +184,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             if ($portalClaims->allowVirusScan) {
                 $portalFm->setVirusScanner(static function (string $localPath) use ($portalClaims): array {
                     /** @var \FluxFiles\Virus\VirusScanModule $virus */
-                    $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\LicenseManager::fromEnv(), $portalClaims);
+                    $virus = \FluxFiles\ModuleRegistry::require('virus', \FluxFiles\ModuleRegistry::license(), $portalClaims);
                     return $virus->scanPath($localPath);
                 });
             }
@@ -203,7 +197,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             if ($portalClaims->allowDlpScan) {
                 $portalFm->setDlpScanner(static function (string $localPath, string $name) use ($portalClaims): array {
                     /** @var \FluxFiles\Dlp\DlpModule $dlp */
-                    $dlp = \FluxFiles\ModuleRegistry::require('dlp', \FluxFiles\LicenseManager::fromEnv(), $portalClaims);
+                    $dlp = \FluxFiles\ModuleRegistry::require('dlp', \FluxFiles\ModuleRegistry::license(), $portalClaims);
                     return $dlp->scanPath($localPath, $portalClaims->dlpEntityTypes, $portalClaims->dlpMinScore);
                 });
             }
@@ -248,7 +242,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             }
             try {
                 if (\FluxFiles\ModuleRegistry::installed('webhooks')
-                    && \FluxFiles\LicenseManager::fromEnv()->licensed('webhooks')) {
+                    && \FluxFiles\ModuleRegistry::license()->licensed('webhooks')) {
                     $jti = (string) ($payload->jti ?? '');
                     $store = (string) ($payload->store ?? '');
                     // A portal token is minted for exactly one disk (see
@@ -272,7 +266,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
                     }
                 }
             } catch (\Throwable $e) {
-                error_log('[fluxfiles] intake notify-on-receipt failed: ' . $e->getMessage());
+                \FluxFiles\Log::warn('[fluxfiles] intake notify-on-receipt failed: ' . $e->getMessage());
             }
             return;
         }
@@ -319,7 +313,7 @@ function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm
         if (!\FluxFiles\ModuleRegistry::installed('share')) {
             throw new ApiException("The 'share' module is not installed on this server", 501, 'module_not_installed', ['module' => 'share']);
         }
-        if (!\FluxFiles\LicenseManager::fromEnv()->licensed('share')) {
+        if (!\FluxFiles\ModuleRegistry::license()->licensed('share')) {
             throw new ApiException("The 'share' module requires a valid license", 402, 'license_required', ['module' => 'share']);
         }
         $module = new \FluxFiles\Share\ShareModule();
@@ -554,7 +548,7 @@ function ff_share_send_bytes(DiskManager $dm, array $diskConfigs, array $res, bo
             // exception here would append a JSON envelope to partial FILE BYTES (and
             // warn about headers already sent). Stop instead — the short body against
             // the declared Content-Length is the client's signal.
-            error_log('FluxFiles share sftp stream failed: ' . $e->getMessage());
+            \FluxFiles\Log::warn('FluxFiles share sftp stream failed: ' . $e->getMessage());
         } finally {
             if (is_resource($stream)) { fclose($stream); }
         }
@@ -687,17 +681,5 @@ function ff_sso_rate_limit(string $kind): void
  */
 function ff_share_token_jti(#[\SensitiveParameter] string $token, #[\SensitiveParameter] ?string $secret = null): string
 {
-    $secret = $secret ?? (string) ($_ENV['FLUXFILES_SECRET'] ?? '');
-    if ($token !== '' && $secret !== '') {
-        try {
-            $payload = \FluxFiles\JwtCompat::decode($token, $secret);
-            $jti = $payload->jti ?? '';
-            if (is_string($jti) && preg_match('/^[A-Za-z0-9_-]{8,64}$/', $jti)) {
-                return $jti;
-            }
-        } catch (\Throwable $e) {
-            // invalid / expired / wrong key → the per-IP bucket below
-        }
-    }
-    return substr(hash('sha256', 'unverified|' . (string) ($_SERVER['REMOTE_ADDR'] ?? '')), 0, 24);
+    return \FluxFiles\PublicContext::tokenBucketFor($token, $secret ?? (string) ($_ENV['FLUXFILES_SECRET'] ?? ''));
 }

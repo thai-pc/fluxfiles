@@ -46,6 +46,12 @@
     "bin": [
         "bin/fluxfiles"
     ],
+    "extra": {
+        "aws/aws-sdk-php": ["S3", "Sts"]
+    },
+    "scripts": {
+        "pre-autoload-dump": "Aws\\Script\\Composer\\Composer::removeUnusedServices"
+    },
     "minimum-stability": "stable",
     "config": {
         "platform": {

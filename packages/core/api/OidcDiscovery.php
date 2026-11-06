@@ -20,9 +20,12 @@ final class OidcDiscovery
 
     private string $cacheDir;
 
-    public function __construct(string $cacheDir)
+    private HttpTransportInterface $transport;
+
+    public function __construct(string $cacheDir, ?HttpTransportInterface $transport = null)
     {
         $this->cacheDir = rtrim($cacheDir, '/');
+        $this->transport = $transport ?? new CurlTransport(self::CONNECT_TIMEOUT);
     }
 
     /**
@@ -65,20 +68,11 @@ final class OidcDiscovery
 
     private function fetchJson(string $url): array
     {
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
-            CURLOPT_TIMEOUT        => self::TIMEOUT,
-            CURLOPT_FOLLOWLOCATION => false, // don't chase redirects
-            CURLOPT_PROTOCOLS      => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-        ]);
-        $body = curl_exec($ch);
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $errno = curl_errno($ch);
+        $res = $this->transport->request('GET', $url, ['Accept: application/json'], null, self::TIMEOUT);
+        $status = $res['status'];
+        $body = $res['body'];
 
-        if ($errno !== 0 || $body === false || $status < 200 || $status >= 300) {
+        if ($status < 200 || $status >= 300) {
             throw new ApiException('Could not reach the identity provider', 502, 'sso_idp_unreachable');
         }
         $data = json_decode((string) $body, true);

@@ -308,6 +308,7 @@
     "invalid_mode": "Ongeldige modus — gebruik 3 octale cijfers (bijv. 644).",
     "invalid_trash_id": "Ongeldig prullenbak-item.",
     "module_not_installed": "Deze functie is niet geïnstalleerd.",
+    "module_update_required": "De module van deze functie is verouderd. Werk deze bij om door te gaan.",
     "not_a_zip": "Dit bestand is geen ZIP-archief.",
     "not_image": "Dit bestand is geen afbeelding.",
     "not_sftp": "Deze actie werkt alleen op een SFTP-schijf.",

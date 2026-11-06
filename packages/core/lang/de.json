@@ -308,6 +308,7 @@
     "invalid_mode": "Ungültiger Modus — verwenden Sie 3 Oktalziffern (z. B. 644).",
     "invalid_trash_id": "Ungültiges Papierkorb-Element.",
     "module_not_installed": "Diese Funktion ist nicht installiert.",
+    "module_update_required": "Das Modul dieser Funktion ist veraltet. Bitte aktualisieren Sie es, um fortzufahren.",
     "not_a_zip": "Diese Datei ist kein ZIP-Archiv.",
     "not_image": "Diese Datei ist kein Bild.",
     "not_sftp": "Diese Aktion funktioniert nur auf einem SFTP-Datenträger.",

@@ -3,6 +3,46 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.8] — 2026-11-06
+
+> Released: `core-v1.0.4`.
+
+### Added
+
+Seams for the WordPress.org split (`docs/design/WPORG-SPLIT-DESIGN.md`, phase 1). Behaviour is
+unchanged: nothing moves or is removed in this release, and every old code path stays as the
+fallback. This is the first core a module that implements the new hooks can require.
+
+- **Licence seam.** `ModuleRegistry::license()` returns the licence every gate consults; by default
+  the same `LicenseManager::fromEnv()` as before. `ModuleRegistry::setLicenseResolver()` lets a host
+  that keeps the key elsewhere supply its own, and a build without `LicenseManager` gets
+  `NoLicense` (nothing entitled). The gate and `ComplianceScorecard` now take a
+  `LicenseCheckInterface`.
+- **`ModuleAutoloader::register($bases)`.** The paid-module autoloader as a class that accepts any
+  number of base directories. `modules-autoload.php` registers the same two layouts as before.
+- **Public Share/Intake routes through `PublicRoutes`.** `PublicRoutes::dispatch()` is the gate
+  (secret, then `501 module_not_installed`, then `402 license_required`/`license_expired`) and hands
+  the request to a module that implements `PublicModuleInterface`. A module release from before the
+  interface is served by the in-core handlers exactly as before. New `GET /api/fm/share/page` and
+  `GET /api/fm/intake/page` serve the recipient pages with the API base injected as
+  `<meta name="fm-api-base">`; `/public/share.html` and `/public/intake.html` keep working and now
+  read that tag first.
+- **`HttpTransportInterface`** (default `CurlTransport`, the current cURL behaviour) for the AI
+  tagger, the bucket doctor's unpinned probe and OIDC discovery. URL import keeps its DNS-pinned
+  cURL, and so does the bucket doctor's pinned (BYOB) fetch.
+- **`Log::warn()` / `Log::setSink()`** replaces `error_log()` in the shipped core files (default
+  output is unchanged).
+- **`FileManager` sweep helpers for modules:** `filesystemFor`, `scopedKey`, `relativeKey`,
+  `isVisibleKey`, `isHeld`, `visibleFiles` and `removeKeys`. They wrap the existing private logic
+  and apply the same disk, permission, `owner_only` and legal-hold checks.
+- `/retention/run`, `/fixity/check` and `/audit/verify` call the `legal-hold` / `audit-export`
+  module's `runRetention` / `runFixityCheck` / `verifyChain` when it has them, and fall back to
+  core's own copy when it does not.
+- New error code `module_update_required` (501, translated in all 16 languages). Nothing returns
+  it yet; it is reserved for the release that removes the fallbacks.
+- `scripts/pack-modules.php` packages a module's top-level `public/` beside `src/`.
+- `aws/aws-sdk-php` is trimmed to its `S3` and `Sts` services on a root `composer install`.
+
 ## [1.0.7] — 2026-11-06
 
 > Released: `ckeditor5-v1.0.1`.

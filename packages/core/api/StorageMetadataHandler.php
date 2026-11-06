@@ -909,7 +909,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             // from "purge succeeded, nothing matched the cutoff". Log for the
             // operator and surface a proper error instead of returning fake
             // success counts for a possibly-partial purge.
-            error_log("FluxFiles audit purge failed on disk '{$disk}': " . $e->getMessage());
+            \FluxFiles\Log::warn("FluxFiles audit purge failed on disk '{$disk}': " . $e->getMessage());
             throw new ApiException('Audit purge failed', 500, 'audit_purge_failed');
         } finally {
             $this->releaseAuditLock($disk);
@@ -1203,7 +1203,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             try {
                 $this->finishBatch((string) $disk);
             } catch (\Throwable $e) {
-                error_log('FluxFiles: flushing an open index batch at shutdown failed — ' . $e->getMessage());
+                \FluxFiles\Log::warn('FluxFiles: flushing an open index batch at shutdown failed — ' . $e->getMessage());
             }
         }
     }
@@ -1497,7 +1497,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             $data = null;
         }
         if (!is_array($data)) {
-            error_log("FluxFiles: legal hold manifest on disk '{$disk}' is unreadable — refusing hold-guarded operations");
+            \FluxFiles\Log::warn("FluxFiles: legal hold manifest on disk '{$disk}' is unreadable — refusing hold-guarded operations");
             // No dedicated code: "treat everything as held" is exactly the
             // fail-closed behaviour, and it reuses the translated message.
             throw new ApiException(
@@ -1770,7 +1770,7 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
             return;
         }
         @touch($marker);
-        error_log(sprintf(
+        \FluxFiles\Log::warn(sprintf(
             "FluxFiles: the metadata index for disk '%s' is %.1f MB. Every list page reads it in full and every "
             . 'write rewrites it, so lists and uploads slow down as it grows. Switch to the database backend '
             . '(FLUXFILES_STORAGE_BACKEND=db, then php scripts/migrate-json-to-db.php) — see docs/design/DB-STORAGE-MIGRATION-DESIGN.md.',
