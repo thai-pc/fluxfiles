@@ -9,6 +9,15 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 Found by reviewing the README against the code.
 
+### Added
+
+- **`FLUXFILES_DISKS_CONFIG`: keep the disk config outside the package.** An absolute path to a
+  PHP file returning the disks array replaces `config/disks.php` entirely, so a
+  `composer require` install keeps its disks across `composer update`. A missing, unreadable
+  or non-array file is an error (HTTP 500 from the API, stderr and exit 1 from the CLI),
+  never a silent fallback to `local`. It applies to the API, the CLI and the scripts, and
+  only the server environment can set it.
+
 ### Fixed
 
 - **`fluxfiles index` ignored every flag.** PHP's `getopt()` stops at the first non-option

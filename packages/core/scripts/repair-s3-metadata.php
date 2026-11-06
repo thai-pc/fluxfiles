@@ -38,7 +38,12 @@ try {
     exit(1);
 }
 
-$diskConfigs = require __DIR__ . '/../config/disks.php';
+try {
+    $diskConfigs = \FluxFiles\DiskConfig::load();
+} catch (\FluxFiles\ApiException $e) {
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
+}
 if (!isset($diskConfigs[$disk])) {
     fwrite(STDERR, "Unknown disk '{$disk}' — check config/disks.php.\n");
     exit(1);

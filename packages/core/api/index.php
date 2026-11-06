@@ -325,7 +325,7 @@ try {
     $claims = JwtMiddleware::handle($token, $secret);
 
     // Dependencies
-    $diskConfigs = require __DIR__ . '/../config/disks.php';
+    $diskConfigs = \FluxFiles\DiskConfig::load();
     // Public demo mode: hard-strip every non-local disk so the demo can never touch
     // S3/R2/SFTP (no egress cost, no BYOB) — defense-in-depth over the local-only token.
     if (\FluxFiles\DemoMode::enabled()) {
@@ -1590,7 +1590,16 @@ function handleSsoExchange(): void
  */
 function ff_media_endpoint(): \FluxFiles\MediaEndpoint
 {
-    $dm = new DiskManager(require __DIR__ . '/../config/disks.php');
+    try {
+        $dm = new DiskManager(\FluxFiles\DiskConfig::load());
+    } catch (ApiException $e) {
+        // Pre-auth route outside the main try/catch: a broken FLUXFILES_DISKS_CONFIG
+        // must still surface as the JSON envelope, not a fatal.
+        http_response_code($e->getHttpCode());
+        header('Content-Type: application/json');
+        echo json_encode(['data' => null, 'error' => $e->getMessage(), 'error_code' => null]);
+        exit;
+    }
     return new \FluxFiles\MediaEndpoint(
         $dm,
         (string) ($_ENV['FLUXFILES_SECRET'] ?? ''),

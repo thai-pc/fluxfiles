@@ -57,6 +57,12 @@ FLUXFILES_SECRET=your-random-secret-key-min-32-chars
 FLUXFILES_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
 ```
 
+Using `composer require`? Edits to `vendor/fluxfiles/fluxfiles/config/disks.php` are lost on
+`composer update`. Keep your disks in your own file instead and point
+`FLUXFILES_DISKS_CONFIG=/absolute/path/to/disks.php` at it. That file replaces the package's
+`config/disks.php` entirely, so `require` the package's file from yours if you want the
+defaults; a missing or invalid file is an error, not a silent fallback to `local`.
+
 Every other setting — server env vars and the per-tenant JWT claims — is listed in the
 [configuration reference](https://github.com/thai-pc/fluxfiles/blob/master/docs/reference/CONFIG.md).
 

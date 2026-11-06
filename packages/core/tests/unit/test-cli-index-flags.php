@@ -49,13 +49,13 @@ mkdir($root . '/b', 0777, true);
 file_put_contents($root . '/a/one.txt', 'one');
 file_put_contents($root . '/b/two.txt', 'two');
 
-function cli(string $pkg, array $args): array
+function cli(string $pkg, array $args, array $env = []): array
 {
     $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($pkg . '/bin/fluxfiles');
     foreach ($args as $a) { $cmd .= ' ' . escapeshellarg($a); }
     $p = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $pkg, [
         'PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME'),
-    ]);
+    ] + $env);
     $out = stream_get_contents($pipes[1]);
     $err = stream_get_contents($pipes[2]);
     return ['out' => (string) $out, 'err' => (string) $err, 'code' => proc_close($p)];
@@ -109,6 +109,30 @@ test('a value option without a value is rejected', function () use ($pkg) {
     $r = cli($pkg, ['index', '--path']);
     assertTrue($r['code'] === 1 && str_contains($r['err'], 'needs a value'), $r['err']);
 });
+
+// FLUXFILES_DISKS_CONFIG: an operator file outside the package replaces the default.
+$alt = sys_get_temp_dir() . '/fx-cli-alt-' . bin2hex(random_bytes(4));
+mkdir($alt . '/files', 0777, true);
+file_put_contents($alt . '/files/x.txt', 'x');
+file_put_contents($alt . '/files/y.txt', 'y');
+file_put_contents($alt . '/files/z.txt', 'z');
+file_put_contents($alt . '/disks.php', "<?php return ['alt' => ['driver' => 'local', 'root' => " . var_export($alt . '/files', true) . "]];\n");
+
+test('FLUXFILES_DISKS_CONFIG replaces the default disks in the CLI', function () use ($pkg, $alt) {
+    $r = cli($pkg, ['index', '--disk=alt', '--dry-run'], ['FLUXFILES_DISKS_CONFIG' => $alt . '/disks.php']);
+    assertTrue($r['code'] === 0 && stat_of($r['out'], 'Files indexed') === 3, $r['out'] . $r['err']);
+    $r = cli($pkg, ['index', '--disk=local', '--dry-run'], ['FLUXFILES_DISKS_CONFIG' => $alt . '/disks.php']);
+    assertTrue($r['code'] === 1 && str_contains($r['err'], "Disk 'local' is not configured"), 'replaced, not merged: ' . $r['err']);
+});
+
+test('a broken FLUXFILES_DISKS_CONFIG fails with exit 1, no fallback to local', function () use ($pkg, $root) {
+    wipe($root);
+    $r = cli($pkg, ['index'], ['FLUXFILES_DISKS_CONFIG' => '/nonexistent/disks.php']);
+    assertTrue($r['code'] === 1 && str_contains($r['err'], 'FLUXFILES_DISKS_CONFIG'), $r['err']);
+    assertTrue(!is_dir($root . '/_fluxfiles'), 'must not have indexed the default disk');
+});
+
+rrmdir($alt);
 
 rrmdir($pkg);
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n\n";

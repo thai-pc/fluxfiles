@@ -197,7 +197,12 @@ $envDirs = [
 \FluxFiles\EnvBootstrap::load($envDirs);
 \FluxFiles\SsrfGuard::setAllowHosts((string) ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
 
-$diskConfigs = require __DIR__ . '/../config/disks.php';
+try {
+    $diskConfigs = \FluxFiles\DiskConfig::load(__DIR__ . '/../config/disks.php');
+} catch (\FluxFiles\ApiException $e) {
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
+}
 $disk = (string) ($opts['disk'] ?? 'local');
 if (!isset($diskConfigs[$disk])) {
     fwrite(STDERR, "Disk '{$disk}' is not configured.\n");
