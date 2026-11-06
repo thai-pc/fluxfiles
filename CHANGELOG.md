@@ -3,6 +3,47 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] — 2026-11-06
+
+> Released: `core-v1.0.2`, `sdk-v1.0.1`, `wordpress-v1.0.2`.
+
+Found by reviewing the README against the code.
+
+### Added
+
+- **`FLUXFILES_DISKS_CONFIG`: keep the disk config outside the package.** An absolute path to a
+  PHP file returning the disks array replaces `config/disks.php` entirely, so a
+  `composer require` install keeps its disks across `composer update`. A missing, unreadable
+  or non-array file is an error (HTTP 500 from the API, stderr and exit 1 from the CLI),
+  never a silent fallback to `local`; over HTTP the error is a generic 500 (the path and
+  detail go to the server log only). The path must be absolute and the file must not print
+  anything. It applies to the API, the CLI and the scripts, and
+  only the server environment can set it.
+
+### Upgrading
+
+- **Review any cron job or CI step that runs `fluxfiles index`.** Its flags were silently
+  ignored before and now take effect, and a typo or stray argument now exits 1. In
+  practice: `--disk=s3 --hash` now really downloads the whole bucket to hash it, `--owner`
+  now stamps `uploaded_by`, `--readonly` now marks the entries, `--path` now limits the
+  scan, and `--dry-run` now stops writing (an invocation that relied on the old behaviour
+  to actually write will stop doing so). An empty value such as `--path=` is refused.
+
+### Fixed
+
+- **`fluxfiles index` ignored every flag.** PHP's `getopt()` stops at the first non-option
+  argument, which is `index`, so `--dry-run` was dropped and the indexer wrote `_fluxfiles/`
+  index files for real, while `--disk`, `--path` and `--owner` were dropped too and it always
+  indexed the whole `local` disk. The flags are now parsed by hand, as `serve` already did, and
+  an unknown option or a missing value is rejected with an error.
+- **The `onSelect` payload was missing `created` and `modified`.** The README documents both
+  (unix seconds: the stable upload time and the live storage mtime), but the UI never sent them.
+- **SDK: `import type { FluxFile, FluxFilesOpenOptions, FluxFilesSDK } from 'fluxfiles'` failed.**
+  `fluxfiles.d.ts` declared its interfaces at module level without exporting them. They now live
+  in a `FluxFiles` namespace merged with the existing `export =` value, so named type imports,
+  the default import and the UMD global all work. `FluxFile.modified` was typed `string` but is a
+  number of unix seconds; `FluxFile.created` was missing.
+
 ## [1.0.2] — 2026-10-31
 
 > Released: `core-v1.0.1`, `laravel-v1.0.1`, `wordpress-v1.0.1`.

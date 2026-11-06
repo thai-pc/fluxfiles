@@ -1358,6 +1358,8 @@ function fluxFilesApp() {
                 basename: item.name, // backward compat
                 size: item.size,
                 disk: this.currentDisk,
+                created: item.created || null,   // unix seconds (stable upload/mkdir time)
+                modified: item.modified || null, // unix seconds (live storage mtime)
                 permanent_url: item.permanent_url || null,
                 mime: item.mime || (item.meta && item.meta.mime) || null,
                 width: item.width || (item.meta && item.meta.width) || null,

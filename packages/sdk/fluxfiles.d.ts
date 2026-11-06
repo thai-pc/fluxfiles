@@ -1,101 +1,110 @@
-interface FluxFilesOpenOptions {
-    endpoint: string;
-    token: string;
-    disk?: string;
-    /** Available disks shown in sidebar. */
-    disks?: string[];
-    mode?: 'picker' | 'browser';
-    /** Allow multi-select; when true, onSelect receives array of FluxFile */
-    multiple?: boolean;
-    /** Locale code (e.g. "en", "vi", "ar"). Default: "en". */
-    locale?: string;
-    /** Theme: "light", "dark", or "auto". */
-    theme?: string;
-    allowedTypes?: string[];
-    /** Max size per uploaded file, in **megabytes (MB)**. Preferred over `maxSize`. */
-    maxUploadMb?: number;
-    /** @deprecated Use `maxUploadMb` (MB). Bytes; converted to MB when `maxUploadMb` is unset. */
-    maxSize?: number;
-    /** Max number of files per upload batch (0/undefined = unlimited). The server enforces the total per prefix via the `max_files` claim. */
-    maxFiles?: number;
-    container?: string;
-    onSelect?: (file: FluxFile | FluxFile[]) => void;
-    onClose?: () => void;
-    /** Called when the iframe needs a fresh JWT (401 received). Return new token or null. */
-    onTokenRefresh?: (context: { reason: string; disk?: string; path?: string }) => Promise<string | null>;
+// Named types live in the merged `FluxFiles` namespace, so all of these work:
+//   import FluxFiles = require('fluxfiles')  /  import FluxFiles from 'fluxfiles' (esModuleInterop)
+//   import type { FluxFile, FluxFilesOpenOptions, FluxFilesSDK } from 'fluxfiles'
+//   const f: FluxFiles.FluxFile  (UMD global)
+declare namespace FluxFiles {
+    export interface FluxFilesOpenOptions {
+        endpoint: string;
+        token: string;
+        disk?: string;
+        /** Available disks shown in sidebar. */
+        disks?: string[];
+        mode?: 'picker' | 'browser';
+        /** Allow multi-select; when true, onSelect receives array of FluxFile */
+        multiple?: boolean;
+        /** Locale code (e.g. "en", "vi", "ar"). Default: "en". */
+        locale?: string;
+        /** Theme: "light", "dark", or "auto". */
+        theme?: string;
+        allowedTypes?: string[];
+        /** Max size per uploaded file, in **megabytes (MB)**. Preferred over `maxSize`. */
+        maxUploadMb?: number;
+        /** @deprecated Use `maxUploadMb` (MB). Bytes; converted to MB when `maxUploadMb` is unset. */
+        maxSize?: number;
+        /** Max number of files per upload batch (0/undefined = unlimited). The server enforces the total per prefix via the `max_files` claim. */
+        maxFiles?: number;
+        container?: string;
+        onSelect?: (file: FluxFile | FluxFile[]) => void;
+        onClose?: () => void;
+        /** Called when the iframe needs a fresh JWT (401 received). Return new token or null. */
+        onTokenRefresh?: (context: { reason: string; disk?: string; path?: string }) => Promise<string | null>;
+    }
+
+    export interface FluxFile {
+        path: string;
+        basename: string;
+        key?: string;
+        name?: string;
+        url?: string;
+        /** Stable, non-expiring URL for embedding (public disk / public_url). */
+        permanent_url?: string;
+        /** Base URL for the on-demand WebP endpoint (images only; when the feature is on). Use `FluxFiles.imgUrl(file, …)`. */
+        img_base?: string;
+        /** Ready-to-use responsive `srcset` (images only; built from `img_base` + the token's width ladder). */
+        img_srcset?: string;
+        /** `sizes` attribute to pair with `img_srcset` (only when the token sets `srcset_sizes`). */
+        img_sizes?: string;
+        size?: number;
+        mime?: string;
+        /** Image dimensions (present for images uploaded through FluxFiles). */
+        width?: number;
+        height?: number;
+        disk?: string;
+        is_dir?: boolean;
+        /** Unix seconds. Stable upload/mkdir time (folders carry it too). */
+        created?: number;
+        /** Unix seconds. Live storage mtime (may be absent for S3/R2 dir prefixes). */
+        modified?: number;
+        meta?: {
+            title?: string | null;
+            alt_text?: string | null;
+            caption?: string | null;
+            tags?: string | null;
+            mime?: string | null;
+            width?: number | null;
+            height?: number | null;
+            uploaded_by?: string | null;
+        } | null;
+        /** Image variant URLs (thumb/medium/large WebP). */
+        variants?: Record<string, { url: string; key: string }> | null;
+        /** Which variant was selected ("original", "thumb", "medium", "large"). */
+        variant?: 'original' | 'thumb' | 'medium' | 'large';
+    }
+
+    export interface FluxEvent {
+        action: 'upload' | 'delete' | 'move' | 'copy' | 'mkdir' | 'restore' | 'purge' | 'trash' | 'crop' | 'ai_tag';
+        disk: string;
+        path: string;
+        [key: string]: unknown;
+    }
+
+    export type FluxFilesEventType = 'FM_READY' | 'FM_SELECT' | 'FM_EVENT' | 'FM_CLOSE' | 'FM_TOKEN_REFRESH';
+
+    export interface FluxFilesSDK {
+        open(options: FluxFilesOpenOptions): void;
+        close(): void;
+        command(action: string, data?: Record<string, unknown>): void;
+        navigate(path: string): void;
+        setDisk(disk: string): void;
+        refresh(): void;
+        search(query: string): void;
+        crossCopy(dstDisk: string, dstPath?: string): void;
+        crossMove(dstDisk: string, dstPath?: string): void;
+        aiTag(): void;
+        /** Switch locale/language at runtime. */
+        setLocale(locale: string): void;
+        /** Crops the currently open detail file. savePath omitted/'' = overwrite in place, otherwise saves as a new file (must keep the same extension). */
+        crop(x: number, y: number, width: number, height: number, savePath?: string): void;
+        /** Build an on-demand WebP URL for a selected image from its `img_base`. Returns '' if unavailable. */
+        imgUrl(file: FluxFile, opts?: { width?: number; quality?: number; format?: 'webp' | 'auto' }): string;
+        /** Push a new token (e.g. after background refresh). */
+        updateToken(token: string): void;
+        on(event: FluxFilesEventType, callback: (data: unknown) => void): () => void;
+        off(event: FluxFilesEventType, callback: (data: unknown) => void): void;
+    }
 }
 
-interface FluxFile {
-    path: string;
-    basename: string;
-    key?: string;
-    name?: string;
-    url?: string;
-    /** Stable, non-expiring URL for embedding (public disk / public_url). */
-    permanent_url?: string;
-    /** Base URL for the on-demand WebP endpoint (images only; when the feature is on). Use `FluxFiles.imgUrl(file, …)`. */
-    img_base?: string;
-    /** Ready-to-use responsive `srcset` (images only; built from `img_base` + the token's width ladder). */
-    img_srcset?: string;
-    /** `sizes` attribute to pair with `img_srcset` (only when the token sets `srcset_sizes`). */
-    img_sizes?: string;
-    size?: number;
-    mime?: string;
-    /** Image dimensions (present for images uploaded through FluxFiles). */
-    width?: number;
-    height?: number;
-    disk?: string;
-    is_dir?: boolean;
-    modified?: string;
-    meta?: {
-        title?: string | null;
-        alt_text?: string | null;
-        caption?: string | null;
-        tags?: string | null;
-        mime?: string | null;
-        width?: number | null;
-        height?: number | null;
-        uploaded_by?: string | null;
-    } | null;
-    /** Image variant URLs (thumb/medium/large WebP). */
-    variants?: Record<string, { url: string; key: string }> | null;
-    /** Which variant was selected ("original", "thumb", "medium", "large"). */
-    variant?: 'original' | 'thumb' | 'medium' | 'large';
-}
-
-interface FluxEvent {
-    action: 'upload' | 'delete' | 'move' | 'copy' | 'mkdir' | 'restore' | 'purge' | 'trash' | 'crop' | 'ai_tag';
-    disk: string;
-    path: string;
-    [key: string]: unknown;
-}
-
-type FluxFilesEventType = 'FM_READY' | 'FM_SELECT' | 'FM_EVENT' | 'FM_CLOSE' | 'FM_TOKEN_REFRESH';
-
-interface FluxFilesSDK {
-    open(options: FluxFilesOpenOptions): void;
-    close(): void;
-    command(action: string, data?: Record<string, unknown>): void;
-    navigate(path: string): void;
-    setDisk(disk: string): void;
-    refresh(): void;
-    search(query: string): void;
-    crossCopy(dstDisk: string, dstPath?: string): void;
-    crossMove(dstDisk: string, dstPath?: string): void;
-    aiTag(): void;
-    /** Switch locale/language at runtime. */
-    setLocale(locale: string): void;
-    /** Crops the currently open detail file. savePath omitted/'' = overwrite in place, otherwise saves as a new file (must keep the same extension). */
-    crop(x: number, y: number, width: number, height: number, savePath?: string): void;
-    /** Build an on-demand WebP URL for a selected image from its `img_base`. Returns '' if unavailable. */
-    imgUrl(file: FluxFile, opts?: { width?: number; quality?: number; format?: 'webp' | 'auto' }): string;
-    /** Push a new token (e.g. after background refresh). */
-    updateToken(token: string): void;
-    on(event: FluxFilesEventType, callback: (data: unknown) => void): () => void;
-    off(event: FluxFilesEventType, callback: (data: unknown) => void): void;
-}
-
-declare const FluxFiles: FluxFilesSDK;
+declare const FluxFiles: FluxFiles.FluxFilesSDK;
 
 export = FluxFiles;
 export as namespace FluxFiles;

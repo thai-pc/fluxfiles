@@ -137,7 +137,7 @@ function handleIntakePublic(string $method, string $uri, ?DiskManager $injectedD
             throw new ApiException("The 'intake' module requires a valid license", 402, 'license_required', ['module' => 'intake']);
         }
         $module = new \FluxFiles\Intake\IntakeModule();
-        $dm = $injectedDm ?? new DiskManager(require __DIR__ . '/../config/disks.php');
+        $dm = $injectedDm ?? new DiskManager(\FluxFiles\DiskConfig::load());
 
         if ($method === 'GET' && $uri === '/api/fm/intake/info') {
             $token = ff_str_param($_GET, 'token');
@@ -323,7 +323,7 @@ function handleSharePublic(string $method, string $uri, ?DiskManager $injectedDm
             throw new ApiException("The 'share' module requires a valid license", 402, 'license_required', ['module' => 'share']);
         }
         $module = new \FluxFiles\Share\ShareModule();
-        $diskConfigs = $injectedCfg ?? require __DIR__ . '/../config/disks.php';
+        $diskConfigs = $injectedCfg ?? \FluxFiles\DiskConfig::load();
         $dm = $injectedDm ?? new DiskManager($diskConfigs);
 
         if ($method === 'GET' && $uri === '/api/fm/share/info') {

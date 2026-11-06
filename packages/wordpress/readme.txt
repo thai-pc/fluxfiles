@@ -4,7 +4,7 @@ Tags: file-manager, media, s3, r2, upload, cloud-storage, share, client-portal
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 8.1.0
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -121,6 +121,9 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 
 == Changelog ==
 
+= 1.0.2 =
+* The `onSelect` payload now includes `created` and `modified` (unix seconds), as documented.
+
 = 1.0.1 =
 * Downloads and previews now work on BYOB SFTP disks. Their per-file links carry the disk config encrypted and last at most 30 minutes.
 * Search, folder search, quota, usage and attachments now work on BYOB disks.
@@ -151,6 +154,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.0.2 =
+Adds `created`/`modified` to the file-select payload.
 
 = 1.0.1 =
 Fixes BYOB SFTP downloads and previews, BYOB search and quota, and the private-network allow-list.
