@@ -128,8 +128,20 @@ test('FLUXFILES_DISKS_CONFIG replaces the default disks in the CLI', function ()
 test('a broken FLUXFILES_DISKS_CONFIG fails with exit 1, no fallback to local', function () use ($pkg, $root) {
     wipe($root);
     $r = cli($pkg, ['index'], ['FLUXFILES_DISKS_CONFIG' => '/nonexistent/disks.php']);
-    assertTrue($r['code'] === 1 && str_contains($r['err'], 'FLUXFILES_DISKS_CONFIG'), $r['err']);
+    assertTrue($r['code'] === 1 && str_contains($r['err'], 'FLUXFILES_DISKS_CONFIG') && str_contains($r['err'], '/nonexistent/disks.php'), $r['err']);
     assertTrue(!is_dir($root . '/_fluxfiles'), 'must not have indexed the default disk');
+});
+
+test('a relative FLUXFILES_DISKS_CONFIG is refused', function () use ($pkg) {
+    $r = cli($pkg, ['index'], ['FLUXFILES_DISKS_CONFIG' => 'disks.php']);
+    assertTrue($r['code'] === 1 && str_contains($r['err'], 'absolute path'), $r['err']);
+});
+
+test('an empty --path= is refused instead of indexing the whole disk', function () use ($pkg, $root) {
+    wipe($root);
+    $r = cli($pkg, ['index', '--path=']);
+    assertTrue($r['code'] === 1 && str_contains($r['err'], '--path is empty'), $r['err']);
+    assertTrue(!is_dir($root . '/_fluxfiles'), 'must not have indexed');
 });
 
 rrmdir($alt);

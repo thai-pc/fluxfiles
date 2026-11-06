@@ -123,7 +123,6 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. Whi
 
 = 1.0.2 =
 * The `onSelect` payload now includes `created` and `modified` (unix seconds), as documented.
-* `fluxfiles index` now honours `--dry-run`, `--disk`, `--path` and `--owner`; before, it ignored every flag.
 
 = 1.0.1 =
 * Downloads and previews now work on BYOB SFTP disks. Their per-file links carry the disk config encrypted and last at most 30 minutes.
@@ -157,7 +156,7 @@ First public release. WordPress adapter for the FluxFiles file manager:
 == Upgrade Notice ==
 
 = 1.0.2 =
-Fixes the CLI indexer ignoring its flags and adds `created`/`modified` to the file-select payload.
+Adds `created`/`modified` to the file-select payload.
 
 = 1.0.1 =
 Fixes BYOB SFTP downloads and previews, BYOB search and quota, and the private-network allow-list.

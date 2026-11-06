@@ -176,6 +176,10 @@ foreach (array_slice($argv, 2) as $arg) {
             fwrite(STDERR, "Option --{$name} needs a value: --{$name}=<value>.\n");
             exit(1);
         }
+        if ($m[2] === '') {
+            fwrite(STDERR, "Option --{$name} is empty (an unset shell variable?). Refusing to continue; omit the option to use its default.\n");
+            exit(1);
+        }
         $opts[$name] = $m[2];
     } elseif (in_array($name, $flagOpts, true)) {
         if ($hasValue) {
@@ -200,7 +204,7 @@ $envDirs = [
 try {
     $diskConfigs = \FluxFiles\DiskConfig::load(__DIR__ . '/../config/disks.php');
 } catch (\FluxFiles\ApiException $e) {
-    fwrite(STDERR, $e->getMessage() . "\n");
+    fwrite(STDERR, ($e instanceof \FluxFiles\DiskConfigException ? $e->getDetail() : $e->getMessage()) . "\n");
     exit(1);
 }
 $disk = (string) ($opts['disk'] ?? 'local');

@@ -1597,7 +1597,7 @@ function ff_media_endpoint(): \FluxFiles\MediaEndpoint
         // must still surface as the JSON envelope, not a fatal.
         http_response_code($e->getHttpCode());
         header('Content-Type: application/json');
-        echo json_encode(['data' => null, 'error' => $e->getMessage(), 'error_code' => null]);
+        echo json_encode(['data' => null, 'error' => $e->getMessage(), 'error_code' => $e->getErrorCode()]);
         exit;
     }
     return new \FluxFiles\MediaEndpoint(

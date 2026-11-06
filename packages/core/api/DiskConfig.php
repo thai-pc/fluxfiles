@@ -30,19 +30,36 @@ final class DiskConfig
             return $disks;
         }
 
-        if (!is_file($path) || !is_readable($path)) {
-            throw new ApiException('FLUXFILES_DISKS_CONFIG points to a file that is missing or not readable: ' . $path, 500);
+        // Absolute POSIX path, Windows drive path or UNC path.
+        if (!str_starts_with($path, '/') && preg_match('~^(?:[A-Za-z]:[\\\\/]|\\\\\\\\)~', $path) !== 1) {
+            throw self::fail('FLUXFILES_DISKS_CONFIG must be an absolute path, got: ' . $path);
         }
+        if (!is_file($path) || !is_readable($path)) {
+            throw self::fail('FLUXFILES_DISKS_CONFIG points to a file that is missing or not readable: ' . $path);
+        }
+        ob_start();
         try {
             $disks = (static function (string $__file) {
                 return require $__file;
             })($path);
         } catch (\Throwable $e) {
-            throw new ApiException('FLUXFILES_DISKS_CONFIG file failed to load: ' . $e->getMessage(), 500);
+            ob_end_clean();
+            throw self::fail('FLUXFILES_DISKS_CONFIG file ' . $path . ' failed to load: ' . get_class($e) . ': ' . $e->getMessage());
+        }
+        $out = (string) ob_get_clean();
+        if ($out !== '') {
+            throw self::fail('FLUXFILES_DISKS_CONFIG file ' . $path . ' printed output (' . strlen($out) . ' bytes); a config file must only return the array');
         }
         if (!is_array($disks)) {
-            throw new ApiException('FLUXFILES_DISKS_CONFIG file must return an array of disks: ' . $path, 500);
+            throw self::fail('FLUXFILES_DISKS_CONFIG file must return an array of disks: ' . $path);
         }
         return $disks;
+    }
+
+    /** Log the detail for the operator; HTTP callers only ever see the generic message. */
+    private static function fail(string $detail): DiskConfigException
+    {
+        error_log('[fluxfiles] ' . $detail);
+        return new DiskConfigException($detail);
     }
 }

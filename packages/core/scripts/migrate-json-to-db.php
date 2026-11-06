@@ -38,7 +38,7 @@ try {
 try {
     $diskConfigs = \FluxFiles\DiskConfig::load();
 } catch (\FluxFiles\ApiException $e) {
-    fwrite(STDERR, $e->getMessage() . "\n");
+    fwrite(STDERR, ($e instanceof \FluxFiles\DiskConfigException ? $e->getDetail() : $e->getMessage()) . "\n");
     exit(1);
 }
 $diskManager = new \FluxFiles\DiskManager($diskConfigs);

@@ -41,11 +41,11 @@ try {
 try {
     $diskConfigs = \FluxFiles\DiskConfig::load();
 } catch (\FluxFiles\ApiException $e) {
-    fwrite(STDERR, $e->getMessage() . "\n");
+    fwrite(STDERR, ($e instanceof \FluxFiles\DiskConfigException ? $e->getDetail() : $e->getMessage()) . "\n");
     exit(1);
 }
 if (!isset($diskConfigs[$disk])) {
-    fwrite(STDERR, "Unknown disk '{$disk}' — check config/disks.php.\n");
+    fwrite(STDERR, "Unknown disk '{$disk}' — check config/disks.php (or the file named by FLUXFILES_DISKS_CONFIG).\n");
     exit(1);
 }
 if (($diskConfigs[$disk]['driver'] ?? '') !== 's3') {

@@ -15,8 +15,19 @@ Found by reviewing the README against the code.
   PHP file returning the disks array replaces `config/disks.php` entirely, so a
   `composer require` install keeps its disks across `composer update`. A missing, unreadable
   or non-array file is an error (HTTP 500 from the API, stderr and exit 1 from the CLI),
-  never a silent fallback to `local`. It applies to the API, the CLI and the scripts, and
+  never a silent fallback to `local`; over HTTP the error is a generic 500 (the path and
+  detail go to the server log only). The path must be absolute and the file must not print
+  anything. It applies to the API, the CLI and the scripts, and
   only the server environment can set it.
+
+### Upgrading
+
+- **Review any cron job or CI step that runs `fluxfiles index`.** Its flags were silently
+  ignored before and now take effect, and a typo or stray argument now exits 1. In
+  practice: `--disk=s3 --hash` now really downloads the whole bucket to hash it, `--owner`
+  now stamps `uploaded_by`, `--readonly` now marks the entries, `--path` now limits the
+  scan, and `--dry-run` now stops writing (an invocation that relied on the old behaviour
+  to actually write will stop doing so). An empty value such as `--path=` is refused.
 
 ### Fixed
 
