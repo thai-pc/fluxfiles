@@ -3,7 +3,9 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.14] — 2026-11-07
+
+> Released: `core-v1.1.1`. The WordPress changes ship with `wordpress-v1.1.0`, the free WordPress.org build, which bundles core 1.1.1.
 
 ### WordPress plugin: storage base, hidden guard files, uninstall
 
