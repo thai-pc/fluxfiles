@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 /**
  * Internationalization — load JSON translation files, resolve locale, interpolate variables.
  */
@@ -87,6 +89,7 @@ class I18n
         }
 
         // 2. URL query param ?lang=
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- read-only language picker, validated against the shipped locales by isSupported() before use
         $lang = $_GET['lang'] ?? null;
         if ($lang !== null && $this->isSupported($lang)) {
             return $this->normalize($lang);

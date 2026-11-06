@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable PluginCheck.CodeAnalysis.AIProvider.DirectIntegration -- opt-in, bring-your-own-key tagging: the operator picks the provider and supplies the key; it is not tied to one vendor, so the WordPress AI Client does not apply
+// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- JSON API exceptions: the message travels in the JSON error envelope and is never rendered as HTML
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 /**
  * AI-powered image tagging using a vision model.
  *

@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- JSON API exceptions: the message travels in the JSON error envelope and is never rendered as HTML
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fclose, WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.WP.AlternativeFunctions.file_system_operations_fread, WordPress.WP.AlternativeFunctions.file_system_operations_fwrite, WordPress.WP.AlternativeFunctions.unlink_unlink -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- core is a WordPress-independent library; wp_parse_url() does not exist outside WordPress
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 use Aws\S3\S3Client;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\StorageAttributes;
@@ -4315,6 +4320,7 @@ class FileManager
                 return rtrim($config['endpoint'], '/') . '/' . $bucket . '/' . $path;
             }
             $region = $config['region'] ?? 'us-east-1';
+            // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- public URL of a file in the OPERATOR'S OWN S3 bucket (BYOB storage the user configured); the plugin ships and loads no script, style or image from any third party
             return "https://{$bucket}.s3.{$region}.amazonaws.com/{$path}";
         }
 
@@ -4371,6 +4377,7 @@ class FileManager
             return rtrim($config['endpoint'], '/') . '/' . $bucket . '/' . $path;
         }
         $region = $config['region'] ?? 'us-east-1';
+        // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- public URL of a file in the OPERATOR'S OWN S3 bucket (BYOB storage the user configured); the plugin ships and loads no script, style or image from any third party
         return "https://{$bucket}.s3.{$region}.amazonaws.com/{$path}";
     }
 

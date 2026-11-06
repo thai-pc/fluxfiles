@@ -3,6 +3,36 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.15] — 2026-11-07
+
+> Released: `core-v1.1.2` (comment-only phpcs annotations). The WordPress changes ship with `wordpress-v1.1.0`, the free WordPress.org build.
+
+### WordPress plugin: WordPress.org Plugin Check clean-up (2.2.0)
+
+- **`public-link.php` is removed.** The paid WordPress modules had no users, so no old-form share/intake links exist
+  to redirect; the REST page route is the only entry point. The `?blog=` hint on that route is kept for multisite.
+- **Requires WordPress 6.5** (was 6.0): `$wpdb->prepare()` uses `%i` identifier
+  placeholders (WordPress 6.2+) and Plugin Check's requires-WordPress check flags anything lower. The readme, plugin header and design doc follow.
+- No hidden or executable files in the zip: `public/.htaccess` is no longer shipped (`public/index.php` answers a
+  direct hit with 403 and carries the `ABSPATH` guard), and the build prunes `*.sh`, `*.phar`, `bin/` launchers, the
+  `paragonie/random_compat` build helpers and every dot-file from `vendor/`. `HOOKS.md` and
+  `THIRD-PARTY-NOTICES.md` ship under `docs/` instead of the plugin root.
+- Output and input hardening: the `[fluxfiles]` shortcode and the media-button modal no longer print raw `<script>`
+  blocks (the shortcode loader goes through `wp_add_inline_script()`, the modal logic lives in
+  `assets/media-button.js`), `$_GET`/`$_SERVER` reads are unslashed and sanitized (the Bearer JWT is only unslashed),
+  `parse_url()` is `wp_parse_url()`, the DB handlers prepare every parameterised query (and use `%i` for table
+  names), and `uninstall.php` / WP-CLI delete files with `wp_delete_file()`.
+- The build guard (`scripts/check-wp-dist.php`) now also rejects hidden files, markdown in the plugin root,
+  `*.sh`/`*.phar`/`bin/` and a stray `public-link.php`.
+
+### Core: Plugin Check annotations (comments only)
+
+- Justified `phpcs:disable` / `phpcs:ignore` annotations in `packages/core/api` for the findings that are
+  intentional in a WordPress-independent library: JSON API exceptions that are never rendered as HTML,
+  argument-array `proc_open` with `ProcessEnv::minimal()`, streamed file handles / `flock` / SSRF-pinned cURL,
+  environment configuration reads, the opt-in PDO backend, raw file and page bytes, and the operator's own S3 URLs.
+  No behaviour change. A new core tag is needed before the next WordPress.org build, which stamps the bundled core.
+
 ## [1.0.14] — 2026-11-07
 
 > Released: `core-v1.1.1`. The WordPress changes ship with `wordpress-v1.1.0`, the free WordPress.org build, which bundles core 1.1.1.

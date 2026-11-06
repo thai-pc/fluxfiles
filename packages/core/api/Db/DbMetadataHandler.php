@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles\Db;
 
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 use FluxFiles\AuditChain;
 
 use FluxFiles\DiskManager;

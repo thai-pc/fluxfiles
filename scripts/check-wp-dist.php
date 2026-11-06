@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Unpacks the zip into a temp dir and fails (exit 1, one line per violation) when the
  * build carries something WordPress.org rejects or the free plugin must not contain:
  * a self-updater, paid-module plumbing, a wp-load.php include, files the plugin never
- * runs, a stray cURL call, a CDN script, an oversized zip or a readme that breaks the
+ * runs, hidden or executable files, a stray cURL call, a CDN script, an oversized zip or a readme that breaks the
  * directory's rules. vendor/ is third-party code and is exempt from the string scans.
  */
 
@@ -77,14 +77,29 @@ ksort($files);
 
 // ---- required paths --------------------------------------------------------
 foreach ([
-    'fluxfiles.php', 'readme.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md',
-    'api/FileManager.php', 'public/index.html', 'assets/fm.js', 'assets/fm.min.js',
+    'fluxfiles.php', 'readme.txt', 'LICENSE', 'docs/THIRD-PARTY-NOTICES.md',
+    'api/FileManager.php', 'templates/ui-index.php', 'assets/fm.js', 'assets/fm.min.js',
     'assets/fluxfiles.js', 'assets/vendor/alpine/alpine.min.js',
     'assets/fonts/DejaVuSans.ttf', 'assets/codemirror-theme-material-darker.css',
-    'vendor/autoload.php', 'composer.json', 'composer.lock', 'HOOKS.md',
+    'vendor/autoload.php', 'composer.json', 'composer.lock', 'docs/HOOKS.md',
 ] as $req) {
     if (!isset($files[$req])) {
         $fail("required file missing: $req");
+    }
+}
+
+// ---- UI template guard -----------------------------------------------------
+// templates/ui-index.php must open with the exact line FluxFilesApi::UI_TEMPLATE_GUARD
+// strips when serving; without it the page is openable directly under wp-content/plugins/.
+if (isset($files['templates/ui-index.php']) && isset($files['includes/FluxFilesApi.php'])) {
+    $api = (string) file_get_contents($files['includes/FluxFilesApi.php']);
+    if (preg_match('/const UI_TEMPLATE_GUARD = "(.*)\\\\n";/', $api, $m) !== 1) {
+        $fail('includes/FluxFilesApi.php: UI_TEMPLATE_GUARD constant not found');
+    } else {
+        $guard = $m[1] . "\n";
+        if (!str_starts_with((string) file_get_contents($files['templates/ui-index.php']), $guard)) {
+            $fail('templates/ui-index.php does not start with the exact UI_TEMPLATE_GUARD line');
+        }
     }
 }
 
@@ -104,6 +119,13 @@ foreach ($files as $rel => $_) {
         '#(^|/)\.git#' => 'git metadata',
         '#(^|/)phpunit#i' => 'phpunit',
         '#(^|/)\.distignore$#' => 'build metadata',
+        '#^(?!assets/|vendor/).*\.(html?|svg|xml)$#i' => 'raw-servable page outside assets/ (UI pages must be PHP templates that exit without ABSPATH)',
+        '#^public-link\.php$#' => 'the legacy redirect entry point was removed in 1.1.0',
+        // Plugin Check: hidden_files, unexpected_markdown_file, application_detected.
+        '#(^|/)\.[^/]+#' => 'hidden file or directory (hidden_files)',
+        '#^[^/]+\.md$#' => 'markdown in the plugin root (unexpected_markdown_file); ship it under docs/',
+        '#\.(sh|phar|exe|bat|so|dll|dylib)$#i' => 'executable or archive (application_detected)',
+        '#(^|/)bin/#' => 'bin/ launcher directory (application_detected)',
     ] as $re => $why) {
         if (preg_match($re, $rel) === 1) {
             $fail("forbidden path: $rel ($why)");
@@ -146,8 +168,6 @@ foreach ($files as $rel => $abs) {
         }
     }
     if (str_contains($src, 'wp-load.php') || str_contains($src, 'wp-load')) {
-        // public-link.php is the one tolerated file, and only while it is WordPress-free
-        // (checked below), so it must not even mention wp-load.
         $fail("$rel: references wp-load.php");
     }
     foreach ($movedFunctions as $fn => $module) {
@@ -198,13 +218,6 @@ foreach ($files as $rel => $abs) {
         $fail("$rel: function verify( moved to the audit-export module");
     }
 }
-if (isset($files['public-link.php'])) {
-    $pl = (string) file_get_contents($files['public-link.php']);
-    if (preg_match('/\b(require|include)(_once)?\b|wp-load/i', $pl) === 1) {
-        $fail('public-link.php: must be a WordPress-free redirect (no require/include/wp-load)');
-    }
-}
-
 // ---- readme.txt and header -------------------------------------------------
 if (isset($files['readme.txt']) && isset($files['fluxfiles.php'])) {
     $readme = (string) file_get_contents($files['readme.txt']);

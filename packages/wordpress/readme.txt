@@ -1,7 +1,7 @@
 === FluxFiles ===
 Contributors: thaipc
 Tags: file manager, amazon s3, cloudflare r2, media library, file upload
-Requires at least: 6.0
+Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
 Stable tag: 1.1.0
@@ -73,7 +73,7 @@ Only when a developer sets `terminal_pty_url`, `pdf_tools_url`, `office_url` or 
 * `assets/fm.js` and `assets/fm.css` are the readable sources of `assets/fm.min.js` and `assets/fm.min.css`, which are produced by `bash scripts/build-ui.sh` (esbuild, minify only).
 * [Alpine.js](https://github.com/alpinejs/alpine) 3.15.12 ships unmodified as `assets/vendor/alpine/alpine.min.js`.
 * The code editor uses the CodeMirror that WordPress itself ships (`wp-includes/js/codemirror/`); no CodeMirror copy is bundled. File types its build has no syntax mode for open as plain text.
-* PHP dependencies in `vendor/` are installed from `packages/core/composer.lock`; their licences ship in their folders. See `THIRD-PARTY-NOTICES.md`.
+* PHP dependencies in `vendor/` are installed from `packages/core/composer.lock`; their licences ship in their folders. See `docs/THIRD-PARTY-NOTICES.md`.
 
 == Using an existing upload directory ==
 
@@ -143,7 +143,7 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 = 1.1.0 =
 * FluxFiles is now listed on WordPress.org. The plugin no longer checks for updates itself: WordPress.org delivers them.
 * The paid modules (Share, Intake, versioning, webhooks, compliance tools) moved to the separate FluxFiles Pro add-on. This plugin keeps every free feature and provides hooks for the add-on.
-* Share and Intake links now use the site's REST URL; old `public-link.php` links still redirect to it.
+* Share and Intake links now use the site's REST URL (the old `public-link.php` entry point is gone).
 * The code editor uses the CodeMirror bundled with WordPress instead of shipping its own copy.
 * The ZIP is smaller: standalone-only files (entry point, licence and SSO code, tus server) and the AWS SDK services FluxFiles does not use are no longer included.
 * Admin messages are translatable (text domain `fluxfiles`).

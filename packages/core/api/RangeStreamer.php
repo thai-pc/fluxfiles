@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fclose, WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.WP.AlternativeFunctions.file_system_operations_fread -- core is a WordPress-independent library (it also runs standalone): streamed file handles, flock and atomic rename on storage-resident state cannot go through WP_Filesystem/wp_delete_file
+
 /**
  * HTTP Range serving for local files — the byte plumbing behind /api/fm/stream.
  *
@@ -127,6 +129,7 @@ final class RangeStreamer
             if ($read === false) {
                 break;
             }
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- raw bytes/HTML of a stored file or a module page, sent with its real Content-Type and nosniff; escaping would corrupt it
             echo $read;
             $remaining -= strlen($read);
             if (function_exists('flush')) {

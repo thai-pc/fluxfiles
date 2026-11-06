@@ -10,7 +10,7 @@
  * License URI: https://opensource.org/licenses/MIT
  * Text Domain: fluxfiles
  * Requires PHP: 8.1.0
- * Requires at least: 6.0
+ * Requires at least: 6.5
  *
  * @package FluxFiles
  */
@@ -21,7 +21,7 @@ define('FLUXFILES_VERSION', '1.1.0');
 // Release of the core bundled in this build; build-wordpress.sh stamps it from the latest core-v* tag.
 define('FLUXFILES_CORE_VERSION', 'unknown');
 // Extension API level for add-on plugins (FluxFiles Pro): bumped only when a hook breaks.
-// See HOOKS.md.
+// See docs/HOOKS.md.
 define('FLUXFILES_EXT_API', 1);
 define('FLUXFILES_PLUGIN_FILE', __FILE__);
 define('FLUXFILES_PLUGIN_DIR', plugin_dir_path(__FILE__));
@@ -49,8 +49,8 @@ if (version_compare(PHP_VERSION, FLUXFILES_MIN_PHP, '<')) {
 
 // Only the plugin's own bundled dependencies (vendor/) are loaded, never another
 // plugin's or wp-content's autoloader.
-$autoloader = is_file(__DIR__ . '/vendor/autoload.php') ? __DIR__ . '/vendor/autoload.php' : null;
-if ($autoloader === null) {
+$fluxfiles_autoloader = is_file(__DIR__ . '/vendor/autoload.php') ? __DIR__ . '/vendor/autoload.php' : null;
+if ($fluxfiles_autoloader === null) {
     add_action('admin_notices', function () {
         echo '<div class="notice notice-error"><p>';
         echo '<strong>FluxFiles:</strong> ';
@@ -61,7 +61,7 @@ if ($autoloader === null) {
     });
     return;
 }
-require_once $autoloader;
+require_once $fluxfiles_autoloader;
 
 // Load plugin classes
 require_once FLUXFILES_PLUGIN_DIR . 'includes/FluxFilesDbSchema.php';

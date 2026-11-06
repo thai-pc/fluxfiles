@@ -265,7 +265,8 @@ class FluxFilesAdmin
         if (!empty($GLOBALS['is_nginx'])) {
             return true;
         }
-        return stripos((string) ($_SERVER['SERVER_SOFTWARE'] ?? ''), 'nginx') !== false;
+        $software = isset($_SERVER['SERVER_SOFTWARE']) ? sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE'])) : '';
+        return stripos($software, 'nginx') !== false;
     }
 
     /**
@@ -283,7 +284,9 @@ class FluxFilesAdmin
             return;
         }
         $page = (string) ($GLOBALS['pagenow'] ?? '');
-        if ($page !== 'plugins.php' && !($page === 'options-general.php' && ($_GET['page'] ?? '') === 'fluxfiles')) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- reads the current admin screen slug to decide where to show a notice; nothing is processed
+        $screen = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        if ($page !== 'plugins.php' && !($page === 'options-general.php' && $screen === 'fluxfiles')) {
             return;
         }
         if ((bool) get_option('fluxfiles_local_private', false)
@@ -366,7 +369,7 @@ class FluxFilesAdmin
             printf(
                 '<label style="margin-right:15px"><input type="checkbox" name="fluxfiles_default_perms[]" value="%s" %s /> %s</label>',
                 esc_attr($perm),
-                $checked,
+                esc_attr($checked),
                 esc_html(ucfirst($perm))
             );
         }
@@ -382,7 +385,7 @@ class FluxFilesAdmin
             printf(
                 '<label style="margin-right:15px"><input type="checkbox" name="fluxfiles_disks[]" value="%s" %s /> %s</label>',
                 esc_attr($disk),
-                $checked,
+                esc_attr($checked),
                 esc_html(strtoupper($disk))
             );
         }

@@ -41,9 +41,9 @@ plant assert-string    includes/FluxFilesPlugin.php '<?php assert("phpinfo()");'
 plant base64-eval      includes/FluxFilesPlugin.php '<?php eval(base64_decode($x));'
 plant curl             includes/FluxFilesPlugin.php '<?php curl_exec($ch);'
 plant socket           includes/FluxFilesPlugin.php '<?php fsockopen("x", 80);'
-plant script-cdn       public/index.html '<script src="https://cdn.example/x.js"></script>'
-plant script-protocol  public/index.html '<script src="//cdn.example/x.js"></script>'
-plant link-external    public/index.html '<link rel="stylesheet" href="//cdn.example/x.css">'
+plant script-cdn       templates/ui-index.php '<script src="https://cdn.example/x.js"></script>'
+plant script-protocol  templates/ui-index.php '<script src="//cdn.example/x.js"></script>'
+plant link-external    templates/ui-index.php '<link rel="stylesheet" href="//cdn.example/x.css">'
 plant css-import       assets/fm.css '@import url("https://cdn.example/x.css");'
 plant js-src           assets/fm.js "s.src = '//cdn.example/x.js';"
 plant moved-function   api/FileManager.php '<?php function runRetention($a) { return 1; }'
@@ -51,6 +51,24 @@ plant paid-module      vendor/fluxfiles/share/x.php '<?php'
 plant forbidden-path   tests/x.php '<?php'
 plant helpers          api/helpers.php '<?php'
 plant license-manager  api/Claims.php '<?php class LicenseManager {}'
+plant raw-html         public/index.html '<html></html>'
+plant raw-svg          includes/x.svg '<svg/>'
+plant hidden-file      public/.htaccess 'Require all denied'
+plant hidden-vendor    vendor/foo/.travis.yml 'x'
+plant vendor-sh        vendor/foo/build.sh '#!/bin/sh'
+plant vendor-bin       vendor/foo/bin/tool 'x'
+plant vendor-phar      vendor/foo/tool.phar 'x'
+plant root-markdown    CHANGES.md '# x'
+plant public-link      public-link.php '<?php'
+
+# Strip the ABSPATH guard line from the UI template: the page would become directly openable.
+dir="$WORK/strip-guard"; mkdir -p "$dir"
+(cd "$dir" && unzip -q "$ZIP" && sed '1d' fluxfiles/templates/ui-index.php > x && mv x fluxfiles/templates/ui-index.php && zip -qr bad.zip fluxfiles)
+if php "$ROOT/scripts/check-wp-dist.php" "$dir/bad.zip" >/dev/null 2>&1; then
+    echo "FAIL strip-guard: the guard accepted a template without the ABSPATH line"; fails=$((fails + 1))
+else
+    echo "ok   strip-guard rejected"
+fi
 
 [ "$fails" -eq 0 ] || { echo "$fails planted violation(s) slipped through"; exit 1; }
 echo "OK: every planted violation was rejected"

@@ -357,6 +357,7 @@ HTACCESS;
             try {
                 $ssrf = defined('FLUXFILES_SSRF_ALLOW_HOSTS')
                     ? constant('FLUXFILES_SSRF_ALLOW_HOSTS')
+                    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration from the environment (not user input), only parsed or compared
                     : (getenv('FLUXFILES_SSRF_ALLOW_HOSTS') ?: ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
                 $about = \FluxFiles\AboutInfo::collect([
                     'env' => array_merge($_ENV, $bundledCore !== null ? ['FLUXFILES_CORE_VERSION' => $bundledCore] : [], [
@@ -403,6 +404,7 @@ HTACCESS;
     {
         $raw = defined('FLUXFILES_SSRF_ALLOW_HOSTS')
             ? constant('FLUXFILES_SSRF_ALLOW_HOSTS')
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration from the environment (not user input), only parsed or compared
             : (getenv('FLUXFILES_SSRF_ALLOW_HOSTS') ?: ($_ENV['FLUXFILES_SSRF_ALLOW_HOSTS'] ?? ''));
         \FluxFiles\SsrfGuard::setAllowHosts((string) $raw);
     }
@@ -513,7 +515,6 @@ HTACCESS;
      * the REST base the static page cannot know. get_rest_url() is per blog, so on
      * multisite the link already names the minting site and needs no `blog` hint; and on
      * plain permalinks it is the `?rest_route=` form (the token is appended with `&`).
-     * public-link.php only redirects links minted before this form existed.
      */
     public static function publicLinkUrl(string $page, string $token = ''): string
     {
@@ -534,8 +535,8 @@ HTACCESS;
     }
 
     /**
-     * What the REST `<module>/page` route does with a `?blog=` hint (set by the
-     * public-link.php shim, or by an old link). The target is built from the validated
+     * What the REST `<module>/page` route does with a `?blog=` hint (carried by an
+     * old link). The target is built from the validated
      * site record, never from the request, so it cannot be steered to another host.
      *
      * @param mixed $blogParam raw `?blog=` value
@@ -798,7 +799,7 @@ HTACCESS;
             if (defined('WP_DEBUG') && WP_DEBUG && function_exists('_doing_it_wrong')) {
                 _doing_it_wrong(
                     'fluxfiles_token',
-                    sprintf('Unknown FluxFiles edition "%s" ignored (registered: %s).', $edition, is_array($presets) && $presets ? implode(', ', array_keys($presets)) : 'none'),
+                    sprintf('Unknown FluxFiles edition "%s" ignored (registered: %s).', esc_html($edition), is_array($presets) && $presets ? esc_html(implode(', ', array_keys($presets))) : 'none'),
                     '1.1.0'
                 );
             }
@@ -840,7 +841,7 @@ HTACCESS;
             // An unknown role used to expand to NOTHING, so the token fell back to the
             // site-wide default perms (read+write+delete) — a typo like `'veiwer'`
             // failed OPEN. Refuse to mint instead.
-            throw new \InvalidArgumentException('Unknown FluxFiles role "' . $role . '" (expected: ' . implode(', ', array_keys($presets)) . ')');
+            throw new \InvalidArgumentException('Unknown FluxFiles role "' . esc_html($role) . '" (expected: ' . esc_html(implode(', ', array_keys($presets))) . ')');
         }
         return $presets[$key];
     }

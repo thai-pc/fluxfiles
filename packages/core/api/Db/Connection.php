@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles\Db;
 
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 use FluxFiles\ApiException;
 
 /**
@@ -65,11 +67,13 @@ class Connection
             throw new ApiException('FLUXFILES_DB_DSN is not configured', 500, 'db_dsn_missing');
         }
 
+        // phpcs:disable WordPress.DB.RestrictedClasses.mysql__PDO -- opt-in FLUXFILES_STORAGE_BACKEND=db: the operator's own MySQL/PostgreSQL/SQLite DSN for FluxFiles' bookkeeping, not WordPress's $wpdb (the WordPress plugin uses $wpdb through its own handler)
         $pdo = new \PDO($this->dsn, $this->user !== '' ? $this->user : null, $this->password !== '' ? $this->password : null, [
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
             \PDO::ATTR_EMULATE_PREPARES => false,
         ]);
+        // phpcs:enable WordPress.DB.RestrictedClasses.mysql__PDO
 
         if ($this->driver() === 'sqlite') {
             $pdo->exec('PRAGMA foreign_keys=ON');

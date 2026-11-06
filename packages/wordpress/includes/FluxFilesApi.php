@@ -93,12 +93,25 @@ class FluxFilesApi
         if (!self::isOwnRestRoute(self::restRoute())) {
             return $result;
         }
-        $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-        if (!preg_match('/^Bearer\s+\S/i', (string) $auth)) {
+        if (!preg_match('/^Bearer\s+\S/i', self::serverAuthorization())) {
             return $result;
         }
         wp_set_current_user(0);
         return true;
+    }
+
+    /**
+     * The raw Authorization header from the server vars, for hosts that strip it from
+     * the request headers (Apache + suexec) but keep the (REDIRECT_)HTTP_AUTHORIZATION
+     * variable mod_rewrite preserves. Unslashed only: the value is a Bearer JWT, which is
+     * verified by its signature, and sanitize_text_field() could alter a valid token.
+     */
+    public static function serverAuthorization(): string
+    {
+        // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Bearer JWT: authenticated by its HMAC signature, never output or stored; sanitizing could corrupt a valid token
+        $raw = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+        return is_string($raw) ? wp_unslash($raw) : '';
     }
 
     /**
@@ -114,12 +127,15 @@ class FluxFilesApi
         if (is_object($wp) && isset($wp->query_vars['rest_route']) && is_string($wp->query_vars['rest_route'])) {
             return '/' . ltrim($wp->query_vars['rest_route'], '/');
         }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only: this picks which REST route is being dispatched; the route's own permission callback authenticates (Bearer JWT or cookie + nonce)
         if (isset($_GET['rest_route']) && is_string($_GET['rest_route'])) {
-            return '/' . ltrim($_GET['rest_route'], '/');
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- same routing read as above
+            return '/' . ltrim(wp_unslash($_GET['rest_route']), '/'); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- compared against fixed route patterns only, never stored or output; sanitize_text_field would mangle %xx and whitespace in the route
         }
-        $path = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?: '');
+        $uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+        $path = (string) (wp_parse_url($uri, PHP_URL_PATH) ?: '');
         $prefix = '/' . trim(function_exists('rest_get_url_prefix') ? rest_get_url_prefix() : 'wp-json', '/') . '/';
-        $homePath = rtrim((string) (parse_url(function_exists('home_url') ? home_url('/') : '/', PHP_URL_PATH) ?: ''), '/');
+        $homePath = rtrim((string) (wp_parse_url(function_exists('home_url') ? home_url('/') : '/', PHP_URL_PATH) ?: ''), '/');
         $base = $homePath . $prefix;
         if (strncmp($path, $base, strlen($base)) !== 0) {
             return '';
@@ -570,9 +586,7 @@ class FluxFilesApi
         // get_header() lowercases names, but some servers strip the
         // Authorization header before PHP sees it (Apache + suexec). Fall back
         // to common server vars that mod_rewrite preserves.
-        $auth = $request->get_header('authorization')
-            ?: ($_SERVER['HTTP_AUTHORIZATION'] ?? '')
-            ?: ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        $auth = $request->get_header('authorization') ?: self::serverAuthorization();
         if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
             $secret = get_option('fluxfiles_secret', '');
             if ($secret === '') {
@@ -816,7 +830,7 @@ class FluxFilesApi
         // PREVIOUS request's identity.
         $this->lastClaims = null;
         $secret = get_option('fluxfiles_secret', '');
-        $auth   = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        $auth   = self::serverAuthorization();
         // Remembered so error() can audit a refused (403) request — see auditRefusal().
         $token = preg_match('/^Bearer\s+(.+)$/i', $auth, $m) ? $m[1] : FluxFilesPlugin::tokenForCurrentUser();
         $claims = $this->lastClaims = JwtMiddleware::handle($token, $secret);
@@ -945,6 +959,7 @@ class FluxFilesApi
         $limitFor = static function (string $bucket, int $default): int {
             $name = 'FLUXFILES_' . strtoupper($bucket) . '_RATE_LIMIT';
             $env = getenv($name);
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration from the environment (not user input), only parsed or compared
             $base = $env !== false && $env !== '' ? (int) $env : (int) ($_ENV[$name] ?? $default);
             return (int) apply_filters('fluxfiles_rate_limit_' . $bucket, $base);
         };
@@ -953,6 +968,7 @@ class FluxFilesApi
             $this->diskManager,
             (string) get_option('fluxfiles_secret', ''),
             MediaEndpoint::defaultRateLimit($limitFor, fn (int $limit): RateLimiterStorageInterface => $this->limiter($limit, $limit)),
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration from the environment (not user input), only parsed or compared
             $xaccel !== false ? (string) $xaccel : (string) ($_ENV['FLUXFILES_XACCEL'] ?? ''),
             $this->metaRepo
         );
@@ -1010,9 +1026,14 @@ class FluxFilesApi
         try {
             $body = AuditPolicy::decodeBody((string) file_get_contents('php://input'));
             $log = new AuditLogStorage($this->metaRepo, $claims->allowedDisks);
+            // phpcs:disable WordPress.Security.NonceVerification -- audit of a request that was REFUSED: the values are only recorded (core redacts them), never acted on
             AuditPolicy::recordRefusedWrite($log, $claims, $e, $body, $_POST);
-            $route = (string) ($_GET['rest_route'] ?? (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?: ''));
-            AuditPolicy::recordDenied($log, $claims, $e, (string) ($_SERVER['REQUEST_METHOD'] ?? ''), $route, $body, $_POST, $_GET);
+            $route = isset($_GET['rest_route']) && is_string($_GET['rest_route'])
+                ? wp_unslash($_GET['rest_route']) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- recorded verbatim in the audit entry (core redacts it), never output or acted on
+                : (string) (wp_parse_url(isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '', PHP_URL_PATH) ?: '');
+            $method = isset($_SERVER['REQUEST_METHOD']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'])) : '';
+            AuditPolicy::recordDenied($log, $claims, $e, $method, $route, $body, $_POST, $_GET);
+            // phpcs:enable WordPress.Security.NonceVerification
         } catch (\Throwable $ignored) {
             // Auditing must never turn a clean 4xx into a 500.
         }
@@ -2288,10 +2309,14 @@ class FluxFilesApi
                 status_header(404);
                 wp_send_json(['data' => null, 'error' => 'Not found', 'error_code' => 'not_found'], 404);
             }
-            // A link minted on another blog (the public-link.php shim passes `blog` through):
+            // A link minted on another blog (an old link may carry a `blog` hint):
             // hop to that blog's own REST page, where its secret and licence apply.
-            $token = isset($_GET['token']) && is_string($_GET['token']) ? wp_unslash($_GET['token']) : '';
-            [$code, $location] = FluxFilesPlugin::publicPageRedirect($which, isset($_GET['blog']) ? wp_unslash($_GET['blog']) : null, $token);
+            // phpcs:disable WordPress.Security.NonceVerification.Recommended -- a public recipient page opened from a link in an e-mail: there is no WP session to bind a nonce to; the one-shot token is checked by the module
+            $token = isset($_GET['token']) && is_string($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
+            // A non-string hint (?blog[]=1) is a malformed link: the empty-array stand-in makes it a 404.
+            $blogHint = isset($_GET['blog']) ? (is_string($_GET['blog']) ? sanitize_text_field(wp_unslash($_GET['blog'])) : []) : null;
+            // phpcs:enable WordPress.Security.NonceVerification.Recommended
+            [$code, $location] = FluxFilesPlugin::publicPageRedirect($which, $blogHint, $token);
             if ($code === 404) {
                 status_header(404);
                 header('Referrer-Policy: no-referrer');
@@ -3269,16 +3294,37 @@ class FluxFilesApi
     // UI / asset / locale serving (public — needed by the iframe)
     // -------------------------------------------------------------------------
 
+    /** First line of the built UI template (build-wordpress.sh): exits when hit directly over HTTP. */
+    private const UI_TEMPLATE_GUARD = "<?php defined('ABSPATH') || exit; // phpcs:disable WordPress.WP.EnqueuedResources -- standalone iframe document served by the REST route (own CSP), not a WordPress page ?>\n";
+
+    /**
+     * The bundled UI page. A release build ships it as templates/ui-index.php (guarded, so a
+     * direct request prints nothing); a source tree falls back to core's public/index.html.
+     */
+    private static function uiPageHtml(): ?string
+    {
+        $tpl = FLUXFILES_PLUGIN_DIR . 'templates/ui-index.php';
+        if (is_file($tpl)) {
+            $raw = @file_get_contents($tpl);
+            if ($raw === false || strncmp($raw, self::UI_TEMPLATE_GUARD, strlen(self::UI_TEMPLATE_GUARD)) !== 0) {
+                return null;
+            }
+            return substr($raw, strlen(self::UI_TEMPLATE_GUARD));
+        }
+        $publicDir = FluxFilesPlugin::corePath('public');
+        $html = $publicDir === null ? false : @file_get_contents($publicDir . '/index.html');
+        return $html === false ? null : $html;
+    }
+
     public function serveUiHtml(\WP_REST_Request $request)
     {
-        $publicDir = FluxFilesPlugin::corePath('public');
-        $langDir   = FluxFilesPlugin::corePath('lang');
-        if ($publicDir === null || $langDir === null) {
+        $langDir = FluxFilesPlugin::corePath('lang');
+        if ($langDir === null) {
             return $this->error('UI assets not bundled with this plugin install', 500);
         }
-        $html = @file_get_contents($publicDir . '/index.html');
-        if ($html === false) {
-            return $this->error('public/index.html not found', 500);
+        $html = self::uiPageHtml();
+        if ($html === null) {
+            return $this->error('UI page not found', 500);
         }
 
         $i18n = new \FluxFiles\I18n($langDir, $request->get_param('lang') ?: null);
@@ -3379,7 +3425,7 @@ class FluxFilesApi
         ];
         $sources = ["'self'"];
         foreach ([function_exists('home_url') ? home_url('/') : '', function_exists('site_url') ? site_url('/') : ''] as $u) {
-            $parts = parse_url((string) $u);
+            $parts = wp_parse_url((string) $u);
             if (!empty($parts['scheme']) && !empty($parts['host'])) {
                 $origin = strtolower($parts['scheme'] . '://' . $parts['host']) . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
                 if (!in_array($origin, $sources, true)) {
@@ -3543,7 +3589,7 @@ class FluxFilesApi
         foreach ($extraHeaders as $h) {
             header($h);
         }
-        echo $body;
+        echo $body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- the plugin's own bundled UI HTML/JS/CSS (or a JSON document), sent with its real Content-Type and nosniff; escaping would corrupt it
         exit;
     }
 

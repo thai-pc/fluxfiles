@@ -177,6 +177,7 @@ class FluxFilesCli
         // Attachments that are NOT already FluxFiles-backed and have a local file.
         $ids = get_posts([
             'post_type' => 'attachment', 'post_status' => 'inherit', 'posts_per_page' => $limit > 0 ? $limit : -1,
+            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- lookup of attachments FluxFiles itself tagged (_fluxfiles_url), run on a user action or in WP-CLI, never on a front-end page view
             'fields' => 'ids', 'meta_query' => [['key' => '_fluxfiles_url', 'compare' => 'NOT EXISTS']],
         ]);
         $fs = new \FluxFiles\DiskManager($configs);
@@ -200,7 +201,7 @@ class FluxFilesCli
                 update_post_meta($id, '_fluxfiles_url', esc_url_raw((string) $url));
                 update_post_meta($id, '_fluxfiles_key', $key);
                 update_post_meta($id, '_fluxfiles_disk', $disk);
-                if ($delLocal) { @unlink($local); }
+                if ($delLocal) { wp_delete_file($local); }
                 $done++;
             } catch (\Throwable $e) {
                 \WP_CLI::warning("#{$id} failed: " . $e->getMessage());
@@ -238,6 +239,7 @@ class FluxFilesCli
 
         $ids = get_posts([
             'post_type' => 'attachment', 'post_status' => 'inherit', 'posts_per_page' => -1, 'fields' => 'ids',
+            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- lookup of attachments FluxFiles itself tagged (_fluxfiles_url), run on a user action or in WP-CLI, never on a front-end page view
             'meta_query' => [['key' => '_fluxfiles_url', 'compare' => 'EXISTS']],
         ]);
         $configs = FluxFilesPlugin::diskConfigs();

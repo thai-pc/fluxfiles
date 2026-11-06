@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles;
 
+// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- operator configuration read from the environment/server (not user input); core is a WordPress-independent library
+
 class JwtMiddleware
 {
     public static function handle(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $secret): Claims
@@ -64,6 +66,7 @@ class JwtMiddleware
 
     public static function extractToken(): string
     {
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Bearer JWT, authenticated by its HMAC signature and never output; core is a WordPress-independent library (no wp_unslash)
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 
         if (!preg_match('/^Bearer\s+(.+)$/i', $header, $matches)) {

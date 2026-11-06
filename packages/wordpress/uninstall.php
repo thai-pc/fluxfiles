@@ -56,15 +56,12 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
     // `uploads/` disk root plus its known state; a custom FLUXFILES_STORAGE_DIR
     // is never wiped wholesale.
     $rmFile = static function (string $path): void {
-        if (function_exists('wp_delete_file')) {
-            wp_delete_file($path);
-        } else {
-            unlink($path);
-        }
+        wp_delete_file($path);
     };
     $rmdirIfEmpty = static function (string $dir): void {
         if (is_dir($dir) && !is_link($dir) && count((array) scandir($dir)) <= 2) {
-            rmdir($dir);
+            // WP_Filesystem needs interactive credentials (FTP/SSH hosts) that do not exist in an uninstall run; this only ever removes an EMPTY directory inside the plugin's own storage root.
+            rmdir($dir); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
         }
     };
     // Symlinks are unlinked, never followed.
@@ -177,8 +174,10 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
 
         // Usage cache transients (fluxfiles_usage_<md5>) and their timeouts.
         if (isset($wpdb) && is_object($wpdb)) {
-            $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            // One-off cleanup of this plugin's own transients at uninstall; there is nothing to cache.
+            $wpdb->query($wpdb->prepare( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+                'DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s',
+                $wpdb->options,
                 $wpdb->esc_like('_transient_fluxfiles_usage_') . '%',
                 $wpdb->esc_like('_transient_timeout_fluxfiles_usage_') . '%'
             ));
@@ -188,8 +187,8 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
                 if (!$wipe && substr($table, -strlen('_rate_limits')) !== '_rate_limits') {
                     continue;
                 }
-                // Names are $wpdb->prefix + fixed literals (FluxFilesDbSchema), never user input.
-                $wpdb->query('DROP TABLE IF EXISTS `' . $table . '`'); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+                // Names are $wpdb->prefix + fixed literals (FluxFilesDbSchema), never user input; %i quotes them as identifiers.
+                $wpdb->query($wpdb->prepare('DROP TABLE IF EXISTS %i', $table)); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
             }
         }
         return $wipe;

@@ -101,7 +101,7 @@ class FxWpdb {
     public $prefix = 'wp_';
     public $options = 'wp_options';
     public function esc_like($s) { return addcslashes($s, '_%\\'); }
-    public function prepare($q, ...$a) { return vsprintf(str_replace('%s', "'%s'", $q), $a); }
+    public function prepare($q, ...$a) { return vsprintf(str_replace(['%s', '%i'], ["'%s'", '`%s`'], $q), $a); }
     public function query($q) { $GLOBALS['LOG']['queries'][] = ['blog' => $GLOBALS['CUR'], 'sql' => $q]; return 1; }
 }
 $wpdb = new FxWpdb();

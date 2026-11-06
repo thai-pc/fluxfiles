@@ -83,8 +83,11 @@ class WpdbPdoShim
     {
         $args = is_array($args) ? $args : array_slice(func_get_args(), 1);
         $i = 0;
-        return preg_replace_callback('/%s|%d/', function ($m) use (&$i, $args) {
+        return preg_replace_callback('/%s|%d|%i/', function ($m) use (&$i, $args) {
             $v = $args[$i++] ?? null;
+            if ($m[0] === '%i') {
+                return '`' . str_replace('`', '``', (string) $v) . '`';
+            }
             if ($m[0] === '%d') {
                 return (string) (int) $v;
             }
