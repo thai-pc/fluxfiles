@@ -509,7 +509,7 @@ class FluxFilesApi
             'callback' => [$api, 'serveUiHtml'],
         ]));
         // fm.js/fm.css plus the vendored lazy-loaded libraries under
-        // assets/vendor/ (CodeMirror) — fm.js derives its base from its
+        // assets/vendor/ (Alpine) — fm.js derives its base from its
         // own <script src>, which is this route. No '..' can match, and
         // serveUiAsset() re-checks containment with realpath().
         register_rest_route($ns, '/assets/(?P<file>fm\.(?:min\.)?(?:js|css)|vendor/[A-Za-z0-9._/-]+\.(?:js|css))', array_merge($publicArgs, [
@@ -3322,6 +3322,20 @@ class FluxFilesApi
         // Vendored Alpine (the page must not load it from a CDN: it runs in the JWT's origin).
         $alpine = 'vendor/alpine/alpine.min.js';
         $html = str_replace('"../assets/' . $alpine . '"', '"' . esc_url($assetsBase . '/' . $alpine) . $jsSep . 'v=' . $hash($alpine) . '"', $html);
+
+        // The code editor uses WordPress's own CodeMirror (wp-includes/js/codemirror/,
+        // exposed as wp.CodeMirror) instead of a vendored copy; fm.js reads this tag.
+        // Modes WordPress's build lacks fall back to plain text.
+        $cmVer = isset($GLOBALS['wp_version']) ? (string) $GLOBALS['wp_version'] : '';
+        $cmCfg = [
+            'css' => [includes_url('js/codemirror/codemirror.min.css') . ($cmVer !== '' ? '?ver=' . rawurlencode($cmVer) : '')],
+            'js'  => [includes_url('js/codemirror/codemirror.min.js') . ($cmVer !== '' ? '?ver=' . rawurlencode($cmVer) : '')],
+        ];
+        $html = str_replace(
+            '</head>',
+            '<meta name="fluxfiles-codemirror" content="' . esc_attr((string) wp_json_encode($cmCfg)) . '">' . "\n</head>",
+            $html
+        );
 
         // Bypass REST JSON serialization — the browser iframe must receive raw HTML
         // with the right content type, not a JSON-wrapped string.

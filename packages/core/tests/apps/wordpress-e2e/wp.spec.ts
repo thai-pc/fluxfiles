@@ -218,3 +218,33 @@ test('wordpress proxy: /api/fm/zip streams a zip through the REST API', async ({
   expect(result.magic).toBe('80,75,3,4'); // "PK\x03\x04"
   expect(result.bytes).toBeGreaterThan(0);
 });
+
+// Free build: the trimmed zip carries no paid modules, so a paid route answers 501
+// (module not installed) instead of 404/fatal, and the stripped standalone files are gone.
+test('wordpress free build: a paid route answers 501 and standalone files are not served', async ({ page }) => {
+  const res = await page.request.get(`${BASE}/?rest_route=/fluxfiles/v1/api/fm/share/page`);
+  expect(res.status()).toBe(501);
+  const body = await res.json();
+  expect(body.error_code).toBe('module_not_installed');
+
+  // embed.php / modules-autoload.php / api/index.php are not part of the plugin.
+  for (const path of ['embed.php', 'modules-autoload.php', 'api/index.php']) {
+    const r = await page.request.get(`${BASE}/wp-content/plugins/fluxfiles/${path}`);
+    expect([403, 404]).toContain(r.status());
+  }
+});
+
+// The code editor uses WordPress's own CodeMirror (no vendored copy in the zip).
+test('wordpress free build: the UI page points the editor at wp-includes CodeMirror', async ({ page }) => {
+  const res = await page.request.get(`${BASE}/?rest_route=/fluxfiles/v1/public/index.html`);
+  expect(res.ok()).toBeTruthy();
+  const html = await res.text();
+  const m = html.match(/<meta name="fluxfiles-codemirror" content="([^"]+)"/);
+  expect(m).toBeTruthy();
+  const cfg = JSON.parse(m![1].replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&amp;/g, '&'));
+  expect(cfg.js[0]).toContain('/wp-includes/js/codemirror/codemirror.min.js');
+  expect((await page.request.get(cfg.js[0])).ok()).toBeTruthy();
+  expect((await page.request.get(cfg.css[0])).ok()).toBeTruthy();
+  const vendored = await page.request.get(`${BASE}/?rest_route=/fluxfiles/v1/assets/vendor/codemirror/codemirror.min.js`);
+  expect(vendored.status()).toBe(404);
+});

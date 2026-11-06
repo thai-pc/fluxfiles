@@ -67,25 +67,11 @@ jobs:
           MONOREPO_TAG: ${{ github.ref_name }}
         run: bash scripts/build-wordpress.sh "${MONOREPO_TAG#wordpress-v}"
 
-      # Sanity-check the artifact rather than trusting the build: a ZIP missing
-      # the bundled core or vendor/ installs cleanly and then fatals at runtime.
+      # The guard unpacks the ZIP and fails on anything WordPress.org rejects or the
+      # free plugin must not carry (self-updater, paid plumbing, wp-load.php, stray
+      # cURL, CDN scripts, size, readme rules), and asserts the required layout.
       - name: Verify the ZIP contents
-        run: |
-          cd build
-          for path in \
-            fluxfiles/fluxfiles.php \
-            fluxfiles/api/FileManager.php \
-            fluxfiles/public/index.html \
-            fluxfiles/assets/fm.js \
-            fluxfiles/assets/fluxfiles.js \
-            fluxfiles/assets/vendor/codemirror/codemirror.min.js \
-            fluxfiles/vendor/autoload.php \
-            fluxfiles/embed.php \
-            fluxfiles/modules-autoload.php ; do
-            unzip -l fluxfiles.zip "$path" > /dev/null \
-              || { echo "::error::missing from the ZIP: $path"; exit 1; }
-          done
-          echo "ZIP layout OK ($(du -h fluxfiles.zip | cut -f1))"
+        run: php scripts/check-wp-dist.php build/fluxfiles.zip
 
       - name: Publish the release
         env:

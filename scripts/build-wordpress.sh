@@ -37,12 +37,9 @@ echo "==> Copying WordPress plugin source..."
 # Use rsync so we get a clean copy that excludes any local dev artifacts
 # (vendor/, node_modules/, .DS_Store, etc.) the contributor may have left in
 # packages/wordpress while working.
-rsync -a \
-    --exclude='vendor/' \
-    --exclude='node_modules/' \
-    --exclude='.DS_Store' \
-    --exclude='build/' \
-    "$WP_DIR/" "$PLUGIN_DIR/"
+# packages/wordpress/.distignore lists what stays out of the zip (tests, composer
+# files, docs, ...).
+rsync -a --exclude-from="$WP_DIR/.distignore" "$WP_DIR/" "$PLUGIN_DIR/"
 
 # The core release this plugin build bundles: the nearest core-vX.Y.Z tag, without the
 # prefix. Shown in Site Health / About so a support report names the bundled core.
@@ -85,7 +82,15 @@ echo "==> Bundling FluxFiles core (api/, public/, lang/) into plugin..."
 cp -r "$CORE_DIR/api"    "$PLUGIN_DIR/api"
 cp -r "$CORE_DIR/public" "$PLUGIN_DIR/public"
 cp -r "$CORE_DIR/lang"   "$PLUGIN_DIR/lang"
-cp -r "$CORE_DIR/config" "$PLUGIN_DIR/config"
+
+# Core files the plugin never runs. The standalone entry point and the code behind
+# it (licence/update client, SSO, demo mode, tus) are left out rather than guarded
+# with ABSPATH checks. api/Db/ stays: WpDbMetadataHandler and FluxFilesCli use it.
+# The share/intake pages are redirect stubs in core and are served by the paid modules.
+for f in index LicenseManager UpdateClient OidcDiscovery SsoStateToken SsoBootToken DemoMode TusServer; do
+    rm -f "$PLUGIN_DIR/api/$f.php"
+done
+rm -f "$PLUGIN_DIR/public/share.html" "$PLUGIN_DIR/public/intake.html"
 
 # public/*.html are read from disk by the REST route and public-link.php and
 # served through them with a CSP + frame protection; they must never be reachable
@@ -118,11 +123,12 @@ for f in fm.min.js fm.min.css; do
     if [ -f "$CORE_DIR/assets/$f" ]; then cp "$CORE_DIR/assets/$f" "$PLUGIN_DIR/assets/$f"; fi
 done
 
-# The vendored libraries: Alpine (loaded by the page itself) plus what fm.js
-# lazy-loads on demand (CodeMirror for the code editor). Deliberately not on a
-# CDN — they run in the origin that holds the JWT — so they have to ship inside
-# the plugin or the editor silently falls back.
-cp -r "$CORE_DIR/assets/vendor" "$PLUGIN_DIR/assets/vendor"
+# Alpine, loaded by the page itself. Deliberately not on a CDN: it runs in the
+# origin that holds the JWT. CodeMirror is NOT shipped: the code editor uses
+# WordPress's bundled copy (wp-includes/js/codemirror/, see serveUiHtml()), so the
+# plugin does not duplicate a core library.
+mkdir -p "$PLUGIN_DIR/assets/vendor"
+cp -r "$CORE_DIR/assets/vendor/alpine" "$PLUGIN_DIR/assets/vendor/alpine"
 
 # The watermark font: ImageOptimizer resolves api/../assets/fonts/DejaVuSans.ttf,
 # so without this a text watermark has no font in the plugin build.
@@ -131,17 +137,22 @@ cp -r "$CORE_DIR/assets/fonts" "$PLUGIN_DIR/assets/fonts"
 echo "==> Bundling browser SDK as assets/fluxfiles.js..."
 cp "$SDK_DIR/fluxfiles.js" "$PLUGIN_DIR/assets/fluxfiles.js"
 
-echo "==> Copying core embed helper + license..."
-cp "$CORE_DIR/embed.php" "$PLUGIN_DIR/embed.php"
-# The paid-module autoloader. Composer's `autoload.files` (from the core
-# composer.json used below) references it at the plugin root, and the layout it
-# probes — <plugin>/vendor/fluxfiles/<module>/src/ — is exactly where ACTIVATE.md
-# tells a WordPress customer to unpack the zip. Without this file the plugin loads,
-# the licence verifies, and every paid gate still answers 501.
-cp "$CORE_DIR/modules-autoload.php" "$PLUGIN_DIR/modules-autoload.php"
+echo "==> Copying license + third-party notices..."
+# No embed.php / modules-autoload.php: the plugin mints its own tokens, and paid
+# modules are loaded by the separate FluxFiles Pro add-on (fluxfiles_module_paths).
 [ -f "$ROOT_DIR/LICENSE" ] && cp "$ROOT_DIR/LICENSE" "$PLUGIN_DIR/LICENSE" || true
-# Licences of the vendored front-end libraries (assets/vendor/*/LICENSE ship with them).
-cp "$CORE_DIR/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/THIRD-PARTY-NOTICES.md"
+# Licences of the shipped front-end libraries (assets/vendor/*/LICENSE ship with them).
+# This build uses WordPress's CodeMirror, so that row is dropped from the notice.
+python3 - "$CORE_DIR/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/THIRD-PARTY-NOTICES.md" <<'PY'
+import sys
+lines = open(sys.argv[1]).read().split('\n')
+out = [l for l in lines if not l.startswith('| [CodeMirror 5]')]
+txt = '\n'.join(out).replace(
+    '## Not bundled',
+    '## Not bundled\n\nThe code editor loads the CodeMirror copy that WordPress itself ships\n(`wp-includes/js/codemirror/`); no CodeMirror files are part of this plugin.',
+    1)
+open(sys.argv[2], 'w').write(txt)
+PY
 
 # The plugin's own composer.json declares its WP-side deps. We install with the
 # core deps too so the plugin's vendor/ has firebase/php-jwt, league/flysystem,
@@ -149,18 +160,20 @@ cp "$CORE_DIR/THIRD-PARTY-NOTICES.md" "$PLUGIN_DIR/THIRD-PARTY-NOTICES.md"
 echo "==> Installing Composer dependencies (production only)..."
 # Use the core composer.json (it has every runtime dep the plugin actually uses)
 # but install into the plugin folder so we ship one vendor/ tree.
-cp "$CORE_DIR/composer.json" "$PLUGIN_DIR/composer.json.core"
-cp "$CORE_DIR/composer.lock" "$PLUGIN_DIR/composer.lock.core" 2>/dev/null || true
+# (.distignore keeps the WP package's own composer.json/lock out of the copy.)
+# autoload.files lists modules-autoload.php, which this build does not ship, so it is
+# dropped from the temp composer.json; otherwise vendor/autoload.php would require a
+# missing file.
+php -r '
+$j = json_decode(file_get_contents($argv[1]), true);
+unset($j["autoload"]["files"]);
+if (empty($j["autoload"])) { unset($j["autoload"]); }
+file_put_contents($argv[2], json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+' "$CORE_DIR/composer.json" "$PLUGIN_DIR/composer.json"
+cp "$CORE_DIR/composer.lock" "$PLUGIN_DIR/composer.lock" 2>/dev/null || true
 (
     cd "$PLUGIN_DIR"
-    # Run composer install with core deps. The WP package's own composer.json
-    # stays untouched (it's only used by Packagist consumers).
-    mv composer.json composer.json.wp
-    mv composer.json.core composer.json
-    [ -f composer.lock.core ] && mv composer.lock.core composer.lock || true
     composer install --no-dev --optimize-autoloader --no-interaction
-    mv composer.json composer.json.core
-    mv composer.json.wp composer.json
 )
 
 # Patch the plugin's autoload to also map FluxFiles\ to the bundled api/
@@ -190,11 +203,16 @@ fi
 
 echo "==> Removing unnecessary files..."
 rm -rf "$PLUGIN_DIR/vendor/bin"
-rm -f  "$PLUGIN_DIR/composer.lock" "$PLUGIN_DIR/composer.json.core"
+rm -f  "$PLUGIN_DIR/composer.lock" "$PLUGIN_DIR/composer.json"
 find "$PLUGIN_DIR/vendor" -name ".git"   -type d -exec rm -rf {} + 2>/dev/null || true
 find "$PLUGIN_DIR/vendor" -name "tests"  -type d -exec rm -rf {} + 2>/dev/null || true
 find "$PLUGIN_DIR/vendor" -name "Tests"  -type d -exec rm -rf {} + 2>/dev/null || true
 find "$PLUGIN_DIR/vendor" -name "test"   -type d -exec rm -rf {} + 2>/dev/null || true
+find "$PLUGIN_DIR/vendor" \( -name "docs" -o -name "doc" -o -name "examples" -o -name "example" -o -name ".github" \) -type d -exec rm -rf {} + 2>/dev/null || true
+# Markdown is documentation, except the licence/notice files, which must ship.
+find "$PLUGIN_DIR/vendor" -type f -iname "*.md" ! -iname "LICENSE*" ! -iname "NOTICE*" -delete 2>/dev/null || true
+find "$PLUGIN_DIR/api" -type f -iname "*.md" -delete 2>/dev/null || true
+find "$PLUGIN_DIR/vendor" -type f \( -name ".git*" -o -name "phpunit*" -o -name ".editorconfig" -o -name ".php-cs-fixer*" -o -name "phpcs.xml*" -o -name "psalm*.xml*" -o -name "phpstan*" \) -delete 2>/dev/null || true
 
 echo "==> Creating ZIP archive..."
 cd "$BUILD_DIR"

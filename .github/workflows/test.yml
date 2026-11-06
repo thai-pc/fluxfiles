@@ -699,6 +699,30 @@ jobs:
           for p in sdk react vue ckeditor5; do bash scripts/ci-retry.sh npm install --prefix packages/$p --no-audit --no-fund; done
           bash scripts/pack-smoke.sh all
 
+  wp-dist-guard:
+    name: WordPress.org zip guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # the build stamps the bundled core version from the latest core-v* tag
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd, curl, json, openssl, mbstring, fileinfo, zip
+          tools: composer
+          coverage: none
+
+      - name: Build the free plugin zip
+        run: bash scripts/build-wordpress.sh
+
+      - name: Check the zip against the WordPress.org rules
+        run: php scripts/check-wp-dist.php build/fluxfiles.zip
+
   docker-build:
     name: Docker production image
     runs-on: ubuntu-latest

@@ -1,0 +1,20 @@
+# Files that live in the repo but never ship in the WordPress.org / release zip.
+# Consumed by scripts/build-wordpress.sh via `rsync --exclude-from`.
+# (readme.txt and LICENSE are kept; every other *.md is dropped.)
+vendor/
+node_modules/
+build/
+.DS_Store
+tests/
+composer.json
+composer.lock
+.gitignore
+.gitattributes
+*.md
+.wordpress-org/
+phpcs.xml*
+.phpcs*
+.plugin-check-ignore
+.distignore
+phpunit*
+.git*
