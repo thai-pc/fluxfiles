@@ -171,6 +171,7 @@ The three checks are separate on purpose, so a failure tells you which one to fi
 | Response | Meaning | Fix |
 |---|---|---|
 | `501 module_not_installed` | the code is not there | step 1 |
+| `501 module_update_required` | the module is installed but older than this core needs (it predates the interface core now calls) | run `fluxfiles update <module>` |
 | `402 license_required` | installed, but no valid key | step 2 |
 | `402 license_expired` | a subscription key is past its payment-recovery grace | renew to re-enable paid-module endpoints; files and module records are retained |
 | `403 allow_<x>_forbidden` | installed and licensed, but this token does not allow it | step 3 |

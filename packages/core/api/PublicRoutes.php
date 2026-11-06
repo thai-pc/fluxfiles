@@ -20,8 +20,8 @@ namespace FluxFiles;
  * layer: the token IS the per-request authorisation, and the module verifies it.
  *
  * A module that does not implement {@see PublicModuleInterface} (a release from before
- * the interface existed) is served by the legacy in-core handlers in `PublicLinks.php`,
- * so updating core never breaks Share/Intake links on an install whose modules lag.
+ * the interface existed) cannot serve these routes: core no longer carries the old in-core
+ * handlers, so the request answers 501 `module_update_required` (update the module).
  */
 final class PublicRoutes
 {
@@ -77,6 +77,9 @@ final class PublicRoutes
                 throw new ApiException('FLUXFILES_SECRET is not configured', 500, 'server_error');
             }
             $module = ModuleRegistry::requireServer($id, $ctx->license);
+            if (!$module instanceof PublicModuleInterface) {
+                throw new ApiException("The '{$id}' module is too old for this FluxFiles core; update it", 501, 'module_update_required', ['module' => $id]);
+            }
 
             if (self::isPage($id, $uri)) {
                 if ($method !== 'GET') {
@@ -100,12 +103,7 @@ final class PublicRoutes
                 return;
             }
 
-            if ($module instanceof PublicModuleInterface) {
-                $module->handlePublic($method, $uri, $ctx);
-                return;
-            }
-
-            self::legacy($id, $method, $uri, $ctx);
+            $module->handlePublic($method, $uri, $ctx);
         } catch (ApiException $e) {
             self::emitError($e);
         } catch (\Throwable $e) {
@@ -121,8 +119,7 @@ final class PublicRoutes
      * Null when the module is not installed or ships no such page. Does NOT gate: callers
      * reach it through {@see dispatch()}, or have already passed the gate themselves.
      *
-     * A module that predates {@see PublicModuleInterface} has no `pages()`, so core's own
-     * copy of the page is served instead.
+     * A module that predates {@see PublicModuleInterface} has no `pages()`: null.
      */
     public static function page(string $id, string $apiBase): ?string
     {
@@ -138,11 +135,6 @@ final class PublicRoutes
             $declared = $class::pages()[$id] ?? null;
             if (is_string($declared) && is_file($declared)) {
                 $file = $declared;
-            }
-        } else {
-            $core = __DIR__ . '/../public/' . $id . '.html';
-            if (is_file($core)) {
-                $file = $core;
             }
         }
         if ($file === null) {
@@ -167,19 +159,6 @@ final class PublicRoutes
             return $meta . "\n" . $html;
         }
         return $out;
-    }
-
-    /** The in-core handlers, for a module that predates PublicModuleInterface. */
-    private static function legacy(string $id, string $method, string $uri, PublicContext $ctx): void
-    {
-        require_once __DIR__ . '/PublicLinks.php';
-        $dm = $ctx->hostInjected ? $ctx->dm() : null;
-        $cfg = $ctx->hostInjected ? $ctx->diskConfigs() : null;
-        if ($id === 'intake') {
-            \handleIntakePublic($method, $uri, $dm, $cfg, $ctx->injectedMeta(), $ctx->license, $ctx->secret);
-        } else {
-            \handleSharePublic($method, $uri, $dm, $cfg, $ctx->injectedMeta(), $ctx->license, $ctx->secret);
-        }
     }
 
     private static function emitError(ApiException $e): void

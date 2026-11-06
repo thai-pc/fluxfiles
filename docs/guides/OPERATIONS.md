@@ -100,6 +100,8 @@ Point `FLUXFILES_UPDATE_URL` at it (default `https://updates.fluxfiles.dev`).
 
 ### Core-version compatibility
 
+**Core 1.1.0 and later need current modules.** Core no longer carries its own copy of the code that moved into the modules, so it needs `share` >= 1.4.0, `intake` >= 1.5.0, `legal-hold` >= 1.2.0 and `audit-export` >= 1.1.0 (the Laravel adapter needs `fluxfiles/laravel` >= 1.0.3). Composer enforces this through `conflict` entries in core's `composer.json`; a site that installed modules without Composer gets `501 module_update_required` on the affected routes until it runs `fluxfiles update <module>`. Update the modules before (or together with) core.
+
 A module declares the core it needs in its `composer.json`
 (`require["fluxfiles/fluxfiles"]`). Composer enforces that on `composer require`, but
 `fluxfiles update <module>` does not go through Composer, so the channel enforces it too:

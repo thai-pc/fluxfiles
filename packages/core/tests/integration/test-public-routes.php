@@ -5,7 +5,7 @@
  *
  *   gate order  secret 500 → not installed 501 → not licensed 402 / expired 402 → handler
  *   module      a PublicModuleInterface module serves the route and its pages
- *   legacy      a module that predates the interface is served by the in-core handlers
+ *   old module  one that predates the interface answers 501 module_update_required (no in-core fallback)
  *   page        the API base is injected as <meta name="fm-api-base">, never inline script
  *
  * The real share/intake packages are private, so fake modules are registered under the
@@ -67,18 +67,10 @@ final class FakePublicShare implements PublicModuleInterface {
 }
 
 /** A module from before the interface: only ModuleInterface. */
-final class LegacyShare implements ModuleInterface {
+final class OldShare implements ModuleInterface {
     public static function id(): string { return 'share'; }
     public static function claim(): string { return 'allow_share'; }
 }
-
-// What the in-core share handler instantiates. A throwing shareInfo() proves the legacy
-// handler ran (it is wrapped into the standard envelope).
-eval('namespace FluxFiles\\Share; final class ShareModule {
-    public function shareInfo($dm, string $secret, string $token): array {
-        throw new \\FluxFiles\\ApiException("legacy handler reached", 418, "legacy_hit");
-    }
-}');
 
 /** Run dispatch() capturing the body + status. @return array{0:int,1:array|string|null} */
 function run(string $id, string $method, string $uri, PublicContext $ctx): array {
@@ -215,33 +207,34 @@ test('page(): meta goes after <head>, the base is attribute-escaped, a headless 
     ModuleRegistry::reset();
 });
 
-test('LEGACY module (no PublicModuleInterface): falls back to the in-core handler, same envelope', function () {
-    ModuleRegistry::register('share', LegacyShare::class);
-    // NO registry resolver: the in-core handler must use the CONTEXT's licence and secret
-    // (a host-injected context cannot disagree with the gate that just passed).
-    $prevSecret = $_ENV['FLUXFILES_SECRET'];
-    $_ENV['FLUXFILES_SECRET'] = PublicContext::DEFAULT_SECRET;   // env says "unconfigured"; the ctx secret is valid
-    $_GET = ['token' => 'x'];
+test('OLD module (no PublicModuleInterface): 501 module_update_required on a JSON route, no handler runs', function () {
+    ModuleRegistry::register('share', OldShare::class);
     [$code, $body] = run('share', 'GET', '/api/fm/share/info', ctx());
-    $_GET = [];
-    $_ENV['FLUXFILES_SECRET'] = $prevSecret;
-    assertEqual(418, $code, json_encode($body));
-    assertEqual('legacy_hit', $body['error_code'], 'reached the legacy handler → ShareModule::shareInfo');
+    assertEqual(501, $code, json_encode($body));
+    assertEqual('module_update_required', $body['error_code']);
+    assertEqual(['module' => 'share'], $body['error_params']);
     ModuleRegistry::reset();
 });
 
-test('LEGACY module is still gated first: unlicensed → 402 before any legacy code runs', function () {
-    ModuleRegistry::register('share', LegacyShare::class);
+test('OLD module: the page route answers the same 501 (checked before the page branch)', function () {
+    ModuleRegistry::register('share', OldShare::class);
+    [$code, $body] = run('share', 'GET', '/api/fm/share/page', ctx());
+    assertEqual(501, $code);
+    assertEqual('module_update_required', $body['error_code']);
+    ModuleRegistry::reset();
+});
+
+test('OLD module is still gated first: unlicensed → 402 before module_update_required', function () {
+    ModuleRegistry::register('share', OldShare::class);
     [$code, $body] = run('share', 'GET', '/api/fm/share/info', ctx(new NoLicense()));
     assertEqual(402, $code);
+    assertEqual('license_required', $body['error_code']);
     ModuleRegistry::reset();
 });
 
-test('LEGACY module page: core public/share.html is served with the meta tag', function () {
-    ModuleRegistry::register('share', LegacyShare::class);
-    $h = PublicRoutes::page('share', '/api/fm');
-    assertTrue(is_string($h) && str_contains($h, '<meta name="fm-api-base"') && str_contains($h, 'fm-api-base'), 'meta injected');
-    assertTrue(str_contains($h, "querySelector('meta[name=\"fm-api-base\"]')"), 'the page reads it');
+test('OLD module: page() returns null (core no longer carries a copy of the page)', function () {
+    ModuleRegistry::register('share', OldShare::class);
+    assertEqual(null, PublicRoutes::page('share', '/api/fm'));
     ModuleRegistry::reset();
 });
 

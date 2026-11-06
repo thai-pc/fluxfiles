@@ -1,20 +1,21 @@
 <?php
 
 /**
- * Regression guard: every closure in PublicLinks.php that reads a variable from the
- * enclosing handler must capture it in its `use` list. core-v1.0.4 shipped the intake
- * virus/DLP scanner closures reading $license without capturing it, so every scanned
- * portal upload on Laravel/WordPress died with a TypeError (500).
+ * Regression guard: every closure in the host helpers and the public-route gate that reads a variable from the
+ * enclosing function must capture it in its `use` list. (core-v1.0.4 shipped the intake
+ * virus/DLP scanner closures, then in PublicLinks.php, reading $license without capturing
+ * it, so every scanned portal upload on Laravel/WordPress died with a TypeError.)
  *
  * Usage: php tests/unit/test-public-links-closures.php
  */
 
 declare(strict_types=1);
 
-$src = (string) file_get_contents(__DIR__ . '/../../api/PublicLinks.php');
-$tokens = token_get_all($src);
 $failures = [];
 $checked = 0;
+foreach (['helpers.php', 'PublicRoutes.php', 'PublicContext.php'] as $srcFile) {
+$src = (string) file_get_contents(__DIR__ . '/../../api/' . $srcFile);
+$tokens = token_get_all($src);
 
 for ($i = 0, $n = count($tokens); $i < $n; $i++) {
     if (!is_array($tokens[$i]) || $tokens[$i][0] !== T_FUNCTION) {
@@ -63,15 +64,16 @@ for ($i = 0, $n = count($tokens); $i < $n; $i++) {
             while ($k < $n && is_array($tokens[$k]) && $tokens[$k][0] === T_WHITESPACE) { $k++; }
             if ($k < $n && $tokens[$k] === '=') { $assigned[$name] = true; continue; }
             if (!isset($known[$name]) && !isset($assigned[$name])) {
-                $failures[] = "closure at line {$line} reads {$name} without capturing it";
+                $failures[] = "{$srcFile}: closure at line {$line} reads {$name} without capturing it";
             }
         }
     }
     $checked++;
 }
+}
 
 $failures = array_values(array_unique($failures));
-echo "Checked {$checked} closures in PublicLinks.php\n";
+echo "Checked {$checked} closures in helpers.php, PublicRoutes.php, PublicContext.php\n";
 foreach ($failures as $f) { echo "  FAIL {$f}\n"; }
 echo $failures ? "\033[31mFAILED\033[0m\n" : "\033[32mAll tests passed!\033[0m\n";
 exit($failures ? 1 : 0);

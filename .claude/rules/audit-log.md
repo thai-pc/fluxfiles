@@ -2,7 +2,6 @@
 paths:
   - "packages/core/api/AuditChain.php"
   - "packages/core/api/AuditLogStorage.php"
-  - "packages/core/api/FixityChecker.php"
   - "packages/audit-export/**"
 ---
 

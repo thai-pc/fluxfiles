@@ -258,17 +258,13 @@ try {
         assertEqual('origin_denied', $j['error_code'] ?? null);
     });
 
-    test('GET /public/intake.html is served: static, no-referrer, talks to the 2 public routes', function () use ($B1) {
+    test('GET /public/intake.html is a no-referrer redirect stub to the module page (kept for issued links)', function () use ($B1) {
         [$st, $h, $body] = req('GET', "{$B1}/public/intake.html");
         assertEqual(200, $st);
         assertTrue(stripos($h['content-type'] ?? '', 'text/html') === 0, 'html: ' . ($h['content-type'] ?? ''));
         assertTrue(strpos($body, '<meta name="referrer" content="no-referrer">') !== false, 'referrer meta');
-        foreach (['/intake/info', '/intake/upload'] as $route) {
-            assertTrue(strpos($body, $route) !== false, "wired to {$route}");
-        }
-        assertTrue(strpos($body, "'/api/fm'") !== false, 'defaults to the standalone API base');
+        assertTrue(strpos($body, "location.replace('../api/fm/intake/page' + location.search + location.hash)") !== false, 'redirect target');
         assertTrue(strpos($body, '<?php') === false, 'no PHP leaked into the landing');
-        assertTrue(strpos($body, 'FluxFiles') === false, 'brand-neutral shell — brand comes from the paid payload');
     });
 
     stop($srv1);

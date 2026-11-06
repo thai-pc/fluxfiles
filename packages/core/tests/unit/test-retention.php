@@ -1,7 +1,8 @@
 <?php
 
 /**
- * Retention rules — FileManager::runRetention() + Claims::sanitizeRetentionRules().
+ * Retention rules — Claims::sanitizeRetentionRules() + FileManager::retentionRules().
+ * The sweep itself is the legal-hold module's (packages/legal-hold/tests/test-retention.php).
  *
  * Usage: php tests/unit/test-retention.php
  */
@@ -10,7 +11,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-use FluxFiles\ApiException;
 use FluxFiles\Claims;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
@@ -57,39 +57,6 @@ test('retentionRules() returns the token\'s sanitised rules', function () {
     assertTrue($fm->retentionRules() === Claims::sanitizeRetentionRules(RULES), json_encode($fm->retentionRules()));
     [$none] = rtEnv([]);
     assertTrue($none->retentionRules() === [], 'empty');
-});
-
-test('dry run reports exactly the expired files and changes nothing', function () {
-    [$fm, , $base] = rtEnv(RULES);
-    $r = $fm->runRetention('local', true);
-    $got = array_map(fn ($i) => $i['path'] . '=' . $i['result'], $r['items']);
-    assertTrue($got === ['invoices/2019.pdf=would_trash', 'tmp/a.log=would_delete'], json_encode($got));
-    assertTrue(is_file("{$base}/t/invoices/2019.pdf") && is_file("{$base}/t/tmp/a.log"), 'untouched');
-});
-
-test('apply: trash rule → restorable trash, delete rule → gone; fresh files and other paths kept', function () {
-    [$fm, , $base] = rtEnv(RULES);
-    $r = $fm->runRetention('local', false);
-    assertTrue($r['acted'] === 2 && $r['errors'] === 0, json_encode($r));
-    assertTrue(!is_file("{$base}/t/invoices/2019.pdf") && !is_file("{$base}/t/tmp/a.log"), 'acted');
-    assertTrue(is_file("{$base}/t/invoices/2026.pdf") && is_file("{$base}/t/tmp/b.log") && is_file("{$base}/t/keep/old.txt"), 'kept');
-    assertTrue(count($fm->listTrash('local')) === 1, 'the trashed invoice is restorable');
-});
-
-test('a legal hold always wins over retention', function () {
-    [$fm, $meta, $base] = rtEnv(RULES);
-    $meta->addHold('local', 'h1', ['path' => 't/invoices', 'placed_at' => time(), 'released_at' => null]);
-    $r = $fm->runRetention('local', false);
-    assertTrue($r['held'] === 1 && is_file("{$base}/t/invoices/2019.pdf"), json_encode($r));
-});
-
-test('needs the delete permission; a per-call cap truncates', function () {
-    [$fm] = rtEnv(RULES, ['read', 'write']);
-    try { $fm->runRetention('local', true); throw new \RuntimeException('expected 403'); }
-    catch (ApiException $e) { assertTrue($e->getErrorCode() === 'permission_denied', (string) $e->getErrorCode()); }
-    [$fm] = rtEnv(RULES);
-    $r = $fm->runRetention('local', true, 1);
-    assertTrue($r['truncated'] && count($r['items']) === 1 && $r['matched'] === 2, json_encode($r));
 });
 
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";

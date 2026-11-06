@@ -290,23 +290,20 @@ try {
         assertEnvelope($j, 'module_not_installed');
     });
 
-    test('GET /public/share.html is served: static, no-referrer, talks to the 3 public routes', function () use ($B1) {
+    test('GET /public/share.html is a no-referrer redirect stub to the module page (kept for issued links)', function () use ($B1) {
         [$st, $h, $body] = req('GET', "{$B1}/public/share.html");
         assertEqual(200, $st);
         assertTrue(stripos($h['content-type'] ?? '', 'text/html') === 0, 'html: ' . ($h['content-type'] ?? ''));
         assertTrue(strpos($body, '<meta name="referrer" content="no-referrer">') !== false, 'referrer meta');
-        // Asserted on the route NAMES, not on a full literal path: the page resolves
-        // its API base at runtime (window.__FM_API_BASE__) so a host that serves it from
-        // elsewhere — the WordPress plugin serves it out of wp-content, with the API
-        // under /wp-json/ — can point it at their own namespace. The default base is
-        // checked separately below, which is what keeps standalone honest.
-        foreach (['/share/info', '/share/unlock', '/share/file'] as $route) {
-            assertTrue(strpos($body, $route) !== false, "wired to {$route}");
-        }
-        assertTrue(strpos($body, "'/api/fm'") !== false, 'defaults to the standalone API base');
+        // Relative, so a subdirectory install keeps working; query and hash are carried over.
+        assertTrue(strpos($body, "location.replace('../api/fm/share/page' + location.search + location.hash)") !== false, 'redirect target');
         assertTrue(strpos($body, '<?php') === false, 'no PHP leaked into the landing');
-        // Free shell: nothing branded of its own — brand comes from the paid payload.
-        assertTrue(strpos($body, 'FluxFiles') === false, 'brand-neutral shell');
+    });
+
+    test('GET /api/fm/share/page with no module installed → 501 module_not_installed (the stub lands on the gate)', function () use ($B1) {
+        [$st, , $j] = reqJson('GET', "{$B1}/api/fm/share/page?token=x");
+        assertEqual(501, $st);
+        assertEnvelope($j, 'module_not_installed');
     });
 
     stop($srv1);

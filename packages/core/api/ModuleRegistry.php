@@ -160,6 +160,22 @@ final class ModuleRegistry
     }
 
     /**
+     * {@see require()} (501/402/403 in that order), then 501 `module_update_required` when the
+     * installed module predates the capability interface the route needs. Core carries no
+     * fallback implementation, so an old module has to be updated.
+     *
+     * @param class-string $interface
+     */
+    public static function requireCapability(string $id, string $interface, LicenseCheckInterface $license, Claims $claims): object
+    {
+        $module = self::require($id, $license, $claims);
+        if (!$module instanceof $interface) {
+            throw new ApiException("The '{$id}' module is too old for this FluxFiles core; update it", 501, 'module_update_required', ['module' => $id]);
+        }
+        return $module;
+    }
+
+    /**
      * Layers 1+2 only (installed + licensed) — for routes that run before a
      * request-scoped Claims object exists (the SSO login/callback/exchange routes
      * are pre-auth: there is no JWT yet to build Claims from). Layer 3 for those

@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../autoload.php';
-// The public Share/Intake handlers. Their own file so the WordPress plugin can serve
-// the same routes without including this one — including this one would run auth and
-// routing as a side effect.
-require_once __DIR__ . '/PublicLinks.php';
+// Small shared helpers (ff_str_param, ff_public_meta_repo, ff_sso_rate_limit). Their own
+// file so the WordPress plugin can reuse them without including this one — including this
+// one would run auth and routing as a side effect.
+require_once __DIR__ . '/helpers.php';
 
 use FluxFiles\ApiException;
 use FluxFiles\AuditLogStorage;
@@ -1135,13 +1135,10 @@ function routeRequest(
         if (!$claims->hasDisk($disk)) {
             throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
         }
-        $module = \FluxFiles\ModuleRegistry::require('legal-hold', \FluxFiles\ModuleRegistry::license(), $claims);
+        $module = \FluxFiles\ModuleRegistry::requireCapability('legal-hold', \FluxFiles\RetentionProviderInterface::class, \FluxFiles\ModuleRegistry::license(), $claims);
         $dryRun = filter_var($body['dry_run'] ?? true, FILTER_VALIDATE_BOOLEAN);
-        // The module owns the sweep; a legal-hold release from before that API falls back
-        // to the in-core copy (removed one core release after the modules ship it).
-        $report = $module instanceof \FluxFiles\RetentionProviderInterface
-            ? $module->runRetention($fm, $disk, $dryRun)
-            : $fm->runRetention($disk, $dryRun);
+        // The module owns the sweep; core carries no fallback (an old module gets 501 module_update_required).
+        $report = $module->runRetention($fm, $disk, $dryRun);
         if (!$dryRun) {
             foreach ($report['items'] as $it) {
                 if (in_array($it['result'], ['trashed', 'deleted'], true)) {
@@ -1169,15 +1166,12 @@ function routeRequest(
         if (!$claims->hasDisk($disk)) {
             throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
         }
-        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
+        $module = \FluxFiles\ModuleRegistry::requireCapability('audit-export', \FluxFiles\FixityProviderInterface::class, \FluxFiles\ModuleRegistry::license(), $claims);
         $auditRows = static fn (?int $since): array =>
             $since !== null && method_exists($metaRepo, 'readAuditWindow')
                 ? $metaRepo->readAuditWindow($disk, $since)
                 : $metaRepo->readAudit($disk);
-        // Module-owned sweep, with the in-core copy as the fallback for an older module.
-        $report = $module instanceof \FluxFiles\FixityProviderInterface
-            ? $module->runFixityCheck($fm, $disk, $auditRows, 1024 * 1024 * 1024)
-            : $fm->runFixityCheck($disk, $auditRows);
+        $report = $module->runFixityCheck($fm, $disk, $auditRows, 1024 * 1024 * 1024);
         foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
             foreach ($report[$list] as $key) {
                 try {
@@ -1205,12 +1199,9 @@ function routeRequest(
         if (!$claims->hasDisk($disk)) {
             throw new ApiException('Disk not allowed', 403, 'disk_not_allowed');
         }
-        $module = \FluxFiles\ModuleRegistry::require('audit-export', \FluxFiles\ModuleRegistry::license(), $claims);
+        $module = \FluxFiles\ModuleRegistry::requireCapability('audit-export', \FluxFiles\AuditVerifierInterface::class, \FluxFiles\ModuleRegistry::license(), $claims);
         $entries = array_merge($metaRepo->readAuditArchive($disk), $metaRepo->readAudit($disk));
-        // Module-owned verifier, with the in-core one as the fallback for an older module.
-        return $module instanceof \FluxFiles\AuditVerifierInterface
-            ? $module->verifyChain($entries)
-            : \FluxFiles\AuditChain::verify($entries);
+        return $module->verifyChain($entries);
     }
 
     // Audit purge (paid module) — destructive, so admin-only: the audit log is

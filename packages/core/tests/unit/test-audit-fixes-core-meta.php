@@ -2,8 +2,7 @@
 
 /**
  * Regression tests for the 2026-10-23 audit fixes in the core metadata layer:
- * JwtMiddleware (exp required), FixityChecker (digit keys, trusted entries,
- * extra write actions), AuditChain (unchained-after-start = tampering),
+ * JwtMiddleware (exp required),
  * TusServer (per-tenant cap, single finalize), readAudit() since/limit, legal
  * holds (fail closed, case-insensitive), private `_fluxfiles/` writes on a
  * public S3 disk, and embed.php (role/edition validation, fluxfiles_embed()
@@ -16,7 +15,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../../embed.php';
-require_once __DIR__ . '/../support/chain-verify.php';
 
 use Aws\CommandInterface;
 use Aws\Result;
@@ -29,7 +27,6 @@ use FluxFiles\Db\DbMetadataHandler;
 use FluxFiles\Db\MigrationRunner;
 use FluxFiles\DiskManager;
 use FluxFiles\FileManager;
-use FluxFiles\FixityChecker;
 use FluxFiles\JwtCompat;
 use FluxFiles\JwtMiddleware;
 use FluxFiles\StorageMetadataHandler;
@@ -86,79 +83,6 @@ test('a builder-minted token (always carries exp) still authenticates', function
     $_ENV['FLUXFILES_SECRET'] = $SECRET;
     $c = JwtMiddleware::handle(fluxfiles_token(['user' => 'u1', 'perms' => ['read']]), $SECRET);
     assertEqual('u1', $c->userId);
-});
-
-echo "\n{$cyan}══ FixityChecker / AuditChain ══{$reset}\n\n";
-
-test('an all-digit file name at the root does not TypeError (int array key)', function () {
-    $root = tmpRoot('fxdigit');
-    put($root, '2024', 'year');
-    put($root, '7/8', 'nested');
-    $fs = (new DiskManager(['local' => ['driver' => 'local', 'root' => $root]]))->disk('local');
-    $r = FixityChecker::run($fs, '', fn (string $k): bool => str_starts_with($k, '_fluxfiles'), []);
-    assertEqual(2, $r['baselined'], 'baselined');
-    unlink("{$root}/2024");
-    $r = FixityChecker::run($fs, '', fn (string $k): bool => str_starts_with($k, '_fluxfiles'), []);
-    assertEqual(['2024'], $r['missing_unexplained'], 'missing key stays a string');
-});
-
-/** Local disk + metadata handler + a baselined tenant tree "t/". */
-function chainedEnv(): array {
-    $root = tmpRoot('fxchain');
-    foreach (['t/a.txt' => 'alpha', 't/b.txt' => 'bravo', 't/docs/x/c.txt' => 'charlie', 't/d.txt' => 'delta'] as $k => $v) {
-        put($root, $k, $v);
-    }
-    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root]]);
-    $meta = new StorageMetadataHandler($dm);
-    $meta->audit('local', 'mkdir', ['user_id' => 'admin', 'file_key' => 't/docs']); // chain started
-    $skip = fn (string $k): bool => str_contains($k, '_fluxfiles');
-    FixityChecker::run($dm->disk('local'), 't', $skip, $meta->readAudit('local'));
-    return [$root, $dm, $meta, $skip];
-}
-
-test('B7: an unchained line appended after the chain started is tampering in verify()', function () {
-    [$root, , $meta] = chainedEnv();
-    file_put_contents("{$root}/_fluxfiles/audit.jsonl",
-        json_encode(['ts' => time() + 5, 'action' => 'upload', 'context' => ['file_key' => 't/a.txt']]) . "\n", FILE_APPEND);
-    $r = fxChainVerify($meta->readAudit('local'));
-    assertTrue($r['ok'] === false && count($r['tampered']) === 1, json_encode($r));
-});
-
-test('B7: fixity ignores an unchained/forged "upload" line vouching for a tampered file', function () {
-    [$root, $dm, $meta, $skip] = chainedEnv();
-    file_put_contents("{$root}/t/a.txt", 'tampered');
-    file_put_contents("{$root}/t/b.txt", 'tampered too');
-    file_put_contents("{$root}/_fluxfiles/audit.jsonl",
-        json_encode(['ts' => time() + 5, 'action' => 'upload', 'context' => ['file_key' => 't/a.txt']]) . "\n"
-        . json_encode(['ts' => time() + 5, 'action' => 'upload', 'context' => ['file_key' => 't/b.txt'], 'prev' => '', 'hash' => str_repeat('0', 64)]) . "\n",
-        FILE_APPEND);
-    $r = FixityChecker::run($dm->disk('local'), 't', $skip, $meta->readAudit('local'));
-    sort($r['changed_unexplained']);
-    assertEqual(['t/a.txt', 't/b.txt'], $r['changed_unexplained'], json_encode($r));
-});
-
-test('B7: a genuine chained entry still explains the change', function () {
-    [$root, $dm, $meta, $skip] = chainedEnv();
-    file_put_contents("{$root}/t/a.txt", 'edited in app');
-    $meta->audit('local', 'content_update', ['user_id' => 'u', 'file_key' => 't/a.txt']);
-    $r = FixityChecker::run($dm->disk('local'), 't', $skip, $meta->readAudit('local'));
-    assertEqual(['t/a.txt'], $r['changed_explained'], json_encode($r));
-});
-
-test('N3: retention_trash / extract (sibling tree) explain their changes', function () {
-    [$root, $dm, $meta, $skip] = chainedEnv();
-    unlink("{$root}/t/d.txt");
-    file_put_contents("{$root}/t/docs/x/c.txt", 'overwritten by extract');
-    $meta->audit('local', 'retention_trash', ['user_id' => 'u', 'file_key' => 't/d.txt']);
-    $meta->audit('local', 'extract', ['user_id' => 'u', 'file_key' => 't/docs/x.zip']);
-    $r = FixityChecker::run($dm->disk('local'), 't', $skip, $meta->readAudit('local'));
-    assertEqual(['t/d.txt'], $r['missing_explained'], 'retention ' . json_encode($r));
-    assertEqual(['t/docs/x/c.txt'], $r['changed_explained'], 'extract ' . json_encode($r));
-});
-
-test('an unchained log (no secret ever configured) is still trusted as before', function () {
-    $rows = [['action' => 'upload', 'file_key' => 't/a.txt', 'created_at' => 10]];
-    assertEqual($rows, AuditChain::trustedEntries($rows));
 });
 
 echo "\n{$cyan}══ readAudit(since, limit) ══{$reset}\n\n";
@@ -251,9 +175,8 @@ test('N5: bookkeeping writes send ACL=private even when the disk defaults to pub
     $meta->addTrash('s3', 'id1', ['original_key' => 'user/photo.jpg']);
     $meta->audit('s3', 'upload', ['user_id' => 'u', 'file_key' => 'user/photo.jpg']);
     $meta->addHold('s3', 'h1', ['path' => 'user/photo.jpg', 'released_at' => null]);
-    FixityChecker::run($fs, 'user', fn (string $k): bool => false, []);
     assertEqual('public-read', $seen['user/photo.jpg'] ?? null, 'control');
-    foreach (['_fluxfiles/trash.json', '_fluxfiles/audit.jsonl', '_fluxfiles/holds.json', 'user/_fluxfiles/fixity.json'] as $k) {
+    foreach (['_fluxfiles/trash.json', '_fluxfiles/audit.jsonl', '_fluxfiles/holds.json'] as $k) {
         assertEqual('private', $seen[$k] ?? null, $k);
     }
 });

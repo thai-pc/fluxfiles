@@ -31,6 +31,13 @@
         "league/flysystem-sftp-v3": "^3.0",
         "maennchen/zipstream-php": "^3.1"
     },
+    "conflict": {
+        "fluxfiles/laravel": "<1.0.3",
+        "fluxfiles/share": "<1.4.0",
+        "fluxfiles/intake": "<1.5.0",
+        "fluxfiles/legal-hold": "<1.2.0",
+        "fluxfiles/audit-export": "<1.1.0"
+    },
     "suggest": {
         "ext-pdo": "Required when FLUXFILES_STORAGE_BACKEND=db (any driver)",
         "ext-pdo_sqlite": "Required when FLUXFILES_STORAGE_BACKEND=db with a sqlite: DSN",

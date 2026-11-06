@@ -39,6 +39,15 @@ function expectApi(callable $f, int $code, string $errCode) {
     }
 }
 
+/** Capability interface used to exercise requireCapability(). */
+interface DemoCapability { public function sweep(): string; }
+/** A module that predates DemoCapability (the FakeModule above) and one that has it. */
+final class CapableModule implements ModuleInterface, DemoCapability {
+    public static function id(): string { return 'demo'; }
+    public static function claim(): string { return 'allow_optimize'; }
+    public function sweep(): string { return 'swept'; }
+}
+
 /** A fake paid module with a claim, registered under id 'demo'. */
 final class FakeModule implements ModuleInterface {
     public static function id(): string { return 'demo'; }
@@ -158,6 +167,40 @@ test('license grace still serves the module (active during grace)', function () 
         $grace = new LicenseManager(mintLicense($SEC, ['edition' => 'pro', 'modules' => ['demo'], 'expires' => $NOW - 86400, 'grace' => 14 * 86400]), $KEYS, $NOW);
         $m = ModuleRegistry::require('demo', $grace, claims(true));
         assertTrue($m instanceof FakeModule, 'served during grace');
+    } finally { ModuleRegistry::reset(); }
+});
+
+echo "\n{$cyan}══ requireCapability ══{$reset}\n\n";
+
+test('requireCapability: not installed → 501 module_not_installed (same as require)', function () use ($SEC, $KEYS, $NOW) {
+    ModuleRegistry::register('demo', 'Not\\Installed\\Demo');
+    try {
+        expectApi(fn () => ModuleRegistry::requireCapability('demo', DemoCapability::class, lic(['demo'], $SEC, $KEYS, $NOW), claims(true)), 501, 'module_not_installed');
+    } finally { ModuleRegistry::reset(); }
+});
+
+test('requireCapability: unlicensed → 402 and claim off → 403, both BEFORE the capability check', function () use ($SEC, $KEYS, $NOW) {
+    ModuleRegistry::register('demo', FakeModule::class);   // an old module that lacks the interface
+    try {
+        expectApi(fn () => ModuleRegistry::requireCapability('demo', DemoCapability::class, lic(null, $SEC, $KEYS, $NOW), claims(true)), 402, 'license_required');
+        expectApi(fn () => ModuleRegistry::requireCapability('demo', DemoCapability::class, lic(['demo'], $SEC, $KEYS, $NOW), claims(false)), 403, 'allow_optimize_forbidden');
+    } finally { ModuleRegistry::reset(); }
+});
+
+test('requireCapability: an installed module without the interface → 501 module_update_required {module}', function () use ($SEC, $KEYS, $NOW) {
+    ModuleRegistry::register('demo', FakeModule::class);
+    try {
+        $e = expectApi(fn () => ModuleRegistry::requireCapability('demo', DemoCapability::class, lic(['demo'], $SEC, $KEYS, $NOW), claims(true)), 501, 'module_update_required');
+        assertEqual(['module' => 'demo'], $e->getErrorParams());
+    } finally { ModuleRegistry::reset(); }
+});
+
+test('requireCapability: a module with the interface is returned', function () use ($SEC, $KEYS, $NOW) {
+    ModuleRegistry::register('demo', CapableModule::class);
+    try {
+        $m = ModuleRegistry::requireCapability('demo', DemoCapability::class, lic(['demo'], $SEC, $KEYS, $NOW), claims(true));
+        assertTrue($m instanceof CapableModule);
+        assertEqual('swept', $m->sweep());
     } finally { ModuleRegistry::reset(); }
 });
 
