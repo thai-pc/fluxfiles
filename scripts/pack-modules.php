@@ -186,7 +186,22 @@ foreach ($ids as $id) {
         continue;
     }
 
-    $catalogue[$id] = ['version' => $version, 'zip' => $zipName, 'sha256' => $sha];
+    // The core this release needs, from the TAGGED composer.json (never the worktree).
+    // Composer enforces it at `composer require`; the self-hosted update channel does
+    // not go through Composer, so the catalogue carries it for the server and client.
+    [$cj, $composerJson] = run(['git', 'show', "{$tag}:composer.json"], $dir);
+    $requiresCore = null;
+    if ($cj === 0) {
+        $decoded = json_decode($composerJson, true);
+        $rc = is_array($decoded) ? ($decoded['require']['fluxfiles/fluxfiles'] ?? null) : null;
+        $requiresCore = is_string($rc) && trim($rc) !== '' ? trim($rc) : null;
+    }
+    if ($requiresCore === null) {
+        echo "  {$yellow}WARN{$reset} {$id}: composer.json has no require[\"fluxfiles/fluxfiles\"] — catalogue entry gets no requires_core\n";
+    }
+    $entry = ['version' => $version, 'zip' => $zipName, 'sha256' => $sha];
+    if ($requiresCore !== null) { $entry['requires_core'] = $requiresCore; }
+    $catalogue[$id] = $entry;
     printf("  {$green}OK{$reset}   %-11s %-7s %2d files  %6.1f KB  %s…\n",
         $id, $version, $count, strlen($bytes) / 1024, substr($sha, 0, 12));
 }
@@ -207,6 +222,20 @@ foreach (EXTERNALLY_BUILT as $extId => $extWhere) {
     } else {
         echo "  {$yellow}NOTE{$reset} no {$extId} entry yet — {$extWhere}\n";
     }
+}
+// Keep earlier releases of a module in `releases` (newest first), so the update server
+// can serve the newest build a given core can host instead of 'nothing' when the latest
+// one needs a newer core. Only entries carrying a sha256 are kept.
+foreach ($catalogue as $id => $entry) {
+    if (isset(EXTERNALLY_BUILT[$id])) { continue; }
+    $prior = $existing[$id] ?? null;
+    $history = is_array($prior) ? array_values($prior['releases'] ?? []) : [];
+    if (is_array($prior) && ($prior['version'] ?? $entry['version']) !== $entry['version']) {
+        unset($prior['releases']);
+        array_unshift($history, $prior);
+    }
+    $history = array_values(array_filter($history, static fn ($r) => is_array($r) && ($r['version'] ?? '') !== $entry['version'] && ($r['sha256'] ?? '') !== ''));
+    if ($history !== []) { $catalogue[$id]['releases'] = array_slice($history, 0, 10); }
 }
 ksort($catalogue);
 file_put_contents($cataloguePath, json_encode($catalogue, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");

@@ -322,6 +322,7 @@
     "update_corrupt": "更新包已损坏。",
     "update_failed": "更新失败。",
     "update_unsafe": "更新包不安全。",
+    "core_update_required": "此版本需要更新的 FluxFiles 核心。请先更新核心,然后重试。",
     "zip_empty": "没有可压缩的内容。",
     "zip_forbidden": "不允许创建 ZIP 文件。",
     "zip_slip": "压缩包包含不安全的路径。",

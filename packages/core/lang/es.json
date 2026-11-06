@@ -322,6 +322,7 @@
     "update_corrupt": "El paquete de actualización está dañado.",
     "update_failed": "La actualización falló.",
     "update_unsafe": "El paquete de actualización no es seguro.",
+    "core_update_required": "Esta versión requiere un núcleo de FluxFiles más reciente. Actualice primero el núcleo y vuelva a intentarlo.",
     "zip_empty": "Nada que comprimir.",
     "zip_forbidden": "No se permite crear archivos ZIP.",
     "zip_slip": "El archivo contiene rutas no seguras.",

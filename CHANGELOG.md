@@ -3,6 +3,26 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.11] — 2026-11-06
+
+> Released: `core-v1.0.6`.
+
+### Fixed
+
+- **The module update channel could install a module that needs a newer core.** Share
+  1.4.0, intake 1.5.0, legal-hold 1.2.0 and audit-export 1.1.0 require core `^1.0.4`, but
+  that floor was enforced only by Composer; `fluxfiles update <module>` bypasses it, so a
+  site on core 1.0.3 could install one and then hit `Interface "FluxFiles\PublicModuleInterface"
+  not found` on every route touching the module. `scripts/pack-modules.php` now writes each
+  module's core constraint into the catalogue as `requires_core` (and keeps earlier builds
+  under `releases`); the update server signs it into the manifest and serves the newest
+  release the client's core can host; `UpdateClient::assertCoreCompatible()` refuses the
+  rest with a message to update core first. New `CoreVersion::current()` /
+  `CoreVersion::satisfies()`. An unknown core version (git checkout) is refused unless
+  `fluxfiles update <module> --force`. Old clients (<= 1.0.4) send no `core_version`, so the
+  server treats them as 1.0.3 and never offers a floor above `^1.0.3`. New error code
+  `core_update_required` (16 languages).
+
 ## [1.0.9] — 2026-11-06
 
 > Released: `ckeditor4-v1.0.1`, `tinymce-v1.0.1`, `summernote-v1.0.1`, `ckeditor5-v1.0.2`.

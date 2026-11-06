@@ -322,6 +322,7 @@
     "update_corrupt": "Das Update-Paket ist beschädigt.",
     "update_failed": "Update fehlgeschlagen.",
     "update_unsafe": "Das Update-Paket ist nicht sicher.",
+    "core_update_required": "Diese Version benötigt einen neueren FluxFiles-Core. Aktualisieren Sie zuerst den Core und versuchen Sie es erneut.",
     "zip_empty": "Nichts zum Komprimieren.",
     "zip_forbidden": "Das Erstellen von ZIP-Dateien ist nicht erlaubt.",
     "zip_slip": "Das Archiv enthält unsichere Pfade.",

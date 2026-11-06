@@ -322,6 +322,7 @@
     "update_corrupt": "Het updatepakket is beschadigd.",
     "update_failed": "Update mislukt.",
     "update_unsafe": "Het updatepakket is onveilig.",
+    "core_update_required": "Deze release vereist een nieuwere FluxFiles-core. Werk eerst de core bij en probeer het opnieuw.",
     "zip_empty": "Niets om te zippen.",
     "zip_forbidden": "ZIP-bestanden maken is niet toegestaan.",
     "zip_slip": "Het archief bevat onveilige paden.",

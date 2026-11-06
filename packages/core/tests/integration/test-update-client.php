@@ -144,5 +144,109 @@ test('install: Zip Slip (../) is refused', function () {
     }
 });
 
+// ── core-version gate ────────────────────────────────────────────────────────
+
+test('CoreVersion::satisfies covers ^, ~, >=, ||, wildcard, AND', function () {
+    $C = \FluxFiles\CoreVersion::class;
+    assertTrue($C::satisfies('1.0.4', '^1.0.4'), '^1.0.4 accepts 1.0.4');
+    assertTrue($C::satisfies('1.3.0', '^1.0.4'), '^1.0.4 accepts 1.3.0');
+    assertTrue(!$C::satisfies('1.0.3', '^1.0.4'), '^1.0.4 refuses 1.0.3');
+    assertTrue(!$C::satisfies('2.0.0', '^1.0.4'), '^1.0.4 refuses 2.0.0');
+    assertTrue($C::satisfies('2.1.0', '^1.0.4 || ^2.0'), '|| alternative');
+    assertTrue($C::satisfies('1.0.4', '>=1.0.3'), '>=');
+    assertTrue($C::satisfies('1.0.4', '>= 1.0.3, <2.0'), 'AND with spaced op');
+    assertTrue(!$C::satisfies('1.0.3', '~1.0.4'), '~1.0.4 refuses 1.0.3');
+    assertTrue($C::satisfies('1.0.9', '~1.0.4'), '~1.0.4 accepts 1.0.9');
+    assertTrue(!$C::satisfies('1.1.0', '~1.0.4'), '~1.0.4 refuses 1.1.0');
+    assertTrue($C::satisfies('1.0.9', '1.0.*'), 'wildcard');
+    assertTrue(!$C::satisfies('1.1.0', '1.0.*'), 'wildcard upper bound');
+    assertTrue($C::satisfies('v1.0.4', '^1.0.4'), 'leading v tolerated');
+    assertTrue(!$C::satisfies('1.0.4', 'banana'), 'unparseable constraint fails closed');
+    assertTrue(!$C::satisfies('dev-master', '^1.0.4'), 'dev version never satisfies');
+    assertTrue($C::satisfies('0.2.5', '^0.2.1') && !$C::satisfies('0.3.0', '^0.2.1'), '0.x caret');
+});
+
+test('CoreVersion::normalize rejects dev versions', function () {
+    assertEqual('1.0.4', \FluxFiles\CoreVersion::normalize('v1.0.4'));
+    assertEqual('1.0.4', \FluxFiles\CoreVersion::normalize('core-v1.0.4'));
+    assertEqual(null, \FluxFiles\CoreVersion::normalize('dev-master'));
+    assertEqual(null, \FluxFiles\CoreVersion::normalize('1.0.x-dev'));
+    $cur = \FluxFiles\CoreVersion::current();
+    assertTrue($cur === null || preg_match('/^\d/', $cur) === 1, 'current() is null or numeric');
+});
+
+$shareManifest = ['module' => 'share', 'version' => '1.4.0', 'requires_core' => '^1.0.4'];
+
+test('assertCoreCompatible: refuses a core below the floor', function () use ($shareManifest) {
+    try {
+        UpdateClient::assertCoreCompatible($shareManifest, '1.0.3');
+        throw new \RuntimeException('expected refusal');
+    } catch (ApiException $e) {
+        assertEqual('core_update_required', $e->getErrorCode());
+        assertTrue(str_contains($e->getMessage(), 'Update core first'), 'message tells the operator what to do');
+    }
+    // --force must NOT override a known mismatch.
+    try {
+        UpdateClient::assertCoreCompatible($shareManifest, '1.0.3', true);
+        throw new \RuntimeException('expected refusal even with force');
+    } catch (ApiException $e) {
+        assertEqual('core_update_required', $e->getErrorCode());
+    }
+});
+
+test('assertCoreCompatible: accepts at or above the floor, and when no floor is declared', function () use ($shareManifest) {
+    assertEqual(null, UpdateClient::assertCoreCompatible($shareManifest, '1.0.4'));
+    assertEqual(null, UpdateClient::assertCoreCompatible($shareManifest, '1.2.0'));
+    assertEqual(null, UpdateClient::assertCoreCompatible(['module' => 'share', 'version' => '1.0.0'], '0.0.1'), 'legacy catalogue entry');
+});
+
+test('assertCoreCompatible: unknown core version warns, and only --force proceeds', function () use ($shareManifest) {
+    try {
+        UpdateClient::assertCoreCompatible($shareManifest, null);
+        throw new \RuntimeException('expected refusal');
+    } catch (ApiException $e) {
+        assertEqual('core_update_required', $e->getErrorCode());
+    }
+    $w = UpdateClient::assertCoreCompatible($shareManifest, null, true);
+    assertTrue(is_string($w) && str_contains($w, '--force'), 'warning returned');
+    assertTrue(is_string(UpdateClient::assertCoreCompatible($shareManifest, 'dev-master', true)), 'dev-* is unknown too');
+});
+
+test('requires_core survives the signed manifest round trip', function () use ($mintManifest, $KEYS) {
+    $c = new UpdateClient($KEYS);
+    $p = $c->verifyManifest($mintManifest(['module' => 'share', 'version' => '1.4.0', 'url' => 'u', 'sha256' => 'h', 'requires_core' => '^1.0.4']));
+    assertEqual('^1.0.4', $p['requires_core'] ?? null);
+});
+
+// ── update server example: release selection ────────────────────────────────
+
+define('FLUXFILES_UPDATE_SERVER_FUNCTIONS_ONLY', true);
+require_once __DIR__ . '/../../../../docs/update-server.example.php';
+
+$rel = static fn (string $v, ?string $core): array => array_filter(['version' => $v, 'zip' => "share-$v.zip", 'sha256' => str_repeat('a', 64), 'requires_core' => $core]);
+$entry = $rel('1.4.0', '^1.0.4') + ['releases' => [$rel('1.3.0', '^1.0.3'), $rel('1.2.0', null)]];
+
+test('server: old client (no core_version) is never offered a floor above ^1.0.3', function () use ($entry) {
+    assertEqual('1.3.0', fluxfiles_pick_release($entry, null)['version'] ?? null);
+    $onlyNew = ['version' => '1.4.0', 'sha256' => 'x', 'requires_core' => '^1.0.4'];
+    assertEqual(null, fluxfiles_pick_release($onlyNew, null), 'nothing compatible -> null');
+});
+
+test('server: proven core gets the newest compatible release', function () use ($entry) {
+    assertEqual('1.4.0', fluxfiles_pick_release($entry, '1.0.4')['version'] ?? null);
+    assertEqual('1.3.0', fluxfiles_pick_release($entry, '1.0.3')['version'] ?? null);
+    assertEqual('1.4.0', fluxfiles_pick_release($entry, '1.5.0')['version'] ?? null);
+    assertEqual('1.3.0', fluxfiles_pick_release($entry, 'dev-master')['version'] ?? null, 'unparseable = unproven');
+});
+
+// ── pack-modules: the catalogue carries requires_core ───────────────────────
+
+test('pack-modules reads require[fluxfiles/fluxfiles] from the tagged composer.json into the catalogue', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../../../../scripts/pack-modules.php');
+    assertTrue(str_contains($src, '"{$tag}:composer.json"'), 'reads composer.json at the tag, not the worktree');
+    assertTrue(str_contains($src, "['require']['fluxfiles/fluxfiles']"), 'reads the core constraint');
+    assertTrue(str_contains($src, "\$entry['requires_core']"), 'writes requires_core into the entry');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);

@@ -118,6 +118,46 @@ final class UpdateClient
     }
 
     /**
+     * Refuse a release the running core cannot host. A module's `requires_core`
+     * (its composer `fluxfiles/fluxfiles` constraint, carried in the signed manifest)
+     * is otherwise enforced only by Composer, which this channel bypasses: installing
+     * a module that needs a newer core fatals on load and takes down every route that
+     * touches it. A manifest without `requires_core` (older catalogue) is accepted.
+     *
+     * An unknown core version (git checkout, `dev-*`) is not guessed at: it throws
+     * unless $force, in which case a warning string is returned for the caller to print.
+     *
+     * @param array<string,mixed> $manifest
+     * @return string|null warning to show the operator, or null
+     * @throws ApiException core_update_required
+     */
+    public static function assertCoreCompatible(array $manifest, ?string $coreVersion, bool $force = false): ?string
+    {
+        $need = trim((string) ($manifest['requires_core'] ?? ''));
+        if ($need === '') {
+            return null;
+        }
+        $module = (string) ($manifest['module'] ?? 'module');
+        $version = (string) ($manifest['version'] ?? '');
+        if ($coreVersion === null || CoreVersion::normalize($coreVersion) === null) {
+            $msg = "Cannot determine the installed FluxFiles core version, and {$module} {$version} requires core {$need}.";
+            if ($force) {
+                return $msg . ' Installing anyway (--force).';
+            }
+            throw new ApiException($msg . ' Re-run with --force if you are sure.', 409, 'core_update_required');
+        }
+        if (!CoreVersion::satisfies($coreVersion, $need)) {
+            throw new ApiException(
+                "{$module} {$version} requires FluxFiles core {$need}, but core {$coreVersion} is installed. "
+                . 'Update core first (composer update fluxfiles/fluxfiles), then retry.',
+                409,
+                'core_update_required'
+            );
+        }
+        return null;
+    }
+
+    /**
      * Extract a verified module zip into $destDir (replacing its contents). Guards
      * against path traversal (Zip Slip) — every entry must resolve inside $destDir.
      * The stage and backup live beside $destDir, not in the system temp directory:

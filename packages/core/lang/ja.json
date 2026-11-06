@@ -322,6 +322,7 @@
     "update_corrupt": "更新パッケージが破損しています。",
     "update_failed": "更新に失敗しました。",
     "update_unsafe": "更新パッケージが安全ではありません。",
+    "core_update_required": "このリリースにはより新しい FluxFiles コアが必要です。先にコアを更新してから、もう一度お試しください。",
     "zip_empty": "ZIP に追加するものがありません。",
     "zip_forbidden": "ZIP ファイルの作成は許可されていません。",
     "zip_slip": "アーカイブに安全でないパスが含まれています。",

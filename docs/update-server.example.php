@@ -10,7 +10,7 @@
  *   - Laravel / standalone: `php vendor/bin/fluxfiles update <module>` (UpdateClient).
  *
  * Flow:
- *   GET /update/{module}?current=X.Y.Z + Authorization: Bearer <license>
+ *   GET /update/{module}?current=X.Y.Z[&core_version=A.B.C] + Authorization: Bearer <license>
  *     → verify the license with the SAME Ed25519 LicenseManager the core ships,
  *       then ask the licence server whether it remains active (refund/revoke check)
  *     → return a SIGNED manifest token {module,version,url,sha256,expires} signed
@@ -29,7 +29,52 @@ declare(strict_types=1);
 
 require __DIR__ . '/../packages/core/vendor/autoload.php';
 
+use FluxFiles\CoreVersion;
 use FluxFiles\LicenseManager;
+
+/**
+ * Pick the release to offer a client.
+ *
+ * A catalogue entry is the latest release plus, optionally, `releases` (older entries,
+ * newest first — `scripts/pack-modules.php` maintains it). Each carries `requires_core`,
+ * the module's composer constraint on fluxfiles/fluxfiles. A module built for a newer
+ * core fatals on load against an older one (missing interface), so we must not offer it.
+ *
+ *   - Client sent `core_version` (core >= 1.0.5): serve the newest release whose
+ *     `requires_core` that version satisfies; null when none does.
+ *   - Client sent none (core <= 1.0.4 cannot): it has not proven its version, so it is
+ *     treated as core 1.0.3 — the oldest core still in the field. A release whose floor is
+ *     above `^1.0.3` (e.g. share 1.4.0 needing `^1.0.4`) is NEVER offered to it.
+ *   - A release with no `requires_core` is compatible with everyone.
+ *
+ * @param array<string,mixed> $entry
+ * @return array<string,mixed>|null
+ */
+function fluxfiles_pick_release(array $entry, ?string $coreVersion): ?array
+{
+    $assumed = $coreVersion !== null && CoreVersion::normalize($coreVersion) !== null
+        ? $coreVersion
+        : '1.0.3';
+    $candidates = array_merge([array_diff_key($entry, ['releases' => 1])], array_values($entry['releases'] ?? []));
+    $best = null;
+    foreach ($candidates as $c) {
+        if (!is_array($c) || ($c['version'] ?? '') === '' || ($c['sha256'] ?? '') === '') {
+            continue;
+        }
+        $need = (string) ($c['requires_core'] ?? '');
+        if ($need !== '' && !CoreVersion::satisfies($assumed, $need)) {
+            continue;
+        }
+        if ($best === null || version_compare(ltrim((string) $c['version'], 'vV'), ltrim((string) $best['version'], 'vV'), '>')) {
+            $best = $c;
+        }
+    }
+    return $best;
+}
+
+if (defined('FLUXFILES_UPDATE_SERVER_FUNCTIONS_ONLY')) {
+    return; // tests load the helper above without running the request
+}
 
 // ── config (env / secrets manager) ──────────────────────────────────────────
 $RELEASE_PRIVATE_KEY = base64_decode((string) getenv('FLUXFILES_RELEASE_PRIVATE_KEY'), true); // 64 bytes
@@ -120,8 +165,14 @@ if (!in_array($module, $FREE_MODULES, true)) {
     }
 }   // end paid-module gate
 
-// 3. Build + sign the manifest.
-$entry = $CATALOGUE[$module];
+// 3. Pick a release this client's core can host, then build + sign the manifest.
+//    `core_version` is advisory (the client reports it); it only narrows what we offer.
+$coreVersion = isset($_GET['core_version']) ? CoreVersion::normalize((string) $_GET['core_version']) : null;
+$entry = fluxfiles_pick_release($CATALOGUE[$module], $coreVersion);
+if ($entry === null) {
+    http_response_code(409);
+    exit('no release of this module is compatible with core ' . ($coreVersion ?? '(unreported, assumed 1.0.3)') . ' - update core first');
+}
 $payload = [
     'module'  => $module,
     'version' => $entry['version'],
@@ -131,6 +182,11 @@ $payload = [
 ];
 // Optional PHP floor for this release (the WordPress catalogue entry carries one), so
 // the plugin's updater can hold the update back on an older PHP.
+// The core this release needs. UpdateClient re-checks it before installing (the manifest is
+// signed, so it can't be stripped in transit).
+if (!empty($entry['requires_core'])) {
+    $payload['requires_core'] = (string) $entry['requires_core'];
+}
 if (!empty($entry['requires_php'])) {
     $payload['requires_php'] = (string) $entry['requires_php'];
 }

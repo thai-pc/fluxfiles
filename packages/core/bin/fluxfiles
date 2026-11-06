@@ -48,16 +48,20 @@ if ($command === 'serve') {
 // FLUXFILES_UPDATE_URL) for a SIGNED manifest using the license key (env
 // FLUXFILES_LICENSE_KEY), verifies the manifest + the zip's sha256, and installs
 // the module into vendor/fluxfiles/<module>/. `--check` only reports.
-//   fluxfiles update optimize [--check]
+//   fluxfiles update optimize [--check] [--force]
+// A release whose `requires_core` the running core doesn't satisfy is refused;
+// --force only overrides an UNKNOWN core version (git checkout), never a known mismatch.
 if ($command === 'update') {
     $module = '';
     $checkOnly = false;
+    $force = false;
     foreach (array_slice($argv, 2) as $arg) {
         if ($arg === '--check') { $checkOnly = true; }
+        elseif ($arg === '--force') { $force = true; }
         elseif (strncmp($arg, '--', 2) !== 0 && $module === '') { $module = $arg; }
     }
     if ($module === '' || !preg_match('/^[a-z0-9-]+$/', $module)) {
-        fwrite(STDERR, "Usage: fluxfiles update <module> [--check]\n");
+        fwrite(STDERR, "Usage: fluxfiles update <module> [--check] [--force]\n");
         exit(1);
     }
 
@@ -94,8 +98,10 @@ if ($command === 'update') {
         }
     }
 
+    $coreVersion = \FluxFiles\CoreVersion::current();
     $url = $updateBase . '/update/' . rawurlencode($module)
-        . '?current=' . rawurlencode($current);
+        . '?current=' . rawurlencode($current)
+        . ($coreVersion !== null ? '&core_version=' . rawurlencode($coreVersion) : '');
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -122,6 +128,15 @@ if ($command === 'update') {
     if ($installed && !\FluxFiles\UpdateClient::isNewer($version, $current)) {
         fwrite(STDOUT, "Already current ({$current}).\n");
         exit(0);
+    }
+    try {
+        $warning = \FluxFiles\UpdateClient::assertCoreCompatible($manifest, $coreVersion, $force);
+    } catch (\FluxFiles\ApiException $e) {
+        fwrite(STDERR, $e->getMessage() . "\n");
+        exit(1);
+    }
+    if ($warning !== null) {
+        fwrite(STDERR, "WARNING: {$warning}\n");
     }
     if ($checkOnly) {
         exit(0);
@@ -154,7 +169,7 @@ if ($command === 'update') {
 if (!in_array($command, ['index', 'seed'], true)) {
     fwrite(STDERR, "Usage:\n"
         . "  fluxfiles serve [--host=127.0.0.1] [--port=8080]\n"
-        . "  fluxfiles update <module> [--check]\n"
+        . "  fluxfiles update <module> [--check] [--force]\n"
         . "  fluxfiles index --disk=local [--path=prefix] [--owner=user-id] [--readonly] [--overwrite] [--dry-run] [--hash] [--variants] [--persist-metadata]\n");
     exit(1);
 }

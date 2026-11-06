@@ -98,6 +98,29 @@ bought it".
 
 Point `FLUXFILES_UPDATE_URL` at it (default `https://updates.fluxfiles.dev`).
 
+### Core-version compatibility
+
+A module declares the core it needs in its `composer.json`
+(`require["fluxfiles/fluxfiles"]`). Composer enforces that on `composer require`, but
+`fluxfiles update <module>` does not go through Composer, so the channel enforces it too:
+
+- `scripts/pack-modules.php` copies that constraint from the **tagged** `composer.json` into
+  each catalogue entry as `requires_core`, and keeps earlier builds under `releases` (newest
+  first) so a site on an older core can still be offered the newest build it can host.
+- The server signs `requires_core` into the manifest. The client sends its core version as
+  `?core_version=` (from `Composer\InstalledVersions`, or the `FLUXFILES_CORE_VERSION`
+  constant) and `UpdateClient::assertCoreCompatible()` refuses a release the running core
+  does not satisfy, telling the operator to update core first.
+- A client that cannot determine its core (a git checkout, `dev-*`) is refused with a
+  warning; `fluxfiles update <module> --force` proceeds. `--force` never overrides a known
+  mismatch.
+- **Clients that predate this (core <= 1.0.4) send no `core_version`.** The server treats
+  them as core `1.0.3` and never offers a release whose floor is above `^1.0.3`; they get
+  the newest older build, or `409` when none is compatible. Only a client that reports its
+  version can be offered a release with a higher floor.
+- The WordPress plugin updater only updates the plugin itself (no `requires_core`), so it is
+  unchanged.
+
 Verify without a licence:
 
 ```bash
