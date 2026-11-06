@@ -5,6 +5,26 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### WordPress plugin: storage base, hidden guard files, uninstall
+
+- **New installs store files in `wp-content/uploads/fluxfiles`** (managed hosts back that folder up and keep it
+  across deploys). The base is decided once, on activation or the first request that needs it, and kept in the
+  `fluxfiles_storage_base` site option: a site that already has `wp-content/fluxfiles` keeps exactly that path (no
+  data is moved). Override order: `FLUXFILES_STORAGE_DIR` constant, then the `fluxfiles_storage_base` filter, then the
+  option. The multisite layout is unchanged (`<base>/sites/<blog_id>/`). The local disk URL is derived from the base
+  (uploads URL, `content_url()`, or none: a base outside both goes private and is served through `/stream`), and the
+  nginx notice, `uploadsRelPath()` and the storage protection files follow the same base.
+- **Fix:** the plugin's own `.htaccess` / `index.php` no longer show up in the picker. The local disk now carries a
+  `hidden_files` list; core hides exactly those keys at the disk root from listings, the search/usage feed, the
+  duplicate finder and the quota file count (new `FileManager::isGuardKey()`). A same-named file in a subfolder or
+  under a tenant prefix is the user's own and stays visible. Older core ignores the key.
+- **New `uninstall.php`:** deleting the plugin removes its options (every `register_setting()` option plus
+  `fluxfiles_secret`, `fluxfiles_storage_base` and the DB schema version), the usage transients and the
+  `wp_fluxfiles_*` tables, on every site of a multisite network. Stored files are deleted only when the new
+  **Delete data on uninstall** setting (`fluxfiles_delete_data_on_uninstall`, off by default) is on, and then only the
+  plugin-owned `uploads/` root and its state files, never an arbitrary custom base. Add-on plugin data is never
+  touched.
+
 ### BREAKING (WordPress plugin): paid plumbing moves to the future FluxFiles Pro plugin
 
 - The free WordPress plugin no longer contains the self-updater (`FluxFilesUpdater`, the

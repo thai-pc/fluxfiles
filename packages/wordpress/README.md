@@ -154,15 +154,21 @@ An unknown `edition` is ignored (the token mints without the extra claims) and r
 
 ## Storage protection (Apache / nginx)
 
-Files live in `wp-content/fluxfiles/uploads/`, which your web server serves
-directly. On Apache/LiteSpeed the plugin writes `.htaccess` rules there
+Files live in `<uploads>/fluxfiles/uploads/` (usually `wp-content/uploads/fluxfiles/uploads/`)
+on new installs and in `wp-content/fluxfiles/uploads/` on sites that already had that
+folder (nothing is moved on update). The choice is stored once as a location
+(`content` or `uploads`, option `fluxfiles_storage_base`) and resolved on every request,
+so a moved or cloned site follows its own paths. Override it with the
+`FLUXFILES_STORAGE_DIR` constant or the `fluxfiles_storage_base` filter. Your web server
+serves the folder directly. On Apache/LiteSpeed the plugin writes `.htaccess` rules there
 automatically (deny `_fluxfiles/` bookkeeping and dotfiles, never execute
 uploads, serve HTML/SVG as inert downloads). **nginx ignores `.htaccess`** — add
 the equivalent yourself:
 
 ```nginx
-location ^~ /wp-content/fluxfiles/ {
-    location ^~ /wp-content/fluxfiles/uploads/ {
+# Adjust the prefix: /wp-content/uploads/fluxfiles/ (new installs) or /wp-content/fluxfiles/
+location ^~ /wp-content/uploads/fluxfiles/ {
+    location ^~ /wp-content/uploads/fluxfiles/uploads/ {
         allow all;   # the outer `deny all` is inherited otherwise
         add_header X-Content-Type-Options "nosniff" always;
         add_header Content-Security-Policy "sandbox" always;
@@ -179,6 +185,14 @@ location ^~ /wp-content/fluxfiles/ {
 }
 ```
 
+### Uninstall
+
+Deleting the plugin always removes its settings and rate-limit counters. The stored files,
+their metadata/trash/audit/legal-hold tables and the secret key are **kept** unless you tick
+"Delete all FluxFiles data when the plugin is deleted" first. With it on, files FluxFiles
+wrote in its own folder are removed; nothing is deleted at a custom location set via
+`FLUXFILES_STORAGE_DIR` or the `fluxfiles_storage_base` filter.
+
 ### Multisite layout
 
 On a multisite network every site gets its **own** storage root, so one site's
@@ -186,9 +200,12 @@ users can never reach another site's files, index, audit log or trash:
 
 | | Single site | Multisite (blog id `N`) |
 |---|---|---|
-| Storage root | `wp-content/fluxfiles/` | `wp-content/fluxfiles/sites/N/` |
-| Local disk | `wp-content/fluxfiles/uploads/` | `wp-content/fluxfiles/sites/N/uploads/` |
-| Disk URL | `…/wp-content/fluxfiles/uploads/` | `…/wp-content/fluxfiles/sites/N/uploads/` |
+| Storage root | `<uploads>/fluxfiles/` (existing installs: `wp-content/fluxfiles/`) | `<uploads>/fluxfiles/sites/N/` |
+| Local disk | `<uploads>/fluxfiles/uploads/` | `<uploads>/fluxfiles/sites/N/uploads/` |
+| Disk URL | `…/uploads/fluxfiles/uploads/` | `…/uploads/fluxfiles/sites/N/uploads/` |
+
+`<uploads>` is the main site's uploads folder. Media-cleaner plugins may list these
+files as "unused media" because they live under uploads/; exclude `fluxfiles/`.
 
 Blog 1 uses `sites/1/` too. Rate-limit state and the `_fluxfiles/` bookkeeping
 live under the site's root; the DB backend was already per-site (`$wpdb->prefix`).

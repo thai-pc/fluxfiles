@@ -2,6 +2,8 @@
 
 defined('ABSPATH') || exit;
 
+require_once __DIR__ . '/FluxFilesStorage.php';
+
 /**
  * Main plugin class — singleton that wires all hooks.
  */
@@ -97,15 +99,20 @@ class FluxFilesPlugin
      */
     public function activate(): void
     {
+        // Decide the storage base before anything creates a directory, so an
+        // existing wp-content/fluxfiles is kept and a fresh install lands in uploads/.
+        FluxFilesStorage::decide();
         $storagePath = self::storagePath();
 
-        if (!is_dir($storagePath)) {
-            wp_mkdir_p($storagePath);
+        if (!FluxFilesStorage::onFallback()) {
+            if (!is_dir($storagePath)) {
+                wp_mkdir_p($storagePath);
+            }
+            if (!is_dir($storagePath . '/uploads')) {
+                wp_mkdir_p($storagePath . '/uploads');
+            }
+            self::protectStorage();
         }
-        if (!is_dir($storagePath . '/uploads')) {
-            wp_mkdir_p($storagePath . '/uploads');
-        }
-        self::protectStorage();
 
         // Set default options if not already set
         if (get_option('fluxfiles_secret') === false) {
@@ -145,11 +152,12 @@ class FluxFilesPlugin
     // -------------------------------------------------------------------------
 
     /**
-     * Get the FluxFiles storage directory path.
+     * Get the FluxFiles storage directory path
+     * (FLUXFILES_STORAGE_DIR > `fluxfiles_storage_base` filter > option; see FluxFilesStorage).
      */
     public static function storagePath(): string
     {
-        $base = WP_CONTENT_DIR . '/fluxfiles';
+        $base = FluxFilesStorage::base();
         $site = self::multisiteSegment();
         return $site === '' ? $base : $base . '/' . $site;
     }
@@ -170,16 +178,19 @@ class FluxFilesPlugin
         return 'sites/' . max(1, $id);
     }
 
-    /** `fluxfiles[/sites/<id>]/uploads`, relative to the content URL/dir. */
+    /**
+     * The local disk root relative to the directory its public URL is built from
+     * (wp-content, or the uploads dir when the base lives there); '' when the
+     * storage is outside both and has no public URL.
+     */
     public static function uploadsRelPath(): string
     {
-        $site = self::multisiteSegment();
-        return 'fluxfiles/' . ($site === '' ? '' : $site . '/') . 'uploads';
+        return FluxFilesStorage::relPath(self::storagePath() . '/uploads');
     }
 
     /** Bump when the generated rules change, so existing installs get rewritten. */
     private const PROTECT_VERSION = 1;
-    private const PROTECT_MARKER  = '# FluxFiles storage protection v';
+    private const PROTECT_MARKER  = FluxFilesStorage::PROTECT_MARKER;
 
     /**
      * Write web-server rules into the storage dir, which lives under the publicly
@@ -209,7 +220,7 @@ class FluxFilesPlugin
         self::writeProtectFile($uploads . '/.htaccess', self::uploadsHtaccess());
         foreach ([$root, $uploads] as $dir) {
             if (!file_exists($dir . '/index.php')) {
-                @file_put_contents($dir . '/index.php', "<?php\n// Silence is golden.\n");
+                @file_put_contents($dir . '/index.php', FluxFilesStorage::INDEX_STUB);
             }
         }
     }
@@ -588,17 +599,23 @@ HTACCESS;
     public static function diskConfigs(): array
     {
         $storagePath = self::storagePath();
+        $localUrl = FluxFilesStorage::url($storagePath . '/uploads');
 
         $disks = [
             'local' => [
                 'driver' => 'local',
                 'root'   => $storagePath . '/uploads',
-                'url'    => content_url(self::uploadsRelPath()),
+                // '' = the base is outside uploads/ and wp-content/ (custom
+                // FLUXFILES_STORAGE_DIR): no public URL, bytes go through /stream.
+                'url'    => $localUrl,
+                // The plugin's own protection files in the disk root: listed by no
+                // one (core matches these exact root keys only).
+                'hidden_files' => FluxFilesStorage::guardFiles(),
                 // true = files are NOT served from the public 'url' above; the UI's
                 // list() marks them gated and the embedded client fetches bytes via
                 // the signed `/api/fm/stream` route instead. Off by default (the WP
                 // content dir is normally web-served).
-                'private' => (bool) get_option('fluxfiles_local_private', false),
+                'private' => (bool) get_option('fluxfiles_local_private', false) || $localUrl === '',
             ],
         ];
 

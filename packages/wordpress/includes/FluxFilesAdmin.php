@@ -173,6 +173,19 @@ class FluxFilesAdmin
             'fluxfiles_permissions'
         );
 
+        register_setting('fluxfiles', 'fluxfiles_delete_data_on_uninstall', [
+            'type' => 'string',
+            'sanitize_callback' => static fn ($v) => $v === '1' ? '1' : '0',
+            'default' => '0',
+        ]);
+        add_settings_field(
+            'fluxfiles_delete_data_on_uninstall',
+            esc_html__('Delete data on uninstall', 'fluxfiles'),
+            [$this, 'renderDeleteDataOnUninstallField'],
+            'fluxfiles',
+            'fluxfiles_permissions'
+        );
+
         // S3 section
         add_settings_section(
             'fluxfiles_s3',
@@ -280,7 +293,18 @@ class FluxFilesAdmin
         }
         // Same rules as README.md "Storage protection (Apache / nginx)", rooted at
         // this site's actual content path.
-        $root = '/' . trim((string) wp_parse_url(content_url('fluxfiles'), PHP_URL_PATH), '/') . '/';
+        $baseUrl = FluxFilesStorage::url(FluxFilesStorage::base());
+        if ($baseUrl === '') {
+            // No URL mapping (e.g. uploads/wp-content moved elsewhere), but a base
+            // under ABSPATH is still served by nginx from the document root.
+            $abs = rtrim(str_replace('\\', '/', (string) (defined('ABSPATH') ? ABSPATH : '')), '/');
+            $base = FluxFilesStorage::base();
+            if ($abs === '' || strpos($base . '/', $abs . '/') !== 0) {
+                return; // outside the web root: nothing is web-served
+            }
+            $baseUrl = rtrim((string) (function_exists('site_url') ? site_url() : ''), '/') . substr($base, strlen($abs));
+        }
+        $root = '/' . trim((string) wp_parse_url($baseUrl, PHP_URL_PATH), '/') . '/';
         // Multisite keeps each site's uploads under sites/<blog_id>/uploads/.
         $multisite = function_exists('is_multisite') && is_multisite();
         $dir = $multisite ? $root . 'sites/[0-9]+/uploads/' : $root . 'uploads/';
@@ -417,6 +441,20 @@ class FluxFilesAdmin
             $on ? 'checked' : '',
             esc_html__('Also delete the file from FluxFiles storage when its attachment is deleted', 'fluxfiles'),
             esc_html__('Off by default: deleting an attachment leaves the file safe in your bucket. Turn on to keep storage in sync with the Media Library.', 'fluxfiles')
+        );
+    }
+
+    public function renderDeleteDataOnUninstallField(): void
+    {
+        $on = get_option('fluxfiles_delete_data_on_uninstall', '0') === '1';
+        printf(
+            '<input type="hidden" name="fluxfiles_delete_data_on_uninstall" value="0" />'
+            . '<label><input type="checkbox" name="fluxfiles_delete_data_on_uninstall" value="1" %s /> %s</label>'
+            . '<p class="description"><strong>%s</strong> %s</p>',
+            $on ? 'checked' : '',
+            esc_html__('Delete all FluxFiles data when the plugin is deleted', 'fluxfiles'),
+            esc_html__('Warning:', 'fluxfiles'),
+            esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables, the secret key (the audit log key) and the settings that decide where and how that data is read (storage backend, storage location, private mode), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash; of the folder only the files FluxFiles wrote are deleted. Nothing is deleted from a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter, nor from S3, R2 or SFTP.', 'fluxfiles')
         );
     }
 

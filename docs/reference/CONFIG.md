@@ -264,6 +264,12 @@ fields, `CredentialEncryptor` doesn't allowlist config keys).
 | `require_host_key` | bool | `false` | Fail closed (`sftp_host_key_required`) if `host_fingerprint` isn't also set. |
 | `strict_algorithms` | bool | `false` | Modern-only KEX/cipher/MAC/host-key allowlist (`DiskManager::modernSshAlgorithmLists()`). |
 
+Generic disk key (any disk type, set by a host adapter in its disk config):
+
+| Key | Type | Default | Notes |
+|---|---|---|---|
+| `hidden_files` | string[] | unset | Exact, case-sensitive disk-root keys the adapter wrote itself (the WordPress plugin lists `.htaccess` and `index.php`). They are never listed, searched, counted in quota/usage or walked by the indexer, while a same-named file in a subfolder stays a normal file. |
+
 ---
 
 ## 3. Static disk environment
