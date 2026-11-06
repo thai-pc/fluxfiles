@@ -357,9 +357,13 @@ test('proxy route surface covers every core /api/fm route', function () {
     $coreRoutes = array_unique($cm[1]);
     // Share/Intake's public routes are no longer literal `$uri === …` checks in index.php:
     // PublicRoutes::dispatch() owns them, so read the table it routes from.
-    foreach (\FluxFiles\PublicRoutes::ROUTES as $publicPaths) {
-        foreach ($publicPaths as $publicPath) {
-            $coreRoutes[] = substr($publicPath, strlen('/api/fm/'));
+    // Guarded: the adapter-core floor guard runs this smoke against older cores that
+    // predate PublicRoutes and still check these routes literally in index.php.
+    if (class_exists(\FluxFiles\PublicRoutes::class)) {
+        foreach (\FluxFiles\PublicRoutes::ROUTES as $publicPaths) {
+            foreach ($publicPaths as $publicPath) {
+                $coreRoutes[] = substr($publicPath, strlen('/api/fm/'));
+            }
         }
     }
     $coreRoutes = array_values(array_unique($coreRoutes));
