@@ -1162,7 +1162,7 @@ class FileManager
 
     /**
      * delete() for an already-scoped key, with every check delete() applies.
-     * For internal callers holding a real storage key (runRetention): sending
+     * For internal callers holding a real storage key (the module sweeps): sending
      * it back through outKey()→scopedPath() is not an identity when a subfolder
      * repeats the prefix's last segment, and would act on a different file.
      */
@@ -3265,125 +3265,12 @@ class FileManager
         return $this->claims->retentionRules;
     }
 
-    /**
-     * Apply the token's `retention_rules`: files under each rule's path not
-     * modified for `days` days go to trash (or are deleted). Dry-run lists what
-     * would happen and changes nothing. Every action goes through trash()/delete()'s
-     * scoped cores (trashScoped()/deleteScoped() — same checks, real key),
-     * so owner_only, the `delete` perm and LEGAL HOLDS (always win) still apply —
-     * a held file is reported as `held`, never touched. At most $maxActions files
-     * per call (`truncated: true` → run again).
-     *
-     * @return array{dry_run:bool,rules:int,matched:int,acted:int,held:int,errors:int,truncated:bool,items:array<int,array{path:string,action:string,age_days:int,result:string}>}
-     */
-    public function runRetention(string $disk, bool $dryRun = true, int $maxActions = 500): array
-    {
-        $this->assertDisk($disk);
-        $this->assertPerm('delete');
-        $fs = $this->disks->disk($disk);
-        $now = time();
-        $report = ['dry_run' => $dryRun, 'rules' => count($this->claims->retentionRules), 'matched' => 0,
-            'acted' => 0, 'held' => 0, 'errors' => 0, 'truncated' => false, 'items' => []];
-        // Collect first, act after: trashing moves files while a lazy listing of the
-        // same tree is still being iterated otherwise.
-        $candidates = [];
-        foreach ($this->claims->retentionRules as $rule) {
-            $root = $this->scopedPath($rule['path']);
-            if ($this->isReservedSystemPath($root)) {
-                continue;
-            }
-            $cutoff = $now - $rule['days'] * 86400;
-            try {
-                foreach ($fs->listContents($root, true) as $item) {
-                    if (!$item->isFile()) {
-                        continue;
-                    }
-                    $key = $item->path();
-                    if (isset($candidates[$key]) || $this->isReservedSystemPath($key) || $this->isHiddenForToken($key)) {
-                        continue;
-                    }
-                    $mtime = (int) ($item->lastModified() ?? $now);
-                    if ($mtime <= $cutoff) {
-                        $candidates[$key] = ['action' => $rule['action'], 'age_days' => intdiv($now - $mtime, 86400)];
-                    }
-                }
-            } catch (\Throwable $e) {
-                continue;
-            }
-        }
-        ksort($candidates, SORT_STRING);
-        $report['matched'] = count($candidates);
-
-        // Deletes/trashes share one index + trash.json write per batch window.
-        $bulk = $dryRun ? ['open' => false, 'n' => 0, 't' => 0.0] : $this->bulkOpen($disk);
-        try {
-            foreach ($candidates as $key => $c) {
-                if (count($report['items']) >= $maxActions) {
-                    $report['truncated'] = true;
-                    break;
-                }
-                $rel = $this->outKey((string) $key);
-                $entry = ['path' => $rel, 'action' => $c['action'], 'age_days' => $c['age_days'], 'result' => 'pending'];
-                if ($this->meta->holdBlocking($disk, (string) $key) !== null) {
-                    $entry['result'] = 'held';
-                    $report['held']++;
-                } elseif ($dryRun) {
-                    $entry['result'] = 'would_' . $c['action'];
-                } else {
-                    try {
-                        // Act on the listed storage key itself, not $rel: outKey() →
-                        // scopedPath() is not an identity when a subfolder repeats the
-                        // prefix's last segment (prefix `t` + key `t/t/a` → rel `t/a`
-                        // → scoped `t/a`, a different file).
-                        $c['action'] === 'delete' ? $this->deleteScoped($disk, (string) $key) : $this->trashScoped($disk, (string) $key);
-                        $entry['result'] = $c['action'] === 'delete' ? 'deleted' : 'trashed';
-                        $report['acted']++;
-                    } catch (ApiException $e) {
-                        $entry['result'] = (string) ($e->getErrorCode() ?? 'error');
-                        $e->getErrorCode() === 'legal_hold_active' ? $report['held']++ : $report['errors']++;
-                    }
-                }
-                $report['items'][] = $entry;
-                $this->bulkTick($disk, $bulk);
-            }
-        } finally {
-            $this->bulkClose($disk, $bulk);
-        }
-        return $report;
-    }
-
-    /**
-     * Run (or resume) a fixity pass over the token's root — see FixityChecker.
-     * $auditEntries are the disk's audit rows, used to tell a change made through
-     * FluxFiles (explained) from one made behind its back (unexplained).
-     *
-     * @param array<int,array<string,mixed>> $auditEntries
-     * @return array<string,mixed>
-     */
-    /** @param array<int,array<string,mixed>>|callable(?int):array<int,array<string,mixed>> $auditEntries see FixityChecker::run() */
-    public function runFixityCheck(string $disk, $auditEntries, int $budgetBytes = 1024 * 1024 * 1024): array
-    {
-        $this->assertDisk($disk);
-        $this->assertPerm('read');
-        $report = FixityChecker::run(
-            $this->disks->disk($disk),
-            $this->scopedPath(''),
-            fn (string $k): bool => $this->isReservedSystemPath($k) || $this->isHiddenForToken($k),
-            $auditEntries,
-            $budgetBytes
-        );
-        foreach (['changed_explained', 'changed_unexplained', 'missing_explained', 'missing_unexplained'] as $list) {
-            $report[$list] = array_map(fn (string $k) => $this->outKey($k), $report[$list]);
-        }
-        return $report;
-    }
-
     // ── Sweep seams for modules ─────────────────────────────────────────────
-    // Thin, public wrappers over the private helpers runRetention() and
-    // runFixityCheck() use, so a module (legal-hold, audit-export) can run the same
-    // sweep without core exposing its internals. None of them relaxes a check: the
-    // disk/perm gates, reserved + hidden filtering, owner_only and legal holds are the
-    // exact ones the built-in sweeps apply.
+    // Thin, public wrappers over the private helpers the sweeps need, so a module
+    // (legal-hold, audit-export) can run its retention / fixity sweep without core
+    // exposing its internals. Core carries no sweep of its own. None of the seams
+    // relaxes a check: the disk/perm gates, reserved + hidden filtering, owner_only and
+    // legal holds are the ones every core operation applies.
 
     /** The disk's filesystem, after the disk and permission gates for `$perm`. */
     public function filesystemFor(string $disk, string $perm = 'read'): \League\Flysystem\FilesystemOperator
@@ -3422,7 +3309,7 @@ class FileManager
      * Every visible file under a tenant-relative root, recursively. The disk and
      * permission gates run when this is called, not on first iteration. Reserved and
      * hidden keys are skipped; a listing failure ends the sequence quietly (a sweep
-     * is best-effort per root, as runRetention() always was). It does NOT filter by
+     * is best-effort per root). It does NOT filter by
      * `owner_only`: a listing never did. Ownership is enforced when a key is acted on
      * ({@see removeKeys()} refuses another user's file). Collect before acting:
      * trashing while a lazy listing is still being iterated skips entries.

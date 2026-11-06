@@ -283,12 +283,14 @@ test('an all-digit trash id (an int array key) lists as a string and empties wit
     rmrf($root); rmrf($root . '-other');
 });
 
-test('retention run (trash) over 20 files: trash.json and index <= 2 writes each', function () {
-    [$fm, $dm, , $root, $c] = env('u', false, ['retentionRules' => [['path' => '', 'days' => 1, 'action' => 'trash']]]);
-    for ($i = 0; $i < 20; $i++) { up($fm, '', "r{$i}.txt", "x{$i}"); touch("$root/r{$i}.txt", time() - 5 * 86400); }
+test('removeKeys (the sweep seam) trashing 20 files: trash.json and index <= 2 writes each', function () {
+    [$fm, $dm, , $root] = env();
+    $keys = [];
+    for ($i = 0; $i < 20; $i++) { up($fm, '', "r{$i}.txt", "x{$i}"); $keys[] = "r{$i}.txt"; }
     $dm->adapter->reset();
-    $r = $fm->runRetention('local', false);
-    assertEq(20, $r['acted'], 'acted');
+    $acted = 0;
+    $fm->removeKeys('local', $keys, 'trash', function (string $k, string $rel, ?ApiException $e) use (&$acted) { if ($e === null) { $acted++; } });
+    assertEq(20, $acted, 'acted');
     foreach (['trash', 'index'] as $k) {
         assertTrue(($dm->adapter->writes[$k] ?? 0) <= 2, "$k writes " . ($dm->adapter->writes[$k] ?? 0));
     }

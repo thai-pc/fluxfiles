@@ -19,7 +19,7 @@
 - `api/index.php`
   - Public routes: `/public/index.html`, `/api/fm/lang`, `/api/fm/lang/{locale}`.
   - Pre-auth byte-serving routes (authenticated by a per-file query-string token, not the main JWT, because `<video>`/`<img>` can't send headers): `/api/fm/stream` (gated local + SFTP media, Range) and `/api/fm/img` (on-demand WebP/AVIF). Both reject a missing/placeholder secret and are dispatched before the main auth block.
-  - Other pre-auth routes: the Share/Intake recipient routes (`share/info|unlock|file`, `intake/info|upload`, `PublicLinks.php`, gated installed + licensed) and the SSO bridge (`sso/login|callback|exchange`, gated by `FLUXFILES_SSO_ENABLED` + installed + licensed).
+  - Other pre-auth routes: the Share/Intake recipient routes (`share/info|unlock|file`, `intake/info|upload`, dispatched by `PublicRoutes`, handled inside the modules, gated installed + licensed) and the SSO bridge (`sso/login|callback|exchange`, gated by `FLUXFILES_SSO_ENABLED` + installed + licensed).
   - Authenticated routes: all other `/api/fm/*` routes, including `/api/fm/tus` (handled by `TusServer` outside the JSON envelope).
   - Loads `.env` from package root or monorepo root.
   - Applies CORS and origin checks for mutating requests.
@@ -90,8 +90,8 @@
 - `api/ModuleRegistry.php` / `api/LicenseManager.php` / `api/UpdateClient.php`
   - The paid-module 3-layer gate (installed → licensed → `allow_<x>` claim; `requireServer()` for the claim-less pre-auth SSO routes), offline Ed25519 licence verification, and the signed module installer behind `fluxfiles update <module>`.
 
-- `api/AuditLogStorage.php` / `api/AuditChain.php` / `api/FixityChecker.php` / `api/ComplianceScorecard.php`
-  - Audit logging (named actions, `access_denied`, optional read auditing), the HMAC chain + verifier, the SHA-256 fixity baseline (`_fluxfiles/fixity.json`), and the free compliance checklist.
+- `api/AuditLogStorage.php` / `api/AuditChain.php` / `api/ComplianceScorecard.php`
+  - Audit logging (named actions, `access_denied`, optional read auditing), the HMAC chain primitives (`key`/`hash`/`isAuthentic`; the verifier and the SHA-256 fixity baseline (`_fluxfiles/fixity.json`) live in the paid `audit-export` module), and the free compliance checklist.
 
 ## Frontend And Embedding
 

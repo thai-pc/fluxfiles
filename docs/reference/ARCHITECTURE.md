@@ -76,14 +76,14 @@ core/
 │   ├── Claims.php        decoded-JWT value object + path scoping
 │   ├── StorageMetadataHandler.php   metadata sidecars + search/folder index + audit (JSON backend by default; `Db/` is the opt-in exception — see §1)
 │   ├── ModuleRegistry.php / LicenseManager.php   paid-module 3-layer gate + offline licence verifier
-│   └── … TusServer, ExifStripper, MediaPoster, ProcessEnv, AuditChain, FixityChecker,
+│   └── … TusServer, ExifStripper, MediaPoster, ProcessEnv, AuditChain,
 │         AiTagger, ImageOptimizer, ImageToken, StreamToken, RangeStreamer,
-│         QuotaManager, RateLimiter*, SsrfGuard, CredentialEncryptor, PublicLinks,
+│         QuotaManager, RateLimiter*, SsrfGuard, CredentialEncryptor, helpers.php,
 │         UrlImporter, BucketDoctor, ChunkUploader, Jwt/ImageCompat shims, …
 ├── embed.php           PHP token helpers: fluxfiles_token() / fluxfiles_byob_token()
 ├── router.php          dev server; also serves /fluxfiles.js from packages/sdk
 ├── assets/             fm.js + fm.css — Alpine.js UI, served as the committed fm.min.js/fm.min.css from scripts/build-ui.sh (vendored Alpine/CodeMirror under assets/vendor/)
-├── public/             index.html (the iframe entry document), share.html, intake.html
+├── public/             index.html (the iframe entry document), share.html + intake.html (redirect stubs to /api/fm/&lt;id&gt;/page)
 ├── lang/               16 locale JSON files
 ├── config/disks.php    disk definitions (env-driven)
 ├── db/migrations/      SQL migrations for the opt-in DB backend

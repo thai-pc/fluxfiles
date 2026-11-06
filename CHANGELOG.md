@@ -3,7 +3,27 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.13] — 2026-11-06
+
+> Released: `laravel-v1.0.3`, `core-v1.1.0` (BREAKING). The WordPress changes ship with the next WordPress release, which bundles core 1.1.0.
+
+### Removed
+
+- **BREAKING (core-v1.1.0): the legacy in-core Share/Intake/retention/fixity/verify code is
+  gone.** The modules own it now, so core needs current modules: `share` >= 1.4.0,
+  `intake` >= 1.5.0, `legal-hold` >= 1.2.0 and `audit-export` >= 1.1.0, and
+  `fluxfiles/laravel` >= 1.0.3 (core's `composer.json` carries `conflict` entries for older
+  ones). Removed: `api/PublicLinks.php` (the three helpers that remain are now
+  `api/helpers.php`: `ff_str_param`, `ff_public_meta_repo`, `ff_sso_rate_limit`),
+  `FileManager::runRetention()` / `runFixityCheck()`, `FixityChecker`,
+  `AuditChain::verify()` / `trustedEntries()`.
+- An installed module that predates the interface core now calls answers
+  `501 module_update_required {module}` (run `fluxfiles update <module>`) on its public routes,
+  `/retention/run`, `/fixity/check` and `/audit/verify`. With the module not installed
+  nothing changes (`501 module_not_installed`, then `402`/`403` as before).
+- `public/share.html` and `public/intake.html` are redirect stubs to
+  `../api/fm/<id>/page` (query and hash kept), so links issued earlier keep working.
+- Added `ModuleRegistry::requireCapability()` (the gate plus the interface check).
 
 ### Added
 

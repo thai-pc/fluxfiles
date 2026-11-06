@@ -3,8 +3,8 @@
 /**
  * FileManager sweep seams for modules: filesystemFor / scopedKey / relativeKey /
  * isVisibleKey / isHeld / visibleFiles / removeKeys. They are thin wrappers over the
- * private helpers runRetention() and runFixityCheck() use, and must not relax a single
- * check: disk + perm gates, reserved and hidden filtering, owner_only and legal holds.
+ * private helpers the module sweeps (legal-hold retention, audit-export fixity) need, and
+ * must not relax a single check: disk + perm gates, reserved and hidden filtering, owner_only and legal holds.
  *
  * Usage: php tests/integration/test-filemanager-module-seams.php
  */

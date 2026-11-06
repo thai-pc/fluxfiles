@@ -8,7 +8,7 @@
  *
  * This does NOT re-test the Intake module gate itself (see test-intake-http.php for
  * the full 501/402/403 3-layer coverage). It only exercises the cross-module wiring
- * added in PublicLinks.php's POST /api/fm/intake/upload branch:
+ * added in the intake module's POST /api/fm/intake/upload handler:
  *
  *   1. Intake licensed, Webhooks module ABSENT entirely            → upload succeeds,
  *      no webhook fires (installed() gate false, no class to dispatch with).

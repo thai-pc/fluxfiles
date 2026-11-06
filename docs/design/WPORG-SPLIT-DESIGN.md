@@ -1,5 +1,17 @@
 # WordPress.org split: `fluxfiles` (free, WP.org) + `fluxfiles-pro` (paid add-on)
 
+> **Phase 3 status (core-v1.1.0):** done. The Laravel and WordPress adapters were moved to
+> module dispatch first (`PublicRoutes::dispatch()` for the JSON routes, `PublicRoutes::page($id, $apiBase)`
+> for the pages; `/page` is NOT routed through `dispatch()` for adapters, which would hard-code `/api/fm`). Core then
+> dropped the legacy code: `PublicLinks.php` is now `api/helpers.php` (`ff_str_param`,
+> `ff_public_meta_repo`, `ff_sso_rate_limit`), `runRetention`/`runFixityCheck`/`FixityChecker`/
+> `AuditChain::verify`/`trustedEntries` are gone, and an installed pre-interface module answers
+> 501 `module_update_required` via `ModuleRegistry::requireCapability()`. `public/share.html` and
+> `public/intake.html` are redirect stubs using a RELATIVE target (`../api/fm/<id>/page` + query +
+> hash) so subdirectory installs work. Core's `composer.json` carries `conflict` entries for
+> `fluxfiles/laravel <1.0.3`, `share <1.4.0`, `intake <1.5.0`, `legal-hold <1.2.0`,
+> `audit-export <1.1.0`.
+
 Status: design, not implemented. Date: 2026-11-06. Owner decisions (two plugins; the four
 licence-locked features move into their modules on every host) are **settled**; this doc
 designs within them.
@@ -74,8 +86,9 @@ All of these are new files or small changes in `packages/core/api/`:
 the existing layers 1 and 2: 501 `module_not_installed` and 402 `license_required` or
 `license_expired`. It then calls `$module->handlePublic()` and wraps any `ApiException` in the
 standard envelope. **New in X:** if the installed module doesn't implement
-`PublicModuleInterface`, it falls back to the legacy `PublicLinks.php` handler. **In Y:** that
-case answers 501 `module_update_required` with `{module}` instead.
+`PublicModuleInterface`, it falls back to the legacy `PublicLinks.php` handler. **In Y (core-v1.1.0,
+implemented):** that case answers 501 `module_update_required` with `{module}` instead; the check
+sits right after `requireServer()`, before the page branch, so the page route answers the same.
 
 ### 2.3 Free plugin extension points (`packages/wordpress`)
 
@@ -153,7 +166,7 @@ and a pro update replaces them together with the plugin that gates them.
   - `publicLink()` becomes `PublicRoutes::dispatch($which, …, new PublicContext($this->diskManager, $diskConfigs, $this->metaRepo, …, ModuleRegistry::license()))`.
   - `publicPage()` becomes `PublicRoutes::page()`, plus two new `…/page` routes in `FluxFilesServiceProvider`.
   - `retentionRun`, `fixityCheck` and `auditVerify` become the same thin stubs as core (§4).
-  - `composer.json` floor goes to `^Y`; `adapter-core-floor` CI enforces it.
+  - `composer.json` floor shipped as `^1.0.4`; `adapter-core-floor` CI enforces it.
 
 ## 3. JWT claims
 
@@ -431,7 +444,7 @@ extending `scripts/landing-screenshots/`.
 
 ```
 === FluxFiles ===
-Contributors: <wp.org username, owner to create; `thaipc` 404s today>
+Contributors: thaipc   (the WP.org account `thaipc` now exists and its profile is live)
 Tags: file manager, amazon s3, cloudflare r2, media library, file upload
 Requires at least: 6.0
 Tested up to: 7.1
@@ -476,10 +489,10 @@ The short description is 145 characters. The sections:
 
 | # | PR | Repo(s) | Release | Depends on | Tests |
 |---|---|---|---|---|---|
-| 0 | Owner: create the WP.org account (`thaipc` 404s), confirm the `fluxfiles` slug is free (not in the directory as of 2026-11-06), make assets, create SVN secrets | — | — | — | — |
+| 0 | Owner: ~~create the WP.org account~~ done: `thaipc` exists and its profile is live (2026-11-06); still to do: confirm the `fluxfiles` slug is free (not in the directory as of 2026-11-06), make assets, create SVN secrets | — | — | — | — |
 | 1 | **Core seams and fallbacks** (§2.2, §4.5 step 1): interfaces, `ModuleRegistry::license()`, `ModuleAutoloader`, `PublicContext`/`PublicRoutes`, `HttpTransportInterface`, `Log`, FileManager seams; `/api/fm/<id>/page` routes; `module_update_required` ×16; `pack-modules.php` `public` path and the `UpdateClient` layout; AWS trim in `composer.json` | public | **core-vX** (with laravel-v… if touched; ≤ 3 tags per push) | — | unit: `NoLicense`, resolver, `ModuleAutoloader` (kebab cases), `removeKeys` (holds, owner_only, perm), `visibleFiles` (hidden, reserved); integration: `dispatch` with a fake `PublicModuleInterface` module (gate order 501→402→handler) and with a legacy module (fallback); unchanged: `test-audit-coverage-http`, `test-config-doc`, the free-core e2e (501s), DB suites |
 | 2 | **Module moves** (§4.1-4.4): legal-hold `runRetention`; audit-export `FixityChecker`, `runFixityCheck`, `verifyChain`, `trustedEntries`; share/intake public handlers and pages (meta API base) | **private ×4** | share, intake, legal-hold, audit-export (each a new tag, floor `^X`; check by hand per CLAUDE.md rule 1); then `pack-modules.php` | 1 | the moved core tests, now in each repo; modules-live e2e (`tests/modules-live/**/share-intake.spec.ts`, `records.spec.ts`) against core X plus the new modules on standalone, Laravel and WP |
-| 3 | **Core removal** (§4.5 step 3): delete the legacy code, `PublicLinks.php` → `api/helpers.php`, redirect-stub `public/*.html`, stubs for old modules → `module_update_required`, test oracle `tests/support/chain-verify.php`; Laravel controller/routes and floor `^Y`; docs (`.claude/rules/audit-log.md`, `.claude/api-map.md`, `.claude/CLAUDE.md` paid-module and PHP-floor lines, `ACTIVATE.md`, `RETENTION-LEGAL-HOLD-DESIGN.md`) | public | **core-vY**, laravel-v… | 2 released | core suite with no modules: 501 everywhere; with an old-module fixture: `module_update_required`; Laravel smoke; `adapter-core-floor`; browser `share-landing`/`intake-landing` through the redirect stub |
+| 3 | **DONE (core-v1.1.0)**: adapters switched to module dispatch first (laravel-v1.0.3, WP `servePublicPage`), then core removal. **Core removal** (§4.5 step 3): delete the legacy code, `PublicLinks.php` → `api/helpers.php`, redirect-stub `public/*.html`, stubs for old modules → `module_update_required`, test oracle `tests/support/chain-verify.php`; Laravel controller/routes and floor `^Y`; docs (`.claude/rules/audit-log.md`, `.claude/api-map.md`, `.claude/CLAUDE.md` paid-module and PHP-floor lines, `ACTIVATE.md`, `RETENTION-LEGAL-HOLD-DESIGN.md`) | public | **core-vY**, laravel-v… | 2 released | core suite with no modules: 501 everywhere; with an old-module fixture: `module_update_required`; Laravel smoke; `adapter-core-floor`; browser `share-landing`/`intake-landing` through the redirect stub |
 | 4 | **WP bridge 1.0.5** (§5.2): new-form links, `legacyModules()`, updater hold on `handover`, pro standby detection; update-server `bridge` and `$ANY_LICENSE_MODULES` | public | **wordpress-v1.0.5** | core X | wp-smoke: link URL form (single site and multisite), the hold logic (modules present/absent × pro active/inactive), the old shim still serves; update-server example: bridge selection by `current` |
 | 5 | **WP free 1.1.0, functional** (§2.3, §5.3-5.4): delete `FluxFilesUpdater`, the `Update URI`, the licence/Module engines/expiry code, `public-link.php` → redirect shim, `modules-autoload` usage; add the hooks and `FLUXFILES_EXT_API`/`FLUXFILES_CORE_VERSION`; thin REST stubs; page routes; `pro_hints=false` default; `fluxfiles_storage_base`; `uninstall.php` | public | (tagged with 6) | core Y | wp-smoke: invert test `:954` (no `Update URI`); remove the updater tests `:631-940` and `:1748-1759` (they move to pro); hooks fire in order; default `NoLicense` → a paid route gives 501, and fake module plus fake provider → 200; page route emits the meta tag, not `<script>`; shim redirect math (subdir, multisite `blog`, a bad `page` → 404); every `register_setting` option is in `uninstall.php` and none of pro's are; storage base keeps an existing dir |
 | 6 | **WP hygiene, build and CI** (§8.1-8.4, §9, the list below): readme, `.distignore`, `check-wp-dist.php`, Plugin Check job, 10up deploy (flagged off), assets | public | **wordpress-v1.1.0** | 5 | `wp-dist-guard` (CI), `wp-plugin-check` (CI), `tests/apps` WP e2e (`npm run e2e:wp`) against the trimmed zip |

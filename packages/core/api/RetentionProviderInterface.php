@@ -6,8 +6,8 @@ namespace FluxFiles;
 
 /**
  * Implemented by the `legal-hold` module to own the retention sweep behind
- * `POST /api/fm/retention/run`. Core checks `instanceof` and otherwise falls back to
- * its own `FileManager::runRetention()` (removed one core release after modules ship this).
+ * `POST /api/fm/retention/run`. Core carries no sweep of its own: a `legal-hold` release
+ * that does not implement this answers 501 `module_update_required`.
  *
  * The module builds the sweep on the FileManager seams (`visibleFiles`, `isHeld`,
  * `removeKeys`), so the delete perm, scope, owner_only and legal-hold checks stay core's.

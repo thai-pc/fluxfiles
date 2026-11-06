@@ -106,6 +106,9 @@ claims gate them (`media_preview`/`preview_url_ttl`/`max_preview_mb`/`stream_tok
   Share/Intake/Versioning/AI Vision/OCR/Virus (on-demand scan)/Backup/Audit export
   (incl. integrity check + chain verify)/Legal hold (incl. retention); SSO adds a
   "Sign in with SSO" button. C2PA, Webhooks and DLP are engine-only (API/config, no UI).
+  Since core-v1.1.0 the Share/Intake public handlers+pages, retention sweep, fixity and chain
+  verifier live only in the modules (minimum module versions); an installed pre-interface
+  module answers `501 module_update_required`; `public/share.html`/`intake.html` are redirect stubs.
 - **Virus scan is fail-closed.** `allow_virus_scan` wires `FileManager::setVirusScanner()`
   in `index.php` *and* the Laravel/WP proxies (they build their own `FileManager`). It
   scans `upload()` / `putContent()` / each `extractZip()` entry **before** writing;

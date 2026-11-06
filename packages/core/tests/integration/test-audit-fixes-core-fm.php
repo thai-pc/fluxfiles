@@ -223,26 +223,23 @@ test('B4: no prefix → trashed bytes are already counted, restore is not double
     assertEqual(true, $fm->restore('local', $id)['restored'], 'restored');
 });
 
-// ── B5: retention acts on the listed key ────────────────────────────────────
-test('B5: retention deletes the OLD file, not the newer one its outKey collides with', function () {
-    [$fm, , $root] = env('t', ['retentionRules' => [['path' => '', 'days' => 1, 'action' => 'delete']]]);
+// ── B5: sweeps act on the listed key ────────────────────────────────────────
+test('B5: removeKeys(delete) deletes the OLD file, not the newer one its outKey collides with', function () {
+    [$fm, , $root] = env('t');
     @mkdir($root . '/t/t', 0777, true);
     file_put_contents($root . '/t/t/a.txt', 'old');
-    touch($root . '/t/t/a.txt', time() - 10 * 86400);
     file_put_contents($root . '/t/a.txt', 'new');
-    $report = $fm->runRetention('local', false);
-    assertEqual(1, $report['acted'], 'acted');
+    $fm->removeKeys('local', ['t/t/a.txt'], 'delete', function () {});
     assertTrue(!file_exists($root . '/t/t/a.txt'), 'old file removed');
     assertEqual('new', @file_get_contents($root . '/t/a.txt'), 'newer file untouched');
 });
 
-test('B5: retention trash path also uses the real key', function () {
-    [$fm, , $root] = env('t', ['retentionRules' => [['path' => '', 'days' => 1, 'action' => 'trash']]]);
+test('B5: removeKeys(trash) also uses the real key', function () {
+    [$fm, , $root] = env('t');
     @mkdir($root . '/t/t', 0777, true);
     file_put_contents($root . '/t/t/a.txt', 'old');
-    touch($root . '/t/t/a.txt', time() - 10 * 86400);
     file_put_contents($root . '/t/a.txt', 'new');
-    $fm->runRetention('local', false);
+    $fm->removeKeys('local', ['t/t/a.txt'], 'trash', function () {});
     assertTrue(!file_exists($root . '/t/t/a.txt'), 'old file trashed');
     assertEqual('new', @file_get_contents($root . '/t/a.txt'), 'newer file untouched');
 });
