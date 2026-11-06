@@ -3,6 +3,61 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.4] — 2026-11-06
+
+> Released: `core-v1.0.3`, `wordpress-v1.0.3`.
+
+### Security
+
+From a security audit of core-v1.0.2.
+
+- **WordPress multisite: every site shared one storage root with an empty token prefix (High).**
+  A sub-site administrator, or any author, could list, read, change and delete the files of every
+  other site on the network, and read the shared `_fluxfiles/` index, audit log and trash. Each
+  site now has its own root, `wp-content/fluxfiles/sites/<blog_id>/` (uploads, `_fluxfiles/`,
+  rate-limit state and the local disk URL all follow); blog 1 uses `sites/1/` too. Single-site
+  installs are unchanged. **Multisite operators must move their existing files; see Upgrading.**
+- **`chmod` ignored `owner_only` for folders and for the tenant root (Medium).** On an SFTP disk an
+  `owner_only` user could change the mode of a folder full of other people's files, or of the
+  root itself. A folder target now needs the caller to own everything inside it, and the tenant
+  root is refused (`403 chmod_root_forbidden`, translated in all 16 languages). Also, a token
+  with `owner_only` and no `allow_chmod` claim now decodes `allow_chmod` as off instead of on;
+  an explicit `allow_chmod: true` still wins, and the role presets already set it explicitly.
+- **BYOB `/img` responses were cacheable by shared caches (Low).** The `Cache-Control` choice read
+  a variable that was not in scope, so a BYOB image URL (which carries the encrypted disk
+  config) got `public, max-age=31536000, immutable`. It is now `private, no-store`.
+- **SSRF guard missed special-purpose address ranges (Low).** `192.0.0.0/24`, `192.0.2.0/24`,
+  `192.88.99.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `224.0.0.0/4`,
+  `240.0.0.0/4` and, for IPv6, `64:ff9b:1::/48`, `::ffff:0:0:0/96`, `fec0::/10`, `100::/64` and
+  `ff00::/8` are now refused through an explicit CIDR list instead of depending on the PHP
+  version's reserved-range filter.
+- **WordPress plugin zip exposed the raw UI pages (Low).** `public/index.html`, `share.html` and
+  `intake.html` could be opened directly under `wp-content/plugins/fluxfiles/public/`. The
+  build now writes a deny `.htaccess` and a 403 `index.php` there; the REST route still reads
+  the pages from disk. nginx ignores `.htaccess`, so on nginx add
+  `location ^~ /wp-content/plugins/fluxfiles/public/ { deny all; }`.
+
+### Fixed
+
+- `POST /api/fm/extract` returned the raw `dest` it was given (for example `../tenantB`) even
+  though the write was sandboxed. It now returns the normalised destination relative to the
+  caller's root. The bundled UI does not read this field.
+- The SSO `#boot=` hand-over is documented as short-lived (60 s) and replayable within that
+  window, not "one-time": no server-side session store exists to enforce single use.
+
+### Upgrading
+
+- **WordPress multisite only.** Files used to live in `wp-content/fluxfiles/`; each site now
+  reads `wp-content/fluxfiles/sites/<blog_id>/`. Move the old contents into the site that owns
+  them (run from `wp-content/`, replace `1` with that site's blog id):
+  `mkdir -p fluxfiles/sites/1 && find fluxfiles -mindepth 1 -maxdepth 1 ! -name sites -exec mv {} fluxfiles/sites/1/ \;`
+  Files of other sites that were mixed into the shared folder must be sorted by hand. Media
+  attachments created from FluxFiles store their URL, so rewrite it per site, for example
+  `wp --url=<site> search-replace '/fluxfiles/uploads/' '/fluxfiles/sites/<blog_id>/uploads/'`.
+  On nginx the notice in Settings → FluxFiles shows the matching `sites/<id>/uploads/` rule.
+- **`owner_only` tokens that relied on the default `allow_chmod`** now need `allow_chmod: true`
+  to chmod on an SFTP disk.
+
 ## [1.0.3] — 2026-11-06
 
 > Released: `core-v1.0.2`, `sdk-v1.0.1`, `wordpress-v1.0.2`.
