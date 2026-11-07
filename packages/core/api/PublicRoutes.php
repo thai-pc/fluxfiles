@@ -69,6 +69,8 @@ final class PublicRoutes
      */
     public static function dispatch(string $id, string $method, string $uri, PublicContext $ctx): void
     {
+        // A recipient opening the page in a browser must not be shown a raw JSON envelope.
+        $isPage = self::isPage($id, $uri);
         try {
             if (!isset(self::ROUTES[$id]) || !in_array($uri, self::ROUTES[$id], true)) {
                 throw new ApiException('Not found', 404, 'not_found');
@@ -106,8 +108,12 @@ final class PublicRoutes
 
             $module->handlePublic($method, $uri, $ctx);
         } catch (ApiException $e) {
-            self::emitError($e);
+            $isPage ? self::emitErrorPage($e->getHttpCode(), $e->getErrorCode() ?? 'error') : self::emitError($e);
         } catch (\Throwable $e) {
+            if ($isPage) {
+                self::emitErrorPage(500, 'server_error');
+                return;
+            }
             http_response_code(500);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['data' => null, 'error' => 'Internal server error', 'error_code' => 'server_error']);
@@ -160,6 +166,36 @@ final class PublicRoutes
             return $meta . "\n" . $html;
         }
         return $out;
+    }
+
+    /**
+     * Minimal, self-contained error page for a page route (no scripts, no external
+     * assets, so any CSP passes). Shows a fixed English line per status class plus the
+     * error code; the ApiException message is never echoed (a module could put detail in it).
+     */
+    private static function emitErrorPage(int $status, string $code): void
+    {
+        $headline = match (true) {
+            $status === 402 => 'This feature is not licensed on this server.',
+            $status === 404 => 'This page was not found.',
+            $status === 501 => 'This feature is not installed on this server.',
+            $status >= 500  => 'Something went wrong on the server.',
+            default         => 'This page is not available.',
+        };
+        $safeCode = htmlspecialchars(preg_replace('/[^a-z0-9_]/i', '', $code) ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        http_response_code($status);
+        header('Content-Type: text/html; charset=utf-8');
+        header('Referrer-Policy: no-referrer');
+        header('Cache-Control: no-store');
+        header('X-Content-Type-Options: nosniff');
+        $csp = FrameAncestors::policy();
+        if ($csp !== null) {
+            header('Content-Security-Policy: ' . $csp);
+        }
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed strings plus a code filtered to [a-z0-9_] and HTML-escaped above
+        echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . $status . '</title>'
+            . '<style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;color:#333}main{text-align:center;padding:2rem}small{color:#888}</style></head>'
+            . '<body><main><h1>' . $status . '</h1><p>' . $headline . '</p><small>' . $safeCode . '</small></main></body></html>';
     }
 
     private static function emitError(ApiException $e): void
