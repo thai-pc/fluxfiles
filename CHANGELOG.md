@@ -6,7 +6,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 ## [Unreleased]
 
 ### Fixed
-- DB storage backend on PostgreSQL: every authenticated request returned 500. The rate limiter ran `SELECT COUNT(*) … FOR UPDATE`, which PostgreSQL rejects ("FOR UPDATE is not allowed with aggregate functions"). It now locks the key's hit rows (`SELECT id … FOR UPDATE`) and counts in PHP, and on PostgreSQL also takes a per-key transaction advisory lock, because READ COMMITTED would not see a hit committed by a concurrent request while waiting. The env-gated MySQL/PostgreSQL DB tests now exercise the limiter (N allowed, N+1 refused, concurrent hits never overshoot).
+- DB storage backend on PostgreSQL: every authenticated request returned 500, because the rate limiter ran `SELECT COUNT(*) … FOR UPDATE`, which PostgreSQL rejects ("FOR UPDATE is not allowed with aggregate functions"). It now locks the key's hit rows (`SELECT id … FOR UPDATE`) and counts them in PHP. The Laravel adapter on PostgreSQL had been silently falling back to the file limiter (`FluxFilesController::checkRate` swallows the error); it now uses the DB limiter again.
+- DB rate limiter, concurrency: on MySQL, concurrent first hits on a key with no rows deadlocked (error 1213, a 500) because InnoDB takes only gap locks on an empty range; the WordPress limiter had the same deadlock and then reinstalled its schema and fell back to the file limiter. The limiter now serialises hits per key (MySQL: `GET_LOCK` on a per-key name; PostgreSQL: a per-key transaction advisory lock) and runs the transaction at READ COMMITTED, so the limit can no longer be overshot under PostgreSQL's default or REPEATABLE READ isolation either. Locks are per key, not global. SQLite is unchanged (`BEGIN IMMEDIATE`).
+- The env-gated MySQL/PostgreSQL DB tests now exercise the limiter: N allowed / N+1 refused, concurrent cold-key races (same key and distinct keys), and per-key lock independence.
 
 ## [1.0.18] — 2026-11-07
 

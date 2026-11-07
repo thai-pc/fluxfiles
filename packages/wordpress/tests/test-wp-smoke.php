@@ -2917,7 +2917,7 @@ test('a watermark_enabled plugin token arrives as a watermark config and forces 
     });
 });
 
-test('db mode: the rate limiter lives in the database (START TRANSACTION … FOR UPDATE … COMMIT), json mode uses the file limiter', function () use ($ffPriv) {
+test('db mode: the rate limiter lives in the database (GET_LOCK, START TRANSACTION … FOR UPDATE … COMMIT), json mode uses the file limiter', function () use ($ffPriv) {
     global $wpdb;
     $keepDb = $wpdb ?? null;
     $api = new FluxFilesApi();
@@ -2930,20 +2930,23 @@ test('db mode: the rate limiter lives in the database (START TRANSACTION … FOR
         $wpdb = new WpdbSpy();
         $lim = $ffPriv($api, 'limiter', [5, 2]);
         assertTrue($lim instanceof WpRateLimiterStorage, 'db mode: the DB-backed limiter');
-        $wpdb->varQueue[] = 0;
+        $wpdb->varQueue = [1, 0];   // GET_LOCK granted, then the count
         $lim->check('u1', 'write');
         $q = $wpdb->queries;
-        assertEqual('START TRANSACTION', $q[0] ?? null, 'transaction opened');
-        assertTrue(str_contains($q[1] ?? '', 'DELETE FROM wp_fluxfiles_rate_limits'), 'expired hits swept');
-        assertTrue(str_contains($q[2] ?? '', 'FOR UPDATE'), 'count taken under lock');
-        assertTrue(str_contains($q[3] ?? '', 'INSERT INTO wp_fluxfiles_rate_limits'), 'hit recorded');
-        assertEqual('COMMIT', $q[4] ?? null, 'committed');
+        assertTrue(str_contains($q[0] ?? '', 'READ COMMITTED'), 'READ COMMITTED for the next transaction');
+        assertTrue(str_contains($q[1] ?? '', 'GET_LOCK'), 'per-key named lock taken');
+        assertEqual('START TRANSACTION', $q[2] ?? null, 'transaction opened');
+        assertTrue(str_contains($q[3] ?? '', 'DELETE FROM wp_fluxfiles_rate_limits'), 'expired hits swept');
+        assertTrue(str_contains($q[4] ?? '', 'FOR UPDATE'), 'count taken under lock');
+        assertTrue(str_contains($q[5] ?? '', 'INSERT INTO wp_fluxfiles_rate_limits'), 'hit recorded');
+        assertEqual('COMMIT', $q[6] ?? null, 'committed');
+        assertTrue(str_contains($q[7] ?? '', 'RELEASE_LOCK'), 'named lock released');
 
-        $wpdb->varQueue[] = 2;   // already at the write limit (2)
+        $wpdb->varQueue = [1, 2];   // already at the write limit (2)
         try { $lim->check('u1', 'write'); $threw = null; }
         catch (\FluxFiles\ApiException $e) { $threw = [$e->getHttpCode(), $e->getErrorCode()]; }
         assertEqual([429, 'rate_limited'], $threw, 'over the limit -> 429 rate_limited');
-        $wpdb->varQueue[] = 4;   // reads have their own, higher limit (5)
+        $wpdb->varQueue = [1, 4];   // reads have their own, higher limit (5)
         $lim->check('u1', 'read');
     } finally {
         $wpdb = $keepDb;

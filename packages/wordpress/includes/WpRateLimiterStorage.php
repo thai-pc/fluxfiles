@@ -89,6 +89,27 @@ class WpRateLimiterStorage implements RateLimiterStorageInterface
         $windowStart = $now - $this->windowSeconds;
         $db = $this->wpdb;
 
+        // On an empty key InnoDB takes only gap locks, so two first hits both INSERT and
+        // deadlock (1213); a per-key named lock serialises them. READ COMMITTED so the
+        // count sees a hit another request committed while we waited.
+        $lockName = 'fxrl_' . sha1(json_encode([$this->table, $identifier, $actionType]));
+        $db->query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        $got = $db->get_var($db->prepare('SELECT GET_LOCK(%s, 10)', $lockName));
+        if ((int) $got !== 1) {
+            return null;
+        }
+        try {
+            return $this->attemptLocked($identifier, $actionType, $limit, $now, $windowStart);
+        } finally {
+            $db->get_var($db->prepare('SELECT RELEASE_LOCK(%s)', $lockName));
+        }
+    }
+
+    /** @return ?bool */
+    private function attemptLocked(string $identifier, string $actionType, int $limit, int $now, int $windowStart): ?bool
+    {
+        $db = $this->wpdb;
+
         $db->query('START TRANSACTION');
         $limited = false;
         $ok = $db->query($db->prepare(

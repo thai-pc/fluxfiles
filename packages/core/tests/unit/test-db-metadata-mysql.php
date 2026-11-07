@@ -475,36 +475,97 @@ test('rate limiter: N hits allowed, N+1 refused with 429, per-key and per-bucket
     assertEqual(3, (int) $conn->pdo()->query("SELECT COUNT(*) FROM rate_limits WHERE identifier = 'rl-user' AND bucket = 'read'")->fetchColumn(), 'refused hit is not recorded');
 });
 
-test('rate limiter: concurrent checks on a warm key never exceed the limit', function () use ($conn, $dsn, $user, $pass) {
-    $conn->pdo()->exec('DELETE FROM rate_limits');
-    $limit = 5;
+/**
+ * Fire $workers processes at once (spin barrier), each calling check() on a
+ * COLD key (no pre-seeded row). $distinct = one key per worker instead of one
+ * shared key. Returns [ok, limited, errors[]].
+ */
+function raceColdKey(string $dsn, string $user, string $pass, int $workers, int $limit, bool $distinct): array
+{
     $autoload = realpath(__DIR__ . '/../../vendor/autoload.php');
     $embed = realpath(__DIR__ . '/../../embed.php');
-    // Warm the key with one hit so the row lock has something to serialise on.
-    (new RateLimiterDbStorage($conn, readLimit: $limit, writeLimit: $limit, windowSeconds: 60))->check('rl-conc', 'read');
     $script = tempnam(sys_get_temp_dir(), 'ff_rl_worker_') . '.php';
     file_put_contents($script, '<?php require ' . var_export($autoload, true) . '; require ' . var_export($embed, true) . ';'
-        . '$c = new \\FluxFiles\\Db\\Connection(' . var_export($dsn, true) . ', ' . var_export($user, true) . ', ' . var_export($pass, true) . ');'
-        . '$l = new \\FluxFiles\\Db\\RateLimiterDbStorage($c, readLimit: ' . $limit . ', writeLimit: ' . $limit . ', windowSeconds: 60);'
-        . 'try { $l->check("rl-conc", "read"); echo "OK"; } catch (\\FluxFiles\\ApiException $e) { echo "LIMITED"; }');
+        . '$c = new \\FluxFiles\\Db\\Connection($argv[1], $argv[2], $argv[3]);'
+        . '$l = new \\FluxFiles\\Db\\RateLimiterDbStorage($c, readLimit: (int) $argv[5], writeLimit: (int) $argv[5], windowSeconds: 60);'
+        . 'while (microtime(true) < (float) $argv[6]) {}'
+        . 'try { $l->check($argv[4], "read"); echo "OK"; } catch (\\FluxFiles\\ApiException $e) { echo $e->getHttpCode() === 429 ? "LIMITED" : "ERR:" . $e->getMessage(); }'
+        . 'catch (\\Throwable $e) { echo "ERR:" . substr($e->getMessage(), 0, 160); }');
+    $base = 'cold-' . bin2hex(random_bytes(4));
+    $start = microtime(true) + 1.0;
     $procs = [];
     $pipes = [];
-    for ($i = 0; $i < 12; $i++) {
-        $procs[$i] = proc_open(['php', $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$i]);
+    for ($i = 0; $i < $workers; $i++) {
+        $key = $distinct ? "{$base}-u{$i}" : $base;
+        $procs[$i] = proc_open(['php', $script, $dsn, $user, $pass, $key, (string) $limit, (string) $start], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$i]);
     }
-    $ok = 0;
+    $res = [0, 0, []];
     foreach ($pipes as $i => $p) {
         $out = stream_get_contents($p[1]);
         stream_get_contents($p[2]);
         proc_close($procs[$i]);
         if ($out === 'OK') {
-            $ok++;
-        } elseif ($out !== 'LIMITED') {
-            throw new \RuntimeException('worker produced unexpected output: ' . $out);
+            $res[0]++;
+        } elseif ($out === 'LIMITED') {
+            $res[1]++;
+        } else {
+            $res[2][] = $out;
         }
     }
     @unlink($script);
-    assertEqual($limit - 1, $ok, 'exactly the remaining slots must be accepted');
+    return $res;
+}
+
+test('rate limiter: concurrent FIRST hits on one cold key never overshoot, error or deadlock', function () use ($conn, $dsn, $user, $pass) {
+    $conn->pdo()->exec('DELETE FROM rate_limits');
+    for ($round = 0; $round < 3; $round++) {
+        [$ok, $limited, $errs] = raceColdKey($dsn, $user, $pass, 16, 5, false);
+        assertEqual([], $errs, 'no worker may error: ' . json_encode($errs));
+        assertEqual(5, $ok, "round {$round}: exactly the limit must be accepted");
+        assertEqual(11, $limited);
+    }
+});
+
+test('rate limiter: concurrent FIRST hits on distinct cold keys all succeed (no deadlock, keys independent)', function () use ($conn, $dsn, $user, $pass) {
+    $conn->pdo()->exec('DELETE FROM rate_limits');
+    for ($round = 0; $round < 3; $round++) {
+        [$ok, $limited, $errs] = raceColdKey($dsn, $user, $pass, 16, 5, true);
+        assertEqual([], $errs, 'no worker may error: ' . json_encode($errs));
+        assertEqual(16, $ok, "round {$round}: every distinct key is below its own limit");
+    }
+});
+
+test('rate limiter: the lock is per key, not global (a held key does not block another key)', function () use ($conn, $dsn, $user, $pass) {
+    $conn->pdo()->exec('DELETE FROM rate_limits');
+    $lockKey = json_encode(['rate_limits', 'held-key', 'read']);
+    $holder = new Connection($dsn, $user, $pass);
+    $name = 'fxrl_' . sha1($lockKey);
+    $holder->pdo()->prepare('SELECT GET_LOCK(?, 10)')->execute([$name]);
+    $release = fn () => $holder->pdo()->prepare('SELECT RELEASE_LOCK(?)')->execute([$name]);
+    try {
+        $t = microtime(true);
+        (new RateLimiterDbStorage($conn, readLimit: 5, writeLimit: 5, windowSeconds: 60))->check('free-key', 'read');
+        assertTrue(microtime(true) - $t < 3, 'another key must not wait on the held key');
+        // and the held key itself IS serialised: it waits for the holder.
+        $script = tempnam(sys_get_temp_dir(), 'ff_rl_held_') . '.php';
+        file_put_contents($script, '<?php require ' . var_export(realpath(__DIR__ . '/../../vendor/autoload.php'), true) . '; require ' . var_export(realpath(__DIR__ . '/../../embed.php'), true) . ';'
+            . '$c = new \\FluxFiles\\Db\\Connection($argv[1], $argv[2], $argv[3]); $t = microtime(true);'
+            . '(new \\FluxFiles\\Db\\RateLimiterDbStorage($c, readLimit: 5, writeLimit: 5, windowSeconds: 60))->check("held-key", "read");'
+            . 'echo round(microtime(true) - $t, 1);');
+        $proc = proc_open(['php', $script, $dsn, $user, $pass], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pp);
+        usleep(1500000);
+        $release();
+        $waited = (float) stream_get_contents($pp[1]);
+        stream_get_contents($pp[2]);
+        proc_close($proc);
+        @unlink($script);
+        assertTrue($waited >= 1.0, 'the same key must wait for the lock holder (waited ' . $waited . 's)');
+    } finally {
+        try {
+            $release();
+        } catch (\Throwable $e) {
+        }
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════

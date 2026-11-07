@@ -44,35 +44,62 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
         $windowStart = $now - $this->windowSeconds;
         $pdo = $this->db->pdo();
 
-        $this->db->beginExclusive();
+        // One injective, NUL-free key per (table, identifier, bucket): serialises hits on the
+        // same key only. (libpq truncates text params at a NUL, so no "\0" separators.)
+        $lockKey = json_encode([$this->table, $identifier, $actionType]);
+        $driver = $this->db->driver();
+        $mysqlLock = null;
         $limited = false;
         try {
-            if ($this->db->driver() === 'pgsql') {
-                // READ COMMITTED + FOR UPDATE would not see a row a concurrent hit committed
-                // while we waited, so serialise per key on a transaction-scoped advisory lock.
-                $pdo->prepare('SELECT pg_advisory_xact_lock(hashtext(?))')
-                    ->execute([$this->table . "\0" . $identifier . "\0" . $actionType]);
+            if ($driver === 'mysql') {
+                // On an empty key InnoDB takes only gap locks, so two first hits both INSERT
+                // and deadlock (1213); a named lock serialises them. READ COMMITTED so the
+                // row count sees a hit another request committed while we waited.
+                $pdo->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+                $g = $pdo->prepare('SELECT GET_LOCK(?, 10)');
+                $g->execute(['fxrl_' . sha1($lockKey)]);
+                if ((int) $g->fetchColumn() !== 1) {
+                    throw new \RuntimeException('Rate limiter lock timeout.');
+                }
+                $mysqlLock = 'fxrl_' . sha1($lockKey);
             }
-            $del = $pdo->prepare("DELETE FROM {$this->table} WHERE identifier = ? AND bucket = ? AND ts <= ?");
-            $del->execute([$identifier, $actionType, $windowStart]);
+            $this->db->beginExclusive();
+            try {
+                if ($driver === 'pgsql') {
+                    // REPEATABLE READ would ignore hits committed after our snapshot; the
+                    // advisory lock (per key, released at COMMIT) serialises the rest.
+                    $pdo->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+                    $pdo->prepare('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))')->execute([$lockKey]);
+                }
+                $del = $pdo->prepare("DELETE FROM {$this->table} WHERE identifier = ? AND bucket = ? AND ts <= ?");
+                $del->execute([$identifier, $actionType, $windowStart]);
 
-            $forUpdate = $this->db->dialect()->forUpdateSuffix();
-            // Lock the key's hit rows and count them in PHP: PostgreSQL rejects
-            // FOR UPDATE combined with an aggregate (COUNT(*)).
-            $cnt = $pdo->prepare("SELECT id FROM {$this->table} WHERE identifier = ? AND bucket = ?{$forUpdate}");
-            $cnt->execute([$identifier, $actionType]);
+                $forUpdate = $this->db->dialect()->forUpdateSuffix();
+                // Lock the key's hit rows and count them in PHP: PostgreSQL rejects
+                // FOR UPDATE combined with an aggregate (COUNT(*)).
+                $cnt = $pdo->prepare("SELECT id FROM {$this->table} WHERE identifier = ? AND bucket = ?{$forUpdate}");
+                $cnt->execute([$identifier, $actionType]);
 
-            if (count($cnt->fetchAll(\PDO::FETCH_COLUMN)) >= $limit) {
-                $limited = true;
-            } else {
-                $ins = $pdo->prepare("INSERT INTO {$this->table} (identifier, bucket, ts) VALUES (?, ?, ?)");
-                $ins->execute([$identifier, $actionType, $now]);
+                if (count($cnt->fetchAll(\PDO::FETCH_COLUMN)) >= $limit) {
+                    $limited = true;
+                } else {
+                    $ins = $pdo->prepare("INSERT INTO {$this->table} (identifier, bucket, ts) VALUES (?, ?, ?)");
+                    $ins->execute([$identifier, $actionType, $now]);
+                }
+
+                $this->db->commit();
+            } catch (\Throwable $e) {
+                $this->db->rollback();
+                throw $e;
             }
-
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            $this->db->rollback();
-            throw $e;
+        } finally {
+            if ($mysqlLock !== null) {
+                try {
+                    $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$mysqlLock]);
+                } catch (\Throwable $e) {
+                    // session-scoped; it dies with the connection
+                }
+            }
         }
 
         if ($limited) {
