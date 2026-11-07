@@ -16,12 +16,13 @@ class FluxFilesAdmin
         add_action('admin_init', [$this, 'registerSettings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('admin_notices', [$this, 'renderNginxStorageNotice']);
+        add_action('admin_notices', [$this, 'renderUnconfiguredNotice']);
     }
 
     public function addMenuPage(): void
     {
         add_options_page(
-            'FluxFiles Settings',
+            esc_html__('FluxFiles Settings', 'fluxfiles'),
             'FluxFiles',
             'manage_options',
             'fluxfiles',
@@ -48,19 +49,19 @@ class FluxFilesAdmin
         // General section
         add_settings_section(
             'fluxfiles_general',
-            'General Settings',
+            esc_html__('General Settings', 'fluxfiles'),
             null,
             'fluxfiles'
         );
 
-        $this->addField('fluxfiles_secret', 'JWT Secret', 'fluxfiles_general', 'password');
-        $this->addField('fluxfiles_max_upload', 'Max Upload Size (MB)', 'fluxfiles_general', 'number');
-        $this->addField('fluxfiles_max_storage', 'Max Storage Quota (MB, 0 = unlimited)', 'fluxfiles_general', 'number');
-        $this->addField('fluxfiles_ttl', 'Token TTL (seconds)', 'fluxfiles_general', 'number');
+        $this->addField('fluxfiles_secret', esc_html__('JWT Secret', 'fluxfiles'), 'fluxfiles_general', 'password');
+        $this->addField('fluxfiles_max_upload', esc_html__('Max Upload Size (MB)', 'fluxfiles'), 'fluxfiles_general', 'number');
+        $this->addField('fluxfiles_max_storage', esc_html__('Max Storage Quota (MB, 0 = unlimited)', 'fluxfiles'), 'fluxfiles_general', 'number');
+        $this->addField('fluxfiles_ttl', esc_html__('Token TTL (seconds)', 'fluxfiles'), 'fluxfiles_general', 'number');
 
         register_setting('fluxfiles', 'fluxfiles_secret', [
             'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
+            'sanitize_callback' => $this->keepSecret('fluxfiles_secret', false),
         ]);
         register_setting('fluxfiles', 'fluxfiles_max_upload', [
             'type' => 'integer',
@@ -78,9 +79,9 @@ class FluxFilesAdmin
         // Storage backend section
         add_settings_section(
             'fluxfiles_storage',
-            'Storage Backend',
+            esc_html__('Storage Backend', 'fluxfiles'),
             function () {
-                echo '<p>Where file metadata (titles, tags, folder index, trash, audit log) is stored.</p>';
+                echo '<p>' . esc_html__('Where file metadata (titles, tags, folder index, trash, audit log) is stored.', 'fluxfiles') . '</p>';
             },
             'fluxfiles'
         );
@@ -92,7 +93,7 @@ class FluxFilesAdmin
         ]);
         add_settings_field(
             'fluxfiles_storage_backend',
-            'Storage backend',
+            esc_html__('Storage backend', 'fluxfiles'),
             [$this, 'renderStorageBackendField'],
             'fluxfiles',
             'fluxfiles_storage'
@@ -101,9 +102,9 @@ class FluxFilesAdmin
         // Permissions section
         add_settings_section(
             'fluxfiles_permissions',
-            'Default Permissions',
+            esc_html__('Default Permissions', 'fluxfiles'),
             function () {
-                echo '<p>Default permissions applied when generating tokens for WordPress users.</p>';
+                echo '<p>' . esc_html__('Default permissions applied when generating tokens for WordPress users.', 'fluxfiles') . '</p>';
             },
             'fluxfiles'
         );
@@ -115,7 +116,7 @@ class FluxFilesAdmin
 
         add_settings_field(
             'fluxfiles_default_perms',
-            'Permissions',
+            esc_html__('Permissions', 'fluxfiles'),
             [$this, 'renderPermsField'],
             'fluxfiles',
             'fluxfiles_permissions'
@@ -128,7 +129,7 @@ class FluxFilesAdmin
 
         add_settings_field(
             'fluxfiles_disks',
-            'Enabled Disks',
+            esc_html__('Enabled Disks', 'fluxfiles'),
             [$this, 'renderDisksField'],
             'fluxfiles',
             'fluxfiles_permissions'
@@ -141,7 +142,7 @@ class FluxFilesAdmin
         ]);
         add_settings_field(
             'fluxfiles_offload',
-            'Media offload (3-in-1)',
+            esc_html__('Media offload (3-in-1)', 'fluxfiles'),
             [$this, 'renderOffloadField'],
             'fluxfiles',
             'fluxfiles_permissions'
@@ -154,7 +155,7 @@ class FluxFilesAdmin
         ]);
         add_settings_field(
             'fluxfiles_replace_picker',
-            'Native picker (experimental)',
+            esc_html__('Native picker (experimental)', 'fluxfiles'),
             [$this, 'renderReplacePickerField'],
             'fluxfiles',
             'fluxfiles_permissions'
@@ -167,8 +168,21 @@ class FluxFilesAdmin
         ]);
         add_settings_field(
             'fluxfiles_delete_storage',
-            'Delete from storage',
+            esc_html__('Delete from storage', 'fluxfiles'),
             [$this, 'renderDeleteStorageField'],
+            'fluxfiles',
+            'fluxfiles_permissions'
+        );
+
+        register_setting('fluxfiles', 'fluxfiles_local_private', [
+            'type' => 'string',
+            'sanitize_callback' => static fn ($v) => $v === '1' ? '1' : '0',
+            'default' => '0',
+        ]);
+        add_settings_field(
+            'fluxfiles_local_private',
+            esc_html__('Private local storage', 'fluxfiles'),
+            [$this, 'renderLocalPrivateField'],
             'fluxfiles',
             'fluxfiles_permissions'
         );
@@ -189,20 +203,20 @@ class FluxFilesAdmin
         // S3 section
         add_settings_section(
             'fluxfiles_s3',
-            'Amazon S3',
+            esc_html__('Amazon S3', 'fluxfiles'),
             function () {
-                echo '<p>Configure S3 storage. Leave bucket empty to disable.</p>';
+                echo '<p>' . esc_html__('Configure S3 storage. Leave bucket empty to disable.', 'fluxfiles') . '</p>';
             },
             'fluxfiles'
         );
 
-        $this->addField('fluxfiles_s3_bucket', 'Bucket', 'fluxfiles_s3');
-        $this->addField('fluxfiles_s3_region', 'Region', 'fluxfiles_s3');
-        $this->addField('fluxfiles_s3_key', 'Access Key ID', 'fluxfiles_s3');
-        $this->addField('fluxfiles_s3_secret', 'Secret Access Key', 'fluxfiles_s3', 'password');
-        $this->addField('fluxfiles_s3_endpoint', 'Endpoint (MinIO/Spaces — empty for AWS)', 'fluxfiles_s3');
-        $this->addField('fluxfiles_s3_visibility', 'Visibility (private | public)', 'fluxfiles_s3');
-        $this->addField('fluxfiles_s3_public_url', 'Public URL (CDN/custom domain)', 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_bucket', esc_html__('Bucket', 'fluxfiles'), 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_region', esc_html__('Region', 'fluxfiles'), 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_key', esc_html__('Access Key ID', 'fluxfiles'), 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_secret', esc_html__('Secret Access Key', 'fluxfiles'), 'fluxfiles_s3', 'password');
+        $this->addField('fluxfiles_s3_endpoint', esc_html__('Endpoint (MinIO/Spaces — empty for AWS)', 'fluxfiles'), 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_visibility', esc_html__('Visibility (private | public)', 'fluxfiles'), 'fluxfiles_s3');
+        $this->addField('fluxfiles_s3_public_url', esc_html__('Public URL (CDN/custom domain)', 'fluxfiles'), 'fluxfiles_s3');
 
         foreach ([
             'fluxfiles_s3_bucket', 'fluxfiles_s3_region', 'fluxfiles_s3_key', 'fluxfiles_s3_secret',
@@ -210,26 +224,26 @@ class FluxFilesAdmin
         ] as $opt) {
             register_setting('fluxfiles', $opt, [
                 'type' => 'string',
-                'sanitize_callback' => 'sanitize_text_field',
+                'sanitize_callback' => $opt === 'fluxfiles_s3_secret' ? $this->keepSecret($opt, true) : 'sanitize_text_field',
             ]);
         }
 
         // R2 section
         add_settings_section(
             'fluxfiles_r2',
-            'Cloudflare R2',
+            esc_html__('Cloudflare R2', 'fluxfiles'),
             function () {
-                echo '<p>Configure R2 storage. Leave bucket empty to disable.</p>';
+                echo '<p>' . esc_html__('Configure R2 storage. Leave bucket empty to disable.', 'fluxfiles') . '</p>';
             },
             'fluxfiles'
         );
 
-        $this->addField('fluxfiles_r2_bucket', 'Bucket', 'fluxfiles_r2');
-        $this->addField('fluxfiles_r2_account_id', 'Account ID', 'fluxfiles_r2');
-        $this->addField('fluxfiles_r2_key', 'Access Key ID', 'fluxfiles_r2');
-        $this->addField('fluxfiles_r2_secret', 'Secret Access Key', 'fluxfiles_r2', 'password');
-        $this->addField('fluxfiles_r2_visibility', 'Visibility (private | public)', 'fluxfiles_r2');
-        $this->addField('fluxfiles_r2_public_url', 'Public URL (r2.dev / custom domain)', 'fluxfiles_r2');
+        $this->addField('fluxfiles_r2_bucket', esc_html__('Bucket', 'fluxfiles'), 'fluxfiles_r2');
+        $this->addField('fluxfiles_r2_account_id', esc_html__('Account ID', 'fluxfiles'), 'fluxfiles_r2');
+        $this->addField('fluxfiles_r2_key', esc_html__('Access Key ID', 'fluxfiles'), 'fluxfiles_r2');
+        $this->addField('fluxfiles_r2_secret', esc_html__('Secret Access Key', 'fluxfiles'), 'fluxfiles_r2', 'password');
+        $this->addField('fluxfiles_r2_visibility', esc_html__('Visibility (private | public)', 'fluxfiles'), 'fluxfiles_r2');
+        $this->addField('fluxfiles_r2_public_url', esc_html__('Public URL (r2.dev / custom domain)', 'fluxfiles'), 'fluxfiles_r2');
 
         foreach ([
             'fluxfiles_r2_bucket', 'fluxfiles_r2_account_id', 'fluxfiles_r2_key', 'fluxfiles_r2_secret',
@@ -237,7 +251,7 @@ class FluxFilesAdmin
         ] as $opt) {
             register_setting('fluxfiles', $opt, [
                 'type' => 'string',
-                'sanitize_callback' => 'sanitize_text_field',
+                'sanitize_callback' => $opt === 'fluxfiles_r2_secret' ? $this->keepSecret($opt, true) : 'sanitize_text_field',
             ]);
         }
 
@@ -336,13 +350,54 @@ class FluxFilesAdmin
     }
 
 
+    /**
+     * A site with no JWT secret cannot mint a single token ("Unable to generate
+     * token"). initSite() normally runs on activation / first request, so this is
+     * the last resort (an emptied or deleted option): tell the admin where to fix it.
+     */
+    public function renderUnconfiguredNotice(): void
+    {
+        if (!current_user_can('manage_options') || (string) get_option('fluxfiles_secret', '') !== '') {
+            return;
+        }
+        printf(
+            '<div class="notice notice-error"><p><strong>FluxFiles:</strong> %s <a href="%s">%s</a></p></div>',
+            esc_html__('This site has no secret key yet, so the file manager cannot sign its tokens.', 'fluxfiles'),
+            esc_url(admin_url('options-general.php?page=fluxfiles')),
+            esc_html__('Open Settings → FluxFiles and save a secret.', 'fluxfiles')
+        );
+    }
+
     private function addField(string $name, string $label, string $section, string $type = 'text'): void
     {
         add_settings_field(
             $name,
             $label,
             function () use ($name, $type) {
-                $value = get_option($name, '');
+                $value = (string) get_option($name, '');
+                if ($type === 'password') {
+                    // Never echo a stored secret back into the page source: a blank
+                    // submit keeps it (keepSecret()), a new value replaces it.
+                    $hint = $value === ''
+                        ? esc_html__('No secret is set.', 'fluxfiles')
+                        : ($name === 'fluxfiles_secret' && strlen($value) >= 8
+                            /* translators: %s: the last 4 characters of the stored secret. */
+                            ? sprintf(esc_html__('A secret is set (ends in %s). Leave blank to keep it, or type a new one to replace it.', 'fluxfiles'), esc_html(substr($value, -4)))
+                            : esc_html__('A secret is set. Leave blank to keep it, or type a new one to replace it.', 'fluxfiles'));
+                    printf(
+                        '<input type="password" name="%s" value="" autocomplete="new-password" class="regular-text" /><p class="description">%s</p>',
+                        esc_attr($name),
+                        $hint // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- both branches are escaped above
+                    );
+                    if ($name !== 'fluxfiles_secret' && $value !== '') {
+                        printf(
+                            '<p><label><input type="checkbox" name="%1$s_clear" value="1" /> %2$s</label></p>',
+                            esc_attr($name),
+                            esc_html__('Remove the stored secret', 'fluxfiles')
+                        );
+                    }
+                    return;
+                }
                 printf(
                     '<input type="%s" name="%s" value="%s" class="regular-text" />',
                     esc_attr($type),
@@ -447,6 +502,19 @@ class FluxFilesAdmin
         );
     }
 
+    public function renderLocalPrivateField(): void
+    {
+        $on = (bool) get_option('fluxfiles_local_private', false);
+        printf(
+            '<input type="hidden" name="fluxfiles_local_private" value="0" />'
+            . '<label><input type="checkbox" name="fluxfiles_local_private" value="1" %s /> %s</label>'
+            . '<p class="description">%s</p>',
+            $on ? 'checked' : '',
+            esc_html__('Serve local files only through signed links', 'fluxfiles'),
+            esc_html__('Recommended on nginx, where the .htaccess rules protecting the uploads folder are ignored. Files are then no longer reachable by their plain URL; they are streamed through FluxFiles on short-lived links, so a link saved in a post stops working. Use the Media Library attachment bridge or an S3/R2 disk with a public URL for permanent links.', 'fluxfiles')
+        );
+    }
+
     public function renderDeleteDataOnUninstallField(): void
     {
         $on = get_option('fluxfiles_delete_data_on_uninstall', '0') === '1';
@@ -457,13 +525,34 @@ class FluxFilesAdmin
             $on ? 'checked' : '',
             esc_html__('Delete all FluxFiles data when the plugin is deleted', 'fluxfiles'),
             esc_html__('Warning:', 'fluxfiles'),
-            esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables, the secret key (the audit log key) and the settings that decide where and how that data is read (storage backend, storage location, private mode), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash; of the folder only the files FluxFiles wrote are deleted. Nothing is deleted from a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter, nor from S3, R2 or SFTP.', 'fluxfiles')
+            esc_html__('Off by default: deleting the plugin from the Plugins screen then removes only the settings and rate-limit counters, and KEEPS the files in the local FluxFiles storage folder together with their metadata, trash, audit log and legal-hold tables, the secret key (the audit log key) and the settings that decide where and how that data is read (storage backend, storage location, private mode), so a reinstall picks everything up again. When on, all of that is permanently removed, including the trash and the generated variants. The files in the storage folder are never deleted, whoever put them there: remove the folder by hand if you no longer need them. Nothing is deleted from a custom location set with the FLUXFILES_STORAGE_DIR constant or the fluxfiles_storage_base filter, nor from S3, R2 or SFTP.', 'fluxfiles')
         );
     }
 
     // -------------------------------------------------------------------------
     // Sanitizers
     // -------------------------------------------------------------------------
+
+    /**
+     * Sanitizer for a write-only secret field: a blank submit keeps the stored
+     * value (the form never echoes it), anything else replaces it. S3/R2 secrets
+     * can be removed with the companion `<option>_clear` checkbox; the JWT secret
+     * can not be blanked (every token would fail).
+     */
+    private function keepSecret(string $option, bool $clearable): callable
+    {
+        return static function ($value) use ($option, $clearable): string {
+            $new = sanitize_text_field((string) $value);
+            if ($new !== '') {
+                return $new;
+            }
+            // phpcs:ignore WordPress.Security.NonceVerification.Missing -- runs inside options.php, which has verified the settings nonce
+            if ($clearable && isset($_POST[$option . '_clear']) && $_POST[$option . '_clear'] === '1') {
+                return '';
+            }
+            return (string) get_option($option, '');
+        };
+    }
 
     /**
      * @param mixed $input

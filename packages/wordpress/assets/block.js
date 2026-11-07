@@ -8,6 +8,7 @@
     var el = element.createElement;
     var __ = i18n.__;
     var cfg = window.FluxFilesBlockCfg || {};
+    var PU = window.FluxFilesPickerUrl;
 
     // Block / placeholder icon: the FluxFiles logo's square folder with an "F", as a
     // monochrome line icon, the same glyph as the editor adapters' toolbar buttons. currentColor follows the
@@ -44,9 +45,23 @@
         if (window.FluxFiles && window.FluxFiles.close) window.FluxFiles.close();
     }
 
+    // Plain text only (wp.data notices render text; alert() is text), so a file name
+    // with markup can never run.
+    function notify(msg) {
+        var d = window.wp && window.wp.data;
+        var n = d && d.dispatch && d.dispatch('core/notices');
+        if (n && n.createErrorNotice) { n.createErrorNotice(msg, { type: 'snackbar', isDismissible: true }); return; }
+        window.alert(msg);
+    }
+
     function openPicker(onPick) {
         if (!cfg.token || !window.FluxFiles) {
-            window.alert(__('FluxFiles is not configured. Set it up in Settings → FluxFiles.', 'fluxfiles'));
+            // Say what THIS user can do about it: only an administrator can open Settings.
+            notify(cfg.canManage
+                ? __('FluxFiles is not configured. Set it up in Settings → FluxFiles.', 'fluxfiles')
+                : (cfg.canUse === false
+                    ? __('Your account is not allowed to use FluxFiles. Ask a site administrator for access.', 'fluxfiles')
+                    : __('FluxFiles is not available right now. Ask a site administrator.', 'fluxfiles')));
             return;
         }
         var m = ensureModal();
@@ -79,7 +94,19 @@
     }
 
     // Register the pick as a WP attachment; hand {url,id,alt} back to the block.
+    // The attachment URL is permanent. Without one (private local storage, the bridge
+    // off, a failed request) the pick's own permanent URL is used; an expiring
+    // /img|/stream ?token= link is never saved into the post (it 403s after an hour).
     function attach(file, onPick) {
+        var alt = (file.meta && (file.meta.alt || file.meta.title)) || file.basename || file.name || '';
+        function fallback() {
+            var r = PU.resolve(file, cfg.endpoint);
+            if (r.url === '') {
+                notify(PU.refusalMessage(r.reason, file.name || file.basename || file.key || '', i18n));
+                return;
+            }
+            onPick({ url: r.url, id: 0, alt: alt });
+        }
         fetch(cfg.attachUrl, {
             method: 'POST',
             credentials: 'same-origin',
@@ -95,17 +122,15 @@
             })
         }).then(function (r) { return r.ok ? r.json() : null; })
           .then(function (j) {
-              var alt = (file.meta && (file.meta.alt || file.meta.title)) || file.basename || file.name || '';
-              onPick({ url: (j && j.data && j.data.url) || file.url, id: (j && j.data && j.data.id) || 0, alt: alt });
+              var url = PU.resolve({ url: j && j.data && j.data.url }, cfg.endpoint).url;
+              if (url !== '' && j.data.id) { onPick({ url: url, id: j.data.id, alt: alt }); return; }
+              fallback();
           })
-          .catch(function () {
-              var alt = (file.meta && (file.meta.alt || file.meta.title)) || file.basename || file.name || '';
-              onPick({ url: file.url, id: 0, alt: alt });
-          });
+          .catch(fallback);
     }
 
     blocks.registerBlockType('fluxfiles/image', {
-        apiVersion: 2,
+        apiVersion: 3,
         title: __('FluxFiles Image', 'fluxfiles'),
         description: __('Insert an image from FluxFiles, served from your bucket.', 'fluxfiles'),
         icon: fluxIcon,
@@ -133,13 +158,13 @@
             }
             var toolbarButtons = [
                 el(components.ToolbarButton, {
-                    icon: 'edit', label: __('Replace from FluxFiles', 'fluxfiles'),
+                    key: 'replace', icon: 'edit', label: __('Replace from FluxFiles', 'fluxfiles'),
                     onClick: function () { openPicker(onPick); }
                 })
             ];
             if (a.id) {
                 toolbarButtons.push(el(components.ToolbarButton, {
-                    icon: 'star-filled', label: __('Set as featured image', 'fluxfiles'),
+                    key: 'featured', icon: 'star-filled', label: __('Set as featured image', 'fluxfiles'),
                     onClick: setFeatured
                 }));
             }

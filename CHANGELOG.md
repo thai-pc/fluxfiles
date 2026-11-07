@@ -5,6 +5,15 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- **WordPress plugin, multisite network activation.** The activation hook ran once on the main site only, so every other site had no `fluxfiles_secret`/defaults and failed with "Unable to generate token". Network activation now loops over the existing sites, `wp_initialize_site` sets up new ones, `init` initialises a site that was missed (lazy), and an admin notice appears if a site still has no secret. Uninstall already cleaned every site; a test now pins it.
+- **WordPress plugin, uninstall data loss.** "Delete all FluxFiles data" removed the whole `<storage>/uploads` tree, including files that existed before FluxFiles was activated, although the checkbox said it only removed files FluxFiles wrote. The plugin cannot tell which files it wrote, so it now deletes only its own bookkeeping (`_fluxfiles/` and `_variants/` at any depth, its protection files, the options and tables) and never the files; the Settings text, `readme.txt` and README say so. The file-backed rate-limit counters are now removed on every uninstall (readme already promised it).
+- **WordPress plugin, private local storage.** The Gutenberg block and the classic editor button fell back to the `/api/fm/stream?token=` URL (1 h) and saved it permanently into the post. They now mirror the editor adapters: only the attachment's or the pick's permanent `http(s)` URL is saved, otherwise nothing is inserted and a plain-text notice explains that private storage has no permanent link. The native media-modal integration says so too instead of doing nothing.
+- WordPress plugin: two `[fluxfiles]` shortcodes on one page no longer replace each other silently (the SDK drives one iframe per page); the second shows a notice. The JWT secret and the S3/R2 secret keys are no longer echoed into the Settings page (blank = keep, S3/R2 have a remove checkbox). The block uses API version 3 and keyed toolbar buttons, Contributors see a role-appropriate message instead of "not configured", and the shortcode and Settings strings are translatable.
+
+### Added
+- WordPress plugin: Settings > "Private local storage" (`fluxfiles_local_private`), the switch the readme and the nginx notice already pointed at. Plugin 1.1.1.
+
 ## [1.0.19] — 2026-11-07
 
 > Released: `core-v1.1.6`, `mcp-v1.1.0`, `ckeditor5-v1.0.3`, `ckeditor4-v1.0.2`, `tinymce-v1.0.2`, `summernote-v1.0.2`. The WordPress rate-limiter fix ships with the next WordPress plugin release.

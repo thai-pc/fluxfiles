@@ -2,8 +2,9 @@
 /**
  * Runs when FluxFiles is DELETED from the Plugins screen (not on deactivation).
  *
- * Always removed: the plugin's settings options, usage transients and the
- * wp_fluxfiles_rate_limits table, on every site of a multisite network.
+ * Always removed: the plugin's settings options, usage transients, the
+ * wp_fluxfiles_rate_limits table and the file-backed rate-limit counters
+ * (`rate_limit.json`, `rate_limit.d/`), on every site of a multisite network.
  *
  * Kept unless the site opted in (Settings > FluxFiles > "Delete data on
  * uninstall"): everything that belongs to the stored files, i.e. the metadata,
@@ -11,11 +12,15 @@
  * options that decide how that data is read and protected (`fluxfiles_secret`
  * = the audit chain's HMAC key, `fluxfiles_storage_backend`,
  * `fluxfiles_storage_base`, `fluxfiles_local_private`, `fluxfiles_db_version`)
- * and the files themselves. With the opt-in, all of it goes, and the files only
- * when the storage base is the plugin's own location token (never a
+ * and the files themselves. With the opt-in, all of it goes, plus the plugin's
+ * bookkeeping inside the storage folder: every `_fluxfiles/` (index, audit log,
+ * trash) and `_variants/` directory and the plugin's own protection files. That
+ * only happens when the storage base is the plugin's own location token (never a
  * FLUXFILES_STORAGE_DIR / `fluxfiles_storage_base` filter override, never a
  * legacy absolute path, never a folder that contains the WordPress install,
- * wp-content, uploads or the plugins dir) and only the files the plugin wrote.
+ * wp-content, uploads or the plugins dir). The files themselves are NEVER deleted:
+ * the plugin cannot tell which ones it wrote, and a folder may hold files that were
+ * there before it was activated.
  *
  * Add-on plugins (FluxFiles Pro) keep their own options, transients and user
  * meta in their own namespace; none of those names may appear here.
@@ -133,34 +138,81 @@ require_once __DIR__ . '/includes/FluxFilesStorage.php';
         return false;
     };
 
-    $deleteFiles = static function (string $root) use ($rmTree, $rmFile, $rmdirIfEmpty, $unsafeRoot): void {
-        if ($root === '' || $root === '/' || $unsafeRoot($root) || $unsafeRoot($root . '/uploads')) {
+    // FluxFiles-owned bookkeeping inside the disk root: `_fluxfiles/` (index, audit
+    // log, trash incl. soft-deleted bytes, pre-watermark originals) and `_variants/`
+    // (generated WebP/thumbnail copies) at any depth, case-folded like the plugin's
+    // own reserved-key check. These directories are the only part of the disk the
+    // plugin creates by itself: the files in between were put there by users or by
+    // other tools (possibly before FluxFiles was activated) and are never deleted.
+    $rmBookkeeping = static function (string $dir) use (&$rmBookkeeping, $rmTree): void {
+        if (is_link($dir) || !is_dir($dir)) {
             return;
         }
-        $rmTree($root . '/uploads');
-        // Protection files: only when they are the plugin's own (marker / exact stub).
-        $htaccess = $root . '/.htaccess';
-        if (is_file($htaccess) && !is_link($htaccess)
-            && strpos((string) file_get_contents($htaccess, false, null, 0, 256), FluxFilesStorage::PROTECT_MARKER) !== false) {
-            $rmFile($htaccess);
+        foreach ((array) scandir($dir) as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $name;
+            $lower = strtolower($name);
+            if ($lower === '_fluxfiles' || $lower === '_variants') {
+                $rmTree($path);
+            } elseif (is_dir($path) && !is_link($path)) {
+                $rmBookkeeping($path);
+            }
         }
-        $index = $root . '/index.php';
-        if (is_file($index) && !is_link($index) && file_get_contents($index) === FluxFilesStorage::INDEX_STUB) {
-            $rmFile($index);
+    };
+
+    // Rate-limit counters (file-backed limiter) live in the storage root; plain
+    // runtime state, removed on every uninstall.
+    $deleteRateLimits = static function (string $root) use ($rmTree, $unsafeRoot): void {
+        if ($root === '' || $root === '/' || $unsafeRoot($root)) {
+            return;
         }
         foreach (['rate_limit.json', 'rate_limit.d'] as $name) {
             $rmTree($root . '/' . $name);
         }
+    };
+
+    $deleteFiles = static function (string $root) use ($rmBookkeeping, $rmFile, $rmdirIfEmpty, $unsafeRoot): void {
+        if ($root === '' || $root === '/' || $unsafeRoot($root) || $unsafeRoot($root . '/uploads')) {
+            return;
+        }
+        $uploads = $root . '/uploads';
+        $rmBookkeeping($uploads);
+        // Protection files: only when they are the plugin's own (marker / exact stub).
+        // The ones inside uploads/ stay while user files remain there: they keep PHP
+        // from executing and HTML/SVG from rendering as active content.
+        $guards = static function (string $dir) use ($rmFile): void {
+            $htaccess = $dir . '/.htaccess';
+            if (is_file($htaccess) && !is_link($htaccess)
+                && strpos((string) file_get_contents($htaccess, false, null, 0, 256), FluxFilesStorage::PROTECT_MARKER) !== false) {
+                $rmFile($htaccess);
+            }
+            $index = $dir . '/index.php';
+            if (is_file($index) && !is_link($index) && file_get_contents($index) === FluxFilesStorage::INDEX_STUB) {
+                $rmFile($index);
+            }
+        };
+        if (is_dir($uploads) && !is_link($uploads)
+            && array_diff((array) scandir($uploads), ['.', '..', '.htaccess', 'index.php']) === []) {
+            $guards($uploads);
+        }
+        $rmdirIfEmpty($uploads);
+        $guards($root);
         $rmdirIfEmpty($root); // only if nothing else lives there
     };
 
-    $cleanSite = static function (?int $blogId, string $base, bool $ownBase) use ($options, $dataOptions, $deleteFiles): bool {
+    $cleanSite = static function (?int $blogId, string $base, bool $ownBase) use ($options, $dataOptions, $deleteFiles, $deleteRateLimits): bool {
         global $wpdb;
 
         // Read the opt-in BEFORE the options go.
         $wipe = get_option('fluxfiles_delete_data_on_uninstall', '0') === '1';
+        $siteRoot = $blogId === null ? $base : $base . '/sites/' . $blogId;
+        if ($base !== '') {
+            $deleteRateLimits($siteRoot);
+        }
         if ($wipe && $ownBase && $base !== '') {
-            $deleteFiles($blogId === null ? $base : $base . '/sites/' . $blogId);
+            $deleteFiles($siteRoot);
         }
 
         foreach ($options as $name) {

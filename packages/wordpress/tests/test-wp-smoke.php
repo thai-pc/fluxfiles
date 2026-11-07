@@ -2674,6 +2674,90 @@ test('settings: `audit` can be granted as a default permission (else no embed to
     }
 });
 
+test('settings: the stored secrets are never echoed into the page; a blank save keeps them', function () {
+    require_once __DIR__ . '/../includes/FluxFilesAdmin.php';
+    foreach (['esc_attr' => 'htmlspecialchars((string) $v, ENT_QUOTES)', 'esc_html' => 'htmlspecialchars((string) $v, ENT_QUOTES)'] as $fn => $body) {
+        if (!function_exists($fn)) { eval("function {$fn}(\$v) { return {$body}; }"); }
+    }
+    if (!function_exists('esc_url')) { function esc_url($u) { return $u; } }
+    if (!function_exists('admin_url')) { function admin_url($p = '') { return 'http://wp.test/wp-admin/' . $p; } }
+    if (!function_exists('add_settings_section')) { function add_settings_section(...$a) {} }
+    if (!function_exists('add_settings_field')) { function add_settings_field($id, $title, $cb, ...$a) { $GLOBALS['WP_FIELDS'][$id] = $cb; } }
+    if (!function_exists('register_setting')) { function register_setting($g, $name, $args = []) { $GLOBALS['WP_SETTINGS'][$name] = $args; } }
+    $GLOBALS['WP_FIELDS'] = []; $GLOBALS['WP_SETTINGS'] = [];
+    $keep = [$GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'] ?? null, $GLOBALS['WP_OPTIONS']['fluxfiles_r2_secret'] ?? null, $_POST];
+    $jwt = (string) $GLOBALS['WP_OPTIONS']['fluxfiles_secret'];
+    try {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'] = 'S3-SECRET-VALUE-XYZ';
+        $GLOBALS['WP_OPTIONS']['fluxfiles_r2_secret'] = 'R2-SECRET-VALUE-XYZ';
+        $admin = (new ReflectionClass('FluxFilesAdmin'))->newInstanceWithoutConstructor();
+        $admin->registerSettings();
+        $render = static function (string $id): string { ob_start(); try { ($GLOBALS['WP_FIELDS'][$id])(); } finally { return (string) ob_get_clean(); } };
+        $html = $render('fluxfiles_secret');
+        assertTrue(strpos($html, $jwt) === false, 'the JWT secret is not in the HTML');
+        assertTrue(preg_match('/<input[^>]*type="password"[^>]*value=""/', $html) === 1, 'empty password input');
+        assertTrue(strpos($html, substr($jwt, -4)) !== false, 'only the last 4 characters are hinted');
+        foreach (['fluxfiles_s3_secret' => 'S3-SECRET-VALUE-XYZ', 'fluxfiles_r2_secret' => 'R2-SECRET-VALUE-XYZ'] as $id => $val) {
+            $html = $render($id);
+            assertTrue(strpos($html, $val) === false && strpos($html, 'XYZ') === false, "{$id} not echoed");
+            assertTrue(strpos($html, $id . '_clear') !== false, "{$id} can be removed explicitly");
+        }
+        // Sanitizers: blank keeps, a value replaces, the JWT secret can never be blanked.
+        $san = static fn (string $o, $v) => ($GLOBALS['WP_SETTINGS'][$o]['sanitize_callback'])($v);
+        $_POST = [];
+        assertEqual($jwt, $san('fluxfiles_secret', ''), 'blank keeps the JWT secret');
+        assertEqual($jwt, $san('fluxfiles_secret', '   '), 'whitespace keeps it too');
+        assertEqual('a-brand-new-secret-0123456789abcdef', $san('fluxfiles_secret', ' a-brand-new-secret-0123456789abcdef '), 'a typed value replaces it');
+        $_POST = ['fluxfiles_secret_clear' => '1'];
+        assertEqual($jwt, $san('fluxfiles_secret', ''), 'the JWT secret has no clear switch');
+        assertEqual('S3-SECRET-VALUE-XYZ', $san('fluxfiles_s3_secret', ''), 'blank keeps the S3 secret');
+        $_POST = ['fluxfiles_s3_secret_clear' => '1'];
+        assertEqual('', $san('fluxfiles_s3_secret', ''), 'the clear checkbox removes it');
+        // The private-local switch is a real setting now (README/nginx notice point at it).
+        assertTrue(isset($GLOBALS['WP_SETTINGS']['fluxfiles_local_private'], $GLOBALS['WP_FIELDS']['fluxfiles_local_private']), 'private local storage is registered with a field');
+        assertEqual('1', $san('fluxfiles_local_private', '1'));
+        assertEqual('0', $san('fluxfiles_local_private', 'yes'), 'anything but 1 is off');
+        $html = $render('fluxfiles_local_private');
+        assertTrue(strpos($html, 'name="fluxfiles_local_private"') !== false && strpos($html, 'type="checkbox"') !== false, 'checkbox rendered');
+        // Unconfigured site: the admin sees where to fix it; others see nothing.
+        $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = '';
+        $keepCaps = $GLOBALS['WP_CAPS'];
+        $GLOBALS['WP_CAPS'] = ['manage_options' => true];
+        ob_start(); $admin->renderUnconfiguredNotice(); $n = (string) ob_get_clean();
+        assertTrue(strpos($n, 'page=fluxfiles') !== false, 'admin notice links to the settings page');
+        $GLOBALS['WP_CAPS'] = ['upload_files' => true];
+        ob_start(); $admin->renderUnconfiguredNotice(); assertEqual('', (string) ob_get_clean(), 'not shown to non-admins');
+        $GLOBALS['WP_CAPS'] = $keepCaps;
+    } finally {
+        $GLOBALS['WP_OPTIONS']['fluxfiles_secret'] = $jwt;
+        [$GLOBALS['WP_OPTIONS']['fluxfiles_s3_secret'], $GLOBALS['WP_OPTIONS']['fluxfiles_r2_secret'], $_POST] = $keep;
+    }
+});
+
+test('WordPress.org polish: translatable strings, block API v3, keyed toolbar buttons, shortcode instance guard', function () {
+    $dir = __DIR__ . '/../';
+    $sc = (string) file_get_contents($dir . 'includes/FluxFilesShortcode.php');
+    assertTrue(strpos($sc, "'<p class=\"fluxfiles-login-required\">Please") === false && strpos($sc, "FluxFiles: Unable to generate token.</p>'") === false, 'no hard-coded English left in the shortcode');
+    assertTrue(substr_count($sc, "'fluxfiles')") >= 5, 'shortcode strings use the plugin text domain');
+    assertTrue(strpos($sc, 'window.fluxfilesShortcodeOpen') !== false, 'a second [fluxfiles] on a page gets a notice instead of replacing the first');
+    $adm = (string) file_get_contents($dir . 'includes/FluxFilesAdmin.php');
+    foreach (['General Settings', 'JWT Secret', 'Storage Backend', 'Enabled Disks', 'Bucket'] as $label) {
+        assertTrue(strpos($adm, "esc_html__('" . $label . "', 'fluxfiles')") !== false, "{$label} is translatable");
+    }
+    assertTrue(strpos((string) file_get_contents($dir . 'includes/FluxFilesBlock.php'), "'api_version' => 3") !== false, 'PHP block registration is API v3');
+    $js = (string) file_get_contents($dir . 'assets/block.js');
+    assertTrue(strpos($js, 'apiVersion: 3') !== false, 'JS block registration is API v3');
+    assertEqual(2, substr_count($js, "key: '"), 'toolbar buttons carry React keys');
+    // Never persist an expiring token URL (private local disk).
+    foreach (['block.js', 'media-button.js'] as $f) {
+        $src = (string) file_get_contents($dir . 'assets/' . $f);
+        assertTrue(strpos($src, 'FluxFilesPickerUrl') !== false, "{$f} resolves the URL through picker-url.js");
+        assertTrue(preg_match('/onPick\(\{ url: file\.url|emit\(file, 0\)\s*;?\s*\}\)\s*;?\s*$/', $src) === 0, "{$f} no longer falls back to the raw file.url");
+    }
+    assertTrue(strpos((string) file_get_contents($dir . 'includes/FluxFilesBlock.php'), "'fluxfiles-picker-url'") !== false
+        && strpos((string) file_get_contents($dir . 'includes/FluxFilesMediaButton.php'), "'fluxfiles-picker-url'") !== false, 'both screens enqueue the helper');
+});
+
 // (module-engine settings moved to the FluxFiles Pro plugin; see the extension-API tests below)
 
 // ── 1.x proxy-parity fixes: X-Accel encoding, audit action names, 403 codes, asset caching ──

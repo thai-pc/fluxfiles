@@ -36,7 +36,9 @@ class FluxFilesDbSchema
     {
         global $wpdb;
 
-        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        if (!function_exists('dbDelta')) {
+            require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        }
 
         $charsetCollate = $wpdb->get_charset_collate();
         $tFileMeta = $wpdb->prefix . 'fluxfiles_file_metadata';

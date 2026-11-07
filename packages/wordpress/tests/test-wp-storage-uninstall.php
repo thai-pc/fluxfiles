@@ -393,24 +393,55 @@ function legacyCfg(string $t, string $base, $flag): array
         'options' => $flag === null ? [] : [1 => ['fluxfiles_delete_data_on_uninstall' => $flag]]];
 }
 
-test('stored files are kept unless fluxfiles_delete_data_on_uninstall is on', function () use ($runUninstall, $stubBody) {
-    foreach ([[null, true], ['0', true], ['1', false]] as [$flag, $kept]) {
+test('stored files are kept; with the opt-in only the plugin\'s own bookkeeping goes (never a pre-existing file)', function () use ($runUninstall, $stubBody) {
+    foreach ([[null, false], ['0', false], ['1', true]] as [$flag, $wiped]) {
         $t = tmpTree();
         $base = ownBase($t);
-        mkdir($base . '/uploads/sub', 0777, true);
+        mkdir($base . '/uploads/sub/_fluxfiles/trash/abc', 0777, true);
+        mkdir($base . '/uploads/sub/_variants', 0777, true);
+        mkdir($base . '/uploads/other/_FluxFiles', 0777, true);
+        mkdir($base . '/uploads/_fluxfiles', 0777, true);
+        mkdir($base . '/rate_limit.d', 0777, true);
         file_put_contents($base . '/uploads/sub/photo.jpg', 'bytes');
-        file_put_contents($base . '/uploads/.htaccess', 'x');
+        file_put_contents($base . '/uploads/pre-existing.pdf', 'was here before activation');
+        file_put_contents($base . '/uploads/sub/_fluxfiles/trash/abc/gone.jpg', 'trashed');
+        file_put_contents($base . '/uploads/sub/_fluxfiles/index.json', '{}');
+        file_put_contents($base . '/uploads/sub/_variants/photo-thumb.webp', 'v');
+        file_put_contents($base . '/uploads/other/_FluxFiles/audit.log', 'a');
+        file_put_contents($base . '/uploads/_fluxfiles/audit.log', 'a');
+        file_put_contents($base . '/rate_limit.d/u.json', '{}');
+        file_put_contents($base . '/rate_limit.json', '{}');
+        file_put_contents($base . '/uploads/.htaccess', "# FluxFiles storage protection v1\nRequire all granted\n");
+        file_put_contents($base . '/uploads/index.php', $stubBody);
         file_put_contents($base . '/.htaccess', "# FluxFiles storage protection v1\nRequire all denied\n");
         file_put_contents($base . '/index.php', $stubBody);
         file_put_contents($base . '/keep-me.txt', 'unrelated');
         scenario(ownBaseCfg($t, $flag), $runUninstall);
-        assertEqual($kept, is_file($base . '/uploads/sub/photo.jpg'), 'flag ' . var_export($flag, true));
+        $label = 'flag ' . var_export($flag, true);
+        assertTrue(is_file($base . '/uploads/sub/photo.jpg') && is_file($base . '/uploads/pre-existing.pdf'), "{$label}: user files are never deleted");
         assertTrue(is_file($base . '/keep-me.txt'), 'unrelated files in the base survive');
-        if (!$kept) {
-            assertTrue(!is_dir($base . '/uploads') && !is_file($base . '/index.php') && !is_file($base . '/.htaccess'), 'plugin-owned files removed');
-        }
+        assertTrue(!is_file($base . '/rate_limit.json') && !is_dir($base . '/rate_limit.d'), "{$label}: rate-limit counters always go");
+        assertEqual(!$wiped, is_dir($base . '/uploads/sub/_fluxfiles') || is_dir($base . '/uploads/_fluxfiles'), "{$label}: _fluxfiles/ at any depth");
+        assertEqual(!$wiped, is_dir($base . '/uploads/other/_FluxFiles'), "{$label}: _fluxfiles/ case-folded");
+        assertEqual(!$wiped, is_dir($base . '/uploads/sub/_variants'), "{$label}: _variants/");
+        assertEqual(!$wiped, is_file($base . '/.htaccess'), "{$label}: root protection files");
+        assertTrue(is_file($base . '/uploads/.htaccess') && is_file($base . '/uploads/index.php'), "{$label}: uploads protection stays while user files remain there");
         rrm($t);
     }
+});
+
+test('with the opt-in an uploads dir that holds nothing else is removed together with its protection files', function () use ($runUninstall, $stubBody) {
+    $t = tmpTree();
+    $base = ownBase($t);
+    mkdir($base . '/uploads/_fluxfiles', 0777, true);
+    file_put_contents($base . '/uploads/_fluxfiles/audit.log', 'a');
+    file_put_contents($base . '/uploads/.htaccess', "# FluxFiles storage protection v1\nx\n");
+    file_put_contents($base . '/uploads/index.php', $stubBody);
+    file_put_contents($base . '/.htaccess', "# FluxFiles storage protection v1\nx\n");
+    file_put_contents($base . '/index.php', $stubBody);
+    scenario(ownBaseCfg($t, '1'), $runUninstall);
+    assertTrue(!is_dir($base), 'nothing of ours is left');
+    rrm($t);
 });
 
 test('an operator-authored .htaccess / index.php survives the wipe', function () use ($runUninstall) {
@@ -422,7 +453,7 @@ test('an operator-authored .htaccess / index.php survives the wipe', function ()
     scenario(ownBaseCfg($t, '1'), $runUninstall);
     assertEqual("Options -Indexes\n# my rules\n", (string) @file_get_contents($base . '/.htaccess'), '.htaccess kept');
     assertEqual("<?php // my own front controller\n", (string) @file_get_contents($base . '/index.php'), 'index.php kept');
-    assertTrue(!is_dir($base . '/uploads'), 'the uploads tree still goes');
+    assertTrue(!is_dir($base . '/uploads'), 'the (empty) uploads dir still goes');
     rrm($t);
 });
 
@@ -470,7 +501,13 @@ test('a symlink inside the tree is unlinked, never followed', function () use ($
     symlink($t . '/outside/precious.txt', $base . '/uploads/flink');
     scenario(ownBaseCfg($t, '1'), $runUninstall);
     assertTrue(is_file($t . '/outside/precious.txt'), 'link target untouched');
-    assertTrue(!is_link($base . '/uploads/link') && !is_dir($base . '/uploads'), 'links removed with the tree');
+    assertTrue(is_link($base . '/uploads/link') && is_link($base . '/uploads/flink'), 'user symlinks are user data: left alone');
+    mkdir($t . '/outside/real/deeper', 0777, true);
+    file_put_contents($t . '/outside/real/deeper/precious2.txt', 'keep');
+    symlink($t . '/outside/real', $base . '/uploads/_fluxfiles');   // a bookkeeping name that is a link
+    scenario(ownBaseCfg($t, '1'), $runUninstall);
+    assertTrue(is_file($t . '/outside/real/deeper/precious2.txt'), 'a _fluxfiles symlink is unlinked, its target never followed');
+    assertTrue(!is_link($base . '/uploads/_fluxfiles'), 'the link itself is gone');
     rrm($t);
 });
 
@@ -480,6 +517,8 @@ test('multisite: every site is visited in batches (this network only), per-site 
     foreach ([1, 2, 3] as $b) {
         mkdir($base . "/sites/{$b}/uploads", 0777, true);
         file_put_contents($base . "/sites/{$b}/uploads/f.txt", 'x');
+        mkdir($base . "/sites/{$b}/uploads/_fluxfiles", 0777, true);
+        file_put_contents($base . "/sites/{$b}/uploads/_fluxfiles/audit.log", 'a');
     }
     $cfg = ['content' => $t . '/wp-content', 'uninstall' => true, 'multisite' => true, 'site_count' => 250,
         'options' => [2 => ['fluxfiles_delete_data_on_uninstall' => '1']],
@@ -494,8 +533,8 @@ test('multisite: every site is visited in batches (this network only), per-site 
     assertEqual(7, count($dropped), 'opted-in site: every table dropped');
     $kept = array_filter($u['queries'], fn ($q) => str_contains($q['sql'], 'DROP TABLE') && $q['blog'] === 3);
     assertEqual(1, count($kept), 'other sites: rate_limits only');
-    assertTrue(!is_dir($base . '/sites/2/uploads'), 'opted-in site 2 files removed');
-    assertTrue(is_file($base . '/sites/1/uploads/f.txt') && is_file($base . '/sites/3/uploads/f.txt'), 'other sites keep their files');
+    assertTrue(is_file($base . '/sites/2/uploads/f.txt') && !is_dir($base . '/sites/2/uploads/_fluxfiles'), 'opted-in site 2: bookkeeping removed, files kept');
+    assertTrue(is_dir($base . '/sites/1/uploads/_fluxfiles') && is_dir($base . '/sites/3/uploads/_fluxfiles'), 'other sites keep their bookkeeping');
     assertTrue(!in_array('fluxfiles_storage_base', $u['delete_site_option'], true), 'network storage base kept while some site keeps its data');
     rrm($t);
 
@@ -551,6 +590,64 @@ test('the Pro plugin\'s options / transient / user meta are never touched by uni
         'fluxfiles_license_notice_dismissed', 'delete_user_meta', 'delete_transient', 'delete_site_transient'] as $name) {
         assertTrue(strpos($src, $name) === false, "{$name} must not appear in uninstall.php");
     }
+});
+
+// ── multisite activation: every sub-site gets its secret/defaults/storage ─────
+$msPrelude = <<<'PHP'
+function flush_rewrite_rules() { $GLOBALS['FLUSH'] = ($GLOBALS['FLUSH'] ?? 0) + 1; }
+function dbDelta($sql) { $GLOBALS['DB'][] = $GLOBALS['CUR']; }
+function plugin_basename($f) { return 'fluxfiles/fluxfiles.php'; }
+function is_plugin_active_for_network($p) { return !empty($GLOBALS['FXT']['netactive']); }
+$wpdb = new class extends FxWpdb { public function get_charset_collate() { return ''; } };
+$plugin = (new ReflectionClass(FluxFilesPlugin::class))->newInstanceWithoutConstructor();
+PHP;
+$msOut = 'fx_out(["opt" => $GLOBALS["OPT"], "flush" => $GLOBALS["FLUSH"] ?? 0, "db" => $GLOBALS["DB"] ?? [], "cur" => $GLOBALS["CUR"]]);';
+
+test('multisite: network activation initialises EVERY existing site, not just the main one', function () use ($msPrelude, $msOut) {
+    $t = tmpTree();
+    $r = scenario(['content' => $t . '/wp-content', 'multisite' => true, 'site_count' => 3],
+        $msPrelude . '$plugin->activate(true);' . $msOut);
+    foreach ([1, 2, 3] as $b) {
+        assertTrue(!empty($r['opt'][$b]['fluxfiles_secret']), "site {$b} has a secret");
+        assertEqual(['local'], $r['opt'][$b]['fluxfiles_disks'] ?? null, "site {$b} disks");
+        assertEqual(3600, $r['opt'][$b]['fluxfiles_ttl'] ?? null, "site {$b} ttl");
+        assertTrue(is_dir($t . "/wp-content/uploads/fluxfiles/sites/{$b}/uploads"), "site {$b} storage root created");
+    }
+    assertEqual([1, 2, 3], $r['db'], 'tables installed per site');
+    assertEqual(1, $r['flush'], 'rewrite rules flushed once');
+    assertEqual(1, $r['cur'], 'blog restored');
+    rrm($t);
+});
+
+test('multisite: a per-site activation only touches the current site', function () use ($msPrelude, $msOut) {
+    $t = tmpTree();
+    $r = scenario(['content' => $t . '/wp-content', 'multisite' => true, 'site_count' => 3],
+        $msPrelude . '$plugin->activate(false);' . $msOut);
+    assertTrue(!empty($r['opt'][1]['fluxfiles_secret']) && empty($r['opt'][2]['fluxfiles_secret']), 'only site 1');
+    rrm($t);
+});
+
+test('multisite: a site created while the plugin is network-active is initialised (wp_initialize_site)', function () use ($msPrelude, $msOut) {
+    $t = tmpTree();
+    $body = $msPrelude . '$plugin::onNewSite((object) ["blog_id" => 4]);' . $msOut;
+    $r = scenario(['content' => $t . '/wp-content', 'multisite' => true, 'site_count' => 4, 'netactive' => true], $body);
+    assertTrue(!empty($r['opt'][4]['fluxfiles_secret']), 'new site 4 has a secret');
+    assertTrue(is_dir($t . '/wp-content/uploads/fluxfiles/sites/4/uploads'), 'and its storage root');
+    assertEqual(1, $r['cur'], 'blog restored');
+    // Not network-active: the new site is left alone (activation is per site then).
+    $r = scenario(['content' => $t . '/wp-content', 'multisite' => true, 'site_count' => 4], $body);
+    assertTrue(empty($r['opt'][4]['fluxfiles_secret']), 'not network-active: untouched');
+    rrm($t);
+});
+
+test('multisite: the lazy safety net initialises a site that missed activation, once, and never rewrites an existing secret', function () use ($msPrelude, $msOut) {
+    $t = tmpTree();
+    $body = $msPrelude . 'switch_to_blog(2); $plugin::ensureSiteReady(); $GLOBALS["OPT"][2]["fluxfiles_secret"] = "mine"; $plugin::ensureSiteReady(); restore_current_blog();' . $msOut;
+    $r = scenario(['content' => $t . '/wp-content', 'multisite' => true, 'site_count' => 2], $body);
+    assertEqual('mine', $r['opt'][2]['fluxfiles_secret'], 'existing secret kept');
+    assertEqual([2], $r['db'], 'initialised exactly once');
+    assertTrue(empty($r['opt'][1]['fluxfiles_secret']), 'other sites untouched');
+    rrm($t);
 });
 
 echo "\n  " . ($failed === 0 ? $green : $red) . "{$passed} passed, {$failed} failed{$reset}\n\n";

@@ -24,7 +24,7 @@ class FluxFilesBlock
         // Dynamic render is not needed — the block saves static HTML — but registering
         // server-side keeps the block available even if editor assets fail to load.
         register_block_type('fluxfiles/image', [
-            'api_version' => 2,
+            'api_version' => 3,
             'editor_script' => 'fluxfiles-block',
         ]);
     }
@@ -42,9 +42,16 @@ class FluxFilesBlock
             true
         );
         wp_enqueue_script(
+            'fluxfiles-picker-url',
+            plugins_url('assets/picker-url.js', FLUXFILES_PLUGIN_FILE),
+            ['wp-i18n'],
+            FLUXFILES_VERSION,
+            true
+        );
+        wp_enqueue_script(
             'fluxfiles-block',
             plugins_url('assets/block.js', FLUXFILES_PLUGIN_FILE),
-            ['wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-i18n', 'fluxfiles-sdk'],
+            ['wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-i18n', 'fluxfiles-sdk', 'fluxfiles-picker-url'],
             FLUXFILES_VERSION,
             true
         );
@@ -65,6 +72,9 @@ class FluxFilesBlock
             'attachUrl' => esc_url_raw(rest_url('fluxfiles/v1/api/fm/attach')),
             'tokenUrl'  => esc_url_raw(rest_url('fluxfiles/v1/api/fm/token')),
             'nonce'     => wp_create_nonce('wp_rest'),
+            // Lets the editor say what THIS user can do when there is no token.
+            'canManage' => current_user_can('manage_options'),
+            'canUse'    => current_user_can(FluxFilesApi::requiredCapability()),
         ]);
     }
 }

@@ -51,11 +51,19 @@ class FluxFilesMediaButton
 
         $sdkUrl = plugins_url('assets/fluxfiles.js', FLUXFILES_PLUGIN_FILE);
         wp_enqueue_script('fluxfiles-sdk', $sdkUrl, [], FLUXFILES_VERSION, true);
+        // Which picked URL may be saved into a post (shared with the block).
+        wp_enqueue_script(
+            'fluxfiles-picker-url',
+            plugins_url('assets/picker-url.js', FLUXFILES_PLUGIN_FILE),
+            ['wp-i18n'],
+            FLUXFILES_VERSION,
+            true
+        );
         // Picker modal logic; renderModal() hands it the per-user config inline.
         wp_enqueue_script(
             'fluxfiles-media-button',
             plugins_url('assets/media-button.js', FLUXFILES_PLUGIN_FILE),
-            ['fluxfiles-sdk'],
+            ['fluxfiles-sdk', 'fluxfiles-picker-url'],
             FLUXFILES_VERSION,
             true
         );
