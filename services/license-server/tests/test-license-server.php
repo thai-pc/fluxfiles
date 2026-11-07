@@ -639,5 +639,125 @@ test('store: a second licence for the same (gateway, order) cannot be stored', f
     assertEqual(1, count($store->findByEmail('race@x.com')), 'one row for the order');
 });
 
+// ── Lifetime + updates renewals (limited deal; inert until the Polar products exist) ──
+
+function renewIssuer(string $secretB64, ?LicenseStore $store = null): LicenseIssuer {
+    return new LicenseIssuer(new LicenseSigner($secretB64), $store ?? new LicenseStore(':memory:'));
+}
+
+test('pro-lifetime: Pro modules only, perpetual, 12 months of updates', function () use ($secretB64, $keys) {
+    $lm = new LicenseManager(renewIssuer($secretB64)->issue(['email'=>'pl@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'PL-1'])['key'], $keys);
+    assertEqual('pro', $lm->edition());
+    assertEqual(['share','intake'], $lm->modules());
+    assertEqual('perpetual', $lm->enforcement());
+    assertEqual(false, $lm->licensed('ai'), 'no Studio modules');
+    assertTrue($lm->daysLeft() > 360 && $lm->daysLeft() <= 365, 'one year of updates');
+});
+
+test('renewal: re-mints the held edition/modules, stacks 12 months on the remaining term, supersedes the old key', function () use ($secretB64, $keys) {
+    $store = new LicenseStore(':memory:');
+    $iss = renewIssuer($secretB64, $store);
+    $base = $iss->issue(['email'=>'Pl@X.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'PL-2']);
+    $ren = $iss->issue(['email'=>'pl@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'PR-2']);
+    $lm = new LicenseManager($ren['key'], $keys);
+    assertEqual('pro', $lm->edition());
+    assertEqual(['share','intake'], $lm->modules(), 'same modules as the base, not more');
+    assertEqual('perpetual', $lm->enforcement());
+    assertTrue($lm->daysLeft() > 725 && $lm->daysLeft() <= 730, 'renewing early stacks on the remaining 365 days');
+    assertEqual('superseded', $store->findByJti((string) $base['record']['jti'])['status'], 'old key retired');
+    assertEqual('pro-renewal', $ren['record']['plan']);
+    // A second renewal chains off the first.
+    $ren2 = $iss->issue(['email'=>'pl@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'PR-3']);
+    assertTrue((new LicenseManager($ren2['key'], $keys))->daysLeft() > 1090, 'chain keeps stacking');
+    assertEqual('superseded', $store->findByJti((string) $ren['record']['jti'])['status']);
+});
+
+test('renewal: an already-expired licence restarts from now, not from the old date', function () use ($secretB64, $keys) {
+    $store = new LicenseStore(':memory:');
+    $iss = renewIssuer($secretB64, $store);
+    $base = $iss->issue(['email'=>'old@x.com','plan'=>'lifetime','gateway'=>'polar','order_id'=>'L-OLD'])['record'];
+    $past = time() - 400 * 86400;
+    $pdo = (new ReflectionProperty($store, 'db')); $pdo->setAccessible(true);
+    $pdo->getValue($store)->prepare('UPDATE licenses SET expires = ? WHERE jti = ?')->execute([$past, $base['jti']]);
+    $lm = new LicenseManager($iss->issue(['email'=>'old@x.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'SR-OLD'])['key'], $keys);
+    assertEqual('studio', $lm->edition());
+    assertEqual(true, $lm->licensed('versioning'));
+    assertTrue($lm->daysLeft() > 360 && $lm->daysLeft() <= 365, 'a full 12 months from today');
+});
+
+test('renewal without a qualifying licence is refused (never granted as the base plan)', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = renewIssuer($secretB64, $store);
+    $thrown = 0;
+    $try = function (string $email, string $plan, string $order) use ($iss, &$thrown) {
+        try { $iss->issue(['email'=>$email,'plan'=>$plan,'gateway'=>'polar','order_id'=>$order]); }
+        catch (\FluxFiles\LicenseServer\RenewalWithoutLicenceException $e) { $thrown++; }
+    };
+    $try('nobody@x.com', 'pro-renewal', 'N-1');                       // no licence at all
+    $iss->issue(['email'=>'annual@x.com','plan'=>'pro','gateway'=>'polar','order_id'=>'A-1']);
+    $try('annual@x.com', 'pro-renewal', 'N-2');                       // annual Pro is not a lifetime licence
+    $iss->issue(['email'=>'pl2@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'P-1']);
+    $try('pl2@x.com', 'studio-renewal', 'N-3');                       // Pro lifetime cannot buy the Studio renewal
+    $r = $iss->issue(['email'=>'rf@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'P-2']);
+    $store->setStatus((string) $r['record']['jti'], 'refunded');
+    $try('rf@x.com', 'pro-renewal', 'N-4');                           // refunded base
+    assertEqual(4, $thrown, 'all four refused');
+    assertEqual(null, $store->findByOrder('polar', 'N-1'), 'nothing was stored');
+});
+
+test('renewal: a legacy no-expiry lifetime key is not replaced by a 12-month term', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $store->record(['jti'=>bin2hex(random_bytes(12)),'email'=>'legacy@x.com','plan'=>'lifetime','edition'=>'studio','modules'=>['share'],
+        'license_key'=>'k','gateway'=>'polar','order_id'=>'LEG-1','expires'=>null]);
+    $threw = false;
+    try { renewIssuer($secretB64, $store)->issue(['email'=>'legacy@x.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'LEG-R']); }
+    catch (\FluxFiles\LicenseServer\RenewalWithoutLicenceException $e) { $threw = true; }
+    assertTrue($threw, 'refused');
+});
+
+test('renewal: redelivering the same order is idempotent', function () use ($secretB64) {
+    $iss = renewIssuer($secretB64);
+    $iss->issue(['email'=>'idem@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'I-1']);
+    $a = $iss->issue(['email'=>'idem@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'I-2']);
+    $b = $iss->issue(['email'=>'idem@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'I-2']);
+    assertEqual(true, $b['reused']); assertEqual($a['key'], $b['key']);
+});
+
+test('polar: lifetime/renewal products map via the plan map like any other', function () {
+    $map = ['prod_pl'=>'pro-lifetime','prod_sr'=>'studio-renewal'];
+    foreach ($map as $pid => $plan) {
+        $o = PolarWebhook::extract(['type'=>'order.paid','data'=>['id'=>'ord_'.$pid,'status'=>'paid','product_id'=>$pid,'customer'=>['email'=>'b@x.com']]], $map);
+        assertEqual($plan, $o['plan']);
+        assertTrue(\FluxFiles\LicenseServer\Plans::get($plan) !== null);
+    }
+});
+
+test('mail: lifetime says use-forever + 12 months of updates; renewal says extended and swap the key', function () use ($secretB64) {
+    $iss = renewIssuer($secretB64);
+    $life = $iss->issue(['email'=>'m@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'M-1'])['record'];
+    $ren = $iss->issue(['email'=>'m@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'M-2'])['record'];
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    $m = new LicenseMailer('log');
+    $a = $render->invoke($m, $life);
+    assertTrue(str_contains($a, 'Pro Lifetime') && str_contains($a, 'forever') && str_contains($a, '12 months'), 'lifetime wording');
+    assertTrue(!str_contains($a, 'lifetime updates'), 'must not promise lifetime updates');
+    $b = $render->invoke($m, $ren);
+    assertTrue(str_contains($b, 'renewing') && str_contains($b, 'Replace the FLUXFILES_LICENSE_KEY'), 'renewal wording');
+    assertTrue(str_contains($b, gmdate('Y-m-d', (int) $ren['expires'])), 'new date shown');
+});
+
+test('polar-setup: default catalogue is the 6 current products; lifetime ones only behind --with-lifetime', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../polar-setup.php');
+    assertTrue(str_contains($src, "in_array('--with-lifetime', \$argv, true)"), 'flag exists');
+    assertTrue(str_contains($src, 'CATALOGUE + ($withLifetime ? LIFETIME_CATALOGUE : [])'), 'opt-in merge');
+    preg_match('/const CATALOGUE = \[(.*?)\n\];/s', $src, $c); preg_match('/const LIFETIME_CATALOGUE = \[(.*?)\n\];/s', $src, $l);
+    preg_match_all("/^    '([a-z-]+)' => \[/m", $c[1], $cm); preg_match_all("/^    '([a-z-]+)' => \[/m", $l[1], $lm);
+    assertEqual(['pro','pro-monthly','studio','studio-monthly','support','support-monthly'], $cm[1], 'default products unchanged');
+    assertEqual(['lifetime','pro-lifetime','pro-renewal','studio-renewal'], $lm[1]);
+    assertEqual(4, substr_count($l[1], "'recurring' => null"), 'all one-time');
+    foreach ([39900, 17900, 2900, 7900] as $amt) { assertTrue(str_contains($l[1], "'amount' => $amt"), "price $amt"); }
+    foreach ($lm[1] as $pid) { assertTrue(\FluxFiles\LicenseServer\Plans::get($pid) !== null, "$pid has a plan"); }
+});
+
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);

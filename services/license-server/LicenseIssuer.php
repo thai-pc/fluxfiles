@@ -9,6 +9,9 @@ namespace FluxFiles\LicenseServer;
  * (and the manual admin endpoint) funnels through, so issuance is identical
  * regardless of the checkout platform.
  */
+/** A renewal was bought but there is no eligible licence to extend. */
+final class RenewalWithoutLicenceException extends \InvalidArgumentException {}
+
 final class LicenseIssuer
 {
     public function __construct(
@@ -19,7 +22,13 @@ final class LicenseIssuer
     /**
      * Issue a license for a purchase. Idempotent on (gateway, order_id) via the store.
      *
+     * A `*-renewal` plan extends the buyer's existing lifetime licence instead of
+     * creating one; with nothing to extend it throws RenewalWithoutLicenceException
+     * (it deliberately does NOT fall back to the base plan: a $29 renewal must not
+     * unlock what costs $179).
+     *
      * @param array{email:string,plan:string,customer?:string,gateway?:string,order_id?:string} $order
+     * @throws RenewalWithoutLicenceException
      * @return array{key:string, record:array<string,mixed>, reused:bool}
      */
     public function issue(array $order): array
@@ -42,6 +51,25 @@ final class LicenseIssuer
             }
         }
 
+        // A renewal has no edition/modules of its own: it re-mints what the buyer holds.
+        $extendFrom = 0;
+        $retire = [$planId];
+        if (isset($plan['renews'])) {
+            $base = $this->store->activeForBuyerPlans($email, (array) $plan['renews']);
+            if ($base === null) {
+                throw new RenewalWithoutLicenceException("No licence to renew for {$email} ({$planId})");
+            }
+            if (($base['expires'] ?? null) === null) {
+                // A legacy no-expiry key already has lifetime updates; "renewing" it would
+                // replace that with a 12-month term.
+                throw new RenewalWithoutLicenceException("Licence {$base['jti']} already has lifetime updates ({$planId})");
+            }
+            $extendFrom = (int) $base['expires'];
+            $plan['edition'] = (string) $base['edition'];
+            $plan['modules'] = array_values(array_filter(explode(',', (string) $base['modules'])));
+            $retire = (array) $plan['renews'];
+        }
+
         $minted = $this->signer->mint([
             'customer'    => (string) ($order['customer'] ?? $email),
             'edition'     => (string) $plan['edition'],
@@ -49,6 +77,7 @@ final class LicenseIssuer
             'enforcement' => (string) $plan['enforcement'],
             'ttlDays'     => $plan['ttlDays'],
             'graceDays'   => (int) ($plan['graceDays'] ?? 14),
+            'extendFrom'  => $extendFrom,
         ]);
         $p = $minted['payload'];
 
@@ -88,11 +117,14 @@ final class LicenseIssuer
         // called "John Smith" must not retire each other's licences. Manual issues
         // are left alone — an operator may deliberately hand one buyer two keys.
         if ((string) $record['gateway'] !== 'manual') {
-            $this->store->supersedeActiveForBuyerPlan(
-                (string) $record['email'],
-                (string) $record['plan'],
-                (string) $record['jti']
-            );
+            // A renewal also retires the licence it extends (and earlier renewals).
+            foreach (array_unique(array_merge($retire, [$planId])) as $p) {
+                $this->store->supersedeActiveForBuyerPlan(
+                    (string) $record['email'],
+                    (string) $p,
+                    (string) $record['jti']
+                );
+            }
         }
 
         return ['key' => $minted['key'], 'record' => $record, 'reused' => false];

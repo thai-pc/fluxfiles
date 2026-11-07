@@ -389,4 +389,26 @@ final class LicenseStore
         $s->execute([trim($email), $plan]);
         return $s->fetchAll();
     }
+
+    /**
+     * The licence a renewal extends: the buyer's newest `active` row (by email, any
+     * gateway) whose plan is one of $plans, preferring the latest expiry.
+     *
+     * @param array<int,string> $plans
+     * @return array<string,mixed>|null
+     */
+    public function activeForBuyerPlans(string $email, array $plans): ?array
+    {
+        if (trim($email) === '' || $plans === []) {
+            return null;
+        }
+        $in = implode(',', array_fill(0, count($plans), '?'));
+        $s = $this->db->prepare(
+            "SELECT * FROM licenses WHERE lower(email) = lower(?) AND status = 'active' AND plan IN ({$in})
+             ORDER BY (expires IS NULL) DESC, expires DESC, created_at DESC LIMIT 1"
+        );
+        $s->execute(array_merge([trim($email)], array_values($plans)));
+        $r = $s->fetch();
+        return $r === false ? null : $r;
+    }
 }

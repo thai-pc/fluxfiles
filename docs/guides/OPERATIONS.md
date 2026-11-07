@@ -222,9 +222,28 @@ paste into step 3.
 > prices *should* be — check new figures against it before changing either `CATALOGUE`
 > or `Pricing.astro`.
 
-`enterprise` and `lifetime` are deliberately not created: Enterprise is a custom
-conversation an instant-buy button would undercut, and lifetime is worth offering only
-once recurring revenue exists.
+`enterprise` is deliberately not created: it is a custom conversation an instant-buy
+button would undercut. The lifetime deal is prepared but off: the default run creates
+exactly the six products above.
+
+### Switching on the lifetime deal (limited offer)
+
+Studio Lifetime $399, Pro Lifetime $179 (one-time; perpetual use, 12 months of
+updates), plus one-time updates renewals: Pro $29, Studio $79. How a renewal works and
+what happens to one with no licence behind it: `services/license-server/README.md`.
+
+1. `php services/license-server/polar-setup.php --dry-run --production --with-lifetime`
+   (look first), then the same without `--dry-run`. It creates the four extra products
+   (existing ones are skipped) and prints the extended `FLUXFILES_POLAR_PLAN_MAP`.
+2. Paste that map into the licence server's environment and redeploy. Without it the
+   webhook answers 503 for the new products (and Polar retries until you fix it).
+3. Set the products' success URL (`…?checkout_id={CHECKOUT_ID}`) like the others, then
+   test one sandbox purchase of each (`--with-lifetime` without `--production`), plus a
+   renewal bought under the same email.
+4. Landing: add the buy links / banner (`PUBLIC_POLAR_*` env vars for the four products)
+   and say renewals must use the purchase email. This repo does not touch the landing.
+5. Ending the deal: archive the products in Polar. Already-issued keys and renewals
+   keep working; to stop renewals too, archive the two renewal products.
 
 `support` and `support-monthly` are created like any other plan, but they unlock no
 module (`Plans.php` gives them `modules: []`) — the product is a support relationship,

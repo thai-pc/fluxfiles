@@ -76,16 +76,33 @@ final class LicenseMailer
         $key = (string) ($record['license_key'] ?? '');
         $edition = ucfirst((string) ($record['edition'] ?? 'pro'));
         $expires = $record['expires'] ?? null;
-        $expiryLine = $expires
-            ? 'Updates and priority support are included until: ' . gmdate('Y-m-d', (int) $expires) . ".\n\n"
-                . 'Your installed paid modules keep running after that date; renewal only restores new releases and support.'
-            : 'This licence includes lifetime use and lifetime updates.';
+        $plan = (string) ($record['plan'] ?? '');
+        $isRenewal = str_ends_with($plan, '-renewal');
+        $isLifetime = $plan === 'lifetime' || $plan === 'pro-lifetime';
+        $date = $expires ? gmdate('Y-m-d', (int) $expires) : '';
+        if (!$expires) {
+            $expiryLine = 'This licence includes lifetime use and lifetime updates.';
+        } elseif ($isRenewal) {
+            $expiryLine = "Your updates and priority support now run until: {$date}.\n\n"
+                . 'Replace the FLUXFILES_LICENSE_KEY on your server with the key below; the previous key keeps working until then. '
+                . 'Your installed paid modules keep running regardless of the date.';
+        } elseif ($isLifetime) {
+            $expiryLine = "This is a one-time purchase: you can use your paid modules forever.\n\n"
+                . "Updates and priority support are included for 12 months, until: {$date}. After that your modules keep running; "
+                . 'a one-time updates renewal (12 more months) restores new releases and support.';
+        } else {
+            $expiryLine = "Updates and priority support are included until: {$date}.\n\n"
+                . 'Your installed paid modules keep running after that date; renewal only restores new releases and support.';
+        }
+        $thanks = $isRenewal
+            ? "Thanks for renewing FluxFiles {$edition} updates."
+            : "Thanks for buying FluxFiles {$edition}" . ($isLifetime ? ' Lifetime' : '') . '.';
 
         // Plain text on purpose: a licence key is a long opaque string, and HTML mail
         // clients are the reason keys arrive with smart quotes or a soft line break in
         // the middle. Plain text is also what survives forwarding into a ticket.
         return <<<TXT
-        Thanks for buying FluxFiles {$edition}.
+        {$thanks}
 
         Your licence key:
 

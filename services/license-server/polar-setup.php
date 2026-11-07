@@ -19,6 +19,7 @@ declare(strict_types=1);
  *   POLAR_TOKEN=polar_oat_… php services/license-server/polar-setup.php
  *   POLAR_TOKEN=polar_oat_… php services/license-server/polar-setup.php --production
  *   … --dry-run          show what would be created, call nothing
+ *   … --with-lifetime    ALSO create the 4 lifetime/renewal products (limited deal)
  *
  * The token needs the `products:write` and `products:read` scopes. Create it under
  * Polar → Settings → Developers. It is read from the environment and never written
@@ -48,9 +49,9 @@ $green = "\033[32m"; $red = "\033[31m"; $yellow = "\033[33m"; $cyan = "\033[36m"
  * Plans deliberately absent:
  *   enterprise — sold custom with an SLA, not self-serve. A checkout button for it
  *                would undercut the conversation that tier exists to have.
- *   lifetime   — a one-time perpetual-use price, worth offering only once recurring
- *                revenue is proven. Its checkout copy must say "12 months updates
- *                and support", matching Plans.php; add it with recurring => null.
+ *   lifetime / pro-lifetime / pro-renewal / studio-renewal — the limited one-time
+ *                deal, kept in LIFETIME_CATALOGUE below and created ONLY with
+ *                --with-lifetime (the default run makes exactly the 6 above).
  */
 const CATALOGUE = [
     'pro' => [
@@ -93,7 +94,43 @@ const CATALOGUE = [
     ],
 ];
 
+/**
+ * The limited lifetime deal: opt-in via --with-lifetime. One-time prices
+ * (recurring => null); amounts mirror docs/LICENSING-PLAN.md §C. Copy must say
+ * "12 months of updates", matching Plans.php (lifetime USE, not lifetime updates).
+ * The renewals extend an existing lifetime licence by 12 months of updates/support
+ * and are bought under the SAME email as the lifetime purchase.
+ */
+const LIFETIME_CATALOGUE = [
+    'lifetime' => [
+        'name' => 'FluxFiles Studio Lifetime',
+        'description' => 'One-time purchase: use the Studio modules (share links, client portals, versioning, webhooks, AI/OCR with your own API key) forever, with 12 months of updates and priority support included.',
+        'amount' => 39900,          // $399 one-time
+        'recurring' => null,
+    ],
+    'pro-lifetime' => [
+        'name' => 'FluxFiles Pro Lifetime',
+        'description' => 'One-time purchase: use branded share links and client upload portals forever, for unlimited sites, with 12 months of updates and priority support included.',
+        'amount' => 17900,          // $179 one-time
+        'recurring' => null,
+    ],
+    'pro-renewal' => [
+        'name' => 'FluxFiles Pro Updates Renewal',
+        'description' => 'One-time: adds 12 months of updates and priority support to your existing Pro Lifetime licence. Use the same email as your original purchase. Your modules keep running either way.',
+        'amount' => 2900,           // $29 one-time
+        'recurring' => null,
+    ],
+    'studio-renewal' => [
+        'name' => 'FluxFiles Studio Updates Renewal',
+        'description' => 'One-time: adds 12 months of updates and priority support to your existing Studio Lifetime licence. Use the same email as your original purchase. Your modules keep running either way.',
+        'amount' => 7900,           // $79 one-time
+        'recurring' => null,
+    ],
+];
+
 $production = in_array('--production', $argv, true);
+$withLifetime = in_array('--with-lifetime', $argv, true);
+$catalogue = CATALOGUE + ($withLifetime ? LIFETIME_CATALOGUE : []);
 
 /**
  * The token, from the environment or the repo-root .env.
@@ -189,7 +226,7 @@ foreach (($list['items'] ?? []) as $p) {
 $planMap = [];
 $failed = 0;
 
-foreach (CATALOGUE as $planId => $spec) {
+foreach ($catalogue as $planId => $spec) {
     // A catalogue entry with no matching plan would sell a licence the issuer refuses.
     if (Plans::get($planId) === null) {
         echo "  {$red}FAIL{$reset} {$planId}: no such plan in Plans.php\n";
@@ -204,7 +241,7 @@ foreach (CATALOGUE as $planId => $spec) {
     }
 
     if ($dryRun) {
-        printf("  {$cyan}DRY {$reset} %-24s \$%s / %s\n", $spec['name'], number_format($spec['amount'] / 100, 2), $spec['recurring']);
+        printf("  {$cyan}DRY {$reset} %-24s \$%s / %s\n", $spec['name'], number_format($spec['amount'] / 100, 2), $spec['recurring'] ?? 'one-time');
         continue;
     }
 
@@ -227,7 +264,7 @@ foreach (CATALOGUE as $planId => $spec) {
     $id = (string) ($res['id'] ?? '');
     $planMap[$id] = $planId;
     printf("  {$green}OK{$reset}   %-24s \$%s / %s  %s\n",
-        $spec['name'], number_format($spec['amount'] / 100, 2), $spec['recurring'], $id);
+        $spec['name'], number_format($spec['amount'] / 100, 2), $spec['recurring'] ?? 'one-time', $id);
 }
 
 echo "\n";

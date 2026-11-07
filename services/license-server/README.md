@@ -26,7 +26,7 @@ export FLUXFILES_UPDATE_STATUS_TOKEN=$(openssl rand -hex 24)     # update server
 
 # 2. Polar (the store)
 export FLUXFILES_POLAR_WEBHOOK_SECRET=whsec_...              # Polar → Settings → Webhooks
-export FLUXFILES_POLAR_PLAN_MAP='{"<product_id>":"pro","<product_id>":"studio"}'
+export FLUXFILES_POLAR_PLAN_MAP='{"<product_id>":"pro","<product_id>":"studio"}'   # + lifetime/renewal ids when the deal is on
 
 # 3. Licence delivery. Default transport is 'log' — an unconfigured server writes the
 #    message to the error log instead of silently pretending it sent mail.
@@ -82,6 +82,39 @@ annual perpetual use plus one year of updates/support), `pro-monthly` (subscript
 seven-day payment-recovery grace), `studio`, `enterprise`, and `lifetime` (the legacy
 checkout id for lifetime **use** plus one year of updates/support). Existing no-expiry
 keys remain valid for lifetime updates; this policy applies only to newly issued keys.
+
+### Lifetime deal and updates renewals (prepared, off by default)
+
+For a limited deal. Nothing is sold until the Polar products exist
+(`polar-setup.php --with-lifetime`, see OPERATIONS.md "Switching on the lifetime
+deal"); the plans below are inert in the meantime.
+
+| Plan | Price | Grants |
+|---|---|---|
+| `lifetime` | Studio Lifetime $399 one-time | Studio modules, perpetual use, 12 months of updates (id kept for checkout compatibility) |
+| `pro-lifetime` | Pro Lifetime $179 one-time | Pro modules (share, intake), perpetual use, 12 months of updates |
+| `pro-renewal` | $29 one-time | +12 months of updates/support for an existing `pro-lifetime` licence |
+| `studio-renewal` | $79 one-time | +12 months of updates/support for an existing `lifetime` licence |
+
+**How a renewal works.** It is an ordinary `order.paid` for a renewal product.
+`LicenseIssuer` finds the buyer's newest `active` licence (matched on the lower-cased
+**email**) whose plan is in the renewal plan's `renews` list, and mints a NEW key with
+that licence's edition and modules and `expires = max(now, old expires) + 365 days`
+(renewing early keeps the days already paid for). The new row is stored with the
+renewal plan id (`pro-renewal`, so the mail and the admin list say what it was) and the
+issuer supersedes the old row through the existing `supersedeActiveForBuyerPlan()`;
+renewals chain (the next one extends the last). The buyer gets the usual delivery mail
+saying to swap `FLUXFILES_LICENSE_KEY`; the old key keeps working until then. Modules
+never depend on the date (`perpetual`), only the update channel does.
+
+**A renewal with nothing to renew is refused**, not treated as the base plan: that
+would hand a $29 buyer a $179 product. Cases: no licence under that email, only an
+annual/monthly plan, the wrong edition, a refunded/revoked base, or a legacy no-expiry
+key (it already has lifetime updates; a 12-month term would be a downgrade). The
+webhook logs `RENEWAL WITHOUT LICENCE` and ACKs 200 (a 5xx would just retry the same
+outcome and eventually disable the endpoint); resolve by hand: refund in Polar, or
+`POST /issue` the right plan for that buyer. The renewal must be bought under the same
+email as the lifetime purchase (the product description says so).
 
 ## Notes
 

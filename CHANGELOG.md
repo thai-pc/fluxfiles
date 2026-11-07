@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- Licence server: the limited **lifetime + updates-renewal** offer is prepared and OFF by default. New plans `pro-lifetime` (Pro modules, perpetual use, 12 months of updates) and one-time `pro-renewal` / `studio-renewal`, which mint a new key with the buyer's existing edition/modules and `expires = max(now, old expiry) + 12 months`, superseding the old key; a renewal with no qualifying lifetime licence behind it is refused (logged, ACKed) rather than granted as the base plan. `polar-setup.php --with-lifetime` creates the four one-time products (Studio Lifetime $399, Pro Lifetime $179, Pro renewal $29, Studio renewal $79); the default run still creates exactly the six current ones. The delivery email now words lifetime ("use forever, 12 months of updates") and renewals correctly. Runbook: OPERATIONS.md "Switching on the lifetime deal".
+
 ## [1.0.21] — 2026-11-08
 
 > Released: `core-v1.1.8`, `wordpress-v1.1.1` (the WordPress.org submission build; bundles core 1.1.8).

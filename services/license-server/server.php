@@ -137,7 +137,17 @@ try {
 
         // Issuing is idempotent on (gateway, order_id), which is what makes Polar's
         // at-least-once delivery safe — a retry returns the same key, never a second one.
-        $res = $issuer->issue($order + ['gateway' => 'polar']);
+        try {
+            $res = $issuer->issue($order + ['gateway' => 'polar']);
+        } catch (\FluxFiles\LicenseServer\RenewalWithoutLicenceException $e) {
+            // Paid for an updates renewal but holds no lifetime licence under this email
+            // (different email at checkout?). Nothing is granted, and a 5xx would only
+            // make Polar retry the same outcome until it disables the endpoint — so ACK
+            // loudly and let the operator resolve it by hand (refund, or POST /issue
+            // the right plan for that buyer).
+            error_log('polar webhook: RENEWAL WITHOUT LICENCE — ' . $e->getMessage() . ' (order ' . $order['order_id'] . ') — refund or issue manually');
+            respond(200, ['ignored' => 'renewal_without_licence', 'order_id' => $order['order_id']]);
+        }
 
         // Deliver the key, keyed on whether it has actually been delivered — NOT on
         // whether this is a first delivery. Those differ in the case that matters: if
