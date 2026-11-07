@@ -3456,6 +3456,14 @@ function fluxFilesApp() {
         virusError: '',
         virusErrorCode: '',
 
+        // Effective per-file upload cap shown in the drop zone: the boot/URL maxUploadMb,
+        // else the token's max_upload claim (what the server enforces), else the 10 MB default.
+        get uploadMaxLabel() {
+            const c = this.config && this.config.maxUploadMb;
+            const t = parseInt(this._tokenPayload().max_upload, 10);
+            return ((c > 0 ? c : (t > 0 ? t : 10))) + 'MB';
+        },
+
         get uploadsAreScanned() { return this.tokenAllows('allow_virus_scan', false); },
 
         canVirusScanFile(file) {
