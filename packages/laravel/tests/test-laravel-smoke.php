@@ -995,6 +995,18 @@ test('upload 500 does not leak the exception message (SQLSTATE/host) to the clie
         assertTrue(strpos($blob, $needle) === false, "leaked {$needle}: {$blob}");
     }
     assertTrue(strpos((string) @file_get_contents($ffTmp . '/php-errors.log'), 'db.internal') !== false, 'detail is logged server-side');
+    assertEqual('server_error', $resp->getData(true)['error_code'] ?? null, 'core-identical envelope: server_error');
+    assertEqual('Internal server error', $resp->getData(true)['error'] ?? null, 'generic message');
+    assertTrue(!array_key_exists('detail', $resp->getData(true)), 'no detail with debug off');
+
+    // Debug on: the operator opted in to seeing the detail.
+    $GLOBALS['LARAVEL_CONFIG']['app.debug'] = true;
+    $ctrl = freshController();
+    $prevLog = ini_set('error_log', $ffTmp . '/php-errors2.log');
+    $resp = $ctrl->upload(new Request('POST', ['disk' => 'local', 'path' => ''], $hdr, null, 'https://app.example.com', ['file' => $file], 'api/fm/upload'));
+    ini_set('error_log', (string) $prevLog);
+    unset($GLOBALS['LARAVEL_CONFIG']['app.debug']);
+    assertTrue(strpos((string) ($resp->getData(true)['detail'] ?? ''), 'SQLSTATE') !== false, 'detail present with debug on');
 });
 
 test('A-H3: refresh ticket round-trips the rendered overrides and is bound to the user', function () {

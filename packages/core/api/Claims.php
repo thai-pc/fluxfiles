@@ -193,10 +193,10 @@ class Claims
     // pre-filter (extension + size cap) below is checked in CORE, before the
     // module is ever invoked, so an engine outage never blocks a non-text upload.
     /** @var string[]|null Allowlist of Presidio entity-type names that trigger a
-     *            block (e.g. ["US_SSN","CREDIT_CARD"]). null = the engine's full
-     *            default detection set (unfiltered) — matches the existing
-     *            `allowed_ext: null = broadest` precedent rather than a hidden
-     *            curated default. Sanitized: uppercased/trimmed, must match
+     *            block (e.g. ["US_SSN","CREDIT_CARD"]). null/empty = the DLP
+     *            module's curated PII default set (DlpModule::DEFAULT_ENTITIES,
+     *            language-narrowed; not Presidio's full set; reversed in dlp 1.1.0).
+     *            Sanitized: uppercased/trimmed, must match
      *            `^[A-Z_]+$`, else dropped. */
     public ?array $dlpEntityTypes = null;
     /** @var string[] v1 scan-eligibility allowlist — extensions outside this list
@@ -564,8 +564,9 @@ class Claims
     /**
      * Sanitize `dlp_entity_types`: uppercase/trim each entry, keep only ones matching
      * Presidio's entity-type naming convention (`^[A-Z_]+$`), drop the rest. Returns
-     * null when nothing usable remains — null means "engine's full default set" (§3
-     * of docs/design/DLP-PII-REDACTION-DESIGN.md), so an all-garbage input is NOT the same
+     * null when nothing usable remains — null means the DLP module's curated PII default set
+     * (DlpModule::DEFAULT_ENTITIES, language-narrowed; not Presidio's full set; reversed in
+     * dlp 1.1.0 — see docs/design/DLP-PII-REDACTION-DESIGN.md), so an all-garbage input is NOT the same
      * as an empty allowlist (which would block nothing).
      *
      * @return string[]|null
