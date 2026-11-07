@@ -282,8 +282,13 @@ class Claims
     /** @var string[] Event filter — only these events fire the webhook. [] = all events. */
     public array $webhookEvents = [];
     /** @var string Secret used to HMAC-sign the webhook payload (X-FluxFiles-Signature).
-     *            '' = fall back to FLUXFILES_SECRET server-side. */
+     *            Decrypted at runtime from the `webhook_secret_enc` claim; server-side only,
+     *            never serialized back to a client. '' = the derived key (see CONFIG.md). */
     public string $webhookSecret = '';
+    /** @var bool The token carried a PLAINTEXT `webhook_secret` claim. A JWT is signed, not
+     *            encrypted, so that key is readable by the token holder: it is ignored (never
+     *            used to sign) and the Webhooks module refuses to dispatch (fail closed). */
+    public bool $webhookSecretPlaintext = false;
 
     /** @var bool Auto-optimize images on upload (recompress to WebP in the pipeline)?
      *            Default FALSE. Like allow_optimize, only effective when the module
@@ -795,7 +800,12 @@ class Claims
         } elseif (is_string($whEv) && trim($whEv) !== '') {
             $c->webhookEvents = array_values(array_filter(array_map('trim', explode(',', strtolower($whEv))), 'strlen'));
         }
-        $c->webhookSecret = (string) ($payload->webhook_secret ?? '');
+        // Only the encrypted form is honoured. A plaintext `webhook_secret` is readable by
+        // whoever holds the token (JWTs are signed, not encrypted), so it is never used.
+        if ($secret !== '' && !empty($payload->webhook_secret_enc) && is_string($payload->webhook_secret_enc)) {
+            $c->webhookSecret = CredentialEncryptor::decryptSecret($payload->webhook_secret_enc, $secret);
+        }
+        $c->webhookSecretPlaintext = !empty($payload->webhook_secret);
         $c->allowAiVision = (bool) ($payload->allow_ai_vision ?? false);
         $c->allowOcr = (bool) ($payload->allow_ocr ?? false);
         $c->allowVirusScan = (bool) ($payload->allow_virus_scan ?? false);

@@ -341,6 +341,7 @@
     "optimize_forbidden": "Không được phép tối ưu hóa.",
     "webhook_not_configured": "Token này chưa cấu hình URL webhook.",
     "webhook_blocked": "URL webhook trỏ tới địa chỉ nội bộ hoặc bị chặn.",
+    "webhook_secret_insecure": "Token này chứa bí mật webhook dạng văn bản thuần, không an toàn. Hãy nhờ quản trị viên nâng cấp trình tạo token.",
     "version_not_found": "Không tìm thấy phiên bản đó.",
     "license_required": "Tính năng này cần giấy phép hợp lệ.",
     "license_expired": "Giấy phép của bạn đã hết hạn nên {module} không dùng được. Hãy gia hạn để tiếp tục sử dụng.",

@@ -292,10 +292,8 @@ _TYPED_KWARG_CASES: list[tuple[dict[str, Any], dict[str, Any]]] = [
      {"upload_collision": "reject", "show_hidden": True, "dedupe_uploads": True}),
     ({"allow_versioning": True, "versioning_max": 10, "versioning_max_mb": 200},
      {"allow_versioning": True, "versioning_max": 10, "versioning_max_mb": 200}),
-    ({"allow_webhooks": True, "webhook_url": "https://hooks.example.com/x", "webhook_events": ["upload"],
-      "webhook_secret": "whsec"},
-     {"allow_webhooks": True, "webhook_url": "https://hooks.example.com/x", "webhook_events": ["upload"],
-      "webhook_secret": "whsec"}),
+    ({"allow_webhooks": True, "webhook_url": "https://hooks.example.com/x", "webhook_events": ["upload"]},
+     {"allow_webhooks": True, "webhook_url": "https://hooks.example.com/x", "webhook_events": ["upload"]}),
     ({"allow_ai_vision": True, "allow_ocr": True, "allow_virus_scan": True, "allow_backup": True,
       "allow_c2pa": True},
      {"allow_ai_vision": True, "allow_ocr": True, "allow_virus_scan": True, "allow_backup": True,
@@ -334,6 +332,19 @@ def test_typed_kwargs_land_in_correspondingly_named_claims(
     c = decode_token(create_token(secret=SECRET, user_id="u", **kwargs))
     for key, value in expected.items():
         assert c.get(key) == value
+
+
+def test_webhook_secret_is_sealed_never_plaintext_in_the_token() -> None:
+    """A JWT is signed, not encrypted: the HMAC key must not be readable by the token holder."""
+    for tok in (
+        create_token(secret=SECRET, user_id="u", webhook_secret="whsec_plain"),
+        create_token(secret=SECRET, user_id="u", claims={"webhook_secret": "whsec_plain"}),
+    ):
+        c = decode_token(tok)
+        assert "webhook_secret" not in c
+        assert "whsec_plain" not in json.dumps(c)
+        assert c["webhook_secret_enc"]
+    assert "webhook_secret_enc" not in decode_token(create_token(secret=SECRET, user_id="u"))
 
 
 def test_pro_hints_is_embedded_only_when_explicitly_set() -> None:

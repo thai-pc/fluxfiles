@@ -341,6 +341,7 @@
     "optimize_forbidden": "A otimização não é permitida.",
     "webhook_not_configured": "Nenhuma URL de webhook configurada neste token.",
     "webhook_blocked": "A URL do webhook aponta para um endereço privado ou bloqueado.",
+    "webhook_secret_insecure": "Este token contém um segredo de webhook em texto simples, o que não é seguro. Peça ao administrador para atualizar o gerador de tokens.",
     "version_not_found": "Essa versão não foi encontrada.",
     "license_required": "Este recurso requer uma licença válida.",
     "license_expired": "Sua licença expirou, portanto {module} está indisponível. Renove-a para continuar usando este recurso.",

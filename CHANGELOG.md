@@ -3,6 +3,23 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security: webhook signing key was readable in the embed token
+
+- **Fixed:** `webhook_secret` was a plaintext JWT claim. Tokens are signed, not encrypted, and the browser holds
+  them, so an end user could base64-decode it, read the HMAC key and forge signed events to the operator's
+  receiver. Every builder (`fluxfiles_token()` / `embed.php`, Node, Python, Laravel, WordPress) now seals the key
+  with AES-256-GCM (same scheme as BYOB credentials, own HKDF key) into the new `webhook_secret_enc` claim; the
+  server decrypts it at runtime (`CredentialEncryptor::encryptSecret()/decryptSecret()`). The `webhook_secret`
+  option and `claims` entry keep working at the call site.
+- **Legacy tokens fail closed:** a token that still carries a plaintext `webhook_secret` is never used to sign. The
+  Webhooks module sends nothing for it (logged) and `POST /api/fm/webhooks/test` returns `400 webhook_secret_insecure`
+  (new i18n key, 16 languages). Upgrade the minter, then **rotate the key**: any existing key has been exposed to
+  every holder of a token that carried it. Receivers' verification scheme is unchanged.
+- Adapter note: the Laravel and WordPress adapters call `CredentialEncryptor::sealWebhookSecret()`, so they need the
+  core release that ships it.
+
 ## [1.0.15] — 2026-11-07
 
 > Released: `core-v1.1.2` (comment-only phpcs annotations). The WordPress changes ship with `wordpress-v1.1.0`, the free WordPress.org build.

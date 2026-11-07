@@ -341,6 +341,7 @@
     "optimize_forbidden": "L’optimisation n’est pas autorisée.",
     "webhook_not_configured": "Aucune URL de webhook n'est configurée sur ce jeton.",
     "webhook_blocked": "L'URL du webhook pointe vers une adresse privée ou bloquée.",
+    "webhook_secret_insecure": "Ce jeton contient un secret de webhook en clair, ce qui n'est pas sûr. Demandez à l'administrateur de mettre à jour le générateur de jetons.",
     "version_not_found": "Cette version est introuvable.",
     "license_required": "Cette fonctionnalité nécessite une licence valide.",
     "license_expired": "Votre licence a expiré, {module} est donc indisponible. Renouvelez-la pour continuer à utiliser cette fonctionnalité.",

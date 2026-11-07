@@ -709,7 +709,7 @@ HTACCESS;
         // Last, so neither `allowed_ext` nor the raw `claims` escape hatch can undo it.
         self::restrictActiveContent($payload, $userId);
 
-        return \FluxFiles\JwtCompat::encode($payload, $secret);
+        return \FluxFiles\JwtCompat::encode(\FluxFiles\CredentialEncryptor::sealWebhookSecret($payload, (string) $secret), $secret);
     }
 
     /**
@@ -1133,6 +1133,8 @@ HTACCESS;
                 ? array_values($overrides['webhook_events'])
                 : (string) $overrides['webhook_events'];
         }
+        // Plaintext here only until sealed into `webhook_secret_enc` just before the token is
+        // encoded (sealWebhookSecret) — a JWT is signed, not encrypted.
         if (!empty($overrides['webhook_secret'])) {
             $payload['webhook_secret'] = (string) $overrides['webhook_secret'];
         }
@@ -1280,7 +1282,7 @@ HTACCESS;
         // Last, so neither `allowed_ext` nor the raw `claims` escape hatch can undo it.
         self::restrictActiveContent($payload, $userId);
 
-        return \FluxFiles\JwtCompat::encode($payload, $secret);
+        return \FluxFiles\JwtCompat::encode(\FluxFiles\CredentialEncryptor::sealWebhookSecret($payload, (string) $secret), $secret);
     }
 
     /**

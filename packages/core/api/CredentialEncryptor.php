@@ -19,6 +19,9 @@ class CredentialEncryptor
     private const NONCE_LEN = 12;
     private const TAG_LEN = 16;
     private const HKDF_INFO = 'fluxfiles-byob-enc';
+    // Separate key for single-string secrets (webhook_secret_enc) so a blob of one
+    // kind can never be replayed as the other.
+    private const HKDF_INFO_SECRET = 'fluxfiles-webhook-secret-enc';
 
     /**
      * Encrypt a disk config array into a base64-encoded blob.
@@ -265,11 +268,68 @@ class CredentialEncryptor
     }
 
     /**
+     * Encrypt a single secret string (the `webhook_secret_enc` claim): a JWT is
+     * signed, not encrypted, so a plaintext secret in it is readable by whoever
+     * holds the token. Same AES-256-GCM blob layout as encrypt(), own HKDF key.
+     */
+    public static function encryptSecret(#[\SensitiveParameter] string $value, #[\SensitiveParameter] string $secret): string
+    {
+        $key = self::deriveKey($secret, self::HKDF_INFO_SECRET);
+        $nonce = random_bytes(self::NONCE_LEN);
+        $tag = '';
+        $ciphertext = openssl_encrypt($value, self::CIPHER, $key, OPENSSL_RAW_DATA, $nonce, $tag, '', self::TAG_LEN);
+        if ($ciphertext === false) {
+            throw new \RuntimeException('Secret encryption failed');
+        }
+        return base64_encode($nonce . $ciphertext . $tag);
+    }
+
+    /**
+     * Minter-side guard: move a plaintext `webhook_secret` (named option or the raw
+     * `claims` escape hatch) into the sealed `webhook_secret_enc` claim so the HMAC key
+     * never travels in readable form. Call on the payload right before encoding it.
+     */
+    public static function sealWebhookSecret(array $payload, #[\SensitiveParameter] string $secret): array
+    {
+        if (isset($payload['webhook_secret'])) {
+            if ((string) $payload['webhook_secret'] !== '') {
+                $payload['webhook_secret_enc'] = self::encryptSecret((string) $payload['webhook_secret'], $secret);
+            }
+            unset($payload['webhook_secret']);
+        }
+        return $payload;
+    }
+
+    /**
+     * @throws ApiException If the blob is malformed or tampered
+     */
+    public static function decryptSecret(string $blob, #[\SensitiveParameter] string $secret): string
+    {
+        $key = self::deriveKey($secret, self::HKDF_INFO_SECRET);
+        $raw = base64_decode($blob, true);
+        if ($raw === false || strlen($raw) < self::NONCE_LEN + self::TAG_LEN + 1) {
+            throw new ApiException('Invalid encrypted secret blob', 401);
+        }
+        $plaintext = openssl_decrypt(
+            substr($raw, self::NONCE_LEN, -self::TAG_LEN),
+            self::CIPHER,
+            $key,
+            OPENSSL_RAW_DATA,
+            substr($raw, 0, self::NONCE_LEN),
+            substr($raw, -self::TAG_LEN)
+        );
+        if ($plaintext === false) {
+            throw new ApiException('Encrypted secret decryption failed — token may be tampered', 401);
+        }
+        return $plaintext;
+    }
+
+    /**
      * Derive an encryption key from the JWT secret using HKDF.
      * Separate from signing key to provide defense-in-depth.
      */
-    private static function deriveKey(#[\SensitiveParameter] string $secret): string
+    private static function deriveKey(#[\SensitiveParameter] string $secret, string $info = self::HKDF_INFO): string
     {
-        return hash_hkdf('sha256', $secret, 32, self::HKDF_INFO);
+        return hash_hkdf('sha256', $secret, 32, $info);
     }
 }

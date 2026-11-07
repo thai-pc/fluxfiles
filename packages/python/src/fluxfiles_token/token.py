@@ -13,7 +13,7 @@ from typing import Any
 
 import jwt
 
-from .crypto import encrypt_byob
+from .crypto import encrypt_byob, encrypt_secret
 from .exceptions import FluxFilesByobError, FluxFilesTokenError
 from .types import ByobDiskConfig
 
@@ -107,6 +107,13 @@ def _sign(payload: dict[str, Any], secret: str) -> str:
     exp = payload.get("exp")
     if isinstance(exp, bool) or not isinstance(exp, int):
         raise FluxFilesTokenError("FluxFiles: `exp` must be an integer unix timestamp.")
+    # A JWT is signed, not encrypted: never ship the webhook HMAC key readable. Seal it
+    # (also when it arrived via the raw `claims` hatch); the server decrypts at runtime.
+    if "webhook_secret" in payload:
+        payload = dict(payload)
+        wh = payload.pop("webhook_secret")
+        if wh:
+            payload["webhook_secret_enc"] = encrypt_secret(str(wh), secret)
     return jwt.encode(payload, secret, algorithm="HS256")
 
 

@@ -341,6 +341,7 @@
     "optimize_forbidden": "最適化は許可されていません。",
     "webhook_not_configured": "このトークンにwebhook URLが設定されていません。",
     "webhook_blocked": "webhook URLがプライベートまたはブロックされたアドレスを指しています。",
+    "webhook_secret_insecure": "このトークンには平文のWebhookシークレットが含まれており、安全ではありません。管理者にトークン発行側の更新を依頼してください。",
     "version_not_found": "そのバージョンが見つかりません。",
     "license_required": "この機能には有効なライセンスが必要です。",
     "license_expired": "ライセンスの有効期限が切れているため、{module} は利用できません。引き続き使用するには更新してください。",

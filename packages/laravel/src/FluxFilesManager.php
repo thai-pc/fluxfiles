@@ -56,7 +56,7 @@ class FluxFilesManager
         }
         self::applyTenantOverrides($payload, $overrides, $roleDefaults);
 
-        return JwtCompat::encode($payload, $secret);
+        return JwtCompat::encode(\FluxFiles\CredentialEncryptor::sealWebhookSecret($payload, (string) $secret), $secret);
     }
 
     /**
@@ -404,6 +404,8 @@ class FluxFilesManager
                 ? array_values($overrides['webhook_events'])
                 : (string) $overrides['webhook_events'];
         }
+        // Plaintext here only until sealed into `webhook_secret_enc` just before the token is
+        // encoded (sealWebhookSecret) — a JWT is signed, not encrypted.
         if (!empty($overrides['webhook_secret'])) {
             $payload['webhook_secret'] = (string) $overrides['webhook_secret'];
         }
@@ -752,7 +754,7 @@ class FluxFilesManager
         }
         self::applyTenantOverrides($payload, $overrides, $roleDefaults);
 
-        return JwtCompat::encode($payload, $secret);
+        return JwtCompat::encode(\FluxFiles\CredentialEncryptor::sealWebhookSecret($payload, (string) $secret), $secret);
     }
 
     /**

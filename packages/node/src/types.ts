@@ -249,7 +249,8 @@ export interface BaseTokenOptions {
   webhookUrl?: string;
   /** Only these event names fire the webhook (e.g. `['upload','delete']`). Empty = all. */
   webhookEvents?: string[];
-  /** HMAC signing secret for the payload (`X-FluxFiles-Signature`). Empty = server secret. */
+  /** HMAC signing secret for the payload (`X-FluxFiles-Signature`). Sealed into the token
+   *  (`webhook_secret_enc`, AES-GCM) — never readable by the token holder. Empty = derived key. */
   webhookSecret?: string;
   /** Allow downloading a multi-file/-folder selection as a zip (POST /api/fm/zip). Default true. */
   allowZip?: boolean;

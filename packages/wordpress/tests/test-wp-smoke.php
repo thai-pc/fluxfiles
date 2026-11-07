@@ -290,7 +290,8 @@ test('generateToken forwards webhook config claims, not just the gate', function
     assertEqual(true, $p->allow_webhooks ?? null, 'webhooks gate');
     assertEqual('https://hooks.acme.com/flux', $p->webhook_url ?? '', 'webhook_url');
     assertEqual(['upload', 'delete'], (array) ($p->webhook_events ?? []), 'webhook_events');
-    assertEqual('whsec_abc123', $p->webhook_secret ?? '', 'webhook_secret');
+    assertEqual(false, isset($p->webhook_secret), 'webhook_secret is NOT readable in the token');
+    assertEqual('whsec_abc123', \FluxFiles\CredentialEncryptor::decryptSecret((string) ($p->webhook_secret_enc ?? ''), $secret), 'webhook_secret sealed as webhook_secret_enc');
 
     // A settings field naturally holds a comma-separated string; the core normalizes it.
     $csv = \FluxFiles\JwtCompat::decode(
