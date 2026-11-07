@@ -436,7 +436,8 @@ def test_decode_token_does_not_require_the_secret() -> None:
 def test_webhook_secret_zero_is_sealed_empty_is_unset() -> None:
     zero = decode_token(create_token(secret=SECRET, user_id="u", webhook_secret="0"))
     assert "webhook_secret" not in zero and zero["webhook_secret_enc"]
-    assert "webhook_secret_enc" not in decode_token(create_token(secret=SECRET, user_id="u", webhook_secret=""))
+    empty = decode_token(create_token(secret=SECRET, user_id="u", webhook_secret=""))
+    assert "webhook_secret_enc" not in empty
 
 
 def test_webhook_secret_decrypts_committed_cross_language_vector() -> None:
