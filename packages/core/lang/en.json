@@ -493,6 +493,7 @@
       "share_download": "Downloaded via share link",
       "disk_doctor": "Storage diagnostics run",
       "fixity_mismatch": "Unexplained file change",
+      "fixity_rebaseline": "Integrity baseline reset",
       "retention_run": "Retention run",
       "retention_trash": "Trashed by retention",
       "retention_delete": "Deleted by retention"

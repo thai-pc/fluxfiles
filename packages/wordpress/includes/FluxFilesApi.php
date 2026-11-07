@@ -2820,7 +2820,12 @@ class FluxFilesApi
                 ? $this->metaRepo->readAuditWindow($disk, $since)
                 : $this->metaRepo->readAudit($disk);
             if ($module instanceof \FluxFiles\FixityProviderInterface) {
-                $report = $module->runFixityCheck($fm, $disk, $auditRows);
+                // Optional 5th argument (not on the interface): see core's fixity route.
+                $rebaseline = ($body['rebaseline'] ?? false) === true;
+                if ($rebaseline && (new \ReflectionMethod($module, 'runFixityCheck'))->getNumberOfParameters() < 5) {
+                    throw new ApiException('The audit-export module needs an update', 501, 'module_update_required', ['module' => 'audit-export']);
+                }
+                $report = $module->runFixityCheck($fm, $disk, $auditRows, 1073741824, $rebaseline);
             } else {
                 throw new ApiException('The audit-export module needs an update', 501, 'module_update_required', ['module' => 'audit-export']);
             }
@@ -2829,8 +2834,13 @@ class FluxFilesApi
                     $this->logAuditQuiet($claims, 'fixity_mismatch', $disk, $claims->scopePath((string) $key), $what);
                 }
             }
-            $this->logAuditQuiet($claims, 'fixity_check', $disk, '', sprintf('checked=%d unexplained=%d',
-                (int) $report['checked'], count($report['changed_unexplained']) + count($report['missing_unexplained'])));
+            if (!empty($report['rebaselined'])) {
+                $this->logAuditQuiet($claims, 'fixity_rebaseline', $disk, $claims->scopePath(''), (string) ($report['baseline_invalid_reason'] ?? ''));
+            }
+            // The per-run anchor (`mac=` ties the next run's manifest to this one).
+            $this->logAuditQuiet($claims, 'fixity_check', $disk, $claims->scopePath(''), sprintf('checked=%d unexplained=%d%s',
+                (int) $report['checked'], count($report['changed_unexplained']) + count($report['missing_unexplained']),
+                preg_match('/^[0-9a-f]{64}$/', (string) ($report['baseline_mac'] ?? '')) ? ' mac=' . $report['baseline_mac'] : ''));
             $this->dispatchWebhook($claims, 'fixity_check', ['disk' => $disk, 'path' => '', 'name' => '']);
             return $this->ok($report);
         } catch (ApiException $e) {

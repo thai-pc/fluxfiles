@@ -493,6 +493,7 @@
       "share_download": "शेयर लिंक से डाउनलोड",
       "disk_doctor": "स्टोरेज जाँच चलाई गई",
       "fixity_mismatch": "अस्पष्ट फ़ाइल बदलाव",
+      "fixity_rebaseline": "अखंडता बेसलाइन रीसेट",
       "retention_run": "प्रतिधारण रन",
       "retention_trash": "प्रतिधारण से ट्रैश",
       "retention_delete": "प्रतिधारण से हटाई गई"

@@ -493,6 +493,7 @@
       "share_download": "Tải qua liên kết chia sẻ",
       "disk_doctor": "Chạy chẩn đoán lưu trữ",
       "fixity_mismatch": "Thay đổi tệp bất thường",
+      "fixity_rebaseline": "Đặt lại đường cơ sở toàn vẹn",
       "retention_run": "Chạy lưu giữ dữ liệu",
       "retention_trash": "Chuyển vào thùng rác theo lưu giữ",
       "retention_delete": "Xóa theo lưu giữ"

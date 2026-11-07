@@ -493,6 +493,7 @@
       "share_download": "Скачано по ссылке общего доступа",
       "disk_doctor": "Диагностика хранилища",
       "fixity_mismatch": "Необъяснимое изменение файла",
+      "fixity_rebaseline": "Базовая линия целостности сброшена",
       "retention_run": "Запуск хранения",
       "retention_trash": "В корзину по хранению",
       "retention_delete": "Удалён по хранению"

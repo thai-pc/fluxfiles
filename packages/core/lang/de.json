@@ -493,6 +493,7 @@
       "share_download": "Über Freigabelink heruntergeladen",
       "disk_doctor": "Speicherdiagnose ausgeführt",
       "fixity_mismatch": "Unerklärte Dateiänderung",
+      "fixity_rebaseline": "Integritäts-Baseline zurückgesetzt",
       "retention_run": "Aufbewahrungslauf",
       "retention_trash": "Durch Aufbewahrung im Papierkorb",
       "retention_delete": "Durch Aufbewahrung gelöscht"

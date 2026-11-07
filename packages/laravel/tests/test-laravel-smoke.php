@@ -1497,6 +1497,17 @@ test('retention/fixity/verify gate order without modules: perm, disk, scope, the
     }
 });
 
+
+test('fixity host wiring: anchor row (scope key + mac=), fixity_rebaseline, 5th-arg reflection 501', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../src/Http/Controllers/FluxFilesController.php');
+    $pos = strpos($src, 'function fixityCheck(');
+    assertTrue($pos !== false, 'handler present');
+    $h = substr($src, $pos, 4500);
+    foreach (["'rebaseline'", 'ReflectionMethod', 'getNumberOfParameters() < 5', "'module_update_required'", "'fixity_rebaseline'", "'fixity_check'", "scopePath('')", "' mac='"] as $needle) {
+        assertTrue(strpos($h, $needle) !== false, "contains {$needle}");
+    }
+});
+
 test('N11: renaming a missing file is a 404 not_found envelope, not a 500 (core parity)', function () {
     $ctrl = freshController();
     $hdr = bearer(['perms' => ['read', 'write'], 'prefix' => 'rn-missing', 'rate_write' => 50]);

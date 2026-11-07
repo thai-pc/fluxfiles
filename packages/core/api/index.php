@@ -1172,7 +1172,20 @@ function routeRequest(
             $since !== null && method_exists($metaRepo, 'readAuditWindow')
                 ? $metaRepo->readAuditWindow($disk, $since)
                 : $metaRepo->readAudit($disk);
-        $report = $module->runFixityCheck($fm, $disk, $auditRows, 1024 * 1024 * 1024);
+        // `rebaseline` is a 5th, optional argument (the interface keeps its 4-arg shape so an
+        // older module keeps loading); a module that predates it must say so, not ignore it.
+        $rebaseline = ($body['rebaseline'] ?? false) === true;
+        if ($rebaseline && (new \ReflectionMethod($module, 'runFixityCheck'))->getNumberOfParameters() < 5) {
+            throw new ApiException("The 'audit-export' module must be updated", 501, 'module_update_required', ['module' => 'audit-export']);
+        }
+        $report = $module->runFixityCheck($fm, $disk, $auditRows, 1024 * 1024 * 1024, $rebaseline);
+        if (!empty($report['rebaselined'])) {
+            // Wiping an invalid baseline discards evidence: always leave a trace.
+            try {
+                $auditLog->log($claims->userId, 'fixity_rebaseline', $disk, $claims->scopePath(''), null, null, (string) ($report['baseline_invalid_reason'] ?? ''));
+            } catch (\Throwable $ignored) {
+            }
+        }
         foreach (['changed_unexplained' => 'changed', 'missing_unexplained' => 'missing'] as $list => $what) {
             foreach ($report[$list] as $key) {
                 try {

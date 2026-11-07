@@ -493,6 +493,7 @@
       "share_download": "Scaricato tramite link di condivisione",
       "disk_doctor": "Diagnostica dello storage",
       "fixity_mismatch": "Modifica file inspiegata",
+      "fixity_rebaseline": "Baseline di integrità reimpostata",
       "retention_run": "Esecuzione conservazione",
       "retention_trash": "Nel cestino per conservazione",
       "retention_delete": "Eliminato per conservazione"

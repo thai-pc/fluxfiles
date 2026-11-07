@@ -493,6 +493,7 @@
       "share_download": "通过共享链接下载",
       "disk_doctor": "运行存储诊断",
       "fixity_mismatch": "无法解释的文件更改",
+      "fixity_rebaseline": "完整性基线已重置",
       "retention_run": "执行保留策略",
       "retention_trash": "因保留策略移至回收站",
       "retention_delete": "因保留策略删除"
