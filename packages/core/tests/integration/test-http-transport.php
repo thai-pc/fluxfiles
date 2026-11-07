@@ -53,6 +53,10 @@ file_put_contents($docroot . '/index.php', <<<'PHP'
 <?php
 $p = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($p === '/redirect') { header('Location: /echo', true, 302); exit; }
+if ($p === '/chunked') { while (@ob_end_clean()) {} for ($i = 0; $i < 40; $i++) { echo str_repeat('x', 65536); flush(); } exit; }
+if ($p === '/bigerr') { http_response_code(500); header('Content-Length: 3145728'); echo str_repeat('x', 3145728); exit; }
+if ($p === '/bigredir') { header('Location: /echo', true, 302); header('Content-Length: 3145728'); echo str_repeat('x', 3145728); exit; }
+if ($p === '/sized') { header('Content-Length: 3145728'); echo str_repeat('x', 3145728); exit; }
 header('X-Probe: yes');
 header('Content-Type: application/json');
 http_response_code($p === '/teapot' ? 418 : 200);
@@ -94,6 +98,93 @@ test('redirects are NOT followed', function () use ($base) {
     $r = (new CurlTransport())->request('GET', "{$base}/redirect", [], null, 5);
     assertEqual(302, $r['status']);
     assertEqual('/echo', $r['headers']['location'] ?? null);
+});
+
+test('a body past the cap (no Content-Length, streamed) fails with status 0 and a clear error', function () use ($base) {
+    $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/chunked", [], null, 10);
+    assertEqual(0, $r['status']);
+    assertEqual('', $r['body']);
+    assertTrue(str_contains($r['error'] ?? '', 'response too large'), 'error: ' . ($r['error'] ?? ''));
+});
+
+test('an oversized declared Content-Length is refused before the body is read', function () use ($base) {
+    $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/sized", [], null, 10);
+    assertEqual(0, $r['status']);
+    assertTrue(str_contains($r['error'] ?? '', 'response too large'), 'error: ' . ($r['error'] ?? ''));
+});
+
+test('HEAD with a large Content-Length is not an oversize error', function () use ($base) {
+    $r = (new CurlTransport(5, 1048576))->request('HEAD', "{$base}/sized", [], null, 10);
+    assertEqual(200, $r['status']);
+    assertEqual('3145728', $r['headers']['content-length'] ?? null);
+    assertEqual('', $r['body']);
+});
+
+test('a non-2xx answer with a huge body keeps status + headers (body dropped), redirects stay visible', function () use ($base) {
+    $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/bigerr", [], null, 10);
+    assertEqual(500, $r['status']);
+    assertEqual('', $r['body']);
+    $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/bigredir", [], null, 10);
+    assertEqual(302, $r['status']);
+    assertEqual('/echo', $r['headers']['location'] ?? null);
+});
+
+test('a body under the cap passes; the default cap is 8 MB', function () use ($base) {
+    $r = (new CurlTransport(5, 4 * 1048576))->request('GET', "{$base}/sized", [], null, 10);
+    assertEqual(200, $r['status']);
+    assertEqual(3145728, strlen($r['body']));
+    assertEqual(8 * 1024 * 1024, CurlTransport::DEFAULT_MAX_BYTES);
+});
+
+test('OidcDiscovery::forgetJwks drops only that URI\'s cached JWKS', function () {
+    $dir = sys_get_temp_dir() . '/ff-oidc-' . uniqid();
+    $ft = new FakeTransport();
+    $ft->queue = [
+        ['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"a"}]}'],
+        ['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"b"}]}'],
+    ];
+    $d = new OidcDiscovery($dir, $ft);
+    assertEqual('a', $d->jwks('https://idp/jwks')['keys'][0]['kid']);
+    assertEqual('a', $d->jwks('https://idp/jwks')['keys'][0]['kid'], 'cached');
+    $d->forgetJwks('https://idp/jwks');
+    assertEqual('b', $d->jwks('https://idp/jwks')['keys'][0]['kid'], 're-fetched after forget');
+    $d->forgetJwks('https://never/cached'); // no-op, no warning
+    $ft->queue = [['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"c"}]}']];
+    $d->forgetJwks(); // no argument: every cached key set
+    assertEqual('c', $d->jwks('https://idp/jwks')['keys'][0]['kid'], 're-fetched after forget-all');
+});
+
+test('OidcDiscovery requires https for discovery and jwks_uri (http only for loopback), also after forgetJwks', function () {
+    $dir = sys_get_temp_dir() . '/ff-oidc-' . uniqid();
+    $ft = new FakeTransport();
+    $d = new OidcDiscovery($dir, $ft);
+    foreach (['http://idp.example.com/jwks', 'ftp://idp/jwks', '//idp/jwks'] as $u) {
+        try { $d->jwks($u); throw new \RuntimeException("accepted {$u}"); }
+        catch (\FluxFiles\ApiException $e) { assertEqual('sso_misconfigured', $e->getErrorCode(), $u); }
+    }
+    try { $d->discover('http://idp.example.com'); throw new \RuntimeException('accepted http issuer'); }
+    catch (\FluxFiles\ApiException $e) { assertEqual('sso_misconfigured', $e->getErrorCode()); }
+    assertEqual([], $ft->calls, 'nothing was fetched');
+    foreach (['http://localhost:9/jwks', 'http://127.0.0.1/jwks', 'http://[::1]/jwks', 'https://idp.example.com/jwks'] as $u) {
+        $ft->queue = [['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"k"}]}']];
+        $d->forgetJwks();
+        assertEqual('k', $d->jwks($u)['keys'][0]['kid'], $u);
+    }
+    $d->forgetJwks();
+    try { $d->jwks('http://evil.example/jwks'); throw new \RuntimeException('accepted after forget'); }
+    catch (\FluxFiles\ApiException $e) { assertEqual('sso_misconfigured', $e->getErrorCode()); }
+
+    // Endpoints named by the discovery document must be https too.
+    foreach (['token_endpoint', 'authorization_endpoint', 'jwks_uri', 'userinfo_endpoint', 'end_session_endpoint'] as $bad) {
+        $doc = ['authorization_endpoint' => 'https://idp/a', 'token_endpoint' => 'https://idp/t', 'jwks_uri' => 'https://idp/j', 'issuer' => 'https://idp'];
+        $doc[$bad] = 'http://idp.example.com/x';
+        $ft->queue = [['status' => 200, 'headers' => [], 'body' => json_encode($doc)]];
+        try { (new OidcDiscovery(sys_get_temp_dir() . '/ff-oidc-' . uniqid(), $ft))->discover('https://idp'); throw new \RuntimeException("accepted http {$bad}"); }
+        catch (\FluxFiles\ApiException $e) { assertEqual('sso_misconfigured', $e->getErrorCode(), $bad); }
+    }
+    $ok = ['authorization_endpoint' => 'https://idp/a', 'token_endpoint' => 'https://idp/t', 'jwks_uri' => 'https://idp/j', 'issuer' => 'https://idp', 'userinfo_endpoint' => 'http://localhost:8080/u'];
+    $ft->queue = [['status' => 200, 'headers' => [], 'body' => json_encode($ok)]];
+    assertEqual('https://idp/t', (new OidcDiscovery(sys_get_temp_dir() . '/ff-oidc-' . uniqid(), $ft))->discover('https://idp')['token_endpoint'], 'https + loopback accepted');
 });
 
 test('a network failure never throws: status 0, empty body, an error string', function () {

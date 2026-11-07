@@ -17,6 +17,8 @@ final class OidcDiscovery
     private const CONNECT_TIMEOUT = 5;
     private const TIMEOUT = 10;
     private const CACHE_TTL = 3600;
+    /** Discovery documents and JWKS are a few KB; 1 MB is generous. */
+    private const MAX_BYTES = 1048576;
 
     private string $cacheDir;
 
@@ -25,7 +27,7 @@ final class OidcDiscovery
     public function __construct(string $cacheDir, ?HttpTransportInterface $transport = null)
     {
         $this->cacheDir = rtrim($cacheDir, '/');
-        $this->transport = $transport ?? new CurlTransport(self::CONNECT_TIMEOUT);
+        $this->transport = $transport ?? new CurlTransport(self::CONNECT_TIMEOUT, self::MAX_BYTES);
     }
 
     /**
@@ -35,6 +37,7 @@ final class OidcDiscovery
     {
         $cached = $this->readCache('discovery-' . $this->cacheKey($issuer));
         if ($cached !== null) {
+            $this->assertEndpointsSecure($cached); // a cache written before this rule existed
             return $cached;
         }
 
@@ -45,6 +48,7 @@ final class OidcDiscovery
             }
         }
 
+        $this->assertEndpointsSecure($doc);
         $this->writeCache('discovery-' . $this->cacheKey($issuer), $doc);
         return $doc;
     }
@@ -66,8 +70,56 @@ final class OidcDiscovery
         return $keys;
     }
 
+    /**
+     * Drop cached JWKS (e.g. after a signature failure caused by a rotated key) so the
+     * next jwks() call re-fetches. With a URI: just that key set. Without: every cached
+     * key set in this cache directory (discovery documents are kept).
+     */
+    public function forgetJwks(?string $jwksUri = null): void
+    {
+        if ($jwksUri !== null) {
+            @unlink($this->cacheDir . '/jwks-' . $this->cacheKey($jwksUri) . '.json');
+            return;
+        }
+        foreach (@scandir($this->cacheDir) ?: [] as $file) {
+            if (str_starts_with($file, 'jwks-') && str_ends_with($file, '.json')) {
+                @unlink($this->cacheDir . '/' . $file);
+            }
+        }
+    }
+
+    /**
+     * Discovery documents and key sets are trust anchors for id_token verification, so
+     * they travel over TLS. Plain http is accepted only for a loopback host (local dev).
+     * Applied in fetchJson(), i.e. to the issuer's discovery URL and to jwks_uri on both
+     * the normal fetch and the forget/refetch path.
+     */
+    private function assertEndpointsSecure(array $doc): void
+    {
+        foreach (['authorization_endpoint', 'token_endpoint', 'jwks_uri', 'userinfo_endpoint', 'end_session_endpoint'] as $field) {
+            if (isset($doc[$field]) && $doc[$field] !== '') {
+                $this->assertSecureUrl(is_string($doc[$field]) ? $doc[$field] : '');
+            }
+        }
+    }
+
+    private function assertSecureUrl(string $url): void
+    {
+        $scheme = strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? ''));
+        if ($scheme === 'https') {
+            return;
+        }
+        $host = strtolower(trim((string) (parse_url($url, PHP_URL_HOST) ?? ''), '[]'));
+        if ($scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            return;
+        }
+        // A configuration problem, not an outage: reuse the existing localised code.
+        throw new ApiException('The identity provider URL must use https', 500, 'sso_misconfigured');
+    }
+
     private function fetchJson(string $url): array
     {
+        $this->assertSecureUrl($url);
         $res = $this->transport->request('GET', $url, ['Accept: application/json'], null, self::TIMEOUT);
         $status = $res['status'];
         $body = $res['body'];

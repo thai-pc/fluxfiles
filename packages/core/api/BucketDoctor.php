@@ -25,6 +25,9 @@ class BucketDoctor
 
     private DiskManager $disks;
 
+    /** A presign probe answer is tiny; 1 MB is generous. */
+    private const PROBE_MAX_BYTES = 1048576;
+
     private HttpTransportInterface $transport;
 
     public function __construct(DiskManager $disks, ?HttpTransportInterface $transport = null)
@@ -332,9 +335,12 @@ class BucketDoctor
         }
 
         $ch = curl_init($url);
+        $received = '';
+        $over = false;
         try {
             $opts = [
-                CURLOPT_RETURNTRANSFER => true,
+                // The endpoint is tenant-supplied (BYOB): cap what it can make us buffer.
+                CURLOPT_WRITEFUNCTION  => CurlTransport::cappedWriter($received, $over, self::PROBE_MAX_BYTES),
                 CURLOPT_TIMEOUT        => 15,
                 CURLOPT_FOLLOWLOCATION => false,
             ];
@@ -363,8 +369,11 @@ class BucketDoctor
                 ) ? [$pinnedIp] : null;
                 SsrfGuard::assertConnectedIpSafe($ch, $allowance);
             }
+            if ($over) {
+                return [0, ''];
+            }
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            return [$code, is_string($body) ? $body : ''];
+            return [$code, $body === false ? '' : $received];
         } finally {
         }
     }
