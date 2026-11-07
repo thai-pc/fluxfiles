@@ -26,9 +26,16 @@ final class ProDownload
     /** The modules the zip carries; a licence needs ANY of them (mirrors the update server's $BUNDLES). */
     public const BUNDLE_MODULES = ['share', 'intake'];
 
-    /** Link lifetime on the success page (matches the /claim window) and in the e-mail. */
-    public const TTL_CLAIM = 3600;
-    public const TTL_MAIL = 604800;
+    /**
+     * Requested link lifetime (also the /claim window). The e-mail does NOT carry a link:
+     * it points at the landing /download page, where the buyer pastes the key for a fresh one.
+     */
+    public const TTL_LINK = 3600;
+    /** A cached link is reused only while it still has this long to live. */
+    public const MIN_LEFT = 600;
+    /** /claim must not hold a licence worker for long. */
+    public const TIMEOUT_CLAIM = 3;
+    public const TIMEOUT_DOWNLOAD = 8;
 
     /** @param array<string,mixed> $record a LicenseStore row */
     public static function eligible(array $record): bool
@@ -42,7 +49,7 @@ final class ProDownload
      * @param null|callable(string,array<int,string>):array{0:int,1:string} $http test seam: (url, headers) => [status, body]
      * @return array{url:string,version:string,expires_in:int}|null
      */
-    public static function fetch(array $record, int $ttl, ?callable $http = null, ?string $base = null): ?array
+    public static function fetch(array $record, int $ttl, ?callable $http = null, ?string $base = null, int $timeout = self::TIMEOUT_DOWNLOAD): ?array
     {
         $base = rtrim($base ?? (string) getenv('FLUXFILES_PRO_UPDATE_URL'), '/');
         $key = (string) ($record['license_key'] ?? '');
@@ -53,7 +60,7 @@ final class ProDownload
         $url = $base . '/update/fluxfiles-pro?install=1&link_ttl=' . $ttl;
         $headers = ['Authorization: Bearer ' . $key, 'Accept: text/plain'];
         try {
-            [$code, $body] = $http !== null ? $http($url, $headers) : self::get($url, $headers);
+            [$code, $body] = $http !== null ? $http($url, $headers) : self::get($url, $headers, $timeout);
         } catch (\Throwable) {
             return null;
         }
@@ -77,7 +84,41 @@ final class ProDownload
         if ($dl === '' || !self::safeUrl($dl) || !str_contains($dl, '.zip')) {
             return null;
         }
-        return ['url' => $dl, 'version' => (string) ($payload['version'] ?? ''), 'expires_in' => $ttl];
+        return ['url' => $dl, 'version' => (string) ($payload['version'] ?? ''), 'expires_in' => self::secondsLeft($dl, $ttl)];
+    }
+
+    /**
+     * Seconds the link is really good for: the secure_link `expires` parameter, never the
+     * TTL we merely asked for (a server that ignores link_ttl signs whatever it likes).
+     * 0 when the URL carries no expiry (it does not expire, or we cannot tell).
+     */
+    public static function secondsLeft(string $url, int $fallback = 0, ?int $now = null): int
+    {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
+        if (isset($q['expires']) && ctype_digit((string) $q['expires'])) {
+            return max(0, (int) $q['expires'] - ($now ?? time()));
+        }
+        return $fallback;
+    }
+
+    /**
+     * fetch() behind a per-licence cache in the licence DB, so /claim polling, reloads and
+     * /pro-download retries do not each cost an update-server round trip.
+     *
+     * @param array<string,mixed> $record
+     * @return array{url:string,version:string,expires_in:int}|null
+     */
+    public static function linkFor(array $record, \FluxFiles\LicenseServer\LicenseStore $store, int $timeout, ?callable $http = null, ?string $base = null): ?array
+    {
+        $jti = (string) ($record['jti'] ?? '');
+        if ($jti !== '' && ($c = $store->cachedLink($jti, self::MIN_LEFT)) !== null) {
+            return ['url' => $c['url'], 'version' => $c['version'], 'expires_in' => max(0, $c['expires_at'] - time())];
+        }
+        $d = self::fetch($record, self::TTL_LINK, $http, $base, $timeout);
+        if ($d !== null && $jti !== '' && $d['expires_in'] > self::MIN_LEFT) {
+            $store->cacheLink($jti, $d['url'], $d['version'], time() + $d['expires_in']);
+        }
+        return $d;
     }
 
     /** https, or plain http to the local machine only (tests). */
@@ -93,15 +134,15 @@ final class ProDownload
     }
 
     /** @param array<int,string> $headers @return array{0:int,1:string} */
-    private static function get(string $url, array $headers): array
+    private static function get(string $url, array $headers, int $timeout): array
     {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_CONNECTTIMEOUT => 3,
-            CURLOPT_TIMEOUT => 8,
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_TIMEOUT => $timeout,
         ]);
         $body = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);

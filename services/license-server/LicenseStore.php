@@ -58,6 +58,10 @@ final class LicenseStore
             status      TEXT DEFAULT \'active\',
             created_at  INTEGER
         )');
+        // Public /pro-download throttling and the per-licence download-link cache (ProDownload).
+        // Small, short-lived rows; pruned on write.
+        $this->db->exec('CREATE TABLE IF NOT EXISTS rate_hits (bucket TEXT NOT NULL, win INTEGER NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (bucket, win))');
+        $this->db->exec('CREATE TABLE IF NOT EXISTS dl_cache (jti TEXT PRIMARY KEY, url TEXT NOT NULL, version TEXT, expires_at INTEGER NOT NULL)');
         $this->db->exec('CREATE INDEX IF NOT EXISTS idx_email ON licenses(email)');
         $this->db->exec('CREATE INDEX IF NOT EXISTS idx_order ON licenses(gateway, order_id)');
 
@@ -182,6 +186,53 @@ final class LicenseStore
             }
         }
         return $this->findByJti($row['jti']) ?? $row;
+    }
+
+    /** @return array<string,mixed>|null */
+    public function findByKey(string $key): ?array
+    {
+        if ($key === '' || strlen($key) > 4096) {
+            return null;
+        }
+        $s = $this->db->prepare('SELECT * FROM licenses WHERE license_key = ?');
+        $s->execute([$key]);
+        $r = $s->fetch();
+        return $r === false ? null : $r;
+    }
+
+    /**
+     * Fixed-window counter. Counts the call, returns true while it is within $limit per
+     * $periodSec for $bucket (e.g. "ip:1.2.3.4"). Atomic enough for a throttle: one UPSERT.
+     */
+    public function rateHit(string $bucket, int $periodSec, int $limit, ?int $now = null): bool
+    {
+        $now ??= time();
+        $win = intdiv($now, max(1, $periodSec));
+        $this->db->prepare('INSERT INTO rate_hits (bucket, win, n) VALUES (?, ?, 1) ON CONFLICT(bucket, win) DO UPDATE SET n = n + 1')->execute([$bucket, $win]);
+        $s = $this->db->prepare('SELECT n FROM rate_hits WHERE bucket = ? AND win = ?');
+        $s->execute([$bucket, $win]);
+        if (random_int(1, 50) === 1) {
+            // prune windows older than an hour
+            $this->db->prepare('DELETE FROM rate_hits WHERE win < ?')->execute([intdiv($now - 3600, max(1, $periodSec))]);
+        }
+        return (int) $s->fetchColumn() <= $limit;
+    }
+
+    /** A cached download link for this licence that is still valid for at least $minLeft seconds. @return array{url:string,version:string,expires_at:int}|null */
+    public function cachedLink(string $jti, int $minLeft, ?int $now = null): ?array
+    {
+        $now ??= time();
+        $s = $this->db->prepare('SELECT url, version, expires_at FROM dl_cache WHERE jti = ? AND expires_at >= ?');
+        $s->execute([$jti, $now + $minLeft]);
+        $r = $s->fetch();
+        return $r === false ? null : ['url' => (string) $r['url'], 'version' => (string) $r['version'], 'expires_at' => (int) $r['expires_at']];
+    }
+
+    public function cacheLink(string $jti, string $url, string $version, int $expiresAt): void
+    {
+        $this->db->prepare('INSERT INTO dl_cache (jti, url, version, expires_at) VALUES (?, ?, ?, ?) ON CONFLICT(jti) DO UPDATE SET url = excluded.url, version = excluded.version, expires_at = excluded.expires_at')
+            ->execute([$jti, $url, $version, $expiresAt]);
+        $this->db->prepare('DELETE FROM dl_cache WHERE expires_at < ?')->execute([time()]);
     }
 
     /** @return array<string,mixed>|null */

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluxFiles\LicenseServer;
 
+require_once __DIR__ . '/ProDownload.php';
+
 /**
  * Delivers a freshly issued licence key to the buyer.
  *
@@ -149,13 +151,13 @@ final class LicenseMailer
             $expiryLine = "Updates and priority support are included until: {$date}.\n\n"
                 . 'Your installed paid modules keep running after that date; renewal only restores new releases and support.';
         }
-        // First-install link for the WordPress Pro plugin zip (ProDownload; absent = no block).
-        $dl = $record['pro_download'] ?? null;
+        // WordPress Pro plugin zip: no bearer URL in the mail. The landing /download page takes
+        // the key and hands out a fresh short-lived link (nothing to expire in the inbox).
         $wpBlock = '';
-        if (is_array($dl) && is_string($dl['url'] ?? null) && str_starts_with($dl['url'], 'http')) {
-            $days = max(1, (int) round(((int) ($dl['expires_in'] ?? 0)) / 86400));
-            $wpBlock = "WordPress: download the FluxFiles Pro plugin (valid for about {$days} day" . ($days === 1 ? '' : 's') . "):\n\n"
-                . "    {$dl['url']}\n\n"
+        $origin = rtrim((string) getenv('FLUXFILES_LANDING_ORIGIN'), '/');
+        if ($origin !== '' && str_starts_with($origin, 'https://') && ProDownload::eligible($record)) {
+            $wpBlock = "WordPress: get the FluxFiles Pro plugin here (paste the key above):\n\n"
+                . "    {$origin}/download\n\n"
                 . "Upload it in Plugins > Add New > Upload Plugin (the free FluxFiles plugin must be\nactive), then paste the key in Settings > FluxFiles. Later updates arrive in wp-admin.\n\n";
         }
         $thanks = $isRenewal

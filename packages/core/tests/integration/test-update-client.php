@@ -332,6 +332,11 @@ test('bundle: a plain module id behaves exactly as before, and the bundle id is 
     assertEqual(false, fluxfiles_entitled('fluxfiles-pro', $bundleLm(['share']), []), 'no bundle map -> plain licensed(), false for a bundle id');
 });
 
+test('bundle map: the example server and the licence server ProDownload list the same modules', function () {
+    require_once __DIR__ . '/../../../../services/license-server/ProDownload.php';
+    assertEqual(fluxfiles_bundles()['fluxfiles-pro'], \FluxFiles\LicenseServer\ProDownload::BUNDLE_MODULES);
+});
+
 test('bundle: install mode serves the newest release regardless of the (unreported) core', function () {
     $e = ['version' => '1.1.0', 'zip' => 'p-1.1.0.zip', 'sha256' => str_repeat('b', 64), 'requires_core' => '^1.1.3'];
     assertEqual(null, fluxfiles_pick_release($e, null), 'default: unreported core = 1.0.3, floor above it');

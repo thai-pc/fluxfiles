@@ -911,7 +911,7 @@ use FluxFiles\LicenseServer\ProDownload;
 
 $fakeManifest = static function (array $over = []): string {
     $u = static fn (string $x): string => rtrim(strtr(base64_encode($x), '+/', '-_'), '=');
-    $pl = $over + ['module' => 'fluxfiles-pro', 'version' => '1.0.0', 'url' => 'https://upd.example/dl/m/fluxfiles-pro-1.0.0.zip?md5=x&expires=9', 'sha256' => str_repeat('a', 64)];
+    $pl = $over + ['module' => 'fluxfiles-pro', 'version' => '1.0.0', 'url' => 'https://upd.example/dl/m/fluxfiles-pro-1.0.0.zip?md5=x&expires=' . (time() + 1800), 'sha256' => str_repeat('a', 64)];
     return $u('{"alg":"Ed25519","kid":"r1"}') . '.' . $u((string) json_encode($pl)) . '.' . $u('sig');
 };
 
@@ -929,9 +929,9 @@ test('pro download: licence goes in the Authorization header only, link comes ba
     $out = ProDownload::fetch($rec, 10, function (string $url, array $h) use (&$seen, $fakeManifest) { $seen = [$url, $h]; return [200, $fakeManifest()]; }, 'https://upd.example');
     assertTrue($out !== null && str_contains($out['url'], 'fluxfiles-pro-1.0.0.zip'), 'url returned');
     assertEqual('1.0.0', $out['version']);
-    assertEqual(300, $out['expires_in'], 'ttl clamped up to 5 min');
+    assertTrue($out['expires_in'] > 1790 && $out['expires_in'] <= 1800, 'expires_in comes from the URL expiry, not the requested ttl: ' . $out['expires_in']);
     assertTrue(!str_contains($seen[0], (string) $rec['license_key']), 'key not in URL');
-    assertTrue(str_contains($seen[0], '/update/fluxfiles-pro?install=1&link_ttl=300'), 'request shape');
+    assertTrue(str_contains($seen[0], '/update/fluxfiles-pro?install=1&link_ttl=300'), 'request shape, ttl clamped up to 5 min');
     assertEqual('Authorization: Bearer ' . $rec['license_key'], $seen[1][0]);
 });
 
@@ -950,15 +950,57 @@ test('pro download: fails soft (null) on unset base, support plan, non-200, wron
     assertEqual(null, ProDownload::fetch($rec, 3600, function () { throw new RuntimeException('boom'); }, 'https://upd.example'), 'throwing transport');
 });
 
-test('mail: the Pro download link appears only when a link was fetched', function () use ($secretB64) {
-    $rec = issuer($secretB64)->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-m'])['record'];
+test('mail: points at the landing /download page (never a bearer URL), only for plans with Pro modules', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    $rec = $iss->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-m'])['record'];
     $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
-    $without = $render->invoke(new LicenseMailer('log'), $rec);
-    assertTrue(!str_contains($without, 'WordPress:'), 'no block by default');
-    $rec['pro_download'] = ['url' => 'https://upd.example/dl/m/x.zip?md5=a&expires=1', 'version' => '1.0.0', 'expires_in' => 604800];
-    $with = $render->invoke(new LicenseMailer('log'), $rec);
-    assertTrue(str_contains($with, 'https://upd.example/dl/m/x.zip?md5=a&expires=1') && str_contains($with, '7 days'), 'link + validity');
-    assertTrue(str_contains($with, 'Keep this email'), 'rest of the mail intact');
+    putenv('FLUXFILES_LANDING_ORIGIN');
+    assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $rec), 'WordPress:'), 'no origin configured: no block');
+    putenv('FLUXFILES_LANDING_ORIGIN=https://fluxfiles.example');
+    try {
+        $with = $render->invoke(new LicenseMailer('log'), $rec);
+        assertTrue(str_contains($with, 'https://fluxfiles.example/download') && str_contains($with, 'Keep this email'), 'page link, rest intact');
+        assertTrue(!str_contains($with, 'md5=') && !str_contains($with, 'expires='), 'no signed URL in the mail');
+        $sup = $iss->issue(['email'=>'a@b.co','plan'=>'support','order_id'=>'pd-ms'])['record'];
+        assertTrue(!str_contains($render->invoke(new LicenseMailer('log'), $sup), '/download'), 'support: none');
+    } finally { putenv('FLUXFILES_LANDING_ORIGIN'); }
+});
+
+test('store: findByKey, rateHit windows, link cache honours the minimum remaining life', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:');
+    $iss = new LicenseIssuer(new LicenseSigner($secretB64), $store);
+    $rec = $iss->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-s1'])['record'];
+    assertEqual($rec['jti'], $store->findByKey($rec['license_key'])['jti']);
+    assertEqual(null, $store->findByKey('nope')); assertEqual(null, $store->findByKey(''));
+    for ($i = 1; $i <= 3; $i++) { assertTrue($store->rateHit('b', 600, 3, 1000), "hit $i within limit"); }
+    assertEqual(false, $store->rateHit('b', 600, 3, 1000), '4th in the window');
+    assertTrue($store->rateHit('b', 600, 3, 1000 + 600), 'next window starts fresh');
+    assertTrue($store->rateHit('other', 600, 3, 1000), 'buckets are independent');
+    $store->cacheLink('j1', 'https://x/y.zip?expires=1', '1.0.0', time() + 700);
+    assertTrue($store->cachedLink('j1', 600) !== null, 'enough life left');
+    assertEqual(null, $store->cachedLink('j1', 800), 'too little life left to hand out');
+    assertEqual(null, $store->cachedLink('missing', 0));
+});
+
+test('pro download: linkFor caches per licence (one update-server call), and a failure is not cached', function () use ($secretB64, $fakeManifest) {
+    $store = new LicenseStore(':memory:');
+    $rec = (new LicenseIssuer(new LicenseSigner($secretB64), $store))->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-c'])['record'];
+    $calls = 0;
+    $http = function () use (&$calls, $fakeManifest) { $calls++; return [200, $fakeManifest(['url' => 'https://upd.example/dl/m/x.zip?md5=a&expires=' . (time() + 3600)])]; };
+    $a = ProDownload::linkFor($rec, $store, 3, $http, 'https://upd.example');
+    $b = ProDownload::linkFor($rec, $store, 3, $http, 'https://upd.example');
+    assertEqual(1, $calls, 'second call served from the cache'); assertEqual($a['url'], $b['url']);
+    $rec2 = (new LicenseIssuer(new LicenseSigner($secretB64), $store))->issue(['email'=>'c@d.co','plan'=>'pro','order_id'=>'pd-c2'])['record'];
+    $fails = 0;
+    assertEqual(null, ProDownload::linkFor($rec2, $store, 3, function () use (&$fails) { $fails++; return [503, 'x']; }, 'https://upd.example'));
+    assertEqual(null, ProDownload::linkFor($rec2, $store, 3, function () use (&$fails) { $fails++; return [503, 'x']; }, 'https://upd.example'));
+    assertEqual(2, $fails, 'failures are retried, not cached');
+});
+
+test('pro download: secondsLeft reads the URL expiry; no expiry -> fallback', function () {
+    assertEqual(100, ProDownload::secondsLeft('https://x/y.zip?md5=a&expires=1100', 0, 1000));
+    assertEqual(0, ProDownload::secondsLeft('https://x/y.zip?md5=a&expires=900', 7, 1000), 'already expired');
+    assertEqual(7, ProDownload::secondsLeft('https://cdn.example/y.zip', 7, 1000));
 });
 
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";

@@ -12,6 +12,7 @@ declare(strict_types=1);
  *   POST /revoke                — admin: {jti, status} mark revoked/refunded/active
  *   POST /redeliver             — admin: re-send licences whose mail failed
  *   GET  /claim?checkout_id=    — public: the buyer's key, for an hour after purchase
+ *   POST /pro-download          — public (landing origin only): {license_key} -> fresh Pro zip link
  *   POST /update-status          — update-server auth: {jti} → active/revoked
  *   GET  /health                — liveness
  *
@@ -188,9 +189,7 @@ try {
         // log to say so. Tracking mailed_at makes Polar's retry the recovery mechanism.
         $jti = (string) $res['record']['jti'];
         if (empty($res['record']['mailed_at'])) {
-            // Best-effort first-install link for the WordPress Pro zip (null = omitted).
-            $mailRec = $res['record'];
-            $mailRec['pro_download'] = ProDownload::fetch($mailRec, ProDownload::TTL_MAIL);
+            $mailRec = $res['record'];   // the mail points at the landing /download page: no update-server call here
             if ((new LicenseMailer())->sendLicense($mailRec)) {
                 (new LicenseStore())->markMailed($jti);
             } else {
@@ -269,11 +268,58 @@ try {
         ];
         // Only plans that include a bundled module (share/intake) get the WordPress Pro
         // zip link: a signed, expiring URL on the update host, never the licence itself.
-        $dl = ProDownload::fetch($rec, ProDownload::TTL_CLAIM);
+        // Short timeout + per-licence cache, and any failure just omits the link: a licence
+        // worker must never wait long on the update server (see /pro-download for the retry path).
+        $dl = ProDownload::linkFor($rec, $store, ProDownload::TIMEOUT_CLAIM);
         if ($dl !== null) {
             $out['pro_download'] = $dl;
         }
         respond(200, $out);
+    }
+
+    // ── Public: re-download the FluxFiles Pro WordPress zip ──────────────────
+    //
+    // The landing /download page POSTs the licence key in the BODY (never a URL) and gets a
+    // fresh, short-lived secure_link. Answers are generic on purpose: unknown key, revoked,
+    // a plan without the Pro modules and an update-server hiccup all read "not available",
+    // so this cannot be used to probe which keys exist. Throttled per IP and per licence.
+    // Runs on the PUBLIC pool; the update server's callback lands on the internal pool.
+    if (($method === 'POST' || $method === 'OPTIONS') && $uri === '/pro-download') {
+        $allowed = env('FLUXFILES_LANDING_ORIGIN');
+        $origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
+        if ($allowed === '' || $origin === '' || !hash_equals($allowed, $origin)) {
+            respond(403, ['error' => 'forbidden']);        // browsers of the landing site only
+        }
+        header('Access-Control-Allow-Origin: ' . $allowed);
+        header('Vary: Origin');
+        if ($method === 'OPTIONS') {
+            header('Access-Control-Allow-Methods: POST');
+            header('Access-Control-Allow-Headers: Content-Type');
+            header('Access-Control-Max-Age: 600');
+            respond(204, []);
+        }
+        $store = new LicenseStore();
+        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        if (!$store->rateHit('dl-ip:' . $ip, 600, 10)) {
+            header('Retry-After: 600');
+            respond(429, ['error' => 'too many attempts']);
+        }
+        $b = json_decode($raw, true);
+        $key = is_array($b) ? preg_replace('/\s+/', '', (string) ($b['license_key'] ?? '')) : '';
+        $rec = is_string($key) && $key !== '' ? $store->findByKey($key) : null;
+        $fail = static fn () => respond(404, ['error' => 'not available', 'hint' => 'check the key, or reply to your licence e-mail']);
+        if ($rec === null || ($rec['status'] ?? '') !== 'active' || !ProDownload::eligible($rec)) {
+            $fail();
+        }
+        if (!$store->rateHit('dl-jti:' . $rec['jti'], 600, 5)) {
+            header('Retry-After: 600');
+            respond(429, ['error' => 'too many attempts']);
+        }
+        $dl = ProDownload::linkFor($rec, $store, ProDownload::TIMEOUT_DOWNLOAD);
+        if ($dl === null) {
+            $fail();
+        }
+        respond(200, ['pro_download' => $dl]);
     }
 
     // ── Internal: update server asks whether a signed licence is still active ─
@@ -323,7 +369,6 @@ try {
         $mailer = new LicenseMailer();
         $sent = 0; $failed = 0;
         foreach ($store->undelivered() as $rec) {
-            $rec['pro_download'] = ProDownload::fetch($rec, ProDownload::TTL_MAIL);
             if ($mailer->sendLicense($rec)) {
                 $store->markMailed((string) $rec['jti']);
                 $sent++;

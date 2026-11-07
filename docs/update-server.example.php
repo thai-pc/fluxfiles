@@ -79,6 +79,18 @@ function fluxfiles_pick_release(array $entry, ?string $coreVersion, bool $latest
 }
 
 /**
+ * Plugin bundle id => the module ids it ships. The ONE place this lives on the server side;
+ * services/license-server ProDownload::BUNDLE_MODULES must agree (a test asserts it).
+ * Phase 2 of the Pro add-on adds 'versioning','webhooks','ai','ocr'.
+ *
+ * @return array<string,list<string>>
+ */
+function fluxfiles_bundles(): array
+{
+    return ['fluxfiles-pro' => ['share', 'intake']];
+}
+
+/**
  * Is this licence entitled to `$module`?
  *
  * A plugin BUNDLE (one zip that carries several modules, e.g. the FluxFiles Pro WordPress
@@ -141,7 +153,7 @@ $FREE_MODULES = ['wordpress'];
 // Plugin bundles: entitled when the licence covers ANY bundled module (same
 // updatesAllowed() and /update-status revocation checks as a module). See
 // fluxfiles_entitled(). Phase 2 of the Pro add-on adds 'versioning','webhooks','ai','ocr'.
-$BUNDLES = ['fluxfiles-pro' => ['share', 'intake']];
+$BUNDLES = fluxfiles_bundles();
 
 // ── request ─────────────────────────────────────────────────────────────────
 $module  = preg_replace('/[^a-z0-9-]/', '', (string) ($_GET['module'] ?? basename($_SERVER['PATH_INFO'] ?? '')));
