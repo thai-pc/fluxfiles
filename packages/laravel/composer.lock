@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "489faa18e6d051ad5f6f87ce3054358f",
+    "content-hash": "4995b256d197fddd805f86de0739467e",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -452,16 +452,16 @@
         },
         {
             "name": "fluxfiles/fluxfiles",
-            "version": "v1.0.7",
+            "version": "v1.1.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/thai-pc/fluxfiles-core.git",
-                "reference": "9ae2f8407cfaba4fd7f2fd90c4d2d61e2629f7b3"
+                "reference": "172ef2459a323ba8b7faadd9d059824ce4425da8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/9ae2f8407cfaba4fd7f2fd90c4d2d61e2629f7b3",
-                "reference": "9ae2f8407cfaba4fd7f2fd90c4d2d61e2629f7b3",
+                "url": "https://api.github.com/repos/thai-pc/fluxfiles-core/zipball/172ef2459a323ba8b7faadd9d059824ce4425da8",
+                "reference": "172ef2459a323ba8b7faadd9d059824ce4425da8",
                 "shasum": ""
             },
             "require": {
@@ -479,6 +479,13 @@
                 "maennchen/zipstream-php": "^3.1",
                 "php": "^8.1.0",
                 "vlucas/phpdotenv": "^5.0"
+            },
+            "conflict": {
+                "fluxfiles/audit-export": "<1.1.0",
+                "fluxfiles/intake": "<1.5.0",
+                "fluxfiles/laravel": "<1.0.3",
+                "fluxfiles/legal-hold": "<1.2.0",
+                "fluxfiles/share": "<1.4.0"
             },
             "suggest": {
                 "ext-pdo": "Required when FLUXFILES_STORAGE_BACKEND=db (any driver)",
@@ -530,7 +537,7 @@
                 "issues": "https://github.com/thai-pc/fluxfiles/issues",
                 "source": "https://github.com/thai-pc/fluxfiles"
             },
-            "time": "2026-11-06T14:01:37+00:00"
+            "time": "2026-11-07T14:29:54+00:00"
         },
         {
             "name": "fruitcake/php-cors",
