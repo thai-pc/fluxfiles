@@ -132,9 +132,12 @@ final class AuditPolicy
         // themselves — the prefix check could never match. Re-apply the same
         // prefixing FileManager used for the operation itself (idempotent, so
         // this is safe even if a path were already scoped).
-        if ($key !== '' || $action === 'fixity_check') {
-            // fixity_check names the whole scope (the tenant root): the baseline anchor
-            // the audit-export module looks up per scope.
+        if ($action === 'fixity_check') {
+            // Names the whole scope (the tenant root) — the baseline anchor the audit-export
+            // module looks up per scope. Never the request body's `path`: a tenant could
+            // otherwise plant anchors in a nested scope and make its baseline read `stale`.
+            $key = $claims->scopePath('');
+        } elseif ($key !== '') {
             $key = $claims->scopePath((string) $key);
         }
         $disk = $body['disk'] ?? $body['src_disk'] ?? $post['disk'] ?? 'local';

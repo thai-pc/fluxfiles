@@ -3,6 +3,13 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Core: fixity baselines anchored in the audit chain (needs audit-export with the matching release)
+
+- `POST /api/fm/fixity/check` logs a `fixity_check` audit entry per run with `file_key` = the token's scope root (never the request body's `path`) and detail `mac=<baseline_mac>`; audit-export compares the manifest with the latest anchor, so a deleted (`missing`) or replayed (`stale`) `fixity.json` is reported. The Laravel and WordPress proxies log the same entry (Laravel did not log one before).
+- Optional `{"rebaseline": true}` body flag, passed as a 5th positional argument to `runFixityCheck` (the interface keeps its 4-argument shape); a module whose method takes fewer than 5 parameters answers `501 module_update_required`. Honoured only over an invalid baseline; core and both proxies log `fixity_rebaseline` (new action label in all 16 languages).
+
 ## [1.0.16] — 2026-11-07
 
 > Released: `core-v1.1.3`, `laravel-v1.0.4`, `node-v1.0.1`, `python-v1.0.1` (security). Advisories: GHSA-872w-mr3x-mq3h (Laravel), GHSA-8rqh-875g-j6qg (legal hold / disk root), GHSA-mj62-fxq6-p436 (webhook secret). The WordPress changes ship with the next WordPress release; the legal-hold, webhooks and intake modules ship as their own releases requiring core `^1.1.3`.

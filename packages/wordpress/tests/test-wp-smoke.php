@@ -1083,6 +1083,17 @@ test('retention / fixity / verify prefer the module seam and 501 module_update_r
     assertTrue(substr_count($api, "'module_update_required'") >= 3, 'otherwise 501 module_update_required');
 });
 
+
+test('fixity host wiring: anchor row (scope key + mac=), fixity_rebaseline, 5th-arg reflection 501', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../includes/FluxFilesApi.php');
+    $pos = strpos($src, 'function handleFixityCheck(');
+    assertTrue($pos !== false, 'handler present');
+    $h = substr($src, $pos, 4500);
+    foreach (["'rebaseline'", 'ReflectionMethod', 'getNumberOfParameters() < 5', "'module_update_required'", "'fixity_rebaseline'", "'fixity_check'", "scopePath('')", "' mac='"] as $needle) {
+        assertTrue(strpos($h, $needle) !== false, "contains {$needle}");
+    }
+});
+
 // ── error() passthrough regression (B1) ─────────────────────────────────────
 // error() used to be declared with only (message, status), so every `catch
 // (ApiException $e) { return $this->error($e->getMessage(), $e->getHttpCode(),

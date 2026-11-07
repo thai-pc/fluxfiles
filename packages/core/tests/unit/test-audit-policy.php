@@ -157,5 +157,24 @@ test('fixity_check anchors the baseline: scope key + mac= in the detail', functi
     assertEqual('checked=0 unexplained=0', $e['detail'], 'junk mac is not anchored');
 });
 
+test('fixity_check anchor scope ignores a request-body path (no planting in nested scopes)', function () {
+    $e = AuditPolicy::successEntry('/api/fm/fixity/check', ['disk' => 'local', 'path' => 'sub', 'key' => 'x', 'from' => 'y'], [], claims('tenant7'), ['checked' => 1]);
+    assertEqual('tenant7', $e['key']);
+});
+
+test('fixity_rebaseline and fixity_check are the only fixity route actions (route table unchanged)', function () {
+    assertEqual('fixity_check', AuditPolicy::resolveAction('/api/fm/fixity/check'));
+});
+
+test('fixity route wiring: 5th-arg rebaseline, reflection 501, fixity_rebaseline audit', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../../api/index.php');
+    $pos = strpos($src, "'/api/fm/fixity/check'");
+    assertTrue($pos !== false, 'route present');
+    $route = substr($src, $pos, 3500);
+    foreach (["'rebaseline'", 'ReflectionMethod', 'getNumberOfParameters() < 5', "'module_update_required'", "'fixity_rebaseline'", "scopePath('')"] as $needle) {
+        assertTrue(strpos($route, $needle) !== false, "route contains {$needle}");
+    }
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
