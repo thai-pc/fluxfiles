@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- DB storage backend + S3: a same-disk copy (no scanner wired) got a `fluxfiles-id` header that disagreed with its metadata row's uuid. Since 1.1.4 `copy()` built the S3 write config (which reserves a uuid for the target) even on the plain server-side copy path that never uses it. It is now built only when the copy is scanned. Caught by `test-s3-metadata-calls-live.php` in CI.
+
 ## [1.0.17] — 2026-11-07
 
 > Released: `core-v1.1.4`, `laravel-v1.0.5` (security). Advisories: GHSA-vvvg-2h5f-m3jh (virus/DLP scan skipped on copy / cross-disk copy / move), GHSA-3p3g-64qj-r33x (watermark removal recreates a deleted file, owner_only bypass). Modules: `intake` v1.5.2, `legal-hold` v1.2.2, `audit-export` v1.2.0 (needs core ^1.1.4).

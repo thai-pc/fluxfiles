@@ -289,7 +289,8 @@ class FileManager
      * a server-side CopyObject. The temp file can outlive a fatal/timeout (shared
      * with writeScopedStream).
      */
-    private function stageScannedCopy($fs, string $scopedPath): ?string
+    /** @return array{0:bool,1:bool} [needVirus, needPii] for staging a copy of $scopedPath. */
+    private function copyScanNeeds($fs, string $scopedPath): array
     {
         $needVirus = $this->virusScanner !== null;
         $needPii = false;
@@ -300,6 +301,12 @@ class FileManager
                 $needPii = $size <= $this->claims->dlpMaxScanKb * 1024;
             }
         }
+        return [$needVirus, $needPii];
+    }
+
+    private function stageScannedCopy($fs, string $scopedPath): ?string
+    {
+        [$needVirus, $needPii] = $this->copyScanNeeds($fs, $scopedPath);
         if (!$needVirus && !$needPii) {
             return null;
         }
@@ -2058,9 +2065,17 @@ class FileManager
         // Virus/PII scan (paid modules): a copy is a new object — scan before writing.
         // Everything that can throw is built BEFORE the temp file exists, so nothing
         // between staging and writeCopyStream() can leak it.
-        $srcMeta = $this->meta->get($disk, $scopedFrom) ?: [];
-        $writeConfig = $this->s3WriteConfig($disk, $scopedTo, $srcMeta);
-        $scanned = $this->stageScannedCopy($fs, $scopedFrom);
+        // Only build the S3 write config when a scan will run: on the DB backend
+        // s3WriteMetadata() reserves a pending object uuid for the target, and an
+        // unused reservation makes the copy's row uuid disagree with the header
+        // that the plain $fs->copy() path ends up with.
+        [$needVirus, $needPii] = $this->copyScanNeeds($fs, $scopedFrom);
+        $scanned = null;
+        if ($needVirus || $needPii) {
+            $srcMeta = $this->meta->get($disk, $scopedFrom) ?: [];
+            $writeConfig = $this->s3WriteConfig($disk, $scopedTo, $srcMeta);
+            $scanned = $this->stageScannedCopy($fs, $scopedFrom);
+        }
         if ($scanned === null) {
             $fs->copy($scopedFrom, $scopedTo);
         } else {
