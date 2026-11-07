@@ -3,6 +3,13 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+- **Virus/DLP scanning now covers copy and cross-disk copy/move.** `copy()`, `crossCopy()` and `crossMove()` never ran the scanners, so a stored EICAR could be duplicated under a scanning token and content from an unscanned disk could enter a scanned one. The stored source is now streamed to a temp file and scanned (fail-closed, same `virus_detected` / `pii_detected` / engine-down errors as upload) before anything is written. The destination is written from the scanned temp file, never from a second read of the source, which closes a mid-scan swap of the source bytes. With a scanner wired, cross-disk copy/move skip `_variants/` (a regenerable cache) so unscanned variant bytes cannot ride along, and a same-disk S3 copy downloads the object instead of using a server-side CopyObject. Same-disk move, rename, folder move, trash restore and `removeWatermark` stay unscanned by design (no new object).
+- **`removeWatermark` could resurrect a deleted file (owner_only bypass).** A user deleting a watermarked image left its pre-watermark original under `_fluxfiles/originals/`; another `owner_only` user calling remove-watermark on that path recreated the file from it, with no ownership, quota or scan check. `removeWatermark` now 404s when the file does not exist, and a kept original is only used while a sha256 sidecar (`_fluxfiles/originals.sum/`) matches the file's current bytes (a stale one is overwritten on the next burn). A backup without a sidecar (left by older cores, which never deleted it with the file) is never trusted: it is dropped on first touch, so "remove watermark" is no longer available for images burned in before this release (the next burn takes a fresh backup of the current bytes). The original is dropped on delete, trash and cross-disk move, and follows the file on rename and move (folders included). A trashed-then-restored image therefore keeps its burned-in mark and cannot be un-watermarked.
+- Cross-disk move with a scanner wired now also deletes the source's `_variants/`, and the scanned temp file can no longer leak if building the write config throws.
+
 ## [1.0.16] — 2026-11-07
 
 > Released: `core-v1.1.3`, `laravel-v1.0.4`, `node-v1.0.1`, `python-v1.0.1` (security). Advisories: GHSA-872w-mr3x-mq3h (Laravel), GHSA-8rqh-875g-j6qg (legal hold / disk root), GHSA-mj62-fxq6-p436 (webhook secret). The WordPress changes ship with the next WordPress release; the legal-hold, webhooks and intake modules ship as their own releases requiring core `^1.1.3`.
