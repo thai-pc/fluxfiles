@@ -178,6 +178,11 @@ test('cross-disk variants are not transferred when a scanner is wired', function
     $dm->disk('a')->write('_variants/ok.txt_thumb.webp', 'planted');
     $fm->crossCopy('a', 'ok.txt', 'b', 'ok.txt');
     assertTrue(!$dm->disk('b')->fileExists('_variants/ok.txt_thumb.webp'));
+    // crossMove with a scanner must still delete the source's variants
+    $dm->disk('a')->write('_variants/ok2.txt_thumb.webp', 'planted');
+    $dm->disk('a')->write('ok2.txt', 'hello');
+    $fm->crossMove('a', 'ok2.txt', 'b', 'ok2.txt');
+    assertTrue(!$dm->disk('a')->fileExists('_variants/ok2.txt_thumb.webp'), 'source variants removed on crossMove');
     // control: without a scanner the variant still travels
     [$fm2, $dm2] = make(false, false);
     $dm2->disk('a')->write('_variants/ok.txt_thumb.webp', 'planted');

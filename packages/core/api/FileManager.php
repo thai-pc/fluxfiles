@@ -1300,12 +1300,14 @@ class FileManager
         try {
             if ($isDir) {
                 $this->deleteVariantsDir($disk, $scoped);
+                $this->deleteWatermarkBackupsDir($disk, $scoped);
                 $this->purgeVersionsDir($disk, $scoped, $fs); // walk BEFORE the tree is gone
                 $fs->deleteDirectory($scoped);
                 $this->meta->deleteChildren($disk, $scoped);
                 $this->meta->deleteDirPrefix($disk, $scoped);
             } else {
                 $this->deleteVariants($disk, $scoped);
+                $this->deleteWatermarkBackup($disk, $scoped);
                 $this->purgeVersions($disk, $scoped, $fs);
                 $fs->delete($scoped);
                 $this->meta->delete($disk, $scoped);
@@ -1416,6 +1418,9 @@ class FileManager
         // original key; the versioning module ignores a key with no history and
         // never takes history from under a live file.)
         $this->moveVersions($disk, $scoped, $trashDir . '/' . $basename, $fs);
+        // The pre-watermark original is dropped on trash (documented: a restored file
+        // keeps its burned-in mark and cannot "remove watermark").
+        $this->deleteWatermarkBackup($disk, $scoped);
 
         // Drop the active metadata; the trash entry (written last) is the commit point.
         $this->meta->delete($disk, $scoped);
@@ -1482,6 +1487,7 @@ class FileManager
         $this->setTrashVisibility($disk, $fs, $trashDir . '/payload', true, 'private');
 
         $this->moveVersionsDir($disk, $scoped, $trashDir . '/payload', $fs); // see the file case
+        $this->deleteWatermarkBackupsDir($disk, $scoped);
 
         $this->meta->deleteChildren($disk, $scoped);
         $this->meta->deleteDirPrefix($disk, $scoped);
@@ -1934,12 +1940,14 @@ class FileManager
             $this->meta->renameDirPrefix($disk, $scoped, $newPath);
             // Version history is keyed by scoped path — re-key every child's.
             $this->moveVersionsDir($disk, $scoped, $newPath, $fs);
+            $this->moveWatermarkBackupsDir($disk, $scoped, $newPath);
         } else {
             $fs->move($scoped, $newPath);
             // Move metadata
             $this->moveMetadata($disk, $scoped, $disk, $newPath);
             // Move image variants
             $this->moveVariants($disk, $scoped, $disk, $newPath);
+            $this->moveWatermarkBackup($disk, $scoped, $newPath);
             // Move version history (Versioning module) with the file
             $this->moveVersions($disk, $scoped, $newPath, $fs);
 
@@ -1994,9 +2002,11 @@ class FileManager
             $this->meta->renameChildren($disk, $scopedFrom, $scopedTo);
             $this->meta->renameDirPrefix($disk, $scopedFrom, $scopedTo);
             $this->moveVersionsDir($disk, $scopedFrom, $scopedTo, $fs);
+            $this->moveWatermarkBackupsDir($disk, $scopedFrom, $scopedTo);
         } else {
             $this->moveMetadata($disk, $scopedFrom, $disk, $scopedTo);
             $this->moveVariants($disk, $scopedFrom, $disk, $scopedTo);
+            $this->moveWatermarkBackup($disk, $scopedFrom, $scopedTo);
             $this->moveVersions($disk, $scopedFrom, $scopedTo, $fs);
             $this->meta->trackParents($disk, $scopedTo);
         }
@@ -2046,13 +2056,16 @@ class FileManager
         $this->quotaCheck($disk, $fileSize, 1);
 
         // Virus/PII scan (paid modules): a copy is a new object — scan before writing.
+        // Everything that can throw is built BEFORE the temp file exists, so nothing
+        // between staging and writeCopyStream() can leak it.
+        $srcMeta = $this->meta->get($disk, $scopedFrom) ?: [];
+        $writeConfig = $this->s3WriteConfig($disk, $scopedTo, $srcMeta);
         $scanned = $this->stageScannedCopy($fs, $scopedFrom);
         if ($scanned === null) {
             $fs->copy($scopedFrom, $scopedTo);
         } else {
             // Write from the scanned bytes, not a second read of the source (TOCTOU).
-            $srcMeta = $this->meta->get($disk, $scopedFrom) ?: [];
-            $this->writeCopyStream($fs, $scopedFrom, $fs, $scopedTo, $scanned, $this->s3WriteConfig($disk, $scopedTo, $srcMeta));
+            $this->writeCopyStream($fs, $scopedFrom, $fs, $scopedTo, $scanned, $writeConfig);
         }
 
         $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo, true, null, true);
@@ -2099,12 +2112,13 @@ class FileManager
 
         // Virus/PII scan (paid modules) BEFORE the bytes reach the destination: the
         // source disk may be unscanned, so this is the only gate.
-        $scanned = $this->stageScannedCopy($srcFs, $scopedSrc);
-
         // Stream the file across disks; an S3 destination gets the source's headers in the PUT.
         // With a scanner wired the bytes come from the scanned temp file (TOCTOU).
+        // Meta/config are built before staging so a throw can't leak the temp file.
         $srcMeta = $this->meta->get($srcDisk, $scopedSrc) ?: [];
-        $this->writeCopyStream($srcFs, $scopedSrc, $dstFs, $scopedDst, $scanned, $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta));
+        $writeConfig = $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta);
+        $scanned = $this->stageScannedCopy($srcFs, $scopedSrc);
+        $this->writeCopyStream($srcFs, $scopedSrc, $dstFs, $scopedDst, $scanned, $writeConfig);
 
         $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst, true, $srcMeta, true);
         $this->copyVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
@@ -2159,16 +2173,20 @@ class FileManager
         $this->quotaCheck($dstDisk, $fileSize, 1);
 
         // Virus/PII scan (paid modules) before the bytes enter the destination disk.
-        $scanned = $this->stageScannedCopy($srcFs, $scopedSrc);
-
         // Written from the scanned temp file (TOCTOU); the source is deleted below
-        // only after this write succeeded.
+        // only after this write succeeded. Meta/config first so a throw can't leak the temp.
         $srcMeta = $this->meta->get($srcDisk, $scopedSrc) ?: [];
-        $this->writeCopyStream($srcFs, $scopedSrc, $dstFs, $scopedDst, $scanned, $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta));
+        $writeConfig = $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta);
+        $scanned = $this->stageScannedCopy($srcFs, $scopedSrc);
+        $this->writeCopyStream($srcFs, $scopedSrc, $dstFs, $scopedDst, $scanned, $writeConfig);
 
         $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst, $srcMeta);
         $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
         $srcFs->delete($scopedSrc);
+        // moveVariants() skips cross-disk when a scanner is wired — drop the source's
+        // variants + watermark backup so they don't outlive the file.
+        $this->deleteVariants($srcDisk, $scopedSrc);
+        $this->deleteWatermarkBackup($srcDisk, $scopedSrc);
         // Version history is per-disk (it lives under the SOURCE disk's
         // `_fluxfiles/versions/`), so it can't follow the file across disks —
         // and left behind it would be orphaned there, or silently re-attach to
@@ -2732,7 +2750,9 @@ class FileManager
         // backup is made once, before the first in-place burn; re-edits then read
         // FROM the clean original, not the already-watermarked file.
         $backupKey = $this->watermarkBackupKey($scopedSrc);
-        $hasBackup = $fs->fileExists($backupKey);
+        // A backup only counts while it still belongs to THIS file's current bytes
+        // (see watermarkBackupValid); a stale leftover is overwritten on the first burn.
+        $hasBackup = $this->watermarkBackupValid($fs, $scopedSrc);
         if ($inPlace && !$hasBackup) {
             $fs->write($backupKey, (string) $fs->read($scopedSrc)); // first burn → snapshot the original
             $hasBackup = true;
@@ -2755,6 +2775,9 @@ class FileManager
         if ($inPlace) {
             // Flag so the UI can offer "Remove watermark" (restore from backup).
             $this->meta->save($disk, $scopedDst, ['watermarked' => true]);
+            // Bind the backup to the bytes just burned, so it can never be restored
+            // onto a different file that later reuses this key.
+            try { $fs->write($this->watermarkSumKey($scopedDst), hash('sha256', (string) $result['data'])); } catch (\Throwable $e) { /* legacy-style backup then */ }
         } else {
             // "Save as copy" creates a new file — carry over metadata (title/tags/
             // uploaded_by) and register it in the search + folder index, same as copy().
@@ -2790,6 +2813,96 @@ class FileManager
         return '_fluxfiles/originals/' . ltrim($scopedKey, '/');
     }
 
+    /** Sidecar holding sha256 of the burned file the backup belongs to. */
+    private function watermarkSumKey(string $scopedKey): string
+    {
+        return '_fluxfiles/originals.sum/' . ltrim($scopedKey, '/');
+    }
+
+    /**
+     * A kept original may be restored/re-burned only while it belongs to the file
+     * currently at the key: backup present AND (sidecar absent = legacy backup, or
+     * sidecar == sha256 of the current bytes). Stops a stale backup left by a deleted
+     * file from resurrecting onto, or overwriting, an unrelated file at the same key.
+     */
+    private function watermarkBackupValid($fs, string $scopedKey): bool
+    {
+        try {
+            if (!$fs->fileExists($this->watermarkBackupKey($scopedKey))) {
+                return false;
+            }
+            $sumKey = $this->watermarkSumKey($scopedKey);
+            if (!$fs->fileExists($sumKey)) {
+                return true;
+            }
+            return hash_equals(trim((string) $fs->read($sumKey)), hash('sha256', (string) $fs->read($scopedKey)));
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /** Best-effort: drop the pre-watermark original kept for $scopedKey. */
+    private function deleteWatermarkBackup(string $disk, string $scopedKey): void
+    {
+        try {
+            $fs = $this->disks->disk($disk);
+            foreach ([$this->watermarkBackupKey($scopedKey), $this->watermarkSumKey($scopedKey)] as $k) {
+                if ($fs->fileExists($k)) {
+                    $fs->delete($k);
+                }
+            }
+        } catch (\Throwable $e) {
+            // best effort
+        }
+    }
+
+    /** Best-effort: drop every kept original under a folder. */
+    private function deleteWatermarkBackupsDir(string $disk, string $scopedDir): void
+    {
+        try {
+            $fs = $this->disks->disk($disk);
+            foreach ([$this->watermarkBackupKey(rtrim($scopedDir, '/')), $this->watermarkSumKey(rtrim($scopedDir, '/'))] as $d) {
+                if ($fs->directoryExists($d)) {
+                    $fs->deleteDirectory($d);
+                }
+            }
+        } catch (\Throwable $e) {
+            // best effort
+        }
+    }
+
+    /** Best-effort: re-key the kept original when its file is renamed/moved. */
+    private function moveWatermarkBackup(string $disk, string $from, string $to): void
+    {
+        try {
+            $fs = $this->disks->disk($disk);
+            foreach ([[$this->watermarkBackupKey($from), $this->watermarkBackupKey($to)],
+                      [$this->watermarkSumKey($from), $this->watermarkSumKey($to)]] as [$k, $t]) {
+                if ($fs->fileExists($k)) {
+                    $fs->move($k, $t);
+                }
+            }
+        } catch (\Throwable $e) {
+            \FluxFiles\Log::warn('FluxFiles: watermark backup move failed — ' . $e->getMessage());
+        }
+    }
+
+    /** Best-effort: re-key every kept original under a folder that was renamed/moved. */
+    private function moveWatermarkBackupsDir(string $disk, string $fromDir, string $toDir): void
+    {
+        try {
+            $fs = $this->disks->disk($disk);
+            foreach ([[$this->watermarkBackupKey(rtrim($fromDir, '/')), $this->watermarkBackupKey(rtrim($toDir, '/'))],
+                      [$this->watermarkSumKey(rtrim($fromDir, '/')), $this->watermarkSumKey(rtrim($toDir, '/'))]] as [$f, $t]) {
+                if ($fs->directoryExists($f)) {
+                    $this->moveDirectoryTree($disk, $fs, $f, $t);
+                }
+            }
+        } catch (\Throwable $e) {
+            \FluxFiles\Log::warn('FluxFiles: watermark backup move (directory) failed — ' . $e->getMessage());
+        }
+    }
+
     /**
      * Remove an in-place burned-in watermark by restoring the kept original
      * (the non-destructive counterpart to applyWatermark). 404 when the image was
@@ -2805,12 +2918,17 @@ class FileManager
 
         $scoped = $this->scopedPath($path);
         $this->assertNotSystem($scoped, $disk);
+        $fs = $this->disks->disk($disk);
+        // Must target an existing file: otherwise a stale backup would RECREATE a
+        // deleted file (bypassing owner_only, quota and scanning).
+        if (!$fs->fileExists($scoped)) {
+            throw new ApiException('File not found', 404, 'not_found');
+        }
         $this->assertOwner($disk, $scoped);
         $this->assertNoActiveHold($disk, $scoped);
-        $fs = $this->disks->disk($disk);
 
         $backupKey = $this->watermarkBackupKey($scoped);
-        if (!$fs->fileExists($backupKey)) {
+        if (!$this->watermarkBackupValid($fs, $scoped)) {
             throw new ApiException('No watermark to remove', 404, 'no_watermark_backup');
         }
         // Not scanned on purpose: this puts back the system-written backup of this very
@@ -2818,6 +2936,7 @@ class FileManager
         $original = (string) $fs->read($backupKey);
         $fs->write($scoped, $original, $this->s3WriteConfigFor($disk, $scoped, true));
         $fs->delete($backupKey);
+        $this->deleteWatermarkBackup($disk, $scoped); // sidecar
         $this->meta->save($disk, $scoped, ['watermarked' => false]);
 
         // Regenerate variants from the restored original (best-effort).

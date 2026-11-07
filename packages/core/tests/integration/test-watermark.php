@@ -136,5 +136,66 @@ test('remove watermark with no backup → 404', function () {
     expectApi(fn () => $fm->removeWatermark('local', 'photo.png'), 'no_watermark_backup');
 });
 
+// ── Stale originals backup (owner_only resurrection) ──
+function wmUsers(): array {
+    $root = sys_get_temp_dir() . '/ff-wm-' . uniqid();
+    @mkdir($root, 0777, true);
+    $dm = new DiskManager(['local' => ['driver' => 'local', 'root' => $root, 'url' => '/s']]);
+    $mk = fn (string $u) => new FileManager($dm, Claims::fromJwtPayload((object) [
+        'sub' => $u, 'perms' => ['read', 'write', 'delete'], 'disks' => ['local'], 'owner_only' => true,
+    ]), new StorageMetadataHandler($dm));
+    return [$mk('u1'), $mk('u2'), $dm, $root];
+}
+function wmUpload(FileManager $fm, string $name): void {
+    $png = pngBytes(60, 60);
+    $tmp = tempnam(sys_get_temp_dir(), 'up'); file_put_contents($tmp, $png);
+    $fm->upload('local', '', ['name' => $name, 'tmp_name' => $tmp, 'size' => strlen($png), 'error' => 0, 'type' => 'image/png'], true);
+}
+
+test('removeWatermark on a DELETED file → 404 not_found, nothing resurrected (owner_only PoC)', function () {
+    [$u1, $u2, $dm, $root] = wmUsers();
+    wmUpload($u1, 'p.png');
+    $u1->applyWatermark('local', 'p.png', ['text' => 'X']);
+    $u1->delete('local', 'p.png');
+    assertTrue(!is_file("$root/_fluxfiles/originals/p.png"), 'delete drops the backup');
+    expectApi(fn () => $u2->removeWatermark('local', 'p.png'), 'not_found');
+    assertTrue(!$dm->disk('local')->fileExists('p.png'), 'p.png must stay gone');
+});
+test('stale backup (planted) never restores onto a different file or user', function () {
+    [$u1, $u2, $dm, $root] = wmUsers();
+    wmUpload($u1, 'p.png');
+    $u1->applyWatermark('local', 'p.png', ['text' => 'X']);
+    // Another file now occupies the key (bytes replaced outside this file's history).
+    file_put_contents("$root/p.png", pngBytes(60, 60, [200, 10, 10]));
+    file_put_contents("$root/_fluxfiles/originals/p.png", 'STALE');
+    expectApi(fn () => $u1->removeWatermark('local', 'p.png'), 'no_watermark_backup');
+    // a first burn overwrites the stale backup and burns from the real file
+    $u1->applyWatermark('local', 'p.png', ['text' => 'X']);
+    assertTrue(file_get_contents("$root/_fluxfiles/originals/p.png") !== 'STALE', 'stale backup overwritten');
+    expectApi(fn () => $u2->removeWatermark('local', 'p.png'), 'owner_only');
+});
+test('rename moves the backup with the file; trash drops it', function () {
+    [$u1, , $dm, $root] = wmUsers();
+    wmUpload($u1, 'p.png');
+    $u1->applyWatermark('local', 'p.png', ['text' => 'X']);
+    $u1->rename('local', 'p.png', 'q.png');
+    assertTrue(is_file("$root/_fluxfiles/originals/q.png") && !is_file("$root/_fluxfiles/originals/p.png"), 'backup followed rename');
+    $u1->removeWatermark('local', 'q.png'); // still works after rename
+    $u1->applyWatermark('local', 'q.png', ['text' => 'X']);
+    $u1->trash('local', 'q.png');
+    assertTrue(!is_file("$root/_fluxfiles/originals/q.png"), 'trash drops the backup');
+});
+test('folder rename moves backups, folder delete drops them', function () {
+    [$u1, , $dm, $root] = wmUsers();
+    $u1->mkdir('local', 'd');
+    $png = pngBytes(60, 60); $tmp = tempnam(sys_get_temp_dir(), 'up'); file_put_contents($tmp, $png);
+    $u1->upload('local', 'd', ['name' => 'p.png', 'tmp_name' => $tmp, 'size' => strlen($png), 'error' => 0, 'type' => 'image/png'], true);
+    $u1->applyWatermark('local', 'd/p.png', ['text' => 'X']);
+    $u1->rename('local', 'd', 'e');
+    assertTrue(is_file("$root/_fluxfiles/originals/e/p.png") && !is_dir("$root/_fluxfiles/originals/d"), 'dir backups followed rename');
+    $u1->delete('local', 'e');
+    assertTrue(!is_dir("$root/_fluxfiles/originals/e"), 'folder delete drops backups');
+});
+
 echo "\n  Total: " . ($passed + $failed) . "  {$green}Passed: {$passed}{$reset}  {$red}Failed: {$failed}{$reset}\n";
 exit($failed > 0 ? 1 : 0);
