@@ -265,6 +265,54 @@ class FileManager
         }
     }
 
+    /**
+     * Scan a file that is ALREADY stored (copy / cross-disk copy / cross-disk move)
+     * before its bytes are written to a new location. Streams the source to a temp
+     * file and runs the same fail-closed assertNoVirus()/assertNoPii() pair upload()
+     * uses. No scanner wired -> no-op, nothing is staged.
+     *
+     * Why scan even when the source is "ours": stored bytes may predate the claim,
+     * or sit on a disk/token that never scanned (cross-disk), so the source's
+     * provenance proves nothing. A same-disk move() is NOT scanned: it creates no
+     * new object and renaming is how a tenant tidies up legacy content.
+     */
+    private function assertStoredFileClean($fs, string $scopedPath): void
+    {
+        $needVirus = $this->virusScanner !== null;
+        $needPii = false;
+        if ($this->dlpScanner !== null) {
+            $ext = strtolower(pathinfo($scopedPath, PATHINFO_EXTENSION));
+            if (in_array($ext, $this->claims->dlpScanExtensions, true)) {
+                $size = (int) $fs->fileSize($scopedPath);
+                $needPii = $size <= $this->claims->dlpMaxScanKb * 1024;
+            }
+        }
+        if (!$needVirus && !$needPii) {
+            return;
+        }
+        $code = $needVirus ? 'virus_failed' : 'dlp_failed';
+        $tmp = tempnam(sys_get_temp_dir(), 'ffcpy');
+        if ($tmp === false) {
+            throw new ApiException('Could not stage content for scanning', 500, $code);
+        }
+        try {
+            $in = $fs->readStream($scopedPath);
+            $out = @fopen($tmp, 'wb');
+            if (!is_resource($in) || $out === false || stream_copy_to_stream($in, $out) === false) {
+                if (is_resource($in)) { fclose($in); }
+                if (is_resource($out)) { fclose($out); }
+                throw new ApiException('Could not stage content for scanning', 500, $code);
+            }
+            fclose($in);
+            fclose($out);
+            $name = basename($scopedPath);
+            $this->assertNoVirus($tmp, $name);
+            $this->assertNoPii($tmp, $name);
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
     /** Snapshot the current bytes of $scopedKey before an overwrite (no-op if no keeper). */
     private function keepVersion(string $disk, string $scopedKey, $fs): void
     {
@@ -1953,6 +2001,9 @@ class FileManager
         $fileSize = (int) ($fs->fileSize($scopedFrom) ?: 0);
         $this->quotaCheck($disk, $fileSize, 1);
 
+        // Virus/PII scan (paid modules): a copy is a new object — scan before writing.
+        $this->assertStoredFileClean($fs, $scopedFrom);
+
         $fs->copy($scopedFrom, $scopedTo);
 
         $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo, true, null, true);
@@ -1996,6 +2047,10 @@ class FileManager
         // Quota check on destination
         $fileSize = (int) $srcFs->fileSize($scopedSrc);
         $this->quotaCheck($dstDisk, $fileSize, 1);
+
+        // Virus/PII scan (paid modules) BEFORE the bytes reach the destination: the
+        // source disk may be unscanned, so this is the only gate.
+        $this->assertStoredFileClean($srcFs, $scopedSrc);
 
         // Stream the file across disks; an S3 destination gets the source's headers in the PUT.
         $srcMeta = $this->meta->get($srcDisk, $scopedSrc) ?: [];
@@ -2059,6 +2114,9 @@ class FileManager
         // the destination's cap.
         $fileSize = (int) $srcFs->fileSize($scopedSrc);
         $this->quotaCheck($dstDisk, $fileSize, 1);
+
+        // Virus/PII scan (paid modules) before the bytes enter the destination disk.
+        $this->assertStoredFileClean($srcFs, $scopedSrc);
 
         $srcMeta = $this->meta->get($srcDisk, $scopedSrc) ?: [];
         $stream = $srcFs->readStream($scopedSrc);

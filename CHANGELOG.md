@@ -3,6 +3,11 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+- **Virus/DLP scanning now covers copy and cross-disk copy/move.** `copy()`, `crossCopy()` and `crossMove()` never ran the scanners, so a stored EICAR could be duplicated under a scanning token and content from an unscanned disk could enter a scanned one. The stored source is now streamed to a temp file and scanned (fail-closed, same `virus_detected` / `pii_detected` / engine-down errors as upload) before anything is written. A same-disk move stays unscanned (pure rename, no new object).
+
 ## [1.0.16] — 2026-11-07
 
 > Released: `core-v1.1.3`, `laravel-v1.0.4`, `node-v1.0.1`, `python-v1.0.1` (security). Advisories: GHSA-872w-mr3x-mq3h (Laravel), GHSA-8rqh-875g-j6qg (legal hold / disk root), GHSA-mj62-fxq6-p436 (webhook secret). The WordPress changes ship with the next WordPress release; the legal-hold, webhooks and intake modules ship as their own releases requiring core `^1.1.3`.
