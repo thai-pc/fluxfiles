@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.21] — 2026-11-08
+
+> Released: `core-v1.1.8`, `wordpress-v1.1.1` (the WordPress.org submission build; bundles core 1.1.8).
+
 ### Changed
 - Project domain is now `fluxfiles.thai-pc.com`: in-app "docs"/"pricing" links (core UI, compliance scorecard), `Plugin URI` and readme of the WordPress plugin, and docs. **`fluxfiles update` now defaults to `https://fluxfiles-updates.thai-pc.com`** (was the never-deployed `updates.fluxfiles.dev`); `FLUXFILES_UPDATE_URL` still overrides it.
 - WordPress plugin 1.1.1 (the WordPress.org submission build): links only, no functional change from 1.1.0; the readme no longer mentions a WordPress Pro add-on.
