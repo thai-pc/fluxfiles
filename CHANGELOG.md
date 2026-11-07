@@ -3,7 +3,26 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [1.0.15] — 2026-11-07
+## [Unreleased]
+
+> Will ship as `laravel-v1.0.4`.
+
+### Laravel adapter: security fix, Laravel 13
+
+- **Security: `<x-fluxfiles>`, `FluxFiles::tokenForUser()` and `@fluxfilesToken` minted a full-disk token when no
+  `claims_resolver` was configured.** With the published default (`'claims_resolver' => null`) every logged-in
+  user got `perms [read,write,delete]` and `prefix ""` from `config('fluxfiles.defaults')`, i.e. access to every
+  other user's files. The middleware and `GET {route_prefix}/token` already refused (GHSA-m73q-w9rc-jcxh, 0.2.51),
+  but these three implicit paths did not, despite the changelog and README saying they no longer fell back.
+  They now refuse the same way: `tokenForUser()` and `tokenForResolvedUser()` (with no overrides) throw
+  `FluxFiles\Laravel\ClaimsResolverRequired`; `<x-fluxfiles>` renders a "not available" message and
+  `@fluxfilesToken` prints nothing (new null-safe `tokenForUserOrNull()`), both logging the reason with
+  `error_log`. Explicit `FluxFiles::token($user, [...])` is unchanged. **Action:** configure
+  `fluxfiles.claims_resolver`, or switch hand-written `tokenForUser([...])` calls to `FluxFiles::token($user, [...])`.
+- **Security: the upload route no longer returns the raw exception message** (`Upload failed: SQLSTATE[...] host=...`)
+  on an unexpected 500; it is logged server-side and the client gets `Upload failed`.
+- **Laravel 13**: `illuminate/*` constraints now allow `^13.0` (Laravel 13 needs PHP 8.3). Laravel 10 is end-of-life
+  but still installs, so it stays in the range for now.
 
 > Released: `core-v1.1.2` (comment-only phpcs annotations). The WordPress changes ship with `wordpress-v1.1.0`, the free WordPress.org build.
 

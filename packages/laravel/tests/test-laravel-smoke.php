@@ -53,6 +53,7 @@ if (!function_exists('storage_path')) {
 // instead of in a user's production app.
 $coreAutoload = getenv('FLUXFILES_CORE_AUTOLOAD') ?: __DIR__ . '/../../core/vendor/autoload.php';
 require_once $coreAutoload;   // FluxFiles\JwtCompat, CredentialEncryptor
+require_once __DIR__ . '/../src/ClaimsResolverRequired.php';
 require_once __DIR__ . '/../src/FluxFilesManager.php';
 
 use FluxFiles\Laravel\FluxFilesManager;
@@ -896,6 +897,70 @@ test('A-H3: tokenForUser() applies the configured resolver; explicit overrides w
     } finally {
         unset($GLOBALS['LARAVEL_AUTH_USER']);
     }
+});
+
+// ── GHSA regression: implicit tokens with NO resolver must refuse, not mint the defaults ──
+test('implicit token paths refuse without a claims resolver (never the config defaults)', function () {
+    $GLOBALS['LARAVEL_AUTH_USER'] = new StubUser(7);
+    try {
+        $mgr = new FluxFilesManager();
+        assertTrue(!$mgr->hasClaimsResolver(), 'precondition: published default, no resolver');
+        // Each of these minted perms [read,write] / prefix "" (full disk) before the fix.
+        $paths = [
+            'tokenForUser()'                => fn () => $mgr->tokenForUser(),
+            'tokenForUser(overrides)'       => fn () => $mgr->tokenForUser(['claims' => ['allow_zip' => false]]),
+            'tokenForResolvedUser(user)'    => fn () => $mgr->tokenForResolvedUser(new StubUser(7)),
+            'tokenForResolvedUser(user,[])' => fn () => $mgr->tokenForResolvedUser(new StubUser(7), []),
+        ];
+        foreach ($paths as $what => $fn) {
+            try {
+                $tok = $fn();
+                throw new \LogicException("{$what}: minted a token without a resolver: " . json_encode(decodeJwt($tok)));
+            } catch (\FluxFiles\Laravel\ClaimsResolverRequired $e) {
+                assertTrue(strpos($e->getMessage(), 'claims_resolver') !== false, "{$what}: developer-facing message names claims_resolver");
+            }
+        }
+        // The Blade-facing helper degrades to null (the view renders a safe message).
+        assertEqual(null, $mgr->tokenForUserOrNull(), 'tokenForUserOrNull() is null without a resolver');
+        // Explicit token() with explicit claims keeps working, as documented.
+        $p = decodeJwt($mgr->token(new StubUser(7), ['prefix' => 'users/7', 'perms' => ['read']]));
+        assertEqual('users/7', $p['prefix'], 'explicit token() unchanged');
+        // With a resolver everything works as before.
+        $mgr->resolveClaimsUsing(fn ($u) => ['prefix' => 'rt/' . $u->getAuthIdentifier()]);
+        assertEqual('rt/7', decodeJwt($mgr->tokenForUserOrNull())['prefix'], 'resolver configured → token');
+    } finally {
+        unset($GLOBALS['LARAVEL_AUTH_USER']);
+    }
+});
+
+test('Blade component and @fluxfilesToken go through the refusing helper', function () {
+    $blade = (string) file_get_contents(__DIR__ . '/../src/Views/components/fluxfiles.blade.php');
+    assertTrue(strpos($blade, 'tokenForUserOrNull(') !== false, 'component uses the null-safe implicit helper');
+    assertTrue(strpos($blade, '$token === null') !== false, 'component renders a safe message when refused');
+    assertTrue(strpos($blade, 'tokenForUser(') === false, 'component no longer calls the throwing/raw helper directly');
+    $prov = (string) file_get_contents(__DIR__ . '/../src/FluxFilesServiceProvider.php');
+    assertTrue(strpos($prov, 'tokenForUserOrNull(') !== false, '@fluxfilesToken uses the null-safe helper');
+});
+
+test('upload 500 does not leak the exception message (SQLSTATE/host) to the client', function () use ($ffTmp) {
+    $ctrl = freshController();
+    $hdr = bearer(['perms' => ['read', 'write'], 'prefix' => 'leak', 'rate_write' => 50]);
+    $file = new class {
+        public function getClientOriginalName(): string { return 'a.txt'; }
+        public function getMimeType(): string { throw new \RuntimeException('SQLSTATE[HY000] [2002] host=db.internal port=3306 dbname=prod'); }
+        public function getRealPath(): string { return ''; }
+        public function getError(): int { return 0; }
+        public function getSize(): int { return 1; }
+    };
+    $prevLog = ini_set('error_log', $ffTmp . '/php-errors.log');
+    $resp = $ctrl->upload(new Request('POST', ['disk' => 'local', 'path' => ''], $hdr, null, 'https://app.example.com', ['file' => $file], 'api/fm/upload'));
+    ini_set('error_log', (string) $prevLog);
+    $blob = json_encode($resp->getData());
+    assertEqual(500, $resp->getStatusCode(), 'still a 500');
+    foreach (['SQLSTATE', 'db.internal', '3306', 'prod'] as $needle) {
+        assertTrue(strpos($blob, $needle) === false, "leaked {$needle}: {$blob}");
+    }
+    assertTrue(strpos((string) @file_get_contents($ffTmp . '/php-errors.log'), 'db.internal') !== false, 'detail is logged server-side');
 });
 
 test('A-H3: refresh ticket round-trips the rendered overrides and is bound to the user', function () {

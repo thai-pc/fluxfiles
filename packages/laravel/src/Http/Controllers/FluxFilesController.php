@@ -420,8 +420,10 @@ class FluxFilesController
         } catch (ApiException $e) {
             return $this->error($e->getMessage(), $e->getHttpCode(), $e->getErrorCode(), $e->getErrorParams());
         } catch (\Throwable $e) {
-            // Never leak a TypeError/HTML error page from the API surface.
-            return $this->error('Upload failed: ' . $e->getMessage(), 500);
+            // Never leak a TypeError/HTML error page from the API surface, nor the
+            // exception text (SQLSTATE, host, port, paths): log it, answer generically.
+            error_log('FluxFiles: upload failed: ' . get_class($e) . ': ' . $e->getMessage());
+            return $this->error('Upload failed', 500);
         }
     }
 

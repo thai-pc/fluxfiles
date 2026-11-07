@@ -126,9 +126,12 @@ return [
     | Prefer a class name (closures can't be `config:cache`d), or register one at
     | runtime with FluxFiles::resolveClaimsUsing(...) in a service provider.
     |
-    | null = no per-user policy: the refresh route then only re-mints from the
-    | component's signed refresh ticket, and session-only API requests (no
-    | Bearer) are refused instead of getting the config `defaults` below.
+    | null = no per-user policy: every implicit mint is REFUSED -- tokenForUser()
+    | throws, <x-fluxfiles> renders a "not available" message, @fluxfilesToken
+    | prints nothing (all log the reason), session-only API requests (no Bearer)
+    | get 401, and the refresh route only re-mints from the component's signed
+    | refresh ticket. None of them ever fall back to the config `defaults` below.
+    | Mint explicitly with FluxFiles::token($user, [...]) if you need a fixed scope.
     |
     */
     'claims_resolver' => null,
@@ -266,8 +269,9 @@ return [
     | when the caller (or the claims_resolver) leaves a key out. They apply to
     | explicit FluxFiles::token() calls and to the keys a claims_resolver
     | omits -- never to a session user who has no resolver: without one, the
-    | FluxFilesAuth middleware and GET {route_prefix}/token refuse to mint
-    | (these defaults are broad: read/write/delete on the whole disk).
+    | component, tokenForUser(), @fluxfilesToken, the FluxFilesAuth middleware
+    | and GET {route_prefix}/token all refuse to mint (these defaults are broad:
+    | read/write/delete on the whole disk).
     |
     */
     'defaults' => [

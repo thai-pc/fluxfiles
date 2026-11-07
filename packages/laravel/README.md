@@ -4,8 +4,8 @@ Laravel adapter for [FluxFiles](https://github.com/thai-pc/fluxfiles) — a stan
 
 ## Requirements
 
-- PHP >= 8.1 (matches `fluxfiles/fluxfiles`; Laravel 11/12 themselves need 8.2)
-- Laravel 10, 11, or 12
+- PHP >= 8.1 (matches `fluxfiles/fluxfiles`; Laravel 11/12 themselves need 8.2, Laravel 13 needs 8.3)
+- Laravel 10, 11, 12, or 13
 
 ## Installation
 
@@ -92,7 +92,8 @@ Managing a **remote VPS / shared host** over SFTP is supported in both modes.
   `sftp` disk:
 
   ```php
-  $token = $fluxFiles->tokenForUser([
+  $token = $fluxFiles->token(auth()->user(), [
+      'prefix'      => 'user_' . auth()->id() . '/',
       'disks'       => ['sftp'],   // an SFTP disk configured on the FluxFiles server
       'allow_chmod' => true,       // cPanel-style permissions (default on for SFTP)
   ]);
@@ -129,7 +130,10 @@ Managing a **remote VPS / shared host** over SFTP is supported in both modes.
 
 Tokens minted **without** an explicit overrides array — `tokenForUser()`,
 `<x-fluxfiles>`, `@fluxfilesToken`, the `GET {route_prefix}/token` refresh route and
-the session fallback below — take their scope from a resolver you register once:
+the session fallback below — take their scope from a resolver you register once.
+**Without a resolver they all refuse** (`tokenForUser()` throws, `<x-fluxfiles>` renders
+a "not available" message, `@fluxfilesToken` prints nothing, each logging the reason);
+they never fall back to the config `defaults`:
 
 ```php
 // app/FluxFiles/TenantClaims.php
@@ -201,7 +205,8 @@ The language routes (`lang`, `lang/{locale}`) need neither.
 ```php
 use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
 
-// For the current authenticated user
+// For the current authenticated user (needs a claims_resolver, see above;
+// without one it throws instead of minting the config defaults)
 $token = FluxFiles::tokenForUser();
 
 // With custom overrides
@@ -312,7 +317,8 @@ FluxFiles.open({
 use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
 
 FluxFiles::token($user, $overrides);   // Generate JWT token (no resolver)
-FluxFiles::tokenForUser($overrides);   // Token for auth user (resolver + overrides)
+FluxFiles::tokenForUser($overrides);   // Token for auth user (resolver + overrides; throws without a resolver)
+FluxFiles::tokenForUserOrNull($overrides); // Same, but null (+ log) instead of throwing
 FluxFiles::tokenForResolvedUser($user, $overrides); // Same, for a given user
 FluxFiles::resolveClaimsUsing($callable);            // Register the claims resolver
 FluxFiles::refreshTicketForUser($overrides);         // Ticket for a custom refresh hook
@@ -649,7 +655,7 @@ Always derive the prefix server-side from the authenticated user — never trust
 ```php
 use FluxFiles\Laravel\FluxFilesFacade as FluxFiles;
 
-$token = FluxFiles::tokenForUser([
+$token = FluxFiles::token(auth()->user(), [
     'prefix' => 'user_' . auth()->id() . '/',
     'disks'  => ['local'],
     'perms'  => ['read', 'write', 'delete'],

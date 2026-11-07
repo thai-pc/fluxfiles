@@ -1,16 +1,23 @@
 @php
     $manager = app(\FluxFiles\Laravel\FluxFilesManager::class);
-    // tokenForUser() = the per-user claims resolver (config `claims_resolver`)
-    // with this tag's :overrides merged on top.
-    $token = $manager->tokenForUser($overrides);
+    // The per-user claims resolver (config `claims_resolver`) with this tag's
+    // :overrides merged on top.
+    // Null (and a server-side log line) when no claims_resolver is configured:
+    // the component never falls back to the config defaults.
+    $token = $manager->tokenForUserOrNull($overrides);
     // The default refresh hook re-mints from a ticket bound to this user + these
     // overrides, so an expired token comes back with the SAME scope — never the
     // broader config defaults. Sent as a header, never in the URL.
-    $refreshTicket = $onTokenRefresh ? null : $manager->refreshTicketForUser($overrides);
+    $refreshTicket = ($token === null || $onTokenRefresh) ? null : $manager->refreshTicketForUser($overrides);
     $endpoint = $manager->endpoint();
     $containerId = 'fluxfiles-' . uniqid();
 @endphp
 
+@if($token === null)
+<div id="{{ $containerId }}" style="width:{{ $width }};height:{{ $height }}">
+    <p>The file manager is not available for your account.</p>
+</div>
+@else
 <div id="{{ $containerId }}" style="width:{{ $width }};height:{{ $height }}"></div>
 
 <script src="{{ $endpoint }}/fluxfiles.js"></script>
@@ -53,3 +60,4 @@
     });
 })();
 </script>
+@endif

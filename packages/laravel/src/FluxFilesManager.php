@@ -499,7 +499,39 @@ class FluxFilesManager
      */
     public function tokenForUser(array $overrides = []): string
     {
+        // Implicit mint: the resolver IS the per-user policy, and `$overrides` only
+        // refine it. Without one the bare config defaults would apply (prefix '',
+        // read/write/delete for every logged-in user), so refuse. For a deliberately
+        // explicit token call FluxFiles::token($user, [...]) instead.
+        if (!$this->hasClaimsResolver()) {
+            throw self::resolverRequired();
+        }
         return $this->tokenForResolvedUser($this->currentUser(), $overrides);
+    }
+
+    /**
+     * tokenForUser() for views: null (and a server-side log line) instead of an
+     * exception when no claims resolver is configured, so a template can render a
+     * safe message rather than a 500 or — worse — a token. A resolver that throws
+     * to refuse a user still propagates.
+     */
+    public function tokenForUserOrNull(array $overrides = []): ?string
+    {
+        try {
+            return $this->tokenForUser($overrides);
+        } catch (ClaimsResolverRequired $e) {
+            error_log('FluxFiles: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    private static function resolverRequired(): ClaimsResolverRequired
+    {
+        return new ClaimsResolverRequired(
+            'No token issued: configure fluxfiles.claims_resolver (or FluxFiles::resolveClaimsUsing()) '
+            . 'so each user gets a scoped token, or mint one explicitly with FluxFiles::token($user, [...]). '
+            . 'The config `defaults` are never applied to a signed-in user implicitly.'
+        );
     }
 
     /**
@@ -512,6 +544,11 @@ class FluxFilesManager
      */
     public function tokenForResolvedUser($user, array $overrides = []): string
     {
+        // No resolver and nothing explicit (e.g. a stale refresh ticket with empty
+        // overrides): token() would fill every claim from the config defaults.
+        if ($overrides === [] && !$this->hasClaimsResolver()) {
+            throw self::resolverRequired();
+        }
         return $this->token($user, self::mergeOverrides($this->claimsFor($user), $overrides));
     }
 
