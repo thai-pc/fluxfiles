@@ -272,11 +272,10 @@ class CredentialEncryptor
      * signed, not encrypted, so a plaintext secret in it is readable by whoever
      * holds the token. Same AES-256-GCM blob layout as encrypt(), own HKDF key.
      */
-    public static function encryptSecret(#[\SensitiveParameter] string $value, #[\SensitiveParameter] string $secret, ?string $nonce = null): string
+    public static function encryptSecret(#[\SensitiveParameter] string $value, #[\SensitiveParameter] string $secret): string
     {
         $key = self::deriveKey($secret, self::HKDF_INFO_SECRET);
-        // $nonce is for the committed cross-language test vector ONLY; production always random.
-        $nonce ??= random_bytes(self::NONCE_LEN);
+        $nonce = random_bytes(self::NONCE_LEN); // never caller-supplied: GCM nonce reuse leaks the key stream
         $tag = '';
         $ciphertext = openssl_encrypt($value, self::CIPHER, $key, OPENSSL_RAW_DATA, $nonce, $tag, '', self::TAG_LEN);
         if ($ciphertext === false) {

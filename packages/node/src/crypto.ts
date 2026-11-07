@@ -73,11 +73,21 @@ export function decryptByob<T = unknown>(blob: string, secret: string): T {
 // BYOB blob can never be replayed as a secret. The plaintext is the raw string.
 const SECRET_INFO = 'fluxfiles-webhook-secret-enc';
 
-export function encryptSecret(value: string, secret: string, nonceForTest?: Buffer): string {
+export function encryptSecret(value: string, secret: string): string {
   const key = deriveByobKey(secret, SECRET_INFO);
-  // nonceForTest is for the committed cross-language vector ONLY; production is random.
-  const nonce = nonceForTest ?? randomBytes(NONCE_LEN);
+  const nonce = randomBytes(NONCE_LEN);
   const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: TAG_LEN });
   const ct = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
   return Buffer.concat([nonce, ct, cipher.getAuthTag()]).toString('base64');
+}
+
+export function decryptSecret(blob: string, secret: string): string {
+  const key = deriveByobKey(secret, SECRET_INFO);
+  const raw = Buffer.from(blob, 'base64');
+  if (raw.length < NONCE_LEN + TAG_LEN + 1) {
+    throw new Error('FluxFiles: invalid encrypted secret blob');
+  }
+  const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, NONCE_LEN), { authTagLength: TAG_LEN });
+  decipher.setAuthTag(raw.subarray(raw.length - TAG_LEN));
+  return Buffer.concat([decipher.update(raw.subarray(NONCE_LEN, raw.length - TAG_LEN)), decipher.final()]).toString('utf8');
 }

@@ -85,11 +85,11 @@ test('no secret set: nothing sealed, not flagged', function () use ($server) {
     check($c->webhookSecret === '' && !$c->webhookSecretPlaintext, 'unexpected state');
 });
 
-test('committed cross-language vector (shared with Node and Python): exact blob + decrypt', function () {
+test('committed cross-language vector (shared with Node and Python) decrypts; seal->open round trip', function () {
     $v = json_decode((string) file_get_contents(__DIR__ . '/../../../../docs/testdata/webhook-secret-vector.json'), true);
-    $blob = CredentialEncryptor::encryptSecret($v['plaintext'], $v['secret'], hex2bin($v['nonce_hex']));
-    check($blob === $v['blob'], 'PHP blob differs from the committed vector');
     check(CredentialEncryptor::decryptSecret($v['blob'], $v['secret']) === $v['plaintext'], 'vector does not decrypt');
+    check(CredentialEncryptor::decryptSecret(CredentialEncryptor::encryptSecret($v['plaintext'], $v['secret']), $v['secret']) === $v['plaintext'], 'round trip');
+    check((new ReflectionMethod(CredentialEncryptor::class, 'encryptSecret'))->getNumberOfParameters() === 2, 'encryptSecret must not take a caller-supplied nonce');
 });
 
 test('"0" is a valid key: sealed by the minter; empty string is unset', function () use ($server) {

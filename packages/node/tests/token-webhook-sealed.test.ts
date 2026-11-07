@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { createToken, decodeToken } from '../src';
-import { encryptSecret } from '../src/crypto';
+import { decryptSecret, encryptSecret } from '../src/crypto';
 
 const SECRET = 'test-secret-key-that-is-at-least-32-bytes-long';
 
@@ -29,8 +30,10 @@ describe('webhook secret is sealed, never plaintext in the token', () => {
     expect(empty.webhook_secret_enc).toBeUndefined();
   });
 
-  it('matches the committed cross-language vector byte for byte', () => {
-    const v = JSON.parse(readFileSync(resolve(process.cwd(), '../../docs/testdata/webhook-secret-vector.json'), 'utf8'));
-    expect(encryptSecret(v.plaintext, v.secret, Buffer.from(v.nonce_hex, 'hex'))).toBe(v.blob);
+  it('decrypts the committed cross-language vector and round-trips', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const v = JSON.parse(readFileSync(resolve(here, '../../../docs/testdata/webhook-secret-vector.json'), 'utf8'));
+    expect(decryptSecret(v.blob, v.secret)).toBe(v.plaintext);
+    expect(decryptSecret(encryptSecret(v.plaintext, v.secret), v.secret)).toBe(v.plaintext);
   });
 });

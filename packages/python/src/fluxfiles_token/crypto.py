@@ -79,11 +79,22 @@ def decrypt_byob(blob: str, secret: str) -> dict[str, Any]:
     return config
 
 
-def encrypt_secret(value: str, secret: str, nonce_for_test: bytes | None = None) -> str:
+def encrypt_secret(value: str, secret: str) -> str:
     """Seal a single secret string (the `webhook_secret_enc` claim). Same blob layout
     as `encrypt_byob`, own HKDF info; matches PHP `CredentialEncryptor::encryptSecret`."""
     key = derive_byob_key(secret, _SECRET_INFO)
-    # nonce_for_test is for the committed cross-language vector ONLY; production is random.
-    nonce = nonce_for_test if nonce_for_test is not None else os.urandom(_NONCE_LEN)
+    nonce = os.urandom(_NONCE_LEN)
     ct_and_tag = AESGCM(key).encrypt(nonce, value.encode("utf-8"), None)
     return base64.b64encode(nonce + ct_and_tag).decode("ascii")
+
+
+def decrypt_secret(blob: str, secret: str) -> str:
+    """Inverse of `encrypt_secret`. Raises FluxFilesByobError on a malformed or tampered blob."""
+    key = derive_byob_key(secret, _SECRET_INFO)
+    try:
+        raw = base64.b64decode(blob, validate=True)
+        if len(raw) < _NONCE_LEN + _TAG_LEN + 1:
+            raise ValueError("short")
+        return AESGCM(key).decrypt(raw[:_NONCE_LEN], raw[_NONCE_LEN:], None).decode("utf-8")
+    except Exception as exc:
+        raise FluxFilesByobError("FluxFiles: invalid or tampered encrypted secret blob") from exc

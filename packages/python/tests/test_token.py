@@ -439,8 +439,9 @@ def test_webhook_secret_zero_is_sealed_empty_is_unset() -> None:
     assert "webhook_secret_enc" not in decode_token(create_token(secret=SECRET, user_id="u", webhook_secret=""))
 
 
-def test_webhook_secret_matches_committed_cross_language_vector() -> None:
-    from fluxfiles_token.crypto import encrypt_secret
+def test_webhook_secret_decrypts_committed_cross_language_vector() -> None:
+    from fluxfiles_token.crypto import decrypt_secret, encrypt_secret
 
     v = json.loads((VECTORS_PATH.parent / "webhook-secret-vector.json").read_text(encoding="utf-8"))
-    assert encrypt_secret(v["plaintext"], v["secret"], bytes.fromhex(v["nonce_hex"])) == v["blob"]
+    assert decrypt_secret(v["blob"], v["secret"]) == v["plaintext"]
+    assert decrypt_secret(encrypt_secret(v["plaintext"], v["secret"]), v["secret"]) == v["plaintext"]
