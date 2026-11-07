@@ -344,6 +344,7 @@
     "optimize_forbidden": "التحسين غير مسموح به.",
     "webhook_not_configured": "لا يوجد عنوان webhook مُهيأ على هذا الرمز.",
     "webhook_blocked": "عنوان webhook يشير إلى عنوان خاص أو محظور.",
+    "webhook_secret_insecure": "يحتوي هذا الرمز على سر webhook بنص عادي وهذا غير آمن. اطلب من المسؤول ترقية مولّد الرموز.",
     "version_not_found": "لم يتم العثور على هذا الإصدار.",
     "license_required": "تتطلب هذه الميزة ترخيصًا صالحًا.",
     "license_expired": "انتهت صلاحية ترخيصك، لذا فإن {module} غير متاح. جدّده لمواصلة استخدام هذه الميزة.",

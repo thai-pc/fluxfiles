@@ -344,6 +344,7 @@
     "optimize_forbidden": "Optimizasyona izin verilmiyor.",
     "webhook_not_configured": "Bu belirteçte yapılandırılmış bir webhook URL'si yok.",
     "webhook_blocked": "Webhook URL'si özel veya engellenmiş bir adrese işaret ediyor.",
+    "webhook_secret_insecure": "Bu belirteç düz metin bir webhook sırrı içeriyor, bu güvenli değil. Yöneticiden belirteç üreticisini güncellemesini isteyin.",
     "version_not_found": "Bu sürüm bulunamadı.",
     "license_required": "Bu özellik geçerli bir lisans gerektirir.",
     "license_expired": "Lisansınızın süresi doldu, bu nedenle {module} kullanılamıyor. Bu özelliği kullanmaya devam etmek için yenileyin.",

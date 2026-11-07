@@ -152,7 +152,7 @@ function _fluxfiles_build_token(array $o): string
         }
     }
 
-    return JwtCompat::encode($payload, $secret);
+    return JwtCompat::encode(\FluxFiles\CredentialEncryptor::sealWebhookSecret($payload, (string) $secret), $secret);
 }
 
 /**
@@ -336,7 +336,7 @@ function fluxfiles_byob_token(
     fluxfiles_apply_webp_claims($payload, $webp ?? []);
     fluxfiles_apply_usage_claims($payload, $usage ?? []);
 
-    return JwtCompat::encode($payload, $secret);
+    return JwtCompat::encode(\FluxFiles\CredentialEncryptor::sealWebhookSecret($payload, (string) $secret), $secret);
 }
 
 /**
@@ -401,7 +401,7 @@ function fluxfiles_mixed_token(
     fluxfiles_apply_webp_claims($payload, $webp ?? []);
     fluxfiles_apply_usage_claims($payload, $usage ?? []);
 
-    return JwtCompat::encode($payload, $secret);
+    return JwtCompat::encode(\FluxFiles\CredentialEncryptor::sealWebhookSecret($payload, (string) $secret), $secret);
 }
 
 /**
@@ -615,7 +615,9 @@ function fluxfiles_apply_webp_claims(array &$payload, array $webp): void
     if (!empty($webp['webhook_events'])) {
         $payload['webhook_events'] = $webp['webhook_events'];
     }
-    if (!empty($webp['webhook_secret'])) {
+    // Plaintext here only until sealed into `webhook_secret_enc` just before the token is
+    // encoded (sealWebhookSecret) — a JWT is signed, not encrypted.
+    if (isset($webp['webhook_secret']) && (string) $webp['webhook_secret'] !== '') {
         $payload['webhook_secret'] = (string) $webp['webhook_secret'];
     }
     if (isset($webp['pdf_level'])

@@ -17,12 +17,13 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from .exceptions import FluxFilesByobError
 
 _BYOB_INFO = b"fluxfiles-byob-enc"
+_SECRET_INFO = b"fluxfiles-webhook-secret-enc"
 _NONCE_LEN = 12
 _TAG_LEN = 16
 _KEY_LEN = 32
 
 
-def derive_byob_key(secret: str) -> bytes:
+def derive_byob_key(secret: str, info: bytes = _BYOB_INFO) -> bytes:
     """Derive the BYOB key exactly like PHP `hash_hkdf('sha256', $secret, 32, $info)`.
 
     PHP's empty HKDF salt means "HashLen zero bytes" (RFC 5869), so we pass an
@@ -31,7 +32,7 @@ def derive_byob_key(secret: str) -> bytes:
     anyway so this stays self-documenting and immune to any future change in
     that default — this single line is the crux of cross-language parity.
     """
-    hkdf = HKDF(algorithm=hashes.SHA256(), length=_KEY_LEN, salt=b"\x00" * 32, info=_BYOB_INFO)
+    hkdf = HKDF(algorithm=hashes.SHA256(), length=_KEY_LEN, salt=b"\x00" * 32, info=info)
     return hkdf.derive(secret.encode("utf-8"))
 
 
@@ -76,3 +77,24 @@ def decrypt_byob(blob: str, secret: str) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise FluxFilesByobError("FluxFiles: invalid BYOB credential format")
     return config
+
+
+def encrypt_secret(value: str, secret: str) -> str:
+    """Seal a single secret string (the `webhook_secret_enc` claim). Same blob layout
+    as `encrypt_byob`, own HKDF info; matches PHP `CredentialEncryptor::encryptSecret`."""
+    key = derive_byob_key(secret, _SECRET_INFO)
+    nonce = os.urandom(_NONCE_LEN)
+    ct_and_tag = AESGCM(key).encrypt(nonce, value.encode("utf-8"), None)
+    return base64.b64encode(nonce + ct_and_tag).decode("ascii")
+
+
+def decrypt_secret(blob: str, secret: str) -> str:
+    """Inverse of `encrypt_secret`. Raises FluxFilesByobError on a malformed or tampered blob."""
+    key = derive_byob_key(secret, _SECRET_INFO)
+    try:
+        raw = base64.b64decode(blob, validate=True)
+        if len(raw) < _NONCE_LEN + _TAG_LEN + 1:
+            raise ValueError("short")
+        return AESGCM(key).decrypt(raw[:_NONCE_LEN], raw[_NONCE_LEN:], None).decode("utf-8")
+    except Exception as exc:
+        raise FluxFilesByobError("FluxFiles: invalid or tampered encrypted secret blob") from exc

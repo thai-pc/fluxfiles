@@ -344,6 +344,7 @@
     "optimize_forbidden": "Optimaliseren is niet toegestaan.",
     "webhook_not_configured": "Er is geen webhook-URL geconfigureerd op dit token.",
     "webhook_blocked": "De webhook-URL wijst naar een privé- of geblokkeerd adres.",
+    "webhook_secret_insecure": "Dit token bevat een webhook-geheim in platte tekst, wat onveilig is. Vraag de beheerder om de tokengenerator bij te werken.",
     "version_not_found": "Die versie is niet gevonden.",
     "license_required": "Deze functie vereist een geldige licentie.",
     "license_expired": "Je licentie is verlopen, waardoor {module} niet beschikbaar is. Vernieuw hem om deze functie te blijven gebruiken.",

@@ -468,7 +468,11 @@ test('webhook_events is normalized to a lowercase trimmed list; webhook_secret p
     assertEqual(['upload'], claimsWith(['webhook_events' => 'upload,,'])->webhookEvents, 'blank CSV entries dropped');
     assertEqual([], claimsWith(['webhook_events' => '   '])->webhookEvents, 'whitespace-only string = all events');
 
-    assertEqual('whsec_abc', claimsWith(['webhook_secret' => 'whsec_abc'])->webhookSecret, 'secret carried');
+    $enc = FluxFiles\CredentialEncryptor::encryptSecret('whsec_abc', 'unit-test-secret-at-least-32-bytes!!');
+    assertEqual('whsec_abc', FluxFiles\Claims::fromJwtPayload((object) ['sub' => 'u', 'webhook_secret_enc' => $enc], 'unit-test-secret-at-least-32-bytes!!')->webhookSecret, 'sealed secret decrypted');
+    $legacy = claimsWith(['webhook_secret' => 'whsec_abc']);
+    assertEqual('', $legacy->webhookSecret, 'plaintext claim is never used as the key');
+    assertEqual(true, $legacy->webhookSecretPlaintext, 'plaintext claim flagged');
     assertEqual('', claimsWith([])->webhookSecret, 'empty = falls back to FLUXFILES_SECRET');
 });
 

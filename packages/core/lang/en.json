@@ -344,6 +344,7 @@
     "optimize_forbidden": "Optimization isn't allowed.",
     "webhook_not_configured": "No webhook URL is configured on this token.",
     "webhook_blocked": "The webhook URL points at a private or blocked address.",
+    "webhook_secret_insecure": "This token carries a plaintext webhook secret, which is not safe. Ask the administrator to upgrade the token minter.",
     "version_not_found": "That version was not found.",
     "license_required": "This feature requires a valid license.",
     "license_expired": "Your licence has expired, so {module} is unavailable. Renew it to keep using this feature.",

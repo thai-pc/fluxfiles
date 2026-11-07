@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { base64url, hmacSha256, encryptByob } from './crypto';
+import { base64url, hmacSha256, encryptByob, encryptSecret } from './crypto';
 import type { BaseTokenOptions, ByobDiskConfig, CreateByobTokenOptions, CreateTokenOptions } from './types';
 
 const MIN_SECRET_BYTES = 32;
@@ -21,6 +21,12 @@ function sign(payload: Record<string, unknown>, secret: string): string {
   // merged last and could otherwise overwrite the validated one with NaN/a string.
   if (typeof payload.exp !== 'number' || !Number.isSafeInteger(payload.exp)) {
     throw new TypeError('FluxFiles: `exp` must be an integer unix timestamp.');
+  }
+  // A JWT is signed, not encrypted: never ship the webhook HMAC key readable. Seal it
+  // (also when it arrived via the raw `claims` hatch); the server decrypts at runtime.
+  if ('webhook_secret' in payload) {
+    const { webhook_secret: wh, ...rest } = payload;
+    payload = wh !== undefined && wh !== null && String(wh) !== '' ? { ...rest, webhook_secret_enc: encryptSecret(String(wh), secret) } : rest;
   }
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const body = base64url(JSON.stringify(payload));
@@ -269,7 +275,8 @@ function applyTenantOverrides(
   if (opts.allowWebhooks !== undefined) payload.allow_webhooks = !!opts.allowWebhooks;
   if (opts.webhookUrl) payload.webhook_url = String(opts.webhookUrl);
   if (opts.webhookEvents && opts.webhookEvents.length) payload.webhook_events = opts.webhookEvents;
-  if (opts.webhookSecret) payload.webhook_secret = String(opts.webhookSecret);
+  // Plaintext here only until sign() seals it into `webhook_secret_enc`.
+  if (opts.webhookSecret !== undefined && opts.webhookSecret !== null && String(opts.webhookSecret) !== '') payload.webhook_secret = String(opts.webhookSecret);
   if (opts.allowAiVision !== undefined) payload.allow_ai_vision = !!opts.allowAiVision;
   if (opts.allowOcr !== undefined) payload.allow_ocr = !!opts.allowOcr;
   if (opts.allowVirusScan !== undefined) payload.allow_virus_scan = !!opts.allowVirusScan;

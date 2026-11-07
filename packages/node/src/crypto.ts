@@ -36,9 +36,9 @@ const TAG_LEN = 16;
  * explicit 32-byte zero salt — passing an empty Buffer to Node's hkdfSync would
  * NOT match.
  */
-function deriveByobKey(secret: string): Buffer {
+function deriveByobKey(secret: string, info: string = BYOB_INFO): Buffer {
   const salt = Buffer.alloc(32, 0);
-  const dk = hkdfSync('sha256', Buffer.from(secret, 'utf8'), salt, Buffer.from(BYOB_INFO, 'utf8'), 32);
+  const dk = hkdfSync('sha256', Buffer.from(secret, 'utf8'), salt, Buffer.from(info, 'utf8'), 32);
   return Buffer.from(dk);
 }
 
@@ -66,4 +66,28 @@ export function decryptByob<T = unknown>(blob: string, secret: string): T {
   decipher.setAuthTag(tag);
   const pt = Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
   return JSON.parse(pt) as T;
+}
+
+// ── Single-string secret sealing (webhook_secret_enc; matches PHP
+// CredentialEncryptor::encryptSecret). Same blob layout, own HKDF info so a
+// BYOB blob can never be replayed as a secret. The plaintext is the raw string.
+const SECRET_INFO = 'fluxfiles-webhook-secret-enc';
+
+export function encryptSecret(value: string, secret: string): string {
+  const key = deriveByobKey(secret, SECRET_INFO);
+  const nonce = randomBytes(NONCE_LEN);
+  const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: TAG_LEN });
+  const ct = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  return Buffer.concat([nonce, ct, cipher.getAuthTag()]).toString('base64');
+}
+
+export function decryptSecret(blob: string, secret: string): string {
+  const key = deriveByobKey(secret, SECRET_INFO);
+  const raw = Buffer.from(blob, 'base64');
+  if (raw.length < NONCE_LEN + TAG_LEN + 1) {
+    throw new Error('FluxFiles: invalid encrypted secret blob');
+  }
+  const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, NONCE_LEN), { authTagLength: TAG_LEN });
+  decipher.setAuthTag(raw.subarray(raw.length - TAG_LEN));
+  return Buffer.concat([decipher.update(raw.subarray(NONCE_LEN, raw.length - TAG_LEN)), decipher.final()]).toString('utf8');
 }

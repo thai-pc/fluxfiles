@@ -292,10 +292,8 @@ _TYPED_KWARG_CASES: list[tuple[dict[str, Any], dict[str, Any]]] = [
      {"upload_collision": "reject", "show_hidden": True, "dedupe_uploads": True}),
     ({"allow_versioning": True, "versioning_max": 10, "versioning_max_mb": 200},
      {"allow_versioning": True, "versioning_max": 10, "versioning_max_mb": 200}),
-    ({"allow_webhooks": True, "webhook_url": "https://hooks.example.com/x", "webhook_events": ["upload"],
-      "webhook_secret": "whsec"},
-     {"allow_webhooks": True, "webhook_url": "https://hooks.example.com/x", "webhook_events": ["upload"],
-      "webhook_secret": "whsec"}),
+    ({"allow_webhooks": True, "webhook_url": "https://hooks.example.com/x", "webhook_events": ["upload"]},
+     {"allow_webhooks": True, "webhook_url": "https://hooks.example.com/x", "webhook_events": ["upload"]}),
     ({"allow_ai_vision": True, "allow_ocr": True, "allow_virus_scan": True, "allow_backup": True,
       "allow_c2pa": True},
      {"allow_ai_vision": True, "allow_ocr": True, "allow_virus_scan": True, "allow_backup": True,
@@ -334,6 +332,19 @@ def test_typed_kwargs_land_in_correspondingly_named_claims(
     c = decode_token(create_token(secret=SECRET, user_id="u", **kwargs))
     for key, value in expected.items():
         assert c.get(key) == value
+
+
+def test_webhook_secret_is_sealed_never_plaintext_in_the_token() -> None:
+    """A JWT is signed, not encrypted: the HMAC key must not be readable by the token holder."""
+    for tok in (
+        create_token(secret=SECRET, user_id="u", webhook_secret="whsec_plain"),
+        create_token(secret=SECRET, user_id="u", claims={"webhook_secret": "whsec_plain"}),
+    ):
+        c = decode_token(tok)
+        assert "webhook_secret" not in c
+        assert "whsec_plain" not in json.dumps(c)
+        assert c["webhook_secret_enc"]
+    assert "webhook_secret_enc" not in decode_token(create_token(secret=SECRET, user_id="u"))
 
 
 def test_pro_hints_is_embedded_only_when_explicitly_set() -> None:
@@ -420,3 +431,17 @@ def test_verify_token_round_trips_and_rejects_tampering_or_expiry() -> None:
 def test_decode_token_does_not_require_the_secret() -> None:
     token = create_token(secret=SECRET, user_id="u", prefix="users/1")
     assert decode_token(token)["prefix"] == "users/1"
+
+
+def test_webhook_secret_zero_is_sealed_empty_is_unset() -> None:
+    zero = decode_token(create_token(secret=SECRET, user_id="u", webhook_secret="0"))
+    assert "webhook_secret" not in zero and zero["webhook_secret_enc"]
+    assert "webhook_secret_enc" not in decode_token(create_token(secret=SECRET, user_id="u", webhook_secret=""))
+
+
+def test_webhook_secret_decrypts_committed_cross_language_vector() -> None:
+    from fluxfiles_token.crypto import decrypt_secret, encrypt_secret
+
+    v = json.loads((VECTORS_PATH.parent / "webhook-secret-vector.json").read_text(encoding="utf-8"))
+    assert decrypt_secret(v["blob"], v["secret"]) == v["plaintext"]
+    assert decrypt_secret(encrypt_secret(v["plaintext"], v["secret"]), v["secret"]) == v["plaintext"]

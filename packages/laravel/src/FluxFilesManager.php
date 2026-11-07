@@ -56,7 +56,7 @@ class FluxFilesManager
         }
         self::applyTenantOverrides($payload, $overrides, $roleDefaults);
 
-        return JwtCompat::encode($payload, $secret);
+        return JwtCompat::encode(self::sealWebhook($payload, (string) $secret), $secret);
     }
 
     /**
@@ -132,6 +132,23 @@ class FluxFilesManager
             ));
         }
         return $presets[$key];
+    }
+
+    /**
+     * Seal the webhook HMAC key into `webhook_secret_enc` right before encoding (a JWT is
+     * signed, not encrypted). Needs core >= 1.1.3; on an older core a supplied secret is
+     * refused rather than ever being emitted in plaintext.
+     */
+    private static function sealWebhook(array $payload, string $secret): array
+    {
+        if (\method_exists(\FluxFiles\CredentialEncryptor::class, 'sealWebhookSecret')) {
+            return \FluxFiles\CredentialEncryptor::sealWebhookSecret($payload, $secret);
+        }
+        if (isset($payload['webhook_secret']) && (string) $payload['webhook_secret'] !== '') {
+            throw new \RuntimeException('webhook_secret requires fluxfiles/fluxfiles >= 1.1.3 (it is sealed into the token, never sent in plaintext). Upgrade core or drop webhook_secret.');
+        }
+        unset($payload['webhook_secret']);
+        return $payload;
     }
 
     /**
@@ -393,7 +410,8 @@ class FluxFilesManager
         }
         // Webhook config. Without a URL `allow_webhooks` is inert (the module has
         // nowhere to POST), so these travel with the gate claim. The core drops a
-        // non-http(s) URL on decode; `webhook_secret` falls back to FLUXFILES_SECRET.
+        // non-http(s) URL on decode; `webhook_secret` is sealed into
+        // `webhook_secret_enc` at encode time (never plaintext); unset = the derived key.
         if (!empty($overrides['webhook_url'])) {
             $payload['webhook_url'] = (string) $overrides['webhook_url'];
         }
@@ -404,7 +422,9 @@ class FluxFilesManager
                 ? array_values($overrides['webhook_events'])
                 : (string) $overrides['webhook_events'];
         }
-        if (!empty($overrides['webhook_secret'])) {
+        // Plaintext here only until sealed into `webhook_secret_enc` just before the token is
+        // encoded (sealWebhookSecret) — a JWT is signed, not encrypted.
+        if (isset($overrides['webhook_secret']) && (string) $overrides['webhook_secret'] !== '') {
             $payload['webhook_secret'] = (string) $overrides['webhook_secret'];
         }
         if (array_key_exists('allow_optimize', $overrides)) {
@@ -790,7 +810,7 @@ class FluxFilesManager
         }
         self::applyTenantOverrides($payload, $overrides, $roleDefaults);
 
-        return JwtCompat::encode($payload, $secret);
+        return JwtCompat::encode(self::sealWebhook($payload, (string) $secret), $secret);
     }
 
     /**

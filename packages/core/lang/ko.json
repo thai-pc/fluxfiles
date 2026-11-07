@@ -344,6 +344,7 @@
     "optimize_forbidden": "최적화가 허용되지 않습니다.",
     "webhook_not_configured": "이 토큰에 webhook URL이 설정되지 않았습니다.",
     "webhook_blocked": "webhook URL이 비공개 또는 차단된 주소를 가리킵니다.",
+    "webhook_secret_insecure": "이 토큰에는 평문 웹훅 시크릿이 포함되어 있어 안전하지 않습니다. 관리자에게 토큰 발급 모듈 업그레이드를 요청하세요.",
     "version_not_found": "해당 버전을 찾을 수 없습니다.",
     "license_required": "이 기능에는 유효한 라이선스가 필요합니다.",
     "license_expired": "라이선스가 만료되어 {module}을(를) 사용할 수 없습니다. 계속 사용하려면 갱신하세요.",

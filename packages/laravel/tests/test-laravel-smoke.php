@@ -107,6 +107,26 @@ test('token() forwards about / brand_name / brand_logo_url / accent_color in the
     assertEqual('#0a7f5a', $claims->accent_color ?? '', 'accent_color forwarded');
 });
 
+
+// The webhook HMAC key must never be a readable claim (a JWT is signed, not encrypted). Sealing
+// needs core >= 1.1.3; on an older core (the declared floor) minting WITH a secret must refuse
+// rather than emit plaintext, while minting without one keeps working (tests above).
+test('webhook_secret is sealed into webhook_secret_enc, or refused on a core that cannot seal', function () use ($secret) {
+    if (!method_exists(\FluxFiles\CredentialEncryptor::class, 'sealWebhookSecret')) {
+        $threw = false;
+        try { (new FluxFilesManager())->token(52, ['webhook_secret' => 'whsec_abc123']); } catch (\RuntimeException $e) { $threw = strpos($e->getMessage(), '1.1.3') !== false; }
+        assertEqual(true, $threw, 'older core: refuses instead of emitting a plaintext secret');
+        return;
+    }
+    $token = (new FluxFilesManager())->token(52, ['webhook_secret' => 'whsec_abc123']);
+    $p = \FluxFiles\JwtCompat::decode($token, $secret);
+    assertEqual(false, isset($p->webhook_secret), 'webhook_secret is NOT readable in the token');
+    $blob = base64_decode((string) ($p->webhook_secret_enc ?? ''), true);
+    // Decrypted inline (HKDF info + AES-256-GCM) so the smoke pins the wire format, not a core API.
+    $whKey = hash_hkdf('sha256', $secret, 32, 'fluxfiles-webhook-secret-enc');
+    assertEqual('whsec_abc123', openssl_decrypt(substr($blob, 12, -16), 'aes-256-gcm', $whKey, OPENSSL_RAW_DATA, substr($blob, 0, 12), substr($blob, -16)), 'webhook_secret sealed as webhook_secret_enc');
+});
+
 test('token() forwards URL-import claims so the feature can be enabled', function () use ($secret) {
     $mgr = new FluxFilesManager();
     $token = $mgr->token(11, [
@@ -205,7 +225,6 @@ test('token() forwards versioning + webhook config claims, not just the gate', f
         'allow_webhooks'    => true,
         'webhook_url'       => 'https://hooks.acme.com/flux',
         'webhook_events'    => ['upload', 'delete'],
-        'webhook_secret'    => 'whsec_abc123',
     ]);
     // Assert on the raw JWT payload, not Claims::fromJwtPayload — forwarding a claim
     // needs no core API, so this must keep passing against the declared core floor
@@ -218,7 +237,6 @@ test('token() forwards versioning + webhook config claims, not just the gate', f
     assertEqual(true, $p->allow_webhooks ?? null, 'webhooks gate');
     assertEqual('https://hooks.acme.com/flux', $p->webhook_url ?? '', 'webhook_url');
     assertEqual(['upload', 'delete'], (array) ($p->webhook_events ?? []), 'webhook_events');
-    assertEqual('whsec_abc123', $p->webhook_secret ?? '', 'webhook_secret');
 
     // A config file naturally holds a comma-separated string; the core normalizes it.
     $csv = \FluxFiles\JwtCompat::decode(
