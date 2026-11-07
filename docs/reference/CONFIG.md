@@ -335,6 +335,7 @@ private-local-media requirement.
 | `FLUXFILES_DLP_ENDPOINT` | — | DLP/PII scanner endpoint for the paid DLP module. Required when DLP scanning is enabled for a token. |
 | `FLUXFILES_DLP_LANGUAGE` | `en` | Language code sent to the DLP scanner with each analyze request. |
 | `FLUXFILES_DLP_TIMEOUT` | `10` | DLP scanner request timeout (seconds, minimum 1). |
+| `FLUXFILES_DLP_TOTAL_TIMEOUT` | `45` | Overall time budget (seconds, minimum 1) for one DLP scan across all of its engine calls (the `/supportedentities` lookup plus every analyze chunk). Each call is limited to the smaller of `FLUXFILES_DLP_TIMEOUT` and the time left; when the budget runs out the write is refused with `502 dlp_engine_unavailable` (fail-closed). Keep it below your web server's request timeout (e.g. a 60 s fastcgi timeout). DLP module >= 1.1.0. |
 | `FLUXFILES_C2PA_MANIFEST` | — | Path to the C2PA (paid) signing manifest JSON (claim_generator + cert/key). Empty → `501 c2pa_unconfigured`. |
 | `FLUXFILES_VIRUSTOTAL_KEY` | — | VirusTotal API key — cloud fallback for the Virus module (paid) when local ClamAV isn't installed. SHA-256 lookup only; bytes never leave the server. |
 | `FLUXFILES_VIRUSTOTAL_TIMEOUT` | `20` | VirusTotal request timeout (seconds). |
