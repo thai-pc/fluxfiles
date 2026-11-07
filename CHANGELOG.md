@@ -3,6 +3,14 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+- **`POST /api/fm/retention/run`: an unrecognised `dry_run` ran LIVE.** `dry_run` was parsed with `FILTER_VALIDATE_BOOLEAN`, so `"yes please"`, `""` or an array evaluated to false and the sweep trashed/deleted files. Now only an explicit false (`false`, `0`, `"0"`, `"false"`, `"no"`, `"off"`) runs live; missing, null or anything else is a dry run. Same parsing in core, the Laravel proxy and the WordPress plugin (guard: `tests/unit/test-retention-dry-run-parse.php`).
+
+### Fixed
+- Retention sweep (legal-hold module): held files no longer count toward the per-call cap, so a large held tree sorting first can't starve eligible files (module release notes).
+
 ## [1.0.16] — 2026-11-07
 
 > Released: `core-v1.1.3`, `laravel-v1.0.4`, `node-v1.0.1`, `python-v1.0.1` (security). Advisories: GHSA-872w-mr3x-mq3h (Laravel), GHSA-8rqh-875g-j6qg (legal hold / disk root), GHSA-mj62-fxq6-p436 (webhook secret). The WordPress changes ship with the next WordPress release; the legal-hold, webhooks and intake modules ship as their own releases requiring core `^1.1.3`.
