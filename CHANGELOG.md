@@ -7,7 +7,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [1.0.22] — 2026-11-08
 
-> Released: `core-v1.1.9` (security hardening + demo mode). Ships with paid modules `dlp` v1.1.0, `ai` v1.2.5, `sso` v2.1.4, `share` v1.4.1. **Breaking for dev SSO:** a non-loopback `http://` OIDC issuer now fails (`500 sso_misconfigured`).
+> Released: `core-v1.1.9`, `laravel-v1.0.6` (security hardening + demo mode). Ships with paid modules `dlp` v1.1.0, `ai` v1.2.5, `sso` v2.1.4, `share` v1.4.1. **Breaking for dev SSO:** a non-loopback `http://` OIDC issuer now fails (`500 sso_misconfigured`).
 
 ### Fixed
 - Public demo mode (`FLUXFILES_DEMO=1`): the demo token no longer allows `svg` (stored-XSS vector on a stranger-upload instance); the default is images only (`jpg,jpeg,png,gif,webp,avif`). New `FLUXFILES_DEMO_ALLOWED_EXT` sets the list, sanitized, and active/dangerous types (`svg`, `html`, `xml`, `js`, `php`, ...) can never be added back.
