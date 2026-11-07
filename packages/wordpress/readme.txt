@@ -4,7 +4,7 @@ Tags: file manager, amazon s3, cloudflare r2, media library, file upload
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -27,7 +27,7 @@ FluxFiles is a file manager for WordPress with a modern browser UI. It manages f
 * WordPress attachment bridge: files picked in FluxFiles appear in the media library
 * WP-CLI: `wp fluxfiles seed` indexes files that already exist on a disk
 
-The plugin is free and open source (MIT). Optional paid modules, such as share links, upload portals and compliance tools, come with FluxFiles Pro, sold separately on [fluxfiles.dev](https://fluxfiles.dev).
+The plugin is free and open source (MIT). Everything in this plugin works without a licence. Optional paid modules (share links, upload portals, compliance tools) are available for the self-hosted FluxFiles server; see [fluxfiles.thai-pc.com](https://fluxfiles.thai-pc.com).
 
 == Installation ==
 
@@ -143,6 +143,10 @@ Not automatically: the plugin writes `.htaccess` rules, which nginx ignores. The
 
 == Changelog ==
 
+= 1.1.1 =
+* Project links and the description now point at fluxfiles.thai-pc.com; the readme no longer mentions a WordPress Pro add-on that does not exist.
+* Bundles FluxFiles core 1.1.8.
+
 = 1.1.0 =
 * Fix: on a multisite network, activating FluxFiles network-wide set up only the main site; every other site failed with "Unable to generate token". Network activation now initialises every existing site, new sites are set up when they are created, and a site that was missed is set up on its first request. Deleting the plugin cleans every site.
 * Fix: "Delete all FluxFiles data" no longer deletes your files. It removes FluxFiles' own bookkeeping (trash, audit log, index, generated variants, protection files) and never the files in the storage folder, including files that were there before FluxFiles.
@@ -203,6 +207,9 @@ First public release. WordPress adapter for the FluxFiles file manager:
 * Requires PHP 8.1+ (8.1–8.5 tested; keeping PHP patched is the host's job). Prefer installing from a ZIP that bundles `vendor/`.
 
 == Upgrade Notice ==
+
+= 1.1.1 =
+Updated project links; no functional change from 1.1.0.
 
 = 1.1.0 =
 Share, Intake and the compliance tools now come from the separate FluxFiles Pro add-on. The free file manager is unchanged. Multisite network activation now sets up every site, and deleting data leaves your files alone.

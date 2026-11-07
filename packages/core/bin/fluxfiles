@@ -89,7 +89,7 @@ if ($command === 'update') {
     // Load .env from the package root or the host project root so the license +
     // update URL are available (mirrors the index command below).
     \FluxFiles\EnvBootstrap::load([realpath(__DIR__ . '/..'), realpath(__DIR__ . '/../../..')]);
-    $updateBase = rtrim((string) ($_ENV['FLUXFILES_UPDATE_URL'] ?? 'https://updates.fluxfiles.dev'), '/');
+    $updateBase = rtrim((string) ($_ENV['FLUXFILES_UPDATE_URL'] ?? 'https://fluxfiles-updates.thai-pc.com'), '/');
     $license = (string) ($_ENV['FLUXFILES_LICENSE_KEY'] ?? '');
     if ($license === '') {
         fwrite(STDERR, "No FLUXFILES_LICENSE_KEY set — updates require a license.\n");
