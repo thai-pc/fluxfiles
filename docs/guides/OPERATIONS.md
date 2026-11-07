@@ -256,6 +256,10 @@ what happens to one with no licence behind it: `services/license-server/README.m
 6. An unmatched renewal (wrong email/account) is ACKed, the buyer is mailed, and
    `RENEWAL WITHOUT LICENCE` is logged. Fix with
    `POST /issue {"plan":"pro-renewal","email":"<the LIFETIME purchase email>"}`, or refund.
+   A refund or revoke of a licence also cancels its renewals; those whose own order was
+   not refunded are logged (masked email) and mailed to `FLUXFILES_OPS_EMAIL`: reissue
+   the lost year with the same `POST /issue`. `/revoke` with `status: active` restores the
+   chain shape but does not revive cancelled renewals; un-revoke each one.
    Optional env: `FLUXFILES_OPS_EMAIL` (also notified), `FLUXFILES_RENEWAL_URL` (in reminders).
 
 `support` and `support-monthly` are created like any other plan, but they unlock no

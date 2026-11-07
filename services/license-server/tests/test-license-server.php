@@ -853,5 +853,57 @@ test('mail: reminders for one-time plans point at the renewal and the same-email
     assertTrue(str_contains($t, 'SAME email') && str_contains($t, 'modules keep running') && !str_contains($t, 'renews/expires'), 'one-time wording');
 });
 
+test('C1: refunding a middle renewal reports the later renewal it cancelled', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:'); $iss = renewIssuer($secretB64, $store);
+    $iss->issue(['email'=>'c1@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'C1-B']);
+    $r1 = $iss->issue(['email'=>'c1@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'C1-R1'])['record'];
+    $r2 = $iss->issue(['email'=>'c1@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'C1-R2'])['record'];
+    $store->setStatusCascade((string) $r1['jti'], 'refunded');
+    $c = $store->lastCascade();
+    assertEqual(1, count($c)); assertEqual($r2['jti'], $c[0]['jti']); assertEqual('pro-renewal', $c[0]['plan']);
+    $store->setStatusCascade((string) $r2['jti'], 'refunded');
+    assertEqual([], $store->lastCascade(), 'a plain refund reports nothing');
+});
+
+test('C2/C3: un-revoke restores a consistent chain, without reviving cancelled renewals', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:'); $iss = renewIssuer($secretB64, $store);
+    $b = $iss->issue(['email'=>'c2@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'C2-B'])['record'];
+    $r = $iss->issue(['email'=>'c2@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'C2-R'])['record'];
+    // C3: revoke + un-revoke the renewal -> the base goes back to superseded (one active head).
+    $store->setStatusCascade((string) $r['jti'], 'revoked');
+    assertEqual('active', $store->findByJti((string) $b['jti'])['status'], 'revoking a renewal restores the base');
+    $store->setStatusCascade((string) $r['jti'], 'active');
+    assertEqual('active', $store->findByJti((string) $r['jti'])['status']);
+    assertEqual('superseded', $store->findByJti((string) $b['jti'])['status'], 'base re-superseded');
+    // C2: revoke the base (cascades), un-revoke it: the cancelled renewal stays revoked, base is active.
+    $store->setStatusCascade((string) $b['jti'], 'revoked');
+    $store->setStatusCascade((string) $b['jti'], 'active');
+    assertEqual('active', $store->findByJti((string) $b['jti'])['status']);
+    assertEqual('revoked', $store->findByJti((string) $r['jti'])['status'], 'renewal is un-revoked by hand');
+    // Un-revoking the base while its renewal is live re-supersedes the base.
+    $store->setStatusCascade((string) $r['jti'], 'active');
+    $store->setStatusCascade((string) $b['jti'], 'active');
+    assertEqual('superseded', $store->findByJti((string) $b['jti'])['status']);
+});
+
+test('polar-setup: name collisions prefer the live product over an archived twin', function () {
+    $src = (string) file_get_contents(__DIR__ . '/../polar-setup.php');
+    preg_match('/function indexProductsByName\(.*?\n}\n/s', $src, $m);
+    assertTrue(isset($m[0]), 'function found');
+    eval($m[0]);
+    $items = fn (array $order) => array_map(fn ($x) => ['name'=>'N','id'=>$x[0],'is_archived'=>$x[1]], $order);
+    assertEqual('live', indexProductsByName($items([['arch', true], ['live', false]]))['N']['id']);
+    assertEqual('live', indexProductsByName($items([['live', false], ['arch', true]]))['N']['id']);
+    assertEqual(true, indexProductsByName($items([['arch', true]]))['N']['archived']);
+});
+
+test('mail: the renewal text does not repeat the modules-keep-running sentence', function () use ($secretB64) {
+    $iss = renewIssuer($secretB64);
+    $iss->issue(['email'=>'d@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'D-1']);
+    $ren = $iss->issue(['email'=>'d@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'D-2'])['record'];
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    assertEqual(1, substr_count($render->invoke(new LicenseMailer('log'), $ren), 'running'), 'said once');
+});
+
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
 exit($f>0?1:0);

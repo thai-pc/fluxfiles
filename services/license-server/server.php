@@ -54,6 +54,28 @@ function respond(int $code, array $body): void
     echo json_encode($body);
     exit;
 }
+/**
+ * A refund/revoke cascade changed rows whose own order was not refunded (a later paid
+ * renewal). Log each (email masked) and tell the ops address so the lost year can be
+ * reissued: POST /issue {plan:<renewal plan>, email:<the lifetime email>}.
+ */
+function reportCascade(LicenseStore $store, string $origin): void
+{
+    $rows = $store->lastCascade();
+    if ($rows === []) { return; }
+    $lines = [];
+    foreach ($rows as $r) {
+        $e = (string) $r['email'];
+        $at = strrpos($e, '@');
+        $masked = $at === false ? '***' : substr($e, 0, 1) . '***' . substr($e, $at);
+        $lines[] = "{$r['jti']} {$r['plan']} {$masked}";
+        error_log("license cascade: {$r['jti']} ({$r['plan']}, {$masked}) cancelled with {$origin}; its own order was not refunded");
+    }
+    (new LicenseMailer())->sendOpsNotice('FluxFiles: renewals cancelled by a cascade',
+        "Cancelling {$origin} also cancelled these renewals, whose own orders were not refunded:\n\n"
+        . implode("\n", $lines)
+        . "\n\nReissue the lost year if it was paid: POST /issue {\"plan\":\"<pro|studio>-renewal\",\"email\":\"<the lifetime email>\"}.");
+}
 function env(string $k, string $d = ''): string { $v = getenv($k); return $v === false || $v === '' ? $d : $v; }
 
 /** How long after purchase /claim will still hand back the key (see the endpoint). */
@@ -104,6 +126,7 @@ try {
                 // Cascades: a refunded base takes its renewals with it; a refunded
                 // renewal gives its base back as `active` (renewable, reminded).
                 $store->setStatusCascade((string) $rec['jti'], 'refunded');
+                reportCascade($store, 'refunded licence ' . $rec['jti']);
                 error_log("polar webhook: order {$refunded} refunded — licence {$rec['jti']} marked refunded");
             }
             respond(200, ['refunded' => $rec !== null]);
@@ -306,7 +329,9 @@ try {
         if (!in_array($status, ['revoked', 'refunded', 'active'], true)) {
             respond(400, ['error' => 'status must be revoked, refunded or active']);
         }
-        $ok = (new LicenseStore())->setStatusCascade((string) ($b['jti'] ?? ''), $status);
+        $store = new LicenseStore();
+        $ok = $store->setStatusCascade((string) ($b['jti'] ?? ''), $status);
+        reportCascade($store, "{$status} licence " . (string) ($b['jti'] ?? ''));
         respond($ok ? 200 : 404, ['updated' => $ok]);
     }
 

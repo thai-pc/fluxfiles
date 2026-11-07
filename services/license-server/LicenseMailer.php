@@ -100,6 +100,16 @@ final class LicenseMailer
         return $ok;
     }
 
+    /** Operator notice to FLUXFILES_OPS_EMAIL (no-op when unset). Never throws. */
+    public function sendOpsNotice(string $subject, string $body): bool
+    {
+        $ops = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
+        if ($ops === '' || !filter_var($ops, FILTER_VALIDATE_EMAIL)) {
+            return false;
+        }
+        return $this->deliver($ops, $subject, $body);
+    }
+
     private function deliver(string $to, string $subject, string $body): bool
     {
         try {
@@ -130,8 +140,7 @@ final class LicenseMailer
         } elseif ($isRenewal) {
             $expiryLine = "Your updates and priority support now run until: {$date}.\n\n"
                 . 'Replace the FLUXFILES_LICENSE_KEY on your server with the key above: only this key carries the extended update window. '
-                . 'Your previous key keeps running your modules, but its updates stop on its original date. '
-                . 'Your installed paid modules keep running regardless of the date.';
+                . 'Your previous key keeps running your modules, but its updates stop on its original date.';
         } elseif ($isLifetime) {
             $expiryLine = "This is a one-time purchase: you can use your paid modules forever.\n\n"
                 . "Updates and priority support are included for 12 months, until: {$date}. After that your modules keep running; "

@@ -117,6 +117,17 @@ Renewals chain.
 - **Refund / `/revoke` cascade.** Revoking or refunding a row sets the same status on
   every renewal descended from it. Refunding a renewal brings the row it extended back to
   `active`, so the buyer can renew again and is reminded again.
+- **Cascades can cancel a paid renewal.** Refunding a middle renewal (base, R1, R2) also
+  cancels R2 although its own order was not refunded. Each such row is logged (email
+  masked) and sent to `FLUXFILES_OPS_EMAIL`, so you can reissue the lost year with
+  `POST /issue {"plan":"pro-renewal","email":"<lifetime email>"}`.
+- **Un-revoking** (`POST /revoke` with `status: "active"`) restores the chain shape: a row
+  that has a live renewal goes back to `superseded`, and an un-revoked renewal supersedes
+  the row it extended again. Renewals cancelled by a cascade are NOT revived: un-revoke
+  each one individually.
+- Two Polar purchases of the same lifetime plan under one email already supersede each
+  other at purchase time (pre-existing behaviour, unchanged); a renewal then extends the
+  surviving row. Only a manually issued twin stays independently active and renewable.
 - Legacy no-expiry keys are not renewable (they already have lifetime updates) and do not
   shadow a newer dated lifetime under the same email.
 

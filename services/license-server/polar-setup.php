@@ -189,6 +189,27 @@ if ($token === '') {
 }
 
 /**
+ * name => {id, archived}. When several products share a name (an archived twin and a
+ * live one), the LIVE one wins whatever the list order: never map an archived id while
+ * a live product exists.
+ *
+ * @param array<int,array<string,mixed>> $items
+ * @return array<string,array{id:string,archived:bool}>
+ */
+function indexProductsByName(array $items): array
+{
+    $out = [];
+    foreach ($items as $p) {
+        $name = (string) ($p['name'] ?? '');
+        $archived = !empty($p['is_archived']);
+        if (isset($out[$name]) && !$out[$name]['archived'] && $archived) { continue; }
+        if (isset($out[$name]) && !$out[$name]['archived'] && !$archived) { continue; } // first live one stays
+        $out[$name] = ['id' => (string) ($p['id'] ?? ''), 'archived' => $archived];
+    }
+    return $out;
+}
+
+/**
  * One API call. Returns [httpStatus, decodedBody].
  *
  * @return array{0:int,1:array<mixed>}
@@ -242,10 +263,7 @@ foreach (($list['items'] ?? []) as $p) {
 // Archived products too, for the optional ones: a renewal product archived after the
 // deal ended must stay in the map (past buyers still renew) and must not be recreated.
 [$st2, $listAll] = api('GET', '/products/?limit=100');
-$existingAny = [];
-foreach (($st2 === 200 ? ($listAll['items'] ?? []) : []) as $p) {
-    $existingAny[(string) ($p['name'] ?? '')] = ['id' => (string) ($p['id'] ?? ''), 'archived' => !empty($p['is_archived'])];
-}
+$existingAny = indexProductsByName($st2 === 200 ? ($listAll['items'] ?? []) : []);
 
 $planMap = [];
 $failed = 0;

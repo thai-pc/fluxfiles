@@ -13,6 +13,8 @@ use PDO;
 final class LicenseStore
 {
     private PDO $db;
+    /** @var array<int,array{jti:string,plan:string,email:string}> rows the last cascade changed */
+    private array $cascaded = [];
     private bool $inTx = false;   // own flag: PDO::inTransaction() ignores a hand-issued BEGIN on older PHP
 
     public function __construct(?string $path = null)
@@ -92,10 +94,10 @@ final class LicenseStore
         // the row a renewal extended. NULL on every pre-existing row: both are only
         // consulted when present, so old data keeps working unchanged.
         if (!in_array('customer_id', $cols, true)) {
-            $this->db->exec('ALTER TABLE licenses ADD COLUMN customer_id TEXT');
+            $this->addColumn('customer_id', 'TEXT');
         }
         if (!in_array('renews_jti', $cols, true)) {
-            $this->db->exec('ALTER TABLE licenses ADD COLUMN renews_jti TEXT');
+            $this->addColumn('renews_jti', 'TEXT');
             $this->db->exec('CREATE INDEX IF NOT EXISTS idx_renews ON licenses(renews_jti)');
         }
         // One licence per (gateway, order): record()'s check-then-insert alone lets two
@@ -105,6 +107,19 @@ final class LicenseStore
             $this->db->exec("CREATE UNIQUE INDEX IF NOT EXISTS uniq_order ON licenses(gateway, order_id) WHERE order_id != ''");
         } catch (\PDOException $e) {
             error_log('license store: duplicate (gateway, order_id) rows exist; uniq_order not created — ' . $e->getMessage());
+        }
+    }
+
+    /** ADD COLUMN that survives a concurrent first request adding it at the same moment. */
+    private function addColumn(string $name, string $type): void
+    {
+        try {
+            $this->db->exec("ALTER TABLE licenses ADD COLUMN {$name} {$type}");
+        } catch (\PDOException $e) {
+            $cols = $this->db->query('PRAGMA table_info(licenses)')->fetchAll(\PDO::FETCH_COLUMN, 1) ?: [];
+            if (!in_array($name, $cols, true)) {
+                throw $e;
+            }
         }
     }
 
@@ -465,6 +480,17 @@ final class LicenseStore
         return ($same[0] ?? $unknown[0] ?? null);
     }
 
+    /**
+     * Rows the last setStatusCascade() changed besides the one named: renewals whose OWN
+     * order was never refunded/revoked, so the operator may need to reissue them.
+     *
+     * @return array<int,array{jti:string,plan:string,email:string}>
+     */
+    public function lastCascade(): array
+    {
+        return $this->cascaded;
+    }
+
     /** Retire exactly one row (the licence a renewal extended). No-op unless `active`. */
     public function supersedeJti(string $jti): bool
     {
@@ -484,17 +510,39 @@ final class LicenseStore
      */
     public function setStatusCascade(string $jti, string $status): bool
     {
+        $this->cascaded = [];
         return $this->transaction(function () use ($jti, $status): bool {
             $row = $this->findByJti($jti);
             $ok = $this->setStatus($jti, $status);
-            if (!$ok || !in_array($status, ['revoked', 'refunded'], true)) {
+            if (!$ok) {
+                return $ok;
+            }
+            if ($status === 'active') {
+                // Un-revoke: put the chain back in a consistent shape. A row that has a
+                // live renewal is superseded again; a renewal re-supersedes the row it
+                // extended. Descendants cancelled by an earlier cascade are NOT revived
+                // (they may have been cancelled for a reason): un-revoke them one by one.
+                $live = $this->db->prepare("SELECT 1 FROM licenses WHERE renews_jti = ? AND status IN ('active','superseded') LIMIT 1");
+                $live->execute([$jti]);
+                if ($live->fetchColumn() !== false) {
+                    $this->supersedeJti($jti);
+                }
+                if (!empty($row['renews_jti'])) {
+                    $this->supersedeJti((string) $row['renews_jti']);
+                }
+                return true;
+            }
+            if (!in_array($status, ['revoked', 'refunded'], true)) {
                 return $ok;
             }
             $queue = [$jti]; $seen = [$jti];
             $up = $this->db->prepare("UPDATE licenses SET status = ? WHERE renews_jti = ? AND status IN ('active','superseded')");
+            $pick = $this->db->prepare("SELECT jti, plan, email FROM licenses WHERE renews_jti = ? AND status IN ('active','superseded')");
             $kids = $this->db->prepare('SELECT jti FROM licenses WHERE renews_jti = ?');
             while ($queue) {
                 $cur = array_shift($queue);
+                $pick->execute([$cur]);
+                foreach ($pick->fetchAll() as $c) { $this->cascaded[] = $c; }
                 $up->execute([$status, $cur]);
                 $kids->execute([$cur]);
                 foreach ($kids->fetchAll(\PDO::FETCH_COLUMN) as $k) {
