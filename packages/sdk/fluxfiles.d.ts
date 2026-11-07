@@ -16,7 +16,7 @@ declare namespace FluxFiles {
         locale?: string;
         /** Theme: "light", "dark", or "auto". */
         theme?: string;
-        /** Extensions (`.pdf`) or MIME patterns (`image/*`) the picker accepts. UI convenience, NOT a security boundary: the server enforces the `allowed_ext` claim. */
+        /** Extensions (`.pdf`) or MIME patterns (`image/*`) the picker accepts (picker mode only). UI convenience, NOT a security boundary: the server enforces the `allowed_ext` claim. */
         allowedTypes?: string[];
         /** Max size per uploaded file, in **megabytes (MB)**. Preferred over `maxSize`. */
         maxUploadMb?: number;

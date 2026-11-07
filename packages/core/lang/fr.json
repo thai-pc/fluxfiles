@@ -249,6 +249,7 @@
     "too_many_files": "Limite de fichiers atteinte (max {max})",
     "ext_not_allowed": "Le type de fichier .{ext} n'est pas autorisé",
     "type_not_allowed": "{name} n'est pas un type de fichier autorisé ici",
+    "type_not_allowed_many": "Fichiers ignorés (type non autorisé ici) : {names}",
     "generic": "Une erreur est survenue. Veuillez réessayer.",
     "system_path": "Ce fichier ne peut pas être modifié",
     "git_internal_path": "Impossible d'écrire dans un chemin interne de git",

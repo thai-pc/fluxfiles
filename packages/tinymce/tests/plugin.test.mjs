@@ -31,6 +31,7 @@ function loadPlugin() {
       addMenuItem: (name, def) => { menuitems[name] = def; },
     } },
     insertContent: vi.fn(),
+    notificationManager: { open: vi.fn() },
   };
   globalThis.__tmceCb(editor);
   return { editor, settings, buttons, menuitems, open: globalThis.FluxFiles.open };
@@ -180,6 +181,27 @@ describe('TinyMCE FluxFiles plugin', () => {
     cfg.onSelect({ url: 'http://localhost/api/fm/img?token=T', name: 'a.png', mime: 'image/png' });
     cfg.onSelect({ url: 'http://localhost/api/fm/stream?x=1&token=T', name: 'a.mp4' });
     expect(editor.insertContent.mock.calls).toHaveLength(0);
+  });
+
+  it('tells the user (notification) when a tokenized-only file is refused', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'a.mp4' });
+    expect(editor.insertContent).not.toHaveBeenCalled();
+    expect(editor.notificationManager.open).toHaveBeenCalledTimes(1);
+    const text = editor.notificationManager.open.mock.calls[0][0].text;
+    expect(text).toMatch(/expiring link/);
+    expect(text).not.toMatch(/watermark/);
+  });
+
+  it('never inserts a non-http(s) url (javascript:, data:, leading whitespace, mixed case)', () => {
+    const { editor, buttons, open } = loadPlugin();
+    buttons.fluxfiles.onAction();
+    const cfg = open.mock.calls[0][0];
+    for (const u of ['javascript:alert(1)', ' \tjava\nscript:alert(1)', '\u0001JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+      cfg.onSelect({ url: u, name: 'a.png', mime: 'image/png' });
+    }
+    expect(editor.insertContent).not.toHaveBeenCalled();
   });
 
   it('skips folders (is_dir)', () => {

@@ -249,6 +249,7 @@
     "too_many_files": "Bestandslimiet bereikt (max {max})",
     "ext_not_allowed": "Bestandstype .{ext} is niet toegestaan",
     "type_not_allowed": "{name} is hier geen toegestaan bestandstype",
+    "type_not_allowed_many": "Overgeslagen: bestandstype hier niet toegestaan: {names}",
     "generic": "Er is iets misgegaan. Probeer het opnieuw.",
     "system_path": "Dit bestand kan niet worden gewijzigd",
     "git_internal_path": "Kan niet schrijven naar een intern git-pad",

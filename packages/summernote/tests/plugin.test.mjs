@@ -194,6 +194,27 @@ describe('Summernote FluxFiles plugin', () => {
     expect(editorInvoke.mock.calls.filter(c => c[0] === 'editor.pasteHTML')).toHaveLength(0);
   });
 
+  it('tells the user (alert) when a tokenized-only file is refused', () => {
+    const { buttonEl, editorInvoke, open } = loadPlugin();
+    globalThis.window.alert = vi.fn();
+    buttonEl.__button.click();
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'a.mp4' });
+    expect(pastedHtml(editorInvoke)).toBe('');
+    expect(globalThis.window.alert).toHaveBeenCalledTimes(1);
+    expect(globalThis.window.alert.mock.calls[0][0]).toMatch(/expiring link/);
+  });
+
+  it('never inserts a non-http(s) url (javascript:, data:, leading whitespace, mixed case)', () => {
+    const { buttonEl, editorInvoke, open } = loadPlugin();
+    globalThis.window.alert = vi.fn();
+    buttonEl.__button.click();
+    const cfg = open.mock.calls[0][0];
+    for (const u of ['javascript:alert(1)', ' \tjava\nscript:alert(1)', '\u0001JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+      cfg.onSelect({ url: u, name: 'a.png', mime: 'image/png' });
+    }
+    expect(pastedHtml(editorInvoke)).toBe('');
+  });
+
   it('skips folders (is_dir): no insert, no range restore', () => {
     const { buttonEl, editorInvoke, open } = loadPlugin();
     buttonEl.__button.click();   // this saves the range

@@ -80,19 +80,53 @@
     // page; resolve it against the FluxFiles endpoint's origin. And never let an
     // expiring .../img|stream ?token= URL reach saved content.
     function absUrl(u, endpoint) {
-        if (typeof u !== 'string' || u === '' || /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
-        try { return new URL(u, endpoint || window.location.href).href; } catch (e) { return u; }
+        if (typeof u !== 'string') return '';
+        // Strip leading whitespace/control chars first: browsers ignore them, so
+        // " \tjavascript:..." would otherwise slip past a scheme check.
+        var t = u.replace(/^[\u0000-\u0020]+/, '');
+        if (t === '') return '';
+        var r = null;
+        try { r = new URL(t, endpoint || window.location.href); } catch (e) {
+            try { r = new URL(t, window.location.href); } catch (e2) { return ''; }
+        }
+        // Only http(s) may reach saved content (drops javascript:, data:, vbscript:, ...).
+        return (r.protocol === 'http:' || r.protocol === 'https:') ? r.href : '';
     }
     function isTokenUrl(u) {
         return /\/(img|stream)(\.php)?\?([^#]*&)?token=/.test(u);
     }
+    // Why a selection cannot be inserted: 'preview' (no URL), 'unsafe' (not http/https),
+    // 'token' (only an expiring /img|/stream token link, e.g. a private local or SFTP disk).
+    function refusalReason(raw, url) {
+        if (raw === '') return 'preview';
+        if (url === '') return 'unsafe';
+        return isTokenUrl(url) ? 'token' : '';
+    }
+    function refusalMessage(reason, name) {
+        if (reason === 'token') {
+            return '"' + name + '" is only available through an expiring link (private disk without a public URL), so it was not inserted. Use a public disk or set public_url.';
+        }
+        if (reason === 'unsafe') {
+            return '"' + name + '" has a URL that is not http(s), so it was not inserted.';
+        }
+        return '"' + name + '" is preview-only (no embeddable URL, e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor, Apply) or issue a downloadable token to embed it.';
+    }
+    // User-visible refusal (a console.warn alone is invisible to editors).
+    function notifyUser(editor, msg) {
+        try {
+            if (editor && editor.notificationManager) { editor.notificationManager.open({ text: msg, type: 'warning', timeout: 8000 }); return; }
+        } catch (e) { /* fall through */ }
+        if (typeof window.alert === 'function') { try { window.alert(msg); } catch (e) { /* ignore */ } }
+    }
 
     // Normalize a selected file into the bits both insert paths need.
-    function fileInfo(file, endpoint) {
+    function fileInfo(file, endpoint, notify) {
         // Prefer a permanent URL (public disk / public_url) so saved content
         // doesn't embed an expiring presigned URL.
-        var url = absUrl(file.permanent_url || file.url || '', endpoint);
-        if (isTokenUrl(url)) { url = ''; } // expiring token URL: never save it
+        var raw = file.permanent_url || file.url || '';
+        var url = absUrl(raw, endpoint);
+        var reason = refusalReason(raw, url);
+        if (reason) { url = ''; } // expiring token / non-http(s) URL: never save it
         var name = file.name || file.basename || file.path || '';
         var meta = file.meta || {};
 
@@ -105,7 +139,9 @@
         // permanent_url. So we refuse here rather than insert a clean/broken image.
         var embeddable = url !== '';
         if (!embeddable) {
-            console.warn('[FluxFiles] "' + name + '" is preview-only (no embeddable URL — e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor → Apply) or issue a downloadable token to embed it.');
+            var msg = refusalMessage(reason, name);
+            console.warn('[FluxFiles] ' + msg);
+            if (notify) { notify(msg); }
         } else if (/[?&](X-Amz-|Signature=)/.test(url)) {
             // Still presigned (private disk, no public_url)? Warn — it will expire
             // and break the saved link/image.
@@ -144,7 +180,7 @@
             for (var i = 0; i < files.length; i++) {
                 var file = files[i];
                 if (!file || file.is_dir) continue;
-                var info = fileInfo(file, cfg(editor).endpoint);
+                var info = fileInfo(file, cfg(editor).endpoint, function (m) { notifyUser(editor, m); });
                 if (!info.embeddable) continue; // preview-only → already warned
 
                 if (info.isImage) {
@@ -167,7 +203,7 @@
             open(editor, false, function (payload) {
                 var file = Array.isArray(payload) ? payload[0] : payload;
                 if (!file || file.is_dir) return;
-                var info = fileInfo(file, cfg(editor).endpoint);
+                var info = fileInfo(file, cfg(editor).endpoint, function (m) { notifyUser(editor, m); });
                 if (!info.embeddable) return; // preview-only → already warned
                 var data = {};
 

@@ -32,6 +32,7 @@ function loadPlugin(fluxfilesConfig) {
     addCommand: (name, def) => { commands[name] = def; },
     ui: { addButton: (name, def) => { buttons[name] = def; } },
     insertHtml: vi.fn(),
+    showNotification: vi.fn(),
     execCommand: (name) => commands[name].exec(),
   };
   globalThis.__pluginDef.init(editor);
@@ -169,6 +170,26 @@ describe('CKEditor 4 FluxFiles plugin', () => {
     cfg.onSelect({ url: 'http://localhost/api/fm/img?token=T', name: 'a.png', mime: 'image/png' });
     cfg.onSelect({ url: 'http://localhost/api/fm/stream?x=1&token=T', name: 'a.mp4' });
     expect(editor.insertHtml.mock.calls).toHaveLength(0);
+  });
+
+  it('tells the user (notification) when a tokenized-only file is refused', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    open.mock.calls[0][0].onSelect({ url: 'http://localhost/api/fm/stream?token=T', permanent_url: null, name: 'a.mp4' });
+    expect(editor.insertHtml).not.toHaveBeenCalled();
+    expect(editor.showNotification).toHaveBeenCalledTimes(1);
+    expect(editor.showNotification.mock.calls[0][0]).toMatch(/expiring link/);
+    expect(editor.showNotification.mock.calls[0][0]).not.toMatch(/watermark/);
+  });
+
+  it('never inserts a non-http(s) url (javascript:, data:, leading whitespace, mixed case)', () => {
+    const { editor, open } = loadPlugin();
+    editor.execCommand('openFluxFiles');
+    const cfg = open.mock.calls[0][0];
+    for (const u of ['javascript:alert(1)', ' \tjava\nscript:alert(1)', '\u0001JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+      cfg.onSelect({ url: u, name: 'a.png', mime: 'image/png' });
+    }
+    expect(editor.insertHtml).not.toHaveBeenCalled();
   });
 
   it('skips folders (is_dir)', () => {

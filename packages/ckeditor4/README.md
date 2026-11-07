@@ -79,7 +79,10 @@ The modal closes automatically after selection.
 | `locale` | string | `null` | UI language code |
 | `theme` | string | `null` | Picker theme: `light` / `dark` / `auto` |
 | `multiple` | boolean | `false` | Allow multi-file selection |
+| `allowedTypes` | string[] | `null` | Extensions (`.pdf` or `pdf`) or MIME types / patterns (`image/*`, `application/pdf`). Shown only in picker mode: non-matching files are hidden and cannot be selected. UI convenience, not a security boundary (the token's `allowed_ext` claim is the server-side check) |
 | `imageDialog` | boolean | `true` | Inject the **Browse FluxFiles** button into the native Image dialog |
+
+**Files with no permanent URL.** On a private or gated disk (`FLUXFILES_LOCAL_PRIVATE`, SFTP, or a private bucket without `public_url`) `permanent_url` is `null` and the only link is an expiring `/api/fm/img|stream?token=` URL. The plugin never saves those into content: it shows a notification explaining the file was not inserted. Use a public disk or set `public_url`. Only `http(s)` URLs are ever inserted.
 
 ## License
 

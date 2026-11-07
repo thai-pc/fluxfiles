@@ -55,13 +55,23 @@ export class FluxFilesCommand extends Command {
     sdk().open(options);
   }
 
+  /** Show a refusal to the editor user (Notification plugin when loaded, else alert). */
+  private _notify(message: string): void {
+    const { plugins } = this.editor;
+    if (plugins.has('Notification')) {
+      (plugins.get('Notification') as { showWarning(m: string, o?: object): void }).showWarning(message, { namespace: 'fluxfiles' });
+    } else if (typeof window.alert === 'function') {
+      window.alert(message);
+    }
+  }
+
   private _insert(files: FluxFile[]): void {
     const { editor } = this;
     const schema = editor.model.schema;
     const inserted: FluxFile[] = [];
 
     for (const file of files) {
-      const info = fileInfo(file, this._cfg.endpoint);
+      const info = fileInfo(file, this._cfg.endpoint, (m) => this._notify(m));
       if (!info.embeddable) continue; // preview-only: already warned
 
       if (info.isImage && editor.commands.get('insertImage')) {

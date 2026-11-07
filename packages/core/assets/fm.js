@@ -1131,7 +1131,10 @@ function fluxFilesApp() {
                 // Ignore stale responses when user typed a newer query
                 if (this._activeSearchId !== reqId) return;
 
-                this.searchResults = Array.isArray(fileRows) ? fileRows : [];
+                // Picker with allowedTypes: search lists only what could be selected.
+                this.searchResults = Array.isArray(fileRows)
+                    ? fileRows.filter(r => this._typeAllowed({ name: this._searchName(r), mime: r.mime, type: 'file' }))
+                    : [];
                 this.searchFolderResults = Array.isArray(folderRows) ? folderRows : [];
             } catch (err) {
                 console.error('FluxFiles: Search failed', err);
@@ -1352,14 +1355,21 @@ function fluxFilesApp() {
             this.sidebarOpen = false;
         },
 
-        // Make a root-relative / protocol-relative URL absolute against the origin
-        // that serves this iframe (core, or the Laravel/WordPress app that proxies
-        // it and serves the same storage). A relative '/storage/...' inserted into a
-        // host page would resolve against the HOST's origin and 404. Absolute URLs
-        // (S3/R2/CDN presigned) and non-strings pass through untouched.
+        // Make a URL absolute the way the browser would for this document
+        // (document.baseURI), so root-relative '/storage/...' resolves against the
+        // origin serving this iframe: core, or the Laravel/WordPress app that
+        // proxies it and serves the same storage. Unresolved, it would resolve
+        // against the HOST page and 404. Absolute http(s) URLs (S3/R2/CDN) are
+        // kept; anything that is not http(s) (javascript:, data:, ...; leading
+        // whitespace/control chars included) is dropped to ''. Non-strings pass through.
         _absUrl(u) {
-            if (typeof u !== 'string' || u === '' || /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
-            try { return new URL(u, window.location.origin + '/').href; } catch (e) { return u; }
+            if (typeof u !== 'string') return u;
+            const t = u.replace(/^[\u0000-\u0020]+/, '');
+            if (t === '') return '';
+            try {
+                const r = new URL(t, document.baseURI);
+                return (r.protocol === 'http:' || r.protocol === 'https:') ? r.href : '';
+            } catch (e) { return ''; }
         },
         // img_srcset is "url 320w, url 640w": absolutize each candidate URL.
         _absSrcset(v) {
@@ -1367,8 +1377,9 @@ function fluxFilesApp() {
             return v.split(',').map(c => {
                 const t = c.trim();
                 const i = t.search(/\s/);
-                return i < 0 ? this._absUrl(t) : this._absUrl(t.slice(0, i)) + t.slice(i);
-            }).join(', ');
+                const u = this._absUrl(i < 0 ? t : t.slice(0, i));
+                return u ? (i < 0 ? u : u + t.slice(i)) : '';
+            }).filter(Boolean).join(', ');
         },
         _absVariants(vs) {
             if (!vs || typeof vs !== 'object') return vs || null;
@@ -1393,39 +1404,66 @@ function fluxFilesApp() {
             const i = n.lastIndexOf('.');
             return i >= 0 ? n.slice(i + 1).toLowerCase() : '';
         },
-        _fileMime(file) {
-            const m = file && (file.mime || (file.meta && file.meta.mime) || file.type);
-            if (typeof m === 'string' && m.indexOf('/') > 0) return m.toLowerCase();
+        // MIME candidates for a file: the stored one AND the extension's. A stored
+        // type can be generic (application/octet-stream) or wrong for the extension
+        // (libmagic says text/plain for an SVG), so a pattern matches on either.
+        _fileMimes(file) {
+            const out = [];
+            const m = file && (file.mime || (file.meta && file.meta.mime));
+            if (typeof m === 'string' && m.indexOf('/') > 0) out.push(m.toLowerCase());
             const map = {
-                jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
-                avif: 'image/avif', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
-                mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
-                mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac',
-                pdf: 'application/pdf', zip: 'application/zip', json: 'application/json',
-                txt: 'text/plain', csv: 'text/csv', html: 'text/html', md: 'text/markdown'
+                jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+                webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
+                heic: 'image/heic', heif: 'image/heif', tif: 'image/tiff', tiff: 'image/tiff',
+                mp4: 'video/mp4', m4v: 'video/x-m4v', webm: 'video/webm', mov: 'video/quicktime',
+                mkv: 'video/x-matroska', avi: 'video/x-msvideo', ogv: 'video/ogg',
+                mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg',
+                flac: 'audio/flac', aac: 'audio/aac', opus: 'audio/opus',
+                pdf: 'application/pdf', zip: 'application/zip', json: 'application/json', xml: 'application/xml',
+                doc: 'application/msword',
+                docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                xls: 'application/vnd.ms-excel',
+                xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ppt: 'application/vnd.ms-powerpoint',
+                pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                odt: 'application/vnd.oasis.opendocument.text',
+                ods: 'application/vnd.oasis.opendocument.spreadsheet',
+                odp: 'application/vnd.oasis.opendocument.presentation',
+                rtf: 'application/rtf', gz: 'application/gzip', tar: 'application/x-tar', '7z': 'application/x-7z-compressed',
+                txt: 'text/plain', csv: 'text/csv', html: 'text/html', htm: 'text/html', md: 'text/markdown', css: 'text/css'
             };
-            return map[this._typeExt(file && file.name)] || '';
+            const em = map[this._typeExt(file && file.name)];
+            if (em && out.indexOf(em) < 0) out.push(em);
+            return out;
         },
-        // Folders always pass (navigation); files must match one entry when set.
+        // allowedTypes narrows SELECTION in picker mode only; browser mode is never
+        // restricted. Folders always pass (navigation); files must match one entry.
         _typeAllowed(file) {
             const list = this._allowedTypeList();
             if (!list.length || !file || file.type === 'dir') return true;
+            if (!this.config || this.config.mode !== 'picker') return true;
             const ext = this._typeExt(file.name);
-            const mime = this._fileMime(file);
+            const mimes = this._fileMimes(file);
             return list.some(t => {
                 if (t.indexOf('/') >= 0) {
-                    if (!mime) return false;
-                    return t.slice(-2) === '/*' ? mime.indexOf(t.slice(0, -1)) === 0 : mime === t;
+                    return mimes.some(m => t.slice(-2) === '/*' ? m.indexOf(t.slice(0, -1)) === 0 : m === t);
                 }
                 return ext !== '' && ext === t.replace(/^\*?\./, '');
             });
         },
         // Value for <input type=file accept>.
         get uploadAccept() {
+            if (!this.config || this.config.mode !== 'picker') return '';
             return this._allowedTypeList().map(t => t.indexOf('/') >= 0 || t.charAt(0) === '.' ? t : '.' + t.replace(/^\*\./, '')).join(',');
         },
         _refuseType(file) {
             this.showToast(this.t('error.type_not_allowed', { name: (file && file.name) || '' }), 'error', 4000);
+        },
+        // Several skipped files: name the first few.
+        _refuseTypes(files) {
+            const names = files.map(f => f.name || '').filter(Boolean);
+            const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ', …' : '');
+            this.showToast(this.t('error.type_not_allowed_many', { names: shown }), 'error', 5000);
         },
 
         // Build FM_SELECT payload from file/folder
@@ -1548,9 +1586,13 @@ function fluxFilesApp() {
         // Multi-select: send selected items as array (when config.multiple)
         selectMultiple() {
             if (this.selected.length === 0) return;
-            const bad = this.selected.find(f => !this._typeAllowed(f));
-            if (bad) { this._refuseType(bad); return; }
-            const payload = this.selected.map(item => this._toSelectPayload(item));
+            // Select the matching items and say which were skipped.
+            const okItems = this.selected.filter(f => this._typeAllowed(f));
+            if (okItems.length !== this.selected.length) {
+                this._refuseTypes(this.selected.filter(f => !this._typeAllowed(f)));
+                if (okItems.length === 0) return;
+            }
+            const payload = okItems.map(item => this._toSelectPayload(item));
             this.postMessage('FM_SELECT', payload);
         },
 
@@ -1763,10 +1805,10 @@ function fluxFilesApp() {
             if (!fileList || fileList.length === 0) return;
             let files = Array.from(fileList);
 
-            // allowedTypes (UI convenience; dropped files bypass the input's accept).
+            // allowedTypes in picker mode (UI convenience; dropped files bypass the input's accept).
             const typeBad = files.filter(f => !this._typeAllowed({ name: f.name, mime: f.type, type: 'file' }));
             if (typeBad.length) {
-                this.showToast(this.t('error.ext_not_allowed', { ext: this._typeExt(typeBad[0].name) || typeBad[0].name }), 'error', 4000);
+                this._refuseTypes(typeBad);
                 files = files.filter(f => !typeBad.includes(f));
                 if (files.length === 0) return;
             }
@@ -2356,11 +2398,7 @@ function fluxFilesApp() {
         // Copy URL
         async copyUrl(file) {
             // Build full URL: use active variant if selected
-            let url = this.getActiveUrl(file) || '';
-            if (url && !url.startsWith('http')) {
-                const base = this.endpoint || window.location.origin;
-                url = base.replace(/\/$/, '') + '/' + url.replace(/^\//, '');
-            }
+            const url = this._absUrl(this.getActiveUrl(file) || '') || '';
             if (await this.copyText(url)) {
                 this.showToast(this.t('copy.copied'), 'success');
             }
@@ -3118,6 +3156,14 @@ function fluxFilesApp() {
         async importUrl() {
             const url = (this.urlImportUrl || '').trim();
             if (!url || this.urlImportState === 'importing') return;
+            // allowedTypes in picker mode: judge by the URL's file extension when it has one.
+            let importName = '';
+            try { importName = decodeURIComponent(new URL(url).pathname.split('/').pop() || ''); } catch (e) { /* server validates the URL */ }
+            if (this._typeExt(importName) && !this._typeAllowed({ name: importName, type: 'file' })) {
+                this.urlImportState = 'error';
+                this.urlImportError = this.t('error.type_not_allowed', { name: importName });
+                return;
+            }
             this.urlImportState = 'importing';
             this.urlImportError = '';
             try {
@@ -3711,7 +3757,7 @@ function fluxFilesApp() {
             const arr = this.files.filter(f => {
                 if (!this._matchTypeFilter(f)) return false;
                 // Picker with allowedTypes: hide what could not be selected anyway.
-                if (this.config.mode === 'picker' && !this._typeAllowed(f)) return false;
+                if (!this._typeAllowed(f)) return false;
                 if (!q) return true;
                 const name = (f.name != null && f.name !== '') ? String(f.name) : '';
                 if (name.toLowerCase().includes(q)) return true;

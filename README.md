@@ -351,7 +351,7 @@ function openFilePicker() {
         multiple: false,              // true = multi-select returns array
         locale: 'en',                 // default 'en' if omitted
         theme: 'auto',                // 'light', 'dark', or 'auto'
-        allowedTypes: ['image/*', '.pdf'], // UI filter: extensions or MIME patterns (not a security boundary, see below)
+        allowedTypes: ['image/*', '.pdf'], // picker UI filter: extensions or MIME patterns (not a security boundary, see below)
         maxUploadMb: 10,              // MB — max size per file (deprecated alias: `maxSize` in bytes)
         maxFiles: 20,                 // max files per upload batch (0/omit = unlimited)
         container: '#my-div',         // CSS selector — omit for modal overlay
@@ -386,7 +386,7 @@ function openFilePicker() {
 </script>
 ```
 
-**`allowedTypes`** narrows what the picker lets a user pick and upload: entries are extensions (`'.pdf'`, `'pdf'`) or MIME types / patterns (`'image/*'`, `'application/pdf'`). Non-matching files are hidden in picker mode, refused at selection with a message, and the upload input gets a matching `accept`. It is a **UI convenience, not a security boundary**: enforce what may actually be stored with the token's `allowed_ext` claim (see [docs/reference/CONFIG.md](docs/reference/CONFIG.md)).
+**`allowedTypes`** narrows what the picker lets a user pick and upload: entries are extensions (`'.pdf'`, `'pdf'`) or MIME types / patterns (`'image/*'`, `'application/pdf'`). In picker mode, non-matching files are hidden (also in search results), refused at selection with a message (a multi-selection selects the matching files and names the skipped ones), and uploads / URL imports of other types are refused; the upload input gets a matching `accept`. Browser mode is never restricted. It is a **UI convenience, not a security boundary**: enforce what may actually be stored with the token's `allowed_ext` claim (see [docs/reference/CONFIG.md](docs/reference/CONFIG.md)).
 
 #### Embedding selected files (`permanent_url` vs `url`)
 
@@ -398,9 +398,12 @@ The select payload carries two URLs:
   Media files use the longer `preview_url_ttl` claim instead (default 2h). Fine
   for previewing right after selection; **do not save it** into content.
 - **`permanent_url`** — a stable, non-expiring URL for **embedding in saved
-  content** (CMS pages, editor HTML, DB records). Present for local disks, public
-  disks, and any disk with a `public_url` (CDN / custom domain). It is **`null`**
-  for a private bucket with no public domain — such a disk has no permanent URL.
+  content** (CMS pages, editor HTML, DB records). Present for web-served local
+  disks, public disks, and any disk with a `public_url` (CDN / custom domain). It
+  is **`null`** for a private bucket with no public domain, and for a gated local
+  disk (`FLUXFILES_LOCAL_PRIVATE`) or an SFTP disk, whose only link is an expiring
+  `/api/fm/stream?token=` URL. The editor plugins refuse to insert such a file
+  (with a message) rather than save a link that dies.
 
 ```js
 // Embedding into content you persist:

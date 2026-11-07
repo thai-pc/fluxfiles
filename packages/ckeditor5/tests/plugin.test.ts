@@ -239,6 +239,20 @@ describe('convert helpers', () => {
     expect(fileInfo({ path: 'p', basename: 'b', url: 'u', permanent_url: 'https://cdn/perm' }).url).toBe('https://cdn/perm');
   });
 
+  it('refuses non-http(s) urls and reports every refusal through notify', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const notify = vi.fn();
+    for (const u of ['javascript:alert(1)', ' \tjava\nscript:alert(1)', '\u0001JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+      expect(fileInfo({ path: 'p', basename: 'b', url: u } as never, 'https://fm.example.com', notify).embeddable).toBe(false);
+    }
+    expect(notify).toHaveBeenCalledTimes(5);
+    const tok = fileInfo({ path: 'p', basename: 'b', name: 'a.mp4', url: 'https://x/api/fm/stream?token=T' } as never, '', notify);
+    expect(tok.embeddable).toBe(false);
+    expect(notify.mock.calls[5][0]).toMatch(/expiring link/);
+    expect(notify.mock.calls[5][0]).not.toMatch(/watermark/);
+    warn.mockRestore();
+  });
+
   it('selectedFiles normalises single, array and empty payloads', () => {
     expect(selectedFiles(null)).toEqual([]);
     expect(selectedFiles({ path: 'a', basename: 'a' })).toHaveLength(1);

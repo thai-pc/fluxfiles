@@ -66,21 +66,50 @@
     // page; resolve it against the FluxFiles endpoint's origin. And never let an
     // expiring .../img|stream ?token= URL reach saved content.
     function absUrl(u, endpoint) {
-        if (typeof u !== 'string' || u === '' || /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
-        try { return new URL(u, endpoint || window.location.href).href; } catch (e) { return u; }
+        if (typeof u !== 'string') return '';
+        // Strip leading whitespace/control chars first: browsers ignore them, so
+        // " \tjavascript:..." would otherwise slip past a scheme check.
+        var t = u.replace(/^[\u0000-\u0020]+/, '');
+        if (t === '') return '';
+        var r = null;
+        try { r = new URL(t, endpoint || window.location.href); } catch (e) {
+            try { r = new URL(t, window.location.href); } catch (e2) { return ''; }
+        }
+        // Only http(s) may reach saved content (drops javascript:, data:, vbscript:, ...).
+        return (r.protocol === 'http:' || r.protocol === 'https:') ? r.href : '';
     }
     function isTokenUrl(u) {
         return /\/(img|stream)(\.php)?\?([^#]*&)?token=/.test(u);
+    }
+    // Why a selection cannot be inserted: 'preview' (no URL), 'unsafe' (not http/https),
+    // 'token' (only an expiring /img|/stream token link, e.g. a private local or SFTP disk).
+    function refusalReason(raw, url) {
+        if (raw === '') return 'preview';
+        if (url === '') return 'unsafe';
+        return isTokenUrl(url) ? 'token' : '';
+    }
+    function refusalMessage(reason, name) {
+        if (reason === 'token') {
+            return '"' + name + '" is only available through an expiring link (private disk without a public URL), so it was not inserted. Use a public disk or set public_url.';
+        }
+        if (reason === 'unsafe') {
+            return '"' + name + '" has a URL that is not http(s), so it was not inserted.';
+        }
+        return '"' + name + '" is preview-only (no embeddable URL, e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor, Apply) or issue a downloadable token to embed it.';
+    }
+    function notifyUser(msg) {
+        if (typeof window.alert === 'function') { try { window.alert(msg); } catch (e) { /* ignore */ } }
     }
 
     // Build the HTML to insert for one selected file (shared contract with the
     // other editor plugins: <img> for images, <a> otherwise).
     function fileToHtml(file, endpoint) {
+        var name = file.name || file.basename || file.path || '';
         // Prefer a permanent URL (public disk / public_url) so saved content
         // doesn't embed an expiring presigned URL.
-        var url = absUrl(file.permanent_url || file.url || '', endpoint);
-        if (isTokenUrl(url)) { url = ''; } // expiring token URL: never save it
-        var name = file.name || file.basename || file.path || '';
+        var raw = file.permanent_url || file.url || '';
+        var url = absUrl(raw, endpoint);
+        var reason = refusalReason(raw, url);
         var meta = file.meta || {};
 
         // Preview-only selection (no permanent_url/url) — e.g. a watermark OVERLAY
@@ -88,8 +117,10 @@
         // URL unsafe to save into content. To embed a *watermarked* image, burn the
         // watermark into the file first (Watermark editor → Apply). Return '' so the
         // caller skips it (rather than inserting <img src="">).
-        if (url === '') {
-            console.warn('[FluxFiles] "' + name + '" is preview-only (no embeddable URL — e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor → Apply) or issue a downloadable token to embed it.');
+        if (reason) {
+            var msg = refusalMessage(reason, name);
+            console.warn('[FluxFiles] ' + msg);
+            notifyUser(msg);
             return '';
         }
 
