@@ -82,13 +82,13 @@ const CATALOGUE = [
     'support' => [
         'name' => 'FluxFiles Priority Support',
         'description' => 'Priority email support with faster response times. No software is unlocked — this is a service subscription for self-hosters who want a support relationship without buying a paid module.',
-        'amount' => 4900,           // $49 / year
+        'amount' => 2900,           // $29 / year
         'recurring' => 'year',
     ],
     'support-monthly' => [
         'name' => 'FluxFiles Priority Support (monthly)',
         'description' => 'Priority email support with faster response times. Billed monthly.',
-        'amount' => 500,            // $5 / month
+        'amount' => 300,            // $3 / month
         'recurring' => 'month',
     ],
 ];
