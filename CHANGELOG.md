@@ -6,8 +6,11 @@ All notable changes to FluxFiles are documented here. This project adheres to
 ## [Unreleased]
 
 ### Fixed
-- `GET /api/fm/meta` on a path with no file or folder now answers `404 not_found` instead of `200 {size:null, modified:null}`. The fake success made `@fluxfiles/mcp`'s `write_text_file` treat every new file as existing, take the edit path and fail with `edit_forbidden` / 404, and made `get_file_info` report success for a missing file. Folders and S3 objects without a sidecar still answer; hidden/system paths still return `path_denied` first. The Laravel and WordPress proxies inherit the 404 (they call `fileMeta()` directly).
-- `@fluxfiles/mcp` 1.0.1: `write_text_file` creates new files against both fixed cores (404) and older ones (200 with null size/modified); `get_file_info` raises `not_found` for a missing file; a refused `http://` URL prints a clean one-line error instead of a stack trace; `zod` bumped to ^4.6.7 (GHSA-mrhx-c7xc-m3w5).
+- `GET /api/fm/meta` on a path with no file or folder now answers `404 not_found` instead of `200 {size:null, modified:null}`. The fake success made `@fluxfiles/mcp`'s `write_text_file` treat every new file as existing, take the edit path and fail with `edit_forbidden` / 404, and made `get_file_info` report success for a missing file. The response gains an additive `type: 'file'|'dir'`: folders (including S3 prefix-only folders and SFTP directories, whose `size`/`modified` are `null`) answer 200 `type:'dir'`, and the token's scope root always answers 200 `dir` (like `/list` on a new tenant). Hidden paths still return `path_denied`, and `_fluxfiles/` / `_variants/` still return 403 `system_path`, before the existence check. The Laravel and WordPress proxies pass the 404 and `type` through (they call `fileMeta()` directly).
+- `@fluxfiles/mcp` 1.1.0: `write_text_file` creates new files on both fixed cores (404) and older ones (200 with null size/modified, confirmed against the parent folder's listing so a folder is never mistaken for a missing file); it refuses a folder target with `is_directory`. `get_file_info` raises `not_found` for a missing file and reports `type`. A refused `http://` URL prints a clean one-line error instead of a stack trace. `scripts/pack-smoke.sh mcp` added.
+
+### Changed
+- `@fluxfiles/mcp` 1.1.0 moves `zod` from ^3.25 to ^4.6.7 (GHSA-mrhx-c7xc-m3w5). The public types follow: `ToolDef.shape` is a zod 4 `ZodRawShape`, so TypeScript consumers that import it need zod 4.
 
 ## [1.0.18] — 2026-11-07
 

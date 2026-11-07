@@ -122,6 +122,9 @@ test('meta on a missing path is 404 not_found; a folder still answers', function
     $folder = $fm->fileMeta('local', 'docs');
     assertTrue(array_key_exists('mime', $folder), 'folder meta still answers');
     assertEqual(1, $fm->fileMeta('local', 'docs/a.txt')['size'], 'file size');
+    assertEqual('dir', $folder['type'], 'folder type');
+    assertEqual('file', $fm->fileMeta('local', 'docs/a.txt')['type'], 'file type');
+    assertEqual('dir', $fm->fileMeta('local', '')['type'], 'scope root is always a dir');
 });
 
 test('metadata GET on pre-existing → null (graceful, no error)', function () {

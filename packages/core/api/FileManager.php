@@ -3719,15 +3719,26 @@ class FileManager
 
         // A path with no object at all is a 404, not a 200 full of nulls: callers (the
         // MCP write tool, any "does it exist?" probe) read a 200 as "it is there". A
-        // folder is a valid target too. If the existence probe itself fails, don't turn
-        // a transient backend error into a false 404; fall through to the lookups below.
-        try {
-            if (!$fs->fileExists($scoped) && !$fs->directoryExists($scoped)) {
-                throw new ApiException('File or directory not found', 404, 'not_found');
+        // folder is a valid target too, reported as type 'dir' (its size/modified are
+        // null on S3/SFTP). The token's scope root always exists (the tenant's empty
+        // folder, same as /list answering 200 with no items). If the existence probe
+        // itself fails, don't turn a transient backend error into a false 404.
+        $type = 'file';
+        if ($scoped === trim($this->claims->pathPrefix, '/')) {
+            $type = 'dir';
+        } else {
+            try {
+                if ($fs->fileExists($scoped)) {
+                    $type = 'file';
+                } elseif ($fs->directoryExists($scoped)) {
+                    $type = 'dir';
+                } else {
+                    throw new ApiException('File or directory not found', 404, 'not_found');
+                }
+            } catch (ApiException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
             }
-        } catch (ApiException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
         }
 
         // Each lookup is best-effort: some S3-compatible backends (notably Cloudflare R2)
@@ -3750,6 +3761,7 @@ class FileManager
             'size'     => $size,
             'mime'     => $mime,
             'modified' => $modified,
+            'type'     => $type,
         ];
     }
 

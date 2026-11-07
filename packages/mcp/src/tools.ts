@@ -23,11 +23,6 @@ export interface ToolDef {
 
 type Item = { key?: string; name?: string; type?: string; size?: number; modified?: number; url?: string; mime?: string; meta?: Record<string, unknown> | null };
 
-/** Pre-fix cores returned 200 with every field null for a path that does not exist. */
-function isMissingMeta(info: { size?: unknown; modified?: unknown } | null | undefined): boolean {
-  return !info || (info.size == null && info.modified == null);
-}
-
 /**
  * Appended to every tool whose result carries storage-derived strings. Anyone who
  * can upload or edit metadata controls file/folder names, titles, alt text,
@@ -51,6 +46,35 @@ function slim(i: Item) {
 function parentOf(p: string): string {
   const s = p.replace(/^\/+|\/+$/g, '');
   return s.includes('/') ? s.slice(0, s.lastIndexOf('/')) : '';
+}
+
+type Stat = { exists: false } | { exists: true; type: 'file' | 'dir'; info: Record<string, unknown> };
+
+/**
+ * Does `p` exist, and is it a file or a folder? Current cores answer /meta with 404 for
+ * a missing path and 200 with `type: 'file'|'dir'` otherwise, so the 200 is trusted.
+ * Older cores answered 200 {size:null, modified:null} for BOTH a missing path and a
+ * folder on S3/SFTP; those are told apart by the parent folder's listing.
+ */
+async function statPath(client: FluxFilesClient, disk: string, p: string): Promise<Stat> {
+  let info: Record<string, unknown>;
+  try {
+    info = await client.request<Record<string, unknown>>('GET', '/meta', { query: { disk, path: p } });
+  } catch (e) {
+    if (e instanceof FluxFilesError && e.status === 404) return { exists: false };
+    throw e;
+  }
+  if (info?.type === 'file' || info?.type === 'dir') return { exists: true, type: info.type, info };
+  if (info && info.size != null) return { exists: true, type: 'file', info };
+  if (info && info.modified != null) return { exists: true, type: 'dir', info };
+  const clean = p.replace(/^\/+|\/+$/g, '');
+  if (clean === '') return { exists: true, type: 'dir', info: info ?? {} };
+  const data = await client.request<{ items?: Item[] } | Item[]>('GET', '/list', { query: { disk, path: parentOf(clean), limit: 500 } });
+  const items = Array.isArray(data) ? data : (data?.items ?? []);
+  const name = clean.slice(clean.lastIndexOf('/') + 1);
+  const hit = items.find((i) => i.name === name || i.key === clean || i.key?.endsWith('/' + clean));
+  if (hit && hit.type === 'dir') return { exists: true, type: 'dir', info: info ?? {} };
+  return hit ? { exists: true, type: 'file', info: info ?? {} } : { exists: false };
 }
 
 export function buildTools(client: FluxFilesClient, opts: ToolOptions): ToolDef[] {
@@ -93,8 +117,9 @@ export function buildTools(client: FluxFilesClient, opts: ToolOptions): ToolDef[
       shape: { path, disk },
       run: async (a) => {
         const p = String(a.path);
-        const info = await client.request<Record<string, unknown>>('GET', '/meta', { query: { disk: d(a.disk), path: p } });
-        if (isMissingMeta(info)) throw new FluxFilesError('File or directory not found', 404, 'not_found');
+        const st = await statPath(client, d(a.disk), p);
+        if (!st.exists) throw new FluxFilesError('File or directory not found', 404, 'not_found');
+        const info = { ...st.info, type: st.type };
         let meta: Record<string, unknown> | null = null;
         try {
           meta = await client.request<Record<string, unknown> | null>('GET', '/metadata', { query: { disk: d(a.disk), key: p } });
@@ -138,16 +163,11 @@ export function buildTools(client: FluxFilesClient, opts: ToolOptions): ToolDef[
         shape: { path, content: z.string().max(2_000_000), disk },
         run: async (a) => {
           const p = String(a.path).replace(/^\/+/, '');
-          // 404 = new file (fixed cores). Older cores answered 200 {size:null,modified:null}
-          // for a path with no object at all, so that shape means "missing" too.
-          let exists = true;
-          try {
-            const info = await client.request<{ size?: number | null; modified?: number | null }>('GET', '/meta', { query: { disk: d(a.disk), path: p } });
-            if (isMissingMeta(info)) exists = false;
-          } catch (e) {
-            if (!(e instanceof FluxFilesError) || e.status !== 404) throw e;
-            exists = false;
+          const st = await statPath(client, d(a.disk), p);
+          if (st.exists && st.type === 'dir') {
+            throw new FluxFilesError(`"${p}" is a folder, not a file`, 400, 'is_directory');
           }
+          const exists = st.exists;
           if (exists) {
             return client.request('PUT', '/content', { json: { disk: d(a.disk), path: p, content: String(a.content) } });
           }
