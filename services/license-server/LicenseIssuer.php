@@ -9,9 +9,6 @@ namespace FluxFiles\LicenseServer;
  * (and the manual admin endpoint) funnels through, so issuance is identical
  * regardless of the checkout platform.
  */
-/** A renewal was bought but there is no eligible licence to extend. */
-final class RenewalWithoutLicenceException extends \InvalidArgumentException {}
-
 final class LicenseIssuer
 {
     public function __construct(
@@ -27,11 +24,24 @@ final class LicenseIssuer
      * (it deliberately does NOT fall back to the base plan: a $29 renewal must not
      * unlock what costs $179).
      *
-     * @param array{email:string,plan:string,customer?:string,gateway?:string,order_id?:string} $order
+     * A renewal runs lookup -> mint -> record -> supersede in ONE write transaction, so
+     * two concurrent renewals extend twice and leave a consistent chain.
+     *
+     * @param array{email:string,plan:string,customer?:string,customer_id?:string,gateway?:string,order_id?:string} $order
      * @throws RenewalWithoutLicenceException
      * @return array{key:string, record:array<string,mixed>, reused:bool}
      */
     public function issue(array $order): array
+    {
+        $plan = Plans::get((string) ($order['plan'] ?? ''));
+        if ($plan !== null && isset($plan['renews'])) {
+            return $this->store->transaction(fn () => $this->issueNow($order));
+        }
+        return $this->issueNow($order);
+    }
+
+    /** @return array{key:string, record:array<string,mixed>, reused:bool} */
+    private function issueNow(array $order): array
     {
         $email = trim((string) ($order['email'] ?? ''));
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -53,21 +63,22 @@ final class LicenseIssuer
 
         // A renewal has no edition/modules of its own: it re-mints what the buyer holds.
         $extendFrom = 0;
-        $retire = [$planId];
+        $base = null;
+        $customerId = trim((string) ($order['customer_id'] ?? ''));
         if (isset($plan['renews'])) {
-            $base = $this->store->activeForBuyerPlans($email, (array) $plan['renews']);
+            // The email is typed at checkout and proves nothing, so when Polar's
+            // customer id is known on both sides it must match too (see the store).
+            // Legacy/manual bases carry no customer id and fall back to the email; the
+            // key is mailed to that licence's own address and never served via /claim.
+            // Dated rows only: a legacy no-expiry key already has lifetime updates and
+            // a 12-month term would be a downgrade, so it is simply not renewable.
+            $base = $this->store->activeForBuyerPlans($email, (array) $plan['renews'], $customerId);
             if ($base === null) {
-                throw new RenewalWithoutLicenceException("No licence to renew for {$email} ({$planId})");
-            }
-            if (($base['expires'] ?? null) === null) {
-                // A legacy no-expiry key already has lifetime updates; "renewing" it would
-                // replace that with a 12-month term.
-                throw new RenewalWithoutLicenceException("Licence {$base['jti']} already has lifetime updates ({$planId})");
+                throw new RenewalWithoutLicenceException("No renewable lifetime licence for {$email} ({$planId})");
             }
             $extendFrom = (int) $base['expires'];
             $plan['edition'] = (string) $base['edition'];
             $plan['modules'] = array_values(array_filter(explode(',', (string) $base['modules'])));
-            $retire = (array) $plan['renews'];
         }
 
         $minted = $this->signer->mint([
@@ -101,6 +112,8 @@ final class LicenseIssuer
             'checkout_id' => (string) ($order['checkout_id'] ?? ''),
             'status'      => 'active',
             'grace_days'  => $graceDays,
+            'customer_id' => $customerId,
+            'renews_jti'  => $base !== null ? (string) $base['jti'] : '',
         ]);
 
         if ((string) $record['jti'] !== (string) $p['jti']) {
@@ -109,24 +122,29 @@ final class LicenseIssuer
             return ['key' => (string) $record['license_key'], 'record' => $record, 'reused' => true];
         }
 
-        // A recurring subscription renewal is a NEW order (fresh order_id) but the
-        // SAME buyer+plan — retire any other still-`active` gateway row for that pair
-        // so only this newest one stays eligible for reminders (see the store
-        // method's docblock for why the duplicate-row is otherwise unavoidable here).
-        // Keyed on the buyer's EMAIL, not their display name: two different people
-        // called "John Smith" must not retire each other's licences. Manual issues
-        // are left alone — an operator may deliberately hand one buyer two keys.
-        if ((string) $record['gateway'] !== 'manual') {
-            // A renewal also retires the licence it extends (and earlier renewals).
-            foreach (array_unique(array_merge($retire, [$planId])) as $p) {
-                $this->store->supersedeActiveForBuyerPlan(
-                    (string) $record['email'],
-                    (string) $p,
-                    (string) $record['jti']
-                );
-            }
+        if ($base !== null) {
+            // A renewal retires ONLY the row it extended (any gateway, manual included),
+            // so that row stops reminding and a second lifetime under the same email
+            // stays independently renewable.
+            $this->store->supersedeJti((string) $base['jti']);
+        } elseif ((string) $record['gateway'] !== 'manual') {
+            // A recurring subscription renewal is a NEW order (fresh order_id) but the
+            // SAME buyer+plan — retire any other still-`active` gateway row for that pair
+            // so only this newest one stays eligible for reminders (see the store
+            // method's docblock for why the duplicate-row is otherwise unavoidable here).
+            // Keyed on the buyer's EMAIL, not their display name: two different people
+            // called "John Smith" must not retire each other's licences. Manual issues
+            // are left alone — an operator may deliberately hand one buyer two keys.
+            $this->store->supersedeActiveForBuyerPlan(
+                (string) $record['email'],
+                (string) $record['plan'],
+                (string) $record['jti']
+            );
         }
 
         return ['key' => $minted['key'], 'record' => $record, 'reused' => false];
     }
 }
+
+/** A renewal was bought but there is no eligible licence to extend. */
+final class RenewalWithoutLicenceException extends \InvalidArgumentException {}

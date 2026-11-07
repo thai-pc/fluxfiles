@@ -97,24 +97,39 @@ deal"); the plans below are inert in the meantime.
 | `studio-renewal` | $79 one-time | +12 months of updates/support for an existing `lifetime` licence |
 
 **How a renewal works.** It is an ordinary `order.paid` for a renewal product.
-`LicenseIssuer` finds the buyer's newest `active` licence (matched on the lower-cased
-**email**) whose plan is in the renewal plan's `renews` list, and mints a NEW key with
-that licence's edition and modules and `expires = max(now, old expires) + 365 days`
-(renewing early keeps the days already paid for). The new row is stored with the
-renewal plan id (`pro-renewal`, so the mail and the admin list say what it was) and the
-issuer supersedes the old row through the existing `supersedeActiveForBuyerPlan()`;
-renewals chain (the next one extends the last). The buyer gets the usual delivery mail
-saying to swap `FLUXFILES_LICENSE_KEY`; the old key keeps working until then. Modules
-never depend on the date (`perpetual`), only the update channel does.
+`LicenseIssuer` (in one `BEGIN IMMEDIATE` transaction, so concurrent renewals extend
+twice and keep a consistent chain) finds the buyer's newest dated, `active` licence
+whose plan is in the renewal plan's `renews` list. The match is the lower-cased
+**email**, and, because the checkout email is free text, also Polar's **customer id**:
+when both the lifetime row and the renewal order carry one they must be equal (the id
+is stored on every Polar-issued row; older/manual rows have none and match by email).
+It mints a NEW key with that licence's edition and modules and
+`expires = max(now, old expires) + 365 days` (renewing early keeps the days already
+paid for). The row is stored with the renewal plan id (`pro-renewal`) and
+`renews_jti` pointing at the row it extended, which is superseded (only that row).
+Renewals chain.
+
+- **The key is mailed to the licence's address, never served by `/claim`** (a renewal
+  borrows an entitlement the checkout only claims to own).
+- The mail says: replace `FLUXFILES_LICENSE_KEY` with the new key; only it carries the
+  extended update window; the previous key keeps running the modules but its updates stop
+  on its original date.
+- **Refund / `/revoke` cascade.** Revoking or refunding a row sets the same status on
+  every renewal descended from it. Refunding a renewal brings the row it extended back to
+  `active`, so the buyer can renew again and is reminded again.
+- Legacy no-expiry keys are not renewable (they already have lifetime updates) and do not
+  shadow a newer dated lifetime under the same email.
 
 **A renewal with nothing to renew is refused**, not treated as the base plan: that
 would hand a $29 buyer a $179 product. Cases: no licence under that email, only an
-annual/monthly plan, the wrong edition, a refunded/revoked base, or a legacy no-expiry
-key (it already has lifetime updates; a 12-month term would be a downgrade). The
-webhook logs `RENEWAL WITHOUT LICENCE` and ACKs 200 (a 5xx would just retry the same
-outcome and eventually disable the endpoint); resolve by hand: refund in Polar, or
-`POST /issue` the right plan for that buyer. The renewal must be bought under the same
-email as the lifetime purchase (the product description says so).
+annual/monthly plan, the wrong edition, a different Polar customer, a refunded/revoked
+base, or only a legacy no-expiry key. The webhook logs `RENEWAL WITHOUT LICENCE`, ACKs
+200 (a 5xx would just retry the same outcome and eventually disable the endpoint), and
+emails the buyer ("we couldn't match your licence, reply and we'll fix or refund") plus
+`FLUXFILES_OPS_EMAIL` if set. Manual fix:
+`POST /issue {"plan":"pro-renewal","email":"<the email of the LIFETIME purchase>"}`
+(`studio-renewal` for Studio), or refund in Polar. Optional `FLUXFILES_RENEWAL_URL` is
+quoted in the reminder mails of one-time plans.
 
 ## Notes
 

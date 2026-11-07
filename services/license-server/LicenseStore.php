@@ -13,6 +13,7 @@ use PDO;
 final class LicenseStore
 {
     private PDO $db;
+    private bool $inTx = false;   // own flag: PDO::inTransaction() ignores a hand-issued BEGIN on older PHP
 
     public function __construct(?string $path = null)
     {
@@ -32,6 +33,7 @@ final class LicenseStore
             umask($prevUmask);
         }
         $this->db->exec('PRAGMA journal_mode=WAL');
+        $this->db->exec('PRAGMA busy_timeout=5000');   // a concurrent writer waits instead of failing
         $this->migrate();
     }
 
@@ -86,6 +88,16 @@ final class LicenseStore
         if (!in_array('grace_days', $cols, true)) {
             $this->db->exec('ALTER TABLE licenses ADD COLUMN grace_days INTEGER DEFAULT 14');
         }
+        // Polar's customer id (stable per buyer, unlike the free-text checkout email) and
+        // the row a renewal extended. NULL on every pre-existing row: both are only
+        // consulted when present, so old data keeps working unchanged.
+        if (!in_array('customer_id', $cols, true)) {
+            $this->db->exec('ALTER TABLE licenses ADD COLUMN customer_id TEXT');
+        }
+        if (!in_array('renews_jti', $cols, true)) {
+            $this->db->exec('ALTER TABLE licenses ADD COLUMN renews_jti TEXT');
+            $this->db->exec('CREATE INDEX IF NOT EXISTS idx_renews ON licenses(renews_jti)');
+        }
         // One licence per (gateway, order): record()'s check-then-insert alone lets two
         // concurrent deliveries of the same order both mint. A database that already
         // holds such a duplicate can't take the index — keep running and say so.
@@ -120,8 +132,8 @@ final class LicenseStore
             }
         }
         $stmt = $this->db->prepare('INSERT OR IGNORE INTO licenses
-            (jti,email,customer,plan,edition,modules,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days)
-            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days)');
+            (jti,email,customer,plan,edition,modules,enforcement,issued,expires,license_key,gateway,order_id,checkout_id,status,created_at,grace_days,customer_id,renews_jti)
+            VALUES (:jti,:email,:customer,:plan,:edition,:modules,:enforcement,:issued,:expires,:license_key,:gateway,:order_id,:checkout_id,:status,:created_at,:grace_days,:customer_id,:renews_jti)');
         $row = [
             'jti'         => (string) $rec['jti'],
             'email'       => (string) $rec['email'],
@@ -142,6 +154,8 @@ final class LicenseStore
             // migrate() comment above for why this is persisted separately from the
             // signed key payload.
             'grace_days'  => (int) ($rec['grace_days'] ?? 14),
+            'customer_id' => ($rec['customer_id'] ?? '') !== '' ? (string) $rec['customer_id'] : null,
+            'renews_jti'  => ($rec['renews_jti'] ?? '') !== '' ? (string) $rec['renews_jti'] : null,
         ];
         $stmt->execute($row);
         if ($stmt->rowCount() === 0 && $row['order_id'] !== '') {
@@ -391,24 +405,107 @@ final class LicenseStore
     }
 
     /**
-     * The licence a renewal extends: the buyer's newest `active` row (by email, any
-     * gateway) whose plan is one of $plans, preferring the latest expiry.
+     * Run $fn inside one write transaction (BEGIN IMMEDIATE: a concurrent writer waits
+     * for the lock instead of reading the same snapshot). Used by renewals, whose
+     * lookup -> mint -> record -> supersede must be atomic or two orders can extend the
+     * same base once and leave a broken chain.
+     *
+     * @template T
+     * @param callable():T $fn
+     * @return T
+     */
+    public function transaction(callable $fn)
+    {
+        if ($this->inTx) {
+            return $fn();
+        }
+        $this->db->exec('BEGIN IMMEDIATE');
+        $this->inTx = true;
+        try {
+            $r = $fn();
+            $this->db->exec('COMMIT');
+            return $r;
+        } catch (\Throwable $e) {
+            try { $this->db->exec('ROLLBACK'); } catch (\Throwable) {}
+            throw $e;
+        } finally {
+            $this->inTx = false;
+        }
+    }
+
+    /**
+     * Candidate licences a renewal can extend: the buyer's `active` rows (by email,
+     * any gateway) in one of $plans that HAVE an expiry, newest first. A legacy
+     * no-expiry key already has lifetime updates, so it is not renewable and must not
+     * shadow a newer dated licence. When $customerId (Polar's) is known, rows with a
+     * DIFFERENT known customer id are excluded, and rows with the same id win over
+     * rows that predate customer ids (matched by email alone).
      *
      * @param array<int,string> $plans
      * @return array<string,mixed>|null
      */
-    public function activeForBuyerPlans(string $email, array $plans): ?array
+    public function activeForBuyerPlans(string $email, array $plans, string $customerId = ''): ?array
     {
         if (trim($email) === '' || $plans === []) {
             return null;
         }
         $in = implode(',', array_fill(0, count($plans), '?'));
         $s = $this->db->prepare(
-            "SELECT * FROM licenses WHERE lower(email) = lower(?) AND status = 'active' AND plan IN ({$in})
-             ORDER BY (expires IS NULL) DESC, expires DESC, created_at DESC LIMIT 1"
+            "SELECT * FROM licenses WHERE lower(email) = lower(?) AND status = 'active' AND expires IS NOT NULL AND plan IN ({$in})
+             ORDER BY expires DESC, created_at DESC"
         );
         $s->execute(array_merge([trim($email)], array_values($plans)));
-        $r = $s->fetch();
-        return $r === false ? null : $r;
+        $rows = $s->fetchAll();
+        $same = []; $unknown = [];
+        foreach ($rows as $r) {
+            $cid = (string) ($r['customer_id'] ?? '');
+            if ($customerId !== '' && $cid === $customerId) { $same[] = $r; }
+            elseif ($cid === '' || $customerId === '') { $unknown[] = $r; }
+        }
+        return ($same[0] ?? $unknown[0] ?? null);
+    }
+
+    /** Retire exactly one row (the licence a renewal extended). No-op unless `active`. */
+    public function supersedeJti(string $jti): bool
+    {
+        $s = $this->db->prepare("UPDATE licenses SET status = 'superseded' WHERE jti = ? AND status = 'active'");
+        $s->execute([$jti]);
+        return $s->rowCount() > 0;
+    }
+
+    /**
+     * setStatus() for refunds/revocations, with the renewal-chain consequences:
+     *  - every descendant (rows whose renews_jti leads back here) that is still
+     *    active/superseded gets the same status, so a refunded or revoked base cannot
+     *    leave a renewal key that is still update-eligible;
+     *  - the row this one extended is brought back to `active` if a renewal had
+     *    superseded it, so the buyer can renew again and gets reminders again.
+     * Only revoked/refunded cascade; anything else is a plain setStatus().
+     */
+    public function setStatusCascade(string $jti, string $status): bool
+    {
+        return $this->transaction(function () use ($jti, $status): bool {
+            $row = $this->findByJti($jti);
+            $ok = $this->setStatus($jti, $status);
+            if (!$ok || !in_array($status, ['revoked', 'refunded'], true)) {
+                return $ok;
+            }
+            $queue = [$jti]; $seen = [$jti];
+            $up = $this->db->prepare("UPDATE licenses SET status = ? WHERE renews_jti = ? AND status IN ('active','superseded')");
+            $kids = $this->db->prepare('SELECT jti FROM licenses WHERE renews_jti = ?');
+            while ($queue) {
+                $cur = array_shift($queue);
+                $up->execute([$status, $cur]);
+                $kids->execute([$cur]);
+                foreach ($kids->fetchAll(\PDO::FETCH_COLUMN) as $k) {
+                    if (!in_array($k, $seen, true)) { $seen[] = $k; $queue[] = $k; }
+                }
+            }
+            $parent = (string) ($row['renews_jti'] ?? '');
+            if ($parent !== '') {
+                $this->db->prepare("UPDATE licenses SET status = 'active' WHERE jti = ? AND status = 'superseded'")->execute([$parent]);
+            }
+            return true;
+        });
     }
 }

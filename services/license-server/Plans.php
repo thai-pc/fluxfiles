@@ -69,7 +69,7 @@ final class Plans
         // lifetime licence. They carry NO edition/modules of their own — the issuer
         // copies those from the buyer's current licence (`renews` lists the plan ids,
         // renewal chain included, that qualify), so a renewal can never grant more than
-        // the base plan did. See LicenseIssuer::issueRenewal().
+        // the base plan did. See LicenseIssuer::issue().
         'pro-renewal' => [
             'renews' => ['pro-lifetime', 'pro-renewal'],
             'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',

@@ -746,17 +746,111 @@ test('mail: lifetime says use-forever + 12 months of updates; renewal says exten
     assertTrue(str_contains($b, gmdate('Y-m-d', (int) $ren['expires'])), 'new date shown');
 });
 
-test('polar-setup: default catalogue is the 6 current products; lifetime ones only behind --with-lifetime', function () {
+test('polar-setup: default catalogue is the 6 current products; lifetime/renewals only behind their flags', function () {
     $src = (string) file_get_contents(__DIR__ . '/../polar-setup.php');
     assertTrue(str_contains($src, "in_array('--with-lifetime', \$argv, true)"), 'flag exists');
-    assertTrue(str_contains($src, 'CATALOGUE + ($withLifetime ? LIFETIME_CATALOGUE : [])'), 'opt-in merge');
-    preg_match('/const CATALOGUE = \[(.*?)\n\];/s', $src, $c); preg_match('/const LIFETIME_CATALOGUE = \[(.*?)\n\];/s', $src, $l);
-    preg_match_all("/^    '([a-z-]+)' => \[/m", $c[1], $cm); preg_match_all("/^    '([a-z-]+)' => \[/m", $l[1], $lm);
+    assertTrue(str_contains($src, "in_array('--with-renewals', \$argv, true)"), 'renewals flag exists');
+    assertTrue(str_contains($src, 'CATALOGUE + ($withLifetime ? LIFETIME_CATALOGUE : []) + ($withRenewals ? RENEWAL_CATALOGUE : [])'), 'opt-in merge');
+    preg_match('/const CATALOGUE = \[(.*?)\n\];/s', $src, $c); preg_match('/const LIFETIME_CATALOGUE = \[(.*?)\n\];/s', $src, $l); preg_match('/const RENEWAL_CATALOGUE = \[(.*?)\n\];/s', $src, $r);
+    preg_match_all("/^    '([a-z-]+)' => \[/m", $c[1], $cm); preg_match_all("/^    '([a-z-]+)' => \[/m", $l[1], $lm); preg_match_all("/^    '([a-z-]+)' => \[/m", $r[1], $rm);
     assertEqual(['pro','pro-monthly','studio','studio-monthly','support','support-monthly'], $cm[1], 'default products unchanged');
-    assertEqual(['lifetime','pro-lifetime','pro-renewal','studio-renewal'], $lm[1]);
-    assertEqual(4, substr_count($l[1], "'recurring' => null"), 'all one-time');
-    foreach ([39900, 17900, 2900, 7900] as $amt) { assertTrue(str_contains($l[1], "'amount' => $amt"), "price $amt"); }
-    foreach ($lm[1] as $pid) { assertTrue(\FluxFiles\LicenseServer\Plans::get($pid) !== null, "$pid has a plan"); }
+    assertEqual(['lifetime','pro-lifetime'], $lm[1]);
+    assertEqual(['pro-renewal','studio-renewal'], $rm[1]);
+    assertEqual(4, substr_count($l[1] . $r[1], "'recurring' => null"), 'all one-time');
+    foreach ([39900, 17900] as $amt) { assertTrue(str_contains($l[1], "'amount' => $amt"), "price $amt"); }
+    foreach ([2900, 7900] as $amt) { assertTrue(str_contains($r[1], "'amount' => $amt"), "price $amt"); }
+    foreach (array_merge($lm[1], $rm[1]) as $pid) { assertTrue(\FluxFiles\LicenseServer\Plans::get($pid) !== null, "$pid has a plan"); }
+});
+
+function rdb(LicenseStore $s): PDO { $p = new ReflectionProperty($s, 'db'); $p->setAccessible(true); return $p->getValue($s); }
+
+test('renewal is bound to Polar customer_id when both sides know it', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:'); $iss = renewIssuer($secretB64, $store);
+    $iss->issue(['email'=>'v@corp.com','plan'=>'lifetime','gateway'=>'polar','order_id'=>'CB-1','customer_id'=>'cus_victim']);
+    $threw = false;
+    try { $iss->issue(['email'=>'v@corp.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'CB-2','customer_id'=>'cus_attacker']); }
+    catch (\FluxFiles\LicenseServer\RenewalWithoutLicenceException $e) { $threw = true; }
+    assertTrue($threw, 'different customer id refused although the email matches');
+    $ok = $iss->issue(['email'=>'V@corp.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'CB-3','customer_id'=>'cus_victim']);
+    assertEqual('cus_victim', $ok['record']['customer_id']);
+    // Base without a customer id (legacy/manual): falls back to the email.
+    $iss->issue(['email'=>'old@corp.com','plan'=>'pro-lifetime','gateway'=>'manual','order_id'=>'CB-4']);
+    $r = $iss->issue(['email'=>'old@corp.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'CB-5','customer_id'=>'cus_x']);
+    assertEqual('pro-renewal', $r['record']['plan']);
+});
+
+test('PolarWebhook::extract carries Polar customer_id', function () {
+    $o = PolarWebhook::extract(['type'=>'order.paid','data'=>['id'=>'o1','status'=>'paid','product_id'=>'p','customer_id'=>'cus_1','customer'=>['email'=>'a@b.co']]], ['p'=>'pro']);
+    assertEqual('cus_1', $o['customer_id']);
+    $o = PolarWebhook::extract(['type'=>'order.paid','data'=>['id'=>'o2','status'=>'paid','product_id'=>'p','customer'=>['id'=>'cus_2','email'=>'a@b.co']]], ['p'=>'pro']);
+    assertEqual('cus_2', $o['customer_id']);
+});
+
+test('refund/revoke of a base cascades to every renewal descendant', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:'); $iss = renewIssuer($secretB64, $store);
+    $b = $iss->issue(['email'=>'c@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'CA-1'])['record'];
+    $r1 = $iss->issue(['email'=>'c@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'CA-2'])['record'];
+    $r2 = $iss->issue(['email'=>'c@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'CA-3'])['record'];
+    assertEqual($b['jti'], $r1['renews_jti']); assertEqual($r1['jti'], $r2['renews_jti']);
+    $store->setStatusCascade((string) $b['jti'], 'refunded');
+    foreach ([$b, $r1, $r2] as $x) {
+        assertEqual('refunded', $store->findByJti((string) $x['jti'])['status']);
+        assertEqual(false, $store->isUpdateEligible((string) $x['jti']), 'no update eligibility left');
+    }
+});
+
+test('refunding a renewal reactivates the base it superseded; it can renew again', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:'); $iss = renewIssuer($secretB64, $store);
+    $b = $iss->issue(['email'=>'rr@x.com','plan'=>'lifetime','gateway'=>'polar','order_id'=>'RR-1'])['record'];
+    $r = $iss->issue(['email'=>'rr@x.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'RR-2'])['record'];
+    assertEqual('superseded', $store->findByJti((string) $b['jti'])['status']);
+    $store->setStatusCascade((string) $r['jti'], 'refunded');
+    assertEqual('refunded', $store->findByJti((string) $r['jti'])['status']);
+    assertEqual('active', $store->findByJti((string) $b['jti'])['status'], 'parent restored');
+    $again = $iss->issue(['email'=>'rr@x.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'RR-3']);
+    assertEqual($b['jti'], $again['record']['renews_jti']);
+});
+
+test('a renewal supersedes ONLY the row it extends; a manual base stops reminding', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:'); $iss = renewIssuer($secretB64, $store);
+    $a = $iss->issue(['email'=>'two@x.com','plan'=>'lifetime','gateway'=>'manual','order_id'=>'TW-1'])['record'];
+    $b = $iss->issue(['email'=>'two@x.com','plan'=>'lifetime','gateway'=>'polar','order_id'=>'TW-2'])['record'];
+    $r = $iss->issue(['email'=>'two@x.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'TW-3'])['record'];
+    $st = [$store->findByJti((string) $a['jti'])['status'], $store->findByJti((string) $b['jti'])['status']];
+    assertEqual(1, count(array_keys($st, 'active')), 'exactly one lifetime is still active (the one NOT extended)');
+    $m = $iss->issue(['email'=>'man@x.com','plan'=>'pro-lifetime','gateway'=>'manual','order_id'=>'MA-1'])['record'];
+    $iss->issue(['email'=>'man@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'MA-2']);
+    assertEqual('superseded', $store->findByJti((string) $m['jti'])['status']);
+    foreach ($store->needingReminder([30], (int) $m['expires'] - 10 * 86400) as $x) { assertTrue($x['jti'] !== $m['jti'], 'no reminder for the renewed manual base'); }
+});
+
+test('a legacy no-expiry key does not block renewing a newer dated lifetime', function () use ($secretB64) {
+    $store = new LicenseStore(':memory:'); $iss = renewIssuer($secretB64, $store);
+    $store->record(['jti'=>bin2hex(random_bytes(12)),'email'=>'m1@x.com','plan'=>'lifetime','edition'=>'studio','modules'=>['share'],'license_key'=>'k','gateway'=>'manual','order_id'=>'LEG','expires'=>null]);
+    $l2 = $iss->issue(['email'=>'m1@x.com','plan'=>'lifetime','gateway'=>'polar','order_id'=>'L2'])['record'];
+    $r = $iss->issue(['email'=>'m1@x.com','plan'=>'studio-renewal','gateway'=>'polar','order_id'=>'R']);
+    assertEqual($l2['jti'], $r['record']['renews_jti']);
+});
+
+test('mail: renewal text is truthful (key above, old key updates end on its date); unmatched renewal mails the buyer', function () use ($secretB64) {
+    $iss = renewIssuer($secretB64);
+    $iss->issue(['email'=>'t@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'T-1']);
+    $ren = $iss->issue(['email'=>'t@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'T-2'])['record'];
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    $b = $render->invoke(new LicenseMailer('log'), $ren);
+    assertTrue(str_contains($b, 'the key above') && str_contains($b, 'only this key carries the extended update window') && str_contains($b, 'updates stop on its original date'), 'truthful');
+    assertTrue(!str_contains($b, 'keeps working until then') && !str_contains($b, 'key below'), 'old false claims gone');
+    putenv('FLUXFILES_OPS_EMAIL=ops@x.com');
+    $out = captureMail(fn () => (new LicenseMailer('log'))->sendRenewalUnmatched('nobody@x.com', 'pro-renewal', 'ORD-9'));
+    putenv('FLUXFILES_OPS_EMAIL');
+    assertTrue(str_contains($out, 'nobody@x.com') && str_contains($out, 'ops@x.com'), 'buyer and ops notified');
+});
+
+test('mail: reminders for one-time plans point at the renewal and the same-email rule', function () use ($secretB64) {
+    $rec = renewIssuer($secretB64)->issue(['email'=>'rm@x.com','plan'=>'pro-lifetime','gateway'=>'polar','order_id'=>'RM-1'])['record'];
+    $m = new ReflectionMethod(LicenseMailer::class, 'renderRenewalBody'); $m->setAccessible(true);
+    $t = $m->invoke(new LicenseMailer('log'), $rec, '30');
+    assertTrue(str_contains($t, 'SAME email') && str_contains($t, 'modules keep running') && !str_contains($t, 'renews/expires'), 'one-time wording');
 });
 
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";

@@ -19,7 +19,11 @@ declare(strict_types=1);
  *   POLAR_TOKEN=polar_oat_… php services/license-server/polar-setup.php
  *   POLAR_TOKEN=polar_oat_… php services/license-server/polar-setup.php --production
  *   … --dry-run          show what would be created, call nothing
- *   … --with-lifetime    ALSO create the 4 lifetime/renewal products (limited deal)
+ *   … --with-renewals   ALSO create the 2 updates-renewal products (safe to re-run)
+ *   … --with-lifetime    ALSO create the 2 lifetime products (limited deal) + the renewals
+ *
+ * Order when changing the licence server: redeploy it FIRST, then run this, then paste
+ * the printed map (an id mapped to a plan the deployed server does not know gets 503s).
  *
  * The token needs the `products:write` and `products:read` scopes. Create it under
  * Polar → Settings → Developers. It is read from the environment and never written
@@ -98,8 +102,7 @@ const CATALOGUE = [
  * The limited lifetime deal: opt-in via --with-lifetime. One-time prices
  * (recurring => null); amounts mirror docs/LICENSING-PLAN.md §C. Copy must say
  * "12 months of updates", matching Plans.php (lifetime USE, not lifetime updates).
- * The renewals extend an existing lifetime licence by 12 months of updates/support
- * and are bought under the SAME email as the lifetime purchase.
+ * (Renewals live in RENEWAL_CATALOGUE below.)
  */
 const LIFETIME_CATALOGUE = [
     'lifetime' => [
@@ -114,6 +117,16 @@ const LIFETIME_CATALOGUE = [
         'amount' => 17900,          // $179 one-time
         'recurring' => null,
     ],
+];
+
+/**
+ * The updates renewals: --with-renewals (or --with-lifetime, which implies it).
+ * Kept apart from the lifetime products because they must OUTLIVE the deal: people who
+ * bought a lifetime licence keep renewing after the offer ends. Every run, with or
+ * without a flag, maps an existing renewal product (archived or not) by name without
+ * recreating it, so the printed plan map never loses the renewal ids.
+ */
+const RENEWAL_CATALOGUE = [
     'pro-renewal' => [
         'name' => 'FluxFiles Pro Updates Renewal',
         'description' => 'One-time: adds 12 months of updates and priority support to your existing Pro Lifetime licence. Use the same email as your original purchase. Your modules keep running either way.',
@@ -130,7 +143,10 @@ const LIFETIME_CATALOGUE = [
 
 $production = in_array('--production', $argv, true);
 $withLifetime = in_array('--with-lifetime', $argv, true);
-$catalogue = CATALOGUE + ($withLifetime ? LIFETIME_CATALOGUE : []);
+$withRenewals = $withLifetime || in_array('--with-renewals', $argv, true);
+$catalogue = CATALOGUE + ($withLifetime ? LIFETIME_CATALOGUE : []) + ($withRenewals ? RENEWAL_CATALOGUE : []);
+// Optional products not being created this run: still MAPPED when they already exist.
+$mapOnly = array_diff_key(LIFETIME_CATALOGUE + RENEWAL_CATALOGUE, $catalogue);
 
 /**
  * The token, from the environment or the repo-root .env.
@@ -223,8 +239,24 @@ foreach (($list['items'] ?? []) as $p) {
     $existing[(string) ($p['name'] ?? '')] = (string) ($p['id'] ?? '');
 }
 
+// Archived products too, for the optional ones: a renewal product archived after the
+// deal ended must stay in the map (past buyers still renew) and must not be recreated.
+[$st2, $listAll] = api('GET', '/products/?limit=100');
+$existingAny = [];
+foreach (($st2 === 200 ? ($listAll['items'] ?? []) : []) as $p) {
+    $existingAny[(string) ($p['name'] ?? '')] = ['id' => (string) ($p['id'] ?? ''), 'archived' => !empty($p['is_archived'])];
+}
+
 $planMap = [];
 $failed = 0;
+
+foreach ($mapOnly as $planId => $spec) {
+    if (isset($existingAny[$spec['name']]) && Plans::get($planId) !== null) {
+        $e = $existingAny[$spec['name']];
+        $planMap[$e['id']] = $planId;
+        printf("  {$yellow}MAP {$reset} %-24s already exists%s (%s) — mapped, not created\n", $spec['name'], $e['archived'] ? ', ARCHIVED' : '', $e['id']);
+    }
+}
 
 foreach ($catalogue as $planId => $spec) {
     // A catalogue entry with no matching plan would sell a licence the issuer refuses.
@@ -234,6 +266,12 @@ foreach ($catalogue as $planId => $spec) {
         continue;
     }
 
+    if (!isset($existing[$spec['name']]) && isset($existingAny[$spec['name']]) && !isset(CATALOGUE[$planId])) {
+        // Archived optional product: reuse it, never create a twin. (For a lifetime
+        // product this means un-archive it in Polar to re-open the deal.)
+        $existing[$spec['name']] = $existingAny[$spec['name']]['id'];
+        echo "  {$yellow}NOTE{$reset} {$spec['name']} is archived in Polar — unarchive it to sell it\n";
+    }
     if (isset($existing[$spec['name']])) {
         $planMap[$existing[$spec['name']]] = $planId;
         printf("  {$yellow}SKIP{$reset} %-24s already exists (%s)\n", $spec['name'], $existing[$spec['name']]);

@@ -70,6 +70,51 @@ final class LicenseMailer
         }
     }
 
+    /**
+     * A renewal was paid but no lifetime licence matches it. Tells the buyer (and the
+     * optional FLUXFILES_OPS_EMAIL) so a paid order is never silent. Never throws.
+     */
+    public function sendRenewalUnmatched(string $email, string $plan, string $orderId): bool
+    {
+        $ok = true;
+        $buyerBody = <<<TXT
+        Thanks for your FluxFiles updates renewal ({$plan}).
+
+        We could not match it to a FluxFiles Lifetime licence under this email address
+        (or this customer account), so nothing has been extended yet and nothing is lost.
+
+        Please reply to this email with the address you used for your original Lifetime
+        purchase and we will apply the renewal, or refund it if you prefer. Order: {$orderId}.
+
+        — FluxFiles
+        TXT;
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $ok = $this->deliver($email, 'We could not match your FluxFiles renewal', $buyerBody);
+        }
+        $ops = (string) (getenv('FLUXFILES_OPS_EMAIL') ?: '');
+        if ($ops !== '' && filter_var($ops, FILTER_VALIDATE_EMAIL)) {
+            $this->deliver($ops, "Unmatched renewal: {$plan} ({$orderId})",
+                "Order {$orderId} ({$plan}) by {$email} matched no active Lifetime licence.\n"
+                . "Fix: POST /issue {\"plan\":\"{$plan}\",\"email\":\"<the LIFETIME purchase email>\"}, or refund in Polar.");
+        }
+        return $ok;
+    }
+
+    private function deliver(string $to, string $subject, string $body): bool
+    {
+        try {
+            return match ($this->transport) {
+                'resend' => $this->sendResend($to, $subject, $body),
+                'smtp' => $this->sendSmtp($to, $subject, $body),
+                'sendmail' => $this->sendMail($to, $subject, $body),
+                default => $this->sendLog($to, $subject, $body),
+            };
+        } catch (\Throwable $e) {
+            error_log('license mail failed for ' . $to . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
     /** @param array<string,mixed> $record */
     private function renderBody(array $record): string
     {
@@ -84,7 +129,8 @@ final class LicenseMailer
             $expiryLine = 'This licence includes lifetime use and lifetime updates.';
         } elseif ($isRenewal) {
             $expiryLine = "Your updates and priority support now run until: {$date}.\n\n"
-                . 'Replace the FLUXFILES_LICENSE_KEY on your server with the key below; the previous key keeps working until then. '
+                . 'Replace the FLUXFILES_LICENSE_KEY on your server with the key above: only this key carries the extended update window. '
+                . 'Your previous key keeps running your modules, but its updates stop on its original date. '
                 . 'Your installed paid modules keep running regardless of the date.';
         } elseif ($isLifetime) {
             $expiryLine = "This is a one-time purchase: you can use your paid modules forever.\n\n"
@@ -225,6 +271,22 @@ final class LicenseMailer
         // email (e.g. a cron outage can cross several thresholds at once, so
         // "bucket=30" could mean 22 days actually left) — this must agree with $date.
         $daysLeft = max(0, (int) floor(($expires - time()) / 86400));
+
+        $plan = (string) ($record['plan'] ?? '');
+        if ($plan === 'lifetime' || $plan === 'pro-lifetime' || str_ends_with($plan, '-renewal')) {
+            // One-time plans do not renew by themselves: only the update window ends.
+            $url = (string) (getenv('FLUXFILES_RENEWAL_URL') ?: '');
+            $where = $url !== '' ? " at {$url}" : ' (reply to this email for the link)';
+            return <<<TXT
+        Your FluxFiles {$edition} updates and priority support end on {$date} ({$daysLeft} day(s) left).
+
+        Your modules keep running either way. To get 12 more months of updates, buy the
+        one-time updates renewal{$where}, using the SAME email address (and account) as your
+        original purchase, then replace FLUXFILES_LICENSE_KEY with the new key we email you.
+
+        — FluxFiles
+        TXT;
+        }
 
         return <<<TXT
         Your FluxFiles {$edition} licence renews/expires on {$date} ({$daysLeft} day(s) left).
