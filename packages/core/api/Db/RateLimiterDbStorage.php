@@ -44,27 +44,92 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
         $windowStart = $now - $this->windowSeconds;
         $pdo = $this->db->pdo();
 
-        $this->db->beginExclusive();
+        // Hits on the same (table, identifier, bucket) are serialised; other keys never wait.
+        // The key halves are NUL-free (libpq truncates text params at a NUL).
+        $keyJson = json_encode([$identifier, $actionType]);
+        $driver = $this->db->driver();
+        $mysqlLock = null;
         $limited = false;
         try {
-            $del = $pdo->prepare("DELETE FROM {$this->table} WHERE identifier = ? AND bucket = ? AND ts <= ?");
-            $del->execute([$identifier, $actionType, $windowStart]);
+            if ($driver === 'mysql') {
+                // On an empty key InnoDB takes only gap locks, so two first hits that both
+                // SELECT ... FOR UPDATE then INSERT deadlock (1213). A named lock serialises
+                // the key instead, and the key's hits are read before the transaction opens
+                // (below), so no locking read is involved at any isolation level.
+                // (No READ COMMITTED: it is refused under binlog_format=STATEMENT, 1665.)
+                $name = 'fxrl_' . sha1($this->table . "|" . $keyJson);
+                $g = $pdo->prepare('SELECT GET_LOCK(?, 10)');
+                $g->execute([$name]);
+                if ((int) $g->fetchColumn() !== 1) {
+                    if (!headers_sent()) {
+                        header('Retry-After: 1');
+                    }
+                    throw new ApiException('Too many requests. Please try again later.', 429, 'rate_limited');
+                }
+                $mysqlLock = $name;
 
-            $forUpdate = $this->db->dialect()->forUpdateSuffix();
-            $cnt = $pdo->prepare("SELECT COUNT(*) FROM {$this->table} WHERE identifier = ? AND bucket = ?{$forUpdate}");
-            $cnt->execute([$identifier, $actionType]);
-
-            if ((int) $cnt->fetchColumn() >= $limit) {
-                $limited = true;
-            } else {
-                $ins = $pdo->prepare("INSERT INTO {$this->table} (identifier, bucket, ts) VALUES (?, ?, ?)");
-                $ins->execute([$identifier, $actionType, $now]);
+                // Autocommit, non-locking read, after GET_LOCK so it sees the previous
+                // holder's commit. Outside a transaction it takes no shared gap lock even
+                // under SERIALIZABLE (inside one, InnoDB turns a plain SELECT into LOCK IN
+                // SHARE MODE and distinct-key first hits deadlock).
+                $sel = $pdo->prepare("SELECT id, ts FROM {$this->table} WHERE identifier = ? AND bucket = ?");
+                $sel->execute([$identifier, $actionType]);
+                $expired = [];
+                $count = 0;
+                foreach ($sel->fetchAll(\PDO::FETCH_NUM) as [$id, $ts]) {
+                    if ((int) $ts <= $windowStart) {
+                        $expired[] = (int) $id;
+                    } else {
+                        $count++;
+                    }
+                }
             }
+            $this->db->beginExclusive();
+            try {
+                if ($driver === 'pgsql') {
+                    // REPEATABLE READ would ignore hits committed after our snapshot; the
+                    // per-key advisory lock (two-int form, PostgreSQL 9.5+ like the rest of the schema, released at
+                    // COMMIT) serialises the rest.
+                    $pdo->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+                    $pdo->prepare('SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))')->execute([$this->table, $keyJson]);
+                }
+                if ($driver === 'mysql') {
+                    // Expired rows go by primary key, never by range (no gap locks).
+                    if ($expired) {
+                        $pdo->exec("DELETE FROM {$this->table} WHERE id IN (" . implode(',', $expired) . ')');
+                    }
+                } else {
+                    $del = $pdo->prepare("DELETE FROM {$this->table} WHERE identifier = ? AND bucket = ? AND ts <= ?");
+                    $del->execute([$identifier, $actionType, $windowStart]);
 
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            $this->db->rollback();
-            throw $e;
+                    $forUpdate = $this->db->dialect()->forUpdateSuffix();
+                    // Lock the key's hit rows and count them in PHP: PostgreSQL rejects
+                    // FOR UPDATE combined with an aggregate (COUNT(*)).
+                    $cnt = $pdo->prepare("SELECT id FROM {$this->table} WHERE identifier = ? AND bucket = ?{$forUpdate}");
+                    $cnt->execute([$identifier, $actionType]);
+                    $count = count($cnt->fetchAll(\PDO::FETCH_COLUMN));
+                }
+
+                if ($count >= $limit) {
+                    $limited = true;
+                } else {
+                    $ins = $pdo->prepare("INSERT INTO {$this->table} (identifier, bucket, ts) VALUES (?, ?, ?)");
+                    $ins->execute([$identifier, $actionType, $now]);
+                }
+
+                $this->db->commit();
+            } catch (\Throwable $e) {
+                $this->db->rollback();
+                throw $e;
+            }
+        } finally {
+            if ($mysqlLock !== null) {
+                try {
+                    $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$mysqlLock]);
+                } catch (\Throwable $e) {
+                    // session-scoped; it dies with the connection
+                }
+            }
         }
 
         if ($limited) {

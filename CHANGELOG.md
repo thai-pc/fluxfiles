@@ -5,6 +5,11 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- DB storage backend on PostgreSQL: every authenticated request returned 500, because the rate limiter ran `SELECT COUNT(*) … FOR UPDATE`, which PostgreSQL rejects ("FOR UPDATE is not allowed with aggregate functions"). It now locks the key's hit rows (`SELECT id … FOR UPDATE`) and counts them in PHP. The Laravel adapter on PostgreSQL had been silently falling back to the file limiter (`FluxFilesController::checkRate` swallows the error); it now uses the DB limiter again.
+- DB rate limiter, concurrency: on MySQL, concurrent first hits on a key with no rows deadlocked (error 1213, a 500), because InnoDB takes only gap locks on an empty range; the WordPress limiter had the same deadlock and then reinstalled its schema and fell back to the file limiter. Hits are now serialised per key, never globally. On MySQL a `GET_LOCK` on a per-key name is taken, the key's hits are read with a plain autocommit SELECT before the transaction opens (no locking read at any isolation level, `SERIALIZABLE` included), and the transaction only deletes expired rows by primary key and inserts; the isolation level is left alone, so servers running `binlog_format=STATEMENT` keep working. If the MySQL/WordPress lock wait (10 s) times out, the request now gets a 429 `rate_limited` (WordPress: no schema reinstall, no file fallback; Laravel passes that 429 through instead of falling back to the file limiter). On PostgreSQL a per-key transaction advisory lock (two-int form, PostgreSQL 9.5+ like the rest of the schema) serialises the key and the transaction runs at READ COMMITTED, so the limit is also enforced when the session default is REPEATABLE READ; a PostgreSQL lock wait is bounded only by the server's `lock_timeout`/`statement_timeout`. SQLite is unchanged (`BEGIN IMMEDIATE`).
+- The env-gated MySQL/PostgreSQL DB tests now exercise the limiter: N allowed / N+1 refused, concurrent cold-key races (same key and distinct keys), and per-key lock independence.
+
 ## [1.0.18] — 2026-11-07
 
 > Released: `core-v1.1.5`.

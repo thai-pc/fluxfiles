@@ -89,33 +89,73 @@ class WpRateLimiterStorage implements RateLimiterStorageInterface
         $windowStart = $now - $this->windowSeconds;
         $db = $this->wpdb;
 
+        // On an empty key InnoDB takes only gap locks, so two first hits that both run a
+        // locking read and then INSERT deadlock (1213). A per-key named lock serialises
+        // them instead, and the key's hits are read before the transaction opens, so no
+        // locking read is involved at any isolation level. (No READ COMMITTED: InnoDB
+        // refuses it under binlog_format=STATEMENT, error 1665.)
+        $lockName = 'fxrl_' . sha1($this->table . '|' . json_encode([$identifier, $actionType]));
+        $got = $db->get_var($db->prepare('SELECT GET_LOCK(%s, 10)', $lockName));
+        if ($got === null) {
+            return null;   // the query itself failed: treat like an unusable table
+        }
+        if ((int) $got !== 1) {
+            // Busy, not broken: don't reinstall the schema or fall back, just push back.
+            if (!headers_sent()) {
+                header('Retry-After: 1');
+            }
+            throw new ApiException('Too many requests. Please try again later.', 429, 'rate_limited');
+        }
+        try {
+            return $this->attemptLocked($identifier, $actionType, $limit, $now, $windowStart);
+        } finally {
+            $db->get_var($db->prepare('SELECT RELEASE_LOCK(%s)', $lockName));
+        }
+    }
+
+    /** @return ?bool */
+    private function attemptLocked(string $identifier, string $actionType, int $limit, int $now, int $windowStart): ?bool
+    {
+        $db = $this->wpdb;
+
+        // Autocommit, non-locking read, after GET_LOCK so it sees the previous holder's
+        // commit. Inside a transaction InnoDB would turn it into a shared gap lock under
+        // SERIALIZABLE and distinct-key first hits would deadlock.
+        $rows = $db->get_results($db->prepare(
+            "SELECT id, ts FROM {$this->table} WHERE identifier = %s AND bucket = %s",
+            $identifier,
+            $actionType
+        ), ARRAY_A);
+        if (!is_array($rows) || ($db->last_error ?? '') !== '') {
+            return null;
+        }
+        $expired = [];
+        $count = 0;
+        foreach ($rows as $row) {
+            if ((int) $row['ts'] <= $windowStart) {
+                $expired[] = (int) $row['id'];
+            } else {
+                $count++;
+            }
+        }
+
         $db->query('START TRANSACTION');
         $limited = false;
-        $ok = $db->query($db->prepare(
-            "DELETE FROM {$this->table} WHERE identifier = %s AND bucket = %s AND ts <= %d",
-            $identifier,
-            $actionType,
-            $windowStart
-        )) !== false;
+        $ok = true;
+        if ($expired) {
+            // Expired rows go by primary key, never by range (no gap locks).
+            $ok = $db->query("DELETE FROM {$this->table} WHERE id IN (" . implode(',', $expired) . ')') !== false;
+        }
         if ($ok) {
-            // FOR UPDATE: two concurrent requests must not both read "limit - 1" and both insert.
-            $count = $db->get_var($db->prepare(
-                "SELECT COUNT(*) FROM {$this->table} WHERE identifier = %s AND bucket = %s FOR UPDATE",
-                $identifier,
-                $actionType
-            ));
-            $ok = $count !== null;
-            if ($ok) {
-                if ((int) $count >= $limit) {
-                    $limited = true;
-                } else {
-                    $ok = $db->query($db->prepare(
-                        "INSERT INTO {$this->table} (identifier, bucket, ts) VALUES (%s, %s, %d)",
-                        $identifier,
-                        $actionType,
-                        $now
-                    )) !== false;
-                }
+            if ($count >= $limit) {
+                $limited = true;
+            } else {
+                $ok = $db->query($db->prepare(
+                    "INSERT INTO {$this->table} (identifier, bucket, ts) VALUES (%s, %s, %d)",
+                    $identifier,
+                    $actionType,
+                    $now
+                )) !== false;
             }
         }
         if (!$ok) {

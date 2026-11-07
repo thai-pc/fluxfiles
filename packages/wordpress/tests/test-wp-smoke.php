@@ -2917,7 +2917,7 @@ test('a watermark_enabled plugin token arrives as a watermark config and forces 
     });
 });
 
-test('db mode: the rate limiter lives in the database (START TRANSACTION … FOR UPDATE … COMMIT), json mode uses the file limiter', function () use ($ffPriv) {
+test('db mode: the rate limiter lives in the database (GET_LOCK, START TRANSACTION … FOR UPDATE … COMMIT), json mode uses the file limiter', function () use ($ffPriv) {
     global $wpdb;
     $keepDb = $wpdb ?? null;
     $api = new FluxFilesApi();
@@ -2930,20 +2930,41 @@ test('db mode: the rate limiter lives in the database (START TRANSACTION … FOR
         $wpdb = new WpdbSpy();
         $lim = $ffPriv($api, 'limiter', [5, 2]);
         assertTrue($lim instanceof WpRateLimiterStorage, 'db mode: the DB-backed limiter');
-        $wpdb->varQueue[] = 0;
+        $live = time();
+        $wpdb->varQueue = [1];   // GET_LOCK granted
+        $wpdb->resultsQueue = [[]];
         $lim->check('u1', 'write');
         $q = $wpdb->queries;
-        assertEqual('START TRANSACTION', $q[0] ?? null, 'transaction opened');
-        assertTrue(str_contains($q[1] ?? '', 'DELETE FROM wp_fluxfiles_rate_limits'), 'expired hits swept');
-        assertTrue(str_contains($q[2] ?? '', 'FOR UPDATE'), 'count taken under lock');
+        assertTrue(str_contains($q[0] ?? '', 'GET_LOCK'), 'per-key named lock taken first');
+        assertTrue(str_contains($q[1] ?? '', 'SELECT id, ts FROM wp_fluxfiles_rate_limits') && !str_contains($q[1], 'FOR UPDATE'), 'non-locking read of the key\'s hits, before the transaction');
+        assertEqual('START TRANSACTION', $q[2] ?? null, 'transaction opened');
         assertTrue(str_contains($q[3] ?? '', 'INSERT INTO wp_fluxfiles_rate_limits'), 'hit recorded');
         assertEqual('COMMIT', $q[4] ?? null, 'committed');
+        assertTrue(str_contains($q[5] ?? '', 'RELEASE_LOCK'), 'named lock released');
+        assertTrue(!array_filter($q, fn ($x) => str_contains($x, 'ISOLATION')), 'no isolation-level change (unsupported under binlog_format=STATEMENT)');
 
-        $wpdb->varQueue[] = 2;   // already at the write limit (2)
+        // expired hits are deleted by primary key, not counted
+        $wpdb->queries = [];
+        $wpdb->varQueue = [1];
+        $wpdb->resultsQueue = [[['id' => 7, 'ts' => $live - 500], ['id' => 8, 'ts' => $live]]];
+        $lim->check('u1', 'write');
+        assertTrue(count(array_filter($wpdb->queries, fn ($x) => str_contains($x, 'DELETE FROM wp_fluxfiles_rate_limits WHERE id IN (7)'))) === 1, 'expired row deleted by id');
+
+        $wpdb->varQueue = [1];   // already at the write limit (2)
+        $wpdb->resultsQueue = [[['id' => 1, 'ts' => $live], ['id' => 2, 'ts' => $live]]];
         try { $lim->check('u1', 'write'); $threw = null; }
         catch (\FluxFiles\ApiException $e) { $threw = [$e->getHttpCode(), $e->getErrorCode()]; }
         assertEqual([429, 'rate_limited'], $threw, 'over the limit -> 429 rate_limited');
-        $wpdb->varQueue[] = 4;   // reads have their own, higher limit (5)
+
+        $wpdb->queries = [];
+        $wpdb->varQueue = [0];   // GET_LOCK timed out: busy, not "schema missing"
+        try { $lim->check('u1', 'write'); $threw = null; }
+        catch (\FluxFiles\ApiException $e) { $threw = [$e->getHttpCode(), $e->getErrorCode()]; }
+        assertEqual([429, 'rate_limited'], $threw, 'lock timeout -> 429, no fallback');
+        assertTrue(!array_filter($wpdb->queries, fn ($x) => str_contains($x, 'START TRANSACTION')), 'no transaction after a lock timeout');
+
+        $wpdb->varQueue = [1];   // reads have their own, higher limit (5)
+        $wpdb->resultsQueue = [[['id' => 1, 'ts' => $live]]];
         $lim->check('u1', 'read');
     } finally {
         $wpdb = $keepDb;
@@ -2960,7 +2981,13 @@ test('db mode: a missing/unusable rate_limits table degrades to the file limiter
         public function query(string $sql)
         {
             $this->queries[] = $sql;
-            return str_starts_with($sql, 'DELETE FROM wp_fluxfiles_rate_limits') ? false : 1;
+            return str_starts_with($sql, 'INSERT INTO wp_fluxfiles_rate_limits') ? false : 1;
+        }
+
+        public function get_var(string $sql)
+        {
+            $this->queries[] = $sql;
+            return str_contains($sql, 'GET_LOCK') ? 1 : null;   // lock granted, table unusable
         }
     };
     $dir = sys_get_temp_dir() . '/ff-wp-rl-' . uniqid();
