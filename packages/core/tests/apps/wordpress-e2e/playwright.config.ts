@@ -6,6 +6,7 @@ import { defineConfig } from '@playwright/test';
 // `npm run e2e:wp` from tests/apps).
 export default defineConfig({
   testDir: '.',
+  testIgnore: /wp-multisite/, // needs its own wp-env (port 8890): playwright.multisite.config.ts
   fullyParallel: false,
   workers: 1,
   use: { baseURL: 'http://localhost:8888' },
