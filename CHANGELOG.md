@@ -10,12 +10,14 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - **Laravel adapter, non-`ApiException` errors.** The upload route answers an unexpected exception with core's envelope (`500`, `error_code: server_error`, generic message) instead of an ad-hoc `Upload failed`. The exception is reported through Laravel's `report()` (so the app's log channel gets it) and its text (SQLSTATE, host, port, paths) reaches the response only as `detail` when `app.debug` is on. The older `'Upload failed: ' . $e->getMessage()` leak had already been removed in `core-v1.1.3`; every other controller `catch (\Throwable)` answers a fixed string.
 
 ### Added
+- `OidcDiscovery` now requires https for the issuer's discovery URL and `jwks_uri` (plain http only for `localhost`, `127.0.0.1`, `::1`), on every fetch including the refetch after `forgetJwks()`; otherwise `502 sso_idp_unreachable`.
 - `OidcDiscovery::forgetJwks(?string $jwksUri = null)`: drops the cached JWKS (one URI, or all) so the SSO module no longer recomputes core's cache file names.
 
 ### Changed
 - Standalone core: the public page routes (`/api/fm/share/page`, `/api/fm/intake/page`) show a minimal HTML error page (right status, error code, deny-all CSP) when the module is missing, unlicensed or too old, instead of a raw JSON envelope. API routes keep JSON. The Laravel and WordPress adapters' page routes still answer JSON for now.
 
 ### Documentation
+- CONFIG.md: AI Vision `FLUXFILES_AIVISION_TIMEOUT` (max 300), `_MAX_RESPONSE_MB`, `_MAX_MEGAPIXELS`, `_MAX_SIDE_PX`. `dlp_entity_types` null/empty now documented as the DLP module's language-narrowed PII default (reversed in dlp 1.1.0) in CONFIG.md, the DLP design doc (decision 6) and the `Claims` docblocks.
 - CONFIG.md: `dlp_entity_types` default is the DLP module's PII set (not Presidio's full set); `allow_dlp_scan` notes zero-width stripping and NFKC normalisation (DLP module >= 1.1.0).
 
 ## [1.0.21] — 2026-11-08

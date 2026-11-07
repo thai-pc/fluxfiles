@@ -154,6 +154,27 @@ test('OidcDiscovery::forgetJwks drops only that URI\'s cached JWKS', function ()
     assertEqual('c', $d->jwks('https://idp/jwks')['keys'][0]['kid'], 're-fetched after forget-all');
 });
 
+test('OidcDiscovery requires https for discovery and jwks_uri (http only for loopback), also after forgetJwks', function () {
+    $dir = sys_get_temp_dir() . '/ff-oidc-' . uniqid();
+    $ft = new FakeTransport();
+    $d = new OidcDiscovery($dir, $ft);
+    foreach (['http://idp.example.com/jwks', 'ftp://idp/jwks', '//idp/jwks'] as $u) {
+        try { $d->jwks($u); throw new \RuntimeException("accepted {$u}"); }
+        catch (\FluxFiles\ApiException $e) { assertEqual('sso_idp_unreachable', $e->getErrorCode(), $u); }
+    }
+    try { $d->discover('http://idp.example.com'); throw new \RuntimeException('accepted http issuer'); }
+    catch (\FluxFiles\ApiException $e) { assertEqual('sso_idp_unreachable', $e->getErrorCode()); }
+    assertEqual([], $ft->calls, 'nothing was fetched');
+    foreach (['http://localhost:9/jwks', 'http://127.0.0.1/jwks', 'http://[::1]/jwks', 'https://idp.example.com/jwks'] as $u) {
+        $ft->queue = [['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"k"}]}']];
+        $d->forgetJwks();
+        assertEqual('k', $d->jwks($u)['keys'][0]['kid'], $u);
+    }
+    $d->forgetJwks();
+    try { $d->jwks('http://evil.example/jwks'); throw new \RuntimeException('accepted after forget'); }
+    catch (\FluxFiles\ApiException $e) { assertEqual('sso_idp_unreachable', $e->getErrorCode()); }
+});
+
 test('a network failure never throws: status 0, empty body, an error string', function () {
     $r = (new CurlTransport(1))->request('GET', 'http://127.0.0.1:1/', [], null, 2);
     assertEqual(0, $r['status']);

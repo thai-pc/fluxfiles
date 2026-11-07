@@ -86,8 +86,28 @@ final class OidcDiscovery
         }
     }
 
+    /**
+     * Discovery documents and key sets are trust anchors for id_token verification, so
+     * they travel over TLS. Plain http is accepted only for a loopback host (local dev).
+     * Applied in fetchJson(), i.e. to the issuer's discovery URL and to jwks_uri on both
+     * the normal fetch and the forget/refetch path.
+     */
+    private function assertSecureUrl(string $url): void
+    {
+        $scheme = strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? ''));
+        if ($scheme === 'https') {
+            return;
+        }
+        $host = strtolower(trim((string) (parse_url($url, PHP_URL_HOST) ?? ''), '[]'));
+        if ($scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            return;
+        }
+        throw new ApiException('The identity provider URL must use https', 502, 'sso_idp_unreachable');
+    }
+
     private function fetchJson(string $url): array
     {
+        $this->assertSecureUrl($url);
         $res = $this->transport->request('GET', $url, ['Accept: application/json'], null, self::TIMEOUT);
         $status = $res['status'];
         $body = $res['body'];
