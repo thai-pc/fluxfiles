@@ -319,6 +319,60 @@ test('list() over an N-item page reads the holds manifest a BOUNDED number of ti
 });
 
 // ═══════════════════════════════════════════════════════════════
+echo "\n{$yellow}► hold on the disk root / token prefix root covers everything beneath{$reset}\n";
+// ═══════════════════════════════════════════════════════════════
+
+foreach (['', '/', '.'] as $rootSpelling) {
+    test("root hold stored as " . var_export($rootSpelling, true) . " blocks delete/trash/rename/move of nested files", function () use ($rootSpelling) {
+        [$fm, , , $meta] = makeFM();
+        upload($fm, 'free', 'x.txt');
+        upload($fm, '', 'top.txt');
+        $meta->addHold('local', 'root1', [
+            'path' => $rootSpelling, 'is_dir' => true, 'disk' => 'local', 'reason' => 'r', 'placed_by' => 'a',
+            'placed_at' => time(), 'released_at' => null, 'released_by' => null, 'release_reason' => null,
+        ]);
+        expectHold(fn () => $fm->delete('local', 'free/x.txt'));
+        expectHold(fn () => $fm->trash('local', 'free/x.txt'));
+        expectHold(fn () => $fm->delete('local', 'top.txt'));
+        expectHold(fn () => $fm->rename('local', 'free/x.txt', 'free/y.txt'));
+        expectHold(fn () => $fm->move('local', 'free/x.txt', 'top2.txt'));
+    });
+}
+
+test('root hold: copy-from and listing keep working', function () {
+    [$fm, , , $meta] = makeFM();
+    upload($fm, 'free', 'x.txt');
+    placeHold($meta, 'local', '', true);
+    $fm->copy('local', 'free/x.txt', 'free/copy.txt');
+    $fm->list('local', 'free');
+});
+
+test('root hold: restoring an already-trashed file stays blocked', function () {
+    [$fm, , , $meta] = makeFM();
+    upload($fm, 'free', 'x.txt');
+    $fm->trash('local', 'free/x.txt');
+    placeHold($meta, 'local', '', true);
+    $items = $fm->listTrash('local');
+    $items = $items['items'] ?? $items;
+    $first = reset($items);
+    $id = (string) ($first['trash_id'] ?? '');
+    assertTrue($id !== '', 'trash id found');
+    $threw = false;
+    try { $fm->restore('local', $id); } catch (ApiException $e) { $threw = $e->getErrorCode() === 'legal_hold_active'; }
+    assertTrue($threw, 'restore refused under root hold');
+});
+
+test('scoped token: hold on its own prefix root covers the prefix, not siblings', function () {
+    [$fmA, , , $metaA, $dm] = makeFM('tenant-a');
+    upload($fmA, '', 'a.txt');
+    placeHold($metaA, 'local', 'tenant-a', true);
+    expectHold(fn () => $fmA->delete('local', 'a.txt'));
+    $fmB = new FileManager($dm, new Claims('b', ['read', 'write', 'delete', 'audit'], ['local'], 'tenant-b', 50, null, 0), $metaA);
+    upload($fmB, '', 'b.txt');
+    $fmB->delete('local', 'b.txt');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════
 

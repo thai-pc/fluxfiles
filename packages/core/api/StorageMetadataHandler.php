@@ -1628,9 +1628,6 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     private static function matchOverlappingHold(array $holds, string $scopedPath, bool $bidirectional): ?array
     {
         $scopedPath = trim($scopedPath, '/');
-        if ($scopedPath === '') {
-            return null;
-        }
         foreach ($holds as $id => $entry) {
             if (($entry['released_at'] ?? null) !== null) {
                 continue; // released holds never block/cover
@@ -1658,7 +1655,14 @@ class StorageMetadataHandler implements MetadataRepositoryInterface
     {
         $holdPath = mb_strtolower(trim($holdPath, '/'), 'UTF-8');
         $scopedPath = mb_strtolower(trim($scopedPath, '/'), 'UTF-8');
-        if ($holdPath === '' || $scopedPath === '') {
+        // A hold on the disk root (path '', '/', '.') covers everything beneath
+        // it; the root itself is only overlapped by a root hold.
+        $holdPath = ($holdPath === '.') ? '' : $holdPath;
+        $scopedPath = ($scopedPath === '.') ? '' : $scopedPath;
+        if ($holdPath === '') {
+            return true;
+        }
+        if ($scopedPath === '') {
             return false;
         }
         return $holdPath === $scopedPath

@@ -589,6 +589,16 @@ test('copyIndexEntry() on a MOVE carries the source owner; a leftover destinatio
     assertEqual('bob', $repo->getBulk($disk, ['n10/copy.jpg'])['n10/copy.jpg']['uploaded_by'], 'a copy keeps what save() decided');
 });
 
+test('root hold (path "", "/" or ".") covers every nested path in the DB backend', function () use ($repo, $disk) {
+    foreach (['rootA' => '', 'rootB' => '/', 'rootC' => '.'] as $hid => $p) {
+        $repo->addHold($disk, $hid, ['path' => $p, 'placed_at' => 1]);
+        assertTrue($repo->holdBlocking($disk, 'free/x.txt') !== null, "holdBlocking under '{$p}'");
+        assertTrue($repo->holdCovering($disk, 'free/x.txt') !== null, "holdCovering under '{$p}'");
+        assertTrue($repo->holdsCoveringMany($disk, ['free/x.txt'])['free/x.txt'] !== null, "holdsCoveringMany under '{$p}'");
+        $repo->releaseHold($disk, $hid, ['released_at' => 2, 'released_by' => 'a', 'release_reason' => 'x']);
+    }
+});
+
 @unlink($dbFile);
 @unlink($dbFile . '-wal');
 @unlink($dbFile . '-shm');

@@ -3,6 +3,18 @@
 All notable changes to FluxFiles are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security — legal hold on the disk root was never enforced
+
+- A legal hold whose path is the disk root (`POST /api/fm/hold {"path":""}` by an unscoped admin) was accepted
+  (200, hold id) but protected nothing: `StorageMetadataHandler::holdPathOverlaps()` treated an empty hold path as
+  "no hold", so delete/trash/rename/move/purge/overwrite of any file still succeeded. A root hold now covers every
+  path beneath it (`""`, `"/"` and `"."` are one spelling), on the JSON and DB backends (and the Laravel/WordPress
+  DB handlers, which share the matcher). Root holds already in storage are enforced after the update, no migration.
+  Reads, listings and copy-from are unaffected. Pair with `legal-hold` module >= its next release (path
+  normalisation in place/list/release/409 detection).
+
 ## [1.0.15] — 2026-11-07
 
 > Released: `core-v1.1.2` (comment-only phpcs annotations). The WordPress changes ship with `wordpress-v1.1.0`, the free WordPress.org build.

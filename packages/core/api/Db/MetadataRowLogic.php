@@ -102,9 +102,6 @@ trait MetadataRowLogic
     private static function matchOverlappingHold(array $holds, string $scopedPath, bool $bidirectional): ?array
     {
         $scopedPath = trim($scopedPath, '/');
-        if ($scopedPath === '') {
-            return null;
-        }
         foreach ($holds as $id => $entry) {
             if ($entry['released_at'] !== null) {
                 continue; // released holds never block/cover
