@@ -1,6 +1,6 @@
 === FluxFiles ===
 Contributors: thaipc
-Tags: file manager, amazon s3, cloudflare r2, media library, file upload
+Tags: file manager, offload media, amazon s3, cloudflare r2, media library
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 8.1.0
@@ -8,11 +8,11 @@ Stable tag: 1.1.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-Multi-storage file manager for WordPress: local disk, Amazon S3 and Cloudflare R2, with image optimization, search and media library integration.
+File manager with folders and media offload to Amazon S3 and Cloudflare R2. Picked files become real attachments. Free and open source.
 
 == Description ==
 
-FluxFiles is a file manager for WordPress with a modern browser UI. It manages files on your local disk, Amazon S3 or Cloudflare R2 (and SFTP through a developer-minted token), and registers what you pick as real WordPress attachments.
+FluxFiles is a file manager for WordPress with a modern browser UI. Keep your files in folders on your local disk, Amazon S3 or Cloudflare R2 (and SFTP through a developer-minted token), and insert them into posts: what you pick is registered as a real WordPress attachment whose URL points at your storage, so it is served from your bucket or CDN instead of your web server.
 
 **Features**
 
@@ -24,7 +24,8 @@ FluxFiles is a file manager for WordPress with a modern browser UI. It manages f
 * Duplicate finder, usage dashboard and quota
 * 16 languages with right-to-left support, dark mode with auto-detection
 * Shortcode `[fluxfiles]`, a "FluxFiles Image" block and a classic editor media button
-* WordPress attachment bridge: files picked in FluxFiles appear in the media library
+* WordPress attachment bridge: files picked in FluxFiles appear in the media library, and their URLs (with a responsive `srcset` for images) are served from your storage
+* Media offload: `wp fluxfiles migrate` moves existing Media Library attachments to a public S3/R2 bucket; deleting an attachment can optionally delete the stored file too
 * WP-CLI: `wp fluxfiles seed` indexes files that already exist on a disk
 
 The plugin is free and open source (MIT). Everything in this plugin works without a licence. Optional paid modules (share links, upload portals, compliance tools) are available for the self-hosted FluxFiles server; see [fluxfiles.thai-pc.com](https://fluxfiles.thai-pc.com).
@@ -101,6 +102,12 @@ If you cannot use WP-CLI, trigger the same indexing by re-uploading files throug
 
 = Can I put two [fluxfiles] shortcodes on one page? =
 No: the file manager runs in a single frame per page, so only the first one loads and later ones show a notice.
+
+= How is this different from WP Offload Media? =
+Both can serve your media from S3 or Cloudflare R2. WP Offload Media hooks into the normal Media Library upload and copies each upload to the bucket for you. FluxFiles works the other way round: you manage files in its own folder-based file manager, and the files you pick are registered as WordPress attachments that point at your storage. Offload needs a public bucket or CDN URL; private buckets and SFTP are not supported for it. `wp fluxfiles migrate` moves existing Media Library attachments to a bucket, and the plugin itself has no per-file limits or fees. If you want every Media Library upload mirrored automatically, check that this workflow fits before switching.
+
+= How is this different from FileBird? =
+FileBird adds folders to the native Media Library grid. FluxFiles does not change that grid: it has its own file manager (the `[fluxfiles]` shortcode, the "FluxFiles Image" block and an editor button) with folders, search, trash, a crop editor and multiple storage disks. Files you pick there show up in the Media Library as attachments, but you organise them in the FluxFiles screen, not by dragging items around the Media Library. If folders inside the Media Library grid are what you need, FileBird is built for that.
 
 = What storage backends are supported? =
 

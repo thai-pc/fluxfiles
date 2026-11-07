@@ -66,8 +66,10 @@ your bucket, so the file shows in the **Media Library** and works in posts, them
 blocks exactly like a native attachment — but offloaded to your storage.
 
 This makes one plugin do what usually takes three — **folders** (the FluxFiles UI) +
-**cloud storage** (S3/R2/SFTP) + **offload/URL-rewrite** — replacing FileBird +
-WP Media Folder + WP Offload Media. Disable it with the `fluxfiles_enable_offload`
+**cloud storage** (S3/R2/SFTP) + **offload/URL-rewrite**. It is not a drop-in clone of
+FileBird (which adds folders to the native Media Library grid) or WP Offload Media (which
+mirrors every Media Library upload): you organise files in the FluxFiles UI and they are
+registered as attachments. Disable it with the `fluxfiles_enable_offload`
 filter or the settings checkbox. The attachment endpoint (`POST
 /wp-json/fluxfiles/v1/api/fm/attach`) requires the `upload_files` capability.
 
