@@ -6,7 +6,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 ## [Unreleased]
 
 ### Security
-- **Virus/DLP scanning now covers copy and cross-disk copy/move.** `copy()`, `crossCopy()` and `crossMove()` never ran the scanners, so a stored EICAR could be duplicated under a scanning token and content from an unscanned disk could enter a scanned one. The stored source is now streamed to a temp file and scanned (fail-closed, same `virus_detected` / `pii_detected` / engine-down errors as upload) before anything is written. A same-disk move stays unscanned (pure rename, no new object).
+- **Virus/DLP scanning now covers copy and cross-disk copy/move.** `copy()`, `crossCopy()` and `crossMove()` never ran the scanners, so a stored EICAR could be duplicated under a scanning token and content from an unscanned disk could enter a scanned one. The stored source is now streamed to a temp file and scanned (fail-closed, same `virus_detected` / `pii_detected` / engine-down errors as upload) before anything is written. The destination is written from the scanned temp file, never from a second read of the source, which closes a mid-scan swap of the source bytes. With a scanner wired, cross-disk copy/move skip `_variants/` (a regenerable cache) so unscanned variant bytes cannot ride along, and a same-disk S3 copy downloads the object instead of using a server-side CopyObject. Same-disk move, rename, folder move, trash restore and `removeWatermark` stay unscanned by design (no new object).
 
 ## [1.0.16] — 2026-11-07
 

@@ -51,7 +51,7 @@ function dlpScanner(): callable {
 }
 
 /** Two local disks; the bad files are planted straight on the adapters (no scanner involved). */
-function make(bool $virus, bool $dlp): array {
+function make(bool $virus, bool $dlp, array $claimExtra = []): array {
     $r1 = sys_get_temp_dir() . '/ff-scm-a-' . uniqid();
     $r2 = sys_get_temp_dir() . '/ff-scm-b-' . uniqid();
     @mkdir($r1, 0777, true); @mkdir($r2, 0777, true);
@@ -59,9 +59,9 @@ function make(bool $virus, bool $dlp): array {
         'a' => ['driver' => 'local', 'root' => $r1, 'url' => '/a'],
         'b' => ['driver' => 'local', 'root' => $r2, 'url' => '/b'],
     ]);
-    $claims = Claims::fromJwtPayload((object) [
+    $claims = Claims::fromJwtPayload((object) ($claimExtra + [
         'sub' => 'u', 'perms' => ['read', 'write', 'delete'], 'disks' => ['a', 'b'],
-    ]);
+    ]));
     $fm = new FileManager($dm, $claims, new StorageMetadataHandler($dm));
     if ($virus) { $fm->setVirusScanner(virusScanner()); }
     if ($dlp) { $fm->setDlpScanner(dlpScanner()); }
@@ -120,6 +120,69 @@ test('DLP: copy / crossCopy / crossMove of PII file -> 422 pii_detected', functi
     expectApi(fn () => $fm->crossCopy('a', 'pii.txt', 'b', 'pii.txt'), 422, 'pii_detected');
     expectApi(fn () => $fm->crossMove('a', 'pii.txt', 'b', 'pii.txt'), 422, 'pii_detected');
     assertTrue(!$dm->disk('b')->fileExists('pii.txt') && !$dm->disk('a')->fileExists('p2.txt'));
+});
+
+// ── TOCTOU: a writer swapping the source mid-scan must not reach the destination ──
+foreach (['copy', 'crossCopy', 'crossMove'] as $op) {
+    test("TOCTOU: source rewritten mid-scan -> {$op} writes the SCANNED bytes", function () use ($op) {
+        [$fm, $dm] = make(false, false);
+        $fm->setVirusScanner(function (string $p) use ($dm): array {
+            $clean = !str_contains((string) file_get_contents($p), NEEDLE);
+            $dm->disk('a')->write('ok.txt', 'x ' . NEEDLE); // attacker swaps the source now
+            return ['clean' => $clean, 'threat' => null];
+        });
+        $dst = 'out-' . $op . '.txt';
+        if ($op === 'copy') { $fm->copy('a', 'ok.txt', $dst); $d = 'a'; }
+        else { $fm->$op('a', 'ok.txt', 'b', $dst); $d = 'b'; }
+        assertTrue($dm->disk($d)->read($dst) === 'hello', 'destination must hold the scanned bytes, got: ' . $dm->disk($d)->read($dst));
+    });
+}
+
+// ── DLP eligibility / refusal semantics ──
+test('DLP-only: ineligible extension and oversize are SKIPPED (scanner never called) on copy and cross ops', function () {
+    $calls = 0;
+    [$fm, $dm] = make(false, false, ['dlp_max_scan_kb' => 1]);
+    $fm->setDlpScanner(function (string $p, string $n) use (&$calls): array { $calls++; return ['clean' => false, 'entities' => ['X']]; });
+    $dm->disk('a')->write('pic.png', 'ssn ' . SSN);
+    $dm->disk('a')->write('big.txt', str_repeat('a', 20000));
+    foreach (['pic.png', 'big.txt'] as $f) {
+        $fm->copy('a', $f, 'c-' . $f);
+        $fm->crossCopy('a', $f, 'b', $f);
+        $fm->crossMove('a', 'c-' . $f, 'b', 'm-' . $f);
+    }
+    assertTrue($calls === 0, "scanner called {$calls} times");
+    assertTrue($dm->disk('b')->fileExists('pic.png') && $dm->disk('b')->fileExists('m-big.txt'));
+});
+test('DLP crossMove refusal keeps the source', function () {
+    [$fm, $dm] = make(false, true);
+    expectApi(fn () => $fm->crossMove('a', 'pii.txt', 'b', 'pii.txt'), 422, 'pii_detected');
+    assertTrue($dm->disk('a')->fileExists('pii.txt') && !$dm->disk('b')->fileExists('pii.txt'));
+});
+test('staging failure -> 500 virus_failed / dlp_failed, nothing written, source kept', function () {
+    foreach ([[true, false, 'virus_failed'], [false, true, 'dlp_failed']] as [$v, $d, $code]) {
+        [$fm, $dm] = make($v, $d);
+        $dm->disk('a')->write('lock.txt', 'hello');
+        $path = null;
+        foreach (glob(sys_get_temp_dir() . '/ff-scm-a-*/lock.txt') as $c) { $path = $c; }
+        if ($path === null || posix_geteuid() === 0) { continue; }
+        chmod($path, 0000);
+        try {
+            expectApi(fn () => $fm->crossMove('a', 'lock.txt', 'b', 'lock.txt'), 500, $code);
+            expectApi(fn () => $fm->copy('a', 'lock.txt', 'lock2.txt'), 500, $code);
+        } finally { chmod($path, 0644); }
+        assertTrue(!$dm->disk('b')->fileExists('lock.txt') && $dm->disk('a')->fileExists('lock.txt'));
+    }
+});
+test('cross-disk variants are not transferred when a scanner is wired', function () {
+    [$fm, $dm] = make(true, false);
+    $dm->disk('a')->write('_variants/ok.txt_thumb.webp', 'planted');
+    $fm->crossCopy('a', 'ok.txt', 'b', 'ok.txt');
+    assertTrue(!$dm->disk('b')->fileExists('_variants/ok.txt_thumb.webp'));
+    // control: without a scanner the variant still travels
+    [$fm2, $dm2] = make(false, false);
+    $dm2->disk('a')->write('_variants/ok.txt_thumb.webp', 'planted');
+    $fm2->crossCopy('a', 'ok.txt', 'b', 'ok.txt');
+    assertTrue($dm2->disk('b')->fileExists('_variants/ok.txt_thumb.webp'), 'control');
 });
 
 echo "\n{$passed} passed, {$failed} failed\n";

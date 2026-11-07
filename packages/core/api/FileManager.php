@@ -269,14 +269,27 @@ class FileManager
      * Scan a file that is ALREADY stored (copy / cross-disk copy / cross-disk move)
      * before its bytes are written to a new location. Streams the source to a temp
      * file and runs the same fail-closed assertNoVirus()/assertNoPii() pair upload()
-     * uses. No scanner wired -> no-op, nothing is staged.
+     * uses.
+     *
+     * Returns the path of the SCANNED temp file, which the caller MUST write the
+     * destination from (and unlink in a finally) — re-reading the source would let a
+     * concurrent writer swap bytes between the scan and the write (TOCTOU). Returns
+     * null when nothing needs scanning (no scanner wired, or DLP-only and the file
+     * is ineligible); the caller then copies straight from the source as before.
+     * On any failure the temp file is already removed.
      *
      * Why scan even when the source is "ours": stored bytes may predate the claim,
      * or sit on a disk/token that never scanned (cross-disk), so the source's
-     * provenance proves nothing. A same-disk move() is NOT scanned: it creates no
-     * new object and renaming is how a tenant tidies up legacy content.
+     * provenance proves nothing. Deliberately NOT scanned, because no new object is
+     * created: same-disk move()/rename/folder move and trash restore (scopedPath()
+     * confines both ends to the token's prefix and ownership is unchanged), and
+     * removeWatermark() (puts back the system-written backup of the same file).
+     * Don't "fix" one of these without the others.
+     * Cost: with a scanner on, a same-disk S3 copy downloads the object instead of
+     * a server-side CopyObject. The temp file can outlive a fatal/timeout (shared
+     * with writeScopedStream).
      */
-    private function assertStoredFileClean($fs, string $scopedPath): void
+    private function stageScannedCopy($fs, string $scopedPath): ?string
     {
         $needVirus = $this->virusScanner !== null;
         $needPii = false;
@@ -288,7 +301,7 @@ class FileManager
             }
         }
         if (!$needVirus && !$needPii) {
-            return;
+            return null;
         }
         $code = $needVirus ? 'virus_failed' : 'dlp_failed';
         $tmp = tempnam(sys_get_temp_dir(), 'ffcpy');
@@ -296,7 +309,11 @@ class FileManager
             throw new ApiException('Could not stage content for scanning', 500, $code);
         }
         try {
-            $in = $fs->readStream($scopedPath);
+            try {
+                $in = $fs->readStream($scopedPath);
+            } catch (\Throwable $e) {
+                $in = null;
+            }
             $out = @fopen($tmp, 'wb');
             if (!is_resource($in) || $out === false || stream_copy_to_stream($in, $out) === false) {
                 if (is_resource($in)) { fclose($in); }
@@ -308,8 +325,35 @@ class FileManager
             $name = basename($scopedPath);
             $this->assertNoVirus($tmp, $name);
             $this->assertNoPii($tmp, $name);
-        } finally {
+        } catch (\Throwable $e) {
             @unlink($tmp);
+            throw $e;
+        }
+        return $tmp;
+    }
+
+    /**
+     * Write $dstKey on $dstFs from the source (or, when $scannedTmp is set, from the
+     * already-scanned temp file — never re-reading the source) and always unlink the temp.
+     */
+    private function writeCopyStream($srcFs, string $srcKey, $dstFs, string $dstKey, ?string $scannedTmp, array $config): void
+    {
+        try {
+            $stream = $scannedTmp !== null ? @fopen($scannedTmp, 'rb') : $srcFs->readStream($srcKey);
+            if (!is_resource($stream)) {
+                throw new ApiException('Could not stage content for scanning', 500, $this->virusScanner !== null ? 'virus_failed' : 'dlp_failed');
+            }
+            try {
+                $dstFs->writeStream($dstKey, $stream, $config);
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
+        } finally {
+            if ($scannedTmp !== null) {
+                @unlink($scannedTmp);
+            }
         }
     }
 
@@ -2002,9 +2046,14 @@ class FileManager
         $this->quotaCheck($disk, $fileSize, 1);
 
         // Virus/PII scan (paid modules): a copy is a new object — scan before writing.
-        $this->assertStoredFileClean($fs, $scopedFrom);
-
-        $fs->copy($scopedFrom, $scopedTo);
+        $scanned = $this->stageScannedCopy($fs, $scopedFrom);
+        if ($scanned === null) {
+            $fs->copy($scopedFrom, $scopedTo);
+        } else {
+            // Write from the scanned bytes, not a second read of the source (TOCTOU).
+            $srcMeta = $this->meta->get($disk, $scopedFrom) ?: [];
+            $this->writeCopyStream($fs, $scopedFrom, $fs, $scopedTo, $scanned, $this->s3WriteConfig($disk, $scopedTo, $srcMeta));
+        }
 
         $this->copyMetadata($disk, $scopedFrom, $disk, $scopedTo, true, null, true);
         $this->copyVariants($disk, $scopedFrom, $disk, $scopedTo);
@@ -2050,18 +2099,12 @@ class FileManager
 
         // Virus/PII scan (paid modules) BEFORE the bytes reach the destination: the
         // source disk may be unscanned, so this is the only gate.
-        $this->assertStoredFileClean($srcFs, $scopedSrc);
+        $scanned = $this->stageScannedCopy($srcFs, $scopedSrc);
 
         // Stream the file across disks; an S3 destination gets the source's headers in the PUT.
+        // With a scanner wired the bytes come from the scanned temp file (TOCTOU).
         $srcMeta = $this->meta->get($srcDisk, $scopedSrc) ?: [];
-        $stream = $srcFs->readStream($scopedSrc);
-        try {
-            $dstFs->writeStream($scopedDst, $stream, $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta));
-        } finally {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-        }
+        $this->writeCopyStream($srcFs, $scopedSrc, $dstFs, $scopedDst, $scanned, $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta));
 
         $this->copyMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst, true, $srcMeta, true);
         $this->copyVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
@@ -2116,17 +2159,12 @@ class FileManager
         $this->quotaCheck($dstDisk, $fileSize, 1);
 
         // Virus/PII scan (paid modules) before the bytes enter the destination disk.
-        $this->assertStoredFileClean($srcFs, $scopedSrc);
+        $scanned = $this->stageScannedCopy($srcFs, $scopedSrc);
 
+        // Written from the scanned temp file (TOCTOU); the source is deleted below
+        // only after this write succeeded.
         $srcMeta = $this->meta->get($srcDisk, $scopedSrc) ?: [];
-        $stream = $srcFs->readStream($scopedSrc);
-        try {
-            $dstFs->writeStream($scopedDst, $stream, $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta));
-        } finally {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-        }
+        $this->writeCopyStream($srcFs, $scopedSrc, $dstFs, $scopedDst, $scanned, $this->s3WriteConfig($dstDisk, $scopedDst, $srcMeta));
 
         $this->moveMetadata($srcDisk, $scopedSrc, $dstDisk, $scopedDst, $srcMeta);
         $this->moveVariants($srcDisk, $scopedSrc, $dstDisk, $scopedDst);
@@ -2452,6 +2490,13 @@ class FileManager
         $dstFs = $this->disks->disk($dstDisk);
         $sizes = ['thumb', 'medium', 'large'];
 
+        // Cross-disk with a scanner wired: don't stream raw `_variants/` bytes from a
+        // possibly-unscanned source disk into a scanned one. Variants are a
+        // regenerable cache, so skipping is safe (same-disk transfers are unaffected).
+        if ($srcDisk !== $dstDisk && ($this->virusScanner !== null || $this->dlpScanner !== null)) {
+            return;
+        }
+
         foreach ($sizes as $size) {
             $srcVariant = $this->variantKey($srcKey, $size);
             $dstVariant = $this->variantKey($dstKey, $size);
@@ -2768,6 +2813,8 @@ class FileManager
         if (!$fs->fileExists($backupKey)) {
             throw new ApiException('No watermark to remove', 404, 'no_watermark_backup');
         }
+        // Not scanned on purpose: this puts back the system-written backup of this very
+        // file in place (no new object), like move()/trash restore.
         $original = (string) $fs->read($backupKey);
         $fs->write($scoped, $original, $this->s3WriteConfigFor($disk, $scoped, true));
         $fs->delete($backupKey);
