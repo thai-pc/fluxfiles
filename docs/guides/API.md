@@ -67,7 +67,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 
 | Method | Path | Body / Params | Description |
 |--------|------|---------------|-------------|
-| `GET` | `/meta?disk=&path=` | — | File info: size, mime, modified |
+| `GET` | `/meta?disk=&path=` | — | File info: size, mime, modified. `404 not_found` if nothing exists at the path (folders answer with `size: null`) |
 | `GET` | `/metadata?disk=&key=` | — | SEO metadata: title, alt_text, caption, tags |
 | `PUT` | `/metadata` | `{disk, key, title, alt_text, caption, tags}` | Save metadata |
 | `DELETE` | `/metadata` | `{disk, key}` | Delete metadata |

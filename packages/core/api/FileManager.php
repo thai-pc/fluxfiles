@@ -3717,6 +3717,19 @@ class FileManager
         $this->assertNotHidden($scoped);
         $fs = $this->disks->disk($disk);
 
+        // A path with no object at all is a 404, not a 200 full of nulls: callers (the
+        // MCP write tool, any "does it exist?" probe) read a 200 as "it is there". A
+        // folder is a valid target too. If the existence probe itself fails, don't turn
+        // a transient backend error into a false 404; fall through to the lookups below.
+        try {
+            if (!$fs->fileExists($scoped) && !$fs->directoryExists($scoped)) {
+                throw new ApiException('File or directory not found', 404, 'not_found');
+            }
+        } catch (ApiException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+        }
+
         // Each lookup is best-effort: some S3-compatible backends (notably Cloudflare R2)
         // don't return a ContentType on HeadObject, which makes Flysystem's mimeType()
         // throw. Fall back to an extension-based guess instead of failing the whole call.

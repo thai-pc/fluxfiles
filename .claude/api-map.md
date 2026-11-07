@@ -95,7 +95,7 @@ All authenticated routes require `Authorization: Bearer <JWT>`.
   - JSON body: `disk`, `path`. Free; BYO provider key (`FLUXFILES_AI_*`).
 
 - `GET /api/fm/meta?disk=local&path=file.jpg`
-  - Returns file URL, size, modified time, mime-ish metadata, and variants.
+  - Returns size, modified time and mime. `404 not_found` when no file or folder exists at the path (a folder answers with `size: null`); before core-v1.1.6 a missing path answered 200 with null size/modified.
 
 - `GET /api/fm/disk/doctor?disk=local&origin=`
   - **Bucket Doctor**: diagnose a disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write` + the disk in the token. Useful to validate BYOB credentials before issuing a long-lived token.

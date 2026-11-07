@@ -58,6 +58,32 @@ describe('tools', () => {
     expect(r).toEqual({ url: 'https://f.test/storage/uploads/pics/a.png', expires_at: null });
   });
 
+  it('write_text_file creates a new file on a fixed core (404) and an older one (200, all-null)', async () => {
+    for (const meta of [
+      () => ({ status: 404, body: { data: null, error: 'File or directory not found', error_code: 'not_found' } }),
+      () => ok({ size: null, mime: 'text/plain', modified: null }),
+    ]) {
+      const { f, calls } = fakeFetch({ 'GET /meta': meta, 'POST /upload': () => ok({ key: 'n.md' }) });
+      await byName(buildTools(new FluxFilesClient({ baseUrl: 'https://f.test', token: 't', fetch: f }), { ...opts, allowWrite: true }), 'write_text_file')
+        .run({ path: 'n.md', content: 'x' });
+      expect(calls.map((c) => `${c.method} ${new URL(c.url).pathname}`)).toEqual(['GET /api/fm/meta', 'POST /api/fm/upload']);
+    }
+  });
+
+  it('get_file_info reports a missing file as not_found on both core behaviours', async () => {
+    for (const meta of [
+      () => ({ status: 404, body: { data: null, error: 'File or directory not found', error_code: 'not_found' } }),
+      () => ok({ size: null, mime: 'text/plain', modified: null }),
+    ]) {
+      const { f } = fakeFetch({ 'GET /meta': meta });
+      await expect(byName(buildTools(new FluxFilesClient({ baseUrl: 'https://f.test', token: 't', fetch: f }), opts), 'get_file_info').run({ path: 'gone.txt' }))
+        .rejects.toMatchObject({ status: 404, code: 'not_found' });
+    }
+    const { f } = fakeFetch({ 'GET /meta': () => ok({ size: 3, mime: 'text/plain', modified: 1 }), 'GET /metadata': () => ok(null) });
+    expect(await byName(buildTools(new FluxFilesClient({ baseUrl: 'https://f.test', token: 't', fetch: f }), opts), 'get_file_info').run({ path: 'a.txt' }))
+      .toMatchObject({ size: 3, metadata: null });
+  });
+
   it('write_text_file uploads a new file, or PUTs the content of an existing one', async () => {
     const created = fakeFetch({ 'POST /upload': () => ok({ key: 'notes/n.md' }) });
     const w1 = byName(buildTools(new FluxFilesClient({ baseUrl: 'https://f.test', token: 't', fetch: created.f }), { ...opts, allowWrite: true }), 'write_text_file');
@@ -66,7 +92,7 @@ describe('tools', () => {
     expect(up.body).toBeInstanceOf(FormData);
     expect((up.body as FormData).get('path')).toBe('notes');
 
-    const existing = fakeFetch({ 'GET /meta': () => ok({ size: 1 }), 'PUT /content': () => ok({ path: 'n.md', size: 4 }) });
+    const existing = fakeFetch({ 'GET /meta': () => ok({ size: 1, modified: 1 }), 'PUT /content': () => ok({ path: 'n.md', size: 4 }) });
     await byName(buildTools(new FluxFilesClient({ baseUrl: 'https://f.test', token: 't', fetch: existing.f }), { ...opts, allowWrite: true }), 'write_text_file')
       .run({ path: 'n.md', content: 'new!' });
     expect(existing.calls.map((c) => `${c.method} ${new URL(c.url).pathname}`)).toEqual(['GET /api/fm/meta', 'PUT /api/fm/content']);

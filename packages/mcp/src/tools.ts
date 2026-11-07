@@ -23,6 +23,11 @@ export interface ToolDef {
 
 type Item = { key?: string; name?: string; type?: string; size?: number; modified?: number; url?: string; mime?: string; meta?: Record<string, unknown> | null };
 
+/** Pre-fix cores returned 200 with every field null for a path that does not exist. */
+function isMissingMeta(info: { size?: unknown; modified?: unknown } | null | undefined): boolean {
+  return !info || (info.size == null && info.modified == null);
+}
+
 /**
  * Appended to every tool whose result carries storage-derived strings. Anyone who
  * can upload or edit metadata controls file/folder names, titles, alt text,
@@ -89,6 +94,7 @@ export function buildTools(client: FluxFilesClient, opts: ToolOptions): ToolDef[
       run: async (a) => {
         const p = String(a.path);
         const info = await client.request<Record<string, unknown>>('GET', '/meta', { query: { disk: d(a.disk), path: p } });
+        if (isMissingMeta(info)) throw new FluxFilesError('File or directory not found', 404, 'not_found');
         let meta: Record<string, unknown> | null = null;
         try {
           meta = await client.request<Record<string, unknown> | null>('GET', '/metadata', { query: { disk: d(a.disk), key: p } });
@@ -132,9 +138,12 @@ export function buildTools(client: FluxFilesClient, opts: ToolOptions): ToolDef[
         shape: { path, content: z.string().max(2_000_000), disk },
         run: async (a) => {
           const p = String(a.path).replace(/^\/+/, '');
+          // 404 = new file (fixed cores). Older cores answered 200 {size:null,modified:null}
+          // for a path with no object at all, so that shape means "missing" too.
           let exists = true;
           try {
-            await client.request('GET', '/meta', { query: { disk: d(a.disk), path: p } });
+            const info = await client.request<{ size?: number | null; modified?: number | null }>('GET', '/meta', { query: { disk: d(a.disk), path: p } });
+            if (isMissingMeta(info)) exists = false;
           } catch (e) {
             if (!(e instanceof FluxFilesError) || e.status !== 404) throw e;
             exists = false;

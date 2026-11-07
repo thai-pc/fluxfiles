@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- `GET /api/fm/meta` on a path with no file or folder now answers `404 not_found` instead of `200 {size:null, modified:null}`. The fake success made `@fluxfiles/mcp`'s `write_text_file` treat every new file as existing, take the edit path and fail with `edit_forbidden` / 404, and made `get_file_info` report success for a missing file. Folders and S3 objects without a sidecar still answer; hidden/system paths still return `path_denied` first. The Laravel and WordPress proxies inherit the 404 (they call `fileMeta()` directly).
+- `@fluxfiles/mcp` 1.0.1: `write_text_file` creates new files against both fixed cores (404) and older ones (200 with null size/modified); `get_file_info` raises `not_found` for a missing file; a refused `http://` URL prints a clean one-line error instead of a stack trace; `zod` bumped to ^4.6.7 (GHSA-mrhx-c7xc-m3w5).
+
 ## [1.0.18] — 2026-11-07
 
 > Released: `core-v1.1.5`.
