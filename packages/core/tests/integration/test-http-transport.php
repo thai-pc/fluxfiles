@@ -53,6 +53,8 @@ file_put_contents($docroot . '/index.php', <<<'PHP'
 <?php
 $p = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($p === '/redirect') { header('Location: /echo', true, 302); exit; }
+if ($p === '/chunked') { while (@ob_end_clean()) {} for ($i = 0; $i < 40; $i++) { echo str_repeat('x', 65536); flush(); } exit; }
+if ($p === '/sized') { header('Content-Length: 3145728'); echo str_repeat('x', 3145728); exit; }
 header('X-Probe: yes');
 header('Content-Type: application/json');
 http_response_code($p === '/teapot' ? 418 : 200);
@@ -94,6 +96,44 @@ test('redirects are NOT followed', function () use ($base) {
     $r = (new CurlTransport())->request('GET', "{$base}/redirect", [], null, 5);
     assertEqual(302, $r['status']);
     assertEqual('/echo', $r['headers']['location'] ?? null);
+});
+
+test('a body past the cap (no Content-Length, streamed) fails with status 0 and a clear error', function () use ($base) {
+    $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/chunked", [], null, 10);
+    assertEqual(0, $r['status']);
+    assertEqual('', $r['body']);
+    assertTrue(str_contains($r['error'] ?? '', 'response too large'), 'error: ' . ($r['error'] ?? ''));
+});
+
+test('an oversized declared Content-Length is refused before the body is read', function () use ($base) {
+    $r = (new CurlTransport(5, 1048576))->request('GET', "{$base}/sized", [], null, 10);
+    assertEqual(0, $r['status']);
+    assertTrue(str_contains($r['error'] ?? '', 'response too large'), 'error: ' . ($r['error'] ?? ''));
+});
+
+test('a body under the cap passes; the default cap is 8 MB', function () use ($base) {
+    $r = (new CurlTransport(5, 4 * 1048576))->request('GET', "{$base}/sized", [], null, 10);
+    assertEqual(200, $r['status']);
+    assertEqual(3145728, strlen($r['body']));
+    assertEqual(8 * 1024 * 1024, CurlTransport::DEFAULT_MAX_BYTES);
+});
+
+test('OidcDiscovery::forgetJwks drops only that URI\'s cached JWKS', function () {
+    $dir = sys_get_temp_dir() . '/ff-oidc-' . uniqid();
+    $ft = new FakeTransport();
+    $ft->queue = [
+        ['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"a"}]}'],
+        ['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"b"}]}'],
+    ];
+    $d = new OidcDiscovery($dir, $ft);
+    assertEqual('a', $d->jwks('https://idp/jwks')['keys'][0]['kid']);
+    assertEqual('a', $d->jwks('https://idp/jwks')['keys'][0]['kid'], 'cached');
+    $d->forgetJwks('https://idp/jwks');
+    assertEqual('b', $d->jwks('https://idp/jwks')['keys'][0]['kid'], 're-fetched after forget');
+    $d->forgetJwks('https://never/cached'); // no-op, no warning
+    $ft->queue = [['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"c"}]}']];
+    $d->forgetJwks(); // no argument: every cached key set
+    assertEqual('c', $d->jwks('https://idp/jwks')['keys'][0]['kid'], 're-fetched after forget-all');
 });
 
 test('a network failure never throws: status 0, empty body, an error string', function () {

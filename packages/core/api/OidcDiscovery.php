@@ -17,6 +17,8 @@ final class OidcDiscovery
     private const CONNECT_TIMEOUT = 5;
     private const TIMEOUT = 10;
     private const CACHE_TTL = 3600;
+    /** Discovery documents and JWKS are a few KB; 1 MB is generous. */
+    private const MAX_BYTES = 1048576;
 
     private string $cacheDir;
 
@@ -25,7 +27,7 @@ final class OidcDiscovery
     public function __construct(string $cacheDir, ?HttpTransportInterface $transport = null)
     {
         $this->cacheDir = rtrim($cacheDir, '/');
-        $this->transport = $transport ?? new CurlTransport(self::CONNECT_TIMEOUT);
+        $this->transport = $transport ?? new CurlTransport(self::CONNECT_TIMEOUT, self::MAX_BYTES);
     }
 
     /**
@@ -64,6 +66,22 @@ final class OidcDiscovery
 
         $this->writeCache('jwks-' . $this->cacheKey($jwksUri), $keys);
         return $keys;
+    }
+
+    /**
+     * Drop cached JWKS (e.g. after a signature failure caused by a rotated key) so the
+     * next jwks() call re-fetches. With a URI: just that key set. Without: every cached
+     * key set in this cache directory (discovery documents are kept).
+     */
+    public function forgetJwks(?string $jwksUri = null): void
+    {
+        if ($jwksUri !== null) {
+            @unlink($this->cacheDir . '/jwks-' . $this->cacheKey($jwksUri) . '.json');
+            return;
+        }
+        foreach (glob($this->cacheDir . '/jwks-*.json') ?: [] as $file) {
+            @unlink($file);
+        }
     }
 
     private function fetchJson(string $url): array
