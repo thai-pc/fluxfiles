@@ -20,12 +20,17 @@ if (!url || !token) {
 }
 const on = (v?: string) => v === '1' || v === 'true';
 
-const server = createServer({
-  baseUrl: url,
-  token,
-  disk: process.env.FLUXFILES_DISK || 'local',
-  allowWrite: on(process.env.FLUXFILES_MCP_WRITE),
-  allowDelete: on(process.env.FLUXFILES_MCP_DELETE),
-  allowInsecureHttp: on(process.env.FLUXFILES_MCP_ALLOW_HTTP),
-});
-await server.connect(new StdioServerTransport());
+try {
+  const server = createServer({
+    baseUrl: url,
+    token,
+    disk: process.env.FLUXFILES_DISK || 'local',
+    allowWrite: on(process.env.FLUXFILES_MCP_WRITE),
+    allowDelete: on(process.env.FLUXFILES_MCP_DELETE),
+    allowInsecureHttp: on(process.env.FLUXFILES_MCP_ALLOW_HTTP),
+  });
+  await server.connect(new StdioServerTransport());
+} catch (e) {
+  process.stderr.write(`fluxfiles-mcp: ${e instanceof Error ? e.message : String(e)}\n`);
+  process.exit(1);
+}

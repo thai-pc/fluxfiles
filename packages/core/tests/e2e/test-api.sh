@@ -158,6 +158,11 @@ RESP=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer $TOKEN" \
 CODE=$(echo "$RESP" | tail -1)
 check "Get file meta → 200" "200" "$CODE"
 
+RESP=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer $TOKEN" \
+  "$BASE/meta?disk=local&path=_api_test_dir/ff-api-missing-$$.txt")
+CODE=$(echo "$RESP" | tail -1)
+check "Get meta of missing file → 404" "404" "$CODE"
+
 # ═══ Metadata CRUD ═══
 echo -e "\n${YELLOW}[Metadata CRUD]${NC}"
 
