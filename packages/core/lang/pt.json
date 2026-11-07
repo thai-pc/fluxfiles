@@ -295,6 +295,7 @@
     "chmod_failed": "Não foi possível alterar as permissões.",
     "chmod_forbidden": "Não é permitido alterar as permissões.",
     "chmod_root_forbidden": "Não é possível alterar as permissões da pasta raiz.",
+    "root_forbidden": "A raiz do disco não pode ser excluída, enviada para a lixeira, renomeada ou movida.",
     "disk_not_allowed": "Não é permitido o acesso a este disco.",
     "download_forbidden": "Não é permitido baixar.",
     "edit_forbidden": "Não é permitido editar.",

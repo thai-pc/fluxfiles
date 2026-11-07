@@ -599,6 +599,21 @@ test('root hold (path "", "/" or ".") covers every nested path in the DB backend
     }
 });
 
+test('DB backend: the disk root is blocked by ANY active hold (bidirectional) but only "covered" by a root hold', function () use ($repo, $disk) {
+    $repo->addHold($disk, 'sub1', ['path' => 'contracts', 'placed_at' => 1]);
+    foreach (['', '/', '.', '..', './', '\\'] as $root) {
+        assertTrue($repo->holdBlocking($disk, $root) !== null, "holdBlocking('{$root}') sees the nested hold");
+        assertTrue($repo->holdCovering($disk, $root) === null, "holdCovering('{$root}') is not covered by a nested hold");
+    }
+    $repo->releaseHold($disk, 'sub1', ['released_at' => 2, 'released_by' => 'a', 'release_reason' => 'x']);
+    // Hand-edited / migrated odd spellings still mean the root.
+    foreach (['././', '/..', '\\', '..'] as $i => $p) {
+        $repo->addHold($disk, "odd{$i}", ['path' => $p, 'placed_at' => 1]);
+        assertTrue($repo->holdBlocking($disk, 'free/x.txt') !== null, "hold stored as '{$p}' covers nested paths");
+        $repo->releaseHold($disk, "odd{$i}", ['released_at' => 2, 'released_by' => 'a', 'release_reason' => 'x']);
+    }
+});
+
 @unlink($dbFile);
 @unlink($dbFile . '-wal');
 @unlink($dbFile . '-shm');

@@ -295,6 +295,7 @@
     "chmod_failed": "Impossible de modifier les permissions.",
     "chmod_forbidden": "La modification des permissions n'est pas autorisée.",
     "chmod_root_forbidden": "Les permissions du dossier racine ne peuvent pas être modifiées.",
+    "root_forbidden": "La racine du disque ne peut pas être supprimée, mise à la corbeille, renommée ni déplacée.",
     "disk_not_allowed": "L'accès à ce disque n'est pas autorisé.",
     "download_forbidden": "Le téléchargement n'est pas autorisé.",
     "edit_forbidden": "La modification n'est pas autorisée.",

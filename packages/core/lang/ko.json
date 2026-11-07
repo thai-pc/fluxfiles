@@ -295,6 +295,7 @@
     "chmod_failed": "권한을 변경할 수 없습니다.",
     "chmod_forbidden": "권한 변경이 허용되지 않습니다.",
     "chmod_root_forbidden": "루트 폴더의 권한은 변경할 수 없습니다.",
+    "root_forbidden": "디스크 루트는 삭제, 휴지통 이동, 이름 변경 또는 이동할 수 없습니다.",
     "disk_not_allowed": "이 디스크에 접근할 수 없습니다.",
     "download_forbidden": "다운로드가 허용되지 않습니다.",
     "edit_forbidden": "편집이 허용되지 않습니다.",

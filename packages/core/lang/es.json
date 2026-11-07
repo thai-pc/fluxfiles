@@ -295,6 +295,7 @@
     "chmod_failed": "No se pudieron cambiar los permisos.",
     "chmod_forbidden": "No se permite cambiar los permisos.",
     "chmod_root_forbidden": "No se pueden cambiar los permisos de la carpeta raíz.",
+    "root_forbidden": "La raíz del disco no se puede eliminar, enviar a la papelera, renombrar ni mover.",
     "disk_not_allowed": "No se permite el acceso a este disco.",
     "download_forbidden": "No se permite la descarga.",
     "edit_forbidden": "No se permite la edición.",

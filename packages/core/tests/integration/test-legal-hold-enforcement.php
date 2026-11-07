@@ -344,7 +344,10 @@ test('root hold: copy-from and listing keep working', function () {
     upload($fm, 'free', 'x.txt');
     placeHold($meta, 'local', '', true);
     $fm->copy('local', 'free/x.txt', 'free/copy.txt');
-    $fm->list('local', 'free');
+    assertTrue($fm->getContent('local', 'free/copy.txt')['content'] === 'hello', 'copy has the source bytes');
+    $listing = $fm->list('local', 'free');
+    $names = array_column($listing['items'] ?? $listing, 'name');
+    assertTrue(in_array('x.txt', $names, true) && in_array('copy.txt', $names, true), 'listing shows both files');
 });
 
 test('root hold: restoring an already-trashed file stays blocked', function () {
@@ -370,6 +373,61 @@ test('scoped token: hold on its own prefix root covers the prefix, not siblings'
     $fmB = new FileManager($dm, new Claims('b', ['read', 'write', 'delete', 'audit'], ['local'], 'tenant-b', 50, null, 0), $metaA);
     upload($fmB, '', 'b.txt');
     $fmB->delete('local', 'b.txt');
+});
+
+test('root hold covers a scoped token whose prefix is below the root', function () {
+    [$fmA, , , $metaA] = makeFM('tenant-a');
+    upload($fmA, '', 'a.txt');
+    placeHold($metaA, 'local', '', true);
+    expectHold(fn () => $fmA->delete('local', 'a.txt'));
+    expectHold(fn () => $fmA->trash('local', 'a.txt'));
+});
+
+foreach (['', '/', '.', './', '..', '\\'] as $rootPath) {
+    test('hold on a folder: deleting the disk root (' . var_export($rootPath, true) . ') cannot wipe it', function () use ($rootPath) {
+        [$fm, $fs, , $meta] = makeFM();
+        upload($fm, 'contracts', 'msa.pdf');
+        placeHold($meta, 'local', 'contracts', true);
+        $threw = null;
+        try { $fm->delete('local', $rootPath); } catch (ApiException $e) { $threw = $e->getErrorCode(); }
+        assertTrue(in_array($threw, ['legal_hold_active', 'root_forbidden'], true), 'refused, got ' . var_export($threw, true));
+        assertTrue($fs->fileExists('contracts/msa.pdf'), 'held file survives');
+        assertTrue($fs->fileExists('_fluxfiles/holds.json'), 'holds manifest survives');
+    });
+}
+
+test('no hold: delete/trash/rename/move of the disk root are refused with root_forbidden, _fluxfiles intact', function () {
+    [$fm, $fs, , $meta] = makeFM();
+    upload($fm, 'docs', 'a.txt');
+    placeHold($meta, 'local', 'docs', true);
+    $meta->releaseHold('local', array_key_first($meta->allHolds('local')), ['released_at' => time(), 'released_by' => 'x', 'release_reason' => 'x']);
+    $code = function (callable $fn) {
+        try { $fn(); return null; } catch (ApiException $e) { return $e->getErrorCode(); }
+    };
+    foreach (['', '/', '.', '..'] as $r) {
+        assertEqual('root_forbidden', $code(fn () => $fm->delete('local', $r)), "delete({$r})");
+        assertEqual('root_forbidden', $code(fn () => $fm->trash('local', $r)), "trash({$r})");
+        assertEqual('root_forbidden', $code(fn () => $fm->move('local', $r, 'moved')), "move({$r})");
+        assertEqual('root_forbidden', $code(fn () => $fm->crossMove('local', $r, 'local2', 'moved')), "crossMove({$r})");
+    }
+    assertEqual('root_forbidden', $code(fn () => $fm->rename('local', '', 'renamed')), 'rename(root)');
+    assertTrue($fs->fileExists('docs/a.txt'), 'content survives');
+    assertTrue($fs->fileExists('_fluxfiles/holds.json'), '_fluxfiles survives');
+});
+
+test('scoped token may still delete its own prefix root when nothing is held', function () {
+    [$fmA, $fs] = makeFM('tenant-a');
+    upload($fmA, '', 'a.txt');
+    $fmA->delete('local', '');
+    assertTrue(!$fs->fileExists('tenant-a/a.txt'), 'tenant tree removed');
+});
+
+test('scoped token deleting its prefix root respects a hold inside it', function () {
+    [$fmA, $fs, , $metaA] = makeFM('tenant-a');
+    upload($fmA, 'docs', 'a.txt');
+    placeHold($metaA, 'local', 'tenant-a/docs', true);
+    expectHold(fn () => $fmA->delete('local', ''));
+    assertTrue($fs->fileExists('tenant-a/docs/a.txt'), 'held file survives');
 });
 
 // ═══════════════════════════════════════════════════════════════

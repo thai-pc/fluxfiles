@@ -5,15 +5,23 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
-### Security — legal hold on the disk root was never enforced
+### Security — legal holds on the disk root were never enforced, and the root could be deleted around any hold
 
-- A legal hold whose path is the disk root (`POST /api/fm/hold {"path":""}` by an unscoped admin) was accepted
-  (200, hold id) but protected nothing: `StorageMetadataHandler::holdPathOverlaps()` treated an empty hold path as
-  "no hold", so delete/trash/rename/move/purge/overwrite of any file still succeeded. A root hold now covers every
-  path beneath it (`""`, `"/"` and `"."` are one spelling), on the JSON and DB backends (and the Laravel/WordPress
-  DB handlers, which share the matcher). Root holds already in storage are enforced after the update, no migration.
-  Reads, listings and copy-from are unaffected. Pair with `legal-hold` module >= its next release (path
-  normalisation in place/list/release/409 detection).
+- **Root hold not enforced.** A hold whose path is the disk root (`POST /api/fm/hold {"path":""}` by an unscoped admin)
+  was accepted (200, hold id) but protected nothing: the overlap matcher (`StorageMetadataHandler::holdPathOverlaps()`,
+  `findOverlappingHold()` before core-v0.2.101) treated an empty hold path as "no hold". A root hold now covers every
+  path beneath it (`""`, `"/"`, `"."`, `".."`, `"\"` ... are one spelling; stored hold paths are canonicalised like
+  `Claims::scopePath()`), on the JSON and DB backends (the Laravel/WordPress DB handlers share the matcher). Root holds
+  already in storage are enforced after the update, no migration. Reads, listings and copy-from are unaffected.
+- **Root delete bypassed every hold.** The same matcher returned "no hold" for an empty *target*, so
+  `DELETE /api/fm/delete {"path":""}` (also `/`, `.`, `..`) by an unscoped token with the `delete` permission removed
+  held files together with `_fluxfiles/` (holds manifest, audit log, trash). An operation on the root is now blocked by
+  any active hold (the root is an ancestor of every held path).
+- **Behaviour change (deliberate, defence in depth):** delete, trash, rename, move and cross-move of the **disk root**
+  itself are now refused with `403 root_forbidden` even when nothing is held, because they wipe `_fluxfiles/`. A
+  prefix-scoped token's own tenant root is still a valid target (holds still apply to it). New i18n key
+  `error.root_forbidden` in all 16 languages.
+- Pair with `legal-hold` module >= its next release (requires core `^1.1.3`).
 
 ## [1.0.15] — 2026-11-07
 

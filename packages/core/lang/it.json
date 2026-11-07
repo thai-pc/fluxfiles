@@ -295,6 +295,7 @@
     "chmod_failed": "Impossibile modificare le autorizzazioni.",
     "chmod_forbidden": "La modifica delle autorizzazioni non è consentita.",
     "chmod_root_forbidden": "Le autorizzazioni della cartella radice non possono essere modificate.",
+    "root_forbidden": "La radice del disco non può essere eliminata, cestinata, rinominata o spostata.",
     "disk_not_allowed": "L'accesso a questo disco non è consentito.",
     "download_forbidden": "Il download non è consentito.",
     "edit_forbidden": "La modifica non è consentita.",
