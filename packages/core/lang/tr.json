@@ -275,6 +275,8 @@
     "missing_param": "Gerekli bilgi eksik",
     "invalid_json": "Geçersiz istek verisi",
     "origin_denied": "Bu kaynaktan erişim reddedildi",
+    "token_refresh_unconfigured": "Dosya yöneticisi oturum açma yapılandırılmamış. Lütfen yeniden yükleyin",
+    "token_refresh_failed": "Oturum yenilenemedi. Lütfen yeniden yükleyin",
     "ext_changed": "Dosya uzantısı değiştirilemez",
     "load_failed": "Bu klasör yüklenemedi",
     "move_into_self": "Bir klasör kendi içine taşınamaz",

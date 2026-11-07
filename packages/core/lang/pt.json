@@ -275,6 +275,8 @@
     "missing_param": "Informação obrigatória ausente",
     "invalid_json": "Dados de requisição inválidos",
     "origin_denied": "Acesso negado desta origem",
+    "token_refresh_unconfigured": "O login do gerenciador de arquivos não está configurado. Recarregue a página",
+    "token_refresh_failed": "Não foi possível renovar a sessão. Recarregue a página",
     "ext_changed": "Não é possível alterar a extensão do arquivo",
     "load_failed": "Não foi possível carregar esta pasta",
     "move_into_self": "Não é possível mover uma pasta para dentro dela mesma",

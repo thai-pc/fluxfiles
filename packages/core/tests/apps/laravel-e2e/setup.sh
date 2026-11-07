@@ -46,14 +46,21 @@ if ! grep -q "GenericUser" routes/web.php; then
   cat >> routes/web.php <<'PHP'
 
 // FluxFiles e2e: a page embedding the real <x-fluxfiles> component. A fake user
-// avoids a DB-backed login; <x-fluxfiles> refuses without a claims resolver, so
-// register one (scopes the e2e user to the whole test root).
+// avoids a DB-backed login. (The claims resolver <x-fluxfiles> needs is registered
+// in AppServiceProvider::boot(), below.)
 Route::get('/files', function () {
-    \FluxFiles\Laravel\FluxFilesFacade::resolveClaimsUsing(fn ($u) => ['prefix' => '', 'perms' => ['read', 'write', 'delete']]);
     auth()->setUser(new \Illuminate\Auth\GenericUser(['id' => 'laravel-e2e']));
     return view('files');
 });
 PHP
+fi
+
+echo "==> Registering the claims resolver (AppServiceProvider::boot)"
+# Drop the old in-route registration from an already-generated app, then (re)patch
+# the provider so GET /token refresh requests have a resolver too.
+perl -0pi -e 's/\n[ \t]*\\FluxFiles\\Laravel\\FluxFilesFacade::resolveClaimsUsing\([^\n]*\n/\n/' routes/web.php
+if ! grep -q "resolveClaimsUsing" app/Providers/AppServiceProvider.php; then
+  perl -0pi -e "s/(public function boot\(\): void\s*\{)/\$1\n        \\\\FluxFiles\\\\Laravel\\\\FluxFilesFacade::resolveClaimsUsing(fn (\\\$u) => ['prefix' => '', 'perms' => ['read', 'write', 'delete']]);/" app/Providers/AppServiceProvider.php
 fi
 
 echo "==> Configuring .env"

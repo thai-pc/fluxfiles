@@ -275,6 +275,8 @@
     "missing_param": "Erforderliche Information fehlt",
     "invalid_json": "Ungültige Anfragedaten",
     "origin_denied": "Zugriff von diesem Ursprung verweigert",
+    "token_refresh_unconfigured": "Die Anmeldung des Dateimanagers ist nicht konfiguriert. Bitte neu laden",
+    "token_refresh_failed": "Sitzung konnte nicht erneuert werden. Bitte neu laden",
     "ext_changed": "Die Dateiendung kann nicht geändert werden",
     "load_failed": "Ordner konnte nicht geladen werden",
     "move_into_self": "Ein Ordner kann nicht in sich selbst verschoben werden",

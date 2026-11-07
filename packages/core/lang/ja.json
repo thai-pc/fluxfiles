@@ -275,6 +275,8 @@
     "missing_param": "必要な情報が不足しています",
     "invalid_json": "無効なリクエストデータ",
     "origin_denied": "このオリジンからのアクセスが拒否されました",
+    "token_refresh_unconfigured": "ファイルマネージャーのサインインが設定されていません。再読み込みしてください",
+    "token_refresh_failed": "セッションを更新できませんでした。再読み込みしてください",
     "ext_changed": "ファイルの拡張子は変更できません",
     "load_failed": "このフォルダーを読み込めませんでした",
     "move_into_self": "フォルダーを自分自身の中に移動できません",

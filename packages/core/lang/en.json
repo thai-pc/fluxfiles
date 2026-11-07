@@ -275,6 +275,8 @@
     "missing_param": "Missing required information",
     "invalid_json": "Invalid request data",
     "origin_denied": "Access denied from this origin",
+    "token_refresh_unconfigured": "File manager sign-in is not configured. Please reload",
+    "token_refresh_failed": "Could not refresh your session. Please reload",
     "ext_changed": "The file extension cannot be changed",
     "load_failed": "Could not load this folder",
     "move_into_self": "Cannot move a folder into itself",

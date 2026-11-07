@@ -275,6 +275,8 @@
     "missing_param": "Falta información requerida",
     "invalid_json": "Datos de solicitud no válidos",
     "origin_denied": "Acceso denegado desde este origen",
+    "token_refresh_unconfigured": "El inicio de sesión del gestor de archivos no está configurado. Recarga la página",
+    "token_refresh_failed": "No se pudo renovar la sesión. Recarga la página",
     "ext_changed": "No se puede cambiar la extensión del archivo",
     "load_failed": "No se pudo cargar esta carpeta",
     "move_into_self": "No se puede mover una carpeta dentro de sí misma",

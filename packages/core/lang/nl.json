@@ -275,6 +275,8 @@
     "missing_param": "Vereiste informatie ontbreekt",
     "invalid_json": "Ongeldige aanvraaggegevens",
     "origin_denied": "Toegang geweigerd vanaf deze bron",
+    "token_refresh_unconfigured": "Aanmelding van de bestandsbeheerder is niet geconfigureerd. Laad opnieuw",
+    "token_refresh_failed": "Sessie kon niet worden vernieuwd. Laad opnieuw",
     "ext_changed": "De bestandsextensie kan niet worden gewijzigd",
     "load_failed": "Kan deze map niet laden",
     "move_into_self": "Kan een map niet in zichzelf verplaatsen",

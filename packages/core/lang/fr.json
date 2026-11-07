@@ -275,6 +275,8 @@
     "missing_param": "Information requise manquante",
     "invalid_json": "Données de requête invalides",
     "origin_denied": "Accès refusé depuis cette origine",
+    "token_refresh_unconfigured": "La connexion du gestionnaire de fichiers n'est pas configurée. Veuillez recharger",
+    "token_refresh_failed": "Impossible de renouveler la session. Veuillez recharger",
     "ext_changed": "L’extension du fichier ne peut pas être modifiée",
     "load_failed": "Impossible de charger ce dossier",
     "move_into_self": "Impossible de déplacer un dossier dans lui-même",
