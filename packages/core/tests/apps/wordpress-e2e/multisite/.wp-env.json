@@ -1,0 +1,10 @@
+{
+  "plugins": ["../../../../../../build/fluxfiles"],
+  "port": 8890,
+  "testsEnvironment": false,
+  "multisite": true,
+  "config": {
+    "WP_DEBUG": true,
+    "WP_DEBUG_LOG": true
+  }
+}
