@@ -57,6 +57,27 @@ final class Plans
             'modules' => ['share', 'intake', 'versioning', 'webhooks', 'ai', 'ocr'],
             'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
         ],
+        // Pro Lifetime = the one-time counterpart of `lifetime` for the Pro modules.
+        // Same policy: perpetual use, 12 months of updates/support. Offered only as a
+        // limited deal (see polar-setup.php --with-lifetime); inert until then.
+        'pro-lifetime' => [
+            'edition' => 'pro',
+            'modules' => ['share', 'intake'],
+            'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
+        ],
+        // Updates renewals: one-time, +12 months of updates/support for an EXISTING
+        // lifetime licence. They carry NO edition/modules of their own — the issuer
+        // copies those from the buyer's current licence (`renews` lists the plan ids,
+        // renewal chain included, that qualify), so a renewal can never grant more than
+        // the base plan did. See LicenseIssuer::issue().
+        'pro-renewal' => [
+            'renews' => ['pro-lifetime', 'pro-renewal'],
+            'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
+        ],
+        'studio-renewal' => [
+            'renews' => ['lifetime', 'studio-renewal'],
+            'ttlDays' => 365, 'graceDays' => 0, 'enforcement' => 'perpetual',
+        ],
         // Support = a pure service commitment (no code, no module) — see
         // docs/ROADMAP.md Phase 4 #10. modules=[] means LicenseManager::licensed()
         // never unlocks anything; the record exists only so the operator knows who

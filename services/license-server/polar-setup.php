@@ -19,6 +19,11 @@ declare(strict_types=1);
  *   POLAR_TOKEN=polar_oat_… php services/license-server/polar-setup.php
  *   POLAR_TOKEN=polar_oat_… php services/license-server/polar-setup.php --production
  *   … --dry-run          show what would be created, call nothing
+ *   … --with-renewals   ALSO create the 2 updates-renewal products (safe to re-run)
+ *   … --with-lifetime    ALSO create the 2 lifetime products (limited deal) + the renewals
+ *
+ * Order when changing the licence server: redeploy it FIRST, then run this, then paste
+ * the printed map (an id mapped to a plan the deployed server does not know gets 503s).
  *
  * The token needs the `products:write` and `products:read` scopes. Create it under
  * Polar → Settings → Developers. It is read from the environment and never written
@@ -48,9 +53,9 @@ $green = "\033[32m"; $red = "\033[31m"; $yellow = "\033[33m"; $cyan = "\033[36m"
  * Plans deliberately absent:
  *   enterprise — sold custom with an SLA, not self-serve. A checkout button for it
  *                would undercut the conversation that tier exists to have.
- *   lifetime   — a one-time perpetual-use price, worth offering only once recurring
- *                revenue is proven. Its checkout copy must say "12 months updates
- *                and support", matching Plans.php; add it with recurring => null.
+ *   lifetime / pro-lifetime / pro-renewal / studio-renewal — the limited one-time
+ *                deal, kept in LIFETIME_CATALOGUE below and created ONLY with
+ *                --with-lifetime (the default run makes exactly the 6 above).
  */
 const CATALOGUE = [
     'pro' => [
@@ -93,7 +98,55 @@ const CATALOGUE = [
     ],
 ];
 
+/**
+ * The limited lifetime deal: opt-in via --with-lifetime. One-time prices
+ * (recurring => null); amounts mirror docs/LICENSING-PLAN.md §C. Copy must say
+ * "12 months of updates", matching Plans.php (lifetime USE, not lifetime updates).
+ * (Renewals live in RENEWAL_CATALOGUE below.)
+ */
+const LIFETIME_CATALOGUE = [
+    'lifetime' => [
+        'name' => 'FluxFiles Studio Lifetime',
+        'description' => 'One-time purchase: use the Studio modules (share links, client portals, versioning, webhooks, AI/OCR with your own API key) forever, with 12 months of updates and priority support included.',
+        'amount' => 39900,          // $399 one-time
+        'recurring' => null,
+    ],
+    'pro-lifetime' => [
+        'name' => 'FluxFiles Pro Lifetime',
+        'description' => 'One-time purchase: use branded share links and client upload portals forever, for unlimited sites, with 12 months of updates and priority support included.',
+        'amount' => 17900,          // $179 one-time
+        'recurring' => null,
+    ],
+];
+
+/**
+ * The updates renewals: --with-renewals (or --with-lifetime, which implies it).
+ * Kept apart from the lifetime products because they must OUTLIVE the deal: people who
+ * bought a lifetime licence keep renewing after the offer ends. Every run, with or
+ * without a flag, maps an existing renewal product (archived or not) by name without
+ * recreating it, so the printed plan map never loses the renewal ids.
+ */
+const RENEWAL_CATALOGUE = [
+    'pro-renewal' => [
+        'name' => 'FluxFiles Pro Updates Renewal',
+        'description' => 'One-time: adds 12 months of updates and priority support to your existing Pro Lifetime licence. Use the same email as your original purchase. Your modules keep running either way.',
+        'amount' => 2900,           // $29 one-time
+        'recurring' => null,
+    ],
+    'studio-renewal' => [
+        'name' => 'FluxFiles Studio Updates Renewal',
+        'description' => 'One-time: adds 12 months of updates and priority support to your existing Studio Lifetime licence. Use the same email as your original purchase. Your modules keep running either way.',
+        'amount' => 7900,           // $79 one-time
+        'recurring' => null,
+    ],
+];
+
 $production = in_array('--production', $argv, true);
+$withLifetime = in_array('--with-lifetime', $argv, true);
+$withRenewals = $withLifetime || in_array('--with-renewals', $argv, true);
+$catalogue = CATALOGUE + ($withLifetime ? LIFETIME_CATALOGUE : []) + ($withRenewals ? RENEWAL_CATALOGUE : []);
+// Optional products not being created this run: still MAPPED when they already exist.
+$mapOnly = array_diff_key(LIFETIME_CATALOGUE + RENEWAL_CATALOGUE, $catalogue);
 
 /**
  * The token, from the environment or the repo-root .env.
@@ -133,6 +186,27 @@ if ($token === '') {
     echo "      {$tokenVar}=polar_oat_…\n\n";
     echo "  (or pass it for one run: {$tokenVar}=polar_oat_… php " . basename(__FILE__) . ")\n\n";
     exit(1);
+}
+
+/**
+ * name => {id, archived}. When several products share a name (an archived twin and a
+ * live one), the LIVE one wins whatever the list order: never map an archived id while
+ * a live product exists.
+ *
+ * @param array<int,array<string,mixed>> $items
+ * @return array<string,array{id:string,archived:bool}>
+ */
+function indexProductsByName(array $items): array
+{
+    $out = [];
+    foreach ($items as $p) {
+        $name = (string) ($p['name'] ?? '');
+        $archived = !empty($p['is_archived']);
+        if (isset($out[$name]) && !$out[$name]['archived'] && $archived) { continue; }
+        if (isset($out[$name]) && !$out[$name]['archived'] && !$archived) { continue; } // first live one stays
+        $out[$name] = ['id' => (string) ($p['id'] ?? ''), 'archived' => $archived];
+    }
+    return $out;
 }
 
 /**
@@ -186,10 +260,23 @@ foreach (($list['items'] ?? []) as $p) {
     $existing[(string) ($p['name'] ?? '')] = (string) ($p['id'] ?? '');
 }
 
+// Archived products too, for the optional ones: a renewal product archived after the
+// deal ended must stay in the map (past buyers still renew) and must not be recreated.
+[$st2, $listAll] = api('GET', '/products/?limit=100');
+$existingAny = indexProductsByName($st2 === 200 ? ($listAll['items'] ?? []) : []);
+
 $planMap = [];
 $failed = 0;
 
-foreach (CATALOGUE as $planId => $spec) {
+foreach ($mapOnly as $planId => $spec) {
+    if (isset($existingAny[$spec['name']]) && Plans::get($planId) !== null) {
+        $e = $existingAny[$spec['name']];
+        $planMap[$e['id']] = $planId;
+        printf("  {$yellow}MAP {$reset} %-24s already exists%s (%s) — mapped, not created\n", $spec['name'], $e['archived'] ? ', ARCHIVED' : '', $e['id']);
+    }
+}
+
+foreach ($catalogue as $planId => $spec) {
     // A catalogue entry with no matching plan would sell a licence the issuer refuses.
     if (Plans::get($planId) === null) {
         echo "  {$red}FAIL{$reset} {$planId}: no such plan in Plans.php\n";
@@ -197,6 +284,12 @@ foreach (CATALOGUE as $planId => $spec) {
         continue;
     }
 
+    if (!isset($existing[$spec['name']]) && isset($existingAny[$spec['name']]) && !isset(CATALOGUE[$planId])) {
+        // Archived optional product: reuse it, never create a twin. (For a lifetime
+        // product this means un-archive it in Polar to re-open the deal.)
+        $existing[$spec['name']] = $existingAny[$spec['name']]['id'];
+        echo "  {$yellow}NOTE{$reset} {$spec['name']} is archived in Polar — unarchive it to sell it\n";
+    }
     if (isset($existing[$spec['name']])) {
         $planMap[$existing[$spec['name']]] = $planId;
         printf("  {$yellow}SKIP{$reset} %-24s already exists (%s)\n", $spec['name'], $existing[$spec['name']]);
@@ -204,7 +297,7 @@ foreach (CATALOGUE as $planId => $spec) {
     }
 
     if ($dryRun) {
-        printf("  {$cyan}DRY {$reset} %-24s \$%s / %s\n", $spec['name'], number_format($spec['amount'] / 100, 2), $spec['recurring']);
+        printf("  {$cyan}DRY {$reset} %-24s \$%s / %s\n", $spec['name'], number_format($spec['amount'] / 100, 2), $spec['recurring'] ?? 'one-time');
         continue;
     }
 
@@ -227,7 +320,7 @@ foreach (CATALOGUE as $planId => $spec) {
     $id = (string) ($res['id'] ?? '');
     $planMap[$id] = $planId;
     printf("  {$green}OK{$reset}   %-24s \$%s / %s  %s\n",
-        $spec['name'], number_format($spec['amount'] / 100, 2), $spec['recurring'], $id);
+        $spec['name'], number_format($spec['amount'] / 100, 2), $spec['recurring'] ?? 'one-time', $id);
 }
 
 echo "\n";
