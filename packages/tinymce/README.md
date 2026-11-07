@@ -79,7 +79,15 @@ The modal closes automatically after selection.
 | `fluxfiles_locale` | string | `null` | UI language code |
 | `fluxfiles_theme` | string | `null` | Picker theme: `light` / `dark` / `auto` |
 | `fluxfiles_multiple` | boolean | `false` | Allow multi-file selection |
+| `fluxfiles_allowed_types` | string[] | `null` | Extensions (`.pdf` or `pdf`) or MIME types / patterns (`image/*`, `application/pdf`). Shown only in picker mode: non-matching files are hidden and cannot be selected. UI convenience, not a security boundary (the token's `allowed_ext` claim is the server-side check) |
 | `fluxfiles_image_dialog` | boolean | `true` | Wire `file_picker_callback` into the native image/link/media dialogs |
+
+**Files with no permanent URL.** Two cases:
+
+- On a gated local disk (`FLUXFILES_LOCAL_PRIVATE`) or an SFTP disk without `public_url`, `permanent_url` is `null` and the only link is an expiring `/api/fm/img|stream?token=` URL. The plugin never saves that into content: it shows one notification listing the refused files. Use a public disk or set `public_url`.
+- A private bucket without `public_url` yields a presigned URL (up to 24h). That one **is** still inserted, with a `console.warn`, and it stops working when it expires.
+
+Only `http(s)` URLs are ever inserted.
 
 ## Compatibility
 

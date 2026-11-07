@@ -42,7 +42,7 @@ test('a `"` in alt_text is escaped, not left to break out of the alt attribute (
   await ready(page);
   await page.evaluate((p) => { (window as any).__ffPayload = p; }, XSS_ALT as any);
   await clickButton(page);
-  await expect.poll(() => getCode(page)).toContain('src="/nonexistent.png"');
+  await expect.poll(() => getCode(page)).toContain('src="http://core.test/nonexistent.png"');
   const html = await getCode(page);
   expect(html).not.toContain('onerror="window.__XSS=1"');
   const xss = await page.evaluate(() => (window as any).__XSS);

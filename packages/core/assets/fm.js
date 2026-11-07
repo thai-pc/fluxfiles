@@ -1131,7 +1131,10 @@ function fluxFilesApp() {
                 // Ignore stale responses when user typed a newer query
                 if (this._activeSearchId !== reqId) return;
 
-                this.searchResults = Array.isArray(fileRows) ? fileRows : [];
+                // Picker with allowedTypes: search lists only what could be selected.
+                this.searchResults = Array.isArray(fileRows)
+                    ? fileRows.filter(r => this._typeAllowed({ name: this._searchName(r), mime: r.mime, type: 'file' }))
+                    : [];
                 this.searchFolderResults = Array.isArray(folderRows) ? folderRows : [];
             } catch (err) {
                 console.error('FluxFiles: Search failed', err);
@@ -1352,10 +1355,121 @@ function fluxFilesApp() {
             this.sidebarOpen = false;
         },
 
+        // Make a URL absolute the way the browser would for this document
+        // (document.baseURI), so root-relative '/storage/...' resolves against the
+        // origin serving this iframe: core, or the Laravel/WordPress app that
+        // proxies it and serves the same storage. Unresolved, it would resolve
+        // against the HOST page and 404. Absolute http(s) URLs (S3/R2/CDN) are
+        // kept; anything that is not http(s) (javascript:, data:, ...; leading
+        // whitespace/control chars included) is dropped to ''. Non-strings pass through.
+        _absUrl(u) {
+            if (typeof u !== 'string') return u;
+            const t = u.replace(/^[\u0000-\u0020]+/, '');
+            if (t === '') return '';
+            try {
+                const r = new URL(t, document.baseURI);
+                return (r.protocol === 'http:' || r.protocol === 'https:') ? r.href : '';
+            } catch (e) { return ''; }
+        },
+        // img_srcset is "url 320w, url 640w": absolutize each candidate URL.
+        _absSrcset(v) {
+            if (typeof v !== 'string' || v === '') return v;
+            return v.split(',').map(c => {
+                const t = c.trim();
+                const i = t.search(/\s/);
+                const u = this._absUrl(i < 0 ? t : t.slice(0, i));
+                return u ? (i < 0 ? u : u + t.slice(i)) : '';
+            }).filter(Boolean).join(', ');
+        },
+        _absVariants(vs) {
+            if (!vs || typeof vs !== 'object') return vs || null;
+            const out = {};
+            for (const k of Object.keys(vs)) {
+                const v = vs[k];
+                out[k] = (v && typeof v === 'object') ? Object.assign({}, v, { url: this._absUrl(v.url) }) : v;
+            }
+            return out;
+        },
+
+        // allowedTypes (SDK option): UI convenience only, NOT a security boundary —
+        // the server enforces the JWT allowed_ext claim. Entries are extensions
+        // ('.pdf', 'pdf') or MIME types / patterns ('image/*', 'application/pdf').
+        _allowedTypeList() {
+            const a = this.config && this.config.allowedTypes;
+            if (!Array.isArray(a)) return [];
+            return a.map(x => String(x || '').trim().toLowerCase()).filter(Boolean);
+        },
+        _typeExt(name) {
+            const n = String(name || '');
+            const i = n.lastIndexOf('.');
+            return i >= 0 ? n.slice(i + 1).toLowerCase() : '';
+        },
+        // MIME candidates for a file: the stored one AND the extension's. A stored
+        // type can be generic (application/octet-stream) or wrong for the extension
+        // (libmagic says text/plain for an SVG), so a pattern matches on either.
+        _fileMimes(file) {
+            const out = [];
+            const m = file && (file.mime || (file.meta && file.meta.mime));
+            if (typeof m === 'string' && m.indexOf('/') > 0) out.push(m.toLowerCase());
+            const map = {
+                jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+                webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
+                heic: 'image/heic', heif: 'image/heif', tif: 'image/tiff', tiff: 'image/tiff',
+                mp4: 'video/mp4', m4v: 'video/x-m4v', webm: 'video/webm', mov: 'video/quicktime',
+                mkv: 'video/x-matroska', avi: 'video/x-msvideo', ogv: 'video/ogg',
+                mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg',
+                flac: 'audio/flac', aac: 'audio/aac', opus: 'audio/opus',
+                pdf: 'application/pdf', zip: 'application/zip', json: 'application/json', xml: 'application/xml',
+                doc: 'application/msword',
+                docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                xls: 'application/vnd.ms-excel',
+                xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ppt: 'application/vnd.ms-powerpoint',
+                pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                odt: 'application/vnd.oasis.opendocument.text',
+                ods: 'application/vnd.oasis.opendocument.spreadsheet',
+                odp: 'application/vnd.oasis.opendocument.presentation',
+                rtf: 'application/rtf', gz: 'application/gzip', tar: 'application/x-tar', '7z': 'application/x-7z-compressed',
+                txt: 'text/plain', csv: 'text/csv', html: 'text/html', htm: 'text/html', md: 'text/markdown', css: 'text/css'
+            };
+            const em = map[this._typeExt(file && file.name)];
+            if (em && out.indexOf(em) < 0) out.push(em);
+            return out;
+        },
+        // allowedTypes narrows SELECTION in picker mode only; browser mode is never
+        // restricted. Folders always pass (navigation); files must match one entry.
+        _typeAllowed(file) {
+            const list = this._allowedTypeList();
+            if (!list.length || !file || file.type === 'dir') return true;
+            if (!this.config || this.config.mode !== 'picker') return true;
+            const ext = this._typeExt(file.name);
+            const mimes = this._fileMimes(file);
+            return list.some(t => {
+                if (t.indexOf('/') >= 0) {
+                    return mimes.some(m => t.slice(-2) === '/*' ? m.indexOf(t.slice(0, -1)) === 0 : m === t);
+                }
+                return ext !== '' && ext === t.replace(/^\*?\./, '');
+            });
+        },
+        // Value for <input type=file accept>.
+        get uploadAccept() {
+            if (!this.config || this.config.mode !== 'picker') return '';
+            return this._allowedTypeList().map(t => t.indexOf('/') >= 0 || t.charAt(0) === '.' ? t : '.' + t.replace(/^\*\./, '')).join(',');
+        },
+        _refuseType(file) {
+            this.showToast(this.t('error.type_not_allowed', { name: (file && file.name) || '' }), 'error', 4000);
+        },
+        // Several skipped files: name the first few.
+        _refuseTypes(files) {
+            const names = files.map(f => f.name || '').filter(Boolean);
+            const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ', …' : '');
+            this.showToast(this.t('error.type_not_allowed_many', { names: shown }), 'error', 5000);
+        },
+
         // Build FM_SELECT payload from file/folder
         _toSelectPayload(item) {
             return {
-                url: item.url,
+                url: this._absUrl(item.url),
                 key: item.key,
                 name: item.name,
                 path: item.key,      // backward compat
@@ -1364,17 +1478,17 @@ function fluxFilesApp() {
                 disk: this.currentDisk,
                 created: item.created || null,   // unix seconds (stable upload/mkdir time)
                 modified: item.modified || null, // unix seconds (live storage mtime)
-                permanent_url: item.permanent_url || null,
+                permanent_url: this._absUrl(item.permanent_url) || null,
                 mime: item.mime || (item.meta && item.meta.mime) || null,
                 width: item.width || (item.meta && item.meta.width) || null,
                 height: item.height || (item.meta && item.meta.height) || null,
                 meta: item.meta || null,
-                variants: item.variants || null,
+                variants: this._absVariants(item.variants),
                 // On-demand WebP: img_base lets the host build any size via
                 // FluxFiles.imgUrl(file, {width, quality}); img_srcset/img_sizes are
                 // a ready responsive set. Present only for images when WebP is on.
-                img_base: item.img_base || null,
-                img_srcset: item.img_srcset || null,
+                img_base: this._absUrl(item.img_base) || null,
+                img_srcset: this._absSrcset(item.img_srcset) || null,
                 img_sizes: item.img_sizes || null,
                 type: item.type || 'file',
                 is_dir: item.type === 'dir'
@@ -1383,6 +1497,7 @@ function fluxFilesApp() {
 
         // File selection (single — from detail panel)
         selectFile(file) {
+            if (!this._typeAllowed(file)) { this._refuseType(file); return; }
             this.detailFile = file;
             this.selectedVariant = 'original';
             this.activeTab = 'info';
@@ -1454,10 +1569,11 @@ function fluxFilesApp() {
 
         // Select a specific variant (thumb/medium/large) or 'original'
         selectVariant(file, size) {
+            if (!this._typeAllowed(file)) { this._refuseType(file); return; }
             this.selectedVariant = size;
             var payload = this._toSelectPayload(file);
             if (size !== 'original' && file.variants && file.variants[size]) {
-                payload.url = file.variants[size].url;
+                payload.url = this._absUrl(file.variants[size].url);
                 payload.key = file.variants[size].key;
                 payload.variant = size;
             } else {
@@ -1470,7 +1586,13 @@ function fluxFilesApp() {
         // Multi-select: send selected items as array (when config.multiple)
         selectMultiple() {
             if (this.selected.length === 0) return;
-            const payload = this.selected.map(item => this._toSelectPayload(item));
+            // Select the matching items and say which were skipped.
+            const okItems = this.selected.filter(f => this._typeAllowed(f));
+            if (okItems.length !== this.selected.length) {
+                this._refuseTypes(this.selected.filter(f => !this._typeAllowed(f)));
+                if (okItems.length === 0) return;
+            }
+            const payload = okItems.map(item => this._toSelectPayload(item));
             this.postMessage('FM_SELECT', payload);
         },
 
@@ -1682,6 +1804,14 @@ function fluxFilesApp() {
         async uploadFiles(fileList) {
             if (!fileList || fileList.length === 0) return;
             let files = Array.from(fileList);
+
+            // allowedTypes in picker mode (UI convenience; dropped files bypass the input's accept).
+            const typeBad = files.filter(f => !this._typeAllowed({ name: f.name, mime: f.type, type: 'file' }));
+            if (typeBad.length) {
+                this._refuseTypes(typeBad);
+                files = files.filter(f => !typeBad.includes(f));
+                if (files.length === 0) return;
+            }
 
             // Client-side size guard (MB). The server also enforces max_upload, but
             // checking here avoids uploading bytes that will be rejected with 413.
@@ -2268,11 +2398,7 @@ function fluxFilesApp() {
         // Copy URL
         async copyUrl(file) {
             // Build full URL: use active variant if selected
-            let url = this.getActiveUrl(file) || '';
-            if (url && !url.startsWith('http')) {
-                const base = this.endpoint || window.location.origin;
-                url = base.replace(/\/$/, '') + '/' + url.replace(/^\//, '');
-            }
+            const url = this._absUrl(this.getActiveUrl(file) || '') || '';
             if (await this.copyText(url)) {
                 this.showToast(this.t('copy.copied'), 'success');
             }
@@ -3030,6 +3156,14 @@ function fluxFilesApp() {
         async importUrl() {
             const url = (this.urlImportUrl || '').trim();
             if (!url || this.urlImportState === 'importing') return;
+            // allowedTypes in picker mode: judge by the URL's file extension when it has one.
+            let importName = '';
+            try { importName = decodeURIComponent(new URL(url).pathname.split('/').pop() || ''); } catch (e) { /* server validates the URL */ }
+            if (this._typeExt(importName) && !this._typeAllowed({ name: importName, type: 'file' })) {
+                this.urlImportState = 'error';
+                this.urlImportError = this.t('error.type_not_allowed', { name: importName });
+                return;
+            }
             this.urlImportState = 'importing';
             this.urlImportError = '';
             try {
@@ -3622,6 +3756,8 @@ function fluxFilesApp() {
             const q = (this.searchQuery || '').toLowerCase();
             const arr = this.files.filter(f => {
                 if (!this._matchTypeFilter(f)) return false;
+                // Picker with allowedTypes: hide what could not be selected anyway.
+                if (!this._typeAllowed(f)) return false;
                 if (!q) return true;
                 const name = (f.name != null && f.name !== '') ? String(f.name) : '';
                 if (name.toLowerCase().includes(q)) return true;

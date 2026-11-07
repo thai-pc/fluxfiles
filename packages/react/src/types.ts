@@ -66,6 +66,7 @@ export interface FluxFilesConfig {
   /** When true, onSelect receives array of FluxFile. */
   multiple?: boolean;
   /** Filter displayed file types (e.g. ["image/*", ".pdf"]). */
+  /** Extensions (`.pdf`) or MIME types / patterns (`image/*`) the picker accepts (picker mode only). UI convenience, NOT a security boundary: the server enforces the token's `allowed_ext` claim. */
   allowedTypes?: string[] | null;
   /** Max size per uploaded file, in **megabytes (MB)**. Preferred over `maxSize`. */
   maxUploadMb?: number | null;

@@ -61,13 +61,63 @@
         return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    // Selected URLs must be absolute and permanent. Older cores return a
+    // root-relative url ('/storage/uploads/x') that would resolve against the HOST
+    // page; resolve it against the FluxFiles endpoint's origin. And never let an
+    // expiring .../img|stream ?token= URL reach saved content.
+    function absUrl(u, endpoint) {
+        if (typeof u !== 'string') return '';
+        // Strip leading whitespace/control chars first: browsers ignore them, so
+        // " \tjavascript:..." would otherwise slip past a scheme check.
+        var t = u.replace(/^[\u0000-\u0020]+/, '');
+        if (t === '') return '';
+        var r = null;
+        try { r = new URL(t, endpoint || window.location.href); } catch (e) {
+            try { r = new URL(t, window.location.href); } catch (e2) { return ''; }
+        }
+        // Only http(s) may reach saved content (drops javascript:, data:, vbscript:, ...).
+        return (r.protocol === 'http:' || r.protocol === 'https:') ? r.href : '';
+    }
+    function isTokenUrl(u) {
+        return /\/(img|stream)(\.php)?\?([^#]*&)?token=/.test(u);
+    }
+    // Why a selection cannot be inserted: 'preview' (no URL), 'unsafe' (not http/https),
+    // 'token' (only an expiring /img|/stream token link, e.g. a private local or SFTP disk).
+    function refusalReason(raw, url) {
+        if (raw === '') return 'preview';
+        if (url === '') return 'unsafe';
+        return isTokenUrl(url) ? 'token' : '';
+    }
+    function refusalMessage(reason, name) {
+        if (reason === 'token') {
+            return '"' + name + '" is only available through an expiring link (private disk without a public URL), so it was not inserted. Use a public disk or set public_url.';
+        }
+        if (reason === 'unsafe') {
+            return '"' + name + '" has a URL that is not http(s), so it was not inserted.';
+        }
+        return '"' + name + '" is preview-only (no embeddable URL, e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor, Apply) or issue a downloadable token to embed it.';
+    }
+    // One combined message per selection (at most 5 lines).
+    function joinRefusals(msgs) {
+        var out = msgs.slice(0, 5);
+        if (msgs.length > 5) { out.push('… and ' + (msgs.length - 5) + ' more'); }
+        return out;
+    }
+    // Summernote has no notification API: one alert (plain text, so no HTML escaping needed).
+    function notifyUser(msgs) {
+        if (!msgs.length) return;
+        if (typeof window.alert === 'function') { try { window.alert(joinRefusals(msgs).join('\n')); } catch (e) { /* ignore */ } }
+    }
+
     // Build the HTML to insert for one selected file (shared contract with the
     // other editor plugins: <img> for images, <a> otherwise).
-    function fileToHtml(file) {
+    function fileToHtml(file, endpoint, refused) {
+        var name = file.name || file.basename || file.path || '';
         // Prefer a permanent URL (public disk / public_url) so saved content
         // doesn't embed an expiring presigned URL.
-        var url = file.permanent_url || file.url || '';
-        var name = file.name || file.basename || file.path || '';
+        var raw = file.permanent_url || file.url || '';
+        var url = absUrl(raw, endpoint);
+        var reason = refusalReason(raw, url);
         var meta = file.meta || {};
 
         // Preview-only selection (no permanent_url/url) — e.g. a watermark OVERLAY
@@ -75,8 +125,10 @@
         // URL unsafe to save into content. To embed a *watermarked* image, burn the
         // watermark into the file first (Watermark editor → Apply). Return '' so the
         // caller skips it (rather than inserting <img src="">).
-        if (url === '') {
-            console.warn('[FluxFiles] "' + name + '" is preview-only (no embeddable URL — e.g. a watermark overlay with allow_download=false), so it was not inserted. Burn in the watermark (Watermark editor → Apply) or issue a downloadable token to embed it.');
+        if (reason) {
+            var msg = refusalMessage(reason, name);
+            console.warn('[FluxFiles] ' + msg);
+            refused.push(msg);
             return '';
         }
 
@@ -136,11 +188,13 @@
                 context.invoke('editor.restoreRange');
                 context.invoke('editor.focus');
 
+                var refused = [];
                 for (var i = 0; i < insertable.length; i++) {
-                    var html = fileToHtml(insertable[i]);
-                    if (html === '') continue; // preview-only → already warned
+                    var html = fileToHtml(insertable[i], opts.endpoint, refused);
+                    if (html === '') continue; // refused → reported below
                     context.invoke('editor.pasteHTML', html);
                 }
+                notifyUser(refused);
             }
         });
     }

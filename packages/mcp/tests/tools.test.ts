@@ -58,6 +58,55 @@ describe('tools', () => {
     expect(r).toEqual({ url: 'https://f.test/storage/uploads/pics/a.png', expires_at: null });
   });
 
+  const NF = () => ({ status: 404, body: { data: null, error: 'File or directory not found', error_code: 'not_found' } });
+  const mk = (routes: Parameters<typeof fakeFetch>[0]) => {
+    const r = fakeFetch(routes);
+    return { ...r, tool: (name: string, extra = {}) => byName(buildTools(new FluxFilesClient({ baseUrl: 'https://f.test', token: 't', fetch: r.f }), { ...opts, allowWrite: true, ...extra }), name) };
+  };
+  const seq = (calls: Call[]) => calls.map((c) => `${c.method} ${new URL(c.url).pathname.replace('/api/fm', '')}`);
+
+  it('write_text_file: 404 (new core) and null/null with an empty parent listing (old core) create the file', async () => {
+    for (const routes of <Array<Parameters<typeof fakeFetch>[0]>>[
+      { 'GET /meta': NF, 'POST /upload': () => ok({ key: 'n.md' }) },
+      { 'GET /meta': () => ok({ size: null, mime: 'text/plain', modified: null }), 'GET /list': () => ok({ items: [] }), 'POST /upload': () => ok({ key: 'n.md' }) },
+    ]) {
+      const m = mk(routes);
+      await m.tool('write_text_file').run({ path: 'n.md', content: 'x' });
+      expect(seq(m.calls).at(-1)).toBe('POST /upload');
+      expect(seq(m.calls)).not.toContain('PUT /content');
+    }
+  });
+
+  it('write_text_file refuses a folder target (type dir, or an old core confirmed by the parent listing)', async () => {
+    for (const routes of <Array<Parameters<typeof fakeFetch>[0]>>[
+      { 'GET /meta': () => ok({ size: null, mime: 'x', modified: null, type: 'dir' }) },
+      { 'GET /meta': () => ok({ size: null, mime: 'x', modified: null }), 'GET /list': () => ok({ items: [{ key: 'docs', name: 'docs', type: 'dir' }] }) },
+    ]) {
+      const m = mk(routes);
+      await expect(m.tool('write_text_file').run({ path: 'docs', content: 'x' })).rejects.toMatchObject({ code: 'is_directory' });
+      expect(seq(m.calls)).not.toContain('POST /upload');
+    }
+  });
+
+  it('write_text_file edits an existing file (type file)', async () => {
+    const m = mk({ 'GET /meta': () => ok({ size: 1, mime: 'x', modified: 1, type: 'file' }), 'PUT /content': () => ok({ size: 4 }) });
+    await m.tool('write_text_file').run({ path: 'n.md', content: 'new!' });
+    expect(seq(m.calls)).toEqual(['GET /meta', 'PUT /content']);
+  });
+
+  it('get_file_info: dir (new core), file, 404, old-core missing, old-core folder', async () => {
+    const info = (routes: Parameters<typeof fakeFetch>[0], path = 'x') => mk(routes).tool('get_file_info').run({ path });
+    expect(await info({ 'GET /meta': () => ok({ size: null, mime: 'x', modified: null, type: 'dir' }), 'GET /metadata': () => ok(null) }))
+      .toMatchObject({ type: 'dir', size: null });
+    expect(await info({ 'GET /meta': () => ok({ size: 3, mime: 'x', modified: 1, type: 'file' }), 'GET /metadata': () => ok({ title: 'T' }) }))
+      .toMatchObject({ type: 'file', size: 3, metadata: { title: 'T' } });
+    await expect(info({ 'GET /meta': NF })).rejects.toMatchObject({ status: 404, code: 'not_found' });
+    await expect(info({ 'GET /meta': () => ok({ size: null, mime: 'x', modified: null }), 'GET /list': () => ok({ items: [] }) }, 'gone.txt'))
+      .rejects.toMatchObject({ status: 404, code: 'not_found' });
+    expect(await info({ 'GET /meta': () => ok({ size: null, mime: 'x', modified: null }), 'GET /list': () => ok({ items: [{ key: 'a/docs', name: 'docs', type: 'dir' }] }), 'GET /metadata': () => ok(null) }, 'a/docs'))
+      .toMatchObject({ type: 'dir' });
+  });
+
   it('write_text_file uploads a new file, or PUTs the content of an existing one', async () => {
     const created = fakeFetch({ 'POST /upload': () => ok({ key: 'notes/n.md' }) });
     const w1 = byName(buildTools(new FluxFilesClient({ baseUrl: 'https://f.test', token: 't', fetch: created.f }), { ...opts, allowWrite: true }), 'write_text_file');
@@ -66,7 +115,7 @@ describe('tools', () => {
     expect(up.body).toBeInstanceOf(FormData);
     expect((up.body as FormData).get('path')).toBe('notes');
 
-    const existing = fakeFetch({ 'GET /meta': () => ok({ size: 1 }), 'PUT /content': () => ok({ path: 'n.md', size: 4 }) });
+    const existing = fakeFetch({ 'GET /meta': () => ok({ size: 1, modified: 1 }), 'PUT /content': () => ok({ path: 'n.md', size: 4 }) });
     await byName(buildTools(new FluxFilesClient({ baseUrl: 'https://f.test', token: 't', fetch: existing.f }), { ...opts, allowWrite: true }), 'write_text_file')
       .run({ path: 'n.md', content: 'new!' });
     expect(existing.calls.map((c) => `${c.method} ${new URL(c.url).pathname}`)).toEqual(['GET /api/fm/meta', 'PUT /api/fm/content']);

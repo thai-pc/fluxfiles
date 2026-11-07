@@ -112,6 +112,21 @@ test('meta on pre-existing image → size/mime, no variants on disk', function (
     assertTrue(!$fs->fileExists('_variants/pic_thumb.webp'), 'no variants for un-indexed image');
 });
 
+test('meta on a missing path is 404 not_found; a folder still answers', function () {
+    [$fm, , , , $root] = makeEnv();
+    place($root, 'docs/a.txt', 'x');
+    foreach (['nope.txt', 'docs/missing.txt', 'ghost/dir/x.md'] as $missing) {
+        try { $fm->fileMeta('local', $missing); throw new \RuntimeException("no 404 for {$missing}"); }
+        catch (ApiException $e) { assertEqual(404, $e->getHttpCode(), "status for {$missing}"); assertEqual('not_found', $e->getErrorCode(), "code for {$missing}"); }
+    }
+    $folder = $fm->fileMeta('local', 'docs');
+    assertTrue(array_key_exists('mime', $folder), 'folder meta still answers');
+    assertEqual(1, $fm->fileMeta('local', 'docs/a.txt')['size'], 'file size');
+    assertEqual('dir', $folder['type'], 'folder type');
+    assertEqual('file', $fm->fileMeta('local', 'docs/a.txt')['type'], 'file type');
+    assertEqual('dir', $fm->fileMeta('local', '')['type'], 'scope root is always a dir');
+});
+
 test('metadata GET on pre-existing → null (graceful, no error)', function () {
     [, , $meta, , $root] = makeEnv();
     place($root, 'doc.txt', 'x');

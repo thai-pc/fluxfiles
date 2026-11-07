@@ -248,6 +248,8 @@
     "upload_too_large": "Dosya çok büyük (maks. {max})",
     "too_many_files": "Dosya sınırına ulaşıldı (en fazla {max})",
     "ext_not_allowed": ".{ext} dosya türüne izin verilmiyor",
+    "type_not_allowed": "{name} burada izin verilen bir dosya türü değil",
+    "type_not_allowed_many": "Burada izin verilmeyen türdeki dosyalar atlandı: {names}",
     "generic": "Bir hata oluştu. Lütfen tekrar deneyin.",
     "system_path": "Bu dosya üzerinde işlem yapılamaz",
     "git_internal_path": "Dahili bir git yoluna yazılamaz",

@@ -55,24 +55,34 @@ export class FluxFilesCommand extends Command {
     sdk().open(options);
   }
 
+  /** Show a refusal to the editor user (Notification plugin when loaded, else alert). */
+  private _notify(messages: string[]): void {
+    if (!messages.length) return;
+    // One combined message per selection (at most 5 lines). The Notification
+    // plugin shows plain text, so file names need no escaping.
+    const lines = messages.slice(0, 5);
+    if (messages.length > 5) lines.push('… and ' + (messages.length - 5) + ' more');
+    const message = lines.join('\n');
+    const { plugins } = this.editor;
+    if (plugins.has('Notification')) {
+      (plugins.get('Notification') as { showWarning(m: string, o?: object): void }).showWarning(message, { namespace: 'fluxfiles' });
+    } else if (typeof window.alert === 'function') {
+      window.alert(message);
+    }
+  }
+
   private _insert(files: FluxFile[]): void {
     const { editor } = this;
     const schema = editor.model.schema;
     const inserted: FluxFile[] = [];
+    const refused: string[] = [];
 
     for (const file of files) {
-      const info = fileInfo(file);
+      const info = fileInfo(file, this._cfg.endpoint, (m) => refused.push(m));
       if (!info.embeddable) continue; // preview-only: already warned
 
       if (info.isImage && editor.commands.get('insertImage')) {
-        const source: Record<string, unknown> = { src: info.url, alt: info.alt };
-        // Responsive attributes only when the image plugin's schema knows them
-        // (core ImageEditing registers `srcset` as a plain string; it has no `sizes`
-        // model attribute and always writes sizes="100vw", so img_sizes is only
-        // honoured by a custom image plugin that registers one).
-        const type = schema.isRegistered('imageBlock') ? 'imageBlock' : 'imageInline';
-        if (info.srcset && schema.checkAttribute(type, 'srcset')) source.srcset = info.srcset;
-        if (info.sizes && schema.checkAttribute(type, 'sizes')) source.sizes = info.sizes;
+        const source = { src: info.url, alt: info.alt };
         editor.execute('insertImage', { source: [source] });
         this._leaveImage();
       } else {
@@ -86,6 +96,8 @@ export class FluxFilesCommand extends Command {
       }
       inserted.push(file);
     }
+
+    this._notify(refused);
 
     if (inserted.length) {
       editor.editing.view.focus();
