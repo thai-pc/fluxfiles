@@ -328,8 +328,8 @@ private-local-media requirement.
 | `FLUXFILES_AIVISION_PROVIDER` | `removebg` | AI Vision (paid) provider: `removebg` (bg-removal only) or `http` (generic self-hosted endpoint). |
 | `FLUXFILES_AIVISION_KEY` | — | API key for the AI Vision provider (BYO key). |
 | `FLUXFILES_AIVISION_ENDPOINT` | — | Endpoint URL, required when `FLUXFILES_AIVISION_PROVIDER=http`. Operator-trusted (server env, not user input) — no SSRF guard. |
-| `FLUXFILES_AIVISION_TIMEOUT` | `60` | AI Vision provider request timeout (seconds, max `300`). |
-| `FLUXFILES_AIVISION_MAX_RESPONSE_MB` | `64` | AI Vision (paid) cap on the provider response body, in MB (`0` = default). A larger body aborts the transfer with `502 aivision_provider_error`. A JSON base64 reply is about 1.33x the image. PHP `memory_limit` should cover the source image plus about 3x the largest response. |
+| `FLUXFILES_AIVISION_TIMEOUT` | `60` | AI Vision provider request timeout (seconds, clamped to 1-300; 0 or invalid = 60). |
+| `FLUXFILES_AIVISION_MAX_RESPONSE_MB` | `64` | AI Vision (paid) cap on the provider response body, in MB (`0` = default). A larger body aborts the transfer with `502 aivision_provider_error`. A JSON base64 reply is about 1.33x the image. PHP `memory_limit` should be about 2x the response for a raw image reply, or about 4x the image for a JSON base64 reply, plus about 20 MB (the source image is streamed from disk, not held in memory). |
 | `FLUXFILES_AIVISION_MAX_MEGAPIXELS` | `100` | AI Vision (paid) refuses a returned image larger than this many megapixels (checked from the header, before it is written). A x4 upscale of a 2000x1500 photo is 48 MP. |
 | `FLUXFILES_AIVISION_MAX_SIDE_PX` | `16384` | AI Vision (paid) refuses a returned image wider or taller than this many pixels. |
 | `FLUXFILES_DLP_ENDPOINT` | — | DLP/PII scanner endpoint for the paid DLP module. Required when DLP scanning is enabled for a token. |
