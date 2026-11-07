@@ -5,6 +5,10 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [1.0.18] — 2026-11-07
+
+> Released: `core-v1.1.5`.
+
 ### Fixed
 - DB storage backend + S3: a same-disk copy (no scanner wired) got a `fluxfiles-id` header that disagreed with its metadata row's uuid. Since 1.1.4 `copy()` built the S3 write config (which reserves a uuid for the target) even on the plain server-side copy path that never uses it. It is now built only when the copy is scanned. Caught by `test-s3-metadata-calls-live.php` in CI.
 
