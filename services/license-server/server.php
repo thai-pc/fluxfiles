@@ -22,6 +22,7 @@ declare(strict_types=1);
  *   FLUXFILES_UPDATE_STATUS_TOKEN        bearer token for /update-status (separate from admin)
  *   FLUXFILES_POLAR_WEBHOOK_SECRET      Polar webhook signing secret (whsec_…)
  *   FLUXFILES_POLAR_PLAN_MAP            JSON {"<product_id>":"pro", ...}
+ *   FLUXFILES_OPS_EMAIL                 optional: also notified when a renewal cannot be matched
  *
  * Run behind any web server, or for dev:  php -S 127.0.0.1:9000 server.php
  */
@@ -52,6 +53,28 @@ function respond(int $code, array $body): void
     http_response_code($code);
     echo json_encode($body);
     exit;
+}
+/**
+ * A refund/revoke cascade changed rows whose own order was not refunded (a later paid
+ * renewal). Log each (email masked) and tell the ops address so the lost year can be
+ * reissued: POST /issue {plan:<renewal plan>, email:<the lifetime email>}.
+ */
+function reportCascade(LicenseStore $store, string $origin): void
+{
+    $rows = $store->lastCascade();
+    if ($rows === []) { return; }
+    $lines = [];
+    foreach ($rows as $r) {
+        $e = (string) $r['email'];
+        $at = strrpos($e, '@');
+        $masked = $at === false ? '***' : substr($e, 0, 1) . '***' . substr($e, $at);
+        $lines[] = "{$r['jti']} {$r['plan']} {$masked}";
+        error_log("license cascade: {$r['jti']} ({$r['plan']}, {$masked}) cancelled with {$origin}; its own order was not refunded");
+    }
+    (new LicenseMailer())->sendOpsNotice('FluxFiles: renewals cancelled by a cascade',
+        "Cancelling {$origin} also cancelled these renewals, whose own orders were not refunded:\n\n"
+        . implode("\n", $lines)
+        . "\n\nReissue the lost year if it was paid: POST /issue {\"plan\":\"<pro|studio>-renewal\",\"email\":\"<the lifetime email>\"}.");
 }
 function env(string $k, string $d = ''): string { $v = getenv($k); return $v === false || $v === '' ? $d : $v; }
 
@@ -100,7 +123,10 @@ try {
             $store = new LicenseStore();
             $rec = $store->findByOrder('polar', $refunded);
             if ($rec !== null && in_array((string) $rec['status'], ['active', 'superseded'], true)) {
-                $store->setStatus((string) $rec['jti'], 'refunded');
+                // Cascades: a refunded base takes its renewals with it; a refunded
+                // renewal gives its base back as `active` (renewable, reminded).
+                $store->setStatusCascade((string) $rec['jti'], 'refunded');
+                reportCascade($store, 'refunded licence ' . $rec['jti']);
                 error_log("polar webhook: order {$refunded} refunded — licence {$rec['jti']} marked refunded");
             }
             respond(200, ['refunded' => $rec !== null]);
@@ -137,7 +163,19 @@ try {
 
         // Issuing is idempotent on (gateway, order_id), which is what makes Polar's
         // at-least-once delivery safe — a retry returns the same key, never a second one.
-        $res = $issuer->issue($order + ['gateway' => 'polar']);
+        try {
+            $res = $issuer->issue($order + ['gateway' => 'polar']);
+        } catch (\FluxFiles\LicenseServer\RenewalWithoutLicenceException $e) {
+            // Paid for an updates renewal but no lifetime licence matches (different
+            // email or Polar customer at checkout?). Nothing is granted, and a 5xx would
+            // only make Polar retry the same outcome until it disables the endpoint — so
+            // ACK, tell the buyer (and the ops address) and let the operator resolve it:
+            // POST /issue {plan:"pro-renewal"|"studio-renewal", email:<the LIFETIME email>}
+            // or refund in Polar.
+            error_log('polar webhook: RENEWAL WITHOUT LICENCE — ' . $e->getMessage() . ' (order ' . $order['order_id'] . ') — refund or issue manually');
+            (new LicenseMailer())->sendRenewalUnmatched((string) $order['email'], (string) $order['plan'], (string) $order['order_id']);
+            respond(200, ['ignored' => 'renewal_without_licence', 'order_id' => $order['order_id']]);
+        }
 
         // Deliver the key, keyed on whether it has actually been delivered — NOT on
         // whether this is a first delivery. Those differ in the case that matters: if
@@ -205,6 +243,13 @@ try {
         $rec = $checkoutId !== '' ? $store->findByCheckout($checkoutId) : $store->findByOrder('polar', $orderId);
         if ($rec === null || ($rec['status'] ?? '') !== 'active') {
             respond(404, ['error' => 'not found']);
+        }
+        // A renewal key is NEVER served here: its edition/modules come from a licence the
+        // checkout email merely CLAIMS to own, so the key must reach only that licence's
+        // mailbox. Anything we cannot prove is a base purchase counts as a renewal.
+        $recPlan = (string) ($rec['plan'] ?? '');
+        if (!empty($rec['renews_jti']) || isset((\FluxFiles\LicenseServer\Plans::get($recPlan) ?? [])['renews']) || str_ends_with($recPlan, '-renewal')) {
+            respond(404, ['error' => 'not found', 'hint' => 'renewal keys are emailed to the address of the licence they extend']);
         }
         $age = time() - (int) ($rec['created_at'] ?? 0);   // stored as a unix int
         if ($age > CLAIM_WINDOW) {
@@ -284,7 +329,9 @@ try {
         if (!in_array($status, ['revoked', 'refunded', 'active'], true)) {
             respond(400, ['error' => 'status must be revoked, refunded or active']);
         }
-        $ok = (new LicenseStore())->setStatus((string) ($b['jti'] ?? ''), $status);
+        $store = new LicenseStore();
+        $ok = $store->setStatusCascade((string) ($b['jti'] ?? ''), $status);
+        reportCascade($store, "{$status} licence " . (string) ($b['jti'] ?? ''));
         respond($ok ? 200 : 404, ['updated' => $ok]);
     }
 

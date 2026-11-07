@@ -222,9 +222,45 @@ paste into step 3.
 > prices *should* be — check new figures against it before changing either `CATALOGUE`
 > or `Pricing.astro`.
 
-`enterprise` and `lifetime` are deliberately not created: Enterprise is a custom
-conversation an instant-buy button would undercut, and lifetime is worth offering only
-once recurring revenue exists.
+`enterprise` is deliberately not created: it is a custom conversation an instant-buy
+button would undercut. The lifetime deal is prepared but off: the default run creates
+exactly the six products above.
+
+### Switching on the lifetime deal (limited offer)
+
+Studio Lifetime $399, Pro Lifetime $179 (one-time; perpetual use, 12 months of
+updates), plus one-time updates renewals: Pro $29, Studio $79. How a renewal works and
+what happens to one with no licence behind it: `services/license-server/README.md`.
+
+0. **Deploy the licence server first.** An older deploy lacks `pro-lifetime`/`*-renewal`
+   (503 for those products) and would mail the old text. Also check any
+   `FLUXFILES_LICENSE_PLANS` override: it wins over the repo's plans.
+1. `php services/license-server/polar-setup.php --dry-run --production --with-lifetime`
+   (look first), then the same without `--dry-run`. `--with-lifetime` creates the two
+   lifetime products and the two renewals; `--with-renewals` creates only the renewals
+   (safe to re-run any time). Existing products are skipped, and existing lifetime or
+   renewal products, archived ones too, are always mapped by name, never recreated.
+   An archived lifetime product is reported: unarchive it in Polar to re-open the deal.
+2. Paste the printed `FLUXFILES_POLAR_PLAN_MAP` into the licence server's environment
+   (order: redeploy, polar-setup, paste, restart). A product missing from the map makes
+   the webhook answer 503 and Polar retries.
+3. Set the products' success URL (`…?checkout_id={CHECKOUT_ID}`) like the others, then
+   test one sandbox purchase of each (`--with-lifetime` without `--production`), plus a
+   renewal bought with the same Polar account. Renewal keys arrive by email only.
+4. Landing: add the buy links / banner (`PUBLIC_POLAR_*` env vars for the four products)
+   and say renewals must use the purchase email and account. This repo does not touch
+   the landing.
+5. Ending the deal: archive the two LIFETIME products in Polar. Keep the renewal
+   products on sale (past buyers renew after the deal ends) and keep them in the plan map;
+   `polar-setup.php` maps archived ones by name. Issued keys keep working.
+6. An unmatched renewal (wrong email/account) is ACKed, the buyer is mailed, and
+   `RENEWAL WITHOUT LICENCE` is logged. Fix with
+   `POST /issue {"plan":"pro-renewal","email":"<the LIFETIME purchase email>"}`, or refund.
+   A refund or revoke of a licence also cancels its renewals; those whose own order was
+   not refunded are logged (masked email) and mailed to `FLUXFILES_OPS_EMAIL`: reissue
+   the lost year with the same `POST /issue`. `/revoke` with `status: active` restores the
+   chain shape but does not revive cancelled renewals; un-revoke each one.
+   Optional env: `FLUXFILES_OPS_EMAIL` (also notified), `FLUXFILES_RENEWAL_URL` (in reminders).
 
 `support` and `support-monthly` are created like any other plan, but they unlock no
 module (`Plans.php` gives them `modules: []`) — the product is a support relationship,

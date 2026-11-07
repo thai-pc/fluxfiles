@@ -50,7 +50,7 @@ final class LicenseSigner
      * Mint a license. Returns ['key' => <signed key>, 'payload' => <array>].
      *
      * @param array{customer?:string,edition?:string,modules?:string[],enforcement?:string,
-     *              ttlDays?:?int,graceDays?:int} $opts
+     *              ttlDays?:?int,graceDays?:int,extendFrom?:int} $opts
      * @return array{key:string,payload:array<string,mixed>}
      */
     public function mint(array $opts): array
@@ -68,7 +68,10 @@ final class LicenseSigner
             'jti'         => bin2hex(random_bytes(12)), // unique id for tracking/revoke
         ];
         if ($ttlDays !== null) {
-            $payload['expires'] = $now + ((int) $ttlDays) * 86400;
+            // extendFrom = a renewal stacks on the unexpired remainder of the licence it
+            // renews, so renewing early never forfeits the days already paid for.
+            $start = max($now, (int) ($opts['extendFrom'] ?? 0));
+            $payload['expires'] = $start + ((int) $ttlDays) * 86400;
             // Zero is meaningful for perpetual plans: no billing-recovery state is
             // needed when expiry only ends updates/support.
             $payload['grace']   = max(0, (int) ($opts['graceDays'] ?? 14)) * 86400;
