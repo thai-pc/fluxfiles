@@ -10,7 +10,7 @@ All notable changes to FluxFiles are documented here. This project adheres to
 - **Laravel adapter, non-`ApiException` errors.** The upload route answers an unexpected exception with core's envelope (`500`, `error_code: server_error`, generic message) instead of an ad-hoc `Upload failed`. The exception is reported through Laravel's `report()` (so the app's log channel gets it) and its text (SQLSTATE, host, port, paths) reaches the response only as `detail` when `app.debug` is on. The older `'Upload failed: ' . $e->getMessage()` leak had already been removed in `core-v1.1.3`; every other controller `catch (\Throwable)` answers a fixed string.
 
 ### Added
-- `OidcDiscovery` now requires https for the issuer's discovery URL and `jwks_uri` (plain http only for `localhost`, `127.0.0.1`, `::1`), on every fetch including the refetch after `forgetJwks()`; otherwise `502 sso_idp_unreachable`.
+- `OidcDiscovery` now requires https for the issuer's discovery URL and `jwks_uri` (plain http only for `localhost`, `127.0.0.1`, `::1`), on every fetch including the refetch after `forgetJwks()`; otherwise `500 sso_misconfigured`. The same rule applies to `authorization_endpoint`, `token_endpoint`, `userinfo_endpoint` and `end_session_endpoint` named by the discovery document. **Breaking for dev setups**: a non-loopback `http://` issuer (e.g. `http://keycloak:8080`) now fails; use https or a loopback name.
 - `OidcDiscovery::forgetJwks(?string $jwksUri = null)`: drops the cached JWKS (one URI, or all) so the SSO module no longer recomputes core's cache file names.
 
 ### Changed

@@ -160,10 +160,10 @@ test('OidcDiscovery requires https for discovery and jwks_uri (http only for loo
     $d = new OidcDiscovery($dir, $ft);
     foreach (['http://idp.example.com/jwks', 'ftp://idp/jwks', '//idp/jwks'] as $u) {
         try { $d->jwks($u); throw new \RuntimeException("accepted {$u}"); }
-        catch (\FluxFiles\ApiException $e) { assertEqual('sso_idp_unreachable', $e->getErrorCode(), $u); }
+        catch (\FluxFiles\ApiException $e) { assertEqual('sso_misconfigured', $e->getErrorCode(), $u); }
     }
     try { $d->discover('http://idp.example.com'); throw new \RuntimeException('accepted http issuer'); }
-    catch (\FluxFiles\ApiException $e) { assertEqual('sso_idp_unreachable', $e->getErrorCode()); }
+    catch (\FluxFiles\ApiException $e) { assertEqual('sso_misconfigured', $e->getErrorCode()); }
     assertEqual([], $ft->calls, 'nothing was fetched');
     foreach (['http://localhost:9/jwks', 'http://127.0.0.1/jwks', 'http://[::1]/jwks', 'https://idp.example.com/jwks'] as $u) {
         $ft->queue = [['status' => 200, 'headers' => [], 'body' => '{"keys":[{"kid":"k"}]}']];
@@ -172,7 +172,19 @@ test('OidcDiscovery requires https for discovery and jwks_uri (http only for loo
     }
     $d->forgetJwks();
     try { $d->jwks('http://evil.example/jwks'); throw new \RuntimeException('accepted after forget'); }
-    catch (\FluxFiles\ApiException $e) { assertEqual('sso_idp_unreachable', $e->getErrorCode()); }
+    catch (\FluxFiles\ApiException $e) { assertEqual('sso_misconfigured', $e->getErrorCode()); }
+
+    // Endpoints named by the discovery document must be https too.
+    foreach (['token_endpoint', 'authorization_endpoint', 'jwks_uri', 'userinfo_endpoint', 'end_session_endpoint'] as $bad) {
+        $doc = ['authorization_endpoint' => 'https://idp/a', 'token_endpoint' => 'https://idp/t', 'jwks_uri' => 'https://idp/j', 'issuer' => 'https://idp'];
+        $doc[$bad] = 'http://idp.example.com/x';
+        $ft->queue = [['status' => 200, 'headers' => [], 'body' => json_encode($doc)]];
+        try { (new OidcDiscovery(sys_get_temp_dir() . '/ff-oidc-' . uniqid(), $ft))->discover('https://idp'); throw new \RuntimeException("accepted http {$bad}"); }
+        catch (\FluxFiles\ApiException $e) { assertEqual('sso_misconfigured', $e->getErrorCode(), $bad); }
+    }
+    $ok = ['authorization_endpoint' => 'https://idp/a', 'token_endpoint' => 'https://idp/t', 'jwks_uri' => 'https://idp/j', 'issuer' => 'https://idp', 'userinfo_endpoint' => 'http://localhost:8080/u'];
+    $ft->queue = [['status' => 200, 'headers' => [], 'body' => json_encode($ok)]];
+    assertEqual('https://idp/t', (new OidcDiscovery(sys_get_temp_dir() . '/ff-oidc-' . uniqid(), $ft))->discover('https://idp')['token_endpoint'], 'https + loopback accepted');
 });
 
 test('a network failure never throws: status 0, empty body, an error string', function () {

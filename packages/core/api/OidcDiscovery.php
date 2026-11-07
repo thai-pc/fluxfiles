@@ -37,6 +37,7 @@ final class OidcDiscovery
     {
         $cached = $this->readCache('discovery-' . $this->cacheKey($issuer));
         if ($cached !== null) {
+            $this->assertEndpointsSecure($cached); // a cache written before this rule existed
             return $cached;
         }
 
@@ -47,6 +48,7 @@ final class OidcDiscovery
             }
         }
 
+        $this->assertEndpointsSecure($doc);
         $this->writeCache('discovery-' . $this->cacheKey($issuer), $doc);
         return $doc;
     }
@@ -92,6 +94,15 @@ final class OidcDiscovery
      * Applied in fetchJson(), i.e. to the issuer's discovery URL and to jwks_uri on both
      * the normal fetch and the forget/refetch path.
      */
+    private function assertEndpointsSecure(array $doc): void
+    {
+        foreach (['authorization_endpoint', 'token_endpoint', 'jwks_uri', 'userinfo_endpoint', 'end_session_endpoint'] as $field) {
+            if (isset($doc[$field]) && $doc[$field] !== '') {
+                $this->assertSecureUrl(is_string($doc[$field]) ? $doc[$field] : '');
+            }
+        }
+    }
+
     private function assertSecureUrl(string $url): void
     {
         $scheme = strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? ''));
@@ -102,7 +113,8 @@ final class OidcDiscovery
         if ($scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
             return;
         }
-        throw new ApiException('The identity provider URL must use https', 502, 'sso_idp_unreachable');
+        // A configuration problem, not an outage: reuse the existing localised code.
+        throw new ApiException('The identity provider URL must use https', 500, 'sso_misconfigured');
     }
 
     private function fetchJson(string $url): array
