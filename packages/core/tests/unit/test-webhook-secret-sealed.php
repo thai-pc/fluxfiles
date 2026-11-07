@@ -60,7 +60,7 @@ test('named option: payload (decoded without the server secret) never contains t
 test('a wrong server secret cannot recover it (tamper / other tenant)', function () use ($KEY, $server) {
     $blob = CredentialEncryptor::encryptSecret($KEY, $server);
     $threw = false;
-    try { CredentialEncryptor::decryptSecret($blob, str_repeat('x', 40)); } catch (\FluxFiles\ApiException $e) { $threw = true; }
+    try { CredentialEncryptor::decryptSecret($blob, 'wrong-' . hash('sha256', $server)); } catch (\FluxFiles\ApiException $e) { $threw = true; }
     check($threw, 'decrypt with the wrong secret succeeded');
 });
 
