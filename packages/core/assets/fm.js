@@ -9,6 +9,9 @@
 // fm.js is served from an absolute route, where a '../' relative to the *page*
 // resolves somewhere else entirely. `document.currentScript` is evaluated while
 // this file is being parsed, so it is still the <script> tag that loaded us.
+// CodeMirror instances, keyed by the raw Alpine component (see _cmGet()).
+const _cmStore = new WeakMap();
+
 const FM_ASSETS_BASE = (function () {
     try {
         const src = document.currentScript && document.currentScript.src;
@@ -4827,7 +4830,9 @@ function fluxFilesApp() {
         editorLoading: false,
         editorSaving: false,
         editorError: '',
-        _cm: null,          // CodeMirror instance (created lazily, then reused)
+        // The CodeMirror instance is NOT kept on `this`: Alpine would wrap it in a
+        // reactive Proxy and setValue/undo through the proxy corrupt the document.
+        // It lives in _cmStore (keyed by the raw component); read it via _cmGet().
         _cmLoading: null,   // promise that resolves once CodeMirror is on the page
 
         // ── Image preview zoom (lightbox) ───────────────────────────────────
@@ -5193,26 +5198,30 @@ function fluxFilesApp() {
             return this._cmLoading;
         },
 
+        _cmGet() { return _cmStore.get(window.Alpine.raw(this)) || null; },
+
         _mountCM() {
             const ta = document.getElementById('ff-editor-ta');
             if (!ta || !window.CodeMirror || !window.CodeMirror.fromTextArea) return;   // textarea fallback already works
             const mode = this._cmMode(this._fileExt(this.editorFile));
             const dark = document.documentElement.classList.contains('dark');
-            if (this._cm) {
-                this._cm.setOption('mode', mode);
-                this._cm.setOption('theme', dark ? 'material-darker' : 'default');
-                this._cm.setValue(this.editorContent);
-                this._cm.clearHistory();
-                setTimeout(() => this._cm.refresh(), 0);
+            let cm = this._cmGet();
+            if (cm) {
+                cm.setOption('mode', mode);
+                cm.setOption('theme', dark ? 'material-darker' : 'default');
+                cm.setValue(this.editorContent);
+                cm.clearHistory();
+                setTimeout(() => cm.refresh(), 0);
                 return;
             }
-            this._cm = window.CodeMirror.fromTextArea(ta, {
+            cm = window.CodeMirror.fromTextArea(ta, {
                 mode, lineNumbers: true, lineWrapping: false, indentUnit: 2, tabSize: 2,
                 theme: dark ? 'material-darker' : 'default',
             });
-            this._cm.setValue(this.editorContent);
-            this._cm.on('change', (cm) => { this.editorContent = cm.getValue(); });
-            setTimeout(() => this._cm.refresh(), 0);
+            _cmStore.set(window.Alpine.raw(this), cm);
+            cm.setValue(this.editorContent);
+            cm.on('change', (c) => { this.editorContent = c.getValue(); });
+            setTimeout(() => cm.refresh(), 0);
         },
 
         async openEditor(file) {
@@ -5246,7 +5255,8 @@ function fluxFilesApp() {
             this.showEditor = false;
             this.editorFile = null;
             this.editorError = '';
-            if (this._cm) this._cm.setValue('');
+            const cm = this._cmGet();
+            if (cm) cm.setValue('');
         },
 
         async saveEditor() {

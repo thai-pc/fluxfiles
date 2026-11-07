@@ -5,6 +5,9 @@ All notable changes to FluxFiles are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+- Code editor: undo/redo threw (`Cannot read properties of undefined (reading 'height')`) and the document could be corrupted, because the CodeMirror instance was stored in Alpine reactive state and so was wrapped in a Proxy. It is now kept outside reactive state (a `WeakMap` keyed by the raw component). The other third-party objects held in component state (the infinite-scroll `IntersectionObserver`, the theme `MediaQueryList`) are native objects Alpine does not proxy, so they were unaffected. New regression spec `codemirror-raw.spec.ts` drives the real CodeMirror: type, undo/redo, save, reopen.
+
 ## [1.0.19] — 2026-11-07
 
 > Released: `core-v1.1.6`, `mcp-v1.1.0`, `ckeditor5-v1.0.3`, `ckeditor4-v1.0.2`, `tinymce-v1.0.2`, `summernote-v1.0.2`. The WordPress rate-limiter fix ships with the next WordPress plugin release.
