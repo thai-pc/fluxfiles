@@ -67,7 +67,7 @@ On error: `{ "data": null, "error": "Error message" }` with appropriate HTTP sta
 
 | Method | Path | Body / Params | Description |
 |--------|------|---------------|-------------|
-| `GET` | `/meta?disk=&path=` | — | File info: `size`, `mime`, `modified`, `type` (`file` or `dir`). `404 not_found` if nothing exists at the path. Folders answer 200 with `type: "dir"` (`size`/`modified` are `null` on S3/SFTP). The token's root folder always answers 200 `dir`, even when still empty |
+| `GET` | `/meta?disk=&path=` | — | File info: `size`, `mime`, `modified`, `type` (`file` or `dir`). `404 not_found` if nothing exists at the path. Folders answer 200 with `type: "dir"` (`size`/`modified` are `null` on S3/SFTP). The token's root folder always answers 200 `dir`, even when still empty. `type` is `null` if the existence check itself failed (backend error) |
 | `GET` | `/metadata?disk=&key=` | — | SEO metadata: title, alt_text, caption, tags |
 | `PUT` | `/metadata` | `{disk, key, title, alt_text, caption, tags}` | Save metadata |
 | `DELETE` | `/metadata` | `{disk, key}` | Delete metadata |

@@ -95,7 +95,7 @@ All authenticated routes require `Authorization: Bearer <JWT>`.
   - JSON body: `disk`, `path`. Free; BYO provider key (`FLUXFILES_AI_*`).
 
 - `GET /api/fm/meta?disk=local&path=file.jpg`
-  - Returns `size`, `modified`, `mime` and `type` (`file`|`dir`). `404 not_found` when no file or folder exists at the path; a folder answers 200 `type:'dir'` (size/modified are null on S3/SFTP, incl. prefix-only S3 folders). The token's scope root (tenant prefix, or the disk root) always answers 200 `type:'dir'`, matching `/list` returning an empty 200 for a new tenant. Hidden paths → `path_denied`, `_fluxfiles/`/`_variants/` → 403 `system_path`. Before core-v1.1.6 a missing path answered 200 with null size/modified and there was no `type`.
+  - Returns `size`, `modified`, `mime` and `type` (`file`|`dir`). `404 not_found` when no file or folder exists at the path; a folder answers 200 `type:'dir'` (size/modified are null on S3/SFTP, incl. prefix-only S3 folders). The token's scope root (tenant prefix, or the disk root) always answers 200 `type:'dir'`, matching `/list` returning an empty 200 for a new tenant. `type` is `null` when the existence probe itself failed (backend error), never a guess. Hidden paths → `path_denied`, `_fluxfiles/`/`_variants/` → 403 `system_path`. Before core-v1.1.6 a missing path answered 200 with null size/modified and there was no `type`.
 
 - `GET /api/fm/disk/doctor?disk=local&origin=`
   - **Bucket Doctor**: diagnose a disk (credentials, read/write/delete, presign, CORS, multipart, versioning) and return a report + IAM/CORS remediation. Requires `write` + the disk in the token. Useful to validate BYOB credentials before issuing a long-lived token.

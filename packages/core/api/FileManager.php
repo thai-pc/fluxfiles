@@ -3722,8 +3722,9 @@ class FileManager
         // folder is a valid target too, reported as type 'dir' (its size/modified are
         // null on S3/SFTP). The token's scope root always exists (the tenant's empty
         // folder, same as /list answering 200 with no items). If the existence probe
-        // itself fails, don't turn a transient backend error into a false 404.
-        $type = 'file';
+        // itself fails, don't turn a transient backend error into a false 404, and
+        // don't guess either: type stays null (unknown) unless a check succeeded.
+        $type = null;
         if ($scoped === trim($this->claims->pathPrefix, '/')) {
             $type = 'dir';
         } else {
