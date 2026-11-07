@@ -149,6 +149,15 @@ final class LicenseMailer
             $expiryLine = "Updates and priority support are included until: {$date}.\n\n"
                 . 'Your installed paid modules keep running after that date; renewal only restores new releases and support.';
         }
+        // First-install link for the WordPress Pro plugin zip (ProDownload; absent = no block).
+        $dl = $record['pro_download'] ?? null;
+        $wpBlock = '';
+        if (is_array($dl) && is_string($dl['url'] ?? null) && str_starts_with($dl['url'], 'http')) {
+            $days = max(1, (int) round(((int) ($dl['expires_in'] ?? 0)) / 86400));
+            $wpBlock = "WordPress: download the FluxFiles Pro plugin (valid for about {$days} day" . ($days === 1 ? '' : 's') . "):\n\n"
+                . "    {$dl['url']}\n\n"
+                . "Upload it in Plugins > Add New > Upload Plugin (the free FluxFiles plugin must be\nactive), then paste the key in Settings > FluxFiles. Later updates arrive in wp-admin.\n\n";
+        }
         $thanks = $isRenewal
             ? "Thanks for renewing FluxFiles {$edition} updates."
             : "Thanks for buying FluxFiles {$edition}" . ($isLifetime ? ' Lifetime' : '') . '.';
@@ -172,7 +181,7 @@ final class LicenseMailer
 
         {$expiryLine}
 
-        Keep this email: it is the copy of the key you own. If you lose it, reply and we
+        {$wpBlock}Keep this email: it is the copy of the key you own. If you lose it, reply and we
         can look it up.
 
         — FluxFiles

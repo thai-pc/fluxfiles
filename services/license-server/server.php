@@ -23,6 +23,8 @@ declare(strict_types=1);
  *   FLUXFILES_POLAR_WEBHOOK_SECRET      Polar webhook signing secret (whsec_…)
  *   FLUXFILES_POLAR_PLAN_MAP            JSON {"<product_id>":"pro", ...}
  *   FLUXFILES_OPS_EMAIL                 optional: also notified when a renewal cannot be matched
+ *   FLUXFILES_PRO_UPDATE_URL            optional: update-server base URL; enables the FluxFiles Pro
+ *                                       download link in /claim and the licence mail (ProDownload.php)
  *
  * Run behind any web server, or for dev:  php -S 127.0.0.1:9000 server.php
  */
@@ -33,12 +35,14 @@ require_once __DIR__ . '/Plans.php';
 require_once __DIR__ . '/LicenseIssuer.php';
 require_once __DIR__ . '/PolarWebhook.php';
 require_once __DIR__ . '/LicenseMailer.php';
+require_once __DIR__ . '/ProDownload.php';
 
 use FluxFiles\LicenseServer\LicenseMailer;
 use FluxFiles\LicenseServer\LicenseSigner;
 use FluxFiles\LicenseServer\LicenseStore;
 use FluxFiles\LicenseServer\LicenseIssuer;
 use FluxFiles\LicenseServer\PolarWebhook;
+use FluxFiles\LicenseServer\ProDownload;
 
 header('Content-Type: application/json; charset=utf-8');
 // Responses can carry licence keys (/claim, /issue, /licenses): never cache them.
@@ -184,7 +188,10 @@ try {
         // log to say so. Tracking mailed_at makes Polar's retry the recovery mechanism.
         $jti = (string) $res['record']['jti'];
         if (empty($res['record']['mailed_at'])) {
-            if ((new LicenseMailer())->sendLicense($res['record'])) {
+            // Best-effort first-install link for the WordPress Pro zip (null = omitted).
+            $mailRec = $res['record'];
+            $mailRec['pro_download'] = ProDownload::fetch($mailRec, ProDownload::TTL_MAIL);
+            if ((new LicenseMailer())->sendLicense($mailRec)) {
                 (new LicenseStore())->markMailed($jti);
             } else {
                 // Answer 200 even though delivery failed, and this is the opposite of
@@ -255,11 +262,18 @@ try {
         if ($age > CLAIM_WINDOW) {
             respond(410, ['error' => 'claim window expired', 'hint' => 'the key was emailed to you']);
         }
-        respond(200, [
+        $out = [
             'license_key' => (string) $rec['license_key'],
             'edition' => (string) $rec['edition'],
             'expires' => $rec['expires'] ?? null,
-        ]);
+        ];
+        // Only plans that include a bundled module (share/intake) get the WordPress Pro
+        // zip link: a signed, expiring URL on the update host, never the licence itself.
+        $dl = ProDownload::fetch($rec, ProDownload::TTL_CLAIM);
+        if ($dl !== null) {
+            $out['pro_download'] = $dl;
+        }
+        respond(200, $out);
     }
 
     // ── Internal: update server asks whether a signed licence is still active ─
@@ -309,6 +323,7 @@ try {
         $mailer = new LicenseMailer();
         $sent = 0; $failed = 0;
         foreach ($store->undelivered() as $rec) {
+            $rec['pro_download'] = ProDownload::fetch($rec, ProDownload::TTL_MAIL);
             if ($mailer->sendLicense($rec)) {
                 $store->markMailed((string) $rec['jti']);
                 $sent++;

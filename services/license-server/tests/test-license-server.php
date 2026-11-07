@@ -19,6 +19,7 @@ require_once __DIR__ . '/../Plans.php';
 require_once __DIR__ . '/../LicenseIssuer.php';
 require_once __DIR__ . '/../PolarWebhook.php';
 require_once __DIR__ . '/../LicenseMailer.php';
+require_once __DIR__ . '/../ProDownload.php';
 
 use FluxFiles\LicenseServer\PolarWebhook;
 use FluxFiles\LicenseServer\LicenseMailer;
@@ -903,6 +904,61 @@ test('mail: the renewal text does not repeat the modules-keep-running sentence',
     $ren = $iss->issue(['email'=>'d@x.com','plan'=>'pro-renewal','gateway'=>'polar','order_id'=>'D-2'])['record'];
     $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
     assertEqual(1, substr_count($render->invoke(new LicenseMailer('log'), $ren), 'running'), 'said once');
+});
+
+// ── FluxFiles Pro (WordPress) first-install download ────────────────────────
+use FluxFiles\LicenseServer\ProDownload;
+
+$fakeManifest = static function (array $over = []): string {
+    $u = static fn (string $x): string => rtrim(strtr(base64_encode($x), '+/', '-_'), '=');
+    $pl = $over + ['module' => 'fluxfiles-pro', 'version' => '1.0.0', 'url' => 'https://upd.example/dl/m/fluxfiles-pro-1.0.0.zip?md5=x&expires=9', 'sha256' => str_repeat('a', 64)];
+    return $u('{"alg":"Ed25519","kid":"r1"}') . '.' . $u((string) json_encode($pl)) . '.' . $u('sig');
+};
+
+test('pro download: only plans with share/intake are eligible', function () use ($secretB64) {
+    $iss = issuer($secretB64);
+    foreach (['pro', 'pro-monthly', 'studio', 'lifetime', 'pro-lifetime', 'enterprise'] as $i => $plan) {
+        assertTrue(ProDownload::eligible($iss->issue(['email'=>'a@b.co','plan'=>$plan,'order_id'=>"pd$i"])['record']), "$plan eligible");
+    }
+    assertEqual(false, ProDownload::eligible($iss->issue(['email'=>'a@b.co','plan'=>'support','order_id'=>'pds'])['record']), 'support has no modules');
+});
+
+test('pro download: licence goes in the Authorization header only, link comes back, TTL clamped', function () use ($secretB64, $fakeManifest) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-h'])['record'];
+    $seen = null;
+    $out = ProDownload::fetch($rec, 10, function (string $url, array $h) use (&$seen, $fakeManifest) { $seen = [$url, $h]; return [200, $fakeManifest()]; }, 'https://upd.example');
+    assertTrue($out !== null && str_contains($out['url'], 'fluxfiles-pro-1.0.0.zip'), 'url returned');
+    assertEqual('1.0.0', $out['version']);
+    assertEqual(300, $out['expires_in'], 'ttl clamped up to 5 min');
+    assertTrue(!str_contains($seen[0], (string) $rec['license_key']), 'key not in URL');
+    assertTrue(str_contains($seen[0], '/update/fluxfiles-pro?install=1&link_ttl=300'), 'request shape');
+    assertEqual('Authorization: Bearer ' . $rec['license_key'], $seen[1][0]);
+});
+
+test('pro download: fails soft (null) on unset base, support plan, non-200, wrong module, bad/insecure url', function () use ($secretB64, $fakeManifest) {
+    $iss = issuer($secretB64);
+    $rec = $iss->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-f'])['record'];
+    $ok = fn () => [200, $fakeManifest()];
+    assertEqual(null, ProDownload::fetch($rec, 3600, $ok, ''), 'unset base');
+    assertEqual(null, ProDownload::fetch($rec, 3600, $ok, 'http://upd.example'), 'plain http to a remote host refused');
+    $sup = $iss->issue(['email'=>'a@b.co','plan'=>'support','order_id'=>'pd-s'])['record'];
+    assertEqual(null, ProDownload::fetch($sup, 3600, $ok, 'https://upd.example'), 'support plan');
+    assertEqual(null, ProDownload::fetch($rec, 3600, fn () => [402, 'nope'], 'https://upd.example'), '402');
+    assertEqual(null, ProDownload::fetch($rec, 3600, fn () => [200, $fakeManifest(['module' => 'share'])], 'https://upd.example'), 'wrong module');
+    assertEqual(null, ProDownload::fetch($rec, 3600, fn () => [200, $fakeManifest(['url' => 'javascript:alert(1)'])], 'https://upd.example'), 'bad scheme');
+    assertEqual(null, ProDownload::fetch($rec, 3600, fn () => [200, $fakeManifest(['url' => 'http://evil.example/x.zip'])], 'https://upd.example'), 'http url');
+    assertEqual(null, ProDownload::fetch($rec, 3600, function () { throw new RuntimeException('boom'); }, 'https://upd.example'), 'throwing transport');
+});
+
+test('mail: the Pro download link appears only when a link was fetched', function () use ($secretB64) {
+    $rec = issuer($secretB64)->issue(['email'=>'a@b.co','plan'=>'pro','order_id'=>'pd-m'])['record'];
+    $render = new ReflectionMethod(LicenseMailer::class, 'renderBody'); $render->setAccessible(true);
+    $without = $render->invoke(new LicenseMailer('log'), $rec);
+    assertTrue(!str_contains($without, 'WordPress:'), 'no block by default');
+    $rec['pro_download'] = ['url' => 'https://upd.example/dl/m/x.zip?md5=a&expires=1', 'version' => '1.0.0', 'expires_in' => 604800];
+    $with = $render->invoke(new LicenseMailer('log'), $rec);
+    assertTrue(str_contains($with, 'https://upd.example/dl/m/x.zip?md5=a&expires=1') && str_contains($with, '7 days'), 'link + validity');
+    assertTrue(str_contains($with, 'Keep this email'), 'rest of the mail intact');
 });
 
 echo "\n  Total: ".($p+$f)."  {$green}Passed: {$p}{$reset}  {$red}Failed: {$f}{$reset}\n";
