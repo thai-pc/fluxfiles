@@ -54,7 +54,8 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
             if ($driver === 'mysql') {
                 // On an empty key InnoDB takes only gap locks, so two first hits that both
                 // SELECT ... FOR UPDATE then INSERT deadlock (1213). A named lock serialises
-                // the key instead, and the transaction below takes no gap locks at all.
+                // the key instead, and the key's hits are read before the transaction opens
+                // (below), so no locking read is involved at any isolation level.
                 // (No READ COMMITTED: it is refused under binlog_format=STATEMENT, 1665.)
                 $name = 'fxrl_' . sha1($this->table . "|" . $keyJson);
                 $g = $pdo->prepare('SELECT GET_LOCK(?, 10)');
@@ -66,31 +67,34 @@ final class RateLimiterDbStorage implements RateLimiterStorageInterface
                     throw new ApiException('Too many requests. Please try again later.', 429, 'rate_limited');
                 }
                 $mysqlLock = $name;
+
+                // Autocommit, non-locking read, after GET_LOCK so it sees the previous
+                // holder's commit. Outside a transaction it takes no shared gap lock even
+                // under SERIALIZABLE (inside one, InnoDB turns a plain SELECT into LOCK IN
+                // SHARE MODE and distinct-key first hits deadlock).
+                $sel = $pdo->prepare("SELECT id, ts FROM {$this->table} WHERE identifier = ? AND bucket = ?");
+                $sel->execute([$identifier, $actionType]);
+                $expired = [];
+                $count = 0;
+                foreach ($sel->fetchAll(\PDO::FETCH_NUM) as [$id, $ts]) {
+                    if ((int) $ts <= $windowStart) {
+                        $expired[] = (int) $id;
+                    } else {
+                        $count++;
+                    }
+                }
             }
             $this->db->beginExclusive();
             try {
                 if ($driver === 'pgsql') {
                     // REPEATABLE READ would ignore hits committed after our snapshot; the
-                    // per-key advisory lock (two-int form, PostgreSQL 9.1+, released at
+                    // per-key advisory lock (two-int form, PostgreSQL 9.5+ like the rest of the schema, released at
                     // COMMIT) serialises the rest.
                     $pdo->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
                     $pdo->prepare('SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))')->execute([$this->table, $keyJson]);
                 }
                 if ($driver === 'mysql') {
-                    // Plain consistent read, first statement of the transaction and after
-                    // GET_LOCK, so it sees the previous holder's commit. No locking read,
-                    // no range delete: expired rows go by primary key.
-                    $sel = $pdo->prepare("SELECT id, ts FROM {$this->table} WHERE identifier = ? AND bucket = ?");
-                    $sel->execute([$identifier, $actionType]);
-                    $expired = [];
-                    $count = 0;
-                    foreach ($sel->fetchAll(\PDO::FETCH_NUM) as [$id, $ts]) {
-                        if ((int) $ts <= $windowStart) {
-                            $expired[] = (int) $id;
-                        } else {
-                            $count++;
-                        }
-                    }
+                    // Expired rows go by primary key, never by range (no gap locks).
                     if ($expired) {
                         $pdo->exec("DELETE FROM {$this->table} WHERE id IN (" . implode(',', $expired) . ')');
                     }

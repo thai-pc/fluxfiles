@@ -762,9 +762,9 @@ class RaceWpdb {
     function prepare($sql, ...$args) { if (count($args) === 1 && is_array($args[0])) $args = $args[0]; $i = 0;
         return preg_replace_callback("/%s|%d|%i/", function ($m) use (&$i, $args) { $v = $args[$i++] ?? null;
             return $m[0] === "%i" ? "`" . $v . "`" : ($m[0] === "%d" ? (string) (int) $v : $this->pdo->quote((string) $v)); }, $sql); }
-    function query($sql) { try { return $this->pdo->exec($sql); } catch (Throwable $e) { $this->last_error = $e->getMessage(); return false; } }
-    function get_var($sql) { try { $r = $this->pdo->query($sql)->fetch(PDO::FETCH_NUM); return $r ? $r[0] : null; } catch (Throwable $e) { $this->last_error = $e->getMessage(); return null; } }
-    function get_results($sql, $o = null) { try { return $this->pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC); } catch (Throwable $e) { $this->last_error = $e->getMessage(); return []; } }
+    function query($sql) { $this->last_error = ""; try { return $this->pdo->exec($sql); } catch (Throwable $e) { $this->last_error = $e->getMessage(); return false; } }
+    function get_var($sql) { $this->last_error = ""; try { $r = $this->pdo->query($sql)->fetch(PDO::FETCH_NUM); return $r ? $r[0] : null; } catch (Throwable $e) { $this->last_error = $e->getMessage(); return null; } }
+    function get_results($sql, $o = null) { $this->last_error = ""; try { return $this->pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC); } catch (Throwable $e) { $this->last_error = $e->getMessage(); return []; } }
 }
 [$_, $dsn, $user, $pass, $prefix, $key, $limit, $start] = $argv;
 $GLOBALS["wpdb"] = new RaceWpdb(new PDO($dsn, $user, $pass), $prefix);

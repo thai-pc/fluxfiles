@@ -2936,8 +2936,8 @@ test('db mode: the rate limiter lives in the database (GET_LOCK, START TRANSACTI
         $lim->check('u1', 'write');
         $q = $wpdb->queries;
         assertTrue(str_contains($q[0] ?? '', 'GET_LOCK'), 'per-key named lock taken first');
-        assertEqual('START TRANSACTION', $q[1] ?? null, 'transaction opened');
-        assertTrue(str_contains($q[2] ?? '', 'SELECT id, ts FROM wp_fluxfiles_rate_limits') && !str_contains($q[2], 'FOR UPDATE'), 'plain consistent read of the key\'s hits (no gap locks)');
+        assertTrue(str_contains($q[1] ?? '', 'SELECT id, ts FROM wp_fluxfiles_rate_limits') && !str_contains($q[1], 'FOR UPDATE'), 'non-locking read of the key\'s hits, before the transaction');
+        assertEqual('START TRANSACTION', $q[2] ?? null, 'transaction opened');
         assertTrue(str_contains($q[3] ?? '', 'INSERT INTO wp_fluxfiles_rate_limits'), 'hit recorded');
         assertEqual('COMMIT', $q[4] ?? null, 'committed');
         assertTrue(str_contains($q[5] ?? '', 'RELEASE_LOCK'), 'named lock released');

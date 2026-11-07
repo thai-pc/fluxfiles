@@ -91,8 +91,9 @@ class WpRateLimiterStorage implements RateLimiterStorageInterface
 
         // On an empty key InnoDB takes only gap locks, so two first hits that both run a
         // locking read and then INSERT deadlock (1213). A per-key named lock serialises
-        // them instead, and the transaction below takes no gap locks. (No READ COMMITTED:
-        // InnoDB refuses it under binlog_format=STATEMENT, error 1665.)
+        // them instead, and the key's hits are read before the transaction opens, so no
+        // locking read is involved at any isolation level. (No READ COMMITTED: InnoDB
+        // refuses it under binlog_format=STATEMENT, error 1665.)
         $lockName = 'fxrl_' . sha1($this->table . '|' . json_encode([$identifier, $actionType]));
         $got = $db->get_var($db->prepare('SELECT GET_LOCK(%s, 10)', $lockName));
         if ($got === null) {
@@ -117,29 +118,33 @@ class WpRateLimiterStorage implements RateLimiterStorageInterface
     {
         $db = $this->wpdb;
 
-        $db->query('START TRANSACTION');
-        $limited = false;
-        // Plain consistent read (first statement, after GET_LOCK, so it sees the previous
-        // holder's commit); expired rows are deleted by primary key, never by range.
+        // Autocommit, non-locking read, after GET_LOCK so it sees the previous holder's
+        // commit. Inside a transaction InnoDB would turn it into a shared gap lock under
+        // SERIALIZABLE and distinct-key first hits would deadlock.
         $rows = $db->get_results($db->prepare(
             "SELECT id, ts FROM {$this->table} WHERE identifier = %s AND bucket = %s",
             $identifier,
             $actionType
         ), ARRAY_A);
-        $ok = is_array($rows) && ($db->last_error ?? '') === '';
-        if ($ok) {
-            $expired = [];
-            $count = 0;
-            foreach ($rows as $row) {
-                if ((int) $row['ts'] <= $windowStart) {
-                    $expired[] = (int) $row['id'];
-                } else {
-                    $count++;
-                }
+        if (!is_array($rows) || ($db->last_error ?? '') !== '') {
+            return null;
+        }
+        $expired = [];
+        $count = 0;
+        foreach ($rows as $row) {
+            if ((int) $row['ts'] <= $windowStart) {
+                $expired[] = (int) $row['id'];
+            } else {
+                $count++;
             }
-            if ($expired) {
-                $ok = $db->query("DELETE FROM {$this->table} WHERE id IN (" . implode(',', $expired) . ')') !== false;
-            }
+        }
+
+        $db->query('START TRANSACTION');
+        $limited = false;
+        $ok = true;
+        if ($expired) {
+            // Expired rows go by primary key, never by range (no gap locks).
+            $ok = $db->query("DELETE FROM {$this->table} WHERE id IN (" . implode(',', $expired) . ')') !== false;
         }
         if ($ok) {
             if ($count >= $limit) {
